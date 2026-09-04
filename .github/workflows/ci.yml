@@ -37,6 +37,19 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
 
+      # The lane canary must run inside a process that carries Electron's asar
+      # `fs` patch, which no vitest run does -- that gap is exactly how a lane
+      # that could not be created passed four rounds of review (MAR-2814). The
+      # `electron` binary needs a display even when it opens no window, so
+      # `xvfb-run` provides one; `--node` runs the same bundle under plain Node,
+      # and a run where both agree on a patched-fs regression would be a canary
+      # that had stopped watching.
+      - name: Run the lane canary under Electron
+        run: xvfb-run -a npm run test:electron
+
+      - name: Run the lane canary under plain Node
+        run: npm run test:electron:node
+
       - name: Install Chaperone
         env:
           CHAPERONE_VERSION: v0.7.1

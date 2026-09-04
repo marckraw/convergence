@@ -1,20 +1,27 @@
-import { execFile } from 'child_process'
 import { lstatSync, realpathSync } from 'fs'
-import { cp, lstat, mkdir, readdir, rm, rmdir, statfs } from 'fs/promises'
+import { mkdir, rmdir, statfs } from 'fs/promises'
 import { basename, dirname, join, resolve } from 'path'
 import { randomUUID } from 'crypto'
 import type Database from 'better-sqlite3'
 import type { ProjectRow } from '../database/database.types'
 import { isContainedPath } from '../git/git-clone.pure'
-import { redactUrlCredentials } from '../git/git-redact.pure'
 import type { GitService } from '../git/git.service'
 import { normalizeProjectSettings } from '../project/project-settings.pure'
 import { projectFromRow, type Project } from '../project/project.types'
 import {
+  copyLaneTreeEntries,
+  listLaneTreeFiles,
+  listLaneTreePaths,
+  listLaneTreeSockets,
+  listLaneTreeUncopyable,
+  removeLanePaths,
+  removeLaneTree,
+  statLaneFileSizes,
+} from './lane-fs'
+import {
   deriveLaneCopyMethod,
   isLaneCopySkipped,
   laneProjectName,
-  relativeToCopyRoot,
   resolveLaneTargetPath,
   validateLaneName,
   type LaneCopyMethod,
@@ -83,162 +90,135 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-/** Whether a copier can carry this entry at all: a socket or FIFO cannot (M5). */
-function isCopyableEntry(path: string): boolean {
-  const stat = lstatSync(path)
-  return stat.isFile() || stat.isDirectory() || stat.isSymbolicLink()
-}
-
 /**
- * The same runner discipline as git's: arguments, never a shell string, and
- * stderr through the credential redaction before it can become an error the
- * renderer shows.
+ * Ruling 2 (MAR-2814): a rollback never masks the cause.
+ *
+ * What the installed app told Marcin was the CLEANUP's `ENOTEMPTY`, thrown out
+ * of `release()` over the top of whatever had really failed -- so the dialog
+ * named a folder inside `Electron.app` and never the reason, and the run that
+ * diagnosed this had to work backwards from debris. The error that leaves here
+ * is the ORIGINAL one: same object, same `code`, its own sentence FIRST, with
+ * the cleanup's failure attached as `cause` and disclosed in one appended
+ * sentence. A rollback that fails is worth saying; it is never the story.
  */
-function run(command: string, args: string[]): Promise<void> {
-  return new Promise((resolvePromise, reject) => {
-    execFile(command, args, (error, _stdout, stderr) => {
-      if (error) {
-        reject(new Error(redactUrlCredentials(stderr.trim() || error.message)))
-      } else {
-        resolvePromise()
-      }
-    })
-  })
+function withFailedRollback(
+  cause: unknown,
+  cleanupError: unknown,
+  targetPath: string,
+): Error {
+  const original =
+    cause instanceof Error ? cause : new Error(errorMessage(cause))
+  original.message = `${original.message} — and the half-made folder could not be removed: ${targetPath}`
+  original.cause = cleanupError
+  return original
 }
 
 /**
- * darwin: `cp -c -R` -- BSD cp with `clonefile(2)` -- per top-level entry into
- * the reserved folder. This is the primitive the lane design is built on and
- * the only one that clones on macOS: libuv's darwin copy goes through
- * `copyfile(3)`, which byte-copies whatever flag Node passes (MAR-2783 round
- * 3, H1 -- measured: 512 MB consumed by every Node mode, 0 by `cp -c`).
- * `-R` without `-L` keeps symlinks as symlinks and recreates FIFOs; it has no
- * filter, so the skip list is applied at the top level here and by the prune
- * in `copyLaneTree` below it.
+ * darwin: `cp -c -R` -- BSD cp with `clonefile(2)`. This is the primitive the
+ * lane design is built on and the only one that clones on macOS: libuv's
+ * darwin copy goes through `copyfile(3)`, which byte-copies whatever flag Node
+ * passes (MAR-2783 round 3, H1 -- measured: 512 MB consumed by every Node
+ * mode, 0 by `cp -c`).
  */
 export function makeDarwinCloneCopier(): LaneTreeCopier {
-  return async (sourcePath, targetPath, shouldSkip) => {
-    for (const entry of await readdir(sourcePath)) {
-      if (shouldSkip(entry)) continue
-      await run('cp', [
-        '-c',
-        '-R',
-        join(sourcePath, entry),
-        join(targetPath, entry),
-      ])
-    }
-  }
+  return (sourcePath, targetPath, shouldSkip) =>
+    copyLaneTreeEntries(sourcePath, targetPath, shouldSkip, ['-c', '-R'])
 }
 
 /**
- * Everywhere else: Node's `cp`, mode 0 -- a byte copy, and honest about it
- * through the same observation (CI is ext4). Entries are copied one by one
- * into the reserved folder because Node's `cp` refuses an existing
- * destination root; its filter applies the skip list at every depth.
+ * Everywhere else: the same `cp` without `-c` -- a byte copy, and honest about
+ * it through the same observation (CI is ext4).
+ *
+ * It was Node's `cp` until MAR-2814. Node's copy walks the source through the
+ * patched `fs` to apply its filter, which makes it the same defect wearing the
+ * other platform's clothes -- so the two copiers are now ONE shape differing
+ * by one flag, and neither of them can read a tree through the patch.
  */
-export function makeNodeByteCopier(): LaneTreeCopier {
-  return async (sourcePath, targetPath, shouldSkip) => {
-    const filter = (source: string): boolean =>
-      !shouldSkip(relativeToCopyRoot(sourcePath, source)) &&
-      isCopyableEntry(source)
-    for (const entry of await readdir(sourcePath)) {
-      if (!filter(join(sourcePath, entry))) continue
-      await cp(join(sourcePath, entry), join(targetPath, entry), {
-        recursive: true,
-        verbatimSymlinks: true,
-        errorOnExist: true,
-        force: false,
-        filter,
-        mode: 0,
-      })
-    }
-  }
+export function makeByteCopier(): LaneTreeCopier {
+  return (sourcePath, targetPath, shouldSkip) =>
+    copyLaneTreeEntries(sourcePath, targetPath, shouldSkip, ['-R'])
 }
 
 export function selectLaneTreeCopier(
   platform: NodeJS.Platform = process.platform,
 ): LaneTreeCopier {
-  return platform === 'darwin' ? makeDarwinCloneCopier() : makeNodeByteCopier()
+  return platform === 'darwin' ? makeDarwinCloneCopier() : makeByteCopier()
 }
 
 /**
- * The pre-scan (H1): every entry outside the skip list, by `lstat`, before a
- * byte moves. Regular-file sizes are summed so the clone budget has something
- * to be a tenth of, and every socket is recorded by relative path so the
- * result can name what the lane went without (round 4, M1 -- ruled A: a
- * socket is never refused; `cp -c -R` skips one silently, Node's copier
- * filters it, and `core.fsmonitor` plants one in `.git` that git respawns
+ * The pre-scan (H1): every regular file outside the skip list, sized before a
+ * byte moves, so the clone budget has a true sum to be a tenth of; and every
+ * socket recorded by relative path so the result can name what the lane went
+ * without (round 4, M1 -- ruled A: a socket is never refused; `cp -R` cannot
+ * carry one, and `core.fsmonitor` plants one in `.git` that git respawns
  * within a second, so refusing would lock such a root out of lanes forever).
  *
- * The sum is read into a local BEFORE it is added (`const { size } = await
- * lstat(...)`): `total += await …` reads `total` before the await, so under
- * this fan-out every in-flight branch would add to the same stale total and
- * the last one would win -- a sum of one file, and a budget stuck at its
- * floor for every tree.
+ * The walk is `find`'s and the sizes are `stat`'s (MAR-2814). A Node `lstat`
+ * of an archive answers "directory" under the patch, so the old scan dropped
+ * every archive's real bytes and counted its virtual children instead --
+ * measured on the canary's fixture: 27 759 scanned against 137 889 on disk.
+ * The clone budget is a tenth of this sum, so a wrong sum is a wrong amber
+ * line on the door.
  */
 async function scanLaneTree(
   sourcePath: string,
   shouldSkip: (relativePath: string) => boolean,
 ): Promise<{ copiedBytes: number; socketPaths: string[] }> {
-  let copiedBytes = 0
-  const socketPaths: string[] = []
-  const walk = async (relativeDir: string): Promise<void> => {
-    const entries = await readdir(join(sourcePath, relativeDir), {
-      withFileTypes: true,
-    })
-    await Promise.all(
-      entries.map(async (entry) => {
-        const relativePath = relativeDir
-          ? join(relativeDir, entry.name)
-          : entry.name
-        if (shouldSkip(relativePath)) return
-        const absolutePath = join(sourcePath, relativePath)
-        if (entry.isSocket()) {
-          socketPaths.push(relativePath)
-        } else if (entry.isDirectory()) {
-          await walk(relativePath)
-        } else if (entry.isFile()) {
-          const { size } = await lstat(absolutePath)
-          copiedBytes += size
-        }
-      }),
-    )
+  const [filePaths, socketPaths] = await Promise.all([
+    listLaneTreeFiles(sourcePath),
+    listLaneTreeSockets(sourcePath),
+  ])
+  const keptFiles = filePaths.filter(
+    (relativePath) => !shouldSkip(relativePath),
+  )
+  const sizes = await statLaneFileSizes(sourcePath, keptFiles)
+  return {
+    copiedBytes: sizes.reduce((total, size) => total + size, 0),
+    // `find` walks in the order the filesystem answers in, which is nobody's;
+    // the door reads them in one.
+    socketPaths: socketPaths
+      .filter((relativePath) => !shouldSkip(relativePath))
+      .sort(),
   }
-  await walk('')
-  // The walk fans out, so the order it finds them in is nobody's; the door
-  // reads them in one.
-  return { copiedBytes, socketPaths: socketPaths.sort() }
 }
 
 /**
- * The prune (H1): the target walked with the ONE skip predicate, so whatever
- * the primitive carried that the lane does not keep -- the skip list at any
- * depth, a FIFO `cp -R` recreated -- is removed after the copy. Clones are
- * free, so copying and pruning costs nothing a filter would have saved.
+ * The prune (H1): the target read with the ONE skip predicate, so whatever the
+ * primitive carried that the lane does not keep -- the skip list at any depth,
+ * a FIFO `cp -R` recreated -- is removed after the copy. Clones are free, so
+ * copying and pruning costs nothing a filter would have saved.
+ *
+ * Both the listing and the delete are `find`'s and `rm`'s (MAR-2814) -- for
+ * UNIFORMITY, not because this step was the one that broke. Measured: routing
+ * this prune back through Node's `fs` leaves the canary green under Electron
+ * too, because a `readdir` of an archive's PARENT still reports the archive as
+ * a file, so the walk never descends into it and never asks `rm` for a path
+ * that is not on disk. The step that actually failed on the installed app was
+ * the rollback; see `release()`. What this rewrite buys is that no caller has
+ * to know which walks the patch can reach and which it cannot -- the module
+ * next door is the only one that reads or removes a tree, so the wrong form is
+ * not available to be chosen by accident a third time.
+ *
+ * Only the TOPMOST skipped path of each run is handed to `rm -rf`, which takes
+ * the rest with it: the predicate reads a path's segments left to right, so a
+ * skipped path's children are skipped too, and the shorter argument lists are
+ * free.
  */
 async function pruneLaneTree(
   targetPath: string,
   shouldSkip: (relativePath: string) => boolean,
 ): Promise<void> {
-  const walk = async (relativeDir: string): Promise<void> => {
-    const entries = await readdir(join(targetPath, relativeDir), {
-      withFileTypes: true,
-    })
-    await Promise.all(
-      entries.map(async (entry) => {
-        const relativePath = relativeDir
-          ? join(relativeDir, entry.name)
-          : entry.name
-        const absolutePath = join(targetPath, relativePath)
-        if (shouldSkip(relativePath) || !isCopyableEntry(absolutePath)) {
-          await rm(absolutePath, { recursive: true, force: true })
-          return
-        }
-        if (entry.isDirectory()) await walk(relativePath)
-      }),
-    )
-  }
-  await walk('')
+  const [paths, uncopyablePaths] = await Promise.all([
+    listLaneTreePaths(targetPath),
+    listLaneTreeUncopyable(targetPath),
+  ])
+  const skipped = new Set(
+    paths.filter((relativePath) => shouldSkip(relativePath)),
+  )
+  const topmostSkipped = [...skipped].filter(
+    (relativePath) => !skipped.has(dirname(relativePath)),
+  )
+  await removeLanePaths(targetPath, [...topmostSkipped, ...uncopyablePaths])
 }
 
 async function freeBytesOn(path: string): Promise<number> {
@@ -415,7 +395,11 @@ export class LaneService {
       onProgress('recording')
       id = this.insertRow(root, targetPath, laneName)
     } catch (error) {
-      await this.release(targetPath)
+      try {
+        await this.release(targetPath)
+      } catch (cleanupError) {
+        throw withFailedRollback(error, cleanupError, targetPath)
+      }
       throw error
     }
 
@@ -427,9 +411,13 @@ export class LaneService {
    * Gives the reservation back, and the `<lanesRoot>/<rootId>/` above it when
    * this was its only lane (L9): `rmdir` is non-recursive, so a parent with
    * sibling lanes in it simply refuses and stays.
+   *
+   * The tree goes by `rm -rf` (MAR-2814): Node's `rm` cannot remove a copied
+   * `Electron.app`, because the patch tells it the archives inside are folders
+   * and then will not let it `rmdir` them.
    */
   private async release(targetPath: string): Promise<void> {
-    await rm(targetPath, { recursive: true, force: true })
+    await removeLaneTree(targetPath)
     await rmdir(dirname(targetPath)).catch(() => {})
   }
 

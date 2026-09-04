@@ -26,6 +26,8 @@
     "test": "npm run test --workspaces --if-present",
     "test:pure": "npm run test:pure --workspaces --if-present",
     "test:unit": "npm run test:unit --workspaces --if-present",
+    "test:electron": "npm run test:electron -w convergence",
+    "test:electron:node": "npm run test:electron:node -w convergence",
     "test:watch": "npm run test:watch -w convergence",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
