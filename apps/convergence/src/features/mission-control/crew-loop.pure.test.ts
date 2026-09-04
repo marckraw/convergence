@@ -3,6 +3,7 @@ import {
   DEFAULT_CREW_ROUND_CAP,
   DEFAULT_CREW_STALL_MINUTES,
   batonConditionToken,
+  batonNameRefusal,
   formatCrewLoopDefault,
 } from './crew-loop.pure'
 
@@ -40,5 +41,32 @@ describe('batonConditionToken, the convention across the tree boundary', () => {
 
   it('writes the spelling the engine stores, not the one that was typed', () => {
     expect(batonConditionToken('  Horse  ')).toBe('BATON: horse')
+  })
+})
+
+describe('batonNameRefusal, the sentence a refused rename shows', () => {
+  it('unwraps the sentence Electron buried in its own plumbing', () => {
+    // What actually reaches the renderer when the main process throws.
+    expect(
+      batonNameRefusal(
+        new Error(
+          "Error invoking remote method 'crew:setMemberBatonName': Error: A baton name cannot start or end with a formatting mark",
+        ),
+      ),
+    ).toBe('A baton name cannot start or end with a formatting mark')
+  })
+
+  it('shows a plain sentence exactly as it was thrown', () => {
+    expect(
+      batonNameRefusal(new Error('A baton name cannot contain a colon')),
+    ).toBe('A baton name cannot contain a colon')
+  })
+
+  it('always has something to say, whatever was thrown', () => {
+    // A refusal nobody can read is the swallow again, one layer down.
+    expect(batonNameRefusal(undefined)).toBe('That baton name was refused.')
+    expect(batonNameRefusal(new Error('   '))).toBe(
+      'That baton name was refused.',
+    )
   })
 })

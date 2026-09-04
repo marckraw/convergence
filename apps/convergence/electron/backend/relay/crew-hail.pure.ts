@@ -191,7 +191,12 @@ export function formatCrewHailDetail(
     case 'terminal':
       return 'This station handed the work to you, so the loop parked here and no wire fired.'
     case 'unrouted':
-      return `This station handed on "${context.baton ?? 'a baton'}", and no armed wire in this crew answers to it, so nothing fired.`
+      // A hand-off with no name is still a hand-off: `BATON:` with nobody
+      // after it named nobody, and there is nothing to quote. Saying "handed
+      // on a baton" there would describe a name the line never wrote.
+      return context.baton
+        ? `This station handed on "${context.baton}", and no armed wire in this crew answers to it, so nothing fired.`
+        : 'This station tried to hand the work on and named nobody, so no wire could answer and nothing fired.'
     case 'loop-closed':
       return `This station handed on "${context.baton ?? 'a baton'}", but the wire that answers to it already carried this run, and a crew closes one lap per run — so the loop ended here.`
     case 'round-budget':

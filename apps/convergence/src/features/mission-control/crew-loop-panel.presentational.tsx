@@ -11,7 +11,19 @@ interface CrewLoopPanelProps {
   defaultRoundCap: number
   defaultStallMinutes: number
   busy?: boolean
-  onBatonNameChange: (sessionId: string, batonName: string) => void
+  /**
+   * The sentence the door refused the last rename with, and whose field it
+   * belongs under. Null once the user has tried again.
+   */
+  batonNameProblem?: { sessionId: string; message: string } | null
+  /**
+   * What is being typed, per member, before it is a name. A member with no
+   * entry here is showing the stored roster, which is every member until
+   * somebody edits one.
+   */
+  batonNameDrafts?: Readonly<Record<string, string>>
+  onBatonNameEdit: (sessionId: string, batonName: string) => void
+  onBatonNameCommit: (sessionId: string) => void
   onRoundCapChange: (roundCap: number | null) => void
   onStallMinutesChange: (stallMinutes: number | null) => void
 }
@@ -27,6 +39,16 @@ interface CrewLoopPanelProps {
  * An empty box means the default, and the placeholder says what the default
  * is — a blank field that silently meant twelve would be a setting nobody
  * could read.
+ *
+ * A name is stored when the person is finished writing it -- they leave the
+ * field, or press Enter -- and not on every keystroke. Typing is not a name:
+ * `my_horse` passes through `my_`, which the door refuses because a trailing
+ * mark is unreadable, so a field that stored each key made a legal name
+ * impossible to TYPE. One trip to the door per intended name.
+ *
+ * While a name is being typed the draft is what the field shows; once the
+ * attempt is over the stored roster is, so a refused name cannot sit in the
+ * box looking saved. A refusal says so under its own field.
  */
 export const CrewLoopPanel: FC<CrewLoopPanelProps> = ({
   members,
@@ -36,7 +58,10 @@ export const CrewLoopPanel: FC<CrewLoopPanelProps> = ({
   defaultRoundCap,
   defaultStallMinutes,
   busy = false,
-  onBatonNameChange,
+  batonNameProblem = null,
+  batonNameDrafts = {},
+  onBatonNameEdit,
+  onBatonNameCommit,
   onRoundCapChange,
   onStallMinutesChange,
 }) => {
@@ -64,22 +89,39 @@ export const CrewLoopPanel: FC<CrewLoopPanelProps> = ({
       ) : (
         <ul className="flex flex-col gap-1">
           {members.map((member) => (
-            <li key={member.sessionId} className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate text-[11px]">
-                {resolveName(member.sessionId) ?? member.sessionId}
-              </span>
-              <Input
-                value={member.batonName ?? ''}
-                placeholder="unnamed"
-                aria-label={`Baton name for ${
-                  resolveName(member.sessionId) ?? member.sessionId
-                }`}
-                disabled={busy}
-                onChange={(event) =>
-                  onBatonNameChange(member.sessionId, event.target.value)
-                }
-                className="h-6 w-28 shrink-0 text-xs"
-              />
+            <li key={member.sessionId} className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-[11px]">
+                  {resolveName(member.sessionId) ?? member.sessionId}
+                </span>
+                <Input
+                  value={
+                    batonNameDrafts[member.sessionId] ?? member.batonName ?? ''
+                  }
+                  placeholder="unnamed"
+                  aria-label={`Baton name for ${
+                    resolveName(member.sessionId) ?? member.sessionId
+                  }`}
+                  disabled={busy}
+                  onChange={(event) =>
+                    onBatonNameEdit(member.sessionId, event.target.value)
+                  }
+                  onBlur={() => onBatonNameCommit(member.sessionId)}
+                  onKeyDown={(event) => {
+                    // Enter is the other way a person says "that is the name",
+                    // and in a one-line field it is the faster one.
+                    if (event.key === 'Enter') {
+                      onBatonNameCommit(member.sessionId)
+                    }
+                  }}
+                  className="h-6 w-28 shrink-0 text-xs"
+                />
+              </div>
+              {batonNameProblem?.sessionId === member.sessionId ? (
+                <p role="alert" className="text-[11px] text-destructive">
+                  {batonNameProblem.message}
+                </p>
+              ) : null}
             </li>
           ))}
         </ul>

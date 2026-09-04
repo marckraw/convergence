@@ -60,11 +60,14 @@ describe('the trail row, rendered', () => {
       outcome: 'skipped-baton',
       baton: 'codex',
       error:
-        'This wire waits for "BATON: horse"; the message handed on "codex", so it held.',
+        'This wire waits for "BATON: horse"; the message\'s last line was "BATON: codex", which handed on "codex", so it held.',
     })
 
     expect(screen.getByText('held — another baton')).toBeInTheDocument()
     expect(screen.getByText(/waits for "BATON: horse"/)).toBeInTheDocument()
+    // The quoted line is the half that made the refusal readable (MAR-2815):
+    // it has to reach the screen, not only the row in the database.
+    expect(screen.getByText(/last line was "BATON: codex"/)).toBeInTheDocument()
   })
 
   it('names the round cap when the loop ran out of rounds', () => {

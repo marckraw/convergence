@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useProjectStore } from '@/entities/project'
+import { useSessionCrewStore } from '@/entities/session-crew'
 import type { SessionCrew } from '@/entities/session-crew'
 import { useSessionRelayStore } from '@/entities/session-relay'
 import type { SessionRelay } from '@/entities/session-relay'
@@ -853,6 +854,184 @@ describe('CrewFlowSection', () => {
           }),
         )
       })
+    })
+  })
+
+  describe('the baton name door (MAR-2815)', () => {
+    function crewWithBatonNames(): SessionCrew {
+      return {
+        ...makeCrew(['impl', 'review']),
+        members: [
+          { sessionId: 'impl', batonName: 'horse' },
+          { sessionId: 'review', batonName: 'codex' },
+        ],
+      }
+    }
+
+    function installCrewDoor(door: ReturnType<typeof vi.fn>) {
+      ;(
+        window as unknown as { electronAPI: { crew: unknown } }
+      ).electronAPI.crew = {
+        list: vi.fn(async () => []),
+        setMemberBatonName: door,
+        // The real bridge has it and the crew store's `load` calls it, so a
+        // stub without it throws inside `load` -- where the model catches and
+        // swallows. The test would still be green, for the wrong reason.
+        onUpdated: vi.fn(() => () => undefined),
+      }
+    }
+
+    function refuseRenames(): ReturnType<typeof vi.fn> {
+      const setMemberBatonName = vi.fn(async () => {
+        throw new Error(
+          "Error invoking remote method 'crew:setMemberBatonName': Error: A baton name cannot start or end with a formatting mark",
+        )
+      })
+      installCrewDoor(setMemberBatonName)
+      return setMemberBatonName
+    }
+
+    /**
+     * A stub that refuses what the real door refuses.
+     *
+     * `normalizeCrewBatonName` throws for a name that starts or ends with a
+     * formatting mark, and Electron wraps the throw in its own plumbing on the
+     * way back. A stub that accepted everything would let a field committing
+     * per keystroke look perfectly healthy here while `my_` was refused in the
+     * app.
+     */
+    function crewDoor(): ReturnType<typeof vi.fn> {
+      const setMemberBatonName = vi.fn(
+        async (
+          _crewId: string,
+          _sessionId: string,
+          batonName: string | null,
+        ) => {
+          if (batonName !== null && /^[*_`]|[*_`]$/.test(batonName)) {
+            throw new Error(
+              "Error invoking remote method 'crew:setMemberBatonName': Error: A baton name cannot start or end with a formatting mark",
+            )
+          }
+          return undefined
+        },
+      )
+      installCrewDoor(setMemberBatonName)
+      return setMemberBatonName
+    }
+
+    it('names a member once per name, not once per keystroke', async () => {
+      // The door's own promise is that `my_horse` is spelling and legal -- and
+      // it could not be TYPED: the field sent every keystroke, so `my_` was
+      // refused mid-word and the field snapped back to `my` before the `h`.
+      // One IPC per intended name is what makes the promise keepable.
+      const door = crewDoor()
+      render(<CrewFlowSection crew={crewWithBatonNames()} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Loop' }))
+
+      const field = screen.getByLabelText('Baton name for Implementor')
+      for (const typed of ['m', 'my', 'my_', 'my_h', 'my_horse']) {
+        fireEvent.change(field, { target: { value: typed } })
+      }
+
+      expect(door).not.toHaveBeenCalled()
+      expect(field).toHaveValue('my_horse')
+
+      fireEvent.blur(field)
+
+      await waitFor(() => expect(door).toHaveBeenCalledTimes(1))
+      expect(door).toHaveBeenCalledWith('c1', 'impl', 'my_horse')
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      // And the roster reload that follows a rename really ran: the crew
+      // store's `load` catches its own failures, so a stub missing a piece of
+      // the real bridge would leave this test green over a swallowed throw.
+      expect(useSessionCrewStore.getState().error).toBeNull()
+    })
+
+    it('names a member when Enter says the name is finished', async () => {
+      // Blur is not the only way a person says "that is the name": pressing
+      // Enter in a one-line field is the other, and a field that only listened
+      // for blur would eat the name of anyone who types it and hits Enter.
+      const door = crewDoor()
+      render(<CrewFlowSection crew={crewWithBatonNames()} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Loop' }))
+
+      const field = screen.getByLabelText('Baton name for Implementor')
+      fireEvent.change(field, { target: { value: 'night horse' } })
+      fireEvent.keyDown(field, { key: 'Enter' })
+
+      await waitFor(() => expect(door).toHaveBeenCalledTimes(1))
+      expect(door).toHaveBeenCalledWith('c1', 'impl', 'night horse')
+    })
+
+    it('says on screen why the door refused a rename', async () => {
+      // The refusal existed in the backend and reached nobody: the container
+      // caught it and the roster simply stayed as it was, so a user typing
+      // `_horse_` watched the field snap back with no reason given. A refusal
+      // nobody can see is the silent drop wearing a UI.
+      refuseRenames()
+      render(<CrewFlowSection crew={crewWithBatonNames()} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Loop' }))
+
+      const field = screen.getByLabelText('Baton name for Implementor')
+      fireEvent.change(field, { target: { value: '_horse_' } })
+      fireEvent.blur(field)
+
+      expect(
+        await screen.findByText(
+          'A baton name cannot start or end with a formatting mark',
+        ),
+      ).toBeInTheDocument()
+    })
+
+    it('renders the field from the roster, so a refused name is not left standing in it', async () => {
+      // This pins the RENDER SOURCE, not the swallow: the field draws from the
+      // stored roster once an attempt is over, so a name the door refused
+      // cannot sit there looking saved. It holds on HEAD too, and the mutation
+      // that turns it red is drawing the field from the draft instead.
+      refuseRenames()
+      render(<CrewFlowSection crew={crewWithBatonNames()} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Loop' }))
+
+      const field = screen.getByLabelText('Baton name for Implementor')
+      fireEvent.change(field, { target: { value: '_horse_' } })
+      fireEvent.blur(field)
+
+      await screen.findByText(/formatting mark/)
+      expect(field).toHaveValue('horse')
+    })
+
+    it('shows the sentence against the member it was refused for', async () => {
+      refuseRenames()
+      render(<CrewFlowSection crew={crewWithBatonNames()} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Loop' }))
+
+      const field = screen.getByLabelText('Baton name for Reviewer')
+      fireEvent.change(field, { target: { value: '`codex`' } })
+      fireEvent.blur(field)
+
+      const sentence = await screen.findByText(/formatting mark/)
+      expect(sentence.closest('li')).toHaveTextContent('Reviewer')
+    })
+
+    it('takes the sentence back down when the next edit is tried', async () => {
+      const setMemberBatonName = refuseRenames()
+      render(<CrewFlowSection crew={crewWithBatonNames()} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Loop' }))
+
+      const field = screen.getByLabelText('Baton name for Implementor')
+      fireEvent.change(field, { target: { value: '_horse_' } })
+      fireEvent.blur(field)
+      await screen.findByText(/formatting mark/)
+
+      // The next attempt is the user answering the refusal; the sentence
+      // belongs to the attempt it came from, not to the field forever.
+      setMemberBatonName.mockImplementation(async () => undefined)
+      fireEvent.change(field, { target: { value: 'night horse' } })
+      fireEvent.blur(field)
+
+      await waitFor(() =>
+        expect(screen.queryByText(/formatting mark/)).not.toBeInTheDocument(),
+      )
     })
   })
 

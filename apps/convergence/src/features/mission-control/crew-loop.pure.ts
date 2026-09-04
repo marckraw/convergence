@@ -48,3 +48,23 @@ export function batonConditionToken(batonName: string): string {
 export function formatCrewLoopDefault(value: number, unit: string): string {
   return `${value} ${unit}`
 }
+
+/**
+ * The sentence a refused baton rename shows under the field.
+ *
+ * The door that refuses a name throws in the MAIN process, and Electron hands
+ * the renderer its own plumbing wrapped around it:
+ * `Error invoking remote method 'crew:setMemberBatonName': Error: <sentence>`.
+ * Nobody typing a name should have to read that, so the last `Error: ` is
+ * where the sentence starts. Anything that does not look like a wrapped throw
+ * is shown whole rather than guessed at, and a throw with nothing to say
+ * still gets a sentence -- a refusal nobody can read is the swallow this
+ * exists to end, one layer further down.
+ */
+export function batonNameRefusal(error: unknown): string {
+  const raw = error instanceof Error ? error.message : ''
+  const marker = 'Error: '
+  const at = raw.lastIndexOf(marker)
+  const sentence = (at === -1 ? raw : raw.slice(at + marker.length)).trim()
+  return sentence.length > 0 ? sentence : 'That baton name was refused.'
+}

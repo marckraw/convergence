@@ -1,3 +1,8 @@
+import {
+  hasEdgeFormattingMark,
+  hasNameableCharacter,
+} from '../relay/relay.pure'
+
 const MAX_CREW_NAME_LENGTH = 64
 const MAX_CREW_EMOJI_CODEPOINTS = 8
 const MAX_CREW_ACCENT_COLOR_LENGTH = 32
@@ -88,6 +93,18 @@ const MAX_CREW_BATON_NAME_LENGTH = 32
  * mean the pre-filled condition and the stored name disagreed about a wire the
  * user never edited. Blank stores as null: an unnamed member is simply one no
  * baton can address yet.
+ *
+ * A name may not begin or end with a formatting mark, because the reader
+ * peels a symmetric pair off the name it finds: `_horse_` would be addressed
+ * as `horse` and route to a different member, and `my_` would read as a token
+ * no peel can settle. This door is where that ambiguity dies -- once, for
+ * every name -- rather than at each place a name is read.
+ *
+ * And it must contain something a person could have meant as a name, by the
+ * same question the wire door asks of a condition: a member named with no
+ * letter and no number is one no condition may wait on, so accepting the name
+ * here while refusing the condition there would store a station nobody can be
+ * wired to.
  */
 export function normalizeCrewBatonName(
   value: string | null | undefined,
@@ -102,6 +119,12 @@ export function normalizeCrewBatonName(
   }
   if (collapsed.includes(':')) {
     throw new Error('A baton name cannot contain a colon')
+  }
+  if (hasEdgeFormattingMark(collapsed)) {
+    throw new Error('A baton name cannot start or end with a formatting mark')
+  }
+  if (!hasNameableCharacter(collapsed)) {
+    throw new Error('A baton name must contain a letter or a number')
   }
   return collapsed
 }

@@ -7,10 +7,13 @@ import {
   MAX_RELAY_CONDITION_TOKEN_LENGTH,
   MAX_RELAY_OPENER_LENGTH,
   DEFAULT_CREW_ROUND_CAP,
+  TERMINAL_BATON,
   batonConditionToken,
+  batonMismatchMessage,
   hasRoundBudget,
   normalizeRelayConditionToken,
   readEmittedBaton,
+  readEmittedDeclaration,
   relayConditionMatches,
   resolveRoundCap,
   roundBudgetMessage,
@@ -399,6 +402,23 @@ describe('buildRelayHopPreview', () => {
   })
 })
 
+describe('readEmittedDeclaration', () => {
+  it('tells a bare keyword apart from a line that named no baton at all', () => {
+    // Two silences that mean different things: a line that never mentioned a
+    // baton handed nothing on, while `BATON:` attempted a hand-off and named
+    // nobody. Only a reading that keeps them apart lets the engine be loud
+    // about the second without hailing about every message that ends in prose.
+    expect(readEmittedDeclaration('Round 3 is in.\n\nBATON:')).toEqual({
+      kind: 'nameless',
+    })
+    expect(readEmittedDeclaration('Round 3 is in.')).toEqual({ kind: 'none' })
+    expect(readEmittedDeclaration('Round 3 is in.\n\nBATON: horse')).toEqual({
+      kind: 'named',
+      name: 'horse',
+    })
+  })
+})
+
 describe('readEmittedBaton', () => {
   it('reads the declaration on the last non-empty line', () => {
     expect(readEmittedBaton('Round 3 looks good.\n\nBATON: horse\n')).toBe(
@@ -428,6 +448,71 @@ describe('readEmittedBaton', () => {
 
   it('reads nothing from a keyword with no name after it', () => {
     expect(readEmittedBaton('BATON:   ')).toBeNull()
+  })
+
+  // MAR-2815. The wire was drawn right and held all day anyway, because the
+  // one station that always writes markdown always bolded its closing line.
+  it('reads through a symmetric wrapper of emphasis or code marks', () => {
+    expect(readEmittedBaton('Round 3 is in.\n\n**BATON: horse**')).toBe('horse')
+    expect(readEmittedBaton('__BATON: horse__')).toBe('horse')
+    expect(readEmittedBaton('`BATON: horse`')).toBe('horse')
+    expect(readEmittedBaton('***BATON: horse***')).toBe('horse')
+    expect(readEmittedBaton('**_BATON: horse_**')).toBe('horse')
+  })
+
+  it('reads through a symmetric pair INSIDE the declaration', () => {
+    // One rule, applied twice: a symmetric pair around the NAME is the same
+    // decoration it is around the line. Reading it as "nothing declared"
+    // turned a loud unrouted hail into the one thing this feature forbids --
+    // a silent drop.
+    expect(readEmittedBaton('BATON: **horse**')).toBe('horse')
+    expect(readEmittedBaton('BATON: `horse`')).toBe('horse')
+    expect(readEmittedBaton('BATON: _horse_')).toBe('horse')
+  })
+
+  it('reads the reserved chair through a pair inside the declaration', () => {
+    expect(readEmittedBaton('Yours.\n\nBATON: **marcin**')).toBe(TERMINAL_BATON)
+  })
+
+  it('leaves a mark in the middle of a name alone', () => {
+    // `my_horse` is spelling, not formatting.
+    expect(readEmittedBaton('BATON: my_horse')).toBe('my_horse')
+  })
+
+  it('still refuses a lopsided wrapper it cannot read as formatting', () => {
+    expect(readEmittedBaton('**BATON: horse*')).toBeNull()
+  })
+
+  it('keeps a lopsided name as the odd token it is, never as nothing', () => {
+    // It gives up the one pair it could match and keeps what is left. No crew
+    // member may be named `*horse` (`normalizeCrewBatonName` refuses an edge
+    // mark), so this answers to nobody -- and an unanswered baton hails,
+    // which is the whole point: loud, never nothing.
+    expect(readEmittedBaton('BATON: **horse*')).toBe('*horse')
+  })
+
+  it('keeps a name of nothing but marks as the odd token it is', () => {
+    // MAR-2815 round 3. A line that begins with the keyword ATTEMPTED a
+    // hand-off, and `**` peels away to nothing: reading that as "no
+    // declaration" is the silent drop again, one the unrouted hail can no
+    // longer catch because there is nothing to hail about. What was written
+    // stands unpeeled -- unroutable, and therefore loud.
+    expect(readEmittedBaton('BATON: **')).toBe('**')
+    expect(readEmittedBaton('BATON: ****')).toBe('****')
+    expect(readEmittedBaton('BATON: `')).toBe('`')
+  })
+
+  it('never searches prose for a baton, however it is formatted', () => {
+    expect(readEmittedBaton('we should BATON: horse later')).toBeNull()
+    expect(readEmittedBaton('**we should BATON: horse later**')).toBeNull()
+  })
+
+  it('reads the reserved chair through bold, so the chair still lights', () => {
+    // The one route guaranteed to reach a human is also the one a mastermind
+    // is most likely to write in bold.
+    expect(readEmittedBaton('This one is yours.\n\n**BATON: marcin**')).toBe(
+      TERMINAL_BATON,
+    )
   })
 })
 
@@ -467,6 +552,38 @@ describe('relayConditionMatches', () => {
   it('matches a token that is not a baton declaration at all', () => {
     expect(relayConditionMatches('DONE', 'Finished.\n\ndone')).toBe(true)
   })
+
+  // MAR-2815, the other side of the same compare: the strip is applied to the
+  // condition too, so a plain token and a bolded line still meet.
+  it('matches a declaration the formatter wrapped', () => {
+    expect(
+      relayConditionMatches('BATON: horse', 'Done.\n\n**BATON: horse**'),
+    ).toBe(true)
+    expect(
+      relayConditionMatches('BATON: horse', 'Done.\n\n`BATON: horse`'),
+    ).toBe(true)
+    expect(
+      relayConditionMatches('**BATON: horse**', 'Done.\n\nBATON: horse'),
+    ).toBe(true)
+  })
+
+  it('matches through emphasis inside the declaration', () => {
+    // The other half of the same rule: the name is peeled on both sides, so
+    // the formatter cannot put a wire out of reach of the line that meant it.
+    expect(
+      relayConditionMatches('BATON: horse', 'Done.\n\nBATON: **horse**'),
+    ).toBe(true)
+    expect(
+      relayConditionMatches('BATON: **horse**', 'Done.\n\nBATON: horse'),
+    ).toBe(true)
+  })
+
+  it('refuses two sides that are nothing but formatting', () => {
+    // `**` peels away to the empty string, and two empties are not an
+    // agreement about anything: they are two things that said nothing.
+    expect(relayConditionMatches('**', 'Done.\n\n__')).toBe(false)
+    expect(relayConditionMatches('****', 'Done.\n\n``')).toBe(false)
+  })
 })
 
 describe('normalizeRelayConditionToken', () => {
@@ -494,6 +611,59 @@ describe('normalizeRelayConditionToken', () => {
     )
   })
 
+  it('refuses a token that is nothing but formatting marks', () => {
+    // It would peel to the empty string and then meet every other empty peel,
+    // firing the wire on a message that declared nothing.
+    expect(() => normalizeRelayConditionToken('**')).toThrow(
+      'only formatting marks',
+    )
+    expect(() => normalizeRelayConditionToken('____')).toThrow(
+      'only formatting marks',
+    )
+  })
+
+  it('refuses the reserved chair however the formatter wrapped it', () => {
+    expect(() => normalizeRelayConditionToken('**BATON: marcin**')).toThrow(
+      'BATON: marcin is reserved',
+    )
+    expect(() => normalizeRelayConditionToken('_baton: MARCIN_')).toThrow(
+      'BATON: marcin is reserved',
+    )
+    expect(() => normalizeRelayConditionToken('BATON: **marcin**')).toThrow(
+      'BATON: marcin is reserved',
+    )
+  })
+
+  it('refuses a token whose name is nothing but formatting marks', () => {
+    // The sentence used to overpromise: a lone mark has no pair to peel, so
+    // `*` stored happily under a guard that claimed to refuse it, and
+    // `BATON: **` names a token no member may carry. Neither can ever be
+    // satisfied, and a wire waiting forever is worse than one refused here.
+    expect(() => normalizeRelayConditionToken('*')).toThrow(
+      'only formatting marks',
+    )
+    expect(() => normalizeRelayConditionToken('`')).toThrow(
+      'only formatting marks',
+    )
+    expect(() => normalizeRelayConditionToken('BATON: **')).toThrow(
+      'only formatting marks',
+    )
+  })
+
+  it('refuses the bare keyword, which names nobody', () => {
+    expect(() => normalizeRelayConditionToken('BATON:')).toThrow(
+      'must name somebody',
+    )
+  })
+
+  it('keeps every token that does name something', () => {
+    expect(normalizeRelayConditionToken('DONE')).toBe('DONE')
+    expect(normalizeRelayConditionToken('BATON: horse')).toBe('BATON: horse')
+    expect(normalizeRelayConditionToken('BATON: **horse**')).toBe(
+      'BATON: **horse**',
+    )
+  })
+
   it('refuses a token longer than the limit', () => {
     expect(() =>
       normalizeRelayConditionToken(
@@ -506,6 +676,64 @@ describe('normalizeRelayConditionToken', () => {
 describe('batonConditionToken', () => {
   it('writes the convention a wire is pre-filled with', () => {
     expect(batonConditionToken('horse')).toBe('BATON: horse')
+  })
+})
+
+describe('batonMismatchMessage (MAR-2815)', () => {
+  it('quotes the raw last line it read, formatting and all', () => {
+    // The whole point: "handed on nothing" was true and unreadable. The line
+    // is quoted as WRITTEN, formatting included, so the person reading the
+    // trail sees the words that held the loop.
+    expect(
+      batonMismatchMessage(
+        'BATON: horse',
+        'Round 3 is in.\n\n**BATON: fable**',
+      ),
+    ).toBe(
+      'This wire waits for "BATON: horse"; the message\'s last line was "**BATON: fable**", which handed on "fable", so it held.',
+    )
+  })
+
+  it('says a line handed on nothing when it declared nothing', () => {
+    expect(batonMismatchMessage('BATON: horse', 'Round 3 is in.')).toBe(
+      'This wire waits for "BATON: horse"; the message\'s last line was "Round 3 is in.", which handed on nothing, so it held.',
+    )
+  })
+
+  it('names the baton it did read when the line declared one', () => {
+    expect(batonMismatchMessage('BATON: horse', 'Done.\n\nBATON: codex')).toBe(
+      'This wire waits for "BATON: horse"; the message\'s last line was "BATON: codex", which handed on "codex", so it held.',
+    )
+  })
+
+  it('stays one sentence when the last line is a paragraph', () => {
+    const long = `${'x'.repeat(200)}`
+    const sentence = batonMismatchMessage('BATON: horse', long)
+
+    expect(sentence).toContain(`"${'x'.repeat(79)}…"`)
+    expect(sentence).not.toContain('x'.repeat(80))
+  })
+
+  it('never splits a character in half when it truncates', () => {
+    // Truncating by UTF-16 code unit left a lone surrogate in the row a person
+    // reads: the last emoji before the ellipsis rendered as a broken box.
+    const sentence = batonMismatchMessage('BATON: horse', '🐎'.repeat(100))
+
+    expect(sentence).toContain(`"${'🐎'.repeat(79)}…"`)
+    expect(
+      [...sentence].some(
+        (character) =>
+          character.length === 1 &&
+          character >= '\uD800' &&
+          character <= '\uDFFF',
+      ),
+    ).toBe(false)
+  })
+
+  it('says so plainly when there was no line to read', () => {
+    expect(batonMismatchMessage('BATON: horse', '   \n\n  ')).toBe(
+      'This wire waits for "BATON: horse"; the message said nothing on any line, so it held.',
+    )
   })
 })
 

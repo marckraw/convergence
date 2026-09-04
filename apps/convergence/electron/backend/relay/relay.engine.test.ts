@@ -6,7 +6,10 @@ import type { SessionSettledEvent } from '../session/session.types'
 import { RelayEngine, type RelaySessionGateway } from './relay.engine'
 import type { AutomaticTurnAccount } from '../provider-account/provider-account-automatic-turn.pure'
 import { CrewHailService } from './crew-hail.service'
-import { MAX_AUTOMATIC_HOPS_PER_FLOW_RUN } from './relay.pure'
+import {
+  MAX_AUTOMATIC_HOPS_PER_FLOW_RUN,
+  TERMINAL_BATON_MESSAGE,
+} from './relay.pure'
 import { RelayService } from './relay.service'
 import type { RelayHop } from './relay.types'
 
@@ -423,6 +426,149 @@ describe('RelayEngine', () => {
 
       expect(gateway.sent.map((turn) => turn.sessionId)).toEqual(['s2'])
       expect(relays.listHops('c1')[0].outcome).toBe('delivered')
+    })
+
+    it('delivers a baton the formatter bolded (MAR-2815)', async () => {
+      // The defect itself, at the layer it was seen: a mastermind that writes
+      // markdown ends its verdict in bold, and for a whole day every one of
+      // those finishes wrote a held row instead of a hop.
+      batonWire('s1', 's2', 'BATON: codex')
+      const gateway = createGateway({
+        lastMessages: { s1: 'Round 1 is in.\n\n**BATON: codex**' },
+      })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual(['s2'])
+      const hop = relays.listHops('c1')[0]
+      expect(hop.outcome).toBe('delivered')
+      expect(hop.baton).toBe('codex')
+    })
+
+    it('stores the raw refused line on the row the trail reads', async () => {
+      // The claim is about the `error` column a person actually reads, so it
+      // is pinned on the persisted row rather than on the sentence helper.
+      batonWire('s1', 's2', 'BATON: codex')
+      const gateway = createGateway({
+        lastMessages: { s1: 'Done.\n\n**BATON: fable**' },
+      })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      const hop = relays.listHops('c1')[0]
+      expect(hop.outcome).toBe('skipped-baton')
+      expect(hop.error).toBe(
+        'This wire waits for "BATON: codex"; the message\'s last line was "**BATON: fable**", which handed on "fable", so it held.',
+      )
+      // And it is LOUD: a baton no wire answered to always reaches a human.
+      expect(hails.listOpen()).toMatchObject([
+        { reason: 'unrouted', crewId: 'c1', baton: 'fable' },
+      ])
+    })
+
+    it('hails unrouted for a baton bolded INSIDE the declaration', async () => {
+      // The silent drop: reading `BATON: **fable**` as "nothing declared"
+      // wrote no row and opened no hail, so the loop simply stopped with
+      // nobody told -- exactly the failure the unrouted hail exists for.
+      batonWire('s1', 's2', 'BATON: codex')
+      const gateway = createGateway({
+        lastMessages: { s1: 'Round 1 is in.\n\nBATON: **fable**' },
+      })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.sent).toHaveLength(0)
+      expect(hails.listOpen()).toMatchObject([
+        { reason: 'unrouted', crewId: 'c1', baton: 'fable' },
+      ])
+    })
+
+    it('hails unrouted for a declaration that names only marks', async () => {
+      // MAR-2815 round 3, at the claim layer: `BATON: **` peels to nothing,
+      // and "nothing" opened no hail and wrote no reason -- the loop stopped
+      // with nobody told. The attempt is loud again, naming what was written.
+      batonWire('s1', 's2', 'BATON: codex')
+      const gateway = createGateway({
+        lastMessages: { s1: 'Round 1 is in.\n\nBATON: **' },
+      })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.sent).toHaveLength(0)
+      expect(hails.listOpen()).toMatchObject([
+        { reason: 'unrouted', crewId: 'c1', baton: '**' },
+      ])
+    })
+
+    it('hails unrouted for a bare BATON: that names nobody', async () => {
+      // MAR-2815 round 4, at the claim layer: the keyword alone read as "no
+      // declaration at all", so the loop stopped with no row, no hail and
+      // nobody told -- the same silent drop `BATON: **` had, one shape over.
+      // The line still attempted a hand-off, so it is loud; there is simply no
+      // name to quote, and the sentence says that instead.
+      batonWire('s1', 's2', 'BATON: codex')
+      const gateway = createGateway({
+        lastMessages: { s1: 'Round 1 is in.\n\nBATON:' },
+      })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.sent).toHaveLength(0)
+      expect(hails.listOpen()).toMatchObject([
+        { reason: 'unrouted', crewId: 'c1', baton: null },
+      ])
+      expect(hails.listOpen()[0].detail).toContain('named nobody')
+    })
+
+    it('delivers a baton bolded INSIDE the declaration', async () => {
+      // The formatter does not decide who gets the work.
+      batonWire('s1', 's2', 'BATON: codex')
+      const gateway = createGateway({
+        lastMessages: { s1: 'Round 1 is in.\n\nBATON: **codex**' },
+      })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual(['s2'])
+      const hop = relays.listHops('c1')[0]
+      expect(hop.outcome).toBe('delivered')
+      expect(hop.baton).toBe('codex')
+    })
+
+    it('parks at the chair when the chair is bolded INSIDE', async () => {
+      batonWire('s1', 's2', 'BATON: codex')
+      const gateway = createGateway({
+        lastMessages: { s1: 'This one is yours.\n\nBATON: **marcin**' },
+      })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.sent).toHaveLength(0)
+      const hop = relays.listHops('c1')[0]
+      expect(hop.outcome).toBe('skipped-baton')
+      expect(hop.error).toBe(TERMINAL_BATON_MESSAGE)
+      expect(hails.listOpen()).toMatchObject([
+        { reason: 'terminal', crewId: 'c1', baton: 'marcin' },
+      ])
+    })
+
+    it('parks at the chair when the reserved baton arrives in bold', async () => {
+      // The route guaranteed to reach a human is the one a mastermind is most
+      // likely to bold, so the strip has to reach the terminal check too.
+      batonWire('s1', 's2', 'BATON: codex')
+      const gateway = createGateway({
+        lastMessages: { s1: 'This one is yours.\n\n**BATON: marcin**' },
+      })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.sent).toHaveLength(0)
+      const hop = relays.listHops('c1')[0]
+      expect(hop.outcome).toBe('skipped-baton')
+      expect(hop.error).toBe(TERMINAL_BATON_MESSAGE)
+      expect(hails.listOpen()).toMatchObject([
+        { reason: 'terminal', crewId: 'c1', baton: 'marcin' },
+      ])
     })
 
     it('stamps the round and the baton onto the hop it fires', async () => {
