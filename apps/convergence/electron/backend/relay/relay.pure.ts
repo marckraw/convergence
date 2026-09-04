@@ -359,46 +359,180 @@ function lastNonEmptyLine(message: string): string | null {
 }
 
 /**
+ * The marks a formatter wraps a line in: emphasis and code.
+ *
+ * Only these three. A mastermind whose every reply is markdown bolds its
+ * closing line by reflex, and for a whole day (MAR-2815) `**BATON: horse**`
+ * read as "nothing" while the wire sat waiting for the same words unbolded.
+ */
+const BATON_WRAPPER_MARKS = new Set(['*', '_', '`'])
+
+/**
+ * Whether a name wears one of those marks on either end.
+ *
+ * The door a baton name is typed at asks this (`normalizeCrewBatonName`),
+ * because nothing downstream can tell `_horse_` the formatting from `_horse_`
+ * the name: the peeler below would address that member as `horse` and hand
+ * the work to somebody else. Refusing the name once, where it is stored, is
+ * what makes the peel unambiguous everywhere it is read. A mark in the MIDDLE
+ * (`my_horse`) is spelling, and is never touched.
+ */
+export function hasEdgeFormattingMark(name: string): boolean {
+  if (name.length === 0) return false
+  return (
+    BATON_WRAPPER_MARKS.has(name[0]) ||
+    BATON_WRAPPER_MARKS.has(name[name.length - 1])
+  )
+}
+
+/**
+ * The text with a SYMMETRIC wrapper of emphasis or code marks peeled off.
+ *
+ * One mark at a time from both ends, and only while the two ends agree, so
+ * `**x**`, `` `x` ``, `_x_` and `***x***` all reduce to `x` while a lopsided
+ * `**x*` gives up its one matching pair and stays the odd `*x` -- a wrapper
+ * only ever comes off in pairs, which is what keeps this peeling formatting
+ * rather than parsing markdown.
+ */
+function stripSymmetricWrapper(text: string): string {
+  let start = 0
+  let end = text.length
+  // Two characters minimum: a lone `*` is its own first AND last character,
+  // and stripping it from both ends would be reading one mark twice.
+  while (end - start >= 2) {
+    const mark = text[start]
+    if (!BATON_WRAPPER_MARKS.has(mark)) break
+    if (text[end - 1] !== mark) break
+    start += 1
+    end -= 1
+  }
+  return text.slice(start, end)
+}
+
+/**
  * One line, in the one spelling everything here compares.
  *
  * Case folds and internal whitespace collapses because both are invisible: a
  * station that wrote `BATON:  Horse` declared the same route as one that wrote
  * `baton: horse`, and a loop that stalled on a double space would be a loop
- * nobody could debug. Normalising cannot make two DIFFERENT declarations equal
- * -- it is applied identically to both sides of every comparison -- so this
- * stays a string compare, not prose parsing.
+ * nobody could debug. A symmetric wrapper of `*`, `_` or backticks comes off
+ * for the same reason: it is the formatter's decoration around a whole
+ * declaration, not part of what was declared. Normalising cannot make two
+ * DIFFERENT declarations equal -- it is applied identically to both sides of
+ * every comparison -- so this stays a string compare, not prose parsing.
  */
 function normalizeBatonLine(line: string): string {
-  return line.trim().replace(/\s+/g, ' ').toLowerCase()
+  return stripSymmetricWrapper(line.trim())
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
 }
 
 /**
- * The baton a line declares, or null when the line is not a declaration.
+ * What a normalized line declared: nothing, a name, or the keyword alone.
+ *
+ * Three cases rather than a name-or-null, because the third is a question the
+ * wire door has to ask on its own: `BATON:` with nothing after it declared
+ * nobody, which is a different refusal from a line that never mentioned a
+ * baton at all, and only a reading that keeps them apart can say so.
+ */
+export type BatonDeclaration =
+  | { kind: 'none' }
+  | { kind: 'named'; name: string }
+  | { kind: 'nameless' }
+
+/**
+ * The ONE place a declaration is decoded, so the reader below and the wire
+ * compare further down can never disagree about what a line handed on.
  *
  * Anchored at the start of the line on purpose: a sentence that mentions the
  * word in passing has not routed anything, and a relay that thought otherwise
  * would be sniffing prose.
+ *
+ * The wrapper comes off the NAME by the same rule it comes off the line --
+ * one rule, applied twice: a symmetric pair on both ends of the token is the
+ * formatter's decoration, exactly as it is around the whole line, so
+ * `BATON: **horse**` hands on to `horse`. Reading that as "nothing declared"
+ * is what it must never be: an emitted baton that evaporates is a silent
+ * drop, and the unrouted hail exists precisely so no hand-off can vanish.
+ * A lopsided `BATON: **horse*` keeps the mark it could not pair (`*horse`),
+ * which no crew member may be named (`hasEdgeFormattingMark` guards the
+ * door), so it answers to nobody and hails as unrouted -- loud, never
+ * nothing. Marks in the MIDDLE of a name (`my_horse`) are untouched: they are
+ * spelling.
+ *
+ * A name of NOTHING BUT marks (`BATON: **`) peels away to the empty string,
+ * and the peel was the only thing that could have been a name -- but the line
+ * still attempted a hand-off, so what was written stands unpeeled. It routes
+ * nowhere for exactly the reason `*horse` does not, and so it is loud.
+ * Calling it "no declaration" would be the silent drop through the other
+ * door: nothing to route AND nothing to hail about.
  */
+function readBatonDeclaration(normalizedLine: string): BatonDeclaration {
+  const prefix = `${BATON_KEYWORD}:`
+  if (!normalizedLine.startsWith(prefix)) return { kind: 'none' }
+  const written = normalizedLine.slice(prefix.length).trim()
+  if (written.length === 0) return { kind: 'nameless' }
+  const peeled = stripSymmetricWrapper(written).trim()
+  return { kind: 'named', name: peeled.length > 0 ? peeled : written }
+}
+
+/** The name a normalized line declares, or null when it declares none. */
+function declaredBatonName(normalizedLine: string): string | null {
+  const declaration = readBatonDeclaration(normalizedLine)
+  return declaration.kind === 'named' ? declaration.name : null
+}
+
+/**
+ * One line in the one spelling every compare uses.
+ *
+ * A line that declares a baton canonicalises to `baton: <name>` with the
+ * declaration's own wrapper peeled off; anything else is simply its
+ * normalized self, because a wire's condition need not be a baton at all
+ * (`DONE` is a legal token). Both sides of every compare come through here,
+ * which is what keeps this a string compare: the same words always canonicalise
+ * the same way, and two DIFFERENT declarations still cannot meet.
+ */
+function canonicalBatonLine(line: string): string {
+  const normalized = normalizeBatonLine(line)
+  const name = declaredBatonName(normalized)
+  return name === null ? normalized : `${BATON_KEYWORD}: ${name}`
+}
+
+/** The baton a line declares, or null when the line is not a declaration. */
 function readBatonFromLine(line: string | null): string | null {
   if (line === null) return null
-  const normalized = normalizeBatonLine(line)
-  const prefix = `${BATON_KEYWORD}:`
-  if (!normalized.startsWith(prefix)) return null
-  const name = normalized.slice(prefix.length).trim()
-  return name.length > 0 ? name : null
+  return declaredBatonName(normalizeBatonLine(line))
+}
+
+/**
+ * What a finished message's last non-empty line declared.
+ *
+ * The engine asks this rather than only "which name", because the two
+ * silences mean different things: a message that ends in prose handed nothing
+ * on, while `BATON:` with nobody after it ATTEMPTED a hand-off and named
+ * nobody -- and an attempt nothing answered has to reach a human, exactly as
+ * `BATON: **` does. Reading them as one silence is what let the bare keyword
+ * vanish with no row and no hail.
+ */
+export function readEmittedDeclaration(message: string): BatonDeclaration {
+  const line = lastNonEmptyLine(message)
+  if (line === null) return { kind: 'none' }
+  return readBatonDeclaration(normalizeBatonLine(line))
 }
 
 /**
  * The baton a finished message hands on, read from its last non-empty line.
  *
- * Used for two different questions, and only these two: whether a baton was
- * declared at all -- an emitted baton nobody routed is a silent drop, and
- * silent drops are forbidden -- and whether it is the reserved terminal. Wire
- * matching does not go through here, because a wire's condition need not be a
- * baton at all.
+ * Used for two different questions, and only these two: which name a settle
+ * handed on -- recorded on every hop row -- and whether it is the reserved
+ * terminal. Whether a hand-off was ATTEMPTED at all is `readEmittedDeclaration`
+ * above, over the same decoding. Wire matching does not go through here,
+ * because a wire's condition need not be a baton at all.
  */
 export function readEmittedBaton(message: string): string | null {
-  return readBatonFromLine(lastNonEmptyLine(message))
+  const declaration = readEmittedDeclaration(message)
+  return declaration.kind === 'named' ? declaration.name : null
 }
 
 /** The convention a wire's condition field is pre-filled with. */
@@ -410,9 +544,11 @@ export function batonConditionToken(batonName: string): string {
  * Whether this wire's condition is satisfied by the message that just
  * finished.
  *
- * One string compare against the last non-empty line, and nothing else. A wire
- * with no token is unconditional -- exactly what every wire drawn before
- * conditions existed was, and still is.
+ * One string compare against the last non-empty line, and nothing else -- the
+ * two sides canonicalised by the same rule, so the formatter cannot put a wire
+ * out of reach of the line that meant it. A wire with no token is
+ * unconditional -- exactly what every wire drawn before conditions existed
+ * was, and still is.
  */
 export function relayConditionMatches(
   conditionToken: string | null,
@@ -421,7 +557,35 @@ export function relayConditionMatches(
   if (conditionToken === null) return true
   const line = lastNonEmptyLine(message)
   if (line === null) return false
-  return normalizeBatonLine(line) === normalizeBatonLine(conditionToken)
+  const canonicalLine = canonicalBatonLine(line)
+  const canonicalToken = canonicalBatonLine(conditionToken)
+  // A side made of nothing but marks (`**`, `____`) peels away to the empty
+  // string, and two empties are not an agreement about anything: they are two
+  // things that said nothing. Without this, a wire whose token was `**` fired
+  // on every message ending in `__`.
+  if (canonicalLine.length === 0 || canonicalToken.length === 0) return false
+  return canonicalLine === canonicalToken
+}
+
+/**
+ * A character a person could have meant: a letter or a number, in any script.
+ *
+ * Everything else a condition might be made of -- emphasis, code marks,
+ * punctuation -- is decoration around a name rather than a name.
+ */
+const NAMEABLE_CHARACTER = /[\p{L}\p{N}]/u
+
+/**
+ * Whether a text contains anything a person could have meant as a name.
+ *
+ * Asked at BOTH doors -- the wire's condition here and the crew member's baton
+ * name (`normalizeCrewBatonName`) -- because the two are one question: a
+ * member named `🐎` is a member no condition may ever wait on, so a door that
+ * accepts the name while the other refuses the condition stores a station
+ * nobody can be wired to.
+ */
+export function hasNameableCharacter(text: string): boolean {
+  return NAMEABLE_CHARACTER.test(text)
 }
 
 /**
@@ -448,6 +612,27 @@ export function normalizeRelayConditionToken(
   if (trimmed.length > MAX_RELAY_CONDITION_TOKEN_LENGTH) {
     throw new Error(
       `A relay condition cannot be longer than ${MAX_RELAY_CONDITION_TOKEN_LENGTH} characters`,
+    )
+  }
+  // A condition is a promise that some future line will match it, and two
+  // shapes can never keep it. Refused here rather than stored, so no wire is
+  // left waiting on something no message can say -- and a blank box is
+  // already spoken for, meaning "fire whenever the source finishes".
+  const normalized = normalizeBatonLine(trimmed)
+  const declaration = readBatonDeclaration(normalized)
+  if (declaration.kind === 'nameless') {
+    throw new Error('A relay condition that says BATON: must name somebody')
+  }
+  // Asked of the declared NAME when there is one, and of the whole token
+  // otherwise, because `DONE` is a legal condition that names no baton at
+  // all. The old guard asked only whether the token peeled away to nothing,
+  // which is why its sentence overpromised: a LONE mark has no pair to peel,
+  // so `*` and a bare backtick stored happily under a sentence saying they
+  // could not, and `BATON: **` waits on a name no member may carry.
+  const waitedOn = declaration.kind === 'named' ? declaration.name : normalized
+  if (!hasNameableCharacter(waitedOn)) {
+    throw new Error(
+      'A relay condition must wait on a letter or a number, not only formatting marks',
     )
   }
   if (readBatonFromLine(trimmed) === TERMINAL_BATON) {
@@ -504,18 +689,43 @@ export function roundBudgetMessage(cap: number): string {
 }
 
 /**
+ * How much of the refused line the ledger quotes back. Long enough to show a
+ * declaration and its formatting, short enough to stay one readable sentence.
+ */
+const MAX_QUOTED_BATON_LINE_LENGTH = 80
+
+/**
  * The sentence the ledger shows when a wire's baton condition did not match.
  *
  * The refusal is the wire working exactly as drawn -- default-closed is the
  * point of a condition -- so it reads grey and says which baton it was waiting
  * for.
+ *
+ * It quotes the RAW last line rather than only the baton it read, because
+ * "handed on nothing" is true and useless: for a whole day (MAR-2815) every
+ * hop said it while the line right there read `**BATON: horse**`, and nobody
+ * could see the mismatch the trail was describing. Takes the whole message and
+ * derives both halves here, so the quoted line and the baton beside it can
+ * never come from two different readings of it.
  */
 export function batonMismatchMessage(
   conditionToken: string,
-  emittedBaton: string | null,
+  message: string,
 ): string {
+  const line = lastNonEmptyLine(message)
+  if (line === null) {
+    return `This wire waits for "${conditionToken}"; the message said nothing on any line, so it held.`
+  }
+  const emittedBaton = readBatonFromLine(line)
   const seen = emittedBaton
     ? `handed on "${emittedBaton}"`
     : 'handed on nothing'
-  return `This wire waits for "${conditionToken}"; the message ${seen}, so it held.`
+  // By character, not by UTF-16 code unit: slicing an emoji in half left a
+  // lone surrogate in the row a person reads, which renders as a broken box.
+  const characters = Array.from(line)
+  const quoted =
+    characters.length > MAX_QUOTED_BATON_LINE_LENGTH
+      ? `${characters.slice(0, MAX_QUOTED_BATON_LINE_LENGTH - 1).join('')}…`
+      : line
+  return `This wire waits for "${conditionToken}"; the message's last line was "${quoted}", which ${seen}, so it held.`
 }

@@ -20,6 +20,7 @@ import {
   hasRoundBudget,
   isBudgetedOutcome,
   readEmittedBaton,
+  readEmittedDeclaration,
   relayConditionMatches,
   resolveRoundCap,
   roundBudgetMessage,
@@ -454,6 +455,14 @@ export class RelayEngine {
    * emitted baton that simply evaporated is exactly the failure this whole
    * feature was built to make impossible.
    *
+   * Which is why the question asked here is whether the last line ATTEMPTED a
+   * hand-off, not which name it handed on. `BATON:` with nobody after it names
+   * nobody, so there is no baton to quote -- and reading that as "no
+   * declaration" dropped it through the other door: nothing to route AND
+   * nothing to hail about. The hail carries a null baton and says so in its
+   * own sentence. Both answers come from the one decoder in `relay.pure`, so
+   * the name and the attempt can never disagree about one line.
+   *
    * Only on a settle that actually finished work, and only when the human did
    * not ask for quiet. A failed session already wrote `skipped-failed` on every
    * wire, and a quiet settle is the user's explicit instruction -- hailing over
@@ -478,7 +487,10 @@ export class RelayEngine {
     answeredCrewIds: ReadonlySet<string>
   }): void {
     const { event, emittedBaton } = input
-    if (emittedBaton === null) return
+    const declaration = input.message
+      ? readEmittedDeclaration(input.message)
+      : ({ kind: 'none' } as const)
+    if (declaration.kind === 'none') return
     if (event.relaysMuted || event.status !== 'completed') return
 
     const reason = emittedBaton === TERMINAL_BATON ? 'terminal' : 'unrouted'
@@ -746,7 +758,7 @@ export class RelayEngine {
       !relayConditionMatches(conditionToken, message ?? '')
     ) {
       record('skipped-baton', {
-        error: batonMismatchMessage(conditionToken, emittedBaton),
+        error: batonMismatchMessage(conditionToken, message ?? ''),
       })
       return false
     }

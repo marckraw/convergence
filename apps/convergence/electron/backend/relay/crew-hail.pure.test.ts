@@ -355,6 +355,16 @@ describe('formatCrewHailDetail', () => {
     )
   })
 
+  it('says a declaration named nobody when there was no name to quote', () => {
+    // `BATON:` with nothing after it handed the work on and named nobody. The
+    // hail has no baton to quote, and the sentence has to say that rather than
+    // fall back to a generic word: a hail that reads "handed on a baton" about
+    // a line that named none is a sentence nobody can act on.
+    const detail = formatCrewHailDetail('unrouted', { baton: null })
+    expect(detail).toContain('named nobody')
+    expect(detail).not.toContain('"a baton"')
+  })
+
   it('names the cap the loop reached', () => {
     expect(formatCrewHailDetail('round-budget', { cap: 12 })).toContain('12')
   })
