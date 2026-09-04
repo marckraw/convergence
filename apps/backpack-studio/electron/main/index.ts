@@ -1,20 +1,51 @@
 import { app, BrowserWindow } from 'electron'
-import { join } from 'path'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import type {
+  DaemonStatusView,
+  StudioStartup,
+} from '../../src/shared/studio-api/studio-api.types'
+import {
+  mergeEnv,
+  parseDotEnv,
+  readStudioConfig,
+  type StudioConfig,
+} from '../backend/config/studio-config.pure'
+import { ConversationService } from '../backend/conversation/conversation.service'
+import { DaemonClient } from '../backend/daemon/daemon-client'
+import { describeDaemonStatus } from '../backend/daemon/daemon-wire.pure'
+import { JsonFileConversationStore } from '../backend/record/conversation-store'
+import {
+  broadcastConversationEvent,
+  broadcastDaemonStatus,
+  registerStudioIpc,
+} from '../backend/studio-ipc'
 
 /**
- * Backpack Studio's shell — the second body's seed (MAR-2737).
+ * Backpack Studio's shell (MAR-2770).
  *
- * A window and nothing else. No database, no providers, no session runtime, no
- * daemon calls: this app exists at this stage to prove one thing, that the
- * monorepo floor can hold a second Electron app which consumes
- * `@convergence/execution-host-client` for real. What it becomes is its own
- * constitution's business (MAR-2705).
+ * Thin on purpose: it reads the configuration, builds the three objects that
+ * do the work, opens a window and gets out of the way. Everything with a
+ * decision in it lives under `backend/`.
+ *
+ * The daemon's URL and token are read here and stay here. Nothing below this
+ * file's `DaemonClient` is given either, no IPC channel carries them, and the
+ * window has no member on `window.backpackStudio` that could.
  */
+
+let service: ConversationService | null = null
+let recordReady: Promise<void> = Promise.resolve()
+let readStartup: () => Promise<StudioStartup> = () =>
+  Promise.resolve({ kind: 'misconfigured', missing: [] })
+
 function createWindow(): void {
   const window = new BrowserWindow({
-    width: 1000,
-    height: 700,
+    width: 1180,
+    height: 800,
+    minWidth: 860,
+    minHeight: 560,
     title: 'Backpack Studio',
+    backgroundColor: '#0f1115',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -30,12 +61,112 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+/**
+ * The environment Studio actually reads: the process's own, with a gitignored
+ * `.env` beside the app standing in wherever the process says nothing.
+ *
+ * A missing or unreadable file is not an error — running with the variables
+ * exported in a shell is the other supported way — so the failure to read one
+ * produces an empty record rather than a refusal.
+ */
+async function readEnvironment(): Promise<Record<string, string | undefined>> {
+  const candidates = [
+    join(app.getAppPath(), '.env'),
+    join(process.cwd(), '.env'),
+  ]
+  for (const candidate of candidates) {
+    try {
+      return mergeEnv(
+        process.env,
+        parseDotEnv(await readFile(candidate, 'utf-8')),
+      )
+    } catch {
+      continue
+    }
+  }
+  return process.env
+}
+
+/**
+ * Builds the working parts, once, for a configuration that is complete.
+ *
+ * THE RECORD IS NOT GATED ON THE DAEMON. Startup resolves as soon as the log
+ * on disk has been read back; the handshake — two probes, fifteen seconds
+ * capped each — runs beside it and is pushed to the window when it lands.
+ * Waiting for it made a black-holed host look like an app that would not open,
+ * and the conversations a person already has are the first thing the window is
+ * for (constitution law 5).
+ *
+ * The handshake is probed once, not once per window: the result is kept here so
+ * a second window is told what the first was told, without a second probe.
+ */
+function build(config: StudioConfig): void {
+  const client = new DaemonClient({
+    baseUrl: config.daemonBaseUrl,
+    token: config.daemonToken,
+  })
+  service = new ConversationService({
+    store: new JsonFileConversationStore(
+      join(app.getPath('userData'), 'conversations'),
+    ),
+    client,
+    providerId: config.providerId,
+    workingDirectory: config.daemonProject,
+    onSnapshot: (snapshot) =>
+      broadcastConversationEvent({
+        conversationId: snapshot.id,
+        snapshot,
+      }),
+  })
+
+  let daemon: DaemonStatusView | null = null
+  recordReady = service.hydrate()
+  void client.handshake().then((handshake) => {
+    daemon = describeDaemonStatus(handshake, config.providerId)
+    broadcastDaemonStatus(daemon)
+  })
+
+  readStartup = async () => {
+    // Re-attaching to what was already running is part of being ready: a window
+    // that asked for the conversation list before the record had been read
+    // would be told there were none.
+    await recordReady
+    return { kind: 'ready', providerId: config.providerId, daemon }
+  }
+}
+
+app.whenReady().then(async () => {
+  const reading = readStudioConfig(await readEnvironment())
+  if (reading.ok) {
+    build(reading.config)
+  } else {
+    readStartup = () =>
+      Promise.resolve({ kind: 'misconfigured', missing: reading.missing })
+  }
+
+  registerStudioIpc({
+    getStartup: () => readStartup(),
+    whenRecordReady: () => recordReady,
+    get service() {
+      return service
+    },
+  })
+
   createWindow()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+// Quitting waits for the appends the streams still owe, so the log on disk is
+// never behind the transcript the window was showing.
+app.on('before-quit', (event) => {
+  const running = service
+  if (!running) return
+  service = null
+  event.preventDefault()
+  void running.dispose().finally(() => app.quit())
 })
 
 app.on('window-all-closed', () => {
