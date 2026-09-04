@@ -29,6 +29,7 @@ import {
   DEFAULT_CREW_ROUND_CAP,
   DEFAULT_CREW_STALL_MINUTES,
   batonConditionToken,
+  batonNameRefusal,
 } from './crew-loop.pure'
 import { RelayHopTrail } from './relay-hop-trail.container'
 import { RelayRow } from './relay-row.presentational'
@@ -102,6 +103,16 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
   )
   const [busy, setBusy] = useState(false)
   const [loopPanelOpen, setLoopPanelOpen] = useState(false)
+  const [batonNameProblem, setBatonNameProblem] = useState<{
+    sessionId: string
+    message: string
+  } | null>(null)
+  // What is being TYPED, per member, until the person says it is finished.
+  // Keyed by session id rather than held as one edit, because a crew's panel
+  // has a field per member and nothing stops somebody starting a second one.
+  const [batonNameDrafts, setBatonNameDrafts] = useState<
+    Record<string, string>
+  >({})
 
   const allHails = useCrewHailStore((state) => state.hails)
   const acknowledgeHail = useCrewHailStore((state) => state.acknowledge)
@@ -353,10 +364,18 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
    * the backend lowercases and collapses what was typed, and the field the
    * user is about to pre-fill a condition from must show the stored spelling,
    * not the one they happened to press.
+   *
+   * A refusal keeps the roster exactly as it was AND puts the door's own
+   * sentence under the field. A swallowed refusal shows as nothing but the
+   * typing vanishing -- which is the silent-drop class with a text box in
+   * front of it.
    */
   const setBatonName = useCallback(
     async (sessionId: string, batonName: string) => {
       setBusy(true)
+      // The next attempt is the user answering the refusal, so the sentence
+      // belongs to the attempt it came from rather than to the field.
+      setBatonNameProblem(null)
       try {
         await sessionCrewApi.setMemberBatonName(
           crew.id,
@@ -364,13 +383,42 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
           batonName.trim() ? batonName : null,
         )
         await loadCrews()
-      } catch {
+      } catch (err) {
         // The roster stays as it was; the broadcast is the authority and it
-        // never fired. A failed rename must not blank the field.
+        // never fired. The field reverts to the stored name on its own -- it
+        // is rendered from the roster -- and now it reverts with a reason.
+        setBatonNameProblem({ sessionId, message: batonNameRefusal(err) })
       }
       setBusy(false)
     },
     [crew.id, loadCrews],
+  )
+
+  /**
+   * The name is finished: the person left the field or pressed Enter.
+   *
+   * The door refuses a name whose last character is a formatting mark, so a
+   * field that went to the door on every keystroke made `my_horse`
+   * untypeable -- `my_` was refused mid-word and the field snapped back before
+   * the `h`. Typing is not a name; this is where a name is.
+   *
+   * The draft is dropped before the trip, which does two things: the field
+   * goes back to reading the roster (so a refused name never sits there
+   * looking stored), and a second finish -- Enter, then the blur it causes --
+   * finds nothing to send rather than knocking twice.
+   */
+  const commitBatonName = useCallback(
+    async (sessionId: string) => {
+      const typed = batonNameDrafts[sessionId]
+      if (typed === undefined) return
+      setBatonNameDrafts((drafts) => {
+        const next = { ...drafts }
+        delete next[sessionId]
+        return next
+      })
+      await setBatonName(sessionId, typed)
+    },
+    [batonNameDrafts, setBatonName],
   )
 
   const setLoopLimit = useCallback(
@@ -468,8 +516,16 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
           defaultRoundCap={DEFAULT_CREW_ROUND_CAP}
           defaultStallMinutes={DEFAULT_CREW_STALL_MINUTES}
           busy={busy}
-          onBatonNameChange={(sessionId, batonName) => {
-            void setBatonName(sessionId, batonName)
+          batonNameProblem={batonNameProblem}
+          batonNameDrafts={batonNameDrafts}
+          onBatonNameEdit={(sessionId, batonName) => {
+            setBatonNameDrafts((drafts) => ({
+              ...drafts,
+              [sessionId]: batonName,
+            }))
+          }}
+          onBatonNameCommit={(sessionId) => {
+            void commitBatonName(sessionId)
           }}
           onRoundCapChange={(roundCap) => {
             void setLoopLimit({ roundCap })
