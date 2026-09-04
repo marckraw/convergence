@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -20,7 +21,7 @@ import { GIT_INTEGRATION_TEST_TIMEOUT_MS } from '../git/git-integration-budget'
 import {
   LaneService,
   copyLaneTree,
-  makeNodeByteCopier,
+  makeByteCopier,
   reserveLaneFolder,
   type LaneTreeCopier,
 } from './lane.service'
@@ -258,7 +259,7 @@ describe('LaneService', { timeout: GIT_INTEGRATION_TEST_TIMEOUT_MS }, () => {
       getDatabase(),
       new GitService(),
       () => lanesRoot,
-      makeNodeByteCopier(),
+      makeByteCopier(),
     )
     const before = await freeBytes(tempDir)
 
@@ -276,6 +277,41 @@ describe('LaneService', { timeout: GIT_INTEGRATION_TEST_TIMEOUT_MS }, () => {
     expect(consumed).toBeGreaterThanOrEqual(0.9 * BIG_FILE_BYTES)
     expect(readFileSync(join(lane.repositoryPath, BIG_FILE)).length).toBe(
       BIG_FILE_BYTES,
+    )
+  })
+
+  // M1 (MAR-2814 round 1): a project row holds `resolve()`d path, not a
+  // realpath, so a root registered through a symlinked folder is an ordinary
+  // root here. `find` defaults to `-P` on both BSD and GNU, under which a
+  // symlinked starting point yields NOTHING -- the lane would be made empty
+  // and fail in git, naming the wrong cause.
+  it('copies a root whose registered path is a symlink to the checkout', async () => {
+    const linkedRootPath = join(tempDir, 'root-link')
+    symlinkSync(rootPath, linkedRootPath)
+    getDatabase()
+      .prepare(
+        `INSERT INTO projects (id, name, repository_path, settings)
+         VALUES ('linked-root', 'convergence', ?, '{}')`,
+      )
+      .run(linkedRootPath)
+
+    const { lane, warnings } = await service.create({
+      rootProjectId: 'linked-root',
+      laneName: 'linked',
+      branchName: 'feat/linked',
+    })
+
+    expect(readFileSync(join(lane.repositoryPath, '.env'), 'utf8')).toBe(
+      'SECRET=1\n',
+    )
+    expect(
+      existsSync(join(lane.repositoryPath, 'node_modules', 'dep', 'index.js')),
+    ).toBe(true)
+    // The pre-scan walked the same followed root: it is the one that meets
+    // the sockets, and a walk that met nothing would name none of them.
+    expect(warnings).toEqual([FSMONITOR_SOCKET_WARNING])
+    expect(git(lane.repositoryPath, ['branch', '--show-current'])).toBe(
+      'feat/linked',
     )
   })
 
@@ -518,6 +554,55 @@ describe('LaneService', { timeout: GIT_INTEGRATION_TEST_TIMEOUT_MS }, () => {
     expect(existsSync(join(lanesRoot, rootId, 'half'))).toBe(false)
     expect(existsSync(join(lanesRoot, rootId))).toBe(false)
     expect(lanesOf(rootId)).toEqual([])
+  })
+
+  // M3 (MAR-2814 round 1): ruling 2's other half -- the rollback that FAILS.
+  // What the installed app told Marcin was the cleanup's ENOTEMPTY thrown
+  // over the top of the real cause, so the dialog named a folder inside
+  // `Electron.app` and never the reason. Here the removal really cannot run:
+  // the reservation's parent is sealed, so `rm -rf` empties the target and
+  // then may not unlink it. The error that leaves is still the copy's own.
+  it('keeps the cause when the rollback itself fails, and says the folder stayed', async () => {
+    const parentPath = join(lanesRoot, rootId)
+    const targetPath = join(parentPath, 'masked')
+    const failing = new LaneService(
+      getDatabase(),
+      new GitService(),
+      () => lanesRoot,
+      async (_source, target) => {
+        writeFileSync(join(target, 'half.txt'), 'half')
+        chmodSync(parentPath, 0o500)
+        throw Object.assign(new Error('disk full'), { code: 'ENOSPC' })
+      },
+    )
+
+    try {
+      const thrown = (await failing
+        .create({
+          rootProjectId: rootId,
+          laneName: 'masked',
+          branchName: 'feat/masked',
+        })
+        .then(
+          () => null,
+          (error: unknown) => error,
+        )) as NodeJS.ErrnoException | null
+
+      // The cause's own sentence FIRST, its `code` intact -- a caller that
+      // reads either one still gets the copy's failure, not the cleanup's.
+      expect(thrown?.message).toMatch(/^disk full — and the half-made folder/)
+      expect(thrown?.message).toContain(`could not be removed: ${targetPath}`)
+      expect(thrown?.code).toBe('ENOSPC')
+      // And the cleanup's failure is kept, attached rather than told.
+      expect((thrown?.cause as Error | undefined)?.message).toMatch(
+        /Permission denied/,
+      )
+      // The instrument itself: the folder really did survive the rollback.
+      expect(existsSync(targetPath)).toBe(true)
+      expect(lanesOf(rootId)).toEqual([])
+    } finally {
+      chmodSync(parentPath, 0o700)
+    }
   })
 
   it('refuses a bad name, a taken name, a lane of a lane, and an occupied folder', async () => {
