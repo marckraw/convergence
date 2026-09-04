@@ -2,10 +2,52 @@ import { describe, expect, it } from 'vitest'
 import {
   nextCrewPosition,
   normalizeCrewAccentColor,
+  normalizeCrewBatonName,
   normalizeCrewEmoji,
   normalizeCrewName,
   normalizeCrewSessionIds,
 } from './crew.pure'
+
+describe('normalizeCrewBatonName', () => {
+  it('stores an unnamed member as no name at all', () => {
+    expect(normalizeCrewBatonName('   ')).toBeNull()
+    expect(normalizeCrewBatonName(null)).toBeNull()
+    expect(normalizeCrewBatonName(undefined)).toBeNull()
+  })
+
+  it('keeps the one spelling the relay compares', () => {
+    expect(normalizeCrewBatonName('  Night  Horse  ')).toBe('night horse')
+  })
+
+  it('refuses a name that starts or ends with a formatting mark', () => {
+    // The reader peels a symmetric pair off a name, so `_horse_` would be
+    // addressed as `horse` and route to somebody else, and `my_` reads as a
+    // token no peel can settle. The door is where that ambiguity dies -- once,
+    // for every name, rather than at each place a name is read.
+    for (const name of ['_horse_', 'horse*', '`horse`', '*horse', 'my_']) {
+      expect(() => normalizeCrewBatonName(name)).toThrow(
+        'cannot start or end with a formatting mark',
+      )
+    }
+  })
+
+  it('leaves a mark in the middle of a name alone', () => {
+    // `my_horse` is spelling, not formatting.
+    expect(normalizeCrewBatonName('my_horse')).toBe('my_horse')
+  })
+
+  it('refuses a name no condition may ever wait on', () => {
+    // The wire door refuses a condition that waits on no letter and no number
+    // (`BATON: 🐎`), so a member stored under that name is a member nobody can
+    // be wired to: named here, unreachable there. One question, asked at both
+    // doors. `Ł` is a letter in a script that is not English -- a name, not
+    // decoration -- and the door must not confuse the two.
+    expect(() => normalizeCrewBatonName('🐎')).toThrow(
+      'must contain a letter or a number',
+    )
+    expect(normalizeCrewBatonName('Ł')).toBe('ł')
+  })
+})
 
 describe('normalizeCrewName', () => {
   it('trims surrounding whitespace', () => {
