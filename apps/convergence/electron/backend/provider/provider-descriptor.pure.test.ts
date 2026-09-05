@@ -246,20 +246,23 @@ describe('provider-descriptor', () => {
     ])
   })
 
-  // Fixture: `model/list` tape from codex 0.145.0, probed 2026-07-27 (MAR-2034).
-  // The fallback is only consulted when that RPC fails, so it mirrors the tape
-  // exactly rather than carrying models OpenAI no longer serves.
-  it('mirrors the live codex 0.145 model/list tape in the fallback catalog', () => {
+  // Fixture: `model/list` tape probed from codex 0.153.4 on 2026-09-05
+  // (MAR-2818, `includeHidden: false`). The fallback is only consulted when
+  // that RPC fails, so it mirrors the tape exactly rather than carrying models
+  // OpenAI no longer serves.
+  it('mirrors the live codex 0.153 model/list tape in the fallback catalog', () => {
     const descriptor = buildFallbackCodexDescriptor()
 
-    expect(descriptor.defaultModelId).toBe('gpt-5.6-sol')
+    // Codex made Astra its own default, so the fallback says the same thing
+    // the RPC path would.
+    expect(descriptor.defaultModelId).toBe('gpt-6-astra')
     expect(descriptor.fastModelId).toBe('gpt-5.6-luna')
     expect(descriptor.modelOptions.map((option) => option.id)).toEqual([
+      'gpt-6-astra',
       'gpt-5.6-sol',
       'gpt-5.6-terra',
       'gpt-5.6-luna',
       'gpt-5.5',
-      'gpt-5.4',
       'gpt-5.4-mini',
       'gpt-5.3-codex-spark',
     ])
@@ -274,6 +277,22 @@ describe('provider-descriptor', () => {
         option.effortOptions.some((effort) => effort.id === 'none'),
       ),
     ).toBe(false)
+
+    expect(descriptor.modelOptions[0]).toMatchObject({
+      id: 'gpt-6-astra',
+      label: 'GPT-6 Astra',
+      description: 'Our most capable model for complex, demanding work.',
+      defaultEffort: 'medium',
+      effortOptions: [
+        { id: 'low', label: 'Low' },
+        { id: 'medium', label: 'Medium' },
+        { id: 'high', label: 'High' },
+        { id: 'xhigh', label: 'Very High' },
+        { id: 'max', label: 'Max' },
+        { id: 'ultra', label: 'Ultra (multi-agent)' },
+      ],
+      inputModalities: ['text', 'image'],
+    })
 
     expect(
       descriptor.modelOptions.find((option) => option.id === 'gpt-5.6-sol'),
@@ -302,10 +321,20 @@ describe('provider-descriptor', () => {
         ?.effortOptions.map((effort) => effort.id),
     ).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
     expect(
+      descriptor.modelOptions.find((option) => option.id === 'gpt-5.4-mini')
+        ?.defaultEffort,
+    ).toBe('medium')
+    expect(
       descriptor.modelOptions
         .find((option) => option.id === 'gpt-5.3-codex-spark')
         ?.effortOptions.map((effort) => effort.id),
     ).toEqual(['low', 'medium', 'high', 'xhigh'])
+    // Spark is the one text-only row on the tape: Codex sends it no images.
+    expect(
+      descriptor.modelOptions.find(
+        (option) => option.id === 'gpt-5.3-codex-spark',
+      )?.inputModalities,
+    ).toEqual(['text'])
   })
 
   it('exposes Antigravity official models as model + effort options', () => {
