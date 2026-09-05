@@ -1,5 +1,11 @@
 # convergence
 
+## 0.46.13
+
+### Patch Changes
+
+- 03b101f: The Codex fallback catalog knows GPT-6 Astra, Codex's new default model. It now mirrors the model list Codex 0.153 actually reports, so the models offered when Codex cannot be asked match the ones it can run.
+
 ## 0.46.12
 
 ### Patch Changes
