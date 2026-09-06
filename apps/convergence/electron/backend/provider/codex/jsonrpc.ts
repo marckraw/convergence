@@ -1,5 +1,4 @@
-import type { Readable, Writable } from 'stream'
-import { parseJsonLines } from '../line-parser'
+import { createJsonLineReader } from '../line-parser'
 
 export type JsonRpcId = string | number
 
@@ -34,14 +33,31 @@ export type ServerRequestHandler = (
 export type NotificationHandler = (method: string, params: unknown) => void
 
 /**
+ * The pipe the client writes newline-JSON into and reads it back out of.
+ *
+ * The client used to take a child process's stdio directly. It takes this
+ * instead because the resident app-server is reached over a WebSocket
+ * (MAR-2823): same messages, same framing, a socket instead of two pipes.
+ * `onData` delivers raw text — framing is the client's job, so a transport
+ * that chunks differently than the sender wrote cannot corrupt a message.
+ */
+export interface JsonRpcTransport {
+  send(text: string): void
+  close(): void
+  onData(handler: (chunk: string) => void): void
+  onError(handler: (error: Error) => void): void
+}
+
+/**
  * How long each app-server method may stay silent before we call it hung.
  *
- * These are **silence** budgets, not total budgets: the clock restarts on every
- * byte the server sends (see `armBudget`). That distinction is what makes them
- * safe to apply to `turn/start`, whose response is an acknowledgement but whose
- * turn streams notifications for as long as the model works — a total budget
- * there would eventually kill healthy long turns, which is the exact failure
- * this era exists to stop.
+ * These are **silence** budgets, not total budgets: each request's clock starts
+ * when it is sent and restarts on every byte that counts as progress for it
+ * (see `armBudget`). That distinction is what makes them safe to apply to
+ * `turn/start`, whose response is an acknowledgement but whose turn streams
+ * notifications for as long as the model works — a total budget there would
+ * eventually kill healthy long turns, which is the exact failure this era
+ * exists to stop.
  *
  * The numbers are patient on purpose. A cold `codex app-server` was measured at
  * 12.8s–28.0s just to answer `account/rateLimits/read`
@@ -54,6 +70,8 @@ export const CODEX_RPC_BUDGETS_MS: Record<string, number> = {
   'thread/start': 60_000,
   'thread/resume': 60_000,
   'thread/compact/start': 120_000,
+  'thread/turns/list': 60_000,
+  'thread/unsubscribe': 30_000,
   'model/list': 60_000,
   'skills/list': 60_000,
   'turn/start': 120_000,
@@ -67,11 +85,22 @@ export interface JsonRpcClientOptions {
   budgets?: Record<string, number>
   defaultBudgetMs?: number
   /**
-   * Called when the connection itself failed — a silent server, a dead stdin,
-   * an EPIPE. The owner of the process is expected to tear the client down and
-   * respawn; the client only reports.
+   * Called when the connection itself failed — a silent server, a dead socket,
+   * an EPIPE. The owner of the connection is expected to tear the client down
+   * and reconnect; the client only reports.
    */
   onTransportFailure?: (error: Error) => void
+  /**
+   * Whether an inbound notification counts as progress for the requests in
+   * flight on this connection.
+   *
+   * The resident server broadcasts `thread/started` and
+   * `thread/status/changed` to every connection, so on a machine with several
+   * live sessions another session's traffic would otherwise keep a genuinely
+   * stuck request looking alive (constitution A2/A5). Defaults to counting
+   * everything, which is what a connection with one thread on it wants.
+   */
+  isProgressNotification?: (method: string, params: unknown) => boolean
 }
 
 interface PendingRequest {
@@ -80,6 +109,14 @@ interface PendingRequest {
   method: string
   budgetMs: number
   timer: ReturnType<typeof setTimeout> | null
+  /**
+   * When this request last saw progress — set at send, never before.
+   *
+   * A connection-wide clock made a request born expired: sent after a long
+   * idle, its first budget check measured silence that predated it and
+   * rejected it instantly (constitution A5).
+   */
+  lastProgressAt: number
 }
 
 export class JsonRpcClient {
@@ -90,30 +127,27 @@ export class JsonRpcClient {
   private budgets: Record<string, number>
   private defaultBudgetMs: number
   private onTransportFailure: ((error: Error) => void) | null
-  private lastInboundAt = Date.now()
+  private isProgressNotification: (method: string, params: unknown) => boolean
   private destroyed = false
 
   constructor(
-    private stdin: Writable,
-    stdout: Readable,
+    private transport: JsonRpcTransport,
     options?: JsonRpcClientOptions,
   ) {
     this.budgets = options?.budgets ?? CODEX_RPC_BUDGETS_MS
     this.defaultBudgetMs =
       options?.defaultBudgetMs ?? DEFAULT_CODEX_RPC_BUDGET_MS
     this.onTransportFailure = options?.onTransportFailure ?? null
+    this.isProgressNotification =
+      options?.isProgressNotification ?? (() => true)
 
-    parseJsonLines(
-      stdout,
-      (data) => this.handleMessage(data as JsonRpcMessage),
-      (err) => this.handleError(err),
+    const reader = createJsonLineReader((data) =>
+      this.handleMessage(data as JsonRpcMessage),
     )
-
+    transport.onData((chunk) => reader.push(chunk))
     // Without this listener an EPIPE on a dead app-server is an unhandled
     // stream error, which takes the whole process with it (MAR-2316).
-    stdin.on('error', (err: Error) => {
-      this.reportTransportFailure(err)
-    })
+    transport.onError((err) => this.reportTransportFailure(err))
   }
 
   request(method: string, params?: unknown): Promise<unknown> {
@@ -122,7 +156,14 @@ export class JsonRpcClient {
 
     return new Promise((resolve, reject) => {
       const budgetMs = this.budgets[method] ?? this.defaultBudgetMs
-      this.pending.set(id, { resolve, reject, method, budgetMs, timer: null })
+      this.pending.set(id, {
+        resolve,
+        reject,
+        method,
+        budgetMs,
+        timer: null,
+        lastProgressAt: Date.now(),
+      })
 
       try {
         this.send(msg)
@@ -165,24 +206,33 @@ export class JsonRpcClient {
     this.notificationHandler = handler
   }
 
+  /**
+   * Ends this connection.
+   *
+   * Closing the transport is the whole teardown now: a session releasing its
+   * connection must never reach the process on the other end, because that
+   * process is the resident server every other session is also talking to
+   * (MAR-2823).
+   */
   destroy(): void {
     this.destroyed = true
     this.onTransportFailure = null
     this.rejectAll(new Error('Client destroyed'))
+    this.transport.close()
   }
 
   /**
    * Re-arms a request's silence budget.
    *
-   * The timer is allowed to fire early: what it checks is how long the server
-   * has been quiet, so a request that saw traffic simply schedules the next
-   * check for when that traffic would have gone stale.
+   * The timer is allowed to fire early: what it checks is how long *this*
+   * request has been without progress, so a request that saw traffic simply
+   * schedules the next check for when that traffic would have gone stale.
    */
   private armBudget(id: JsonRpcId): void {
     const pending = this.pending.get(id)
     if (!pending) return
 
-    const quietFor = Date.now() - this.lastInboundAt
+    const quietFor = Date.now() - pending.lastProgressAt
     const remaining = pending.budgetMs - quietFor
 
     if (remaining <= 0) {
@@ -197,6 +247,13 @@ export class JsonRpcClient {
 
     pending.timer = setTimeout(() => this.armBudget(id), remaining)
     pending.timer.unref?.()
+  }
+
+  private noteProgress(): void {
+    const at = Date.now()
+    for (const pending of this.pending.values()) {
+      pending.lastProgressAt = at
+    }
   }
 
   private clearBudget(pending: PendingRequest): void {
@@ -217,10 +274,7 @@ export class JsonRpcClient {
   }
 
   private send(msg: unknown): void {
-    if (this.stdin.destroyed || this.stdin.writableEnded) {
-      throw new Error('Codex process pipe is closed')
-    }
-    this.stdin.write(JSON.stringify(msg) + '\n')
+    this.transport.send(JSON.stringify(msg) + '\n')
   }
 
   private reportTransportFailure(error: Error): void {
@@ -240,14 +294,13 @@ export class JsonRpcClient {
   }
 
   private handleMessage(msg: JsonRpcMessage): void {
-    this.lastInboundAt = Date.now()
-
     // Response to our request (has id, has result/error, no method)
     if (
       'id' in msg &&
       ('result' in msg || 'error' in msg) &&
       !('method' in msg)
     ) {
+      this.noteProgress()
       const response = msg as JsonRpcResponse
       const pending = this.pending.get(response.id)
       if (pending) {
@@ -264,6 +317,7 @@ export class JsonRpcClient {
 
     // Server request (has id AND method — server wants a response)
     if ('id' in msg && 'method' in msg) {
+      this.noteProgress()
       const request = msg as JsonRpcRequest
       this.requestHandler?.(request.method, request.params, request.id)
       return
@@ -272,11 +326,12 @@ export class JsonRpcClient {
     // Notification (has method, no id)
     if ('method' in msg && !('id' in msg)) {
       const notification = msg as JsonRpcNotification
+      if (
+        this.isProgressNotification(notification.method, notification.params)
+      ) {
+        this.noteProgress()
+      }
       this.notificationHandler?.(notification.method, notification.params)
     }
-  }
-
-  private handleError(err: Error): void {
-    this.rejectAll(err)
   }
 }

@@ -1,4 +1,5 @@
-import { spawn, type ChildProcess } from 'child_process'
+import { spawn } from 'child_process'
+import { randomUUID } from 'crypto'
 import { promises as fs } from 'fs'
 import type { SessionDelta } from '../../session/conversation-item.types'
 import type {
@@ -24,11 +25,20 @@ import type {
   ProviderContextManagementResult,
 } from '../provider.types'
 import { JsonRpcClient, type JsonRpcId } from './jsonrpc'
+import type {
+  CodexServerConnection,
+  CodexServerHost,
+  CodexServerHostRegistry,
+} from './codex-server-host'
+import {
+  isCodexThreadUnmaterializedError,
+  readCodexUnsubscribeStatus,
+  threadContainsClientMessage,
+} from './codex-server-host.pure'
 import {
   buildCodexAccountEnv,
   type CodexAccountEnvTarget,
 } from '../../provider-account/provider-account-codex-env.pure'
-import { buildCodexClientInfo } from './codex-client-info.pure'
 import { ProviderSessionEmitter } from '../provider-session.emitter'
 import {
   buildFallbackCodexDescriptor,
@@ -46,12 +56,12 @@ import {
 } from '../context-window.pure'
 import {
   buildCodexErrorNote,
-  buildCodexProcessExitEntry,
   buildCodexThreadRecoveryEntry,
   buildTurnFailureEntry,
   classifyCodexErrorNotification,
   isCodexThreadNotFoundError,
   readCodexErrorNotificationMessage,
+  readCodexErrorWillRetry,
 } from './codex-errors.pure'
 import {
   buildCodexUserInput,
@@ -82,29 +92,21 @@ import {
   type ProviderDebugSink,
 } from '../../provider-debug/provider-debug-sink'
 import { resolveCodexPermissionConfig } from '../session-permissions.pure'
-import { createRingBuffer } from '../../terminal/ring-buffer.pure'
 import type {
   ProviderDebugChannel,
   ProviderDebugEntry,
 } from '../../provider-debug/provider-debug.types'
 
 /**
- * How long we wait for the thread id after asking for a thread.
+ * How long a lost connection waits before it mourns.
  *
- * This used to be 1000ms, measured against nothing. A cold `codex app-server`
- * needs 13–28s just to answer its cheapest request
- * (`codex-quota.constants.ts`), so the old budget turned every slow start into
- * "thread/start response did not include a thread id" (MAR-2316).
+ * A dying server closes its sockets and exits, and those two events race. The
+ * process's own exit carries its stderr — the line that says *why*, and the
+ * only one worth reading (MAR-2317) — so the socket's generic report pauses
+ * briefly to let the obituary win. When the socket alone failed, no obituary
+ * comes and this is all the delay it costs.
  */
-const CODEX_THREAD_ID_BUDGET_MS = 60_000
-
-/**
- * How much of the app-server's stderr we keep to quote in its obituary.
- *
- * A Rust panic plus its backtrace fits comfortably; the bound exists so a
- * process that logs all day cannot grow the session's memory.
- */
-const CODEX_STDERR_TAIL_BYTES = 8 * 1024
+const CODEX_OBITUARY_GRACE_MS = 150
 
 async function loadCodexParts(
   attachments: Attachment[] | undefined,
@@ -838,13 +840,30 @@ export class CodexProvider implements Provider {
   supportsContinuation = true
   private descriptorPromise: Promise<ProviderDescriptor> | null = null
 
+  /**
+   * @param serverHosts the app's resident `codex app-server` pool. Required,
+   * and the provider's only way to reach the binary for anything but
+   * `codex exec`: there is deliberately no path left that spawns an app-server
+   * per turn (MAR-2823). It also owns the `initialize` handshake, and with it
+   * the app version Codex records — the provider no longer carries a second
+   * copy of that fact.
+   */
   constructor(
     private binaryPath: string,
+    private serverHosts: CodexServerHostRegistry,
     private taskProgress: TaskProgressService | null = null,
     private debugSink: ProviderDebugSink = noopDebugSink,
-    private appVersion: string | null = null,
     private accountLookup: CodexAccountLookup = noCodexAccountLookup,
   ) {}
+
+  /** The resident server for a session's account, or the ambient login. */
+  private hostFor(
+    providerAccountId: string | null | undefined,
+  ): CodexServerHost {
+    return this.serverHosts.get({
+      account: this.accountLookup(providerAccountId),
+    })
+  }
 
   describe(): Promise<ProviderDescriptor> {
     if (!this.descriptorPromise) {
@@ -877,30 +896,8 @@ export class CodexProvider implements Provider {
       throw new Error('Codex context compaction requires a continuation token')
     }
 
-    const child = spawn(this.binaryPath, ['app-server'], {
-      cwd: config.workingDirectory,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: buildCodexAccountEnv({
-        baseEnv: process.env,
-        account: this.accountLookup(config.providerAccountId),
-      }),
-    })
-    if (!child.stdin || !child.stdout) {
-      child.kill('SIGTERM')
-      throw new Error('codex app-server did not expose stdio pipes')
-    }
-
-    const rpc = new JsonRpcClient(child.stdin, child.stdout)
-    const processFailure = new Promise<never>((_resolve, reject) => {
-      child.once('error', reject)
-      child.once('exit', (code, signal) => {
-        reject(
-          new Error(
-            `codex app-server exited before compaction completed (${code ?? signal ?? 'unknown'})`,
-          ),
-        )
-      })
-    })
+    const connection = await this.hostFor(config.providerAccountId).connect()
+    const rpc = connection.rpc
     let resolveCompacted: (() => void) | null = null
     let timeout: ReturnType<typeof setTimeout> | null = null
     const compacted = new Promise<void>((resolve, reject) => {
@@ -912,23 +909,27 @@ export class CodexProvider implements Provider {
       timeout.unref?.()
     })
     rpc.onNotification((method, params) => {
-      const item =
+      const record =
         params && typeof params === 'object'
-          ? (params as { item?: { type?: unknown } }).item
+          ? (params as { item?: { type?: unknown }; threadId?: unknown })
           : null
+      // The server broadcasts other threads' lifecycle events down every
+      // connection, so a compaction only counts when it is this thread's.
+      if (
+        typeof record?.threadId === 'string' &&
+        record.threadId !== threadId
+      ) {
+        return
+      }
       if (
         method === 'thread/compacted' ||
-        (method === 'item/completed' && item?.type === 'contextCompaction')
+        (method === 'item/completed' &&
+          record?.item?.type === 'contextCompaction')
       ) {
         resolveCompacted?.()
       }
     })
     try {
-      await rpc.request('initialize', {
-        clientInfo: buildCodexClientInfo(this.appVersion),
-        capabilities: { experimentalApi: true },
-      })
-      rpc.notify('initialized')
       const permissionConfig = resolveCodexPermissionConfig(
         config.permissionConfig,
       )
@@ -940,7 +941,7 @@ export class CodexProvider implements Provider {
         ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
       })
       await rpc.request('thread/compact/start', { threadId })
-      await Promise.race([compacted, processFailure])
+      await compacted
       return {
         kind: 'compact',
         contextWindow: createUnavailableContextWindow(
@@ -949,13 +950,13 @@ export class CodexProvider implements Provider {
       }
     } finally {
       if (timeout) clearTimeout(timeout)
-      rpc.destroy()
-      child.kill('SIGTERM')
+      // Releasing this connection is the whole teardown: the server it ran on
+      // belongs to every other session too.
+      connection.close()
     }
   }
 
   start(config: SessionStartConfig): SessionHandle {
-    const binaryPath = this.binaryPath
     const accountLookup = this.accountLookup
     /**
      * The account this session's `codex app-server` runs under.
@@ -972,7 +973,6 @@ export class CodexProvider implements Provider {
      */
     const sessionAccountId = config.providerAccountId ?? null
     const debugSink = this.debugSink
-    const clientInfo = buildCodexClientInfo(this.appVersion)
     const sessionId = config.sessionId
     const listeners = {
       delta: [] as ((delta: SessionDelta) => void)[],
@@ -1005,8 +1005,18 @@ export class CodexProvider implements Provider {
       fireHeartbeat()
     }
 
-    let child: ChildProcess | null = null
+    const serverHost = this.serverHosts.get({
+      account: accountLookup(sessionAccountId),
+    })
+    let connection: CodexServerConnection | null = null
     let rpc: JsonRpcClient | null = null
+    let connecting: Promise<JsonRpcClient | null> | null = null
+    /**
+     * The last server generation this session was told about, so a death is
+     * mourned once however many ways the news arrives.
+     */
+    let mournedGeneration: number | null = null
+    let warmUpNoted = false
     let stopped = false
     let threadId: string | null = config.continuationToken
     let threadReady = config.continuationToken === null
@@ -1024,18 +1034,8 @@ export class CodexProvider implements Provider {
         text: string
       }
     >()
-    // Everyone waiting for the thread id, not just the most recent caller: a
-    // single slot meant a second waiter silently evicted the first, whose
-    // promise then never settled (MAR-2316).
-    let threadReadyWaiters: Array<() => void> = []
     let activeProviderTurnId: string | null = null
     let deadInteractionNoted = false
-
-    function notifyThreadReadyWaiters(): void {
-      const waiters = threadReadyWaiters
-      threadReadyWaiters = []
-      waiters.forEach((waiter) => waiter())
-    }
 
     // Map of pending approval request IDs (JSON-RPC id → approval response plan)
     const pendingApprovals = new Map<JsonRpcId, PendingApprovalRequest>()
@@ -1068,20 +1068,15 @@ export class CodexProvider implements Provider {
 
     function setContinuationToken(token: string): void {
       threadReady = true
-      if (threadId === token) {
-        notifyThreadReadyWaiters()
-        return
-      }
+      if (threadId === token) return
 
       threadId = token
       listeners.continuationToken.forEach((cb) => cb(token))
       sessionEmitter.patchSession({ continuationToken: token })
-      notifyThreadReadyWaiters()
     }
 
     function markThreadReady(): void {
       threadReady = true
-      notifyThreadReadyWaiters()
     }
 
     function setContextWindow(contextWindow: SessionContextWindow): void {
@@ -1232,40 +1227,6 @@ export class CodexProvider implements Provider {
       return null
     }
 
-    function waitForThreadId(): Promise<string> {
-      if (threadId) {
-        return Promise.resolve(threadId)
-      }
-
-      return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          removeWaiter()
-          reject(new Error('thread/start response did not include a thread id'))
-        }, CODEX_THREAD_ID_BUDGET_MS)
-        timeout.unref?.()
-
-        const waiter = () => {
-          clearTimeout(timeout)
-          removeWaiter()
-          if (threadId) {
-            resolve(threadId)
-          } else {
-            reject(
-              new Error('thread/start response did not include a thread id'),
-            )
-          }
-        }
-
-        function removeWaiter(): void {
-          threadReadyWaiters = threadReadyWaiters.filter(
-            (candidate) => candidate !== waiter,
-          )
-        }
-
-        threadReadyWaiters.push(waiter)
-      })
-    }
-
     async function startFreshThread(activeRpc: JsonRpcClient): Promise<string> {
       const permissionConfig = resolveCodexPermissionConfig(
         config.permissionConfig,
@@ -1282,7 +1243,13 @@ export class CodexProvider implements Provider {
         setContinuationToken(discoveredThreadId)
       }
       if (!threadId) {
-        threadId = await waitForThreadId()
+        // Nothing left to wait for: the id arrives in this request's own
+        // result or not at all. The session's own `thread/started` is dropped
+        // while `threadId` is null (routing by thread id, constitution A2), so
+        // a waiter for it could only ever spend its budget and then fail with
+        // this sentence — 0.153.4 always carries the id here (measured), and a
+        // server that does not is broken now rather than in a minute.
+        throw new Error('thread/start response did not include a thread id')
       }
 
       return threadId
@@ -1341,6 +1308,102 @@ export class CodexProvider implements Provider {
       return startFreshThread(activeRpc)
     }
 
+    /**
+     * Sends `turn/start` and remembers the turn the server reports.
+     *
+     * `clientUserMessageId` is ours: the server records it on the user message
+     * it stores (measured: `items[].clientId`), which is what makes a turn we
+     * sent but never saw acknowledged findable afterwards instead of guessable
+     * (constitution A6).
+     */
+    async function requestTurnStart(
+      activeRpc: JsonRpcClient,
+      currentThreadId: string,
+      input: CodexUserInput[],
+      clientUserMessageId: string,
+    ): Promise<void> {
+      const turnResult = await activeRpc.request('turn/start', {
+        threadId: currentThreadId,
+        model: config.model,
+        effort: config.effort,
+        ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
+        clientUserMessageId,
+        input,
+      })
+      const providerTurnId = readProviderTurnId(turnResult)
+      if (providerTurnId) {
+        activeProviderTurnId = providerTurnId
+      }
+    }
+
+    /**
+     * Whether a turn we sent but never saw acknowledged actually reached Codex.
+     *
+     * A thread with no turn yet answers both `thread/resume` and
+     * `thread/turns/list` with "no rollout found" / "not materialized yet"
+     * (measured) — for this question that refusal is an answer, not an error.
+     * Any *other* failure leaves the question unanswered, and an unanswered
+     * question must never become a resend: duplicating a turn the model already
+     * ran is worse than asking the user to send it again.
+     */
+    async function turnAlreadyLanded(
+      activeRpc: JsonRpcClient,
+      currentThreadId: string,
+      clientUserMessageId: string,
+    ): Promise<boolean | 'unknown'> {
+      try {
+        const turns = await activeRpc.request('thread/turns/list', {
+          threadId: currentThreadId,
+        })
+        return threadContainsClientMessage(turns, clientUserMessageId)
+      } catch (err) {
+        if (isCodexThreadUnmaterializedError(err)) return false
+        return 'unknown'
+      }
+    }
+
+    /**
+     * Reconnects after the connection died under an unacknowledged turn, and
+     * decides between adopting and resending by reading the thread.
+     */
+    async function recoverUnacknowledgedTurn(input: {
+      threadIdAtSend: string
+      clientUserMessageId: string
+      turnInput: CodexUserInput[]
+    }): Promise<void> {
+      const recovered = await openConnection()
+      if (!recovered || stopped) return
+
+      const landed = await turnAlreadyLanded(
+        recovered,
+        input.threadIdAtSend,
+        input.clientUserMessageId,
+      )
+
+      if (landed === true) {
+        sessionEmitter.addNote({
+          text: 'The connection dropped after Codex had already taken this message, so it was not sent again. Its answer continues in the next reply.',
+          level: 'warning',
+          timestamp: now(),
+        })
+        return
+      }
+
+      if (landed === 'unknown') {
+        throw new Error(
+          'Lost the connection while sending, and Codex could not be asked whether the message arrived. Send it again if no answer appears.',
+        )
+      }
+
+      const resumedThreadId = await ensureThread(recovered)
+      await requestTurnStart(
+        recovered,
+        resumedThreadId,
+        input.turnInput,
+        input.clientUserMessageId,
+      )
+    }
+
     async function startTurn(
       activeRpc: JsonRpcClient,
       input: CodexUserInput[],
@@ -1354,20 +1417,29 @@ export class CodexProvider implements Provider {
       pendingThinkingProviderItemId = null
       flushedThinkingByProviderItemId.clear()
       const currentThreadId = await ensureThread(activeRpc)
+      const clientUserMessageId = randomUUID()
 
       try {
-        const turnResult = await activeRpc.request('turn/start', {
-          threadId: currentThreadId,
-          model: config.model,
-          effort: config.effort,
-          ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
+        await requestTurnStart(
+          activeRpc,
+          currentThreadId,
           input,
-        })
-        const providerTurnId = readProviderTurnId(turnResult)
-        if (providerTurnId) {
-          activeProviderTurnId = providerTurnId
-        }
+          clientUserMessageId,
+        )
       } catch (err) {
+        // The connection this turn was sent on is gone: `abandonConnection`
+        // cleared it, or a reconnect already replaced it. Whether Codex ran the
+        // turn anyway is a question with an answer on the server, so it gets
+        // asked rather than guessed (constitution A6).
+        if (rpc === null || rpc !== activeRpc) {
+          await recoverUnacknowledgedTurn({
+            threadIdAtSend: currentThreadId,
+            clientUserMessageId,
+            turnInput: input,
+          })
+          return
+        }
+
         if (!threadId || !isCodexThreadNotFoundError(err)) {
           throw err
         }
@@ -1381,17 +1453,12 @@ export class CodexProvider implements Provider {
         threadId = null
         threadReady = false
         const recoveredThreadId = await startFreshThread(activeRpc)
-        const turnResult = await activeRpc.request('turn/start', {
-          threadId: recoveredThreadId,
-          model: config.model,
-          effort: config.effort,
-          ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
+        await requestTurnStart(
+          activeRpc,
+          recoveredThreadId,
           input,
-        })
-        const providerTurnId = readProviderTurnId(turnResult)
-        if (providerTurnId) {
-          activeProviderTurnId = providerTurnId
-        }
+          clientUserMessageId,
+        )
       }
     }
 
@@ -1571,46 +1638,12 @@ export class CodexProvider implements Provider {
       })
     }
 
-    async function initialize(
-      initialMessage: string,
-      initialAttachments?: Attachment[],
-      initialSkillSelections?: SkillSelection[],
-    ): Promise<void> {
-      if (!rpc || stopped) return
-
-      try {
-        // Handshake
-        await rpc.request('initialize', {
-          clientInfo,
-          capabilities: {
-            experimentalApi: true,
-          },
-        })
-        rpc.notify('initialized')
-
-        await sendCodexTurn({
-          activeRpc: rpc,
-          text: initialMessage,
-          attachments: initialAttachments,
-          skillSelections: initialSkillSelections,
-        })
-      } catch (err) {
-        if (stopped) return
-        sessionEmitter.addNote({
-          text: `Initialization failed: ${err instanceof Error ? err.message : String(err)}`,
-          level: 'error',
-        })
-        setStatus('failed')
-        setAttention('failed')
-      }
-    }
-
     /**
      * Answer everything the user was being asked for, when the process that
      * asked is gone.
      *
-     * A pending approval used to outlive its app-server: the map still held it,
-     * the session still showed "needs approval", and the click went to
+     * A pending approval used to outlive its connection: the map still held
+     * it, the session still showed "needs approval", and the click went to
      * `if (!rpc) return` — swallowed, forever (MAR-2317).
      */
     function endPendingInteractions(): void {
@@ -1622,8 +1655,8 @@ export class CodexProvider implements Provider {
       sessionEmitter.addNote({
         text:
           abandoned === 1
-            ? 'The Codex process ended while it was waiting on you. Nothing was approved or answered.'
-            : `The Codex process ended while it was waiting on you (${abandoned} requests). Nothing was approved or answered.`,
+            ? 'The Codex connection ended while it was waiting on you. Nothing was approved or answered.'
+            : `The Codex connection ended while it was waiting on you (${abandoned} requests). Nothing was approved or answered.`,
         level: 'warning',
         timestamp: now(),
       })
@@ -1669,94 +1702,226 @@ export class CodexProvider implements Provider {
       if (deadInteractionNoted) return
       deadInteractionNoted = true
       sessionEmitter.addNote({
-        text: 'That request belonged to a Codex process that has already ended, so the answer had nowhere to go. Send a message to start a fresh one.',
+        text: 'That request belonged to a Codex connection that has already ended, so the answer had nowhere to go. Send a message to reconnect.',
         level: 'warning',
         timestamp: now(),
       })
     }
 
     /**
-     * Give up on this app-server without giving up on the session.
+     * Give up on this connection without giving up on the session — or on the
+     * server.
      *
-     * A hung request or a dead pipe used to leave `rpc` truthy with nothing
-     * behind it, so the next message skipped the respawn at `sendMessage` and
-     * wrote into a closed stdin — a hang with no way out. Tearing both halves
-     * down here puts the session back on the lazy-respawn path (MAR-2316).
+     * A hung request or a dead socket used to leave `rpc` truthy with nothing
+     * behind it, so the next message skipped the reconnect at `sendMessage`
+     * and wrote into a closed pipe — a hang with no way out (MAR-2316). What
+     * has changed is the other half: the process on the far end belongs to
+     * every other Codex session too, so this path never signals it (MAR-2823).
      */
-    function abandonServer(reason: string): void {
+    function abandonConnection(reason: string): void {
       if (stopped) return
 
-      const abandonedChild = child
-      const abandonedRpc = rpc
-      child = null
+      const abandoned = connection
+      const abandonedGeneration = abandoned?.generation ?? null
+      connection = null
       rpc = null
-      // A fresh process has never heard of this thread (MAR-2317).
+      // A fresh connection has resumed nothing, whatever the last one did.
       threadReady = false
       endPendingInteractions()
+      abandoned?.close()
 
+      // The turn on that connection is over, whatever the server is doing:
+      // nothing will ever answer it down a socket that is gone. The old
+      // per-session process ended it for us — abandoning the connection killed
+      // the child, and its exit handler failed the interrupted turn — so the
+      // resident server has to end it here instead, and cannot wait on the
+      // obituary grace for a process exit that is never coming. A resend that
+      // succeeds says `turn/started` on the new connection and puts the
+      // session back to `running` itself.
+      const interruptedTurn = currentStatus === 'running'
+      flushAssistantBuffer()
+      activeProviderTurnId = null
+      applyActivity({ kind: 'close' })
+      if (interruptedTurn) {
+        setStatus('failed')
+        setAttention('failed')
+      }
+
+      // The socket usually notices a dying server before the process's own
+      // exit is reported, and the exit is the half that carries the reason.
+      const mourn = () => {
+        if (stopped) return
+        if (
+          abandonedGeneration !== null &&
+          mournedGeneration === abandonedGeneration
+        ) {
+          return
+        }
+        mournedGeneration = abandonedGeneration
+        sessionEmitter.addNote({
+          text: `Lost the connection to the Codex app-server: ${reason}. The next message reconnects and resumes this thread.`,
+          level: 'error',
+          timestamp: now(),
+        })
+      }
+      const grace = setTimeout(mourn, CODEX_OBITUARY_GRACE_MS)
+      grace.unref?.()
+    }
+
+    /**
+     * The server itself died. Every session on it hears the process's own last
+     * words, and the next message brings a new one up (MAR-2823).
+     */
+    const stopWatchingServer = serverHost.onDeath((obituary) => {
+      if (stopped) return
+      if (mournedGeneration === obituary.generation) return
+      mournedGeneration = obituary.generation
+      const dying = connection
+      if (dying && dying.generation === obituary.generation) {
+        connection = null
+        rpc = null
+        threadReady = false
+        endPendingInteractions()
+        dying.close()
+      }
+      const interruptedTurn = currentStatus === 'running'
+      activeProviderTurnId = null
+      applyActivity({ kind: 'close' })
       sessionEmitter.addNote({
-        text: `Lost the connection to the Codex app-server: ${reason}. The next message starts a fresh one.`,
+        text: obituary.note,
         level: 'error',
         timestamp: now(),
       })
-
-      abandonedRpc?.destroy()
-      if (
-        abandonedChild &&
-        abandonedChild.exitCode === null &&
-        abandonedChild.signalCode === null
-      ) {
-        abandonedChild.kill('SIGTERM')
+      if (interruptedTurn) {
+        setStatus('failed')
+        setAttention('failed')
       }
+    })
+
+    /**
+     * Whether a notification is this session's business.
+     *
+     * The server broadcasts `thread/started` and `thread/status/changed` to
+     * every connection (measured: a second connection saw another session's
+     * `thread/started` *before* that session's own response arrived), while
+     * item and turn traffic reaches only this thread's subscriber. Routing is
+     * therefore by thread id and never by "the latest one" — the rule that
+     * stops a session adopting a stranger's thread (constitution A2).
+     */
+    function notificationBelongsToSession(params: unknown): boolean {
+      const notificationThreadId = readThreadId(params)
+      if (!notificationThreadId) return true
+      return threadId !== null && notificationThreadId === threadId
     }
 
-    function spawnServer(
+    /**
+     * Opens this session's own connection to the resident server, starting the
+     * server if it is not up yet.
+     *
+     * One connection per session is the routing (constitution R2): the thread's
+     * stream is scoped to its subscriber, so nothing here has to demultiplex a
+     * shared pipe, and a session releasing its connection cannot disturb
+     * another's live turn.
+     */
+    async function openConnection(): Promise<JsonRpcClient | null> {
+      if (stopped) return null
+      if (rpc) return rpc
+      if (connecting) return connecting
+
+      const attempt = (async () => {
+        if (!serverHost.isReady()) {
+          noteWarmUp()
+        }
+        const opened = await serverHost.connect({
+          onTransportFailure: (error) => abandonConnection(error.message),
+          isProgressNotification: (_method, params) =>
+            notificationBelongsToSession(params),
+        })
+        if (stopped) {
+          opened.close()
+          return null
+        }
+        connection = opened
+        rpc = opened.rpc
+        // This connection has resumed nothing, whatever the last one had done.
+        // Without the reset, a reconnect sent `turn/start` against a thread the
+        // new connection had never subscribed to, and the session's survival
+        // came down to whether the error wording happened to contain "not
+        // found" (MAR-2317).
+        threadReady = false
+        deadInteractionNoted = false
+        attachHandlers(opened.rpc)
+        return opened.rpc
+      })()
+        .catch((err) => {
+          if (!stopped) {
+            sessionEmitter.addNote({
+              text: `Could not reach the Codex app-server: ${err instanceof Error ? err.message : String(err)}`,
+              level: 'error',
+              timestamp: now(),
+            })
+          }
+          throw err
+        })
+        .finally(() => {
+          connecting = null
+        })
+
+      connecting = attempt
+      return attempt
+    }
+
+    /**
+     * The honest state while the resident server is still coming up.
+     *
+     * A cold start is 7–25s on this machine, paid once per app launch. Saying
+     * so beats a turn that looks dead for half a minute (MAR-2823, Build 4).
+     */
+    function noteWarmUp(): void {
+      if (warmUpNoted) return
+      warmUpNoted = true
+      sessionEmitter.addNote({
+        text: 'Codex is starting up. Your message goes out as soon as it is ready.',
+        level: 'info',
+        timestamp: now(),
+      })
+    }
+
+    function startFirstTurn(
       initialMessage: string,
       initialAttachments?: Attachment[],
       initialSkillSelections?: SkillSelection[],
     ): void {
-      if (stopped) return
-      if (child || rpc) return
-
-      child = spawn(binaryPath, ['app-server'], {
-        cwd: config.workingDirectory,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: buildCodexAccountEnv({
-          baseEnv: process.env,
-          account: accountLookup(sessionAccountId),
-        }),
-      })
-      // Captured so the lifecycle handlers below can tell their own process's
-      // death from that of one we already abandoned and replaced.
-      const spawnedChild = child
-      // This process has resumed nothing yet, whatever the last one had done.
-      // Without the reset, a respawn sent `turn/start` against a thread the
-      // new process had never heard of, and the session's survival came down
-      // to whether the error wording happened to contain "not found"
-      // (MAR-2317).
-      threadReady = false
-      deadInteractionNoted = false
-      const stderrTail = createRingBuffer(CODEX_STDERR_TAIL_BYTES)
-
-      if (!child.stdin || !child.stdout) {
-        sessionEmitter.addNote({
-          text: 'Failed to open stdio',
-          level: 'error',
+      void openConnection()
+        .then((activeRpc) => {
+          if (!activeRpc || stopped) return
+          return sendCodexTurn({
+            activeRpc,
+            text: initialMessage,
+            attachments: initialAttachments,
+            skillSelections: initialSkillSelections,
+          })
         })
-        setStatus('failed')
-        setAttention('failed')
-        return
-      }
+        .catch((err) => {
+          if (stopped) return
+          const failureEntry = buildTurnFailureEntry(err, now())
+          sessionEmitter.addNote({
+            text: failureEntry.text,
+            level: failureEntry.level,
+            timestamp: failureEntry.timestamp,
+          })
+          setStatus('failed')
+          setAttention('failed')
+        })
+    }
 
-      rpc = new JsonRpcClient(child.stdin, child.stdout, {
-        onTransportFailure: (error) => {
-          abandonServer(error.message)
-        },
-      })
-
+    function attachHandlers(activeRpc: JsonRpcClient): void {
       // Handle notifications (no response needed)
-      rpc.onNotification((method, params) => {
+      activeRpc.onNotification((method, params) => {
         if (stopped) return
+        // Another session's thread, broadcast down this connection: not ours
+        // to record, count as activity, or act on (constitution A2).
+        if (!notificationBelongsToSession(params)) return
         recordDebug('notification', {
           direction: 'in',
           method,
@@ -1766,17 +1931,6 @@ export class CodexProvider implements Provider {
         const p = params as Record<string, unknown>
 
         switch (method) {
-          case 'thread/started':
-            {
-              const discoveredThreadId = readThreadId(params)
-              if (discoveredThreadId) {
-                setContinuationToken(discoveredThreadId)
-              } else {
-                notifyThreadReadyWaiters()
-              }
-            }
-            break
-
           case 'turn/started':
             {
               const providerTurnId = readProviderTurnId(params)
@@ -2023,7 +2177,10 @@ export class CodexProvider implements Provider {
           case 'error': {
             flushAssistantBuffer()
             const message = readCodexErrorNotificationMessage(params)
-            const disposition = classifyCodexErrorNotification(message)
+            const disposition = classifyCodexErrorNotification(
+              message,
+              readCodexErrorWillRetry(params),
+            )
             const note = buildCodexErrorNote(message, disposition, now())
             sessionEmitter.addNote({
               text: note.text,
@@ -2031,12 +2188,13 @@ export class CodexProvider implements Provider {
               timestamp: note.timestamp,
             })
 
-            // Only a message we can name as terminal ends the session here.
-            // Codex's retry notices arrive on this same channel, and failing
-            // the session releases the handle — which SIGTERMs the app-server
-            // in the middle of the retry it was about to survive (MAR-2315).
-            // For everything else the process is the source of truth: if it is
-            // really dying, the exit handler says so.
+            // Only a message Codex itself calls terminal — `willRetry: false`
+            // — or one we can name as terminal ends the session here. Retry
+            // notices arrive on this same channel, and failing the session
+            // releases the handle, which used to SIGTERM the app-server in the
+            // middle of the retry it was about to survive (MAR-2315). For
+            // everything else the server is the source of truth: if it is
+            // really dying, its obituary says so.
             if (disposition === 'fatal') {
               activeProviderTurnId = null
               setStatus('failed')
@@ -2048,7 +2206,7 @@ export class CodexProvider implements Provider {
       })
 
       // Handle server requests (need response — approvals)
-      rpc.onServerRequest((method, params, id) => {
+      activeRpc.onServerRequest((method, params, id) => {
         if (stopped) return
         recordDebug('request', { direction: 'in', method, payload: params })
         applyActivity({ kind: 'request', method, params, requestId: id })
@@ -2118,7 +2276,7 @@ export class CodexProvider implements Provider {
             // Declining one is a per-request outcome, not a session outcome:
             // Codex handles the `-32601` and the turn keeps going.
             flushAssistantBuffer()
-            rpc?.respondError(
+            activeRpc.respondError(
               id,
               -32601,
               `Convergence does not support Codex server request "${method}" yet`,
@@ -2131,97 +2289,38 @@ export class CodexProvider implements Provider {
           }
         }
       })
-
-      child.stdout?.on('data', (chunk: Buffer) => {
-        recordDebug('stdout', { direction: 'in', bytes: chunk.length })
-      })
-
-      if (child.stderr) {
-        child.stderr.on('data', (chunk: Buffer) => {
-          recordDebug('stderr', { direction: 'in', bytes: chunk.length })
-          // Kept, not just counted: it is the only place the process ever says
-          // why it died (MAR-2317).
-          stderrTail.append(chunk.toString())
-        })
-      }
-
-      spawnedChild.on('exit', (code) => {
-        if (stopped || child !== spawnedChild) return
-        recordDebug('lifecycle', {
-          direction: 'in',
-          note: `child exited with code ${code}`,
-        })
-        flushAssistantBuffer()
-        const interruptedTurn = currentStatus === 'running'
-        activeProviderTurnId = null
-        applyActivity({ kind: 'close' })
-        threadReady = false
-        child = null
-        rpc?.destroy()
-        rpc = null
-        endPendingInteractions()
-
-        const exitEntry = buildCodexProcessExitEntry({
-          code,
-          stderrTail: stderrTail.snapshot(),
-          interruptedTurn,
-          timestamp: now(),
-        })
-        if (exitEntry) {
-          sessionEmitter.addNote({
-            text: exitEntry.text,
-            level: exitEntry.level,
-            timestamp: exitEntry.timestamp,
-          })
-          setStatus('failed')
-          setAttention('failed')
-        }
-      })
-
-      spawnedChild.on('error', (err) => {
-        if (stopped || child !== spawnedChild) return
-        recordDebug('lifecycle', {
-          direction: 'in',
-          note: `child error: ${err.message}`,
-        })
-        activeProviderTurnId = null
-        threadReady = false
-        child = null
-        // Mirrors the exit handler: leaving `rpc` alive here was what made the
-        // next message write into a dead stdin instead of respawning
-        // (MAR-2316).
-        rpc?.destroy()
-        rpc = null
-        endPendingInteractions()
-        sessionEmitter.addNote({
-          text: `Process error: ${err.message}`,
-          level: 'error',
-        })
-        setStatus('failed')
-        setAttention('failed')
-      })
-
-      void initialize(
-        initialMessage,
-        initialAttachments,
-        initialSkillSelections,
-      )
     }
 
-    // Spawn after a tick so listeners can be attached
+    // Connect after a tick so listeners can be attached
     const startTimer = setTimeout(() => {
-      spawnServer(
+      startFirstTurn(
         config.initialMessage,
         config.initialAttachments,
         config.initialSkillSelections,
       )
     }, 10)
 
+    /**
+     * Release the session.
+     *
+     * Releasing used to mean killing: the app-server was this session's own
+     * process, so `disposeRuntime` SIGTERMed it after every completed turn and
+     * the next message paid a cold start. Now the process is the app's, shared
+     * by every Codex session, so release is a *subscription* ending — tell the
+     * server we are done with the thread, then close our socket. No signal is
+     * ever sent from here (MAR-2823); a session that skipped the unsubscribe
+     * would still be correct, because the server drops an unsubscribed thread
+     * after 30 idle minutes, but it would hold the thread loaded for nothing.
+     */
     function disposeRuntime(): void {
       if (stopped) return
       stopped = true
       clearTimeout(startTimer)
-      rpc?.destroy()
+      stopWatchingServer()
+
+      const releasing = connection
+      const releasingThreadId = threadId
+      connection = null
       rpc = null
       pendingApprovals.clear()
       pendingUserInputs.clear()
@@ -2230,17 +2329,30 @@ export class CodexProvider implements Provider {
       thinkingBuffer = ''
       activeProviderTurnId = null
 
-      if (child) {
-        const pending = child
-        pending.kill('SIGTERM')
-        const killTimer = setTimeout(() => {
-          if (pending.exitCode === null && pending.signalCode === null) {
-            pending.kill('SIGKILL')
-          }
-        }, 3000)
-        killTimer.unref?.()
-        child = null
+      if (!releasing) return
+      if (!releasingThreadId || !threadReady) {
+        releasing.close()
+        return
       }
+
+      // Best effort and never blocking: `unsubscribed`, `notSubscribed` and
+      // `notLoaded` are all normal answers (measured), and a failure here
+      // costs the server nothing it will not clean up itself.
+      void releasing.rpc
+        .request('thread/unsubscribe', { threadId: releasingThreadId })
+        .then((result) => {
+          recordDebug('lifecycle', {
+            direction: 'in',
+            note: `thread/unsubscribe: ${readCodexUnsubscribeStatus(result) ?? 'unknown'}`,
+          })
+        })
+        .catch(() => {
+          // The connection may already be gone; the thread is released either
+          // way.
+        })
+        .finally(() => {
+          releasing.close()
+        })
     }
 
     const handle: SessionHandle = {
@@ -2286,7 +2398,7 @@ export class CodexProvider implements Provider {
           return
         }
         if (!rpc) {
-          spawnServer(text, attachments, skillSelections)
+          startFirstTurn(text, attachments, skillSelections)
           return
         }
 
@@ -2343,7 +2455,7 @@ export class CodexProvider implements Provider {
         }
 
         if (!threadId) {
-          spawnServer(text, attachments, skillSelections)
+          startFirstTurn(text, attachments, skillSelections)
           return
         }
 
@@ -2387,66 +2499,38 @@ export class CodexProvider implements Provider {
 
     // Deliberately ambient: this probe asks the binary what it can do. It
     // serves no turn and bills nobody, so scoping it to an account would only
-    // make capability discovery depend on which account is selected.
-    const child = spawn(this.binaryPath, ['app-server'], {
-      cwd: process.cwd(),
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env },
-    })
+    // make capability discovery depend on which account is selected — and it
+    // rides the same resident server every session uses, so asking costs no
+    // process at all.
+    const result = (await this.serverHosts
+      .get({ account: null })
+      .run((rpc) =>
+        rpc.request('model/list', { includeHidden: false, limit: 100 }),
+      )) as { data?: unknown }
 
-    if (!child.stdin || !child.stdout) {
-      child.kill('SIGTERM')
+    const models = Array.isArray(result?.data) ? result.data : []
+    if (models.length === 0) {
       return fallback
     }
 
-    const rpc = new JsonRpcClient(child.stdin, child.stdout)
-    if (child.stderr) {
-      child.stderr.on('data', () => {
-        // Drain stderr so discovery cannot block.
-      })
+    const modelOptions = models
+      .map((model) => this.toModelOption(model))
+      .filter((option): option is ProviderModelOption => option !== null)
+
+    if (modelOptions.length === 0) {
+      return fallback
     }
 
-    try {
-      await rpc.request('initialize', {
-        clientInfo: buildCodexClientInfo(this.appVersion),
-        capabilities: {
-          experimentalApi: true,
-        },
-      })
-      rpc.notify('initialized')
+    const defaultModelId =
+      this.readDefaultModelId(models) ??
+      modelOptions[0]?.id ??
+      fallback.defaultModelId
 
-      const result = (await rpc.request('model/list', {
-        includeHidden: false,
-        limit: 100,
-      })) as { data?: unknown }
-      const models = Array.isArray(result?.data) ? result.data : []
-
-      if (models.length === 0) {
-        return fallback
-      }
-
-      const modelOptions = models
-        .map((model) => this.toModelOption(model))
-        .filter((option): option is ProviderModelOption => option !== null)
-
-      if (modelOptions.length === 0) {
-        return fallback
-      }
-
-      const defaultModelId =
-        this.readDefaultModelId(models) ??
-        modelOptions[0]?.id ??
-        fallback.defaultModelId
-
-      return normalizeProviderDescriptor({
-        ...fallback,
-        defaultModelId,
-        modelOptions,
-      })
-    } finally {
-      rpc.destroy()
-      child.kill('SIGTERM')
-    }
+    return normalizeProviderDescriptor({
+      ...fallback,
+      defaultModelId,
+      modelOptions,
+    })
   }
 
   private toModelOption(model: unknown): ProviderModelOption | null {

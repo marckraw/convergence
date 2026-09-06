@@ -1,4 +1,4 @@
-import { CodexAppServerClient } from '../provider/codex/codex-app-server-client'
+import type { CodexServerHostRegistry } from '../provider/codex/codex-server-host'
 import { mapCodexSkillCatalog } from './codex-skills.mapper.pure'
 import { buildProviderSkillErrorCatalog } from './skill-catalog.pure'
 import type { ProviderSkillCatalog, SkillCatalogOptions } from './skills.types'
@@ -11,12 +11,11 @@ export interface CodexSkillsClient {
 }
 
 /**
- * Codex skill discovery spawns a fresh `codex app-server` and runs an
- * initialize + skills/list round-trip. Cold starts (config load, auth, network)
- * are the main cause of timeouts, so the budget is generous and a successful
- * scan is cached to avoid re-paying that cost on every dialog open.
+ * Codex skill discovery runs an initialize + `skills/list` round-trip on the
+ * app's resident app-server (MAR-2823) instead of spawning one of its own. A
+ * successful scan is still cached, because the scan itself walks the file
+ * system on the Codex side.
  */
-const DEFAULT_TIMEOUT_MS = 20_000
 const DEFAULT_CACHE_TTL_MS = 5 * 60_000
 
 interface CodexSkillsCacheEntry {
@@ -28,8 +27,6 @@ export interface CodexSkillsServiceOptions {
   client?: CodexSkillsClient
   now?: () => number
   cacheTtlMs?: number
-  timeoutMs?: number
-  appVersion?: string | null
 }
 
 function errorMessage(error: unknown): string {
@@ -44,13 +41,19 @@ export class CodexSkillsService {
   private cacheTtlMs: number
   private cache = new Map<string, CodexSkillsCacheEntry>()
 
-  constructor(binaryPath: string, options: CodexSkillsServiceOptions = {}) {
-    this.client =
-      options.client ??
-      new CodexAppServerClient(binaryPath, {
-        timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-        appVersion: options.appVersion ?? null,
-      })
+  constructor(
+    serverHosts: CodexServerHostRegistry,
+    options: CodexSkillsServiceOptions = {},
+  ) {
+    this.client = options.client ?? {
+      listSkills: (projectPath, listOptions) =>
+        serverHosts.get({ account: null }).run((rpc) =>
+          rpc.request('skills/list', {
+            cwds: [projectPath],
+            forceReload: listOptions?.forceReload === true,
+          }),
+        ),
+    }
     this.now = options.now ?? (() => Date.now())
     this.cacheTtlMs = options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS
   }

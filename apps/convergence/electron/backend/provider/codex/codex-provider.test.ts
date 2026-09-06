@@ -1,35 +1,58 @@
-import { EventEmitter } from 'events'
-import { PassThrough } from 'stream'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { SessionDelta } from '../../session/conversation-item.types'
 import { buildSkillCatalogId } from '../../skills/skill-catalog.pure'
-
-const { spawnMock } = vi.hoisted(() => ({
-  spawnMock: vi.fn(),
-}))
-
-vi.mock('child_process', () => ({
-  spawn: spawnMock,
-}))
-
 import { CodexProvider } from './codex-provider'
+import { CodexServerHostRegistry } from './codex-server-host'
+import {
+  FakeCodexChildProcess,
+  FakeCodexServer,
+  type FakeCodexServerOptions,
+} from './codex-server-host.fixture'
 
-class MockChildProcess extends EventEmitter {
-  stdin = new PassThrough()
-  stdout = new PassThrough()
-  stderr = new PassThrough()
-  killed = false
-
-  kill = vi.fn((signal?: NodeJS.Signals) => {
-    this.killed = true
-    this.emit('exit', signal === 'SIGKILL' ? 137 : 0)
-    return true
+/**
+ * Every session in these tests rides the app's resident app-server, because
+ * that is now the only way to reach Codex (MAR-2823): the fake server answers
+ * one connection per session, and the registry underneath it is the real one,
+ * so a test that provokes a second spawn would show it.
+ */
+function createCodexTestBed(
+  options: FakeCodexServerOptions & {
+    version?: string | null
+    appVersion?: string
+  } = {},
+) {
+  const {
+    version = '0.153.4',
+    appVersion = '0.46.13',
+    ...serverOptions
+  } = options
+  const server = new FakeCodexServer({
+    threadIdFactory: () => 'fresh-thread',
+    ...serverOptions,
   })
+  const children: FakeCodexChildProcess[] = []
+
+  const registry = new CodexServerHostRegistry({
+    appVersion,
+    cwd: '/tmp',
+    spawnProcess: () => {
+      const child = new FakeCodexChildProcess()
+      children.push(child)
+      setTimeout(() => child.announceListening('ws://127.0.0.1:5150'), 0)
+      return child.asChildProcess()
+    },
+    probeReady: async () => true,
+    connectTransport: async () => server.connect(),
+  })
+  registry.setBinary('/usr/local/bin/codex', version)
+
+  const provider = new CodexProvider('/usr/local/bin/codex', registry)
+  return { provider, server, registry, children }
 }
 
 function waitFor(
   assertion: () => void,
-  timeoutMs = 250,
+  timeoutMs = 500,
   intervalMs = 10,
 ): Promise<void> {
   const startedAt = Date.now()
@@ -53,201 +76,9 @@ function waitFor(
   })
 }
 
-function createMockCodexServer(
-  child: MockChildProcess,
-  options?: {
-    missingThreadIds?: string[]
-    skillsResponse?: unknown
-    modelListResponse?: unknown
-    autoCompleteTurns?: boolean
-    turnStartedId?: string
-    steerError?: string
-  },
-): {
-  requests: Array<{ method: string; params?: Record<string, unknown> }>
-  responses: Array<{ id: string | number; result?: unknown; error?: unknown }>
-} {
-  const missingThreadIds = new Set(options?.missingThreadIds ?? [])
-  const requests: Array<{
-    method: string
-    params?: Record<string, unknown>
-  }> = []
-  const responses: Array<{
-    id: string | number
-    result?: unknown
-    error?: unknown
-  }> = []
-  let buffer = ''
-  const enqueue = (fn: () => void) => {
-    setTimeout(fn, 0)
-  }
-
-  const respond = (id: number, result: unknown) => {
-    enqueue(() => {
-      child.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n')
-    })
-  }
-
-  const reject = (id: number, message: string) => {
-    enqueue(() => {
-      child.stdout.write(
-        JSON.stringify({
-          jsonrpc: '2.0',
-          id,
-          error: { code: -32000, message },
-        }) + '\n',
-      )
-    })
-  }
-
-  child.stdin.on('data', (chunk) => {
-    buffer += chunk.toString()
-
-    let newlineIndex = buffer.indexOf('\n')
-    while (newlineIndex >= 0) {
-      const line = buffer.slice(0, newlineIndex).trim()
-      buffer = buffer.slice(newlineIndex + 1)
-
-      if (line) {
-        const message = JSON.parse(line) as {
-          id?: string | number
-          method?: string
-          params?: Record<string, unknown>
-          result?: unknown
-          error?: unknown
-        }
-
-        if ('id' in message && !('method' in message)) {
-          responses.push({
-            id: message.id as string | number,
-            result: message.result,
-            error: message.error,
-          })
-        }
-
-        if (
-          typeof message.id === 'number' &&
-          typeof message.method === 'string'
-        ) {
-          requests.push({
-            method: message.method,
-            params: message.params,
-          })
-        }
-
-        if (message.method === 'initialize' && typeof message.id === 'number') {
-          respond(message.id, {})
-        } else if (
-          message.method === 'thread/resume' &&
-          typeof message.id === 'number'
-        ) {
-          if (
-            typeof message.params?.threadId === 'string' &&
-            missingThreadIds.has(message.params.threadId)
-          ) {
-            reject(message.id, `thread not found: ${message.params.threadId}`)
-          } else {
-            respond(message.id, {
-              thread: { id: message.params?.threadId ?? 'resumed-thread' },
-            })
-          }
-        } else if (
-          message.method === 'turn/start' &&
-          typeof message.id === 'number'
-        ) {
-          if (
-            typeof message.params?.threadId === 'string' &&
-            missingThreadIds.has(message.params.threadId)
-          ) {
-            reject(message.id, `thread not found: ${message.params.threadId}`)
-          } else {
-            respond(
-              message.id,
-              options?.turnStartedId
-                ? { turn: { id: options.turnStartedId } }
-                : {},
-            )
-            if (options?.turnStartedId) {
-              enqueue(() => {
-                child.stdout.write(
-                  JSON.stringify({
-                    jsonrpc: '2.0',
-                    method: 'turn/started',
-                    params: { turn: { id: options.turnStartedId } },
-                  }) + '\n',
-                )
-              })
-            }
-            if (options?.autoCompleteTurns !== false) {
-              enqueue(() => {
-                child.stdout.write(
-                  JSON.stringify({
-                    jsonrpc: '2.0',
-                    method: 'turn/completed',
-                    params: { turn: { status: 'completed' } },
-                  }) + '\n',
-                )
-              })
-            }
-          }
-        } else if (
-          message.method === 'thread/compact/start' &&
-          typeof message.id === 'number'
-        ) {
-          respond(message.id, {})
-          enqueue(() => {
-            child.stdout.write(
-              JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'thread/compacted',
-                params: { threadId: message.params?.threadId },
-              }) + '\n',
-            )
-          })
-        } else if (
-          message.method === 'turn/steer' &&
-          typeof message.id === 'number'
-        ) {
-          if (options?.steerError) {
-            reject(message.id, options.steerError)
-          } else {
-            respond(message.id, {})
-          }
-        } else if (
-          message.method === 'thread/start' &&
-          typeof message.id === 'number'
-        ) {
-          respond(message.id, { threadId: 'fresh-thread' })
-        } else if (
-          message.method === 'skills/list' &&
-          typeof message.id === 'number'
-        ) {
-          respond(message.id, options?.skillsResponse ?? { skills: [] })
-        } else if (
-          message.method === 'model/list' &&
-          typeof message.id === 'number'
-        ) {
-          respond(message.id, options?.modelListResponse ?? { data: [] })
-        }
-      }
-
-      newlineIndex = buffer.indexOf('\n')
-    }
-  })
-
-  return { requests, responses }
-}
-
 describe('CodexProvider', () => {
-  afterEach(() => {
-    spawnMock.mockReset()
-  })
-
   it('compacts a resumed thread through the native app-server method', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child)
-    spawnMock.mockReturnValue(child)
-    const provider = new CodexProvider('/usr/local/bin/codex')
+    const { provider, server } = createCodexTestBed()
 
     const result = await provider.manageContext?.(
       {
@@ -274,11 +105,7 @@ describe('CodexProvider', () => {
   })
 
   it('starts yolo threads without approvals or sandboxing', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child)
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
+    const { provider, server } = createCodexTestBed()
     const handle = provider.start({
       sessionId: 'session-yolo',
       workingDirectory: process.cwd(),
@@ -331,11 +158,9 @@ describe('CodexProvider', () => {
   })
 
   it('emits thinking conversation items from Codex reasoning deltas', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child, { autoCompleteTurns: false })
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
+    const { provider, server } = createCodexTestBed({
+      autoCompleteTurns: false,
+    })
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -380,35 +205,35 @@ describe('CodexProvider', () => {
       ).toBe(true)
     })
 
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         method: 'item/started',
         params: { item: { id: 'reasoning-1', type: 'reasoning' } },
       }) + '\n',
     )
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         method: 'item/reasoning/textDelta',
         params: { itemId: 'reasoning-1', delta: 'Checking ' },
       }) + '\n',
     )
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         method: 'item/reasoning/summaryTextDelta',
         params: { itemId: 'reasoning-1', delta: 'constraints' },
       }) + '\n',
     )
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         method: 'item/completed',
         params: { item: { id: 'reasoning-1', type: 'reasoning' } },
       }) + '\n',
     )
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         method: 'turn/completed',
@@ -435,11 +260,9 @@ describe('CodexProvider', () => {
   })
 
   it('preserves provider metadata for completed-only Codex reasoning items', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child, { autoCompleteTurns: false })
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
+    const { provider, server } = createCodexTestBed({
+      autoCompleteTurns: false,
+    })
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -474,14 +297,14 @@ describe('CodexProvider', () => {
       ).toBe(true)
     })
 
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         method: 'item/started',
         params: { item: { id: 'reasoning-complete', type: 'reasoning' } },
       }) + '\n',
     )
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         method: 'item/completed',
@@ -494,7 +317,7 @@ describe('CodexProvider', () => {
         },
       }) + '\n',
     )
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         method: 'turn/completed',
@@ -522,11 +345,9 @@ describe('CodexProvider', () => {
   })
 
   it('does not duplicate Codex reasoning when completed metadata arrives after assistant text', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child, { autoCompleteTurns: false })
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
+    const { provider, server } = createCodexTestBed({
+      autoCompleteTurns: false,
+    })
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -571,28 +392,28 @@ describe('CodexProvider', () => {
       ).toBe(true)
     })
 
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         method: 'item/started',
         params: { item: { id: 'reasoning-1', type: 'reasoning' } },
       }) + '\n',
     )
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         method: 'item/reasoning/textDelta',
         params: { itemId: 'reasoning-1', delta: 'Checking constraints' },
       }) + '\n',
     )
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         method: 'item/agentMessage/delta',
         params: { itemId: 'message-1', delta: 'Done.' },
       }) + '\n',
     )
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         method: 'item/completed',
@@ -605,7 +426,7 @@ describe('CodexProvider', () => {
         },
       }) + '\n',
     )
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         method: 'turn/completed',
@@ -643,11 +464,7 @@ describe('CodexProvider', () => {
   })
 
   it('resumes a continuation thread before starting a new turn', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child)
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
+    const { provider, server } = createCodexTestBed()
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -710,13 +527,9 @@ describe('CodexProvider', () => {
   })
 
   it('recovers from a stale continuation thread by starting a fresh thread', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child, {
+    const { provider, server } = createCodexTestBed({
       missingThreadIds: ['dead-thread'],
     })
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -799,8 +612,7 @@ describe('CodexProvider', () => {
       scope: 'global',
       rawScope: 'global',
     })
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child, {
+    const { provider, server } = createCodexTestBed({
       skillsResponse: {
         skills: [
           {
@@ -813,9 +625,6 @@ describe('CodexProvider', () => {
         ],
       },
     })
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -917,14 +726,10 @@ describe('CodexProvider', () => {
   })
 
   it('surfaces MCP elicitation requests as approvals and responds on approve', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child, {
+    const { provider, server } = createCodexTestBed({
       autoCompleteTurns: false,
       turnStartedId: 'codex-turn-1',
     })
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -959,7 +764,7 @@ describe('CodexProvider', () => {
       ).toBe(true)
     })
 
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         id: 100,
@@ -1011,14 +816,10 @@ describe('CodexProvider', () => {
   })
 
   it('surfaces MCP form elicitations as structured input requests', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child, {
+    const { provider, server } = createCodexTestBed({
       autoCompleteTurns: false,
       turnStartedId: 'codex-turn-1',
     })
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -1053,7 +854,7 @@ describe('CodexProvider', () => {
       ).toBe(true)
     })
 
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         id: 100,
@@ -1159,14 +960,10 @@ describe('CodexProvider', () => {
   })
 
   it('declines MCP form elicitations with unsupported fields instead of rendering partial forms', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child, {
+    const { provider, server } = createCodexTestBed({
       autoCompleteTurns: false,
       turnStartedId: 'codex-turn-1',
     })
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -1204,7 +1001,7 @@ describe('CodexProvider', () => {
       ).toBe(true)
     })
 
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         id: 102,
@@ -1258,14 +1055,10 @@ describe('CodexProvider', () => {
   })
 
   it('declines unknown server requests without killing the session', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child, {
+    const { provider, server } = createCodexTestBed({
       autoCompleteTurns: false,
       turnStartedId: 'codex-turn-1',
     })
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -1303,7 +1096,7 @@ describe('CodexProvider', () => {
       ).toBe(true)
     })
 
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         id: 900,
@@ -1336,7 +1129,7 @@ describe('CodexProvider', () => {
       ]),
     )
 
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         method: 'turn/completed',
@@ -1358,16 +1151,9 @@ describe('CodexProvider', () => {
   })
 
   it('sends the real app version in the session initialize handshake', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child)
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider(
-      '/usr/local/bin/codex',
-      null,
-      undefined,
-      '9.9.9',
-    )
+    // The version lives on the pool that performs the handshake, so this is
+    // the one place it is encoded (MAR-2823).
+    const { provider, server } = createCodexTestBed({ appVersion: '9.9.9' })
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -1404,8 +1190,8 @@ describe('CodexProvider', () => {
   })
 
   it('sends the real app version in the descriptor probe handshake', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child, {
+    const { provider, server } = createCodexTestBed({
+      appVersion: '9.9.9',
       modelListResponse: {
         data: [
           {
@@ -1418,14 +1204,6 @@ describe('CodexProvider', () => {
         ],
       },
     })
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider(
-      '/usr/local/bin/codex',
-      null,
-      undefined,
-      '9.9.9',
-    )
     await provider.describe()
 
     const initialize = server.requests.find(
@@ -1441,8 +1219,7 @@ describe('CodexProvider', () => {
   })
 
   it('exposes the ultra reasoning effort reported by model/list', async () => {
-    const child = new MockChildProcess()
-    createMockCodexServer(child, {
+    const { provider } = createCodexTestBed({
       modelListResponse: {
         data: [
           {
@@ -1465,9 +1242,6 @@ describe('CodexProvider', () => {
         ],
       },
     })
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
     const descriptor = await provider.describe()
 
     const sol = descriptor.modelOptions.find(
@@ -1492,11 +1266,7 @@ describe('CodexProvider', () => {
   })
 
   it('passes the ultra reasoning effort through to turn/start unchanged', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child)
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
+    const { provider, server } = createCodexTestBed()
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -1530,14 +1300,10 @@ describe('CodexProvider', () => {
   })
 
   it('surfaces MCP URL elicitations and responds on decline', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child, {
+    const { provider, server } = createCodexTestBed({
       autoCompleteTurns: false,
       turnStartedId: 'codex-turn-1',
     })
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -1568,7 +1334,7 @@ describe('CodexProvider', () => {
       ).toBe(true)
     })
 
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         id: 101,
@@ -1619,14 +1385,10 @@ describe('CodexProvider', () => {
   })
 
   it('surfaces Codex user-input questions as structured choice requests and answers them', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child, {
+    const { provider, server } = createCodexTestBed({
       autoCompleteTurns: false,
       turnStartedId: 'codex-turn-1',
     })
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -1661,7 +1423,7 @@ describe('CodexProvider', () => {
       ).toBe(true)
     })
 
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         id: 100,
@@ -1753,14 +1515,10 @@ describe('CodexProvider', () => {
   })
 
   it('falls back to text input for mixed Codex user-input questions', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child, {
+    const { provider, server } = createCodexTestBed({
       autoCompleteTurns: false,
       turnStartedId: 'codex-turn-1',
     })
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -1791,7 +1549,7 @@ describe('CodexProvider', () => {
       ).toBe(true)
     })
 
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         id: 103,
@@ -1849,14 +1607,10 @@ describe('CodexProvider', () => {
   })
 
   it('responds to the requested Codex approval when an approval id is provided', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child, {
+    const { provider, server } = createCodexTestBed({
       autoCompleteTurns: false,
       turnStartedId: 'codex-turn-1',
     })
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -1888,7 +1642,7 @@ describe('CodexProvider', () => {
       ).toBe(true)
     })
 
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         id: 100,
@@ -1899,7 +1653,7 @@ describe('CodexProvider', () => {
         },
       }) + '\n',
     )
-    child.stdout.write(
+    server.pushRaw(
       JSON.stringify({
         jsonrpc: '2.0',
         id: 101,
@@ -1932,14 +1686,10 @@ describe('CodexProvider', () => {
   })
 
   it('routes steering input to turn/steer without starting a second turn', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child, {
+    const { provider, server } = createCodexTestBed({
       autoCompleteTurns: false,
       turnStartedId: 'codex-turn-1',
     })
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -1994,15 +1744,11 @@ describe('CodexProvider', () => {
   })
 
   it('reports stale Codex steer failure without failing the active session', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child, {
+    const { provider, server } = createCodexTestBed({
       autoCompleteTurns: false,
       turnStartedId: 'codex-turn-1',
       steerError: 'expected turn id is stale',
     })
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -2057,13 +1803,9 @@ describe('CodexProvider', () => {
   })
 
   it('marks stale selected Codex skills unavailable without starting a turn', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child, {
+    const { provider, server } = createCodexTestBed({
       skillsResponse: { skills: [] },
     })
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -2134,11 +1876,7 @@ describe('CodexProvider', () => {
   })
 
   it('persists attachmentIds on the user conversation item when attachments are provided', async () => {
-    const child = new MockChildProcess()
-    createMockCodexServer(child)
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
+    const { provider } = createCodexTestBed()
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
@@ -2202,11 +1940,7 @@ describe('CodexProvider', () => {
   })
 
   it('omits attachmentIds when no attachments are provided', async () => {
-    const child = new MockChildProcess()
-    createMockCodexServer(child)
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
+    const { provider } = createCodexTestBed()
     const handle = provider.start({
       sessionId: 'session-2',
       workingDirectory: process.cwd(),

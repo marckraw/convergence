@@ -31,6 +31,7 @@ import { ProviderRegistry } from '../backend/provider/provider-registry'
 import { LocalExecutionHost } from '../backend/provider/execution-host/local-execution-host'
 import { ClaudeCodeProvider } from '../backend/provider/claude-code/claude-code-provider'
 import { CodexProvider } from '../backend/provider/codex/codex-provider'
+import { CodexServerHostRegistry } from '../backend/provider/codex/codex-server-host'
 import { CursorProvider } from '../backend/provider/cursor/cursor-provider'
 import { PiProvider } from '../backend/provider/pi/pi-provider'
 import { AntigravityProvider } from '../backend/provider/antigravity/antigravity-provider'
@@ -313,6 +314,15 @@ async function startApp(): Promise<void> {
     // Cleanup is best effort.
   }
   const debugSink = providerDebugService
+  /**
+   * The app's single pool of `codex app-server` processes: one per account,
+   * shared by every Codex session, the quota reader, capability discovery and
+   * skill listing (MAR-2823). Built at the composition root precisely so no
+   * one of them can hold a private server.
+   */
+  const codexServerHosts = new CodexServerHostRegistry({
+    appVersion: app.getVersion(),
+  })
   // Constructed here so it can report RPC failures to the debug sink, and so
   // it reads each account's own CODEX_HOME rather than the ambient one (PA9).
   const codexQuotaService = new CodexQuotaService({
@@ -392,13 +402,16 @@ async function startApp(): Promise<void> {
         providerRegistry.register(
           new CodexProvider(
             p.binaryPath,
+            codexServerHosts,
             taskProgressService,
             debugSink,
-            app.getVersion(),
             resolveCodexAccountForSession,
           ),
         )
-        codexQuotaService.setBinaryPath(p.binaryPath)
+        // The version gates the resident server: an older codex-cli is refused
+        // out loud rather than served by a path that no longer exists.
+        codexServerHosts.setBinary(p.binaryPath, p.version ?? null)
+        codexQuotaService.setServerHosts(codexServerHosts)
         providerAccountEnrolmentService.setBinaryPath(p.id, p.binaryPath)
       } else if (p.id === 'cursor') {
         providerRegistry.register(
@@ -442,6 +455,7 @@ async function startApp(): Promise<void> {
   const skillsService = new SkillsService(projectService, detected, {
     cacheRepository: new SkillCatalogRepository(db),
     appVersion: app.getVersion(),
+    codexServerHosts,
   })
   const promptsService = new PromptsService(db, projectService)
   const projectScriptsRunner = new ProjectScriptsRunner({
@@ -813,7 +827,10 @@ async function startApp(): Promise<void> {
   app.on('before-quit', () => {
     localModelTunnelService.stopMonitoring()
     localModelTunnelService.stopAllManaged()
+    // Sessions release their connections; the servers themselves are stopped
+    // here, and nowhere else (MAR-2823).
     sessionService.disposeAll()
+    codexServerHosts.stopAll()
     terminalService.disposeAll()
     projectScriptsRunner.disposeAll()
   })

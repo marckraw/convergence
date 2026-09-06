@@ -1,4 +1,5 @@
 import { CodexSkillsService } from './codex-skills.service'
+import type { CodexServerHostRegistry } from '../provider/codex/codex-server-host'
 import { ClaudeCodeSkillsService } from './claude-code-skills.service'
 import { CursorSkillsService } from './cursor-skills.service'
 import { PiSkillsService } from './pi-skills.service'
@@ -41,6 +42,12 @@ export interface SkillsServiceOptions {
    * the default adapter factory; an injected `createAdapter` owns its own.
    */
   appVersion?: string | null
+  /**
+   * The app's resident `codex app-server` pool. The Codex adapter reads
+   * `skills/list` over it rather than spawning a server of its own
+   * (MAR-2823), so without it there is no Codex adapter to build.
+   */
+  codexServerHosts?: CodexServerHostRegistry
   /**
    * SQLite-backed catalog cache. When provided, each provider adapter is
    * wrapped in a {@link CachingSkillAdapter} so scans persist across opens and
@@ -152,9 +159,10 @@ function providerErrorCatalog(
 function defaultCreateAdapter(
   provider: DetectedProvider,
   appVersion: string | null = null,
+  codexServerHosts: CodexServerHostRegistry | null = null,
 ): SkillProviderCatalogAdapter | null {
   if (provider.id === 'codex') {
-    return new CodexSkillsService(provider.binaryPath, { appVersion })
+    return codexServerHosts ? new CodexSkillsService(codexServerHosts) : null
   }
   if (provider.id === 'claude-code') {
     return new ClaudeCodeSkillsService()
@@ -276,7 +284,12 @@ export class SkillsService {
     this.now = options.now ?? (() => new Date())
     this.createAdapter =
       options.createAdapter ??
-      ((provider) => defaultCreateAdapter(provider, options.appVersion ?? null))
+      ((provider) =>
+        defaultCreateAdapter(
+          provider,
+          options.appVersion ?? null,
+          options.codexServerHosts ?? null,
+        ))
     this.cacheRepository = options.cacheRepository ?? null
     this.cacheTtlMs = options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS
   }
