@@ -262,6 +262,8 @@ export interface RelayHopRow {
   baton: string | null
   /** Which round of this crew's loop the hop belonged to. */
   round_number: number | null
+  /** Which generation of THIS WIRE inside the run the hop belonged to. */
+  lap_number: number | null
   /** When the station this hop landed work in came back, or null if it has not. */
   settled_at: string | null
   /** How it came back: the settle's own status word. */

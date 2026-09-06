@@ -37,6 +37,8 @@ export interface AppendRelayHopInput {
   baton?: string | null
   /** Which round of the loop this hop was, when it belonged to one. */
   roundNumber?: number | null
+  /** Which lap of THIS WIRE inside the run it was, when it belonged to one. */
+  lapNumber?: number | null
   /**
    * The dispatch id the session layer returned for the input this hop
    * carried (MAR-2759). Absent on rows that delivered nothing.
@@ -266,9 +268,10 @@ export class RelayService {
         `INSERT INTO relay_hops (
            id, relay_id, crew_id, flow_run_id, fired_at, source_session_id,
            target_session_id, spawned_session_id, trigger_status,
-           payload_preview, baton, round_number, dispatch_id, outcome, error
+           payload_preview, baton, round_number, lap_number, dispatch_id,
+           outcome, error
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -283,6 +286,7 @@ export class RelayService {
         input.payloadPreview ?? null,
         input.baton ?? null,
         input.roundNumber ?? null,
+        input.lapNumber ?? null,
         input.dispatchId ?? null,
         input.outcome,
         input.error ?? null,
@@ -390,25 +394,35 @@ export class RelayService {
   }
 
   /**
-   * Whether this wire already spent a provider turn in this flow run.
+   * How many provider turns this WIRE has already spent in this flow run.
    *
-   * The loop law: a wire fires at most once per run, so A -> B -> A ends after
-   * two real hops instead of ping-ponging until the budget guard kills it. The
-   * ledger is the authority rather than anything held in memory, because it is
-   * the one record that survives a restart mid-run.
+   * The lap law's one input (R2, RUN45): a hop's lap is one more than this
+   * count, so a wire that already carried the run carries it again a lap
+   * higher instead of refusing. It replaced `hasFiredInFlowRun`, whose
+   * boolean answer was the once-per-run refusal itself -- a count says
+   * everything the boolean said (zero is "never fired") and one thing more,
+   * which is the generation.
+   *
+   * Per wire and per run, never per crew: that is what makes the number
+   * meaningful in a graph that is not a ring. A fan-out's two wires each
+   * carry their own count, so both read lap 1 on the same settle, and the
+   * crew's own delivery index is the round meter's separate question.
+   *
+   * The ledger is the authority rather than anything held in memory, because
+   * it is the one record that survives a restart mid-run.
    *
    * Budgeted outcomes only, and the filtering happens here rather than in SQL
    * so `isBudgetedOutcome` stays the single place that knows which words mean
    * "a turn was spent" -- a WHERE clause listing them would be a second copy
    * free to drift.
    */
-  hasFiredInFlowRun(relayId: string, flowRunId: string): boolean {
+  countWireHopsInFlowRun(relayId: string, flowRunId: string): number {
     const rows = this.db
       .prepare(
         'SELECT outcome FROM relay_hops WHERE relay_id = ? AND flow_run_id = ?',
       )
       .all(relayId, flowRunId) as { outcome: string }[]
-    return rows.some((row) => isBudgetedOutcome(row.outcome))
+    return rows.filter((row) => isBudgetedOutcome(row.outcome)).length
   }
 
   /**

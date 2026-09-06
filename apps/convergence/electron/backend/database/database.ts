@@ -305,6 +305,13 @@ const SCHEMA = `
     -- carries no behaviour: this is a label the wire editor reads to pre-fill
     -- a condition, never something the engine routes on.
     baton_name TEXT,
+    -- Where this member's card sits on the Canvas, or null to be laid out by
+    -- the automatic walk (R10). Null is not "the origin": a member nobody has
+    -- moved must keep landing wherever the layout puts it, so that adding a
+    -- conversation to a crew still produces a readable picture without anyone
+    -- arranging it first.
+    canvas_x REAL,
+    canvas_y REAL,
     added_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (crew_id, session_id)
   );
@@ -359,6 +366,13 @@ const SCHEMA = `
     outcome TEXT NOT NULL,
     baton TEXT,
     round_number INTEGER,
+    -- Which generation of THIS WIRE inside the run the hop belonged to (R2).
+    -- The round above counts the crew's deliveries; this counts the wire's
+    -- own, so a ring of three wires reads "lap 2" on all three of its second
+    -- passes while the rounds keep climbing 4, 5, 6. Null on every row
+    -- written before laps existed; history derives the same number for those
+    -- from the ledger rather than defaulting them to 1.
+    lap_number INTEGER,
     -- When the station this hop landed work in came back, and how it came
     -- back. The stall clock's second input: "is this hop still owed" is a
     -- question about the station's fate, not about the clock, and the answer
@@ -876,6 +890,15 @@ function ensureRelayColumns(database: Database.Database): void {
   if (!hopColumns.has('round_number')) {
     database.exec('ALTER TABLE relay_hops ADD COLUMN round_number INTEGER')
   }
+  // The lap (R2): which generation of this WIRE inside the run the hop was.
+  // Additive and nullable like every column here, and null is load-bearing
+  // rather than a gap to backfill: `readLapNumber` derives the same value
+  // for an old row by counting the wire's earlier budgeted hops in the run,
+  // which is exactly the rule that produced the stored ones. A default of 1
+  // would claim every legacy row was a first pass.
+  if (!hopColumns.has('lap_number')) {
+    database.exec('ALTER TABLE relay_hops ADD COLUMN lap_number INTEGER')
+  }
   // Whether the station this hop landed work in ever came back. Null on every
   // older row, and null is the honest reading for them too -- nothing recorded
   // the station's return before this, so the stall clock treats them exactly
@@ -917,6 +940,16 @@ function ensureRelayColumns(database: Database.Database): void {
   const memberColumns = getTableColumnNames(database, 'session_crew_members')
   if (!memberColumns.has('baton_name')) {
     database.exec('ALTER TABLE session_crew_members ADD COLUMN baton_name TEXT')
+  }
+  // Canvas positions (R10). Both columns, both nullable, and null means "lay
+  // this one out" rather than a coordinate -- a default of 0 would stack every
+  // card of every existing crew on the top-left corner the first time somebody
+  // opened the Canvas after updating.
+  if (!memberColumns.has('canvas_x')) {
+    database.exec('ALTER TABLE session_crew_members ADD COLUMN canvas_x REAL')
+  }
+  if (!memberColumns.has('canvas_y')) {
+    database.exec('ALTER TABLE session_crew_members ADD COLUMN canvas_y REAL')
   }
 }
 

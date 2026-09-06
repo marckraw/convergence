@@ -141,6 +141,23 @@ const UNSUPPORTED_SKILLS_CAPABILITY: ProviderSkillsCapability = {
   activationConfirmation: 'none',
 }
 
+/**
+ * Whether this provider can be told to start over inside a live session (R8).
+ *
+ * One function rather than a literal at each build site, for the reason
+ * `getMidRunInputCapabilityForProviderId` is one: the answer is a fact about
+ * the provider, and five copies of it are five chances to disagree the day a
+ * provider gains the ability.
+ *
+ * Codex is FALSE on purpose and stays false until MAR-2819 ships its opener
+ * reset — offering it today would put a control on Marcin's screen that sends
+ * `/clear` into a session that reads it as prose. Pi and the rest are false
+ * for the same reason: nobody has proved they can.
+ */
+export function providerSupportsConversationReset(providerId: string): boolean {
+  return providerId === 'claude-code'
+}
+
 export const NO_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability = {
   supportsAnswer: false,
   supportsNativeFollowUp: false,
@@ -277,6 +294,10 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
     vendorLabel: 'Anthropic',
     kind: 'conversation',
     supportsContinuation: true,
+    // From the one resolver rather than a literal here: the answer is a
+    // fact about the provider, and a literal per builder is a literal per
+    // chance to disagree the day a provider gains the ability (R8).
+    supportsConversationReset: providerSupportsConversationReset('claude-code'),
     defaultModelId: 'opus',
     fastModelId: 'haiku',
     modelOptions: [
@@ -460,6 +481,10 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
     vendorLabel: 'OpenAI',
     kind: 'conversation',
     supportsContinuation: true,
+    // From the one resolver rather than a literal here: the answer is a
+    // fact about the provider, and a literal per builder is a literal per
+    // chance to disagree the day a provider gains the ability (R8).
+    supportsConversationReset: providerSupportsConversationReset('codex'),
     // Codex moved its own default to Astra. The RPC path follows the tape's
     // `isDefault`; this path follows the same tape, so the two agree.
     defaultModelId: 'gpt-6-astra',
@@ -568,6 +593,10 @@ export function buildFallbackPiDescriptor(): ProviderDescriptor {
     vendorLabel: 'Pi',
     kind: 'conversation',
     supportsContinuation: true,
+    // From the one resolver rather than a literal here: the answer is a
+    // fact about the provider, and a literal per builder is a literal per
+    // chance to disagree the day a provider gains the ability (R8).
+    supportsConversationReset: providerSupportsConversationReset('pi'),
     defaultModelId: 'default',
     modelOptions: [
       {
@@ -598,6 +627,10 @@ export function buildFallbackCursorDescriptor(): ProviderDescriptor {
     vendorLabel: 'Anysphere',
     kind: 'conversation',
     supportsContinuation: true,
+    // From the one resolver rather than a literal here: the answer is a
+    // fact about the provider, and a literal per builder is a literal per
+    // chance to disagree the day a provider gains the ability (R8).
+    supportsConversationReset: providerSupportsConversationReset('cursor'),
     defaultModelId: 'default[]',
     modelOptions: [
       {
@@ -627,6 +660,10 @@ export function buildFallbackAntigravityDescriptor(): ProviderDescriptor {
     vendorLabel: 'Google',
     kind: 'conversation',
     supportsContinuation: true,
+    // From the one resolver rather than a literal here: the answer is a
+    // fact about the provider, and a literal per builder is a literal per
+    // chance to disagree the day a provider gains the ability (R8).
+    supportsConversationReset: providerSupportsConversationReset('antigravity'),
     defaultModelId: 'gemini-3.5-flash',
     fastModelId: 'gemini-3.5-flash',
     modelOptions: buildFallbackAntigravityModelOptions(),

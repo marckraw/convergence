@@ -115,6 +115,7 @@ describe('ExecutionHostSettingsContainer', () => {
           available: true,
           authenticated: true,
           supportsContinuation: true,
+          supportsConversationReset: false,
           models: [],
         },
       ],

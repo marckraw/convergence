@@ -7,7 +7,7 @@ import {
   formatSpawnNodeSpec,
 } from '@/features/mission-control'
 import { cn } from '@/shared/lib/cn.pure'
-import { CANVAS_HANDLE } from './session-canvas.types'
+import { CANVAS_HANDLE, CANVAS_SIDE_HANDLE } from './session-canvas.types'
 import type { CanvasSpawnNodeData } from './session-canvas.types'
 
 /**
@@ -37,6 +37,29 @@ export const CanvasSpawnNode: FC<NodeProps> = ({ data }) => {
         id={CANVAS_HANDLE.in}
         type="target"
         position={Position.Left}
+        isConnectable={false}
+        className="!size-0 !min-h-0 !min-w-0 !border-0 !bg-transparent"
+      />
+      {/* The other three sides (R11): a spawned session a route reaches
+          from above or below is entered there, not dragged round to the left. */}
+      <Handle
+        id={CANVAS_SIDE_HANDLE.target.right}
+        type="target"
+        position={Position.Right}
+        isConnectable={false}
+        className="!size-0 !min-h-0 !min-w-0 !border-0 !bg-transparent"
+      />
+      <Handle
+        id={CANVAS_SIDE_HANDLE.target.top}
+        type="target"
+        position={Position.Top}
+        isConnectable={false}
+        className="!size-0 !min-h-0 !min-w-0 !border-0 !bg-transparent"
+      />
+      <Handle
+        id={CANVAS_SIDE_HANDLE.target.bottom}
+        type="target"
+        position={Position.Bottom}
         isConnectable={false}
         className="!size-0 !min-h-0 !min-w-0 !border-0 !bg-transparent"
       />

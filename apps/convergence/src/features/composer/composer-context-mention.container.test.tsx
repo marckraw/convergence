@@ -171,6 +171,7 @@ function seedStores() {
         vendorLabel: 'Anthropic',
         kind: 'conversation',
         supportsContinuation: true,
+        supportsConversationReset: false,
         defaultModelId: 'claude-sonnet',
         modelOptions: [
           {

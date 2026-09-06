@@ -459,6 +459,7 @@ describe('AnalyticsService', () => {
         vendorLabel: 'OpenAI',
         kind: 'conversation',
         supportsContinuation: true,
+        supportsConversationReset: false,
         defaultModelId: 'gpt-5.4',
         modelOptions: [
           {
@@ -541,6 +542,7 @@ describe('AnalyticsService', () => {
         vendorLabel: 'OpenAI',
         kind: 'conversation',
         supportsContinuation: true,
+        supportsConversationReset: false,
         defaultModelId: 'gpt-5.4',
         modelOptions: [],
         attachments: {

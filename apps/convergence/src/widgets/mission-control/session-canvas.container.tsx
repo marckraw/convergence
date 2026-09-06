@@ -21,6 +21,7 @@ import {
   buildRelaySentence,
   buildWirePulses,
   collectNewHops,
+  crewLocalPosition,
   pulseWireColor,
   pulseWireWidth,
   resolveWireColor,
@@ -36,6 +37,7 @@ import {
 } from '@/entities/session-relay'
 import { useCrewHailStore } from '@/entities/crew-hail'
 import { CanvasChairNode } from './canvas-chair-node.presentational'
+import { CanvasRoutedEdge } from './canvas-routed-edge.presentational'
 import { CanvasCrewCluster } from './canvas-crew-cluster.presentational'
 import { CanvasSessionNode } from './canvas-session-node.presentational'
 import { CanvasSpawnNode } from './canvas-spawn-node.presentational'
@@ -57,6 +59,14 @@ const NODE_TYPES = {
   chair: CanvasChairNode,
 }
 
+/**
+ * Defined once at module scope, for the same reason `NODE_TYPES` is: React
+ * Flow remounts every edge if this object changes identity between renders.
+ */
+const EDGE_TYPES = {
+  routed: CanvasRoutedEdge,
+}
+
 /** Matches the popover's own `w-80`, plus room to breathe at the edges. */
 const POPOVER_WIDTH = 320
 const POPOVER_MAX_HEIGHT = 260
@@ -64,6 +74,43 @@ const POPOVER_EDGE_GAP = 8
 
 /** The popover is a glance; the crew's trail is where the full ledger lives. */
 const POPOVER_HOP_LIMIT = 5
+
+/**
+ * How near a handle a release has to land for the drag to take (R10).
+ *
+ * Generous on purpose: a port you have to hit exactly is a port most people
+ * give up on, and the cost of being wrong is an inspector opening on a pair
+ * you did not mean — which cancels with Esc and sends nothing.
+ */
+const CONNECTION_RADIUS = 40
+
+/** The unsaved draft's colour: not the crew's, because it is not a wire yet. */
+const DRAFT_EDGE_COLOR = '#38bdf8'
+
+/**
+ * What a wire looks like while a run is being replayed on it.
+ *
+ * Keyed by the history TONE rather than the outcome word, so a word added to
+ * the vocabulary lands on a colour somebody already chose instead of on
+ * nothing. An unrecognised tone falls to the quiet grey below -- red is for
+ * what this build understands to be wrong.
+ */
+const REPLAY_TONE_COLOR: Record<string, string> = {
+  delivered: '#34d399',
+  alarm: '#f87171',
+  terminal: '#fbbf24',
+  held: 'color-mix(in srgb, var(--muted-foreground) 70%, transparent)',
+}
+
+/**
+ * Fitting leaves room at the edges, so a card at the boundary is not flush
+ * against the frame with its route squeezed against the clip.
+ */
+const FIT_VIEW_OPTIONS = { padding: 0.15 }
+
+/** A wire the selected run never used. */
+const REPLAY_QUIET_COLOR =
+  'color-mix(in srgb, var(--muted-foreground) 45%, transparent)'
 
 function clamp(
   value: number,
@@ -75,21 +122,80 @@ function clamp(
   return Math.max(gap, Math.min(value, extent - size - gap))
 }
 
+/**
+ * Everything the canvas needs to be authored, or nothing at all.
+ *
+ * One optional object rather than a dozen optional props, so a caller either
+ * hands the canvas an authoring surface or does not: a canvas half-wired for
+ * drawing is a canvas where some gestures work and the rest fail quietly.
+ */
+export interface SessionCanvasAuthoring {
+  /** The crew the toolbar and panel are about; only its cards can be drawn. */
+  crewId: string
+  /** A drag between two handles landed, or a Connect-mode pair completed. */
+  onConnect: (input: {
+    sourceSessionId: string
+    targetSessionId: string
+  }) => void
+  /**
+   * A card was dropped, in coordinates relative to its own crew's frame.
+   *
+   * The canvas converts rather than the caller, because the canvas is the
+   * only place that knows where each frame starts: clusters stack down the
+   * page, so an absolute y is meaningless the moment a crew is added above.
+   */
+  onMove: (input: { sessionId: string; x: number; y: number }) => void
+  /** True while Connect mode is armed. */
+  connecting: boolean
+  /** The source half of a Connect-mode pick, or null. */
+  connectSourceId: string | null
+  /** Picking a card while Connect is armed. */
+  onPick: (sessionId: string) => void
+  /** A stored connection was clicked: open it in the inspector. */
+  onSelectRelay: (relayId: string) => void
+  /** The connection the inspector currently holds, or null. */
+  selectedRelayId: string | null
+  /** A drawn-but-unsaved connection, drawn dashed and blue. */
+  draftEdge: { sourceSessionId: string; targetSessionId: string } | null
+  /** The footer sentence for Connect mode, or null. */
+  hint: string | null
+  /**
+   * A selected run's outcomes, keyed by relay id, or null when none is.
+   *
+   * These are TODAY's wires wearing YESTERDAY's outcomes, which is why the
+   * banner says so out loud (promise 6): the canvas cannot reconstruct the
+   * topology a run had, and pretending otherwise would invent a diagram.
+   * Every wire the run did not use reads "No event in this run".
+   */
+  runHighlight: Map<string, { tone: string; label: string }> | null
+  /** "RUN FROM 14:32 · SHOWN ON CURRENT CREW LAYOUT", or null. */
+  runBanner: string | null
+}
+
 interface SessionCanvasProps {
   groups: readonly SessionCrewGroup[]
   onOpen: (card: SessionCard) => void
+  /** Absent on a read-only canvas — the shape every caller had before R10. */
+  authoring?: SessionCanvasAuthoring
 }
 
 /**
  * The room drawn as its flows: crews as boxes, sessions as nodes inside them.
  *
- * Read-only by ruling. Panning and zooming are how you read a big diagram, so
- * they are on; dragging a node is off, because positions are computed from the
- * data rather than stored, and a node that sprang back to its computed spot the
- * moment anything else changed would feel broken rather than fixed. Positions
- * arrive when authoring does.
+ * Authorable from R10 (RUN45), and only where a caller hands it an
+ * `authoring` surface: without one it is exactly the read-only diagram it has
+ * always been. With one, cards drag and remember, edge handles draw, and a
+ * click on a stored wire opens it.
+ *
+ * Nothing here sends a message. Dragging stores a position, drawing opens a
+ * draft, clicking a wire opens a panel — the engine is the only thing that
+ * ever delivers, and only when a source session actually finishes.
  */
-export const SessionCanvas: FC<SessionCanvasProps> = ({ groups, onOpen }) => {
+export const SessionCanvas: FC<SessionCanvasProps> = ({
+  groups,
+  onOpen,
+  authoring,
+}) => {
   // Subscribed to the stable list and narrowed below: selecting inside the
   // subscription hands zustand a fresh array every render and spins it.
   const relays = useSessionRelayStore((state) => state.relays)
@@ -171,6 +277,25 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({ groups, onOpen }) => {
     return () => clearTimeout(timer)
   }, [hops])
 
+  /**
+   * Who is on the canvas, as one string.
+   *
+   * Remounting the flow is how `fitView` is re-run, and it must happen when
+   * the CAST changes and not when a position does: re-fitting mid-drag would
+   * move the ground under the pointer.
+   */
+  const castKey = useMemo(
+    () =>
+      [
+        ...graph.nodes.map((node) => node.id),
+        ...graph.spawnNodes.map((node) => node.id),
+        ...graph.chairs.map((chair) => chair.id),
+      ]
+        .sort()
+        .join(','),
+    [graph],
+  )
+
   const nodes = useMemo<Node[]>(() => {
     // Every size is declared rather than measured. The layout already knows how
     // big each node is, so telling React Flow up front lets it route wires and
@@ -192,10 +317,23 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({ groups, onOpen }) => {
       id: node.id,
       type: 'session',
       position: { x: node.x, y: node.y },
-      data: { card: node.card, onOpen },
+      data: {
+        card: node.card,
+        crewId: node.crewId,
+        onOpen,
+        // Only the crew the panel is about can be authored. A canvas holding
+        // three crews would otherwise offer ports on all of them and let
+        // somebody draw a wire between two crews, which is not a thing a
+        // relay can be: a wire belongs to one crew.
+        authoring: authoring?.crewId === node.crewId,
+        connecting:
+          Boolean(authoring?.connecting) && authoring?.crewId === node.crewId,
+        connectSource: authoring?.connectSourceId === node.id,
+        onPick: authoring?.onPick,
+      },
       width: CANVAS_NODE_WIDTH,
       height: CANVAS_NODE_HEIGHT,
-      draggable: false,
+      draggable: authoring?.crewId === node.crewId,
       zIndex: 1,
     }))
 
@@ -229,67 +367,129 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({ groups, onOpen }) => {
     }))
 
     return [...clusterNodes, ...sessionNodes, ...spawnChips, ...chairNodes]
-  }, [graph, onOpen, acknowledgeCrew])
+  }, [graph, onOpen, acknowledgeCrew, authoring])
 
-  const edges = useMemo<Edge[]>(
-    () =>
-      graph.edges.map((edge) => {
-        // Only a stored wire can pulse: a hop names the relay it fired on, and
-        // the drawn consequences have no relay to be named by.
-        const pulse = edge.relayId === null ? undefined : pulses[edge.relayId]
-        const base = resolveWireColor(edge, graph.clusters)
-        const color = pulse ? pulseWireColor(pulse.tone, base) : base
+  const edges = useMemo<Edge[]>(() => {
+    const stored = graph.edges.map((edge) => {
+      // Only a stored wire can pulse: a hop names the relay it fired on, and
+      // the drawn consequences have no relay to be named by.
+      const pulse = edge.relayId === null ? undefined : pulses[edge.relayId]
+      const base = resolveWireColor(edge, graph.clusters)
+      const color = pulse ? pulseWireColor(pulse.tone, base) : base
 
-        // A safety net is a consequence, not a wire somebody drew, so it is
-        // drawn as one: dashed, dim, never pulsing, and unopenable.
-        const isSafety = edge.kind === 'safety'
+      // A safety net is a consequence, not a wire somebody drew, so it is
+      // drawn as one: dashed, dim, never pulsing, and unopenable.
+      const isSafety = edge.kind === 'safety'
+      // The wire the inspector holds reads as selected, so "which one am I
+      // editing" is answerable on the diagram rather than only in the panel.
+      const selected = authoring?.selectedRelayId === edge.relayId
+      // While a run is selected the diagram is about THAT run: the wires it
+      // used wear its outcomes and everything else fades to "nothing happened
+      // here", so the picture cannot be misread as current traffic.
+      const replay =
+        edge.relayId === null
+          ? undefined
+          : authoring?.runHighlight?.get(edge.relayId)
+      const replaying = Boolean(authoring?.runHighlight)
 
-        return {
-          id: edge.id,
-          source: edge.source,
-          target: edge.target,
-          label: edge.label ?? undefined,
-          labelShowBg: true,
-          // Back wires leave and arrive underneath, so the returning half of a
-          // loop cannot hide beneath the wire it answers.
-          sourceHandle: edge.back ? CANVAS_HANDLE.loopOut : CANVAS_HANDLE.out,
-          targetHandle: edge.back ? CANVAS_HANDLE.loopIn : CANVAS_HANDLE.in,
-          type: edge.back ? 'smoothstep' : 'default',
-          // A lit wire marches while it carries something, so a hop reads as
-          // movement along the wire rather than a colour change in place.
-          animated: Boolean(pulse),
-          // A disarmed wire is drawn but visibly not live: grey and dashed.
-          style: {
-            stroke: color,
-            strokeWidth: pulse
-              ? pulseWireWidth(pulse.tone)
+      return {
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        label: replaying
+          ? (replay?.label ?? 'No event in this run')
+          : (edge.label ?? undefined),
+        labelShowBg: true,
+        // The ports React Flow measures from. Which SIDE the drawn route
+        // actually uses is chosen inside the edge component from where the two
+        // cards are (R11) — cards move now, so a layout column stopped
+        // describing the picture the moment somebody dragged one. These stay
+        // as the attachment React Flow reports, and the route overrides the
+        // geometry between them.
+        sourceHandle: CANVAS_HANDLE.out,
+        targetHandle: CANVAS_HANDLE.in,
+        type: 'routed',
+        // A lit wire marches while it carries something, so a hop reads as
+        // movement along the wire rather than a colour change in place.
+        animated: Boolean(pulse),
+        // A disarmed wire is drawn but visibly not live: grey and dashed.
+        style: {
+          stroke: replaying
+            ? (REPLAY_TONE_COLOR[replay?.tone ?? ''] ?? REPLAY_QUIET_COLOR)
+            : selected
+              ? DRAFT_EDGE_COLOR
+              : color,
+          strokeWidth: pulse
+            ? pulseWireWidth(pulse.tone)
+            : selected
+              ? 2.5
               : isSafety
                 ? 1.5
                 : edge.armed
                   ? 2
                   : 1.5,
-            // Dashed for two different reasons that read the same on purpose:
-            // a switched-off wire and a safety net are both "this is not the
-            // ordinary path".
-            strokeDasharray:
-              isSafety || (!edge.armed && pulse === undefined)
-                ? '5 4'
-                : undefined,
-            opacity: isSafety ? 0.55 : undefined,
-          },
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            color,
-            width: 18,
-            height: 18,
-          },
-          focusable: false,
-          selectable: false,
-          zIndex: 2,
-        }
-      }),
-    [graph, pulses],
-  )
+          // Dashed for two different reasons that read the same on purpose:
+          // a switched-off wire and a safety net are both "this is not the
+          // ordinary path".
+          strokeDasharray:
+            (replaying && !replay) ||
+            isSafety ||
+            (!edge.armed && pulse === undefined)
+              ? '5 4'
+              : undefined,
+          opacity: isSafety ? 0.55 : undefined,
+        },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: replaying
+            ? (REPLAY_TONE_COLOR[replay?.tone ?? ''] ?? REPLAY_QUIET_COLOR)
+            : selected
+              ? DRAFT_EDGE_COLOR
+              : color,
+          width: 18,
+          height: 18,
+        },
+        focusable: false,
+        selectable: false,
+        zIndex: 2,
+      }
+    })
+
+    // The unsaved draft (frame 02): dashed, blue, labelled, and NOT a row.
+    // Drawn from the same graph so it lands on the same handles as the wire
+    // it will become, which is what makes "save" look like nothing moved.
+    if (!authoring?.draftEdge) return stored
+    return [
+      ...stored,
+      {
+        id: 'draft:new-connection',
+        source: authoring.draftEdge.sourceSessionId,
+        target: authoring.draftEdge.targetSessionId,
+        label: 'New connection',
+        labelShowBg: true,
+        sourceHandle: CANVAS_HANDLE.out,
+        targetHandle: CANVAS_HANDLE.in,
+        // The draft routes like any other wire, so saving it looks like
+        // nothing moved.
+        type: 'routed',
+        animated: false,
+        style: {
+          stroke: DRAFT_EDGE_COLOR,
+          strokeWidth: 2,
+          strokeDasharray: '5 4',
+        },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: DRAFT_EDGE_COLOR,
+          width: 18,
+          height: 18,
+        },
+        focusable: false,
+        selectable: false,
+        zIndex: 3,
+      },
+    ]
+  }, [graph, pulses, authoring])
 
   /**
    * Every session the canvas can name, including ones a wire points at that the
@@ -320,12 +520,65 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({ groups, onOpen }) => {
     [graph],
   )
 
+  /**
+   * A drag between two handles landed.
+   *
+   * It opens a DRAFT and nothing else: no row is written, no message is sent,
+   * and Esc or Cancel leaves the canvas exactly as it was. Saving on connect
+   * would make an accidental drag a stored wire, and a stored wire that is
+   * armed is one settle away from spending somebody's provider quota.
+   */
+  const handleConnect = useCallback(
+    (connection: { source: string | null; target: string | null }) => {
+      if (!authoring) return
+      const { source, target } = connection
+      if (!source || !target || source === target) return
+      authoring.onConnect({
+        sourceSessionId: source,
+        targetSessionId: target,
+      })
+    },
+    [authoring],
+  )
+
+  /**
+   * A card was dropped. The position stored is the node's own, so what is
+   * remembered is where it was left rather than where the pointer was.
+   */
+  const handleNodeDragStop = useCallback(
+    (_event: unknown, node: Node) => {
+      if (!authoring) return
+      const cluster = graph.clusters.find(
+        (entry) => entry.crewId === authoring.crewId,
+      )
+      // No frame, no arrangement to store. A crew whose cluster is not on the
+      // canvas cannot have had a card dragged inside it, so this is a guard
+      // against a stale graph rather than an expected path.
+      if (!cluster) return
+      authoring.onMove({
+        sessionId: node.id,
+        ...crewLocalPosition(
+          { x: node.position.x, y: node.position.y },
+          cluster,
+        ),
+      })
+    },
+    [authoring, graph],
+  )
+
   const handleEdgeClick = useCallback(
     (event: MouseEvent, edge: Edge) => {
       // Only a stored wire has anything to open. A terminal route and the safety
       // net are drawn consequences with no row behind them, and a popover that
       // hunted for a relay by their id would find nothing and open blank.
       if (!relayEdgeIds.has(edge.id)) return
+      // With a panel to open into, a wire click OPENS it: the popover was the
+      // read-only view's only way to say anything about a wire, and two
+      // surfaces answering the same click is one surface too many.
+      if (authoring) {
+        authoring.onSelectRelay(edge.id)
+        return
+      }
       const bounds = canvasRef.current?.getBoundingClientRect()
       const localX = event.clientX - (bounds?.left ?? 0)
       const localY = event.clientY - (bounds?.top ?? 0)
@@ -338,7 +591,7 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({ groups, onOpen }) => {
         y: clamp(localY, POPOVER_EDGE_GAP, bounds?.height, POPOVER_MAX_HEIGHT),
       })
     },
-    [relayEdgeIds],
+    [relayEdgeIds, authoring],
   )
 
   const closeWire = useCallback(() => setOpenWire(null), [])
@@ -365,22 +618,37 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({ groups, onOpen }) => {
       data-session-canvas
       data-canvas-color-mode={colorMode}
       style={CANVAS_THEME_VARS}
-      className="relative size-full"
+      // Clipped (R11): a route near the edge of a rearranged canvas would
+      // otherwise be painted across the panel beside it and the app chrome
+      // above it. The diagram lives inside its own frame.
+      className="relative size-full overflow-hidden"
     >
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={NODE_TYPES}
+        edgeTypes={EDGE_TYPES}
         // Follows the titlebar toggle live, rather than assuming the room is
         // dark: the library picks light by default and looked pasted on.
         colorMode={colorMode}
         fitView
+        // Re-fits when the CAST changes, so a conversation just added to the
+        // crew is on screen rather than somewhere off the edge the person has
+        // to hunt for. Keyed by the node ids rather than by the nodes, so a
+        // drag — which changes positions, not membership — does not yank the
+        // viewport out from under the hand doing the dragging.
+        fitViewOptions={FIT_VIEW_OPTIONS}
+        key={castKey}
         minZoom={0.2}
         maxZoom={1.5}
-        // Every gesture that would author something is off: this view reads.
-        nodesConnectable={false}
-        nodesDraggable={false}
+        // Authoring is granted by the caller, never assumed: without an
+        // `authoring` surface this is the read-only diagram it always was.
+        nodesConnectable={Boolean(authoring)}
+        nodesDraggable={Boolean(authoring)}
+        connectionRadius={CONNECTION_RADIUS}
         edgesFocusable={false}
+        onConnect={handleConnect}
+        onNodeDragStop={handleNodeDragStop}
         onEdgeClick={handleEdgeClick}
         onPaneClick={closeWire}
         proOptions={{ hideAttribution: false }}
@@ -394,6 +662,25 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({ groups, onOpen }) => {
           className="!bottom-4 !left-4 overflow-hidden !rounded-md !border !border-border !shadow-none"
         />
       </ReactFlow>
+
+      {authoring?.runBanner ? (
+        <p
+          data-run-banner
+          className="pointer-events-none absolute inset-x-0 top-3 mx-auto w-fit rounded-md border border-white/10 bg-background/90 px-3 py-1 text-[10px] uppercase tracking-wide text-muted-foreground shadow-sm"
+        >
+          {authoring.runBanner}
+        </p>
+      ) : null}
+
+      {authoring?.hint ? (
+        <p
+          data-connect-hint
+          role="status"
+          className="pointer-events-none absolute inset-x-0 bottom-4 mx-auto w-fit rounded-md border border-white/10 bg-background/90 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm"
+        >
+          {authoring.hint}
+        </p>
+      ) : null}
 
       {openWire && openRelay ? (
         <div

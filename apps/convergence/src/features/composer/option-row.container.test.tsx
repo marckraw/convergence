@@ -35,6 +35,7 @@ const LOCAL_PROVIDERS: ProviderInfo[] = [
     vendorLabel: 'Anthropic',
     kind: 'conversation' as const,
     supportsContinuation: true,
+    supportsConversationReset: false,
     defaultModelId: 'claude-sonnet-4-5',
     modelOptions: [
       {
@@ -71,6 +72,7 @@ const LOCAL_PROVIDERS: ProviderInfo[] = [
     vendorLabel: 'Pi',
     kind: 'conversation' as const,
     supportsContinuation: true,
+    supportsConversationReset: false,
     defaultModelId: 'pi-default',
     modelOptions: [
       {
@@ -113,6 +115,7 @@ function daemonProvider(
     vendorLabel: '',
     kind: 'conversation' as const,
     supportsContinuation: true,
+    supportsConversationReset: false,
     defaultModelId: models[0]?.id ?? '',
     modelOptions: models.map((model) => ({
       ...model,

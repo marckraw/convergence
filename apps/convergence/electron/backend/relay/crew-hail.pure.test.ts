@@ -384,9 +384,39 @@ describe('formatCrewHailDetail', () => {
     expect(detail).not.toContain('quiet')
   })
 
-  it('says the lap closed for a loop the law ended', () => {
-    expect(formatCrewHailDetail('loop-closed', { baton: 'horse' })).toContain(
-      'horse',
-    )
+  it('names what broke when a delivery failed', () => {
+    const detail = formatCrewHailDetail('delivery-failed', {
+      error: 'The target session no longer exists.',
+    })
+
+    // The call exists precisely because nothing else says this: an `error`
+    // hop row hails nobody, and a send that never landed leaves no debt for
+    // the stall clock to find. So the reason has to be in the sentence.
+    expect(detail).toContain('The target session no longer exists.')
+    expect(detail).toContain('failed')
+  })
+
+  it('still says a delivery failed when nothing named the fault', () => {
+    const detail = formatCrewHailDetail('delivery-failed')
+
+    expect(detail).toContain('failed')
+    expect(detail).not.toContain('undefined')
+  })
+
+  it('says a wire was switched off when the backstop tripped', () => {
+    const detail = formatCrewHailDetail('budget', { spentHops: 20 })
+
+    expect(detail).toContain('20')
+    // The word the round cap's sentence must NOT contain, and this one must:
+    // the backstop is the guard that disarms, and a hail that blurred the two
+    // would send him hunting for a wire he would find dark with no reason.
+    expect(detail).toContain('disarmed')
+  })
+
+  it('does not say a wire was disarmed when only the delivery limit tripped', () => {
+    const detail = formatCrewHailDetail('round-budget', { cap: 12 })
+
+    expect(detail).toContain('12')
+    expect(detail).not.toContain('disarm')
   })
 })

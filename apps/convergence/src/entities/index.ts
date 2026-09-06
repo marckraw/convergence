@@ -104,3 +104,15 @@ export type {
   PromptLibraryScope,
 } from './prompt-library'
 export { promptLibraryApi, usePromptLibraryStore } from './prompt-library'
+export type {
+  ListRunsOptions,
+  RelayRun,
+  RelayRunCounts,
+  RelayRunLap,
+  RelayRunPage,
+  RunHistoryOutcome,
+  RunNeedsYouReason,
+  RunStatus,
+  RunStatusWord,
+} from './run-history'
+export { runHistoryApi } from './run-history'

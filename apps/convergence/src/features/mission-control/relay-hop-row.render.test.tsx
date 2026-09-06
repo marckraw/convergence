@@ -26,6 +26,8 @@ function hop(overrides: Partial<RelayHop> = {}): RelayHop {
     payloadPreview: null,
     baton: null,
     roundNumber: null,
+    lapNumber: null,
+    settledAt: null,
     outcome: 'delivered',
     error: null,
     ...overrides,
@@ -70,14 +72,15 @@ describe('the trail row, rendered', () => {
     expect(screen.getByText(/last line was "BATON: codex"/)).toBeInTheDocument()
   })
 
-  it('names the round cap when the loop ran out of rounds', () => {
+  it('names the delivery limit when the run spent it all', () => {
     renderHop({
       outcome: 'skipped-round-budget',
       roundNumber: 13,
-      error: 'This loop reached its 12-round cap without reaching a terminal.',
+      error:
+        'This run spent its whole delivery limit of 12 without reaching you.',
     })
 
-    expect(screen.getByText('stopped — round cap')).toBeInTheDocument()
+    expect(screen.getByText('stopped — delivery limit')).toBeInTheDocument()
     expect(screen.getByText('round 13')).toBeInTheDocument()
   })
 

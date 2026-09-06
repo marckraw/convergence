@@ -88,6 +88,7 @@ function remoteProvider(
     vendorLabel: 'Remote daemon',
     kind: 'conversation' as const,
     supportsContinuation: true,
+    supportsConversationReset: false,
     defaultModelId: models[0]?.id ?? '',
     modelOptions: models.map((model) => ({
       ...model,
@@ -319,6 +320,7 @@ const codexProvider = {
   vendorLabel: 'OpenAI',
   kind: 'conversation' as const,
   supportsContinuation: true,
+  supportsConversationReset: false,
   defaultModelId: 'gpt-5.5',
   fastModelId: 'gpt-5.4-mini',
   modelOptions: [
@@ -358,6 +360,7 @@ const piProvider = {
   vendorLabel: 'Pi',
   kind: 'conversation' as const,
   supportsContinuation: true,
+  supportsConversationReset: false,
   defaultModelId: 'default',
   modelOptions: [
     {
@@ -561,6 +564,7 @@ describe('ComposerContainer', () => {
           vendorLabel: 'Anthropic',
           kind: 'conversation',
           supportsContinuation: true,
+          supportsConversationReset: false,
           defaultModelId: 'claude-sonnet',
           modelOptions: [
             {
@@ -2282,6 +2286,7 @@ describe('ComposerContainer', () => {
           vendorLabel: 'OpenAI',
           kind: 'conversation',
           supportsContinuation: true,
+          supportsConversationReset: false,
           defaultModelId: 'gpt-5.3-codex',
           modelOptions: [
             {
@@ -2334,6 +2339,7 @@ describe('ComposerContainer', () => {
           vendorLabel: 'Pi',
           kind: 'conversation',
           supportsContinuation: true,
+          supportsConversationReset: false,
           defaultModelId: 'openai/gpt-5.3-codex',
           modelOptions: [
             {
@@ -2982,6 +2988,7 @@ describe('ComposerContainer', () => {
         name: 'Shell',
         vendorLabel: 'Local',
         supportsContinuation: false,
+        supportsConversationReset: false,
       }))
       setSessionState({
         status: 'completed',

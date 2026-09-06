@@ -7,14 +7,36 @@ import {
   type SessionCardState,
 } from './session-card-state.pure'
 
-export const MISSION_CONTROL_VIEW_MODES = ['flat', 'crews', 'canvas'] as const
+export const MISSION_CONTROL_VIEW_MODES = ['flat', 'canvas'] as const
 
 /**
- * Flat lays every card in one grid; crews groups them into their containers;
- * canvas draws the crews as wired diagrams. All three are the same room read
- * three ways -- the canvas is a view, not a workspace, and cannot be authored.
+ * Flat lays every card in one grid; Canvas draws the crews as wired diagrams
+ * you can author. Two ways of reading one room.
+ *
+ * `crews` was the third, and it retired with R13 (RUN45): every capability it
+ * had — membership, wire authoring, baton names, limits, history and the
+ * chair — now has a home on the Canvas, and a separate list of the same crews
+ * was a second place to keep in step. A stored `crews` reads as `canvas`
+ * rather than falling back to the default, because that is what the person
+ * who chose it was actually looking at.
  */
 export type MissionControlViewMode = (typeof MISSION_CONTROL_VIEW_MODES)[number]
+
+/**
+ * What a stored mode from an older build means now.
+ *
+ * Its own function rather than a branch inside the parser, so the rule has one
+ * home and the retired words are listed where they can be read.
+ */
+export function readStoredViewMode(value: unknown): MissionControlViewMode {
+  if (MISSION_CONTROL_VIEW_MODES.includes(value as MissionControlViewMode)) {
+    return value as MissionControlViewMode
+  }
+  // The retired Crews view. Landing on `flat` would take somebody who was
+  // looking at their wires to a grid with no wires in it.
+  if (value === 'crews') return 'canvas'
+  return DEFAULT_MISSION_CONTROL_VIEW.mode
+}
 
 /**
  * The shape of the room Marcin left behind: which layout he chose, how it was
@@ -73,11 +95,7 @@ export function parseMissionControlView(
   }
 
   const record = parsed as Record<string, unknown>
-  const mode = MISSION_CONTROL_VIEW_MODES.includes(
-    record.mode as MissionControlViewMode,
-  )
-    ? (record.mode as MissionControlViewMode)
-    : DEFAULT_MISSION_CONTROL_VIEW.mode
+  const mode = readStoredViewMode(record.mode)
   const order = SESSION_CARD_ORDER_PRESETS.includes(
     record.order as SessionCardOrderPreset,
   )

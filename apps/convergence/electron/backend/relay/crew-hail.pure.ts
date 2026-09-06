@@ -1,4 +1,8 @@
-import { DEFAULT_CREW_ROUND_CAP, isBudgetedOutcome } from './relay.pure'
+import {
+  DEFAULT_CREW_ROUND_CAP,
+  MAX_AUTOMATIC_HOPS_PER_FLOW_RUN,
+  isBudgetedOutcome,
+} from './relay.pure'
 import type { CrewHailReason } from './crew-hail.types'
 
 /**
@@ -185,6 +189,10 @@ export function formatCrewHailDetail(
     cap?: number
     minutes?: number
     fate?: StalledStationFate
+    /** The run's spent deliveries, for the backstop's sentence. */
+    spentHops?: number
+    /** What actually broke, for the delivery-failed sentence. */
+    error?: string | null
   } = {},
 ): string {
   switch (reason) {
@@ -197,10 +205,21 @@ export function formatCrewHailDetail(
       return context.baton
         ? `This station handed on "${context.baton}", and no armed wire in this crew answers to it, so nothing fired.`
         : 'This station tried to hand the work on and named nobody, so no wire could answer and nothing fired.'
-    case 'loop-closed':
-      return `This station handed on "${context.baton ?? 'a baton'}", but the wire that answers to it already carried this run, and a crew closes one lap per run — so the loop ended here.`
     case 'round-budget':
-      return `This loop went ${context.cap ?? DEFAULT_CREW_ROUND_CAP} rounds without reaching a terminal, so the wire held rather than spending another turn.`
+      return `This run spent its whole delivery limit of ${context.cap ?? DEFAULT_CREW_ROUND_CAP} without reaching you, so the wire held rather than spending another turn.`
+    case 'budget':
+      // The backstop's own sentence, and it says the thing the round cap's
+      // does not: a wire was switched OFF. That is the difference between the
+      // two guards, and a hail that blurred them would send Marcin looking
+      // for a wire he would find dark with no explanation.
+      return `This run ran away — ${context.spentHops ?? MAX_AUTOMATIC_HOPS_PER_FLOW_RUN} deliveries without reaching you — so the wire was disarmed to stop it.`
+    case 'delivery-failed':
+      // Names the failure inline, because this call exists precisely because
+      // nothing else says it: the hop row is an `error` nobody watches, and a
+      // send that never landed leaves no debt for the stall clock to find.
+      return context.error
+        ? `A delivery in this run failed — ${context.error} — so nothing is coming next on its own.`
+        : 'A delivery in this run failed, so nothing is coming next on its own.'
     case 'stall':
       return context.fate === 'failed'
         ? "This station took the loop's work and failed, so nothing is coming next on its own."

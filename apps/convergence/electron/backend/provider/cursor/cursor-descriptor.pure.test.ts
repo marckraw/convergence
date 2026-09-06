@@ -33,6 +33,7 @@ describe('cursor descriptor mapping', () => {
       vendorLabel: 'Anysphere',
       defaultModelId: 'composer-2.5[fast=true]',
       supportsContinuation: true,
+      supportsConversationReset: false,
       attachments: {
         supportsImage: true,
         supportsPdf: false,

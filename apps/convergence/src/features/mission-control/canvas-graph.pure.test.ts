@@ -11,6 +11,7 @@ import {
   CANVAS_NODE_WIDTH,
   chairNodeId,
   DISARMED_WIRE_COLOR,
+  crewLocalPosition,
   formatSpawnNodeSpec,
   resolveWireColor,
   spawnNodeId,
@@ -617,5 +618,108 @@ describe('Marcin chair on the canvas', () => {
     )
 
     expect(graph.edges[0].label).toBeNull()
+  })
+})
+
+describe('positions the crew remembers (R10)', () => {
+  function group(sessionIds: string[], members: SessionCrew['members']) {
+    return {
+      crew: crew('c1', { sessionIds, members }),
+      cards: sessionIds.map(card),
+      memberCount: sessionIds.length,
+    } as SessionCrewGroup
+  }
+
+  /**
+   * THE position canary. A card somebody arranged has to land where they left
+   * it, and a card nobody has touched has to keep landing where the automatic
+   * walk puts it — otherwise adding a conversation to an arranged crew drops
+   * it on top of the first card.
+   *
+   * Mutation that reds it: ignore `canvasX/canvasY` in `buildCanvasGraph` and
+   * always use `place()`.
+   */
+  it('puts a moved card where it was left, and lays out the rest', () => {
+    const graph = buildCanvasGraph(
+      [
+        group(
+          ['a', 'b'],
+          [
+            { sessionId: 'a', batonName: null, canvasX: 600, canvasY: 320 },
+            { sessionId: 'b', batonName: null, canvasX: null, canvasY: null },
+          ],
+        ),
+      ],
+      [],
+    )
+
+    const moved = graph.nodes.find((node) => node.id === 'a')
+    const untouched = graph.nodes.find((node) => node.id === 'b')
+    expect(moved).toMatchObject({ x: 600, y: 320 })
+    // The walk still placed the other one, and not at the origin.
+    expect(untouched?.x).toBeGreaterThan(0)
+    expect(untouched?.y).toBeGreaterThan(0)
+    expect(untouched).not.toMatchObject({ x: 600, y: 320 })
+  })
+
+  /**
+   * Half a position is not a position. Reading one coordinate as 0 would drag
+   * the card to the edge of its frame, which looks like a bug rather than an
+   * arrangement.
+   */
+  it('lays out a card that stored only one coordinate', () => {
+    const graph = buildCanvasGraph(
+      [
+        group(
+          ['a'],
+          [{ sessionId: 'a', batonName: null, canvasX: 600, canvasY: null }],
+        ),
+      ],
+      [],
+    )
+
+    expect(graph.nodes[0].x).not.toBe(600)
+  })
+
+  it('grows the crew frame to hold a card moved past its edge', () => {
+    const tight = buildCanvasGraph(
+      [
+        group(
+          ['a'],
+          [{ sessionId: 'a', batonName: null, canvasX: null, canvasY: null }],
+        ),
+      ],
+      [],
+    )
+    const stretched = buildCanvasGraph(
+      [
+        group(
+          ['a'],
+          [{ sessionId: 'a', batonName: null, canvasX: 900, canvasY: 700 }],
+        ),
+      ],
+      [],
+    )
+
+    // A card sitting on top of its own crew's border reads as one that has
+    // fallen out of the crew.
+    expect(stretched.clusters[0].width).toBeGreaterThan(tight.clusters[0].width)
+    expect(stretched.clusters[0].height).toBeGreaterThan(
+      tight.clusters[0].height,
+    )
+    expect(stretched.clusters[0].width).toBeGreaterThanOrEqual(
+      900 + CANVAS_NODE_WIDTH,
+    )
+  })
+})
+
+describe('crewLocalPosition', () => {
+  it('turns an absolute drop into an offset from the crew it belongs to', () => {
+    // Clusters stack down the canvas, so storing an absolute y would move
+    // every arrangement the moment a crew was added above it.
+    expect(crewLocalPosition({ x: 300, y: 900 }, { x: 0, y: 800 })).toEqual({
+      x: 300,
+      y: 100,
+    })
   })
 })

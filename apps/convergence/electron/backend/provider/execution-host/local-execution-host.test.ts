@@ -15,6 +15,7 @@ function createFakeProvider(input: {
     vendorLabel: 'Fake',
     kind: 'conversation',
     supportsContinuation: input.supportsContinuation,
+    supportsConversationReset: false,
     defaultModelId: 'test-model',
     modelOptions: [
       {

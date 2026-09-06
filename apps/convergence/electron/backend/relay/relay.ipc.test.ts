@@ -18,6 +18,7 @@ vi.mock('electron', () => ({
 
 import { registerRelayIpcHandlers } from './relay.ipc'
 import { RelayService } from './relay.service'
+import { RunHistoryService } from './run-history.service'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import type { ClearRelayHopsResult } from './relay.service'
 import type { RelayHop, SessionRelay } from './relay.types'
@@ -56,6 +57,7 @@ describe('relay IPC', () => {
     service = new RelayService(db)
     registerRelayIpcHandlers({
       service,
+      runHistory: new RunHistoryService(db),
       liveFlowRunIds: () => liveFlowRunIds,
       broadcast,
       broadcastCleared,
@@ -74,6 +76,7 @@ describe('relay IPC', () => {
       'relay:delete',
       'relay:disarm',
       'relay:list',
+      'relay:listRuns',
       'relay:update',
       'relayHops:clear',
       'relayHops:list',

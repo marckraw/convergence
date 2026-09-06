@@ -4,6 +4,7 @@ import {
   MISSION_CONTROL_VIEW_MODES,
   parseMissionControlView,
   serializeMissionControlView,
+  readStoredViewMode,
 } from './mission-control-view.pure'
 import { SESSION_CARD_ORDER_PRESETS } from './session-card-order.pure'
 
@@ -28,7 +29,7 @@ describe('parseMissionControlView', () => {
 
   it('reads back a full stored view', () => {
     const stored = {
-      mode: 'crews' as const,
+      mode: 'canvas' as const,
       order: 'working-first' as const,
       states: ['working' as const, 'failed' as const],
       projectIds: ['project-a'],
@@ -39,11 +40,25 @@ describe('parseMissionControlView', () => {
     expect(parseMissionControlView(JSON.stringify(stored))).toEqual(stored)
   })
 
+  /**
+   * R13. The Crews view retired into the Canvas, and somebody who last chose
+   * it was looking at their WIRES. Landing them on Flat would take them to a
+   * grid with no wires in it and no sign of where they went.
+   *
+   * Mutation that reds it: drop the `crews` branch from `readStoredViewMode`
+   * so an unknown mode falls back to the default.
+   */
+  it('reads a stored Crews view as the Canvas that replaced it', () => {
+    expect(parseMissionControlView('{"mode":"crews"}').mode).toBe('canvas')
+    expect(readStoredViewMode('crews')).toBe('canvas')
+  })
+
   it('falls back to the flat room for a view mode it does not know', () => {
     expect(parseMissionControlView('{"mode":"constellations"}').mode).toBe(
       'flat',
     )
     expect(parseMissionControlView('{"mode":7}').mode).toBe('flat')
+    expect(readStoredViewMode(undefined)).toBe('flat')
   })
 
   it('round-trips both view modes', () => {
@@ -104,7 +119,7 @@ describe('parseMissionControlView', () => {
 describe('serializeMissionControlView', () => {
   it('round-trips a narrowed room', () => {
     const view = {
-      mode: 'crews' as const,
+      mode: 'canvas' as const,
       order: 'by-project' as const,
       states: ['needs-you' as const],
       projectIds: ['project-a', 'global'],

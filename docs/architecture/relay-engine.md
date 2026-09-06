@@ -9,7 +9,8 @@ action or transform actually lands on.
 Every code path in this document is relative to the `apps/convergence`
 workspace (MAR-2706), not the repository root.
 
-Code: `electron/backend/relay/` (engine, service, pure, types, ipc),
+Code: `electron/backend/relay/` (engine, service, pure, types, ipc, and the
+history read model `run-history.{pure,service}.ts`),
 `src/entities/session-relay/` (renderer mirror), `src/features/mission-control/`
 (sentence, row, editor, hop trail), `src/widgets/mission-control/` (canvas).
 
@@ -24,13 +25,13 @@ it records.
 session settles
   → RelayEngine.handleSettle(event)        engine: the only orchestration
       marks the station came back          (RelayService.markStationSettled)
-      takes the flow-run baton             (in-memory ancestry, see loop law)
+      takes the flow-run baton             (in-memory ancestry, see lap law)
       → RelayService.listForSourceSession  service: repository + use cases
       → fire(relay) per wire
           guards: armed / mute / status
                   → round meter (per crew)
                   → terminal baton / wire condition
-                  → loop law / round cap / hop budget
+                  → lap number / delivery limit / hop budget
           payload: gateway read → compileRelayPayload → preview
           act: RelaySessionGateway.sendMessage | sendMessageWithOpener
                | create + start
@@ -84,8 +85,8 @@ of the status, loop-law and budget guards:
   guard, it could disarm a wire on the way past.
 
 `skipped-muted` is deliberately **not** a budgeted outcome and **not** an
-alarming one: no budget is charged, no baton is handed on, the loop law's
-already-fired check stays unsatisfied, and the row reads grey. The wire stays
+alarming one: no budget is charged, no baton is handed on, the wire's lap does
+not advance, and the row reads grey. The wire stays
 armed, and the next ordinary message carries as usual.
 
 Convergence never infers the mute. It does not sniff `/clear` or `/compact` and
@@ -102,29 +103,53 @@ answer itself into the next station. The engine recognises the opener's settle
 by its dispatch id (below); this mark is in the database, so it survives the
 restart that empties the engine's memory.
 
-### 2. The loop law — a wire fires once per flow run
+### 2. The lap law — a wire fires once per lap, and a run may have many
 
-Loops are wanted; A → B → A is our own review loop. But a chain that has been
-all the way round has finished. Before acting, `fire()` asks
-`RelayService.hasFiredInFlowRun(relayId, flowRunId)`; if the ledger already
-holds a budgeted hop for that pair it writes a `skipped-already-fired` row and
-stops. Nothing is disarmed — the law is a pause, not a failure, and the next
-run must find every wire live.
+Loops are wanted; A → B → A is our own review loop. **One user-visible run may
+contain several autonomous correction laps and ends in an explicit human
+handoff** (ratified 2026-09-06, constitution amendment "🛰️ Mission Control r1 —
+the run, the lap, the canvas", ruling R2). A wire that already carried this run
+carries it again, one lap higher.
 
-**A cyclic crew therefore closes exactly ONE lap per flow run** (ruled, RUN39
-D1). Say it that way everywhere: the round cap below governs a chain of
-_distinct_ wires inside one run, not repeated laps of the same ring, and an
-unattended lap 2 is not a thing this build does. Making it one is an explicit
-lap/generation model — wire eligibility resetting per lap while the per-crew
-cap survives — which is its own ticket and a constitution amendment, not a
-patch inside a guard.
+**A lap is a per-wire generation.** Before acting, `fire()` asks
+`RelayService.countWireHopsInFlowRun(relayId, flowRunId)` — budgeted rows only
+— and the hop's lap is one more than that count. That definition, and not
+"one trip round the ring", is what makes laps work on a graph that is not one
+ring: a fan-out's two wires are both on their first pass in the same settle, a
+branch that never returns simply never reaches lap 2, and a ring of N wires
+yields N deliveries per lap without anybody having to detect a cycle. The
+number is stored on the row (`relay_hops.lap_number`).
 
-**The closure is LOUD when a baton was riding.** If the finishing message
-declared a route and the wire that answers to it already carried this run,
-the station handed work to something that cannot take it: the loop has parked.
-The row stays grey and the chair is called with reason `loop-closed`. A chain
-ending with nobody told is the defect class this feature exists to remove,
-and the loop law is not exempt from it.
+**The round beside it is a different question, and neither derives the other.**
+The round is the CREW's delivery index across the whole run (§2c) and keeps
+climbing 4, 5, 6 while three wires all read lap 2.
+
+**What replaced the refusal.** This law used to be "a wire fires once per flow
+run": `hasFiredInFlowRun` returned a boolean, the second pass wrote a
+`skipped-already-fired` row, the chain stopped, and a closure with a baton
+riding hailed `loop-closed`. Both words are retired for new rows and stay
+READABLE for old ones — the ledger is a historical record (§3). Nothing was
+merely deleted: the run still ends, but at guards that answer a human's
+question rather than a graph's. What ends a run now, in order of how often it
+should: the terminal baton reaching the chair (§2a), the crew's **cumulative**
+delivery limit (§2c), the 20-hop backstop, a delivery that failed, and the
+stall clock. All five are loud (§2b).
+
+**Emptying the ledger is worse under laps, not better.** The lap count and the
+crew's cumulative delivery limit both read `relay_hops`, so deleting a live
+run's rows resets a wire's generation to 1 and refunds the limit it already
+spent. The `keepFlowRunIds` guard below is what stands between a UI convenience
+and a run with no memory.
+
+**Reading a lap back.** `readLapNumber(hop, ledger)` in `relay.pure.ts` answers
+for any row: a stored number is returned, and a null one — every row written
+before the column existed — is DERIVED by the same rule that produced the
+stored ones, counting the wire's earlier budgeted hops in the run by position
+in the ledger's own chronological order rather than by a `fired_at` compare
+that second resolution cannot make total. Defaulting a null to 1 would flatten
+every legacy multi-pass run into a single lap and make history lie about what
+happened, which is why `database.test.ts` pins the derivation against a
+database built without the column.
 
 **Every delivery has a receipt (MAR-2759, the delivery receipt).** The
 session service is the only party that knows which turn carries which input,
@@ -161,18 +186,19 @@ _container_ that may hold several outstanding dispatches at once: two wires of
 one run queued into the same target, or two runs whose payloads joined one
 native turn. A one-slot-per-session map lost every receipt but the last, so
 the first queued payload's settle named nothing held and minted a fresh run —
-in which every already-fired wire was live again, the loop-law breach. **The
+in which every wire's lap restarted at 1 and the crew's delivery limit was
+refunded — the breach the bound below exists for. **The
 bound on this seam (RUN39 round 4) is dispatch-set fidelity: a session-keyed
 slot, a whole-settle boolean, or a "first id wins" anywhere the engine reads a
 settle's ids is a STOP and a design talk, not a patch.**
 
 This replaced an earlier ledger inference ("the run of the newest hop that ever
-delivered into this session"), which under the loop law would have made a
-manual hail tomorrow inherit today's finished run — every wire "already fired",
-dead forever, from a switch the user can see is armed. A restart drops the
-batons, so an interrupted chain resumes in a fresh run and one wire may fire
-once more: the design errs toward liveliness, never toward a loop, because
-once-per-run still governs the new run.
+delivered into this session"), which would have made a manual hail tomorrow
+inherit today's finished run — and under laps that is worse than dead wires:
+the old run's delivery limit is already spent, so the new work would hold at a
+cap it never used. A restart drops the batons, so an interrupted chain resumes
+in a fresh run with a fresh limit and its wires back at lap 1: the design errs
+toward liveliness, and the backstop below is what still catches a runaway.
 
 **Not every settle is a settle.** A wire with an opener (below) makes the
 target come to rest twice per hop: once when the opener's own turn ends —
@@ -184,8 +210,11 @@ one id and every id it names is a held opener's**. That beat fires no wires,
 writes no ledger row, and leaves the baton where it is. Skipping this is not
 cosmetic. Consuming the baton on the plumbing beat would make the real settle
 mint a **fresh** run, every wire would be live again, and A → B → A → B would
-ping-pong forever with each lap legal in its own new run — the loop law
-silently stops ending chains.
+ping-pong forever with each pass in a new run of its own — laps that nothing
+counts, and a delivery limit that is refunded every time round. Laps make this
+worse than it was: a run going round again is now CORRECT, so a fresh run per
+pass no longer shows up as anything a user could see, and the only things left
+that notice are the run id in history and the cumulative meter.
 
 **An opener is always a turn of its own (ruled, RUN39 round 5: design X).**
 `SessionService.sendMessageWithOpener` decides at dispatch: an idle target
@@ -218,12 +247,14 @@ as a false "completed"; persisting the in-flight set across reattach (design
 Y) remains a possible follow-up if the loud side proves noisy in practice.
 
 The 20-hop **budget** (`MAX_AUTOMATIC_HOPS_PER_FLOW_RUN`) stays as a backstop
-for the case the loop law cannot see: a chain of _distinct_ wires long enough
-to outrun it. It disarms loudly and says why.
+for the case the crew's own limit cannot see: a run spread across several
+crews, each under its own cap. It disarms loudly, says why, and hails
+(`budget`, §2b).
 
 **The ledger is load-bearing, so emptying it is guarded.** Because both the
-loop law and the budget count read `relay_hops`, deleting a live run's rows
-would tell a wire it never fired and reopen the loop the law had closed. The
+lap count and the budget counts read `relay_hops`, deleting a live run's rows
+would put a wire back on lap 1 and refund the deliveries the run already
+spent. The
 engine therefore publishes `liveFlowRunIds()` — the union of every baton it
 holds and every run a settle is carrying _right now_ (`runsInFlight`, a
 counter, because one hop can leave batons on two sessions) — and the
@@ -253,8 +284,8 @@ route on a line of its own. Normalising case and whitespace is not parsing --
 it is applied identically to both sides and cannot make two different
 declarations equal.
 
-Where the guard sits in `fire()`, and why: **above** the loop law and both
-budgets, **below** the mute and the failure guard. Those two are facts about
+Where the guard sits in `fire()`, and why: **above** the lap and both budgets,
+**below** the mute and the failure guard. Those two are facts about
 the settle and outrank anything the message says; everything below is a
 question about a wire that is already a candidate, and this is the question of
 whether it is one at all. A wire waiting for a route the message never named
@@ -285,13 +316,26 @@ Folding it in would also make "Clear trail" dismiss alarms.
 - `terminal` / `unrouted`: raised by `parkIfUnanswered` after every wire has
   had its turn, when a baton was emitted and **no wire answered it**.
   "Answered" is about the CONDITION, not delivery: a wire whose baton matched
-  and then declined for its own reason (an error, the round cap or the loop
-  law, which hail on their own) did answer, and the trail records what happened
-  next. Only on a completed, unmuted settle.
-- `loop-closed`: raised inside `fire()` when the loop law ends a chain with a
-  baton riding, above.
-- `round-budget`: raised inside `fire()` at the cap, below.
+  and then declined for its own reason (an error or the delivery limit, which
+  hail on their own) did answer, and the trail records what happened next.
+  Only on a completed, unmuted settle.
+- `round-budget`: raised inside `fire()` at the crew's cumulative delivery
+  limit, below.
+- `budget`: raised inside `fire()` at the 20-hop backstop, **beside the
+  disarm** (R3). The backstop is the one guard that switches a wire off, and
+  a switch thrown behind the user's back with nobody told was the last silent
+  ending in the engine — reachable rather than theoretical now that a run may
+  lap.
+- `delivery-failed`: raised inside `record()` whenever a firing writes an
+  `error` row (R3). Inside the one function every error row goes through,
+  spawn's included, rather than at each of the six sites that can write one —
+  a site-by-site rule is one the next error site is free to forget. It has to
+  exist because an `error` hop hails nobody on its own AND a send that never
+  landed leaves no budgeted hop for the stall clock to accuse: before this,
+  a failed delivery simply stopped the run in silence.
 - `stall`: raised by `checkForStalls`, below.
+- `loop-closed`: **retired** with the once-per-run refusal (§2). Never written
+  by this build; still read.
 
 Which crews get hailed is `flowCrewIds`: the crews of the session's outgoing
 wires, unioned with every crew it merely BELONGS to that owns at least one
@@ -323,6 +367,12 @@ behind the first.
 twelve rounds are another's two. Null means the default; a stored value that
 could not have been meant falls back to it rather than disabling the guard.
 
+`round_cap` is the design's **delivery limit per run** (R4): it counts every
+budgeted hop of this crew in the run, **across every lap**, so returning to the
+first station refills nothing. `stall_minutes` is a threshold on an OWED REPLY,
+never a limit on how long a run may take. The code did not change with the
+words; only the words did.
+
 The round cap and the 20-hop `MAX_AUTOMATIC_HOPS_PER_FLOW_RUN` are deliberately
 both kept, because they answer different questions with different responses:
 the cap says "this loop needs eyes" and **disarms nothing** while hailing, and
@@ -340,8 +390,9 @@ runaway chain is a runaway however many rooms it passes through.
 The round number is fixed once, above every guard that records a row, so the
 number the ledger records, the number a refusal names and the number the
 receiving station reads are one value. Which rows carry it: everything from the
-round meter down — deliveries, `skipped-baton`, `skipped-already-fired`,
-`skipped-round-budget`, `skipped-budget`, errors. The mute and failure rows
+round meter down — deliveries, `skipped-baton`, `skipped-round-budget`,
+`skipped-budget`, errors. The lap is stamped on exactly the same rows, for
+exactly the same reason. The mute and failure rows
 carry null on purpose: they are facts about the settle rather than beats of a
 loop, and a round on them would claim they belonged to one.
 
@@ -460,6 +511,50 @@ receipt reaches a terminal"): cancel, delete, the failed receipt hailed
 without waiting, and two same-session receipts where ending one leaves the
 other live.
 
+### 2d. The history read model — runs, laps and events (R12)
+
+`relay:listRuns(crewId, { limit, before })` answers with one page of this
+crew's runs, newest first. It is the read side of everything above, and it has
+its own class (`RunHistoryService`) rather than a method on `RelayService` or
+`CrewHailService` for one reason: **a run is hops AND hails**, and it owns
+neither table. A station whose baton nothing answered may have no outgoing wire
+at all, so its call has no `relay_id` and no hop — which means the ledger alone
+cannot even list the runs. The page's key set is the UNION of the two tables',
+and a run that is only a hail is still a run.
+
+Three rules, all of them pinned:
+
+- **It never re-tells the ledger.** Every fact returned is a stored fact.
+  Grouping, ordering and the design's vocabulary are the only work, and all
+  three live in `run-history.pure.ts` where they are testable without a
+  database. A recorded event is never replaced by a current setting: the
+  graph is labelled _current layout_ and the event carries what was written.
+- **A call with no run id joins no run.** The decision is made once, in
+  `assembleRuns`, and the service therefore hands it BOTH kinds of call in one
+  list. Filtering the orphans out in SQL would leave that guard with no
+  reachable input and the rule pinned by nothing — which is exactly what the
+  first version did, and what a mutation test caught.
+- **One normalizer between the vocabularies.** `normalizeHistoryOutcome` maps
+  the engine's words (`RelayHopOutcome`, `CrewHail.reason`) onto the design's
+  (delivered · queued · held · delivery failed · limit reached · handed back ·
+  parked · reply overdue · loop closed · unknown). Two vocabularies on purpose:
+  a rename on either side cannot silently change the other. `parked` is R3's
+  own word for an unrouted baton — `held` would be a lie, because a held wire
+  did what it was drawn to do while a parked run reached nobody.
+
+`deriveRunStatus` answers what a run amounts to: `handed back` · `needs you`
+(with which of `failed` / `limit` / `parked` / `stalled`) · `running` ·
+`finished quiet` · `unknown`. **The order of its questions is the ruling:
+needs-you is asked FIRST, so a run that both failed and reached the chair reads
+as one that needs him.** A failure, a stall or an exhausted budget must never
+masquerade as a successful terminal handoff, and the terminal is still in the
+events either way. Acknowledgement is not read: marking a call seen does not
+un-fail a delivery, and a status that changed when he looked at it would be a
+record of his attention rather than of the run. `running` is asked of the
+LEDGER — a budgeted hop with no settle stamp — because that fact survives the
+restart that empties every baton, and `finished quiet` is not "succeeded":
+nothing here knows whether the work was any good.
+
 ### 3. The vocabulary law — write a union, read a string
 
 `RelayHopOutcome` is the vocabulary this build may **write**. Everything that
@@ -479,7 +574,7 @@ hailed for one.
 
 The same split applies to `isBudgetedOutcome`, which is the single place that
 knows which words mean "a provider turn was spent". Three separate rules read
-it: the budget count, the loop law, and baton hand-off. Keep it that way; a
+it: the budget counts, the lap count, and baton hand-off. Keep it that way; a
 `WHERE outcome IN (…)` in SQL would be a second copy free to drift.
 
 ### 4. The quota law — no test may reach a provider
@@ -643,9 +738,20 @@ pins it.
   everything they describe is gone.
 - **Deleting a relay means "stop doing this"**, never "pretend it never
   happened" — its hops stay.
+- **A retired word is not a deleted word.** `skipped-already-fired` and the
+  `loop-closed` hail reason left the WRITE unions with the lap law and stay in
+  every reader, because rows already say them. Anything that switches on a
+  stored outcome or reason takes a plain `string` (§3); removing a case there
+  turns somebody's history blank.
+- **The lap and the round are two numbers, not one.** A helper that took "the
+  count" and returned "the number" would invite a caller to pass the crew's
+  count and silently number laps per crew — which reads plausibly and is wrong
+  on every fan-out. `lapNumber` and `roundNumber` stay separate functions over
+  separate counts.
 - **Clearing a trail is a read-model convenience over a load-bearing table.**
   Anything new that deletes from `relay_hops` must spare
-  `RelayEngine.liveFlowRunIds()`, or it silently weakens the loop law.
+  `RelayEngine.liveFlowRunIds()`, or it silently resets a live run's laps and
+  refunds its delivery limit.
 - **A literal that crosses the tree boundary is duplicated, not shared — and
   the duplication needs a barrier, not two pins.** The renderer cannot import
   from `electron/`, so `BATON:` (`batonConditionToken`) and the two loop

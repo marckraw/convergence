@@ -105,6 +105,7 @@ function createTestProvider(): Provider {
       vendorLabel: 'Test',
       kind: 'conversation',
       supportsContinuation: false,
+      supportsConversationReset: false,
       defaultModelId: 'test-model',
       modelOptions: [
         {
@@ -826,6 +827,7 @@ describe('SessionService', () => {
         vendorLabel: 'Test',
         kind: 'conversation',
         supportsContinuation: false,
+        supportsConversationReset: false,
         defaultModelId: 'stream-model',
         modelOptions: [
           {
@@ -1327,6 +1329,7 @@ describe('SessionService', () => {
         vendorLabel: 'Test',
         kind: 'conversation',
         supportsContinuation: true,
+        supportsConversationReset: false,
         defaultModelId: 'continuable-model',
         modelOptions: [
           {
@@ -1396,6 +1399,7 @@ describe('SessionService', () => {
         vendorLabel: 'Test',
         kind: 'conversation',
         supportsContinuation: true,
+        supportsConversationReset: false,
         defaultModelId: 'model',
         modelOptions: [
           {
@@ -1515,6 +1519,7 @@ describe('SessionService', () => {
         vendorLabel: 'Test',
         kind: 'conversation',
         supportsContinuation: true,
+        supportsConversationReset: false,
         defaultModelId: 'continuable-model',
         modelOptions: [
           {
@@ -1595,6 +1600,7 @@ describe('SessionService', () => {
         vendorLabel: 'Anthropic',
         kind: 'conversation',
         supportsContinuation: true,
+        supportsConversationReset: false,
         defaultModelId: 'sonnet',
         modelOptions: [
           {
@@ -1792,6 +1798,7 @@ describe('SessionService', () => {
         vendorLabel: 'Anthropic',
         kind: 'conversation',
         supportsContinuation: true,
+        supportsConversationReset: false,
         defaultModelId: 'sonnet',
         modelOptions: [
           {
@@ -2293,6 +2300,7 @@ describe('SessionService', () => {
         vendorLabel: 'Test',
         kind: 'conversation',
         supportsContinuation: true,
+        supportsConversationReset: false,
         defaultModelId: 'continuable-model',
         modelOptions: [
           {
@@ -2744,6 +2752,7 @@ describe('SessionService attachments integration', () => {
         vendorLabel: 'Test',
         kind: 'conversation',
         supportsContinuation: false,
+        supportsConversationReset: false,
         defaultModelId: 'm',
         modelOptions: [
           {
@@ -3050,6 +3059,7 @@ describe('SessionService — turn capture wiring', () => {
         vendorLabel: 'Quiet',
         kind: 'conversation',
         supportsContinuation: false,
+        supportsConversationReset: false,
         defaultModelId: 'quiet',
         modelOptions: [
           {
@@ -3955,6 +3965,7 @@ describe('SessionService — liveness clock', () => {
         providerId: 'claude',
         name: 'Claude Code',
         supportsContinuation: true,
+        supportsConversationReset: false,
         supportsOneShot: false,
       }
       const listed = [
@@ -3965,6 +3976,7 @@ describe('SessionService — liveness clock', () => {
                 providerId: blocked.providerId,
                 name: blocked.providerId,
                 supportsContinuation: true,
+                supportsConversationReset: false,
                 supportsOneShot: false,
               },
             ]
@@ -5824,6 +5836,7 @@ describe('SessionService opener sends (F9)', () => {
         vendorLabel: 'Test',
         kind: 'conversation',
         supportsContinuation: true,
+        supportsConversationReset: false,
         defaultModelId: 'continuable-model',
         modelOptions: [
           {
@@ -6148,6 +6161,7 @@ describe('SessionService relay mute', () => {
         vendorLabel: 'Test',
         kind: 'conversation',
         supportsContinuation: true,
+        supportsConversationReset: false,
         defaultModelId: 'quiet-model',
         modelOptions: [
           {
@@ -6394,6 +6408,7 @@ describe('SessionService relay mute', () => {
       providerId: 'claude',
       name: 'Claude Code',
       supportsContinuation: true,
+      supportsConversationReset: false,
       supportsOneShot: false,
     }
     const remoteHost = {
@@ -6547,6 +6562,7 @@ describe('SessionService model selection (MAR-2550)', () => {
         vendorLabel: 'Test',
         kind: 'conversation',
         supportsContinuation: true,
+        supportsConversationReset: false,
         defaultModelId: 'fable',
         modelOptions: [
           {
@@ -7014,6 +7030,7 @@ describe('SessionService + RelayEngine: an opener is always its own turn (MAR-27
       providerId: 'pi',
       name: 'Pi',
       supportsContinuation: true,
+      supportsConversationReset: false,
       supportsOneShot: false,
     }
     const remoteHost = {
@@ -7241,6 +7258,7 @@ describe('SessionService + RelayEngine: an opener is always its own turn (MAR-27
       providerId: 'pi',
       name: 'Pi',
       supportsContinuation: true,
+      supportsConversationReset: false,
       supportsOneShot: false,
     }
     const barrier = { refuse: false }
@@ -7440,6 +7458,7 @@ describe('THE SWEEP: every dispatched receipt reaches exactly one terminal (MAR-
       providerId: 'pi',
       name: 'Pi',
       supportsContinuation: true,
+      supportsConversationReset: false,
       supportsOneShot: false,
     }
     const hold: Rig['hold'] = { listing: null, refuse: false }

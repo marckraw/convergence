@@ -4,6 +4,7 @@ export {
   DEFAULT_MISSION_CONTROL_VIEW,
   MISSION_CONTROL_VIEW_MODES,
   parseMissionControlView,
+  readStoredViewMode,
   serializeMissionControlView,
 } from './mission-control-view.pure'
 export type {
@@ -27,15 +28,114 @@ export { SessionCrewPicker } from './session-crew-picker.container'
 export { SessionCrewChips } from './session-crew-chips.presentational'
 export { CrewDecorationPicker } from './crew-decoration-picker.presentational'
 export { CrewHeaderMenu } from './crew-header-menu.container'
-export { CrewFlowSection } from './crew-flow-section.container'
-export { CrewHailBanner } from './crew-hail-banner.presentational'
-export { CrewLoopPanel } from './crew-loop-panel.presentational'
 export {
   DEFAULT_CREW_ROUND_CAP,
   DEFAULT_CREW_STALL_MINUTES,
   batonConditionToken,
+  batonNameRefusal,
   formatCrewLoopDefault,
 } from './crew-loop.pure'
+
+// The Canvas as a workspace (R10, R13): the toolbar, the three right-hand
+// panels, and the pure rules behind them. Together these are the Canvas home
+// for every capability the retired Crews view had.
+export { CanvasToolbar } from './canvas-toolbar.presentational'
+export {
+  ConnectionInspector,
+  GLOBAL_PROJECT_OPTION_ID,
+  SPAWN_RECIPIENT_OPTION_ID,
+} from './connection-inspector.presentational'
+export { CrewSettingsPanel } from './crew-settings-panel.presentational'
+export {
+  AddConversationsPanel,
+  ANY_PROJECT_OPTION_ID,
+} from './add-conversations-panel.presentational'
+export type { AddableConversation } from './add-conversations-panel.presentational'
+export {
+  CONVERSATION_RESET_COMMAND,
+  EMPTY_SPAWN_SPEC,
+  beforeDeliveryOptions,
+  connectionDraftIsDirty,
+  connectionDraftProblem,
+  customOpenerNote,
+  draftFromRelay,
+  newConnectionDraft,
+  openerForDraft,
+  relayInputFromDraft,
+} from './connection-draft.pure'
+export type {
+  BeforeDeliveryMode,
+  BeforeDeliveryOption,
+  ConnectionCondition,
+  ConnectionDraft,
+  ConnectionRecipient,
+  ConnectionSpawnSpec,
+} from './connection-draft.pure'
+export {
+  CONNECT_MODE_OFF,
+  cancelConnectMode,
+  connectModeHint,
+  pickConnectCard,
+  toggleConnectMode,
+} from './connect-mode.pure'
+export type { ConnectModeResult, ConnectModeState } from './connect-mode.pure'
+
+// Routing (R11): where a wire leaves, where it arrives, and how it gets there.
+export {
+  ROUTE_CLEARANCE,
+  ROUTE_GRID,
+  ROUTE_STUB,
+  chooseRouteSides,
+  rectCenter,
+  routeAround,
+  routeEntersRect,
+  routeLabelPoint,
+  routePath,
+  segmentHitsRect,
+  sidePoint,
+  simplify,
+} from './canvas-route.pure'
+export type { RoutePoint, RouteRect, RouteSide } from './canvas-route.pure'
+
+// History under the canvas (R3, R12): the words, the panel, the event panel.
+export { HistoryPanel } from './history-panel.presentational'
+export {
+  HISTORY_TONE_BORDER,
+  HISTORY_TONE_TEXT,
+  HistoryEventRowView,
+} from './history-event-row.presentational'
+export { HistoryFact } from './history-fact.presentational'
+export {
+  HistoryEventInspector,
+  RUN_LAP_DELIVERY_GLOSSARY,
+} from './history-event-inspector.presentational'
+export type { RecordedEventFacts } from './history-event-inspector.presentational'
+export {
+  HISTORY_FILTERS,
+  buildHailEventRow,
+  buildHopEventRow,
+  buildRunEvents,
+  buildRunHighlight,
+  buildRunRow,
+  filterRuns,
+  formatEventTime,
+  formatRunStatusLine,
+  formatRunSummary,
+  formatRunTime,
+  historyOutcomeTone,
+  historyOutcomeWord,
+  historyPanelState,
+  runStartingStation,
+  runTone,
+} from './run-history.pure'
+export type {
+  HistoryEventRow,
+  HistoryFilter,
+  HistoryLapGroup,
+  HistoryPanelState,
+  HistoryRunRow,
+  HistoryTone,
+} from './run-history.pure'
 export { RelayHopTrail } from './relay-hop-trail.container'
 export { RelayHopRow } from './relay-hop-row.presentational'
 export {
@@ -155,6 +255,7 @@ export {
   assignFlowColumns,
   buildCanvasGraph,
   chairNodeId,
+  crewLocalPosition,
   formatSpawnNodeSpec,
   resolveWireColor,
   spawnNodeId,

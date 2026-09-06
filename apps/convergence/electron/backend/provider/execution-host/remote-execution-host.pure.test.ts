@@ -231,6 +231,10 @@ describe('descriptorForRemoteProvider', () => {
       name: 'Claude Code',
       kind: 'conversation',
       supportsContinuation: true,
+      // Answered from the LOCAL id this row records (R8): a remote Claude
+      // Code is still a Claude Code, so the connection inspector may offer
+      // "clear the conversation first" for a session running on a daemon.
+      supportsConversationReset: true,
       defaultModelId: 'sonnet',
       midRunInput: {
         supportsNativeFollowUp: true,

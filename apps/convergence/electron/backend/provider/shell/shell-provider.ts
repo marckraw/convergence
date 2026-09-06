@@ -11,6 +11,8 @@ const SHELL_DESCRIPTOR: ProviderDescriptor = {
   vendorLabel: 'Local',
   kind: 'shell',
   supportsContinuation: false,
+  // A shell has no conversation, so there is nothing to start over.
+  supportsConversationReset: false,
   defaultModelId: '',
   fastModelId: null,
   modelOptions: [],

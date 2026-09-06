@@ -310,6 +310,15 @@ export function buildCanvasGraph(
     let widestColumn = 0
     let tallestColumn = 0
 
+    /**
+     * Where a card sits, when nobody has moved it.
+     *
+     * The automatic walk is still the answer for every unplaced thing, and it
+     * still has to reserve a slot even for a card that WAS moved -- otherwise
+     * arranging one card would slide every unmoved card beside it, and a
+     * layout that rearranges itself when you touch something else is a layout
+     * you cannot trust.
+     */
     const place = (id: string): { x: number; y: number } => {
       const column = columns.get(id) ?? 0
       const row = rowsByColumn.get(column) ?? 0
@@ -325,12 +334,32 @@ export function buildCanvasGraph(
       }
     }
 
+    // Positions the crew remembers (R10). Read once for the whole cluster
+    // rather than per card, and only for members that carry BOTH coordinates:
+    // half a position is not a position.
+    const storedPositions = new Map<string, { x: number; y: number }>()
+    for (const member of crew.members) {
+      if (member.canvasX === null || member.canvasY === null) continue
+      storedPositions.set(member.sessionId, {
+        x: member.canvasX,
+        y: member.canvasY,
+      })
+    }
+
     for (const card of group.cards) {
+      // The slot is claimed either way, then overridden -- see `place`.
+      const laidOut = place(card.session.id)
+      const stored = storedPositions.get(card.session.id)
       nodes.push({
         id: card.session.id,
         crewId: crew.id,
         card,
-        ...place(card.session.id),
+        // Stored positions are cluster-relative in x and ABSOLUTE in y for
+        // the same reason `place` is: clusters stack down the canvas, so a
+        // card's y has to be read against the frame it belongs to. Stored
+        // values are written back the same way (see `crewLocalPosition`).
+        x: stored ? stored.x : laidOut.x,
+        y: stored ? clusterTop + stored.y : laidOut.y,
       })
     }
 
@@ -406,15 +435,26 @@ export function buildCanvasGraph(
       })
     }
 
-    const width =
+    let width =
       CLUSTER_PADDING_X * 2 +
       (widestColumn + 1) * CANVAS_NODE_WIDTH +
       widestColumn * COLUMN_GAP
-    const height =
+    let height =
       CLUSTER_PADDING_TOP +
       CLUSTER_PADDING_BOTTOM +
       tallestColumn * CANVAS_NODE_HEIGHT +
       (tallestColumn - 1) * ROW_GAP
+
+    // A moved card can land outside the frame the walk would have drawn, and
+    // a card sitting on top of its own crew's border reads as a card that has
+    // fallen out of the crew. The frame grows to hold what it contains.
+    for (const stored of storedPositions.values()) {
+      width = Math.max(width, stored.x + CANVAS_NODE_WIDTH + CLUSTER_PADDING_X)
+      height = Math.max(
+        height,
+        stored.y + CANVAS_NODE_HEIGHT + CLUSTER_PADDING_BOTTOM,
+      )
+    }
 
     clusters.push({
       crewId: crew.id,
@@ -491,3 +531,18 @@ export function formatSpawnNodeSpec(
 /** What the canvas says when the room has crews but none of them are drawable. */
 export const EMPTY_CANVAS_MESSAGE =
   'No crewed sessions to draw. The canvas shows crews and the wires between them — put sessions in a crew to see them here.'
+
+/**
+ * A dropped card's absolute canvas position, in the coordinates the crew
+ * stores.
+ *
+ * Clusters stack down the canvas, so an absolute y means nothing on its own:
+ * inserting a crew above would move every card below it. Storing the offset
+ * from the frame's top keeps a arrangement true wherever its crew ends up.
+ */
+export function crewLocalPosition(
+  absolute: { x: number; y: number },
+  cluster: Pick<CanvasCrewCluster, 'x' | 'y'>,
+): { x: number; y: number } {
+  return { x: absolute.x - cluster.x, y: absolute.y - cluster.y }
+}

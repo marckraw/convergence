@@ -40,6 +40,8 @@ function hop(overrides: Partial<RelayHop> = {}): RelayHop {
     payloadPreview: 'Done. Ready for review.',
     baton: null,
     roundNumber: null,
+    lapNumber: null,
+    settledAt: null,
     outcome: 'delivered',
     error: null,
     ...overrides,
@@ -121,16 +123,21 @@ describe('formatRelayHopOutcome', () => {
     )
     expect(formatRelayHopOutcome('skipped-budget')).toBe('stopped — hop budget')
     expect(formatRelayHopOutcome('skipped-muted')).toBe('held — sent quiet')
+    expect(formatRelayHopOutcome('skipped-round-budget')).toBe(
+      'stopped — delivery limit',
+    )
+    // Legacy, and still readable: the ledger is a historical record and this
+    // build stopped writing the word rather than forgetting it (R2).
     expect(formatRelayHopOutcome('skipped-already-fired')).toBe(
-      'already fired this run',
+      'lap closed (older build)',
     )
   })
 
   /**
-   * The loop law ending a chain is the wire working. If it ever reads as an
-   * alarm the user learns to distrust the thing that stops runaway spending.
+   * The retired loop law ending a chain was the wire working. If a legacy row
+   * ever read as an alarm the user would learn to distrust their own history.
    */
-  it('keeps the loop law quiet rather than alarming', () => {
+  it('keeps the retired loop-law row quiet rather than alarming', () => {
     expect(isAlarmingHop({ outcome: 'skipped-already-fired' })).toBe(false)
     expect(countAlarmingHops([{ outcome: 'skipped-already-fired' }])).toBe(0)
     expect(

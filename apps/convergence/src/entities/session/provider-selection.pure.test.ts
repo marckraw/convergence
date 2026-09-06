@@ -36,6 +36,7 @@ const providers = [
     vendorLabel: 'Anthropic',
     kind: 'conversation' as const,
     supportsContinuation: true,
+    supportsConversationReset: false,
     defaultModelId: 'sonnet',
     modelOptions: [
       {
@@ -58,6 +59,7 @@ const providers = [
     vendorLabel: 'OpenAI',
     kind: 'conversation' as const,
     supportsContinuation: true,
+    supportsConversationReset: false,
     defaultModelId: 'gpt-5.4',
     modelOptions: [
       {
@@ -297,6 +299,7 @@ describe('resolveComposerSelectionLocks (MAR-2550)', () => {
       ...providers[0]!,
       id: 'shell',
       supportsContinuation: false,
+      supportsConversationReset: false,
     }
     expect(
       resolveComposerSelectionLocks([...providers, shell], {

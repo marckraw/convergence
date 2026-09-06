@@ -4,12 +4,19 @@
  * The mirror of the backend record. A hail is not a hop — the trail says what
  * a wire did, a hail says what a crew needs from a human — so it lives beside
  * the ledger rather than inside it.
+ *
+ * `loop-closed` is retired from the written union (R2 replaced the once-per-run
+ * refusal with laps) and stays readable through `reason: string`, which is
+ * wider than the union for exactly this reason.
  */
 export type CrewHailReason =
   | 'terminal'
   | 'unrouted'
-  | 'loop-closed'
   | 'round-budget'
+  /** The 20-hop backstop tripped and disarmed a wire (R3). */
+  | 'budget'
+  /** A wire could not deliver at all; nothing is coming next (R3). */
+  | 'delivery-failed'
   | 'stall'
 
 export interface CrewHail {

@@ -8,7 +8,6 @@ import type {
 import { resolveAccountForAutomaticTurn } from '../provider-account/provider-account-automatic-turn.pure'
 import type { AutomaticTurnAccountSource } from '../provider-account/provider-account-automatic-turn.pure'
 import {
-  ALREADY_FIRED_MESSAGE,
   MUTED_MESSAGE,
   TERMINAL_BATON,
   TERMINAL_BATON_MESSAGE,
@@ -19,6 +18,7 @@ import {
   hasFlowRunBudget,
   hasRoundBudget,
   isBudgetedOutcome,
+  lapNumber,
   readEmittedBaton,
   readEmittedDeclaration,
   relayConditionMatches,
@@ -650,6 +650,7 @@ export class RelayEngine {
     emittedBaton: string | null,
   ): Promise<boolean> {
     let roundNumberForHop: number | null = null
+    let lapNumberForHop: number | null = null
     const record: RecordHopFn = (
       outcome: RelayHopOutcome,
       extra: RecordHopExtra = {},
@@ -670,6 +671,12 @@ export class RelayEngine {
         // and failure rows above it are facts about the settle, not rounds of
         // a loop. Everything from the meter down carries its number.
         roundNumber: roundNumberForHop,
+        // Same rule, different question (R2): the wire's own generation
+        // inside this run, stamped on exactly the rows the round is stamped
+        // on. The two are computed in the same breath below and neither is
+        // derivable from the other -- a ring's second pass reads lap 2 on
+        // three wires whose rounds are 4, 5 and 6.
+        lapNumber: lapNumberForHop,
         dispatchId: extra.dispatchId ?? null,
         outcome,
         error: extra.error ?? null,
@@ -684,6 +691,26 @@ export class RelayEngine {
       // rather than over it.
       if (isBudgetedOutcome(outcome) && extra.dispatchId) {
         this.batons.set(extra.dispatchId, flowRunId)
+      }
+      // A delivery that BROKE is a run that ended, and until R3 it ended in
+      // silence: an `error` row hailed nobody, and because a failed send
+      // lands no budgeted hop there was nothing for the stall clock to
+      // accuse either. So the chair is called from here -- inside the one
+      // function every error row in this file goes through, spawn's included
+      // -- rather than at each of the six sites that can write one. A
+      // site-by-site hail is a rule the next error site is free to forget.
+      if (outcome === 'error') {
+        this.raiseHail({
+          crewId: relay.crewId,
+          flowRunId,
+          reason: 'delivery-failed',
+          sessionId: event.sessionId,
+          baton: emittedBaton,
+          message,
+          detail: formatCrewHailDetail('delivery-failed', {
+            error: extra.error ?? null,
+          }),
+        })
       }
       this.onHopAppended?.(hop)
     }
@@ -731,6 +758,16 @@ export class RelayEngine {
     )
     roundNumberForHop = roundNumber(crewSpentHops)
 
+    // The lap (R2), read in the same breath and from the same ledger, because
+    // it is the same kind of fact about this firing: the round says which
+    // delivery of the CREW's run this is, the lap says which generation of
+    // THIS WIRE. A ring of three wires going round twice reads rounds 1..6
+    // and laps 1,1,1,2,2,2 -- and neither number can be recovered from the
+    // other, which is why both are stored.
+    lapNumberForHop = lapNumber(
+      this.relays.countWireHopsInFlowRun(relay.id, flowRunId),
+    )
+
     // The reserved terminal (MAR-2759). Above the condition gate, because it
     // outranks ROUTING and not merely conditions: an unconditional wire
     // answers every message, so a terminal that only beat conditioned wires
@@ -763,32 +800,15 @@ export class RelayEngine {
       return false
     }
 
-    // The loop law. A chain that comes back round to a wire it already used
-    // has finished, so the wire declines and stays armed for the next run --
-    // A -> B -> A ends at two real hops, and a cyclic crew therefore closes
-    // exactly one lap per run. This is not a failure, which is why it disarms
-    // nothing and reads grey in the trail.
-    //
-    // But if a baton was RIDING, the station handed work to a wire that cannot
-    // carry it, and a chain that stops there has parked. So the row stays grey
-    // and the chair is called: a silent stop is the defect class, whoever
-    // stops it. Lap two is not a patch to make here -- it is an explicit
-    // lap model, its own ticket, after a design talk.
-    if (this.relays.hasFiredInFlowRun(relay.id, flowRunId)) {
-      record('skipped-already-fired', { error: ALREADY_FIRED_MESSAGE })
-      if (emittedBaton !== null) {
-        this.raiseHail({
-          crewId: relay.crewId,
-          flowRunId,
-          reason: 'loop-closed',
-          sessionId: event.sessionId,
-          baton: emittedBaton,
-          message,
-          detail: formatCrewHailDetail('loop-closed', { baton: emittedBaton }),
-        })
-      }
-      return true
-    }
+    // The lap law replaced a refusal here (R2, RUN45). A wire that already
+    // carried this run used to write `skipped-already-fired` and stop, so a
+    // cyclic crew closed exactly one lap per run and an unattended second
+    // correction cycle was not a thing this build could do. It now carries
+    // again, one lap higher, and the guards below are what still end a run:
+    // the crew's cumulative delivery limit, the 20-hop backstop, and the
+    // terminal baton reaching the chair. Nothing was merely deleted -- the
+    // number that refusal made unnecessary is now recorded on every row,
+    // which is what lets history show the laps it was hiding.
 
     // The round budget (MAR-2759). Ahead of the hop budget because it is the
     // smaller of the two by default, and unlike it this refusal disarms
@@ -824,6 +844,20 @@ export class RelayEngine {
       this.relays.setArmed(relay.id, false)
       this.onRelaysChanged?.()
       record('skipped-budget', { error: flowRunBudgetMessage(runSpentHops) })
+      // Loud, from R3. The backstop still disarms -- that is the difference
+      // between it and the round cap -- but a wire switched off behind the
+      // user's back with nobody told was the last silent ending left in the
+      // engine, and with laps the runaway it guards against is reachable
+      // rather than theoretical.
+      this.raiseHail({
+        crewId: relay.crewId,
+        flowRunId,
+        reason: 'budget',
+        sessionId: event.sessionId,
+        baton: emittedBaton,
+        message,
+        detail: formatCrewHailDetail('budget', { spentHops: runSpentHops }),
+      })
       return true
     }
 

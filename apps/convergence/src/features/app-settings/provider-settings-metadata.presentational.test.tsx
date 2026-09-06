@@ -9,6 +9,7 @@ const cursorProvider: ProviderInfo = {
   vendorLabel: 'Anysphere',
   kind: 'conversation',
   supportsContinuation: true,
+  supportsConversationReset: false,
   defaultModelId: 'default[]',
   modelOptions: [],
   attachments: {

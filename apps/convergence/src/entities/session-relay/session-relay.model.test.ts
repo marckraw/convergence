@@ -41,6 +41,8 @@ function hop(overrides: Partial<RelayHop> & { id: string }): RelayHop {
     payloadPreview: 'Done.',
     baton: null,
     roundNumber: null,
+    lapNumber: null,
+    settledAt: null,
     outcome: 'delivered',
     error: null,
     ...overrides,

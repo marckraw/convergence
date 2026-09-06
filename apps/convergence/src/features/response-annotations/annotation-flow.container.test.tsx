@@ -182,6 +182,7 @@ describe('response annotations, end to end', () => {
           vendorLabel: 'Anthropic',
           kind: 'conversation',
           supportsContinuation: true,
+          supportsConversationReset: false,
           defaultModelId: 'claude-sonnet',
           modelOptions: [
             {

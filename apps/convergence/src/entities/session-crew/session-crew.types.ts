@@ -10,6 +10,13 @@ export interface SessionCrewMember {
    * engine never routes on it, it compares a wire's stored token.
    */
   batonName: string | null
+  /**
+   * Where this member's card sits on the Canvas, or null when nobody has
+   * moved it — the automatic layout places those, so a crew nobody has
+   * arranged still draws readably (R10).
+   */
+  canvasX: number | null
+  canvasY: number | null
 }
 
 export interface SessionCrew {

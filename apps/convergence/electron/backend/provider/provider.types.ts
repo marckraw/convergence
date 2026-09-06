@@ -359,6 +359,19 @@ export interface ProviderDescriptor {
   vendorLabel: string
   kind: ProviderKind
   supportsContinuation: boolean
+  /**
+   * Whether this provider can be told to start the conversation over inside a
+   * session that already exists (R8, RUN45).
+   *
+   * REQUIRED rather than optional, deliberately: the Canvas offers "clear the
+   * conversation first" only where it actually works, and a provider that
+   * shipped without answering this question would silently inherit somebody
+   * else's answer. The compiler asks every new provider instead.
+   *
+   * Distinct from `contextManagement`, which is about SUMMARISING a long
+   * conversation to keep going. This is about throwing it away.
+   */
+  supportsConversationReset: boolean
   defaultModelId: string
   fastModelId?: string | null
   modelOptions: ProviderModelOption[]

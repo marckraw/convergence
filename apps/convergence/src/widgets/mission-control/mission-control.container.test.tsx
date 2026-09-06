@@ -63,6 +63,7 @@ function makeProvider(
     vendorLabel: id === 'claude-code' ? 'Anthropic' : 'OpenAI',
     kind: 'conversation',
     supportsContinuation: true,
+    supportsConversationReset: false,
     defaultModelId: 'model-1',
     modelOptions: [],
     attachments: {
@@ -99,6 +100,11 @@ let getAllSummaries: ReturnType<typeof vi.fn>
 let listCrews: ReturnType<typeof vi.fn<() => Promise<SessionCrew[]>>>
 let listHops: ReturnType<typeof vi.fn>
 let listRelays: ReturnType<typeof vi.fn>
+let createRelay: ReturnType<typeof vi.fn>
+let updateRelay: ReturnType<typeof vi.fn>
+let setMemberPosition: ReturnType<typeof vi.fn>
+let acknowledgeHail: ReturnType<typeof vi.fn>
+let listRuns: ReturnType<typeof vi.fn>
 let createCrew: ReturnType<
   typeof vi.fn<(input: CreateSessionCrewInput) => Promise<SessionCrew>>
 >
@@ -191,6 +197,20 @@ describe('MissionControl', () => {
     listCrews = vi.fn(async () => [])
     listHops = vi.fn(async () => [])
     listRelays = vi.fn(async () => [])
+    createRelay = vi.fn(async () => {
+      throw new Error('no test may store a wire by accident')
+    })
+    updateRelay = vi.fn(async () => {
+      throw new Error('no test may store a wire by accident')
+    })
+    setMemberPosition = vi.fn(async () => makeCrew({ id: 'crew-1' }))
+    acknowledgeHail = vi.fn(async () => undefined)
+    listRuns = vi.fn(async () => ({
+      runs: [],
+      unattributedHails: [],
+      outcomes: {},
+      hasMore: false,
+    }))
     createCrew = vi.fn(async (input) =>
       makeCrew({
         id: 'created-crew',
@@ -207,16 +227,32 @@ describe('MissionControl', () => {
         create: createCrew,
         addMember: vi.fn(),
         removeMember: vi.fn(),
+        setMemberBatonName: vi.fn(),
+        setMemberPosition,
+        update: vi.fn(),
         onUpdated: vi.fn(() => () => undefined),
       },
       relay: {
         list: listRelays,
         listHops,
+        listRuns,
+        // Watched, never stubbed away: the point of the drawing canaries is
+        // that no gesture on the canvas reaches these.
+        create: createRelay,
+        update: updateRelay,
+        delete: vi.fn(),
         onUpdated: vi.fn(() => () => undefined),
         onHopAppended: vi.fn(() => () => undefined),
         onHopsCleared: vi.fn(() => () => undefined),
       },
       providerAccounts: { list: vi.fn(async () => []) },
+      crewHail: {
+        listOpen: vi.fn(async () => []),
+        // Watched: Mark seen must reach THIS and nothing else.
+        acknowledge: acknowledgeHail,
+        acknowledgeCrew: vi.fn(),
+        onUpdated: vi.fn(() => () => undefined),
+      },
     }
     useSessionRelayStore.getState().unsubscribeBroadcast?.()
     useSessionRelayStore.getState().unsubscribeHops?.()
@@ -569,235 +605,26 @@ describe('MissionControl', () => {
     })
   })
 
-  describe('crews view', () => {
-    async function switchToCrews() {
-      fireEvent.click(await screen.findByRole('button', { name: 'Crews' }))
-    }
+  // The Crews view retired with R13 (RUN45): every capability it had —
+  // membership, wire authoring, baton names, limits, and the calls waiting
+  // for a human — now has a home on the Canvas, and its suite moved with it.
+  // What survives here is the mode list, which must no longer offer it.
+  it('offers two layouts, because Crews retired into the Canvas', async () => {
+    seedCrews([makeCrew({ id: 'crew-1', name: 'Night shift' })])
+    seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
 
-    it('starts flat and switches to bordered crew containers', async () => {
-      seedCrews([makeCrew({ id: 'crew-1', name: 'Night shift' })])
-      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+    render(<MissionControl />)
+    await screen.findByText('Wire the room')
 
-      render(<MissionControl />)
-      await screen.findByText('Wire the room')
-      expect(document.querySelectorAll('[data-crew-container]')).toHaveLength(0)
-
-      await switchToCrews()
-
-      expect(
-        await screen.findByRole('heading', { name: 'Night shift' }),
-      ).toBeInTheDocument()
-      expect(
-        document.querySelectorAll('[data-crew-container]').length,
-      ).toBeGreaterThan(0)
-    })
-
-    it('keeps uncrewed sessions visible in a No crew section', async () => {
-      seedCrews([makeCrew({ id: 'crew-1', name: 'Night shift' })])
-      seed([makeSession({ id: 'a', name: 'Loose agent' })], [CLAUDE_CODE])
-
-      render(<MissionControl />)
-      await switchToCrews()
-
-      expect(await screen.findByText('No crew')).toBeInTheDocument()
-      expect(screen.getByText('Loose agent')).toBeInTheDocument()
-    })
-
-    it('renders a session held by two crews inside both containers', async () => {
-      seedCrews([
-        makeCrew({ id: 'crew-1', name: 'Masterminds', sessionIds: ['a'] }),
-        makeCrew({
-          id: 'crew-2',
-          name: 'Workers',
-          position: 1,
-          sessionIds: ['a'],
-        }),
-      ])
-      seed([makeSession({ id: 'a', name: 'Double agent' })], [CLAUDE_CODE])
-
-      render(<MissionControl />)
-      await switchToCrews()
-
-      expect(
-        await screen.findByRole('heading', { name: 'Masterminds' }),
-      ).toBeInTheDocument()
-      expect(
-        screen.getByRole('heading', { name: 'Workers' }),
-      ).toBeInTheDocument()
-      expect(screen.getAllByText('Double agent')).toHaveLength(2)
-      // Nothing is loose, so the catch-all section stays away.
-      expect(screen.queryByText('No crew')).not.toBeInTheDocument()
-    })
-
-    it('shows an empty crew rather than hiding it', async () => {
-      seedCrews([makeCrew({ id: 'crew-1', name: 'Nobody yet' })])
-      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
-
-      render(<MissionControl />)
-      await switchToCrews()
-
-      expect(
-        await screen.findByRole('heading', { name: 'Nobody yet' }),
-      ).toBeInTheDocument()
-      expect(screen.getByText('0 sessions')).toBeInTheDocument()
-      expect(
-        screen.getByText('No sessions in this crew yet.'),
-      ).toBeInTheDocument()
-    })
-
-    it('outlines a crew in red when one of its wires errored', async () => {
-      seedCrews([
-        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a', 'b'] }),
-      ])
-      seed([makeSession({ id: 'a' }), makeSession({ id: 'b' })], [CLAUDE_CODE])
-      listHops.mockResolvedValue([
-        {
-          id: 'h1',
-          relayId: 'r1',
-          crewId: 'crew-1',
-          flowRunId: 'run-1',
-          firedAt: '2026-08-15T10:00:00.000Z',
-          sourceSessionId: 'a',
-          targetSessionId: 'b',
-          spawnedSessionId: null,
-          triggerStatus: 'completed',
-          payloadPreview: null,
-          baton: null,
-          roundNumber: null,
-          outcome: 'error',
-          error: 'The target session no longer exists.',
-        },
-      ])
-
-      render(<MissionControl />)
-      await switchToCrews()
-
-      await waitFor(() => {
-        expect(
-          document.querySelector('[data-crew-alarm="true"]'),
-        ).toBeInTheDocument()
-      })
-      expect(
-        screen.getByText('1 relay hop needs your eyes'),
-      ).toBeInTheDocument()
-    })
-
-    it('leaves a crew whose wires all behaved unmarked', async () => {
-      seedCrews([
-        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a', 'b'] }),
-      ])
-      seed([makeSession({ id: 'a' }), makeSession({ id: 'b' })], [CLAUDE_CODE])
-
-      render(<MissionControl />)
-      await switchToCrews()
-
-      await screen.findByRole('heading', { name: 'Review loop' })
-      expect(
-        document.querySelector('[data-crew-alarm="true"]'),
-      ).not.toBeInTheDocument()
-    })
-
-    it('remembers the layout choice for the next visit', async () => {
-      seedCrews([makeCrew({ id: 'crew-1', name: 'Night shift' })])
-      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
-
-      const first = render(<MissionControl />)
-      await switchToCrews()
-      await screen.findByRole('heading', { name: 'Night shift' })
-      first.unmount()
-
-      render(<MissionControl />)
-      expect(
-        await screen.findByRole('heading', { name: 'Night shift' }),
-      ).toBeInTheDocument()
-    })
-
-    it('creates a crew from a card and shows it as a container', async () => {
-      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
-
-      render(<MissionControl />)
-
-      // Every gesture here is a click: no console, no seeding.
-      fireEvent.click(
-        await screen.findByLabelText('Add Wire the room to a crew', {
-          selector: 'button',
-        }),
-      )
-      fireEvent.click(await screen.findByText('New crew'))
-      fireEvent.change(screen.getByLabelText('New crew name'), {
-        target: { value: 'Night shift' },
-      })
-      fireEvent.click(screen.getByLabelText('Emoji 🌙'))
-      fireEvent.click(screen.getByLabelText('Violet'))
-      fireEvent.click(screen.getByText('Create & add this session'))
-
-      await waitFor(() =>
-        expect(createCrew).toHaveBeenCalledWith({
-          name: 'Night shift',
-          emoji: '🌙',
-          accentColor: '#7c3aed',
-          sessionIds: ['a'],
-        }),
-      )
-
-      fireEvent.keyDown(document.activeElement ?? document.body, {
-        key: 'Escape',
-      })
-      await switchToCrews()
-
-      expect(
-        await screen.findByRole('heading', { name: 'Night shift' }),
-      ).toBeInTheDocument()
-      expect(screen.getByText('1 session')).toBeInTheDocument()
-      // The card sits inside its new crew rather than the catch-all.
-      expect(screen.queryByText('No crew')).not.toBeInTheDocument()
-    })
-
-    it('offers rename, decoration and delete from the crew header', async () => {
-      seedCrews([
-        makeCrew({ id: 'crew-1', name: 'Night shift', sessionIds: ['a'] }),
-      ])
-      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
-
-      render(<MissionControl />)
-      await switchToCrews()
-
-      fireEvent.click(await screen.findByLabelText('Edit crew Night shift'))
-
-      expect(await screen.findByLabelText('Crew name')).toHaveValue(
-        'Night shift',
-      )
-      expect(screen.getByLabelText('Emoji 🐎')).toBeInTheDocument()
-      expect(screen.getByLabelText('Violet')).toBeInTheDocument()
-      expect(screen.getByText('Delete crew')).toBeInTheDocument()
-    })
-
-    it('gives the No crew section no menu — it is not a crew', async () => {
-      seedCrews([])
-      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
-
-      render(<MissionControl />)
-      await switchToCrews()
-
-      await screen.findByText('No crew')
-      expect(
-        screen.queryByLabelText('Edit crew No crew'),
-      ).not.toBeInTheDocument()
-    })
-
-    it('hails a card from inside its crew container', async () => {
-      seedCrews([
-        makeCrew({ id: 'crew-1', name: 'Night shift', sessionIds: ['a'] }),
-      ])
-      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
-
-      render(<MissionControl />)
-      await switchToCrews()
-
-      fireEvent.click(await screen.findByLabelText('Hail Wire the room'))
-
-      expect(await screen.findByTestId('composer')).toBeInTheDocument()
-    })
+    expect(
+      await screen.findByRole('button', { name: 'Flat' }),
+    ).toBeInTheDocument()
+    expect(
+      await screen.findByRole('button', { name: 'Canvas' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Crews' }),
+    ).not.toBeInTheDocument()
   })
 
   describe('canvas view', () => {
@@ -855,7 +682,13 @@ describe('MissionControl', () => {
       ).not.toBeInTheDocument()
     })
 
-    it('explains itself when there is nothing wired to draw', async () => {
+    /**
+     * Frame 08. A room with no crews has nothing to author, and the Canvas
+     * says what to do next rather than reading as a view that failed to load.
+     * It also says the thing people fear most about crews out loud: nothing
+     * disappears from Flat by not being in one.
+     */
+    it('explains itself when there is no crew to draw', async () => {
       seedCrews([])
       seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
 
@@ -863,9 +696,485 @@ describe('MissionControl', () => {
       await switchToCanvas()
 
       expect(
-        await screen.findByText('Nothing wired to draw yet'),
+        await screen.findByText('Start with a conversation'),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          'Conversations outside crews remain available in Flat.',
+        ),
       ).toBeInTheDocument()
     })
+
+    /**
+     * THE drawing canary. Connect mode picks two cards and opens the panel as
+     * a DRAFT — no row, no message. A drawn connection that saved itself would
+     * make a slipped pick a stored, armed wire, and an armed wire is one
+     * settle away from spending provider quota.
+     *
+     * Mutation that reds it: have `openDraft` call `createRelay` — the
+     * refusing mock throws and the assertion below fails.
+     */
+    it('draws by clicking two cards, and stores nothing', async () => {
+      seedCrews([
+        makeCrew({
+          id: 'crew-1',
+          name: 'Review loop',
+          sessionIds: ['a', 'b'],
+        }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Fable' }),
+          makeSession({ id: 'b', name: 'Opus' }),
+        ],
+        [CLAUDE_CODE],
+      )
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-canvas-session-node="b"]'),
+        ).toBeInTheDocument()
+      })
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+      expect(
+        await screen.findByText(/Choose the conversation that finishes/),
+      ).toBeInTheDocument()
+
+      fireEvent.click(await screen.findByLabelText('Connect to Fable'))
+      expect(await screen.findByText(/Fable selected/)).toBeInTheDocument()
+
+      fireEvent.click(await screen.findByLabelText('Connect to Opus'))
+
+      // The panel opened on an unsaved draft…
+      expect(await screen.findByText('New connection')).toBeInTheDocument()
+      expect(screen.getByText('Not saved yet')).toBeInTheDocument()
+      // …and nothing was written or sent.
+      expect(createRelay).not.toHaveBeenCalled()
+      expect(updateRelay).not.toHaveBeenCalled()
+    })
+
+    /**
+     * The keyboard route is the SAME route, not a second one: both call the
+     * one connect-mode machine, so they cannot drift apart.
+     *
+     * Mutation that reds it: give the card's `onKeyDown` its own branch that
+     * calls `onOpen` while Connect is armed.
+     */
+    it('draws the same connection from the keyboard', async () => {
+      const onOpenSession = vi.fn()
+      seedCrews([
+        makeCrew({
+          id: 'crew-1',
+          name: 'Review loop',
+          sessionIds: ['a', 'b'],
+        }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Fable' }),
+          makeSession({ id: 'b', name: 'Opus' }),
+        ],
+        [CLAUDE_CODE],
+      )
+
+      render(<MissionControl onOpenSession={onOpenSession} />)
+      await switchToCanvas()
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-canvas-session-node="b"]'),
+        ).toBeInTheDocument()
+      })
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+      fireEvent.keyDown(await screen.findByLabelText('Connect to Fable'), {
+        key: 'Enter',
+      })
+      fireEvent.keyDown(await screen.findByLabelText('Connect to Opus'), {
+        key: 'Enter',
+      })
+
+      expect(await screen.findByText('New connection')).toBeInTheDocument()
+      // Enter PICKED rather than navigated: the mode decides, not the device.
+      expect(onOpenSession).not.toHaveBeenCalled()
+      expect(createRelay).not.toHaveBeenCalled()
+    })
+
+    it('leaves Enter meaning "open" when Connect is not armed', async () => {
+      const onOpenSession = vi.fn()
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
+      ])
+      seed([makeSession({ id: 'a', name: 'Fable' })], [CLAUDE_CODE])
+
+      render(<MissionControl onOpenSession={onOpenSession} />)
+      await switchToCanvas()
+
+      fireEvent.keyDown(await screen.findByLabelText('Open Fable'), {
+        key: 'Enter',
+      })
+
+      expect(onOpenSession).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'a' }),
+      )
+    })
+
+    it('offers the crew’s own settings and its conversations from the toolbar', async () => {
+      seedCrews([
+        makeCrew({
+          id: 'crew-1',
+          name: 'Review loop',
+          sessionIds: ['a'],
+          members: [
+            {
+              sessionId: 'a',
+              batonName: 'fable',
+              canvasX: null,
+              canvasY: null,
+            },
+          ],
+        }),
+      ])
+      seed([makeSession({ id: 'a', name: 'Fable' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-canvas-session-node="a"]'),
+        ).toBeInTheDocument()
+      })
+
+      // R13: every capability the retired Crews view had has a Canvas home.
+      fireEvent.click(
+        await screen.findByRole('button', { name: /Crew settings/ }),
+      )
+      expect(
+        await screen.findByRole('region', { name: 'Crew settings' }),
+      ).toBeInTheDocument()
+      expect(screen.getByDisplayValue('fable')).toBeInTheDocument()
+      expect(
+        screen.getByLabelText('Delivery limit per run for this crew'),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText('A run can contain several laps'),
+      ).toBeInTheDocument()
+
+      // From the settings panel's own button, not the toolbar's: both lead
+      // to the same panel, and the settings one is the reachable path for
+      // somebody already looking at the roster.
+      fireEvent.click(
+        screen.getByRole('button', { name: '+ Add conversation' }),
+      )
+      expect(
+        await screen.findByRole('region', { name: 'Add conversations' }),
+      ).toBeInTheDocument()
+    })
+
+    /**
+     * Frame 09, at the layer that can actually break it. The panel renders a
+     * kept draft — its own test proves that — but only the container decides
+     * whether there IS still a draft after a refusal, and throwing the form
+     * away is the defect this state exists to prevent: the typed work is the
+     * expensive part, not the row.
+     *
+     * Mutation that reds it: `setDraft(null)` in `save`'s failure branch.
+     */
+    it('keeps a failed save’s draft, and leaves the stored wire alone', async () => {
+      createRelay.mockRejectedValueOnce(new Error('The database is locked.'))
+      seedCrews([
+        makeCrew({
+          id: 'crew-1',
+          name: 'Review loop',
+          sessionIds: ['a', 'b'],
+        }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Fable' }),
+          makeSession({ id: 'b', name: 'Opus' }),
+        ],
+        [CLAUDE_CODE],
+      )
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-canvas-session-node="b"]'),
+        ).toBeInTheDocument()
+      })
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+      fireEvent.click(await screen.findByLabelText('Connect to Fable'))
+      fireEvent.click(await screen.findByLabelText('Connect to Opus'))
+
+      const instructions = await screen.findByLabelText(
+        /Standing instructions/i,
+      )
+      fireEvent.change(instructions, {
+        target: { value: 'Implement the brief.' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      expect(
+        await screen.findByText('Couldn’t save the connection'),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          'Your draft is kept here. The saved connection has not changed.',
+        ),
+      ).toBeInTheDocument()
+      // The typed work survived the refusal.
+      expect(
+        screen.getByDisplayValue('Implement the brief.'),
+      ).toBeInTheDocument()
+      // And trying again is about settings, never about resending.
+      expect(
+        screen.getByText(
+          'Trying again saves settings. It does not resend a message.',
+        ),
+      ).toBeInTheDocument()
+    })
+
+    /**
+     * R11's clipping half. jsdom does no layout, so "nothing renders outside
+     * the viewport" cannot be measured here — what CAN be pinned is the
+     * mechanism, and its absence is exactly how a route ends up painted
+     * across the panel beside the canvas and the chrome above it.
+     *
+     * Mutation that reds it: drop `overflow-hidden` from the canvas frame.
+     * How it actually looks at the edges is on Marcin's QA list.
+     */
+    it('keeps the diagram inside its own frame', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
+      ])
+      seed([makeSession({ id: 'a', name: 'Fable' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await switchToCanvas()
+
+      await waitFor(() => {
+        expect(document.querySelector('[data-session-canvas]')).toHaveClass(
+          'overflow-hidden',
+        )
+      })
+    })
+
+    /**
+     * THE acknowledgement canary (promise 5). **Mark seen acknowledges and
+     * nothing else** — the whole point of the sentence beside it is that it
+     * does not reply, does not restart, and does not approve. So the test
+     * watches the one call that should happen and the two that must not.
+     *
+     * Mutation that reds it: have `onMarkSeen` also create or update a relay.
+     */
+    it('marks a call seen without sending or storing anything', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
+      ])
+      seed([makeSession({ id: 'a', name: 'Fable' })], [CLAUDE_CODE])
+      listRuns.mockResolvedValue({
+        runs: [
+          {
+            flowRunId: 'run-1',
+            crewId: 'crew-1',
+            startedAt: '2026-09-06T12:00:00.000Z',
+            endedAt: '2026-09-06T12:39:00.000Z',
+            laps: [],
+            hails: [
+              {
+                id: 'call-1',
+                crewId: 'crew-1',
+                flowRunId: 'run-1',
+                reason: 'terminal',
+                sessionId: 'a',
+                baton: 'marcin',
+                message: 'Two decisions need your eyes.',
+                detail: 'This station handed the work to you.',
+                raisedAt: '2026-09-06T12:39:00.000Z',
+                acknowledgedAt: null,
+              },
+            ],
+            status: { word: 'handed-back', reason: null },
+            counts: { deliveries: 0, failures: 0, laps: 0, events: 1 },
+          },
+        ],
+        unattributedHails: [],
+        outcomes: { 'call-1': 'handed-back' },
+        hasMore: false,
+      })
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-canvas-session-node="a"]'),
+        ).toBeInTheDocument()
+      })
+
+      fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+      fireEvent.click(await screen.findByText(/handed the run back to you/))
+
+      const markSeen = await screen.findByRole('button', { name: 'Mark seen' })
+      expect(
+        screen.getByText(
+          'Mark seen acknowledges this call. It does not send a reply or restart the run.',
+        ),
+      ).toBeInTheDocument()
+
+      fireEvent.click(markSeen)
+
+      await waitFor(() => {
+        expect(acknowledgeHail).toHaveBeenCalledWith('call-1')
+      })
+      // Nothing was stored and nothing was sent.
+      expect(createRelay).not.toHaveBeenCalled()
+      expect(updateRelay).not.toHaveBeenCalled()
+    })
+
+    /**
+     * Promise 6, the half about names: an event names the conversations it
+     * actually involved, resolved from the WHOLE room rather than from who
+     * happens to be in the crew today. A conversation removed from a crew is
+     * still a conversation, and its recorded events must stay readable.
+     *
+     * Mutation that reds it: resolve names from `crew.sessionIds` instead of
+     * the session list — the row falls back to "a conversation that is gone"
+     * for somebody who is merely no longer a member.
+     */
+    it('still names a conversation that has left the crew', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Fable' }),
+          // In the room, NOT in the crew any more.
+          makeSession({ id: 'b', name: 'Opus' }),
+        ],
+        [CLAUDE_CODE],
+      )
+      listRuns.mockResolvedValue({
+        runs: [
+          {
+            flowRunId: 'run-1',
+            crewId: 'crew-1',
+            startedAt: '2026-09-06T12:00:00.000Z',
+            endedAt: '2026-09-06T12:05:00.000Z',
+            laps: [
+              {
+                lap: 1,
+                hops: [
+                  {
+                    id: 'h1',
+                    relayId: 'w1',
+                    crewId: 'crew-1',
+                    flowRunId: 'run-1',
+                    firedAt: '2026-09-06T12:00:00.000Z',
+                    sourceSessionId: 'a',
+                    targetSessionId: 'b',
+                    spawnedSessionId: null,
+                    triggerStatus: 'completed',
+                    payloadPreview: null,
+                    baton: null,
+                    roundNumber: 1,
+                    lapNumber: 1,
+                    settledAt: null,
+                    outcome: 'delivered',
+                    error: null,
+                  },
+                ],
+              },
+            ],
+            hails: [],
+            status: { word: 'finished-quiet', reason: null },
+            counts: { deliveries: 1, failures: 0, laps: 1, events: 1 },
+          },
+        ],
+        unattributedHails: [],
+        outcomes: { h1: 'delivered' },
+        hasMore: false,
+      })
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+
+      expect(await screen.findByText('Fable → Opus')).toBeInTheDocument()
+    })
+
+    /**
+     * Promise 6: the graph is labelled the CURRENT layout, because that is
+     * what it is — today's wires wearing yesterday's outcomes, never a
+     * reconstruction of the topology the run actually had.
+     *
+     * Mutation that reds it: drop the banner, or word it as though the
+     * diagram were a snapshot.
+     */
+    it('labels a replayed run as shown on the current layout', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
+      ])
+      seed([makeSession({ id: 'a', name: 'Fable' })], [CLAUDE_CODE])
+      listRuns.mockResolvedValue({
+        runs: [
+          {
+            flowRunId: 'run-1',
+            crewId: 'crew-1',
+            startedAt: '2026-09-06T12:00:00.000Z',
+            endedAt: '2026-09-06T12:39:00.000Z',
+            laps: [],
+            hails: [],
+            status: { word: 'finished-quiet', reason: null },
+            counts: { deliveries: 0, failures: 0, laps: 0, events: 0 },
+          },
+        ],
+        unattributedHails: [],
+        outcomes: {},
+        hasMore: false,
+      })
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+
+      expect(
+        await screen.findByText(/shown on current crew layout/i),
+      ).toBeInTheDocument()
+    })
+
+    it('says a crew with no records has none, and does not claim it never ran', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
+      ])
+      seed([makeSession({ id: 'a', name: 'Fable' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+
+      expect(
+        await screen.findByText('No history available yet'),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText('No records does not imply this crew has never run.'),
+      ).toBeInTheDocument()
+    })
+
+    /**
+     * Selecting a stored connection by clicking its wire has NO test here on
+     * purpose, and this comment is the disclosure rather than a gap left
+     * quiet: React Flow renders no edge DOM under jsdom — edge geometry comes
+     * from measured handle positions the environment does not have — so there
+     * is nothing to click. What that path does once it fires IS pinned: the
+     * stored wire becomes a draft in `connection-draft.pure.test.ts`, and the
+     * draft reaches the screen in `connection-inspector.render.test.tsx`. The
+     * click itself is on Marcin's QA list.
+     */
 
     it('opens a session from its node, like the card body does', async () => {
       const onOpenSession = vi.fn()

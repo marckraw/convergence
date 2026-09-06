@@ -210,6 +210,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
         sessionId,
         batonName,
       ),
+    setMemberPosition: (
+      crewId: string,
+      sessionId: string,
+      position: { x: number; y: number } | null,
+    ) =>
+      ipcRenderer.invoke('crew:setMemberPosition', crewId, sessionId, position),
     onUpdated: (callback: (crews: unknown) => void) => {
       const handler = (_: unknown, crews: unknown) => callback(crews)
       ipcRenderer.on('crew:updated', handler)
@@ -230,6 +236,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('relayHops:list', crewId, limit, beforeHopId),
     clearHops: (crewId: string) =>
       ipcRenderer.invoke('relayHops:clear', crewId),
+    listRuns: (crewId: string, options?: unknown) =>
+      ipcRenderer.invoke('relay:listRuns', crewId, options),
     onUpdated: (callback: (relays: unknown) => void) => {
       const handler = (_: unknown, relays: unknown) => callback(relays)
       ipcRenderer.on('relay:updated', handler)

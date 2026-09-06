@@ -11,6 +11,7 @@ import {
   TURN_FILE_CHANGE_IDENTITY_INDEX,
 } from './database'
 import { RelayService } from '../relay/relay.service'
+import { RunHistoryService } from '../relay/run-history.service'
 
 describe('database', () => {
   afterEach(() => {
@@ -958,7 +959,14 @@ describe('database', () => {
       .prepare("PRAGMA table_info('session_crew_members')")
       .all() as Array<{ name: string }>
     expect(memberColumns.map((c) => c.name).sort()).toEqual(
-      ['crew_id', 'session_id', 'baton_name', 'added_at'].sort(),
+      [
+        'crew_id',
+        'session_id',
+        'baton_name',
+        'canvas_x',
+        'canvas_y',
+        'added_at',
+      ].sort(),
     )
 
     // Membership must never cascade in either direction: a crew is a label,
@@ -1023,6 +1031,7 @@ describe('database', () => {
         'payload_preview',
         'baton',
         'round_number',
+        'lap_number',
         'settled_at',
         'settled_status',
         'dispatch_id',
@@ -1577,6 +1586,56 @@ describe('database', () => {
     }
   })
 
+  it('adds the canvas position to a roster that predates it', () => {
+    // The exact `session_crew_members` v0.46.15 shipped. The idempotent
+    // ALTERs are the only thing between an installed database and
+    // `no such column: canvas_x` on the very first crew read after the
+    // update — which is every crew read, so the Canvas would come up empty.
+    // A test that builds the table from the fresh SCHEMA never exercises them.
+    //
+    // The second half is the promise: null on an existing member means "lay
+    // it out", never the origin. A default of 0 would stack every card of
+    // every existing crew on the frame's top-left corner.
+    const dir = mkdtempSync(join(tmpdir(), 'convergence-canvas-position-'))
+    const dbPath = join(dir, 'pre-canvas-position.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.exec(`
+        CREATE TABLE session_crew_members (
+          crew_id TEXT NOT NULL,
+          session_id TEXT NOT NULL,
+          baton_name TEXT,
+          added_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE (crew_id, session_id)
+        );
+
+        INSERT INTO session_crew_members (crew_id, session_id, baton_name)
+        VALUES ('c1', 's1', 'fable');
+      `)
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      const columns = (
+        db.prepare("PRAGMA table_info('session_crew_members')").all() as Array<{
+          name: string
+        }>
+      ).map((column) => column.name)
+      expect(columns).toContain('canvas_x')
+      expect(columns).toContain('canvas_y')
+
+      const row = db
+        .prepare("SELECT * FROM session_crew_members WHERE session_id = 's1'")
+        .get() as { canvas_x: number | null; canvas_y: number | null }
+      expect(row.canvas_x).toBeNull()
+      expect(row.canvas_y).toBeNull()
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('adds the session relay mute to a database that predates the quiet send', () => {
     const dir = mkdtempSync(
       join(tmpdir(), 'convergence-session-mute-migration-'),
@@ -2032,6 +2091,110 @@ describe('database', () => {
           .prepare("SELECT settled_status FROM relay_hops WHERE id = 'hop-old'")
           .get(),
       ).toEqual({ settled_status: 'completed' })
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('adds the lap to a relay trail that predates it, and derives the rest', () => {
+    // The exact relay_hops v0.46.15 shipped: receipts and rounds, no lap.
+    // The idempotent ALTER is the only thing between an installed database
+    // and `no such column: lap_number` on the very first firing after the
+    // update -- where `fire()`'s INSERT would throw inside `handleSettle`'s
+    // outer catch and silently kill every relay of every settle. A test that
+    // builds relay_hops from the fresh SCHEMA never exercises it.
+    //
+    // Deleting the ALTER turns this red. The second half is the other half of
+    // the promise: null on an old row is DERIVED, not defaulted, so a run
+    // recorded before laps existed still groups into the laps it actually
+    // ran. Replacing `readLapNumber`'s derivation with `return 1` reds it too.
+    const dir = mkdtempSync(join(tmpdir(), 'convergence-lap-migration-'))
+    const dbPath = join(dir, 'pre-lap.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.exec(`
+        CREATE TABLE relay_hops (
+          id TEXT PRIMARY KEY,
+          relay_id TEXT NOT NULL,
+          crew_id TEXT NOT NULL,
+          flow_run_id TEXT NOT NULL,
+          fired_at TEXT NOT NULL DEFAULT (datetime('now')),
+          source_session_id TEXT NOT NULL,
+          target_session_id TEXT,
+          spawned_session_id TEXT,
+          trigger_status TEXT NOT NULL,
+          payload_preview TEXT,
+          outcome TEXT NOT NULL,
+          baton TEXT,
+          round_number INTEGER,
+          settled_at TEXT,
+          settled_status TEXT,
+          dispatch_id TEXT,
+          error TEXT
+        );
+
+        CREATE TABLE crew_hails (
+          id TEXT PRIMARY KEY,
+          crew_id TEXT NOT NULL,
+          flow_run_id TEXT,
+          reason TEXT NOT NULL,
+          session_id TEXT NOT NULL,
+          baton TEXT,
+          message TEXT,
+          detail TEXT NOT NULL,
+          raised_at TEXT NOT NULL,
+          acknowledged_at TEXT
+        );
+      `)
+      // Two passes of one wire inside one run, written by a build that had
+      // no word for the second pass -- the shape the old loop law could not
+      // produce but a restart mid-run could.
+      const insert = legacy.prepare(`
+        INSERT INTO relay_hops (
+          id, relay_id, crew_id, flow_run_id, fired_at, source_session_id,
+          target_session_id, trigger_status, outcome, round_number
+        ) VALUES (?, 'r1', 'c1', 'run-1', ?, 's1', 's2', 'completed', 'delivered', ?)
+      `)
+      insert.run('hop-lap-1', '2026-09-01T10:00:00.000Z', 1)
+      insert.run('hop-lap-2', '2026-09-01T10:05:00.000Z', 2)
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      const columns = (
+        db.prepare("PRAGMA table_info('relay_hops')").all() as Array<{
+          name: string
+        }>
+      ).map((column) => column.name)
+      expect(columns).toContain('lap_number')
+
+      const rows = db
+        .prepare('SELECT id, lap_number FROM relay_hops ORDER BY fired_at')
+        .all() as Array<{ id: string; lap_number: number | null }>
+      // Null is the honest reading: nothing recorded a generation for them.
+      expect(rows.map((row) => row.lap_number)).toEqual([null, null])
+
+      // And the write path against the migrated table: the first firing of
+      // the updated build must record a lap, not throw.
+      const service = new RelayService(db)
+      const fresh = service.appendHop({
+        relayId: 'r1',
+        crewId: 'c1',
+        flowRunId: 'run-1',
+        sourceSessionId: 's1',
+        targetSessionId: 's2',
+        triggerStatus: 'completed',
+        outcome: 'delivered',
+        lapNumber: 3,
+      })
+      expect(fresh.lapNumber).toBe(3)
+
+      // History reads the legacy rows as the two laps they were, beside the
+      // stored third -- one run, three generations, no migration of meaning.
+      const [run] = new RunHistoryService(db).listRuns('c1').runs
+      expect(run.laps.map((lap) => lap.lap)).toEqual([1, 2, 3])
     } finally {
       closeDatabase()
       resetDatabase()
