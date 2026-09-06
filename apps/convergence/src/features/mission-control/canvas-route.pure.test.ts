@@ -194,7 +194,7 @@ describe('routeAround', () => {
    * A moved card is a different picture, and the route has to follow it — and
    * still start and end ON the two cards, which is what "no detached
    * endpoint" means. The rendering half (no cache keyed by edge id) lives in
-   * `canvas-routed-edge.presentational.tsx`, which recomputes from the
+   * `canvas-routed-edge.container.tsx`, which recomputes from the
    * current nodes; this pins the half that can be reasoned about.
    *
    * Mutation that reds it: compute an attachment point from the rectangle's
@@ -229,6 +229,45 @@ describe('routeAround', () => {
       x: 800,
       y: 600 + CARD_HEIGHT / 2,
     })
+  })
+
+  /**
+   * L5. "Orthogonal" is the whole shape: every segment runs along one axis.
+   * The searched route joined the card's attachment point straight to the
+   * first GRID cell, and the grid is snapped from the search area's own
+   * origin -- so the two agreed on one coordinate only by luck, and the first
+   * and last segments were drawn up to half a cell (10px) out of true.
+   *
+   * Mutation that reds it: return `sidePoint(...)` unaligned at either end.
+   */
+  it('draws every segment along an axis, ends included', () => {
+    const source = STRESS[0]
+    const target = STRESS[2]
+    // Through the blocker between them, so the SEARCH answers rather than the
+    // one-bend candidate: it is the search's ends that were out of true.
+    const route = routeAround({
+      source,
+      target,
+      ...chooseRouteSides(source, target),
+      obstacles: STRESS,
+    }) as { x: number; y: number }[]
+
+    expect(route).not.toBeNull()
+    expect(route.length).toBeGreaterThan(3)
+    for (let index = 0; index < route.length - 1; index += 1) {
+      const from = route[index]
+      const to = route[index + 1]
+      expect(
+        from.x === to.x || from.y === to.y,
+        `segment ${index} is diagonal: ${JSON.stringify(from)} → ${JSON.stringify(to)}`,
+      ).toBe(true)
+    }
+    // Still ON the cards: aligning moves the point ALONG the side it left by,
+    // never off the card.
+    expect(route[0].x).toBe(CARD_WIDTH)
+    expect(route[0].y).toBeGreaterThanOrEqual(0)
+    expect(route[0].y).toBeLessThanOrEqual(CARD_HEIGHT)
+    expect(route[route.length - 1].x).toBe(800)
   })
 
   it('takes the straight answer when nothing is in the way', () => {

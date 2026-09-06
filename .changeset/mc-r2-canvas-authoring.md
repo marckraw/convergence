@@ -18,8 +18,15 @@ connection has not changed.
 
 "Clear the conversation first" is offered where the provider can actually do
 it and shown disabled with the reason where it cannot — Codex will get it when
-its own reset ships. A first message you wrote yourself still works everywhere,
+its own reset ships. Change a connection's recipient to a provider that cannot
+reset and the choice is dropped back to "keep context", with a line saying so:
+it is never quietly stored as a `/clear` the recipient would read as an
+ordinary message. A first message you wrote yourself still works everywhere,
 and a connection saved with one keeps it exactly as it was.
+
+Leaving an unfinished draft always asks first — closing the panel, drawing a
+second connection, clicking a stored one, opening a recorded event or picking a
+run in history.
 
 Crew settings and adding conversations moved to the Canvas too, so the
 separate Crews layout has retired into it. If Crews was the layout you had

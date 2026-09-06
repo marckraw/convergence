@@ -1712,7 +1712,16 @@ describe('RelayEngine', () => {
     })
   })
 
-  it('records an error when the session finished with nothing to carry', async () => {
+  /**
+   * L1. A settle with no assistant text is a tool-only turn, not a broken
+   * delivery: nothing was owed, so nothing failed. Writing `error` there put a
+   * red row on the trail AND -- once `record()` learned to call the chair for
+   * every error row -- filed a delivery-failure call on every armed wire of
+   * every human-driven crewed session whose turn ended without text.
+   *
+   * Mutation that reds it: write `error` for the empty message again.
+   */
+  it('holds quietly when the session finished with nothing to carry', async () => {
     wire()
     const gateway = createGateway({ lastMessages: { s1: null } })
 
@@ -1720,10 +1729,11 @@ describe('RelayEngine', () => {
 
     expect(gateway.sent).toEqual([])
     expect(relays.listHops('c1')[0]).toMatchObject({
-      outcome: 'error',
+      outcome: 'skipped-no-message',
       payloadPreview: null,
     })
     expect(relays.listHops('c1')[0].error).toContain('without an assistant')
+    expect(hails.listOpen()).toHaveLength(0)
   })
 
   it('records an error when the target session is gone', async () => {

@@ -132,10 +132,23 @@ export interface CanvasCrewCluster {
   accentColor: string | null
   /** This crew's loop is stopped and asking for him: the frame goes amber. */
   parked: boolean
+  /** The drawn frame's top-left corner, which grows to hold what it contains. */
   x: number
   y: number
   width: number
   height: number
+  /**
+   * Where this crew's STORED card coordinates are measured from.
+   *
+   * Separate from the drawn corner because the frame moves and the origin must
+   * not: a card dragged above or left of the walk's area pushes the border out
+   * to hold it (L6), and if the two were one value, reading that same drop back
+   * would subtract the border's new offset and store a different position than
+   * the one the card is at -- so a card up there would creep further every time
+   * it was touched.
+   */
+  originX: number
+  originY: number
 }
 
 export interface CanvasGraph {
@@ -435,11 +448,15 @@ export function buildCanvasGraph(
       })
     }
 
-    let width =
+    // The frame's four edges, in the layout's own coordinates: the walk's area
+    // first, then stretched to hold anything arranged outside it.
+    let left = 0
+    let top = 0
+    let right =
       CLUSTER_PADDING_X * 2 +
       (widestColumn + 1) * CANVAS_NODE_WIDTH +
       widestColumn * COLUMN_GAP
-    let height =
+    let bottom =
       CLUSTER_PADDING_TOP +
       CLUSTER_PADDING_BOTTOM +
       tallestColumn * CANVAS_NODE_HEIGHT +
@@ -447,14 +464,22 @@ export function buildCanvasGraph(
 
     // A moved card can land outside the frame the walk would have drawn, and
     // a card sitting on top of its own crew's border reads as a card that has
-    // fallen out of the crew. The frame grows to hold what it contains.
+    // fallen out of the crew. The frame grows to hold what it contains -- on
+    // all four sides, because a card can be dragged up and left as easily as
+    // down and right (L6).
     for (const stored of storedPositions.values()) {
-      width = Math.max(width, stored.x + CANVAS_NODE_WIDTH + CLUSTER_PADDING_X)
-      height = Math.max(
-        height,
+      left = Math.min(left, stored.x - CLUSTER_PADDING_X)
+      // The top padding is the strip the crew's name sits in, so a card above
+      // the walk's area clears the title rather than landing under it.
+      top = Math.min(top, stored.y - CLUSTER_PADDING_TOP)
+      right = Math.max(right, stored.x + CANVAS_NODE_WIDTH + CLUSTER_PADDING_X)
+      bottom = Math.max(
+        bottom,
         stored.y + CANVAS_NODE_HEIGHT + CLUSTER_PADDING_BOTTOM,
       )
     }
+
+    const height = bottom - top
 
     clusters.push({
       crewId: crew.id,
@@ -462,10 +487,14 @@ export function buildCanvasGraph(
       emoji: crew.emoji,
       accentColor: crew.accentColor,
       parked: openHails.length > 0,
-      x: 0,
-      y: clusterTop,
-      width,
+      x: left,
+      y: clusterTop + top,
+      width: right - left,
       height,
+      // Unmoved by any of the stretching above: this is what a stored `(0, 0)`
+      // means, and it has to mean the same thing on every read.
+      originX: 0,
+      originY: clusterTop,
     })
 
     // ONE dashed edge for all three safety nets, from the frame rather than
@@ -487,7 +516,10 @@ export function buildCanvasGraph(
       })
     }
 
-    clusterTop += height + CLUSTER_GAP
+    // The next crew starts below this one's LOWEST edge, which is `bottom`
+    // measured from this crew's origin -- not its height, which also counts
+    // however far the frame reached above that origin.
+    clusterTop += bottom + CLUSTER_GAP
   }
 
   return { clusters, nodes, spawnNodes, chairs, edges }
@@ -538,11 +570,16 @@ export const EMPTY_CANVAS_MESSAGE =
  *
  * Clusters stack down the canvas, so an absolute y means nothing on its own:
  * inserting a crew above would move every card below it. Storing the offset
- * from the frame's top keeps a arrangement true wherever its crew ends up.
+ * from the crew's own origin keeps an arrangement true wherever its crew ends
+ * up.
+ *
+ * The ORIGIN, not the drawn corner: the border stretches to hold a card
+ * arranged outside the walk's area, and measuring against a moving edge would
+ * change what a stored coordinate means every time the frame grew.
  */
 export function crewLocalPosition(
   absolute: { x: number; y: number },
-  cluster: Pick<CanvasCrewCluster, 'x' | 'y'>,
+  cluster: Pick<CanvasCrewCluster, 'originX' | 'originY'>,
 ): { x: number; y: number } {
-  return { x: absolute.x - cluster.x, y: absolute.y - cluster.y }
+  return { x: absolute.x - cluster.originX, y: absolute.y - cluster.originY }
 }

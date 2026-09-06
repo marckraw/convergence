@@ -221,17 +221,71 @@ export function relayInputFromDraft(
 }
 
 /**
+ * The draft with a new recipient, and R8's question re-asked (M2).
+ *
+ * A recipient change is not a change of one field: *Before delivery* is a
+ * choice about what the RECIPIENT's provider can do, so moving the wire to a
+ * provider that cannot start a conversation over makes a stored `clear` a
+ * setting the engine would carry as an ordinary `/clear` message. Replacing
+ * the recipient alone left the panel showing *Clear the conversation first*
+ * with Save enabled and stored exactly that.
+ *
+ * The choice is dropped rather than kept-and-refused, and the note is the
+ * price of dropping it: a selection that changes itself while nobody says why
+ * is the same defect wearing better manners. A custom first message is text
+ * the person wrote, which every provider can receive, so it is never touched.
+ */
+export interface RecipientChange {
+  draft: ConnectionDraft
+  /** What was dropped and why, or null when nothing was. */
+  note: string | null
+}
+
+export function changeDraftRecipient(
+  draft: ConnectionDraft,
+  recipient: ConnectionRecipient,
+  options: {
+    /** Whether the NEW recipient's provider can start a conversation over. */
+    supportsReset: boolean
+    /** The new recipient's provider, named in the note. Null when unknown. */
+    providerName: string | null
+  },
+): RecipientChange {
+  const next = { ...draft, recipient }
+  // A spawn opens a session that was never used, so there is nothing to
+  // reset and the selector is not offered -- the stored opener is dropped by
+  // `relayInputFromDraft`, and the choice is kept here so switching back to a
+  // session that CAN reset restores what they picked.
+  if (recipient.kind === 'spawn') return { draft: next, note: null }
+  if (draft.beforeDelivery !== 'clear' || options.supportsReset) {
+    return { draft: next, note: null }
+  }
+
+  return {
+    draft: { ...next, beforeDelivery: 'keep' },
+    note: `${options.providerName ?? 'This provider'} cannot start a conversation over yet, so ${CONVERSATION_RESET_COMMAND} was dropped and the reply will be delivered into the conversation as it stands.`,
+  }
+}
+
+/**
  * Why this draft cannot be saved yet, in the words the panel shows, or null.
  *
  * Refusals the ENGINE would make are stated here too, ahead of the trip, so
  * the person is told rather than shown a failed save: a wire that listens to
  * its own session is a loop with no second station and no human in it (R6),
  * and the same pair twice is two rows nobody could tell apart.
+ *
+ * `supportsReset` is a REQUIRED argument rather than an option with a
+ * default, so no caller can ask whether a draft is saveable without answering
+ * what its recipient can do: `clear` on a provider that cannot reset is a
+ * setting the engine would carry as an ordinary message, and the fallback in
+ * `changeDraftRecipient` is the door -- this is the wall behind it.
  */
 export function connectionDraftProblem(
   draft: ConnectionDraft,
   existing: readonly SessionRelay[],
   editingRelayId: string | null,
+  options: { supportsReset: boolean },
 ): string | null {
   if (!draft.sourceSessionId) return 'Pick the conversation that finishes.'
 
@@ -246,6 +300,9 @@ export function connectionDraftProblem(
   if (!target) return 'Choose the conversation that should receive the reply.'
   if (target === draft.sourceSessionId) {
     return 'A conversation cannot answer itself — pick a different recipient.'
+  }
+  if (draft.beforeDelivery === 'clear' && !options.supportsReset) {
+    return 'This recipient’s provider cannot start a conversation over — pick Keep context or a custom first message.'
   }
 
   const duplicate = existing.find(

@@ -18,11 +18,20 @@ import type { RouteRect } from '@/features/mission-control'
  * A wire drawn as a rounded orthogonal route that stays clear of the cards it
  * is not attached to (R11).
  *
- * It reads the node positions from React Flow rather than taking them as
+ * A CONTAINER, not a presentational file, and the subscription below is why:
+ * it reads the node positions from React Flow rather than taking them as
  * props, which is what makes a drag re-route: the nodes change, this
  * re-renders, and the route is recomputed from the CURRENT rectangles. There
  * is deliberately no cache keyed by edge id — a cached route survives the move
  * that invalidated it and leaves the line hanging where the card used to be.
+ *
+ * Handing the rectangles down through edge `data` instead would move the
+ * subscription rather than remove it: the container that builds the edges
+ * sits OUTSIDE the flow's own store and holds only the stored, pre-drag
+ * positions, so a route built from them would let go of its card the moment
+ * the card started moving. Only a component rendered inside the flow can see
+ * where the cards are right now, so this is a component with state wiring in
+ * it, and it is named for what it is.
  *
  * The geometry itself lives in `canvas-route.pure.ts`, where "deterministic"
  * and "clear of the cards" are provable without a browser. This component is

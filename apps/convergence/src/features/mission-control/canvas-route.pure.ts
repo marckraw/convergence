@@ -257,9 +257,17 @@ export function routeAround(input: {
     if (current.x === endCell.x && current.y === endCell.y) {
       const corners = reconstruct(current, cameFrom)
       return [
-        sidePoint(input.source, input.sourceSide),
+        alignToCell(
+          sidePoint(input.source, input.sourceSide),
+          input.sourceSide,
+          startCell,
+        ),
         ...corners,
-        sidePoint(input.target, input.targetSide),
+        alignToCell(
+          sidePoint(input.target, input.targetSide),
+          input.targetSide,
+          endCell,
+        ),
       ]
     }
 
@@ -293,6 +301,31 @@ export function routeAround(input: {
   }
 
   return null
+}
+
+/**
+ * The attachment point slid onto the grid line its first segment runs along.
+ *
+ * The searched route's ends are grid CELLS, snapped from the search area's own
+ * origin, while the attachment point is the middle of a card's side -- so the
+ * two agree on the cross-axis coordinate only by coincidence, and joining them
+ * drew up to half a cell of diagonal at each end of an otherwise orthogonal
+ * line. Moving the point ALONG the side it leaves by keeps it on the card
+ * (half a cell is 10px against a card 108px tall) and makes "every segment is
+ * axis-aligned" true of the whole path rather than of its middle.
+ *
+ * The one-bend candidates above need none of this: they are built from the
+ * stub point, which shares its cross-axis coordinate with the attachment point
+ * by construction.
+ */
+function alignToCell(
+  point: RoutePoint,
+  side: RouteSide,
+  cell: RoutePoint,
+): RoutePoint {
+  return side === 'left' || side === 'right'
+    ? { x: point.x, y: cell.y }
+    : { x: cell.x, y: point.y }
 }
 
 /** Where a route stands off from the card before it starts turning. */

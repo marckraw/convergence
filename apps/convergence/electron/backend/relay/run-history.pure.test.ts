@@ -101,9 +101,13 @@ describe('normalizeHistoryOutcome', () => {
 })
 
 describe('deriveRunStatus', () => {
+  /** Inside the live window of every hop the helpers above build. */
+  const now = new Date('2026-09-06T12:10:00.000Z')
+
   it('says handed back when a station gave the work to the chair', () => {
     expect(
       deriveRunStatus({
+        now,
         hops: [hop({ id: 'h1' })],
         hails: [hail({ id: 'x1', reason: 'terminal' })],
       }),
@@ -127,11 +131,12 @@ describe('deriveRunStatus', () => {
     ]
     for (const [reason, expected] of cases) {
       expect(
-        deriveRunStatus({ hops: [], hails: [hail({ id: 'x', reason })] }),
+        deriveRunStatus({ now, hops: [], hails: [hail({ id: 'x', reason })] }),
       ).toEqual({ word: 'needs-you', reason: expected })
       // And the same run reaching the chair as well does not paint over it.
       expect(
         deriveRunStatus({
+          now,
           hops: [],
           hails: [
             hail({ id: 'x', reason }),
@@ -145,6 +150,7 @@ describe('deriveRunStatus', () => {
   it('leads with the ending least likely to resolve itself', () => {
     expect(
       deriveRunStatus({
+        now,
         hops: [],
         hails: [
           hail({ id: 'x', reason: 'stall' }),
@@ -162,6 +168,7 @@ describe('deriveRunStatus', () => {
   it('does not change when the call has been marked seen', () => {
     expect(
       deriveRunStatus({
+        now,
         hops: [],
         hails: [
           hail({
@@ -182,6 +189,7 @@ describe('deriveRunStatus', () => {
   it('says running while a delivered hop is still owed', () => {
     expect(
       deriveRunStatus({
+        now,
         hops: [hop({ id: 'h1', settledAt: null })],
         hails: [],
       }),
@@ -191,6 +199,7 @@ describe('deriveRunStatus', () => {
   it('does not call a refusal outstanding work', () => {
     expect(
       deriveRunStatus({
+        now,
         hops: [hop({ id: 'h1', outcome: 'skipped-baton', settledAt: null })],
         hails: [],
       }),
@@ -198,7 +207,9 @@ describe('deriveRunStatus', () => {
   })
 
   it('says finished quiet when every delivery came back and nobody asked', () => {
-    expect(deriveRunStatus({ hops: [hop({ id: 'h1' })], hails: [] })).toEqual({
+    expect(
+      deriveRunStatus({ now, hops: [hop({ id: 'h1' })], hails: [] }),
+    ).toEqual({
       word: 'finished-quiet',
       reason: null,
     })
@@ -207,19 +218,132 @@ describe('deriveRunStatus', () => {
   it('says unknown for a run recorded entirely in another build’s words', () => {
     expect(
       deriveRunStatus({
+        now,
         hops: [hop({ id: 'h1', outcome: 'skipped-disarmed' })],
         hails: [hail({ id: 'x', reason: 'something-newer' })],
       }),
     ).toEqual({ word: 'unknown', reason: null })
-    expect(deriveRunStatus({ hops: [], hails: [] })).toEqual({
+    expect(deriveRunStatus({ now, hops: [], hails: [] })).toEqual({
       word: 'unknown',
       reason: null,
     })
   })
 
+  /**
+   * H1. The hop rows are FACTS about the run, and a run whose delivery broke
+   * needs him whether or not a call was ever filed for it -- which no
+   * pre-RUN45 row could have been, since `delivery-failed` did not exist. The
+   * old reading looked at the hails alone, so those runs read "finished
+   * quiet", and one that also reached the chair read "handed back": exactly
+   * the masquerade promise 5 forbids.
+   *
+   * Mutation that reds it: drop the hop switch and read `input.hails` alone.
+   */
+  it('reads a failure and a spent limit off the hops, with no call filed', () => {
+    expect(
+      deriveRunStatus({
+        now,
+        hops: [hop({ id: 'h1', outcome: 'error', settledAt: null })],
+        hails: [],
+      }),
+    ).toEqual({ word: 'needs-you', reason: 'failed' })
+
+    expect(
+      deriveRunStatus({
+        now,
+        hops: [hop({ id: 'h1', outcome: 'error', settledAt: null })],
+        hails: [hail({ id: 'x', reason: 'terminal' })],
+      }),
+    ).toEqual({ word: 'needs-you', reason: 'failed' })
+
+    for (const outcome of ['skipped-budget', 'skipped-round-budget']) {
+      expect(
+        deriveRunStatus({
+          now,
+          hops: [hop({ id: 'h1', outcome, settledAt: null })],
+          hails: [hail({ id: 'x', reason: 'terminal' })],
+        }),
+      ).toEqual({ word: 'needs-you', reason: 'limit' })
+    }
+  })
+
+  /**
+   * L1. A turn that ends without an assistant message owed nothing, so
+   * nothing failed: the row is a hold, and a run of them is a quiet run.
+   *
+   * Mutation that reds it: map `skipped-no-message` to `delivery-failed`.
+   */
+  it('does not call a turn with no message to carry a failure', () => {
+    expect(
+      deriveRunStatus({
+        now,
+        hops: [
+          hop({ id: 'h1', outcome: 'skipped-no-message', settledAt: null }),
+        ],
+        hails: [],
+      }),
+    ).toEqual({ word: 'finished-quiet', reason: null })
+  })
+
+  /**
+   * M1, half one: a hop with no receipt can never be stamped by name, so
+   * "still owed" is not something the ledger can say about it. Reading it as
+   * owed left every pre-receipt row running forever, and no filter could move
+   * it.
+   *
+   * Mutation that reds it: treat every unsettled budgeted hop as owed.
+   */
+  it('does not call an unreceipted delivery outstanding work', () => {
+    expect(
+      deriveRunStatus({
+        now,
+        hops: [hop({ id: 'h1', settledAt: null, dispatchId: null })],
+        hails: [],
+      }),
+    ).toEqual({ word: 'unknown', reason: null })
+  })
+
+  /**
+   * M1, half two: the stall clock's own rule, applied to the status. Outside
+   * the live window a loop is finished rather than stalled -- so a hop still
+   * unsettled out there is not work in flight, it is an ending nobody
+   * recorded.
+   *
+   * Mutation that reds it: drop the window check from `isStillOwed`.
+   */
+  it('stops calling a run running once its owed hop is older than the live window', () => {
+    const hops = [hop({ id: 'h1', settledAt: null })]
+    expect(deriveRunStatus({ now, hops, hails: [] })).toEqual({
+      word: 'running',
+      reason: null,
+    })
+    expect(
+      deriveRunStatus({
+        now: new Date('2026-09-06T13:30:00.000Z'),
+        hops,
+        hails: [],
+      }),
+    ).toEqual({ word: 'unknown', reason: null })
+  })
+
+  /** A run still owing work that ALSO failed elsewhere leads with the failure. */
+  it('keeps a failure ahead of work still owed', () => {
+    expect(
+      deriveRunStatus({
+        now,
+        hops: [
+          hop({ id: 'h1', settledAt: null }),
+          hop({ id: 'h2', outcome: 'error', settledAt: null }),
+        ],
+        hails: [],
+      }),
+    ).toEqual({ word: 'needs-you', reason: 'failed' })
+  })
+
   it('reads a legacy loop-closed call as the parked run it was', () => {
     expect(
       deriveRunStatus({
+        now,
         hops: [],
         hails: [hail({ id: 'x', reason: 'loop-closed' })],
       }),
@@ -318,6 +442,7 @@ describe('assembleRuns', () => {
       hails: [...hails, orphan],
       flowRunIds: ['run-2', 'run-1'],
       hasMore: false,
+      now: new Date('2026-09-06T12:10:00.000Z'),
     })
 
     expect(page.runs.map((run) => run.flowRunId)).toEqual(['run-2', 'run-1'])
@@ -357,6 +482,7 @@ describe('assembleRuns', () => {
       hails: [orphanRunHail],
       flowRunIds: ['run-9'],
       hasMore: false,
+      now: new Date('2026-09-06T12:10:00.000Z'),
     })
 
     expect(page.runs).toHaveLength(1)
@@ -386,6 +512,7 @@ describe('assembleRuns', () => {
       ],
       flowRunIds: ['run-1'],
       hasMore: true,
+      now: new Date('2026-09-06T12:10:00.000Z'),
     })
 
     const run = page.runs[0]

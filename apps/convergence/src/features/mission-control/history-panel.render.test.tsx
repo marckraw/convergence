@@ -51,12 +51,14 @@ function renderPanel(
     calls?: HistoryEventRow[]
     unattributedCalls?: HistoryEventRow[]
     summary?: string | null
+    hasMore?: boolean
   } = {},
 ) {
   const handlers = {
     onFilterChange: vi.fn(),
     onSelectRun: vi.fn(),
     onSelectEvent: vi.fn(),
+    onLoadOlder: vi.fn(),
     onRetry: vi.fn(),
     onClose: vi.fn(),
   }
@@ -73,6 +75,8 @@ function renderPanel(
       selectedEventId={null}
       filter="all"
       loadError={null}
+      hasMore={overrides.hasMore ?? false}
+      loadingOlder={false}
       {...handlers}
     />,
   )
@@ -180,6 +184,9 @@ describe('the history panel, rendered', () => {
         selectedEventId={null}
         filter="all"
         loadError={null}
+        hasMore={false}
+        loadingOlder={false}
+        onLoadOlder={vi.fn()}
         onFilterChange={vi.fn()}
         onSelectRun={vi.fn()}
         onSelectEvent={vi.fn()}

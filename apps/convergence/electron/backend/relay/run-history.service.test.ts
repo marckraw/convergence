@@ -63,6 +63,8 @@ describe('RunHistoryService', () => {
     outcome?: RelayHopOutcome
     lapNumber?: number | null
     settledAt?: string | null
+    /** Null writes a row as it looked before delivery receipts existed. */
+    dispatchId?: string | null
   }): string {
     const row = relays.appendHop({
       relayId: input.relayId,
@@ -73,6 +75,8 @@ describe('RunHistoryService', () => {
       triggerStatus: 'completed',
       outcome: input.outcome ?? 'delivered',
       lapNumber: input.lapNumber === undefined ? 1 : input.lapNumber,
+      dispatchId:
+        input.dispatchId === undefined ? 'receipt-1' : input.dispatchId,
     })
     db.prepare(
       'UPDATE relay_hops SET fired_at = ?, settled_at = ? WHERE id = ?',
@@ -354,7 +358,10 @@ describe('RunHistoryService', () => {
     hop({
       relayId: a.id,
       flowRunId: 'live',
-      firedAt: '2026-09-06T10:00:00.000Z',
+      // Inside the crew's live window, read against the clock the service
+      // takes at the read: outside it, nothing is coming and the run is not
+      // running (M1).
+      firedAt: new Date().toISOString(),
       settledAt: null,
     })
 
@@ -362,5 +369,39 @@ describe('RunHistoryService', () => {
       word: 'running',
       reason: null,
     })
+  })
+
+  /**
+   * M1, end to end: the two hops that can never be stamped. A row from before
+   * receipts existed has no id for a settle to name, and a hop older than the
+   * live window belongs to a loop that finished however it finished -- both
+   * used to read "Running" for the life of the ledger, and no filter could
+   * move them.
+   *
+   * Mutation that reds it: read every unsettled budgeted hop as owed.
+   */
+  it('does not leave an unstampable delivery running forever', () => {
+    const a = wire('s1', 's2')
+    hop({
+      relayId: a.id,
+      flowRunId: 'legacy',
+      firedAt: new Date().toISOString(),
+      settledAt: null,
+      dispatchId: null,
+    })
+    hop({
+      relayId: a.id,
+      flowRunId: 'stale',
+      firedAt: '2026-09-06T10:00:00.000Z',
+      settledAt: null,
+    })
+
+    const runs = history.listRuns('c1').runs
+    for (const flowRunId of ['legacy', 'stale']) {
+      expect(runs.find((run) => run.flowRunId === flowRunId)?.status).toEqual({
+        word: 'unknown',
+        reason: null,
+      })
+    }
   })
 })

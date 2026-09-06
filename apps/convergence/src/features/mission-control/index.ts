@@ -55,6 +55,7 @@ export {
   CONVERSATION_RESET_COMMAND,
   EMPTY_SPAWN_SPEC,
   beforeDeliveryOptions,
+  changeDraftRecipient,
   connectionDraftIsDirty,
   connectionDraftProblem,
   customOpenerNote,
@@ -112,6 +113,7 @@ export {
 export type { RecordedEventFacts } from './history-event-inspector.presentational'
 export {
   HISTORY_FILTERS,
+  appendRunPage,
   buildHailEventRow,
   buildHopEventRow,
   buildRunEvents,

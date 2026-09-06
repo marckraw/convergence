@@ -4,6 +4,7 @@ import {
   CONVERSATION_RESET_COMMAND,
   beforeDeliveryOptions,
   connectionDraftIsDirty,
+  changeDraftRecipient,
   connectionDraftProblem,
   customOpenerNote,
   draftFromRelay,
@@ -306,13 +307,15 @@ describe('the Before delivery selector (R8)', () => {
 })
 
 describe('connectionDraftProblem', () => {
+  const RESET_OK = { supportsReset: true }
+
   it('refuses a conversation answering itself, ahead of the trip (R6)', () => {
     const draft = newConnectionDraft({
       sourceSessionId: 'fable',
       targetSessionId: 'fable',
     })
 
-    expect(connectionDraftProblem(draft, [], null)).toContain(
+    expect(connectionDraftProblem(draft, [], null, RESET_OK)).toContain(
       'cannot answer itself',
     )
   })
@@ -325,11 +328,13 @@ describe('connectionDraftProblem', () => {
       suggestedBatonName: 'horse',
     })
 
-    expect(connectionDraftProblem(draft, [existing], null)).toContain(
+    expect(connectionDraftProblem(draft, [existing], null, RESET_OK)).toContain(
       'already connected',
     )
     // The wire being edited is not its own duplicate.
-    expect(connectionDraftProblem(draft, [existing], existing.id)).toBeNull()
+    expect(
+      connectionDraftProblem(draft, [existing], existing.id, RESET_OK),
+    ).toBeNull()
   })
 
   /**
@@ -345,12 +350,12 @@ describe('connectionDraftProblem', () => {
       suggestedBatonName: 'reviewer',
     })
 
-    expect(connectionDraftProblem(draft, [existing], null)).toBeNull()
+    expect(connectionDraftProblem(draft, [existing], null, RESET_OK)).toBeNull()
   })
 
   it('asks for the missing half of each shape', () => {
     const empty = newConnectionDraft({ sourceSessionId: 'fable' })
-    expect(connectionDraftProblem(empty, [], null)).toContain(
+    expect(connectionDraftProblem(empty, [], null, RESET_OK)).toContain(
       'should receive the reply',
     )
 
@@ -372,8 +377,93 @@ describe('connectionDraftProblem', () => {
         },
         [],
         null,
+        RESET_OK,
       ),
     ).toContain('provider')
+  })
+
+  /**
+   * M2. `clear` is a choice about a capability, so the refusal belongs to the
+   * same function that refuses every other unsaveable shape -- and it takes
+   * `supportsReset` as a required argument, so a caller cannot ask the
+   * question without answering it. Without this, changing a recipient from a
+   * provider that can reset to one that cannot left Save enabled and stored
+   * `/clear` into a conversation that reads it as an ordinary message.
+   *
+   * Mutation that reds it: drop the `beforeDelivery === 'clear'` refusal.
+   */
+  it('refuses Clear on a recipient whose provider cannot reset', () => {
+    const draft = {
+      ...newConnectionDraft({
+        sourceSessionId: 'fable',
+        targetSessionId: 'opus',
+      }),
+      beforeDelivery: 'clear' as const,
+    }
+
+    expect(
+      connectionDraftProblem(draft, [], null, { supportsReset: false }),
+    ).toContain('cannot start a conversation over')
+    expect(connectionDraftProblem(draft, [], null, RESET_OK)).toBeNull()
+  })
+})
+
+/**
+ * M2, the other half: the fallback, so the refusal above is a backstop rather
+ * than a wall somebody has to work out how to get past. Changing the
+ * recipient re-asks R8's question, and a choice the new provider cannot
+ * honour is dropped -- out loud, never silently.
+ */
+describe('changeDraftRecipient', () => {
+  const clearing = {
+    ...newConnectionDraft({
+      sourceSessionId: 'fable',
+      targetSessionId: 'opus',
+    }),
+    beforeDelivery: 'clear' as const,
+  }
+
+  /** Mutation that reds it: keep `beforeDelivery` whatever the recipient is. */
+  it('drops Clear when the new recipient cannot reset, and says so', () => {
+    const result = changeDraftRecipient(
+      clearing,
+      { kind: 'session', sessionId: 'sol' },
+      { supportsReset: false, providerName: 'Codex' },
+    )
+
+    expect(result.draft.beforeDelivery).toBe('keep')
+    expect(result.draft.recipient).toEqual({
+      kind: 'session',
+      sessionId: 'sol',
+    })
+    expect(result.note).toContain('Codex')
+  })
+
+  it('keeps Clear when the new recipient can reset', () => {
+    const result = changeDraftRecipient(
+      clearing,
+      { kind: 'session', sessionId: 'sol' },
+      { supportsReset: true, providerName: 'Claude Code' },
+    )
+
+    expect(result.draft.beforeDelivery).toBe('clear')
+    expect(result.note).toBeNull()
+  })
+
+  /**
+   * A custom first message is text the person wrote; no provider can be
+   * unable to receive it, so nothing is dropped and nothing is said.
+   */
+  it('leaves a custom first message alone', () => {
+    const result = changeDraftRecipient(
+      { ...clearing, beforeDelivery: 'custom', customOpener: 'Read HANDOFF.' },
+      { kind: 'session', sessionId: 'sol' },
+      { supportsReset: false, providerName: 'Codex' },
+    )
+
+    expect(result.draft.beforeDelivery).toBe('custom')
+    expect(result.draft.customOpener).toBe('Read HANDOFF.')
+    expect(result.note).toBeNull()
   })
 })
 

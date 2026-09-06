@@ -44,6 +44,13 @@ interface ConnectionInspectorProps {
   beforeDelivery: BeforeDeliveryOption[]
   /** A note about a stored opener this provider cannot run, or null. */
   customOpenerNote: string | null
+  /**
+   * What changing the recipient dropped, or null (M2).
+   *
+   * A change that quietly rewrote another field would be the same defect
+   * wearing better manners, so the panel says it where the change was made.
+   */
+  recipientNote: string | null
   /** Why this cannot be saved yet, or null. */
   problem: string | null
   busy: boolean
@@ -103,6 +110,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
   recipientOptions,
   beforeDelivery,
   customOpenerNote,
+  recipientNote,
   problem,
   busy,
   projectOptions,
@@ -238,6 +246,9 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           emptyMessage="No other conversations in this crew."
           triggerClassName="h-8 text-xs"
         />
+        {recipientNote ? (
+          <p className="text-[10px] text-amber-400/80">{recipientNote}</p>
+        ) : null}
         {spawning ? null : (
           <p className="text-[10px] text-muted-foreground/70">
             Need another conversation? Add it to this crew first.

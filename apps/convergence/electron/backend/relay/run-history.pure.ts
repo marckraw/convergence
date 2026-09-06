@@ -1,3 +1,4 @@
+import { CREW_LIVE_WINDOW_MS } from './crew-hail.pure'
 import { isBudgetedOutcome, readLapNumber } from './relay.pure'
 import type { CrewHail } from './crew-hail.types'
 import type { RelayHop } from './relay.types'
@@ -88,9 +89,13 @@ export function normalizeHopOutcome(outcome: string): RunHistoryOutcome {
       return 'delivered'
     case 'queued':
       return 'queued'
+    // `skipped-no-message` joins them because nothing was owed, so nothing
+    // failed: a turn that produced no assistant message left the wire with
+    // nothing to carry, which is a hold in every sense the word has here.
     case 'skipped-failed':
     case 'skipped-muted':
     case 'skipped-baton':
+    case 'skipped-no-message':
       return 'held'
     case 'skipped-budget':
     case 'skipped-round-budget':
@@ -140,8 +145,46 @@ export function normalizeHistoryOutcome(
 /** The little of a hop `deriveRunStatus` needs. */
 export interface RunStatusHop {
   outcome: string
+  /** When the hop fired, so an unsettled one can be asked its age. */
+  firedAt: string
+  /**
+   * The delivery receipt, or null on a row written before receipts existed.
+   *
+   * Carried here because it decides whether "still owed" is even a question
+   * the ledger can answer: `markStationSettled` stamps a receipted hop only
+   * when a settle NAMES its id, so a row without one is never going to be
+   * stamped by that path and cannot be read as work in flight.
+   */
+  dispatchId: string | null
   /** Null while the station this hop landed work in still owes it. */
   settledAt: string | null
+}
+
+/**
+ * Whether an unsettled budgeted hop is genuinely work in flight.
+ *
+ * Two ways it is not, and both end at `unknown` rather than at `running` --
+ * because the honest thing to say about an ending nobody recorded is that
+ * nobody recorded it:
+ *
+ * - **No receipt.** A hop that carries no dispatch id has nothing a settle can
+ *   name, so nothing will stamp it by identity. Every row written before
+ *   receipts existed is in this state, and reading them as owed pinned them to
+ *   "Running" for the life of the ledger.
+ * - **Older than the crew's live window.** The stall clock's own rule (a loop
+ *   that last fired an hour ago is finished, not stalled), applied to the same
+ *   question. A station that took work and died leaves its hop unstamped
+ *   forever, and after the window the truthful reading is that the ending was
+ *   never written down.
+ *
+ * A timestamp this build cannot parse is not proof of anything either, so it
+ * lands on the same side.
+ */
+function isStillOwed(hop: RunStatusHop, now: Date): boolean {
+  if (hop.dispatchId === null) return false
+  const firedAt = Date.parse(hop.firedAt)
+  if (!Number.isFinite(firedAt)) return false
+  return now.getTime() - firedAt <= CREW_LIVE_WINDOW_MS
 }
 
 /** The little of a hail `deriveRunStatus` needs. */
@@ -172,10 +215,25 @@ export interface RunStatusHail {
  * honest name for the rest -- a run whose deliveries all came back and which
  * asked for nobody. It is not "succeeded": nothing here knows whether the
  * work was any good.
+ *
+ * **Both kinds of record answer the question, not the calls alone.** A hop
+ * that failed and a hop the budget stopped are recorded FACTS about the run,
+ * and they say it needs him whether or not a call was ever filed beside them
+ * -- which, for every row written before `delivery-failed` and `budget`
+ * existed, it could not have been. Reading the hails alone let one of those
+ * runs read "finished quiet", and one that also reached the chair read
+ * "handed back": the masquerade promise 5 forbids, spread across the whole
+ * ledger by construction. A hop's engine word is read through the same
+ * one-way normalizer the event rows use rather than matched here a second
+ * time (R12): which outcomes mean "a delivery broke" and "a limit stopped it"
+ * has one owner, and a second copy in this loop would be a copy free to
+ * drift.
  */
 export function deriveRunStatus(input: {
   hops: readonly RunStatusHop[]
   hails: readonly RunStatusHail[]
+  /** Read once by the caller, so one page of runs is judged by one clock. */
+  now: Date
 }): RunStatus {
   const needs = new Set<RunNeedsYouReason>()
   let handedBack = false
@@ -183,6 +241,21 @@ export function deriveRunStatus(input: {
   // the vocabulary, never about whether a turn was spent. A run of nothing
   // but held wires is perfectly readable and simply spent nothing.
   let readable = false
+  // Work a station genuinely still owes, and work whose ending nobody wrote
+  // down. They are different answers and neither is the other's default.
+  let owed = false
+  let unrecorded = false
+
+  for (const hop of input.hops) {
+    const word = normalizeHopOutcome(hop.outcome)
+    if (word !== 'unknown') readable = true
+    if (word === 'delivery-failed') needs.add('failed')
+    if (word === 'limit-reached') needs.add('limit')
+    if (!isBudgetedOutcome(hop.outcome)) continue
+    if (hop.settledAt !== null) continue
+    if (isStillOwed(hop, input.now)) owed = true
+    else unrecorded = true
+  }
 
   for (const hail of input.hails) {
     if (normalizeHailReason(hail.reason) !== 'unknown') readable = true
@@ -219,18 +292,14 @@ export function deriveRunStatus(input: {
 
   if (handedBack) return { word: 'handed-back', reason: null }
 
-  let owed = false
-  for (const hop of input.hops) {
-    if (normalizeHopOutcome(hop.outcome) !== 'unknown') readable = true
-    if (!isBudgetedOutcome(hop.outcome)) continue
-    if (hop.settledAt === null) owed = true
-  }
   if (owed) return { word: 'running', reason: null }
 
-  // A run recorded entirely in another build's vocabulary, and a run with no
-  // records at all. Saying "finished quiet" about either would be vouching
-  // for something nothing here can read.
-  if (!readable) return { word: 'unknown', reason: null }
+  // Three roads to the same word, and one sentence covers all of them: a run
+  // recorded entirely in another build's vocabulary, a run with no records at
+  // all, and a run whose last delivery has no ending written down. Saying
+  // "finished quiet" about any of them would be vouching for something
+  // nothing here can read.
+  if (unrecorded || !readable) return { word: 'unknown', reason: null }
 
   return { word: 'finished-quiet', reason: null }
 }
@@ -318,6 +387,14 @@ export function assembleRuns(input: {
   /** The runs to build, newest first: the page's own order. */
   flowRunIds: readonly string[]
   hasMore: boolean
+  /**
+   * The clock every run on this page is judged by.
+   *
+   * Passed in rather than read here, so the whole page is derived from one
+   * instant and a test can put a run either side of the live window without
+   * waiting for it.
+   */
+  now: Date
 }): RelayRunPage {
   const hopsByRun = new Map<string, RelayHop[]>()
   for (const hop of input.hops) {
@@ -377,7 +454,7 @@ export function assembleRuns(input: {
       endedAt: times[times.length - 1] ?? '',
       laps,
       hails,
-      status: deriveRunStatus({ hops, hails }),
+      status: deriveRunStatus({ hops, hails, now: input.now }),
       counts: {
         deliveries: hops.filter((hop) => isBudgetedOutcome(hop.outcome)).length,
         failures: hops.filter((hop) => hop.outcome === 'error').length,

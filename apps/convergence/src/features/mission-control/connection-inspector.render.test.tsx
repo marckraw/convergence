@@ -51,6 +51,7 @@ function renderInspector(
     dirty?: boolean
     saveError?: string | null
     recipientMissing?: boolean
+    recipientNote?: string | null
     handlers?: Partial<Record<string, ReturnType<typeof vi.fn>>>
   } = {},
 ) {
@@ -90,6 +91,7 @@ function renderInspector(
         recipientName: 'Opus',
       })}
       customOpenerNote={customOpenerNote(draft, supportsReset)}
+      recipientNote={overrides.recipientNote ?? null}
       problem={null}
       busy={false}
       projectOptions={[]}

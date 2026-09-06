@@ -62,6 +62,13 @@ export interface RelaySpawnSpec {
  * `skipped-round-budget` is the loop having gone too far without reaching a
  * human. Unlike `skipped-budget` it disarms nothing: a long loop needs eyes,
  * not a switch thrown, and Marcin is hailed in the same breath.
+ *
+ * `skipped-no-message` is the settle having nothing to carry: a tool-only
+ * turn, or one that ended without assistant text. A SKIP rather than an
+ * `error`, because nothing was owed and so nothing failed -- and because
+ * `error` now calls the chair, writing one here would file a delivery-failure
+ * on every armed wire of every human-driven crewed session whose turn ends
+ * quiet.
  */
 export type RelayHopOutcome =
   | 'delivered'
@@ -72,6 +79,7 @@ export type RelayHopOutcome =
   | 'skipped-round-budget'
   | 'skipped-muted'
   | 'skipped-baton'
+  | 'skipped-no-message'
   | 'error'
 
 /**

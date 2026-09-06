@@ -90,6 +90,9 @@ export class RunHistoryService {
       ],
       flowRunIds,
       hasMore,
+      // One instant for the whole page: two runs a millisecond either side of
+      // the live window would otherwise be judged by two different clocks.
+      now: new Date(),
     })
   }
 

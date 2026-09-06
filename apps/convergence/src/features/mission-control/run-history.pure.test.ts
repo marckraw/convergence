@@ -8,6 +8,7 @@ import type {
   RunStatus,
 } from '@/entities/run-history'
 import {
+  appendRunPage,
   buildHailEventRow,
   buildHopEventRow,
   buildRunEvents,
@@ -527,5 +528,56 @@ describe('the smaller readers, on their own', () => {
       // A call is not a wire: there is nothing to open a connection for.
       relayId: null,
     })
+  })
+})
+
+describe('appendRunPage', () => {
+  const page = (
+    runs: RelayRun[],
+    hasMore: boolean,
+    outcomes: Record<string, RunHistoryOutcome> = {},
+  ): RelayRunPage => ({ runs, unattributedHails: [], outcomes, hasMore })
+
+  /**
+   * L2. The older page joins the bottom of the list, and the page that saw
+   * the bottom owns `hasMore` -- otherwise the row offering more never goes
+   * away.
+   *
+   * Mutation that reds it: keep the current page's `hasMore`, or replace the
+   * runs instead of appending.
+   */
+  it('joins the older page onto the bottom and takes its hasMore', () => {
+    const joined = appendRunPage(
+      page([run({ flowRunId: 'run-1' }), run({ flowRunId: 'run-2' })], true, {
+        h1: 'delivered',
+      }),
+      page([run({ flowRunId: 'run-3' })], false, { h9: 'handed-back' }),
+    )
+
+    expect(joined.runs.map((entry) => entry.flowRunId)).toEqual([
+      'run-1',
+      'run-2',
+      'run-3',
+    ])
+    expect(joined.hasMore).toBe(false)
+    expect(joined.outcomes).toEqual({ h1: 'delivered', h9: 'handed-back' })
+  })
+
+  /**
+   * A wire firing mid-read can push a run the caller already holds into the
+   * page below it, and one run listed twice reads as two attempts.
+   *
+   * Mutation that reds it: concatenate without the id check.
+   */
+  it('never lists a run it already holds twice', () => {
+    const joined = appendRunPage(
+      page([run({ flowRunId: 'run-1' })], true),
+      page([run({ flowRunId: 'run-1' }), run({ flowRunId: 'run-2' })], false),
+    )
+
+    expect(joined.runs.map((entry) => entry.flowRunId)).toEqual([
+      'run-1',
+      'run-2',
+    ])
   })
 })

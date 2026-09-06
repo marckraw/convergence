@@ -14,7 +14,13 @@ Several correction cycles are one run, with a group per lap, so a run that went
 round three times reads as one attempt with nine deliveries instead of three
 unrelated things. A delivery that failed says why on the row, without being
 clicked. A run that needs you says which of the four ways it needs you, and
-never reads as one that was handed back.
+never reads as one that was handed back — read off the run's own recorded
+events, so a run from before this release whose delivery broke says so too
+instead of reading as one that finished quietly. A delivery whose ending was
+never written down says that, rather than showing as still running forever.
+
+Crews with a long history load a page at a time, with a _Load older runs_ row
+under the list when there are more.
 
 Picking an event opens what was recorded when it happened — source, recipient,
 baton, outcome, timestamp, and whatever reply preview the ledger kept — beside

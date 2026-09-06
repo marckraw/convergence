@@ -31,6 +31,10 @@ interface HistoryPanelProps {
   selectedEventId: string | null
   filter: HistoryFilter
   loadError: string | null
+  /** The page saw another run below the ones it returned (L2). */
+  hasMore: boolean
+  loadingOlder: boolean
+  onLoadOlder: () => void
   onFilterChange: (filter: HistoryFilter) => void
   onSelectRun: (flowRunId: string) => void
   onSelectEvent: (eventId: string) => void
@@ -61,6 +65,9 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
   selectedEventId,
   filter,
   loadError,
+  hasMore,
+  loadingOlder,
+  onLoadOlder,
   onFilterChange,
   onSelectRun,
   onSelectEvent,
@@ -199,6 +206,25 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
               </Button>
             </li>
           ))}
+
+          {/* Older runs are asked for rather than fetched on a scroll: a
+              read that happens because the list moved is a read nobody
+              chose, and this panel's whole promise is that it only ever
+              reads when told to. */}
+          {hasMore ? (
+            <li className="pt-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={loadingOlder}
+                onClick={onLoadOlder}
+                className="h-7 w-full px-3 text-[11px] text-muted-foreground"
+              >
+                {loadingOlder ? 'Loading older runs…' : 'Load older runs'}
+              </Button>
+            </li>
+          ) : null}
 
           {unattributedCalls.length > 0 ? (
             <li className="pt-2">

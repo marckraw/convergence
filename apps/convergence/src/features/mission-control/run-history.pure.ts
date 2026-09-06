@@ -94,7 +94,13 @@ export function formatRunStatusLine(run: RelayRun): string {
       : 'Handed back'
   }
   if (run.status.word === 'running') return 'Running'
-  if (run.status.word === 'unknown') return 'Recorded by another build'
+  // Three different runs land on `unknown` -- one recorded in another build's
+  // words, one with no records at all, and one whose last delivery has no
+  // ending written down -- so the sentence has to be true of all three.
+  // "Recorded by another build" was true of only the first, and the third
+  // became reachable the moment an unreceipted delivery stopped reading as
+  // "Running" forever.
+  if (run.status.word === 'unknown') return 'Ending not recorded'
 
   return run.counts.deliveries === 1
     ? '1 delivery'
@@ -460,4 +466,35 @@ export function buildRunHighlight(
     }
   }
   return highlight
+}
+
+/**
+ * One page of older runs joined onto the page already on screen (L2).
+ *
+ * Appended rather than swapped in, because the panel is a list the person is
+ * reading: replacing it would move the run under their cursor. The older
+ * page's `hasMore` becomes the list's, since it is the one that saw the
+ * bottom.
+ *
+ * Runs already held are dropped rather than repeated. The cursor is a run id
+ * and history grows at the HEAD, so an overlap is not the normal case -- but a
+ * wire firing mid-read can produce one, and a repeated run reads as two
+ * attempts where there was one. `outcomes` is a map by event id, so merging is
+ * the only work it needs; the older page carries no unattributed calls by
+ * construction (they ride the first page only).
+ */
+export function appendRunPage(
+  current: RelayRunPage,
+  older: RelayRunPage,
+): RelayRunPage {
+  const held = new Set(current.runs.map((run) => run.flowRunId))
+  return {
+    ...current,
+    runs: [
+      ...current.runs,
+      ...older.runs.filter((run) => !held.has(run.flowRunId)),
+    ],
+    outcomes: { ...current.outcomes, ...older.outcomes },
+    hasMore: older.hasMore,
+  }
 }

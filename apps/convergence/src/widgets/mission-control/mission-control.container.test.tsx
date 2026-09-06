@@ -109,6 +109,20 @@ let createCrew: ReturnType<
   typeof vi.fn<(input: CreateSessionCrewInput) => Promise<SessionCrew>>
 >
 
+/** One empty run, which is all the paging test needs to tell pages apart. */
+function makeRun(flowRunId: string, startedAt: string) {
+  return {
+    flowRunId,
+    crewId: 'crew-1',
+    startedAt,
+    endedAt: startedAt,
+    laps: [],
+    hails: [],
+    status: { word: 'finished-quiet' as const, reason: null },
+    counts: { deliveries: 0, failures: 0, laps: 0, events: 0 },
+  }
+}
+
 function makeCrew(
   overrides: Partial<SessionCrew> & { id: string },
 ): SessionCrew {
@@ -802,6 +816,135 @@ describe('MissionControl', () => {
       expect(createRelay).not.toHaveBeenCalled()
     })
 
+    /**
+     * M3. The discard guard was on the toolbar and Cancel only, so the three
+     * gestures that also replace or orphan a draft threw it away without
+     * asking: drawing a second pair, picking a run, and opening a recorded
+     * event (which is how *View current connection* is reached at all -- it
+     * lives on the event inspector, and reaching it used to leave the draft
+     * stranded in state for the next connection to overwrite).
+     *
+     * The fix is one door rather than three patches: every panel change and
+     * every draft replacement goes through `leaveDraft`.
+     *
+     * Mutation that reds it: bypass the guard on any ONE of the three -- call
+     * `setPanelState` directly from `onSelectRun`, or drop the guard from
+     * `openDraft`, or from `onSelectEvent`.
+     */
+    it('asks before losing an unsaved draft, whichever way you leave', async () => {
+      seedCrews([
+        makeCrew({
+          id: 'crew-1',
+          name: 'Review loop',
+          sessionIds: ['a', 'b', 'c'],
+        }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Fable' }),
+          makeSession({ id: 'b', name: 'Opus' }),
+          makeSession({ id: 'c', name: 'Sol' }),
+        ],
+        [CLAUDE_CODE],
+      )
+      listRuns.mockResolvedValue({
+        runs: [
+          {
+            flowRunId: 'run-1',
+            crewId: 'crew-1',
+            startedAt: '2026-09-06T12:00:00.000Z',
+            endedAt: '2026-09-06T12:05:00.000Z',
+            laps: [
+              {
+                lap: 1,
+                hops: [
+                  {
+                    id: 'h1',
+                    relayId: 'w1',
+                    crewId: 'crew-1',
+                    flowRunId: 'run-1',
+                    firedAt: '2026-09-06T12:00:00.000Z',
+                    sourceSessionId: 'a',
+                    targetSessionId: 'b',
+                    spawnedSessionId: null,
+                    triggerStatus: 'completed',
+                    payloadPreview: null,
+                    baton: null,
+                    roundNumber: 1,
+                    lapNumber: 1,
+                    settledAt: '2026-09-06T12:01:00.000Z',
+                    dispatchId: 'receipt-1',
+                    outcome: 'delivered',
+                    error: null,
+                  },
+                ],
+              },
+            ],
+            hails: [],
+            status: { word: 'finished-quiet', reason: null },
+            counts: { deliveries: 1, failures: 0, laps: 1, events: 1 },
+          },
+        ],
+        unattributedHails: [],
+        outcomes: { h1: 'delivered' },
+        hasMore: false,
+      })
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-canvas-session-node="c"]'),
+        ).toBeInTheDocument()
+      })
+
+      /** Draws Fable → Opus and leaves it unsaved. */
+      async function drawDraft() {
+        fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+        fireEvent.click(await screen.findByLabelText('Connect to Fable'))
+        fireEvent.click(await screen.findByLabelText('Connect to Opus'))
+        expect(await screen.findByText('New connection')).toBeInTheDocument()
+      }
+
+      /** Answers the alert with *Keep editing* and proves the draft survived. */
+      async function keepEditing() {
+        fireEvent.click(
+          await screen.findByRole('button', { name: 'Keep editing' }),
+        )
+        expect(screen.getByText('New connection')).toBeInTheDocument()
+        expect(screen.getByText('Not saved yet')).toBeInTheDocument()
+      }
+
+      // 1. Drawing a second pair.
+      await drawDraft()
+      fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+      fireEvent.click(await screen.findByLabelText('Connect to Fable'))
+      fireEvent.click(await screen.findByLabelText('Connect to Sol'))
+      expect(
+        await screen.findByRole('alertdialog', { name: 'Discard this draft?' }),
+      ).toBeInTheDocument()
+      await keepEditing()
+
+      // 2. Picking a run in history.
+      fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+      fireEvent.click(await screen.findByText('1 delivery'))
+      expect(
+        await screen.findByRole('alertdialog', { name: 'Discard this draft?' }),
+      ).toBeInTheDocument()
+      await keepEditing()
+
+      // 3. Opening a recorded event — the only door to *View current
+      //    connection*, and the one that used to strand the draft silently.
+      fireEvent.click(await screen.findByText('Fable → Opus'))
+      expect(
+        await screen.findByRole('alertdialog', { name: 'Discard this draft?' }),
+      ).toBeInTheDocument()
+      await keepEditing()
+
+      expect(createRelay).not.toHaveBeenCalled()
+      expect(updateRelay).not.toHaveBeenCalled()
+    })
+
     it('leaves Enter meaning "open" when Connect is not armed', async () => {
       const onOpenSession = vi.fn()
       seedCrews([
@@ -1105,6 +1248,168 @@ describe('MissionControl', () => {
       fireEvent.click(await screen.findByRole('button', { name: /History/ }))
 
       expect(await screen.findByText('Fable → Opus')).toBeInTheDocument()
+    })
+
+    /**
+     * L2. `hasMore` is the page's own observation that another run exists
+     * below it, and it was being read by nobody: the panel asked for one page
+     * and stopped, so a crew with more than twenty runs simply lost the rest.
+     *
+     * Mutation that reds it: drop the `hasMore` row, or call `listRuns`
+     * without the `before` cursor.
+     */
+    it('loads older runs when the page says there are more', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
+      ])
+      seed([makeSession({ id: 'a', name: 'Fable' })], [CLAUDE_CODE])
+      listRuns.mockImplementation(
+        async (_crewId: string, options?: unknown) => {
+          const before = (options as { before?: string } | undefined)?.before
+          return before === 'run-2'
+            ? {
+                runs: [makeRun('run-3', '2026-09-04T12:00:00.000Z')],
+                unattributedHails: [],
+                outcomes: {},
+                hasMore: false,
+              }
+            : {
+                runs: [
+                  makeRun('run-1', '2026-09-06T12:00:00.000Z'),
+                  makeRun('run-2', '2026-09-05T12:00:00.000Z'),
+                ],
+                unattributedHails: [],
+                outcomes: {},
+                hasMore: true,
+              }
+        },
+      )
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+
+      const older = await screen.findByRole('button', {
+        name: 'Load older runs',
+      })
+      fireEvent.click(older)
+
+      await waitFor(() => {
+        expect(listRuns).toHaveBeenCalledWith('crew-1', { before: 'run-2' })
+      })
+      // The older page is appended, not swapped in: the run already on screen
+      // stays, and the row that offered more is gone.
+      await waitFor(() => {
+        expect(
+          screen.queryByRole('button', { name: 'Load older runs' }),
+        ).not.toBeInTheDocument()
+      })
+      expect(
+        document.querySelectorAll('[aria-pressed]').length,
+      ).toBeGreaterThan(0)
+    })
+
+    /**
+     * L3. "Earlier calls" means the calls OTHER than the one you are looking
+     * at. Subtracting one unconditionally made a hop event -- which is not a
+     * call at all -- undercount every call in the page by exactly one.
+     *
+     * Mutation that reds it: subtract one whatever the opened event is.
+     */
+    it('counts the other calls, not always one less than all of them', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Fable' }),
+          makeSession({ id: 'b', name: 'Opus' }),
+        ],
+        [CLAUDE_CODE],
+      )
+      listRuns.mockResolvedValue({
+        runs: [
+          {
+            flowRunId: 'run-1',
+            crewId: 'crew-1',
+            startedAt: '2026-09-06T12:00:00.000Z',
+            endedAt: '2026-09-06T12:05:00.000Z',
+            laps: [
+              {
+                lap: 1,
+                hops: [
+                  {
+                    id: 'h1',
+                    relayId: 'w1',
+                    crewId: 'crew-1',
+                    flowRunId: 'run-1',
+                    firedAt: '2026-09-06T12:00:00.000Z',
+                    sourceSessionId: 'a',
+                    targetSessionId: 'b',
+                    spawnedSessionId: null,
+                    triggerStatus: 'completed',
+                    payloadPreview: null,
+                    baton: null,
+                    roundNumber: 1,
+                    lapNumber: 1,
+                    settledAt: '2026-09-06T12:01:00.000Z',
+                    dispatchId: 'receipt-1',
+                    outcome: 'delivered',
+                    error: null,
+                  },
+                ],
+              },
+            ],
+            hails: [
+              {
+                id: 'call-1',
+                crewId: 'crew-1',
+                flowRunId: 'run-1',
+                reason: 'terminal',
+                sessionId: 'a',
+                baton: 'marcin',
+                message: null,
+                detail: 'Handed to you.',
+                raisedAt: '2026-09-06T12:04:00.000Z',
+                acknowledgedAt: null,
+              },
+              {
+                id: 'call-2',
+                crewId: 'crew-1',
+                flowRunId: 'run-1',
+                reason: 'stall',
+                sessionId: 'b',
+                baton: null,
+                message: null,
+                detail: 'Quiet for 30 minutes.',
+                raisedAt: '2026-09-06T12:05:00.000Z',
+                acknowledgedAt: null,
+              },
+            ],
+            status: { word: 'needs-you', reason: 'stalled' },
+            counts: { deliveries: 1, failures: 0, laps: 1, events: 3 },
+          },
+        ],
+        unattributedHails: [],
+        outcomes: {
+          h1: 'delivered',
+          'call-1': 'handed-back',
+          'call-2': 'reply-overdue',
+        },
+        hasMore: false,
+      })
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+
+      // A HOP is not a call, so both calls are "other".
+      fireEvent.click(await screen.findByText('Fable → Opus'))
+      expect(await screen.findByText(/Earlier calls · 2/)).toBeInTheDocument()
+
+      // A CALL is one of them, so the other one is what is left.
+      fireEvent.click(await screen.findByText(/handed the run back to you/))
+      expect(await screen.findByText(/Earlier calls · 1/)).toBeInTheDocument()
     })
 
     /**

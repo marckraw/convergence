@@ -65,6 +65,8 @@ export type RelayHopOutcome =
   | 'skipped-muted'
   /** The wire working as drawn: the message named another route, or none. */
   | 'skipped-baton'
+  /** The settle had nothing to carry: a tool-only turn owed nothing (L1). */
+  | 'skipped-no-message'
   | 'error'
 
 /** One firing, recorded whether or not anything was carried. */

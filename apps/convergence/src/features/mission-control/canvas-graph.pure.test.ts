@@ -711,15 +711,70 @@ describe('positions the crew remembers (R10)', () => {
       900 + CANVAS_NODE_WIDTH,
     )
   })
+
+  /**
+   * L6. The frame only ever grew right and down, so a card dragged ABOVE or
+   * LEFT of where the walk would have put it sat outside its own crew's
+   * border -- the same "fallen out of the crew" picture the rule above exists
+   * to prevent, from the other two sides.
+   *
+   * Mutation that reds it: leave the cluster's origin at (0, clusterTop).
+   */
+  it('grows the crew frame to hold a card moved above or left of it', () => {
+    const graph = buildCanvasGraph(
+      [
+        group(
+          ['a'],
+          [{ sessionId: 'a', batonName: null, canvasX: -300, canvasY: -200 }],
+        ),
+      ],
+      [],
+    )
+
+    const frame = graph.clusters[0]
+    const node = graph.nodes[0]
+    expect(node).toMatchObject({ x: -300, y: -200 })
+    expect(frame.x).toBeLessThanOrEqual(-300)
+    expect(frame.y).toBeLessThanOrEqual(-200)
+    expect(frame.x + frame.width).toBeGreaterThanOrEqual(
+      node.x + CANVAS_NODE_WIDTH,
+    )
+    expect(frame.y + frame.height).toBeGreaterThanOrEqual(node.y)
+  })
+
+  /**
+   * The stored coordinates are measured from the LAYOUT origin, not from the
+   * frame's drawn corner -- which the rule above lets move. Reading a drop
+   * back against the drawn corner would shift the stored value by however far
+   * the frame had grown, so a card dragged above its frame would creep every
+   * time it was touched.
+   *
+   * Mutation that reds it: have `crewLocalPosition` take `x`/`y` again.
+   */
+  it('keeps a drop’s stored coordinates measured from the layout origin', () => {
+    const graph = buildCanvasGraph(
+      [
+        group(
+          ['a'],
+          [{ sessionId: 'a', batonName: null, canvasX: -300, canvasY: -200 }],
+        ),
+      ],
+      [],
+    )
+
+    const node = graph.nodes[0]
+    expect(
+      crewLocalPosition({ x: node.x, y: node.y }, graph.clusters[0]),
+    ).toEqual({ x: -300, y: -200 })
+  })
 })
 
 describe('crewLocalPosition', () => {
   it('turns an absolute drop into an offset from the crew it belongs to', () => {
     // Clusters stack down the canvas, so storing an absolute y would move
     // every arrangement the moment a crew was added above it.
-    expect(crewLocalPosition({ x: 300, y: 900 }, { x: 0, y: 800 })).toEqual({
-      x: 300,
-      y: 100,
-    })
+    expect(
+      crewLocalPosition({ x: 300, y: 900 }, { originX: 0, originY: 800 }),
+    ).toEqual({ x: 300, y: 100 })
   })
 })

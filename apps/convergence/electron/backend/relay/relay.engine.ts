@@ -861,8 +861,13 @@ export class RelayEngine {
       return true
     }
 
+    // Nothing to carry is not a delivery that broke (L1): a tool-only turn
+    // owed nothing, so it holds rather than fails, and it calls nobody. It
+    // still writes a row -- "my wire did not fire" must always have a visible
+    // answer -- and it still counts as having ANSWERED the baton, because the
+    // condition above it matched.
     if (!message) {
-      record('error', {
+      record('skipped-no-message', {
         error: 'The session finished without an assistant message to carry.',
       })
       return true

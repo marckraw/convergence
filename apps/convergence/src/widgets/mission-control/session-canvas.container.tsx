@@ -37,7 +37,7 @@ import {
 } from '@/entities/session-relay'
 import { useCrewHailStore } from '@/entities/crew-hail'
 import { CanvasChairNode } from './canvas-chair-node.presentational'
-import { CanvasRoutedEdge } from './canvas-routed-edge.presentational'
+import { CanvasRoutedEdge } from './canvas-routed-edge.container'
 import { CanvasCrewCluster } from './canvas-crew-cluster.presentational'
 import { CanvasSessionNode } from './canvas-session-node.presentational'
 import { CanvasSpawnNode } from './canvas-spawn-node.presentational'

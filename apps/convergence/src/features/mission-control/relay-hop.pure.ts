@@ -49,10 +49,13 @@ export function relayHopTone(outcome: string): RelayHopTone {
     // `skipped-baton` is grey for the same reason the other two are: the wire
     // is default-closed by design, and red here would train the user to fear
     // a condition doing its job on every settle that names another route.
+    // `skipped-no-message` is grey for the same reason again: the turn simply
+    // produced nothing to carry, and nothing was owed.
     case 'skipped-failed':
     case 'skipped-already-fired':
     case 'skipped-muted':
     case 'skipped-baton':
+    case 'skipped-no-message':
       return 'skipped'
     case 'skipped-budget':
     case 'skipped-round-budget':
@@ -92,6 +95,8 @@ export function formatRelayHopOutcome(outcome: string): string {
       return 'held — sent quiet'
     case 'skipped-baton':
       return 'held — another baton'
+    case 'skipped-no-message':
+      return 'held — nothing to carry'
     case 'skipped-round-budget':
       return 'stopped — delivery limit'
     case 'error':

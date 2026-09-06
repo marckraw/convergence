@@ -30,7 +30,9 @@ import {
   GLOBAL_PROJECT_OPTION_ID,
   SPAWN_RECIPIENT_OPTION_ID,
   batonNameRefusal,
+  appendRunPage,
   beforeDeliveryOptions,
+  changeDraftRecipient,
   HistoryEventInspector,
   HistoryPanel,
   RUN_LAP_DELIVERY_GLOSSARY,
@@ -109,14 +111,30 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   )
 
   const [selectedCrewId, setSelectedCrewId] = useState<string | null>(null)
-  const [panel, setPanel] = useState<PanelState>({ kind: 'none' })
+  // Raw on purpose, and used in exactly three places: `applyPanel`,
+  // `closePanel`, and the beat after a successful save. Every other panel
+  // change goes through `leaveDraft` below, which is what keeps the discard
+  // guard from being a rule each new gesture has to remember.
+  const [panel, setPanelState] = useState<PanelState>({ kind: 'none' })
   const [connectMode, setConnectMode] =
     useState<ConnectModeState>(CONNECT_MODE_OFF)
   const [draft, setDraft] = useState<ConnectionDraft | null>(null)
   const [savedDraft, setSavedDraft] = useState<ConnectionDraft | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [confirmDiscard, setConfirmDiscard] = useState<PanelState | null>(null)
+  /**
+   * What leaving the draft would do, held until the person answers.
+   *
+   * A thunk rather than a panel, because the four ways out do different
+   * things: two of them replace the draft with another one, one changes which
+   * run is selected, and one just closes. Storing the ACTION lets all of them
+   * share one guard instead of one guard per shape.
+   */
+  const [confirmDiscard, setConfirmDiscard] = useState<{
+    run: () => void
+  } | null>(null)
+  /** What a recipient change silently dropped, said out loud (M2). */
+  const [recipientNote, setRecipientNote] = useState<string | null>(null)
   const [accounts, setAccounts] = useState<ProviderAccount[]>([])
   const [addQuery, setAddQuery] = useState('')
   const [addProjectId, setAddProjectId] = useState<string | null>(null)
@@ -131,6 +149,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyPage, setHistoryPage] = useState<RelayRunPage | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyLoadingOlder, setHistoryLoadingOlder] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all')
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
@@ -211,56 +230,82 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const supportsReset = recipientProvider?.supportsConversationReset ?? false
 
   const closePanel = useCallback(() => {
-    setPanel({ kind: 'none' })
+    setPanelState({ kind: 'none' })
     setDraft(null)
     setSavedDraft(null)
     setSaveError(null)
+    setRecipientNote(null)
     clearRelayError()
   }, [clearRelayError])
 
   /**
    * Leaving an unfinished draft asks first (frame 10-02).
    *
+   * ONE door rather than a rule each gesture remembers (M3). The guard used
+   * to sit on the toolbar and Cancel, so the gestures that also lose a draft
+   * -- clicking a stored wire, drawing a second pair, opening a recorded
+   * event, picking a run -- threw it away in silence. Anything that would
+   * replace the draft or take the panel off it goes through here, and the
+   * thing it would do is the argument.
+   *
    * Only when there is something to lose: a panel opened and closed without a
    * change closes silently, because a confirmation nobody needed is a
    * confirmation people learn to dismiss without reading.
    */
-  const leavePanel = useCallback(
-    (next: PanelState) => {
+  const leaveDraft = useCallback(
+    (run: () => void) => {
       const dirty =
         draft !== null &&
         (savedDraft === null || connectionDraftIsDirty(draft, savedDraft))
       if (dirty) {
-        setConfirmDiscard(next)
+        setConfirmDiscard({ run })
         return
       }
-      if (next.kind === 'none') closePanel()
-      else {
-        setDraft(null)
-        setSavedDraft(null)
-        setSaveError(null)
-        setPanel(next)
-      }
+      run()
     },
-    [draft, savedDraft, closePanel],
+    [draft, savedDraft],
+  )
+
+  /** Moves to another panel, dropping whatever draft the last one held. */
+  const applyPanel = useCallback(
+    (next: PanelState) => {
+      if (next.kind === 'none') {
+        closePanel()
+        return
+      }
+      setDraft(null)
+      setSavedDraft(null)
+      setSaveError(null)
+      setRecipientNote(null)
+      setPanelState(next)
+    },
+    [closePanel],
+  )
+
+  const leavePanel = useCallback(
+    (next: PanelState) => leaveDraft(() => applyPanel(next)),
+    [leaveDraft, applyPanel],
   )
 
   const openConnection = useCallback(
     (relay: SessionRelay) => {
-      const target = relay.action === 'hail' ? relay.targetSessionId : null
-      const provider = target
-        ? providersById.get(sessionsById.get(target)?.providerId ?? '')
-        : undefined
-      const next = draftFromRelay(relay, {
-        supportsReset: provider?.supportsConversationReset ?? false,
+      leaveDraft(() => {
+        const target = relay.action === 'hail' ? relay.targetSessionId : null
+        const provider = target
+          ? providersById.get(sessionsById.get(target)?.providerId ?? '')
+          : undefined
+        const next = draftFromRelay(relay, {
+          supportsReset: provider?.supportsConversationReset ?? false,
+        })
+        setDraft(next)
+        setSavedDraft(next)
+        setSaveError(null)
+        setRecipientNote(null)
+        clearRelayError()
+        setPanelState({ kind: 'connection', relayId: relay.id })
       })
-      setDraft(next)
-      setSavedDraft(next)
-      setSaveError(null)
-      clearRelayError()
-      setPanel({ kind: 'connection', relayId: relay.id })
     },
-    [providersById, sessionsById, clearRelayError],
+    [leaveDraft, providersById, sessionsById, clearRelayError],
   )
 
   /**
@@ -272,22 +317,25 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
    */
   const openDraft = useCallback(
     (input: { sourceSessionId: string; targetSessionId: string }) => {
-      const batonName =
-        crew?.members.find(
-          (member) => member.sessionId === input.targetSessionId,
-        )?.batonName ?? null
-      const next = newConnectionDraft({
-        sourceSessionId: input.sourceSessionId,
-        targetSessionId: input.targetSessionId,
-        suggestedBatonName: batonName,
+      leaveDraft(() => {
+        const batonName =
+          crew?.members.find(
+            (member) => member.sessionId === input.targetSessionId,
+          )?.batonName ?? null
+        const next = newConnectionDraft({
+          sourceSessionId: input.sourceSessionId,
+          targetSessionId: input.targetSessionId,
+          suggestedBatonName: batonName,
+        })
+        setDraft(next)
+        setSavedDraft(null)
+        setSaveError(null)
+        setRecipientNote(null)
+        clearRelayError()
+        setPanelState({ kind: 'connection', relayId: null })
       })
-      setDraft(next)
-      setSavedDraft(null)
-      setSaveError(null)
-      clearRelayError()
-      setPanel({ kind: 'connection', relayId: null })
     },
-    [crew, clearRelayError],
+    [leaveDraft, crew, clearRelayError],
   )
 
   const handlePick = useCallback(
@@ -313,7 +361,9 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
 
   const save = useCallback(async () => {
     if (!draft || !crew || panel.kind !== 'connection') return
-    const problem = connectionDraftProblem(draft, relays, panel.relayId)
+    const problem = connectionDraftProblem(draft, relays, panel.relayId, {
+      supportsReset,
+    })
     if (problem) return
 
     setBusy(true)
@@ -340,7 +390,10 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
     const next = draftFromRelay(saved, { supportsReset })
     setDraft(next)
     setSavedDraft(next)
-    setPanel({ kind: 'connection', relayId: saved.id })
+    setRecipientNote(null)
+    // Not through the guard: this IS the save, and the draft it would offer
+    // to protect is the one that was just stored.
+    setPanelState({ kind: 'connection', relayId: saved.id })
   }, [
     draft,
     crew,
@@ -437,13 +490,13 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       }
       await loadCrews()
       setAddSelection([])
-      setPanel({ kind: 'none' })
+      closePanel()
     } catch {
       // Membership that would not store leaves the panel open with the
       // selection intact, so the person can try again without re-picking.
     }
     setBusy(false)
-  }, [crew, addSelection, loadCrews])
+  }, [crew, addSelection, loadCrews, closePanel])
 
   const removeMember = useCallback(
     async (sessionId: string) => {
@@ -593,6 +646,38 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
     }
     setHistoryLoading(false)
   }, [crew])
+
+  /**
+   * The next page down, joined onto the one on screen (L2).
+   *
+   * Anchored on the oldest run already held rather than on an offset, for the
+   * reason the read model's cursor is a run id: history grows at the head, and
+   * an offset would repeat a run the moment a wire fires mid-read.
+   */
+  const loadOlderRuns = useCallback(async () => {
+    const oldest = historyPage?.runs[historyPage.runs.length - 1]
+    if (!crew || !historyPage?.hasMore || !oldest) return
+    setHistoryLoadingOlder(true)
+    setHistoryError(null)
+    try {
+      const older = await runHistoryApi.listRuns(crew.id, {
+        before: oldest.flowRunId,
+      })
+      setHistoryPage((current) =>
+        current ? appendRunPage(current, older) : older,
+      )
+    } catch (error) {
+      // The runs already read stay on screen: losing them because the page
+      // below them would not load would be the button destroying the thing it
+      // was meant to extend.
+      setHistoryError(
+        error instanceof Error
+          ? error.message
+          : 'Convergence could not read this crew’s history.',
+      )
+    }
+    setHistoryLoadingOlder(false)
+  }, [crew, historyPage])
 
   useEffect(() => {
     if (!historyOpen) return
@@ -827,29 +912,42 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                     : null,
               })}
               customOpenerNote={customOpenerNote(draft, supportsReset)}
-              problem={connectionDraftProblem(draft, relays, panel.relayId)}
+              recipientNote={recipientNote}
+              problem={connectionDraftProblem(draft, relays, panel.relayId, {
+                supportsReset,
+              })}
               busy={busy}
               projectOptions={projectOptions}
               providerOptions={providerOptions}
               modelOptions={modelOptions}
               effortOptions={effortOptions}
               spawnAccounts={spawnAccounts}
-              onRecipientChange={(optionId) =>
-                setDraft((current) =>
-                  current
-                    ? {
-                        ...current,
-                        recipient:
-                          optionId === SPAWN_RECIPIENT_OPTION_ID
-                            ? {
-                                kind: 'spawn',
-                                spec: { ...EMPTY_SPAWN_SPEC },
-                              }
-                            : { kind: 'session', sessionId: optionId },
-                      }
-                    : current,
+              onRecipientChange={(optionId) => {
+                if (!draft) return
+                // R8 is re-asked here, not just the field replaced (M2): the
+                // *Before delivery* choice is about what the RECIPIENT's
+                // provider can do, so a new recipient can turn a stored
+                // choice into one the engine would carry as an ordinary
+                // message.
+                const provider =
+                  optionId === SPAWN_RECIPIENT_OPTION_ID
+                    ? undefined
+                    : providersById.get(
+                        sessionsById.get(optionId)?.providerId ?? '',
+                      )
+                const changed = changeDraftRecipient(
+                  draft,
+                  optionId === SPAWN_RECIPIENT_OPTION_ID
+                    ? { kind: 'spawn', spec: { ...EMPTY_SPAWN_SPEC } }
+                    : { kind: 'session', sessionId: optionId },
+                  {
+                    supportsReset: provider?.supportsConversationReset ?? false,
+                    providerName: provider?.name ?? null,
+                  },
                 )
-              }
+                setDraft(changed.draft)
+                setRecipientNote(changed.note)
+              }}
               onSpawnChange={(patch: Partial<ConnectionSpawnSpec>) =>
                 setDraft((current) => {
                   if (!current || current.recipient.kind !== 'spawn') {
@@ -973,11 +1071,13 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               onAttentionMinutesChange={(stallMinutes) => {
                 void setLoopLimit({ stallMinutes })
               }}
-              onAddConversation={() => setPanel({ kind: 'add-conversations' })}
+              onAddConversation={() =>
+                leavePanel({ kind: 'add-conversations' })
+              }
               onRemoveMember={(sessionId) => {
                 void removeMember(sessionId)
               }}
-              onClose={() => setPanel({ kind: 'none' })}
+              onClose={() => leavePanel({ kind: 'none' })}
             />
           </div>
         ) : null}
@@ -1028,12 +1128,15 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                 openedRecord.kind === 'hail' &&
                 openedRecord.hail.acknowledgedAt !== null
               }
+              // The OTHER calls in history, which is what the sentence
+              // says (L3). A hop is not a call, so subtracting one for it
+              // undercounted every call on the page by exactly one.
               earlierCallCount={Math.max(
                 0,
                 (historyPage?.runs ?? []).reduce(
                   (total, run) => total + run.hails.length,
                   (historyPage?.unattributedHails ?? []).length,
-                ) - 1,
+                ) - (openedRecord.kind === 'hail' ? 1 : 0),
               )}
               openRecipientLabel={
                 openedRecord.kind === 'hop'
@@ -1075,7 +1178,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                   loadHistory(),
                 )
               }}
-              onClose={() => setPanel({ kind: 'none' })}
+              onClose={() => leavePanel({ kind: 'none' })}
             />
           </div>
         ) : null}
@@ -1105,7 +1208,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               onAdd={() => {
                 void addConversations()
               }}
-              onClose={() => setPanel({ kind: 'none' })}
+              onClose={() => leavePanel({ kind: 'none' })}
             />
           </div>
         ) : null}
@@ -1134,19 +1237,26 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
           filter={historyFilter}
           loadError={historyError}
           onFilterChange={setHistoryFilter}
-          onSelectRun={(flowRunId) => {
-            setSelectedRunId(flowRunId)
-            setPanel({ kind: 'none' })
+          hasMore={historyPage?.hasMore ?? false}
+          loadingOlder={historyLoadingOlder}
+          onLoadOlder={() => {
+            void loadOlderRuns()
           }}
+          onSelectRun={(flowRunId) =>
+            leaveDraft(() => {
+              setSelectedRunId(flowRunId)
+              applyPanel({ kind: 'none' })
+            })
+          }
           onSelectEvent={(eventId) =>
-            setPanel({ kind: 'history-event', eventId })
+            leavePanel({ kind: 'history-event', eventId })
           }
           onRetry={() => {
             void loadHistory()
           }}
           onClose={() => {
             setHistoryOpen(false)
-            if (panel.kind === 'history-event') setPanel({ kind: 'none' })
+            if (panel.kind === 'history-event') applyPanel({ kind: 'none' })
           }}
         />
       ) : null}
@@ -1188,13 +1298,17 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  const next = confirmDiscard
+                  const leaving = confirmDiscard
                   setConfirmDiscard(null)
                   setDraft(null)
                   setSavedDraft(null)
                   setSaveError(null)
+                  setRecipientNote(null)
                   clearRelayError()
-                  setPanel(next)
+                  // The action decides where they land -- another draft, a
+                  // stored wire, a recorded event, a run, or nothing. The
+                  // guard only asked.
+                  leaving.run()
                 }}
                 className="h-8 px-3 text-[11px]"
               >
