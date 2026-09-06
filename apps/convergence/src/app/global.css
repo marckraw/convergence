@@ -1,9 +1,18 @@
 @import 'tailwindcss';
 @import 'streamdown/styles.css';
 
-@source "../../node_modules/streamdown/dist/*.js";
-@source "../../node_modules/@streamdown/mermaid/dist/*.js";
-@source "../../node_modules/@streamdown/code/dist/*.js";
+/*
+ * Streamdown's components carry their Tailwind classes inside its bundle, so
+ * the bundle must be scanned or the classes are never emitted. The packages
+ * are hoisted to the monorepo root; a glob that points at a node_modules that
+ * does not exist scans nothing and fails silently -- which is how the code
+ * block's `pointer-events-auto` and `-mt-10` vanished after the monorepo move
+ * (MAR-2760). `global-css-sources.test.ts` pins these paths to the real
+ * install location.
+ */
+@source "../../../../node_modules/streamdown/dist/*.js";
+@source "../../../../node_modules/@streamdown/mermaid/dist/*.js";
+@source "../../../../node_modules/@streamdown/code/dist/*.js";
 
 @custom-variant dark (&:is(.dark *));
 
