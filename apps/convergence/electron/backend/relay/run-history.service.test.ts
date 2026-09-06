@@ -353,15 +353,15 @@ describe('RunHistoryService', () => {
     })
   })
 
-  it('says running while a delivery is still owed, and reads the ledger for it', () => {
+  it('says running while a delivery is still owed (mutation: ignore injected clock)', () => {
+    const now = new Date('2000-01-01T12:00:00.000Z')
+    history = new RunHistoryService(db, () => now)
     const a = wire('s1', 's2')
     hop({
       relayId: a.id,
       flowRunId: 'live',
-      // Inside the crew's live window, read against the clock the service
-      // takes at the read: outside it, nothing is coming and the run is not
-      // running (M1).
-      firedAt: new Date().toISOString(),
+      // Both the ledger row and the service read use this fixed clock.
+      firedAt: now.toISOString(),
       settledAt: null,
     })
 

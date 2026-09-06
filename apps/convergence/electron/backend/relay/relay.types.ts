@@ -188,11 +188,11 @@ export interface RelayHop {
   /**
    * The delivery receipt (MAR-2759): the dispatch id the session layer minted
    * for the input this hop carried, or null on rows written before receipts
-   * existed. `markStationSettled` stamps a hop only when a settle NAMES this
-   * id -- the causal fact stated by the one layer that knows which turn
-   * consumed which input, instead of counted or guessed from status
-   * snapshots. Durable beside the stamp it governs, so a restart cannot split
-   * the two.
+   * existed. For this build's receipted rows, `markStationSettled` stamps a
+   * hop when a settle NAMES this id -- the causal fact stated by the layer
+   * that knows which turn consumed which input. A legacy null-receipt row
+   * can still be stamped by the fired-at floor. The receipt stays durable
+   * beside the stamp it governs, so a restart cannot split the two.
    */
   dispatchId: string | null
   /**

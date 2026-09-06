@@ -987,8 +987,9 @@ describe('MissionControl', () => {
     })
 
     it.each(['Keep editing', 'Discard draft'])(
-      'guards a crew switch: %s (mutation: bypass crew leaveDraft)',
+      'guards a crew switch: %s (mutations: bypass crew leaveDraft / delete stopPropagation)',
       async (answer) => {
+        const onOpenSession = vi.fn()
         seedCrews([
           makeCrew({ id: 'crew-1', name: 'Crew A', sessionIds: ['a', 'b'] }),
           makeCrew({ id: 'crew-2', name: 'Crew B', sessionIds: ['c'] }),
@@ -1001,7 +1002,7 @@ describe('MissionControl', () => {
           ],
           [CLAUDE_CODE],
         )
-        render(<MissionControl />)
+        render(<MissionControl onOpenSession={onOpenSession} />)
         await switchToCanvas()
         fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
         fireEvent.click(await screen.findByLabelText('Connect to Fable'))
@@ -1033,6 +1034,8 @@ describe('MissionControl', () => {
           draft: answer === 'Keep editing',
           text: answer === 'Keep editing' ? 'Keep this draft' : null,
         })
+        // Neither answer replays the card click held by the discard guard.
+        expect(onOpenSession).not.toHaveBeenCalled()
       },
     )
 
