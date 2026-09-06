@@ -9,6 +9,7 @@ import {
   codexServerKey,
   isCodexThreadUnmaterializedError,
   parseCodexListeningUrl,
+  readLandedTurn,
   readCodexUnsubscribeStatus,
   supportsResidentCodexServer,
   threadContainsClientMessage,
@@ -31,8 +32,25 @@ describe('parseCodexListeningUrl', () => {
     expect(parseCodexListeningUrl('codex app-server (WebSockets)\n')).toBeNull()
   })
 
+  it('refuses a chunk that ends inside the port', () => {
+    // stderr arrives in chunks the writer never chose. `ws://127.0.0.1:5` is a
+    // well-formed URL and the wrong server: the host commits to the first
+    // address it is handed and never re-reads, so half a port becomes a
+    // permanent "never became ready" (MAR-2823 F8).
+    expect(
+      parseCodexListeningUrl(
+        'codex app-server (WebSockets)\n  listening on: ws://127.0.0.1:5',
+      ),
+    ).toBeNull()
+    expect(
+      parseCodexListeningUrl(
+        'codex app-server (WebSockets)\n  listening on: ws://127.0.0.1:5150\n  readyz: http://127.0.0.1:5150/readyz\n',
+      ),
+    ).toBe('ws://127.0.0.1:5150')
+  })
+
   it('does not carry trailing punctuation into the URL', () => {
-    expect(parseCodexListeningUrl('listening on: ws://127.0.0.1:5.')).toBe(
+    expect(parseCodexListeningUrl('listening on: ws://127.0.0.1:5.\n')).toBe(
       'ws://127.0.0.1:5',
     )
   })
@@ -188,9 +206,35 @@ describe('threadContainsClientMessage', () => {
     ).toBe(false)
   })
 
-  it('is false for an empty or unreadable thread', () => {
+  it('is a validated negative for a thread whose turns we read and it was not in', () => {
     expect(threadContainsClientMessage({ data: [] }, 'cvg-1')).toBe(false)
-    expect(threadContainsClientMessage(null, 'cvg-1')).toBe(false)
+    expect(
+      threadContainsClientMessage({ data: [], nextCursor: null }, 'cvg-1'),
+    ).toBe(false)
+  })
+
+  it('never turns a payload it could not read into a negative', () => {
+    // The RPC succeeded, so nothing else will ever notice. Collapsing this to
+    // `false` authorises resending a turn the model may already have run
+    // (MAR-2823 F5).
+    expect(threadContainsClientMessage(null, 'cvg-1')).toBe('unreadable')
+    expect(threadContainsClientMessage({ turns: 'nope' }, 'cvg-1')).toBe(
+      'unreadable',
+    )
+    expect(threadContainsClientMessage('a thread', 'cvg-1')).toBe('unreadable')
+  })
+
+  it('does not call a message absent while a page of history is unread', () => {
+    expect(
+      threadContainsClientMessage(
+        { data: [{ items: [] }], nextCursor: 'page-2' },
+        'cvg-1',
+      ),
+    ).toBe('unreadable')
+    // Finding it needs no further page.
+    expect(
+      threadContainsClientMessage({ ...turns, nextCursor: 'page-2' }, 'cvg-1'),
+    ).toBe(true)
   })
 
   it('does not mistake an agent message carrying the id for our user message', () => {
@@ -200,6 +244,79 @@ describe('threadContainsClientMessage', () => {
         'cvg-1',
       ),
     ).toBe(false)
+  })
+})
+
+describe('readLandedTurn', () => {
+  const completedTurn = {
+    data: [
+      {
+        id: 'turn-9',
+        status: 'completed',
+        items: [
+          { type: 'userMessage', clientId: 'cvg-1' },
+          { type: 'agentMessage', text: 'the answer' },
+        ],
+      },
+    ],
+    nextCursor: null,
+  }
+
+  it('names the turn so steer and interrupt can still reach it', () => {
+    expect(readLandedTurn(completedTurn, 'cvg-1')?.turnId).toBe('turn-9')
+  })
+
+  it('carries the answer of a turn that finished while nobody was subscribed', () => {
+    const landed = readLandedTurn(completedTurn, 'cvg-1')
+    expect(landed?.completed).toBe(true)
+    expect(landed?.agentText).toBe('the answer')
+  })
+
+  it('reads the content-array form of the same agent message', () => {
+    const landed = readLandedTurn(
+      {
+        data: [
+          {
+            id: 'turn-9',
+            status: 'completed',
+            items: [
+              { type: 'userMessage', clientId: 'cvg-1' },
+              {
+                type: 'agentMessage',
+                content: [
+                  { type: 'text', text: 'half ' },
+                  { type: 'text', text: 'an answer' },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      'cvg-1',
+    )
+    expect(landed?.agentText).toBe('half an answer')
+  })
+
+  it('leaves a turn still running uncompleted and unhydrated', () => {
+    const landed = readLandedTurn(
+      {
+        data: [
+          {
+            id: 'turn-9',
+            status: 'inProgress',
+            items: [{ type: 'userMessage', clientId: 'cvg-1' }],
+          },
+        ],
+      },
+      'cvg-1',
+    )
+    expect(landed?.completed).toBe(false)
+    expect(landed?.agentText).toBeNull()
+  })
+
+  it('is null when this thread never took our message', () => {
+    expect(readLandedTurn(completedTurn, 'cvg-2')).toBeNull()
+    expect(readLandedTurn(null, 'cvg-1')).toBeNull()
   })
 })
 

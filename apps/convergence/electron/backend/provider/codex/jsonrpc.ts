@@ -249,6 +249,13 @@ export class JsonRpcClient {
     pending.timer.unref?.()
   }
 
+  /**
+   * Re-arms every pending request's silence clock.
+   *
+   * Only inbound traffic that says *this connection is alive and working* may
+   * do this: notifications the owner has claimed as its own, and server
+   * requests, which are always addressed to the work in flight here.
+   */
   private noteProgress(): void {
     const at = Date.now()
     for (const pending of this.pending.values()) {
@@ -300,7 +307,11 @@ export class JsonRpcClient {
       ('result' in msg || 'error' in msg) &&
       !('method' in msg)
     ) {
-      this.noteProgress()
+      // A response is progress for the request it answers and for nothing
+      // else. Re-arming every pending request meant a busy account's ordinary
+      // traffic kept a stuck one alive indefinitely, and an unmatched id — a
+      // response to a request already timed out — did it while answering
+      // nothing at all (constitution A5, MAR-2823 F6).
       const response = msg as JsonRpcResponse
       const pending = this.pending.get(response.id)
       if (pending) {

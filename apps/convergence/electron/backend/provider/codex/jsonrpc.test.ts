@@ -256,6 +256,56 @@ describe('JsonRpcClient budgets (MAR-2316)', () => {
     await expect(promise).rejects.toThrow(/did not answer/)
   })
 
+  it('does not let a threadless helper be kept alive by any traffic at all', async () => {
+    // Quota, model list and skills hold no thread: their only progress is their
+    // own response, so they say so and every broadcast on the socket is a
+    // stranger's (MAR-2823 F6).
+    vi.useFakeTimers()
+    const { transport, push } = createMockTransport()
+    const client = new JsonRpcClient(transport, {
+      budgets: { 'model/list': 40 },
+      isProgressNotification: () => false,
+    })
+
+    const promise = client.request('model/list')
+    const settled = vi.fn()
+    void promise.then(settled, settled)
+
+    for (let elapsed = 0; elapsed < 120; elapsed += 20) {
+      await vi.advanceTimersByTimeAsync(20)
+      push(
+        '{"jsonrpc":"2.0","method":"thread/status/changed","params":{"threadId":"someone-else"}}\n',
+      )
+    }
+
+    await expect(promise).rejects.toThrow(/did not answer/)
+  })
+
+  it('lets a response re-arm only the request it answers', async () => {
+    // Any response used to reset every pending request's clock — including a
+    // response to an id nobody is waiting for any more, which answers nothing
+    // and still bought the stuck request another full budget (MAR-2823 F6).
+    vi.useFakeTimers()
+    const { transport, push } = createMockTransport()
+    const client = new JsonRpcClient(transport, {
+      budgets: { 'model/list': 40, 'skills/list': 4_000 },
+    })
+
+    const stuck = client.request('model/list')
+    const settled = vi.fn()
+    void stuck.then(settled, settled)
+    void client.request('skills/list').catch(() => {})
+
+    for (let elapsed = 0; elapsed < 120; elapsed += 20) {
+      await vi.advanceTimersByTimeAsync(20)
+      // A response to the other request, and one to nobody at all.
+      push('{"jsonrpc":"2.0","id":2,"result":{"skills":[]}}\n')
+      push('{"jsonrpc":"2.0","id":98,"result":{}}\n')
+    }
+
+    await expect(stuck).rejects.toThrow(/did not answer "model\/list"/)
+  })
+
   it('closes the transport when the client is destroyed, and signals nothing else', () => {
     const { transport, isClosed } = createMockTransport()
     const client = new JsonRpcClient(transport)

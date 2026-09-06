@@ -10,9 +10,18 @@ import { compareSemver } from '../provider-status.pure'
  *   listening on: ws://127.0.0.1:61988
  *   readyz: http://127.0.0.1:61988/readyz
  * ```
+ *
+ * The line terminator is required, and it is the whole point: stderr arrives in
+ * chunks the writer never chose, so a chunk that ends inside the port
+ * (`ws://127.0.0.1:5` of `…:5150`) reads as a perfectly well-formed URL. The
+ * host commits to the first address it is given and never re-reads, so half a
+ * port would send every readiness probe to a port nobody listens on and the
+ * server would be reported as "never became ready" (MAR-2823 F8).
  */
 export function parseCodexListeningUrl(stderr: string): string | null {
-  const match = stderr.match(/listening on:\s*(ws:\/\/\S+)/)
+  const match = stderr.match(
+    /listening on:[^\S\r\n]*(ws:\/\/[^\s]*)[^\S\r\n]*\r?\n/,
+  )
   const url = match?.[1]?.trim()
   if (!url) return null
   // A trailing punctuation mark would make the URL unparseable later, where
@@ -144,39 +153,142 @@ export function buildCodexServerObituary(input: {
  * it, so the thread's own turn list answers the question that decides between
  * resending and adopting. Measured shape (0.153.4):
  * `{ data: [ { items: [ { type: 'userMessage', clientId: '…' } ] } ] }`.
+ *
+ * Three answers, not two. A payload we cannot read is **not** a thread without
+ * our message in it: the RPC succeeded, so the transport never noticed, and
+ * folding that into `false` authorises a resend of a turn the model may already
+ * have run (MAR-2823 F5). Only a negative we could actually validate — turns we
+ * parsed, and no page left unread — may end in a resend.
  */
+export type CodexThreadLanding = true | false | 'unreadable'
+
 export function threadContainsClientMessage(
   payload: unknown,
   clientUserMessageId: string,
-): boolean {
+): CodexThreadLanding {
   if (!clientUserMessageId) return false
   const turns = readTurns(payload)
+  if (turns === null) return 'unreadable'
 
+  if (findTurnWithClientMessage(turns, clientUserMessageId)) return true
+
+  // Absence is only established over the whole history: a cursor means there
+  // are turns we never looked at, and our message could be in any of them.
+  return hasMoreTurnPages(payload) ? 'unreadable' : false
+}
+
+/**
+ * What the server already did with a turn we lost the acknowledgement for.
+ *
+ * Knowing it landed is not enough to rejoin it: adopting means naming the turn
+ * again (so steer and interrupt still reach it) and, when the model has already
+ * finished, putting the answer it produced into the transcript — a turn that
+ * completed while nobody was subscribed streams to no one (MAR-2823 F4).
+ */
+export interface CodexLandedTurn {
+  turnId: string | null
+  completed: boolean
+  agentText: string | null
+}
+
+export function readLandedTurn(
+  payload: unknown,
+  clientUserMessageId: string,
+): CodexLandedTurn | null {
+  if (!clientUserMessageId) return null
+  const turns = readTurns(payload)
+  if (turns === null) return null
+
+  const turn = findTurnWithClientMessage(turns, clientUserMessageId)
+  if (!turn) return null
+
+  const record = turn as { id?: unknown; turnId?: unknown; status?: unknown }
+  const turnId =
+    typeof record.id === 'string'
+      ? record.id
+      : typeof record.turnId === 'string'
+        ? record.turnId
+        : null
+
+  const agentText = readAgentText(turnItems(turn))
+  return {
+    turnId,
+    completed: record.status === 'completed' || record.status === 'failed',
+    agentText,
+  }
+}
+
+function findTurnWithClientMessage(
+  turns: unknown[],
+  clientUserMessageId: string,
+): Record<string, unknown> | null {
   for (const turn of turns) {
-    const items = Array.isArray((turn as { items?: unknown }).items)
-      ? ((turn as { items: unknown[] }).items ?? [])
-      : []
-    for (const item of items) {
+    for (const item of turnItems(turn)) {
       if (!item || typeof item !== 'object') continue
       const record = item as { type?: unknown; clientId?: unknown }
       if (
         record.type === 'userMessage' &&
         record.clientId === clientUserMessageId
       ) {
-        return true
+        return turn as Record<string, unknown>
       }
     }
   }
 
-  return false
+  return null
 }
 
-function readTurns(payload: unknown): unknown[] {
-  if (!payload || typeof payload !== 'object') return []
+function turnItems(turn: unknown): unknown[] {
+  if (!turn || typeof turn !== 'object') return []
+  const items = (turn as { items?: unknown }).items
+  return Array.isArray(items) ? items : []
+}
+
+/**
+ * The last agent message of a turn, as the transcript would have shown it.
+ *
+ * Measured shapes (0.153.4): `{ type: 'agentMessage', text }` and the
+ * content-array form the same item takes on `thread/read`.
+ */
+function readAgentText(items: unknown[]): string | null {
+  let text: string | null = null
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue
+    const record = item as { type?: unknown; text?: unknown; content?: unknown }
+    if (record.type !== 'agentMessage') continue
+    if (typeof record.text === 'string' && record.text) {
+      text = record.text
+      continue
+    }
+    if (Array.isArray(record.content)) {
+      const joined = record.content
+        .map((part) =>
+          part &&
+          typeof part === 'object' &&
+          typeof (part as { text?: unknown }).text === 'string'
+            ? (part as { text: string }).text
+            : '',
+        )
+        .join('')
+      if (joined) text = joined
+    }
+  }
+  return text
+}
+
+/** `null` means "this is not a turn list", which is not the same as an empty one. */
+function readTurns(payload: unknown): unknown[] | null {
+  if (!payload || typeof payload !== 'object') return null
   const record = payload as { data?: unknown; thread?: { turns?: unknown } }
   if (Array.isArray(record.data)) return record.data
   if (Array.isArray(record.thread?.turns)) return record.thread.turns
-  return []
+  return null
+}
+
+function hasMoreTurnPages(payload: unknown): boolean {
+  if (!payload || typeof payload !== 'object') return false
+  const cursor = (payload as { nextCursor?: unknown }).nextCursor
+  return typeof cursor === 'string' && cursor.length > 0
 }
 
 /**

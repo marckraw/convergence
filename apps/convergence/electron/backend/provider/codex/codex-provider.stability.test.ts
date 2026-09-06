@@ -7,6 +7,7 @@ import type {
 import { CodexProvider } from './codex-provider'
 import { CodexServerHostRegistry } from './codex-server-host'
 import {
+  FAKE_CODEX_NO_RESPONSE,
   FakeCodexChildProcess,
   FakeCodexServer,
   type FakeCodexServerOptions,
@@ -579,6 +580,78 @@ describe('Codex server death (MAR-2317, MAR-2823)', () => {
         observed.notes.some((note) => note.text.includes('had nowhere to go')),
       ).toBe(true)
     })
+  })
+
+  it('interrupts the running turn on Stop instead of walking away from it', async () => {
+    // Under the per-session process, Stop cancelled the turn by killing the
+    // process it ran in. On a resident server nothing is killed and no signal
+    // is permitted, so an unsent `turn/interrupt` means the model keeps working
+    // — and keeps billing — after the UI has said stopped (MAR-2823 F1).
+    const bed = createStabilityBed({ autoCompleteTurns: false })
+    const handle = startSession(bed.provider)
+    observe(handle)
+
+    await waitFor(() => {
+      expect(bed.server.methodsCalled()).toContain('turn/start')
+    })
+
+    handle.stop()
+    // The session service releases the handle the moment `stop()` returns.
+    handle.dispose?.()
+
+    await waitFor(() => {
+      expect(bed.server.methodsCalled()).toContain('thread/unsubscribe')
+    })
+
+    const methods = bed.server.methodsCalled()
+    expect(methods).toContain('turn/interrupt')
+    // Order is the assertion: unsubscribing first leaves the turn running on a
+    // thread nobody is listening to.
+    expect(methods.indexOf('turn/interrupt')).toBeLessThan(
+      methods.indexOf('thread/unsubscribe'),
+    )
+    expect(
+      bed.server.requests.find((request) => request.method === 'turn/interrupt')
+        ?.params?.turnId,
+    ).toBe('turn-1')
+    // And still no signal, ever.
+    expect(bed.children[0].signals).toEqual([])
+  })
+
+  it('waits for the acknowledgement so an unnamed turn can still be interrupted', async () => {
+    // Stop can land between `turn/start` leaving and its answer arriving. The
+    // turn is running; only the id we need to name it is late.
+    const bed = createStabilityBed({
+      autoCompleteTurns: false,
+      onRequest: (message, connection) => {
+        if (message.method !== 'turn/start') return undefined
+        setTimeout(
+          () =>
+            connection.respond(message.id as number, {
+              turn: { id: 'turn-late', status: 'inProgress' },
+            }),
+          60,
+        )
+        return FAKE_CODEX_NO_RESPONSE
+      },
+    })
+    const handle = startSession(bed.provider)
+    observe(handle)
+
+    await waitFor(() => {
+      expect(bed.server.methodsCalled()).toContain('turn/start')
+    })
+
+    handle.stop()
+    handle.dispose?.()
+
+    await waitFor(() => {
+      expect(bed.server.methodsCalled()).toContain('turn/interrupt')
+    })
+    expect(
+      bed.server.requests.find((request) => request.method === 'turn/interrupt')
+        ?.params?.turnId,
+    ).toBe('turn-late')
   })
 
   it('never signals the server when a session fails or is released', async () => {

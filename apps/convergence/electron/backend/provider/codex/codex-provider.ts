@@ -33,7 +33,9 @@ import type {
 import {
   isCodexThreadUnmaterializedError,
   readCodexUnsubscribeStatus,
+  readLandedTurn,
   threadContainsClientMessage,
+  type CodexLandedTurn,
 } from './codex-server-host.pure'
 import {
   buildCodexAccountEnv,
@@ -1035,6 +1037,16 @@ export class CodexProvider implements Provider {
       }
     >()
     let activeProviderTurnId: string | null = null
+    /**
+     * The `turn/start` acknowledgement in flight, resolving to the turn's id.
+     *
+     * It answers the one question two different paths need and neither can
+     * infer: *is there a send whose fate is still undecided?* A connection
+     * dying over it must not be turned into a terminal status before
+     * reconciliation has read the thread (MAR-2823 F2), and Stop over it has a
+     * turn to cancel whose id has simply not arrived yet (F1).
+     */
+    let pendingTurnStart: Promise<string | null> | null = null
     let deadInteractionNoted = false
 
     // Map of pending approval request IDs (JSON-RPC id → approval response plan)
@@ -1322,17 +1334,27 @@ export class CodexProvider implements Provider {
       input: CodexUserInput[],
       clientUserMessageId: string,
     ): Promise<void> {
-      const turnResult = await activeRpc.request('turn/start', {
-        threadId: currentThreadId,
-        model: config.model,
-        effort: config.effort,
-        ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
-        clientUserMessageId,
-        input,
-      })
-      const providerTurnId = readProviderTurnId(turnResult)
-      if (providerTurnId) {
-        activeProviderTurnId = providerTurnId
+      const acknowledgement = activeRpc
+        .request('turn/start', {
+          threadId: currentThreadId,
+          model: config.model,
+          effort: config.effort,
+          ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
+          clientUserMessageId,
+          input,
+        })
+        .then((turnResult) => readProviderTurnId(turnResult))
+      pendingTurnStart = acknowledgement
+
+      try {
+        const providerTurnId = await acknowledgement
+        if (providerTurnId) {
+          activeProviderTurnId = providerTurnId
+        }
+      } finally {
+        if (pendingTurnStart === acknowledgement) {
+          pendingTurnStart = null
+        }
       }
     }
 
@@ -1344,27 +1366,87 @@ export class CodexProvider implements Provider {
      * (measured) — for this question that refusal is an answer, not an error.
      * Any *other* failure leaves the question unanswered, and an unanswered
      * question must never become a resend: duplicating a turn the model already
-     * ran is worse than asking the user to send it again.
+     * ran is worse than asking the user to send it again. A payload we could
+     * not read is exactly such an unanswered question, however cleanly the RPC
+     * itself succeeded (MAR-2823 F5).
      */
-    async function turnAlreadyLanded(
+    async function reconcileTurn(
       activeRpc: JsonRpcClient,
       currentThreadId: string,
       clientUserMessageId: string,
-    ): Promise<boolean | 'unknown'> {
+    ): Promise<
+      | { outcome: 'landed'; turn: CodexLandedTurn | null }
+      | { outcome: 'absent' }
+      | { outcome: 'unknown' }
+    > {
       try {
         const turns = await activeRpc.request('thread/turns/list', {
           threadId: currentThreadId,
         })
-        return threadContainsClientMessage(turns, clientUserMessageId)
+        const landing = threadContainsClientMessage(turns, clientUserMessageId)
+        if (landing === 'unreadable') return { outcome: 'unknown' }
+        if (landing === false) return { outcome: 'absent' }
+        return {
+          outcome: 'landed',
+          turn: readLandedTurn(turns, clientUserMessageId),
+        }
       } catch (err) {
-        if (isCodexThreadUnmaterializedError(err)) return false
-        return 'unknown'
+        if (isCodexThreadUnmaterializedError(err)) return { outcome: 'absent' }
+        return { outcome: 'unknown' }
       }
+    }
+
+    /**
+     * Rejoins a turn the server had already taken.
+     *
+     * Noting it was not enough. The thread was read on a connection that had
+     * subscribed to nothing, so a turn still executing streamed to no one and a
+     * turn that had already answered left its answer on the server: the session
+     * sat at `running` until something else ended it (MAR-2823 F4). Adoption is
+     * therefore the subscription, the turn's id back (so steer and interrupt
+     * still reach it), and — when the model has already finished — its answer
+     * in the transcript.
+     */
+    function adoptLandedTurn(turn: CodexLandedTurn | null): void {
+      sessionEmitter.addNote({
+        text: 'The connection dropped after Codex had already taken this message, so it was not sent again. Its answer continues in the next reply.',
+        level: 'warning',
+        timestamp: now(),
+      })
+
+      if (turn?.turnId) {
+        activeProviderTurnId = turn.turnId
+      }
+
+      if (!turn?.completed) {
+        // Still running on the server, and this connection is subscribed to it
+        // now: the rest arrives as ordinary notifications.
+        setStatus('running')
+        setAttention('none')
+        return
+      }
+
+      if (turn.agentText) {
+        sessionEmitter.addAssistantMessage({
+          text: turn.agentText,
+          state: 'complete',
+          timestamp: now(),
+        })
+      }
+      activeProviderTurnId = null
+      applyActivity({ kind: 'close' })
+      setStatus('completed')
+      setAttention('none')
     }
 
     /**
      * Reconnects after the connection died under an unacknowledged turn, and
      * decides between adopting and resending by reading the thread.
+     *
+     * The thread is resumed *before* it is read, and the order is the point: a
+     * turn that finishes between the read and the subscription would otherwise
+     * announce itself to nobody, leaving a session that reconciled correctly
+     * still waiting forever.
      */
     async function recoverUnacknowledgedTurn(input: {
       threadIdAtSend: string
@@ -1374,28 +1456,37 @@ export class CodexProvider implements Provider {
       const recovered = await openConnection()
       if (!recovered || stopped) return
 
-      const landed = await turnAlreadyLanded(
+      const resumedThreadId = await ensureThread(recovered)
+      if (resumedThreadId !== input.threadIdAtSend) {
+        // The thread we sent to is gone — the server refused to resume it and
+        // a fresh one took its place — so nothing can have landed on it.
+        await requestTurnStart(
+          recovered,
+          resumedThreadId,
+          input.turnInput,
+          input.clientUserMessageId,
+        )
+        return
+      }
+
+      const reconciled = await reconcileTurn(
         recovered,
         input.threadIdAtSend,
         input.clientUserMessageId,
       )
+      if (stopped) return
 
-      if (landed === true) {
-        sessionEmitter.addNote({
-          text: 'The connection dropped after Codex had already taken this message, so it was not sent again. Its answer continues in the next reply.',
-          level: 'warning',
-          timestamp: now(),
-        })
+      if (reconciled.outcome === 'landed') {
+        adoptLandedTurn(reconciled.turn)
         return
       }
 
-      if (landed === 'unknown') {
+      if (reconciled.outcome === 'unknown') {
         throw new Error(
           'Lost the connection while sending, and Codex could not be asked whether the message arrived. Send it again if no answer appears.',
         )
       }
 
-      const resumedThreadId = await ensureThread(recovered)
       await requestTurnStart(
         recovered,
         resumedThreadId,
@@ -1738,11 +1829,20 @@ export class CodexProvider implements Provider {
       // obituary grace for a process exit that is never coming. A resend that
       // succeeds says `turn/started` on the new connection and puts the
       // session back to `running` itself.
+      //
+      // **Except while a send is still undecided.** `failed` is a terminal
+      // status, and the session service releases the handle the moment it sees
+      // one — disposing the very object that was about to reconcile, so the
+      // recovery below never ran and the socket's own note was swallowed with
+      // it (MAR-2823 F2). Who owns the outcome is the seam: the provider
+      // decides an interrupted send (adopt / resend / unknown) and only then
+      // publishes a status; the service reacts to decided statuses.
+      const reconciling = pendingTurnStart !== null
       const interruptedTurn = currentStatus === 'running'
       flushAssistantBuffer()
       activeProviderTurnId = null
       applyActivity({ kind: 'close' })
-      if (interruptedTurn) {
+      if (interruptedTurn && !reconciling) {
         setStatus('failed')
         setAttention('failed')
       }
@@ -2312,7 +2412,7 @@ export class CodexProvider implements Provider {
      * would still be correct, because the server drops an unsubscribed thread
      * after 30 idle minutes, but it would hold the thread loaded for nothing.
      */
-    function disposeRuntime(): void {
+    function disposeRuntime(options?: { interruptActiveTurn?: boolean }): void {
       if (stopped) return
       stopped = true
       clearTimeout(startTimer)
@@ -2320,6 +2420,14 @@ export class CodexProvider implements Provider {
 
       const releasing = connection
       const releasingThreadId = threadId
+      const releasingThreadReady = threadReady
+      // Captured before the reset below, because the release runs after it.
+      const interruptTurnId = options?.interruptActiveTurn
+        ? activeProviderTurnId
+        : null
+      const interruptPending = options?.interruptActiveTurn
+        ? pendingTurnStart
+        : null
       connection = null
       rpc = null
       pendingApprovals.clear()
@@ -2328,31 +2436,77 @@ export class CodexProvider implements Provider {
       assistantTextBuffer = ''
       thinkingBuffer = ''
       activeProviderTurnId = null
+      pendingTurnStart = null
 
       if (!releasing) return
-      if (!releasingThreadId || !threadReady) {
-        releasing.close()
-        return
+
+      void releaseConnection({
+        releasing,
+        threadId: releasingThreadId,
+        threadReady: releasingThreadReady,
+        interruptTurnId,
+        interruptPending,
+      })
+    }
+
+    /**
+     * Hands the connection back, in the one order that leaves nothing running.
+     *
+     * Under the per-session process, Stop cancelled the turn by killing the
+     * process it ran in. On a resident server there is no such implicit
+     * cancellation and no signal is permitted, so an explicit Stop has to say
+     * so out loud: `turn/interrupt` first, then the unsubscribe, then the
+     * socket. Without it the UI said stopped while the model kept working,
+     * billing the account for an answer nobody would ever see (MAR-2823 F1).
+     */
+    async function releaseConnection(input: {
+      releasing: CodexServerConnection
+      threadId: string | null
+      threadReady: boolean
+      interruptTurnId: string | null
+      interruptPending: Promise<string | null> | null
+    }): Promise<void> {
+      try {
+        // A turn whose `turn/start` has not been answered yet has no id to
+        // name; the acknowledgement carries it, so the interrupt waits for it
+        // rather than letting the turn run on unnamed.
+        const turnId =
+          input.interruptTurnId ??
+          (input.interruptPending
+            ? await input.interruptPending.catch(() => null)
+            : null)
+
+        if (turnId && input.threadId) {
+          await input.releasing.rpc.request('turn/interrupt', {
+            threadId: input.threadId,
+            turnId,
+          })
+        }
+      } catch {
+        // A server that cannot be told to stop is still owed the unsubscribe
+        // below; reporting here would have nowhere to go — the session is
+        // already released.
       }
 
-      // Best effort and never blocking: `unsubscribed`, `notSubscribed` and
-      // `notLoaded` are all normal answers (measured), and a failure here
-      // costs the server nothing it will not clean up itself.
-      void releasing.rpc
-        .request('thread/unsubscribe', { threadId: releasingThreadId })
-        .then((result) => {
-          recordDebug('lifecycle', {
-            direction: 'in',
-            note: `thread/unsubscribe: ${readCodexUnsubscribeStatus(result) ?? 'unknown'}`,
-          })
+      try {
+        if (!input.threadId || !input.threadReady) return
+
+        // Best effort and never blocking: `unsubscribed`, `notSubscribed` and
+        // `notLoaded` are all normal answers (measured), and a failure here
+        // costs the server nothing it will not clean up itself.
+        const result = await input.releasing.rpc.request('thread/unsubscribe', {
+          threadId: input.threadId,
         })
-        .catch(() => {
-          // The connection may already be gone; the thread is released either
-          // way.
+        recordDebug('lifecycle', {
+          direction: 'in',
+          note: `thread/unsubscribe: ${readCodexUnsubscribeStatus(result) ?? 'unknown'}`,
         })
-        .finally(() => {
-          releasing.close()
-        })
+      } catch {
+        // The connection may already be gone; the thread is released either
+        // way.
+      } finally {
+        input.releasing.close()
+      }
     }
 
     const handle: SessionHandle = {
@@ -2482,10 +2636,13 @@ export class CodexProvider implements Provider {
       deny: (providerApprovalId) => {
         answerApproval(providerApprovalId, 'deny')
       },
-      dispose: disposeRuntime,
+      dispose: () => disposeRuntime(),
       stop: () => {
         if (stopped) return
-        disposeRuntime()
+        // Explicit Stop, unlike an ordinary release: there is a turn running on
+        // a process that outlives this session, and only `turn/interrupt` ends
+        // it (F1).
+        disposeRuntime({ interruptActiveTurn: true })
         setStatus('failed')
         setAttention('failed')
       },

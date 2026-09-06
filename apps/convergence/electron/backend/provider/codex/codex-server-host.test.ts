@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  CodexServerHost,
   CodexServerHostRegistry,
+  type CodexServerHostOptions,
   type CodexServerObituary,
 } from './codex-server-host'
 import {
@@ -67,6 +69,49 @@ function createEnvironment(
     killJournal,
     probeCount: () => probes,
   }
+}
+
+/**
+ * One host, wired by hand.
+ *
+ * The registry deliberately does not expose the start budget — production has
+ * exactly one — but the cases below are *about* the budget and the ownership of
+ * a child across it, so they build the host themselves rather than waiting 90s.
+ */
+function createHost(
+  overrides: Partial<CodexServerHostOptions> & {
+    onSpawn?: (child: FakeCodexChildProcess) => void
+    ignoresSigterm?: boolean
+  } = {},
+) {
+  const children: FakeCodexChildProcess[] = []
+  const killJournal: Array<{ pid: number; signal: NodeJS.Signals }> = []
+  const { onSpawn, ignoresSigterm, ...hostOverrides } = overrides
+
+  const host = new CodexServerHost({
+    key: 'local::ambient-default',
+    binaryPath: '/usr/local/bin/codex',
+    version: '0.153.4',
+    account: null,
+    appVersion: '0.46.13',
+    cwd: '/tmp',
+    spawnProcess: () => {
+      const child = new FakeCodexChildProcess({
+        ignoresSigterm,
+        pid: 4242 + children.length,
+        onKill: (pid, signal) => killJournal.push({ pid, signal }),
+      })
+      children.push(child)
+      onSpawn?.(child)
+      return child.asChildProcess()
+    },
+    probeReady: async () => true,
+    listProcesses: () => [],
+    killPid: (pid, signal) => killJournal.push({ pid, signal }),
+    ...hostOverrides,
+  })
+
+  return { host, children, killJournal }
 }
 
 const accountA: CodexAccountEnvTarget = {
@@ -299,6 +344,137 @@ describe('CodexServerHost', () => {
     // The server itself is untouched — a bad handshake is not its death.
     expect(env.children[0].exitCode).toBeNull()
     expect(env.children[0].signals).toEqual([])
+  })
+
+  it('signals the child of a start that quit landed in the middle of', async () => {
+    // `server` is only assigned once `/readyz` answers, so for the whole cold
+    // start — up to 90s of it — `stop()` used to find nothing to stop and the
+    // process it had already spawned outlived the app (MAR-2823 F3).
+    const env = createEnvironment({ announce: false })
+    const connecting = env.registry.get({ account: null }).connect()
+    connecting.catch(() => {})
+
+    expect(env.children).toHaveLength(1)
+    env.registry.stopAll()
+
+    expect(env.children[0].signals).toContain('SIGTERM')
+    await expect(connecting).rejects.toThrow()
+  })
+
+  it('does not spawn a second server while a failed start is still exiting', async () => {
+    // A start that times out has not released its `CODEX_HOME` until the
+    // process is gone. Clearing the single-flight slot before then let the next
+    // caller spawn a second app-server beside the first — the collision the
+    // resident design exists to remove (MAR-2823 F3).
+    const bed = createHost({ ignoresSigterm: true, startBudgetMs: 50 })
+
+    vi.useFakeTimers()
+    try {
+      const first = bed.host.connect()
+      first.catch(() => {})
+      await vi.advanceTimersByTimeAsync(60)
+
+      expect(bed.children).toHaveLength(1)
+      expect(bed.children[0].signals).toEqual(['SIGTERM'])
+      expect(bed.children[0].exitCode).toBeNull()
+
+      const second = bed.host.connect()
+      second.catch(() => {})
+      await vi.advanceTimersByTimeAsync(10)
+      expect(bed.children).toHaveLength(1)
+
+      // The escalation reaches the tree, the child finally goes, and only then
+      // is the host free to start another one.
+      await vi.advanceTimersByTimeAsync(3_000)
+      expect(bed.children[0].signalCode).toBe('SIGKILL')
+      await expect(first).rejects.toThrow(/never reported a listening port/)
+      await expect(second).rejects.toThrow(/never reported a listening port/)
+
+      const third = bed.host.connect()
+      third.catch(() => {})
+      await vi.advanceTimersByTimeAsync(1)
+      expect(bed.children).toHaveLength(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('bounds a readiness probe that never settles, and quotes the stderr', async () => {
+    // `fetch` against a listener that accepts and never answers has no deadline
+    // of its own, and an unbounded await cannot be checked against one. The
+    // timeout also has to say *why*: the stderr tail is the only place the
+    // process ever explains itself (MAR-2823 F7).
+    const bed = createHost({
+      startBudgetMs: 150,
+      probeReady: () => new Promise<boolean>(() => {}),
+      onSpawn: (child) =>
+        setTimeout(() => {
+          child.log('WARN sqlite state runtime is rebuilding\n')
+          child.announceListening('ws://127.0.0.1:5150')
+        }, 0),
+    })
+
+    const startedAt = Date.now()
+    await expect(bed.host.connect()).rejects.toThrow(
+      /did not become ready[\s\S]*sqlite state runtime is rebuilding/,
+    )
+    expect(Date.now() - startedAt).toBeLessThan(2_000)
+  })
+
+  it('waits for the whole banner line before choosing a port', async () => {
+    // The banner arrives in chunks stderr chose, and `ws://127.0.0.1:5` — the
+    // first half of `:5150` — is a perfectly well-formed address. The host
+    // commits to the first one it is handed and never re-reads (MAR-2823 F8).
+    const probed: string[] = []
+    const bed = createHost({
+      probeReady: async (readyUrl) => {
+        probed.push(readyUrl)
+        return true
+      },
+      connectTransport: async () => new FakeCodexServer().connect(),
+      onSpawn: (child) =>
+        setTimeout(() => {
+          child.log(
+            'codex app-server (WebSockets)\n  listening on: ws://127.0.0.1:5',
+          )
+          child.log('150\n  readyz: http://127.0.0.1:5150/readyz\n')
+        }, 0),
+    })
+
+    await bed.host.connect()
+
+    expect(probed).toEqual(['http://127.0.0.1:5150/readyz'])
+    expect(bed.host.address()?.url).toBe('ws://127.0.0.1:5150')
+  })
+
+  it('does not let another session traffic keep a stuck helper request alive', async () => {
+    // Quota, model list and skills are threadless: their only progress is their
+    // own response. Counting every broadcast as progress meant a busy account
+    // kept a genuinely stuck helper pending for as long as it stayed busy
+    // (constitution A5, MAR-2823 F6).
+    const server = new FakeCodexServer({ silentMethods: ['model/list'] })
+    const bed = createHost({
+      connectTransport: async () => server.connect(),
+      onSpawn: (child) =>
+        setTimeout(() => child.announceListening('ws://127.0.0.1:5150'), 0),
+    })
+
+    vi.useFakeTimers()
+    try {
+      const helper = bed.host.run((rpc) => rpc.request('model/list', {}))
+      helper.catch(() => {})
+
+      for (let tick = 0; tick < 15; tick += 1) {
+        await vi.advanceTimersByTimeAsync(5_000)
+        server.broadcast('thread/status/changed', {
+          threadId: 'another-sessions-thread',
+        })
+      }
+
+      await expect(helper).rejects.toThrow(/did not answer "model\/list"/)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('retries the start after a failed one instead of caching the failure', async () => {

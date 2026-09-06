@@ -90,7 +90,7 @@ export interface CodexServerHostOptions {
   cwd: string
   spawnProcess?: CodexAppServerSpawn
   connectTransport?: (url: string) => Promise<JsonRpcTransport>
-  probeReady?: (readyUrl: string) => Promise<boolean>
+  probeReady?: (readyUrl: string, signal?: AbortSignal) => Promise<boolean>
   listProcesses?: () => ProcessTableRow[]
   killPid?: (pid: number, signal: NodeJS.Signals) => void
   startBudgetMs?: number
@@ -124,11 +124,18 @@ function defaultKillPid(pid: number, signal: NodeJS.Signals): void {
   }
 }
 
-async function defaultProbeReady(readyUrl: string): Promise<boolean> {
+async function defaultProbeReady(
+  readyUrl: string,
+  signal?: AbortSignal,
+): Promise<boolean> {
   try {
     // No `Origin` header, ever: the server answers 403 to a probe that carries
     // one (constitution A3), which would read as "never became ready".
-    const response = await fetch(readyUrl)
+    //
+    // The signal is the half that makes the start budget real: a listener that
+    // accepts the connection and never answers leaves `fetch` pending forever,
+    // and an unbounded await cannot be checked against a deadline (F7).
+    const response = await fetch(readyUrl, { signal })
     return response.status === 200
   } catch {
     return false
@@ -150,13 +157,28 @@ async function defaultProbeReady(readyUrl: string): Promise<boolean> {
 export class CodexServerHost {
   readonly key: string
   private server: RunningServer | null = null
+  /**
+   * The child of the start in flight, held from `spawn` until the host either
+   * adopts it as `server` or has watched it exit.
+   *
+   * Without it `stop()` could only see a *ready* server, so a quit during the
+   * cold start — up to 90s of it — left the process running with nobody left to
+   * signal it, and a failed start handed the next caller a licence to spawn a
+   * second app-server under the same `CODEX_HOME` while the first was still
+   * alive: the exact collision the resident design exists to remove
+   * (MAR-2823 F3).
+   */
+  private spawning: ChildProcess | null = null
   private starting: Promise<RunningServer> | null = null
   private stopped = false
   private generationCounter = 0
   private deathListeners = new Set<(obituary: CodexServerObituary) => void>()
   private readonly spawnProcess: CodexAppServerSpawn
   private readonly connectTransport: (url: string) => Promise<JsonRpcTransport>
-  private readonly probeReady: (readyUrl: string) => Promise<boolean>
+  private readonly probeReady: (
+    readyUrl: string,
+    signal?: AbortSignal,
+  ) => Promise<boolean>
   private readonly listProcesses: () => ProcessTableRow[]
   private readonly killPid: (pid: number, signal: NodeJS.Signals) => void
   private readonly startBudgetMs: number
@@ -252,7 +274,14 @@ export class CodexServerHost {
    * the server, never a thread, and must not share a live turn's pipe.
    */
   async run<T>(work: (rpc: JsonRpcClient) => Promise<T>): Promise<T> {
-    const connection = await this.connect()
+    const connection = await this.connect({
+      // A threadless request's only progress is its own response. Every
+      // notification on this socket belongs to some session's thread, and
+      // counting a stranger's broadcast as progress is how a genuinely stuck
+      // `model/list` stays pending for as long as the machine stays busy
+      // (constitution A5, MAR-2823 F6).
+      isProgressNotification: () => false,
+    })
     try {
       return await work(connection.rpc)
     } finally {
@@ -260,25 +289,75 @@ export class CodexServerHost {
     }
   }
 
-  /** App quit. The one place a signal is ever sent to a server. */
+  /**
+   * App quit. The one place a signal is ever sent to a server.
+   *
+   * Both children are signalled: the ready one and the one still warming up.
+   * `server` is only assigned after `/readyz` answers, so a quit inside the
+   * cold start used to find nothing to stop and left the process behind
+   * (MAR-2823 F3).
+   */
   stop(): void {
     this.stopped = true
     const running = this.server
+    const spawning = this.spawning
     this.server = null
+    this.spawning = null
     this.starting = null
-    if (running && running.child.exitCode === null) {
-      const child = running.child
+    for (const child of new Set([running?.child, spawning])) {
+      if (child) this.signalWithEscalation(child)
+    }
+  }
+
+  /**
+   * SIGTERM now, the whole tree in 3s if it is still there.
+   *
+   * Quit does not wait for a server to feel like leaving. A process wedged on
+   * its own state takes SIGTERM and stays; the per-session runtime escalated
+   * after 3s, and dropping that escalation is how a resident server outlives
+   * the app that spawned it.
+   */
+  private signalWithEscalation(child: ChildProcess): void {
+    if (child.exitCode !== null || child.signalCode !== null) return
+    child.kill('SIGTERM')
+    const escalation = setTimeout(() => {
+      if (child.exitCode !== null || child.signalCode !== null) return
+      this.killTree(child)
+    }, CODEX_SERVER_KILL_ESCALATION_MS)
+    escalation.unref?.()
+  }
+
+  /**
+   * Sees a child out and resolves only once its exit has been observed.
+   *
+   * This is the half that serialises replacement: a start that failed has not
+   * released its `CODEX_HOME` until the process is gone, so the host must not
+   * hand the next caller a fresh spawn before then (MAR-2823 F3).
+   */
+  private terminateChild(child: ChildProcess): Promise<void> {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      return Promise.resolve()
+    }
+
+    return new Promise<void>((resolve) => {
+      let settled = false
+      let escalation: ReturnType<typeof setTimeout> | null = null
+      const finish = () => {
+        if (settled) return
+        settled = true
+        if (escalation) clearTimeout(escalation)
+        resolve()
+      }
+
+      child.once('exit', finish)
       child.kill('SIGTERM')
-      // Quit does not wait for a server to feel like leaving. A process wedged
-      // on its own state takes SIGTERM and stays; the per-session runtime
-      // escalated after 3s, and dropping that escalation is how a resident
-      // server outlives the app that spawned it.
-      const escalation = setTimeout(() => {
-        if (child.exitCode !== null || child.signalCode !== null) return
+      if (settled) return
+
+      escalation = setTimeout(() => {
         this.killTree(child)
       }, CODEX_SERVER_KILL_ESCALATION_MS)
       escalation.unref?.()
-    }
+    })
   }
 
   /**
@@ -314,17 +393,23 @@ export class CodexServerHost {
     if (this.starting) return this.starting
 
     const starting = this.startServer()
-      .then((server) => {
-        // A stop that lands mid-start must not leave a process behind.
+      .then(async (server) => {
+        // A stop that lands mid-start must not leave a process behind — and
+        // "not behind" means watched out, not merely signalled.
         if (this.stopped) {
-          server.child.kill('SIGTERM')
+          await this.terminateChild(server.child)
           throw new Error('Convergence is shutting down.')
         }
+        this.spawning = null
         this.server = server
         this.starting = null
         return server
       })
       .catch((err) => {
+        // `startServer` has already seen its child out by the time it rejects,
+        // so releasing the single-flight slot here cannot let a second server
+        // start beside a live one.
+        this.spawning = null
         this.starting = null
         throw err
       })
@@ -338,6 +423,10 @@ export class CodexServerHost {
       throw new Error(buildCodexVersionRefusal(this.options.version))
     }
 
+    // One deadline for the whole start, not one per phase: port discovery and
+    // readiness used to get a full budget each, so a server that crawled
+    // through both took twice as long as the number the failure quotes (F7).
+    const deadline = Date.now() + this.startBudgetMs
     const generation = ++this.generationCounter
     const stderrTail = createRingBuffer(CODEX_SERVER_STDERR_TAIL_BYTES)
     const child = this.spawnProcess(
@@ -352,6 +441,7 @@ export class CodexServerHost {
         }),
       },
     )
+    this.spawning = child
 
     // A death during the start is an answer to both phases below, so it is
     // recorded once, here, and read by each of them.
@@ -405,13 +495,19 @@ export class CodexServerHost {
           return
         }
 
-        const timer = setTimeout(() => {
-          reject(
-            new Error(
-              `The Codex app-server never reported a listening port within ${this.budgetSeconds()}s.`,
-            ),
-          )
-        }, this.startBudgetMs)
+        const timer = setTimeout(
+          () => {
+            reject(
+              new Error(
+                this.startTimeoutMessage(
+                  'never reported a listening port',
+                  stderrTail.snapshot(),
+                ),
+              ),
+            )
+          },
+          Math.max(0, deadline - Date.now()),
+        )
         timer.unref?.()
 
         onStartFailure = () => {
@@ -432,7 +528,7 @@ export class CodexServerHost {
       }
 
       onStartFailure = null
-      await this.awaitReady(readyUrl, () => startFailure)
+      await this.awaitReady(readyUrl, deadline, () => startFailure, stderrTail)
 
       child.off('exit', handleExit)
       child.off('error', handleError)
@@ -442,9 +538,10 @@ export class CodexServerHost {
     } catch (err) {
       onStartFailure = null
       onListening = null
-      if (child.exitCode === null && child.signalCode === null) {
-        child.kill('SIGTERM')
-      }
+      // The host owns this child until it is gone: rejecting while it is still
+      // alive is what let the next `connect()` spawn a second app-server under
+      // the same home (MAR-2823 F3).
+      await this.terminateChild(child)
       throw err
     }
   }
@@ -454,34 +551,93 @@ export class CodexServerHost {
   }
 
   /**
-   * Polls `/readyz` until it answers 200, the server dies, or the budget runs
-   * out. Readiness is observed, never assumed — a constitution law.
+   * A start timeout, in the process's own words where it has any.
+   *
+   * Without the tail the two failures a stuck start can produce are
+   * indistinguishable from a machine that was merely slow, and the stderr the
+   * ring buffer already holds is the only thing that says which (F7).
+   */
+  private startTimeoutMessage(reason: string, stderrTail: string): string {
+    const tail = stderrTail.trim()
+    return (
+      `The Codex app-server ${reason} within ${this.budgetSeconds()}s.` +
+      (tail ? ` Its last words: ${tail}` : '')
+    )
+  }
+
+  /**
+   * Polls `/readyz` until it answers 200, the server dies, or the shared start
+   * deadline runs out. Readiness is observed, never assumed — a constitution
+   * law.
+   *
+   * Each probe is bounded twice over: the signal aborts a `fetch` the listener
+   * accepted and never answered, and the race bounds the await itself, so a
+   * probe that ignores its signal cannot hold the deadline open either (F7).
    */
   private async awaitReady(
     readyUrl: string,
+    deadline: number,
     readStartFailure: () => Error | null,
+    stderrTail: RingBuffer,
   ): Promise<void> {
-    const deadline = Date.now() + this.startBudgetMs
     for (;;) {
       const failure = readStartFailure()
       if (failure) throw failure
 
-      if (await this.probeReady(readyUrl)) return
+      const remaining = deadline - Date.now()
+      if (remaining <= 0) {
+        throw new Error(
+          this.startTimeoutMessage(
+            'did not become ready',
+            stderrTail.snapshot(),
+          ),
+        )
+      }
+
+      const ready = await this.probeWithin(readyUrl, remaining)
 
       // Re-read after the await: the server can die while the probe is in
       // flight, and reporting a timeout then would hide its own explanation.
       const failureAfterProbe = readStartFailure()
       if (failureAfterProbe) throw failureAfterProbe
+      if (ready) return
 
       if (Date.now() >= deadline) {
         throw new Error(
-          `The Codex app-server did not become ready within ${this.budgetSeconds()}s.`,
+          this.startTimeoutMessage(
+            'did not become ready',
+            stderrTail.snapshot(),
+          ),
         )
       }
       await new Promise((resolve) =>
-        setTimeout(resolve, this.readyPollIntervalMs),
+        setTimeout(resolve, Math.min(this.readyPollIntervalMs, remaining)),
       )
     }
+  }
+
+  private probeWithin(readyUrl: string, remainingMs: number): Promise<boolean> {
+    const controller = new AbortController()
+    const abort = setTimeout(() => controller.abort(), remainingMs)
+    abort.unref?.()
+
+    return new Promise<boolean>((resolve) => {
+      let settled = false
+      const settle = (ready: boolean) => {
+        if (settled) return
+        settled = true
+        clearTimeout(abort)
+        clearTimeout(bound)
+        resolve(ready)
+      }
+      const bound = setTimeout(() => settle(false), remainingMs)
+      bound.unref?.()
+
+      void Promise.resolve(this.probeReady(readyUrl, controller.signal)).then(
+        (ready) => settle(ready === true),
+        () => settle(false),
+      )
+    })
   }
 
   private watchForDeath(running: RunningServer): void {
@@ -515,7 +671,7 @@ export interface CodexServerHostRegistryOptions {
   cwd?: string
   spawnProcess?: CodexAppServerSpawn
   connectTransport?: (url: string) => Promise<JsonRpcTransport>
-  probeReady?: (readyUrl: string) => Promise<boolean>
+  probeReady?: (readyUrl: string, signal?: AbortSignal) => Promise<boolean>
   listProcesses?: () => ProcessTableRow[]
   killPid?: (pid: number, signal: NodeJS.Signals) => void
 }
