@@ -19,8 +19,17 @@ export function buildTurnFailureEntry(
   }
 }
 
+/**
+ * The two ways the server says "that thread is not something I can resume".
+ *
+ * `no rollout found for thread id …` is the second one, and the substring
+ * heuristic below misses it entirely: a thread only gets a rollout after its
+ * first user message, so a session whose thread never took a turn was told its
+ * turn had simply failed (measured on 0.153.4; constitution A4).
+ */
 export function isCodexThreadNotFoundError(err: unknown): boolean {
   const message = readErrorMessage(err).toLowerCase()
+  if (message.includes('no rollout found')) return true
   return message.includes('thread') && message.includes('not found')
 }
 
@@ -72,9 +81,39 @@ const FATAL_ERROR_PATTERNS = [
   'could not be refreshed',
 ]
 
+/**
+ * Codex says outright whether it is going to retry.
+ *
+ * `willRetry` is on the error notification itself, so the wording lists below
+ * are a *fallback* for payloads that omit it — never the first answer. Reading
+ * the field first is what stops a new retry wording (or a new terminal one)
+ * from being classified by whichever list happens to contain a matching word
+ * (constitution A4).
+ */
+export function readCodexErrorWillRetry(params: unknown): boolean | null {
+  const payload =
+    typeof params === 'object' && params !== null
+      ? (params as { willRetry?: unknown; error?: unknown })
+      : null
+
+  if (typeof payload?.willRetry === 'boolean') return payload.willRetry
+
+  const nested =
+    typeof payload?.error === 'object' && payload.error !== null
+      ? (payload.error as { willRetry?: unknown })
+      : null
+
+  return typeof nested?.willRetry === 'boolean' ? nested.willRetry : null
+}
+
 export function classifyCodexErrorNotification(
   message: string,
+  willRetry: boolean | null = null,
 ): CodexErrorDisposition {
+  // The server's own answer wins: it knows whether it is retrying.
+  if (willRetry === true) return 'transient'
+  if (willRetry === false) return 'fatal'
+
   const normalized = message.toLowerCase()
 
   if (FATAL_ERROR_PATTERNS.some((pattern) => normalized.includes(pattern))) {
@@ -134,46 +173,6 @@ export function buildCodexErrorNote(
   }
 
   return { text: `Error: ${message}`, level: 'error', timestamp }
-}
-
-/**
- * What the session should say when the app-server process ends.
- *
- * Two silences used to live here (MAR-2317). A crash produced a bare "Process
- * exited with code 1" while the process's own explanation sat unread in stderr;
- * and an exit code of 0 in the middle of a turn produced nothing at all, so the
- * session stayed "running" with no process behind it, forever.
- *
- * Returns `null` for the one exit that genuinely needs no note: a clean one
- * while nothing was in flight.
- */
-export function buildCodexProcessExitEntry(input: {
-  code: number | null
-  stderrTail: string
-  interruptedTurn: boolean
-  timestamp: string
-}): CodexNoteDraft | null {
-  const tail = input.stderrTail.trim()
-  const suffix = tail ? `: ${tail}` : ''
-  const crashed = input.code !== 0 && input.code !== null
-
-  if (crashed) {
-    return {
-      text: `Process exited with code ${input.code}${suffix}`,
-      level: 'error',
-      timestamp: input.timestamp,
-    }
-  }
-
-  if (input.interruptedTurn) {
-    return {
-      text: `The Codex process ended before finishing the turn${suffix}`,
-      level: 'error',
-      timestamp: input.timestamp,
-    }
-  }
-
-  return null
 }
 
 export function buildCodexThreadRecoveryEntry(

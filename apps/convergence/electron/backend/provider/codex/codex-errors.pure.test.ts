@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildCodexErrorNote,
-  buildCodexProcessExitEntry,
   buildCodexThreadRecoveryEntry,
   buildTurnFailureEntry,
   classifyCodexErrorNotification,
   isCodexThreadNotFoundError,
   readCodexErrorNotificationMessage,
+  readCodexErrorWillRetry,
 } from './codex-errors.pure'
 
 describe('buildTurnFailureEntry', () => {
@@ -166,74 +166,6 @@ describe('buildCodexErrorNote', () => {
   })
 })
 
-describe('buildCodexProcessExitEntry', () => {
-  const timestamp = '2026-08-09T10:00:00.000Z'
-
-  it('quotes what the process said on its way out', () => {
-    expect(
-      buildCodexProcessExitEntry({
-        code: 1,
-        stderrTail: 'thread panicked at core/src/client.rs:412\n',
-        interruptedTurn: true,
-        timestamp,
-      }),
-    ).toEqual({
-      text: 'Process exited with code 1: thread panicked at core/src/client.rs:412',
-      level: 'error',
-      timestamp,
-    })
-  })
-
-  it('still names the code when the process said nothing', () => {
-    expect(
-      buildCodexProcessExitEntry({
-        code: 137,
-        stderrTail: '   \n',
-        interruptedTurn: false,
-        timestamp,
-      }),
-    ).toEqual({
-      text: 'Process exited with code 137',
-      level: 'error',
-      timestamp,
-    })
-  })
-
-  it('refuses to let a clean exit mid-turn pass unremarked', () => {
-    expect(
-      buildCodexProcessExitEntry({
-        code: 0,
-        stderrTail: '',
-        interruptedTurn: true,
-        timestamp,
-      }),
-    ).toEqual({
-      text: 'The Codex process ended before finishing the turn',
-      level: 'error',
-      timestamp,
-    })
-  })
-
-  it('says nothing about a clean exit with nothing in flight', () => {
-    expect(
-      buildCodexProcessExitEntry({
-        code: 0,
-        stderrTail: '',
-        interruptedTurn: false,
-        timestamp,
-      }),
-    ).toBeNull()
-    expect(
-      buildCodexProcessExitEntry({
-        code: null,
-        stderrTail: '',
-        interruptedTurn: false,
-        timestamp,
-      }),
-    ).toBeNull()
-  })
-})
-
 describe('buildCodexThreadRecoveryEntry', () => {
   it('explains that recovery used a fresh thread', () => {
     const timestamp = '2026-04-17T10:00:00.000Z'
@@ -242,5 +174,53 @@ describe('buildCodexThreadRecoveryEntry', () => {
       level: 'warning',
       timestamp,
     })
+  })
+})
+
+describe('willRetry, the answer Codex gives itself (constitution A4)', () => {
+  it('believes the field over the wording lists', () => {
+    // "exceeded retry limit" is on the fatal list; the server says otherwise.
+    expect(classifyCodexErrorNotification('exceeded retry limit', true)).toBe(
+      'transient',
+    )
+    // "reconnecting" is on the transient list; the server says it is done.
+    expect(classifyCodexErrorNotification('reconnecting... 2/5', false)).toBe(
+      'fatal',
+    )
+  })
+
+  it('falls back to the wordings only when the field is absent', () => {
+    expect(classifyCodexErrorNotification('reconnecting... 2/5', null)).toBe(
+      'transient',
+    )
+    expect(classifyCodexErrorNotification('something new')).toBe('unknown')
+  })
+
+  it('reads the field from either level of the notification', () => {
+    expect(readCodexErrorWillRetry({ willRetry: true })).toBe(true)
+    expect(readCodexErrorWillRetry({ error: { willRetry: false } })).toBe(false)
+    expect(readCodexErrorWillRetry({ error: { message: 'boom' } })).toBeNull()
+    expect(readCodexErrorWillRetry(null)).toBeNull()
+    expect(readCodexErrorWillRetry({ willRetry: 'yes' })).toBeNull()
+  })
+})
+
+describe('isCodexThreadNotFoundError', () => {
+  it('reads the rollout refusal, which the substring heuristic misses', () => {
+    expect(
+      isCodexThreadNotFoundError(
+        new Error('no rollout found for thread id 01a07392-c151-74d2'),
+      ),
+    ).toBe(true)
+  })
+
+  it('still reads the wording it always read', () => {
+    expect(isCodexThreadNotFoundError(new Error('thread not found: abc'))).toBe(
+      true,
+    )
+  })
+
+  it('does not swallow an unrelated failure', () => {
+    expect(isCodexThreadNotFoundError(new Error('EPIPE'))).toBe(false)
   })
 })

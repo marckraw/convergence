@@ -1,21 +1,17 @@
-import { EventEmitter } from 'events'
-import { PassThrough } from 'stream'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type {
   AttentionState,
   SessionHandle,
   SessionStatus,
 } from '../provider.types'
-
-const { spawnMock } = vi.hoisted(() => ({
-  spawnMock: vi.fn(),
-}))
-
-vi.mock('child_process', () => ({
-  spawn: spawnMock,
-}))
-
 import { CodexProvider } from './codex-provider'
+import { CodexServerHostRegistry } from './codex-server-host'
+import {
+  FAKE_CODEX_NO_RESPONSE,
+  FakeCodexChildProcess,
+  FakeCodexServer,
+  type FakeCodexServerOptions,
+} from './codex-server-host.fixture'
 import { CODEX_RPC_BUDGETS_MS } from './jsonrpc'
 
 /**
@@ -24,111 +20,74 @@ import { CODEX_RPC_BUDGETS_MS } from './jsonrpc'
  * Everything in this suite is about what Convergence does when the real
  * app-server misbehaves — retries, stalls, dies mid-turn. Spawning the actual
  * `codex` binary would make those cases unreachable (and would touch the
- * enrolled accounts), so the process is a fake from stdio up.
+ * enrolled accounts), so the process is a fake, and so is the socket to it.
+ *
+ * Since MAR-2823 the process is also *shared*: one resident server per
+ * account, one connection per session. The scars this suite pins are the same,
+ * but their shapes moved — a session recovers by reconnecting, not by
+ * respawning, and nothing here may ever signal the process.
  */
-class MockChildProcess extends EventEmitter {
-  stdin = new PassThrough()
-  stdout = new PassThrough()
-  stderr = new PassThrough()
-  killed = false
-  exitCode: number | null = null
-  signalCode: NodeJS.Signals | null = null
-
-  kill = vi.fn(() => {
-    this.killed = true
-    return true
+function createStabilityBed(options: FakeCodexServerOptions = {}) {
+  const server = new FakeCodexServer({
+    threadIdFactory: () => 'thread-1',
+    ...options,
   })
+  const children: FakeCodexChildProcess[] = []
+  let connectionCount = 0
 
-  /** End the process the way a crashed app-server would. */
-  exit(code: number | null): void {
-    this.exitCode = code
-    this.emit('exit', code)
-  }
-}
-
-interface MockServer {
-  requests: Array<{ method: string; params?: Record<string, unknown> }>
-  responses: Array<{ id: string | number; result?: unknown; error?: unknown }>
-  methods: () => string[]
-}
-
-function createMockCodexServer(
-  child: MockChildProcess,
-  options?: {
-    /** Methods the server accepts but never answers. */
-    silentMethods?: string[]
-    threadId?: string
-    /** Answer `thread/start` without an id, as a cold server does. */
-    threadStartWithoutId?: boolean
-  },
-): MockServer {
-  const silent = new Set(options?.silentMethods ?? [])
-  const threadId = options?.threadId ?? 'thread-1'
-  const requests: MockServer['requests'] = []
-  const responses: MockServer['responses'] = []
-  let buffer = ''
-
-  const respond = (id: number, result: unknown) => {
-    setTimeout(() => {
-      child.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n')
-    }, 0)
-  }
-
-  child.stdin.on('data', (chunk) => {
-    buffer += chunk.toString()
-
-    let newlineIndex = buffer.indexOf('\n')
-    while (newlineIndex >= 0) {
-      const line = buffer.slice(0, newlineIndex).trim()
-      buffer = buffer.slice(newlineIndex + 1)
-
-      if (line) {
-        const message = JSON.parse(line) as {
-          id?: string | number
-          method?: string
-          params?: Record<string, unknown>
-          result?: unknown
-          error?: unknown
-        }
-
-        if ('id' in message && !('method' in message)) {
-          responses.push({
-            id: message.id as string | number,
-            result: message.result,
-            error: message.error,
-          })
-        }
-
-        if (
-          typeof message.id === 'number' &&
-          typeof message.method === 'string'
-        ) {
-          requests.push({ method: message.method, params: message.params })
-
-          if (!silent.has(message.method)) {
-            if (message.method === 'initialize') respond(message.id, {})
-            else if (message.method === 'thread/start')
-              respond(
-                message.id,
-                options?.threadStartWithoutId ? {} : { threadId },
-              )
-            else if (message.method === 'turn/steer') respond(message.id, {})
-            else if (message.method === 'thread/resume')
-              respond(message.id, {
-                thread: { id: message.params?.threadId ?? threadId },
-              })
-            else if (message.method === 'turn/start') respond(message.id, {})
-            else if (message.method === 'skills/list')
-              respond(message.id, { skills: [] })
-          }
-        }
-      }
-
-      newlineIndex = buffer.indexOf('\n')
-    }
+  const registry = new CodexServerHostRegistry({
+    appVersion: '0.46.13',
+    cwd: '/tmp',
+    spawnProcess: () => {
+      const child = new FakeCodexChildProcess()
+      children.push(child)
+      setTimeout(() => child.announceListening('ws://127.0.0.1:5150'), 0)
+      return child.asChildProcess()
+    },
+    probeReady: async () => true,
+    connectTransport: async () => {
+      connectionCount += 1
+      return server.connect()
+    },
   })
+  registry.setBinary('/usr/local/bin/codex', '0.153.4')
 
-  return { requests, responses, methods: () => requests.map((r) => r.method) }
+  return {
+    server,
+    children,
+    registry,
+    provider: new CodexProvider('/usr/local/bin/codex', registry),
+    connectionCount: () => connectionCount,
+    /**
+     * The server process dies, the way a crashed app-server would — sockets
+     * first, exit second, which is the order that hides the obituary if the
+     * session mourns the socket immediately.
+     */
+    killServer(code: number | null, stderr?: string) {
+      const child = children[children.length - 1]
+      if (stderr) child.log(stderr)
+      server.connections.forEach((connection) => {
+        if (!connection.closed) connection.fail('socket hang up')
+      })
+      child.exit(code)
+    },
+    /** Only this session's socket dies; the server lives on. */
+    dropConnection() {
+      server.connections[server.connections.length - 1]?.fail('socket hang up')
+    },
+    /** Server → the session's connection. */
+    notify(method: string, params: unknown) {
+      server.connections[server.connections.length - 1]?.notify(method, params)
+    },
+    pushServerRequest(id: number, method: string, params: unknown) {
+      server.connections[server.connections.length - 1]?.push({
+        jsonrpc: '2.0',
+        id,
+        method,
+        params,
+      })
+    },
+  }
 }
 
 function waitFor(
@@ -195,33 +154,19 @@ function startSession(
   })
 }
 
-function notify(
-  child: MockChildProcess,
-  method: string,
-  params: unknown,
-): void {
-  child.stdout.write(JSON.stringify({ jsonrpc: '2.0', method, params }) + '\n')
-}
-
-afterEach(() => {
-  spawnMock.mockReset()
-})
-
 describe('Codex transient errors (MAR-2315)', () => {
   it('keeps the session running through a reconnect notice and lets the turn finish', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child)
-    spawnMock.mockReturnValue(child)
-
-    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+    const bed = createStabilityBed()
+    const server = bed.server
+    const handle = startSession(bed.provider)
     const observed = observe(handle)
 
     await waitFor(() => {
-      expect(server.methods()).toContain('turn/start')
+      expect(server.methodsCalled()).toContain('turn/start')
     })
 
-    notify(child, 'error', { error: { message: 'Reconnecting... 2/5' } })
-    notify(child, 'turn/completed', { turn: { status: 'completed' } })
+    bed.notify('error', { error: { message: 'Reconnecting... 2/5' } })
+    bed.notify('turn/completed', { turn: { status: 'completed' } })
 
     await waitFor(() => {
       expect(observed.statuses).toContain('completed')
@@ -236,18 +181,16 @@ describe('Codex transient errors (MAR-2315)', () => {
   })
 
   it('reports an unrecognised error without claiming a retry or failing the session', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child)
-    spawnMock.mockReturnValue(child)
-
-    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+    const bed = createStabilityBed()
+    const server = bed.server
+    const handle = startSession(bed.provider)
     const observed = observe(handle)
 
     await waitFor(() => {
-      expect(server.methods()).toContain('turn/start')
+      expect(server.methodsCalled()).toContain('turn/start')
     })
 
-    notify(child, 'error', { message: 'something went sideways' })
+    bed.notify('error', { message: 'something went sideways' })
 
     await waitFor(() => {
       expect(observed.notes).toContainEqual({
@@ -260,21 +203,19 @@ describe('Codex transient errors (MAR-2315)', () => {
   })
 
   it('still fails the session on a fatal error followed by a crash', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child)
-    spawnMock.mockReturnValue(child)
-
-    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+    const bed = createStabilityBed()
+    const server = bed.server
+    const handle = startSession(bed.provider)
     const observed = observe(handle)
 
     await waitFor(() => {
-      expect(server.methods()).toContain('turn/start')
+      expect(server.methodsCalled()).toContain('turn/start')
     })
 
-    notify(child, 'error', {
+    bed.notify('error', {
       error: { message: 'exceeded retry limit, last status: 429' },
     })
-    child.exit(1)
+    bed.killServer(1)
 
     await waitFor(() => {
       expect(observed.statuses).toContain('failed')
@@ -287,25 +228,19 @@ describe('Codex transient errors (MAR-2315)', () => {
   })
 
   it('declines an elicitation mode it cannot render without failing the session', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child)
-    spawnMock.mockReturnValue(child)
-
-    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+    const bed = createStabilityBed()
+    const server = bed.server
+    const handle = startSession(bed.provider)
     const observed = observe(handle)
 
     await waitFor(() => {
-      expect(server.methods()).toContain('turn/start')
+      expect(server.methodsCalled()).toContain('turn/start')
     })
 
-    child.stdout.write(
-      JSON.stringify({
-        jsonrpc: '2.0',
-        id: 900,
-        method: 'mcpServer/elicitation/request',
-        params: { mode: 'url', message: 'Open this' },
-      }) + '\n',
-    )
+    bed.pushServerRequest(900, 'mcpServer/elicitation/request', {
+      mode: 'url',
+      message: 'Open this',
+    })
 
     await waitFor(() => {
       expect(
@@ -328,25 +263,20 @@ describe('Codex transient errors (MAR-2315)', () => {
 })
 
 describe('Codex hangs and dead pipes (MAR-2316)', () => {
-  it('gives up on a server that never answers and respawns on the next message', async () => {
+  it('gives up on a server that never answers and reconnects on the next message', async () => {
     vi.useFakeTimers()
     try {
-      const children = [new MockChildProcess(), new MockChildProcess()]
-      children.forEach((child) =>
-        createMockCodexServer(child, { silentMethods: ['initialize'] }),
-      )
-      let spawnCount = 0
-      spawnMock.mockImplementation(() => children[spawnCount++])
-
-      const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+      const bed = createStabilityBed({ silentMethods: ['initialize'] })
+      const handle = startSession(bed.provider)
       const observed = observe(handle)
 
-      // Let the server spawn and the handshake go out unanswered.
+      // Let the connection open and the handshake go out unanswered.
       await vi.advanceTimersByTimeAsync(50)
-      expect(spawnMock).toHaveBeenCalledTimes(1)
-      expect(observed.notes).toEqual([])
+      expect(bed.connectionCount()).toBe(1)
+      // Warming up is a state, not a failure (MAR-2823, Build 4).
+      expect(observed.notes.map((note) => note.level)).toEqual(['info'])
 
-      await vi.advanceTimersByTimeAsync(CODEX_RPC_BUDGETS_MS.initialize + 100)
+      await vi.advanceTimersByTimeAsync(CODEX_RPC_BUDGETS_MS.initialize + 500)
 
       expect(
         observed.notes.some(
@@ -360,28 +290,27 @@ describe('Codex hangs and dead pipes (MAR-2316)', () => {
       handle.sendMessage('try again')
       await vi.advanceTimersByTimeAsync(50)
 
-      expect(spawnMock).toHaveBeenCalledTimes(2)
+      expect(bed.connectionCount()).toBe(2)
+      // The server itself was never signalled: it is the app's, not the
+      // session's (MAR-2823).
+      expect(bed.children[0].signals).toEqual([])
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('recovers from a dead stdin instead of writing into it forever', async () => {
-    const children = [new MockChildProcess(), new MockChildProcess()]
-    const servers = children.map((child) => createMockCodexServer(child))
-    let spawnCount = 0
-    spawnMock.mockImplementation(() => children[spawnCount++])
-
-    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+  it('recovers from a dead socket instead of writing into it forever', async () => {
+    const bed = createStabilityBed()
+    const handle = startSession(bed.provider)
     const observed = observe(handle)
 
     await waitFor(() => {
-      expect(servers[0].methods()).toContain('turn/start')
+      expect(bed.server.methodsCalled()).toContain('turn/start')
     })
 
-    // The app-server is gone but nobody told us — exactly what `child.on(
-    // 'error')` used to leave behind.
-    children[0].stdin.destroy()
+    // The connection is gone but nobody told us — exactly what the missing
+    // stream error handler used to leave behind.
+    bed.dropConnection()
 
     handle.sendMessage('are you there?')
 
@@ -396,217 +325,246 @@ describe('Codex hangs and dead pipes (MAR-2316)', () => {
     handle.sendMessage('try again')
 
     await waitFor(() => {
-      expect(spawnMock).toHaveBeenCalledTimes(2)
-    })
-    await waitFor(() => {
-      expect(servers[1].methods()).toContain('turn/start')
-    })
-  })
-
-  it('answers every waiter for the thread id, not just the last one', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child, { threadStartWithoutId: true })
-    spawnMock.mockReturnValue(child)
-
-    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
-    const observed = observe(handle)
-
-    // Both the opening turn and the steer ask for a thread whose id only
-    // arrives later. With one waiter slot the second call evicted the first,
-    // whose promise then never settled.
-    await waitFor(() => {
-      expect(server.methods()).toContain('thread/start')
-    })
-    handle.sendMessage('and also this', undefined, undefined, {
-      deliveryMode: 'steer',
-      expectedProviderTurnId: 'codex-turn-1',
+      expect(bed.connectionCount()).toBe(2)
     })
     await waitFor(() => {
       expect(
-        server.methods().filter((method) => method === 'thread/start'),
+        bed.server.methodsCalled().filter((method) => method === 'turn/start'),
       ).toHaveLength(2)
     })
-
-    notify(child, 'thread/started', { threadId: 'thread-late' })
-
-    await waitFor(() => {
-      expect(server.methods()).toContain('turn/start')
-      expect(server.methods()).toContain('turn/steer')
-    })
-
-    expect(
-      observed.notes.some((note) => note.text.includes('did not include')),
-    ).toBe(false)
+    // One server, throughout.
+    expect(bed.children).toHaveLength(1)
   })
 
-  it('waits out a cold start instead of giving up after a second', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child, { threadStartWithoutId: true })
-    spawnMock.mockReturnValue(child)
+  it('ends the turn when the socket dies under it and the server lives on', async () => {
+    // The socket dies mid-turn while the app-server is perfectly healthy, so
+    // no process exit ever arrives to end the turn. Under the per-session
+    // process this was masked — abandoning the connection killed the child and
+    // its exit handler failed the turn — so a resident server reopened the
+    // hole: the session sat at `running` forever and the app queued every
+    // later message behind a turn that can never answer (MAR-2823).
+    const bed = createStabilityBed({ autoCompleteTurns: false })
+    const handle = startSession(bed.provider)
+    const observed = observe(handle)
+    const assistantStates = new Map<string, string | undefined>()
+    handle.onDelta((delta) => {
+      if (
+        delta.kind === 'conversation.item.add' &&
+        delta.item.kind === 'message' &&
+        delta.item.actor === 'assistant'
+      ) {
+        assistantStates.set(delta.item.id, delta.item.state)
+      }
+      if (delta.kind === 'conversation.item.patch') {
+        const patched = delta.patch as { state?: string }
+        if (assistantStates.has(delta.itemId) && patched.state) {
+          assistantStates.set(delta.itemId, patched.state)
+        }
+      }
+    })
 
-    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+    await waitFor(() => {
+      expect(bed.server.methodsCalled()).toContain('turn/start')
+    })
+    bed.notify('item/agentMessage/delta', { delta: 'half an ans' })
+    await waitFor(() => {
+      expect(assistantStates.size).toBe(1)
+    })
+
+    bed.dropConnection()
+
+    await waitFor(() => {
+      expect(
+        observed.notes.some((note) =>
+          note.text.includes('Lost the connection to the Codex app-server'),
+        ),
+      ).toBe(true)
+    })
+
+    // The server is alive and unsignalled: nothing but this path can end it.
+    expect(bed.children[0].exitCode).toBeNull()
+    expect(bed.children[0].signals).toEqual([])
+    expect(observed.statuses.at(-1)).not.toBe('running')
+    expect(observed.statuses).toContain('failed')
+    expect(observed.attentions.at(-1)).toBe('failed')
+    // What the model had already said is kept, and kept honestly: a partial
+    // answer that stays `streaming` is a spinner nothing will ever stop.
+    expect([...assistantStates.values()]).toEqual(['complete'])
+  })
+
+  it('fails fast when thread/start answers without a thread id', async () => {
+    // A session's id comes only from its own `thread/start` result: its own
+    // `thread/started` broadcast is dropped while `threadId` is still null
+    // (the routing rule that stops it adopting a stranger's thread), so the
+    // 60s waiter that used to stand here could never be satisfied. It spent
+    // the whole budget and then failed with these very words — dead weight
+    // that lied about what it was waiting for (MAR-2823). The MAR-2316 scar it
+    // was built for — one waiter slot silently evicting another — went with
+    // the waiter list itself; there is nothing left to evict.
+    const bed = createStabilityBed({
+      threadStartWithoutIdCount: 1,
+      threadIdFactory: () => 'thread-late',
+    })
+    const handle = startSession(bed.provider)
     const observed = observe(handle)
 
     await waitFor(() => {
-      expect(server.methods()).toContain('thread/start')
-    })
+      expect(
+        observed.notes.some((note) =>
+          note.text.includes(
+            'thread/start response did not include a thread id',
+          ),
+        ),
+      ).toBe(true)
+    }, 1_000)
+    expect(observed.statuses).toContain('failed')
+    // Nothing was sent against a thread the session cannot name.
+    expect(bed.server.methodsCalled()).not.toContain('turn/start')
+  })
 
-    // Longer than the old 1000ms budget, far short of a cold start's 13–28s.
-    await new Promise((resolve) => setTimeout(resolve, 1200))
-    notify(child, 'thread/started', { threadId: 'thread-slow' })
+  it('waits out a cold start instead of giving up after a second', async () => {
+    // Longer than the old 1000ms budget, far short of a cold start's 7–25s.
+    const bed = createStabilityBed({ threadStartDelayMs: 1_200 })
+    const handle = startSession(bed.provider)
+    const observed = observe(handle)
 
     await waitFor(() => {
-      expect(server.methods()).toContain('turn/start')
+      expect(bed.server.methodsCalled()).toContain('thread/start')
     })
+
+    await waitFor(() => {
+      expect(bed.server.methodsCalled()).toContain('turn/start')
+    }, 4_000)
 
     expect(observed.statuses).not.toContain('failed')
   })
 })
 
-describe('Codex process death (MAR-2317)', () => {
-  it('resumes the thread on a fresh process instead of starting a turn on it blind', async () => {
-    const children = [new MockChildProcess(), new MockChildProcess()]
-    const servers = children.map((child) => createMockCodexServer(child))
-    let spawnCount = 0
-    spawnMock.mockImplementation(() => children[spawnCount++])
-
-    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+describe('Codex server death (MAR-2317, MAR-2823)', () => {
+  it('resumes the thread on a fresh connection instead of starting a turn on it blind', async () => {
+    const bed = createStabilityBed()
+    const handle = startSession(bed.provider)
     observe(handle)
 
     await waitFor(() => {
-      expect(servers[0].methods()).toContain('turn/start')
+      expect(bed.server.methodsCalled()).toContain('turn/start')
     })
-    notify(children[0], 'turn/completed', { turn: { status: 'completed' } })
-    await waitFor(() => {
-      expect(servers[0].methods()).toContain('turn/start')
-    })
+    bed.notify('turn/completed', { turn: { status: 'completed' } })
 
-    // The turn is over and the app-server is released — the shape every
-    // completed Codex turn takes today.
-    children[0].exit(0)
+    // The server dies. Under the per-turn model this was routine — every
+    // completed turn released its own process; now it is news, and the thread
+    // outlives it on disk.
+    bed.killServer(0)
 
     handle.sendMessage('and one more thing')
 
     await waitFor(() => {
-      expect(servers[1].methods()).toContain('turn/start')
+      expect(
+        bed.server.methodsCalled().filter((method) => method === 'turn/start'),
+      ).toHaveLength(2)
     })
 
-    expect(servers[1].methods().indexOf('thread/resume')).toBeGreaterThan(-1)
-    expect(servers[1].methods().indexOf('thread/resume')).toBeLessThan(
-      servers[1].methods().indexOf('turn/start'),
+    const methods = bed.server.methodsCalled()
+    expect(methods.indexOf('thread/resume')).toBeGreaterThan(-1)
+    expect(methods.indexOf('thread/resume')).toBeLessThan(
+      methods.lastIndexOf('turn/start'),
     )
+    // A second server, spawned lazily by the next message — never eagerly.
+    expect(bed.children).toHaveLength(2)
   })
 
-  it('quotes what the process said on its way out', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child)
-    spawnMock.mockReturnValue(child)
-
-    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+  it('quotes what the server said on its way out', async () => {
+    const bed = createStabilityBed()
+    const handle = startSession(bed.provider)
     const observed = observe(handle)
 
     await waitFor(() => {
-      expect(server.methods()).toContain('turn/start')
+      expect(bed.server.methodsCalled()).toContain('turn/start')
     })
 
-    child.stderr.write("thread 'main' panicked at core/src/client.rs:412\n")
-    await waitFor(() => {
-      expect(child.stderr.readableLength).toBe(0)
-    })
-    child.exit(1)
+    bed.killServer(1, "thread 'main' panicked at core/src/client.rs:412\n")
 
     await waitFor(() => {
       expect(
         observed.notes.some(
           (note) =>
             note.level === 'error' &&
-            note.text.startsWith('Process exited with code 1:') &&
+            note.text.includes('exited with code 1') &&
             note.text.includes('core/src/client.rs:412'),
         ),
       ).toBe(true)
     })
   })
 
-  it('fails honestly when the process ends cleanly mid-turn', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child)
-    spawnMock.mockReturnValue(child)
-
-    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+  it('fails honestly when the server ends cleanly mid-turn', async () => {
+    const bed = createStabilityBed({ autoCompleteTurns: false })
+    const handle = startSession(bed.provider)
     const observed = observe(handle)
 
     await waitFor(() => {
-      expect(server.methods()).toContain('turn/start')
+      expect(bed.server.methodsCalled()).toContain('turn/start')
     })
 
-    child.exit(0)
+    bed.killServer(0)
 
     await waitFor(() => {
       expect(observed.statuses).toContain('failed')
     })
-    expect(observed.notes).toContainEqual(
-      expect.objectContaining({
-        text: 'The Codex process ended before finishing the turn',
-        level: 'error',
-      }),
-    )
+    expect(
+      observed.notes.some((note) => note.text.includes('exited with code 0')),
+    ).toBe(true)
   })
 
-  it('stays quiet when the process ends cleanly with nothing in flight', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child)
-    spawnMock.mockReturnValue(child)
-
-    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+  it('says the server went away even with nothing in flight', async () => {
+    // The old per-turn process exited after every completed turn, so silence
+    // was correct. A *resident* server that exits on its own is always news:
+    // the next message will pay a cold start, and the user is owed the reason.
+    const bed = createStabilityBed()
+    const handle = startSession(bed.provider)
     const observed = observe(handle)
 
     await waitFor(() => {
-      expect(server.methods()).toContain('turn/start')
+      expect(bed.server.methodsCalled()).toContain('turn/start')
     })
-    notify(child, 'turn/completed', { turn: { status: 'completed' } })
+    bed.notify('turn/completed', { turn: { status: 'completed' } })
     await waitFor(() => {
       expect(observed.statuses).toContain('completed')
     })
 
-    child.exit(0)
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    bed.killServer(0)
+    await waitFor(() => {
+      expect(
+        observed.notes.some((note) => note.text.includes('exited with code 0')),
+      ).toBe(true)
+    })
 
     expect(observed.statuses).not.toContain('failed')
-    expect(observed.notes).toEqual([])
   })
 
-  it('ends a pending approval with the process instead of leaving it clickable forever', async () => {
-    const child = new MockChildProcess()
-    const server = createMockCodexServer(child)
-    spawnMock.mockReturnValue(child)
-
-    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+  it('ends a pending approval with the connection instead of leaving it clickable forever', async () => {
+    const bed = createStabilityBed()
+    const handle = startSession(bed.provider)
     const observed = observe(handle)
 
     await waitFor(() => {
-      expect(server.methods()).toContain('turn/start')
+      expect(bed.server.methodsCalled()).toContain('turn/start')
     })
 
-    child.stdout.write(
-      JSON.stringify({
-        jsonrpc: '2.0',
-        id: 700,
-        method: 'item/commandExecution/requestApproval',
-        params: { command: 'rm -rf build' },
-      }) + '\n',
-    )
+    bed.pushServerRequest(700, 'item/commandExecution/requestApproval', {
+      command: 'rm -rf build',
+    })
 
     await waitFor(() => {
       expect(observed.attentions).toContain('needs-approval')
     })
 
-    child.exit(1)
+    bed.killServer(1)
 
     await waitFor(() => {
       expect(
         observed.notes.some((note) =>
           note.text.includes(
-            'The Codex process ended while it was waiting on you',
+            'The Codex connection ended while it was waiting on you',
           ),
         ),
       ).toBe(true)
@@ -622,5 +580,96 @@ describe('Codex process death (MAR-2317)', () => {
         observed.notes.some((note) => note.text.includes('had nowhere to go')),
       ).toBe(true)
     })
+  })
+
+  it('interrupts the running turn on Stop instead of walking away from it', async () => {
+    // Under the per-session process, Stop cancelled the turn by killing the
+    // process it ran in. On a resident server nothing is killed and no signal
+    // is permitted, so an unsent `turn/interrupt` means the model keeps working
+    // — and keeps billing — after the UI has said stopped (MAR-2823 F1).
+    const bed = createStabilityBed({ autoCompleteTurns: false })
+    const handle = startSession(bed.provider)
+    observe(handle)
+
+    await waitFor(() => {
+      expect(bed.server.methodsCalled()).toContain('turn/start')
+    })
+
+    handle.stop()
+    // The session service releases the handle the moment `stop()` returns.
+    handle.dispose?.()
+
+    await waitFor(() => {
+      expect(bed.server.methodsCalled()).toContain('thread/unsubscribe')
+    })
+
+    const methods = bed.server.methodsCalled()
+    expect(methods).toContain('turn/interrupt')
+    // Order is the assertion: unsubscribing first leaves the turn running on a
+    // thread nobody is listening to.
+    expect(methods.indexOf('turn/interrupt')).toBeLessThan(
+      methods.indexOf('thread/unsubscribe'),
+    )
+    expect(
+      bed.server.requests.find((request) => request.method === 'turn/interrupt')
+        ?.params?.turnId,
+    ).toBe('turn-1')
+    // And still no signal, ever.
+    expect(bed.children[0].signals).toEqual([])
+  })
+
+  it('waits for the acknowledgement so an unnamed turn can still be interrupted', async () => {
+    // Stop can land between `turn/start` leaving and its answer arriving. The
+    // turn is running; only the id we need to name it is late.
+    const bed = createStabilityBed({
+      autoCompleteTurns: false,
+      onRequest: (message, connection) => {
+        if (message.method !== 'turn/start') return undefined
+        setTimeout(
+          () =>
+            connection.respond(message.id as number, {
+              turn: { id: 'turn-late', status: 'inProgress' },
+            }),
+          60,
+        )
+        return FAKE_CODEX_NO_RESPONSE
+      },
+    })
+    const handle = startSession(bed.provider)
+    observe(handle)
+
+    await waitFor(() => {
+      expect(bed.server.methodsCalled()).toContain('turn/start')
+    })
+
+    handle.stop()
+    handle.dispose?.()
+
+    await waitFor(() => {
+      expect(bed.server.methodsCalled()).toContain('turn/interrupt')
+    })
+    expect(
+      bed.server.requests.find((request) => request.method === 'turn/interrupt')
+        ?.params?.turnId,
+    ).toBe('turn-late')
+  })
+
+  it('never signals the server when a session fails or is released', async () => {
+    const bed = createStabilityBed()
+    const handle = startSession(bed.provider)
+    observe(handle)
+
+    await waitFor(() => {
+      expect(bed.server.methodsCalled()).toContain('turn/start')
+    })
+
+    handle.stop()
+    handle.dispose?.()
+
+    await waitFor(() => {
+      expect(bed.server.methodsCalled()).toContain('thread/unsubscribe')
+    })
+    expect(bed.children[0].signals).toEqual([])
+    expect(bed.children[0].exitCode).toBeNull()
   })
 })

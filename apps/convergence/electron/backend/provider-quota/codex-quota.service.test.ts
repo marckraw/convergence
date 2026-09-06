@@ -19,10 +19,8 @@ const RATE_LIMITS_RESPONSE = {
 }
 
 describe('CodexQuotaService', () => {
-  it('reads quota from the app-server RPC without touching auth.json', async () => {
-    const jsonGet = vi.fn()
+  it('reads quota from the app-server RPC', async () => {
     const service = new CodexQuotaService({
-      jsonGet,
       readRateLimits: async () => RATE_LIMITS_RESPONSE,
     })
 
@@ -38,67 +36,39 @@ describe('CodexQuotaService', () => {
         remainingPercent: 99,
       })
     }
-    // The scrape carries the user's raw token; it must not run when the
-    // official method answered.
-    expect(jsonGet).not.toHaveBeenCalled()
   })
 
-  it('falls back to the chatgpt.com scrape when the RPC is unavailable', async () => {
-    const jsonGet = vi.fn().mockResolvedValue({
-      plan_type: 'plus',
-      rate_limit: {
-        primary_window: {
-          used_percent: 20,
-          limit_window_seconds: 18_000,
-          reset_at: 1785612249,
-        },
-      },
-    })
+  it('reports the RPC failure instead of scraping the credential file', async () => {
+    // The old fallback read `~/.codex/auth.json` and called an undocumented
+    // chatgpt.com endpoint with the user's raw access token, and *any* RPC
+    // failure reached it — including a slow cold start. It is gone
+    // (constitution A8): a failed read says so.
     const service = new CodexQuotaService({
-      jsonGet,
       readRateLimits: async () => {
         throw new Error('Unknown method: account/rateLimits/read')
       },
-      // CI runners have no real ~/.codex/auth.json; the scrape's token read
-      // must be stubbed or this test only passes on a logged-in machine.
-      readAuthTokens: async () => ({
-        accessToken: 'test-token',
-        accountId: null,
-      }),
-    })
-
-    const snapshot = await service.getQuota()
-
-    expect(jsonGet).toHaveBeenCalledTimes(1)
-    expect(snapshot.status).toBe('available')
-    if (snapshot.status === 'available') {
-      expect(snapshot.planType).toBe('plus')
-      expect(snapshot.windows[0]).toMatchObject({
-        kind: 'five-hour',
-        remainingPercent: 80,
-      })
-    }
-  })
-
-  it('reports unavailable when both paths fail', async () => {
-    const service = new CodexQuotaService({
-      jsonGet: async () => {
-        throw new Error('HTTP 401')
-      },
-      readRateLimits: async () => {
-        throw new Error('codex app-server timed out')
-      },
-      readAuthTokens: async () => ({
-        accessToken: 'test-token',
-        accountId: null,
-      }),
     })
 
     const snapshot = await service.getQuota()
 
     expect(snapshot.status).toBe('unavailable')
     if (snapshot.status === 'unavailable') {
-      expect(snapshot.reason).toBe('HTTP 401')
+      expect(snapshot.reason).toBe('Unknown method: account/rateLimits/read')
+    }
+  })
+
+  it('reports unavailable when the read fails', async () => {
+    const service = new CodexQuotaService({
+      readRateLimits: async () => {
+        throw new Error('codex app-server timed out')
+      },
+    })
+
+    const snapshot = await service.getQuota()
+
+    expect(snapshot.status).toBe('unavailable')
+    if (snapshot.status === 'unavailable') {
+      expect(snapshot.reason).toBe('codex app-server timed out')
     }
   })
 
@@ -115,24 +85,18 @@ describe('CodexQuotaService', () => {
   })
 
   it('fails without spawning anything when codex was never detected', async () => {
-    const service = new CodexQuotaService({
-      // No readRateLimits and no binary path, so the RPC cannot run. Both
-      // scrape seams are stubbed so this never reads a real ~/.codex/auth.json.
-      readAuthTokens: async () => ({
-        accessToken: 'test-token',
-        accountId: null,
-      }),
-      jsonGet: async () => {
-        throw new Error('no auth')
-      },
-    })
+    // No readRateLimits and no server pool, so there is nothing to ask.
+    const service = new CodexQuotaService({})
 
     const snapshot = await service.getQuota()
     expect(snapshot.status).toBe('unavailable')
+    if (snapshot.status === 'unavailable') {
+      expect(snapshot.reason).toBe('Codex CLI was not detected.')
+    }
   })
 
-  // A cold read spawns a codex app-server and can take ~30s. Two callers must
-  // not mean two processes.
+  // A cold read waits on the resident server coming up, which can take ~25s.
+  // Two callers must not mean two reads.
   it('shares one in-flight read between concurrent callers', async () => {
     let resolveRead: ((value: unknown) => void) | null = null
     const readRateLimits = vi.fn(
@@ -170,33 +134,23 @@ describe('CodexQuotaService', () => {
     expect(readRateLimits).toHaveBeenCalledTimes(2)
   })
 
-  it('records the RPC failure to the debug sink before falling back', async () => {
+  it('records the RPC failure to the debug sink as well as surfacing it', async () => {
     const entries: ProviderDebugEntry[] = []
     const service = new CodexQuotaService({
       debugSink: { record: (entry) => entries.push(entry) },
       readRateLimits: async () => {
         throw new Error('codex app-server timed out after 60000ms')
       },
-      readAuthTokens: async () => ({
-        accessToken: 'test-token',
-        accountId: null,
-      }),
-      jsonGet: async () => {
-        throw new Error('Codex ChatGPT auth is expired. Run `codex login`.')
-      },
     })
 
     const snapshot = await service.getQuota()
 
-    // The surfaced reason stays the scrape's actionable one...
     expect(snapshot.status).toBe('unavailable')
     if (snapshot.status === 'unavailable') {
-      expect(snapshot.reason).toBe(
-        'Codex ChatGPT auth is expired. Run `codex login`.',
-      )
+      expect(snapshot.reason).toBe('codex app-server timed out after 60000ms')
     }
 
-    // ...but the RPC failure is diagnosable rather than swallowed.
+    // A broken RPC path with no trace is undiagnosable.
     expect(entries).toHaveLength(1)
     expect(entries[0]).toMatchObject({
       providerId: 'codex',

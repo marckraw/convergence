@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { CodexSkillsService } from './codex-skills.service'
+import { CodexServerHostRegistry } from '../provider/codex/codex-server-host'
 
 function payload() {
   return {
@@ -15,10 +16,19 @@ function payload() {
   }
 }
 
+/**
+ * Every test here injects its own `client`, so the pool is never reached — but
+ * the service takes one now, because `skills/list` rides the resident server
+ * instead of spawning its own (MAR-2823).
+ */
+function unusedRegistry(): CodexServerHostRegistry {
+  return new CodexServerHostRegistry()
+}
+
 describe('CodexSkillsService caching', () => {
   it('caches a successful scan and reuses it within the TTL', async () => {
     const listSkills = vi.fn().mockResolvedValue(payload())
-    const service = new CodexSkillsService('/bin/codex', {
+    const service = new CodexSkillsService(unusedRegistry(), {
       client: { listSkills },
       now: () => 1000,
       cacheTtlMs: 5000,
@@ -34,7 +44,7 @@ describe('CodexSkillsService caching', () => {
 
   it('keys the cache by path', async () => {
     const listSkills = vi.fn().mockResolvedValue(payload())
-    const service = new CodexSkillsService('/bin/codex', {
+    const service = new CodexSkillsService(unusedRegistry(), {
       client: { listSkills },
       now: () => 1000,
       cacheTtlMs: 5000,
@@ -49,7 +59,7 @@ describe('CodexSkillsService caching', () => {
   it('refetches after the TTL expires', async () => {
     let now = 1000
     const listSkills = vi.fn().mockResolvedValue(payload())
-    const service = new CodexSkillsService('/bin/codex', {
+    const service = new CodexSkillsService(unusedRegistry(), {
       client: { listSkills },
       now: () => now,
       cacheTtlMs: 5000,
@@ -64,7 +74,7 @@ describe('CodexSkillsService caching', () => {
 
   it('bypasses the cache on forceReload', async () => {
     const listSkills = vi.fn().mockResolvedValue(payload())
-    const service = new CodexSkillsService('/bin/codex', {
+    const service = new CodexSkillsService(unusedRegistry(), {
       client: { listSkills },
       now: () => 1000,
       cacheTtlMs: 5000,
@@ -83,7 +93,7 @@ describe('CodexSkillsService caching', () => {
         new Error('codex app-server timed out after 20000ms'),
       )
       .mockResolvedValueOnce(payload())
-    const service = new CodexSkillsService('/bin/codex', {
+    const service = new CodexSkillsService(unusedRegistry(), {
       client: { listSkills },
       now: () => 1000,
       cacheTtlMs: 5000,

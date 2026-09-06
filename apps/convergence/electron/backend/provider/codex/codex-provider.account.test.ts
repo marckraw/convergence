@@ -11,6 +11,8 @@ vi.mock('child_process', () => ({
 
 import { CodexProvider } from './codex-provider'
 import type { CodexAccountLookup } from './codex-provider'
+import { CodexServerHostRegistry } from './codex-server-host'
+import { FakeCodexServer } from './codex-server-host.fixture'
 
 const ACCOUNT_A = { configDir: '/home/.convergence/provider-accounts/codex/a' }
 const ACCOUNT_B = { configDir: '/home/.convergence/provider-accounts/codex/b' }
@@ -18,15 +20,50 @@ const ACCOUNT_B = { configDir: '/home/.convergence/provider-accounts/codex/b' }
 const lookup: CodexAccountLookup = (id) =>
   id === 'acct-a' ? ACCOUNT_A : id === 'acct-b' ? ACCOUNT_B : null
 
+/**
+ * The account is now carried by the *server* a session connects to, one per
+ * `CODEX_HOME` (MAR-2823). So these tests deliberately leave `spawnProcess`
+ * alone and read the environment of the real spawn the host performs — the
+ * same assertion as before, one layer down.
+ */
 class MockChildProcess extends EventEmitter {
   stdin = new PassThrough()
   stdout = new PassThrough()
   stderr = new PassThrough()
+  exitCode: number | null = null
+  signalCode: NodeJS.Signals | null = null
 
   kill = vi.fn(() => {
     this.emit('exit', 0)
     return true
   })
+
+  announceListening(): void {
+    setTimeout(() => {
+      this.stderr.write('  listening on: ws://127.0.0.1:5150\n')
+    }, 0)
+  }
+}
+
+function createRegistry() {
+  const server = new FakeCodexServer()
+  const registry = new CodexServerHostRegistry({
+    appVersion: '0.46.13',
+    cwd: '/tmp',
+    probeReady: async () => true,
+    connectTransport: async () => server.connect(),
+  })
+  registry.setBinary('/usr/local/bin/codex', '0.153.4')
+  return { registry, server }
+}
+
+function mockSpawnedServer(): MockChildProcess {
+  const child = new MockChildProcess()
+  spawnMock.mockImplementation(() => {
+    child.announceListening()
+    return child
+  })
+  return child
 }
 
 function waitFor(assertion: () => void, timeoutMs = 1000): Promise<void> {
@@ -56,11 +93,12 @@ function startSession(options: {
   providerAccountId?: string | null
   deltas?: SessionDelta[]
 }) {
+  const { registry } = createRegistry()
   const provider = new CodexProvider(
     '/usr/local/bin/codex',
+    registry,
     null,
     undefined,
-    null,
     lookup,
   )
   const handle = provider.start({
@@ -91,7 +129,7 @@ afterEach(() => {
 
 describe('Codex account isolation', () => {
   it('runs a session app-server under the account own CODEX_HOME', async () => {
-    spawnMock.mockReturnValue(new MockChildProcess())
+    mockSpawnedServer()
 
     startSession({ providerAccountId: 'acct-a' })
 
@@ -100,7 +138,7 @@ describe('Codex account isolation', () => {
   })
 
   it('leaves the environment untouched when no account is selected', async () => {
-    spawnMock.mockReturnValue(new MockChildProcess())
+    mockSpawnedServer()
 
     startSession({})
 
@@ -113,7 +151,7 @@ describe('Codex account isolation', () => {
     // OPENAI_API_KEY outranks the ChatGPT login, so inheriting it would bill a
     // different identity while the app claims to run the selected account.
     vi.stubEnv('OPENAI_API_KEY', 'sk-live')
-    spawnMock.mockReturnValue(new MockChildProcess())
+    mockSpawnedServer()
 
     startSession({ providerAccountId: 'acct-a' })
 
@@ -122,14 +160,16 @@ describe('Codex account isolation', () => {
   })
 
   it('scopes a one-shot to the account the caller named', async () => {
+    // `codex exec` still spawns per call: oneShot is CX2-3, not this slice.
     const child = new MockChildProcess()
     spawnMock.mockReturnValue(child)
+    const { registry } = createRegistry()
 
     const provider = new CodexProvider(
       '/usr/local/bin/codex',
+      registry,
       null,
       undefined,
-      null,
       lookup,
     )
     const promise = provider.oneShot({
@@ -148,15 +188,16 @@ describe('Codex account isolation', () => {
   })
 
   /**
-   * The honest edge. Codex holds one long-lived `app-server` for the whole
-   * session rather than spawning per turn, so its credential is fixed when that
-   * process starts. ADR 0007's "switching accounts mid-conversation needs no
-   * process lifecycle management" is a property of Claude's per-turn spawn and
-   * does not carry over — so the change is refused out loud instead of being
-   * silently served by the account already running.
+   * The honest edge, and sharper than before. The app-server is now resident
+   * and *shared*: its credential belongs to the (host, account) key, not to
+   * this session, so a mid-session switch cannot be served by respawning
+   * anything. ADR 0007's "switching accounts mid-conversation needs no process
+   * lifecycle management" is a property of Claude's per-turn spawn and does not
+   * carry over — so the change is refused out loud instead of being silently
+   * served by the account already running.
    */
   it('refuses a mid-session account change rather than silently serving the old one', async () => {
-    spawnMock.mockReturnValue(new MockChildProcess())
+    mockSpawnedServer()
     const deltas: SessionDelta[] = []
     const handle = startSession({
       providerAccountId: 'acct-a',
@@ -187,7 +228,7 @@ describe('Codex account isolation', () => {
   })
 
   it('accepts a turn that names the account the session is already on', async () => {
-    spawnMock.mockReturnValue(new MockChildProcess())
+    mockSpawnedServer()
     const deltas: SessionDelta[] = []
     const handle = startSession({ providerAccountId: 'acct-a', deltas })
 

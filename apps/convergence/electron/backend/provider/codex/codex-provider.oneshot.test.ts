@@ -11,6 +11,7 @@ vi.mock('child_process', () => ({
 }))
 
 import { CodexProvider } from './codex-provider'
+import { CodexServerHostRegistry } from './codex-server-host'
 
 class MockChildProcess extends EventEmitter {
   stdout = new PassThrough()
@@ -37,12 +38,23 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+/**
+ * oneShot still runs `codex exec` as its own process (CX2-3 moves it onto the
+ * server), so these tests keep mocking `spawn`. The registry is here only
+ * because the provider requires one — nothing in this file connects to it.
+ */
+function createOneShotRegistry(): CodexServerHostRegistry {
+  const registry = new CodexServerHostRegistry({ appVersion: '0.46.13' })
+  registry.setBinary('/usr/local/bin/codex', '0.153.4')
+  return registry
+}
+
 describe('CodexProvider.oneShot progress emission', () => {
   it('passes approval policy through config for current Codex exec', async () => {
     const child = new MockChildProcess()
     spawnMock.mockReturnValue(child)
 
-    const provider = new CodexProvider('/bin/codex')
+    const provider = new CodexProvider('/bin/codex', createOneShotRegistry())
 
     const promise = provider.oneShot({
       prompt: 'hi',
@@ -78,7 +90,7 @@ describe('CodexProvider.oneShot progress emission', () => {
     const child = new MockChildProcess()
     spawnMock.mockReturnValue(child)
 
-    const provider = new CodexProvider('/bin/codex')
+    const provider = new CodexProvider('/bin/codex', createOneShotRegistry())
 
     const promise = provider.oneShot({
       prompt: 'hi',
@@ -109,7 +121,7 @@ describe('CodexProvider.oneShot progress emission', () => {
     const child = new MockChildProcess()
     spawnMock.mockReturnValue(child)
 
-    const provider = new CodexProvider('/bin/codex')
+    const provider = new CodexProvider('/bin/codex', createOneShotRegistry())
 
     const promise = provider.oneShot({
       prompt: 'hi',
@@ -137,7 +149,11 @@ describe('CodexProvider.oneShot progress emission', () => {
 
     const broadcast = vi.fn()
     const service = new TaskProgressService(broadcast)
-    const provider = new CodexProvider('/bin/codex', service)
+    const provider = new CodexProvider(
+      '/bin/codex',
+      createOneShotRegistry(),
+      service,
+    )
 
     const promise = provider.oneShot({
       prompt: 'hi',
@@ -159,7 +175,11 @@ describe('CodexProvider.oneShot progress emission', () => {
 
     const service = new TaskProgressService(vi.fn())
     const events = captureEmits(service)
-    const provider = new CodexProvider('/bin/codex', service)
+    const provider = new CodexProvider(
+      '/bin/codex',
+      createOneShotRegistry(),
+      service,
+    )
 
     const promise = provider.oneShot({
       prompt: 'hi',
@@ -188,7 +208,11 @@ describe('CodexProvider.oneShot progress emission', () => {
 
     const service = new TaskProgressService(vi.fn())
     const events = captureEmits(service)
-    const provider = new CodexProvider('/bin/codex', service)
+    const provider = new CodexProvider(
+      '/bin/codex',
+      createOneShotRegistry(),
+      service,
+    )
 
     const promise = provider.oneShot({
       prompt: 'hi',
