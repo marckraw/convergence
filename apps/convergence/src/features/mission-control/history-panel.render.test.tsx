@@ -267,7 +267,7 @@ describe('the recorded-event panel, rendered', () => {
           recipient: 'Sol · reviewer',
           baton: 'reviewer',
           outcome: 'Delivery failed',
-          timestamp: '6 September · 14:38:22',
+          timestamp: '2026-09-06T14:38:22.000Z',
           responsePreview: overrides.responsePreview ?? null,
           message: overrides.message ?? null,
         }}
@@ -282,6 +282,34 @@ describe('the recorded-event panel, rendered', () => {
     )
     return handlers
   }
+
+  it.each(['table', 'pipes'] as const)(
+    'F5 renders message %s (mutation: restore raw message paragraph)',
+    (proof) => {
+      renderInspector({
+        message: '| Finding | Result |\n| --- | --- |\n| F1 | Routed |',
+      })
+      if (proof === 'table')
+        expect(screen.queryByRole('table')).toBeInTheDocument()
+      else
+        expect(
+          screen.getByRole('region', { name: 'Recorded event' }).textContent,
+        ).not.toContain('|')
+    },
+  )
+
+  it.each(['local time', 'ISO hover'] as const)(
+    'F5 shows %s (mutation: restore raw timestamp)',
+    (proof) => {
+      renderInspector()
+      const time = document.querySelector('[data-history-event-inspector] time')
+      if (proof === 'local time')
+        expect(time).toHaveTextContent(
+          new Date('2026-09-06T14:38:22.000Z').toLocaleString(),
+        )
+      else expect(time).toHaveAttribute('title', '2026-09-06T14:38:22.000Z')
+    },
+  )
 
   it('shows the recorded facts, not the connection as it reads today', () => {
     renderInspector()

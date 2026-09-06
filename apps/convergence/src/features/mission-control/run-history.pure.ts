@@ -62,6 +62,34 @@ export function historyOutcomeTone(outcome: RunHistoryOutcome): HistoryTone {
   return OUTCOME_TONES[outcome]
 }
 
+/** Delivery-bearing laps for display; ledger generations remain untouched. */
+function displayRunLaps(run: RelayRun): RelayRun['laps'] {
+  const groups: RelayRun['laps'] = []
+  let lapNumber = 0
+  for (const lap of run.laps) {
+    const carried = lap.hops.some(
+      (hop) =>
+        hop.outcome === 'delivered' ||
+        hop.outcome === 'spawned' ||
+        hop.outcome === 'queued',
+    )
+    const previous = groups.at(-1)
+    if (carried) {
+      lapNumber += 1
+      if (previous?.lap === 0) {
+        previous.lap = lapNumber
+        previous.hops.push(...lap.hops)
+      } else groups.push({ lap: lapNumber, hops: [...lap.hops] })
+    } else if (previous) previous.hops.push(...lap.hops)
+    else groups.push({ lap: 0, hops: [...lap.hops] })
+  }
+  return groups
+}
+
+function displayLapCount(run: RelayRun): number {
+  return displayRunLaps(run).at(-1)?.lap ?? 0
+}
+
 /**
  * What a run's row says in one line.
  *
@@ -89,8 +117,8 @@ export function formatRunStatusLine(run: RelayRun): string {
   }
 
   if (run.status.word === 'handed-back') {
-    return run.counts.laps > 1
-      ? `${run.counts.laps} laps · handed back`
+    return displayLapCount(run) > 1
+      ? `${displayLapCount(run)} laps · handed back`
       : 'Handed back'
   }
   if (run.status.word === 'running') return 'Running'
@@ -384,7 +412,7 @@ export function buildRunEvents(
     outcomes: Record<string, RunHistoryOutcome>
   },
 ): { laps: HistoryLapGroup[]; calls: HistoryEventRow[] } {
-  const laps = run.laps.map((lap) => {
+  const laps = displayRunLaps(run).map((lap) => {
     const events = lap.hops.map((hop) =>
       buildHopEventRow(hop, {
         resolveName: input.resolveName,
@@ -394,7 +422,12 @@ export function buildRunEvents(
     const baton = lap.hops.find((hop) => hop.baton !== null)?.baton ?? null
     return {
       lap: lap.lap,
-      label: baton ? `Lap ${lap.lap} · ${baton}` : `Lap ${lap.lap}`,
+      label:
+        lap.lap === 0
+          ? 'Recorded events'
+          : baton
+            ? `Lap ${lap.lap} · ${baton}`
+            : `Lap ${lap.lap}`,
       deliveries: events.filter(
         (event) => event.outcome === 'delivered' || event.outcome === 'queued',
       ).length,
@@ -418,8 +451,8 @@ export function formatRunSummary(run: RelayRun): string {
     run.counts.deliveries === 1
       ? '1 delivery'
       : `${run.counts.deliveries} deliveries`
-  if (run.counts.laps > 1) {
-    return `One run · ${run.counts.laps} laps · ${deliveries}`
+  if (displayLapCount(run) > 1) {
+    return `One run · ${displayLapCount(run)} laps · ${deliveries}`
   }
   const events =
     run.counts.events === 1
@@ -449,7 +482,7 @@ export function buildRunHighlight(
     string,
     { outcome: RunHistoryOutcome; tone: HistoryTone; label: string }
   >()
-  for (const lap of run.laps) {
+  for (const lap of displayRunLaps(run)) {
     for (const hop of lap.hops) {
       const outcome = outcomes[hop.id] ?? 'unknown'
       // The NEWEST event on a wire wins: a wire that failed on lap 1 and
@@ -459,7 +492,7 @@ export function buildRunHighlight(
         outcome,
         tone: historyOutcomeTone(outcome),
         label:
-          run.counts.laps > 1
+          displayLapCount(run) > 1
             ? `Lap ${lap.lap} · ${historyOutcomeWord(outcome).toLowerCase()}`
             : historyOutcomeWord(outcome),
       })

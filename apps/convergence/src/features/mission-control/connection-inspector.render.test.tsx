@@ -295,7 +295,7 @@ describe('the connection inspector, rendered', () => {
     ).toBeInTheDocument()
   })
 
-  it('offers the switch with the sentence that explains an off connection', () => {
+  it('arms a new Off connection (mutation: enable new drafts)', () => {
     const handlers = renderInspector()
 
     const toggle = screen.getByRole('switch')
@@ -307,7 +307,7 @@ describe('the connection inspector, rendered', () => {
 
     fireEvent.click(toggle)
     // Storing a switch, and nothing else: enabling never sends.
-    expect(handlers.onEnabledChange).toHaveBeenCalledWith(false)
+    expect(handlers.onEnabledChange).toHaveBeenCalledWith(true)
     expect(handlers.onSave).not.toHaveBeenCalled()
   })
 

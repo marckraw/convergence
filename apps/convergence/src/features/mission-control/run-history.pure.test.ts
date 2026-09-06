@@ -146,6 +146,10 @@ describe('formatRunStatusLine', () => {
     expect(
       formatRunStatusLine(
         run({
+          laps: [1, 2, 3].map((lap) => ({
+            lap,
+            hops: [hop({ id: `lap-${lap}`, lapNumber: lap })],
+          })),
           status: { word: 'handed-back', reason: null },
           counts: { deliveries: 9, failures: 0, laps: 3, events: 10 },
         }),
@@ -580,4 +584,38 @@ describe('appendRunPage', () => {
       'run-2',
     ])
   })
+})
+
+describe('L-vi delivery-bearing display laps', () => {
+  const record = run({
+    laps: [
+      { lap: 1, hops: [hop({ id: 'delivery' })] },
+      {
+        lap: 2,
+        hops: [hop({ id: 'held', outcome: 'skipped-baton', lapNumber: 2 })],
+      },
+    ],
+    status: { word: 'handed-back', reason: null },
+    counts: { deliveries: 1, failures: 0, laps: 2, events: 2 },
+  })
+  const outcomes = { delivery: 'delivered', held: 'held' } as const
+  it.each(['status', 'summary', 'group', 'highlight'] as const)(
+    'corrects the %s (mutation: use ledger laps directly)',
+    (proof) => {
+      if (proof === 'status')
+        expect(formatRunStatusLine(record)).toBe('Handed back')
+      if (proof === 'summary')
+        expect(formatRunSummary(record)).toBe('2 recorded events')
+      if (proof === 'group')
+        expect(
+          buildRunEvents(record, { resolveName, outcomes }).laps.map((lap) =>
+            lap.events.map((event) => event.id),
+          ),
+        ).toEqual([['delivery', 'held']])
+      if (proof === 'highlight')
+        expect(buildRunHighlight(record, outcomes).get('wire-a')?.label).toBe(
+          'Held',
+        )
+    },
+  )
 })

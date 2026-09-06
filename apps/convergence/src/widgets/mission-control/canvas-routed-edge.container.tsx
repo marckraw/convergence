@@ -2,14 +2,18 @@ import { useMemo } from 'react'
 import type { FC } from 'react'
 import {
   BaseEdge,
+  getSmoothStepPath,
+  Position,
   EdgeLabelRenderer,
   useNodes,
   type EdgeProps,
 } from '@xyflow/react'
 import {
   chooseRouteSides,
-  routeAround,
-  routeLabelPoint,
+  ROUTE_GRID,
+  routeCanvasEdge,
+  routeLabelLayout,
+  sidePoint,
   routePath,
 } from '@/features/mission-control'
 import type { RouteRect } from '@/features/mission-control'
@@ -38,8 +42,7 @@ import type { RouteRect } from '@/features/mission-control'
  * the part that cannot be: reading the canvas and painting the path.
  *
  * When the router cannot get through it returns null, and this falls back to
- * the straight run between the two attachment points — a plain line the
- * reader can follow beats a clever one drawn through a card.
+ * side-selected smoothstep between the two attachment points.
  */
 export const CanvasRoutedEdge: FC<EdgeProps> = ({
   id,
@@ -47,15 +50,19 @@ export const CanvasRoutedEdge: FC<EdgeProps> = ({
   target,
   sourceX,
   sourceY,
+  sourcePosition,
   targetX,
   targetY,
+  targetPosition,
+  data,
   label,
   style,
   markerEnd,
 }) => {
   const nodes = useNodes()
 
-  const { path, labelPoint } = useMemo(() => {
+  const opposed = data?.opposed === true
+  const { path, labelPoint, labelTranslate } = useMemo(() => {
     const rects: RouteRect[] = []
     let sourceRect: RouteRect | null = null
     let targetRect: RouteRect | null = null
@@ -80,38 +87,93 @@ export const CanvasRoutedEdge: FC<EdgeProps> = ({
       if (node.id === target) targetRect = rect
     }
 
-    // Before React Flow has measured, or for an edge whose ends are not on
-    // the canvas: the straight run is the honest answer, not a guess.
-    if (!sourceRect || !targetRect) {
-      return {
-        path: `M ${sourceX},${sourceY} L ${targetX},${targetY}`,
-        labelPoint: {
-          x: (sourceX + targetX) / 2,
-          y: (sourceY + targetY) / 2,
-        },
-      }
+    const sides =
+      sourceRect && targetRect ? chooseRouteSides(sourceRect, targetRect) : null
+    const sourcePoint =
+      sourceRect && sides
+        ? sidePoint(sourceRect, sides.sourceSide)
+        : { x: sourceX, y: sourceY }
+    const targetPoint =
+      targetRect && sides
+        ? sidePoint(targetRect, sides.targetSide)
+        : { x: targetX, y: targetY }
+    const positions = {
+      left: Position.Left,
+      right: Position.Right,
+      top: Position.Top,
+      bottom: Position.Bottom,
     }
-
-    const sides = chooseRouteSides(sourceRect, targetRect)
-    const route = routeAround({
-      source: sourceRect,
-      target: targetRect,
-      ...sides,
-      obstacles: rects,
-    })
-
+    const route =
+      sourceRect && targetRect
+        ? routeCanvasEdge({
+            source: sourceRect,
+            target: targetRect,
+            obstacles: rects,
+            opposed,
+          })
+        : null
     if (!route) {
+      const sourceSide = sides ? positions[sides.sourceSide] : sourcePosition
+      const vertical =
+        sourceSide === Position.Top || sourceSide === Position.Bottom
+      const dx = targetPoint.x - sourcePoint.x,
+        dy = targetPoint.y - sourcePoint.y
+      const lane = opposed ? ROUTE_GRID / 2 : 0
+      const centerX = vertical
+        ? undefined
+        : (sourcePoint.x + targetPoint.x) / 2 -
+          lane * (Math.sign(dy) || (source < target ? 1 : -1))
+      const centerY = vertical
+        ? (sourcePoint.y + targetPoint.y) / 2 +
+          lane * (Math.sign(dx) || (source < target ? 1 : -1))
+        : undefined
+      if (vertical) {
+        const shift = sourceSide === Position.Bottom ? -lane : lane
+        sourcePoint.x += shift
+        targetPoint.x += shift
+      } else {
+        const shift = sourceSide === Position.Right ? lane : -lane
+        sourcePoint.y += shift
+        targetPoint.y += shift
+      }
+      const [path, x, y] = getSmoothStepPath({
+        centerX,
+        centerY,
+        sourceX: sourcePoint.x,
+        sourceY: sourcePoint.y,
+        targetX: targetPoint.x,
+        targetY: targetPoint.y,
+        sourcePosition: sides ? positions[sides.sourceSide] : sourcePosition,
+        targetPosition: sides ? positions[sides.targetSide] : targetPosition,
+      })
+      const layout = routeLabelLayout([sourcePoint, targetPoint], opposed)
       return {
-        path: `M ${sourceX},${sourceY} L ${targetX},${targetY}`,
+        path,
         labelPoint: {
-          x: (sourceX + targetX) / 2,
-          y: (sourceY + targetY) / 2,
+          x: x + layout.point.x - (sourcePoint.x + targetPoint.x) / 2,
+          y: y + layout.point.y - (sourcePoint.y + targetPoint.y) / 2,
         },
+        labelTranslate: layout.translate,
       }
     }
-
-    return { path: routePath(route), labelPoint: routeLabelPoint(route) }
-  }, [nodes, source, target, sourceX, sourceY, targetX, targetY])
+    const layout = routeLabelLayout(route, opposed)
+    return {
+      path: routePath(route),
+      labelPoint: layout.point,
+      labelTranslate: layout.translate,
+    }
+  }, [
+    nodes,
+    source,
+    target,
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+    opposed,
+  ])
 
   return (
     <>
@@ -124,7 +186,7 @@ export const CanvasRoutedEdge: FC<EdgeProps> = ({
               // On the longest straight run rather than at the path's
               // midpoint: a label at the midpoint lands wherever the path
               // happens to be bending.
-              transform: `translate(-50%, -50%) translate(${labelPoint.x}px, ${labelPoint.y}px)`,
+              transform: `translate(${labelTranslate}) translate(${labelPoint.x}px, ${labelPoint.y}px)`,
             }}
             className="pointer-events-none absolute rounded bg-background/90 px-1.5 py-0.5 text-[10px] text-muted-foreground"
           >

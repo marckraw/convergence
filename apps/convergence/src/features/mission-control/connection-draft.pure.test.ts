@@ -33,13 +33,13 @@ function relay(overrides: Partial<SessionRelay> = {}): SessionRelay {
 }
 
 describe('newConnectionDraft', () => {
-  it('starts enabled and unconditional, and sends nothing by existing', () => {
+  it('starts Off and unconditional (mutation: enable new drafts)', () => {
     const draft = newConnectionDraft({
       sourceSessionId: 'fable',
       targetSessionId: 'opus',
     })
 
-    expect(draft.enabled).toBe(true)
+    expect(draft.enabled).toBe(false)
     expect(draft.condition).toEqual({ kind: 'any' })
     expect(draft.beforeDelivery).toBe('keep')
     expect(openerForDraft(draft)).toBeNull()

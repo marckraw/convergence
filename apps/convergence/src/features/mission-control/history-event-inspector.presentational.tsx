@@ -1,6 +1,7 @@
 import type { FC } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
+import { Markdown } from '@/shared/ui/markdown.container'
 import { Button } from '@/shared/ui/button'
 import { HISTORY_TONE_TEXT } from './history-event-row.presentational'
 import { HistoryFact } from './history-fact.presentational'
@@ -82,7 +83,13 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
         <h3 className={cn('text-sm font-medium', HISTORY_TONE_TEXT[tone])}>
           {title}
         </h3>
-        <p className="text-[11px] text-muted-foreground">{facts.timestamp}</p>
+        <time
+          dateTime={facts.timestamp}
+          title={facts.timestamp}
+          className="text-[11px] text-muted-foreground"
+        >
+          {new Date(facts.timestamp).toLocaleString()}
+        </time>
       </div>
       <Button
         type="button"
@@ -98,7 +105,7 @@ export const HistoryEventInspector: FC<HistoryEventInspectorProps> = ({
 
     {facts.message ? (
       <div className="rounded-md border border-white/10 bg-white/[0.02] px-3 py-2">
-        <p className="whitespace-pre-wrap text-[11px]">{facts.message}</p>
+        <Markdown content={facts.message} className="text-[11px]" />
       </div>
     ) : null}
 

@@ -25,6 +25,7 @@ export const CanvasCrewCluster: FC<NodeProps> = ({ data }) => {
   return (
     <div
       data-canvas-crew={cluster.crewId}
+      data-canvas-crew-id={cluster.crewId}
       data-crew-parked={cluster.parked ? 'true' : 'false'}
       style={{ width: cluster.width, height: cluster.height, ...accentStyle }}
       className={cn(
@@ -35,7 +36,7 @@ export const CanvasCrewCluster: FC<NodeProps> = ({ data }) => {
         'pointer-events-none',
       )}
     >
-      <div className="flex items-center gap-2 px-4 py-3">
+      <div className="pointer-events-auto flex items-center gap-2 px-4 py-3">
         {cluster.emoji ? (
           <span aria-hidden className="text-sm leading-none">
             {cluster.emoji}

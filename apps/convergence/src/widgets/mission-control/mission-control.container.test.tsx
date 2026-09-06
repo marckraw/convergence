@@ -1,4 +1,11 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useProjectStore } from '@/entities/project'
 import { useSessionCrewStore } from '@/entities/session-crew'
@@ -16,6 +23,19 @@ import type {
 } from '@/entities/session'
 import type { ComposerSessionContext } from '@/features/composer'
 import { MissionControl } from './mission-control.container'
+
+import type { ReactFlowProps, ReactFlowInstance } from '@xyflow/react'
+const flow = vi.hoisted(() => ({ props: null as ReactFlowProps | null }))
+vi.mock('@xyflow/react', async (original) => {
+  const actual = await original<typeof import('@xyflow/react')>()
+  return {
+    ...actual,
+    ReactFlow: (props: ReactFlowProps) => {
+      flow.props = props
+      return <actual.ReactFlow {...props} />
+    },
+  }
+})
 
 // The Hail must render the app's real composer, not a copy of it. The widget's
 // job is aiming it at the right Session; what the composer then does is the
@@ -1845,6 +1865,192 @@ describe('MissionControl', () => {
           ).mode,
         ).toBe('canvas')
       })
+    })
+  })
+
+  describe('round 5 live-review canaries', () => {
+    async function switchToCanvas() {
+      fireEvent.click(await screen.findByRole('button', { name: 'Canvas' }))
+    }
+    it.each(['transform', 'persisted position'] as const)(
+      'F2 moves the %s (mutation: omit onNodesChange)',
+      async (proof) => {
+        seedCrews([
+          makeCrew({ id: 'crew-1', name: 'Moving crew', sessionIds: ['a'] }),
+        ])
+        seed([makeSession({ id: 'a', name: 'Moving card' })], [CLAUDE_CODE])
+        render(<MissionControl />)
+        await switchToCanvas()
+        await screen.findByText('Moving card')
+        act(() =>
+          flow.props?.onNodesChange?.([
+            {
+              id: 'a',
+              type: 'position',
+              position: { x: 300, y: 400 },
+              dragging: true,
+            },
+          ]),
+        )
+        if (proof === 'transform') {
+          expect(
+            document.querySelector('.react-flow__node[data-id="a"]'),
+          ).toHaveStyle({ transform: 'translate(300px,400px)' })
+        } else {
+          const node = flow.props!.nodes!.find((entry) => entry.id === 'a')!
+          act(() =>
+            flow.props?.onNodeDragStop?.(new MouseEvent('mouseup'), node, [
+              node,
+            ]),
+          )
+          await waitFor(() =>
+            expect(setMemberPosition).toHaveBeenCalledWith('crew-1', 'a', {
+              x: 300,
+              y: 400,
+            }),
+          )
+        }
+      },
+    )
+
+    it.each(['toolbar', 'add target'] as const)(
+      'F3 follows the visible crew in the %s (mutation: fall back to crewGroups[0])',
+      async (proof) => {
+        seedCrews([
+          makeCrew({ id: 'crew-1', name: 'First crew', sessionIds: ['a'] }),
+          makeCrew({ id: 'crew-2', name: 'Visible crew', sessionIds: ['b'] }),
+        ])
+        seed(
+          [
+            makeSession({ id: 'a', name: 'First card' }),
+            makeSession({ id: 'b', name: 'Visible card' }),
+          ],
+          [CLAUDE_CODE],
+        )
+        render(<MissionControl />)
+        fireEvent.click(
+          await screen.findByRole('button', { name: /Visible crew/ }),
+        )
+        await switchToCanvas()
+        await screen.findByText('Visible card')
+        if (proof === 'toolbar') {
+          expect(
+            within(
+              document.querySelector('[data-canvas-toolbar]') as HTMLElement,
+            ).getByRole('heading'),
+          ).toHaveTextContent('Visible crew')
+        } else {
+          fireEvent.click(
+            screen.getByRole('button', { name: /Add conversation/ }),
+          )
+          expect(
+            await screen.findByText(
+              'Bring existing conversations into Visible crew.',
+            ),
+          ).toBeInTheDocument()
+        }
+      },
+    )
+
+    it('F3 selects the clicked frame heading (mutation: omit cluster crew id)', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'First crew', sessionIds: ['a'] }),
+        makeCrew({ id: 'crew-2', name: 'Second crew', sessionIds: ['b'] }),
+      ])
+      seed([makeSession({ id: 'a' }), makeSession({ id: 'b' })], [CLAUDE_CODE])
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(
+        await screen.findByRole('heading', { name: 'Second crew' }),
+      )
+      expect(
+        within(
+          document.querySelector('[data-canvas-toolbar]') as HTMLElement,
+        ).getByRole('heading'),
+      ).toHaveTextContent('Second crew')
+    })
+
+    it('F4 puts history beside the graph in the left column (mutation: move history below the row)', async () => {
+      seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])
+      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+      const history = await screen.findByRole('region', { name: 'History' })
+      expect(
+        history.parentElement?.querySelector(':scope > [data-canvas-graph]'),
+      ).not.toBeNull()
+    })
+
+    it('F4 refits a resized graph viewport (mutation: omit resize fitView)', async () => {
+      let observed: {
+        callback: ResizeObserverCallback
+        observer: ResizeObserver
+        target: Element
+      } | null = null
+      class Observer implements ResizeObserver {
+        constructor(private callback: ResizeObserverCallback) {}
+        observe(target: Element) {
+          if (target.hasAttribute('data-session-canvas'))
+            observed = { callback: this.callback, observer: this, target }
+        }
+        unobserve() {}
+        disconnect() {}
+      }
+      vi.stubGlobal('ResizeObserver', Observer)
+      try {
+        seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])
+        seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+        render(<MissionControl />)
+        await switchToCanvas()
+        await screen.findByText('Wire the room')
+        const fitView = vi.fn(async () => true)
+        act(() => {
+          flow.props?.onInit?.({ fitView } as unknown as ReactFlowInstance)
+          const entry = observed as {
+            callback: ResizeObserverCallback
+            observer: ResizeObserver
+            target: Element
+          } | null
+          entry?.callback(
+            [
+              {
+                target: entry.target,
+                contentRect: { width: 640, height: 220 },
+              } as ResizeObserverEntry,
+            ],
+            entry.observer,
+          )
+        })
+        expect(fitView).toHaveBeenCalledWith({ padding: 0.15 })
+      } finally {
+        vi.unstubAllGlobals()
+      }
+    })
+
+    it('F6 identifies repeated names by project (mutation: omit project name from detail)', async () => {
+      seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])
+      seed(
+        [
+          makeSession({ id: 'a' }),
+          makeSession({ id: 'b', name: 'Same name' }),
+          makeSession({ id: 'c', name: 'Same name', projectId: 'project-2' }),
+        ],
+        [CLAUDE_CODE],
+      )
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(
+        await screen.findByRole('button', { name: /Add conversation/ }),
+      )
+      const panel = await screen.findByRole('region', {
+        name: 'Add conversations',
+      })
+      expect(
+        within(panel).queryAllByText(
+          /claude-code · claude-opus-5 · (Convergence|Emergence)/,
+        ),
+      ).toHaveLength(2)
     })
   })
 })

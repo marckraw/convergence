@@ -190,8 +190,10 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
 
   const selectedGroup = useMemo(
     () =>
-      crewGroups.find((group) => group.crew?.id === selectedCrewId) ??
-      crewGroups[0] ??
+      crewGroups.find(
+        (group) => group.crew?.id === selectedCrewId && group.cards.length > 0,
+      ) ??
+      crewGroups.find((group) => group.cards.length > 0) ??
       null,
     [crewGroups, selectedCrewId],
   )
@@ -604,9 +606,16 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       .map((session) => ({
         sessionId: session.id,
         name: session.name,
-        detail: [session.providerId, session.model].filter(Boolean).join(' · '),
+        detail: [
+          session.providerId,
+          session.model,
+          projects.find((project) => project.id === session.projectId)?.name ??
+            (session.projectId ? 'Unknown project' : 'No project'),
+        ]
+          .filter(Boolean)
+          .join(' · '),
       }))
-  }, [crew, sessions, addQuery, addProjectId])
+  }, [crew, sessions, projects, addQuery, addProjectId])
 
   /**
    * Whether this crew has work in flight (R7).
@@ -882,12 +891,73 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       />
 
       <div className="flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1">
-          <SessionCanvas
-            groups={groups}
-            onOpen={onOpen}
-            authoring={authoring}
-          />
+        <div
+          data-canvas-left-column
+          className="flex min-h-0 min-w-0 flex-1 flex-col"
+        >
+          <div data-canvas-graph className="min-h-0 flex-1 overflow-hidden">
+            <SessionCanvas
+              groups={groups}
+              onOpen={onOpen}
+              authoring={authoring}
+            />
+          </div>
+          {historyOpen ? (
+            <HistoryPanel
+              crewName={crew.name}
+              state={historyPanelState({
+                loading: historyLoading,
+                error: historyError,
+                page: historyPage,
+                visibleRuns: visibleRuns.length,
+              })}
+              runs={visibleRuns.map((run) =>
+                buildRunRow(run, resolveName, new Date()),
+              )}
+              selectedRunId={selectedRun?.flowRunId ?? null}
+              summary={selectedRun ? formatRunSummary(selectedRun) : null}
+              laps={runEvents.laps}
+              calls={runEvents.calls}
+              unattributedCalls={unattributedCalls}
+              selectedEventId={
+                panel.kind === 'history-event' ? panel.eventId : null
+              }
+              filter={historyFilter}
+              loadError={historyError}
+              onFilterChange={setHistoryFilter}
+              hasMore={historyPage?.hasMore ?? false}
+              loadingOlder={historyLoadingOlder}
+              olderError={olderError}
+              onLoadOlder={() => {
+                void loadOlderRuns()
+              }}
+              onSelectRun={(flowRunId) =>
+                leaveDraft(() => {
+                  setSelectedRunId(flowRunId)
+                  applyPanel({ kind: 'none' })
+                })
+              }
+              onSelectEvent={(eventId) =>
+                leavePanel({ kind: 'history-event', eventId })
+              }
+              onRetry={() => {
+                void loadHistory()
+              }}
+              onClose={() => {
+                setHistoryOpen(false)
+                if (panel.kind === 'history-event') applyPanel({ kind: 'none' })
+              }}
+            />
+          ) : null}
+
+          {/* The glossary the handed-back run carries (frame 07). Shown with the
+          panel rather than only in one inspector, because "run", "lap" and
+          "delivery" are the three words the whole surface is written in. */}
+          {historyOpen && selectedRun?.status.word === 'handed-back' ? (
+            <p className="border-t border-white/10 px-5 py-1.5 text-[10px] text-muted-foreground/70">
+              {RUN_LAP_DELIVERY_GLOSSARY.join(' ')}
+            </p>
+          ) : null}
         </div>
 
         {panel.kind === 'connection' && draft ? (
@@ -1226,63 +1296,6 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
           </div>
         ) : null}
       </div>
-
-      {historyOpen ? (
-        <HistoryPanel
-          crewName={crew.name}
-          state={historyPanelState({
-            loading: historyLoading,
-            error: historyError,
-            page: historyPage,
-            visibleRuns: visibleRuns.length,
-          })}
-          runs={visibleRuns.map((run) =>
-            buildRunRow(run, resolveName, new Date()),
-          )}
-          selectedRunId={selectedRun?.flowRunId ?? null}
-          summary={selectedRun ? formatRunSummary(selectedRun) : null}
-          laps={runEvents.laps}
-          calls={runEvents.calls}
-          unattributedCalls={unattributedCalls}
-          selectedEventId={
-            panel.kind === 'history-event' ? panel.eventId : null
-          }
-          filter={historyFilter}
-          loadError={historyError}
-          onFilterChange={setHistoryFilter}
-          hasMore={historyPage?.hasMore ?? false}
-          loadingOlder={historyLoadingOlder}
-          olderError={olderError}
-          onLoadOlder={() => {
-            void loadOlderRuns()
-          }}
-          onSelectRun={(flowRunId) =>
-            leaveDraft(() => {
-              setSelectedRunId(flowRunId)
-              applyPanel({ kind: 'none' })
-            })
-          }
-          onSelectEvent={(eventId) =>
-            leavePanel({ kind: 'history-event', eventId })
-          }
-          onRetry={() => {
-            void loadHistory()
-          }}
-          onClose={() => {
-            setHistoryOpen(false)
-            if (panel.kind === 'history-event') applyPanel({ kind: 'none' })
-          }}
-        />
-      ) : null}
-
-      {/* The glossary the handed-back run carries (frame 07). Shown with the
-          panel rather than only in one inspector, because "run", "lap" and
-          "delivery" are the three words the whole surface is written in. */}
-      {historyOpen && selectedRun?.status.word === 'handed-back' ? (
-        <p className="border-t border-white/10 px-5 py-1.5 text-[10px] text-muted-foreground/70">
-          {RUN_LAP_DELIVERY_GLOSSARY.join(' ')}
-        </p>
-      ) : null}
 
       {/* Frame 10-02. Leaving an unfinished draft asks before losing it. */}
       {confirmDiscard ? (

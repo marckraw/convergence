@@ -83,10 +83,8 @@ export const EMPTY_SPAWN_SPEC: ConnectionSpawnSpec = {
 /**
  * A connection drawn but not yet saved.
  *
- * Enabled by default, because the person just drew it on purpose — the toggle
- * exists so a crew can be built with its wires off, not so every new wire
- * starts dead. Nothing is sent by creating this: it is a shape in memory
- * until Save.
+ * Off by default: saving a connection does not authorize the next settle
+ * to deliver through it. The person arms it explicitly with the toggle.
  */
 export function newConnectionDraft(input: {
   sourceSessionId: string
@@ -97,7 +95,7 @@ export function newConnectionDraft(input: {
   return {
     sourceSessionId: input.sourceSessionId,
     recipient: { kind: 'session', sessionId: input.targetSessionId ?? null },
-    enabled: true,
+    enabled: false,
     // Pre-filled from the recipient's baton name when there is one, because
     // the convention only works if the line the wire waits for and the line
     // the station is told to write are one string. Unconditional otherwise:

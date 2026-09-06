@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FC, MouseEvent } from 'react'
 import {
+  applyNodeChanges,
   Background,
   BackgroundVariant,
   Controls,
   MarkerType,
   ReactFlow,
 } from '@xyflow/react'
-import type { Edge, Node } from '@xyflow/react'
+import type { Edge, Node, NodeChange, ReactFlowInstance } from '@xyflow/react'
 import { Waypoints } from 'lucide-react'
 import {
   CANVAS_CHAIR_NODE_HEIGHT,
@@ -296,7 +297,7 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
     [graph],
   )
 
-  const nodes = useMemo<Node[]>(() => {
+  const graphNodes = useMemo<Node[]>(() => {
     // Every size is declared rather than measured. The layout already knows how
     // big each node is, so telling React Flow up front lets it route wires and
     // fit the view on the first paint instead of after a measuring pass.
@@ -369,6 +370,53 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
     return [...clusterNodes, ...sessionNodes, ...spawnChips, ...chairNodes]
   }, [graph, onOpen, acknowledgeCrew, authoring])
 
+  const [nodes, setNodes] = useState<Node[]>(graphNodes)
+  const previousGraph = useRef(graph)
+  useEffect(() => {
+    const changed = previousGraph.current !== graph
+    previousGraph.current = graph
+    setNodes((current) =>
+      graphNodes.map((node) => {
+        const previous = current.find((entry) => entry.id === node.id)
+        return !changed && previous
+          ? {
+              ...previous,
+              ...node,
+              position: previous.position,
+              dragging: previous.dragging,
+            }
+          : node
+      }),
+    )
+  }, [graph, graphNodes])
+  const handleNodesChange = useCallback((changes: NodeChange[]) => {
+    setNodes((current) => applyNodeChanges(changes, current))
+  }, [])
+  const flowInstance = useRef<ReactFlowInstance | null>(null)
+  const handleInit = useCallback((instance: ReactFlowInstance) => {
+    flowInstance.current = instance
+  }, [])
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    let previousWidth = 0,
+      previousHeight = 0
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect
+      if (
+        width <= 0 ||
+        height <= 0 ||
+        (width === previousWidth && height === previousHeight)
+      )
+        return
+      previousWidth = width
+      previousHeight = height
+      void flowInstance.current?.fitView(FIT_VIEW_OPTIONS)
+    })
+    observer.observe(canvas)
+    return () => observer.disconnect()
+  }, [castKey])
+
   const edges = useMemo<Edge[]>(() => {
     const stored = graph.edges.map((edge) => {
       // Only a stored wire can pulse: a hop names the relay it fired on, and
@@ -409,6 +457,15 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
         sourceHandle: CANVAS_HANDLE.out,
         targetHandle: CANVAS_HANDLE.in,
         type: 'routed',
+        data: {
+          opposed:
+            graph.edges.some(
+              (other) =>
+                other.source === edge.target && other.target === edge.source,
+            ) ||
+            (authoring?.draftEdge?.sourceSessionId === edge.target &&
+              authoring.draftEdge.targetSessionId === edge.source),
+        },
         // A lit wire marches while it carries something, so a hop reads as
         // movement along the wire rather than a colour change in place.
         animated: Boolean(pulse),
@@ -472,6 +529,13 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
         // The draft routes like any other wire, so saving it looks like
         // nothing moved.
         type: 'routed',
+        data: {
+          opposed: graph.edges.some(
+            (edge) =>
+              edge.source === authoring.draftEdge?.targetSessionId &&
+              edge.target === authoring.draftEdge.sourceSessionId,
+          ),
+        },
         animated: false,
         style: {
           stroke: DRAFT_EDGE_COLOR,
@@ -625,6 +689,8 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
     >
       <ReactFlow
         nodes={nodes}
+        onNodesChange={handleNodesChange}
+        onInit={handleInit}
         edges={edges}
         nodeTypes={NODE_TYPES}
         edgeTypes={EDGE_TYPES}

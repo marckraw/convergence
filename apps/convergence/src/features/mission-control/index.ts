@@ -89,6 +89,8 @@ export {
   chooseRouteSides,
   rectCenter,
   routeAround,
+  routeCanvasEdge,
+  routeLabelLayout,
   routeEntersRect,
   routeLabelPoint,
   routePath,
