@@ -77,6 +77,7 @@ function renderPanel(
       loadError={null}
       hasMore={overrides.hasMore ?? false}
       loadingOlder={false}
+      olderError={null}
       {...handlers}
     />,
   )
@@ -186,6 +187,7 @@ describe('the history panel, rendered', () => {
         loadError={null}
         hasMore={false}
         loadingOlder={false}
+        olderError={null}
         onLoadOlder={vi.fn()}
         onFilterChange={vi.fn()}
         onSelectRun={vi.fn()}

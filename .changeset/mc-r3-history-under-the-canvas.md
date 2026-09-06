@@ -18,9 +18,14 @@ never reads as one that was handed back — read off the run's own recorded
 events, so a run from before this release whose delivery broke says so too
 instead of reading as one that finished quietly. A delivery whose ending was
 never written down says that, rather than showing as still running forever.
+A turn running longer than an hour reads _Ending not recorded_ until its
+settlement receipt lands. Older builds recorded tool-only settles as `error`;
+those historical rows now read as failed and retain that recorded outcome.
 
 Crews with a long history load a page at a time, with a _Load older runs_ row
-under the list when there are more.
+under the list when there are more. If an older page fails to load, the runs
+already loaded stay visible with an inline error. _Retry older runs_ retries
+that same page without dropping the list.
 
 Picking an event opens what was recorded when it happened — source, recipient,
 baton, outcome, timestamp, and whatever reply preview the ledger kept — beside

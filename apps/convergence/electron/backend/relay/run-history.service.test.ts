@@ -372,31 +372,42 @@ describe('RunHistoryService', () => {
   })
 
   /**
-   * M1, end to end: the two hops that can never be stamped. A row from before
-   * receipts existed has no id for a settle to name, and a hop older than the
-   * live window belongs to a loop that finished however it finished -- both
-   * used to read "Running" for the life of the ledger, and no filter could
-   * move them.
+   * M1/M-a, end to end: legacy and stale rows cannot vouch for work still
+   * owed. A recent receipted row can. Pin both sides of the live window to
+   * the injected clock, independent of the day this test runs.
    *
-   * Mutation that reds it: read every unsettled budgeted hop as owed.
+   * Mutations that red it: always owed (legacy/stale); never owed (fresh).
    */
-  it('does not leave an unstampable delivery running forever', () => {
+  it('uses the injected clock on both sides of the owed window (mutation: always owed)', () => {
+    const now = new Date('2040-01-01T12:00:00.000Z')
+    history = new RunHistoryService(db, () => now)
     const a = wire('s1', 's2')
     hop({
       relayId: a.id,
       flowRunId: 'legacy',
-      firedAt: new Date().toISOString(),
+      firedAt: now.toISOString(),
       settledAt: null,
       dispatchId: null,
     })
     hop({
       relayId: a.id,
       flowRunId: 'stale',
-      firedAt: '2026-09-06T10:00:00.000Z',
+      firedAt: new Date(now.getTime() - 61 * 60_000).toISOString(),
+      settledAt: null,
+    })
+
+    hop({
+      relayId: a.id,
+      flowRunId: 'fresh',
+      firedAt: new Date(now.getTime() - 59 * 60_000).toISOString(),
       settledAt: null,
     })
 
     const runs = history.listRuns('c1').runs
+    expect(runs.find((run) => run.flowRunId === 'fresh')?.status).toEqual({
+      word: 'running',
+      reason: null,
+    })
     for (const flowRunId of ['legacy', 'stale']) {
       expect(runs.find((run) => run.flowRunId === flowRunId)?.status).toEqual({
         word: 'unknown',

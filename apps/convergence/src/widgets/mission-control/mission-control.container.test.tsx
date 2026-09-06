@@ -945,6 +945,97 @@ describe('MissionControl', () => {
       expect(updateRelay).not.toHaveBeenCalled()
     })
 
+    it('keeps the pending pair when retaining a draft (mutation: commit connect mode before guard)', async () => {
+      seedCrews([
+        makeCrew({
+          id: 'crew-1',
+          name: 'Review loop',
+          sessionIds: ['a', 'b', 'c'],
+        }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Fable' }),
+          makeSession({ id: 'b', name: 'Opus' }),
+          makeSession({ id: 'c', name: 'Sol' }),
+        ],
+        [CLAUDE_CODE],
+      )
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+      fireEvent.click(await screen.findByLabelText('Connect to Fable'))
+      fireEvent.click(await screen.findByLabelText('Connect to Opus'))
+      fireEvent.change(await screen.findByLabelText('Standing instructions'), {
+        target: { value: 'Original draft' },
+      })
+      fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+      fireEvent.click(await screen.findByLabelText('Connect to Fable'))
+      fireEvent.click(await screen.findByLabelText('Connect to Sol'))
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Keep editing' }),
+      )
+      expect({
+        connecting: screen
+          .getByRole('button', { name: 'Connect' })
+          .getAttribute('aria-pressed'),
+        source: screen.queryByText(/Fable selected/) !== null,
+        draft: (
+          screen.getByLabelText('Standing instructions') as HTMLTextAreaElement
+        ).value,
+      }).toEqual({ connecting: 'true', source: true, draft: 'Original draft' })
+    })
+
+    it.each(['Keep editing', 'Discard draft'])(
+      'guards a crew switch: %s (mutation: bypass crew leaveDraft)',
+      async (answer) => {
+        seedCrews([
+          makeCrew({ id: 'crew-1', name: 'Crew A', sessionIds: ['a', 'b'] }),
+          makeCrew({ id: 'crew-2', name: 'Crew B', sessionIds: ['c'] }),
+        ])
+        seed(
+          [
+            makeSession({ id: 'a', name: 'Fable' }),
+            makeSession({ id: 'b', name: 'Opus' }),
+            makeSession({ id: 'c', name: 'Sol' }),
+          ],
+          [CLAUDE_CODE],
+        )
+        render(<MissionControl />)
+        await switchToCanvas()
+        fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+        fireEvent.click(await screen.findByLabelText('Connect to Fable'))
+        fireEvent.click(await screen.findByLabelText('Connect to Opus'))
+        fireEvent.change(
+          await screen.findByLabelText('Standing instructions'),
+          { target: { value: 'Keep this draft' } },
+        )
+        fireEvent.click(await screen.findByLabelText('Open Sol'))
+        const dialog = screen.queryByRole('alertdialog', {
+          name: 'Discard this draft?',
+        })
+        if (dialog)
+          fireEvent.click(screen.getByRole('button', { name: answer }))
+        expect({
+          asked: dialog !== null,
+          selected: document.querySelector('[data-canvas-toolbar] h2')
+            ?.textContent,
+          draft: screen.queryByRole('region', { name: 'Connection' }) !== null,
+          text:
+            (
+              screen.queryByLabelText(
+                'Standing instructions',
+              ) as HTMLTextAreaElement | null
+            )?.value ?? null,
+        }).toEqual({
+          asked: true,
+          selected: answer === 'Keep editing' ? 'Crew A' : 'Crew B',
+          draft: answer === 'Keep editing',
+          text: answer === 'Keep editing' ? 'Keep this draft' : null,
+        })
+      },
+    )
+
     it('leaves Enter meaning "open" when Connect is not armed', async () => {
       const onOpenSession = vi.fn()
       seedCrews([
@@ -1258,6 +1349,64 @@ describe('MissionControl', () => {
      * Mutation that reds it: drop the `hasMore` row, or call `listRuns`
      * without the `before` cursor.
      */
+    it('keeps every loaded run on an older-page failure and retries that page (mutation: historyError)', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
+      ])
+      seed([makeSession({ id: 'a', name: 'Fable' })], [CLAUDE_CODE])
+      const page = (ids: string[], hasMore = true) => ({
+        runs: ids.map((id) => makeRun(id, '2026-09-06T12:00:00.000Z')),
+        unattributedHails: [],
+        outcomes: {},
+        hasMore,
+      })
+      listRuns
+        .mockResolvedValueOnce(page(['run-1', 'run-2']))
+        .mockResolvedValueOnce(page(['run-3']))
+        .mockRejectedValueOnce(new Error('Older records unavailable'))
+        .mockResolvedValueOnce(page(['run-4'], false))
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Load older runs' }),
+      )
+      await waitFor(() => {
+        if (
+          screen.queryAllByRole('button', { name: /0 deliveries/ }).length !== 3
+        )
+          throw new Error('waiting for appended page')
+      })
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Load older runs' }),
+      )
+      await screen.findByText('Older records unavailable')
+      expect({
+        runs: screen.queryAllByRole('button', { name: /0 deliveries/ }).length,
+        inline: screen.queryByRole('alert')?.textContent,
+        fullError: screen.queryByText('Couldn’t load history'),
+      }).toEqual({
+        runs: 3,
+        inline: 'Older records unavailable',
+        fullError: null,
+      })
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Retry older runs' }),
+      )
+      await waitFor(() => {
+        expect({
+          runs: screen.queryAllByRole('button', { name: /0 deliveries/ })
+            .length,
+          lastRead: listRuns.mock.calls.at(-1),
+          error: screen.queryByText('Older records unavailable'),
+        }).toEqual({
+          runs: 4,
+          lastRead: ['crew-1', { before: 'run-3' }],
+          error: null,
+        })
+      })
+    })
+
     it('loads older runs when the page says there are more', async () => {
       seedCrews([
         makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),

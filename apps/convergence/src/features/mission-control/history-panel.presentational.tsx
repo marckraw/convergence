@@ -34,6 +34,7 @@ interface HistoryPanelProps {
   /** The page saw another run below the ones it returned (L2). */
   hasMore: boolean
   loadingOlder: boolean
+  olderError: string | null
   onLoadOlder: () => void
   onFilterChange: (filter: HistoryFilter) => void
   onSelectRun: (flowRunId: string) => void
@@ -67,6 +68,7 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
   loadError,
   hasMore,
   loadingOlder,
+  olderError,
   onLoadOlder,
   onFilterChange,
   onSelectRun,
@@ -213,6 +215,11 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
               reads when told to. */}
           {hasMore ? (
             <li className="pt-1">
+              {olderError ? (
+                <p role="alert" className="px-3 text-[11px] text-red-400">
+                  {olderError}
+                </p>
+              ) : null}
               <Button
                 type="button"
                 variant="ghost"
@@ -221,7 +228,11 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
                 onClick={onLoadOlder}
                 className="h-7 w-full px-3 text-[11px] text-muted-foreground"
               >
-                {loadingOlder ? 'Loading older runs…' : 'Load older runs'}
+                {loadingOlder
+                  ? 'Loading older runs…'
+                  : olderError
+                    ? 'Retry older runs'
+                    : 'Load older runs'}
               </Button>
             </li>
           ) : null}

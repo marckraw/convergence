@@ -151,6 +151,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyLoadingOlder, setHistoryLoadingOlder] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
+  const [olderError, setOlderError] = useState<string | null>(null)
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all')
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
 
@@ -259,9 +260,10 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         (savedDraft === null || connectionDraftIsDirty(draft, savedDraft))
       if (dirty) {
         setConfirmDiscard({ run })
-        return
+        return false
       }
       run()
+      return true
     },
     [draft, savedDraft],
   )
@@ -316,8 +318,12 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
    * settle away from spending somebody's provider quota.
    */
   const openDraft = useCallback(
-    (input: { sourceSessionId: string; targetSessionId: string }) => {
+    (
+      input: { sourceSessionId: string; targetSessionId: string },
+      nextConnectMode?: ConnectModeState,
+    ) => {
       leaveDraft(() => {
+        if (nextConnectMode) setConnectMode(nextConnectMode)
         const batonName =
           crew?.members.find(
             (member) => member.sessionId === input.targetSessionId,
@@ -341,8 +347,8 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const handlePick = useCallback(
     (sessionId: string) => {
       const result = pickConnectCard(connectMode, sessionId)
-      setConnectMode(result.state)
-      if (result.drawn) openDraft(result.drawn)
+      if (result.drawn) openDraft(result.drawn, result.state)
+      else setConnectMode(result.state)
     },
     [connectMode, openDraft],
   )
@@ -633,6 +639,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
     if (!crew) return
     setHistoryLoading(true)
     setHistoryError(null)
+    setOlderError(null)
     try {
       const page = await runHistoryApi.listRuns(crew.id)
       setHistoryPage(page)
@@ -658,7 +665,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
     const oldest = historyPage?.runs[historyPage.runs.length - 1]
     if (!crew || !historyPage?.hasMore || !oldest) return
     setHistoryLoadingOlder(true)
-    setHistoryError(null)
+    setOlderError(null)
     try {
       const older = await runHistoryApi.listRuns(crew.id, {
         before: oldest.flowRunId,
@@ -670,7 +677,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       // The runs already read stay on screen: losing them because the page
       // below them would not load would be the button destroying the thing it
       // was meant to extend.
-      setHistoryError(
+      setOlderError(
         error instanceof Error
           ? error.message
           : 'Convergence could not read this crew’s history.',
@@ -849,7 +856,13 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
           '[data-canvas-crew-id]',
         )
         const crewId = node?.getAttribute('data-canvas-crew-id')
-        if (crewId) setSelectedCrewId(crewId)
+        if (!crewId || crewId === crew.id) return
+        const left = leaveDraft(() => {
+          setSelectedCrewId(crewId)
+          closePanel()
+        })
+        // A pending discard decision also holds the card's own click action.
+        if (!left) event.stopPropagation()
       }}
     >
       <CanvasToolbar
@@ -1239,6 +1252,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
           onFilterChange={setHistoryFilter}
           hasMore={historyPage?.hasMore ?? false}
           loadingOlder={historyLoadingOlder}
+          olderError={olderError}
           onLoadOlder={() => {
             void loadOlderRuns()
           }}

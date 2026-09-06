@@ -46,7 +46,10 @@ interface RunCursorRow {
  * without a database.
  */
 export class RunHistoryService {
-  constructor(private db: Database.Database) {}
+  constructor(
+    private db: Database.Database,
+    private now: () => Date = () => new Date(),
+  ) {}
 
   listRuns(crewId: string, options: ListRunsOptions = {}): RelayRunPage {
     const limit = resolveLimit(options.limit)
@@ -92,7 +95,7 @@ export class RunHistoryService {
       hasMore,
       // One instant for the whole page: two runs a millisecond either side of
       // the live window would otherwise be judged by two different clocks.
-      now: new Date(),
+      now: this.now(),
     })
   }
 

@@ -150,10 +150,10 @@ export interface RunStatusHop {
   /**
    * The delivery receipt, or null on a row written before receipts existed.
    *
-   * Carried here because it decides whether "still owed" is even a question
-   * the ledger can answer: `markStationSettled` stamps a receipted hop only
-   * when a settle NAMES its id, so a row without one is never going to be
-   * stamped by that path and cannot be read as work in flight.
+   * Receipts are issued on this build's rows only. A null receipt identifies
+   * a legacy row whose outstanding work the ledger cannot vouch for, so it
+   * is not read as owed. `markStationSettled` can still stamp such a row by
+   * its fired-at floor; the missing receipt is not proof it cannot settle.
    */
   dispatchId: string | null
   /** Null while the station this hop landed work in still owes it. */

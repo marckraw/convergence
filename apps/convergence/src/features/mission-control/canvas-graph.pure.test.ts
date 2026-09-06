@@ -238,6 +238,37 @@ describe('buildCanvasGraph', () => {
     expect(second.y).toBeGreaterThan(first.y + first.height)
   })
 
+  it('keeps negative overhang inside the second crew slot (mutation: origin pinned at clusterTop)', () => {
+    const graph = buildCanvasGraph(
+      [
+        group(crew('c1'), ['a']),
+        group(
+          crew('c2', {
+            members: [
+              { sessionId: 'b', batonName: null, canvasX: -300, canvasY: -200 },
+            ],
+          }),
+          ['b'],
+        ),
+        group(crew('c3'), ['c']),
+      ],
+      [],
+    )
+    const [first, second] = graph.clusters
+    const node = graph.nodes.find((entry) => entry.id === 'b')!
+    expect({
+      gap: second.y - first.y - first.height,
+      nextGap: graph.clusters[2].y - second.y - second.height,
+      topPadding: node.y - second.y,
+      stored: crewLocalPosition(node, second),
+    }).toEqual({
+      gap: 48,
+      nextGap: 48,
+      topPadding: 44,
+      stored: { x: -300, y: -200 },
+    })
+  })
+
   it('leaves sessions in no crew off the canvas entirely', () => {
     const graph = buildCanvasGraph(
       [group(crew('c1'), ['a']), group(null, ['loose'])],
@@ -718,7 +749,7 @@ describe('positions the crew remembers (R10)', () => {
    * border -- the same "fallen out of the crew" picture the rule above exists
    * to prevent, from the other two sides.
    *
-   * Mutation that reds it: leave the cluster's origin at (0, clusterTop).
+   * Mutation that reds it: pin originY at clusterTop instead of absorbing overhang.
    */
   it('grows the crew frame to hold a card moved above or left of it', () => {
     const graph = buildCanvasGraph(
@@ -733,9 +764,9 @@ describe('positions the crew remembers (R10)', () => {
 
     const frame = graph.clusters[0]
     const node = graph.nodes[0]
-    expect(node).toMatchObject({ x: -300, y: -200 })
+    expect(node).toMatchObject({ x: -300, y: 44 })
     expect(frame.x).toBeLessThanOrEqual(-300)
-    expect(frame.y).toBeLessThanOrEqual(-200)
+    expect(frame.y).toBe(0)
     expect(frame.x + frame.width).toBeGreaterThanOrEqual(
       node.x + CANVAS_NODE_WIDTH,
     )
@@ -743,11 +774,9 @@ describe('positions the crew remembers (R10)', () => {
   })
 
   /**
-   * The stored coordinates are measured from the LAYOUT origin, not from the
-   * frame's drawn corner -- which the rule above lets move. Reading a drop
-   * back against the drawn corner would shift the stored value by however far
-   * the frame had grown, so a card dragged above its frame would creep every
-   * time it was touched.
+   * The stored coordinates are measured from the crew origin, not from the
+   * frame's drawn corner. The origin absorbs upward overhang inside the slot;
+   * reading a drop against the frame instead would change its stored value.
    *
    * Mutation that reds it: have `crewLocalPosition` take `x`/`y` again.
    */

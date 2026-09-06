@@ -140,12 +140,10 @@ export interface CanvasCrewCluster {
   /**
    * Where this crew's STORED card coordinates are measured from.
    *
-   * Separate from the drawn corner because the frame moves and the origin must
-   * not: a card dragged above or left of the walk's area pushes the border out
-   * to hold it (L6), and if the two were one value, reading that same drop back
-   * would subtract the border's new offset and store a different position than
-   * the one the card is at -- so a card up there would creep further every time
-   * it was touched.
+   * The frame stays at its slot's top; upward overhang moves the origin down
+   * inside that slot. Reading a drop against this origin preserves its stored
+   * coordinates even after the frame grows. Horizontal overhang moves only
+   * the frame's left edge, so originX remains zero.
    */
   originX: number
   originY: number
@@ -323,6 +321,26 @@ export function buildCanvasGraph(
     let widestColumn = 0
     let tallestColumn = 0
 
+    // Positions the crew remembers (R10). Read once for the whole cluster
+    // rather than per card, and only for members that carry BOTH coordinates:
+    // half a position is not a position.
+    const storedPositions = new Map<string, { x: number; y: number }>()
+    for (const member of crew.members) {
+      if (member.canvasX === null || member.canvasY === null) continue
+      storedPositions.set(member.sessionId, {
+        x: member.canvasX,
+        y: member.canvasY,
+      })
+    }
+
+    // The frame owns its slot. Absorb upward overhang by moving the origin
+    // down inside it, so no crew can grow into the crew above (M-b).
+    let top = 0
+    for (const stored of storedPositions.values()) {
+      top = Math.min(top, stored.y - CLUSTER_PADDING_TOP)
+    }
+    const originY = clusterTop - top
+
     /**
      * Where a card sits, when nobody has moved it.
      *
@@ -340,23 +358,8 @@ export function buildCanvasGraph(
       tallestColumn = Math.max(tallestColumn, row + 1)
       return {
         x: CLUSTER_PADDING_X + column * (CANVAS_NODE_WIDTH + COLUMN_GAP),
-        y:
-          clusterTop +
-          CLUSTER_PADDING_TOP +
-          row * (CANVAS_NODE_HEIGHT + ROW_GAP),
+        y: originY + CLUSTER_PADDING_TOP + row * (CANVAS_NODE_HEIGHT + ROW_GAP),
       }
-    }
-
-    // Positions the crew remembers (R10). Read once for the whole cluster
-    // rather than per card, and only for members that carry BOTH coordinates:
-    // half a position is not a position.
-    const storedPositions = new Map<string, { x: number; y: number }>()
-    for (const member of crew.members) {
-      if (member.canvasX === null || member.canvasY === null) continue
-      storedPositions.set(member.sessionId, {
-        x: member.canvasX,
-        y: member.canvasY,
-      })
     }
 
     for (const card of group.cards) {
@@ -367,12 +370,10 @@ export function buildCanvasGraph(
         id: card.session.id,
         crewId: crew.id,
         card,
-        // Stored positions are cluster-relative in x and ABSOLUTE in y for
-        // the same reason `place` is: clusters stack down the canvas, so a
-        // card's y has to be read against the frame it belongs to. Stored
-        // values are written back the same way (see `crewLocalPosition`).
+        // Stored positions are relative to the crew origin. Project them
+        // onto the canvas and invert through `crewLocalPosition` on drop.
         x: stored ? stored.x : laidOut.x,
-        y: stored ? clusterTop + stored.y : laidOut.y,
+        y: stored ? originY + stored.y : laidOut.y,
       })
     }
 
@@ -451,7 +452,6 @@ export function buildCanvasGraph(
     // The frame's four edges, in the layout's own coordinates: the walk's area
     // first, then stretched to hold anything arranged outside it.
     let left = 0
-    let top = 0
     let right =
       CLUSTER_PADDING_X * 2 +
       (widestColumn + 1) * CANVAS_NODE_WIDTH +
@@ -469,9 +469,6 @@ export function buildCanvasGraph(
     // down and right (L6).
     for (const stored of storedPositions.values()) {
       left = Math.min(left, stored.x - CLUSTER_PADDING_X)
-      // The top padding is the strip the crew's name sits in, so a card above
-      // the walk's area clears the title rather than landing under it.
-      top = Math.min(top, stored.y - CLUSTER_PADDING_TOP)
       right = Math.max(right, stored.x + CANVAS_NODE_WIDTH + CLUSTER_PADDING_X)
       bottom = Math.max(
         bottom,
@@ -488,13 +485,11 @@ export function buildCanvasGraph(
       accentColor: crew.accentColor,
       parked: openHails.length > 0,
       x: left,
-      y: clusterTop + top,
+      y: clusterTop,
       width: right - left,
       height,
-      // Unmoved by any of the stretching above: this is what a stored `(0, 0)`
-      // means, and it has to mean the same thing on every read.
       originX: 0,
-      originY: clusterTop,
+      originY,
     })
 
     // ONE dashed edge for all three safety nets, from the frame rather than
@@ -516,10 +511,8 @@ export function buildCanvasGraph(
       })
     }
 
-    // The next crew starts below this one's LOWEST edge, which is `bottom`
-    // measured from this crew's origin -- not its height, which also counts
-    // however far the frame reached above that origin.
-    clusterTop += bottom + CLUSTER_GAP
+    // The next slot clears the entire frame, including upward overhang.
+    clusterTop += height + CLUSTER_GAP
   }
 
   return { clusters, nodes, spawnNodes, chairs, edges }
