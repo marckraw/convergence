@@ -29,6 +29,32 @@ Lineage: Divergence
 (Rust) is the ancestor, reference-only; Emergence is the descendant.
 Working-relationship charter: `FABLE.md` (local, gitignored).
 
+## Role routing
+
+Follow the role assigned by Marcin or the current kickoff; model name and
+hosting app do not determine authority. Reading another role's charter does
+not assign that role.
+
+- **Design Director:** for design exploration and Figma collaboration, read
+  [DESIGN.md](DESIGN.md) and [the design workflow](docs/agents/design-workflow.md).
+  This role usually works in the ChatGPT Codex desktop app, outside the
+  Convergence executor/reviewer relay loop. It hands compact design briefs
+  to Fable in Linear; it does not arm runs or own implementation/release.
+- **Fable:** use the local `FABLE.md`, `HANDOFF.md`, and current Linear
+  rulings for planning, review settlement, and release ownership.
+- **Executor or independent reviewer:** follow the assigned run/review
+  instructions and current Linear dispatch board; do not adopt the design
+  role just because Figma artifacts are linked.
+
+Marcin ratified the design role on 2026-09-06 and Fable integrated it the
+same day. Figma components are exploration tools, not mandatory code mappings.
+Code Connect and automatic design/code synchronization are not part of this
+agreement. Preserve selected design references during dispatched runs.
+Explicit task-specific delivery ownership takes precedence over the general
+working-style defaults below. A run born from a design brief carries the
+brief's real-app walkthrough into its kickoff as the base of the run's QA
+list, so the horse's checklist and the brief cannot diverge.
+
 ## Working style
 
 - Main branch is `master`. Small vertical slices; honest states at every
