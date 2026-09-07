@@ -2,6 +2,11 @@ import { render } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { Position, type EdgeProps } from '@xyflow/react'
 import { CanvasRoutedEdge } from './canvas-routed-edge.container'
+const routing = vi.hoisted(() => ({
+  route: vi.fn(
+    (): { points: { x: number; y: number }[]; shared: boolean } | null => null,
+  ),
+}))
 
 vi.mock('@xyflow/react', async (original) => ({
   ...(await original<typeof import('@xyflow/react')>()),
@@ -21,10 +26,46 @@ vi.mock('@xyflow/react', async (original) => ({
 vi.mock('@/features/mission-control', async (original) => ({
   ...(await original<typeof import('@/features/mission-control')>()),
   routeAround: () => null,
-  routeCanvasEdge: () => null,
+  routeCanvasEdge: routing.route,
 }))
 
 describe('F1 fallback', () => {
+  it.each([false, true])(
+    'G2′ stacks shared-route label %s (mutation: omit shared label layout)',
+    (reverse) => {
+      const points = [
+        { x: 150, y: 152 },
+        { x: 150, y: 246 },
+        { x: 400, y: 246 },
+        { x: 400, y: 340 },
+      ]
+      routing.route.mockReturnValueOnce({
+        points: reverse ? points.slice().reverse() : points,
+        shared: true,
+      })
+      const { getByText } = render(
+        <CanvasRoutedEdge
+          {...({
+            id: 'wire',
+            source: reverse ? 'b' : 'a',
+            target: reverse ? 'a' : 'b',
+            sourceX: 0,
+            sourceY: 0,
+            targetX: 0,
+            targetY: 0,
+            sourcePosition: Position.Bottom,
+            targetPosition: Position.Top,
+            data: { opposed: true },
+            label: 'Shared label',
+          } as EdgeProps)}
+        />,
+      )
+      expect(getByText('Shared label')).toHaveStyle({
+        transform: `translate(-50%, ${reverse ? '0%' : '-100%'}) translate(275px, ${reverse ? 249 : 243}px)`,
+      })
+    },
+  )
+
   it('uses a side-selected smoothstep (mutation: restore the straight fallback)', () => {
     const props = {
       id: 'wire',

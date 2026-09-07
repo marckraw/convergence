@@ -26,6 +26,7 @@ import {
   pulseWireColor,
   pulseWireWidth,
   resolveWireColor,
+  resolveCardDrop,
 } from '@/features/mission-control'
 import type {
   SessionCard,
@@ -371,14 +372,19 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
   }, [graph, onOpen, acknowledgeCrew, authoring])
 
   const [nodes, setNodes] = useState<Node[]>(graphNodes)
-  const previousGraph = useRef(graph)
+  const previousGraphNodes = useRef(graphNodes)
   useEffect(() => {
-    const changed = previousGraph.current !== graph
-    previousGraph.current = graph
+    const previousCoordinates = new Map(
+      previousGraphNodes.current.map((node) => [node.id, node.position]),
+    )
+    previousGraphNodes.current = graphNodes
     setNodes((current) =>
       graphNodes.map((node) => {
         const previous = current.find((entry) => entry.id === node.id)
-        return !changed && previous
+        const coordinate = previousCoordinates.get(node.id)
+        const changed =
+          coordinate?.x !== node.position.x || coordinate?.y !== node.position.y
+        return previous && (previous.dragging || !changed)
           ? {
               ...previous,
               ...node,
@@ -388,9 +394,14 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
           : node
       }),
     )
-  }, [graph, graphNodes])
+  }, [graphNodes])
   const handleNodesChange = useCallback((changes: NodeChange[]) => {
-    setNodes((current) => applyNodeChanges(changes, current))
+    setNodes((current) =>
+      applyNodeChanges(
+        changes.filter((change) => change.type !== 'remove'),
+        current,
+      ),
+    )
   }, [])
   const flowInstance = useRef<ReactFlowInstance | null>(null)
   const handleInit = useCallback((instance: ReactFlowInstance) => {
@@ -399,17 +410,10 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    let previousWidth = 0,
-      previousHeight = 0
+    let previousHeight = 0
     const observer = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect
-      if (
-        width <= 0 ||
-        height <= 0 ||
-        (width === previousWidth && height === previousHeight)
-      )
-        return
-      previousWidth = width
+      if (width <= 0 || height <= 0 || height === previousHeight) return
       previousHeight = height
       void flowInstance.current?.fitView(FIT_VIEW_OPTIONS)
     })
@@ -606,8 +610,8 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
   )
 
   /**
-   * A card was dropped. The position stored is the node's own, so what is
-   * remembered is where it was left rather than where the pointer was.
+   * Resolve crowding on drop, then show and store that same position. Only
+   * the dragged card moves; legacy arrangements stay untouched until a drop.
    */
   const handleNodeDragStop = useCallback(
     (_event: unknown, node: Node) => {
@@ -619,15 +623,39 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
       // canvas cannot have had a card dragged inside it, so this is a guard
       // against a stale graph rather than an expected path.
       if (!cluster) return
+      const position = resolveCardDrop(
+        {
+          id: node.id,
+          ...node.position,
+          width: CANVAS_NODE_WIDTH,
+          height: CANVAS_NODE_HEIGHT,
+        },
+        nodes
+          .filter(
+            (other) =>
+              other.type !== 'crewCluster' &&
+              other.data.crewId === authoring.crewId,
+          )
+          .map((other) => ({
+            id: other.id,
+            ...other.position,
+            width: other.width ?? CANVAS_NODE_WIDTH,
+            height: other.height ?? CANVAS_NODE_HEIGHT,
+          })),
+      )
+      setNodes((current) =>
+        current.map((other) =>
+          other.id === node.id
+            ? { ...other, position, dragging: false }
+            : other,
+        ),
+      )
       authoring.onMove({
         sessionId: node.id,
-        ...crewLocalPosition(
-          { x: node.position.x, y: node.position.y },
-          cluster,
-        ),
+        ...crewLocalPosition(position, cluster),
       })
     },
-    [authoring, graph],
+    [authoring, graph, nodes],
   )
 
   const handleEdgeClick = useCallback(
@@ -690,6 +718,7 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
       <ReactFlow
         nodes={nodes}
         onNodesChange={handleNodesChange}
+        deleteKeyCode={null}
         onInit={handleInit}
         edges={edges}
         nodeTypes={NODE_TYPES}

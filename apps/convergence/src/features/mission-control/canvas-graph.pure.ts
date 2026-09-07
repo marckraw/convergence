@@ -2,6 +2,7 @@ import type { CrewHail } from '@/entities/crew-hail'
 import type { RelayAction, SessionRelay } from '@/entities/session-relay'
 import type { SessionCrewGroup } from './session-crew-groups.pure'
 import type { SessionCard } from './mission-control.types'
+import { MIN_CARD_GAP } from './canvas-collision.pure'
 
 /**
  * Canvas geometry, in the same units React Flow uses.
@@ -14,7 +15,7 @@ export const CANVAS_NODE_WIDTH = 260
 export const CANVAS_NODE_HEIGHT = 108
 export const CANVAS_SPAWN_NODE_HEIGHT = 64
 const COLUMN_GAP = 120
-const ROW_GAP = 40
+const ROW_GAP = MIN_CARD_GAP
 const CLUSTER_PADDING_X = 20
 const CLUSTER_PADDING_TOP = 44
 const CLUSTER_PADDING_BOTTOM = 20

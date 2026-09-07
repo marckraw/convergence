@@ -122,6 +122,11 @@ function group(crewValue: SessionCrew | null, ids: string[]): SessionCrewGroup {
 }
 
 describe('assignFlowColumns', () => {
+  it('R15 leaves 64 px between automatic rows (mutation: restore ROW_GAP 40)', () => {
+    const graph = buildCanvasGraph([group(crew('c1'), ['a', 'b'])], [], [])
+    expect(graph.nodes[1].y - graph.nodes[0].y - 108).toBe(64)
+  })
+
   it('walks a chain left to right', () => {
     const columns = assignFlowColumns(ids('a', 'b', 'c'), [
       link('a', 'b'),

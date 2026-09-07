@@ -4,7 +4,7 @@ import {
   chooseRouteSides,
   rectCenter,
   routeAround,
-  routeCanvasEdge,
+  routeCanvasEdge as planCanvasEdge,
   routeSearchBounds,
   routeEntersRect,
   routeLabelPoint,
@@ -15,6 +15,10 @@ import {
   simplify,
 } from './canvas-route.pure'
 import type { RouteRect } from './canvas-route.pure'
+
+// Keep point assertions readable while exercising the public route planner.
+const routeCanvasEdge = (input: Parameters<typeof planCanvasEdge>[0]) =>
+  planCanvasEdge(input)?.points ?? null
 
 const CARD_WIDTH = 260
 const CARD_HEIGHT = 108
@@ -403,6 +407,83 @@ const DIRECTOR_STACK: RouteRect[] = [
   ),
   { id: 'chair', x: 20, y: 636, width: 260, height: 64 },
 ]
+const SPACED_STACK = DIRECTOR_STACK.map((rect, index) => ({
+  ...rect,
+  y: 44 + index * 172,
+}))
+
+describe('G2′ hosted lanes and the legacy net', () => {
+  it('advertises sharing only for the unhosted pair (mutation: omit the shared flag)', () => {
+    expect(
+      [DIRECTOR_STACK, SPACED_STACK].map(
+        (stack) =>
+          planCanvasEdge({
+            source: stack[0],
+            target: stack[2],
+            obstacles: stack,
+            opposed: true,
+          })?.shared,
+      ),
+    ).toEqual([true, false])
+  })
+  it('keeps both 64 px lanes perpendicular with at least 8 px end segments (mutation: subtract laneSpace from centre stubs)', () => {
+    for (const source of SPACED_STACK) {
+      for (const target of SPACED_STACK) {
+        if (source === target) continue
+        const route = routeCanvasEdge({
+          source,
+          target,
+          obstacles: SPACED_STACK,
+          opposed: true,
+        })
+        const ends = route
+          ? [
+              [route[0], route[1]],
+              [route[route.length - 2], route[route.length - 1]],
+            ]
+          : []
+        expect(
+          ends.length === 2 &&
+            ends.every(([a, b]) => a.x === b.x && Math.abs(a.y - b.y) >= 8),
+          `${source.id} -> ${target.id}`,
+        ).toBe(true)
+      }
+    }
+  })
+
+  it('shares the 40 px centre route around the middle card (mutation: drop the lane-host predicate)', () => {
+    const source = DIRECTOR_STACK[0],
+      target = DIRECTOR_STACK[2]
+    const forward = routeCanvasEdge({
+      source,
+      target,
+      obstacles: DIRECTOR_STACK,
+      opposed: true,
+    })
+    const reverse = routeCanvasEdge({
+      source: target,
+      target: source,
+      obstacles: DIRECTOR_STACK,
+      opposed: true,
+    })
+    expect(forward).toEqual(reverse?.slice().reverse())
+  })
+
+  it('deduplicates before collapsing corners (mutation: omit consecutive-point deduplication)', () => {
+    expect(
+      simplify([
+        { x: 0, y: 0 },
+        { x: 20, y: 0 },
+        { x: 20, y: 0 },
+        { x: 20, y: 20 },
+      ]),
+    ).toEqual([
+      { x: 0, y: 0 },
+      { x: 20, y: 0 },
+      { x: 20, y: 20 },
+    ])
+  })
+})
 
 describe('F1 Director stack', () => {
   it('routes every ordered pair (mutation: restore fixed, snapped stubs)', () => {
@@ -436,20 +517,20 @@ describe('F1 Director stack', () => {
   })
 
   it('separates opposed routes (mutation: omit the lane offset)', () => {
-    const source = DIRECTOR_STACK[0]
-    const target = DIRECTOR_STACK[1]
+    const source = SPACED_STACK[0]
+    const target = SPACED_STACK[1]
     const forwardInput = {
       source,
       target,
       ...chooseRouteSides(source, target),
-      obstacles: DIRECTOR_STACK,
+      obstacles: SPACED_STACK,
       opposed: true,
     }
     const reverseInput = {
       source: target,
       target: source,
       ...chooseRouteSides(target, source),
-      obstacles: DIRECTOR_STACK,
+      obstacles: SPACED_STACK,
       opposed: true,
     }
     const forward = routeCanvasEdge(forwardInput)!
@@ -513,20 +594,20 @@ describe('F1 routing bounds', () => {
   })
 
   it('shares no opposed segment (mutation: omit the lane offset)', () => {
-    for (let a = 0; a < DIRECTOR_STACK.length; a += 1) {
-      for (let b = a + 1; b < DIRECTOR_STACK.length; b += 1) {
-        const source = DIRECTOR_STACK[a],
-          target = DIRECTOR_STACK[b]
+    for (let a = 0; a < SPACED_STACK.length; a += 1) {
+      for (let b = a + 1; b < SPACED_STACK.length; b += 1) {
+        const source = SPACED_STACK[a],
+          target = SPACED_STACK[b]
         const forward = routeCanvasEdge({
           source,
           target,
-          obstacles: DIRECTOR_STACK,
+          obstacles: SPACED_STACK,
           opposed: true,
         })!
         const reverse = routeCanvasEdge({
           source: target,
           target: source,
-          obstacles: DIRECTOR_STACK,
+          obstacles: SPACED_STACK,
           opposed: true,
         })!
         const overlaps = forward.slice(1).some((end, i) =>
@@ -578,16 +659,16 @@ describe('F1 opposed labels', () => {
   it.each([false, true])(
     'keeps the label outside lane %s (mutation: center opposed labels)',
     (reverse) => {
-      const source = DIRECTOR_STACK[reverse ? 1 : 0],
-        target = DIRECTOR_STACK[reverse ? 0 : 1]
+      const source = SPACED_STACK[reverse ? 1 : 0],
+        target = SPACED_STACK[reverse ? 0 : 1]
       const route = routeCanvasEdge({
         source,
         target,
-        obstacles: DIRECTOR_STACK,
+        obstacles: SPACED_STACK,
         opposed: true,
       })!
       expect(routeLabelLayout(route, true)).toEqual({
-        point: { x: reverse ? 166 : 134, y: 172 },
+        point: { x: reverse ? 166 : 134, y: 184 },
         translate: reverse ? '0%, -50%' : '-100%, -50%',
       })
     },

@@ -665,6 +665,129 @@ describe('MissionControl', () => {
     async function switchToCanvas() {
       fireEvent.click(await screen.findByRole('button', { name: 'Canvas' }))
     }
+    it.each(['keyboard', 'remove change'] as const)(
+      'G1 disables %s deletion (mutation: restore the corresponding deletion path)',
+      async (proof) => {
+        seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])
+        seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+        render(<MissionControl />)
+        await switchToCanvas()
+        await screen.findByText('Wire the room')
+        if (proof === 'keyboard') expect(flow.props?.deleteKeyCode).toBeNull()
+        else {
+          act(() => flow.props?.onNodesChange?.([{ id: 'a', type: 'remove' }]))
+          expect(
+            document.querySelector('.react-flow__node[data-id="a"]'),
+          ).not.toBeNull()
+        }
+      },
+    )
+
+    it.each(['dragging', 'awaiting save'] as const)(
+      'G3 preserves local coordinates while %s through a metadata rebuild (mutation: adopt graph identity changes)',
+      async (phase) => {
+        seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])
+        seed([makeSession({ id: 'a', name: 'Moving card' })], [CLAUDE_CODE])
+        setMemberPosition.mockImplementation(() => new Promise(() => {}))
+        render(<MissionControl />)
+        await switchToCanvas()
+        await screen.findByText('Moving card')
+        act(() =>
+          flow.props?.onNodesChange?.([
+            {
+              id: 'a',
+              type: 'position',
+              position: { x: 300, y: 400 },
+              dragging: phase === 'dragging',
+            },
+          ]),
+        )
+        act(() =>
+          useSessionStore.setState({
+            globalSessions: [makeSession({ id: 'a', name: 'Updated card' })],
+          }),
+        )
+        const node = flow.props!.nodes!.find((entry) => entry.id === 'a')!
+        expect.soft(node.position).toEqual({ x: 300, y: 400 })
+        act(() =>
+          flow.props?.onNodeDragStop?.(new MouseEvent('mouseup'), node, [node]),
+        )
+        await waitFor(() =>
+          expect(setMemberPosition).toHaveBeenCalledWith('crew-1', 'a', {
+            x: 300,
+            y: 400,
+          }),
+        )
+      },
+    )
+
+    it.each(['dragging', 'confirmed'] as const)(
+      'G3 handles changed store coordinates while %s (mutations: adopt during dragging; preserve every local coordinate)',
+      async (phase) => {
+        const crew = makeCrew({ id: 'crew-1', sessionIds: ['a'] })
+        seedCrews([crew])
+        seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+        render(<MissionControl />)
+        await switchToCanvas()
+        await screen.findByText('Wire the room')
+        act(() =>
+          flow.props?.onNodesChange?.([
+            {
+              id: 'a',
+              type: 'position',
+              position: { x: 300, y: 400 },
+              dragging: true,
+            },
+          ]),
+        )
+        act(() =>
+          useSessionCrewStore.setState({
+            crews: [
+              {
+                ...crew,
+                members: [
+                  {
+                    sessionId: 'a',
+                    batonName: null,
+                    canvasX: 600,
+                    canvasY: 320,
+                  },
+                ],
+              },
+            ],
+          }),
+        )
+        if (phase === 'confirmed') {
+          act(() =>
+            flow.props?.onNodesChange?.([
+              { id: 'a', type: 'position', dragging: false },
+            ]),
+          )
+          act(() =>
+            useSessionCrewStore.setState({
+              crews: [
+                {
+                  ...crew,
+                  members: [
+                    {
+                      sessionId: 'a',
+                      batonName: null,
+                      canvasX: 600,
+                      canvasY: 420,
+                    },
+                  ],
+                },
+              ],
+            }),
+          )
+        }
+        expect(
+          flow.props!.nodes!.find((entry) => entry.id === 'a')!.position,
+        ).toEqual(
+          phase === 'dragging' ? { x: 300, y: 400 } : { x: 600, y: 420 },
+        )
+      },
+    )
 
     it('draws crewed sessions as nodes inside their crew', async () => {
       seedCrews([
@@ -1872,6 +1995,58 @@ describe('MissionControl', () => {
     async function switchToCanvas() {
       fireEvent.click(await screen.findByRole('button', { name: 'Canvas' }))
     }
+    it.each(['persisted', 'shown', 'other card'] as const)(
+      'R15 keeps the nudged drop %s (mutations: omit resolution; move every card)',
+      async (proof) => {
+        seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a', 'b'] })])
+        seed(
+          [
+            makeSession({ id: 'a', name: 'First card' }),
+            makeSession({ id: 'b', name: 'Dragged card' }),
+          ],
+          [CLAUDE_CODE],
+        )
+        setMemberPosition.mockImplementation(() => new Promise(() => {}))
+        render(<MissionControl />)
+        await switchToCanvas()
+        await screen.findByText('Dragged card')
+        const other = flow.props!.nodes!.find((entry) => entry.id === 'a')!
+        const node = {
+          ...flow.props!.nodes!.find((entry) => entry.id === 'b')!,
+          position: { ...other.position },
+        }
+        act(() =>
+          flow.props?.onNodesChange?.([
+            {
+              id: 'b',
+              type: 'position',
+              position: node.position,
+              dragging: true,
+            },
+          ]),
+        )
+        act(() =>
+          flow.props?.onNodeDragStop?.(new MouseEvent('mouseup'), node, [node]),
+        )
+        if (proof === 'persisted') {
+          await waitFor(() =>
+            expect(setMemberPosition).toHaveBeenCalledWith('crew-1', 'b', {
+              x: 20,
+              y: -136,
+            }),
+          )
+        } else if (proof === 'shown') {
+          expect(
+            document.querySelector('.react-flow__node[data-id="b"]'),
+          ).toHaveStyle({ transform: 'translate(20px,-136px)' })
+        } else {
+          expect(
+            flow.props!.nodes!.find((entry) => entry.id === 'a')!.position,
+          ).toEqual(other.position)
+        }
+      },
+    )
+
     it.each(['transform', 'persisted position'] as const)(
       'F2 moves the %s (mutation: omit onNodesChange)',
       async (proof) => {
@@ -1952,6 +2127,8 @@ describe('MissionControl', () => {
       },
     )
 
+    // jsdom ignores pointer-events: this proves handler wiring only. Marcin's
+    // real pointer click is the other half of the frame-heading proof.
     it('F3 selects the clicked frame heading (mutation: omit cluster crew id)', async () => {
       seedCrews([
         makeCrew({ id: 'crew-1', name: 'First crew', sessionIds: ['a'] }),
@@ -1982,7 +2159,7 @@ describe('MissionControl', () => {
       ).not.toBeNull()
     })
 
-    it('F4 refits a resized graph viewport (mutation: omit resize fitView)', async () => {
+    it('L-vii refits height only (mutations: omit resize fitView; refit on width)', async () => {
       let observed: {
         callback: ResizeObserverCallback
         observer: ResizeObserver
@@ -2023,6 +2200,23 @@ describe('MissionControl', () => {
           )
         })
         expect(fitView).toHaveBeenCalledWith({ padding: 0.15 })
+        act(() => {
+          const entry = observed as {
+            callback: ResizeObserverCallback
+            observer: ResizeObserver
+            target: Element
+          } | null
+          entry?.callback(
+            [
+              {
+                target: entry.target,
+                contentRect: { width: 400, height: 220 },
+              } as ResizeObserverEntry,
+            ],
+            entry.observer,
+          )
+        })
+        expect(fitView).toHaveBeenCalledTimes(1)
       } finally {
         vi.unstubAllGlobals()
       }

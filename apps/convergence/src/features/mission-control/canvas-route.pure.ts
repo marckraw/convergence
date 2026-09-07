@@ -207,16 +207,14 @@ interface RouteInput {
 
 export function routeAround(input: RouteInput): RoutePoint[] | null {
   const laneSpace = input.laneSpace ?? 0
-  const startDistance =
-    Math.min(
-      ROUTE_STUB,
-      freeGap(input.source, input.sourceSide, input.obstacles) / 2,
-    ) - laneSpace
-  const endDistance =
-    Math.min(
-      ROUTE_STUB,
-      freeGap(input.target, input.targetSide, input.obstacles) / 2,
-    ) - laneSpace
+  const startDistance = Math.min(
+    ROUTE_STUB,
+    freeGap(input.source, input.sourceSide, input.obstacles) / 2,
+  )
+  const endDistance = Math.min(
+    ROUTE_STUB,
+    freeGap(input.target, input.targetSide, input.obstacles) / 2,
+  )
   if (startDistance < 0 || endDistance < 0) return null
   const start = stubPoint(input.source, input.sourceSide, startDistance)
   const end = stubPoint(input.target, input.targetSide, endDistance)
@@ -420,12 +418,12 @@ function freeGap(
   return gap
 }
 
-/** Two bounded attempts; opposed wires share a centerline, not a lane. */
+/** Two bounded attempts; narrow legacy gaps share the unoffset centre route. */
 export function routeCanvasEdge(
   input: Omit<RouteInput, 'sourceSide' | 'targetSide' | 'laneSpace'> & {
     opposed?: boolean
   },
-): RoutePoint[] | null {
+): { points: RoutePoint[]; shared: boolean } | null {
   const reverse = Boolean(input.opposed && input.source.id > input.target.id)
   const source = reverse ? input.target : input.source
   const target = reverse ? input.source : input.target
@@ -443,8 +441,21 @@ export function routeCanvasEdge(
       targetSide: perpendicular[first.targetSide],
     },
   ]
-  const laneSpace = input.opposed ? ROUTE_GRID / 2 : 0
+  const requestedLaneSpace = input.opposed ? ROUTE_GRID / 2 : 0
   for (const sides of attempts) {
+    const hostsLanes = (rect: RouteRect, side: RouteSide) => {
+      const gap = freeGap(rect, side, input.obstacles)
+      const centre = Math.min(ROUTE_STUB, gap / 2)
+      return (
+        centre - requestedLaneSpace >= 8 &&
+        centre + requestedLaneSpace <= gap - ROUTE_CLEARANCE
+      )
+    }
+    const laneSpace =
+      hostsLanes(source, sides.sourceSide) &&
+      hostsLanes(target, sides.targetSide)
+        ? requestedLaneSpace
+        : 0
     const center = routeAround({
       ...input,
       source,
@@ -465,8 +476,11 @@ export function routeCanvasEdge(
     // Both directions must accept the same centerline. An offset that clips
     // a corner rejects this attempt for the pair, so the retry stays shared.
     if (lanes.some((lane) => pathHits(lane, blockers))) continue
-    const route = lanes[reverse ? 1 : 0]
-    return simplify(reverse ? route.reverse() : route)
+    const route = lanes[reverse && laneSpace ? 1 : 0]
+    return {
+      points: simplify(reverse ? route.reverse() : route),
+      shared: Boolean(input.opposed && !laneSpace),
+    }
   }
   return null
 }
@@ -512,7 +526,13 @@ function reconstruct(
  * forty chances for a rounding step to wobble. What a reader sees is the
  * turns.
  */
-export function simplify(points: readonly RoutePoint[]): RoutePoint[] {
+export function simplify(walk: readonly RoutePoint[]): RoutePoint[] {
+  const points = walk.filter(
+    (point, index) =>
+      index === 0 ||
+      point.x !== walk[index - 1].x ||
+      point.y !== walk[index - 1].y,
+  )
   if (points.length <= 2) return [...points]
   const corners: RoutePoint[] = [points[0]]
   for (let index = 1; index < points.length - 1; index += 1) {
@@ -608,11 +628,22 @@ export function routeEntersRect(
   return points.some((point) => contains(rect, point))
 }
 
-/** Labels sit outside opposed lanes; their widths cannot bridge the pair. */
+/** Labels sit outside opposed lanes, or stack above/below a shared route. */
 export function routeLabelLayout(
   points: readonly RoutePoint[],
   opposed: boolean,
+  sharedDirection?: 'forward' | 'reverse',
 ): { point: RoutePoint; translate: string } {
+  if (sharedDirection) {
+    const reverse = sharedDirection === 'reverse'
+    // Use the canonical walk for both labels, including ties between equally
+    // long segments, so reversing the wire cannot pick a different anchor.
+    const anchor = routeLabelPoint(reverse ? [...points].reverse() : points)
+    return {
+      point: { x: anchor.x, y: anchor.y + (reverse ? 3 : -3) },
+      translate: reverse ? '-50%, 0%' : '-50%, -100%',
+    }
+  }
   const point = routeLabelPoint(points)
   if (!opposed || points.length < 2) return { point, translate: '-50%, -50%' }
   let longest = 0

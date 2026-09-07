@@ -156,9 +156,13 @@ export const CanvasRoutedEdge: FC<EdgeProps> = ({
         labelTranslate: layout.translate,
       }
     }
-    const layout = routeLabelLayout(route, opposed)
+    const layout = routeLabelLayout(
+      route.points,
+      opposed,
+      route.shared ? (source > target ? 'reverse' : 'forward') : undefined,
+    )
     return {
-      path: routePath(route),
+      path: routePath(route.points),
       labelPoint: layout.point,
       labelTranslate: layout.translate,
     }

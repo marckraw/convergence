@@ -1,4 +1,5 @@
 export { useMissionControlView } from './use-mission-control-view'
+export { MIN_CARD_GAP, resolveCardDrop } from './canvas-collision.pure'
 export type { MissionControlViewState } from './use-mission-control-view'
 export {
   DEFAULT_MISSION_CONTROL_VIEW,
