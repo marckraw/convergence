@@ -59,7 +59,7 @@ describe('Studio onboarding (MAR-2853)', () => {
     ).toBeTruthy()
   })
   it('opens Hello with the developer chord and toggles the shared captured connection', async () => {
-    // Mutations: remove the chord listener, remove the toggle refresh, or hardcode a connected label.
+    // Mutations: remove the chord listener, remove the toggle refresh, or let Hello read its own connected fixture.
     vi.useFakeTimers()
     render(<StudioApp />)
     fireEvent.click(
@@ -73,6 +73,7 @@ describe('Studio onboarding (MAR-2853)', () => {
     fireEvent.click(
       screen.getByRole('checkbox', { name: 'Simulate an unreachable daemon' }),
     )
+    expect(screen.getByText('The captured daemon did not answer.')).toBeTruthy()
     fireEvent.keyDown(window, { key: 'd', ctrlKey: true, shiftKey: true })
     expect(
       screen.getByText('○ Not connected to backpack.automations'),

@@ -18,7 +18,7 @@ reachability. No endpoint credentials enter the renderer.
 
 Press **Ctrl+Shift+D** to open or close the developer view. It preserves the
 current screen and exposes the unreachable-fixture checkbox alongside the
-original Hello diagnostics. Toggle the checkbox and return to compare connection
+original Hello diagnostics. The checkbox updates Hello immediately; return to compare connection
 indicators on first-request or home. The selection lasts only for the current
 app instance.
 
@@ -29,12 +29,14 @@ in a separate cascade layer. Backpack's shipped Tailwind 3 preset fails under
 Tailwind 4 (`value.match is not a function`), so it is not loaded. All Studio
 colors live in `src/shared/ui/studio-theme.css`; Backpack supplies its own
 button tokens. The shared UI boundary re-exports Backpack's Button.
+Vite aliases the two CSS files to their exported paths because Tailwind 4.2's
+style condition is absent from Backpack's import/require-only CSS exports.
 
 Vite resolves the Book/Medium font assets beside Backpack's exported Button
 entry, since Backpack ships fonts without public font subpath exports. The
 fonts are bundled from the dependency and are never copied into source control.
 
-The root pins React and React DOM to the same version for shared test tooling.
+The root overrides React and React DOM to the same version for shared test tooling.
 This prevents Backpack's older transitive peers from hoisting React 18 above
 React 19 consumers. Vite also deduplicates these modules in Studio.
 

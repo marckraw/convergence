@@ -24,7 +24,7 @@
   --studio-explore-line: #e1e5de;
   --studio-explore-soft: #eaf0e4;
   --studio-explore-surface: #ffffff;
-  --studio-connected: #238251;
+  --studio-explore-connected: #238251;
 }
 
 html {
@@ -147,7 +147,7 @@ a:focus-visible {
   font-weight: 500;
 }
 .studio-connection-connected {
-  color: var(--studio-connected);
+  color: var(--studio-explore-connected);
 }
 .studio-request-card {
   width: 100%;
@@ -261,7 +261,7 @@ a:focus-visible {
   color: var(--studio-explore-muted);
 }
 .studio-remote .studio-connection-connected {
-  color: var(--studio-connected);
+  color: var(--studio-explore-connected);
 }
 .studio-account {
   display: flex;

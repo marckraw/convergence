@@ -13,6 +13,7 @@ const expectedTokens = {
   line: '#e1e5de',
   soft: '#eaf0e4',
   surface: '#ffffff',
+  connected: '#238251',
 }
 
 afterEach(() => {

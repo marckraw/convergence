@@ -45,7 +45,7 @@ describe('Studio home and connection (MAR-2853)', () => {
     ).toBe(connected)
   })
   it('renders every home section from the mock model and marks inert controls', () => {
-    // Mutations: remove/alter a section, or strip titles and aria-disabled from inert controls.
+    // Mutations: remove/alter a section, or drop disabled from either inert Backpack Button.
     render(<Home identity={identity} connection={readConnection()} />)
     for (const text of [
       'backpack',
@@ -90,7 +90,7 @@ describe('Studio home and connection (MAR-2853)', () => {
     for (const control of screen.getAllByRole('button')) {
       expect(
         control.hasAttribute('disabled') ||
-          Boolean(control.getAttribute('title')),
+          control.getAttribute('aria-disabled') === 'true',
       ).toBe(true)
     }
     for (const label of ['+ New conversation', 'Send ↑'])
@@ -102,11 +102,11 @@ describe('Studio home and connection (MAR-2853)', () => {
   })
   it('uses both evaluations through the single connection door', () => {
     // Mutations: hardcode connected or change the captured endpoint constant.
-    expect(readConnection()).toEqual({
+    expect(readConnection()).toMatchObject({
       status: 'connected',
       endpointName: 'backpack.automations',
     })
-    expect(readConnection(true)).toEqual({
+    expect(readConnection(true)).toMatchObject({
       status: 'unreachable',
       endpointName: 'backpack.automations',
     })

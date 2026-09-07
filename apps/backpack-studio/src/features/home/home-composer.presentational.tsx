@@ -22,7 +22,7 @@ export function HomeComposer(): React.JSX.Element {
           variant="filled"
           size="regular"
           title={INERT_CONTROL_TITLE}
-          aria-disabled="true"
+          disabled
         >
           {HOME_MOCK.composer.send}
         </Button>

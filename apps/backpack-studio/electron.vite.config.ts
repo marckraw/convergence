@@ -45,7 +45,14 @@ export default defineConfig({
     root: 'src',
     resolve: {
       dedupe: ['react', 'react-dom'],
-      alias: { '@backpack-fonts': backpackFonts },
+      alias: {
+        '@backpack-fonts': backpackFonts,
+        // Tailwind 4.2 resolves CSS with the style condition; Backpack exports import/require only.
+        '@ef-global/backpack/css/global.css':
+          require.resolve('@ef-global/backpack/css/global.css'),
+        '@ef-global/backpack/css/button.css':
+          require.resolve('@ef-global/backpack/css/button.css'),
+      },
     },
     build: {
       rollupOptions: {

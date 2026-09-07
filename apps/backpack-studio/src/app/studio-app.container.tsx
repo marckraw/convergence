@@ -42,7 +42,7 @@ export function StudioApp(): React.JSX.Element {
           />{' '}
           Simulate an unreachable daemon
         </label>
-        <HelloScreen />
+        <HelloScreen reading={connection} />
       </div>
     )
   if (!identity) return <SignInContainer onSignedIn={setIdentity} />

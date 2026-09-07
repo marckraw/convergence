@@ -1,7 +1,9 @@
-import { readCapturedDaemonHandshake } from './captured-daemon-handshake.pure'
+import {
+  readCapturedDaemonHandshake,
+  type StudioHandshakeReading,
+} from './captured-daemon-handshake.pure'
 
-export interface ConnectionReading {
-  status: 'connected' | 'unauthorized' | 'incompatible' | 'unreachable'
+export interface ConnectionReading extends StudioHandshakeReading {
   endpointName: string
 }
 
@@ -14,7 +16,7 @@ const CAPTURED_ENDPOINT_NAME = 'backpack.automations'
  */
 export function readConnection(unreachable = false): ConnectionReading {
   return {
-    status: readCapturedDaemonHandshake(unreachable).status,
+    ...readCapturedDaemonHandshake(unreachable),
     endpointName: CAPTURED_ENDPOINT_NAME,
   }
 }

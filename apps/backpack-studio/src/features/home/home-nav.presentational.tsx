@@ -28,7 +28,7 @@ export function HomeNav({
         variant="filled"
         size="regular"
         title={INERT_CONTROL_TITLE}
-        aria-disabled="true"
+        disabled
       >
         + New conversation
       </Button>

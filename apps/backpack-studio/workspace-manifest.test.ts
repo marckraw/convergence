@@ -42,6 +42,21 @@ function readManifest(): Manifest {
 }
 
 describe("Backpack Studio's manifest", () => {
+  it.each([
+    ['tailwindcss', '4.2.2'],
+    ['@tailwindcss/vite', '4.2.2'],
+    ['vitest', '4.1.4'],
+  ])('preserves the reviewed root %s lock version', (name, version) => {
+    // Mutation: hoist a newer toolchain version in package-lock.json.
+    const lock = JSON.parse(
+      readFileSync(
+        join(dirname(manifestPath), '../../package-lock.json'),
+        'utf8',
+      ),
+    ) as { packages: Record<string, { version?: string }> }
+    expect(lock.packages[`node_modules/${name}`]?.version).toBe(version)
+  })
+
   it('is the manifest this test claims to read', () => {
     expect(readManifest().name).toBe('backpack-studio')
   })
