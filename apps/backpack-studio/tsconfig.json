@@ -13,6 +13,6 @@
     "resolveJsonModule": true,
     "isolatedModules": true
   },
-  "include": ["src/**/*", "vitest.pure.config.ts"],
+  "include": ["src/**/*", "vitest.pure.config.ts", "vitest.unit.config.ts"],
   "exclude": ["node_modules"]
 }

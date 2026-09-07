@@ -10,25 +10,33 @@
     "package:mac:unsigned": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg zip --x64 --arm64 --publish never",
     "test": "vitest run --config vitest.pure.config.ts",
     "test:pure": "vitest run --config vitest.pure.config.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "test:unit": "vitest run --config vitest.unit.config.ts",
+    "test:design": "node tools/verify-design-system.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@ef-global/backpack": "4.8.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
   },
   "devDependencies": {
     "@convergence/execution-host-client": "*",
+    "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/react": "^16.3.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "41.2.0",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
+    "jsdom": "^28.1.0",
+    "tailwindcss": "^4.3.3",
     "typescript": "^6.0.2",
     "vite": "^7.3.2",
-    "vitest": "^4.1.4"
+    "vitest": "^4.1.4",
+    "playwright": "^1.60.0"
   }
 }
