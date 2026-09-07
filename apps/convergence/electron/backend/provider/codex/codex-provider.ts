@@ -1614,11 +1614,13 @@ export class CodexProvider implements Provider {
         setAttention('none')
         await startFreshThread(input.activeRpc)
         await unsubscribeThread(input.activeRpc, oldThreadId)
-        sessionEmitter.addNote({
-          text: CONTEXT_RESTARTED_NOTE_TEXT,
-          level: 'warning',
-          providerEventType: SESSION_RESTARTED_EVENT_TYPE,
-        })
+        if (oldThreadId !== null) {
+          sessionEmitter.addNote({
+            text: CONTEXT_RESTARTED_NOTE_TEXT,
+            level: 'warning',
+            providerEventType: SESSION_RESTARTED_EVENT_TYPE,
+          })
+        }
         setStatus('completed')
         setAttention('finished')
         return

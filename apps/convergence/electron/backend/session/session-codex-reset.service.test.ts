@@ -204,8 +204,8 @@ describe('Codex reset through the composer door', () => {
     const result = await attachments.ingestFiles(DRAFT_SESSION_ID, [
       { name: 'note.txt', bytes: new TextEncoder().encode('hello') },
     ])
-    // A provider can announce a restart before emitting the pending user item.
-    // This also represents a reset accepted by the previous build's door.
+    // Deliberately synthetic order to pin defensive cleanup: both real adapters
+    // emit the user row first, so their restarted-note cleanup is normally a no-op.
     await service.start(sessionId, {
       text: 'before',
       attachmentIds: [result.attachments[0].id],
@@ -252,5 +252,72 @@ describe('Codex reset through the composer door', () => {
     })
     await service.sendMessage(claude.id, { text: '/clear' })
     expect(starts.at(-1)?.initialMessage).toBe('/clear')
+  })
+
+  it('refuses a running Claude composer reset without queueing — queue Claude reset instead turns red', async () => {
+    const claude = service.create({
+      projectId: 'reset-project',
+      workspaceId: null,
+      providerId: 'claude-code',
+      name: 'Claude',
+      model: 'opus',
+      effort: 'high',
+    })
+    await service.start(claude.id, { text: 'before' })
+    emit({ kind: 'session.patch', patch: { status: 'running' } })
+    const refusal = await service
+      .sendMessage(claude.id, { text: '/clear' })
+      .then(
+        () => null,
+        (error: unknown) =>
+          error instanceof Error ? error.message : String(error),
+      )
+    expect({ refusal, queued: service.getQueuedInputs(claude.id) }).toEqual({
+      refusal:
+        'Wait for the current turn to finish before clearing the conversation.',
+      queued: [],
+    })
+  })
+
+  it('drains a queued Codex reset opener into a new handle with the prior thread — drop the completed drain turns red', async () => {
+    await service.start(sessionId, {
+      text: 'before',
+      contextItemIds: [contextId],
+    })
+    emit({
+      kind: 'session.patch',
+      patch: { status: 'running', continuationToken: 'prior-thread' },
+    })
+    await service.sendMessageWithOpener(sessionId, {
+      opener: '/clear',
+      text: 'payload',
+    })
+    const beforeCompletion = {
+      starts: starts.length,
+      queued: service
+        .getQueuedInputs(sessionId)
+        .map((item) => ({ text: item.text, state: item.state })),
+    }
+    emit({ kind: 'session.patch', patch: { status: 'completed' } })
+    expect({
+      beforeCompletion,
+      resumed: starts.slice(1).map((config) => ({
+        text: config.initialMessage,
+        thread: config.continuationToken,
+      })),
+      remaining: service
+        .getQueuedInputs(sessionId)
+        .map((item) => ({ text: item.text, state: item.state })),
+    }).toEqual({
+      beforeCompletion: {
+        starts: 1,
+        queued: [
+          { text: '/clear', state: 'queued' },
+          { text: 'payload', state: 'queued' },
+        ],
+      },
+      resumed: [{ text: '/clear', thread: 'prior-thread' }],
+      remaining: [{ text: 'payload', state: 'queued' }],
+    })
   })
 })

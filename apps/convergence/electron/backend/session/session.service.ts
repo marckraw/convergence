@@ -1423,6 +1423,8 @@ export class SessionService {
     dispatch: (inFlight: SessionDispatch) => Promise<T>,
   ): Promise<T> {
     // Read before registering this dispatch: only an earlier send counts as busy.
+    // Refuse outside the try below too: a cold-start refusal must not enter
+    // queue termination and end the earlier turn's queued inputs.
     if (
       input.text === CONVERSATION_RESET_COMMAND &&
       providerSupportsConversationReset(

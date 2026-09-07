@@ -249,6 +249,29 @@ describe('Codex conversation reset', () => {
       released: ['previous-thread'],
     })
   })
+
+  it('starts a first-ever reset without a cleared boundary — emit the note with no old thread turns red', async () => {
+    const bed = session(true, '/clear')
+    await vi.waitUntil(() => bed.statuses.at(-1) === 'completed')
+    expect({
+      threads: bed.server.requests.filter(
+        (request) => request.method === 'thread/start',
+      ).length,
+      storedThreads: bed.deltas.flatMap((delta) =>
+        delta.kind === 'session.patch' && delta.patch.continuationToken
+          ? [delta.patch.continuationToken]
+          : [],
+      ),
+      boundaries: transcript(bed.deltas).filter(
+        (item) =>
+          item.kind === 'note' &&
+          (item.text === CONTEXT_RESTARTED_NOTE_TEXT ||
+            item.providerMeta.providerEventType ===
+              SESSION_RESTARTED_EVENT_TYPE),
+      ),
+    }).toEqual({ threads: 1, storedThreads: ['thread-1'], boundaries: [] })
+  })
+
   it('throws on reset while connecting — delete the connecting guard turns red', async () => {
     let release!: () => void
     const ready = new Promise<void>((resolve) => {
