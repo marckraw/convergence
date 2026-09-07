@@ -415,3 +415,22 @@ a:focus-visible {
     flex-wrap: wrap;
   }
 }
+
+.studio-update-banner {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 24px;
+  background: var(--studio-explore-soft);
+  color: var(--studio-explore-ink);
+  border-bottom: 1px solid var(--studio-explore-line);
+}
+.studio-update-banner button {
+  color: var(--studio-explore-accent);
+  text-decoration: underline;
+  cursor: pointer;
+}

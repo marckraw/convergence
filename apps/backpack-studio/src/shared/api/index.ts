@@ -4,3 +4,4 @@ export {
   describeHandshakeStatus,
   type StudioHandshakeReading,
 } from './captured-daemon-handshake.pure'
+export { getUpdatesBridge } from './updates.api'

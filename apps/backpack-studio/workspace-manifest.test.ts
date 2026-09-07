@@ -42,6 +42,16 @@ function readManifest(): Manifest {
 }
 
 describe("Backpack Studio's manifest", () => {
+  it('packages only external runtime dependencies — mutation: put bundled UI dependencies back in production', () => {
+    const manifest = readManifest()
+    expect(manifest.dependencies).toEqual({ 'electron-updater': '^6.8.3' })
+    expect(
+      ['@ef-global/backpack', 'react', 'react-dom'].every((name) =>
+        Boolean(manifest.devDependencies?.[name]),
+      ),
+    ).toBe(true)
+  })
+
   it.each([
     ['tailwindcss', '4.2.2'],
     ['@tailwindcss/vite', '4.2.2'],
