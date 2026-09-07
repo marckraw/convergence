@@ -1,5 +1,11 @@
 import type { ConnectionReading } from '../../shared/api'
-import { Button, StoryPanel, type StudioIdentity } from '../../shared/ui'
+import {
+  Button,
+  StoryPanel,
+  RequestComposer,
+  type RequestComposerProps,
+  type StudioIdentity,
+} from '../../shared/ui'
 
 const STARTING_POINTS = [
   ['Create and design', 'Turn a brief or a Figma frame into a first draft.'],
@@ -11,12 +17,16 @@ interface FirstRequestProps {
   identity: StudioIdentity
   connection: ConnectionReading
   onSkip: () => void
+  onStart(text: string): void
+  composer: RequestComposerProps
 }
 
 export function FirstRequest({
   identity,
   connection,
   onSkip,
+  onStart,
+  composer,
 }: FirstRequestProps): React.JSX.Element {
   const connected = connection.status === 'connected'
   return (
@@ -35,11 +45,18 @@ export function FirstRequest({
         </p>
         <h2 className="studio-section-title">What would be useful today?</h2>
         {STARTING_POINTS.map(([title, description]) => (
-          <div className="studio-request-card" key={title}>
+          <button
+            className="studio-request-card"
+            key={title}
+            type="button"
+            disabled={composer.disabled}
+            onClick={() => onStart(`${title}: ${description}`)}
+          >
             <h3 className="studio-section-title">{title}</h3>
             <p>{description}</p>
-          </div>
+          </button>
         ))}
+        <RequestComposer {...composer} />
         <Button variant="filled" size="regular" onClick={onSkip}>
           Skip and start a conversation
         </Button>

@@ -434,3 +434,54 @@ a:focus-visible {
   text-decoration: underline;
   cursor: pointer;
 }
+
+.studio-composer textarea {
+  display: block;
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  border: 0;
+  background: transparent;
+  color: var(--studio-explore-ink);
+  font: inherit;
+}
+.studio-composer textarea:focus-visible {
+  outline: 2px solid var(--studio-explore-accent);
+  outline-offset: 4px;
+}
+.studio-notice {
+  margin: 0;
+  padding: 12px 24px;
+  background: var(--studio-explore-soft);
+  color: var(--studio-explore-ink);
+}
+.studio-conversation-body {
+  padding: 32px 48px;
+  min-width: 0;
+}
+.studio-transcript {
+  margin: 24px 0;
+}
+.studio-transcript-row {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--studio-explore-line);
+  overflow-wrap: anywhere;
+}
+.studio-transcript-row p,
+.studio-transcript-row pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+.studio-conversation .studio-topbar {
+  display: flex;
+  gap: 24px;
+}
+.studio-nav-recent[aria-current='page'] {
+  background: var(--studio-explore-soft);
+}
+.studio-panel > .studio-request-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+}

@@ -15,7 +15,7 @@ export function Home(props: HomeProps): React.JSX.Element {
           <p className="studio-intro">
             Your assistant brings GCS skills, knowledge and connected tools.
           </p>
-          <HomeComposer />
+          <HomeComposer {...props.composer} />
           <div className="studio-home-links">
             {HOME_MOCK.links.map((label) => (
               <button

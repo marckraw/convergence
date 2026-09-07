@@ -6,13 +6,12 @@ import {
 } from '@convergence/execution-host-client'
 
 /**
- * The one real thing Backpack Studio does with the client core (MAR-2737).
+ * Studio's captured handshake evaluator, retained from the seed (MAR-2737).
  *
- * It reads a captured `/health` body through the package's own parser and
- * handshake evaluator — the same two functions Convergence runs against a live
- * daemon — and reports what they made of it. No network: the fixture stands in
- * for the daemon, because this app has no Endpoint, no token and no settings
- * yet, and inventing one would be scope this beat does not own.
+ * Tests use this recorded health body as their double; the developer route
+ * uses its unreachable evaluation as a simulation. Production connection
+ * indicators read the live main-process handshake through connection.api.ts.
+ * This helper itself performs no network IO.
  *
  * The point is the *seam*, not the sentence — and the seam is guarded by two
  * things, neither of which is the manifest line. Deleting

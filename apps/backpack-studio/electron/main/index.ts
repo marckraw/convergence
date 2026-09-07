@@ -1,3 +1,4 @@
+import { registerStudioRuntime } from '../backend/studio-runtime.service'
 import { resolveStudioWindowSize } from './window-options.config'
 import { registerStudioUpdates } from '../updates/updates.ipc'
 import { app, BrowserWindow, screen } from 'electron'
@@ -22,7 +23,8 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await registerStudioRuntime()
   registerStudioUpdates()
   createWindow()
 
