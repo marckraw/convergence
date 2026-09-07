@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain, type IpcMainInvokeEvent } from 'electron'
+import { owned } from '../backend/owned-ipc'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { updateChannels } from '../../shared/updates.types'
 import { createStudioUpdater } from './updates.service'
@@ -14,14 +15,6 @@ export function registerStudioUpdates() {
         }
       })
     : undefined
-  const owned = (event: IpcMainInvokeEvent) => {
-    if (
-      event.senderFrame !== event.sender.mainFrame ||
-      !BrowserWindow.fromWebContents(event.sender)
-    ) {
-      throw new Error('Studio updates require the app window')
-    }
-  }
   ipcMain.handle(updateChannels.get, (event) => {
     owned(event)
     return updater?.getState() ?? { status: 'idle' }

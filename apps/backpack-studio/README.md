@@ -4,23 +4,64 @@ Run commands from the monorepo root after `eval "$(fnm env)" && fnm use`.
 Marcin starts the app with `npm run dev -w backpack-studio`; agents do not start
 its dev server.
 
-## Design build boundaries
+## Conversations and configuration
 
-The sign-in action is a 500ms mock in `features/sign-in/sign-in.api.ts`.
-It opens no browser and makes no authentication request. The first-request
-cards are suggestions; Skip opens the home shell. Home controls are static
-and carry an explanatory title.
+The sign-in action remains the 500ms mock in `features/sign-in/sign-in.api.ts`.
+It opens no browser and makes no authentication request; the S1 sign-in copy
+stays unchanged until SSO lands. The first-request cards send their visible
+brief, and the first-request and home composers start real conversations.
+With saved conversations, sign-in opens home; the first-request screen is for
+an empty record. The sidebar loads the local record, newest first. Open a conversation to read
+its raw transcript or send a follow-up; sending is disabled while it works.
+The plain conversation view uses the S1 design system, pending MAR-2861.
 
-Connection indicators read `shared/api/connection.api.ts`. This build evaluates
-captured daemon health through the shared execution-host client. A connected
-label describes that recorded evaluation; it does not prove current network
-reachability. No endpoint credentials enter the renderer.
+Main reads the following environment variables through
+`electron/backend/config/studio-environment.service.ts`. It tries `.env`
+beside the app, then in the working directory; explicit shell values win.
 
-Press **Ctrl+Shift+D** to open or close the developer view. It preserves the
-current screen and exposes the unreachable-fixture checkbox alongside the
-original Hello diagnostics. The checkbox updates Hello immediately; return to compare connection
-indicators on first-request or home. The selection lasts only for the current
-app instance.
+| Name                             | Purpose                                           |
+| -------------------------------- | ------------------------------------------------- |
+| `BACKPACK_STUDIO_DAEMON_URL`     | The backpack-automations daemon address           |
+| `BACKPACK_STUDIO_DAEMON_TOKEN`   | Authentication, main process only                 |
+| `BACKPACK_STUDIO_DAEMON_PROJECT` | Working directory on the daemon                   |
+| `BACKPACK_STUDIO_PROVIDER`       | Optional daemon provider id; defaults to `claude` |
+
+The renderer's one connection door is `shared/api/connection.api.ts`, reading
+an evaluated live handshake over `studio:daemon-status`. Main probes `/health`
+and authenticated `/v0/meta` through the shared client. Only the endpoint host
+name and evaluated diagnostics cross IPC; URL and credentials have no fields
+in the renderer contract. A missing configuration is reported by variable name.
+A missing provider is reported with the names advertised by the daemon.
+
+Press **Ctrl+Shift+D** for live Hello diagnostics. The unreachable checkbox
+simulates the captured failure without changing the real handshake; unticking
+returns to that live reading. No dev server is started by a verification tool.
+
+## Local record and retry
+
+`<userData>/conversations/<id>/conversation.json` holds immutable facts;
+`events.jsonl` holds wire events and local `sent`, `refused`, `stream-exhausted`, `restarted`
+facts. One fold derives both live and replayed status and transcript. The
+record is hydrated independently of the handshake; running conversations
+resume from their last recorded sequence. Closing Studio does not stop the
+remote session.
+
+The first append heals through the reader's first unparseable line, including
+a fused middle line. A complete line missing only its newline is preserved.
+Each conversation has one append queue in the store. The acceptance predicate,
+healing, append and synchronous fold commit execute under that queue, so an
+overlapping replay cannot write a sequence twice. SQLite remains a later
+extraction; any replacement store must preserve that commit contract and drain
+pending appends before shutdown.
+
+Retries ask the daemon: a command receiving HTTP 404 starts a session, and a
+start receiving HTTP 409 sends the command to the existing session and follows
+it. A fresh start after a lost session records a visible notice that the agent's
+earlier memory is gone on the server; old turns remain readable. Stream HTTP
+401/403/404 ends the follow immediately with the daemon's sentence. A refused local record creation is retried before any append. Local facts
+never decide whether the remote session exists. Approvals, attachments, queued
+input and stopping a remote session remain outside this slice; raw request
+items are shown without an action that would pretend to answer them.
 
 ## CSS and fonts
 
@@ -47,7 +88,7 @@ React 19 consumers. Vite also deduplicates these modules in Studio.
 
 ## Verification
 
-- `npm run test:unit -w backpack-studio`: rendered copy, routing, fixture states,
+- `npm run test:unit -w backpack-studio`: backend/restart composition, rendered copy, live routing, fixture states,
   developer chord, inert controls, token declarations and literal-color guard.
 - `npm run build -w backpack-studio`: production Electron and renderer bundles.
 - `npm run test:design -w backpack-studio`: property canary against that production
@@ -95,4 +136,4 @@ The window's preferred 1440×960 size is clamped to the primary display's work
 area, with a 1280×800 minimum. Shorter windows scroll vertically. Width comes from
 the frozen frames: 650px story + 490px panel content + two 70px gutters. This is
 also above the home cards' 1100px breakpoint. Media queries remain for smaller
-surfaces; the property check exercises all three screens at the native minimum.
+surfaces; the property check exercises onboarding, home and the conversation view at the native minimum.

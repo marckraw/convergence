@@ -1,8 +1,9 @@
+import type { StudioApi } from './studio-api.types'
 import type { UpdatesBridge } from '../../../shared/updates.types'
 
 declare global {
   interface Window {
-    backpackStudio?: { platform: string; updates: UpdatesBridge }
+    backpackStudio?: StudioApi
   }
 }
 

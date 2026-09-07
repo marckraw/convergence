@@ -1,11 +1,15 @@
 import { Button, sidebarIcon } from '../../shared/ui'
-import { HOME_MOCK, INERT_CONTROL_TITLE } from './home.model'
-import type { HomeProps } from './home.types'
+import { INERT_CONTROL_TITLE } from './home.model'
+import type { HomeNavProps } from './home.types'
 
 export function HomeNav({
   identity,
   connection,
-}: HomeProps): React.JSX.Element {
+  conversations,
+  selectedId,
+  onNew,
+  onSelect,
+}: HomeNavProps): React.JSX.Element {
   const connected = connection.status === 'connected'
   return (
     <nav className="studio-nav" aria-label="Conversations">
@@ -24,12 +28,7 @@ export function HomeNav({
           <img src={sidebarIcon} width={20} height={20} alt="" />
         </button>
       </div>
-      <Button
-        variant="filled"
-        size="regular"
-        title={INERT_CONTROL_TITLE}
-        disabled
-      >
+      <Button variant="filled" size="regular" onClick={onNew}>
         + New conversation
       </Button>
       <button
@@ -39,7 +38,13 @@ export function HomeNav({
         aria-disabled="true"
       >
         <span>Inbox</span>
-        <span>{HOME_MOCK.inboxCount}</span>
+        <span>
+          {
+            conversations.filter(
+              (conversation) => conversation.status !== 'running',
+            ).length
+          }
+        </span>
       </button>
       <button
         className="studio-nav-item"
@@ -66,16 +71,22 @@ export function HomeNav({
         Library
       </button>
       <p className="studio-nav-caption">RECENT</p>
-      {HOME_MOCK.recent.map(([name, state]) => (
+      {conversations.map((conversation) => (
         <button
           className="studio-nav-recent"
-          key={name}
+          key={conversation.id}
           type="button"
-          title={INERT_CONTROL_TITLE}
-          aria-disabled="true"
+          aria-current={selectedId === conversation.id ? 'page' : undefined}
+          onClick={() => onSelect(conversation.id)}
         >
-          <span>{name}</span>
-          <span>{state}</span>
+          <span>{conversation.title}</span>{' '}
+          <span>
+            {conversation.status === 'running'
+              ? 'Working'
+              : conversation.status === 'idle'
+                ? 'Done'
+                : 'Refused'}
+          </span>
         </button>
       ))}
       <div className="studio-nav-space" />

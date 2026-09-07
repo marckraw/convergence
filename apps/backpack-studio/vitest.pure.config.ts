@@ -12,6 +12,7 @@ export default defineConfig({
   test: {
     include: [
       'src/**/*.pure.test.ts',
+      'electron/**/*.pure.test.ts',
       '../../tools/*.test.ts',
       'workspace-manifest.test.ts',
       'workspace-import-ownership.test.ts',

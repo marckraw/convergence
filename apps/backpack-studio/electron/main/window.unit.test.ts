@@ -3,6 +3,7 @@ import { expect, it, vi } from 'vitest'
 import { resolveStudioWindowSize } from './window-options.config'
 
 const mocks = vi.hoisted(() => ({
+  runtime: vi.fn(async () => {}),
   options: undefined as Record<string, number> | undefined,
 }))
 vi.mock('electron', () => ({
@@ -18,11 +19,15 @@ vi.mock('electron', () => ({
     loadFile = vi.fn()
   },
 }))
+vi.mock('../backend/studio-runtime.service', () => ({
+  registerStudioRuntime: mocks.runtime,
+}))
 vi.mock('../updates/updates.ipc', () => ({ registerStudioUpdates: vi.fn() }))
 
 it('actual BrowserWindow stays above stacking breakpoints — mutation: remove minima or restore 1000×700 default', async () => {
   await import('./index')
   await Promise.resolve()
+  expect(mocks.runtime).toHaveBeenCalledOnce()
   expect(mocks.options?.minWidth).toBeGreaterThanOrEqual(650 + 490 + 2 * 70)
   expect(mocks.options?.minWidth).toBeGreaterThan(1100)
   expect(mocks.options?.minHeight).toBe(800)

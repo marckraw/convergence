@@ -18,7 +18,54 @@ page.on('pageerror', (error) => errors.push(error.message))
 try {
   await page.addInitScript(() => {
     window.studioUpdateProbe = { restarts: 0, listener: undefined }
+    const daemon = {
+      status: 'connected',
+      endpointName: 'backpack.automations',
+      headline: 'Connected to the daemon.',
+      daemonVersion: 'test',
+      apiVersion: 'test',
+      capabilities: [],
+      advertisedProviders: ['claude'],
+      providerMissing: false,
+      detail: null,
+    }
+    const snapshot = {
+      id: 'design-probe',
+      title: 'Design probe conversation',
+      status: 'idle',
+      createdAt: '2026-09-07',
+      updatedAt: '2026-09-07',
+      streamError: null,
+      unreadableTailLines: 0,
+      orphanPatches: 0,
+      items: [
+        {
+          id: 'probe-answer',
+          kind: 'message',
+          actor: 'assistant',
+          label: 'Assistant',
+          state: 'complete',
+          text: (
+            'A streamed answer with a very long word ' +
+            'x'.repeat(150) +
+            '\n'
+          ).repeat(24),
+        },
+      ],
+    }
+    window.studioConversationProbe = { starts: [] }
     window.backpackStudio = {
+      getStartup: async () => ({ kind: 'ready', providerId: 'claude', daemon }),
+      getDaemonStatus: async () => daemon,
+      listConversations: async () => [],
+      getTranscript: async () => snapshot,
+      startConversation: async (text) => {
+        window.studioConversationProbe.starts.push(text)
+        return { kind: 'started', conversationId: snapshot.id }
+      },
+      sendMessage: async () => ({ kind: 'sent' }),
+      onConversationEvent: () => () => {},
+      onDaemonStatus: () => () => {},
       platform: 'test',
       updates: {
         getState: async () => ({ status: 'downloaded', version: '0.2.0' }),
@@ -214,9 +261,38 @@ try {
       `Home does not overflow at ${width}px`,
     )
   }
+  await page.setViewportSize({
+    width: studioWindowSize.minWidth,
+    height: studioWindowSize.minHeight - 28,
+  })
+  await page.getByRole('textbox', { name: 'Your request' }).fill('Design probe')
+  await page.getByRole('button', { name: 'Send ↑' }).click()
+  await page.getByRole('button', { name: 'Back to home' }).waitFor()
+  await page.locator('.studio-transcript-row').waitFor()
+  const conversationGeometry = await page.evaluate(() => {
+    const nav = document.querySelector('.studio-nav').getBoundingClientRect()
+    const main = document
+      .querySelector('.studio-home-main')
+      .getBoundingClientRect()
+    return {
+      overflow: document.documentElement.scrollWidth > innerWidth,
+      sideBySide: main.x >= nav.right,
+      scrolls: document.documentElement.scrollHeight > innerHeight,
+    }
+  })
+  assert.deepEqual(
+    conversationGeometry,
+    { overflow: false, sideBySide: true, scrolls: true },
+    'Conversation fits 1280×772 and scrolls vertically — mutation: force conversation min-width to 1440px',
+  )
+  assert.deepEqual(
+    await page.evaluate(() => window.studioConversationProbe.starts),
+    ['Design probe'],
+    'Home composer starts through the production bridge',
+  )
   assert.deepEqual(errors, [], 'Production renderer has no runtime errors')
   console.log(
-    'PASS: bundled Book + Medium, inherited Circular, Backpack button, responsive onboarding/home including 1280px minimum, exported icon, runtime errors',
+    'PASS: bundled Book + Medium, inherited Circular, Backpack button, responsive onboarding/home/conversation including 1280×772 minimum, exported icon, runtime errors',
   )
 } finally {
   await browser.close()

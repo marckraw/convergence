@@ -1,8 +1,13 @@
+import { createStudioApiFixture } from '../shared/api/studio-api.fixture'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StudioApp } from './studio-app.container'
 
+beforeEach(() => {
+  window.backpackStudio = createStudioApiFixture()
+})
 afterEach(() => {
+  delete window.backpackStudio
   cleanup()
   vi.useRealTimers()
 })
