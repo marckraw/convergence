@@ -1899,12 +1899,9 @@ export class SessionService {
           sessionId: session.id,
           workingDirectory: session.workingDirectory,
           initialMessage: '',
-          // Both facts, not one: a compaction opens a provider session exactly
-          // as a start does, and a compaction after a `/clear` on a handle-less
-          // session would otherwise arrive without the ledger's answer and fire
-          // the recovery note for a thread that never took a turn
-          // (MAR-2826 round 1, L3).
-          ...this.readStartConversationFacts(id),
+          previousAssistantTexts: previousAssistantMessageTexts(
+            this.getConversation(id),
+          ),
           model: session.model,
           effort: session.effort,
           serviceTier: session.serviceTier ?? null,

@@ -2430,6 +2430,163 @@ describe('ComposerContainer', () => {
     ])
   })
 
+  /** An available Codex snapshot whose five-hour window reads `remaining`. */
+  function codexQuota(remaining: number) {
+    return {
+      providerId: 'codex',
+      status: 'available',
+      source: 'provider-api',
+      planType: 'pro',
+      windows: [
+        {
+          kind: 'five-hour',
+          label: '5 hour usage limit',
+          usedPercent: 100 - remaining,
+          remainingPercent: remaining,
+          windowMinutes: 300,
+          resetsAt: '2026-05-21T15:21:00.000Z',
+        },
+      ],
+      credits: null,
+      limitReachedType: null,
+      lastCheckedAt: '2026-05-21T12:00:00.000Z',
+      stale: false,
+    }
+  }
+
+  it('asks nothing at all until it knows which account it would send on', async () => {
+    // MAR-2826 round 2, H1. The account is two async hops away — enrolment,
+    // then PA4's record of the session's last turn — and in between the
+    // effective account reads `null`, which means "not known yet", not "the
+    // ambient default". The read used to fire in that window, so the very
+    // first question the pill ever asked was about the wrong account.
+    providerAccountsMock = [
+      buildAccount({
+        id: 'acct-b',
+        providerId: 'codex',
+        email: 'b@example.com',
+      }),
+    ]
+    sessionTurnsMock = [{ id: 'turn-1', providerAccountId: 'acct-b' }]
+    seedCodexSession()
+    const list = window.electronAPI.providerQuota.list as ReturnType<
+      typeof vi.fn
+    >
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
+      />,
+    )
+
+    await waitFor(() => expect(list.mock.calls.length).toBeGreaterThan(0))
+    // The FIRST question, not merely some later one: a scoped read arriving
+    // second does not undo an unscoped read that already went out.
+    expect(list.mock.calls[0]).toEqual([
+      false,
+      { executionHostId: 'local', providerAccountId: 'acct-b' },
+    ])
+  })
+
+  it('ignores a slower answer about an account it has stopped asking about', async () => {
+    // MAR-2826 round 2, H1. The scope can change again long after the first
+    // read — a session switch here — and an answer is only ever about the
+    // scope it was asked with. Nothing in the snapshot names the account that
+    // answered, so the composer remembers which question is still its own;
+    // without that, the older read landing last puts the other account's
+    // number on the pill and leaves it there until the next quiet tick.
+    providerAccountsMock = [
+      buildAccount({
+        id: 'acct-b',
+        providerId: 'codex',
+        email: 'b@example.com',
+      }),
+      buildAccount({
+        id: 'acct-c',
+        providerId: 'codex',
+        email: 'c@example.com',
+      }),
+    ]
+    sessionTurnsMock = [{ id: 'turn-1', providerAccountId: 'acct-b' }]
+    seedCodexSession()
+    useSessionStore.setState((state) => {
+      const first = state.sessions[0]
+      if (!first) throw new Error('missing seeded session')
+      return { sessions: [first, { ...first, id: 'session-2' }] }
+    })
+
+    const list = window.electronAPI.providerQuota.list as ReturnType<
+      typeof vi.fn
+    >
+    let answerForB: (() => void) | undefined
+    list.mockImplementation(
+      (
+        _forceRefresh: boolean,
+        scope?: { providerAccountId?: string | null },
+      ) =>
+        scope?.providerAccountId === 'acct-b'
+          ? new Promise((resolve) => {
+              answerForB = () => resolve([codexQuota(87)])
+            })
+          : Promise.resolve([codexQuota(42)]),
+    )
+
+    const view = render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
+      />,
+    )
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(false, {
+        executionHostId: 'local',
+        providerAccountId: 'acct-b',
+      }),
+    )
+
+    // He switches to the session on the other account while the first read is
+    // still on the wire.
+    sessionTurnsMock = [{ id: 'turn-2', providerAccountId: 'acct-c' }]
+    view.rerender(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-2',
+        }}
+      />,
+    )
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(false, {
+        executionHostId: 'local',
+        providerAccountId: 'acct-c',
+      }),
+    )
+    expect(
+      await screen.findByRole('button', { name: 'Codex usage 42% remaining' }),
+    ).toBeInTheDocument()
+
+    // The abandoned question finally answers.
+    answerForB?.()
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(
+      screen.getByRole('button', { name: 'Codex usage 42% remaining' }),
+    ).toBeInTheDocument()
+  })
+
   it('re-asks every 3s while the pill says warming up, and every 120s once it does not', async () => {
     // The cadence is the honesty of the claim: the resident Codex server comes
     // up in 7-25s, so at the quiet cadence a pill reading "warming up" would go
@@ -2447,7 +2604,13 @@ describe('ComposerContainer', () => {
     const list = window.electronAPI.providerQuota.list as ReturnType<
       typeof vi.fn
     >
-    const ready = await list.mock.results[0]?.value
+    // An explicit snapshot, not whatever the shared mock last returned: read
+    // off `mock.results` this was `undefined` after `beforeEach` recreated the
+    // mock, the lookup threw, the catch left the snapshot `null` — so the
+    // 120s branch was proven for "the read failed" and not for "a number
+    // arrived", and a cadence keyed on `status === 'available'` stayed green
+    // (MAR-2826 round 2, M-b).
+    const ready = [codexQuota(87)]
     list.mockResolvedValue([warming])
     seedCodexSession()
     vi.useFakeTimers()

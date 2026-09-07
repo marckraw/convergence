@@ -1285,6 +1285,13 @@ export class CodexProvider implements Provider {
      * first message, a resume, a recovery, and the reset's fresh thread — so a
      * caller arriving while one is on the wire joins it instead of minting a
      * thread of its own and orphaning one of the two (MAR-2826).
+     *
+     * One resume runs outside it, and only one: `manageContext` issues
+     * `thread/resume` on a connection of its own for a compaction. It is safe
+     * *because it cannot mint a thread* — a refusal there is thrown, it has no
+     * `startFreshThread` fallback, and it never assigns `threadId` — so it can
+     * lose a race but it can never leave an orphan behind, which is the thing
+     * this door exists to prevent (MAR-2826 round 2, M-c).
      */
     async function publishThreadResolution(
       attempt: Promise<string>,
@@ -1539,6 +1546,17 @@ export class CodexProvider implements Provider {
         // The turn was refused, so it is not one this thread took.
         threadUnusedSinceBoundary = unusedBeforeSend
         noteMissingThreadRecovery()
+        // Unconditional, and it may stay that way: nothing can replace
+        // `threadId` while this `turn/start` is awaited on this connection.
+        // `ensureThread` short-circuits on a ready thread, so no concurrent
+        // caller resolves one; every route that *does* replace it goes through
+        // `forgetThreadReadiness()` at a connection change, which moves `rpc`
+        // and is caught by the branch above; and the one deliberate
+        // replacement — a `/clear` — is refused outright while a turn is
+        // running (`:2636`, pinned in session-restart.test.ts and
+        // session-codex-reset.service.test.ts). Guarding on
+        // `threadId === currentThreadId` here was measured to be decoration:
+        // no mutation can turn it red (MAR-2826 round 2, L-b).
         threadId = null
         threadReady = false
         // Through the single flight, not around it: a steer or a second message
@@ -1629,11 +1647,20 @@ export class CodexProvider implements Provider {
           // message used to resume the OLD thread and land on the one
           // unsubscribed two lines below (MAR-2826 round 1, M2).
           threadReady = false
-          await publishThreadResolution(startFreshThread(input.activeRpc))
-          // The thread this boundary opens has taken nothing, and the ledger
-          // will say so to whichever handle carries the next message
-          // (MAR-2854).
-          threadUnusedSinceBoundary = true
+          await publishThreadResolution(
+            startFreshThread(input.activeRpc).then((freshThreadId) => {
+              // The thread this boundary opens has taken nothing, and the
+              // ledger will say so to whichever handle carries the next
+              // message (MAR-2854).
+              //
+              // Inside the resolution, not after its await: a caller that
+              // joined the flight resolves on this very promise, so setting
+              // the flag here makes it true for every joiner by construction
+              // instead of by counting microtasks (MAR-2826 round 2, L-a).
+              threadUnusedSinceBoundary = true
+              return freshThreadId
+            }),
+          )
           await unsubscribeThread(input.activeRpc, oldThreadId)
           sessionEmitter.addNote({
             text: CONTEXT_RESTARTED_NOTE_TEXT,
@@ -1988,6 +2015,14 @@ export class CodexProvider implements Provider {
         // new connection had never subscribed to, and the session's survival
         // came down to whether the error wording happened to contain "not
         // found" (MAR-2317).
+        //
+        // It has to stay BELOW the await. A `thread/start` issued on the dying
+        // connection can answer while `connect` is still in flight, and only a
+        // forget that runs after the await discards that answer; moved above
+        // it, the late `setContinuationToken` would mark this connection ready
+        // for a thread it never subscribed to. Pinned by stability.test.ts >
+        // "re-subscribes a thread whose connection died while it was starting"
+        // (MAR-2826 round 2).
         forgetThreadReadiness()
         deadInteractionNoted = false
         attachHandlers(opened.rpc)

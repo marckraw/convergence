@@ -821,6 +821,68 @@ describe('Codex single-flight thread start (MAR-2826)', () => {
     bed.registry.stopAll()
   })
 
+  it('does not warn about lost context on the thread its own reset just opened', async () => {
+    // The reset marks the thread it opens as having taken nothing, and that is
+    // the fact `noteMissingThreadRecovery` reads when the server refuses a
+    // turn on it. On a handle that survives its own `/clear` — no service, no
+    // release, no new start config to carry the ledger's answer — this
+    // in-session flag is the ONLY thing standing between a deliberate clear
+    // and a warning that context was lost, and it was measured unpinned in
+    // round 3 (MAR-2854; MAR-2826 round 2, L-a).
+    const bed = createStabilityBed({
+      autoCompleteTurns: true,
+      threadIdFactory: (count) => `thread-${count}`,
+      onRequest: (message) => {
+        if (
+          message.method === 'turn/start' &&
+          message.params?.threadId === 'thread-2'
+        ) {
+          throw new Error('no rollout found for thread id thread-2')
+        }
+        return undefined
+      },
+    })
+    const handle = startSession(bed.provider)
+    const observed = observe(handle)
+
+    await waitFor(() =>
+      expect(
+        bed.server.requests.filter((r) => r.method === 'turn/start').length,
+      ).toBe(1),
+    )
+    handle.sendMessage('/clear')
+    await waitFor(() =>
+      expect(
+        bed.server.requests.filter((r) => r.method === 'thread/unsubscribe')
+          .length,
+      ).toBe(1),
+    )
+
+    // The same handle carries the next message; the server refuses the turn on
+    // the never-materialised thread the reset opened.
+    handle.sendMessage('after')
+    await waitFor(() =>
+      expect(
+        bed.server.requests.filter((r) => r.method === 'turn/start').length,
+      ).toBe(3),
+    )
+
+    expect({
+      turnThreads: bed.server.requests
+        .filter((r) => r.method === 'turn/start')
+        .map((r) => r.params?.threadId),
+      recoveryNotes: observed.notes
+        .map((note) => note.text)
+        .filter((text) => text.includes('no longer available')),
+    }).toEqual({
+      turnThreads: ['thread-1', 'thread-2', 'thread-3'],
+      recoveryNotes: [],
+    })
+
+    handle.dispose?.()
+    bed.registry.stopAll()
+  })
+
   it('re-subscribes a thread whose connection died while it was starting', async () => {
     // `thread/start` answers and the socket fails in the same synchronous
     // burst, so the awaiting continuation runs on a connection that is already
