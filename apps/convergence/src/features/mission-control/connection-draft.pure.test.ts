@@ -1,3 +1,7 @@
+import {
+  buildFallbackCodexDescriptor,
+  buildFallbackPiDescriptor,
+} from '../../../electron/backend/provider/provider-descriptor.pure'
 import { describe, expect, it } from 'vitest'
 import type { SessionRelay } from '@/entities/session-relay'
 import {
@@ -234,7 +238,7 @@ describe('the Before delivery selector (R8)', () => {
     })
     const unsupported = beforeDeliveryOptions({
       supportsReset: false,
-      providerName: 'Codex',
+      providerName: 'Pi',
       recipientName: 'Sol',
     })
 
@@ -259,7 +263,7 @@ describe('the Before delivery selector (R8)', () => {
       false,
     ])
     // The reason names the provider, so it is actionable rather than a shrug.
-    expect(unsupported[1].help).toContain('Codex')
+    expect(unsupported[1].help).toContain('Pi')
     // And the custom first message survives on every provider: R8 keeps the
     // arbitrary opener beside the new selector rather than replacing it.
     expect(unsupported[2].disabled).toBe(false)
@@ -392,7 +396,7 @@ describe('connectionDraftProblem', () => {
    *
    * Mutation that reds it: drop the `beforeDelivery === 'clear'` refusal.
    */
-  it('refuses Clear on a recipient whose provider cannot reset', () => {
+  it('accepts Clear for Codex and refuses unsupported recipients — disable Codex or remove the capability refusal turns red', () => {
     const draft = {
       ...newConnectionDraft({
         sourceSessionId: 'fable',
@@ -404,7 +408,11 @@ describe('connectionDraftProblem', () => {
     expect(
       connectionDraftProblem(draft, [], null, { supportsReset: false }),
     ).toContain('cannot start a conversation over')
-    expect(connectionDraftProblem(draft, [], null, RESET_OK)).toBeNull()
+    expect(
+      connectionDraftProblem(draft, [], null, {
+        supportsReset: buildFallbackCodexDescriptor().supportsConversationReset,
+      }),
+    ).toBeNull()
   })
 })
 
@@ -428,7 +436,10 @@ describe('changeDraftRecipient', () => {
     const result = changeDraftRecipient(
       clearing,
       { kind: 'session', sessionId: 'sol' },
-      { supportsReset: false, providerName: 'Codex' },
+      {
+        supportsReset: buildFallbackPiDescriptor().supportsConversationReset,
+        providerName: 'Pi',
+      },
     )
 
     expect(result.draft.beforeDelivery).toBe('keep')
@@ -436,14 +447,17 @@ describe('changeDraftRecipient', () => {
       kind: 'session',
       sessionId: 'sol',
     })
-    expect(result.note).toContain('Codex')
+    expect(result.note).toContain('Pi')
   })
 
-  it('keeps Clear when the new recipient can reset', () => {
+  it('keeps Clear for Codex — disable the Codex reset capability turns red', () => {
     const result = changeDraftRecipient(
       clearing,
       { kind: 'session', sessionId: 'sol' },
-      { supportsReset: true, providerName: 'Claude Code' },
+      {
+        supportsReset: buildFallbackCodexDescriptor().supportsConversationReset,
+        providerName: 'Codex',
+      },
     )
 
     expect(result.draft.beforeDelivery).toBe('clear')
@@ -458,7 +472,10 @@ describe('changeDraftRecipient', () => {
     const result = changeDraftRecipient(
       { ...clearing, beforeDelivery: 'custom', customOpener: 'Read HANDOFF.' },
       { kind: 'session', sessionId: 'sol' },
-      { supportsReset: false, providerName: 'Codex' },
+      {
+        supportsReset: buildFallbackPiDescriptor().supportsConversationReset,
+        providerName: 'Pi',
+      },
     )
 
     expect(result.draft.beforeDelivery).toBe('custom')

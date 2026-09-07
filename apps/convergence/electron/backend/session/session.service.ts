@@ -1,3 +1,4 @@
+import { CONVERSATION_RESET_COMMAND } from '../../../src/shared/lib/conversation-reset.pure'
 import { randomUUID } from 'crypto'
 import { mkdirSync } from 'fs'
 import type Database from 'better-sqlite3'
@@ -1499,11 +1500,18 @@ export class SessionService {
       return { augmentedText: originalText, noteDraft: null }
     }
 
-    return this.contextInjection.prepareBoot({
+    const prepared = this.contextInjection.prepareBoot({
       session,
       originalText,
       contextItemIds,
     })
+    if (
+      session.providerId === 'codex' &&
+      originalText === CONVERSATION_RESET_COMMAND
+    ) {
+      return { augmentedText: originalText, noteDraft: null }
+    }
+    return prepared
   }
 
   private prepareUserTurnText(
@@ -1511,7 +1519,12 @@ export class SessionService {
     originalText: string,
     skipContextInjection?: boolean,
   ): string {
-    if (skipContextInjection) return originalText
+    if (
+      skipContextInjection ||
+      (session.providerId === 'codex' &&
+        originalText === CONVERSATION_RESET_COMMAND)
+    )
+      return originalText
     if (!this.contextInjection) return originalText
     return this.contextInjection.prepareUserTurn({ session, originalText })
   }
@@ -1915,6 +1928,15 @@ export class SessionService {
     dispatchId: string
   }): void {
     const { session, handle, attachments, deliveryMode } = input
+    if (
+      session.providerId === 'codex' &&
+      input.input.text === CONVERSATION_RESET_COMMAND &&
+      session.status === 'running'
+    ) {
+      throw new Error(
+        'Wait for the current turn to finish before clearing the conversation.',
+      )
+    }
     const capability = getMidRunInputCapabilityForProviderId(session.providerId)
 
     if (

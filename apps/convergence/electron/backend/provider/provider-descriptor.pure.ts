@@ -149,13 +149,11 @@ const UNSUPPORTED_SKILLS_CAPABILITY: ProviderSkillsCapability = {
  * the provider, and five copies of it are five chances to disagree the day a
  * provider gains the ability.
  *
- * Codex is FALSE on purpose and stays false until MAR-2819 ships its opener
- * reset — offering it today would put a control on Marcin's screen that sends
- * `/clear` into a session that reads it as prose. Pi and the rest are false
- * for the same reason: nobody has proved they can.
+ * Claude and Codex both honour the shared /clear command. Other providers
+ * remain unsupported until their adapters implement the same reset contract.
  */
 export function providerSupportsConversationReset(providerId: string): boolean {
-  return providerId === 'claude-code'
+  return providerId === 'claude-code' || providerId === 'codex'
 }
 
 export const NO_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability = {

@@ -6,19 +6,8 @@ import type {
 } from '@/entities/session-relay'
 import { batonConditionToken } from './crew-loop.pure'
 
-/**
- * The message that starts a provider's conversation over.
- *
- * Claude's word, and plain text on the wire by design: the engine sends an
- * opener verbatim and never reads it, so its meaning belongs to whoever
- * receives it. A provider that gains its own reset word gets its own constant
- * rather than inheriting this one.
- *
- * Duplicated NOWHERE. The engine has no literal to agree with — it carries
- * `session_relays.opener` byte for byte — so this is the only place in the
- * app that knows what "clear the conversation" is spelled as.
- */
-export const CONVERSATION_RESET_COMMAND = '/clear'
+import { CONVERSATION_RESET_COMMAND } from '@/shared'
+export { CONVERSATION_RESET_COMMAND } from '@/shared'
 
 /**
  * What happens to the recipient's conversation before this connection's

@@ -15,6 +15,12 @@ import {
 } from './provider-descriptor.pure'
 
 describe('provider-descriptor', () => {
+  it('advertises Codex reset and keeps Pi unsupported — disable Codex or enable Pi turns red', () => {
+    expect({
+      codex: buildFallbackCodexDescriptor().supportsConversationReset,
+      pi: buildFallbackPiDescriptor().supportsConversationReset,
+    }).toEqual({ codex: true, pi: false })
+  })
   it('builds labeled effort options', () => {
     expect(
       buildEffortOptions(['minimal', 'high'], { high: 'Deep reasoning' }),

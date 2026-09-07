@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync, spawnSync } from 'child_process'
+import { randomUUID } from 'crypto'
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { dirname, join, resolve } from 'path'
@@ -24,7 +25,8 @@ import { build } from 'esbuild'
  *   6. the process table shows exactly one `codex app-server`, and none after
  *      the host is stopped.
  *
- * No turn is ever started, so it spends no model quota and writes no rollout.
+ * The reset case sends two short model turns and writes their rollouts.
+ * It checks memory isolation on the same connection (MAR-2819).
  *
  * Usage: `node tools/run-codex-server-canary.mjs`
  */
@@ -73,6 +75,55 @@ function countAppServers() {
 
   const pids = new Set(rows.map((row) => row.pid))
   return rows.filter((row) => !pids.has(row.ppid)).length
+}
+
+/** Wait for the actual completed turn, including its answer, rather than its ack. */
+async function answerOnThread(rpc, threadId, text) {
+  let answer = ''
+  let finish
+  let fail
+  const completion = new Promise((resolve, reject) => {
+    finish = resolve
+    fail = reject
+  })
+  // Handle a failure while the turn/start acknowledgement is still pending.
+  void completion.catch(() => {})
+  const timer = setTimeout(
+    () => fail(new Error('Memory canary turn did not complete within 120s')),
+    120_000,
+  )
+  rpc.onNotification((method, params) => {
+    if (params?.threadId !== threadId) return
+    if (method === 'item/completed' && params.item?.type === 'agentMessage') {
+      answer += params.item.text ?? ''
+    }
+    if (method === 'turn/completed') {
+      if (params.turn?.status !== 'completed')
+        fail(
+          new Error(
+            `Memory canary turn ended ${params.turn?.status}: ${params.turn?.error?.message ?? 'no reason supplied'}`,
+          ),
+        )
+      else finish(answer.trim())
+    }
+  })
+  rpc.onServerRequest((id) =>
+    rpc.respondError(
+      id,
+      -32601,
+      'This memory canary uses no tools or interactions',
+    ),
+  )
+  try {
+    await rpc.request('turn/start', {
+      threadId,
+      input: [{ type: 'text', text }],
+    })
+    return await completion
+  } finally {
+    clearTimeout(timer)
+    rpc.onNotification(() => {})
+  }
 }
 
 const outDir = mkdtempSync(join(tmpdir(), 'cvg-codex-canary-'))
@@ -200,6 +251,33 @@ try {
     Boolean(resumeError && resumeError.includes('no rollout found')),
     resumeError ?? 'resume unexpectedly succeeded',
   )
+
+  const memoryStartedAt = Date.now()
+  const phrase = `cvg-memory-${randomUUID()}`
+  const firstAnswer = await answerOnThread(
+    first.rpc,
+    firstId,
+    `Remember this memory-test phrase: ${phrase}. Reply with exactly that phrase. Do not use tools.`,
+  )
+  const replacement = await first.rpc.request('thread/start', {
+    cwd,
+    ...permission,
+  })
+  const replacementId = replacement?.thread?.id ?? replacement?.threadId
+  await first.rpc.request('thread/unsubscribe', { threadId: firstId })
+  const secondAnswer = await answerOnThread(
+    first.rpc,
+    replacementId,
+    'What was the memory-test phrase given earlier in THIS conversation? Reply with it if present, otherwise reply exactly NO_PRIOR_PHRASE. Do not use tools.',
+  )
+  check(
+    'new thread has no prior memory — reusing the first thread and subscription turns red',
+    firstAnswer === phrase &&
+      replacementId !== firstId &&
+      secondAnswer === 'NO_PRIOR_PHRASE',
+    `${Date.now() - memoryStartedAt}ms; learned=${firstAnswer === phrase}; newThread=${replacementId !== firstId}; answer=${JSON.stringify(secondAnswer)}`,
+  )
+  await first.rpc.request('thread/unsubscribe', { threadId: replacementId })
 
   const unsubscribed = await first.rpc.request('thread/unsubscribe', {
     threadId: firstId,
