@@ -1,6 +1,6 @@
 {
   "name": "backpack-studio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "The second body: a remote-only creation app for the EF disciplines, named after the design system its users already live in",
   "main": "out/main/index.js",
