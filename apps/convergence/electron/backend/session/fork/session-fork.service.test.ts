@@ -190,12 +190,14 @@ function setup(
     },
   )
   const startSession = vi.fn(async () => {})
+  const getLastTurnProviderAccountId = vi.fn(() => 'acct-parent')
   const sessions = {
     create: createSession,
     start: startSession,
     getById,
     getSummaryById,
     getConversation,
+    getLastTurnProviderAccountId,
   } as unknown as SessionService
 
   const oneShotTexts = overrides.oneShotText ?? [JSON.stringify(validSummary)]
@@ -299,6 +301,19 @@ describe('SessionForkService', () => {
       const summary = await h.service.previewSummary('parent-1')
       expect(summary.topic).toBe('Fix auth')
       expect(h.oneShot).toHaveBeenCalledTimes(1)
+    })
+
+    it('bills extraction to the account the parent last ran on', async () => {
+      // R5: a session carries no account of its own, so omitting the field
+      // would quietly spend whichever subscription the ambient login holds.
+      const h = setup({
+        oneShotText: ['not json {', JSON.stringify(validSummary)],
+      })
+      await h.service.previewSummary('parent-1')
+      for (const call of h.oneShot.mock.calls) {
+        expect(call[0]).toMatchObject({ providerAccountId: 'acct-parent' })
+      }
+      expect(h.oneShot).toHaveBeenCalledTimes(2)
     })
 
     it('extracts with the provided summarize-with model and effort', async () => {

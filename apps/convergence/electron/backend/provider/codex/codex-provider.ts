@@ -1,4 +1,3 @@
-import { spawn } from 'child_process'
 import { CONVERSATION_RESET_COMMAND } from '../../../../src/shared/lib/conversation-reset.pure'
 import {
   CONTEXT_RESTARTED_NOTE_TEXT,
@@ -42,10 +41,8 @@ import {
   threadContainsClientMessage,
   type CodexLandedTurn,
 } from './codex-server-host.pure'
-import {
-  buildCodexAccountEnv,
-  type CodexAccountEnvTarget,
-} from '../../provider-account/provider-account-codex-env.pure'
+import { runCodexOneShotOnServer } from './codex-one-shot'
+import type { CodexAccountEnvTarget } from '../../provider-account/provider-account-codex-env.pure'
 import { ProviderSessionEmitter } from '../provider-session.emitter'
 import {
   buildFallbackCodexDescriptor,
@@ -93,7 +90,6 @@ import {
   type CodexActivityState,
 } from './codex-activity.pure'
 import type { TaskProgressService } from '../../task-progress/task-progress.service'
-import { createTaskProgressEmitter } from '../../task-progress/task-progress.emitter'
 import {
   noopDebugSink,
   type ProviderDebugSink,
@@ -718,115 +714,6 @@ function buildCodexApprovalRequest(
   return null
 }
 
-function runCodexOneShot(
-  binaryPath: string,
-  input: OneShotInput,
-  taskProgress?: TaskProgressService | null,
-  account: CodexAccountEnvTarget | null = null,
-): Promise<OneShotResult> {
-  return new Promise((resolve, reject) => {
-    const permissionConfig = resolveCodexPermissionConfig(
-      input.permissionConfig,
-    )
-    const args = ['exec', '--skip-git-repo-check', '--model', input.modelId]
-    if (
-      permissionConfig.approvalPolicy === 'never' &&
-      permissionConfig.sandbox === 'danger-full-access'
-    ) {
-      args.push('--dangerously-bypass-approvals-and-sandbox')
-    } else {
-      args.push(
-        '-c',
-        `approval_policy="${permissionConfig.approvalPolicy}"`,
-        '--sandbox',
-        permissionConfig.sandbox,
-      )
-    }
-    if (input.effort) {
-      args.push('-c', `model_reasoning_effort="${input.effort}"`)
-    }
-    if (input.serviceTier) {
-      args.push('-c', `service_tier="${input.serviceTier}"`)
-    }
-    args.push(input.prompt)
-    const child = spawn(binaryPath, args, {
-      cwd: input.workingDirectory,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: buildCodexAccountEnv({ baseEnv: process.env, account }),
-    })
-
-    const progress = createTaskProgressEmitter(input.requestId, taskProgress)
-    progress?.started()
-
-    let stdout = ''
-    let stderr = ''
-    let settled = false
-
-    const timeout = setTimeout(() => {
-      if (settled) return
-      settled = true
-      child.kill('SIGTERM')
-      progress?.settled('timeout')
-      reject(new Error('codex oneShot timed out'))
-    }, input.timeoutMs ?? 20000)
-
-    child.stdout?.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString()
-      progress?.stdoutChunk(chunk.length)
-    })
-    child.stderr?.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString()
-      progress?.stderrChunk(chunk.length)
-    })
-
-    child.on('error', (err) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timeout)
-      progress?.settled('error')
-      reject(err)
-    })
-
-    child.on('exit', (code) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timeout)
-      if (code !== 0) {
-        progress?.settled('error')
-        reject(
-          new Error(
-            `codex oneShot exited with code ${code}: ${stderr.trim() || 'no stderr'}`,
-          ),
-        )
-        return
-      }
-      progress?.settled('ok')
-      resolve({ text: extractCodexExecText(stdout) })
-    })
-  })
-}
-
-function extractCodexExecText(raw: string): string {
-  const trimmed = raw.trim()
-  if (!trimmed) return ''
-
-  const lines = trimmed.split(/\r?\n/)
-  const lastMarkerIndex = lines
-    .map((line, index) => ({ line, index }))
-    .filter(({ line }) => /^\s*\[.*codex\s*\]\s*$/i.test(line))
-    .map(({ index }) => index)
-    .pop()
-
-  if (lastMarkerIndex !== undefined) {
-    return lines
-      .slice(lastMarkerIndex + 1)
-      .join('\n')
-      .trim()
-  }
-
-  return trimmed
-}
-
 /**
  * Resolves a recorded account id to the `CODEX_HOME` that decides which
  * credential serves a process (ADR 0007, PA9). Injected rather than imported so
@@ -849,14 +736,14 @@ export class CodexProvider implements Provider {
 
   /**
    * @param serverHosts the app's resident `codex app-server` pool. Required,
-   * and the provider's only way to reach the binary for anything but
-   * `codex exec`: there is deliberately no path left that spawns an app-server
-   * per turn (MAR-2823). It also owns the `initialize` handshake, and with it
-   * the app version Codex records — the provider no longer carries a second
-   * copy of that fact.
+   * and the provider's ONLY way to reach the binary: since naming and
+   * extraction moved onto ephemeral threads (MAR-2824) the provider no longer
+   * knows a binary path at all, so there is no path left that spawns anything
+   * — not an app-server per turn (MAR-2823), not a `codex exec` per helper
+   * call. The host also owns the `initialize` handshake, and with it the app
+   * version Codex records.
    */
   constructor(
-    private binaryPath: string,
     private serverHosts: CodexServerHostRegistry,
     private taskProgress: TaskProgressService | null = null,
     private debugSink: ProviderDebugSink = noopDebugSink,
@@ -882,12 +769,18 @@ export class CodexProvider implements Provider {
     return this.descriptorPromise
   }
 
+  /**
+   * Naming and extraction, on the same resident server every session uses.
+   *
+   * `hostFor` is what carries R5: the account the caller named decides which
+   * server — and so which `CODEX_HOME` — answers, exactly as it does for a
+   * session. The helper itself refuses a caller that never stated one.
+   */
   async oneShot(input: OneShotInput): Promise<OneShotResult> {
-    return runCodexOneShot(
-      this.binaryPath,
+    return runCodexOneShotOnServer(
+      this.hostFor(input.providerAccountId),
       input,
       this.taskProgress,
-      this.accountLookup(input.providerAccountId),
     )
   }
 

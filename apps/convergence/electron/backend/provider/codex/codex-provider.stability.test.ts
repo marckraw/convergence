@@ -56,7 +56,7 @@ function createStabilityBed(options: FakeCodexServerOptions = {}) {
     server,
     children,
     registry,
-    provider: new CodexProvider('/usr/local/bin/codex', registry),
+    provider: new CodexProvider(registry),
     connectionCount: () => connectionCount,
     /**
      * The server process dies, the way a crashed app-server would — sockets

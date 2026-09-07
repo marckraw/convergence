@@ -405,7 +405,6 @@ async function startApp(): Promise<void> {
       } else if (p.id === 'codex') {
         providerRegistry.register(
           new CodexProvider(
-            p.binaryPath,
             codexServerHosts,
             taskProgressService,
             debugSink,

@@ -398,9 +398,45 @@ describe('SessionService', () => {
     expect(generateName).toHaveBeenCalledWith(
       expect.objectContaining({ id: session.id }),
       [],
-      { requestId: 'rename-request-1' },
+      // The account is stated, never omitted (MAR-2824 R5); a session with no
+      // turns yet rode the ambient login, and says so.
+      { requestId: 'rename-request-1', providerAccountId: null },
     )
     expect(service.getById(session.id)?.name).toBe('New Session Name')
+  })
+
+  it('names a session on the account its last turn actually ran on', async () => {
+    // A session carries no account of its own, so the honest source is the
+    // last turn's row. Reading `null` here instead would be indistinguishable
+    // from a session that has never run — which is why this case has a turn.
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'old name',
+    })
+    db.prepare(
+      `INSERT INTO session_turns (id, session_id, sequence, started_at, status, provider_account_id)
+       VALUES (?, ?, ?, ?, 'completed', ?)`,
+    ).run(
+      'turn-named',
+      session.id,
+      1,
+      new Date().toISOString(),
+      'acct-the-one-it-ran-on',
+    )
+    const generateName = vi.fn(async () => 'New Session Name')
+    service.setNamer({ generateName })
+
+    await service.regenerateName(session.id)
+
+    expect(generateName).toHaveBeenCalledWith(
+      expect.objectContaining({ id: session.id }),
+      [],
+      { providerAccountId: 'acct-the-one-it-ran-on' },
+    )
   })
 
   it('reports no update when regeneration returns no title', async () => {

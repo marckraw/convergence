@@ -98,6 +98,15 @@ export class SessionForkService {
 
     const serialized = serializeConversationItems(conversation)
     const basePrompt = buildExtractionPrompt(serialized)
+    /**
+     * Extraction is billed to the account that held the conversation it reads
+     * (MAR-2824 R5). A session carries no account of its own — the durable
+     * record is per turn — so this is the same last-turn rule the composer
+     * seeds its picker from; null means the parent rode the ambient login.
+     */
+    const providerAccountId = this.deps.sessions.getLastTurnProviderAccountId(
+      parent.id,
+    )
 
     const firstRaw = await provider.oneShot({
       prompt: basePrompt,
@@ -106,6 +115,7 @@ export class SessionForkService {
       workingDirectory: parent.workingDirectory,
       timeoutMs: SUMMARY_EXTRACTION_TIMEOUT_MS,
       requestId,
+      providerAccountId,
     })
     const firstResult = parseAndValidateSummary(firstRaw.text)
     if (firstResult.ok) {
@@ -119,6 +129,7 @@ export class SessionForkService {
       workingDirectory: parent.workingDirectory,
       timeoutMs: SUMMARY_EXTRACTION_TIMEOUT_MS,
       requestId,
+      providerAccountId,
     })
     const retryResult = parseAndValidateSummary(retryRaw.text)
     if (retryResult.ok) {

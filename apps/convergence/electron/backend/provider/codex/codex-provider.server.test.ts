@@ -46,7 +46,7 @@ function createBed(
     server,
     children,
     registry,
-    provider: new CodexProvider('/usr/local/bin/codex', registry),
+    provider: new CodexProvider(registry),
   }
 }
 
@@ -292,7 +292,7 @@ describe('a turn that was sent but never acknowledged', () => {
       connectTransport: async () => recovery.server.connect(),
     })
     registry.setBinary('/usr/local/bin/codex', '0.153.4')
-    return new CodexProvider('/usr/local/bin/codex', registry)
+    return new CodexProvider(registry)
   }
 
   it('adopts a turn the server had already taken instead of sending it twice', async () => {

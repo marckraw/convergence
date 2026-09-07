@@ -94,13 +94,7 @@ function startSession(options: {
   deltas?: SessionDelta[]
 }) {
   const { registry } = createRegistry()
-  const provider = new CodexProvider(
-    '/usr/local/bin/codex',
-    registry,
-    null,
-    undefined,
-    lookup,
-  )
+  const provider = new CodexProvider(registry, null, undefined, lookup)
   const handle = provider.start({
     sessionId: 'session-codex-account',
     workingDirectory: process.cwd(),
@@ -159,19 +153,17 @@ describe('Codex account isolation', () => {
     expect(spawnedEnv(0).OPENAI_API_KEY).toBeUndefined()
   })
 
+  /**
+   * The one-shot's account now decides which *server* answers it (MAR-2824):
+   * the helper is an ephemeral thread on the resident app-server for that
+   * account's `CODEX_HOME`, so the assertion moved one layer down — same
+   * question, no `codex exec` child left to ask it of.
+   */
   it('scopes a one-shot to the account the caller named', async () => {
-    // `codex exec` still spawns per call: oneShot is CX2-3, not this slice.
-    const child = new MockChildProcess()
-    spawnMock.mockReturnValue(child)
-    const { registry } = createRegistry()
+    mockSpawnedServer()
+    const { registry, server } = createRegistry()
 
-    const provider = new CodexProvider(
-      '/usr/local/bin/codex',
-      registry,
-      null,
-      undefined,
-      lookup,
-    )
+    const provider = new CodexProvider(registry, null, undefined, lookup)
     const promise = provider.oneShot({
       prompt: 'name this session',
       modelId: 'gpt-5.4',
@@ -181,9 +173,16 @@ describe('Codex account isolation', () => {
 
     await waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
     expect(spawnedEnv(0).CODEX_HOME).toBe(ACCOUNT_B.configDir)
+    // The spawn is the app-server, never `codex exec`.
+    expect(spawnMock.mock.calls[0][1]).toContain('app-server')
+    expect(spawnMock.mock.calls[0][1]).not.toContain('exec')
 
-    child.stdout.end()
-    child.emit('exit', 0)
+    await waitFor(() => expect(server.methodsCalled()).toContain('turn/start'))
+    const turn = server.requests.find((r) => r.method === 'turn/start')
+    turn?.connection.notify('turn/completed', {
+      threadId: turn.params?.threadId,
+      turn: { id: 'turn-1', status: 'completed' },
+    })
     await promise.catch(() => {})
   })
 

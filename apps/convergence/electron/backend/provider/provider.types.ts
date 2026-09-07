@@ -397,8 +397,21 @@ export interface OneShotInput {
   /**
    * Provider account to spend on this call. Omitted or null means the ambient
    * default account — the behaviour every one-shot had before accounts existed.
+   *
+   * The Codex helper refuses a call that omits the key entirely (MAR-2824 R5):
+   * an absent account is a caller that never thought about it, while an
+   * explicit `null` is a caller that means the ambient login.
    */
   providerAccountId?: string | null
+  /**
+   * JSON schema the answer must satisfy, for callers that want structured
+   * output instead of prose to parse.
+   *
+   * Honoured by providers that can ask their model for it (Codex passes it to
+   * `turn/start`, measured on codex-cli 0.153.4) and ignored by the rest, so a
+   * caller that sets it must still validate what comes back.
+   */
+  outputSchema?: unknown
 }
 
 export interface OneShotResult {
