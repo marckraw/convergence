@@ -91,7 +91,8 @@ on quit are disabled. Development builds do not check the network. The minimal
 Studio adapter owns no Convergence settings or channels; shared extraction is
 tracked in MAR-2859.
 
-The window opens at 1440×960 and cannot resize below 1280×920. Width comes from
+The window's preferred 1440×960 size is clamped to the primary display's work
+area, with a 1280×800 minimum. Shorter windows scroll vertically. Width comes from
 the frozen frames: 650px story + 490px panel content + two 70px gutters. This is
 also above the home cards' 1100px breakpoint. Media queries remain for smaller
 surfaces; the property check exercises all three screens at the native minimum.

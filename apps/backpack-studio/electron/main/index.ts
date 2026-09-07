@@ -1,11 +1,11 @@
-import { studioWindowSize } from './window-options.config'
+import { resolveStudioWindowSize } from './window-options.config'
 import { registerStudioUpdates } from '../updates/updates.ipc'
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, screen } from 'electron'
 import { join } from 'path'
 
 function createWindow(): void {
   const window = new BrowserWindow({
-    ...studioWindowSize,
+    ...resolveStudioWindowSize(screen.getPrimaryDisplay().workAreaSize),
     title: 'Backpack Studio',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

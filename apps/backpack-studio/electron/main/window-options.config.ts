@@ -1,8 +1,13 @@
 // Frozen S1 frames: 650 story + 490 panel content + two 70px gutters.
-// 920px height accommodates the first-request cards and home navigation.
-export const studioWindowSize = {
-  width: 1440,
-  height: 960,
-  minWidth: 1280,
-  minHeight: 920,
-} as const
+// Shorter windows keep that horizontal layout and scroll vertically.
+export function resolveStudioWindowSize(workArea: {
+  width: number
+  height: number
+}) {
+  return {
+    width: Math.min(1440, workArea.width),
+    height: Math.min(960, workArea.height),
+    minWidth: 1280,
+    minHeight: 800,
+  }
+}

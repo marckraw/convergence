@@ -2,7 +2,9 @@ import assert from 'node:assert/strict'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { chromium } from 'playwright'
-import { studioWindowSize } from '../electron/main/window-options.config.ts'
+import { resolveStudioWindowSize } from '../electron/main/window-options.config.ts'
+
+const studioWindowSize = resolveStudioWindowSize({ width: 1440, height: 860 })
 
 // Property canary against the production bundle; no server and no screenshot judgment.
 const browser = await chromium.launch({
