@@ -94,7 +94,9 @@ describe('statesProviderAccount', () => {
     expect(statesProviderAccount({ providerAccountId: 'acct-1' })).toBe(true)
     // An explicit null is an answer: the ambient `~/.codex` login.
     expect(statesProviderAccount({ providerAccountId: null })).toBe(true)
-    expect(statesProviderAccount({ providerAccountId: undefined })).toBe(true)
+    // A caller spreading an optional field it never filled said nothing, and
+    // an absent key and an unfilled one buy the same ambient quota.
+    expect(statesProviderAccount({ providerAccountId: undefined })).toBe(false)
     expect(statesProviderAccount({ prompt: 'name this' })).toBe(false)
   })
 })

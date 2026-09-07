@@ -28,14 +28,17 @@ export const CODEX_ONE_SHOT_ACCOUNT_REQUIRED =
 /**
  * Whether a caller stated which account its helper turn runs on (R5).
  *
- * The key being *absent* is the mistake — a caller that never thought about
- * whose subscription pays. An explicit `null` is an answer: the ambient
- * `~/.codex` login, which is most people's only Codex account. One predicate
- * because two sites refuse: the provider, before it resolves a host for a call
- * it is about to reject, and the helper, for anyone who reaches it directly.
+ * `undefined` is the mistake, and the key being absent is only one way to
+ * reach it: a caller spreading an optional field it never filled writes the
+ * key and still says nothing about whose subscription pays. An explicit `null`
+ * is an answer: the ambient `~/.codex` login, which is most people's only
+ * Codex account. One predicate because two sites refuse: the provider, before
+ * it resolves a host for a call it is about to reject, and the helper, for
+ * anyone who reaches it directly.
  */
 export function statesProviderAccount(input: object): boolean {
-  return 'providerAccountId' in input
+  const { providerAccountId } = input as { providerAccountId?: string | null }
+  return providerAccountId !== undefined
 }
 
 /**

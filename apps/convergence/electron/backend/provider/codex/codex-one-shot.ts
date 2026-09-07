@@ -30,9 +30,18 @@ import {
  *
  * What the budget does NOT cover is the cleanup it triggers: `turn/interrupt`
  * and `thread/unsubscribe` are each bounded only by their rpc silence budget
- * (30s, `CODEX_RPC_BUDGETS_MS`). Bounded is enough — they run after the caller
- * already has its answer, and a helper that gave up without releasing its turn
- * would leave it running on the server every session shares.
+ * (30s, `CODEX_RPC_BUDGETS_MS`), and a deadline that fell between writing
+ * `turn/start` and reading its acknowledgement waits for that acknowledgement
+ * under its own budget (120s) so it has an id to interrupt. Bounded is enough
+ * — cleanup runs after the caller already has its answer, and a helper that
+ * gave up without releasing its turn would leave it running on the server
+ * every session shares.
+ *
+ * One late arrival is left alone on purpose (ruled, MAR-2824 round 3): a
+ * deadline that falls between writing `thread/start` and reading its answer
+ * leaves a thread this call never learned of. It is ephemeral and idle — no
+ * turn, no quota, no rollout — and closing the socket ends its subscription,
+ * so there is nothing to interrupt and no fourth site to guard.
  */
 const CODEX_ONE_SHOT_TIMEOUT_MS = 20_000
 
@@ -122,6 +131,7 @@ async function executeCodexOneShot(
   let timedOut = false
   let gaveUp = false
   let connectionLost: Error | null = null
+  let turnStarting: Promise<unknown> | null = null
 
   const timer = setTimeout(() => {
     timedOut = true
@@ -138,6 +148,12 @@ async function executeCodexOneShot(
    * `thread/start` wins this race by one microtask carrying a raw transport
    * message. The named failure is the true one — it is what tells the caller
    * this can simply be run again (R4).
+   *
+   * It also relabels one non-transport case, correctly: an rpc silence budget
+   * that expires routes through `reportTransportFailure` too, so a caller who
+   * grants the helper more than 60s sees a `thread/start` that never answered
+   * reported as a lost connection that can be retried — which is the client's
+   * own definition of a server that has produced nothing for a minute.
    */
   const runStep = async <T>(step: Promise<T>): Promise<T> => {
     try {
@@ -227,9 +243,15 @@ async function executeCodexOneShot(
       throw new Error('codex oneShot thread/start returned no thread id')
     }
 
-    const acknowledgement = await runStep(
-      rpc.request('turn/start', buildCodexOneShotTurnParams(threadId, input)),
+    // Held, not just awaited: the deadline can fall between writing this and
+    // reading its acknowledgement, and by then the turn is already running.
+    // Non-null in `finally` means exactly that — written, never acknowledged.
+    turnStarting = rpc.request(
+      'turn/start',
+      buildCodexOneShotTurnParams(threadId, input),
     )
+    const acknowledgement = await runStep(turnStarting)
+    turnStarting = null
     const turnId = readCodexOneShotTurnId(acknowledgement)
 
     try {
@@ -254,6 +276,21 @@ async function executeCodexOneShot(
     gaveUp = true
     if (connection) {
       const releasing = connection
+      if (turnStarting && threadId) {
+        // The turn is running on the server every session shares and this call
+        // never learned its id, so unsubscribing and closing would stop the
+        // events and not the turn. Waiting for the id it was denied is what
+        // keeps the budget whole-call; the wait is bounded by `turn/start`'s
+        // own rpc silence budget, the same kind of bound the release below has.
+        const lateTurnId = readCodexOneShotTurnId(
+          await turnStarting.catch(() => null),
+        )
+        if (lateTurnId) {
+          await releasing.rpc
+            .request('turn/interrupt', { threadId, turnId: lateTurnId })
+            .catch(() => undefined)
+        }
+      }
       if (threadId) {
         await releasing.rpc
           .request('thread/unsubscribe', { threadId })

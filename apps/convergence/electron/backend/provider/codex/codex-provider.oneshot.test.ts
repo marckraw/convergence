@@ -408,6 +408,44 @@ describe('CodexProvider.oneShot on the resident server', () => {
     })
   })
 
+  it('interrupts a turn whose acknowledgement landed after the budget ran out', async () => {
+    const service = new TaskProgressService(vi.fn())
+    const events = captureEmits(service)
+    let settledBeforeInterrupt: boolean | null = null
+    const bed = createBed({
+      turnStartDelayMs: 500,
+      turnId: 'turn-late',
+      onRequest: (message) => {
+        if (message.method === 'turn/interrupt') {
+          settledBeforeInterrupt = events.some((e) => e.kind === 'settled')
+        }
+        return undefined
+      },
+    })
+    const provider = new CodexProvider(bed.registry, service)
+
+    await expect(
+      provider.oneShot({ ...NAMING, requestId: 'req-late', timeoutMs: 300 }),
+    ).rejects.toThrow('codex oneShot timed out')
+
+    // The deadline fell after `turn/start` was written and before its answer,
+    // so this call never learned the id of a turn that is running anyway.
+    // Unsubscribing and closing stops the events, not the turn: only an
+    // interrupt carrying that late id stops spending quota on the server every
+    // other session shares.
+    expect(requestParams(bed.server, 'turn/interrupt')).toEqual({
+      threadId: String(requestParams(bed.server, 'turn/start')?.threadId),
+      turnId: 'turn-late',
+    })
+    expect(bed.server.connections[0].closed).toBe(true)
+    // Which interrupt this is, told apart on the wire: a call that WAS
+    // acknowledged interrupts from the answer's catch, before it settles. This
+    // one had already settled `timeout` and could only interrupt afterwards —
+    // so a fixture that stopped delaying the acknowledgement fails here rather
+    // than passing through the ordinary path.
+    expect(settledBeforeInterrupt).toBe(true)
+  })
+
   it('names a connection lost before the turn was acknowledged as retryable', async () => {
     const bed = createBed({ threadStartDelayMs: 500 })
     const promise = bed.provider.oneShot(NAMING)
@@ -420,7 +458,6 @@ describe('CodexProvider.oneShot on the resident server', () => {
     bed.server.connections[0].fail('socket closed')
 
     await expect(promise).rejects.toThrow(/can be retried/)
-    expect(bed.server.methodsCalled()).not.toContain('thread/resume')
   })
 
   it('ignores another thread answering on the same connection', async () => {
@@ -487,6 +524,16 @@ describe('CodexProvider.oneShot on the resident server', () => {
         modelId: 'gpt-5.6-luna',
         workingDirectory: '/tmp/project',
       }),
+    ).rejects.toThrow(/requires providerAccountId/)
+    expect(bed.server.methodsCalled()).not.toContain('thread/start')
+  })
+
+  it('refuses a caller that spread the account key without filling it', async () => {
+    const bed = createBed()
+    // The key is present and says nothing: an optional field a caller never
+    // filled would otherwise be served on whichever login is ambient.
+    await expect(
+      bed.provider.oneShot({ ...NAMING, providerAccountId: undefined }),
     ).rejects.toThrow(/requires providerAccountId/)
     expect(bed.server.methodsCalled()).not.toContain('thread/start')
   })

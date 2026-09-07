@@ -395,12 +395,14 @@ export interface OneShotInput {
   requestId?: string
   permissionConfig?: SessionPermissionConfig
   /**
-   * Provider account to spend on this call. Omitted or null means the ambient
-   * default account — the behaviour every one-shot had before accounts existed.
+   * Provider account to spend on this call. An explicit `null` means the
+   * ambient default account — the behaviour every one-shot had before accounts
+   * existed.
    *
-   * The Codex helper refuses a call that omits the key entirely (MAR-2824 R5):
-   * an absent account is a caller that never thought about it, while an
-   * explicit `null` is a caller that means the ambient login.
+   * The Codex helper refuses a call that leaves this `undefined` (MAR-2824
+   * R5), whether the key is absent or spread in unfilled: either way nobody
+   * said whose subscription pays, while an explicit `null` is a caller that
+   * means the ambient login.
    */
   providerAccountId?: string | null
   /**
