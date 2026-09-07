@@ -1,0 +1,5 @@
+@layer theme, base, backpack, components, utilities;
+@import 'tailwindcss';
+@import '@ef-global/backpack/css/global.css' layer(backpack);
+@import '@ef-global/backpack/css/button.css' layer(backpack);
+@import '../shared/ui/studio-theme.css';

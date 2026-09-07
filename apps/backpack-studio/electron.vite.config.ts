@@ -1,6 +1,15 @@
-import { resolve } from 'path'
+import { dirname, resolve } from 'path'
+import { createRequire } from 'node:module'
+import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
+
+const require = createRequire(import.meta.url)
+// Backpack ships fonts without subpath exports; resolve them beside its public Button entry.
+const backpackFonts = resolve(
+  dirname(require.resolve('@ef-global/backpack/Button')),
+  '../../assets/fonts',
+)
 
 /**
  * The workspace packages this build compiles from source rather than requiring
@@ -34,6 +43,10 @@ export default defineConfig({
   },
   renderer: {
     root: 'src',
+    resolve: {
+      dedupe: ['react', 'react-dom'],
+      alias: { '@backpack-fonts': backpackFonts },
+    },
     build: {
       rollupOptions: {
         input: {
@@ -41,6 +54,6 @@ export default defineConfig({
         },
       },
     },
-    plugins: [react()],
+    plugins: [react(), tailwindcss()],
   },
 })
