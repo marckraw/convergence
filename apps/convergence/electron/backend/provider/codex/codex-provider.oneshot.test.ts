@@ -25,7 +25,13 @@ import {
  * account, an unchanged progress heartbeat, and a call that never reaches for
  * a process of its own.
  */
-function createBed(options: FakeCodexServerOptions = {}) {
+function createBed(
+  options: FakeCodexServerOptions = {},
+  {
+    detectBinary = true,
+    connectDelayMs = 0,
+  }: { detectBinary?: boolean; connectDelayMs?: number } = {},
+) {
   const server = new FakeCodexServer({ autoCompleteTurns: false, ...options })
   const registry = new CodexServerHostRegistry({
     appVersion: '0.46.17',
@@ -36,9 +42,14 @@ function createBed(options: FakeCodexServerOptions = {}) {
       return child.asChildProcess()
     },
     probeReady: async () => true,
-    connectTransport: async () => server.connect(),
+    connectTransport: async () => {
+      if (connectDelayMs) {
+        await new Promise((resolve) => setTimeout(resolve, connectDelayMs))
+      }
+      return server.connect()
+    },
   })
-  registry.setBinary('/usr/local/bin/codex', '0.153.4')
+  if (detectBinary) registry.setBinary('/usr/local/bin/codex', '0.153.4')
   return { server, registry, provider: new CodexProvider(registry) }
 }
 
@@ -82,6 +93,23 @@ function waitFor(assertion: () => void, timeoutMs = 2_000): Promise<void> {
     }
     attempt()
   })
+}
+
+/**
+ * `'pending'` unless the promise settles within `ms`.
+ *
+ * The shape an assertion takes when the claim is that nothing happened: a
+ * helper that answered a stranger's turn resolves immediately, so the only
+ * way to catch it is to wait and find the promise still open.
+ */
+function settlement(promise: Promise<unknown>, ms: number): Promise<string> {
+  return Promise.race([
+    promise.then(
+      () => 'settled',
+      () => 'settled',
+    ),
+    new Promise<string>((resolve) => setTimeout(() => resolve('pending'), ms)),
+  ])
 }
 
 function captureEmits(service: TaskProgressService): TaskProgressEvent[] {
@@ -199,9 +227,6 @@ describe('CodexProvider.oneShot on the resident server', () => {
     // The registry's own spawner is injected in this bed, so the only way
     // `child_process.spawn` fires at all is a helper reaching for a child.
     expect(spawnMock).not.toHaveBeenCalled()
-    for (const call of spawnMock.mock.calls) {
-      expect(call[1]).not.toContain('exec')
-    }
   })
 
   it('releases the thread and closes the connection when the answer is in hand', async () => {
@@ -300,13 +325,158 @@ describe('CodexProvider.oneShot on the resident server', () => {
     expect(bed.server.methodsCalled()).not.toContain('thread/resume')
   })
 
-  it('interrupts the turn it started when the budget runs out', async () => {
+  it('interrupts the turn, unsubscribes and closes when the budget runs out', async () => {
     const bed = createBed()
     const promise = bed.provider.oneShot({ ...NAMING, timeoutMs: 300 })
 
     await expect(promise).rejects.toThrow('codex oneShot timed out')
     const interrupt = requestParams(bed.server, 'turn/interrupt')
     expect(interrupt).toMatchObject({ turnId: 'turn-1' })
+    // The thread and the socket are ours on a server every other session
+    // shares; a failed exit that keeps them is a leak per naming call.
+    expect(requestParams(bed.server, 'thread/unsubscribe')).toEqual({
+      threadId: String(requestParams(bed.server, 'turn/start')?.threadId),
+    })
+    expect(bed.server.connections[0].closed).toBe(true)
+  })
+
+  it('unsubscribes and closes when the turn fails', async () => {
+    const bed = createBed()
+    const promise = bed.provider.oneShot(NAMING)
+
+    await waitFor(() =>
+      expect(requestParams(bed.server, 'turn/start')).toBeDefined(),
+    )
+    const threadId = String(requestParams(bed.server, 'turn/start')?.threadId)
+    bed.server.connections[0].notify('turn/completed', {
+      threadId,
+      turn: { id: 'turn-1', status: 'failed', error: { message: 'no quota' } },
+    })
+    await expect(promise).rejects.toThrow(/no quota/)
+
+    expect(requestParams(bed.server, 'thread/unsubscribe')).toEqual({
+      threadId,
+    })
+    expect(bed.server.connections[0].closed).toBe(true)
+  })
+
+  it('closes the connection when thread/start answers without a thread id', async () => {
+    const bed = createBed({ threadStartWithoutIdCount: 1 })
+
+    await expect(bed.provider.oneShot(NAMING)).rejects.toThrow(
+      /returned no thread id/,
+    )
+
+    // Nothing was started, so there is nothing to unsubscribe from — but the
+    // socket was opened and only this call can close it.
+    expect(bed.server.methodsCalled()).not.toContain('thread/unsubscribe')
+    expect(bed.server.connections[0].closed).toBe(true)
+  })
+
+  it('spends the budget on the whole call, so a stalled host never reaches the model', async () => {
+    const service = new TaskProgressService(vi.fn())
+    const events = captureEmits(service)
+    const bed = createBed({ threadStartDelayMs: 500 })
+    const provider = new CodexProvider(bed.registry, service)
+
+    await expect(
+      provider.oneShot({ ...NAMING, requestId: 'req-cold', timeoutMs: 300 }),
+    ).rejects.toThrow('codex oneShot timed out')
+
+    // `turn/start` is where the user's quota starts being spent. A budget that
+    // only covers the turn lets a host that answered nothing for 20s still
+    // send it, which is exactly what killing the child at 20s never did.
+    expect(bed.server.methodsCalled()).not.toContain('turn/start')
+    const settled = events.find((e) => e.kind === 'settled')
+    if (settled?.kind !== 'settled') throw new Error('bad shape')
+    expect(settled.outcome).toBe('timeout')
+  })
+
+  it('gives up on a host still connecting, and closes the socket that lands late', async () => {
+    const bed = createBed({}, { connectDelayMs: 400 })
+
+    await expect(
+      bed.provider.oneShot({ ...NAMING, timeoutMs: 200 }),
+    ).rejects.toThrow('codex oneShot timed out')
+
+    expect(bed.server.methodsCalled()).not.toContain('thread/start')
+    // The socket still lands after the call gave up, on a resident server that
+    // outlives it — and this call is the only thing that ever held it.
+    await waitFor(() => {
+      expect(bed.server.connections).toHaveLength(1)
+      expect(bed.server.connections[0].closed).toBe(true)
+    })
+  })
+
+  it('names a connection lost before the turn was acknowledged as retryable', async () => {
+    const bed = createBed({ threadStartDelayMs: 500 })
+    const promise = bed.provider.oneShot(NAMING)
+
+    await waitFor(() =>
+      expect(bed.server.methodsCalled()).toContain('thread/start'),
+    )
+    // The socket dies while `thread/start` is still in flight: the caller must
+    // still learn this is retryable, not read a raw transport message.
+    bed.server.connections[0].fail('socket closed')
+
+    await expect(promise).rejects.toThrow(/can be retried/)
+    expect(bed.server.methodsCalled()).not.toContain('thread/resume')
+  })
+
+  it('ignores another thread answering on the same connection', async () => {
+    const bed = createBed()
+    const promise = bed.provider.oneShot(NAMING)
+
+    await waitFor(() =>
+      expect(requestParams(bed.server, 'turn/start')).toBeDefined(),
+    )
+    const threadId = String(requestParams(bed.server, 'turn/start')?.threadId)
+    const connection = bed.server.connections[0]
+
+    // A stranger's session, completing on the socket this helper shares.
+    answerTurn(connection, 'stranger-thread', ['a name for another session'])
+    await expect(settlement(promise, 50)).resolves.toBe('pending')
+
+    answerTurn(connection, threadId, ['the real name'])
+    await expect(promise).resolves.toEqual({ text: 'the real name' })
+  })
+
+  it('refuses a server request mid-turn instead of leaving the turn hanging', async () => {
+    const bed = createBed({
+      onRequest: (message, connection) => {
+        if (message.method !== 'turn/start') return undefined
+        const threadId = String(message.params?.threadId)
+        // What 0.153.4 does when a turn wants a command approved.
+        setTimeout(() =>
+          connection.push({
+            jsonrpc: '2.0',
+            id: 'approval-1',
+            method: 'item/commandExecution/requestApproval',
+            params: { threadId },
+          }),
+        )
+        return undefined
+      },
+    })
+    const promise = bed.provider.oneShot(NAMING)
+
+    await waitFor(() =>
+      expect(bed.server.responses.map((response) => response.id)).toContain(
+        'approval-1',
+      ),
+    )
+    expect(
+      bed.server.responses.find((response) => response.id === 'approval-1')
+        ?.error,
+    ).toMatchObject({ code: -32601 })
+
+    // Refused, not ignored: the turn goes on and still answers.
+    answerTurn(
+      bed.server.connections[0],
+      String(requestParams(bed.server, 'turn/start')?.threadId),
+      ['ok'],
+    )
+    await expect(promise).resolves.toEqual({ text: 'ok' })
   })
 
   it('refuses a caller that never stated which account it spends', async () => {
@@ -319,6 +489,21 @@ describe('CodexProvider.oneShot on the resident server', () => {
       }),
     ).rejects.toThrow(/requires providerAccountId/)
     expect(bed.server.methodsCalled()).not.toContain('thread/start')
+  })
+
+  it('refuses the omitted account before it resolves a host for it', async () => {
+    // No binary detected: resolving a host throws first, so a provider that
+    // refuses late reports "Codex CLI was not detected" for a call whose real
+    // fault is that nobody said whose subscription it spends.
+    const bed = createBed({}, { detectBinary: false })
+
+    await expect(
+      bed.provider.oneShot({
+        prompt: 'name this session',
+        modelId: 'gpt-5.6-luna',
+        workingDirectory: '/tmp/project',
+      }),
+    ).rejects.toThrow(/requires providerAccountId/)
   })
 })
 

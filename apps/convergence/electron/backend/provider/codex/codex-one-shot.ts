@@ -6,16 +6,34 @@ import type {
   CodexServerHost,
 } from './codex-server-host'
 import {
+  CODEX_ONE_SHOT_ACCOUNT_REQUIRED,
   buildCodexOneShotThreadParams,
   buildCodexOneShotTurnParams,
   isCodexNotificationForThread,
   readCodexOneShotDelta,
   readCodexOneShotMessage,
   readCodexOneShotThreadId,
+  readCodexOneShotTurnId,
   readCodexTurnOutcome,
+  statesProviderAccount,
 } from './codex-one-shot.pure'
 
-/** Same budget the `codex exec` child was given, whole-call as it was there. */
+/**
+ * Same budget the `codex exec` child was given, whole-call as it was there.
+ *
+ * Whole-call is the load-bearing word, and `runStep` is what makes it true:
+ * killing the child at 20s stopped everything it might still do, so every
+ * await before the answer — the connect, the thread, the turn — has to be able
+ * to lose to this deadline too. A budget that only covered the wait for the
+ * answer would let a host that had been silent for 20s still send `turn/start`
+ * and spend the user's quota after the call was already lost.
+ *
+ * What the budget does NOT cover is the cleanup it triggers: `turn/interrupt`
+ * and `thread/unsubscribe` are each bounded only by their rpc silence budget
+ * (30s, `CODEX_RPC_BUDGETS_MS`). Bounded is enough — they run after the caller
+ * already has its answer, and a helper that gave up without releasing its turn
+ * would leave it running on the server every session shares.
+ */
 const CODEX_ONE_SHOT_TIMEOUT_MS = 20_000
 
 /**
@@ -74,15 +92,9 @@ export function runCodexOneShotOnServer(
   input: OneShotInput,
   taskProgress?: TaskProgressService | null,
 ): Promise<OneShotResult> {
-  if (!('providerAccountId' in input)) {
-    // R5: an absent account is a caller that never thought about which
-    // subscription it spends; an explicit `null` is one that means the ambient
-    // login. Only the first is a mistake, and it is refused rather than served.
-    return Promise.reject(
-      new Error(
-        'codex oneShot requires providerAccountId (pass null for the ambient login)',
-      ),
-    )
+  if (!statesProviderAccount(input)) {
+    // R5, for anyone who reaches the helper without going through the provider.
+    return Promise.reject(new Error(CODEX_ONE_SHOT_ACCOUNT_REQUIRED))
   }
 
   const run = () => executeCodexOneShot(host, input, taskProgress)
@@ -108,6 +120,8 @@ async function executeCodexOneShot(
   let threadId: string | null = null
   let connection: CodexServerConnection | null = null
   let timedOut = false
+  let gaveUp = false
+  let connectionLost: Error | null = null
 
   const timer = setTimeout(() => {
     timedOut = true
@@ -115,23 +129,55 @@ async function executeCodexOneShot(
   }, input.timeoutMs ?? CODEX_ONE_SHOT_TIMEOUT_MS)
   timer.unref?.()
 
+  /**
+   * One step of the call, run against the deadline instead of beside it.
+   *
+   * The relabel is not decoration: `JsonRpcClient` rejects its pending
+   * requests *before* it calls `onTransportFailure` (see
+   * `reportTransportFailure` in `jsonrpc.ts`), so a socket that dies during
+   * `thread/start` wins this race by one microtask carrying a raw transport
+   * message. The named failure is the true one — it is what tells the caller
+   * this can simply be run again (R4).
+   */
+  const runStep = async <T>(step: Promise<T>): Promise<T> => {
+    try {
+      return await Promise.race([step, answer.promise as Promise<never>])
+    } catch (error) {
+      throw connectionLost ?? error
+    }
+  }
+
   try {
-    connection = await host.connect({
+    const connecting = host.connect({
       // A helper's only progress is its own thread's traffic. Counting another
       // session's broadcast would keep a genuinely stuck naming call looking
       // alive for as long as the machine stays busy (constitution A5).
       isProgressNotification: (_method, params) =>
         threadId !== null && isCodexNotificationForThread(params, threadId),
-      onTransportFailure: (error) =>
-        answer.reject(
-          new Error(`${CODEX_ONE_SHOT_CONNECTION_LOST}: ${error.message}`),
-        ),
+      onTransportFailure: (error) => {
+        connectionLost = new Error(
+          `${CODEX_ONE_SHOT_CONNECTION_LOST}: ${error.message}`,
+        )
+        answer.reject(connectionLost)
+      },
     })
+    // A host that finishes connecting after the budget expired still hands
+    // back a live socket on the resident server, and this call is the only
+    // thing that ever holds it.
+    void connecting.then(
+      (opened) => {
+        if (gaveUp) opened.close()
+      },
+      () => undefined,
+    )
+    connection = await runStep(connecting)
     const rpc = connection.rpc
 
     // A read-only helper has nothing to approve and no user to ask; leaving a
-    // server request unanswered would hang the turn instead.
-    rpc.onServerRequest((id) =>
+    // server request unanswered would hang the turn instead. The id is the
+    // handler's THIRD argument — answering with the method name writes a
+    // response the server can match to no request, which is the same hang.
+    rpc.onServerRequest((_method, _params, id) =>
       rpc.respondError(
         id,
         -32601,
@@ -173,18 +219,16 @@ async function executeCodexOneShot(
       }
     })
 
-    const started = await rpc.request(
-      'thread/start',
-      buildCodexOneShotThreadParams(input),
+    const started = await runStep(
+      rpc.request('thread/start', buildCodexOneShotThreadParams(input)),
     )
     threadId = readCodexOneShotThreadId(started)
     if (!threadId) {
       throw new Error('codex oneShot thread/start returned no thread id')
     }
 
-    const acknowledgement = await rpc.request(
-      'turn/start',
-      buildCodexOneShotTurnParams(threadId, input),
+    const acknowledgement = await runStep(
+      rpc.request('turn/start', buildCodexOneShotTurnParams(threadId, input)),
     )
     const turnId = readCodexOneShotTurnId(acknowledgement)
 
@@ -207,6 +251,7 @@ async function executeCodexOneShot(
     throw error
   } finally {
     clearTimeout(timer)
+    gaveUp = true
     if (connection) {
       const releasing = connection
       if (threadId) {
@@ -217,12 +262,4 @@ async function executeCodexOneShot(
       releasing.close()
     }
   }
-}
-
-function readCodexOneShotTurnId(result: unknown): string | null {
-  const record =
-    typeof result === 'object' && result !== null
-      ? (result as { turn?: { id?: unknown } })
-      : null
-  return typeof record?.turn?.id === 'string' ? record.turn.id : null
 }

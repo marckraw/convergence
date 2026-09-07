@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CODEX_ONE_SHOT_PERMISSION,
   buildCodexOneShotThreadParams,
   buildCodexOneShotTurnParams,
   isCodexNotificationForThread,
   readCodexOneShotDelta,
   readCodexOneShotMessage,
   readCodexOneShotThreadId,
+  readCodexOneShotTurnId,
   readCodexTurnOutcome,
+  statesProviderAccount,
 } from './codex-one-shot.pure'
 
 const BASE = {
@@ -23,15 +24,6 @@ describe('buildCodexOneShotThreadParams', () => {
       approvalPolicy: 'never',
       sandbox: 'read-only',
       ephemeral: true,
-    })
-  })
-
-  it('runs least privilege, never the agent profile', () => {
-    // The constant is the point: no argument reaches it, so no caller can pass
-    // `danger-full-access` down a path that answers with a session title.
-    expect(CODEX_ONE_SHOT_PERMISSION).toEqual({
-      approvalPolicy: 'never',
-      sandbox: 'read-only',
     })
   })
 })
@@ -82,6 +74,28 @@ describe('readCodexOneShotThreadId', () => {
     expect(readCodexOneShotThreadId({})).toBeNull()
     expect(readCodexOneShotThreadId(null)).toBeNull()
     expect(readCodexOneShotThreadId({ thread: { id: 7 } })).toBeNull()
+  })
+})
+
+describe('readCodexOneShotTurnId', () => {
+  it('reads the id a turn/start acknowledgement carries, and nothing else', () => {
+    // Without an id the timeout path cannot interrupt, and the turn outlives
+    // the call on a server every other session shares.
+    expect(readCodexOneShotTurnId({ turn: { id: 'turn-1' } })).toBe('turn-1')
+    expect(readCodexOneShotTurnId({ turn: {} })).toBeNull()
+    expect(readCodexOneShotTurnId({ turn: { id: 7 } })).toBeNull()
+    expect(readCodexOneShotTurnId({})).toBeNull()
+    expect(readCodexOneShotTurnId(null)).toBeNull()
+  })
+})
+
+describe('statesProviderAccount', () => {
+  it('separates a caller that meant the ambient login from one that never said', () => {
+    expect(statesProviderAccount({ providerAccountId: 'acct-1' })).toBe(true)
+    // An explicit null is an answer: the ambient `~/.codex` login.
+    expect(statesProviderAccount({ providerAccountId: null })).toBe(true)
+    expect(statesProviderAccount({ providerAccountId: undefined })).toBe(true)
+    expect(statesProviderAccount({ prompt: 'name this' })).toBe(false)
   })
 })
 

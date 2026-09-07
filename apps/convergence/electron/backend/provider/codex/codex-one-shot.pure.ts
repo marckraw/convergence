@@ -21,6 +21,23 @@ export const CODEX_ONE_SHOT_PERMISSION: {
   sandbox: 'read-only',
 }
 
+/** What a caller is told when it never said whose subscription it spends. */
+export const CODEX_ONE_SHOT_ACCOUNT_REQUIRED =
+  'codex oneShot requires providerAccountId (pass null for the ambient login)'
+
+/**
+ * Whether a caller stated which account its helper turn runs on (R5).
+ *
+ * The key being *absent* is the mistake — a caller that never thought about
+ * whose subscription pays. An explicit `null` is an answer: the ambient
+ * `~/.codex` login, which is most people's only Codex account. One predicate
+ * because two sites refuse: the provider, before it resolves a host for a call
+ * it is about to reject, and the helper, for anyone who reaches it directly.
+ */
+export function statesProviderAccount(input: object): boolean {
+  return 'providerAccountId' in input
+}
+
 /**
  * The `thread/start` params for a helper turn.
  *
@@ -81,15 +98,28 @@ export function readCodexOneShotThreadId(result: unknown): string | null {
 /**
  * Whether a notification belongs to this helper's thread.
  *
- * The server broadcasts `thread/started` and `thread/status/changed` down every
- * connection (constitution A2), and the helper shares its socket with nothing
- * else only by luck — an untagged event is somebody else's until proven ours.
+ * The helper opens its own socket, but that is not what makes its traffic its
+ * own: the server broadcasts `thread/*` events down *every* connection
+ * (constitution A2), so a private socket still carries other sessions' threads.
+ * The thread id is the only thing that separates them — an untagged event is
+ * somebody else's until proven ours.
  */
 export function isCodexNotificationForThread(
   params: unknown,
   threadId: string,
 ): boolean {
   return readText(asRecord(params)?.threadId) === threadId
+}
+
+/**
+ * The turn id in a `turn/start` acknowledgement.
+ *
+ * Without it the timeout path has nothing to interrupt, and the turn keeps
+ * running on a server every other session is also talking to.
+ */
+export function readCodexOneShotTurnId(result: unknown): string | null {
+  const turn = asRecord(asRecord(result)?.turn)
+  return readText(turn?.id)
 }
 
 /** Streamed agent text, in either delta shape the adapter already parses. */

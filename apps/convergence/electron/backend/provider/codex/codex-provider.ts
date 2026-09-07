@@ -42,6 +42,10 @@ import {
   type CodexLandedTurn,
 } from './codex-server-host.pure'
 import { runCodexOneShotOnServer } from './codex-one-shot'
+import {
+  CODEX_ONE_SHOT_ACCOUNT_REQUIRED,
+  statesProviderAccount,
+} from './codex-one-shot.pure'
 import type { CodexAccountEnvTarget } from '../../provider-account/provider-account-codex-env.pure'
 import { ProviderSessionEmitter } from '../provider-session.emitter'
 import {
@@ -774,9 +778,16 @@ export class CodexProvider implements Provider {
    *
    * `hostFor` is what carries R5: the account the caller named decides which
    * server — and so which `CODEX_HOME` — answers, exactly as it does for a
-   * session. The helper itself refuses a caller that never stated one.
+   * session. The refusal comes first because resolving a host is not free of
+   * consequence: with no binary detected it throws a message about the CLI for
+   * a call whose real fault is that nobody said whose subscription it spends,
+   * and with one it registers an ambient host for a call about to be rejected.
    */
   async oneShot(input: OneShotInput): Promise<OneShotResult> {
+    if (!statesProviderAccount(input)) {
+      throw new Error(CODEX_ONE_SHOT_ACCOUNT_REQUIRED)
+    }
+
     return runCodexOneShotOnServer(
       this.hostFor(input.providerAccountId),
       input,
