@@ -29,8 +29,9 @@ in a separate cascade layer. Backpack's shipped Tailwind 3 preset fails under
 Tailwind 4 (`value.match is not a function`), so it is not loaded. All Studio
 colors live in `src/shared/ui/studio-theme.css`; Backpack supplies its own
 button tokens. The shared UI boundary re-exports Backpack's Button.
-Vite aliases the two CSS files to their exported paths because Tailwind 4.2's
-style condition is absent from Backpack's import/require-only CSS exports.
+After Vite's own resolver returns nothing, `@tailwindcss/vite`'s enhanced-resolve
+fallback uses only the `style` condition and rejects Backpack's import/require-only
+CSS exports without these aliases.
 
 Vite resolves the Book/Medium font assets beside Backpack's exported Button
 entry, since Backpack ships fonts without public font subpath exports. The

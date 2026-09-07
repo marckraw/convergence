@@ -47,7 +47,7 @@ export default defineConfig({
       dedupe: ['react', 'react-dom'],
       alias: {
         '@backpack-fonts': backpackFonts,
-        // Tailwind 4.2 resolves CSS with the style condition; Backpack exports import/require only.
+        // After Vite resolves nothing, @tailwindcss/vite's enhanced-resolve fallback uses only style and rejects Backpack's import/require-only CSS exports without these aliases.
         '@ef-global/backpack/css/global.css':
           require.resolve('@ef-global/backpack/css/global.css'),
         '@ef-global/backpack/css/button.css':
