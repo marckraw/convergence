@@ -40,7 +40,7 @@ function session(
     },
   })
   registry.setBinary('/usr/local/bin/codex', '0.153.4')
-  const handle = new CodexProvider('/usr/local/bin/codex', registry).start({
+  const handle = new CodexProvider(registry).start({
     sessionId: 'same-session',
     workingDirectory: '/tmp',
     initialMessage,

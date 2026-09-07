@@ -46,7 +46,7 @@ function createCodexTestBed(
   })
   registry.setBinary('/usr/local/bin/codex', version)
 
-  const provider = new CodexProvider('/usr/local/bin/codex', registry)
+  const provider = new CodexProvider(registry)
   return { provider, server, registry, children }
 }
 

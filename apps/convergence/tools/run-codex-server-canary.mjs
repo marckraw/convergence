@@ -23,7 +23,12 @@ import { build } from 'esbuild'
  *      the wording the recovery path reads;
  *   5. `thread/unsubscribe` answers with a status, not an error;
  *   6. the process table shows exactly one `codex app-server`, and none after
- *      the host is stopped.
+ *      the host is stopped;
+ *   7. an ephemeral thread runs a full turn and STILL leaves no rollout, while
+ *      a non-ephemeral one that ran a turn resumes — the control that makes
+ *      "no rollout" mean something (MAR-2824);
+ *   8. two helper calls on one account serialise: the second never opens its
+ *      connection until the first has finished.
  *
  * The reset case sends two short model turns and writes their rollouts.
  * It checks memory isolation on the same connection (MAR-2819).
@@ -128,6 +133,7 @@ async function answerOnThread(rpc, threadId, text) {
 
 const outDir = mkdtempSync(join(tmpdir(), 'cvg-codex-canary-'))
 const bundlePath = join(outDir, 'codex-server-host.cjs')
+const oneShotBundlePath = join(outDir, 'codex-one-shot.cjs')
 
 let exitCode = 1
 /**
@@ -158,7 +164,30 @@ try {
     logLevel: 'warning',
   })
 
+  await build({
+    entryPoints: [
+      join(
+        appRoot,
+        'electron',
+        'backend',
+        'provider',
+        'codex',
+        'codex-one-shot.ts',
+      ),
+    ],
+    outfile: oneShotBundlePath,
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    target: 'node22',
+    external: ['electron', 'better-sqlite3'],
+    logLevel: 'warning',
+  })
+
   const { CodexServerHostRegistry } = await import(`file://${bundlePath}`)
+  const { runCodexOneShotOnServer } = await import(
+    `file://${oneShotBundlePath}`
+  )
 
   const binaryPath = resolveCodexBinary()
   const version = execFileSync(binaryPath, ['--version'], {
@@ -284,6 +313,94 @@ try {
     'replacement thread/unsubscribe answers unsubscribed — target old thread turns red',
     unsubscribed?.status === 'unsubscribed',
     JSON.stringify(unsubscribed),
+  )
+
+  // --- MAR-2824: the ephemeral thread, and its control.
+  //
+  // Both threads run a real turn. Without the turn on the NON-ephemeral side
+  // this proves nothing: a thread that never ran also has no rollout, so the
+  // check would pass with `ephemeral` deleted.
+  const rolloutConn = await host.connect()
+  const durable = await rolloutConn.rpc.request('thread/start', {
+    cwd,
+    ...permission,
+  })
+  const durableId = durable?.thread?.id ?? durable?.threadId
+  await answerOnThread(rolloutConn.rpc, durableId, 'Reply with exactly: ok')
+  const ephemeral = await rolloutConn.rpc.request('thread/start', {
+    cwd,
+    ...permission,
+    ephemeral: true,
+  })
+  const ephemeralId = ephemeral?.thread?.id ?? ephemeral?.threadId
+  await answerOnThread(rolloutConn.rpc, ephemeralId, 'Reply with exactly: ok')
+
+  const readRollout = async (threadId) => {
+    const reader = await host.connect()
+    try {
+      await reader.rpc.request('thread/resume', {
+        threadId,
+        cwd,
+        ...permission,
+      })
+      return 'resumed'
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err)
+    } finally {
+      reader.close()
+    }
+  }
+  const durableRollout = await readRollout(durableId)
+  const ephemeralRollout = await readRollout(ephemeralId)
+  check(
+    'an ephemeral thread that ran a turn leaves no rollout — dropping `ephemeral` turns this red',
+    durableRollout === 'resumed' &&
+      ephemeralRollout.includes('no rollout found'),
+    `durable=${durableRollout}; ephemeral=${ephemeralRollout}`,
+  )
+  rolloutConn.close()
+
+  // --- MAR-2824: one helper turn per account at a time.
+  //
+  // Timing would be a guess; the connection is the fact. The second call may
+  // not so much as open its socket until the first has released its own.
+  const journal = []
+  const openConnection = host.connect.bind(host)
+  host.connect = async (...args) => {
+    journal.push({ kind: 'connect', at: Date.now() })
+    return openConnection(...args)
+  }
+  const helper = (prompt) =>
+    runCodexOneShotOnServer(host, {
+      prompt,
+      modelId: 'gpt-5.6-luna',
+      effort: 'low',
+      workingDirectory: cwd,
+      providerAccountId: null,
+      timeoutMs: 120_000,
+    }).then((result) => {
+      journal.push({ kind: 'done', at: Date.now() })
+      return result
+    })
+  const helperStartedAt = Date.now()
+  const [firstHelper, secondHelper] = await Promise.all([
+    helper('Reply with exactly the word: first'),
+    helper('Reply with exactly the word: second'),
+  ])
+  host.connect = openConnection
+  const firstDone = journal.find((entry) => entry.kind === 'done')
+  const secondConnect = journal.filter((entry) => entry.kind === 'connect')[1]
+  check(
+    'two helper calls on one account serialise — removing the per-host queue turns this red',
+    Boolean(firstDone && secondConnect) && secondConnect.at >= firstDone.at,
+    `${journal.length} events over ${Date.now() - helperStartedAt}ms; second connect ${
+      secondConnect && firstDone ? secondConnect.at - firstDone.at : '?'
+    }ms after the first answer`,
+  )
+  check(
+    'each helper call returns its own answer',
+    /first/i.test(firstHelper.text) && /second/i.test(secondHelper.text),
+    `${JSON.stringify(firstHelper.text)} / ${JSON.stringify(secondHelper.text)}`,
   )
 
   const during = countAppServers()

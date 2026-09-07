@@ -395,10 +395,25 @@ export interface OneShotInput {
   requestId?: string
   permissionConfig?: SessionPermissionConfig
   /**
-   * Provider account to spend on this call. Omitted or null means the ambient
-   * default account — the behaviour every one-shot had before accounts existed.
+   * Provider account to spend on this call. An explicit `null` means the
+   * ambient default account — the behaviour every one-shot had before accounts
+   * existed.
+   *
+   * The Codex helper refuses a call that leaves this `undefined` (MAR-2824
+   * R5), whether the key is absent or spread in unfilled: either way nobody
+   * said whose subscription pays, while an explicit `null` is a caller that
+   * means the ambient login.
    */
   providerAccountId?: string | null
+  /**
+   * JSON schema the answer must satisfy, for callers that want structured
+   * output instead of prose to parse.
+   *
+   * Honoured by providers that can ask their model for it (Codex passes it to
+   * `turn/start`, measured on codex-cli 0.153.4) and ignored by the rest, so a
+   * caller that sets it must still validate what comes back.
+   */
+  outputSchema?: unknown
 }
 
 export interface OneShotResult {

@@ -114,7 +114,7 @@ describe('SessionNamingService', () => {
     const result = await service.generateName(
       baseSession(),
       conversation('claude-code'),
-      { requestId: 'rename-request-1' },
+      { requestId: 'rename-request-1', providerAccountId: 'acct-a' },
     )
 
     expect(result).toBe('Better Session Name')
@@ -123,6 +123,9 @@ describe('SessionNamingService', () => {
         modelId: 'fast',
         requestId: 'rename-request-1',
         workingDirectory: '/tmp',
+        // R5: naming spends the account the caller named, never the ambient
+        // one it would inherit by omitting the field.
+        providerAccountId: 'acct-a',
       }),
     )
   })
@@ -140,7 +143,7 @@ describe('SessionNamingService', () => {
         permissionConfig: { preset: 'yolo' },
       }),
       conversation('codex'),
-      { requestId: 'rename-request-1' },
+      { requestId: 'rename-request-1', providerAccountId: 'acct-a' },
     )
 
     expect(oneShot).toHaveBeenCalledWith(
@@ -162,7 +165,7 @@ describe('SessionNamingService', () => {
     const result = await service.generateName(
       baseSession({ providerId: 'codex' }),
       conversation('codex'),
-      { requestId: 'rename-request-1' },
+      { requestId: 'rename-request-1', providerAccountId: 'acct-a' },
     )
 
     expect(result).toBeNull()
@@ -196,6 +199,7 @@ describe('SessionNamingService', () => {
     const result = await service.generateName(
       baseSession({ providerId: 'shell', primarySurface: 'terminal' }),
       [],
+      { providerAccountId: null },
     )
 
     expect(result).toBeNull()

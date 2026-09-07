@@ -120,6 +120,11 @@ export interface FakeCodexServerOptions {
   silentMethods?: string[]
   /** Delay before `thread/start` answers, standing in for a slow server. */
   threadStartDelayMs?: number
+  /**
+   * Delay before `turn/start` acknowledges. The turn is taken when the request
+   * arrives; the delay is only the caller's ignorance of its id.
+   */
+  turnStartDelayMs?: number
   /** How many opening `thread/start` calls answer without an id at all. */
   threadStartWithoutIdCount?: number
   /**
@@ -279,12 +284,19 @@ export class FakeCodexServer {
         }
         const turnId =
           this.options.turnId ?? this.options.turnStartedId ?? 'turn-1'
-        connection.respond(id, { turn: { id: turnId, status: 'inProgress' } })
-        connection.notify('turn/started', { turn: { id: turnId } })
-        if (this.options.autoCompleteTurns !== false) {
-          connection.notify('turn/completed', {
-            turn: { id: turnId, status: 'completed' },
-          })
+        const answer = () => {
+          connection.respond(id, { turn: { id: turnId, status: 'inProgress' } })
+          connection.notify('turn/started', { turn: { id: turnId } })
+          if (this.options.autoCompleteTurns !== false) {
+            connection.notify('turn/completed', {
+              turn: { id: turnId, status: 'completed' },
+            })
+          }
+        }
+        if (this.options.turnStartDelayMs) {
+          setTimeout(answer, this.options.turnStartDelayMs)
+        } else {
+          answer()
         }
         return
       }

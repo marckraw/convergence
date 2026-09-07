@@ -163,7 +163,7 @@ export interface SessionNamer {
   generateName(
     session: SessionSummary,
     conversation: ConversationItem[],
-    options?: { requestId?: string },
+    options: { requestId?: string; providerAccountId: string | null },
   ): Promise<string | null>
 }
 
@@ -995,7 +995,10 @@ export class SessionService {
     const title = await this.namer.generateName(
       session,
       this.getConversation(session.id),
-      requestId ? { requestId } : undefined,
+      {
+        ...(requestId ? { requestId } : {}),
+        providerAccountId: this.getLastTurnProviderAccountId(session.id),
+      },
     )
     if (!title) return false
     this.sessionRepository.rename(session.id, title)

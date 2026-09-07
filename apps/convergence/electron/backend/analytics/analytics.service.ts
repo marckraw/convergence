@@ -147,6 +147,10 @@ export class AnalyticsService {
       workingDirectory: this.workingDirectory,
       timeoutMs: 180_000,
       requestId: randomUUID(),
+      // Stated rather than omitted (MAR-2824 R5): a work profile spans every
+      // session in the range and belongs to no single one, so the ambient
+      // login is the honest answer here — not an oversight.
+      providerAccountId: null,
     })
     const payload = parseGeneratedWorkProfilePayload(result.text)
 
