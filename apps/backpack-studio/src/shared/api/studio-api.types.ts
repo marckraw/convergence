@@ -75,7 +75,7 @@ export interface ConversationSummary {
   status: ConversationStatus
 }
 
-/** Every conversation-item kind the wire carries, projected one for one. */
+/** Wire item kinds plus the local notice that a remote session restarted. */
 export type TranscriptItemKind =
   | 'message'
   | 'thinking'
@@ -84,14 +84,15 @@ export type TranscriptItemKind =
   | 'approval-request'
   | 'input-request'
   | 'note'
+  | 'restart-notice'
 
 /**
  * One row of the raw transcript.
  *
  * Raw on purpose: this run has no Narrator (constitution law 3), so a row says
  * what the wire said and the label names where it came from. Nothing here is
- * summarised, and nothing is invented — every row is a conversation item the
- * daemon sent, including the user's own message, which the daemon echoes back
+ * summarised, and local restart notices are marked as notes. The other rows are
+ * conversation items the daemon sent, including the user's own message, which the daemon echoes back
  * as an item of its own.
  */
 export interface TranscriptItem {

@@ -8,10 +8,14 @@ const fixtures = vi.hoisted(() => ({
   handshake: vi.fn(),
 }))
 vi.mock('electron', () => ({
-  app: { getPath: () => '/tmp/studio-test-record', on: vi.fn() },
+  app: { getPath: () => '/tmp/studio-test-record', on: vi.fn(), once: vi.fn() },
   BrowserWindow: {
+    fromWebContents: () => ({}),
     getAllWindows: () => [
-      { isDestroyed: () => false, webContents: { send: fixtures.sent } },
+      {
+        isDestroyed: () => false,
+        webContents: { send: fixtures.sent, isDestroyed: () => false },
+      },
     ],
   },
   ipcMain: {
@@ -57,18 +61,18 @@ it('publishes the real handshake without gating the saved list — mutations: om
   })
   const { registerStudioRuntime } = await import('./studio-runtime.service')
   await registerStudioRuntime()
-  expect(await fixtures.handlers.get('studio:list-conversations')?.()).toEqual([
-    { id: 'saved' },
-  ])
+  expect(
+    await fixtures.handlers.get('studio:list-conversations')?.({ sender: {} }),
+  ).toEqual([{ id: 'saved' }])
   expect(fixtures.sent).not.toHaveBeenCalled()
   held.release()
-  expect(await fixtures.handlers.get('studio:daemon-status')?.()).toMatchObject(
-    {
-      status: 'connected',
-      endpointName: 'live.example',
-      daemonVersion: 'live',
-    },
-  )
+  expect(
+    await fixtures.handlers.get('studio:daemon-status')?.({ sender: {} }),
+  ).toMatchObject({
+    status: 'connected',
+    endpointName: 'live.example',
+    daemonVersion: 'live',
+  })
   expect(fixtures.sent).toHaveBeenCalledWith(
     'studio:daemon-status',
     expect.objectContaining({ endpointName: 'live.example' }),

@@ -54,6 +54,8 @@ export function ConversationView({
                         </h2>
                         <p>{row.text}</p>
                       </>
+                    ) : row.kind === 'restart-notice' ? (
+                      <p>{row.text}</p>
                     ) : (
                       <details>
                         <summary>

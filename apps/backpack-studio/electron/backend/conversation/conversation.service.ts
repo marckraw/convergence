@@ -281,7 +281,10 @@ export class ConversationService {
           )
         )
           throw error
-        await this.startOrContinue(live, text)
+        if (await this.startOrContinue(live, text)) {
+          await this.recordLocal(live, 'restarted')
+          this.publish(live)
+        }
       }
     } catch (error) {
       const reason = describeDaemonFailure(error)
@@ -302,7 +305,7 @@ export class ConversationService {
   private async startOrContinue(
     live: LiveConversation,
     text: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       await this.deps.client.startSession({
         sessionId: live.record.id,
@@ -310,6 +313,7 @@ export class ConversationService {
         workingDirectory: this.deps.workingDirectory,
         initialMessage: text,
       })
+      return true
     } catch (error) {
       if (
         !(
@@ -320,6 +324,7 @@ export class ConversationService {
       )
         throw error
       await this.deps.client.sendMessage(live.record.id, text)
+      return false
     }
   }
 
@@ -337,6 +342,7 @@ export class ConversationService {
       if (live.following) following.push(live.following)
     }
     await Promise.all(following)
+    await this.deps.store.drain()
   }
 
   /**

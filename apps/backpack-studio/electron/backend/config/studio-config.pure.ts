@@ -59,7 +59,7 @@ export type StudioConfigReading =
 export function readStudioConfig(
   env: Record<string, string | undefined>,
 ): StudioConfigReading {
-  const daemonBaseUrl = trimmed(env[STUDIO_ENV_KEYS.daemonUrl])
+  const daemonBaseUrl = httpUrl(trimmed(env[STUDIO_ENV_KEYS.daemonUrl]))
   const daemonToken = trimmed(env[STUDIO_ENV_KEYS.daemonToken])
   const daemonProject = trimmed(env[STUDIO_ENV_KEYS.daemonProject])
   const providerId =
@@ -160,4 +160,14 @@ function unquote(value: string): string {
     (value.startsWith('"') && value.endsWith('"')) ||
     (value.startsWith("'") && value.endsWith("'"))
   return quoted && value.length >= 2 ? value.slice(1, -1) : value
+}
+
+function httpUrl(value: string | null): string | null {
+  if (value === null) return null
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? value : null
+  } catch {
+    return null
+  }
 }

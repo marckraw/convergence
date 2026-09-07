@@ -171,3 +171,12 @@ describe('mergeEnv', () => {
     expect(mergeEnv({}, FULL).BACKPACK_STUDIO_DAEMON_TOKEN).toBe('tok-abc')
   })
 })
+
+it.each(['not a URL', '/relative', 'ftp://daemon.test', 'file:///tmp/daemon'])(
+  'names an invalid daemon URL %s — mutation: skip URL validation',
+  (url) => {
+    expect(
+      readStudioConfig({ ...FULL, BACKPACK_STUDIO_DAEMON_URL: url }),
+    ).toEqual({ ok: false, missing: [STUDIO_ENV_KEYS.daemonUrl] })
+  },
+)

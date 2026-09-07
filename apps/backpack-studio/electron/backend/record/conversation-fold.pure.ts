@@ -108,6 +108,30 @@ function applyLocalFact(
   at: string,
 ): ConversationFold {
   switch (fact) {
+    case 'restarted':
+      return {
+        ...fold,
+        status: 'running',
+        updatedAt: at,
+        lastFact: fact,
+        lastSeq: 0,
+        // The new remote session can reuse sequences and item ids. Keep the
+        // earlier rows as history, outside the new session's patch namespace.
+        items: [
+          ...fold.items.map((row, index) => ({
+            ...row,
+            id: `archived:${fold.items.length}:${index}:${row.id}`,
+          })),
+          {
+            id: `restart:${fold.items.length}`,
+            kind: 'restart-notice',
+            actor: null,
+            label: 'Conversation restarted',
+            state: 'complete',
+            text: "The agent's earlier memory of this conversation is gone on the server; it starts again from here.",
+          },
+        ],
+      }
     case 'sent':
       return { ...fold, status: 'running', updatedAt: at, lastFact: fact }
     case 'refused':
@@ -251,6 +275,7 @@ const FULL_TEXT_FIELD: Record<TranscriptItem['kind'], string> = {
   message: 'text',
   thinking: 'text',
   note: 'text',
+  'restart-notice': 'text',
   'tool-call': 'inputText',
   'tool-result': 'outputText',
   'approval-request': 'description',

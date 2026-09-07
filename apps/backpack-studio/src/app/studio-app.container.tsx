@@ -4,7 +4,11 @@ import { SignInContainer } from '../features/sign-in'
 import { FirstRequest } from '../features/first-request'
 import { Home } from '../features/home'
 import { ConversationView } from '../widgets/conversation'
-import { composerState, daemonHeadline } from '../entities/conversation'
+import {
+  composerState,
+  daemonHeadline,
+  conversationSummary,
+} from '../entities/conversation'
 import {
   readConnection,
   pendingConnection,
@@ -76,7 +80,7 @@ export function StudioApp(): React.JSX.Element {
         setSnapshots((current) => ({ ...current, [snapshot.id]: snapshot }))
         setConversations((current) => [
           ...current.filter((row) => row.id !== snapshot.id),
-          snapshot,
+          conversationSummary(snapshot),
         ])
       })
       stopDaemon = onDaemonStatus((status) => {
@@ -96,7 +100,9 @@ export function StudioApp(): React.JSX.Element {
         .then((rows) => {
           if (active)
             setConversations((current) => {
-              const merged = new Map(rows.map((row) => [row.id, row]))
+              const merged = new Map(
+                rows.map((row) => [row.id, conversationSummary(row)]),
+              )
               for (const row of current) merged.set(row.id, row)
               return [...merged.values()]
             })

@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import type {
   ConversationEvent,
   ConversationSnapshot,
@@ -11,6 +11,7 @@ import type {
 import type { ConversationService } from './conversation/conversation.service'
 import { STUDIO_CHANNELS } from './studio-channels'
 import { readIpcString } from './studio-ipc.pure'
+import { owned } from './owned-ipc'
 
 export interface StudioIpcDeps {
   getDaemonStatus: () => Promise<DaemonStatusView | null>
@@ -41,7 +42,7 @@ export interface StudioIpcDeps {
 /**
  * Registers Studio's whole main-process surface.
  *
- * Five calls and two pushes — the list the run was given, and nothing else.
+ * Six calls and two pushes — the list the run was given, and nothing else.
  * What crosses is what the window draws: no base URL, no token, no daemon
  * internals.
  *
@@ -51,15 +52,22 @@ export interface StudioIpcDeps {
  * arrived.
  */
 export function registerStudioIpc(deps: StudioIpcDeps): void {
-  ipcMain.handle(STUDIO_CHANNELS.daemonStatus, () => deps.getDaemonStatus())
+  ipcMain.handle(STUDIO_CHANNELS.daemonStatus, (event) => {
+    owned(event)
+    return deps.getDaemonStatus()
+  })
   ipcMain.handle(
     STUDIO_CHANNELS.getStartup,
-    (): Promise<StudioStartup> => deps.getStartup(),
+    (event): Promise<StudioStartup> => {
+      owned(event)
+      return deps.getStartup()
+    },
   )
 
   ipcMain.handle(
     STUDIO_CHANNELS.listConversations,
-    async (): Promise<ConversationSummary[]> => {
+    async (event): Promise<ConversationSummary[]> => {
+      owned(event)
       await deps.whenRecordReady()
       return deps.service?.list() ?? []
     },
@@ -68,9 +76,10 @@ export function registerStudioIpc(deps: StudioIpcDeps): void {
   ipcMain.handle(
     STUDIO_CHANNELS.getTranscript,
     async (
-      _event,
+      event,
       conversationId: unknown,
     ): Promise<ConversationSnapshot | null> => {
+      owned(event)
       const id = readIpcString(conversationId)
       if (id === null) return null
       await deps.whenRecordReady()
@@ -80,9 +89,10 @@ export function registerStudioIpc(deps: StudioIpcDeps): void {
 
   ipcMain.handle(
     STUDIO_CHANNELS.startConversation,
-    (_event, text: unknown): Promise<StartConversationOutcome> => {
+    (event, text: unknown): Promise<StartConversationOutcome> => {
+      owned(event)
       const sentence = readIpcString(text)
-      if (sentence === null) {
+      if (sentence === null || sentence.trim() === '') {
         return Promise.resolve({
           kind: 'refused',
           conversationId: '',
@@ -102,13 +112,14 @@ export function registerStudioIpc(deps: StudioIpcDeps): void {
   ipcMain.handle(
     STUDIO_CHANNELS.sendMessage,
     (
-      _event,
+      event,
       conversationId: unknown,
       text: unknown,
     ): Promise<SendMessageOutcome> => {
+      owned(event)
       const id = readIpcString(conversationId)
       const sentence = readIpcString(text)
-      if (id === null || sentence === null) {
+      if (id === null || sentence === null || sentence.trim() === '') {
         return Promise.resolve({ kind: 'refused', reason: MALFORMED })
       }
       return deps.service
@@ -116,6 +127,17 @@ export function registerStudioIpc(deps: StudioIpcDeps): void {
         : Promise.resolve({ kind: 'refused', reason: UNCONFIGURED })
     },
   )
+  app.once('will-quit', () => {
+    for (const channel of [
+      STUDIO_CHANNELS.daemonStatus,
+      STUDIO_CHANNELS.getStartup,
+      STUDIO_CHANNELS.listConversations,
+      STUDIO_CHANNELS.getTranscript,
+      STUDIO_CHANNELS.startConversation,
+      STUDIO_CHANNELS.sendMessage,
+    ])
+      ipcMain.removeHandler(channel)
+  })
 }
 
 const UNCONFIGURED = 'Backpack Studio is not configured to reach a daemon yet.'
@@ -146,7 +168,7 @@ export function broadcastDaemonStatus(daemon: DaemonStatusView): void {
 
 function broadcast(channel: string, payload: unknown): void {
   for (const window of BrowserWindow.getAllWindows()) {
-    if (window.isDestroyed()) continue
+    if (window.isDestroyed() || window.webContents.isDestroyed()) continue
     window.webContents.send(channel, payload)
   }
 }

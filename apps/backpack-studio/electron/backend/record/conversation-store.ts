@@ -133,6 +133,11 @@ export class JsonFileConversationStore implements ConversationStore {
     }
   }
 
+  async drain(): Promise<void> {
+    while (this.appends.size > 0)
+      await Promise.allSettled([...this.appends.values()])
+  }
+
   async readLog(id: string): Promise<ConversationLogReading> {
     let text: string
     try {
@@ -248,6 +253,7 @@ const LOCAL_FACTS: readonly LocalConversationFact[] = [
   'sent',
   'refused',
   'stream-exhausted',
+  'restarted',
 ]
 
 /**

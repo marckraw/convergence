@@ -185,6 +185,11 @@ export class DaemonClient {
         response = await this.openEventStream(sessionId, lastSeq, signal)
       } catch (error) {
         if (signal.aborted) return
+        if (
+          error instanceof RemoteExecutionHostError &&
+          (error.kind === 'auth' || error.status === 404)
+        )
+          throw error
         attempt += 1
         if (attempt >= this.maxStreamAttempts) {
           throw new RemoteExecutionHostError(
@@ -286,12 +291,9 @@ export class DaemonClient {
           }
           // A replay can re-deliver what this conversation already holds; the
           // record is append-only, so anything at or below the high-water mark
-          // is dropped here rather than written twice. It still counts: the
-          // host answered with this session's own events.
-          if (reading.envelope.seq <= lastSeq) {
-            envelopes += 1
-            continue
-          }
+          // is dropped here rather than written twice. A replay is not progress
+          // and must not renew the reconnect budget.
+          if (reading.envelope.seq <= lastSeq) continue
           await handlers.onEnvelope(reading.envelope)
           envelopes += 1
           lastSeq = reading.envelope.seq
@@ -365,8 +367,7 @@ export class DaemonClient {
       throw new RemoteExecutionHostError(
         // The daemon's own sentence wherever it gave one: "Unknown provider:
         // claude-code" is the half that says how to fix it.
-        extractErrorMessage(text) ??
-          `The daemon refused the request with HTTP ${response.status}.`,
+        extractErrorMessage(text) ?? `HTTP ${response.status} from the daemon`,
         response.status === 401 || response.status === 403 ? 'auth' : 'http',
         response.status,
       )
@@ -415,8 +416,16 @@ export class DaemonClient {
       )
     }
     if (!response.ok || !response.body) {
+      let reason: string | null = null
+      try {
+        reason = extractErrorMessage(await response.text())
+      } catch {
+        // A broken error body still has an HTTP status.
+      } finally {
+        await response.body?.cancel().catch(() => {})
+      }
       throw new RemoteExecutionHostError(
-        `The conversation stream failed with HTTP ${response.status}.`,
+        reason ?? `HTTP ${response.status} from the daemon`,
         response.status === 401 || response.status === 403 ? 'auth' : 'http',
         response.status,
       )
@@ -432,6 +441,6 @@ function extractErrorMessage(text: string): string | null {
       ? parsed.error.trim()
       : null
   } catch {
-    return text.trim() === '' ? null : text.trim()
+    return null
   }
 }

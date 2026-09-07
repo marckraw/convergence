@@ -24,9 +24,9 @@ export interface ConversationRecord {
 /**
  * A lifecycle fact Studio itself owns, because the wire never carries it.
  *
- * These are the three moments the daemon cannot tell us about: a turn we posted
+ * These are the moments the daemon cannot tell us about: a turn we posted
  * (or tried to), a turn it would not take, and a stream we gave up
- * re-establishing. Before they existed they lived only in memory, and a status
+ * re-establishing, and a session the daemon had to start fresh. Before they existed they lived only in memory, and a status
  * kept outside the log is a status a restart cannot reproduce — a refused start
  * came back as a permanent "Working" that no composer would ever unlock.
  *
@@ -34,7 +34,11 @@ export interface ConversationRecord {
  * daemon declining a turn already recorded as `sent`, and one fact that healed
  * only the start would leave the same zombie behind the other door.
  */
-export type LocalConversationFact = 'sent' | 'refused' | 'stream-exhausted'
+export type LocalConversationFact =
+  | 'sent'
+  | 'refused'
+  | 'stream-exhausted'
+  | 'restarted'
 
 /**
  * One line of the log: an envelope off the wire, or a fact Studio recorded.
@@ -86,6 +90,8 @@ export interface ConversationStore {
     entry: ConversationLogEntry,
     commit?: AppendCommit,
   ): Promise<void>
+  /** Wait for queued appends, including refusals outside a follow. */
+  drain(): Promise<void>
   readLog(id: string): Promise<ConversationLogReading>
 }
 

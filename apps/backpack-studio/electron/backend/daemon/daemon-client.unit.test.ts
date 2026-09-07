@@ -1,8 +1,9 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RemoteExecutionHostError } from '@convergence/execution-host-client'
 import {
   createStubDaemon,
+  envelope,
   type StubDaemon,
 } from '@convergence/execution-host-client'
 import { DaemonClient } from './daemon-client'
@@ -177,4 +178,98 @@ describe('DaemonClient.followSession, when the host will not serve', () => {
 
     expect(Date.now() - started).toBeLessThan(800)
   }, 5_000)
+})
+
+it.each([401, 403, 404])(
+  'ends HTTP %s events immediately with the daemon sentence — mutation: retry terminal status',
+  async (status) => {
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: `Stream refused ${status}` }), {
+          status,
+        }),
+    )
+    const wait = vi.fn(async () => {})
+    const client = new DaemonClient({
+      baseUrl: 'https://daemon.test',
+      token: 'fixture',
+      fetchFn,
+      wait,
+      maxStreamAttempts: 3,
+    })
+    await expect(
+      client.followSession(
+        'c-1',
+        0,
+        { onEnvelope: async () => {}, onDroppedFrame: () => {} },
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ message: `Stream refused ${status}`, status })
+    expect(fetchFn).toHaveBeenCalledTimes(1)
+    expect(wait).not.toHaveBeenCalled()
+  },
+)
+
+it('cancels non-OK event bodies — mutation: omit body.cancel', async () => {
+  const response = new Response(JSON.stringify({ error: 'expired' }), {
+    status: 401,
+  })
+  const cancel = vi.spyOn(response.body!, 'cancel')
+  const client = new DaemonClient({
+    baseUrl: 'https://daemon.test',
+    token: 'fixture',
+    fetchFn: async () => response,
+    maxStreamAttempts: 1,
+  })
+  await client
+    .followSession(
+      'c-1',
+      0,
+      { onEnvelope: async () => {}, onDroppedFrame: () => {} },
+      new AbortController().signal,
+    )
+    .catch(() => {})
+  expect(cancel).toHaveBeenCalledOnce()
+})
+
+it.each(['<html>Bad gateway</html>', '{"message":"proxy"}', 'null'])(
+  'hides non-daemon error bodies %s — mutation: return raw text',
+  async (body) => {
+    const client = new DaemonClient({
+      baseUrl: 'https://daemon.test',
+      token: 'fixture',
+      fetchFn: async () => new Response(body, { status: 502 }),
+    })
+    await expect(client.sendMessage('c-1', 'hello')).rejects.toMatchObject({
+      message: 'HTTP 502 from the daemon',
+    })
+  },
+)
+
+it('spends its budget on replay-only streams — mutation: count duplicate envelopes as progress', async () => {
+  let opens = 0
+  const abort = new AbortController()
+  const onEnvelope = vi.fn(async () => {})
+  const client = new DaemonClient({
+    baseUrl: 'https://daemon.test',
+    token: 'fixture',
+    wait: async () => {},
+    maxStreamAttempts: 3,
+    fetchFn: async () => {
+      if (++opens > 10) abort.abort()
+      return new Response(
+        `data: ${JSON.stringify(envelope(2, { kind: 'status', status: 'running' }, 'c-1'))}\n\n`,
+      )
+    },
+  })
+  await expect(
+    client.followSession(
+      'c-1',
+      2,
+      { onEnvelope, onDroppedFrame: () => {} },
+      abort.signal,
+    ),
+  ).rejects.toBeInstanceOf(RemoteExecutionHostError)
+  expect(opens).toBe(3)
+  expect(onEnvelope).not.toHaveBeenCalled()
 })

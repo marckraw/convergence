@@ -2,7 +2,7 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createStubDaemon,
   deferred,
@@ -33,6 +33,24 @@ import { ConversationService } from './conversation.service'
  * over a second store, pointed at the same directory, with no memory of the
  * first.
  */
+
+const appendGate = vi.hoisted(() => ({
+  held: null as Promise<void> | null,
+  entered: false,
+}))
+vi.mock('node:fs/promises', async (original) => {
+  const real = await original<typeof import('node:fs/promises')>()
+  return {
+    ...real,
+    appendFile: async (...args: Parameters<typeof real.appendFile>) => {
+      if (appendGate.held && String(args[1]).includes('"fact":"refused"')) {
+        appendGate.entered = true
+        await appendGate.held
+      }
+      return real.appendFile(...args)
+    },
+  }
+})
 
 const CONVERSATION_ID = 'c-1'
 
@@ -710,6 +728,7 @@ describe('the walking skeleton, end to end', () => {
       let appends = 0
       const store: ConversationStore = {
         list: () => real.list(),
+        drain: () => real.drain(),
         read: (id) => real.read(id),
         readLog: (id) => real.readLog(id),
         create: (value) => {
@@ -735,7 +754,7 @@ describe('the walking skeleton, end to end', () => {
       const result = await service.send(CONVERSATION_ID, 'retry')
       expect(creates).toBe(2)
       expect(result.kind).toBe(stillRefusing ? 'refused' : 'sent')
-      expect(appends).toBe(stillRefusing ? 0 : 1)
+      expect(appends).toBe(stillRefusing ? 0 : 2)
       expect((await real.list()).length).toBe(stillRefusing ? 0 : 1)
       expect(daemon.startRequests.length).toBe(stillRefusing ? 0 : 1)
       await service.dispose()
@@ -1143,6 +1162,7 @@ describe('the follow', () => {
     const real = new JsonFileConversationStore(root)
     const store: ConversationStore = {
       list: () => real.list(),
+      drain: () => real.drain(),
       read: (id) => real.read(id),
       create: (value) => real.create(value),
       readLog: (id) => real.readLog(id),
@@ -1240,6 +1260,7 @@ function storeThatRefusesWireEntries(refusals = 10): ConversationStore {
   let refused = 0
   return {
     list: () => real.list(),
+    drain: () => real.drain(),
     read: (id) => real.read(id),
     create: (value) => real.create(value),
     readLog: (id) => real.readLog(id),
@@ -1264,9 +1285,171 @@ function storeThatRefusesCreate(): ConversationStore {
   const real = new JsonFileConversationStore(root)
   return {
     list: () => real.list(),
+    drain: () => real.drain(),
     read: (id) => real.read(id),
     create: () => Promise.reject(new Error('disk is full')),
     readLog: (id) => real.readLog(id),
     appendEntry: (id, entry, commit) => real.appendEntry(id, entry, commit),
   }
 }
+
+it.each([401, 500])(
+  'refuses command HTTP %s without starting — mutation: widen 404 fallback',
+  async (code) => {
+    let refuse = false
+    const { service } = buildService({
+      fetchFn: async (input, init) => {
+        if (refuse && String(input).includes('/commands'))
+          return new Response(
+            JSON.stringify({ error: `Command refused ${code}` }),
+            { status: code },
+          )
+        return daemon.fetchFn(input, init)
+      },
+    })
+    await service.start('first')
+    daemon.emit(status(1, 'completed'))
+    await waitUntil(
+      () => service.snapshot(CONVERSATION_ID)?.status === 'idle',
+      'settled',
+    )
+    refuse = true
+    expect(await service.send(CONVERSATION_ID, 'next')).toEqual({
+      kind: 'refused',
+      reason: `Command refused ${code}`,
+    })
+    expect(daemon.startRequests).toHaveLength(1)
+    await service.dispose()
+  },
+)
+
+it.each([401, 403, 404])(
+  'unlocks after stream HTTP %s with the daemon sentence — mutation: omit stream exhaustion',
+  async (code) => {
+    const { service } = buildService({
+      fetchFn: async (input, init) =>
+        String(input).includes('/events')
+          ? new Response(JSON.stringify({ error: `No stream ${code}` }), {
+              status: code,
+            })
+          : daemon.fetchFn(input, init),
+    })
+    await service.start('first')
+    await waitUntil(
+      () => service.snapshot(CONVERSATION_ID)?.status === 'failed',
+      'terminal stream refusal',
+    )
+    expect(service.snapshot(CONVERSATION_ID)?.streamError).toBe(
+      `No stream ${code}`,
+    )
+    await service.dispose()
+  },
+)
+
+it('lists two saved records newest first — mutation: reverse service comparator', async () => {
+  const { service, store } = buildService()
+  await store.create({
+    id: 'old',
+    title: 'Old',
+    createdAt: '2026-09-01',
+    providerId: 'claude',
+  })
+  await store.create({
+    id: 'new',
+    title: 'New',
+    createdAt: '2026-09-07',
+    providerId: 'claude',
+  })
+  await service.hydrate()
+  expect(service.list().map((row) => row.id)).toEqual(['new', 'old'])
+  await service.dispose()
+})
+
+it('records one restart notice and keeps old and fresh turns through replay — mutations: drop restarted fact or refuse it on replay', async () => {
+  let forgotten = false
+  const fresh = createStubDaemon()
+  const { service, store } = buildService({
+    fetchFn: async (input, init) => {
+      if (forgotten && String(input).includes('/commands'))
+        return new Response(JSON.stringify({ error: 'Session gone' }), {
+          status: 404,
+        })
+      return (forgotten ? fresh : daemon).fetchFn(input, init)
+    },
+  })
+  await service.start('first')
+  daemon.emit(add(1, item({ id: 'answer', text: 'Earlier answer' })))
+  daemon.emit(status(2, 'completed'))
+  await waitUntil(
+    () => service.snapshot(CONVERSATION_ID)?.status === 'idle',
+    'old turn settled',
+  )
+  forgotten = true
+  await service.send(CONVERSATION_ID, 'again')
+  const expected =
+    "The agent's earlier memory of this conversation is gone on the server; it starts again from here."
+  const notice =
+    service
+      .snapshot(CONVERSATION_ID)
+      ?.items.filter((row) => row.text === expected) ?? []
+  // Capture the primary missing fact before any later await can obscure it.
+  expect(notice).toHaveLength(1)
+  fresh.emit(add(1, item({ id: 'answer', text: 'Fresh answer' })))
+  fresh.emit(status(2, 'completed'))
+  await waitUntil(
+    () => service.snapshot(CONVERSATION_ID)?.status === 'idle',
+    'fresh turn settled',
+  )
+  const texts = service.snapshot(CONVERSATION_ID)?.items.map((row) => row.text)
+  expect(texts).toEqual(['Earlier answer', expected, 'Fresh answer'])
+  await service.dispose()
+  const replay = buildService({ store })
+  await replay.service.hydrate()
+  expect(
+    replay.service.snapshot(CONVERSATION_ID)?.items.map((row) => row.text),
+  ).toEqual(texts)
+  expect(
+    (await store.readLog(CONVERSATION_ID)).entries.filter(
+      (entry) => entry.kind === 'local' && entry.fact === 'restarted',
+    ),
+  ).toHaveLength(1)
+  await replay.service.dispose()
+})
+
+it('quit drains a refusal append already in flight — mutation: omit store drain', async () => {
+  const { service, store } = buildService({
+    fetchFn: async (input, init) =>
+      String(input).includes('/commands')
+        ? new Response(JSON.stringify({ error: 'refused' }), { status: 401 })
+        : daemon.fetchFn(input, init),
+  })
+  await service.start('first')
+  daemon.emit(status(1, 'completed'))
+  await waitUntil(
+    () => service.snapshot(CONVERSATION_ID)?.status === 'idle',
+    'settled',
+  )
+  const held = deferred()
+  appendGate.held = held.promise
+  appendGate.entered = false
+  try {
+    const sending = service.send(CONVERSATION_ID, 'again')
+    await waitUntil(() => appendGate.entered, 'refusal append entered')
+    let stopped = false
+    const stopping = service.dispose().then(() => {
+      stopped = true
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+    const stoppedBeforeAppend = stopped
+    held.release()
+    await Promise.all([sending, stopping])
+    expect(stoppedBeforeAppend).toBe(false)
+    expect((await store.readLog(CONVERSATION_ID)).entries.at(-1)).toMatchObject(
+      { fact: 'refused' },
+    )
+  } finally {
+    held.release()
+    appendGate.held = null
+    await service.dispose()
+  }
+})

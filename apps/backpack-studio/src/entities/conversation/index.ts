@@ -3,7 +3,7 @@ export {
   composerState,
   conversationTimestamp,
   daemonHeadline,
-  snapshotForSelection,
+  conversationSummary,
   statusBadge,
   transcriptWarnings,
   type StatusBadge,

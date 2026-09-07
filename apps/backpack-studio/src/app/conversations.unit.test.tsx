@@ -148,3 +148,55 @@ it('names missing configuration in developer diagnostics — mutation: hide misc
     screen.getByText('Missing variables: BACKPACK_STUDIO_DAEMON_TOKEN'),
   ).toBeTruthy()
 })
+
+it('sorts two saved conversations newest first — mutation: reverse container comparator', async () => {
+  window.backpackStudio = createStudioApiFixture({
+    listConversations: async () => [
+      {
+        ...fixtureSnapshot,
+        id: 'old',
+        title: 'Old record',
+        createdAt: '2026-09-01',
+      },
+      {
+        ...fixtureSnapshot,
+        id: 'new',
+        title: 'New record',
+        createdAt: '2026-09-07',
+      },
+    ],
+  })
+  await signIn()
+  expect(
+    screen
+      .getAllByRole('button', { name: /(?:Old|New) record Done/ })
+      .map((row) => row.textContent),
+  ).toEqual(['New record Done', 'Old record Done'])
+})
+
+it('shows the restart notice without opening details — mutation: collapse local notice', async () => {
+  const snapshot = {
+    ...fixtureSnapshot,
+    items: [
+      {
+        id: 'notice',
+        kind: 'restart-notice' as const,
+        actor: null,
+        label: 'Conversation restarted',
+        state: 'complete' as const,
+        text: "The agent's earlier memory of this conversation is gone on the server; it starts again from here.",
+      },
+    ],
+  }
+  window.backpackStudio = createStudioApiFixture({
+    listConversations: async () => [snapshot],
+    getTranscript: async () => snapshot,
+  })
+  await signIn()
+  await act(async () => {
+    fireEvent.click(
+      screen.getByRole('button', { name: /A saved conversation Done/ }),
+    )
+  })
+  expect(screen.getByText(snapshot.items[0].text).closest('details')).toBe(null)
+})

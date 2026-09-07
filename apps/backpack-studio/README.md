@@ -40,7 +40,7 @@ returns to that live reading. No dev server is started by a verification tool.
 ## Local record and retry
 
 `<userData>/conversations/<id>/conversation.json` holds immutable facts;
-`events.jsonl` holds wire events and local `sent`, `refused`, `stream-exhausted`
+`events.jsonl` holds wire events and local `sent`, `refused`, `stream-exhausted`, `restarted`
 facts. One fold derives both live and replayed status and transcript. The
 record is hydrated independently of the handshake; running conversations
 resume from their last recorded sequence. Closing Studio does not stop the
@@ -51,11 +51,14 @@ a fused middle line. A complete line missing only its newline is preserved.
 Each conversation has one append queue in the store. The acceptance predicate,
 healing, append and synchronous fold commit execute under that queue, so an
 overlapping replay cannot write a sequence twice. SQLite remains a later
-extraction; any replacement store must preserve that commit contract.
+extraction; any replacement store must preserve that commit contract and drain
+pending appends before shutdown.
 
 Retries ask the daemon: a command receiving HTTP 404 starts a session, and a
 start receiving HTTP 409 sends the command to the existing session and follows
-it. A refused local record creation is retried before any append. Local facts
+it. A fresh start after a lost session records a visible notice that the agent's
+earlier memory is gone on the server; old turns remain readable. Stream HTTP
+401/403/404 ends the follow immediately with the daemon's sentence. A refused local record creation is retried before any append. Local facts
 never decide whether the remote session exists. Approvals, attachments, queued
 input and stopping a remote session remain outside this slice; raw request
 items are shown without an action that would pretend to answer them.
