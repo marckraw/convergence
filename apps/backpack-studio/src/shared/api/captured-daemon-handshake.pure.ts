@@ -31,18 +31,26 @@ import {
  *   compiler cannot notice (MAR-2737).
  */
 export interface StudioHandshakeReading {
+  status: EndpointHandshakeResult['status']
   headline: string
   daemonVersion: string
   apiVersion: string
   capabilities: string[]
 }
 
-export function readCapturedDaemonHandshake(): StudioHandshakeReading {
+export function readCapturedDaemonHandshake(
+  unreachable = false,
+): StudioHandshakeReading {
   const health = parseDaemonHealth(JSON.parse(DAEMON_HEALTH_FIXTURE_0_26_1))
-  const handshake: EndpointHandshakeResult = evaluateHandshake(health, null, {
-    kind: 'ok',
-  })
+  const handshake: EndpointHandshakeResult = evaluateHandshake(
+    unreachable ? null : health,
+    unreachable ? 'Simulated unreachable fixture' : null,
+    {
+      kind: 'ok',
+    },
+  )
   return {
+    status: handshake.status,
     headline: describeHandshakeStatus(handshake),
     daemonVersion: handshake.daemonVersion ?? 'unknown',
     apiVersion: handshake.apiVersion ?? 'unknown',

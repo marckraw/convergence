@@ -1,4 +1,4 @@
-import { readCapturedDaemonHandshake } from './hello-screen.pure'
+import { readCapturedDaemonHandshake } from '../../shared/api'
 
 /**
  * Backpack Studio's hello screen (MAR-2737).
