@@ -82,6 +82,7 @@ export function sidePoint(rect: RouteRect, side: RouteSide): RoutePoint {
  * leaving the same side do not overlap their first segment.
  */
 export const ROUTE_STUB = 24
+const MIN_LANE_STUB = 8
 
 /**
  * How coarse the router's grid is.
@@ -215,7 +216,6 @@ export function routeAround(input: RouteInput): RoutePoint[] | null {
     ROUTE_STUB,
     freeGap(input.target, input.targetSide, input.obstacles) / 2,
   )
-  if (startDistance < 0 || endDistance < 0) return null
   const start = stubPoint(input.source, input.sourceSide, startDistance)
   const end = stubPoint(input.target, input.targetSide, endDistance)
 
@@ -447,7 +447,7 @@ export function routeCanvasEdge(
       const gap = freeGap(rect, side, input.obstacles)
       const centre = Math.min(ROUTE_STUB, gap / 2)
       return (
-        centre - requestedLaneSpace >= 8 &&
+        centre - requestedLaneSpace >= MIN_LANE_STUB &&
         centre + requestedLaneSpace <= gap - ROUTE_CLEARANCE
       )
     }
@@ -634,32 +634,27 @@ export function routeLabelLayout(
   opposed: boolean,
   sharedDirection?: 'forward' | 'reverse',
 ): { point: RoutePoint; translate: string } {
-  if (sharedDirection) {
-    const reverse = sharedDirection === 'reverse'
-    // Use the canonical walk for both labels, including ties between equally
-    // long segments, so reversing the wire cannot pick a different anchor.
-    const anchor = routeLabelPoint(reverse ? [...points].reverse() : points)
-    return {
-      point: { x: anchor.x, y: anchor.y + (reverse ? 3 : -3) },
-      translate: reverse ? '-50%, 0%' : '-50%, -100%',
-    }
-  }
-  const point = routeLabelPoint(points)
-  if (!opposed || points.length < 2) return { point, translate: '-50%, -50%' }
+  // Both directions use the canonical segment, including equal-length ties.
+  // Separate shared labels along its normal, so bypass legs work in either axis.
+  const reverse = sharedDirection === 'reverse'
+  const walk = reverse ? [...points].reverse() : points
+  const point = routeLabelPoint(walk)
+  if (!opposed || walk.length < 2) return { point, translate: '-50%, -50%' }
   let longest = 0
-  for (let index = 1; index < points.length - 1; index += 1) {
+  for (let index = 1; index < walk.length - 1; index += 1) {
     if (
-      distance(points[index], points[index + 1]) >
-      distance(points[longest], points[longest + 1])
+      distance(walk[index], walk[index + 1]) >
+      distance(walk[longest], walk[longest + 1])
     )
       longest = index
   }
-  const from = points[longest],
-    to = points[longest + 1]
-  const nx = -Math.sign(to.y - from.y),
-    ny = Math.sign(to.x - from.x)
+  const from = walk[longest],
+    to = walk[longest + 1]
+  const separation = sharedDirection ? (reverse ? 3 : -3) : 6
+  const dx = -Math.sign(to.y - from.y) * separation
+  const dy = Math.sign(to.x - from.x) * separation
   return {
-    point: { x: point.x + nx * 6, y: point.y + ny * 6 },
-    translate: `${nx < 0 ? '-100%' : nx > 0 ? '0%' : '-50%'}, ${ny < 0 ? '-100%' : ny > 0 ? '0%' : '-50%'}`,
+    point: { x: point.x + dx, y: point.y + dy },
+    translate: `${dx < 0 ? '-100%' : dx > 0 ? '0%' : '-50%'}, ${dy < 0 ? '-100%' : dy > 0 ? '0%' : '-50%'}`,
   }
 }

@@ -247,6 +247,7 @@ export { formatSessionCardActivity } from './session-card-activity.pure'
 export { CARD_ATTENTION_STYLES, STATUS_DOT_STYLES } from './session-card.styles'
 export {
   CANVAS_CHAIR_NODE_HEIGHT,
+  CANVAS_CLUSTER_PADDING_TOP,
   CANVAS_NODE_HEIGHT,
   CANVAS_NODE_WIDTH,
   CANVAS_SPAWN_NODE_HEIGHT,

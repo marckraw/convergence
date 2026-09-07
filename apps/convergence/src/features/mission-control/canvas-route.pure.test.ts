@@ -426,30 +426,34 @@ describe('G2′ hosted lanes and the legacy net', () => {
       ),
     ).toEqual([true, false])
   })
-  it('keeps both 64 px lanes perpendicular with at least 8 px end segments (mutation: subtract laneSpace from centre stubs)', () => {
-    for (const source of SPACED_STACK) {
-      for (const target of SPACED_STACK) {
-        if (source === target) continue
-        const route = routeCanvasEdge({
-          source,
-          target,
-          obstacles: SPACED_STACK,
-          opposed: true,
-        })
-        const ends = route
-          ? [
-              [route[0], route[1]],
-              [route[route.length - 2], route[route.length - 1]],
-            ]
-          : []
-        expect(
-          ends.length === 2 &&
-            ends.every(([a, b]) => a.x === b.x && Math.abs(a.y - b.y) >= 8),
-          `${source.id} -> ${target.id}`,
-        ).toBe(true)
-      }
-    }
-  })
+  it.each(['centre', 'forward', 'reverse'] as const)(
+    'L-ix pins exact %s stubs on the 64 px bypass (mutation: subtract laneSpace from centre stubs)',
+    (kind) => {
+      const source = SPACED_STACK[kind === 'reverse' ? 2 : 0]
+      const target = SPACED_STACK[kind === 'reverse' ? 0 : 2]
+      const input = { source, target, obstacles: SPACED_STACK }
+      const route =
+        kind === 'centre'
+          ? routeAround({
+              ...input,
+              ...chooseRouteSides(source, target),
+              laneSpace: 10,
+            })!
+          : routeCanvasEdge({ ...input, opposed: true })!
+      const lengths = [
+        [route[0], route[1]],
+        [route[route.length - 2], route[route.length - 1]],
+      ].map(([a, b]) => ({
+        across: Math.abs(a.x - b.x),
+        along: Math.abs(a.y - b.y),
+      }))
+      const expected = kind === 'centre' ? 24 : kind === 'forward' ? 14 : 34
+      expect(lengths).toEqual([
+        { across: 0, along: expected },
+        { across: 0, along: expected },
+      ])
+    },
+  )
 
   it('shares the 40 px centre route around the middle card (mutation: drop the lane-host predicate)', () => {
     const source = DIRECTOR_STACK[0],

@@ -12,6 +12,7 @@ import type { Edge, Node, NodeChange, ReactFlowInstance } from '@xyflow/react'
 import { Waypoints } from 'lucide-react'
 import {
   CANVAS_CHAIR_NODE_HEIGHT,
+  CANVAS_CLUSTER_PADDING_TOP,
   CANVAS_NODE_HEIGHT,
   CANVAS_NODE_WIDTH,
   CANVAS_SPAWN_NODE_HEIGHT,
@@ -642,6 +643,7 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({
             width: other.width ?? CANVAS_NODE_WIDTH,
             height: other.height ?? CANVAS_NODE_HEIGHT,
           })),
+        cluster.originY + CANVAS_CLUSTER_PADDING_TOP,
       )
       setNodes((current) =>
         current.map((other) =>

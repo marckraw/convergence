@@ -17,7 +17,7 @@ export const CANVAS_SPAWN_NODE_HEIGHT = 64
 const COLUMN_GAP = 120
 const ROW_GAP = MIN_CARD_GAP
 const CLUSTER_PADDING_X = 20
-const CLUSTER_PADDING_TOP = 44
+export const CANVAS_CLUSTER_PADDING_TOP = 44
 const CLUSTER_PADDING_BOTTOM = 20
 const CLUSTER_GAP = 48
 
@@ -338,7 +338,7 @@ export function buildCanvasGraph(
     // down inside it, so no crew can grow into the crew above (M-b).
     let top = 0
     for (const stored of storedPositions.values()) {
-      top = Math.min(top, stored.y - CLUSTER_PADDING_TOP)
+      top = Math.min(top, stored.y - CANVAS_CLUSTER_PADDING_TOP)
     }
     const originY = clusterTop - top
 
@@ -359,7 +359,10 @@ export function buildCanvasGraph(
       tallestColumn = Math.max(tallestColumn, row + 1)
       return {
         x: CLUSTER_PADDING_X + column * (CANVAS_NODE_WIDTH + COLUMN_GAP),
-        y: originY + CLUSTER_PADDING_TOP + row * (CANVAS_NODE_HEIGHT + ROW_GAP),
+        y:
+          originY +
+          CANVAS_CLUSTER_PADDING_TOP +
+          row * (CANVAS_NODE_HEIGHT + ROW_GAP),
       }
     }
 
@@ -458,7 +461,7 @@ export function buildCanvasGraph(
       (widestColumn + 1) * CANVAS_NODE_WIDTH +
       widestColumn * COLUMN_GAP
     let bottom =
-      CLUSTER_PADDING_TOP +
+      CANVAS_CLUSTER_PADDING_TOP +
       CLUSTER_PADDING_BOTTOM +
       tallestColumn * CANVAS_NODE_HEIGHT +
       (tallestColumn - 1) * ROW_GAP

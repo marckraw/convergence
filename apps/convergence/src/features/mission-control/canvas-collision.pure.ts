@@ -9,11 +9,14 @@ interface CardRect {
   height: number
 }
 
+/** Nearest free grid point at/below the slot floor; ties favor down, then right. */
 export function resolveCardDrop(
   dragged: CardRect,
   obstacles: readonly CardRect[],
+  minimumY = 0,
 ): { x: number; y: number } {
   const free = (x: number, y: number) =>
+    y >= minimumY &&
     obstacles.every(
       (other) =>
         other.id === dragged.id ||
@@ -34,7 +37,7 @@ export function resolveCardDrop(
       (!best ||
         distance < best.distance ||
         (distance === best.distance &&
-          (x < best.x || (x === best.x && y < best.y))))
+          (y > best.y || (y === best.y && x > best.x))))
     )
       best = { x, y, distance }
   }

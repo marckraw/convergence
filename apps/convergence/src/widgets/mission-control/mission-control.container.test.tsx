@@ -1995,10 +1995,43 @@ describe('MissionControl', () => {
     async function switchToCanvas() {
       fireEvent.click(await screen.findByRole('button', { name: 'Canvas' }))
     }
-    it.each(['persisted', 'shown', 'other card'] as const)(
-      'R15 keeps the nudged drop %s (mutations: omit resolution; move every card)',
-      async (proof) => {
-        seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a', 'b'] })])
+    it('L-x nudges a card dropped onto the chair (mutation: restrict obstacles to sessions)', async () => {
+      seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])
+      seed([makeSession({ id: 'a', name: 'Moving card' })], [CLAUDE_CODE])
+      seedRelays([
+        makeRelay({
+          id: 'baton',
+          sourceSessionId: 'a',
+          conditionToken: 'BATON: a',
+        }),
+      ])
+      render(<MissionControl />)
+      await switchToCanvas()
+      await screen.findByText('Marcin')
+      const chair = flow.props!.nodes!.find((entry) => entry.type === 'chair')!
+      const node = {
+        ...flow.props!.nodes!.find((entry) => entry.id === 'a')!,
+        position: { ...chair.position },
+      }
+      await act(async () =>
+        flow.props?.onNodeDragStop?.(new MouseEvent('mouseup'), node, [node]),
+      )
+      expect(setMemberPosition).toHaveBeenCalledWith('crew-1', 'a', {
+        x: chair.position.x,
+        y: chair.position.y + 140,
+      })
+    })
+
+    it.each([
+      ['persisted', 'restore upward nudging'],
+      ['shown', 'restore upward nudging'],
+      ['other card', 'restore upward nudging'],
+      ['above title', 'omit title floor'],
+    ] as const)(
+      'H-R15 keeps the nudged drop %s after save resolves (mutation: %s)',
+      async (proof, _mutation) => {
+        const crew = makeCrew({ id: 'crew-1', sessionIds: ['a', 'b'] })
+        seedCrews([crew])
         seed(
           [
             makeSession({ id: 'a', name: 'First card' }),
@@ -2006,14 +2039,36 @@ describe('MissionControl', () => {
           ],
           [CLAUDE_CODE],
         )
-        setMemberPosition.mockImplementation(() => new Promise(() => {}))
+        setMemberPosition.mockImplementation(
+          async (_crewId, sessionId, position) => {
+            const saved = {
+              ...crew,
+              members: [
+                {
+                  sessionId,
+                  batonName: null,
+                  canvasX: position.x,
+                  canvasY: position.y,
+                },
+              ],
+            }
+            listCrews.mockResolvedValue([saved])
+            return saved
+          },
+        )
         render(<MissionControl />)
         await switchToCanvas()
         await screen.findByText('Dragged card')
         const other = flow.props!.nodes!.find((entry) => entry.id === 'a')!
+        const beforeTransform = (
+          document.querySelector(
+            '.react-flow__node[data-id="a"]',
+          ) as HTMLElement
+        ).style.transform
         const node = {
           ...flow.props!.nodes!.find((entry) => entry.id === 'b')!,
-          position: { ...other.position },
+          position:
+            proof === 'above title' ? { x: 400, y: 0 } : { ...other.position },
         }
         act(() =>
           flow.props?.onNodesChange?.([
@@ -2025,24 +2080,28 @@ describe('MissionControl', () => {
             },
           ]),
         )
-        act(() =>
+        await act(async () =>
           flow.props?.onNodeDragStop?.(new MouseEvent('mouseup'), node, [node]),
         )
         if (proof === 'persisted') {
           await waitFor(() =>
             expect(setMemberPosition).toHaveBeenCalledWith('crew-1', 'b', {
               x: 20,
-              y: -136,
+              y: 224,
             }),
           )
         } else if (proof === 'shown') {
           expect(
             document.querySelector('.react-flow__node[data-id="b"]'),
-          ).toHaveStyle({ transform: 'translate(20px,-136px)' })
+          ).toHaveStyle({ transform: 'translate(20px,224px)' })
         } else {
           expect(
-            flow.props!.nodes!.find((entry) => entry.id === 'a')!.position,
-          ).toEqual(other.position)
+            (
+              document.querySelector(
+                '.react-flow__node[data-id="a"]',
+              ) as HTMLElement
+            ).style.transform,
+          ).toBe(beforeTransform)
         }
       },
     )

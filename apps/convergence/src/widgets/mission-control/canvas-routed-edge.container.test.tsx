@@ -30,15 +30,24 @@ vi.mock('@/features/mission-control', async (original) => ({
 }))
 
 describe('F1 fallback', () => {
-  it.each([false, true])(
-    'G2′ stacks shared-route label %s (mutation: omit shared label layout)',
-    (reverse) => {
-      const points = [
+  it.each([
+    ['horizontal', false, 'omit shared label layout'],
+    ['horizontal', true, 'omit shared label layout'],
+    ['vertical', false, 'shift only y'],
+    ['vertical', true, 'shift only y'],
+  ] as const)(
+    'L-xi stacks shared labels normal to a %s segment, reverse %s (mutation: %s)',
+    (axis, reverse, _mutation) => {
+      const horizontal = [
         { x: 150, y: 152 },
         { x: 150, y: 246 },
         { x: 400, y: 246 },
         { x: 400, y: 340 },
       ]
+      const points =
+        axis === 'horizontal'
+          ? horizontal
+          : horizontal.map(({ x, y }) => ({ x: y, y: x }))
       routing.route.mockReturnValueOnce({
         points: reverse ? points.slice().reverse() : points,
         shared: true,
@@ -61,7 +70,10 @@ describe('F1 fallback', () => {
         />,
       )
       expect(getByText('Shared label')).toHaveStyle({
-        transform: `translate(-50%, ${reverse ? '0%' : '-100%'}) translate(275px, ${reverse ? 249 : 243}px)`,
+        transform:
+          axis === 'horizontal'
+            ? `translate(-50%, ${reverse ? '0%' : '-100%'}) translate(275px, ${reverse ? 249 : 243}px)`
+            : `translate(${reverse ? '-100%' : '0%'}, -50%) translate(${reverse ? 243 : 249}px, 275px)`,
       })
     },
   )
