@@ -61,9 +61,11 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
   fillsContent = false,
   children,
 }) => {
+  // Two, from R13: Crews retired into the Canvas, which now holds every
+  // capability it had. A third button that only regrouped the same cards was
+  // a second place to keep in step with the first.
   const modes: { value: MissionControlViewMode; label: string }[] = [
     { value: 'flat', label: 'Flat' },
-    { value: 'crews', label: 'Crews' },
     { value: 'canvas', label: 'Canvas' },
   ]
 

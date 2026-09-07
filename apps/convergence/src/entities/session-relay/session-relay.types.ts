@@ -59,14 +59,14 @@ export type RelayHopOutcome =
   | 'spawned'
   | 'skipped-failed'
   | 'skipped-budget'
-  /** The loop reached its round cap without reaching a terminal (MAR-2759). */
+  /** The crew spent its whole delivery limit for the run (MAR-2759). */
   | 'skipped-round-budget'
-  /** The loop law working: a wire fires at most once per flow run. */
-  | 'skipped-already-fired'
   /** The human working: they sent that turn quiet, so the wire held (F10). */
   | 'skipped-muted'
   /** The wire working as drawn: the message named another route, or none. */
   | 'skipped-baton'
+  /** The settle had nothing to carry: a tool-only turn owed nothing (L1). */
+  | 'skipped-no-message'
   | 'error'
 
 /** One firing, recorded whether or not anything was carried. */
@@ -85,6 +85,19 @@ export interface RelayHop {
   baton: string | null
   /** Which round of the loop this hop was, or null if it spent none. */
   roundNumber: number | null
+  /**
+   * Which lap of THIS WIRE inside the run the hop was (R2), or null on a row
+   * written before laps existed. Null is derived, never defaulted: history
+   * recomputes it from the ledger by the rule that produced the stored ones.
+   */
+  lapNumber: number | null
+  /**
+   * When the station this hop landed work in came back, or null while it
+   * still owes it. History reads it to tell a run still moving from one that
+   * finished quiet, which is a question the engine's memory cannot answer
+   * after a restart.
+   */
+  settledAt: string | null
   /**
    * Wider than `RelayHopOutcome` on purpose: that union is what this build
    * writes, while a stored row may carry a word an older or newer build used.

@@ -9,10 +9,10 @@ import { MISSING_SESSION_LABEL } from './relay-sentence.pure'
 export const ALARMING_RELAY_OUTCOMES: readonly RelayHopOutcome[] = [
   'error',
   'skipped-budget',
-  // The round cap is alarming while `skipped-baton` is not, and the difference
-  // is whether anything is owed: a wire that held because the message named
-  // another route did exactly what it was drawn to do, while a loop that ran
-  // out of rounds is waiting on a human and has hailed for one.
+  // The delivery limit is alarming while `skipped-baton` is not, and the
+  // difference is whether anything is owed: a wire that held because the
+  // message named another route did exactly what it was drawn to do, while a
+  // run that spent its whole limit is waiting on a human and has hailed.
   'skipped-round-budget',
 ]
 
@@ -40,19 +40,22 @@ export function relayHopTone(outcome: string): RelayHopTone {
     case 'queued':
     case 'spawned':
       return 'delivered'
-    // `skipped-already-fired` is grey on purpose: a chain ending after one
-    // pass round its wires is the loop law doing its job, and red would train
-    // the user to fear the thing that is protecting them.
-    // `skipped-muted` is grey for the same reason `skipped-already-fired` is:
-    // the wire did exactly what it was told. Red here would train the user to
-    // fear their own quiet send.
+    // `skipped-already-fired` is grey on purpose, and it is LEGACY: the lap
+    // law (R2) means no build after RUN45 writes it, but rows that already
+    // say it are still rows, and a chain that ended after one pass was the
+    // loop law doing its job rather than a fault.
+    // `skipped-muted` is grey because the wire did exactly what it was told.
+    // Red here would train the user to fear their own quiet send.
     // `skipped-baton` is grey for the same reason the other two are: the wire
     // is default-closed by design, and red here would train the user to fear
     // a condition doing its job on every settle that names another route.
+    // `skipped-no-message` is grey for the same reason again: the turn simply
+    // produced nothing to carry, and nothing was owed.
     case 'skipped-failed':
     case 'skipped-already-fired':
     case 'skipped-muted':
     case 'skipped-baton':
+    case 'skipped-no-message':
       return 'skipped'
     case 'skipped-budget':
     case 'skipped-round-budget':
@@ -84,14 +87,18 @@ export function formatRelayHopOutcome(outcome: string): string {
       return 'skipped — source failed'
     case 'skipped-budget':
       return 'stopped — hop budget'
+    // Legacy only (R2): the ledger is a historical record, and a row this
+    // build stopped writing must still read as what it meant.
     case 'skipped-already-fired':
-      return 'already fired this run'
+      return 'lap closed (older build)'
     case 'skipped-muted':
       return 'held — sent quiet'
     case 'skipped-baton':
       return 'held — another baton'
+    case 'skipped-no-message':
+      return 'held — nothing to carry'
     case 'skipped-round-budget':
-      return 'stopped — round cap'
+      return 'stopped — delivery limit'
     case 'error':
       return 'error'
     default:

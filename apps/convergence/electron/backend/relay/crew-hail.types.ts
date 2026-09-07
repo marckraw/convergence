@@ -1,26 +1,37 @@
 import type { CrewHailRow } from '../database/database.types'
 
 /**
- * Why a loop stopped and asked for Marcin.
+ * Why a run stopped and asked for Marcin.
  *
  * Five ways a crew can need a human, and every one of them is a case that used
- * to be silence. `terminal` is the loop working -- a station said the work is
- * his -- while the other four are the loop failing to reach anybody:
+ * to be silence. `terminal` is the run working -- a station said the work is
+ * his -- while the other four are the run failing to reach anybody:
  *
  * - `terminal`: the finishing message declared `BATON: marcin`, the one route
  *   reserved for the chair.
  * - `unrouted`: it declared a baton no enabled wire in this crew answers. A
  *   silent drop is its own defect, so this is loud rather than nothing.
- * - `loop-closed`: it handed a baton on, but the wire that answers to it
- *   already carried this run's work, so the lap closed under the loop law.
- * - `round-budget`: the loop reached its cap without reaching a terminal.
+ * - `round-budget`: the crew spent its whole delivery limit for the run
+ *   without reaching a terminal.
+ * - `budget`: the 20-hop backstop tripped and disarmed a wire. A switch
+ *   thrown behind the user's back with nobody told was the last silent
+ *   ending in the engine (R3).
+ * - `delivery-failed`: a wire could not deliver at all. An `error` row used
+ *   to hail nobody, and a failed send lands no budgeted hop, so the stall
+ *   clock had nothing to accuse either -- the run simply stopped (R3).
  * - `stall`: a station took the work and never came back.
+ *
+ * `loop-closed` is retired from this union and NOT written by this build: the
+ * lap law (R2) means a wire that already carried the run carries it again
+ * rather than closing a lap. Stored rows still say it, and every reader of a
+ * stored reason takes a plain string for exactly that reason.
  */
 export type CrewHailReason =
   | 'terminal'
   | 'unrouted'
-  | 'loop-closed'
   | 'round-budget'
+  | 'budget'
+  | 'delivery-failed'
   | 'stall'
 
 /** One call for Marcin, raised by the engine and cleared by his hand. */

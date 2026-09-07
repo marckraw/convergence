@@ -28,6 +28,18 @@ export const sessionCrewApi = {
   ): Promise<SessionCrew> =>
     window.electronAPI.crew.setMemberBatonName(crewId, sessionId, batonName),
 
+  /**
+   * Remembers where a card was dropped, or puts it back under the automatic
+   * layout with `null`. A position, and nothing else: moving a card never
+   * sends a message.
+   */
+  setMemberPosition: (
+    crewId: string,
+    sessionId: string,
+    position: { x: number; y: number } | null,
+  ): Promise<SessionCrew> =>
+    window.electronAPI.crew.setMemberPosition(crewId, sessionId, position),
+
   onUpdated: (callback: (crews: SessionCrew[]) => void): (() => void) =>
     window.electronAPI.crew.onUpdated(callback),
 }

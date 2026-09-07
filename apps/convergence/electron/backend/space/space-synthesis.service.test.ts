@@ -126,12 +126,14 @@ function setup(
     id: 'codex',
     name: 'Codex',
     supportsContinuation: true,
+    supportsConversationReset: false,
     describe: async () => ({
       id: 'codex',
       name: 'Codex',
       vendorLabel: 'OpenAI',
       kind: 'conversation',
       supportsContinuation: true,
+      supportsConversationReset: false,
       defaultModelId: 'gpt-5.4',
       modelOptions: [],
       attachments: {

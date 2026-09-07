@@ -103,6 +103,36 @@ export class CrewService {
    * is: it belongs to a member, not to the crew, and burying it in the crew
    * form would mean editing a colour could rename a route.
    */
+  /**
+   * Remembers where a member's card was dropped on the Canvas (R10).
+   *
+   * A null pair means "lay it out" and is how a card is put back under the
+   * automatic walk; the two coordinates move together because half a position
+   * is not a position. Silent when the pair names a member this crew does not
+   * have -- a card dragged in a window whose membership changed under it is
+   * not an error worth failing a drag over, and the next crew broadcast
+   * corrects the picture.
+   */
+  setMemberPosition(
+    crewId: string,
+    sessionId: string,
+    position: { x: number; y: number } | null,
+  ): SessionCrew {
+    this.requireRow(crewId)
+    this.db
+      .prepare(
+        `UPDATE session_crew_members SET canvas_x = ?, canvas_y = ?
+         WHERE crew_id = ? AND session_id = ?`,
+      )
+      .run(
+        normalizeCanvasCoordinate(position?.x),
+        normalizeCanvasCoordinate(position?.y),
+        crewId,
+        sessionId,
+      )
+    return this.requireById(crewId)
+  }
+
   setMemberBatonName(
     crewId: string,
     sessionId: string,
@@ -204,7 +234,8 @@ export class CrewService {
       crewId === undefined
         ? this.db
             .prepare(
-              `SELECT members.crew_id, members.session_id, members.baton_name
+              `SELECT members.crew_id, members.session_id, members.baton_name,
+                      members.canvas_x, members.canvas_y
                FROM session_crew_members members
                JOIN sessions ON sessions.id = members.session_id
                ORDER BY members.added_at ASC, members.rowid ASC`,
@@ -212,14 +243,21 @@ export class CrewService {
             .all()
         : this.db
             .prepare(
-              `SELECT members.crew_id, members.session_id, members.baton_name
+              `SELECT members.crew_id, members.session_id, members.baton_name,
+                      members.canvas_x, members.canvas_y
                FROM session_crew_members members
                JOIN sessions ON sessions.id = members.session_id
                WHERE members.crew_id = ?
                ORDER BY members.added_at ASC, members.rowid ASC`,
             )
             .all(crewId)
-    ) as { crew_id: string; session_id: string; baton_name: string | null }[]
+    ) as {
+      crew_id: string
+      session_id: string
+      baton_name: string | null
+      canvas_x: number | null
+      canvas_y: number | null
+    }[]
 
     const membersByCrewId = new Map<string, SessionCrewMember[]>()
     for (const row of rows) {
@@ -228,6 +266,10 @@ export class CrewService {
         // Defensive read for the same reason every other added column gets
         // one: a row written before baton names existed has none.
         batonName: row.baton_name ?? null,
+        // Both or neither: half a position cannot place a card, and reading
+        // one coordinate as 0 would drag it to the edge of the frame.
+        canvasX: readCanvasCoordinate(row.canvas_x, row.canvas_y),
+        canvasY: readCanvasCoordinate(row.canvas_y, row.canvas_x),
       }
       const existing = membersByCrewId.get(row.crew_id)
       if (existing) {
@@ -256,4 +298,42 @@ export class CrewService {
     }
     return crew
   }
+}
+
+/**
+ * A coordinate worth storing, or null.
+ *
+ * The belt of a belt-and-braces pair, and it says so rather than claiming to
+ * be the guard: **`readCanvasCoordinate` below is the load-bearing half.**
+ * Deleting this function alone leaves every test green, because the read
+ * refuses the same rows -- a stored Infinity comes back and is dropped there,
+ * and SQLite turns a NaN into NULL on its own before this is even asked.
+ *
+ * It stays because a row nobody can read is still a row somebody has to
+ * explain, and refusing junk at the door is cheaper than explaining it. The
+ * rule it enforces is the read's: a non-finite coordinate is a card gone off
+ * the canvas with no way to find it, and null -- the automatic walk -- is
+ * always somewhere visible.
+ */
+function normalizeCanvasCoordinate(value: number | undefined): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null
+  return value
+}
+
+/**
+ * One half of a stored pair, kept only when its partner is there too.
+ *
+ * THE guard. Half a position cannot place a card, and reading one coordinate
+ * as 0 would drag it to the edge of its frame -- which looks like a bug
+ * rather than an arrangement. It also catches a non-finite value however it
+ * got into the column, including from a build that wrote it before the door
+ * above existed.
+ */
+function readCanvasCoordinate(
+  value: number | null,
+  partner: number | null,
+): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null
+  if (typeof partner !== 'number' || !Number.isFinite(partner)) return null
+  return value
 }

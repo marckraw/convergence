@@ -11,6 +11,7 @@ function descriptor(id: string, name = id): ProviderDescriptor {
     vendorLabel: name,
     kind: 'conversation',
     supportsContinuation: true,
+    supportsConversationReset: false,
     defaultModelId: 'm1',
     modelOptions: [
       { id: 'm1', label: 'Model One', defaultEffort: null, effortOptions: [] },

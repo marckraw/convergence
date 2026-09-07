@@ -2,28 +2,20 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
 import { useCrewHailStore } from '@/entities/crew-hail'
 import { useSessionCrewStore } from '@/entities/session-crew'
-import {
-  selectHopsForCrew,
-  useSessionRelayStore,
-} from '@/entities/session-relay'
+import { useSessionRelayStore } from '@/entities/session-relay'
 import type { SessionSummary } from '@/entities/session'
 import {
-  CrewFlowSection,
-  CrewHeaderMenu,
-  countAlarmingHops,
   SessionCrewChips,
   SessionFacetPicker,
   SessionStateChips,
   groupSessionCardsByCrew,
   isEmptySessionCardFilter,
-  sessionCrewGroupKey,
   useMissionControlCards,
   useMissionControlView,
 } from '@/features/mission-control'
 import type { SessionCard } from '@/features/mission-control'
-import { CrewContainer } from './crew-container.presentational'
+import { CrewCanvas } from './crew-canvas.container'
 import { MissionControlView } from './mission-control.presentational'
-import { SessionCanvas } from './session-canvas.container'
 import { SessionCardGrid } from './session-card-grid.container'
 
 interface MissionControlProps {
@@ -53,7 +45,6 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
   const crews = useSessionCrewStore((state) => state.crews)
   const loadCrews = useSessionCrewStore((state) => state.load)
   const loadRelays = useSessionRelayStore((state) => state.load)
-  const hopsByCrewId = useSessionRelayStore((state) => state.hopsByCrewId)
   const loadHails = useCrewHailStore((state) => state.load)
 
   useEffect(() => {
@@ -151,42 +142,7 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
       }
     >
       {mode === 'canvas' ? (
-        <SessionCanvas groups={crewGroups} onOpen={handleOpen} />
-      ) : mode === 'crews' ? (
-        <div className="flex flex-col gap-3">
-          {crewGroups.map((group) => (
-            <CrewContainer
-              key={sessionCrewGroupKey(group)}
-              name={group.crew?.name ?? 'No crew'}
-              emoji={group.crew?.emoji ?? null}
-              accentColor={group.crew?.accentColor ?? null}
-              memberCount={group.memberCount}
-              visibleCount={group.cards.length}
-              loose={group.crew === null}
-              menu={
-                group.crew ? <CrewHeaderMenu crew={group.crew} /> : undefined
-              }
-              flow={
-                group.crew ? <CrewFlowSection crew={group.crew} /> : undefined
-              }
-              alarm={
-                group.crew
-                  ? countAlarmingHops(
-                      selectHopsForCrew({ hopsByCrewId }, group.crew.id),
-                    ) > 0
-                  : false
-              }
-            >
-              <SessionCardGrid
-                cards={group.cards}
-                hailSessionId={hailSessionId}
-                onOpen={handleOpen}
-                onHail={handleHail}
-                onCloseHail={closeHail}
-              />
-            </CrewContainer>
-          ))}
-        </div>
+        <CrewCanvas groups={crewGroups} onOpen={handleOpen} />
       ) : (
         <SessionCardGrid
           cards={cards}

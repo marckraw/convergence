@@ -42,6 +42,7 @@ const providers: ProviderInfo[] = [
     vendorLabel: 'Anthropic',
     kind: 'conversation',
     supportsContinuation: true,
+    supportsConversationReset: false,
     defaultModelId: 'sonnet',
     modelOptions: [
       {
@@ -64,6 +65,7 @@ const providers: ProviderInfo[] = [
     vendorLabel: 'OpenAI',
     kind: 'conversation',
     supportsContinuation: true,
+    supportsConversationReset: false,
     defaultModelId: 'gpt-5.4',
     modelOptions: [
       {

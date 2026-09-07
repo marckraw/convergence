@@ -11,6 +11,17 @@ import type { SessionCrewRow } from '../database/database.types'
 export interface SessionCrewMember {
   sessionId: string
   batonName: string | null
+  /**
+   * Where this member's card sits on the Canvas, or null when nobody has
+   * moved it (R10).
+   *
+   * Null is load-bearing rather than a gap: the automatic layout still places
+   * an unmoved card, so a crew somebody has never arranged draws exactly as it
+   * always did, and a conversation added today lands somewhere readable
+   * instead of on top of the first card.
+   */
+  canvasX: number | null
+  canvasY: number | null
 }
 
 /**

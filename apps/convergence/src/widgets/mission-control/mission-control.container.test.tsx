@@ -1,4 +1,11 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useProjectStore } from '@/entities/project'
 import { useSessionCrewStore } from '@/entities/session-crew'
@@ -16,6 +23,19 @@ import type {
 } from '@/entities/session'
 import type { ComposerSessionContext } from '@/features/composer'
 import { MissionControl } from './mission-control.container'
+
+import type { ReactFlowProps, ReactFlowInstance } from '@xyflow/react'
+const flow = vi.hoisted(() => ({ props: null as ReactFlowProps | null }))
+vi.mock('@xyflow/react', async (original) => {
+  const actual = await original<typeof import('@xyflow/react')>()
+  return {
+    ...actual,
+    ReactFlow: (props: ReactFlowProps) => {
+      flow.props = props
+      return <actual.ReactFlow {...props} />
+    },
+  }
+})
 
 // The Hail must render the app's real composer, not a copy of it. The widget's
 // job is aiming it at the right Session; what the composer then does is the
@@ -63,6 +83,7 @@ function makeProvider(
     vendorLabel: id === 'claude-code' ? 'Anthropic' : 'OpenAI',
     kind: 'conversation',
     supportsContinuation: true,
+    supportsConversationReset: false,
     defaultModelId: 'model-1',
     modelOptions: [],
     attachments: {
@@ -99,9 +120,28 @@ let getAllSummaries: ReturnType<typeof vi.fn>
 let listCrews: ReturnType<typeof vi.fn<() => Promise<SessionCrew[]>>>
 let listHops: ReturnType<typeof vi.fn>
 let listRelays: ReturnType<typeof vi.fn>
+let createRelay: ReturnType<typeof vi.fn>
+let updateRelay: ReturnType<typeof vi.fn>
+let setMemberPosition: ReturnType<typeof vi.fn>
+let acknowledgeHail: ReturnType<typeof vi.fn>
+let listRuns: ReturnType<typeof vi.fn>
 let createCrew: ReturnType<
   typeof vi.fn<(input: CreateSessionCrewInput) => Promise<SessionCrew>>
 >
+
+/** One empty run, which is all the paging test needs to tell pages apart. */
+function makeRun(flowRunId: string, startedAt: string) {
+  return {
+    flowRunId,
+    crewId: 'crew-1',
+    startedAt,
+    endedAt: startedAt,
+    laps: [],
+    hails: [],
+    status: { word: 'finished-quiet' as const, reason: null },
+    counts: { deliveries: 0, failures: 0, laps: 0, events: 0 },
+  }
+}
 
 function makeCrew(
   overrides: Partial<SessionCrew> & { id: string },
@@ -191,6 +231,20 @@ describe('MissionControl', () => {
     listCrews = vi.fn(async () => [])
     listHops = vi.fn(async () => [])
     listRelays = vi.fn(async () => [])
+    createRelay = vi.fn(async () => {
+      throw new Error('no test may store a wire by accident')
+    })
+    updateRelay = vi.fn(async () => {
+      throw new Error('no test may store a wire by accident')
+    })
+    setMemberPosition = vi.fn(async () => makeCrew({ id: 'crew-1' }))
+    acknowledgeHail = vi.fn(async () => undefined)
+    listRuns = vi.fn(async () => ({
+      runs: [],
+      unattributedHails: [],
+      outcomes: {},
+      hasMore: false,
+    }))
     createCrew = vi.fn(async (input) =>
       makeCrew({
         id: 'created-crew',
@@ -207,16 +261,32 @@ describe('MissionControl', () => {
         create: createCrew,
         addMember: vi.fn(),
         removeMember: vi.fn(),
+        setMemberBatonName: vi.fn(),
+        setMemberPosition,
+        update: vi.fn(),
         onUpdated: vi.fn(() => () => undefined),
       },
       relay: {
         list: listRelays,
         listHops,
+        listRuns,
+        // Watched, never stubbed away: the point of the drawing canaries is
+        // that no gesture on the canvas reaches these.
+        create: createRelay,
+        update: updateRelay,
+        delete: vi.fn(),
         onUpdated: vi.fn(() => () => undefined),
         onHopAppended: vi.fn(() => () => undefined),
         onHopsCleared: vi.fn(() => () => undefined),
       },
       providerAccounts: { list: vi.fn(async () => []) },
+      crewHail: {
+        listOpen: vi.fn(async () => []),
+        // Watched: Mark seen must reach THIS and nothing else.
+        acknowledge: acknowledgeHail,
+        acknowledgeCrew: vi.fn(),
+        onUpdated: vi.fn(() => () => undefined),
+      },
     }
     useSessionRelayStore.getState().unsubscribeBroadcast?.()
     useSessionRelayStore.getState().unsubscribeHops?.()
@@ -569,241 +639,155 @@ describe('MissionControl', () => {
     })
   })
 
-  describe('crews view', () => {
-    async function switchToCrews() {
-      fireEvent.click(await screen.findByRole('button', { name: 'Crews' }))
-    }
+  // The Crews view retired with R13 (RUN45): every capability it had —
+  // membership, wire authoring, baton names, limits, and the calls waiting
+  // for a human — now has a home on the Canvas, and its suite moved with it.
+  // What survives here is the mode list, which must no longer offer it.
+  it('offers two layouts, because Crews retired into the Canvas', async () => {
+    seedCrews([makeCrew({ id: 'crew-1', name: 'Night shift' })])
+    seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
 
-    it('starts flat and switches to bordered crew containers', async () => {
-      seedCrews([makeCrew({ id: 'crew-1', name: 'Night shift' })])
-      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+    render(<MissionControl />)
+    await screen.findByText('Wire the room')
 
-      render(<MissionControl />)
-      await screen.findByText('Wire the room')
-      expect(document.querySelectorAll('[data-crew-container]')).toHaveLength(0)
-
-      await switchToCrews()
-
-      expect(
-        await screen.findByRole('heading', { name: 'Night shift' }),
-      ).toBeInTheDocument()
-      expect(
-        document.querySelectorAll('[data-crew-container]').length,
-      ).toBeGreaterThan(0)
-    })
-
-    it('keeps uncrewed sessions visible in a No crew section', async () => {
-      seedCrews([makeCrew({ id: 'crew-1', name: 'Night shift' })])
-      seed([makeSession({ id: 'a', name: 'Loose agent' })], [CLAUDE_CODE])
-
-      render(<MissionControl />)
-      await switchToCrews()
-
-      expect(await screen.findByText('No crew')).toBeInTheDocument()
-      expect(screen.getByText('Loose agent')).toBeInTheDocument()
-    })
-
-    it('renders a session held by two crews inside both containers', async () => {
-      seedCrews([
-        makeCrew({ id: 'crew-1', name: 'Masterminds', sessionIds: ['a'] }),
-        makeCrew({
-          id: 'crew-2',
-          name: 'Workers',
-          position: 1,
-          sessionIds: ['a'],
-        }),
-      ])
-      seed([makeSession({ id: 'a', name: 'Double agent' })], [CLAUDE_CODE])
-
-      render(<MissionControl />)
-      await switchToCrews()
-
-      expect(
-        await screen.findByRole('heading', { name: 'Masterminds' }),
-      ).toBeInTheDocument()
-      expect(
-        screen.getByRole('heading', { name: 'Workers' }),
-      ).toBeInTheDocument()
-      expect(screen.getAllByText('Double agent')).toHaveLength(2)
-      // Nothing is loose, so the catch-all section stays away.
-      expect(screen.queryByText('No crew')).not.toBeInTheDocument()
-    })
-
-    it('shows an empty crew rather than hiding it', async () => {
-      seedCrews([makeCrew({ id: 'crew-1', name: 'Nobody yet' })])
-      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
-
-      render(<MissionControl />)
-      await switchToCrews()
-
-      expect(
-        await screen.findByRole('heading', { name: 'Nobody yet' }),
-      ).toBeInTheDocument()
-      expect(screen.getByText('0 sessions')).toBeInTheDocument()
-      expect(
-        screen.getByText('No sessions in this crew yet.'),
-      ).toBeInTheDocument()
-    })
-
-    it('outlines a crew in red when one of its wires errored', async () => {
-      seedCrews([
-        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a', 'b'] }),
-      ])
-      seed([makeSession({ id: 'a' }), makeSession({ id: 'b' })], [CLAUDE_CODE])
-      listHops.mockResolvedValue([
-        {
-          id: 'h1',
-          relayId: 'r1',
-          crewId: 'crew-1',
-          flowRunId: 'run-1',
-          firedAt: '2026-08-15T10:00:00.000Z',
-          sourceSessionId: 'a',
-          targetSessionId: 'b',
-          spawnedSessionId: null,
-          triggerStatus: 'completed',
-          payloadPreview: null,
-          baton: null,
-          roundNumber: null,
-          outcome: 'error',
-          error: 'The target session no longer exists.',
-        },
-      ])
-
-      render(<MissionControl />)
-      await switchToCrews()
-
-      await waitFor(() => {
-        expect(
-          document.querySelector('[data-crew-alarm="true"]'),
-        ).toBeInTheDocument()
-      })
-      expect(
-        screen.getByText('1 relay hop needs your eyes'),
-      ).toBeInTheDocument()
-    })
-
-    it('leaves a crew whose wires all behaved unmarked', async () => {
-      seedCrews([
-        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a', 'b'] }),
-      ])
-      seed([makeSession({ id: 'a' }), makeSession({ id: 'b' })], [CLAUDE_CODE])
-
-      render(<MissionControl />)
-      await switchToCrews()
-
-      await screen.findByRole('heading', { name: 'Review loop' })
-      expect(
-        document.querySelector('[data-crew-alarm="true"]'),
-      ).not.toBeInTheDocument()
-    })
-
-    it('remembers the layout choice for the next visit', async () => {
-      seedCrews([makeCrew({ id: 'crew-1', name: 'Night shift' })])
-      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
-
-      const first = render(<MissionControl />)
-      await switchToCrews()
-      await screen.findByRole('heading', { name: 'Night shift' })
-      first.unmount()
-
-      render(<MissionControl />)
-      expect(
-        await screen.findByRole('heading', { name: 'Night shift' }),
-      ).toBeInTheDocument()
-    })
-
-    it('creates a crew from a card and shows it as a container', async () => {
-      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
-
-      render(<MissionControl />)
-
-      // Every gesture here is a click: no console, no seeding.
-      fireEvent.click(
-        await screen.findByLabelText('Add Wire the room to a crew', {
-          selector: 'button',
-        }),
-      )
-      fireEvent.click(await screen.findByText('New crew'))
-      fireEvent.change(screen.getByLabelText('New crew name'), {
-        target: { value: 'Night shift' },
-      })
-      fireEvent.click(screen.getByLabelText('Emoji 🌙'))
-      fireEvent.click(screen.getByLabelText('Violet'))
-      fireEvent.click(screen.getByText('Create & add this session'))
-
-      await waitFor(() =>
-        expect(createCrew).toHaveBeenCalledWith({
-          name: 'Night shift',
-          emoji: '🌙',
-          accentColor: '#7c3aed',
-          sessionIds: ['a'],
-        }),
-      )
-
-      fireEvent.keyDown(document.activeElement ?? document.body, {
-        key: 'Escape',
-      })
-      await switchToCrews()
-
-      expect(
-        await screen.findByRole('heading', { name: 'Night shift' }),
-      ).toBeInTheDocument()
-      expect(screen.getByText('1 session')).toBeInTheDocument()
-      // The card sits inside its new crew rather than the catch-all.
-      expect(screen.queryByText('No crew')).not.toBeInTheDocument()
-    })
-
-    it('offers rename, decoration and delete from the crew header', async () => {
-      seedCrews([
-        makeCrew({ id: 'crew-1', name: 'Night shift', sessionIds: ['a'] }),
-      ])
-      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
-
-      render(<MissionControl />)
-      await switchToCrews()
-
-      fireEvent.click(await screen.findByLabelText('Edit crew Night shift'))
-
-      expect(await screen.findByLabelText('Crew name')).toHaveValue(
-        'Night shift',
-      )
-      expect(screen.getByLabelText('Emoji 🐎')).toBeInTheDocument()
-      expect(screen.getByLabelText('Violet')).toBeInTheDocument()
-      expect(screen.getByText('Delete crew')).toBeInTheDocument()
-    })
-
-    it('gives the No crew section no menu — it is not a crew', async () => {
-      seedCrews([])
-      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
-
-      render(<MissionControl />)
-      await switchToCrews()
-
-      await screen.findByText('No crew')
-      expect(
-        screen.queryByLabelText('Edit crew No crew'),
-      ).not.toBeInTheDocument()
-    })
-
-    it('hails a card from inside its crew container', async () => {
-      seedCrews([
-        makeCrew({ id: 'crew-1', name: 'Night shift', sessionIds: ['a'] }),
-      ])
-      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
-
-      render(<MissionControl />)
-      await switchToCrews()
-
-      fireEvent.click(await screen.findByLabelText('Hail Wire the room'))
-
-      expect(await screen.findByTestId('composer')).toBeInTheDocument()
-    })
+    expect(
+      await screen.findByRole('button', { name: 'Flat' }),
+    ).toBeInTheDocument()
+    expect(
+      await screen.findByRole('button', { name: 'Canvas' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Crews' }),
+    ).not.toBeInTheDocument()
   })
 
   describe('canvas view', () => {
     async function switchToCanvas() {
       fireEvent.click(await screen.findByRole('button', { name: 'Canvas' }))
     }
+    it.each(['keyboard', 'remove change'] as const)(
+      'G1 disables %s deletion (mutation: restore the corresponding deletion path)',
+      async (proof) => {
+        seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])
+        seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+        render(<MissionControl />)
+        await switchToCanvas()
+        await screen.findByText('Wire the room')
+        if (proof === 'keyboard') expect(flow.props?.deleteKeyCode).toBeNull()
+        else {
+          act(() => flow.props?.onNodesChange?.([{ id: 'a', type: 'remove' }]))
+          expect(
+            document.querySelector('.react-flow__node[data-id="a"]'),
+          ).not.toBeNull()
+        }
+      },
+    )
+
+    it.each(['dragging', 'awaiting save'] as const)(
+      'G3 preserves local coordinates while %s through a metadata rebuild (mutation: adopt graph identity changes)',
+      async (phase) => {
+        seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])
+        seed([makeSession({ id: 'a', name: 'Moving card' })], [CLAUDE_CODE])
+        setMemberPosition.mockImplementation(() => new Promise(() => {}))
+        render(<MissionControl />)
+        await switchToCanvas()
+        await screen.findByText('Moving card')
+        act(() =>
+          flow.props?.onNodesChange?.([
+            {
+              id: 'a',
+              type: 'position',
+              position: { x: 300, y: 400 },
+              dragging: phase === 'dragging',
+            },
+          ]),
+        )
+        act(() =>
+          useSessionStore.setState({
+            globalSessions: [makeSession({ id: 'a', name: 'Updated card' })],
+          }),
+        )
+        const node = flow.props!.nodes!.find((entry) => entry.id === 'a')!
+        expect.soft(node.position).toEqual({ x: 300, y: 400 })
+        act(() =>
+          flow.props?.onNodeDragStop?.(new MouseEvent('mouseup'), node, [node]),
+        )
+        await waitFor(() =>
+          expect(setMemberPosition).toHaveBeenCalledWith('crew-1', 'a', {
+            x: 300,
+            y: 400,
+          }),
+        )
+      },
+    )
+
+    it.each(['dragging', 'confirmed'] as const)(
+      'G3 handles changed store coordinates while %s (mutations: adopt during dragging; preserve every local coordinate)',
+      async (phase) => {
+        const crew = makeCrew({ id: 'crew-1', sessionIds: ['a'] })
+        seedCrews([crew])
+        seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+        render(<MissionControl />)
+        await switchToCanvas()
+        await screen.findByText('Wire the room')
+        act(() =>
+          flow.props?.onNodesChange?.([
+            {
+              id: 'a',
+              type: 'position',
+              position: { x: 300, y: 400 },
+              dragging: true,
+            },
+          ]),
+        )
+        act(() =>
+          useSessionCrewStore.setState({
+            crews: [
+              {
+                ...crew,
+                members: [
+                  {
+                    sessionId: 'a',
+                    batonName: null,
+                    canvasX: 600,
+                    canvasY: 320,
+                  },
+                ],
+              },
+            ],
+          }),
+        )
+        if (phase === 'confirmed') {
+          act(() =>
+            flow.props?.onNodesChange?.([
+              { id: 'a', type: 'position', dragging: false },
+            ]),
+          )
+          act(() =>
+            useSessionCrewStore.setState({
+              crews: [
+                {
+                  ...crew,
+                  members: [
+                    {
+                      sessionId: 'a',
+                      batonName: null,
+                      canvasX: 600,
+                      canvasY: 420,
+                    },
+                  ],
+                },
+              ],
+            }),
+          )
+        }
+        expect(
+          flow.props!.nodes!.find((entry) => entry.id === 'a')!.position,
+        ).toEqual(
+          phase === 'dragging' ? { x: 300, y: 400 } : { x: 600, y: 420 },
+        )
+      },
+    )
 
     it('draws crewed sessions as nodes inside their crew', async () => {
       seedCrews([
@@ -855,7 +839,13 @@ describe('MissionControl', () => {
       ).not.toBeInTheDocument()
     })
 
-    it('explains itself when there is nothing wired to draw', async () => {
+    /**
+     * Frame 08. A room with no crews has nothing to author, and the Canvas
+     * says what to do next rather than reading as a view that failed to load.
+     * It also says the thing people fear most about crews out loud: nothing
+     * disappears from Flat by not being in one.
+     */
+    it('explains itself when there is no crew to draw', async () => {
       seedCrews([])
       seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
 
@@ -863,9 +853,928 @@ describe('MissionControl', () => {
       await switchToCanvas()
 
       expect(
-        await screen.findByText('Nothing wired to draw yet'),
+        await screen.findByText('Start with a conversation'),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          'Conversations outside crews remain available in Flat.',
+        ),
       ).toBeInTheDocument()
     })
+
+    /**
+     * THE drawing canary. Connect mode picks two cards and opens the panel as
+     * a DRAFT — no row, no message. A drawn connection that saved itself would
+     * make a slipped pick a stored, armed wire, and an armed wire is one
+     * settle away from spending provider quota.
+     *
+     * Mutation that reds it: have `openDraft` call `createRelay` — the
+     * refusing mock throws and the assertion below fails.
+     */
+    it('draws by clicking two cards, and stores nothing', async () => {
+      seedCrews([
+        makeCrew({
+          id: 'crew-1',
+          name: 'Review loop',
+          sessionIds: ['a', 'b'],
+        }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Fable' }),
+          makeSession({ id: 'b', name: 'Opus' }),
+        ],
+        [CLAUDE_CODE],
+      )
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-canvas-session-node="b"]'),
+        ).toBeInTheDocument()
+      })
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+      expect(
+        await screen.findByText(/Choose the conversation that finishes/),
+      ).toBeInTheDocument()
+
+      fireEvent.click(await screen.findByLabelText('Connect to Fable'))
+      expect(await screen.findByText(/Fable selected/)).toBeInTheDocument()
+
+      fireEvent.click(await screen.findByLabelText('Connect to Opus'))
+
+      // The panel opened on an unsaved draft…
+      expect(await screen.findByText('New connection')).toBeInTheDocument()
+      expect(screen.getByText('Not saved yet')).toBeInTheDocument()
+      // …and nothing was written or sent.
+      expect(createRelay).not.toHaveBeenCalled()
+      expect(updateRelay).not.toHaveBeenCalled()
+    })
+
+    /**
+     * The keyboard route is the SAME route, not a second one: both call the
+     * one connect-mode machine, so they cannot drift apart.
+     *
+     * Mutation that reds it: give the card's `onKeyDown` its own branch that
+     * calls `onOpen` while Connect is armed.
+     */
+    it('draws the same connection from the keyboard', async () => {
+      const onOpenSession = vi.fn()
+      seedCrews([
+        makeCrew({
+          id: 'crew-1',
+          name: 'Review loop',
+          sessionIds: ['a', 'b'],
+        }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Fable' }),
+          makeSession({ id: 'b', name: 'Opus' }),
+        ],
+        [CLAUDE_CODE],
+      )
+
+      render(<MissionControl onOpenSession={onOpenSession} />)
+      await switchToCanvas()
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-canvas-session-node="b"]'),
+        ).toBeInTheDocument()
+      })
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+      fireEvent.keyDown(await screen.findByLabelText('Connect to Fable'), {
+        key: 'Enter',
+      })
+      fireEvent.keyDown(await screen.findByLabelText('Connect to Opus'), {
+        key: 'Enter',
+      })
+
+      expect(await screen.findByText('New connection')).toBeInTheDocument()
+      // Enter PICKED rather than navigated: the mode decides, not the device.
+      expect(onOpenSession).not.toHaveBeenCalled()
+      expect(createRelay).not.toHaveBeenCalled()
+    })
+
+    /**
+     * M3. The discard guard was on the toolbar and Cancel only, so the three
+     * gestures that also replace or orphan a draft threw it away without
+     * asking: drawing a second pair, picking a run, and opening a recorded
+     * event (which is how *View current connection* is reached at all -- it
+     * lives on the event inspector, and reaching it used to leave the draft
+     * stranded in state for the next connection to overwrite).
+     *
+     * The fix is one door rather than three patches: every panel change and
+     * every draft replacement goes through `leaveDraft`.
+     *
+     * Mutation that reds it: bypass the guard on any ONE of the three -- call
+     * `setPanelState` directly from `onSelectRun`, or drop the guard from
+     * `openDraft`, or from `onSelectEvent`.
+     */
+    it('asks before losing an unsaved draft, whichever way you leave', async () => {
+      seedCrews([
+        makeCrew({
+          id: 'crew-1',
+          name: 'Review loop',
+          sessionIds: ['a', 'b', 'c'],
+        }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Fable' }),
+          makeSession({ id: 'b', name: 'Opus' }),
+          makeSession({ id: 'c', name: 'Sol' }),
+        ],
+        [CLAUDE_CODE],
+      )
+      listRuns.mockResolvedValue({
+        runs: [
+          {
+            flowRunId: 'run-1',
+            crewId: 'crew-1',
+            startedAt: '2026-09-06T12:00:00.000Z',
+            endedAt: '2026-09-06T12:05:00.000Z',
+            laps: [
+              {
+                lap: 1,
+                hops: [
+                  {
+                    id: 'h1',
+                    relayId: 'w1',
+                    crewId: 'crew-1',
+                    flowRunId: 'run-1',
+                    firedAt: '2026-09-06T12:00:00.000Z',
+                    sourceSessionId: 'a',
+                    targetSessionId: 'b',
+                    spawnedSessionId: null,
+                    triggerStatus: 'completed',
+                    payloadPreview: null,
+                    baton: null,
+                    roundNumber: 1,
+                    lapNumber: 1,
+                    settledAt: '2026-09-06T12:01:00.000Z',
+                    dispatchId: 'receipt-1',
+                    outcome: 'delivered',
+                    error: null,
+                  },
+                ],
+              },
+            ],
+            hails: [],
+            status: { word: 'finished-quiet', reason: null },
+            counts: { deliveries: 1, failures: 0, laps: 1, events: 1 },
+          },
+        ],
+        unattributedHails: [],
+        outcomes: { h1: 'delivered' },
+        hasMore: false,
+      })
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-canvas-session-node="c"]'),
+        ).toBeInTheDocument()
+      })
+
+      /** Draws Fable → Opus and leaves it unsaved. */
+      async function drawDraft() {
+        fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+        fireEvent.click(await screen.findByLabelText('Connect to Fable'))
+        fireEvent.click(await screen.findByLabelText('Connect to Opus'))
+        expect(await screen.findByText('New connection')).toBeInTheDocument()
+      }
+
+      /** Answers the alert with *Keep editing* and proves the draft survived. */
+      async function keepEditing() {
+        fireEvent.click(
+          await screen.findByRole('button', { name: 'Keep editing' }),
+        )
+        expect(screen.getByText('New connection')).toBeInTheDocument()
+        expect(screen.getByText('Not saved yet')).toBeInTheDocument()
+      }
+
+      // 1. Drawing a second pair.
+      await drawDraft()
+      fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+      fireEvent.click(await screen.findByLabelText('Connect to Fable'))
+      fireEvent.click(await screen.findByLabelText('Connect to Sol'))
+      expect(
+        await screen.findByRole('alertdialog', { name: 'Discard this draft?' }),
+      ).toBeInTheDocument()
+      await keepEditing()
+
+      // 2. Picking a run in history.
+      fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+      fireEvent.click(await screen.findByText('1 delivery'))
+      expect(
+        await screen.findByRole('alertdialog', { name: 'Discard this draft?' }),
+      ).toBeInTheDocument()
+      await keepEditing()
+
+      // 3. Opening a recorded event — the only door to *View current
+      //    connection*, and the one that used to strand the draft silently.
+      fireEvent.click(await screen.findByText('Fable → Opus'))
+      expect(
+        await screen.findByRole('alertdialog', { name: 'Discard this draft?' }),
+      ).toBeInTheDocument()
+      await keepEditing()
+
+      expect(createRelay).not.toHaveBeenCalled()
+      expect(updateRelay).not.toHaveBeenCalled()
+    })
+
+    it('keeps the pending pair when retaining a draft (mutation: commit connect mode before guard)', async () => {
+      seedCrews([
+        makeCrew({
+          id: 'crew-1',
+          name: 'Review loop',
+          sessionIds: ['a', 'b', 'c'],
+        }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Fable' }),
+          makeSession({ id: 'b', name: 'Opus' }),
+          makeSession({ id: 'c', name: 'Sol' }),
+        ],
+        [CLAUDE_CODE],
+      )
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+      fireEvent.click(await screen.findByLabelText('Connect to Fable'))
+      fireEvent.click(await screen.findByLabelText('Connect to Opus'))
+      fireEvent.change(await screen.findByLabelText('Standing instructions'), {
+        target: { value: 'Original draft' },
+      })
+      fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+      fireEvent.click(await screen.findByLabelText('Connect to Fable'))
+      fireEvent.click(await screen.findByLabelText('Connect to Sol'))
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Keep editing' }),
+      )
+      expect({
+        connecting: screen
+          .getByRole('button', { name: 'Connect' })
+          .getAttribute('aria-pressed'),
+        source: screen.queryByText(/Fable selected/) !== null,
+        draft: (
+          screen.getByLabelText('Standing instructions') as HTMLTextAreaElement
+        ).value,
+      }).toEqual({ connecting: 'true', source: true, draft: 'Original draft' })
+    })
+
+    it.each(['Keep editing', 'Discard draft'])(
+      'guards a crew switch: %s (mutations: bypass crew leaveDraft / delete stopPropagation)',
+      async (answer) => {
+        const onOpenSession = vi.fn()
+        seedCrews([
+          makeCrew({ id: 'crew-1', name: 'Crew A', sessionIds: ['a', 'b'] }),
+          makeCrew({ id: 'crew-2', name: 'Crew B', sessionIds: ['c'] }),
+        ])
+        seed(
+          [
+            makeSession({ id: 'a', name: 'Fable' }),
+            makeSession({ id: 'b', name: 'Opus' }),
+            makeSession({ id: 'c', name: 'Sol' }),
+          ],
+          [CLAUDE_CODE],
+        )
+        render(<MissionControl onOpenSession={onOpenSession} />)
+        await switchToCanvas()
+        fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+        fireEvent.click(await screen.findByLabelText('Connect to Fable'))
+        fireEvent.click(await screen.findByLabelText('Connect to Opus'))
+        fireEvent.change(
+          await screen.findByLabelText('Standing instructions'),
+          { target: { value: 'Keep this draft' } },
+        )
+        fireEvent.click(await screen.findByLabelText('Open Sol'))
+        const dialog = screen.queryByRole('alertdialog', {
+          name: 'Discard this draft?',
+        })
+        if (dialog)
+          fireEvent.click(screen.getByRole('button', { name: answer }))
+        expect({
+          asked: dialog !== null,
+          selected: document.querySelector('[data-canvas-toolbar] h2')
+            ?.textContent,
+          draft: screen.queryByRole('region', { name: 'Connection' }) !== null,
+          text:
+            (
+              screen.queryByLabelText(
+                'Standing instructions',
+              ) as HTMLTextAreaElement | null
+            )?.value ?? null,
+        }).toEqual({
+          asked: true,
+          selected: answer === 'Keep editing' ? 'Crew A' : 'Crew B',
+          draft: answer === 'Keep editing',
+          text: answer === 'Keep editing' ? 'Keep this draft' : null,
+        })
+        // Neither answer replays the card click held by the discard guard.
+        expect(onOpenSession).not.toHaveBeenCalled()
+      },
+    )
+
+    it('leaves Enter meaning "open" when Connect is not armed', async () => {
+      const onOpenSession = vi.fn()
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
+      ])
+      seed([makeSession({ id: 'a', name: 'Fable' })], [CLAUDE_CODE])
+
+      render(<MissionControl onOpenSession={onOpenSession} />)
+      await switchToCanvas()
+
+      fireEvent.keyDown(await screen.findByLabelText('Open Fable'), {
+        key: 'Enter',
+      })
+
+      expect(onOpenSession).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'a' }),
+      )
+    })
+
+    it('offers the crew’s own settings and its conversations from the toolbar', async () => {
+      seedCrews([
+        makeCrew({
+          id: 'crew-1',
+          name: 'Review loop',
+          sessionIds: ['a'],
+          members: [
+            {
+              sessionId: 'a',
+              batonName: 'fable',
+              canvasX: null,
+              canvasY: null,
+            },
+          ],
+        }),
+      ])
+      seed([makeSession({ id: 'a', name: 'Fable' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-canvas-session-node="a"]'),
+        ).toBeInTheDocument()
+      })
+
+      // R13: every capability the retired Crews view had has a Canvas home.
+      fireEvent.click(
+        await screen.findByRole('button', { name: /Crew settings/ }),
+      )
+      expect(
+        await screen.findByRole('region', { name: 'Crew settings' }),
+      ).toBeInTheDocument()
+      expect(screen.getByDisplayValue('fable')).toBeInTheDocument()
+      expect(
+        screen.getByLabelText('Delivery limit per run for this crew'),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText('A run can contain several laps'),
+      ).toBeInTheDocument()
+
+      // From the settings panel's own button, not the toolbar's: both lead
+      // to the same panel, and the settings one is the reachable path for
+      // somebody already looking at the roster.
+      fireEvent.click(
+        screen.getByRole('button', { name: '+ Add conversation' }),
+      )
+      expect(
+        await screen.findByRole('region', { name: 'Add conversations' }),
+      ).toBeInTheDocument()
+    })
+
+    /**
+     * Frame 09, at the layer that can actually break it. The panel renders a
+     * kept draft — its own test proves that — but only the container decides
+     * whether there IS still a draft after a refusal, and throwing the form
+     * away is the defect this state exists to prevent: the typed work is the
+     * expensive part, not the row.
+     *
+     * Mutation that reds it: `setDraft(null)` in `save`'s failure branch.
+     */
+    it('keeps a failed save’s draft, and leaves the stored wire alone', async () => {
+      createRelay.mockRejectedValueOnce(new Error('The database is locked.'))
+      seedCrews([
+        makeCrew({
+          id: 'crew-1',
+          name: 'Review loop',
+          sessionIds: ['a', 'b'],
+        }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Fable' }),
+          makeSession({ id: 'b', name: 'Opus' }),
+        ],
+        [CLAUDE_CODE],
+      )
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-canvas-session-node="b"]'),
+        ).toBeInTheDocument()
+      })
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+      fireEvent.click(await screen.findByLabelText('Connect to Fable'))
+      fireEvent.click(await screen.findByLabelText('Connect to Opus'))
+
+      const instructions = await screen.findByLabelText(
+        /Standing instructions/i,
+      )
+      fireEvent.change(instructions, {
+        target: { value: 'Implement the brief.' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      expect(
+        await screen.findByText('Couldn’t save the connection'),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          'Your draft is kept here. The saved connection has not changed.',
+        ),
+      ).toBeInTheDocument()
+      // The typed work survived the refusal.
+      expect(
+        screen.getByDisplayValue('Implement the brief.'),
+      ).toBeInTheDocument()
+      // And trying again is about settings, never about resending.
+      expect(
+        screen.getByText(
+          'Trying again saves settings. It does not resend a message.',
+        ),
+      ).toBeInTheDocument()
+    })
+
+    /**
+     * R11's clipping half. jsdom does no layout, so "nothing renders outside
+     * the viewport" cannot be measured here — what CAN be pinned is the
+     * mechanism, and its absence is exactly how a route ends up painted
+     * across the panel beside the canvas and the chrome above it.
+     *
+     * Mutation that reds it: drop `overflow-hidden` from the canvas frame.
+     * How it actually looks at the edges is on Marcin's QA list.
+     */
+    it('keeps the diagram inside its own frame', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
+      ])
+      seed([makeSession({ id: 'a', name: 'Fable' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await switchToCanvas()
+
+      await waitFor(() => {
+        expect(document.querySelector('[data-session-canvas]')).toHaveClass(
+          'overflow-hidden',
+        )
+      })
+    })
+
+    /**
+     * THE acknowledgement canary (promise 5). **Mark seen acknowledges and
+     * nothing else** — the whole point of the sentence beside it is that it
+     * does not reply, does not restart, and does not approve. So the test
+     * watches the one call that should happen and the two that must not.
+     *
+     * Mutation that reds it: have `onMarkSeen` also create or update a relay.
+     */
+    it('marks a call seen without sending or storing anything', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
+      ])
+      seed([makeSession({ id: 'a', name: 'Fable' })], [CLAUDE_CODE])
+      listRuns.mockResolvedValue({
+        runs: [
+          {
+            flowRunId: 'run-1',
+            crewId: 'crew-1',
+            startedAt: '2026-09-06T12:00:00.000Z',
+            endedAt: '2026-09-06T12:39:00.000Z',
+            laps: [],
+            hails: [
+              {
+                id: 'call-1',
+                crewId: 'crew-1',
+                flowRunId: 'run-1',
+                reason: 'terminal',
+                sessionId: 'a',
+                baton: 'marcin',
+                message: 'Two decisions need your eyes.',
+                detail: 'This station handed the work to you.',
+                raisedAt: '2026-09-06T12:39:00.000Z',
+                acknowledgedAt: null,
+              },
+            ],
+            status: { word: 'handed-back', reason: null },
+            counts: { deliveries: 0, failures: 0, laps: 0, events: 1 },
+          },
+        ],
+        unattributedHails: [],
+        outcomes: { 'call-1': 'handed-back' },
+        hasMore: false,
+      })
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-canvas-session-node="a"]'),
+        ).toBeInTheDocument()
+      })
+
+      fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+      fireEvent.click(await screen.findByText(/handed the run back to you/))
+
+      const markSeen = await screen.findByRole('button', { name: 'Mark seen' })
+      expect(
+        screen.getByText(
+          'Mark seen acknowledges this call. It does not send a reply or restart the run.',
+        ),
+      ).toBeInTheDocument()
+
+      fireEvent.click(markSeen)
+
+      await waitFor(() => {
+        expect(acknowledgeHail).toHaveBeenCalledWith('call-1')
+      })
+      // Nothing was stored and nothing was sent.
+      expect(createRelay).not.toHaveBeenCalled()
+      expect(updateRelay).not.toHaveBeenCalled()
+    })
+
+    /**
+     * Promise 6, the half about names: an event names the conversations it
+     * actually involved, resolved from the WHOLE room rather than from who
+     * happens to be in the crew today. A conversation removed from a crew is
+     * still a conversation, and its recorded events must stay readable.
+     *
+     * Mutation that reds it: resolve names from `crew.sessionIds` instead of
+     * the session list — the row falls back to "a conversation that is gone"
+     * for somebody who is merely no longer a member.
+     */
+    it('still names a conversation that has left the crew', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Fable' }),
+          // In the room, NOT in the crew any more.
+          makeSession({ id: 'b', name: 'Opus' }),
+        ],
+        [CLAUDE_CODE],
+      )
+      listRuns.mockResolvedValue({
+        runs: [
+          {
+            flowRunId: 'run-1',
+            crewId: 'crew-1',
+            startedAt: '2026-09-06T12:00:00.000Z',
+            endedAt: '2026-09-06T12:05:00.000Z',
+            laps: [
+              {
+                lap: 1,
+                hops: [
+                  {
+                    id: 'h1',
+                    relayId: 'w1',
+                    crewId: 'crew-1',
+                    flowRunId: 'run-1',
+                    firedAt: '2026-09-06T12:00:00.000Z',
+                    sourceSessionId: 'a',
+                    targetSessionId: 'b',
+                    spawnedSessionId: null,
+                    triggerStatus: 'completed',
+                    payloadPreview: null,
+                    baton: null,
+                    roundNumber: 1,
+                    lapNumber: 1,
+                    settledAt: null,
+                    outcome: 'delivered',
+                    error: null,
+                  },
+                ],
+              },
+            ],
+            hails: [],
+            status: { word: 'finished-quiet', reason: null },
+            counts: { deliveries: 1, failures: 0, laps: 1, events: 1 },
+          },
+        ],
+        unattributedHails: [],
+        outcomes: { h1: 'delivered' },
+        hasMore: false,
+      })
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+
+      expect(await screen.findByText('Fable → Opus')).toBeInTheDocument()
+    })
+
+    /**
+     * L2. `hasMore` is the page's own observation that another run exists
+     * below it, and it was being read by nobody: the panel asked for one page
+     * and stopped, so a crew with more than twenty runs simply lost the rest.
+     *
+     * Mutation that reds it: drop the `hasMore` row, or call `listRuns`
+     * without the `before` cursor.
+     */
+    it('keeps every loaded run on an older-page failure and retries that page (mutation: historyError)', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
+      ])
+      seed([makeSession({ id: 'a', name: 'Fable' })], [CLAUDE_CODE])
+      const page = (ids: string[], hasMore = true) => ({
+        runs: ids.map((id) => makeRun(id, '2026-09-06T12:00:00.000Z')),
+        unattributedHails: [],
+        outcomes: {},
+        hasMore,
+      })
+      listRuns
+        .mockResolvedValueOnce(page(['run-1', 'run-2']))
+        .mockResolvedValueOnce(page(['run-3']))
+        .mockRejectedValueOnce(new Error('Older records unavailable'))
+        .mockResolvedValueOnce(page(['run-4'], false))
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Load older runs' }),
+      )
+      await waitFor(() => {
+        if (
+          screen.queryAllByRole('button', { name: /0 deliveries/ }).length !== 3
+        )
+          throw new Error('waiting for appended page')
+      })
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Load older runs' }),
+      )
+      await screen.findByText('Older records unavailable')
+      expect({
+        runs: screen.queryAllByRole('button', { name: /0 deliveries/ }).length,
+        inline: screen.queryByRole('alert')?.textContent,
+        fullError: screen.queryByText('Couldn’t load history'),
+      }).toEqual({
+        runs: 3,
+        inline: 'Older records unavailable',
+        fullError: null,
+      })
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Retry older runs' }),
+      )
+      await waitFor(() => {
+        expect({
+          runs: screen.queryAllByRole('button', { name: /0 deliveries/ })
+            .length,
+          lastRead: listRuns.mock.calls.at(-1),
+          error: screen.queryByText('Older records unavailable'),
+        }).toEqual({
+          runs: 4,
+          lastRead: ['crew-1', { before: 'run-3' }],
+          error: null,
+        })
+      })
+    })
+
+    it('loads older runs when the page says there are more', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
+      ])
+      seed([makeSession({ id: 'a', name: 'Fable' })], [CLAUDE_CODE])
+      listRuns.mockImplementation(
+        async (_crewId: string, options?: unknown) => {
+          const before = (options as { before?: string } | undefined)?.before
+          return before === 'run-2'
+            ? {
+                runs: [makeRun('run-3', '2026-09-04T12:00:00.000Z')],
+                unattributedHails: [],
+                outcomes: {},
+                hasMore: false,
+              }
+            : {
+                runs: [
+                  makeRun('run-1', '2026-09-06T12:00:00.000Z'),
+                  makeRun('run-2', '2026-09-05T12:00:00.000Z'),
+                ],
+                unattributedHails: [],
+                outcomes: {},
+                hasMore: true,
+              }
+        },
+      )
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+
+      const older = await screen.findByRole('button', {
+        name: 'Load older runs',
+      })
+      fireEvent.click(older)
+
+      await waitFor(() => {
+        expect(listRuns).toHaveBeenCalledWith('crew-1', { before: 'run-2' })
+      })
+      // The older page is appended, not swapped in: the run already on screen
+      // stays, and the row that offered more is gone.
+      await waitFor(() => {
+        expect(
+          screen.queryByRole('button', { name: 'Load older runs' }),
+        ).not.toBeInTheDocument()
+      })
+      expect(
+        document.querySelectorAll('[aria-pressed]').length,
+      ).toBeGreaterThan(0)
+    })
+
+    /**
+     * L3. "Earlier calls" means the calls OTHER than the one you are looking
+     * at. Subtracting one unconditionally made a hop event -- which is not a
+     * call at all -- undercount every call in the page by exactly one.
+     *
+     * Mutation that reds it: subtract one whatever the opened event is.
+     */
+    it('counts the other calls, not always one less than all of them', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Fable' }),
+          makeSession({ id: 'b', name: 'Opus' }),
+        ],
+        [CLAUDE_CODE],
+      )
+      listRuns.mockResolvedValue({
+        runs: [
+          {
+            flowRunId: 'run-1',
+            crewId: 'crew-1',
+            startedAt: '2026-09-06T12:00:00.000Z',
+            endedAt: '2026-09-06T12:05:00.000Z',
+            laps: [
+              {
+                lap: 1,
+                hops: [
+                  {
+                    id: 'h1',
+                    relayId: 'w1',
+                    crewId: 'crew-1',
+                    flowRunId: 'run-1',
+                    firedAt: '2026-09-06T12:00:00.000Z',
+                    sourceSessionId: 'a',
+                    targetSessionId: 'b',
+                    spawnedSessionId: null,
+                    triggerStatus: 'completed',
+                    payloadPreview: null,
+                    baton: null,
+                    roundNumber: 1,
+                    lapNumber: 1,
+                    settledAt: '2026-09-06T12:01:00.000Z',
+                    dispatchId: 'receipt-1',
+                    outcome: 'delivered',
+                    error: null,
+                  },
+                ],
+              },
+            ],
+            hails: [
+              {
+                id: 'call-1',
+                crewId: 'crew-1',
+                flowRunId: 'run-1',
+                reason: 'terminal',
+                sessionId: 'a',
+                baton: 'marcin',
+                message: null,
+                detail: 'Handed to you.',
+                raisedAt: '2026-09-06T12:04:00.000Z',
+                acknowledgedAt: null,
+              },
+              {
+                id: 'call-2',
+                crewId: 'crew-1',
+                flowRunId: 'run-1',
+                reason: 'stall',
+                sessionId: 'b',
+                baton: null,
+                message: null,
+                detail: 'Quiet for 30 minutes.',
+                raisedAt: '2026-09-06T12:05:00.000Z',
+                acknowledgedAt: null,
+              },
+            ],
+            status: { word: 'needs-you', reason: 'stalled' },
+            counts: { deliveries: 1, failures: 0, laps: 1, events: 3 },
+          },
+        ],
+        unattributedHails: [],
+        outcomes: {
+          h1: 'delivered',
+          'call-1': 'handed-back',
+          'call-2': 'reply-overdue',
+        },
+        hasMore: false,
+      })
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+
+      // A HOP is not a call, so both calls are "other".
+      fireEvent.click(await screen.findByText('Fable → Opus'))
+      expect(await screen.findByText(/Earlier calls · 2/)).toBeInTheDocument()
+
+      // A CALL is one of them, so the other one is what is left.
+      fireEvent.click(await screen.findByText(/handed the run back to you/))
+      expect(await screen.findByText(/Earlier calls · 1/)).toBeInTheDocument()
+    })
+
+    /**
+     * Promise 6: the graph is labelled the CURRENT layout, because that is
+     * what it is — today's wires wearing yesterday's outcomes, never a
+     * reconstruction of the topology the run actually had.
+     *
+     * Mutation that reds it: drop the banner, or word it as though the
+     * diagram were a snapshot.
+     */
+    it('labels a replayed run as shown on the current layout', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
+      ])
+      seed([makeSession({ id: 'a', name: 'Fable' })], [CLAUDE_CODE])
+      listRuns.mockResolvedValue({
+        runs: [
+          {
+            flowRunId: 'run-1',
+            crewId: 'crew-1',
+            startedAt: '2026-09-06T12:00:00.000Z',
+            endedAt: '2026-09-06T12:39:00.000Z',
+            laps: [],
+            hails: [],
+            status: { word: 'finished-quiet', reason: null },
+            counts: { deliveries: 0, failures: 0, laps: 0, events: 0 },
+          },
+        ],
+        unattributedHails: [],
+        outcomes: {},
+        hasMore: false,
+      })
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+
+      expect(
+        await screen.findByText(/shown on current crew layout/i),
+      ).toBeInTheDocument()
+    })
+
+    it('says a crew with no records has none, and does not claim it never ran', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
+      ])
+      seed([makeSession({ id: 'a', name: 'Fable' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+
+      expect(
+        await screen.findByText('No history available yet'),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText('No records does not imply this crew has never run.'),
+      ).toBeInTheDocument()
+    })
+
+    /**
+     * Selecting a stored connection by clicking its wire has NO test here on
+     * purpose, and this comment is the disclosure rather than a gap left
+     * quiet: React Flow renders no edge DOM under jsdom — edge geometry comes
+     * from measured handle positions the environment does not have — so there
+     * is nothing to click. What that path does once it fires IS pinned: the
+     * stored wire becomes a draft in `connection-draft.pure.test.ts`, and the
+     * draft reaches the screen in `connection-inspector.render.test.tsx`. The
+     * click itself is on Marcin's QA list.
+     */
 
     it('opens a session from its node, like the card body does', async () => {
       const onOpenSession = vi.fn()
@@ -1079,6 +1988,322 @@ describe('MissionControl', () => {
           ).mode,
         ).toBe('canvas')
       })
+    })
+  })
+
+  describe('round 5 live-review canaries', () => {
+    async function switchToCanvas() {
+      fireEvent.click(await screen.findByRole('button', { name: 'Canvas' }))
+    }
+    it('L-x nudges a card dropped onto the chair (mutation: restrict obstacles to sessions)', async () => {
+      seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])
+      seed([makeSession({ id: 'a', name: 'Moving card' })], [CLAUDE_CODE])
+      seedRelays([
+        makeRelay({
+          id: 'baton',
+          sourceSessionId: 'a',
+          conditionToken: 'BATON: a',
+        }),
+      ])
+      render(<MissionControl />)
+      await switchToCanvas()
+      await screen.findByText('Marcin')
+      const chair = flow.props!.nodes!.find((entry) => entry.type === 'chair')!
+      const node = {
+        ...flow.props!.nodes!.find((entry) => entry.id === 'a')!,
+        position: { ...chair.position },
+      }
+      await act(async () =>
+        flow.props?.onNodeDragStop?.(new MouseEvent('mouseup'), node, [node]),
+      )
+      expect(setMemberPosition).toHaveBeenCalledWith('crew-1', 'a', {
+        x: chair.position.x,
+        y: chair.position.y + 140,
+      })
+    })
+
+    it.each([
+      ['persisted', 'restore upward nudging'],
+      ['shown', 'restore upward nudging'],
+      ['other card', 'restore upward nudging'],
+      ['above title', 'omit title floor'],
+    ] as const)(
+      'H-R15 keeps the nudged drop %s after save resolves (mutation: %s)',
+      async (proof, _mutation) => {
+        const crew = makeCrew({ id: 'crew-1', sessionIds: ['a', 'b'] })
+        seedCrews([crew])
+        seed(
+          [
+            makeSession({ id: 'a', name: 'First card' }),
+            makeSession({ id: 'b', name: 'Dragged card' }),
+          ],
+          [CLAUDE_CODE],
+        )
+        setMemberPosition.mockImplementation(
+          async (_crewId, sessionId, position) => {
+            const saved = {
+              ...crew,
+              members: [
+                {
+                  sessionId,
+                  batonName: null,
+                  canvasX: position.x,
+                  canvasY: position.y,
+                },
+              ],
+            }
+            listCrews.mockResolvedValue([saved])
+            return saved
+          },
+        )
+        render(<MissionControl />)
+        await switchToCanvas()
+        await screen.findByText('Dragged card')
+        const other = flow.props!.nodes!.find((entry) => entry.id === 'a')!
+        const beforeTransform = (
+          document.querySelector(
+            '.react-flow__node[data-id="a"]',
+          ) as HTMLElement
+        ).style.transform
+        const node = {
+          ...flow.props!.nodes!.find((entry) => entry.id === 'b')!,
+          position:
+            proof === 'above title' ? { x: 400, y: 0 } : { ...other.position },
+        }
+        act(() =>
+          flow.props?.onNodesChange?.([
+            {
+              id: 'b',
+              type: 'position',
+              position: node.position,
+              dragging: true,
+            },
+          ]),
+        )
+        await act(async () =>
+          flow.props?.onNodeDragStop?.(new MouseEvent('mouseup'), node, [node]),
+        )
+        if (proof === 'persisted') {
+          await waitFor(() =>
+            expect(setMemberPosition).toHaveBeenCalledWith('crew-1', 'b', {
+              x: 20,
+              y: 224,
+            }),
+          )
+        } else if (proof === 'shown') {
+          expect(
+            document.querySelector('.react-flow__node[data-id="b"]'),
+          ).toHaveStyle({ transform: 'translate(20px,224px)' })
+        } else {
+          expect(
+            (
+              document.querySelector(
+                '.react-flow__node[data-id="a"]',
+              ) as HTMLElement
+            ).style.transform,
+          ).toBe(beforeTransform)
+        }
+      },
+    )
+
+    it.each(['transform', 'persisted position'] as const)(
+      'F2 moves the %s (mutation: omit onNodesChange)',
+      async (proof) => {
+        seedCrews([
+          makeCrew({ id: 'crew-1', name: 'Moving crew', sessionIds: ['a'] }),
+        ])
+        seed([makeSession({ id: 'a', name: 'Moving card' })], [CLAUDE_CODE])
+        render(<MissionControl />)
+        await switchToCanvas()
+        await screen.findByText('Moving card')
+        act(() =>
+          flow.props?.onNodesChange?.([
+            {
+              id: 'a',
+              type: 'position',
+              position: { x: 300, y: 400 },
+              dragging: true,
+            },
+          ]),
+        )
+        if (proof === 'transform') {
+          expect(
+            document.querySelector('.react-flow__node[data-id="a"]'),
+          ).toHaveStyle({ transform: 'translate(300px,400px)' })
+        } else {
+          const node = flow.props!.nodes!.find((entry) => entry.id === 'a')!
+          act(() =>
+            flow.props?.onNodeDragStop?.(new MouseEvent('mouseup'), node, [
+              node,
+            ]),
+          )
+          await waitFor(() =>
+            expect(setMemberPosition).toHaveBeenCalledWith('crew-1', 'a', {
+              x: 300,
+              y: 400,
+            }),
+          )
+        }
+      },
+    )
+
+    it.each(['toolbar', 'add target'] as const)(
+      'F3 follows the visible crew in the %s (mutation: fall back to crewGroups[0])',
+      async (proof) => {
+        seedCrews([
+          makeCrew({ id: 'crew-1', name: 'First crew', sessionIds: ['a'] }),
+          makeCrew({ id: 'crew-2', name: 'Visible crew', sessionIds: ['b'] }),
+        ])
+        seed(
+          [
+            makeSession({ id: 'a', name: 'First card' }),
+            makeSession({ id: 'b', name: 'Visible card' }),
+          ],
+          [CLAUDE_CODE],
+        )
+        render(<MissionControl />)
+        fireEvent.click(
+          await screen.findByRole('button', { name: /Visible crew/ }),
+        )
+        await switchToCanvas()
+        await screen.findByText('Visible card')
+        if (proof === 'toolbar') {
+          expect(
+            within(
+              document.querySelector('[data-canvas-toolbar]') as HTMLElement,
+            ).getByRole('heading'),
+          ).toHaveTextContent('Visible crew')
+        } else {
+          fireEvent.click(
+            screen.getByRole('button', { name: /Add conversation/ }),
+          )
+          expect(
+            await screen.findByText(
+              'Bring existing conversations into Visible crew.',
+            ),
+          ).toBeInTheDocument()
+        }
+      },
+    )
+
+    // jsdom ignores pointer-events: this proves handler wiring only. Marcin's
+    // real pointer click is the other half of the frame-heading proof.
+    it('F3 selects the clicked frame heading (mutation: omit cluster crew id)', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'First crew', sessionIds: ['a'] }),
+        makeCrew({ id: 'crew-2', name: 'Second crew', sessionIds: ['b'] }),
+      ])
+      seed([makeSession({ id: 'a' }), makeSession({ id: 'b' })], [CLAUDE_CODE])
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(
+        await screen.findByRole('heading', { name: 'Second crew' }),
+      )
+      expect(
+        within(
+          document.querySelector('[data-canvas-toolbar]') as HTMLElement,
+        ).getByRole('heading'),
+      ).toHaveTextContent('Second crew')
+    })
+
+    it('F4 puts history beside the graph in the left column (mutation: move history below the row)', async () => {
+      seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])
+      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+      const history = await screen.findByRole('region', { name: 'History' })
+      expect(
+        history.parentElement?.querySelector(':scope > [data-canvas-graph]'),
+      ).not.toBeNull()
+    })
+
+    it('L-vii refits height only (mutations: omit resize fitView; refit on width)', async () => {
+      let observed: {
+        callback: ResizeObserverCallback
+        observer: ResizeObserver
+        target: Element
+      } | null = null
+      class Observer implements ResizeObserver {
+        constructor(private callback: ResizeObserverCallback) {}
+        observe(target: Element) {
+          if (target.hasAttribute('data-session-canvas'))
+            observed = { callback: this.callback, observer: this, target }
+        }
+        unobserve() {}
+        disconnect() {}
+      }
+      vi.stubGlobal('ResizeObserver', Observer)
+      try {
+        seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])
+        seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+        render(<MissionControl />)
+        await switchToCanvas()
+        await screen.findByText('Wire the room')
+        const fitView = vi.fn(async () => true)
+        act(() => {
+          flow.props?.onInit?.({ fitView } as unknown as ReactFlowInstance)
+          const entry = observed as {
+            callback: ResizeObserverCallback
+            observer: ResizeObserver
+            target: Element
+          } | null
+          entry?.callback(
+            [
+              {
+                target: entry.target,
+                contentRect: { width: 640, height: 220 },
+              } as ResizeObserverEntry,
+            ],
+            entry.observer,
+          )
+        })
+        expect(fitView).toHaveBeenCalledWith({ padding: 0.15 })
+        act(() => {
+          const entry = observed as {
+            callback: ResizeObserverCallback
+            observer: ResizeObserver
+            target: Element
+          } | null
+          entry?.callback(
+            [
+              {
+                target: entry.target,
+                contentRect: { width: 400, height: 220 },
+              } as ResizeObserverEntry,
+            ],
+            entry.observer,
+          )
+        })
+        expect(fitView).toHaveBeenCalledTimes(1)
+      } finally {
+        vi.unstubAllGlobals()
+      }
+    })
+
+    it('F6 identifies repeated names by project (mutation: omit project name from detail)', async () => {
+      seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])
+      seed(
+        [
+          makeSession({ id: 'a' }),
+          makeSession({ id: 'b', name: 'Same name' }),
+          makeSession({ id: 'c', name: 'Same name', projectId: 'project-2' }),
+        ],
+        [CLAUDE_CODE],
+      )
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(
+        await screen.findByRole('button', { name: /Add conversation/ }),
+      )
+      const panel = await screen.findByRole('region', {
+        name: 'Add conversations',
+      })
+      expect(
+        within(panel).queryAllByText(
+          /claude-code · claude-opus-5 · (Convergence|Emergence)/,
+        ),
+      ).toHaveLength(2)
     })
   })
 })

@@ -1,0 +1,660 @@
+/**
+ * Where a route leaves and arrives, and how it gets between the two (R11).
+ *
+ * Pure, and deliberately ignorant of React Flow: routing is geometry, and
+ * geometry is the one part of a canvas that can be reasoned about without a
+ * browser. Everything here is a function of rectangles and points, so the
+ * hard promises — *deterministic*, *clear of unrelated cards* — are provable
+ * without measuring anything.
+ */
+
+/** A card, as far as routing is concerned. */
+export interface RouteRect {
+  /** The node this rectangle belongs to, so a route can ignore its own ends. */
+  id: string
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export type RouteSide = 'left' | 'right' | 'top' | 'bottom'
+
+export interface RoutePoint {
+  x: number
+  y: number
+}
+
+/**
+ * Which sides a route should use, from where the two cards actually are.
+ *
+ * Position rather than column, deliberately: cards move now (R10), so a
+ * layout column stopped describing the picture the moment somebody dragged
+ * one. A wire drawn from a column heuristic on a rearranged canvas leaves the
+ * wrong edge and reads as a mistake.
+ *
+ * The dominant axis wins — the bigger of the horizontal and vertical gaps —
+ * because that is the direction the eye already reads the pair in. Ties go to
+ * horizontal, which is how this canvas has always laid a flow out.
+ */
+export function chooseRouteSides(
+  source: RouteRect,
+  target: RouteRect,
+): { sourceSide: RouteSide; targetSide: RouteSide } {
+  const sourceCenter = rectCenter(source)
+  const targetCenter = rectCenter(target)
+  const dx = targetCenter.x - sourceCenter.x
+  const dy = targetCenter.y - sourceCenter.y
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx >= 0
+      ? { sourceSide: 'right', targetSide: 'left' }
+      : { sourceSide: 'left', targetSide: 'right' }
+  }
+  return dy >= 0
+    ? { sourceSide: 'bottom', targetSide: 'top' }
+    : { sourceSide: 'top', targetSide: 'bottom' }
+}
+
+export function rectCenter(rect: RouteRect): RoutePoint {
+  return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+}
+
+/** The point on a rectangle's side a route attaches to. */
+export function sidePoint(rect: RouteRect, side: RouteSide): RoutePoint {
+  const center = rectCenter(rect)
+  switch (side) {
+    case 'left':
+      return { x: rect.x, y: center.y }
+    case 'right':
+      return { x: rect.x + rect.width, y: center.y }
+    case 'top':
+      return { x: center.x, y: rect.y }
+    case 'bottom':
+      return { x: center.x, y: rect.y + rect.height }
+  }
+}
+
+/**
+ * How far a route steps away from a card before it turns.
+ *
+ * Enough that an arrowhead is legible against the border and two routes
+ * leaving the same side do not overlap their first segment.
+ */
+export const ROUTE_STUB = 24
+const MIN_LANE_STUB = 8
+
+/**
+ * How coarse the router's grid is.
+ *
+ * Coarse on purpose. A fine grid finds prettier paths and takes long enough
+ * on every drag frame to be felt; this is a diagram of at most a few dozen
+ * cards, and a route that is clearly clear of the cards beats a route that is
+ * two pixels shorter.
+ */
+export const ROUTE_GRID = 20
+
+/** How much a route is willing to travel to avoid one turn. */
+const BEND_PENALTY = 3
+
+/** Breathing room kept around every card the route is not attached to. */
+export const ROUTE_CLEARANCE = 12
+
+function expand(rect: RouteRect, by: number): RouteRect {
+  return {
+    id: rect.id,
+    x: rect.x - by,
+    y: rect.y - by,
+    width: rect.width + by * 2,
+    height: rect.height + by * 2,
+  }
+}
+
+function contains(rect: RouteRect, point: RoutePoint): boolean {
+  return (
+    point.x >= rect.x &&
+    point.x <= rect.x + rect.width &&
+    point.y >= rect.y &&
+    point.y <= rect.y + rect.height
+  )
+}
+
+/**
+ * Whether a straight segment crosses a rectangle.
+ *
+ * Orthogonal only, which is all this router produces — a general
+ * segment/rectangle test would be code answering a question nothing asks.
+ */
+export function segmentHitsRect(
+  from: RoutePoint,
+  to: RoutePoint,
+  rect: RouteRect,
+): boolean {
+  const minX = Math.min(from.x, to.x)
+  const maxX = Math.max(from.x, to.x)
+  const minY = Math.min(from.y, to.y)
+  const maxY = Math.max(from.y, to.y)
+  return (
+    maxX > rect.x &&
+    minX < rect.x + rect.width &&
+    maxY > rect.y &&
+    minY < rect.y + rect.height
+  )
+}
+
+/**
+ * Which way the search is travelling.
+ *
+ * Its own type rather than `RouteSide`, because a SIDE is a face of a card and
+ * a HEADING is a direction of travel; they have four members each and mean
+ * different things, and casting one to the other is how a comment ends up
+ * lying about what a value is.
+ */
+type RouteHeading = 'east' | 'south' | 'west' | 'north'
+
+interface GridNode {
+  x: number
+  y: number
+  /** Which way the route was travelling when it arrived, for the bend cost. */
+  heading: RouteHeading | null
+  cost: number
+}
+
+function key(x: number, y: number, heading: RouteHeading | null): string {
+  return `${x}:${y}:${heading ?? '-'}`
+}
+
+const STEPS: { heading: RouteHeading; dx: number; dy: number }[] = [
+  // Iterated in a FIXED order, which is half of what makes the router
+  // deterministic: two paths of equal cost are separated by this order and by
+  // nothing else, so the same inputs always produce the same route.
+  { heading: 'east', dx: 1, dy: 0 },
+  { heading: 'south', dx: 0, dy: 1 },
+  { heading: 'west', dx: -1, dy: 0 },
+  { heading: 'north', dx: 0, dy: -1 },
+]
+
+/**
+ * An orthogonal route from one card to another that stays clear of the rest.
+ *
+ * A uniform-cost search over a coarse grid, with a penalty per turn so the
+ * result reads as a drawn line rather than a staircase. Returns the corner
+ * points, start and end included; the render step rounds the corners.
+ *
+ * **Deterministic by construction, not by luck.** The grid is derived from
+ * the inputs, the four directions are tried in a fixed order, and the
+ * frontier is sorted stably — so two routes of equal cost are separated by
+ * something fixed rather than by whatever order a `Map` happened to hold. The
+ * obstacle list's order cannot matter either: every use of it asks whether
+ * ANY rectangle blocks a step. A route that changed on re-render would make
+ * the canvas twitch on every unrelated state change.
+ *
+ * Returns `null` when it cannot get through, which is a real answer: the
+ * caller falls back to the plain side-selected curve rather than drawing a
+ * route through a card.
+ */
+interface RouteInput {
+  source: RouteRect
+  target: RouteRect
+  sourceSide: RouteSide
+  targetSide: RouteSide
+  /** Every card on the canvas; the two endpoints are ignored automatically. */
+  obstacles: readonly RouteRect[]
+  /** Safety valve: a grid this big means the picture is not worth routing. */
+  maxNodes?: number
+  /** Space reserved on each side of the centerline for opposed wires. */
+  laneSpace?: number
+}
+
+export function routeAround(input: RouteInput): RoutePoint[] | null {
+  const laneSpace = input.laneSpace ?? 0
+  const startDistance = Math.min(
+    ROUTE_STUB,
+    freeGap(input.source, input.sourceSide, input.obstacles) / 2,
+  )
+  const endDistance = Math.min(
+    ROUTE_STUB,
+    freeGap(input.target, input.targetSide, input.obstacles) / 2,
+  )
+  const start = stubPoint(input.source, input.sourceSide, startDistance)
+  const end = stubPoint(input.target, input.targetSide, endDistance)
+
+  // Order-insensitive by construction rather than by sorting: every use of
+  // this list asks "does ANY of these block me", which is the same answer
+  // whatever order they arrive in. An earlier draft sorted them by id to make
+  // the router deterministic — the sort turned out to change nothing, and a
+  // line whose removal leaves every test green is a line that was decorating
+  // the promise instead of keeping it. The promise is kept by the fixed
+  // direction order and the stable frontier sort below; the test that hands
+  // the same cards in reverse pins that this list's order stays irrelevant.
+  const blockers = input.obstacles
+    .filter(
+      (rect) => rect.id !== input.source.id && rect.id !== input.target.id,
+    )
+    .map((rect) => expand(rect, ROUTE_CLEARANCE + laneSpace))
+
+  // The straight-ish answer first: if one bend does it, no search is needed
+  // and the result is the most readable route there is.
+  const direct = orthogonalCandidates(start, end)
+  for (const candidate of direct) {
+    if (!pathHits(candidate, blockers)) {
+      return [
+        sidePoint(input.source, input.sourceSide),
+        ...candidate,
+        sidePoint(input.target, input.targetSide),
+      ]
+    }
+  }
+
+  const bounds = routeSearchBounds([input.source, input.target, ...blockers])
+  const maxNodes = input.maxNodes ?? 20_000
+
+  // Keep the exact stub coordinates in the grid. Rounding a short stub to
+  // a cell can lengthen it into the next card's clearance or reverse it.
+  const xs = gridAxis(bounds.minX, bounds.maxX, start.x, end.x)
+  const ys = gridAxis(bounds.minY, bounds.maxY, start.y, end.y)
+  const startCell = start
+  const endCell = end
+
+  const queue: GridNode[] = [{ ...startCell, heading: null, cost: 0 }]
+  const seen = new Map<string, number>()
+  const cameFrom = new Map<string, GridNode | null>()
+  seen.set(key(startCell.x, startCell.y, null), 0)
+  cameFrom.set(key(startCell.x, startCell.y, null), null)
+
+  let visited = 0
+  while (queue.length > 0) {
+    // A sorted frontier rather than a heap: the grid is coarse and the
+    // frontier stays small, and a stable sort keeps equal-cost ties resolved
+    // by insertion order — which is the determinism promise again.
+    queue.sort((a, b) => a.cost - b.cost)
+    const current = queue.shift() as GridNode
+    visited += 1
+    if (visited > maxNodes) return null
+
+    if (current.x === endCell.x && current.y === endCell.y) {
+      const corners = reconstruct(current, cameFrom)
+      return [
+        sidePoint(input.source, input.sourceSide),
+        ...corners,
+        sidePoint(input.target, input.targetSide),
+      ]
+    }
+
+    for (const step of STEPS) {
+      const next = {
+        x: step.dx === 0 ? current.x : xs[xs.indexOf(current.x) + step.dx],
+        y: step.dy === 0 ? current.y : ys[ys.indexOf(current.y) + step.dy],
+      }
+      if (
+        next.x === undefined ||
+        next.y === undefined ||
+        next.x < bounds.minX ||
+        next.x > bounds.maxX ||
+        next.y < bounds.minY ||
+        next.y > bounds.maxY
+      ) {
+        continue
+      }
+      if (blockers.some((rect) => segmentHitsRect(current, next, rect))) {
+        continue
+      }
+      const turned =
+        current.heading !== null && current.heading !== step.heading
+      const cost =
+        current.cost +
+        distance(current, next) +
+        (turned ? BEND_PENALTY * ROUTE_GRID : 0)
+      const nextKey = key(next.x, next.y, step.heading)
+      const best = seen.get(nextKey)
+      if (best !== undefined && best <= cost) continue
+      seen.set(nextKey, cost)
+      cameFrom.set(nextKey, current)
+      queue.push({ ...next, heading: step.heading, cost })
+    }
+  }
+
+  return null
+}
+
+/** Where a route stands off from the card before it starts turning. */
+function stubPoint(rect: RouteRect, side: RouteSide, by: number): RoutePoint {
+  const point = sidePoint(rect, side)
+  switch (side) {
+    case 'left':
+      return { x: point.x - by, y: point.y }
+    case 'right':
+      return { x: point.x + by, y: point.y }
+    case 'top':
+      return { x: point.x, y: point.y - by }
+    case 'bottom':
+      return { x: point.x, y: point.y + by }
+  }
+}
+
+/** The two one-bend routes between two points, in a fixed order. */
+function orthogonalCandidates(
+  start: RoutePoint,
+  end: RoutePoint,
+): RoutePoint[][] {
+  if (start.x === end.x || start.y === end.y) return [[start, end]]
+  return [
+    [start, { x: end.x, y: start.y }, end],
+    [start, { x: start.x, y: end.y }, end],
+  ]
+}
+
+function pathHits(
+  path: readonly RoutePoint[],
+  blockers: readonly RouteRect[],
+): boolean {
+  for (let index = 0; index < path.length - 1; index += 1) {
+    for (const rect of blockers) {
+      if (segmentHitsRect(path[index], path[index + 1], rect)) return true
+    }
+  }
+  return false
+}
+
+export function routeSearchBounds(rects: readonly RouteRect[]): {
+  minX: number
+  maxX: number
+  minY: number
+  maxY: number
+} {
+  const pad = ROUTE_GRID * 4
+  let minX = Infinity
+  let maxX = -Infinity
+  let minY = Infinity
+  let maxY = -Infinity
+  for (const rect of rects) {
+    minX = Math.min(minX, rect.x)
+    maxX = Math.max(maxX, rect.x + rect.width)
+    minY = Math.min(minY, rect.y)
+    maxY = Math.max(maxY, rect.y + rect.height)
+  }
+  return {
+    minX: minX - pad,
+    maxX: maxX + pad,
+    minY: minY - pad,
+    maxY: maxY + pad,
+  }
+}
+
+/** Grid lines plus exact endpoints, so short stubs survive the search. */
+function gridAxis(
+  min: number,
+  max: number,
+  start: number,
+  end: number,
+): number[] {
+  const values = new Set([start, end])
+  for (let value = min; value <= max; value += ROUTE_GRID) values.add(value)
+  return [...values].sort((a, b) => a - b)
+}
+
+/** Free distance along the outward ray to the nearest other card. */
+function freeGap(
+  rect: RouteRect,
+  side: RouteSide,
+  obstacles: readonly RouteRect[],
+): number {
+  const point = sidePoint(rect, side)
+  let gap = Infinity
+  for (const other of obstacles) {
+    if (other.id === rect.id) continue
+    if (side === 'top' || side === 'bottom') {
+      if (point.x < other.x || point.x > other.x + other.width) continue
+      const candidate =
+        side === 'bottom' ? other.y - point.y : point.y - other.y - other.height
+      if (candidate >= 0) gap = Math.min(gap, candidate)
+    } else {
+      if (point.y < other.y || point.y > other.y + other.height) continue
+      const candidate =
+        side === 'right' ? other.x - point.x : point.x - other.x - other.width
+      if (candidate >= 0) gap = Math.min(gap, candidate)
+    }
+  }
+  return gap
+}
+
+/** Two bounded attempts; narrow legacy gaps share the unoffset centre route. */
+export function routeCanvasEdge(
+  input: Omit<RouteInput, 'sourceSide' | 'targetSide' | 'laneSpace'> & {
+    opposed?: boolean
+  },
+): { points: RoutePoint[]; shared: boolean } | null {
+  const reverse = Boolean(input.opposed && input.source.id > input.target.id)
+  const source = reverse ? input.target : input.source
+  const target = reverse ? input.source : input.target
+  const first = chooseRouteSides(source, target)
+  const perpendicular: Record<RouteSide, RouteSide> = {
+    top: 'left',
+    bottom: 'right',
+    left: 'top',
+    right: 'bottom',
+  }
+  const attempts = [
+    first,
+    {
+      sourceSide: perpendicular[first.sourceSide],
+      targetSide: perpendicular[first.targetSide],
+    },
+  ]
+  const requestedLaneSpace = input.opposed ? ROUTE_GRID / 2 : 0
+  for (const sides of attempts) {
+    const hostsLanes = (rect: RouteRect, side: RouteSide) => {
+      const gap = freeGap(rect, side, input.obstacles)
+      const centre = Math.min(ROUTE_STUB, gap / 2)
+      return (
+        centre - requestedLaneSpace >= MIN_LANE_STUB &&
+        centre + requestedLaneSpace <= gap - ROUTE_CLEARANCE
+      )
+    }
+    const laneSpace =
+      hostsLanes(source, sides.sourceSide) &&
+      hostsLanes(target, sides.targetSide)
+        ? requestedLaneSpace
+        : 0
+    const center = routeAround({
+      ...input,
+      source,
+      target,
+      ...sides,
+      laneSpace,
+    })
+    if (!center) continue
+    const lanes = laneSpace
+      ? [
+          offsetRoute(simplify(center), laneSpace),
+          offsetRoute(simplify(center), -laneSpace),
+        ]
+      : [center]
+    const blockers = input.obstacles
+      .filter((rect) => rect.id !== source.id && rect.id !== target.id)
+      .map((rect) => expand(rect, ROUTE_CLEARANCE))
+    // Both directions must accept the same centerline. An offset that clips
+    // a corner rejects this attempt for the pair, so the retry stays shared.
+    if (lanes.some((lane) => pathHits(lane, blockers))) continue
+    const route = lanes[reverse && laneSpace ? 1 : 0]
+    return {
+      points: simplify(reverse ? route.reverse() : route),
+      shared: Boolean(input.opposed && !laneSpace),
+    }
+  }
+  return null
+}
+
+/** Parallel orthogonal lanes, with their ends slid along the chosen sides. */
+function offsetRoute(points: readonly RoutePoint[], by: number): RoutePoint[] {
+  const normals = points.slice(1).map((point, index) => {
+    const previous = points[index]
+    const length = distance(previous, point)
+    return {
+      x: -(point.y - previous.y) / length,
+      y: (point.x - previous.x) / length,
+    }
+  })
+  return points.map((point, index) => {
+    const before = normals[Math.max(0, index - 1)]
+    const after = normals[Math.min(normals.length - 1, index)]
+    return {
+      x: point.x + by * (before.x || after.x),
+      y: point.y + by * (before.y || after.y),
+    }
+  })
+}
+
+/** The corners of the found path, with the straight runs collapsed. */
+function reconstruct(
+  end: GridNode,
+  cameFrom: Map<string, GridNode | null>,
+): RoutePoint[] {
+  const points: RoutePoint[] = []
+  let node: GridNode | null = end
+  while (node) {
+    points.unshift({ x: node.x, y: node.y })
+    node = cameFrom.get(key(node.x, node.y, node.heading)) ?? null
+  }
+  return simplify(points)
+}
+
+/**
+ * Collapses a grid walk into corners.
+ *
+ * The search returns one point per cell; a line with forty points in it is
+ * forty chances for a rounding step to wobble. What a reader sees is the
+ * turns.
+ */
+export function simplify(walk: readonly RoutePoint[]): RoutePoint[] {
+  const points = walk.filter(
+    (point, index) =>
+      index === 0 ||
+      point.x !== walk[index - 1].x ||
+      point.y !== walk[index - 1].y,
+  )
+  if (points.length <= 2) return [...points]
+  const corners: RoutePoint[] = [points[0]]
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const previous = points[index - 1]
+    const current = points[index]
+    const next = points[index + 1]
+    const straight =
+      (previous.x === current.x && current.x === next.x) ||
+      (previous.y === current.y && current.y === next.y)
+    if (!straight) corners.push(current)
+  }
+  corners.push(points[points.length - 1])
+  return corners
+}
+
+/**
+ * The SVG path for a set of corners, with the turns rounded.
+ *
+ * Rounded orthogonal geometry is the shape Marcin picked, and it is a render
+ * concern rather than a routing one: the router answers *where*, this answers
+ * *how it is drawn*.
+ */
+export function routePath(points: readonly RoutePoint[], radius = 8): string {
+  if (points.length === 0) return ''
+  if (points.length === 1) return `M ${points[0].x},${points[0].y}`
+
+  let path = `M ${points[0].x},${points[0].y}`
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const previous = points[index - 1]
+    const corner = points[index]
+    const next = points[index + 1]
+    // Never round more than half a segment, or two close corners eat each
+    // other and the line visibly detaches from its own path.
+    const inLength = distance(previous, corner)
+    const outLength = distance(corner, next)
+    const r = Math.min(radius, inLength / 2, outLength / 2)
+    const enter = towards(corner, previous, r)
+    const leave = towards(corner, next, r)
+    path += ` L ${enter.x},${enter.y} Q ${corner.x},${corner.y} ${leave.x},${leave.y}`
+  }
+  const last = points[points.length - 1]
+  path += ` L ${last.x},${last.y}`
+  return path
+}
+
+function distance(a: RoutePoint, b: RoutePoint): number {
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y)
+}
+
+function towards(from: RoutePoint, to: RoutePoint, by: number): RoutePoint {
+  const total = distance(from, to)
+  if (total === 0) return { ...from }
+  const ratio = by / total
+  return {
+    x: from.x + (to.x - from.x) * ratio,
+    y: from.y + (to.y - from.y) * ratio,
+  }
+}
+
+/**
+ * Where a route's label sits: the middle of its longest straight run.
+ *
+ * A label on a corner is a label on top of the turn it is describing, and a
+ * label at the midpoint of the whole path lands wherever the path happens to
+ * be bending.
+ */
+export function routeLabelPoint(points: readonly RoutePoint[]): RoutePoint {
+  if (points.length === 0) return { x: 0, y: 0 }
+  if (points.length === 1) return { ...points[0] }
+
+  let bestIndex = 0
+  let bestLength = -1
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const length = distance(points[index], points[index + 1])
+    if (length > bestLength) {
+      bestLength = length
+      bestIndex = index
+    }
+  }
+  const from = points[bestIndex]
+  const to = points[bestIndex + 1]
+  return { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 }
+}
+
+/** Whether any point of a route lies inside a rectangle. Test helper shape. */
+export function routeEntersRect(
+  points: readonly RoutePoint[],
+  rect: RouteRect,
+): boolean {
+  for (let index = 0; index < points.length - 1; index += 1) {
+    if (segmentHitsRect(points[index], points[index + 1], rect)) return true
+  }
+  return points.some((point) => contains(rect, point))
+}
+
+/** Labels sit outside opposed lanes, or stack above/below a shared route. */
+export function routeLabelLayout(
+  points: readonly RoutePoint[],
+  opposed: boolean,
+  sharedDirection?: 'forward' | 'reverse',
+): { point: RoutePoint; translate: string } {
+  // Both directions use the canonical segment, including equal-length ties.
+  // Separate shared labels along its normal, so bypass legs work in either axis.
+  const reverse = sharedDirection === 'reverse'
+  const walk = reverse ? [...points].reverse() : points
+  const point = routeLabelPoint(walk)
+  if (!opposed || walk.length < 2) return { point, translate: '-50%, -50%' }
+  let longest = 0
+  for (let index = 1; index < walk.length - 1; index += 1) {
+    if (
+      distance(walk[index], walk[index + 1]) >
+      distance(walk[longest], walk[longest + 1])
+    )
+      longest = index
+  }
+  const from = walk[longest],
+    to = walk[longest + 1]
+  const separation = sharedDirection ? (reverse ? 3 : -3) : 6
+  const dx = -Math.sign(to.y - from.y) * separation
+  const dy = Math.sign(to.x - from.x) * separation
+  return {
+    point: { x: point.x + dx, y: point.y + dy },
+    translate: `${dx < 0 ? '-100%' : dx > 0 ? '0%' : '-50%'}, ${dy < 0 ? '-100%' : dy > 0 ? '0%' : '-50%'}`,
+  }
+}

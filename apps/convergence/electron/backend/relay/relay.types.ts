@@ -44,9 +44,11 @@ export interface RelaySpawnSpec {
  * forbidden. There is deliberately no member for "the wire was disarmed" --
  * a switch at rest never fires, so it has no outcome to name.
  *
- * `skipped-already-fired` is the loop law working rather than anything going
- * wrong: a wire fires at most once per flow run, so the second time round a
- * loop it declines quietly and stays armed for the next run.
+ * `skipped-already-fired` is NOT in this list, and its absence is the lap law
+ * (R2, RUN45): a wire that already carried the run may carry it again, one
+ * lap higher, so there is no second-time-round refusal left to write. The
+ * word stays readable everywhere a stored outcome is read -- the ledger is a
+ * historical record and the rows this build stopped writing are still rows.
  *
  * `skipped-muted` is the human working: they sent that turn quiet (F10), so
  * the wire declined and stays armed for the next one. It writes a row for the
@@ -60,6 +62,13 @@ export interface RelaySpawnSpec {
  * `skipped-round-budget` is the loop having gone too far without reaching a
  * human. Unlike `skipped-budget` it disarms nothing: a long loop needs eyes,
  * not a switch thrown, and Marcin is hailed in the same breath.
+ *
+ * `skipped-no-message` is the settle having nothing to carry: a tool-only
+ * turn, or one that ended without assistant text. A SKIP rather than an
+ * `error`, because nothing was owed and so nothing failed -- and because
+ * `error` now calls the chair, writing one here would file a delivery-failure
+ * on every armed wire of every human-driven crewed session whose turn ends
+ * quiet.
  */
 export type RelayHopOutcome =
   | 'delivered'
@@ -68,9 +77,9 @@ export type RelayHopOutcome =
   | 'skipped-failed'
   | 'skipped-budget'
   | 'skipped-round-budget'
-  | 'skipped-already-fired'
   | 'skipped-muted'
   | 'skipped-baton'
+  | 'skipped-no-message'
   | 'error'
 
 /**
@@ -148,6 +157,23 @@ export interface RelayHop {
    */
   roundNumber: number | null
   /**
+   * Which generation of THIS WIRE inside the run the hop belonged to (R2).
+   *
+   * A per-wire number, deliberately, because that is the only definition of
+   * "lap" that survives a graph which is not one ring: a fan-out gives
+   * several wires the same lap, a branch that never returns simply never
+   * reaches lap 2, and a ring of N wires yields N deliveries per lap. The
+   * round beside it is the crew's delivery index and keeps climbing across
+   * laps; the two answer different questions and neither can be derived from
+   * the other.
+   *
+   * Null on rows written before laps existed, and on the two rows that are
+   * facts about the SETTLE rather than beats of the loop. `readLapNumber`
+   * derives the value for a null row from the ledger by the same rule that
+   * produced the stored ones, so legacy history groups identically.
+   */
+  lapNumber: number | null
+  /**
    * When the station this hop landed work in came to rest, or null while it
    * still owes the hop.
    *
@@ -162,11 +188,11 @@ export interface RelayHop {
   /**
    * The delivery receipt (MAR-2759): the dispatch id the session layer minted
    * for the input this hop carried, or null on rows written before receipts
-   * existed. `markStationSettled` stamps a hop only when a settle NAMES this
-   * id -- the causal fact stated by the one layer that knows which turn
-   * consumed which input, instead of counted or guessed from status
-   * snapshots. Durable beside the stamp it governs, so a restart cannot split
-   * the two.
+   * existed. For this build's receipted rows, `markStationSettled` stamps a
+   * hop when a settle NAMES this id -- the causal fact stated by the layer
+   * that knows which turn consumed which input. A legacy null-receipt row
+   * can still be stamped by the fired-at floor. The receipt stays durable
+   * beside the stamp it governs, so a restart cannot split the two.
    */
   dispatchId: string | null
   /**
@@ -272,6 +298,7 @@ export function relayHopFromRow(row: RelayHopRow): RelayHop {
     payloadPreview: row.payload_preview,
     baton: row.baton ?? null,
     roundNumber: row.round_number ?? null,
+    lapNumber: row.lap_number ?? null,
     settledAt: row.settled_at ?? null,
     settledStatus: row.settled_status ?? null,
     // Null is the honest reading for a row written before receipts existed:

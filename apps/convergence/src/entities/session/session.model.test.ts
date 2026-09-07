@@ -876,6 +876,7 @@ describe('loadProviderCatalog (MAR-2682)', () => {
       vendorLabel: id,
       kind,
       supportsContinuation: true,
+      supportsConversationReset: false,
       defaultModelId: '',
       modelOptions: [],
       attachments: {
@@ -1140,6 +1141,7 @@ describe('selectLocalProviders (MAR-2682)', () => {
           vendorLabel: 'Anthropic',
           kind: 'conversation',
           supportsContinuation: true,
+          supportsConversationReset: false,
           defaultModelId: 'sonnet',
           modelOptions: [],
           attachments: {

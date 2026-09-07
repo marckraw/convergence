@@ -2,6 +2,7 @@ import type { CrewHail } from '@/entities/crew-hail'
 import type { RelayAction, SessionRelay } from '@/entities/session-relay'
 import type { SessionCrewGroup } from './session-crew-groups.pure'
 import type { SessionCard } from './mission-control.types'
+import { MIN_CARD_GAP } from './canvas-collision.pure'
 
 /**
  * Canvas geometry, in the same units React Flow uses.
@@ -14,9 +15,9 @@ export const CANVAS_NODE_WIDTH = 260
 export const CANVAS_NODE_HEIGHT = 108
 export const CANVAS_SPAWN_NODE_HEIGHT = 64
 const COLUMN_GAP = 120
-const ROW_GAP = 40
+const ROW_GAP = MIN_CARD_GAP
 const CLUSTER_PADDING_X = 20
-const CLUSTER_PADDING_TOP = 44
+export const CANVAS_CLUSTER_PADDING_TOP = 44
 const CLUSTER_PADDING_BOTTOM = 20
 const CLUSTER_GAP = 48
 
@@ -132,10 +133,21 @@ export interface CanvasCrewCluster {
   accentColor: string | null
   /** This crew's loop is stopped and asking for him: the frame goes amber. */
   parked: boolean
+  /** The drawn frame's top-left corner, which grows to hold what it contains. */
   x: number
   y: number
   width: number
   height: number
+  /**
+   * Where this crew's STORED card coordinates are measured from.
+   *
+   * The frame stays at its slot's top; upward overhang moves the origin down
+   * inside that slot. Reading a drop against this origin preserves its stored
+   * coordinates even after the frame grows. Horizontal overhang moves only
+   * the frame's left edge, so originX remains zero.
+   */
+  originX: number
+  originY: number
 }
 
 export interface CanvasGraph {
@@ -310,6 +322,35 @@ export function buildCanvasGraph(
     let widestColumn = 0
     let tallestColumn = 0
 
+    // Positions the crew remembers (R10). Read once for the whole cluster
+    // rather than per card, and only for members that carry BOTH coordinates:
+    // half a position is not a position.
+    const storedPositions = new Map<string, { x: number; y: number }>()
+    for (const member of crew.members) {
+      if (member.canvasX === null || member.canvasY === null) continue
+      storedPositions.set(member.sessionId, {
+        x: member.canvasX,
+        y: member.canvasY,
+      })
+    }
+
+    // The frame owns its slot. Absorb upward overhang by moving the origin
+    // down inside it, so no crew can grow into the crew above (M-b).
+    let top = 0
+    for (const stored of storedPositions.values()) {
+      top = Math.min(top, stored.y - CANVAS_CLUSTER_PADDING_TOP)
+    }
+    const originY = clusterTop - top
+
+    /**
+     * Where a card sits, when nobody has moved it.
+     *
+     * The automatic walk is still the answer for every unplaced thing, and it
+     * still has to reserve a slot even for a card that WAS moved -- otherwise
+     * arranging one card would slide every unmoved card beside it, and a
+     * layout that rearranges itself when you touch something else is a layout
+     * you cannot trust.
+     */
     const place = (id: string): { x: number; y: number } => {
       const column = columns.get(id) ?? 0
       const row = rowsByColumn.get(column) ?? 0
@@ -319,18 +360,24 @@ export function buildCanvasGraph(
       return {
         x: CLUSTER_PADDING_X + column * (CANVAS_NODE_WIDTH + COLUMN_GAP),
         y:
-          clusterTop +
-          CLUSTER_PADDING_TOP +
+          originY +
+          CANVAS_CLUSTER_PADDING_TOP +
           row * (CANVAS_NODE_HEIGHT + ROW_GAP),
       }
     }
 
     for (const card of group.cards) {
+      // The slot is claimed either way, then overridden -- see `place`.
+      const laidOut = place(card.session.id)
+      const stored = storedPositions.get(card.session.id)
       nodes.push({
         id: card.session.id,
         crewId: crew.id,
         card,
-        ...place(card.session.id),
+        // Stored positions are relative to the crew origin. Project them
+        // onto the canvas and invert through `crewLocalPosition` on drop.
+        x: stored ? stored.x : laidOut.x,
+        y: stored ? originY + stored.y : laidOut.y,
       })
     }
 
@@ -406,15 +453,34 @@ export function buildCanvasGraph(
       })
     }
 
-    const width =
+    // The frame's four edges, in the layout's own coordinates: the walk's area
+    // first, then stretched to hold anything arranged outside it.
+    let left = 0
+    let right =
       CLUSTER_PADDING_X * 2 +
       (widestColumn + 1) * CANVAS_NODE_WIDTH +
       widestColumn * COLUMN_GAP
-    const height =
-      CLUSTER_PADDING_TOP +
+    let bottom =
+      CANVAS_CLUSTER_PADDING_TOP +
       CLUSTER_PADDING_BOTTOM +
       tallestColumn * CANVAS_NODE_HEIGHT +
       (tallestColumn - 1) * ROW_GAP
+
+    // A moved card can land outside the frame the walk would have drawn, and
+    // a card sitting on top of its own crew's border reads as a card that has
+    // fallen out of the crew. The frame grows to hold what it contains -- on
+    // all four sides, because a card can be dragged up and left as easily as
+    // down and right (L6).
+    for (const stored of storedPositions.values()) {
+      left = Math.min(left, stored.x - CLUSTER_PADDING_X)
+      right = Math.max(right, stored.x + CANVAS_NODE_WIDTH + CLUSTER_PADDING_X)
+      bottom = Math.max(
+        bottom,
+        stored.y + CANVAS_NODE_HEIGHT + CLUSTER_PADDING_BOTTOM,
+      )
+    }
+
+    const height = bottom - top
 
     clusters.push({
       crewId: crew.id,
@@ -422,10 +488,12 @@ export function buildCanvasGraph(
       emoji: crew.emoji,
       accentColor: crew.accentColor,
       parked: openHails.length > 0,
-      x: 0,
+      x: left,
       y: clusterTop,
-      width,
+      width: right - left,
       height,
+      originX: 0,
+      originY,
     })
 
     // ONE dashed edge for all three safety nets, from the frame rather than
@@ -447,6 +515,7 @@ export function buildCanvasGraph(
       })
     }
 
+    // The next slot clears the entire frame, including upward overhang.
     clusterTop += height + CLUSTER_GAP
   }
 
@@ -491,3 +560,23 @@ export function formatSpawnNodeSpec(
 /** What the canvas says when the room has crews but none of them are drawable. */
 export const EMPTY_CANVAS_MESSAGE =
   'No crewed sessions to draw. The canvas shows crews and the wires between them — put sessions in a crew to see them here.'
+
+/**
+ * A dropped card's absolute canvas position, in the coordinates the crew
+ * stores.
+ *
+ * Clusters stack down the canvas, so an absolute y means nothing on its own:
+ * inserting a crew above would move every card below it. Storing the offset
+ * from the crew's own origin keeps an arrangement true wherever its crew ends
+ * up.
+ *
+ * The ORIGIN, not the drawn corner: the border stretches to hold a card
+ * arranged outside the walk's area, and measuring against a moving edge would
+ * change what a stored coordinate means every time the frame grew.
+ */
+export function crewLocalPosition(
+  absolute: { x: number; y: number },
+  cluster: Pick<CanvasCrewCluster, 'originX' | 'originY'>,
+): { x: number; y: number } {
+  return { x: absolute.x - cluster.originX, y: absolute.y - cluster.originY }
+}

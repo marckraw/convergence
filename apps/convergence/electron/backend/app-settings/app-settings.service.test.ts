@@ -41,6 +41,7 @@ function buildDescriptors(): ProviderDescriptor[] {
       vendorLabel: 'Anthropic',
       kind: 'conversation',
       supportsContinuation: true,
+      supportsConversationReset: false,
       defaultModelId: 'sonnet',
       fastModelId: 'haiku',
       modelOptions: [
@@ -85,6 +86,7 @@ function buildDescriptors(): ProviderDescriptor[] {
       vendorLabel: 'OpenAI',
       kind: 'conversation',
       supportsContinuation: true,
+      supportsConversationReset: false,
       defaultModelId: 'gpt-5.6',
       modelOptions: [
         {
@@ -136,6 +138,7 @@ function buildPiDescriptor(): ProviderDescriptor {
     vendorLabel: 'Pi',
     kind: 'conversation',
     supportsContinuation: true,
+    supportsConversationReset: false,
     defaultModelId: 'openrouter/custom',
     modelOptions: [
       {

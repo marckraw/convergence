@@ -40,6 +40,7 @@ function provider(id: string, kind: ProviderInfo['kind'] = 'conversation') {
     vendorLabel: id,
     kind,
     supportsContinuation: true,
+    supportsConversationReset: false,
     defaultModelId: 'm1',
     modelOptions: [],
     attachments: {

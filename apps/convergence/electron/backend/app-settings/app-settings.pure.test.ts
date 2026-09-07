@@ -41,6 +41,7 @@ function buildDescriptors(): ProviderDescriptor[] {
       vendorLabel: 'Anthropic',
       kind: 'conversation',
       supportsContinuation: true,
+      supportsConversationReset: false,
       defaultModelId: 'sonnet',
       modelOptions: [
         {
@@ -74,6 +75,7 @@ function buildDescriptors(): ProviderDescriptor[] {
       vendorLabel: 'Pi',
       kind: 'conversation',
       supportsContinuation: true,
+      supportsConversationReset: false,
       defaultModelId: 'openrouter/custom',
       modelOptions: [
         {

@@ -69,4 +69,16 @@ export function registerCrewIpcHandlers(deps: {
     (_event, crewId: string, sessionId: string, batonName: string | null) =>
       mutate(() => service.setMemberBatonName(crewId, sessionId, batonName)),
   )
+
+  // Where a card was dropped (R10). A mutation like every other in this file,
+  // so a second window showing the same crew moves the card too.
+  ipcMain.handle(
+    'crew:setMemberPosition',
+    (
+      _event,
+      crewId: string,
+      sessionId: string,
+      position: { x: number; y: number } | null,
+    ) => mutate(() => service.setMemberPosition(crewId, sessionId, position)),
+  )
 }

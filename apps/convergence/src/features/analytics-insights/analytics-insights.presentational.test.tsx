@@ -113,6 +113,7 @@ const providers = [
     vendorLabel: 'OpenAI',
     kind: 'conversation' as const,
     supportsContinuation: true,
+    supportsConversationReset: false,
     defaultModelId: 'gpt-5.4',
     modelOptions: [
       {

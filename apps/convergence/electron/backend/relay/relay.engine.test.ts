@@ -763,53 +763,54 @@ describe('RelayEngine', () => {
       expect(relays.listHops('c1')[0].outcome).toBe('skipped-failed')
     })
 
-    it('calls him when the loop law closes a lap with a baton riding', async () => {
-      // D1, ruled: a cyclic crew closes ONE lap per flow run. The chain ends
-      // at the wire that already fired -- and a station that handed work on
-      // to a wire which cannot carry it has parked, so the closure is LOUD.
-      // A silent stop is the defect class, whoever stops it.
-      batonWire('s1', 's2', 'BATON: s2')
-      batonWire('s2', 's1', 'BATON: s1')
-      const gateway = createGateway({
-        lastMessages: { s1: 'Go.\n\nBATON: s2', s2: 'Back.\n\nBATON: s1' },
-      })
+    /**
+     * R3. A delivery that BROKE used to end a run in silence: the `error` row
+     * hailed nobody, and because a failed send lands no budgeted hop there was
+     * no debt for the stall clock to accuse either. The run simply stopped.
+     *
+     * Mutation that reds it: drop the `outcome === 'error'` branch from
+     * `record()` -- the ledger still shows the error and nobody is told.
+     */
+    it('calls him when a wire could not deliver at all', async () => {
+      wire('s1', 's2')
+      const gateway = createGateway({ missing: ['s2'] })
       const engine = createEngine(gateway)
 
       await engine.handleSettle(settled('s1'))
-      await engine.handleSettle(settleCarried(gateway, 's2'))
-      await engine.handleSettle(settleCarried(gateway, 's1'))
 
-      expect(
-        relays
-          .listHops('c1')
-          .some((hop) => hop.outcome === 'skipped-already-fired'),
-      ).toBe(true)
-      expect(hails.listOpen()).toMatchObject([
-        { reason: 'loop-closed', sessionId: 's1', baton: 's2' },
+      expect(relays.listHops('c1')[0].outcome).toBe('error')
+      const open = hails.listOpen()
+      expect(open).toMatchObject([
+        { reason: 'delivery-failed', sessionId: 's1' },
       ])
+      // The reason is IN the call, because nothing else says it.
+      expect(open[0].detail).toContain('no longer exists')
     })
 
-    it('stays quiet when the loop law ends a chain nobody handed on', async () => {
-      // The other half of the same law: unconditional wires carrying an
-      // ordinary conversation have no baton riding, so the chain ending is
-      // the wire behaving and there is nothing for him to answer.
-      wire('s1', 's2')
-      wire('s2', 's1')
-      const gateway = createGateway({
-        lastMessages: { s1: 'Go.', s2: 'Back.' },
-      })
-      const engine = createEngine(gateway)
+    /**
+     * The same rule from the other end of `fire()`: a spawn that cannot open
+     * its session writes its error through the same helper, so it is loud for
+     * free. That is why the hail lives in `record()` and not at each site.
+     *
+     * Mutation that reds it: raise the hail beside the hail-action's own
+     * `record('error', ...)` calls instead of inside `record`.
+     */
+    it('calls him when a spawn could not open its session', async () => {
+      const engine = createEngine(
+        createGateway({
+          create: () => {
+            throw new Error('Disk is full.')
+          },
+        }),
+      )
+      spawnWire('s1')
 
       await engine.handleSettle(settled('s1'))
-      await engine.handleSettle(settleCarried(gateway, 's2'))
-      await engine.handleSettle(settleCarried(gateway, 's1'))
 
-      expect(
-        relays
-          .listHops('c1')
-          .some((hop) => hop.outcome === 'skipped-already-fired'),
-      ).toBe(true)
-      expect(hails.listOpen()).toHaveLength(0)
+      expect(relays.listHops('c1')[0].outcome).toBe('error')
+      expect(hails.listOpen()).toMatchObject([
+        { reason: 'delivery-failed', sessionId: 's1' },
+      ])
     })
 
     it('calls again when the station parks a second time', async () => {
@@ -837,8 +838,8 @@ describe('RelayEngine', () => {
   describe('the round budget: a long loop asks for a human (MAR-2759)', () => {
     it('holds the wire at the cap, hails, and disarms nothing', async () => {
       loopLimits.c1 = { roundCap: 2, stallMinutes: null }
-      // Three wires in one chain so the run reaches a third hop without the
-      // loop law ending it first.
+      // Three wires in one chain so the run reaches a third hop through
+      // distinct wires rather than laps of one.
       const first = wire('s1', 's2')
       const second = wire('s2', 's3')
       const third = wire('s3', 's1')
@@ -1711,7 +1712,16 @@ describe('RelayEngine', () => {
     })
   })
 
-  it('records an error when the session finished with nothing to carry', async () => {
+  /**
+   * L1. A settle with no assistant text is a tool-only turn, not a broken
+   * delivery: nothing was owed, so nothing failed. Writing `error` there put a
+   * red row on the trail AND -- once `record()` learned to call the chair for
+   * every error row -- filed a delivery-failure call on every armed wire of
+   * every human-driven crewed session whose turn ended without text.
+   *
+   * Mutation that reds it: write `error` for the empty message again.
+   */
+  it('holds quietly when the session finished with nothing to carry', async () => {
     wire()
     const gateway = createGateway({ lastMessages: { s1: null } })
 
@@ -1719,10 +1729,11 @@ describe('RelayEngine', () => {
 
     expect(gateway.sent).toEqual([])
     expect(relays.listHops('c1')[0]).toMatchObject({
-      outcome: 'error',
+      outcome: 'skipped-no-message',
       payloadPreview: null,
     })
     expect(relays.listHops('c1')[0].error).toContain('without an assistant')
+    expect(hails.listOpen()).toHaveLength(0)
   })
 
   it('records an error when the target session is gone', async () => {
@@ -1810,11 +1821,6 @@ describe('RelayEngine', () => {
     expect(runIds.size).toBe(2)
   })
 
-  /**
-   * The loop law. Loops are wanted -- A -> B -> A is our own review loop --
-   * but a chain that has been all the way round has finished, and before this
-   * the only thing that stopped it was twenty real provider turns.
-   */
   describe('the quiet send (F10)', () => {
     it('declines and says so, without carrying anything', async () => {
       wire()
@@ -1872,9 +1878,10 @@ describe('RelayEngine', () => {
       expect(relaysChanged).toBe(0)
     })
 
-    it('does not satisfy the loop law, so the wire may still fire in that run', async () => {
-      // A muted row is not a firing. If it counted, a wire that held once would
-      // be dead for the rest of the run -- silently, and only sometimes.
+    it('does not advance the lap, so the wire stays on the same generation', async () => {
+      // A muted row is not a firing. If it counted, a quiet send would push a
+      // wire a lap forward and spend a delivery -- silently, and only
+      // sometimes.
       const there = wire()
       const gateway = createGateway({})
       const engine = createEngine(gateway)
@@ -1882,17 +1889,17 @@ describe('RelayEngine', () => {
       await engine.handleSettle(settled('s1', 'completed', true))
       const mutedRun = relays.listHops('c1')[0].flowRunId
 
-      expect(relays.hasFiredInFlowRun(there.id, mutedRun)).toBe(false)
+      expect(relays.countWireHopsInFlowRun(there.id, mutedRun)).toBe(0)
       expect(relays.countBudgetedHops(mutedRun)).toBe(0)
+      // And the row itself claims no beat of the run.
+      expect(relays.listHops('c1')[0].lapNumber).toBeNull()
     })
 
-    it('outranks the loop law, so a quiet settle never reads "already fired"', async () => {
-      // Ordering, pinned rather than commented. Everything below the mute guard
-      // is a fact about the flow's state; the mute is the human's explicit
-      // instruction about this settle, so it wins. Otherwise a wire that had
-      // already fired this run would file the human's quiet send as the loop
-      // law working, and the row count for a quiet settle would depend on where
-      // in a chain it happened to land.
+    it('outranks the lap, so a quiet settle never reads as a delivery', async () => {
+      // Ordering, pinned rather than commented. Everything below the mute
+      // guard is a fact about the flow's state; the mute is the human's
+      // explicit instruction about this settle, so it wins. Otherwise the row
+      // count for a quiet settle would depend on where in a run it landed.
       wire('s1', 's2')
       wire('s2', 's1')
       const gateway = createGateway({})
@@ -1900,7 +1907,7 @@ describe('RelayEngine', () => {
 
       await engine.handleSettle(settled('s1'))
       await engine.handleSettle(settled('s2'))
-      // s1 now holds the baton and its wire has already fired in this run.
+      // s1's wire has already carried this crew once by now.
       await engine.handleSettle(settled('s1', 'completed', true))
 
       expect(relays.listHops('c1')[0].outcome).toBe('skipped-muted')
@@ -1983,40 +1990,19 @@ describe('RelayEngine', () => {
     })
   })
 
-  describe('the loop law: once per flow run', () => {
-    it('ends a ping-pong at two real hops with both wires still armed', async () => {
-      const there = wire('s1', 's2')
-      const back = wire('s2', 's1')
-      const gateway = createGateway({})
-      const engine = createEngine(gateway)
-
-      // s1 finishes, hails s2; s2 finishes, hails s1 back; s1 finishes again
-      // -- and that third settle is where the chain has to end.
-      await engine.handleSettle(settled('s1'))
-      await engine.handleSettle(settleCarried(gateway, 's2'))
-      await engine.handleSettle(settleCarried(gateway, 's1'))
-
-      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual(['s2', 's1'])
-
-      const trail = relays.listHops('c1', 100)
-      expect(trail).toHaveLength(3)
-      const runIds = new Set(trail.map((hop) => hop.flowRunId))
-      expect(runIds.size).toBe(1)
-
-      const newest = trail[0]
-      expect(newest.outcome).toBe('skipped-already-fired')
-      expect(newest.relayId).toBe(there.id)
-      expect(newest.error).toContain('already fired in this run')
-
-      // Nothing was disarmed and nothing went red: the law is a pause, not a
-      // failure, and the next run must find both wires live.
-      expect(relays.getById(there.id)!.armed).toBe(true)
-      expect(relays.getById(back.id)!.armed).toBe(true)
-      expect(relaysChanged).toBe(0)
-      expect(trail.some((hop) => hop.outcome === 'skipped-budget')).toBe(false)
-    })
-
-    it('lets each wire of a three-node chain fire once, then stops', async () => {
+  describe('the lap law: a wire fires once per lap, not once per run', () => {
+    /**
+     * THE canary of R2. Before this, a cyclic crew closed exactly one lap per
+     * flow run: the third settle of a ping-pong wrote `skipped-already-fired`
+     * and the chain stopped. Marcin wanted several unattended correction
+     * cycles inside ONE run, so the refusal is gone and the generation is
+     * recorded instead.
+     *
+     * Mutation that reds it: restore the once-per-run refusal in `fire()`
+     * (`if (this.relays.countWireHopsInFlowRun(...) > 0) return`) -- the ring
+     * stops at three hops and the lap sequence never reaches 2.
+     */
+    it('carries a three-wire ring three times as ONE run, numbering the laps', async () => {
       wire('s1', 's2')
       wire('s2', 's3')
       wire('s3', 's1')
@@ -2024,32 +2010,163 @@ describe('RelayEngine', () => {
       const engine = createEngine(gateway)
 
       await engine.handleSettle(settled('s1'))
-      await engine.handleSettle(settleCarried(gateway, 's2'))
-      await engine.handleSettle(settleCarried(gateway, 's3'))
-      await engine.handleSettle(settleCarried(gateway, 's1'))
+      for (const station of ['s2', 's3', 's1', 's2', 's3', 's1', 's2', 's3']) {
+        await engine.handleSettle(settleCarried(gateway, station))
+      }
 
-      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual([
-        's2',
-        's3',
-        's1',
+      const trail = relays.listHops('c1', 100)
+      expect(trail).toHaveLength(9)
+      expect(trail.every((hop) => hop.outcome === 'delivered')).toBe(true)
+      // One run, from the first human settle to the ninth delivery: the
+      // whole point of the change is that this is ONE thing Marcin watches.
+      expect(new Set(trail.map((hop) => hop.flowRunId)).size).toBe(1)
+
+      // Oldest first, so the sequence reads the way the run happened.
+      const chronological = [...trail].reverse()
+      expect(chronological.map((hop) => hop.lapNumber)).toEqual([
+        1, 1, 1, 2, 2, 2, 3, 3, 3,
       ])
-      const outcomes = relays.listHops('c1', 100).map((hop) => hop.outcome)
-      expect(outcomes).toEqual([
-        'skipped-already-fired',
-        'delivered',
-        'delivered',
-        'delivered',
+      // The round keeps its own meaning beside it -- the crew's delivery
+      // index across the whole run -- and neither number can be recovered
+      // from the other.
+      expect(chronological.map((hop) => hop.roundNumber)).toEqual([
+        1, 2, 3, 4, 5, 6, 7, 8, 9,
       ])
+      expect(gateway.sent).toHaveLength(9)
+      // Nothing was disarmed and nothing hailed: a run going round again is
+      // the feature, not an alarm.
+      expect(relaysChanged).toBe(0)
+      expect(hails.listOpen()).toEqual([])
     })
 
     /**
-     * THE regression this design exists for. Before the baton, ancestry was
-     * inferred from the newest hop that ever landed in a session, with no time
-     * bound -- so a hail typed by hand tomorrow would inherit today's finished
-     * run and find every wire "already fired". Dead forever, from a switch the
-     * user can see is armed.
+     * R4: the delivery limit is the CREW's, for the whole run, across every
+     * lap. Returning to the first station resets nothing.
+     *
+     * Mutation that reds it: count only the current lap (pass the wire's own
+     * count to `hasRoundBudget`) -- the sixth delivery goes through and the
+     * refusal never appears.
      */
-    it('fires again when the same session is driven by hand after the chain ended', async () => {
+    it('spends one cumulative delivery limit across every lap', async () => {
+      loopLimits.c1 = { roundCap: 5, stallMinutes: null }
+      wire('s1', 's2')
+      wire('s2', 's3')
+      wire('s3', 's1')
+      const gateway = createGateway({})
+      const engine = createEngine(gateway)
+
+      await engine.handleSettle(settled('s1'))
+      for (const station of ['s2', 's3', 's1', 's2', 's3']) {
+        await engine.handleSettle(settleCarried(gateway, station))
+      }
+
+      const trail = relays.listHops('c1', 100)
+      expect(trail).toHaveLength(6)
+      expect(gateway.sent).toHaveLength(5)
+
+      const refusal = trail[0]
+      expect(refusal.outcome).toBe('skipped-round-budget')
+      // Lap 2 of that wire, round 6 of the crew: the refusal names the run's
+      // own meter, which is exactly the number a per-lap counter would have
+      // reset to 3.
+      expect(refusal.lapNumber).toBe(2)
+      expect(refusal.roundNumber).toBe(6)
+      expect(refusal.error).toContain('5')
+      expect(hails.listOpen().map((hail) => hail.reason)).toEqual([
+        'round-budget',
+      ])
+      // The cap disarms nothing: a long run needs eyes, not a switch thrown.
+      expect(relaysChanged).toBe(0)
+    })
+
+    /**
+     * The other half of "cumulative": a baton that was still held when the
+     * limit tripped cannot spend more when it finally settles. Two wires leave
+     * s1, so the run has a branch whose reply arrives after the meter is
+     * already spent.
+     *
+     * Mutation that reds it: count only the current lap -- the late branch
+     * delivers instead of holding.
+     */
+    it('refuses a branch that settles after the limit was already spent', async () => {
+      loopLimits.c1 = { roundCap: 3, stallMinutes: null }
+      wire('s1', 's2')
+      wire('s1', 's3')
+      const onward = wire('s3', 's1')
+      const gateway = createGateway({})
+      const engine = createEngine(gateway)
+
+      // s1 fans out: one delivery into s2, one into s3.
+      await engine.handleSettle(settled('s1'))
+      const [intoS3] = receiptsFor(gateway, 's3')
+      expect(relays.listHops('c1', 100)).toHaveLength(2)
+
+      // s2 comes back first and its own wire spends the third delivery.
+      wire('s2', 's3')
+      await engine.handleSettle(settleCarried(gateway, 's2'))
+      expect(
+        relays.listHops('c1', 100).filter((hop) => hop.outcome === 'delivered'),
+      ).toHaveLength(3)
+
+      // Only now does the branch that was still owed come back, on the baton
+      // it has held since the fan-out: same run, and nothing left to spend.
+      await engine.handleSettle(settled('s3', 'completed', false, [intoS3]))
+
+      const newest = relays.listHops('c1')[0]
+      expect(newest.relayId).toBe(onward.id)
+      expect(newest.outcome).toBe('skipped-round-budget')
+      expect(newest.flowRunId).toBe(relays.listHops('c1', 100)[1].flowRunId)
+      expect(gateway.sent).toHaveLength(3)
+    })
+
+    /**
+     * A lap is a per-WIRE generation, which is the only definition that
+     * survives a graph that is not one ring: a fan-out's two wires are both
+     * on their first pass in the same settle.
+     *
+     * Mutation that reds it: number laps per crew
+     * (`countBudgetedHopsInCrew` in place of `countWireHopsInFlowRun`) --
+     * the fan-out reads 1 and 2, and the second pass reads 4 and 5.
+     */
+    it('numbers a fan-out per wire, not per crew', async () => {
+      const toB = wire('s1', 's2')
+      const toC = wire('s1', 's3')
+      wire('s2', 's1')
+      const gateway = createGateway({})
+      const engine = createEngine(gateway)
+
+      await engine.handleSettle(settled('s1'))
+      const firstPass = relays.listHops('c1', 100)
+      expect(firstPass).toHaveLength(2)
+      // Both wires are on their own first pass, in the same settle.
+      expect(firstPass.map((hop) => hop.lapNumber)).toEqual([1, 1])
+      // While the crew's delivery index does climb, because it counts the
+      // crew rather than the wire.
+      expect([...firstPass].reverse().map((hop) => hop.roundNumber)).toEqual([
+        1, 2,
+      ])
+
+      // s2 answers, s1 finishes again, and both of s1's wires take a second
+      // pass -- lap 2 for each of them, rounds 4 and 5 for the crew.
+      await engine.handleSettle(settleCarried(gateway, 's2'))
+      await engine.handleSettle(settleCarried(gateway, 's1'))
+
+      const secondPass = relays
+        .listHops('c1', 100)
+        .filter((hop) => [toB.id, toC.id].includes(hop.relayId))
+        .filter((hop) => hop.lapNumber === 2)
+      expect(secondPass).toHaveLength(2)
+      expect(secondPass.map((hop) => hop.roundNumber).sort()).toEqual([4, 5])
+    })
+
+    /**
+     * THE regression the baton design exists for. Ancestry used to be inferred
+     * from the newest hop that ever landed in a session, with no time bound --
+     * so a hail typed by hand tomorrow inherited today's finished run. Under
+     * laps that would be worse, not better: the old run's meter would still be
+     * spent.
+     */
+    it('starts a fresh run when the same session is driven by hand', async () => {
       wire('s1', 's2')
       wire('s2', 's1')
       const gateway = createGateway({})
@@ -2057,22 +2174,17 @@ describe('RelayEngine', () => {
 
       await engine.handleSettle(settled('s1'))
       await engine.handleSettle(settleCarried(gateway, 's2'))
-      await engine.handleSettle(settleCarried(gateway, 's1'))
-      const afterChain = relays.listHops('c1', 100).length
+      const chainRun = relays.listHops('c1')[0].flowRunId
 
-      // A human hails s1 and it settles again. No baton, so a fresh run.
+      // A human hails s1 and it settles again. No baton, so a fresh run --
+      // and a fresh run means lap 1 again for a wire that has fired before.
       await engine.handleSettle(settled('s1'))
 
-      const trail = relays.listHops('c1', 100)
-      expect(trail).toHaveLength(afterChain + 1)
-      expect(trail[0].outcome).toBe('delivered')
-      expect(trail[0].targetSessionId).toBe('s2')
-      expect(new Set(trail.map((hop) => hop.flowRunId)).size).toBe(2)
-      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual([
-        's2',
-        's1',
-        's2',
-      ])
+      const newest = relays.listHops('c1')[0]
+      expect(newest.outcome).toBe('delivered')
+      expect(newest.flowRunId).not.toBe(chainRun)
+      expect(newest.lapNumber).toBe(1)
+      expect(newest.roundNumber).toBe(1)
     })
 
     it('spends a baton exactly once, so a chain never re-enters an old run', async () => {
@@ -2147,21 +2259,23 @@ describe('RelayEngine', () => {
       expect(outward.relayId).toBe(onward.id)
       expect(outward.outcome).toBe('delivered')
       expect(outward.flowRunId).toBe(landingRun)
+      expect(outward.lapNumber).toBe(1)
       const byReceipt = (receipt: string) =>
         relays.listHops('c1', 100).find((hop) => hop.dispatchId === receipt)
       expect(byReceipt(firstReceipt)?.settledAt).not.toBeNull()
       expect(byReceipt(secondReceipt)?.settledAt).toBeNull()
 
       // The second payload settles on its own receipt: same run, its own hop
-      // paid, and the onward wire has already fired in that run.
+      // paid, and the onward wire takes its SECOND lap rather than refusing.
       await engine.handleSettle(
         settled('s2', 'completed', false, [secondReceipt]),
       )
       expect(byReceipt(secondReceipt)?.settledAt).not.toBeNull()
       expect(relays.listHops('c1')[0]).toMatchObject({
         relayId: onward.id,
-        outcome: 'skipped-already-fired',
+        outcome: 'delivered',
         flowRunId: landingRun,
+        lapNumber: 2,
       })
     })
 
@@ -2205,42 +2319,8 @@ describe('RelayEngine', () => {
       }
     })
 
-    /**
-     * A quiet row is still a row. The engine may decline to act, but it may
-     * never decline silently -- "my wire did not fire" always has an answer.
-     */
-    it('broadcasts the quiet row like any other hop', async () => {
-      wire('s1', 's2')
-      wire('s2', 's1')
-      const gateway = createGateway({})
-      const engine = createEngine(gateway)
-
-      await engine.handleSettle(settled('s1'))
-      await engine.handleSettle(settleCarried(gateway, 's2'))
-      await engine.handleSettle(settleCarried(gateway, 's1'))
-
-      expect(hops).toHaveLength(3)
-      expect(hops[2].outcome).toBe('skipped-already-fired')
-    })
-
-    it('carries nothing and touches no session when it declines', async () => {
-      wire('s1', 's2')
-      wire('s2', 's1')
-      const gateway = createGateway({})
-      const engine = createEngine(gateway)
-
-      await engine.handleSettle(settled('s1'))
-      await engine.handleSettle(settleCarried(gateway, 's2'))
-      const sentBefore = gateway.sent.length
-      await engine.handleSettle(settleCarried(gateway, 's1'))
-
-      expect(gateway.sent).toHaveLength(sentBefore)
-      expect(gateway.created).toEqual([])
-      expect(relays.listHops('c1')[0].payloadPreview).toBeNull()
-    })
-
-    /** A failed source is a truer answer than "you already fired". */
-    it('still names a failed source ahead of the loop law', async () => {
+    /** A failed source is a truer answer than any question about the wire. */
+    it('still names a failed source ahead of the lap', async () => {
       wire('s1', 's2')
       wire('s2', 's1')
       const engine = createEngine(createGateway({}))
@@ -2249,14 +2329,20 @@ describe('RelayEngine', () => {
       await engine.handleSettle(settled('s2'))
       await engine.handleSettle(settled('s1', 'failed'))
 
-      expect(relays.listHops('c1')[0].outcome).toBe('skipped-failed')
+      const newest = relays.listHops('c1')[0]
+      expect(newest.outcome).toBe('skipped-failed')
+      // A fact about the settle, not a beat of the run: no round, no lap.
+      expect(newest.roundNumber).toBeNull()
+      expect(newest.lapNumber).toBeNull()
     })
   })
 
   /**
-   * Clearing the trail is a UI convenience; the loop law is a safety rule, and
-   * the loop law reads this table. A trail emptied while a chain is still
-   * moving would tell a wire it never fired and let the loop it closed reopen.
+   * Clearing the trail is a UI convenience; the lap law is a safety rule, and
+   * the lap law reads this table. A trail emptied while a run is still moving
+   * would tell a wire it never fired and reset its generation to 1 -- which
+   * also refunds the crew's cumulative delivery limit, the guard that now
+   * ends a cyclic run.
    */
   describe('clearing the trail cannot un-fire a live run', () => {
     /** Exactly what the IPC handler does: the engine names what must survive. */
@@ -2266,7 +2352,7 @@ describe('RelayEngine', () => {
       })
     }
 
-    it('keeps a chain ending at two hops when the trail is cleared mid-chain', async () => {
+    it('keeps a wire on its second lap when the trail is cleared mid-run', async () => {
       const there = wire('s1', 's2')
       wire('s2', 's1')
       const gateway = createGateway({})
@@ -2280,11 +2366,19 @@ describe('RelayEngine', () => {
       await engine.handleSettle(settleCarried(gateway, 's2'))
       await engine.handleSettle(settleCarried(gateway, 's1'))
 
-      // Two real turns, exactly as if nothing had been cleared.
-      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual(['s2', 's1'])
+      // Three real turns: the run goes round again, as laps intend.
+      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual([
+        's2',
+        's1',
+        's2',
+      ])
       const trail = relays.listHops('c1', 100)
-      expect(trail[0].outcome).toBe('skipped-already-fired')
+      // The wire's own history survived the clear, so its third firing is
+      // lap 2 and the crew's meter reads 3 rather than starting again.
       expect(trail[0].relayId).toBe(there.id)
+      expect(trail[0].outcome).toBe('delivered')
+      expect(trail[0].lapNumber).toBe(2)
+      expect(trail[0].roundNumber).toBe(3)
     })
 
     /**
@@ -2312,10 +2406,15 @@ describe('RelayEngine', () => {
       await engine.handleSettle(settleCarried(gateway, 's2'))
       await engine.handleSettle(settleCarried(gateway, 's1'))
 
-      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual(['s2', 's1'])
+      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual([
+        's2',
+        's1',
+        's2',
+      ])
       const trail = relays.listHops('c1', 100)
-      expect(trail[0].outcome).toBe('skipped-already-fired')
       expect(trail[0].relayId).toBe(there.id)
+      expect(trail[0].lapNumber).toBe(2)
+      expect(trail[0].roundNumber).toBe(3)
     })
 
     it('empties what has finished and keeps only what is still moving', async () => {
@@ -2392,14 +2491,12 @@ describe('RelayEngine', () => {
       releaseSend()
       await stalled
 
-      // And the run still ends where it should: s1 comes back round to two
-      // wires that have both already fired in it.
+      // And the run carries on where it should: s1 comes back round to two
+      // wires that both take their SECOND lap, numbered from rows the clear
+      // was made to spare.
       await engine.handleSettle(settleCarried(gateway, 's1'))
       const trail = relays.listHops('c1', 100)
-      expect(trail.slice(0, 2).map((hop) => hop.outcome)).toEqual([
-        'skipped-already-fired',
-        'skipped-already-fired',
-      ])
+      expect(trail.slice(0, 2).map((hop) => hop.lapNumber)).toEqual([2, 2])
       expect(new Set(trail.slice(0, 2).map((hop) => hop.relayId))).toEqual(
         new Set([there.id, alsoThere.id]),
       )
@@ -2407,42 +2504,50 @@ describe('RelayEngine', () => {
         's2',
         's3',
         's1',
+        's2',
+        's3',
       ])
     })
 
     /**
      * The canary for the mechanism itself. Clearing without asking the engine
-     * what is live is precisely the bug this guard exists for, and it must stay
-     * visibly broken -- if this ever passes, the ledger stopped being the
-     * loop law's authority and the guard above is measuring nothing.
+     * what is live is precisely the bug this guard exists for, and it must
+     * stay visibly broken -- if this ever passes, the ledger stopped being
+     * the lap law's authority and the guard above is measuring nothing.
+     *
+     * Under laps the damage is a refund rather than a reopening: the wire
+     * fires either way, but its generation restarts at 1 and the crew's
+     * cumulative delivery limit is handed back the deliveries it spent.
      */
-    it('would reopen the loop if the live runs were not spared', async () => {
-      wire('s1', 's2')
+    it("would refund a live run's laps if they were not spared", async () => {
+      const there = wire('s1', 's2')
       wire('s2', 's1')
       const gateway = createGateway({})
       const engine = createEngine(gateway)
 
       await engine.handleSettle(settled('s1'))
+      await engine.handleSettle(settleCarried(gateway, 's2'))
+      // The unguarded clear: every row of a run still in flight is gone.
       relays.clearHops('c1')
 
-      await engine.handleSettle(settled('s2'))
-      await engine.handleSettle(settled('s1'))
+      await engine.handleSettle(settleCarried(gateway, 's1'))
 
-      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual([
-        's2',
-        's1',
-        's2',
-      ])
+      const newest = relays.listHops('c1')[0]
+      expect(newest.relayId).toBe(there.id)
+      // It should have been lap 2, round 3. With the ledger emptied under it
+      // the run has no memory of the two deliveries it already spent.
+      expect(newest.lapNumber).toBe(1)
+      expect(newest.roundNumber).toBe(1)
     })
   })
 
   /**
-   * The budget is the backstop behind the loop law, so these tests can no
-   * longer reach it by ping-ponging two wires -- that chain now ends at two
-   * hops. They fill a run the way a wide crew would: with hops from wires
-   * this test is not watching, all landing in the run the engine is really
-   * using. Run ids are minted inside the engine, so the run is read off the
-   * first real hop rather than invented here.
+   * The 20-hop backstop. These tests fill a run the way a wide crew would:
+   * with hops from wires this test is not watching, all landing in the run
+   * the engine is really using. Run ids are minted inside the engine, so the
+   * run is read off the first real hop rather than invented here. Driving a
+   * ping-pong twenty times would work now that laps exist, but it would also
+   * trip the crew's delivery limit first, which is a different guard.
    */
   function burnFlowRunBudget(flowRunId: string): void {
     while (
@@ -2490,6 +2595,13 @@ describe('RelayEngine', () => {
     expect(newest.error).toContain(String(MAX_AUTOMATIC_HOPS_PER_FLOW_RUN))
     expect(relays.getById(relay.id)!.armed).toBe(false)
     expect(relaysChanged).toBe(1)
+    // Loud, from R3: a wire switched off behind the user's back with nobody
+    // told was the last silent ending in the engine, and laps make the
+    // runaway this guards against reachable rather than theoretical.
+    // Mutation that reds it: drop the `budget` hail beside the disarm.
+    const open = hails.listOpen()
+    expect(open).toMatchObject([{ reason: 'budget', sessionId: 's2' }])
+    expect(open[0].detail).toContain('disarmed')
   })
 
   it('lets a chain of distinct wires run right up to the budget', async () => {
@@ -2521,8 +2633,8 @@ describe('RelayEngine', () => {
     expect(budgeted).toHaveLength(MAX_AUTOMATIC_HOPS_PER_FLOW_RUN)
     expect(trail.some((hop) => hop.outcome === 'skipped-budget')).toBe(true)
     expect(new Set(trail.map((hop) => hop.flowRunId)).size).toBe(1)
-    // Only the wire that tried to overspend is switched off; the loop law
-    // never disarms anything, so the rest of the chain stays live.
+    // Only the wire that tried to overspend is switched off; the delivery
+    // limit never disarms anything, so the rest of the chain stays live.
     expect(relays.list().filter((relay) => !relay.armed)).toHaveLength(1)
   })
 
@@ -2848,14 +2960,16 @@ describe('RelayEngine', () => {
     })
 
     /**
-     * The loop law's hardest case. An opener adds a settle that finishes
-     * nothing -- the target coming to rest after being wiped, with its real
-     * work still queued. If that beat spent the run's baton, the settle a
-     * moment later would open a FRESH run, every wire would be live again, and
-     * A -> B -> A -> B would ping-pong for as long as the sessions kept
-     * answering.
+     * The lap law's hardest case, and it is HARDER now than under the loop
+     * law. An opener adds a settle that finishes nothing -- the target coming
+     * to rest after being wiped, with its real work still queued. If that beat
+     * spent the run's baton, the settle a moment later would open a FRESH run.
+     * The old law caught that as a ping-pong that never ended; laps mean a
+     * ping-pong is SUPPOSED to go round again, so the only thing left that
+     * catches it is the run id itself -- and the cumulative delivery limit
+     * that rides on it. A second run here would refund the limit for ever.
      */
-    it('ends a ping-pong at two hops even though the opener adds a settle', async () => {
+    it('keeps one run across the opener beat, and laps inside it', async () => {
       const there = wire('s1', 's2', true, null, '/clear')
       const back = wire('s2', 's1')
       const gateway = createGateway({})
@@ -2876,10 +2990,17 @@ describe('RelayEngine', () => {
       const trail = relays.listHops('c1', 100)
       expect(new Set(trail.map((hop) => hop.flowRunId)).size).toBe(1)
       expect(trail.map((hop) => hop.outcome)).toEqual([
-        'skipped-already-fired',
+        'queued',
         'delivered',
         'queued',
       ])
+      // Newest first: the wire's second lap sits at the head, and the crew's
+      // meter reads 3 -- the number a spent baton would have reset to 1.
+      expect(trail[0]).toMatchObject({
+        relayId: there.id,
+        lapNumber: 2,
+        roundNumber: 3,
+      })
       expect(relays.getById(there.id)!.armed).toBe(true)
       expect(relays.getById(back.id)!.armed).toBe(true)
     })
@@ -2904,7 +3025,7 @@ describe('RelayEngine', () => {
       expect(gateway.sent.map((turn) => turn.sessionId)).toEqual(['s2', 's2'])
     })
 
-    it('sends one opener into a running target and keeps the loop closed', async () => {
+    it('sends one opener per lap into a running target and keeps one run', async () => {
       // Corner 3 of the round-3 STOP, closed by construction. A -> B -> A
       // with B mid-turn: the opener is QUEUED behind the running turn
       // (design X: an opener is always its own turn), so the pre-existing
@@ -2912,8 +3033,9 @@ describe('RelayEngine', () => {
       // journals through the wire leaving s2 (here the human asked for
       // quiet, so that row is a muted refusal in a fresh run) -- and the
       // baton STAYS; the opener's settle is plumbing by id; the payload's
-      // settle continues the SAME run -- so the ring ends at the loop law
-      // instead of re-firing A -> B, and exactly one /clear is ever sent.
+      // settle continues the SAME run. One /clear per firing, and the second
+      // firing is a LAP of that same run rather than a new one: wiping the
+      // recycled worker every lap is exactly what the opener was built for.
       const there = wire('s1', 's2', true, null, '/clear')
       const back = wire('s2', 's1')
       const gateway = createGateway({ statuses: { s2: 'running' } })
@@ -2940,18 +3062,21 @@ describe('RelayEngine', () => {
       )
       await engine.handleSettle(settleCarried(gateway, 's1'))
 
+      // One per firing, never two for one: the plumbing beat fires nothing.
       expect(
         gateway.sent.filter((turn) => turn.text === '/clear'),
-      ).toHaveLength(1)
+      ).toHaveLength(2)
       const trail = relays.listHops('c1', 100)
       expect(
         trail.filter(
           (hop) => hop.relayId === there.id && hop.outcome === 'queued',
         ),
-      ).toHaveLength(1)
+      ).toHaveLength(2)
       expect(trail[0]).toMatchObject({
-        outcome: 'skipped-already-fired',
+        relayId: there.id,
+        outcome: 'queued',
         flowRunId: run,
+        lapNumber: 2,
       })
       // Only the settle NAMING the opener's receipt was skipped: every
       // other beat of s2 is in the trail.

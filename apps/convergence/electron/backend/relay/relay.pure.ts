@@ -305,16 +305,6 @@ export const MUTED_MESSAGE =
   'This message was sent quiet, so the wire did not fire. It is still armed for the next one.'
 
 /**
- * The sentence the ledger shows when the loop law ends a chain.
- *
- * Deliberately not phrased as a problem: A -> B -> A finishing after two hops
- * is the wire behaving, and the row exists so the user can see the chain stop
- * rather than wonder whether anything happened.
- */
-export const ALREADY_FIRED_MESSAGE =
-  'This wire already fired in this run; a wire fires once per run.'
-
-/**
  * The word a station writes to say where its work goes next.
  *
  * Declared, never inferred. Routing by reading intent out of prose is a text
@@ -671,6 +661,76 @@ export function resolveRoundCap(storedCap: number | null | undefined): number {
 /** Which round a hop about to be spent belongs to: the first one is round 1. */
 export function roundNumber(spentHops: number): number {
   return spentHops + 1
+}
+
+/**
+ * The little of a hop the lap rule needs, so any caller can supply it -- the
+ * ledger, a test fixture, or a run being assembled for history.
+ */
+export interface LapLedgerHop {
+  id: string
+  relayId: string
+  flowRunId: string
+  /** Read as a plain string: the vocabulary law applies to stored rows. */
+  outcome: string
+  /** Null on rows written before laps existed; derived rather than defaulted. */
+  lapNumber: number | null
+}
+
+/**
+ * Which lap of ONE WIRE a hop about to be spent belongs to (R2, RUN45).
+ *
+ * A lap is a per-wire generation, not a property of the graph: one more than
+ * the times this same wire already carried this same run. That definition is
+ * the whole reason laps work on a shape that is not a ring -- a fan-out's two
+ * wires both read lap 1 on the same settle, a branch that never returns never
+ * reaches lap 2, and a ring of N wires yields N deliveries per lap without
+ * anybody having to detect a cycle.
+ *
+ * Separate function from `roundNumber` despite the identical arithmetic,
+ * because they take different counts and mean different things; collapsing
+ * them would invite a caller to pass the crew's count and silently number
+ * laps per crew.
+ */
+export function lapNumber(wireSpentHops: number): number {
+  return wireSpentHops + 1
+}
+
+/**
+ * The lap a recorded hop belongs to, whoever wrote it.
+ *
+ * Rows written from RUN45 onward carry the number. Rows written before the
+ * column existed carry null, and null is derived rather than defaulted: the
+ * lap is recomputed by the SAME rule that produced the stored ones -- one
+ * more than the wire's earlier budgeted hops in this run -- so a legacy run
+ * groups into laps exactly as a new one does. Defaulting them to 1 would
+ * flatten every old multi-pass chain into a single lap and make history lie
+ * about what happened.
+ *
+ * `ledger` is the run's own hops in CHRONOLOGICAL order, which is the order
+ * `listRuns` reads them in; "earlier" is position in that sequence rather
+ * than a timestamp compare, because `fired_at` has second resolution and a
+ * settle fires every wire leaving a session inside one tick. A hop the
+ * ledger does not contain is read as the newest, which is what an
+ * about-to-be-written row is.
+ */
+export function readLapNumber(
+  hop: LapLedgerHop,
+  ledger: readonly LapLedgerHop[],
+): number {
+  if (hop.lapNumber !== null && Number.isInteger(hop.lapNumber)) {
+    return hop.lapNumber
+  }
+
+  let earlier = 0
+  for (const candidate of ledger) {
+    if (candidate.id === hop.id) break
+    if (candidate.relayId !== hop.relayId) continue
+    if (candidate.flowRunId !== hop.flowRunId) continue
+    if (!isBudgetedOutcome(candidate.outcome)) continue
+    earlier += 1
+  }
+  return lapNumber(earlier)
 }
 
 /** Whether this loop may spend another round. */

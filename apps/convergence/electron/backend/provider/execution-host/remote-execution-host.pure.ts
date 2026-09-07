@@ -14,6 +14,7 @@
  * second app (Backpack Studio) consumes with no provider layer at all.
  */
 import type { ProviderDescriptor } from '../provider.types'
+import { providerSupportsConversationReset } from '../provider-descriptor.pure'
 import type { ProviderCatalogEntry } from '../provider-catalog.types'
 import type { ExecutionHostProviderCapabilities } from './execution-host.types'
 import {
@@ -65,6 +66,14 @@ export function descriptorForRemoteProvider(
     vendorLabel: '',
     kind: 'conversation',
     supportsContinuation: info.supportsContinuation,
+    // Answered from the LOCAL provider id, which is what a session on this
+    // row records and what the inspector looks the capability up by. The
+    // daemon does not report this yet; a remote Claude Code is still a Claude
+    // Code, and if that ever stops being true the daemon has to say so rather
+    // than this file guessing (R8).
+    supportsConversationReset: providerSupportsConversationReset(
+      localProviderIdForRemoteProvider(info.providerId),
+    ),
     defaultModelId: info.models[0]?.id ?? '',
     modelOptions: info.models.map((model) => ({
       id: model.id,

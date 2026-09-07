@@ -182,6 +182,7 @@ describe('provider-descriptor', () => {
       id: 'cursor',
       name: 'Cursor',
       supportsContinuation: true,
+      supportsConversationReset: false,
       defaultModelId: 'default[]',
       attachments: {
         supportsImage: true,
@@ -375,6 +376,7 @@ describe('provider-descriptor', () => {
       vendorLabel: 'OpenAI',
       kind: 'conversation',
       supportsContinuation: true,
+      supportsConversationReset: false,
       defaultModelId: 'missing',
       modelOptions: [
         {
@@ -408,6 +410,7 @@ describe('provider-descriptor', () => {
       vendorLabel: 'Legacy',
       kind: 'conversation',
       supportsContinuation: false,
+      supportsConversationReset: false,
       defaultModelId: 'legacy',
       modelOptions: [],
       attachments: CODEX_ATTACHMENT_CAPABILITY,

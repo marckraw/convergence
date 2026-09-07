@@ -91,6 +91,60 @@ describe('CrewService', () => {
     })
   })
 
+  it('remembers where a card was dropped, and forgets it on request', () => {
+    const crew = service.create({ name: 'Convoy', sessionIds: ['s1', 's2'] })
+
+    // Nobody has arranged anything yet, and null is what says so.
+    expect(crew.members).toEqual([
+      { sessionId: 's1', batonName: null, canvasX: null, canvasY: null },
+      { sessionId: 's2', batonName: null, canvasX: null, canvasY: null },
+    ])
+
+    const moved = service.setMemberPosition(crew.id, 's1', { x: 240, y: 96 })
+    expect(moved.members[0]).toMatchObject({ canvasX: 240, canvasY: 96 })
+    // Only the card that moved.
+    expect(moved.members[1]).toMatchObject({ canvasX: null, canvasY: null })
+
+    // Null puts it back under the automatic layout.
+    const released = service.setMemberPosition(crew.id, 's1', null)
+    expect(released.members[0]).toMatchObject({ canvasX: null, canvasY: null })
+  })
+
+  /**
+   * A coordinate that is not a number would be written and then read back as a
+   * position no layout can recover from: the card ends up off the canvas with
+   * no way to find it. Null means the automatic walk, which is always
+   * somewhere visible.
+   */
+  it('refuses a position that could not have been meant', () => {
+    const crew = service.create({ name: 'Convoy', sessionIds: ['s1'] })
+
+    // NaN and Infinity are checked separately on purpose: SQLite stores NaN
+    // as NULL on its own, so only the infinity case can tell the guard from
+    // the database's own behaviour.
+    expect(
+      service.setMemberPosition(crew.id, 's1', { x: Number.NaN, y: 10 })
+        .members[0],
+    ).toMatchObject({ canvasX: null, canvasY: null })
+
+    const bad = service.setMemberPosition(crew.id, 's1', {
+      x: Number.POSITIVE_INFINITY,
+      y: 10,
+    })
+
+    expect(bad.members[0]).toMatchObject({ canvasX: null, canvasY: null })
+  })
+
+  it('is silent about a member this crew does not have', () => {
+    const crew = service.create({ name: 'Convoy', sessionIds: ['s1'] })
+
+    // A card dragged in a window whose membership changed under it is not an
+    // error worth failing a drag over; the next crew broadcast corrects it.
+    expect(() =>
+      service.setMemberPosition(crew.id, 's2', { x: 1, y: 2 }),
+    ).not.toThrow()
+  })
+
   it('updates name and decoration, leaving untouched fields alone', () => {
     const crew = service.create({
       name: 'Convoy',

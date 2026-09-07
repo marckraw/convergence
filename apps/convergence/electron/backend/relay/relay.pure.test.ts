@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ALREADY_FIRED_MESSAGE,
   DEFAULT_SPAWN_NAME,
   MAX_AUTOMATIC_HOPS_PER_FLOW_RUN,
   MAX_RELAY_INSTRUCTION_LENGTH,
@@ -233,16 +232,6 @@ describe('flowRunBudgetMessage', () => {
     const message = flowRunBudgetMessage(MAX_AUTOMATIC_HOPS_PER_FLOW_RUN)
     expect(message).toContain(String(MAX_AUTOMATIC_HOPS_PER_FLOW_RUN))
     expect(message).toContain('disarmed')
-  })
-})
-
-describe('ALREADY_FIRED_MESSAGE', () => {
-  it('explains the law instead of reporting a fault', () => {
-    expect(ALREADY_FIRED_MESSAGE).toContain('already fired in this run')
-    expect(ALREADY_FIRED_MESSAGE).toContain('once per run')
-    // The loop law is not a failure, so its sentence must not read like one.
-    expect(ALREADY_FIRED_MESSAGE.toLowerCase()).not.toContain('error')
-    expect(ALREADY_FIRED_MESSAGE.toLowerCase()).not.toContain('failed')
   })
 })
 

@@ -321,6 +321,9 @@ interface SessionCrewMemberData {
   sessionId: string
   /** The short name a baton addresses this member by; null when unnamed. */
   batonName: string | null
+  /** Where the card sits on the Canvas; null means "lay it out" (R10). */
+  canvasX: number | null
+  canvasY: number | null
 }
 
 interface SessionCrewData {
@@ -413,9 +416,71 @@ interface RelayHopData {
   baton: string | null
   /** Which round of the loop this hop was, or null if it spent none. */
   roundNumber: number | null
+  /** Which lap of THIS WIRE inside the run, or null on a pre-lap row (R2). */
+  lapNumber: number | null
+  /** When the station this hop landed in came back, or null while it owes it. */
+  settledAt: string | null
   /** Wider than the written vocabulary: stored rows may predate this build. */
   outcome: string
   error: string | null
+}
+
+/** One generation of a run: every hop whose wire was on its Nth pass (R2). */
+interface RelayRunLapData {
+  lap: number
+  hops: RelayHopData[]
+}
+
+interface RunStatusData {
+  word: 'handed-back' | 'needs-you' | 'running' | 'finished-quiet' | 'unknown'
+  /** Set only when the word is `needs-you`. */
+  reason: 'failed' | 'limit' | 'parked' | 'stalled' | null
+}
+
+interface RelayRunCountsData {
+  deliveries: number
+  failures: number
+  laps: number
+  events: number
+}
+
+/** One user-visible run: everything one `flowRunId` ever recorded (R12). */
+interface RelayRunData {
+  flowRunId: string
+  crewId: string
+  startedAt: string
+  endedAt: string
+  laps: RelayRunLapData[]
+  hails: CrewHailData[]
+  status: RunStatusData
+  counts: RelayRunCountsData
+}
+
+interface RelayRunPageData {
+  runs: RelayRunData[]
+  /** Calls with no run id: they belong to no run and join none. */
+  unattributedHails: CrewHailData[]
+  /** The design's word for every event on this page, by hop or hail id. */
+  outcomes: Record<string, RunHistoryOutcomeData>
+  hasMore: boolean
+}
+
+type RunHistoryOutcomeData =
+  | 'delivered'
+  | 'queued'
+  | 'held'
+  | 'delivery-failed'
+  | 'limit-reached'
+  | 'handed-back'
+  | 'parked'
+  | 'reply-overdue'
+  | 'loop-closed'
+  | 'unknown'
+
+interface ListRunsOptionsData {
+  limit?: number
+  /** The oldest run already held; the page resumes below it. */
+  before?: string | null
 }
 
 interface ClearRelayHopsResultData {
@@ -1030,6 +1095,8 @@ interface ProviderInfo {
   vendorLabel: string
   kind: 'conversation' | 'shell'
   supportsContinuation: boolean
+  /** Whether the conversation can be started over in place (R8). */
+  supportsConversationReset: boolean
   defaultModelId: string
   fastModelId?: string | null
   modelOptions: ProviderModelOption[]
@@ -1639,6 +1706,11 @@ interface ElectronAPI {
       sessionId: string,
       batonName: string | null,
     ) => Promise<SessionCrewData>
+    setMemberPosition: (
+      crewId: string,
+      sessionId: string,
+      position: { x: number; y: number } | null,
+    ) => Promise<SessionCrewData>
     onUpdated: (callback: (crews: SessionCrewData[]) => void) => () => void
   }
   relay: {
@@ -1657,6 +1729,10 @@ interface ElectronAPI {
       beforeHopId?: string | null,
     ) => Promise<RelayHopData[]>
     clearHops: (crewId: string) => Promise<ClearRelayHopsResultData>
+    listRuns: (
+      crewId: string,
+      options?: ListRunsOptionsData,
+    ) => Promise<RelayRunPageData>
     onUpdated: (callback: (relays: SessionRelayData[]) => void) => () => void
     onHopAppended: (callback: (hop: RelayHopData) => void) => () => void
     onHopsCleared: (callback: (crewId: string) => void) => () => void

@@ -8,7 +8,7 @@ import {
 } from '@/features/mission-control'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
-import { CANVAS_HANDLE } from './session-canvas.types'
+import { CANVAS_HANDLE, CANVAS_SIDE_HANDLE } from './session-canvas.types'
 import type { CanvasChairNodeData } from './session-canvas.types'
 
 /**
@@ -47,6 +47,22 @@ export const CanvasChairNode: FC<NodeProps> = ({ data }) => {
         id={CANVAS_HANDLE.loopIn}
         type="target"
         position={Position.Bottom}
+        isConnectable={false}
+        className="!size-0 !min-h-0 !min-w-0 !border-0 !bg-transparent"
+      />
+      {/* The other two sides, so a chair a route approaches from the right or
+          from above is entered by the side it actually faces (R11). */}
+      <Handle
+        id={CANVAS_SIDE_HANDLE.target.right}
+        type="target"
+        position={Position.Right}
+        isConnectable={false}
+        className="!size-0 !min-h-0 !min-w-0 !border-0 !bg-transparent"
+      />
+      <Handle
+        id={CANVAS_SIDE_HANDLE.target.top}
+        type="target"
+        position={Position.Top}
         isConnectable={false}
         className="!size-0 !min-h-0 !min-w-0 !border-0 !bg-transparent"
       />

@@ -130,6 +130,7 @@ import {
   broadcastRelays,
   registerRelayIpcHandlers,
 } from '../backend/relay/relay.ipc'
+import { RunHistoryService } from '../backend/relay/run-history.service'
 import { registerIpcHandlers } from './ipc'
 import { getExternalNavigationAction } from './external-links.pure'
 import { resolveAutoUpdater } from './auto-updater-module.pure'
@@ -256,6 +257,9 @@ async function startApp(): Promise<void> {
   const pullRequestService = new PullRequestService(db, gitService)
   const crewService = new CrewService(db)
   const relayService = new RelayService(db)
+  // The history read model reads both the ledger and the hail book, so it
+  // owns neither and sits beside both (R12).
+  const runHistoryService = new RunHistoryService(db)
   const providerRegistry = new ProviderRegistry()
   const openRouterCredentials = new OpenRouterCredentialsService()
   const taskProgressService = new TaskProgressService(broadcastTaskProgress)
@@ -714,6 +718,7 @@ async function startApp(): Promise<void> {
   // could not ask would be free to empty the ledger the loop law reads.
   registerRelayIpcHandlers({
     service: relayService,
+    runHistory: runHistoryService,
     liveFlowRunIds: () => relayEngine.liveFlowRunIds(),
   })
   // The multi-subscriber settle seam, deliberately not one of the single-slot

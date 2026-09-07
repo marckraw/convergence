@@ -497,6 +497,12 @@ export interface ProviderInfo {
   vendorLabel: string
   kind: ProviderKind
   supportsContinuation: boolean
+  /**
+   * Whether this provider can start the conversation over inside a session
+   * that already exists (R8). The connection inspector offers "clear the
+   * conversation first" only where this is true, and says why where it is not.
+   */
+  supportsConversationReset: boolean
   defaultModelId: string
   fastModelId?: string | null
   modelOptions: ProviderModelOption[]

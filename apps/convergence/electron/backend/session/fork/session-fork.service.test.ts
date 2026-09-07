@@ -217,6 +217,7 @@ function setup(
       vendorLabel: 'Anthropic',
       kind: 'conversation',
       supportsContinuation: true,
+      supportsConversationReset: false,
       defaultModelId: 'sonnet',
       modelOptions: [
         {

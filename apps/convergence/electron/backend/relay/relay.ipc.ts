@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import type { ClearRelayHopsResult, RelayService } from './relay.service'
+import type { ListRunsOptions, RunHistoryService } from './run-history.service'
 import type {
   CreateSessionRelayInput,
   RelayHop,
@@ -50,6 +51,11 @@ export const broadcastRelayHopsCleared: RelayHopClearedBroadcastFn = (
 export function registerRelayIpcHandlers(deps: {
   service: RelayService
   /**
+   * The history read model (R12). Separate from `service` because a run is
+   * hops AND hails, and neither repository owns both.
+   */
+  runHistory: RunHistoryService
+  /**
    * The runs a clear must not touch. The engine owns this answer -- the loop
    * law reads the ledger, so emptying a live run's rows would tell a wire it
    * never fired -- and it is required rather than optional so no wiring can
@@ -59,7 +65,7 @@ export function registerRelayIpcHandlers(deps: {
   broadcast?: RelayBroadcastFn
   broadcastCleared?: RelayHopClearedBroadcastFn
 }): void {
-  const { service, liveFlowRunIds } = deps
+  const { service, runHistory, liveFlowRunIds } = deps
   const broadcast = deps.broadcast ?? broadcastRelays
   const broadcastCleared = deps.broadcastCleared ?? broadcastRelayHopsCleared
 
@@ -97,6 +103,12 @@ export function registerRelayIpcHandlers(deps: {
     'relayHops:list',
     (_event, crewId: string, limit?: number, beforeHopId?: string | null) =>
       service.listHops(crewId, limit, beforeHopId),
+  )
+
+  ipcMain.handle(
+    'relay:listRuns',
+    (_event, crewId: string, options?: ListRunsOptions) =>
+      runHistory.listRuns(crewId, options ?? {}),
   )
 
   ipcMain.handle(

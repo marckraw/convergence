@@ -714,29 +714,32 @@ describe('RelayService', () => {
     })
   })
 
-  describe('the loop law and the budget', () => {
-    it('says a wire has not fired when its run holds no hops', () => {
+  describe('the lap law and the budget', () => {
+    it('counts nothing for a wire whose run holds no hops', () => {
       const relay = createRelay()
 
-      expect(service.hasFiredInFlowRun(relay.id, 'run-1')).toBe(false)
+      expect(service.countWireHopsInFlowRun(relay.id, 'run-1')).toBe(0)
     })
 
-    it('remembers a wire that spent a turn in this run', () => {
+    it('counts each turn this wire spent in this run', () => {
       const relay = createRelay()
-      service.appendHop({
-        relayId: relay.id,
-        crewId: 'c1',
-        flowRunId: 'run-1',
-        sourceSessionId: 's1',
-        targetSessionId: 's2',
-        triggerStatus: 'completed',
-        outcome: 'delivered',
-      })
+      for (let pass = 0; pass < 3; pass += 1) {
+        service.appendHop({
+          relayId: relay.id,
+          crewId: 'c1',
+          flowRunId: 'run-1',
+          sourceSessionId: 's1',
+          targetSessionId: 's2',
+          triggerStatus: 'completed',
+          outcome: 'delivered',
+        })
+      }
 
-      expect(service.hasFiredInFlowRun(relay.id, 'run-1')).toBe(true)
-      // The next run is a clean sheet; that is what makes the law a pause
-      // rather than a one-shot fuse.
-      expect(service.hasFiredInFlowRun(relay.id, 'run-2')).toBe(false)
+      // Three passes of the same wire in one run: the lap law's whole point,
+      // and the number the once-per-run boolean could not express.
+      expect(service.countWireHopsInFlowRun(relay.id, 'run-1')).toBe(3)
+      // The next run is a clean sheet; laps are per run, not for ever.
+      expect(service.countWireHopsInFlowRun(relay.id, 'run-2')).toBe(0)
     })
 
     it('keeps the answer to the wire that was asked about', () => {
@@ -752,19 +755,18 @@ describe('RelayService', () => {
         outcome: 'delivered',
       })
 
-      expect(service.hasFiredInFlowRun(second.id, 'run-1')).toBe(false)
+      expect(service.countWireHopsInFlowRun(second.id, 'run-1')).toBe(0)
     })
 
     /**
-     * A skip is not a firing. If it counted, one failed source would retire
-     * the wire for the rest of the run without a turn ever being spent.
+     * A skip is not a firing. If it counted, one failed source would push the
+     * wire a lap forward without a turn ever being spent.
      */
     it('does not count skips, errors or words from another build', () => {
       const relay = createRelay()
       for (const outcome of [
         'skipped-failed',
         'skipped-budget',
-        'skipped-already-fired',
         'error',
       ] as const) {
         service.appendHop({
@@ -776,19 +778,21 @@ describe('RelayService', () => {
           outcome,
         })
       }
-      service.appendHop({
-        relayId: relay.id,
-        crewId: 'c1',
-        flowRunId: 'run-1',
-        sourceSessionId: 's1',
-        triggerStatus: 'completed',
-        outcome: 'skipped-disarmed' as never,
-      })
+      for (const legacy of ['skipped-already-fired', 'skipped-disarmed']) {
+        service.appendHop({
+          relayId: relay.id,
+          crewId: 'c1',
+          flowRunId: 'run-1',
+          sourceSessionId: 's1',
+          triggerStatus: 'completed',
+          outcome: legacy as never,
+        })
+      }
 
-      expect(service.hasFiredInFlowRun(relay.id, 'run-1')).toBe(false)
+      expect(service.countWireHopsInFlowRun(relay.id, 'run-1')).toBe(0)
     })
 
-    it('counts a spawn as this wire having fired', () => {
+    it('counts a spawn as a turn this wire spent', () => {
       const relay = createRelay()
       service.appendHop({
         relayId: relay.id,
@@ -800,7 +804,34 @@ describe('RelayService', () => {
         outcome: 'spawned',
       })
 
-      expect(service.hasFiredInFlowRun(relay.id, 'run-spawn')).toBe(true)
+      expect(service.countWireHopsInFlowRun(relay.id, 'run-spawn')).toBe(1)
+    })
+
+    it('stores the lap it was given, and null when it was given none', () => {
+      const relay = createRelay()
+      const first = service.appendHop({
+        relayId: relay.id,
+        crewId: 'c1',
+        flowRunId: 'run-1',
+        sourceSessionId: 's1',
+        targetSessionId: 's2',
+        triggerStatus: 'completed',
+        outcome: 'delivered',
+        lapNumber: 2,
+      })
+      const muted = service.appendHop({
+        relayId: relay.id,
+        crewId: 'c1',
+        flowRunId: 'run-1',
+        sourceSessionId: 's1',
+        triggerStatus: 'completed',
+        outcome: 'skipped-muted',
+      })
+
+      expect(first.lapNumber).toBe(2)
+      // Null is the honest answer for a row that is a fact about the settle
+      // rather than a beat of the run, and for every row written before laps.
+      expect(muted.lapNumber).toBeNull()
     })
 
     it('charges only the hops that spent a provider turn', () => {

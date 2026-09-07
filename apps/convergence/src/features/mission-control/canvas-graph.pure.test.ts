@@ -11,6 +11,7 @@ import {
   CANVAS_NODE_WIDTH,
   chairNodeId,
   DISARMED_WIRE_COLOR,
+  crewLocalPosition,
   formatSpawnNodeSpec,
   resolveWireColor,
   spawnNodeId,
@@ -121,6 +122,11 @@ function group(crewValue: SessionCrew | null, ids: string[]): SessionCrewGroup {
 }
 
 describe('assignFlowColumns', () => {
+  it('R15 leaves 64 px between automatic rows (mutation: restore ROW_GAP 40)', () => {
+    const graph = buildCanvasGraph([group(crew('c1'), ['a', 'b'])], [], [])
+    expect(graph.nodes[1].y - graph.nodes[0].y - 108).toBe(64)
+  })
+
   it('walks a chain left to right', () => {
     const columns = assignFlowColumns(ids('a', 'b', 'c'), [
       link('a', 'b'),
@@ -235,6 +241,37 @@ describe('buildCanvasGraph', () => {
 
     const [first, second] = graph.clusters
     expect(second.y).toBeGreaterThan(first.y + first.height)
+  })
+
+  it('keeps negative overhang inside the second crew slot (mutation: origin pinned at clusterTop)', () => {
+    const graph = buildCanvasGraph(
+      [
+        group(crew('c1'), ['a']),
+        group(
+          crew('c2', {
+            members: [
+              { sessionId: 'b', batonName: null, canvasX: -300, canvasY: -200 },
+            ],
+          }),
+          ['b'],
+        ),
+        group(crew('c3'), ['c']),
+      ],
+      [],
+    )
+    const [first, second] = graph.clusters
+    const node = graph.nodes.find((entry) => entry.id === 'b')!
+    expect({
+      gap: second.y - first.y - first.height,
+      nextGap: graph.clusters[2].y - second.y - second.height,
+      topPadding: node.y - second.y,
+      stored: crewLocalPosition(node, second),
+    }).toEqual({
+      gap: 48,
+      nextGap: 48,
+      topPadding: 44,
+      stored: { x: -300, y: -200 },
+    })
   })
 
   it('leaves sessions in no crew off the canvas entirely', () => {
@@ -617,5 +654,161 @@ describe('Marcin chair on the canvas', () => {
     )
 
     expect(graph.edges[0].label).toBeNull()
+  })
+})
+
+describe('positions the crew remembers (R10)', () => {
+  function group(sessionIds: string[], members: SessionCrew['members']) {
+    return {
+      crew: crew('c1', { sessionIds, members }),
+      cards: sessionIds.map(card),
+      memberCount: sessionIds.length,
+    } as SessionCrewGroup
+  }
+
+  /**
+   * THE position canary. A card somebody arranged has to land where they left
+   * it, and a card nobody has touched has to keep landing where the automatic
+   * walk puts it — otherwise adding a conversation to an arranged crew drops
+   * it on top of the first card.
+   *
+   * Mutation that reds it: ignore `canvasX/canvasY` in `buildCanvasGraph` and
+   * always use `place()`.
+   */
+  it('puts a moved card where it was left, and lays out the rest', () => {
+    const graph = buildCanvasGraph(
+      [
+        group(
+          ['a', 'b'],
+          [
+            { sessionId: 'a', batonName: null, canvasX: 600, canvasY: 320 },
+            { sessionId: 'b', batonName: null, canvasX: null, canvasY: null },
+          ],
+        ),
+      ],
+      [],
+    )
+
+    const moved = graph.nodes.find((node) => node.id === 'a')
+    const untouched = graph.nodes.find((node) => node.id === 'b')
+    expect(moved).toMatchObject({ x: 600, y: 320 })
+    // The walk still placed the other one, and not at the origin.
+    expect(untouched?.x).toBeGreaterThan(0)
+    expect(untouched?.y).toBeGreaterThan(0)
+    expect(untouched).not.toMatchObject({ x: 600, y: 320 })
+  })
+
+  /**
+   * Half a position is not a position. Reading one coordinate as 0 would drag
+   * the card to the edge of its frame, which looks like a bug rather than an
+   * arrangement.
+   */
+  it('lays out a card that stored only one coordinate', () => {
+    const graph = buildCanvasGraph(
+      [
+        group(
+          ['a'],
+          [{ sessionId: 'a', batonName: null, canvasX: 600, canvasY: null }],
+        ),
+      ],
+      [],
+    )
+
+    expect(graph.nodes[0].x).not.toBe(600)
+  })
+
+  it('grows the crew frame to hold a card moved past its edge', () => {
+    const tight = buildCanvasGraph(
+      [
+        group(
+          ['a'],
+          [{ sessionId: 'a', batonName: null, canvasX: null, canvasY: null }],
+        ),
+      ],
+      [],
+    )
+    const stretched = buildCanvasGraph(
+      [
+        group(
+          ['a'],
+          [{ sessionId: 'a', batonName: null, canvasX: 900, canvasY: 700 }],
+        ),
+      ],
+      [],
+    )
+
+    // A card sitting on top of its own crew's border reads as one that has
+    // fallen out of the crew.
+    expect(stretched.clusters[0].width).toBeGreaterThan(tight.clusters[0].width)
+    expect(stretched.clusters[0].height).toBeGreaterThan(
+      tight.clusters[0].height,
+    )
+    expect(stretched.clusters[0].width).toBeGreaterThanOrEqual(
+      900 + CANVAS_NODE_WIDTH,
+    )
+  })
+
+  /**
+   * L6. The frame only ever grew right and down, so a card dragged ABOVE or
+   * LEFT of where the walk would have put it sat outside its own crew's
+   * border -- the same "fallen out of the crew" picture the rule above exists
+   * to prevent, from the other two sides.
+   *
+   * Mutation that reds it: pin originY at clusterTop instead of absorbing overhang.
+   */
+  it('grows the crew frame to hold a card moved above or left of it', () => {
+    const graph = buildCanvasGraph(
+      [
+        group(
+          ['a'],
+          [{ sessionId: 'a', batonName: null, canvasX: -300, canvasY: -200 }],
+        ),
+      ],
+      [],
+    )
+
+    const frame = graph.clusters[0]
+    const node = graph.nodes[0]
+    expect(node).toMatchObject({ x: -300, y: 44 })
+    expect(frame.x).toBeLessThanOrEqual(-300)
+    expect(frame.y).toBe(0)
+    expect(frame.x + frame.width).toBeGreaterThanOrEqual(
+      node.x + CANVAS_NODE_WIDTH,
+    )
+    expect(frame.y + frame.height).toBeGreaterThanOrEqual(node.y)
+  })
+
+  /**
+   * The stored coordinates are measured from the crew origin, not from the
+   * frame's drawn corner. The origin absorbs upward overhang inside the slot;
+   * reading a drop against the frame instead would change its stored value.
+   *
+   * Mutation that reds it: have `crewLocalPosition` take `x`/`y` again.
+   */
+  it('keeps a drop’s stored coordinates measured from the layout origin', () => {
+    const graph = buildCanvasGraph(
+      [
+        group(
+          ['a'],
+          [{ sessionId: 'a', batonName: null, canvasX: -300, canvasY: -200 }],
+        ),
+      ],
+      [],
+    )
+
+    const node = graph.nodes[0]
+    expect(
+      crewLocalPosition({ x: node.x, y: node.y }, graph.clusters[0]),
+    ).toEqual({ x: -300, y: -200 })
+  })
+})
+
+describe('crewLocalPosition', () => {
+  it('turns an absolute drop into an offset from the crew it belongs to', () => {
+    // Clusters stack down the canvas, so storing an absolute y would move
+    // every arrangement the moment a crew was added above it.
+    expect(
+      crewLocalPosition({ x: 300, y: 900 }, { originX: 0, originY: 800 }),
+    ).toEqual({ x: 300, y: 100 })
   })
 })
