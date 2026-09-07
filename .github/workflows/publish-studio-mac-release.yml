@@ -1,0 +1,151 @@
+name: Publish Studio Mac Release
+
+on:
+  push:
+    tags:
+      - 'studio-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (for example studio-v0.1.0)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: release
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="$REQUESTED_TAG"
+          else
+            TAG="$GITHUB_REF_NAME"
+          fi
+
+          if [ -z "$TAG" ]; then
+            echo "Release tag is required."
+            exit 1
+          fi
+
+          if [[ ! "$TAG" =~ ^studio-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Release tag must be studio-v followed by a semantic version (got: $TAG)"
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#studio-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout release tag for manual runs
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ steps.release.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@ef-global'
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.EF_GLOBAL_PACKAGES_TOKEN }}
+
+      - name: Import Code Signing Certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          curl -o $RUNNER_TEMP/DeveloperIDG2CA.cer https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          curl -o $RUNNER_TEMP/AppleWWDRCAG3.cer https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer
+
+          echo "$APPLE_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/certificate.p12
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          security import $RUNNER_TEMP/DeveloperIDG2CA.cer -k $KEYCHAIN_PATH -T /usr/bin/codesign
+          security import $RUNNER_TEMP/AppleWWDRCAG3.cer -k $KEYCHAIN_PATH -T /usr/bin/codesign
+          security import $RUNNER_TEMP/certificate.p12 -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+      - name: Verify signing identities
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD || secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: BBDY3ZEHGH
+        run: |
+          echo "APPLE_ID length: ${#APPLE_ID}"
+          echo "APPLE_APP_SPECIFIC_PASSWORD length: ${#APPLE_APP_SPECIFIC_PASSWORD}"
+          echo "APPLE_TEAM_ID: $APPLE_TEAM_ID"
+          if [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
+            echo "Missing Apple app-specific password secret. Set APPLE_APP_SPECIFIC_PASSWORD."
+            exit 1
+          fi
+          security find-identity -v -p codesigning
+
+      - name: Verify tag matches package version
+        run: |
+          VERSION=$(node -p "require('./apps/backpack-studio/package.json').version")
+          if [ "studio-v$VERSION" != "${{ steps.release.outputs.tag }}" ]; then
+            echo "Tag ${{ steps.release.outputs.tag }} does not match package version studio-v$VERSION"
+            exit 1
+          fi
+
+      - name: Extract release notes
+        run: |
+          npm run release:notes -w backpack-studio -- "${{ steps.release.outputs.version }}" release-notes.md
+
+      - name: Build macOS artifacts
+        run: npm run package:mac -w backpack-studio
+        env:
+          GH_TOKEN: ${{ secrets.STUDIO_RELEASES_TOKEN }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD || secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: BBDY3ZEHGH
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.STUDIO_RELEASES_TOKEN }}
+        run: |
+          if gh release view --repo marckraw/backpack-studio "${{ steps.release.outputs.tag }}" >/dev/null 2>&1; then
+            gh release upload --repo marckraw/backpack-studio "${{ steps.release.outputs.tag }}" \
+              apps/backpack-studio/release/*.dmg \
+              apps/backpack-studio/release/*.zip \
+              apps/backpack-studio/release/*.blockmap \
+              apps/backpack-studio/release/latest-mac.yml \
+              --clobber
+            gh release edit --repo marckraw/backpack-studio "${{ steps.release.outputs.tag }}" \
+              --title "${{ steps.release.outputs.tag }}" \
+              --notes-file apps/backpack-studio/release-notes.md
+          else
+            gh release create --repo marckraw/backpack-studio "${{ steps.release.outputs.tag }}" \
+              apps/backpack-studio/release/*.dmg \
+              apps/backpack-studio/release/*.zip \
+              apps/backpack-studio/release/*.blockmap \
+              apps/backpack-studio/release/latest-mac.yml \
+              --title "${{ steps.release.outputs.tag }}" \
+              --notes-file apps/backpack-studio/release-notes.md
+          fi

@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: { dedupe: ['react', 'react-dom'] },
   test: {
-    include: ['src/**/*.unit.test.tsx'],
+    include: ['src/**/*.unit.test.tsx', 'electron/**/*.unit.test.ts'],
     environment: 'jsdom',
     restoreMocks: true,
   },

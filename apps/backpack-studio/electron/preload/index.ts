@@ -1,13 +1,25 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import {
+  updateChannels,
+  type UpdatesBridge,
+  type UpdateState,
+} from '../../shared/updates.types'
 
-/**
- * The bridge, deliberately almost empty (MAR-2737).
- *
- * Studio has no IPC surface yet because it has no main-process work to do. The
- * file exists so the shell's three-part shape — main, preload, renderer — is
- * the one Convergence uses, and so the first real capability has somewhere
- * obvious to land.
- */
+const updates: UpdatesBridge = {
+  getState: () => ipcRenderer.invoke(updateChannels.get),
+  check: () => ipcRenderer.invoke(updateChannels.check),
+  download: () => ipcRenderer.invoke(updateChannels.download),
+  install: () => ipcRenderer.invoke(updateChannels.install),
+  subscribe(listener) {
+    const receive = (_event: IpcRendererEvent, state: UpdateState) =>
+      listener(state)
+    ipcRenderer.on(updateChannels.state, receive)
+    return () => {
+      ipcRenderer.removeListener(updateChannels.state, receive)
+    }
+  },
+}
 contextBridge.exposeInMainWorld('backpackStudio', {
   platform: process.platform,
+  updates,
 })

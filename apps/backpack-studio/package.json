@@ -7,20 +7,20 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "package:mac:unsigned": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg zip --x64 --arm64 --publish never",
+    "package:mac:unsigned": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg zip --x64 --arm64 --publish never && node tools/verify-release-assets.mjs",
     "test": "vitest run --config vitest.pure.config.ts",
     "test:pure": "vitest run --config vitest.pure.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "test:unit": "vitest run --config vitest.unit.config.ts",
-    "test:design": "node tools/verify-design-system.mjs"
+    "test:design": "node tools/verify-design-system.mjs",
+    "package:mac": "npm run build && electron-builder --mac dmg zip --x64 --arm64 --publish never && node tools/verify-release-assets.mjs",
+    "release:notes": "node ../../tools/extract-release-notes.mjs CHANGELOG.md"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@ef-global/backpack": "4.8.0",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "electron-updater": "^6.8.3"
   },
   "devDependencies": {
     "@convergence/execution-host-client": "*",
@@ -37,6 +37,10 @@
     "typescript": "^6.0.2",
     "vite": "^7.3.2",
     "vitest": "^4.1.4",
-    "playwright": "^1.60.0"
+    "playwright": "^1.60.0",
+    "yaml": "^2.8.2",
+    "@ef-global/backpack": "4.8.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
   }
 }
