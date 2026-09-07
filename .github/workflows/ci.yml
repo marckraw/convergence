@@ -23,9 +23,13 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@ef-global'
 
       - name: Install dependencies
         run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.EF_GLOBAL_PACKAGES_TOKEN }}
 
       - name: Require changeset on PRs
         if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'changeset-release/')

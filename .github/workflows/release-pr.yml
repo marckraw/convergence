@@ -24,9 +24,13 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@ef-global'
 
       - name: Install dependencies
         run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.EF_GLOBAL_PACKAGES_TOKEN }}
 
       - name: Create or update release PR
         uses: changesets/action@v1

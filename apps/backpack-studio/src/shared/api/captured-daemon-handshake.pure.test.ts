@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   describeHandshakeStatus,
   readCapturedDaemonHandshake,
-} from './hello-screen.pure'
+} from './captured-daemon-handshake.pure'
 
 describe('readCapturedDaemonHandshake', () => {
   /**

@@ -42,7 +42,7 @@ const RENDERER_ANCHOR = join(workspaceDir, 'src', 'app', 'index.tsx')
 const ELECTRON_ANCHOR = join(workspaceDir, 'electron', 'main', 'index.ts')
 
 /** A real module in the sibling app Convergence does not declare. */
-const IN_STUDIO = 'src/features/daemon-handshake/hello-screen.pure'
+const IN_STUDIO = 'src/app/index'
 
 /** A private file of the package Convergence DOES declare (round 5). */
 const IN_CLIENT_CORE = 'src/remote-execution-host.types'

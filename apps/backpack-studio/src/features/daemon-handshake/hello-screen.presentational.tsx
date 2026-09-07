@@ -1,15 +1,16 @@
-import { readCapturedDaemonHandshake } from './hello-screen.pure'
+import type { StudioHandshakeReading } from '../../shared/api'
 
 /**
  * Backpack Studio's hello screen (MAR-2737).
  *
- * Render-only, and the reading is computed at render from a constant, so there
- * is no state and no effect to own — the shape this app will keep as it grows a
- * container above it.
+ * Render-only: StudioApp supplies the same evaluated connection reading used
+ * by the onboarding and home screens, including the developer fixture toggle.
  */
-export function HelloScreen(): React.JSX.Element {
-  const reading = readCapturedDaemonHandshake()
-
+export function HelloScreen({
+  reading,
+}: {
+  reading: StudioHandshakeReading
+}): React.JSX.Element {
   return (
     <main
       style={{
