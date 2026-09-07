@@ -54,6 +54,16 @@ export interface ProviderQuotaUnavailableSnapshot {
   usageUrl?: string
   lastCheckedAt: string
   stale: boolean
+  /**
+   * The provider is starting up, so this is a wait rather than a failure.
+   *
+   * Kept as a flag on the read the surfaces already make rather than as a
+   * second channel: an "unavailable" that is really "not yet" is the one
+   * unavailable reason a surface should show as motion instead of as a dash
+   * (MAR-2825). Mirrored in `src/entities/provider-quota/provider-quota.types.ts`
+   * -- the renderer keeps its own copy of this shape.
+   */
+  warmingUp?: boolean
 }
 
 export type ProviderQuotaSnapshot =

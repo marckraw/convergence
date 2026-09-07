@@ -200,6 +200,54 @@ describe('Codex reset through the composer door', () => {
     },
   )
 
+  it('tells the next start that nothing has run since the boundary — read the wire refusal instead turns red', async () => {
+    // The fact only this side has (MAR-2854). Codex refuses to resume the empty
+    // thread a `/clear` leaves behind in the same words it refuses a thread
+    // whose rollout is gone, so the adapter is told which of the two it is
+    // looking at rather than left to read the sentence.
+    await service.start(sessionId, { text: 'before' })
+    emit({
+      kind: 'session.patch',
+      patch: { continuationToken: 'thread-1', status: 'completed' },
+    })
+    await service.sendMessage(sessionId, { text: '/clear' })
+    const emitter = new ProviderSessionEmitter({
+      providerId: 'codex',
+      emitDelta: (delta) => emit(delta),
+    })
+    emitter.addNote({
+      text: CONTEXT_RESTARTED_NOTE_TEXT,
+      level: 'warning',
+      providerEventType: SESSION_RESTARTED_EVENT_TYPE,
+    })
+    emit({
+      kind: 'session.patch',
+      patch: { continuationToken: 'thread-2', status: 'completed' },
+    })
+
+    await service.sendMessage(sessionId, { text: 'after the clear' })
+    const afterTheClear = starts.at(-1)
+
+    // The adapter records the user's message, as both real ones do, and the
+    // boundary now has a turn after it.
+    emitter.addUserMessage({ text: 'after the clear' })
+    emit({ kind: 'session.patch', patch: { status: 'completed' } })
+    await service.sendMessage(sessionId, { text: 'and another' })
+
+    expect({
+      messages: starts.map((config) => config.initialMessage),
+      flags: starts.map((config) => config.noTurnSinceBoundary),
+      afterTheClearToken: afterTheClear?.continuationToken,
+    }).toEqual({
+      messages: ['before', '/clear', 'after the clear', 'and another'],
+      // The reset itself is started before its own boundary exists, so it is
+      // false; the message after the boundary is the true one; the message
+      // after *that* is false again.
+      flags: [false, false, true, false],
+      afterTheClearToken: 'thread-2',
+    })
+  })
+
   it('drops unconsumed attachment and skill ids at the restart boundary — omit boundary cleanup turns red', async () => {
     const result = await attachments.ingestFiles(DRAFT_SESSION_ID, [
       { name: 'note.txt', bytes: new TextEncoder().encode('hello') },

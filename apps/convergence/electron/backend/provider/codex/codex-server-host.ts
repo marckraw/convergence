@@ -737,6 +737,26 @@ export class CodexServerHostRegistry {
     return host
   }
 
+  /**
+   * Whether the server for this scope is starting up right now.
+   *
+   * A pure read of what exists: a scope with no host has nothing warming. It
+   * deliberately does not go through `get`, which mints a host and *throws*
+   * when no Codex binary has been detected — this question is asked on a timer
+   * by the usage pill (MAR-2825), long before and long after any session, and a
+   * question that can throw is one every caller has to wrap.
+   */
+  isWarmingUp(input: {
+    executionHostId?: string | null
+    account: CodexAccountEnvTarget | null
+  }): boolean {
+    const key = codexServerKey({
+      executionHostId: input.executionHostId ?? 'local',
+      codexHome: input.account?.configDir ?? null,
+    })
+    return this.hosts.get(key)?.isWarmingUp() ?? false
+  }
+
   stopAll(): void {
     for (const host of this.hosts.values()) host.stop()
     this.hosts.clear()

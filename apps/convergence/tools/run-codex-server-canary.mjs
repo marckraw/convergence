@@ -28,7 +28,15 @@ import { build } from 'esbuild'
  *      a non-ephemeral one that ran a turn resumes — the control that makes
  *      "no rollout" mean something (MAR-2824);
  *   8. two helper calls on one account serialise: the second never opens its
- *      connection until the first has finished.
+ *      connection until the first has finished;
+ *   9. a session sent two messages before its thread exists ends up with ONE
+ *      thread on the server, not two (MAR-2826);
+ *  10. after `/clear` and a released handle, the next message answers with no
+ *      recovery note and one boundary in the transcript (MAR-2854).
+ *
+ * Checks 9 and 10 drive the real `CodexProvider`, not just the host: they are
+ * about what the adapter does with the server's answers, and the fake server
+ * cannot be wrong about the wording the way a real one can.
  *
  * The reset case sends two short model turns and writes their rollouts.
  * It checks memory isolation on the same connection (MAR-2819).
@@ -131,9 +139,64 @@ async function answerOnThread(rpc, threadId, text) {
   }
 }
 
+/**
+ * A Convergence session on the real provider, with everything it says.
+ *
+ * The two adapter checks are about a transcript, not about a socket: what has
+ * to be true is that the user is not told a conversation was lost when it was
+ * not, and that one session leaves one thread behind.
+ */
+function openProviderSession(provider, sessionId, cwd, initialMessage, config) {
+  const seen = { notes: [], boundaries: [], answers: [], statuses: [] }
+  const handle = provider.start({
+    sessionId,
+    workingDirectory: cwd,
+    initialMessage,
+    model: null,
+    effort: null,
+    continuationToken: null,
+    permissionConfig: { preset: 'read-only' },
+    ...config,
+  })
+  handle.onStatusChange((status) => seen.statuses.push(status))
+  handle.onContinuationToken((token) => {
+    seen.token = token
+  })
+  handle.onDelta((delta) => {
+    if (delta.kind !== 'conversation.item.add') return
+    const item = delta.item
+    if (item.kind === 'note') {
+      seen.notes.push(item.text)
+      if (item.providerMeta?.providerEventType === 'session.restarted') {
+        seen.boundaries.push(item.text)
+      }
+    }
+    if (item.kind === 'message' && item.actor === 'assistant') {
+      seen.answers.push(item.text)
+    }
+  })
+  return { handle, seen }
+}
+
+/** Waits for a settled turn count, or gives up loudly. */
+async function settled(seen, count, what) {
+  const deadline = Date.now() + 180_000
+  while (Date.now() < deadline) {
+    const done = seen.statuses.filter(
+      (status) => status === 'completed' || status === 'failed',
+    ).length
+    if (done >= count) return
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+  throw new Error(
+    `${what} did not settle ${count} turn(s) within 180s (saw ${seen.statuses.join(',') || 'nothing'})`,
+  )
+}
+
 const outDir = mkdtempSync(join(tmpdir(), 'cvg-codex-canary-'))
 const bundlePath = join(outDir, 'codex-server-host.cjs')
 const oneShotBundlePath = join(outDir, 'codex-one-shot.cjs')
+const providerBundlePath = join(outDir, 'codex-provider.cjs')
 
 let exitCode = 1
 /**
@@ -184,7 +247,28 @@ try {
     logLevel: 'warning',
   })
 
+  await build({
+    entryPoints: [
+      join(
+        appRoot,
+        'electron',
+        'backend',
+        'provider',
+        'codex',
+        'codex-provider.ts',
+      ),
+    ],
+    outfile: providerBundlePath,
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    target: 'node22',
+    external: ['electron', 'better-sqlite3'],
+    logLevel: 'warning',
+  })
+
   const { CodexServerHostRegistry } = await import(`file://${bundlePath}`)
+  const { CodexProvider } = await import(`file://${providerBundlePath}`)
   const { runCodexOneShotOnServer } = await import(
     `file://${oneShotBundlePath}`
   )
@@ -402,6 +486,84 @@ try {
     /first/i.test(firstHelper.text) && /second/i.test(secondHelper.text),
     `${JSON.stringify(firstHelper.text)} / ${JSON.stringify(secondHelper.text)}`,
   )
+
+  // --- MAR-2826 / MAR-2854: the adapter, against the real server.
+  const provider = new CodexProvider(registry)
+  const countThreadsIn = async (directory) => {
+    const reader = await host.connect()
+    try {
+      const listed = await reader.rpc.request('thread/list', {})
+      return (listed?.data ?? []).filter((row) => row?.cwd === directory).length
+    } finally {
+      reader.close()
+    }
+  }
+
+  const raceCwd = mkdtempSync(join(tmpdir(), 'cvg-canary-race-'))
+  const race = openProviderSession(
+    provider,
+    'canary-race',
+    raceCwd,
+    'Reply with exactly: ok',
+  )
+  // The second message goes out while the first thread is still being started:
+  // the shape that used to start two of them (MAR-2826).
+  race.handle.sendMessage('Reply with exactly: ok2')
+  // One settle, not two: what a second message does to a thread that is already
+  // running a turn is the real server's business and varies. The claim here is
+  // only about how many threads exist -- and the second `thread/start` this
+  // check exists to forbid would have happened before either turn could finish,
+  // while both callers still saw no thread at all.
+  await settled(race.seen, 1, 'the single-flight session')
+  await new Promise((resolve) => setTimeout(resolve, 3_000))
+  const raceThreads = await countThreadsIn(raceCwd)
+  race.handle.dispose?.()
+  check(
+    'a session sent two messages before its thread existed leaves ONE thread — removing the single-flight turns red',
+    raceThreads === 1,
+    `${raceThreads} thread(s) for ${raceCwd}; statuses ${race.seen.statuses.join(',')}; notes ${JSON.stringify(race.seen.notes)}`,
+  )
+  rmSync(raceCwd, { recursive: true, force: true })
+
+  const resetCwd = mkdtempSync(join(tmpdir(), 'cvg-canary-reset-'))
+  const beforeClear = openProviderSession(
+    provider,
+    'canary-reset',
+    resetCwd,
+    'Reply with exactly: ok',
+  )
+  await settled(beforeClear.seen, 1, 'the reset session first turn')
+  beforeClear.handle.sendMessage('/clear')
+  await settled(beforeClear.seen, 2, 'the reset')
+  const clearedToken = beforeClear.seen.token
+  // Exactly what the session service does the moment the reset turn completes.
+  beforeClear.handle.dispose?.()
+
+  const afterClear = openProviderSession(
+    provider,
+    'canary-reset',
+    resetCwd,
+    'Reply with exactly: ok3',
+    { continuationToken: clearedToken, noTurnSinceBoundary: true },
+  )
+  await settled(afterClear.seen, 1, 'the message after the reset')
+  afterClear.handle.dispose?.()
+  const recoveryNotes = [
+    ...beforeClear.seen.notes,
+    ...afterClear.seen.notes,
+  ].filter((note) => note.includes('no longer available'))
+  const boundaries = [
+    ...beforeClear.seen.boundaries,
+    ...afterClear.seen.boundaries,
+  ]
+  check(
+    'the message after a /clear answers with no recovery note and one boundary — routing it through recovery turns red',
+    recoveryNotes.length === 0 &&
+      boundaries.length === 1 &&
+      afterClear.seen.answers.length > 0,
+    `${recoveryNotes.length} recovery note(s), ${boundaries.length} boundary(ies), answers=${JSON.stringify(afterClear.seen.answers)}`,
+  )
+  rmSync(resetCwd, { recursive: true, force: true })
 
   const during = countAppServers()
   check(

@@ -70,3 +70,39 @@ export function formatCodexRemainingPercent(
   if (typeof remainingPercent !== 'number') return '--'
   return `${Math.round(remainingPercent)}%`
 }
+
+/**
+ * Whether the Codex pill is waiting on a server that is still starting.
+ */
+export function isCodexUsageWarmingUp(
+  snapshot: ProviderQuotaSnapshot | null,
+): boolean {
+  return snapshot?.status === 'unavailable' && snapshot.warmingUp === true
+}
+
+export interface CodexUsagePillLabel {
+  text: string
+  ariaLabel: string
+}
+
+/**
+ * What the pill says, in one derivation.
+ *
+ * A cold Codex server used to leave the pill reading whatever percentage it
+ * last knew, with nothing behind it — a number above the strip that no machine
+ * below it was still standing behind (MAR-2825, MAR-2619). While the server is
+ * coming up the pill says so instead, and says it in the accessible name too:
+ * "-- remaining" and "warming up" are different claims and must not share a
+ * sentence.
+ */
+export function describeCodexUsagePill(
+  snapshot: ProviderQuotaSnapshot | null,
+): CodexUsagePillLabel {
+  if (isCodexUsageWarmingUp(snapshot)) {
+    return { text: 'warming up', ariaLabel: 'Codex is starting up' }
+  }
+  const label = formatCodexRemainingPercent(
+    getPrimaryCodexWindow(snapshot)?.remainingPercent ?? null,
+  )
+  return { text: label, ariaLabel: `Codex usage ${label} remaining` }
+}

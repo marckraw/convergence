@@ -2321,10 +2321,342 @@ describe('ComposerContainer', () => {
         name: 'Codex usage 87% remaining',
       }),
     ).toBeInTheDocument()
-    expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(
-      false,
-      undefined,
+    // Scoped, not ambient: Codex answers rate limits from the account's own
+    // authenticated session, so an unscoped read reports the default account's
+    // number under whichever account this composer would actually send on, and
+    // asks the default host the warm-up question (MAR-2826 round 1, M3).
+    expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(false, {
+      executionHostId: 'local',
+      providerAccountId: null,
+    })
+  })
+
+  /** A Codex session on this machine, which is what makes the pill render. */
+  function seedCodexSession(): void {
+    const baseProvider = seededProviders()[0]
+    if (!baseProvider) throw new Error('missing base test provider')
+
+    useAppSettingsStore.setState((state) => ({
+      settings: {
+        ...state.settings,
+        defaultProviderId: 'codex',
+        defaultModelId: 'gpt-5.3-codex',
+        defaultEffortId: 'medium',
+      },
+    }))
+
+    useSessionStore.setState((state) => ({
+      providerCatalogs: localProviderCatalogs([
+        {
+          id: 'codex',
+          name: 'Codex',
+          vendorLabel: 'OpenAI',
+          kind: 'conversation',
+          supportsContinuation: true,
+          supportsConversationReset: false,
+          defaultModelId: 'gpt-5.3-codex',
+          modelOptions: [
+            {
+              id: 'gpt-5.3-codex',
+              label: 'GPT-5.3 Codex',
+              defaultEffort: 'medium',
+              effortOptions: [
+                { id: 'low', label: 'Low' },
+                { id: 'medium', label: 'Medium' },
+              ],
+            },
+          ],
+          attachments: baseProvider.attachments,
+          midRunInput: baseProvider.midRunInput,
+        },
+      ]),
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? {
+              ...session,
+              providerId: 'codex',
+              model: 'gpt-5.3-codex',
+              status: 'completed' as const,
+              attention: 'finished' as const,
+            }
+          : session,
+      ),
+    }))
+  }
+
+  it('asks about the account the composer would send on, not the ambient default', async () => {
+    // MAR-2826 round 1, M3. The read was unscoped, so a session running on a
+    // second Codex account was shown the *default* account's number, and the
+    // warm-up question was asked of the default host while this one was the
+    // host actually starting — so nobody on a non-default account ever saw
+    // "warming up". The account here is the one PA4 recorded on the session's
+    // last turn, which is what the composer would send the next one on; Codex
+    // has no picker of its own (that control is Claude Code's).
+    providerAccountsMock = [
+      buildAccount({
+        id: 'acct-b',
+        providerId: 'codex',
+        email: 'b@example.com',
+      }),
+    ]
+    sessionTurnsMock = [{ id: 'turn-1', providerAccountId: 'acct-b' }]
+    seedCodexSession()
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
+      />,
     )
+
+    await waitFor(() =>
+      expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(
+        false,
+        { executionHostId: 'local', providerAccountId: 'acct-b' },
+      ),
+    )
+    // What the pill settles on is this session's account, not the default's.
+    expect(
+      (
+        window.electronAPI.providerQuota.list as ReturnType<typeof vi.fn>
+      ).mock.calls.at(-1),
+    ).toEqual([
+      false,
+      { executionHostId: 'local', providerAccountId: 'acct-b' },
+    ])
+  })
+
+  /** An available Codex snapshot whose five-hour window reads `remaining`. */
+  function codexQuota(remaining: number) {
+    return {
+      providerId: 'codex',
+      status: 'available',
+      source: 'provider-api',
+      planType: 'pro',
+      windows: [
+        {
+          kind: 'five-hour',
+          label: '5 hour usage limit',
+          usedPercent: 100 - remaining,
+          remainingPercent: remaining,
+          windowMinutes: 300,
+          resetsAt: '2026-05-21T15:21:00.000Z',
+        },
+      ],
+      credits: null,
+      limitReachedType: null,
+      lastCheckedAt: '2026-05-21T12:00:00.000Z',
+      stale: false,
+    }
+  }
+
+  it('asks nothing at all until it knows which account it would send on', async () => {
+    // MAR-2826 round 2, H1. The account is two async hops away — enrolment,
+    // then PA4's record of the session's last turn — and in between the
+    // effective account reads `null`, which means "not known yet", not "the
+    // ambient default". The read used to fire in that window, so the very
+    // first question the pill ever asked was about the wrong account.
+    providerAccountsMock = [
+      buildAccount({
+        id: 'acct-b',
+        providerId: 'codex',
+        email: 'b@example.com',
+      }),
+    ]
+    sessionTurnsMock = [{ id: 'turn-1', providerAccountId: 'acct-b' }]
+    seedCodexSession()
+    const list = window.electronAPI.providerQuota.list as ReturnType<
+      typeof vi.fn
+    >
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
+      />,
+    )
+
+    await waitFor(() => expect(list.mock.calls.length).toBeGreaterThan(0))
+    // The FIRST question, not merely some later one: a scoped read arriving
+    // second does not undo an unscoped read that already went out.
+    expect(list.mock.calls[0]).toEqual([
+      false,
+      { executionHostId: 'local', providerAccountId: 'acct-b' },
+    ])
+  })
+
+  it('ignores a slower answer about an account it has stopped asking about', async () => {
+    // MAR-2826 round 2, H1. The scope can change again long after the first
+    // read — a session switch here — and an answer is only ever about the
+    // scope it was asked with. Nothing in the snapshot names the account that
+    // answered, so the composer remembers which question is still its own;
+    // without that, the older read landing last puts the other account's
+    // number on the pill and leaves it there until the next quiet tick.
+    providerAccountsMock = [
+      buildAccount({
+        id: 'acct-b',
+        providerId: 'codex',
+        email: 'b@example.com',
+      }),
+      buildAccount({
+        id: 'acct-c',
+        providerId: 'codex',
+        email: 'c@example.com',
+      }),
+    ]
+    sessionTurnsMock = [{ id: 'turn-1', providerAccountId: 'acct-b' }]
+    seedCodexSession()
+    useSessionStore.setState((state) => {
+      const first = state.sessions[0]
+      if (!first) throw new Error('missing seeded session')
+      return { sessions: [first, { ...first, id: 'session-2' }] }
+    })
+
+    const list = window.electronAPI.providerQuota.list as ReturnType<
+      typeof vi.fn
+    >
+    let answerForB: (() => void) | undefined
+    list.mockImplementation(
+      (
+        _forceRefresh: boolean,
+        scope?: { providerAccountId?: string | null },
+      ) =>
+        scope?.providerAccountId === 'acct-b'
+          ? new Promise((resolve) => {
+              answerForB = () => resolve([codexQuota(87)])
+            })
+          : Promise.resolve([codexQuota(42)]),
+    )
+
+    const view = render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
+      />,
+    )
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(false, {
+        executionHostId: 'local',
+        providerAccountId: 'acct-b',
+      }),
+    )
+
+    // He switches to the session on the other account while the first read is
+    // still on the wire.
+    sessionTurnsMock = [{ id: 'turn-2', providerAccountId: 'acct-c' }]
+    view.rerender(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-2',
+        }}
+      />,
+    )
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(false, {
+        executionHostId: 'local',
+        providerAccountId: 'acct-c',
+      }),
+    )
+    expect(
+      await screen.findByRole('button', { name: 'Codex usage 42% remaining' }),
+    ).toBeInTheDocument()
+
+    // The abandoned question finally answers.
+    answerForB?.()
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(
+      screen.getByRole('button', { name: 'Codex usage 42% remaining' }),
+    ).toBeInTheDocument()
+  })
+
+  it('re-asks every 3s while the pill says warming up, and every 120s once it does not', async () => {
+    // The cadence is the honesty of the claim: the resident Codex server comes
+    // up in 7-25s, so at the quiet cadence a pill reading "warming up" would go
+    // on saying it for up to two minutes after the wait ended — the class of
+    // lie the strip may not tell (MAR-2825, MAR-2619; MAR-2826 round 1, L4).
+    const warming = {
+      providerId: 'codex',
+      status: 'unavailable',
+      source: 'provider-api',
+      reason: 'Codex is starting up.',
+      lastCheckedAt: '2026-05-21T12:00:00.000Z',
+      stale: false,
+      warmingUp: true,
+    }
+    const list = window.electronAPI.providerQuota.list as ReturnType<
+      typeof vi.fn
+    >
+    // An explicit snapshot, not whatever the shared mock last returned: read
+    // off `mock.results` this was `undefined` after `beforeEach` recreated the
+    // mock, the lookup threw, the catch left the snapshot `null` — so the
+    // 120s branch was proven for "the read failed" and not for "a number
+    // arrived", and a cadence keyed on `status === 'available'` stayed green
+    // (MAR-2826 round 2, M-b).
+    const ready = [codexQuota(87)]
+    list.mockResolvedValue([warming])
+    seedCodexSession()
+    vi.useFakeTimers()
+
+    try {
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+      await act(async () => {})
+      const afterFirstRead = list.mock.calls.length
+
+      await act(async () => {
+        vi.advanceTimersByTime(3_000)
+      })
+      const whileWarming = list.mock.calls.length
+
+      // The wait ends: the next answer carries a number, and the pill drops
+      // back to the quiet cadence rather than keeping the fast one forever.
+      list.mockResolvedValue(ready)
+      await act(async () => {
+        vi.advanceTimersByTime(3_000)
+      })
+      const firstReadyRead = list.mock.calls.length
+      await act(async () => {
+        vi.advanceTimersByTime(3_000)
+      })
+      const stillQuiet = list.mock.calls.length
+      await act(async () => {
+        vi.advanceTimersByTime(120_000)
+      })
+
+      expect({
+        warmingReAsked: whileWarming - afterFirstRead,
+        readyReAsked: stillQuiet - firstReadyRead,
+        quietTickReAsked: list.mock.calls.length - stillQuiet,
+      }).toEqual({ warmingReAsked: 1, readyReAsked: 0, quietTickReAsked: 1 })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('hides Codex usage in the composer for Pi sessions on OpenAI models', async () => {

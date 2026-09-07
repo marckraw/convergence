@@ -1,5 +1,7 @@
 import type { SessionQueuedInputRow } from '../database/database.types'
+import { SESSION_RESTARTED_EVENT_TYPE } from '../provider/session-restart.pure'
 import type { SkillSelection } from '../skills/skills.types'
+import type { ConversationItem } from './conversation-item.types'
 import type {
   AttentionRequestKind,
   AttentionState,
@@ -182,4 +184,60 @@ export function describeProviderIdentityRefusal(
     return `This selection was made against ${requestedProviderId}, but the session runs on ${session.providerId}. The provider is fixed for the life of a session.`
   }
   return null
+}
+
+/**
+ * Whether the conversation shows no turn taken since its last boundary.
+ *
+ * A boundary is the marker a provider draws when it mints a new conversation
+ * underneath the session -- `/clear` (`SESSION_RESTARTED_EVENT_TYPE`). The
+ * question this answers is one only the transcript can: *is the conversation
+ * the continuation token names one that has never been spoken to?*
+ *
+ * A provider needs it because the wire cannot tell it apart from a much worse
+ * thing. Codex refuses to resume a thread that took no turn and a thread whose
+ * rollout was pruned off disk with the same sentence, and the two demand
+ * opposite behaviour: silence after a deliberate clear, an honest "previous
+ * context may be missing" after a real loss (MAR-2854).
+ *
+ * Anything but a note ends it. Notes are the one kind a provider writes
+ * unprompted -- a warning, an obituary, the boundary itself -- so they are the
+ * one kind that cannot mean a turn was taken; everything else in a transcript
+ * exists because one was. Asking the narrower question ("was there a *user*
+ * message?") would answer identically on every reachable transcript and be
+ * wrong on the first one that is not, which is the wrong direction to be wrong
+ * in: this flag's only power is to silence a warning, so it must fail toward
+ * saying it.
+ */
+export function hasNoTurnSinceLastBoundary(
+  items: readonly ConversationItem[],
+): boolean {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]
+    if (item.kind !== 'note') return false
+    if (
+      item.kind === 'note' &&
+      item.providerMeta.providerEventType === SESSION_RESTARTED_EVENT_TYPE
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
+ * The assistant's own words so far, for the flows that prime a new provider
+ * process with them (local relays and forks).
+ */
+export function previousAssistantMessageTexts(
+  items: readonly ConversationItem[],
+): string[] {
+  return items
+    .filter(
+      (item): item is Extract<ConversationItem, { kind: 'message' }> =>
+        item.kind === 'message' &&
+        item.actor === 'assistant' &&
+        item.text.trim().length > 0,
+    )
+    .map((item) => item.text)
 }

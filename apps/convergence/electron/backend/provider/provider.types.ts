@@ -124,6 +124,23 @@ export interface SessionStartConfig {
   effort: ReasoningEffort | null
   serviceTier?: string | null
   continuationToken: string | null
+  /**
+   * Whether the conversation named by `continuationToken` has carried no turn
+   * since the last boundary — the ledger's answer, not the provider's guess.
+   *
+   * A deliberate `/clear` opens a fresh Codex thread, and a thread only gets a
+   * rollout once it has taken a user message. So the message after a clear
+   * resumes a thread the server has never written down, is refused, and used to
+   * be routed through the same recovery path a genuinely lost conversation
+   * takes — announcing that "previous provider context may be missing" when a
+   * boundary two lines above says the user asked for exactly that (MAR-2854).
+   *
+   * The wording of the refusal cannot answer this: a rollout pruned off disk
+   * from a conversation that *did* run refuses in the same words, and there the
+   * warning is true and must survive. Only the transcript knows which of the
+   * two happened, so the transcript is asked.
+   */
+  noTurnSinceBoundary?: boolean
   permissionConfig?: SessionPermissionConfig
   /**
    * Provider account for the session's first turn. Composer state only after

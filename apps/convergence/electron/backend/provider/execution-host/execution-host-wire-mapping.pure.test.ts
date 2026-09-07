@@ -441,6 +441,7 @@ describe('buildWireStartRequest', () => {
       'previousAssistantTexts',
       'serviceTier',
       'providerAccountId',
+      'noTurnSinceBoundary',
     ])
 
     const request = buildWireStartRequest('claude', {
@@ -450,6 +451,7 @@ describe('buildWireStartRequest', () => {
       previousAssistantTexts: ['earlier reply'],
       serviceTier: 'priority',
       providerAccountId: 'account-1',
+      noTurnSinceBoundary: true,
     })
 
     for (const field of EXECUTION_HOST_UNMAPPED_START_CONFIG_FIELDS) {

@@ -162,6 +162,29 @@ describe('CodexServerHost', () => {
     expect(env.children).toHaveLength(2)
   })
 
+  it('answers the warm-up question without minting or spawning anything — answer through get() turns red', async () => {
+    // The pill asks this on a timer (MAR-2825). A read that spawns what it is
+    // asking about would make the question its own cause, and would spawn a
+    // second app-server under an account nobody had opened a session on.
+    const env = createEnvironment()
+
+    // Asked on a timer by the usage pill, including before Codex is detected
+    // at all — where `get` throws "Codex CLI was not detected."
+    expect(
+      new CodexServerHostRegistry({}).isWarmingUp({ account: accountA }),
+    ).toBe(false)
+    expect(env.registry.isWarmingUp({ account: accountA })).toBe(false)
+    expect(env.children).toHaveLength(0)
+
+    const connecting = env.registry.get({ account: accountA }).connect()
+    expect(env.registry.isWarmingUp({ account: accountA })).toBe(true)
+    expect(env.registry.isWarmingUp({ account: accountB })).toBe(false)
+
+    const connection = await connecting
+    expect(env.registry.isWarmingUp({ account: accountA })).toBe(false)
+    connection.close()
+  })
+
   it('waits for /readyz before handing out a connection', async () => {
     const env = createEnvironment({ readyAfterProbes: 3 })
     const host = env.registry.get({ account: null })

@@ -102,6 +102,7 @@ import {
   type LocalRepositoryState,
 } from './work-address-slot.pure'
 import { CodexUsagePillContainer } from './codex-usage-pill.container'
+import { isCodexUsageWarmingUp } from './codex-usage-pill.pure'
 import { shouldShowCodexBillingControls } from './codex-usage-pill.pure'
 import { ContextWindowDot } from './context-window-dot.container'
 import { Button } from '@/shared/ui/button'
@@ -192,6 +193,28 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const [selectedProviderAccountId, setSelectedProviderAccountId] = useState<
     string | null
   >(null)
+  /**
+   * What the two async hops behind "which account would this composer send
+   * on" have answered, and what they answered it *for* (MAR-2826 round 2, H1).
+   *
+   * Enrolment lands first and the session's last-turn account second, and
+   * until both have, the effective account reads `null` — which means "not
+   * known yet", not "the ambient default". Anything asking a question *about*
+   * the account has to wait for the difference.
+   *
+   * Each marker carries the inputs it is an answer to rather than being a bare
+   * boolean, because a boolean has to be reset by an effect and the effect
+   * that reads it can run in the same commit and still see the stale `true`.
+   * Compared at render against today's inputs, an answer stops being current
+   * the instant its question changes, whatever order the effects fire in.
+   */
+  const [providerAccountsAnsweredFor, setProviderAccountsAnsweredFor] =
+    useState<{ sessionId: string | null } | null>(null)
+  const [providerAccountSeedAnsweredFor, setProviderAccountSeedAnsweredFor] =
+    useState<{
+      sessionId: string | null
+      accounts: ProviderAccount[]
+    } | null>(null)
   /**
    * The machine he last picked for a session being born (MAR-2642).
    *
@@ -1068,7 +1091,11 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         // ambient default, which is exactly what it did before PA5.
         accounts = []
       }
-      if (!cancelled) setProviderAccounts(accounts)
+      if (cancelled) return
+      setProviderAccounts(accounts)
+      // A refusal is an answer too: "no accounts here" is a known scope, and
+      // waiting forever on it would leave the pill blank rather than honest.
+      setProviderAccountsAnsweredFor({ sessionId: activeSessionId })
     })()
     return () => {
       cancelled = true
@@ -1117,7 +1144,15 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       )
     }
 
-    void seed()
+    void seed().finally(() => {
+      // The seed's completion point, which is what anything scoped to this
+      // account has to wait for (MAR-2826 round 2, H1).
+      if (cancelled) return
+      setProviderAccountSeedAnsweredFor({
+        sessionId: activeSessionId,
+        accounts: providerAccountsForSession,
+      })
+    })
     return () => {
       cancelled = true
     }
@@ -1166,25 +1201,85 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     selection.effortId,
   ])
 
+  /**
+   * The account the pill is about: the one this composer would send on.
+   *
+   * Codex answers rate limits from the account's own authenticated session, so
+   * an unscoped read asks about the ambient default — and on a session using a
+   * second account the pill then reported the default account's number under
+   * this one's name, and asked the default host whether it was warming up while
+   * *this* one was the host actually starting (MAR-2825, ADR 0007 PA8;
+   * MAR-2826 round 1, M3).
+   */
+  const codexUsageScope = useMemo(
+    () => ({
+      executionHostId: executionBar.hostId,
+      providerAccountId: effectiveProviderAccountId,
+    }),
+    [executionBar.hostId, effectiveProviderAccountId],
+  )
+
+  /**
+   * Whether the composer yet knows which account the pill would be about.
+   *
+   * Both hops, and both still answering today's question: a read fired before
+   * they have asks the default host about the default account, and since it
+   * went out FIRST its answer can land LAST, over the scoped one, leaving the
+   * default account's number and warm-up state on the pill until the next
+   * quiet tick two minutes later (MAR-2826 round 2, H1).
+   */
+  const codexUsageScopeSettled =
+    providerAccountsAnsweredFor !== null &&
+    providerAccountsAnsweredFor.sessionId === activeSessionId &&
+    providerAccountSeedAnsweredFor !== null &&
+    providerAccountSeedAnsweredFor.sessionId === activeSessionId &&
+    providerAccountSeedAnsweredFor.accounts === providerAccountsForSession
+
+  /**
+   * Which read the pill is currently listening to.
+   *
+   * The gate above stops the *first* unscoped read; this stops every later
+   * crossing — a session switch, a machine switch, a manual refresh racing a
+   * poll — because the scope can change again at any time and an answer is
+   * only about the scope it was asked with. Nothing here says which account
+   * answered (the snapshot does not carry one), so the composer remembers
+   * which question is still its own.
+   */
+  const codexUsageRequestRef = useRef(0)
+
   const loadCodexUsage = useCallback(
     async (forceRefresh = false) => {
       if (!showCodexBillingControls) return
+      const generation = (codexUsageRequestRef.current += 1)
+      const isCurrent = () => generation === codexUsageRequestRef.current
       setCodexUsageLoading(true)
       try {
-        setCodexUsageSnapshot(
-          findProviderQuotaSnapshot(
-            await providerQuotaApi.list(forceRefresh),
-            'codex',
-          ),
+        const snapshots = await providerQuotaApi.list(
+          forceRefresh,
+          codexUsageScope,
         )
+        if (!isCurrent()) return
+        setCodexUsageSnapshot(findProviderQuotaSnapshot(snapshots, 'codex'))
       } catch {
+        if (!isCurrent()) return
         setCodexUsageSnapshot(null)
       } finally {
-        setCodexUsageLoading(false)
+        if (isCurrent()) setCodexUsageLoading(false)
       }
     },
-    [showCodexBillingControls],
+    [codexUsageScope, showCodexBillingControls],
   )
+
+  /**
+   * How often to ask again. A pill reading "warming up" is only honest while it
+   * still is: the resident Codex server comes up in 7-25s (MAR-2823), so at the
+   * quiet cadence the pill would go on claiming a wait for up to two minutes
+   * after it ended, which is the class of lie the strip may not tell
+   * (MAR-2825, MAR-2619).
+   */
+  const codexUsagePollMs = isCodexUsageWarmingUp(codexUsageSnapshot)
+    ? 3_000
+    : 120_000
 
   useEffect(() => {
     if (!showCodexBillingControls) {
@@ -1193,12 +1288,21 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       return undefined
     }
 
+    // Not yet knowing the account is not the same as there being none, and
+    // the pill may not ask under a name it has not read yet (H1).
+    if (!codexUsageScopeSettled) return undefined
+
     void loadCodexUsage(false)
     const intervalId = window.setInterval(() => {
       void loadCodexUsage(false)
-    }, 120_000)
+    }, codexUsagePollMs)
     return () => window.clearInterval(intervalId)
-  }, [loadCodexUsage, showCodexBillingControls])
+  }, [
+    codexUsagePollMs,
+    codexUsageScopeSettled,
+    loadCodexUsage,
+    showCodexBillingControls,
+  ])
 
   const isSessionDone =
     !activeSession ||

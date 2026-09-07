@@ -104,6 +104,23 @@ function readWorkingTreeFile(
   }
 }
 
+/**
+ * A turn capture that could not be written down, named rather than thrown.
+ *
+ * Both ends of a turn are opened by callers that cannot await them -- a bare
+ * `void` at the start (`session.service.ts`, `applyDelta`) and a debounce timer
+ * at the end -- so a rejection here has nowhere to go and surfaces as an
+ * unhandled rejection in the main process, which in the test runner reads as
+ * "all tests passed, 1 error" (MAR-2630). Reporting is what a caller-less
+ * failure gets instead of throwing.
+ */
+export interface TurnCaptureFailure {
+  phase: 'start' | 'end'
+  sessionId: string
+  turnId: string
+  reason: string
+}
+
 export class TurnCaptureService {
   private baselines = new Map<string, TurnBaseline>()
   private inFlightStarts = new Map<string, Promise<void>>()
@@ -114,13 +131,67 @@ export class TurnCaptureService {
   private inFlightFinalizes = new Map<string, Promise<void>>()
   private emitDelta: TurnDeltaEmitter = () => {}
   private readonly debounceMs: number
+  private readonly reportFailure: (failure: TurnCaptureFailure) => void
 
   constructor(
     private readonly gitService: GitService,
     private readonly db: Database.Database,
-    options?: { debounceMs?: number },
+    options?: {
+      debounceMs?: number
+      reportFailure?: (failure: TurnCaptureFailure) => void
+    },
   ) {
     this.debounceMs = options?.debounceMs ?? 150
+    this.reportFailure =
+      options?.reportFailure ??
+      ((failure) =>
+        console.error(
+          `[turn-capture] could not record the ${failure.phase} of turn ${failure.turnId}: ${failure.reason}`,
+        ))
+  }
+
+  /**
+   * Runs one half of a turn capture so that its failure is reported, never
+   * thrown into nowhere.
+   *
+   * The closed database is checked up front as well as caught, because between
+   * deciding to write and writing, `finalizeEnd` spawns git: asking first is
+   * what stops a doomed finalize doing all of that work to reach a handle that
+   * is already gone. Either way it reports -- a write that silently returns
+   * like a success is its own defect -- and reports the state rather than a
+   * stack, because a closed handle is not a fault.
+   */
+  private async capture(
+    phase: TurnCaptureFailure['phase'],
+    input: { sessionId: string; turnId: string },
+    work: () => Promise<void>,
+  ): Promise<void> {
+    const report = (reason: string) =>
+      this.reportFailure({
+        phase,
+        sessionId: input.sessionId,
+        turnId: input.turnId,
+        reason,
+      })
+
+    if (!this.db.open) {
+      report('the database is closed')
+      return
+    }
+
+    try {
+      await work()
+    } catch (error) {
+      // Re-read rather than trust the message: the handle can close *under* the
+      // work, and that is the same "nothing left to write to", not a fault.
+      report(
+        this.db.open
+          ? error instanceof Error
+            ? error.message
+            : String(error)
+          : 'the database is closed',
+      )
+    }
   }
 
   setDeltaEmitter(fn: TurnDeltaEmitter): void {
@@ -128,7 +199,9 @@ export class TurnCaptureService {
   }
 
   startTurn(input: StartTurnInput): Promise<void> {
-    const operation = this.captureTurnStart(input)
+    const operation = this.capture('start', input, () =>
+      this.captureTurnStart(input),
+    )
     const tracked = operation.finally(() => {
       if (this.inFlightStarts.get(input.turnId) === tracked) {
         this.inFlightStarts.delete(input.turnId)
@@ -224,7 +297,9 @@ export class TurnCaptureService {
   }
 
   private runFinalize(input: EndTurnInput): void {
-    const promise = this.finalizeEnd(input).finally(() => {
+    const promise = this.capture('end', input, () =>
+      this.finalizeEnd(input),
+    ).finally(() => {
       if (this.inFlightFinalizes.get(input.sessionId) === promise) {
         this.inFlightFinalizes.delete(input.sessionId)
       }

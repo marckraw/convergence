@@ -931,6 +931,27 @@ export class CodexProvider implements Provider {
     let stopped = false
     let threadId: string | null = config.continuationToken
     let threadReady = config.continuationToken === null
+    /**
+     * The thread resolution in flight, so two callers cannot each start one.
+     *
+     * `ensureServer` has had this shape since CX2-1 and `ensureThread` did not:
+     * a session whose first `thread/start` was still on the wire when a second
+     * message arrived saw `threadId === null` twice and started two threads,
+     * keeping whichever id came back last and orphaning the other on the
+     * resident server (MAR-2826, reproduced live on 0.153.4). Every caller
+     * awaits the one promise instead.
+     */
+    let resolvingThread: Promise<string> | null = null
+    /**
+     * Whether the thread `threadId` names has carried no turn since the last
+     * boundary — seeded from the ledger (`noTurnSinceBoundary`), set again when
+     * a reset opens a fresh thread, and cleared the moment a turn is sent.
+     *
+     * It is the difference between the two refusals `thread/resume` spells the
+     * same way: a thread that never took a turn (nothing to recover) and one
+     * whose rollout is gone (context genuinely missing). See MAR-2854.
+     */
+    let threadUnusedSinceBoundary = config.noTurnSinceBoundary === true
     let assistantTextBuffer = ''
     let assistantMessageItemId: string | null = null
     let thinkingBuffer = ''
@@ -1174,6 +1195,50 @@ export class CodexProvider implements Provider {
       return discoveredThreadId
     }
 
+    /**
+     * Everything this session knew about its thread's readiness, dropped.
+     *
+     * One helper rather than the same pair of assignments at each connection
+     * change: a resolution in flight belongs to the connection it was issued
+     * on, so a connection that goes takes it with it, and a caller arriving on
+     * the new one must not be handed the dead promise to await.
+     */
+    function forgetThreadReadiness(): void {
+      threadReady = false
+      resolvingThread = null
+    }
+
+    /**
+     * The recovery note, emitted only when something could actually have been
+     * lost.
+     *
+     * A thread that has taken no turn since the last boundary has no rollout
+     * for the server to find — that is what a deliberate `/clear` leaves
+     * behind — so starting another one restores nothing, and warning about
+     * missing context contradicts the boundary drawn two lines above it in the
+     * same transcript (MAR-2854).
+     *
+     * The refusal's own wording cannot make this call: a rollout pruned off
+     * disk from a conversation that *did* run is refused in exactly the same
+     * words, and there the warning is true and has to survive. Only the ledger
+     * knows which of the two happened, and it was asked before this session
+     * started.
+     *
+     * One function because the server refuses a missing thread at *two* doors —
+     * `thread/resume` and `turn/start` — and a guard on one of them leaves the
+     * lie reachable through the other (MAR-2826 round 1, M1).
+     */
+    function noteMissingThreadRecovery(): void {
+      if (threadUnusedSinceBoundary) return
+
+      const recoveryEntry = buildCodexThreadRecoveryEntry(now())
+      sessionEmitter.addNote({
+        text: recoveryEntry.text,
+        level: recoveryEntry.level,
+        timestamp: recoveryEntry.timestamp,
+      })
+    }
+
     async function resumeExistingThread(
       activeRpc: JsonRpcClient,
       continuationThreadId: string,
@@ -1203,28 +1268,55 @@ export class CodexProvider implements Provider {
           throw err
         }
 
-        const recoveryEntry = buildCodexThreadRecoveryEntry(now())
-        sessionEmitter.addNote({
-          text: recoveryEntry.text,
-          level: recoveryEntry.level,
-          timestamp: recoveryEntry.timestamp,
-        })
-
+        noteMissingThreadRecovery()
         threadId = null
         threadReady = false
+        // Already inside the published resolution, so this takes the door
+        // directly: joining `resolvingThread` here would be awaiting the very
+        // promise this call is resolving.
         return startFreshThread(activeRpc)
       }
     }
 
-    async function ensureThread(activeRpc: JsonRpcClient): Promise<string> {
-      if (threadId) {
-        if (!threadReady) {
-          return resumeExistingThread(activeRpc, threadId)
-        }
-        return threadId
+    /**
+     * Runs a thread resolution as *the* one in flight for this session.
+     *
+     * The single flight is the one door every thread start goes through — the
+     * first message, a resume, a recovery, and the reset's fresh thread — so a
+     * caller arriving while one is on the wire joins it instead of minting a
+     * thread of its own and orphaning one of the two (MAR-2826).
+     *
+     * One resume runs outside it, and only one: `manageContext` issues
+     * `thread/resume` on a connection of its own for a compaction. It is safe
+     * *because it cannot mint a thread* — a refusal there is thrown, it has no
+     * `startFreshThread` fallback, and it never assigns `threadId` — so it can
+     * lose a race but it can never leave an orphan behind, which is the thing
+     * this door exists to prevent (MAR-2826 round 2, M-c).
+     */
+    async function publishThreadResolution(
+      attempt: Promise<string>,
+    ): Promise<string> {
+      resolvingThread = attempt
+      try {
+        return await attempt
+      } finally {
+        if (resolvingThread === attempt) resolvingThread = null
       }
+    }
 
-      return startFreshThread(activeRpc)
+    /**
+     * The session's thread, resolved once however many callers ask at once.
+     */
+    async function ensureThread(activeRpc: JsonRpcClient): Promise<string> {
+      if (threadId && threadReady) return threadId
+      if (resolvingThread) return resolvingThread
+
+      const currentThreadId = threadId
+      return publishThreadResolution(
+        currentThreadId
+          ? resumeExistingThread(activeRpc, currentThreadId)
+          : startFreshThread(activeRpc),
+      )
     }
 
     /**
@@ -1241,6 +1333,10 @@ export class CodexProvider implements Provider {
       input: CodexUserInput[],
       clientUserMessageId: string,
     ): Promise<void> {
+      // Sent, not acknowledged: a turn the server took but never answered for
+      // still carried this thread past the boundary, and claiming otherwise is
+      // the one direction this flag must never fail in.
+      threadUnusedSinceBoundary = false
       const acknowledgement = activeRpc
         .request('turn/start', {
           threadId: currentThreadId,
@@ -1416,6 +1512,11 @@ export class CodexProvider implements Provider {
       flushedThinkingByProviderItemId.clear()
       const currentThreadId = await ensureThread(activeRpc)
       const clientUserMessageId = randomUUID()
+      // `requestTurnStart` clears this the moment the turn is *sent*, which is
+      // the right rule for a turn the server took. A turn the server refused
+      // outright never happened, so the flag is put back below rather than
+      // leaving a `/clear`ed thread counting as used (MAR-2826 round 1, M1).
+      const unusedBeforeSend = threadUnusedSinceBoundary
 
       try {
         await requestTurnStart(
@@ -1442,15 +1543,26 @@ export class CodexProvider implements Provider {
           throw err
         }
 
-        const recoveryEntry = buildCodexThreadRecoveryEntry(now())
-        sessionEmitter.addNote({
-          text: recoveryEntry.text,
-          level: recoveryEntry.level,
-          timestamp: recoveryEntry.timestamp,
-        })
+        // The turn was refused, so it is not one this thread took.
+        threadUnusedSinceBoundary = unusedBeforeSend
+        noteMissingThreadRecovery()
+        // Unconditional, and it may stay that way: nothing can replace
+        // `threadId` while this `turn/start` is awaited on this connection.
+        // `ensureThread` short-circuits on a ready thread, so no concurrent
+        // caller resolves one; every route that *does* replace it goes through
+        // `forgetThreadReadiness()` at a connection change, which moves `rpc`
+        // and is caught by the branch above; and the one deliberate
+        // replacement — a `/clear` — is refused outright while a turn is
+        // running (`:2636`, pinned in session-restart.test.ts and
+        // session-codex-reset.service.test.ts). Guarding on
+        // `threadId === currentThreadId` here was measured to be decoration:
+        // no mutation can turn it red (MAR-2826 round 2, L-b).
         threadId = null
         threadReady = false
-        const recoveredThreadId = await startFreshThread(activeRpc)
+        // Through the single flight, not around it: a steer or a second message
+        // arriving during this recovery's own `thread/start` must join it
+        // rather than mint a thread of its own (MAR-2826 round 1, M1).
+        const recoveredThreadId = await ensureThread(activeRpc)
         await requestTurnStart(
           activeRpc,
           recoveredThreadId,
@@ -1516,9 +1628,40 @@ export class CodexProvider implements Provider {
         const oldThreadId = threadId
         setStatus('running')
         setAttention('none')
-        await startFreshThread(input.activeRpc)
-        await unsubscribeThread(input.activeRpc, oldThreadId)
+        // Nothing to clear, so nothing is opened. A reset on a thread-less
+        // session used to mint a thread it then never used and wrote no
+        // boundary for (the note below is the boundary, and it is guarded on
+        // there having been something to clear) — after a relaunch the token
+        // named that unused thread, `thread/resume` refused it, and the next
+        // message warned about context that never existed. A fresh session
+        // gets no boundary (CX2-2), so it gets no thread either
+        // (MAR-2826 round 1, L2).
         if (oldThreadId !== null) {
+          // The old thread stops being this session's answer the moment the
+          // reset begins, and the new one is the resolution in flight — both
+          // set before the first await, so there is no window in which a
+          // concurrent caller can be handed either the thread about to be
+          // unsubscribed or a start of its own. The service gate refuses a
+          // `/clear` while a handle is active; it does not refuse a message
+          // while the reset's own `thread/start` is on the wire, and that
+          // message used to resume the OLD thread and land on the one
+          // unsubscribed two lines below (MAR-2826 round 1, M2).
+          threadReady = false
+          await publishThreadResolution(
+            startFreshThread(input.activeRpc).then((freshThreadId) => {
+              // The thread this boundary opens has taken nothing, and the
+              // ledger will say so to whichever handle carries the next
+              // message (MAR-2854).
+              //
+              // Inside the resolution, not after its await: a caller that
+              // joined the flight resolves on this very promise, so setting
+              // the flag here makes it true for every joiner by construction
+              // instead of by counting microtasks (MAR-2826 round 2, L-a).
+              threadUnusedSinceBoundary = true
+              return freshThreadId
+            }),
+          )
+          await unsubscribeThread(input.activeRpc, oldThreadId)
           sessionEmitter.addNote({
             text: CONTEXT_RESTARTED_NOTE_TEXT,
             level: 'warning',
@@ -1741,7 +1884,7 @@ export class CodexProvider implements Provider {
       connection = null
       rpc = null
       // A fresh connection has resumed nothing, whatever the last one did.
-      threadReady = false
+      forgetThreadReadiness()
       endPendingInteractions()
       abandoned?.close()
 
@@ -1804,7 +1947,7 @@ export class CodexProvider implements Provider {
       if (dying && dying.generation === obituary.generation) {
         connection = null
         rpc = null
-        threadReady = false
+        forgetThreadReadiness()
         endPendingInteractions()
         dying.close()
       }
@@ -1872,7 +2015,15 @@ export class CodexProvider implements Provider {
         // new connection had never subscribed to, and the session's survival
         // came down to whether the error wording happened to contain "not
         // found" (MAR-2317).
-        threadReady = false
+        //
+        // It has to stay BELOW the await. A `thread/start` issued on the dying
+        // connection can answer while `connect` is still in flight, and only a
+        // forget that runs after the await discards that answer; moved above
+        // it, the late `setContinuationToken` would mark this connection ready
+        // for a thread it never subscribed to. Pinned by stability.test.ts >
+        // "re-subscribes a thread whose connection died while it was starting"
+        // (MAR-2826 round 2).
+        forgetThreadReadiness()
         deadInteractionNoted = false
         attachHandlers(opened.rpc)
         return opened.rpc

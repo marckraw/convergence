@@ -38,6 +38,62 @@ describe('CodexQuotaService', () => {
     }
   })
 
+  it('says the server is starting instead of blocking on the cold start — read through to the RPC turns red', async () => {
+    // The read does not fail during a warm-up, it waits: 7-25s with the pill
+    // still showing whatever number it last had (MAR-2825). Answering now, and
+    // saying what the wait is, is both honest and immediate.
+    let warming = true
+    let reads = 0
+    const service = new CodexQuotaService({
+      isWarmingUp: () => warming,
+      readRateLimits: async () => {
+        reads += 1
+        return RATE_LIMITS_RESPONSE
+      },
+    })
+
+    const warmingSnapshot = await service.getQuota()
+    expect({
+      status: warmingSnapshot.status,
+      warmingUp:
+        warmingSnapshot.status === 'unavailable'
+          ? warmingSnapshot.warmingUp
+          : null,
+      reason:
+        warmingSnapshot.status === 'unavailable'
+          ? warmingSnapshot.reason
+          : null,
+      reads,
+    }).toEqual({
+      status: 'unavailable',
+      warmingUp: true,
+      reason: 'Codex is starting up.',
+      reads: 0,
+    })
+
+    warming = false
+    const readySnapshot = await service.getQuota()
+    expect({ status: readySnapshot.status, reads }).toEqual({
+      status: 'available',
+      reads: 1,
+    })
+  })
+
+  it('answers warming up rather than the cached number it can no longer stand behind', async () => {
+    // The control: a cache that is still inside its TTL is exactly the number
+    // the pill would otherwise keep showing across an app restart.
+    let warming = false
+    const service = new CodexQuotaService({
+      isWarmingUp: () => warming,
+      readRateLimits: async () => RATE_LIMITS_RESPONSE,
+    })
+    expect((await service.getQuota()).status).toBe('available')
+
+    warming = true
+    const snapshot = await service.getQuota()
+    expect(snapshot.status).toBe('unavailable')
+  })
+
   it('reports the RPC failure instead of scraping the credential file', async () => {
     // The old fallback read `~/.codex/auth.json` and called an undocumented
     // chatgpt.com endpoint with the user's raw access token, and *any* RPC
