@@ -5,10 +5,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { cn } from '@/shared/lib/cn.pure'
 import { RefreshCw } from 'lucide-react'
 import {
-  formatCodexRemainingPercent,
+  describeCodexUsagePill,
   getCodexUsageTone,
   getCodexWindow,
   getPrimaryCodexWindow,
+  isCodexUsageWarmingUp,
   type CodexUsageTone,
 } from './codex-usage-pill.pure'
 import { CodexUsageQuotaRow } from './codex-usage-quota-row.presentational'
@@ -53,7 +54,8 @@ export function CodexUsagePillContainer({
   const weekly = getCodexWindow(snapshot, 'weekly')
   const remaining = primary?.remainingPercent ?? null
   const tone = getCodexUsageTone(remaining)
-  const label = formatCodexRemainingPercent(remaining)
+  const label = describeCodexUsagePill(snapshot)
+  const warmingUp = isCodexUsageWarmingUp(snapshot)
   const unavailableReason =
     snapshot?.status === 'unavailable' ? snapshot.reason : null
 
@@ -88,7 +90,7 @@ export function CodexUsagePillContainer({
               'h-7 shrink-0 rounded-full border px-2 text-xs font-semibold shadow-none',
               toneClass[tone],
             )}
-            aria-label={`Codex usage ${label} remaining`}
+            aria-label={label.ariaLabel}
             onClick={(event) => {
               event.preventDefault()
               event.stopPropagation()
@@ -98,9 +100,9 @@ export function CodexUsagePillContainer({
             <CodexUsageRing
               value={remaining}
               tone={tone}
-              isLoading={isLoading}
+              isLoading={isLoading || warmingUp}
             />
-            <span>Codex {label}</span>
+            <span>Codex {label.text}</span>
           </Button>
         </span>
       </PopoverTrigger>

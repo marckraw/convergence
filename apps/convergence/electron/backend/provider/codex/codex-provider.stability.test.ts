@@ -673,3 +673,41 @@ describe('Codex server death (MAR-2317, MAR-2823)', () => {
     expect(bed.children[0].exitCode).toBeNull()
   })
 })
+
+describe('Codex single-flight thread start (MAR-2826)', () => {
+  it('starts one thread when a second message arrives while thread/start is in flight', async () => {
+    const bed = createStabilityBed({
+      threadStartDelayMs: 30,
+      threadIdFactory: (count) => `thread-${count}`,
+    })
+    const handle = startSession(bed.provider)
+    const observed = observe(handle)
+
+    await waitFor(() =>
+      expect(bed.server.methodsCalled()).toContain('thread/start'),
+    )
+    handle.sendMessage('second')
+
+    await waitFor(() =>
+      expect(
+        bed.server.requests.filter((r) => r.method === 'turn/start').length,
+      ).toBe(2),
+    )
+
+    expect({
+      starts: bed.server.methodsCalled().filter((m) => m === 'thread/start')
+        .length,
+      turnThreads: bed.server.requests
+        .filter((r) => r.method === 'turn/start')
+        .map((r) => r.params?.threadId),
+      failures: observed.notes.filter((note) => note.level === 'error'),
+    }).toEqual({
+      starts: 1,
+      turnThreads: ['thread-1', 'thread-1'],
+      failures: [],
+    })
+
+    handle.dispose?.()
+    bed.registry.stopAll()
+  })
+})

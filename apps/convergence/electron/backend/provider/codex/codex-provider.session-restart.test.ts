@@ -322,3 +322,138 @@ describe('Codex conversation reset', () => {
     })
   })
 })
+
+/**
+ * The reset and the message after it, with the handle released in between —
+ * which is what the session service does the moment the reset turn completes
+ * (`session.service.ts`, `releaseHandle` on `completed`). Both handles share
+ * one registry, so they share one resident server and one thread ledger.
+ */
+function resetThenReleaseBed(options: FakeCodexServerOptions = {}) {
+  const server = new FakeCodexServer({ autoCompleteTurns: true, ...options })
+  const registry = new CodexServerHostRegistry({
+    appVersion: 'test',
+    cwd: '/tmp',
+    spawnProcess: () => {
+      const child = new FakeCodexChildProcess()
+      setTimeout(() => child.announceListening('ws://127.0.0.1:5150'), 0)
+      return child.asChildProcess()
+    },
+    probeReady: async () => true,
+    connectTransport: async () => server.connect(),
+  })
+  registry.setBinary('/usr/local/bin/codex', '0.153.4')
+  const provider = new CodexProvider(registry)
+  cleanups.push(() => registry.stopAll())
+
+  const deltas: SessionDelta[] = []
+  const statuses: string[] = []
+  const tokens: string[] = []
+  const open = (
+    initialMessage: string,
+    continuationToken: string | null,
+    noTurnSinceBoundary = false,
+  ) => {
+    const handle = provider.start({
+      sessionId: 'same-session',
+      workingDirectory: '/tmp',
+      initialMessage,
+      model: 'gpt-6',
+      effort: 'high',
+      continuationToken,
+      noTurnSinceBoundary,
+    })
+    handle.onDelta((delta) => deltas.push(delta))
+    handle.onStatusChange((status) => statuses.push(status))
+    handle.onContinuationToken((token) => tokens.push(token))
+    cleanups.push(() => handle.dispose?.())
+    return handle
+  }
+
+  return { server, open, deltas, statuses, tokens }
+}
+
+describe('Codex reset then a released handle (MAR-2854)', () => {
+  it('starts the next message silently when no turn ran since the boundary — route it through recovery turns red', async () => {
+    const bed = resetThenReleaseBed({ unmaterializedThreadIds: ['thread-2'] })
+
+    const first = bed.open('before', null)
+    await vi.waitUntil(() => bed.statuses.at(-1) === 'completed')
+    first.sendMessage('/clear')
+    await vi.waitUntil(
+      () =>
+        bed.statuses.filter((status) => status === 'completed').length === 2,
+    )
+    // The service releases the handle the moment the reset turn completes.
+    first.dispose?.()
+
+    // The next message arrives on a brand-new handle carrying the thread the
+    // reset created, and the ledger's answer to "has anything run since the
+    // boundary?".
+    const second = bed.open('after', 'thread-2', true)
+    await vi.waitUntil(() =>
+      bed.deltas.some(
+        (delta) =>
+          delta.kind === 'conversation.item.add' &&
+          delta.item.kind === 'message' &&
+          delta.item.actor === 'user' &&
+          delta.item.text === 'after',
+      ),
+    )
+    await vi.waitUntil(
+      () =>
+        bed.server.requests.filter((r) => r.method === 'turn/start').length ===
+        2,
+    )
+    void second
+
+    const items = bed.deltas.flatMap((delta) =>
+      delta.kind === 'conversation.item.add' ? [delta.item] : [],
+    )
+    expect({
+      recoveryNotes: items.flatMap((item) =>
+        item.kind === 'note' && item.text.includes('no longer available')
+          ? [item.text]
+          : [],
+      ),
+      boundaries: items.filter(
+        (item) =>
+          item.kind === 'note' &&
+          item.providerMeta.providerEventType === SESSION_RESTARTED_EVENT_TYPE,
+      ).length,
+      turnThreads: bed.server.requests
+        .filter((r) => r.method === 'turn/start')
+        .map((r) => r.params?.threadId),
+    }).toEqual({
+      recoveryNotes: [],
+      boundaries: 1,
+      turnThreads: ['thread-1', 'thread-3'],
+    })
+  })
+
+  it('still warns when a thread that carried a turn cannot be resumed — dropping the note outright turns red', async () => {
+    // The control that makes the silence above mean something. `thread/resume`
+    // refuses a rollout pruned off disk in exactly the same words it refuses a
+    // thread that never ran, so a fix keyed on the wording would silence this
+    // one too — and here the context really is gone and the warning is true.
+    const bed = resetThenReleaseBed({ unmaterializedThreadIds: ['thread-9'] })
+
+    bed.open('after', 'thread-9', false)
+    await vi.waitUntil(
+      () =>
+        bed.server.requests.filter((r) => r.method === 'turn/start').length ===
+        1,
+    )
+
+    const items = bed.deltas.flatMap((delta) =>
+      delta.kind === 'conversation.item.add' ? [delta.item] : [],
+    )
+    expect(
+      items.flatMap((item) =>
+        item.kind === 'note' && item.text.includes('no longer available')
+          ? [item.level]
+          : [],
+      ),
+    ).toEqual(['warning'])
+  })
+})

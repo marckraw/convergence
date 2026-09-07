@@ -63,6 +63,139 @@ describe('TurnCaptureService', () => {
     rmSync(tempDir, { recursive: true, force: true })
   })
 
+  it('reports a finalize that lands on a closed database instead of throwing into nowhere', async () => {
+    // The teardown race MAR-2630 filed, made deterministic. `closeActiveTurn`
+    // is synchronous and `endTurn` schedules its finalize on a timer, so no
+    // caller exists to await the write: a database that closes under it left a
+    // rejection with nowhere to go, which Vitest reported as "all tests
+    // passed, 1 error" -- the reading that gets skimmed as green.
+    const failures: unknown[] = []
+    const countingGit = new GitService()
+    const guarded = new TurnCaptureService(countingGit, db, {
+      debounceMs: 0,
+      reportFailure: (failure) => failures.push(failure),
+    })
+    const sessionId = randomUUID()
+    const turnId = randomUUID()
+    seedSessionRow(db, sessionId, repoPath)
+    await guarded.startTurn({ sessionId, turnId, workingDirectory: repoPath })
+
+    // Counted from here: the finalize's own git work, which only begins after
+    // the baseline the start already took.
+    let gitReads = 0
+    const realGetStatus = countingGit.getStatus.bind(countingGit)
+    countingGit.getStatus = async (dir: string) => {
+      gitReads += 1
+      return realGetStatus(dir)
+    }
+
+    guarded.endTurn({
+      sessionId,
+      turnId,
+      status: 'completed',
+      summarySource: null,
+    })
+    closeDatabase()
+
+    await expect(guarded.flushPendingEnd(sessionId)).resolves.toBeUndefined()
+    expect(failures).toEqual([
+      {
+        phase: 'end',
+        sessionId,
+        turnId,
+        reason: 'the database is closed',
+      },
+    ])
+    // Asked before the work, not only after it: a finalize that cannot land
+    // must not spawn git to discover that.
+    expect(gitReads).toBe(0)
+  })
+
+  it('reports a database that closes UNDER a finalize, not only one already closed', async () => {
+    // The other half of the race, and the one the pre-check cannot see:
+    // `finalizeEnd` does asynchronous git work between deciding to write and
+    // writing, so the handle can go in the middle. Without this case a fix that
+    // only checks up front reads as covered (MAR-2630).
+    const failures: unknown[] = []
+    const slowGit = new GitService()
+    const guarded = new TurnCaptureService(slowGit, db, {
+      debounceMs: 0,
+      reportFailure: (failure) => failures.push(failure),
+    })
+    const sessionId = randomUUID()
+    const turnId = randomUUID()
+    seedSessionRow(db, sessionId, repoPath)
+    await guarded.startTurn({ sessionId, turnId, workingDirectory: repoPath })
+    writeFileSync(join(repoPath, 'mid-flight.txt'), 'written\n')
+
+    // Only the finalize's own git read is held, and only after the baseline has
+    // been taken -- so the pause lands strictly between deciding to write and
+    // writing.
+    let releaseStatus!: () => void
+    const held = new Promise<void>((resolve) => {
+      releaseStatus = resolve
+    })
+    let entered!: () => void
+    const parked = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    const realGetStatus = slowGit.getStatus.bind(slowGit)
+    slowGit.getStatus = async (dir: string) => {
+      const status = await realGetStatus(dir)
+      entered()
+      await held
+      return status
+    }
+
+    guarded.endTurn({
+      sessionId,
+      turnId,
+      status: 'completed',
+      summarySource: null,
+    })
+    await parked
+    expect(failures).toEqual([])
+    closeDatabase()
+    releaseStatus()
+
+    await expect(guarded.flushPendingEnd(sessionId)).resolves.toBeUndefined()
+    expect(failures).toEqual([
+      {
+        phase: 'end',
+        sessionId,
+        turnId,
+        reason: 'the database is closed',
+      },
+    ])
+  })
+
+  it('reports a turn start that lands on a closed database instead of throwing into nowhere', async () => {
+    // The same escape at the other end of the turn: `session.service.ts` opens
+    // captures with a bare `void`, so a start that fails has no more of a
+    // caller than an end does.
+    const failures: unknown[] = []
+    const guarded = new TurnCaptureService(git, db, {
+      debounceMs: 0,
+      reportFailure: (failure) => failures.push(failure),
+    })
+    const sessionId = randomUUID()
+    const turnId = randomUUID()
+    seedSessionRow(db, sessionId, repoPath)
+    closeDatabase()
+
+    await expect(
+      guarded.startTurn({ sessionId, turnId, workingDirectory: repoPath }),
+    ).resolves.toBeUndefined()
+    expect(failures).toEqual([
+      {
+        phase: 'start',
+        sessionId,
+        turnId,
+        reason: 'the database is closed',
+      },
+    ])
+  })
+
   it('records the account that served the turn', async () => {
     // Claude's own transcript records no account attribution, so if this row
     // does not hold it, the information does not exist anywhere.

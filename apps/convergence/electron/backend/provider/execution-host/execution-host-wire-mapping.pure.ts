@@ -57,6 +57,10 @@ import type {
  * - `serviceTier` — a Convergence-local provider billing preference.
  * - `providerAccountId` — Convergence's own multi-account concept (ADR 0007).
  *   A remote run authenticates as the daemon's account, not as one of ours.
+ * - `noTurnSinceBoundary` — a fact read off *this* transcript for *this*
+ *   process's adapter (MAR-2854). A remote run's provider is the daemon's own,
+ *   with its own conversation bookkeeping, so the answer would be about the
+ *   wrong ledger even if the wire carried it.
  */
 export const EXECUTION_HOST_UNMAPPED_START_CONFIG_FIELDS = [
   'initialAttachments',
@@ -64,6 +68,7 @@ export const EXECUTION_HOST_UNMAPPED_START_CONFIG_FIELDS = [
   'previousAssistantTexts',
   'serviceTier',
   'providerAccountId',
+  'noTurnSinceBoundary',
 ] as const satisfies readonly (keyof SessionStartConfig)[]
 
 /**

@@ -1,12 +1,101 @@
 import { describe, expect, it } from 'vitest'
+import { SESSION_RESTARTED_EVENT_TYPE } from '../provider/session-restart.pure'
+import type { ConversationItem } from './conversation-item.types'
 import {
   describeModelSelectionRefusal,
   describeProviderIdentityRefusal,
+  hasNoTurnSinceLastBoundary,
   isAttentionRequestSummary,
   parseJsonArray,
   queuedInputFromRow,
   resolveAttentionRequestKind,
 } from './session.pure'
+
+function item(
+  partial: Partial<ConversationItem> & Pick<ConversationItem, 'kind'>,
+  providerEventType: string | null = null,
+): ConversationItem {
+  return {
+    id: 'i',
+    sessionId: 's',
+    sequence: 0,
+    turnId: null,
+    state: 'completed',
+    createdAt: '2026-09-07T00:00:00.000Z',
+    updatedAt: '2026-09-07T00:00:00.000Z',
+    providerMeta: {
+      providerId: 'codex',
+      providerItemId: null,
+      providerEventType,
+    },
+    ...partial,
+  } as ConversationItem
+}
+
+const boundary = () =>
+  item(
+    { kind: 'note', level: 'warning', text: 'Context cleared' },
+    SESSION_RESTARTED_EVENT_TYPE,
+  )
+const userMessage = (text: string) =>
+  item({ kind: 'message', actor: 'user', text })
+const assistantMessage = (text: string) =>
+  item({ kind: 'message', actor: 'assistant', text })
+
+describe('hasNoTurnSinceLastBoundary', () => {
+  it('is false for a conversation that has never had a boundary', () => {
+    expect(hasNoTurnSinceLastBoundary([])).toBe(false)
+    expect(
+      hasNoTurnSinceLastBoundary([userMessage('hi'), assistantMessage('hey')]),
+    ).toBe(false)
+  })
+
+  it('is true when the boundary is the last thing that happened', () => {
+    expect(
+      hasNoTurnSinceLastBoundary([
+        userMessage('hi'),
+        assistantMessage('hey'),
+        boundary(),
+      ]),
+    ).toBe(true)
+  })
+
+  it('is true when only the provider has spoken since the boundary', () => {
+    // A note or an assistant item after the boundary is not a turn on the new
+    // conversation -- an ordinary error note would otherwise cancel the answer.
+    expect(
+      hasNoTurnSinceLastBoundary([
+        boundary(),
+        item({ kind: 'note', level: 'error', text: 'something went wrong' }),
+      ]),
+    ).toBe(true)
+  })
+
+  it.each([
+    ['a user message', userMessage('after')],
+    ['an assistant message', assistantMessage('after')],
+    [
+      'a tool call',
+      item({ kind: 'tool-call', toolName: 'bash', inputText: '' }),
+    ],
+  ])('is false once %s has landed since the boundary', (_label, since) => {
+    // Every one of these exists because a turn was taken. Narrowing this to
+    // user messages alone answers the same on every transcript today and would
+    // be wrong on the first one it is not -- in the direction that swallows a
+    // warning, which is the direction this flag may never fail in.
+    expect(hasNoTurnSinceLastBoundary([boundary(), since])).toBe(false)
+  })
+
+  it('reads the LAST boundary, not the first', () => {
+    expect(
+      hasNoTurnSinceLastBoundary([
+        boundary(),
+        userMessage('after the first'),
+        boundary(),
+      ]),
+    ).toBe(true)
+  })
+})
 
 describe('session pure helpers', () => {
   it('detects attention request summaries', () => {

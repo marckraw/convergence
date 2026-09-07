@@ -25,6 +25,27 @@ export function buildCodexQuotaAuthError(
   }
 }
 
+/**
+ * The honest answer while the resident app-server is still coming up.
+ *
+ * The cold start is 7-25s and paid once per app launch (constitution CX2-1).
+ * Before this, the quota read simply blocked on it and the pill went on showing
+ * whatever it last knew -- a number with nothing behind it (MAR-2825).
+ */
+export function buildCodexQuotaWarmingUp(
+  nowIso: string,
+): ProviderQuotaSnapshot {
+  return {
+    providerId: 'codex',
+    status: 'unavailable',
+    source: 'provider-api',
+    reason: 'Codex is starting up.',
+    lastCheckedAt: nowIso,
+    stale: false,
+    warmingUp: true,
+  }
+}
+
 function readNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value !== 'string') return null

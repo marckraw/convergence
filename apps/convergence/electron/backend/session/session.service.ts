@@ -77,8 +77,10 @@ import { CONVERSATION_PATCH_FLUSH_MS } from './session.constants'
 import {
   describeModelSelectionRefusal,
   describeProviderIdentityRefusal,
+  hasNoTurnSinceLastBoundary,
   isAttentionRequestSummary,
   isTerminalSessionStatus,
+  previousAssistantMessageTexts,
   resolveAttentionRequestKind,
   type AttentionRequestRowLike,
 } from './session.pure'
@@ -2981,7 +2983,7 @@ export class SessionService {
       workingDirectory: place?.workingDirectory ?? session.workingDirectory,
       initialMessage: boot.augmentedText,
       initialSkillSelections,
-      previousAssistantTexts: this.getPreviousAssistantMessageTexts(session.id),
+      ...this.readStartConversationFacts(session.id),
       model: session.model,
       effort: session.effort,
       serviceTier: session.serviceTier ?? null,
@@ -3008,14 +3010,25 @@ export class SessionService {
   }
 
   private getPreviousAssistantMessageTexts(sessionId: string): string[] {
-    return this.getConversation(sessionId)
-      .filter(
-        (item): item is Extract<ConversationItem, { kind: 'message' }> =>
-          item.kind === 'message' &&
-          item.actor === 'assistant' &&
-          item.text.trim().length > 0,
-      )
-      .map((item) => item.text)
+    return previousAssistantMessageTexts(this.getConversation(sessionId))
+  }
+
+  /**
+   * What a starting handle reads off the transcript, from ONE read of it.
+   *
+   * Both facts are answers only the ledger has, and both are needed by every
+   * start, so they are taken together rather than by two independent scans of
+   * the same conversation.
+   */
+  private readStartConversationFacts(sessionId: string): {
+    previousAssistantTexts: string[]
+    noTurnSinceBoundary: boolean
+  } {
+    const conversation = this.getConversation(sessionId)
+    return {
+      previousAssistantTexts: previousAssistantMessageTexts(conversation),
+      noTurnSinceBoundary: hasNoTurnSinceLastBoundary(conversation),
+    }
   }
 
   /**

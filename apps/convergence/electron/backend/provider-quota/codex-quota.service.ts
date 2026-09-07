@@ -3,6 +3,7 @@ import type { ProviderDebugSink } from '../provider-debug/provider-debug-sink'
 import { CODEX_QUOTA_CACHE_TTL_MS } from './codex-quota.constants'
 import {
   buildCodexQuotaAuthError,
+  buildCodexQuotaWarmingUp,
   mapCodexRateLimitsToQuotaSnapshot,
 } from './codex-quota.pure'
 import type { CodexAccountEnvTarget } from '../provider-account/provider-account-codex-env.pure'
@@ -19,6 +20,8 @@ export interface CodexQuotaServiceOptions {
   resolveAccount?: (
     accountId: string | null | undefined,
   ) => CodexAccountEnvTarget | null
+  /** Whether the scope's resident server is still coming up (MAR-2825). */
+  isWarmingUp?: (account: CodexAccountEnvTarget | null) => boolean
   debugSink?: ProviderDebugSink
 }
 
@@ -98,6 +101,27 @@ export class CodexQuotaService {
     })
   }
 
+  /**
+   * Whether this scope's server is starting up.
+   *
+   * Asked before the cache, not after a failure: a quota read during the cold
+   * start does not fail, it *waits* -- for up to 25 seconds, with the pill
+   * showing its last number all the while. Saying "starting up" now is both the
+   * honest answer and the one that returns immediately (MAR-2825).
+   */
+  private isWarmingUp(
+    scope: CodexQuotaRequestScope | undefined,
+    account: CodexAccountEnvTarget | null,
+  ): boolean {
+    if (this.options.isWarmingUp) return this.options.isWarmingUp(account)
+    return (
+      this.serverHosts?.isWarmingUp({
+        executionHostId: scope?.executionHostId,
+        account,
+      }) ?? false
+    )
+  }
+
   private async readQuota(
     account: CodexAccountEnvTarget | null,
     key: string,
@@ -135,6 +159,10 @@ export class CodexQuotaService {
     const accountId = options.scope?.providerAccountId ?? null
     const key = `${options.scope?.executionHostId ?? 'local'}::${accountId ?? 'ambient-default'}`
     const account = this.options.resolveAccount?.(accountId) ?? null
+
+    if (this.isWarmingUp(options.scope, account)) {
+      return buildCodexQuotaWarmingUp(new Date().toISOString())
+    }
 
     const now = Date.now()
     const cached = this.cached.get(key)

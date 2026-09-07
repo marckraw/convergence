@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { ProviderQuotaSnapshot } from '@/entities/provider-quota'
 import {
+  describeCodexUsagePill,
   formatCodexRemainingPercent,
   getCodexUsageTone,
   getCodexWindow,
   getPrimaryCodexWindow,
+  isCodexUsageWarmingUp,
   shouldShowCodexBillingControls,
 } from './codex-usage-pill.pure'
 
@@ -100,5 +102,44 @@ describe('Codex usage pill helpers', () => {
     expect(getCodexUsageTone(40)).toBe('amber')
     expect(getCodexUsageTone(15)).toBe('red')
     expect(getCodexUsageTone(null)).toBe('muted')
+  })
+})
+
+describe('describeCodexUsagePill', () => {
+  const warming: ProviderQuotaSnapshot = {
+    providerId: 'codex',
+    status: 'unavailable',
+    source: 'provider-api',
+    reason: 'Codex is starting up.',
+    lastCheckedAt: '2026-09-07T00:00:00.000Z',
+    stale: false,
+    warmingUp: true,
+  }
+
+  it('says the server is starting rather than a percentage — drop the flag turns red', () => {
+    expect(describeCodexUsagePill(warming)).toEqual({
+      text: 'warming up',
+      ariaLabel: 'Codex is starting up',
+    })
+    expect(isCodexUsageWarmingUp(warming)).toBe(true)
+  })
+
+  it('reads the quota once there is one', () => {
+    expect(describeCodexUsagePill(snapshot)).toEqual({
+      text: '87%',
+      ariaLabel: 'Codex usage 87% remaining',
+    })
+  })
+
+  it('does not claim a warm-up for an ordinary unavailable read', () => {
+    // The control: every other reason the quota is missing still reads as a
+    // dash, so "warming up" keeps meaning the one thing.
+    const failed: ProviderQuotaSnapshot = { ...warming, warmingUp: undefined }
+    expect(describeCodexUsagePill(failed)).toEqual({
+      text: '--',
+      ariaLabel: 'Codex usage -- remaining',
+    })
+    expect(isCodexUsageWarmingUp(failed)).toBe(false)
+    expect(isCodexUsageWarmingUp(null)).toBe(false)
   })
 })

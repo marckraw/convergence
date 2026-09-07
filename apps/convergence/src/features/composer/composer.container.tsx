@@ -102,6 +102,7 @@ import {
   type LocalRepositoryState,
 } from './work-address-slot.pure'
 import { CodexUsagePillContainer } from './codex-usage-pill.container'
+import { isCodexUsageWarmingUp } from './codex-usage-pill.pure'
 import { shouldShowCodexBillingControls } from './codex-usage-pill.pure'
 import { ContextWindowDot } from './context-window-dot.container'
 import { Button } from '@/shared/ui/button'
@@ -1186,6 +1187,17 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     [showCodexBillingControls],
   )
 
+  /**
+   * How often to ask again. A pill reading "warming up" is only honest while it
+   * still is: the resident Codex server comes up in 7-25s (MAR-2823), so at the
+   * quiet cadence the pill would go on claiming a wait for up to two minutes
+   * after it ended, which is the class of lie the strip may not tell
+   * (MAR-2825, MAR-2619).
+   */
+  const codexUsagePollMs = isCodexUsageWarmingUp(codexUsageSnapshot)
+    ? 3_000
+    : 120_000
+
   useEffect(() => {
     if (!showCodexBillingControls) {
       setCodexUsageSnapshot(null)
@@ -1196,9 +1208,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     void loadCodexUsage(false)
     const intervalId = window.setInterval(() => {
       void loadCodexUsage(false)
-    }, 120_000)
+    }, codexUsagePollMs)
     return () => window.clearInterval(intervalId)
-  }, [loadCodexUsage, showCodexBillingControls])
+  }, [codexUsagePollMs, loadCodexUsage, showCodexBillingControls])
 
   const isSessionDone =
     !activeSession ||
