@@ -1,5 +1,110 @@
 # convergence
 
+## 0.46.16
+
+### Patch Changes
+
+- 484d03b: Mission Control: a crew run can now go round more than once (MAR-2833).
+
+  A wire that already carried a run used to refuse the second time, so a review
+  loop closed after exactly one pass and an unattended correction cycle was not
+  something Convergence could do. It now carries again, one lap higher, and the
+  lap is recorded on every delivery — so history can show a run as the several
+  correction cycles it really was.
+
+  Nothing was loosened to make room for it. The crew's delivery limit is spent
+  across the whole run, so coming back to the first station refills nothing, and
+  a run that ends badly now says so out loud: a delivery that failed and the
+  20-hop runaway backstop both call you, where before they stopped the run in
+  silence. A turn that finishes without anything to say is not one of those: the
+  wire holds quietly and nobody is called, so a crewed conversation you are
+  driving by hand never files a delivery failure just for ending on a tool call.
+  In the crew panel, "round cap" now reads "Delivery limit … per run" and the
+  stall box reads "Ask for attention after … minutes" — the same two numbers,
+  named for what they actually do.
+
+- 484d03b: Mission Control: the Canvas is where crews are built now (MAR-2834).
+
+  Cards drag and stay where you put them. Drag from a card's edge to another
+  card to draw a connection, or press Connect and pick two cards — by click or
+  by keyboard — and the connection opens in a panel on the right, unsaved, with
+  everything about it in one place: who receives the reply, whether it fires on
+  any finish or only on a declared final line, what happens to the recipient's
+  conversation before delivery, the standing instructions, and the switch.
+
+  Nothing on that panel sends a message. Drawing a connection, saving one,
+  switching one on, and retrying a save that failed all store settings and
+  nothing else. A save that fails keeps your draft and says the stored
+  connection has not changed.
+
+  "Clear the conversation first" is offered where the provider can actually do
+  it and shown disabled with the reason where it cannot — Codex will get it when
+  its own reset ships. Change a connection's recipient to a provider that cannot
+  reset and the choice is dropped back to "keep context", with a line saying so:
+  it is never quietly stored as a `/clear` the recipient would read as an
+  ordinary message. A first message you wrote yourself still works everywhere,
+  and a connection saved with one keeps it exactly as it was.
+
+  Leaving an unfinished draft always asks first — closing the panel, drawing a
+  second connection, clicking a stored one, opening a recorded event or picking a
+  run in history.
+
+  Crew settings and adding conversations moved to the Canvas too, so the
+  separate Crews layout has retired into it. If Crews was the layout you had
+  open, Convergence now opens the Canvas.
+
+- 484d03b: Mission Control: history under the canvas (MAR-2835).
+
+  Press History and the crew's runs appear under the graph, newest first. Pick
+  one and the diagram shows what that run did — the wires it used wearing their
+  outcomes, everything else faded, and a line saying plainly that this is your
+  current layout rather than a reconstruction of what the crew looked like at the
+  time.
+
+  Several correction cycles are one run, with a group per lap, so a run that went
+  round three times reads as one attempt with nine deliveries instead of three
+  unrelated things. A delivery that failed says why on the row, without being
+  clicked. A run that needs you says which of the four ways it needs you, and
+  never reads as one that was handed back — read off the run's own recorded
+  events, so a run from before this release whose delivery broke says so too
+  instead of reading as one that finished quietly. A delivery whose ending was
+  never written down says that, rather than showing as still running forever.
+  A turn running longer than an hour reads _Ending not recorded_ until its
+  settlement receipt lands. Older builds recorded tool-only settles as `error`;
+  those historical rows now read as failed and retain that recorded outcome.
+
+  Crews with a long history load a page at a time, with a _Load older runs_ row
+  under the list when there are more. If an older page fails to load, the runs
+  already loaded stay visible with an inline error. _Retry older runs_ retries
+  that same page without dropping the list.
+
+  Picking an event opens what was recorded when it happened — source, recipient,
+  baton, outcome, timestamp, and whatever reply preview the ledger kept — beside
+  a separate link to the connection's current settings, because those are two
+  different questions. For a call, Mark seen acknowledges it and says out loud
+  that it does not send a reply or restart the run.
+
+  Nothing on this surface sends anything. Reloading after a load error reads the
+  records again; filters change the view, not the record. Both say so.
+
+- 484d03b: Mission Control: wires that go round things (MAR-2836).
+
+  Connections now leave and arrive by the side the two cards actually face, so a
+  card you drag to the left of its source is entered from the right instead of
+  having the line loop round to the wrong edge. Routes are rounded orthogonal
+  lines that stay clear of the cards they are not attached to, with the label on
+  the longest straight run rather than sitting on a corner.
+
+  A route follows its cards as you move them, and every segment of it runs
+  along an axis — including the two that touch the cards, which used to be a few
+  pixels out of true. The diagram stays inside its own frame — no line painted
+  across the panel beside it — and a crew's frame grows around a card dragged
+  above or to the left of it, not only below and to the right. Adding a
+  conversation to a crew fits the view so the new card is on screen.
+
+  Where a route genuinely cannot get through, the wire falls back to a plain
+  straight line: a line you can follow beats a clever one drawn through a card.
+
 ## 0.46.15
 
 ### Patch Changes
