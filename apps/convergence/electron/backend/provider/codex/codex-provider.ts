@@ -1,4 +1,9 @@
 import { spawn } from 'child_process'
+import { CONVERSATION_RESET_COMMAND } from '../../../../src/shared/lib/conversation-reset.pure'
+import {
+  CONTEXT_RESTARTED_NOTE_TEXT,
+  SESSION_RESTARTED_EVENT_TYPE,
+} from '../session-restart.pure'
 import { randomUUID } from 'crypto'
 import { promises as fs } from 'fs'
 import type { SessionDelta } from '../../session/conversation-item.types'
@@ -1251,10 +1256,7 @@ export class CodexProvider implements Provider {
       })
 
       const discoveredThreadId = readThreadId(threadResult)
-      if (discoveredThreadId) {
-        setContinuationToken(discoveredThreadId)
-      }
-      if (!threadId) {
+      if (!discoveredThreadId) {
         // Nothing left to wait for: the id arrives in this request's own
         // result or not at all. The session's own `thread/started` is dropped
         // while `threadId` is null (routing by thread id, constitution A2), so
@@ -1264,7 +1266,8 @@ export class CodexProvider implements Provider {
         throw new Error('thread/start response did not include a thread id')
       }
 
-      return threadId
+      setContinuationToken(discoveredThreadId)
+      return discoveredThreadId
     }
 
     async function resumeExistingThread(
@@ -1605,6 +1608,23 @@ export class CodexProvider implements Provider {
       attachments?: Attachment[]
       skillSelections?: SkillSelection[]
     }): Promise<void> {
+      if (input.text === CONVERSATION_RESET_COMMAND) {
+        const oldThreadId = threadId
+        setStatus('running')
+        setAttention('none')
+        await startFreshThread(input.activeRpc)
+        await unsubscribeThread(input.activeRpc, oldThreadId)
+        if (oldThreadId !== null) {
+          sessionEmitter.addNote({
+            text: CONTEXT_RESTARTED_NOTE_TEXT,
+            level: 'warning',
+            providerEventType: SESSION_RESTARTED_EVENT_TYPE,
+          })
+        }
+        setStatus('completed')
+        setAttention('finished')
+        return
+      }
       const skillResolution = await resolveSelectedSkills(
         input.activeRpc,
         input.skillSelections,
@@ -2006,7 +2026,10 @@ export class CodexProvider implements Provider {
           if (stopped) return
           const failureEntry = buildTurnFailureEntry(err, now())
           sessionEmitter.addNote({
-            text: failureEntry.text,
+            text:
+              initialMessage === CONVERSATION_RESET_COMMAND
+                ? `Could not clear the conversation: ${err instanceof Error ? err.message : String(err)}.${threadId ? ' The previous conversation is still active; your next message will resume it.' : ' No conversation was started.'}`
+                : failureEntry.text,
             level: failureEntry.level,
             timestamp: failureEntry.timestamp,
           })
@@ -2489,23 +2512,30 @@ export class CodexProvider implements Provider {
       }
 
       try {
-        if (!input.threadId || !input.threadReady) return
+        if (input.threadReady) {
+          await unsubscribeThread(input.releasing.rpc, input.threadId)
+        }
+      } finally {
+        input.releasing.close()
+      }
+    }
 
-        // Best effort and never blocking: `unsubscribed`, `notSubscribed` and
-        // `notLoaded` are all normal answers (measured), and a failure here
-        // costs the server nothing it will not clean up itself.
-        const result = await input.releasing.rpc.request('thread/unsubscribe', {
-          threadId: input.threadId,
+    /** Reset and disposal release subscriptions through the same protocol path. */
+    async function unsubscribeThread(
+      activeRpc: JsonRpcClient,
+      releasingThreadId: string | null,
+    ): Promise<void> {
+      if (!releasingThreadId) return
+      try {
+        const result = await activeRpc.request('thread/unsubscribe', {
+          threadId: releasingThreadId,
         })
         recordDebug('lifecycle', {
           direction: 'in',
           note: `thread/unsubscribe: ${readCodexUnsubscribeStatus(result) ?? 'unknown'}`,
         })
       } catch {
-        // The connection may already be gone; the thread is released either
-        // way.
-      } finally {
-        input.releasing.close()
+        // Best effort, as on disposal: the server also releases idle threads.
       }
     }
 
@@ -2549,6 +2579,15 @@ export class CodexProvider implements Provider {
               'with. Start a new session to use a different account.',
             level: 'error',
           })
+          return
+        }
+        if (text === CONVERSATION_RESET_COMMAND) {
+          if (currentStatus === 'running' || connecting) {
+            throw new Error(
+              'Wait for the current turn to finish before clearing the conversation.',
+            )
+          }
+          startFirstTurn(text, attachments, skillSelections)
           return
         }
         if (!rpc) {

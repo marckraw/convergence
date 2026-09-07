@@ -1,3 +1,5 @@
+import { SESSION_RESTARTED_EVENT_TYPE } from '../provider/session-restart.pure'
+import { CONVERSATION_RESET_COMMAND } from '../../../src/shared/lib/conversation-reset.pure'
 import { randomUUID } from 'crypto'
 import { mkdirSync } from 'fs'
 import type Database from 'better-sqlite3'
@@ -37,6 +39,7 @@ import type {
 } from '../provider/provider.types'
 import {
   getMidRunInputCapabilityForProviderId,
+  providerSupportsConversationReset,
   parseReasoningEffort,
   supportsMidRunInputMode,
 } from '../provider/provider-descriptor.pure'
@@ -1386,7 +1389,7 @@ export class SessionService {
    */
   async start(id: string, input: SendMessageInput): Promise<string> {
     const dispatchId = randomUUID()
-    await this.withDispatchInFlight(id, () =>
+    await this.withDispatchInFlight(id, input, () =>
       this.openFirstTurn(id, input, dispatchId),
     )
     return dispatchId
@@ -1416,8 +1419,32 @@ export class SessionService {
    */
   private async withDispatchInFlight<T>(
     sessionId: string,
+    input: SendMessageInput,
     dispatch: (inFlight: SessionDispatch) => Promise<T>,
   ): Promise<T> {
+    // Read before registering this dispatch: only an earlier send counts as busy.
+    // Refuse outside the try below too: a cold-start refusal must not enter
+    // queue termination and end the earlier turn's queued inputs.
+    if (
+      input.text === CONVERSATION_RESET_COMMAND &&
+      providerSupportsConversationReset(
+        this.getById(sessionId)?.providerId ?? '',
+      )
+    ) {
+      if (input.attachmentIds?.length || input.skillSelections?.length) {
+        throw new Error(
+          'A conversation reset cannot carry attachments or skill selections.',
+        )
+      }
+      if (
+        this.activeHandles.has(sessionId) ||
+        this.dispatches.isDispatching(sessionId)
+      ) {
+        throw new Error(
+          'Wait for the current turn to finish before clearing the conversation.',
+        )
+      }
+    }
     const inFlight = this.dispatches.begin(sessionId)
     try {
       return await dispatch(inFlight)
@@ -1499,6 +1526,12 @@ export class SessionService {
       return { augmentedText: originalText, noteDraft: null }
     }
 
+    if (
+      providerSupportsConversationReset(session.providerId) &&
+      originalText === CONVERSATION_RESET_COMMAND
+    ) {
+      return { augmentedText: originalText, noteDraft: null }
+    }
     return this.contextInjection.prepareBoot({
       session,
       originalText,
@@ -1511,7 +1544,12 @@ export class SessionService {
     originalText: string,
     skipContextInjection?: boolean,
   ): string {
-    if (skipContextInjection) return originalText
+    if (
+      skipContextInjection ||
+      (providerSupportsConversationReset(session.providerId) &&
+        originalText === CONVERSATION_RESET_COMMAND)
+    )
+      return originalText
     if (!this.contextInjection) return originalText
     return this.contextInjection.prepareUserTurn({ session, originalText })
   }
@@ -1532,7 +1570,7 @@ export class SessionService {
   /** Returns the input's dispatch id -- the delivery receipt (MAR-2759). */
   async sendMessage(id: string, input: SendMessageInput): Promise<string> {
     const dispatchId = randomUUID()
-    await this.withDispatchInFlight(id, () =>
+    await this.withDispatchInFlight(id, input, () =>
       this.deliverMessage(id, input, dispatchId),
     )
     return dispatchId
@@ -2214,6 +2252,13 @@ export class SessionService {
       case 'conversation.item.add': {
         const item = this.addConversationItem(sessionId, delta.item)
         if (!item) return
+        if (
+          item.kind === 'note' &&
+          item.providerMeta.providerEventType === SESSION_RESTARTED_EVENT_TYPE
+        ) {
+          this.pendingUserAttachmentIds.delete(sessionId)
+          this.pendingUserSkillSelections.delete(sessionId)
+        }
         this.handleAssistantNaming(sessionId, item)
         this.notifySessionChange(sessionId, {
           sessionId,
