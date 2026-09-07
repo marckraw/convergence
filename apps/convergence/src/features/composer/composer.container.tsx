@@ -1167,6 +1167,24 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     selection.effortId,
   ])
 
+  /**
+   * The account the pill is about: the one this composer would send on.
+   *
+   * Codex answers rate limits from the account's own authenticated session, so
+   * an unscoped read asks about the ambient default — and on a session using a
+   * second account the pill then reported the default account's number under
+   * this one's name, and asked the default host whether it was warming up while
+   * *this* one was the host actually starting (MAR-2825, ADR 0007 PA8;
+   * MAR-2826 round 1, M3).
+   */
+  const codexUsageScope = useMemo(
+    () => ({
+      executionHostId: executionBar.hostId,
+      providerAccountId: effectiveProviderAccountId,
+    }),
+    [executionBar.hostId, effectiveProviderAccountId],
+  )
+
   const loadCodexUsage = useCallback(
     async (forceRefresh = false) => {
       if (!showCodexBillingControls) return
@@ -1174,7 +1192,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       try {
         setCodexUsageSnapshot(
           findProviderQuotaSnapshot(
-            await providerQuotaApi.list(forceRefresh),
+            await providerQuotaApi.list(forceRefresh, codexUsageScope),
             'codex',
           ),
         )
@@ -1184,7 +1202,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         setCodexUsageLoading(false)
       }
     },
-    [showCodexBillingControls],
+    [codexUsageScope, showCodexBillingControls],
   )
 
   /**

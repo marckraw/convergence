@@ -250,7 +250,12 @@ describe('Codex conversation reset', () => {
     })
   })
 
-  it('starts a first-ever reset without a cleared boundary — emit the note with no old thread turns red', async () => {
+  it('opens nothing on a first-ever reset — emit the note, or start a thread, with no old thread turns red', async () => {
+    // A reset with nothing to clear writes no boundary (CX2-2), so it must
+    // leave no thread behind either. It used to mint one and store its token;
+    // that thread then took no turn, so after a relaunch `thread/resume`
+    // refused the token and the next message warned about context that had
+    // never existed (MAR-2826 round 1, L2).
     const bed = session(true, '/clear')
     await vi.waitUntil(() => bed.statuses.at(-1) === 'completed')
     expect({
@@ -269,7 +274,7 @@ describe('Codex conversation reset', () => {
             item.providerMeta.providerEventType ===
               SESSION_RESTARTED_EVENT_TYPE),
       ),
-    }).toEqual({ threads: 1, storedThreads: ['thread-1'], boundaries: [] })
+    }).toEqual({ threads: 0, storedThreads: [], boundaries: [] })
   })
 
   it('throws on reset while connecting — delete the connecting guard turns red', async () => {
@@ -455,5 +460,75 @@ describe('Codex reset then a released handle (MAR-2854)', () => {
           : [],
       ),
     ).toEqual(['warning'])
+  })
+})
+
+/**
+ * The server refuses a thread it no longer has at *two* doors, and the second
+ * one had no ledger guard at all: `thread/resume` succeeds, and `turn/start`
+ * is then refused because the thread was evicted in between. The recovery
+ * there warned unconditionally — and could not have done otherwise, because
+ * sending the turn had already cleared the flag that decides whether anything
+ * could have been lost (MAR-2826 round 1, M1).
+ */
+function turnRefusedBed(refusedThreadId: string) {
+  return resetThenReleaseBed({
+    onRequest: (message) => {
+      if (
+        message.method === 'turn/start' &&
+        message.params?.threadId === refusedThreadId
+      ) {
+        throw new Error(`no rollout found for thread id ${refusedThreadId}`)
+      }
+      return undefined
+    },
+  })
+}
+
+function recoveryNoteLevels(deltas: SessionDelta[]): string[] {
+  return transcript(deltas).flatMap((item) =>
+    item.kind === 'note' && item.text.includes('no longer available')
+      ? [item.level]
+      : [],
+  )
+}
+
+describe('Codex turn refused on a thread the server lost (MAR-2854, MAR-2826 M1)', () => {
+  it('recovers silently when no turn ran since the boundary — leaving the flag cleared, or warning unconditionally, turns red', async () => {
+    const bed = turnRefusedBed('thread-2')
+
+    bed.open('after', 'thread-2', true)
+    await vi.waitUntil(
+      () =>
+        bed.server.requests.filter((r) => r.method === 'turn/start').length ===
+        2,
+    )
+
+    expect({
+      recoveryNotes: recoveryNoteLevels(bed.deltas),
+      // Refused on the `/clear`ed thread, retried on the fresh one.
+      turnThreads: bed.server.requests
+        .filter((r) => r.method === 'turn/start')
+        .map((r) => r.params?.threadId),
+    }).toEqual({
+      recoveryNotes: [],
+      turnThreads: ['thread-2', 'thread-1'],
+    })
+  })
+
+  it('still warns when the thread that was lost had carried a turn — dropping the note outright turns red', async () => {
+    // The control at this door: same refusal, same words, but the ledger says
+    // this conversation ran, so the context really is gone and the warning is
+    // true.
+    const bed = turnRefusedBed('thread-9')
+
+    bed.open('after', 'thread-9', false)
+    await vi.waitUntil(
+      () =>
+        bed.server.requests.filter((r) => r.method === 'turn/start').length ===
+        2,
+    )
+
+    expect(recoveryNoteLevels(bed.deltas)).toEqual(['warning'])
   })
 })

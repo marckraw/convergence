@@ -1208,6 +1208,37 @@ export class CodexProvider implements Provider {
       resolvingThread = null
     }
 
+    /**
+     * The recovery note, emitted only when something could actually have been
+     * lost.
+     *
+     * A thread that has taken no turn since the last boundary has no rollout
+     * for the server to find — that is what a deliberate `/clear` leaves
+     * behind — so starting another one restores nothing, and warning about
+     * missing context contradicts the boundary drawn two lines above it in the
+     * same transcript (MAR-2854).
+     *
+     * The refusal's own wording cannot make this call: a rollout pruned off
+     * disk from a conversation that *did* run is refused in exactly the same
+     * words, and there the warning is true and has to survive. Only the ledger
+     * knows which of the two happened, and it was asked before this session
+     * started.
+     *
+     * One function because the server refuses a missing thread at *two* doors —
+     * `thread/resume` and `turn/start` — and a guard on one of them leaves the
+     * lie reachable through the other (MAR-2826 round 1, M1).
+     */
+    function noteMissingThreadRecovery(): void {
+      if (threadUnusedSinceBoundary) return
+
+      const recoveryEntry = buildCodexThreadRecoveryEntry(now())
+      sessionEmitter.addNote({
+        text: recoveryEntry.text,
+        level: recoveryEntry.level,
+        timestamp: recoveryEntry.timestamp,
+      })
+    }
+
     async function resumeExistingThread(
       activeRpc: JsonRpcClient,
       continuationThreadId: string,
@@ -1237,30 +1268,32 @@ export class CodexProvider implements Provider {
           throw err
         }
 
-        // A refused resume is only a recovery when something could have been
-        // lost. A thread that has taken no turn since the last boundary has no
-        // rollout for the server to find — that is what a deliberate `/clear`
-        // leaves behind — so starting another one restores nothing and warning
-        // about missing context contradicts the boundary drawn two lines above
-        // it in the same transcript (MAR-2854).
-        //
-        // The refusal's own wording cannot make this call: a rollout pruned off
-        // disk from a conversation that *did* run is refused in exactly the same
-        // words, and there the warning is true and has to survive. Only the
-        // ledger knows which of the two happened, and it was asked before this
-        // session started.
-        if (!threadUnusedSinceBoundary) {
-          const recoveryEntry = buildCodexThreadRecoveryEntry(now())
-          sessionEmitter.addNote({
-            text: recoveryEntry.text,
-            level: recoveryEntry.level,
-            timestamp: recoveryEntry.timestamp,
-          })
-        }
-
+        noteMissingThreadRecovery()
         threadId = null
         threadReady = false
+        // Already inside the published resolution, so this takes the door
+        // directly: joining `resolvingThread` here would be awaiting the very
+        // promise this call is resolving.
         return startFreshThread(activeRpc)
+      }
+    }
+
+    /**
+     * Runs a thread resolution as *the* one in flight for this session.
+     *
+     * The single flight is the one door every thread start goes through — the
+     * first message, a resume, a recovery, and the reset's fresh thread — so a
+     * caller arriving while one is on the wire joins it instead of minting a
+     * thread of its own and orphaning one of the two (MAR-2826).
+     */
+    async function publishThreadResolution(
+      attempt: Promise<string>,
+    ): Promise<string> {
+      resolvingThread = attempt
+      try {
+        return await attempt
+      } finally {
+        if (resolvingThread === attempt) resolvingThread = null
       }
     }
 
@@ -1272,15 +1305,11 @@ export class CodexProvider implements Provider {
       if (resolvingThread) return resolvingThread
 
       const currentThreadId = threadId
-      const attempt = currentThreadId
-        ? resumeExistingThread(activeRpc, currentThreadId)
-        : startFreshThread(activeRpc)
-      resolvingThread = attempt
-      try {
-        return await attempt
-      } finally {
-        if (resolvingThread === attempt) resolvingThread = null
-      }
+      return publishThreadResolution(
+        currentThreadId
+          ? resumeExistingThread(activeRpc, currentThreadId)
+          : startFreshThread(activeRpc),
+      )
     }
 
     /**
@@ -1476,6 +1505,11 @@ export class CodexProvider implements Provider {
       flushedThinkingByProviderItemId.clear()
       const currentThreadId = await ensureThread(activeRpc)
       const clientUserMessageId = randomUUID()
+      // `requestTurnStart` clears this the moment the turn is *sent*, which is
+      // the right rule for a turn the server took. A turn the server refused
+      // outright never happened, so the flag is put back below rather than
+      // leaving a `/clear`ed thread counting as used (MAR-2826 round 1, M1).
+      const unusedBeforeSend = threadUnusedSinceBoundary
 
       try {
         await requestTurnStart(
@@ -1502,15 +1536,15 @@ export class CodexProvider implements Provider {
           throw err
         }
 
-        const recoveryEntry = buildCodexThreadRecoveryEntry(now())
-        sessionEmitter.addNote({
-          text: recoveryEntry.text,
-          level: recoveryEntry.level,
-          timestamp: recoveryEntry.timestamp,
-        })
+        // The turn was refused, so it is not one this thread took.
+        threadUnusedSinceBoundary = unusedBeforeSend
+        noteMissingThreadRecovery()
         threadId = null
         threadReady = false
-        const recoveredThreadId = await startFreshThread(activeRpc)
+        // Through the single flight, not around it: a steer or a second message
+        // arriving during this recovery's own `thread/start` must join it
+        // rather than mint a thread of its own (MAR-2826 round 1, M1).
+        const recoveredThreadId = await ensureThread(activeRpc)
         await requestTurnStart(
           activeRpc,
           recoveredThreadId,
@@ -1576,12 +1610,31 @@ export class CodexProvider implements Provider {
         const oldThreadId = threadId
         setStatus('running')
         setAttention('none')
-        await startFreshThread(input.activeRpc)
-        // The thread this boundary opens has taken nothing, and the ledger will
-        // say so to whichever handle carries the next message (MAR-2854).
-        threadUnusedSinceBoundary = true
-        await unsubscribeThread(input.activeRpc, oldThreadId)
+        // Nothing to clear, so nothing is opened. A reset on a thread-less
+        // session used to mint a thread it then never used and wrote no
+        // boundary for (the note below is the boundary, and it is guarded on
+        // there having been something to clear) — after a relaunch the token
+        // named that unused thread, `thread/resume` refused it, and the next
+        // message warned about context that never existed. A fresh session
+        // gets no boundary (CX2-2), so it gets no thread either
+        // (MAR-2826 round 1, L2).
         if (oldThreadId !== null) {
+          // The old thread stops being this session's answer the moment the
+          // reset begins, and the new one is the resolution in flight — both
+          // set before the first await, so there is no window in which a
+          // concurrent caller can be handed either the thread about to be
+          // unsubscribed or a start of its own. The service gate refuses a
+          // `/clear` while a handle is active; it does not refuse a message
+          // while the reset's own `thread/start` is on the wire, and that
+          // message used to resume the OLD thread and land on the one
+          // unsubscribed two lines below (MAR-2826 round 1, M2).
+          threadReady = false
+          await publishThreadResolution(startFreshThread(input.activeRpc))
+          // The thread this boundary opens has taken nothing, and the ledger
+          // will say so to whichever handle carries the next message
+          // (MAR-2854).
+          threadUnusedSinceBoundary = true
+          await unsubscribeThread(input.activeRpc, oldThreadId)
           sessionEmitter.addNote({
             text: CONTEXT_RESTARTED_NOTE_TEXT,
             level: 'warning',

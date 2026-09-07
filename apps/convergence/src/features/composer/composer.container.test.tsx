@@ -2321,10 +2321,179 @@ describe('ComposerContainer', () => {
         name: 'Codex usage 87% remaining',
       }),
     ).toBeInTheDocument()
-    expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(
-      false,
-      undefined,
+    // Scoped, not ambient: Codex answers rate limits from the account's own
+    // authenticated session, so an unscoped read reports the default account's
+    // number under whichever account this composer would actually send on, and
+    // asks the default host the warm-up question (MAR-2826 round 1, M3).
+    expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(false, {
+      executionHostId: 'local',
+      providerAccountId: null,
+    })
+  })
+
+  /** A Codex session on this machine, which is what makes the pill render. */
+  function seedCodexSession(): void {
+    const baseProvider = seededProviders()[0]
+    if (!baseProvider) throw new Error('missing base test provider')
+
+    useAppSettingsStore.setState((state) => ({
+      settings: {
+        ...state.settings,
+        defaultProviderId: 'codex',
+        defaultModelId: 'gpt-5.3-codex',
+        defaultEffortId: 'medium',
+      },
+    }))
+
+    useSessionStore.setState((state) => ({
+      providerCatalogs: localProviderCatalogs([
+        {
+          id: 'codex',
+          name: 'Codex',
+          vendorLabel: 'OpenAI',
+          kind: 'conversation',
+          supportsContinuation: true,
+          supportsConversationReset: false,
+          defaultModelId: 'gpt-5.3-codex',
+          modelOptions: [
+            {
+              id: 'gpt-5.3-codex',
+              label: 'GPT-5.3 Codex',
+              defaultEffort: 'medium',
+              effortOptions: [
+                { id: 'low', label: 'Low' },
+                { id: 'medium', label: 'Medium' },
+              ],
+            },
+          ],
+          attachments: baseProvider.attachments,
+          midRunInput: baseProvider.midRunInput,
+        },
+      ]),
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? {
+              ...session,
+              providerId: 'codex',
+              model: 'gpt-5.3-codex',
+              status: 'completed' as const,
+              attention: 'finished' as const,
+            }
+          : session,
+      ),
+    }))
+  }
+
+  it('asks about the account the composer would send on, not the ambient default', async () => {
+    // MAR-2826 round 1, M3. The read was unscoped, so a session running on a
+    // second Codex account was shown the *default* account's number, and the
+    // warm-up question was asked of the default host while this one was the
+    // host actually starting — so nobody on a non-default account ever saw
+    // "warming up". The account here is the one PA4 recorded on the session's
+    // last turn, which is what the composer would send the next one on; Codex
+    // has no picker of its own (that control is Claude Code's).
+    providerAccountsMock = [
+      buildAccount({
+        id: 'acct-b',
+        providerId: 'codex',
+        email: 'b@example.com',
+      }),
+    ]
+    sessionTurnsMock = [{ id: 'turn-1', providerAccountId: 'acct-b' }]
+    seedCodexSession()
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
+      />,
     )
+
+    await waitFor(() =>
+      expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(
+        false,
+        { executionHostId: 'local', providerAccountId: 'acct-b' },
+      ),
+    )
+    // What the pill settles on is this session's account, not the default's.
+    expect(
+      (
+        window.electronAPI.providerQuota.list as ReturnType<typeof vi.fn>
+      ).mock.calls.at(-1),
+    ).toEqual([
+      false,
+      { executionHostId: 'local', providerAccountId: 'acct-b' },
+    ])
+  })
+
+  it('re-asks every 3s while the pill says warming up, and every 120s once it does not', async () => {
+    // The cadence is the honesty of the claim: the resident Codex server comes
+    // up in 7-25s, so at the quiet cadence a pill reading "warming up" would go
+    // on saying it for up to two minutes after the wait ended — the class of
+    // lie the strip may not tell (MAR-2825, MAR-2619; MAR-2826 round 1, L4).
+    const warming = {
+      providerId: 'codex',
+      status: 'unavailable',
+      source: 'provider-api',
+      reason: 'Codex is starting up.',
+      lastCheckedAt: '2026-05-21T12:00:00.000Z',
+      stale: false,
+      warmingUp: true,
+    }
+    const list = window.electronAPI.providerQuota.list as ReturnType<
+      typeof vi.fn
+    >
+    const ready = await list.mock.results[0]?.value
+    list.mockResolvedValue([warming])
+    seedCodexSession()
+    vi.useFakeTimers()
+
+    try {
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+      await act(async () => {})
+      const afterFirstRead = list.mock.calls.length
+
+      await act(async () => {
+        vi.advanceTimersByTime(3_000)
+      })
+      const whileWarming = list.mock.calls.length
+
+      // The wait ends: the next answer carries a number, and the pill drops
+      // back to the quiet cadence rather than keeping the fast one forever.
+      list.mockResolvedValue(ready)
+      await act(async () => {
+        vi.advanceTimersByTime(3_000)
+      })
+      const firstReadyRead = list.mock.calls.length
+      await act(async () => {
+        vi.advanceTimersByTime(3_000)
+      })
+      const stillQuiet = list.mock.calls.length
+      await act(async () => {
+        vi.advanceTimersByTime(120_000)
+      })
+
+      expect({
+        warmingReAsked: whileWarming - afterFirstRead,
+        readyReAsked: stillQuiet - firstReadyRead,
+        quietTickReAsked: list.mock.calls.length - stillQuiet,
+      }).toEqual({ warmingReAsked: 1, readyReAsked: 0, quietTickReAsked: 1 })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('hides Codex usage in the composer for Pi sessions on OpenAI models', async () => {

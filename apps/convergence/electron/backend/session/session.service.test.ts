@@ -17,6 +17,10 @@ import {
 import { ProviderRegistry } from '../provider/provider-registry'
 import { LocalExecutionHost } from '../provider/execution-host/local-execution-host'
 import { ProviderSessionEmitter } from '../provider/provider-session.emitter'
+import {
+  CONTEXT_RESTARTED_NOTE_TEXT,
+  SESSION_RESTARTED_EVENT_TYPE,
+} from '../provider/session-restart.pure'
 import type {
   ActivitySignal,
   Attachment,
@@ -1516,6 +1520,29 @@ describe('SessionService', () => {
       activity: null,
       contextWindow: { availability: 'unavailable' },
     })
+
+    // A compaction opens a provider session exactly as a start does, so it
+    // owes the same ledger answer. Without it a compaction taken right after a
+    // `/clear` reached the adapter with the flag missing, `thread/resume` was
+    // refused for the empty thread, and the recovery warned about context that
+    // had never existed (MAR-2826 round 1, L3).
+    new ProviderSessionEmitter({
+      providerId: 'compactable',
+      emitDelta: pushDelta,
+    }).addNote({
+      text: CONTEXT_RESTARTED_NOTE_TEXT,
+      level: 'warning',
+      providerEventType: SESSION_RESTARTED_EVENT_TYPE,
+    })
+    await compactService.compactContext(created.id)
+
+    expect(
+      compact.mock.calls.map(
+        (call) =>
+          (call as unknown as [{ noTurnSinceBoundary?: boolean }])[0]
+            .noTurnSinceBoundary,
+      ),
+    ).toEqual([false, true])
   })
 
   it('releases a completed continuation handle and resumes from its token', async () => {

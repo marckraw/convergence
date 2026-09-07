@@ -710,4 +710,155 @@ describe('Codex single-flight thread start (MAR-2826)', () => {
     handle.dispose?.()
     bed.registry.stopAll()
   })
+
+  it('starts one thread when a second message arrives while the turn-refused recovery is starting one', async () => {
+    // The same shape as above, on the recovery path: the server refuses the
+    // turn because the thread is gone, and the fresh thread that replaces it
+    // used to be started around the single flight, so a message arriving in
+    // that window minted a second one (MAR-2826 round 1, M1).
+    const bed = createStabilityBed({
+      threadStartDelayMs: 50,
+      threadIdFactory: (count) => `thread-${count}`,
+      onRequest: (message) => {
+        if (
+          message.method === 'turn/start' &&
+          message.params?.threadId === 'thread-1'
+        ) {
+          throw new Error('no rollout found for thread id thread-1')
+        }
+        return undefined
+      },
+    })
+    const handle = startSession(bed.provider)
+    const observed = observe(handle)
+
+    // The recovery's own `thread/start` is on the wire (the fake records the
+    // request before its delayed answer), which is the window this pins.
+    await waitFor(() =>
+      expect(
+        bed.server.methodsCalled().filter((m) => m === 'thread/start').length,
+      ).toBe(2),
+    )
+    handle.sendMessage('second')
+
+    // Deliberately counts turns rather than the thread they name: three either
+    // way, so the mutation reports the orphan it made instead of timing out.
+    await waitFor(() =>
+      expect(
+        bed.server.requests.filter((r) => r.method === 'turn/start').length,
+      ).toBe(3),
+    )
+
+    expect({
+      starts: bed.server.methodsCalled().filter((m) => m === 'thread/start')
+        .length,
+      turnThreads: bed.server.requests
+        .filter((r) => r.method === 'turn/start')
+        .map((r) => r.params?.threadId),
+      failures: observed.notes.filter((note) => note.level === 'error'),
+    }).toEqual({
+      starts: 2,
+      turnThreads: ['thread-1', 'thread-2', 'thread-2'],
+      failures: [],
+    })
+
+    handle.dispose?.()
+    bed.registry.stopAll()
+  })
+
+  it('keeps a message sent during a reset on the reset’s own thread', async () => {
+    // The reset started its thread around the single flight and never
+    // published it, so a message arriving inside its `thread/start` window
+    // resumed the OLD thread — and landed on the one the reset unsubscribed
+    // two lines later (MAR-2826 round 1, M2).
+    const bed = createStabilityBed({
+      autoCompleteTurns: true,
+      threadStartDelayMs: 50,
+      threadIdFactory: (count) => `thread-${count}`,
+    })
+    const handle = startSession(bed.provider)
+    const observed = observe(handle)
+
+    await waitFor(() =>
+      expect(
+        bed.server.requests.filter((r) => r.method === 'turn/start').length,
+      ).toBe(1),
+    )
+    handle.sendMessage('/clear')
+
+    await waitFor(() =>
+      expect(
+        bed.server.methodsCalled().filter((m) => m === 'thread/start').length,
+      ).toBe(2),
+    )
+    handle.sendMessage('after')
+
+    await waitFor(() =>
+      expect(
+        bed.server.requests.filter((r) => r.method === 'turn/start').length,
+      ).toBe(2),
+    )
+
+    expect({
+      starts: bed.server.methodsCalled().filter((m) => m === 'thread/start')
+        .length,
+      turnThreads: bed.server.requests
+        .filter((r) => r.method === 'turn/start')
+        .map((r) => r.params?.threadId),
+      // The thread the message rode must not be the one released underneath it.
+      released: bed.server.requests
+        .filter((r) => r.method === 'thread/unsubscribe')
+        .map((r) => r.params?.threadId),
+      failures: observed.notes.filter((note) => note.level === 'error'),
+    }).toEqual({
+      starts: 2,
+      turnThreads: ['thread-1', 'thread-2'],
+      released: ['thread-1'],
+      failures: [],
+    })
+
+    handle.dispose?.()
+    bed.registry.stopAll()
+  })
+
+  it('re-subscribes a thread whose connection died while it was starting', async () => {
+    // `thread/start` answers and the socket fails in the same synchronous
+    // burst, so the awaiting continuation runs on a connection that is already
+    // gone. The thread id survives that — the thread is the resident server's —
+    // but the *subscription* does not, and a `turn/start` fired at a thread the
+    // new connection never subscribed to streams to nobody: MAR-2317's shape,
+    // reachable again through the resolution now in flight (MAR-2826).
+    let failedOnce = false
+    const bed = createStabilityBed({
+      autoCompleteTurns: true,
+      threadIdFactory: (count) => `thread-${count}`,
+      onRequest: (message, connection, server) => {
+        if (message.method !== 'thread/start' || failedOnce) return undefined
+        failedOnce = true
+        server.broadcast('thread/started', { thread: { id: 'thread-1' } })
+        connection.respond(message.id as number, { thread: { id: 'thread-1' } })
+        connection.fail('socket hang up')
+        return FAKE_CODEX_NO_RESPONSE
+      },
+    })
+    const handle = startSession(bed.provider)
+    observe(handle)
+
+    await waitFor(() =>
+      expect(bed.server.methodsCalled()).toContain('thread/resume'),
+    )
+
+    expect({
+      resumed: bed.server.requests
+        .filter((r) => r.method === 'thread/resume')
+        .map((r) => r.params?.threadId),
+      // One thread, not two: the id outlives the connection even though the
+      // readiness does not.
+      starts: bed.server.methodsCalled().filter((m) => m === 'thread/start')
+        .length,
+    }).toEqual({ resumed: ['thread-1'], starts: 1 })
+
+    handle.dispose?.()
+    bed.registry.stopAll()
+  })
 })
