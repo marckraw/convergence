@@ -360,3 +360,13 @@ describe('unavailableProviderError', () => {
     expect(error.message).not.toContain('Provider not found')
   })
 })
+
+describe('remote conversation reset capability', () => {
+  it('advertises reset only for remote Claude — derive remote Codex reset from the local capability turns red', () => {
+    const [claude, codex] = parseRemoteExecutionHostMeta(DAEMON_META)
+    expect({
+      claude: descriptorForRemoteProvider(claude!).supportsConversationReset,
+      codex: descriptorForRemoteProvider(codex!).supportsConversationReset,
+    }).toEqual({ claude: true, codex: false })
+  })
+})

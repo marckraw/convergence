@@ -2024,7 +2024,10 @@ export class CodexProvider implements Provider {
           if (stopped) return
           const failureEntry = buildTurnFailureEntry(err, now())
           sessionEmitter.addNote({
-            text: failureEntry.text,
+            text:
+              initialMessage === CONVERSATION_RESET_COMMAND
+                ? `Could not clear the conversation: ${err instanceof Error ? err.message : String(err)}.${threadId ? ' The previous conversation is still active; your next message will resume it.' : ' No conversation was started.'}`
+                : failureEntry.text,
             level: failureEntry.level,
             timestamp: failureEntry.timestamp,
           })
@@ -2578,11 +2581,9 @@ export class CodexProvider implements Provider {
         }
         if (text === CONVERSATION_RESET_COMMAND) {
           if (currentStatus === 'running' || connecting) {
-            sessionEmitter.addNote({
-              text: 'Wait for the current turn to finish before clearing the conversation.',
-              level: 'warning',
-            })
-            return
+            throw new Error(
+              'Wait for the current turn to finish before clearing the conversation.',
+            )
           }
           startFirstTurn(text, attachments, skillSelections)
           return

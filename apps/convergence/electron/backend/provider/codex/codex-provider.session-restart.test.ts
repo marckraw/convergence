@@ -20,6 +20,7 @@ function session(
   initialMessage = 'before',
   options: FakeCodexServerOptions = {},
   continuationToken: string | null = null,
+  connectReady: Promise<void> = Promise.resolve(),
 ) {
   const server = new FakeCodexServer({ autoCompleteTurns, ...options })
   const children: FakeCodexChildProcess[] = []
@@ -33,7 +34,10 @@ function session(
       return child.asChildProcess()
     },
     probeReady: async () => true,
-    connectTransport: async () => server.connect(),
+    connectTransport: async () => {
+      await connectReady
+      return server.connect()
+    },
   })
   registry.setBinary('/usr/local/bin/codex', '0.153.4')
   const handle = new CodexProvider('/usr/local/bin/codex', registry).start({
@@ -126,14 +130,18 @@ describe('Codex conversation reset', () => {
       spawns: 1,
     })
   })
-  it('refuses a busy reset before steer or answers — remove the busy reset guard turns red', async () => {
+  it('throws on a busy reset — return with a warning note turns red', async () => {
     const bed = session(false)
     await vi.waitUntil(
       () => bed.statuses.at(-1) === 'running' && bed.tokens.length === 1,
     )
-    bed.handle.sendMessage('/clear', undefined, undefined, {
-      deliveryMode: 'steer',
-    })
+    expect(() =>
+      bed.handle.sendMessage('/clear', undefined, undefined, {
+        deliveryMode: 'steer',
+      }),
+    ).toThrow(
+      'Wait for the current turn to finish before clearing the conversation.',
+    )
     await new Promise((resolve) => setTimeout(resolve, 30))
     expect({
       messages: transcript(bed.deltas)
@@ -150,9 +158,7 @@ describe('Codex conversation reset', () => {
         .filter((method) => method === 'turn/steer'),
     }).toEqual({
       messages: ['before'],
-      refusal: [
-        'Wait for the current turn to finish before clearing the conversation.',
-      ],
+      refusal: [],
       tokens: ['thread-1'],
       status: 'running',
       steers: [],
@@ -185,7 +191,9 @@ describe('Codex conversation reset', () => {
     }).toEqual({
       status: 'failed',
       tokens: ['thread-1'],
-      notes: ['Turn failed: thread/start response did not include a thread id'],
+      notes: [
+        'Could not clear the conversation: thread/start response did not include a thread id. The previous conversation is still active; your next message will resume it.',
+      ],
       released: [],
     })
   })
@@ -239,6 +247,55 @@ describe('Codex conversation reset', () => {
       boundaries: [CONTEXT_RESTARTED_NOTE_TEXT],
       resumed: [],
       released: ['previous-thread'],
+    })
+  })
+  it('throws on reset while connecting — delete the connecting guard turns red', async () => {
+    let release!: () => void
+    const ready = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const bed = session(true, 'before', {}, null, ready)
+    await vi.waitUntil(() => bed.children.length === 1)
+    try {
+      expect(() => bed.handle.sendMessage('/clear')).toThrow(
+        'Wait for the current turn to finish before clearing the conversation.',
+      )
+    } finally {
+      release()
+      await vi.waitUntil(() => bed.statuses.at(-1) === 'completed')
+    }
+  })
+
+  it('names a refused reset and keeps the old conversation — generic failure note or discard the old thread turns red', async () => {
+    const bed = session(true, 'before', {
+      onRequest(message, _connection, server) {
+        if (
+          message.method === 'thread/start' &&
+          server.methodsCalled().filter((method) => method === 'thread/start')
+            .length === 2
+        )
+          throw new Error('server refused reset')
+      },
+    })
+    await vi.waitUntil(() => bed.statuses.at(-1) === 'completed')
+    bed.handle.sendMessage('/clear')
+    await vi.waitUntil(() => bed.statuses.at(-1) === 'failed')
+    bed.handle.sendMessage('after')
+    await vi.waitUntil(() => bed.statuses.at(-1) === 'completed')
+    expect({
+      tokens: bed.tokens,
+      errors: transcript(bed.deltas).flatMap((item) =>
+        item.kind === 'note' && item.level === 'error' ? [item.text] : [],
+      ),
+      turns: bed.server.requests
+        .filter((r) => r.method === 'turn/start')
+        .map((r) => r.params?.threadId),
+    }).toEqual({
+      tokens: ['thread-1'],
+      errors: [
+        'Could not clear the conversation: server refused reset. The previous conversation is still active; your next message will resume it.',
+      ],
+      turns: ['thread-1', 'thread-1'],
     })
   })
 })

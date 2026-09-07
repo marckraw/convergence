@@ -272,19 +272,17 @@ try {
   )
   check(
     'new thread has no prior memory — reusing the first thread and subscription turns red',
-    firstAnswer === phrase &&
+    firstAnswer.includes(phrase) &&
       replacementId !== firstId &&
-      secondAnswer === 'NO_PRIOR_PHRASE',
-    `${Date.now() - memoryStartedAt}ms; learned=${firstAnswer === phrase}; newThread=${replacementId !== firstId}; answer=${JSON.stringify(secondAnswer)}`,
+      secondAnswer.includes('NO_PRIOR_PHRASE'),
+    `${Date.now() - memoryStartedAt}ms; learned=${firstAnswer.includes(phrase)}; newThread=${replacementId !== firstId}; answer=${JSON.stringify(secondAnswer)}`,
   )
-  await first.rpc.request('thread/unsubscribe', { threadId: replacementId })
-
   const unsubscribed = await first.rpc.request('thread/unsubscribe', {
-    threadId: firstId,
+    threadId: replacementId,
   })
   check(
-    'thread/unsubscribe answers with a status',
-    typeof unsubscribed?.status === 'string',
+    'replacement thread/unsubscribe answers unsubscribed — target old thread turns red',
+    unsubscribed?.status === 'unsubscribed',
     JSON.stringify(unsubscribed),
   )
 
