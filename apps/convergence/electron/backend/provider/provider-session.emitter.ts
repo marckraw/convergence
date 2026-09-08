@@ -8,6 +8,7 @@ import type {
 } from '../session/conversation-item.types'
 import type { SessionSummary } from '../session/session.types'
 import type { SkillSelection } from '../skills/skills.types'
+import type { HarnessEvidence } from '../session/harness-evidence.types'
 
 type MessageItem = Extract<ConversationItem, { kind: 'message' }>
 type ThinkingItem = Extract<ConversationItem, { kind: 'thinking' }>
@@ -33,6 +34,10 @@ export class ProviderSessionEmitter {
     this.providerId = options.providerId
     this.emitDeltaFn = options.emitDelta
     this.now = options.now ?? (() => new Date().toISOString())
+  }
+
+  recordEvidence(evidence: HarnessEvidence): void {
+    this.emitDeltaFn({ kind: 'harness.evidence', evidence })
   }
 
   /**
@@ -89,6 +94,8 @@ export class ProviderSessionEmitter {
     timestamp?: string
     providerItemId?: string | null
     providerEventType?: string | null
+    agentRunId?: string | null
+    taskId?: string | null
   }): string {
     return this.addMessage({
       actor: 'assistant',
@@ -96,6 +103,8 @@ export class ProviderSessionEmitter {
       state: input.state,
       timestamp: input.timestamp,
       providerItemId: input.providerItemId,
+      agentRunId: input.agentRunId,
+      taskId: input.taskId,
       providerEventType: input.providerEventType ?? 'assistant',
     })
   }
@@ -122,6 +131,8 @@ export class ProviderSessionEmitter {
     timestamp?: string
     providerItemId?: string | null
     providerEventType?: string | null
+    agentRunId?: string | null
+    taskId?: string | null
   }): string {
     const timestamp = input.timestamp ?? this.now()
     const item = this.buildBaseItem({
@@ -129,6 +140,8 @@ export class ProviderSessionEmitter {
       state: input.state ?? 'complete',
       timestamp,
       providerItemId: input.providerItemId,
+      agentRunId: input.agentRunId,
+      taskId: input.taskId,
       providerEventType: input.providerEventType ?? 'thinking',
       payload: {
         actor: 'assistant',
@@ -166,6 +179,8 @@ export class ProviderSessionEmitter {
     timestamp?: string
     providerItemId?: string | null
     providerEventType?: string | null
+    agentRunId?: string | null
+    taskId?: string | null
   }): string {
     const timestamp = input.timestamp ?? this.now()
     const item = this.buildBaseItem({
@@ -173,6 +188,8 @@ export class ProviderSessionEmitter {
       state: 'complete',
       timestamp,
       providerItemId: input.providerItemId,
+      agentRunId: input.agentRunId,
+      taskId: input.taskId,
       providerEventType: input.providerEventType ?? 'tool-use',
       payload: {
         toolName: input.toolName,
@@ -191,6 +208,8 @@ export class ProviderSessionEmitter {
     state?: ConversationItem['state']
     providerItemId?: string | null
     providerEventType?: string | null
+    agentRunId?: string | null
+    taskId?: string | null
   }): string {
     const timestamp = input.timestamp ?? this.now()
     const item = this.buildBaseItem({
@@ -198,6 +217,8 @@ export class ProviderSessionEmitter {
       state: input.state ?? 'complete',
       timestamp,
       providerItemId: input.providerItemId,
+      agentRunId: input.agentRunId,
+      taskId: input.taskId,
       providerEventType: input.providerEventType ?? 'tool-result',
       payload: {
         toolName: input.toolName ?? null,
@@ -214,6 +235,8 @@ export class ProviderSessionEmitter {
     timestamp?: string
     providerItemId?: string | null
     providerEventType?: string | null
+    agentRunId?: string | null
+    taskId?: string | null
   }): string {
     const timestamp = input.timestamp ?? this.now()
     const item = this.buildBaseItem({
@@ -221,6 +244,8 @@ export class ProviderSessionEmitter {
       state: 'complete',
       timestamp,
       providerItemId: input.providerItemId,
+      agentRunId: input.agentRunId,
+      taskId: input.taskId,
       providerEventType: input.providerEventType ?? 'approval-request',
       payload: {
         description: input.description,
@@ -236,6 +261,8 @@ export class ProviderSessionEmitter {
     timestamp?: string
     providerItemId?: string | null
     providerEventType?: string | null
+    agentRunId?: string | null
+    taskId?: string | null
   }): string {
     const timestamp = input.timestamp ?? this.now()
     const item = this.buildBaseItem({
@@ -243,6 +270,8 @@ export class ProviderSessionEmitter {
       state: 'complete',
       timestamp,
       providerItemId: input.providerItemId,
+      agentRunId: input.agentRunId,
+      taskId: input.taskId,
       providerEventType: input.providerEventType ?? 'input-request',
       payload: {
         prompt: input.prompt,
@@ -260,6 +289,8 @@ export class ProviderSessionEmitter {
     state?: ConversationItem['state']
     providerItemId?: string | null
     providerEventType?: string | null
+    agentRunId?: string | null
+    taskId?: string | null
     action?: ConversationNoteAction
   }): string {
     const timestamp = input.timestamp ?? this.now()
@@ -268,6 +299,8 @@ export class ProviderSessionEmitter {
       state: input.state ?? (input.level === 'error' ? 'error' : 'complete'),
       timestamp,
       providerItemId: input.providerItemId,
+      agentRunId: input.agentRunId,
+      taskId: input.taskId,
       providerEventType: input.providerEventType ?? 'system',
       payload: {
         level: input.level,
@@ -288,6 +321,8 @@ export class ProviderSessionEmitter {
     timestamp?: string
     providerItemId?: string | null
     providerEventType?: string | null
+    agentRunId?: string | null
+    taskId?: string | null
     deliveryMode?: 'steer' | 'follow-up'
   }): string {
     const timestamp = input.timestamp ?? this.now()
@@ -296,6 +331,8 @@ export class ProviderSessionEmitter {
       state: input.state ?? 'complete',
       timestamp,
       providerItemId: input.providerItemId,
+      agentRunId: input.agentRunId,
+      taskId: input.taskId,
       providerEventType: input.providerEventType,
       payload: {
         actor: input.actor,
@@ -324,6 +361,8 @@ export class ProviderSessionEmitter {
     timestamp: string
     providerItemId?: string | null
     providerEventType?: string | null
+    agentRunId?: string | null
+    taskId?: string | null
     payload: Omit<
       Extract<ConversationItem, { kind: TKind }>,
       | 'id'
@@ -340,6 +379,8 @@ export class ProviderSessionEmitter {
     return {
       id: randomUUID(),
       turnId: null,
+      ...(input.agentRunId ? { agentRunId: input.agentRunId } : {}),
+      ...(input.taskId ? { taskId: input.taskId } : {}),
       kind: input.kind,
       state: input.state,
       createdAt: input.timestamp,

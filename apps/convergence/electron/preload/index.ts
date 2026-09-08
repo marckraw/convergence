@@ -314,6 +314,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('session:getSummaryById', id),
     getConversation: (id: string) =>
       ipcRenderer.invoke('session:getConversation', id),
+    listAgentRuns: (sessionId: string) =>
+      ipcRenderer.invoke('session:listAgentRuns', sessionId),
+    listTasks: (sessionId: string) =>
+      ipcRenderer.invoke('session:listTasks', sessionId),
     archive: (id: string) => ipcRenderer.invoke('session:archive', id),
     unarchive: (id: string) => ipcRenderer.invoke('session:unarchive', id),
     delete: (id: string) => ipcRenderer.invoke('session:delete', id),

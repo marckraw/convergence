@@ -237,7 +237,7 @@ describe('database', () => {
     ).toThrow()
   })
 
-  it('creates session_turns with expected columns, FK, and unique constraint', () => {
+  it('creates session_turns with expected columns, FK, and unique constraint — omit accounting columns turns red', () => {
     const db = getDatabase()
     const columns = db
       .prepare("PRAGMA table_info('session_turns')")
@@ -254,6 +254,11 @@ describe('database', () => {
         'provider_account_id',
         'model',
         'effort',
+        'result_subtype',
+        'usage_json',
+        'cost_usd',
+        'permission_denials_json',
+        'subagent_stats_json',
       ].sort(),
     )
 

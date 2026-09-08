@@ -247,6 +247,13 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
               <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
             <div className="min-w-0 flex-1 pt-1">
+              {entry.agentRunId && (
+                <div className="mb-1 truncate text-xs text-muted-foreground">
+                  {entry.agentAttribution?.description?.trim()
+                    ? `↳ ${entry.agentAttribution.description} (${entry.agentAttribution.agentType ?? 'unknown'})`
+                    : '↳ subagent'}
+                </div>
+              )}
               <div className="mb-1 flex min-w-0 flex-wrap items-center gap-1.5">
                 <ConversationItemTimestamp
                   createdAt={entry.createdAt}

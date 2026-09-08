@@ -232,6 +232,9 @@ export type InteractionResponse =
   | InteractionUrlResponse
 
 export interface ConversationItemBase {
+  agentRunId?: string | null
+  taskId?: string | null
+  agentAttribution?: { description: string | null; agentType: string | null }
   id: string
   sessionId: string
   sequence: number

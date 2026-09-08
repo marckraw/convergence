@@ -446,6 +446,8 @@ export function conversationItemToInsertRow(
     sessionId,
     sequence,
     turnId,
+    agentRunId,
+    taskId,
     kind,
     state,
     createdAt,
@@ -453,6 +455,8 @@ export function conversationItemToInsertRow(
     providerMeta,
     ...payload
   } = item
+  // The read join supplies the label; identity remains the stored source.
+  delete payload.agentAttribution
 
   return {
     id,
@@ -461,6 +465,8 @@ export function conversationItemToInsertRow(
     turnId,
     kind,
     state,
+    agentRunId: agentRunId ?? null,
+    taskId: taskId ?? null,
     payloadJson: JSON.stringify(payload),
     providerItemId: providerMeta.providerItemId,
     providerEventType: providerMeta.providerEventType,
@@ -480,6 +486,16 @@ export function conversationItemFromRow(
     sessionId: row.session_id,
     sequence: row.sequence,
     turnId: row.turn_id,
+    ...(row.agent_run_id
+      ? {
+          agentRunId: row.agent_run_id,
+          agentAttribution: {
+            description: row.agent_description ?? null,
+            agentType: row.agent_type ?? null,
+          },
+        }
+      : {}),
+    ...(row.task_id ? { taskId: row.task_id } : {}),
     kind,
     state,
     createdAt: row.created_at,

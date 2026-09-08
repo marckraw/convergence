@@ -8,6 +8,7 @@ import {
 } from '../execution-host-endpoint/execution-host-endpoint.pure'
 import type { TranscriptEntry } from '../provider/provider.types'
 import { conversationItemToInsertRow } from '../session/conversation-item.pure'
+import { migrateHarnessEvidence } from './harness-evidence-migration.service'
 import { migrateTranscriptToConversationItems } from '../session/conversation-item.pure'
 import {
   serializeSessionWorkAddress,
@@ -2102,6 +2103,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     ensureAttachmentsTableNoFk(database)
     migrateLegacySessionConversations(database)
     ensureSessionsTableShape(database)
+    migrateHarnessEvidence(database)
   } catch (error) {
     database.close()
     throw error

@@ -1,6 +1,7 @@
 import { SESSION_RESTARTED_EVENT_TYPE } from '../provider/session-restart.pure'
 import { CONVERSATION_RESET_COMMAND } from '../../../src/shared/lib/conversation-reset.pure'
 import { randomUUID } from 'crypto'
+import { HarnessEvidenceService } from './harness-evidence.service'
 import { mkdirSync } from 'fs'
 import type Database from 'better-sqlite3'
 import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
@@ -1307,15 +1308,23 @@ export class SessionService {
 
     const rows = this.db
       .prepare(
-        `SELECT items.*, sessions.provider_id
+        `SELECT items.*, sessions.provider_id, agents.description AS agent_description, agents.agent_type
          FROM session_conversation_items items
          INNER JOIN sessions ON sessions.id = items.session_id
+         LEFT JOIN session_agent_runs agents ON agents.session_id=items.session_id AND agents.id=items.agent_run_id
          WHERE items.session_id = ?
          ORDER BY items.sequence ASC`,
       )
       .all(id) as ConversationItemRow[]
 
     return rows.map(conversationItemFromRow)
+  }
+
+  listAgentRuns(sessionId: string) {
+    return new HarnessEvidenceService(this.db).listAgentRuns(sessionId)
+  }
+  listTasks(sessionId: string) {
+    return new HarnessEvidenceService(this.db).listTasks(sessionId)
   }
 
   getQueuedInputs(sessionId: string): SessionQueuedInput[] {
@@ -2224,6 +2233,39 @@ export class SessionService {
   ): void {
     this.liveness.bump(sessionId)
     switch (delta.kind) {
+      case 'harness.evidence': {
+        const live = this.activeHandles.get(sessionId)
+        if (live && live !== source) return
+        if (
+          delta.evidence.kind === 'agent.identified' ||
+          (delta.evidence.kind === 'task.changed' &&
+            delta.evidence.patch.toolUseId)
+        )
+          this.flushPendingConversationPatchesForSession(sessionId)
+        const evidence = new HarnessEvidenceService(this.db)
+        const renamed = evidence.apply(
+          sessionId,
+          this.activeTurnIds.get(sessionId) ?? null,
+          delta.evidence,
+        )
+        if (renamed) {
+          const rows = this.db
+            .prepare(
+              `SELECT items.*, sessions.provider_id, agents.description AS agent_description, agents.agent_type
+            FROM session_conversation_items items INNER JOIN sessions ON sessions.id=items.session_id
+            LEFT JOIN session_agent_runs agents ON agents.session_id=items.session_id AND agents.id=items.agent_run_id
+            WHERE items.session_id=? AND items.id IN (${renamed.itemIds.map(() => '?').join(',')}) ORDER BY items.sequence`,
+            )
+            .all(sessionId, ...renamed.itemIds) as ConversationItemRow[]
+          for (const row of rows)
+            this.notifySessionChange(sessionId, {
+              sessionId,
+              op: 'patch',
+              item: conversationItemFromRow(row),
+            })
+        }
+        return
+      }
       case 'session.patch': {
         // A handle cannot speak over the handle that replaced it. A session
         // patch is a statement about the run, and this one's run is gone --
@@ -2525,6 +2567,8 @@ export class SessionService {
            session_id,
            sequence,
            turn_id,
+           agent_run_id,
+           task_id,
            kind,
            state,
            payload_json,
@@ -2532,13 +2576,15 @@ export class SessionService {
            provider_event_type,
            created_at,
            updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         insertRow.id,
         insertRow.sessionId,
         insertRow.sequence,
         insertRow.turnId,
+        insertRow.agentRunId,
+        insertRow.taskId,
         insertRow.kind,
         insertRow.state,
         insertRow.payloadJson,
@@ -2574,6 +2620,22 @@ export class SessionService {
       })
     }
 
+    if (item.agentRunId) {
+      const run = this.db
+        .prepare(
+          'SELECT description, agent_type AS agentType FROM session_agent_runs WHERE session_id = ? AND id = ?',
+        )
+        .get(sessionId, item.agentRunId) as
+        | { description: string | null; agentType: string | null }
+        | undefined
+      item = {
+        ...item,
+        agentAttribution: {
+          description: run?.description ?? null,
+          agentType: run?.agentType ?? null,
+        },
+      }
+    }
     return item
   }
 
@@ -2584,9 +2646,10 @@ export class SessionService {
   ): ConversationItem | null {
     const existing = this.db
       .prepare(
-        `SELECT items.*, sessions.provider_id
+        `SELECT items.*, sessions.provider_id, agents.description AS agent_description, agents.agent_type
          FROM session_conversation_items items
          INNER JOIN sessions ON sessions.id = items.session_id
+         LEFT JOIN session_agent_runs agents ON agents.session_id=items.session_id AND agents.id=items.agent_run_id
          WHERE items.session_id = ? AND items.id = ?`,
       )
       .get(sessionId, itemId) as ConversationItemRow | undefined
@@ -2609,6 +2672,8 @@ export class SessionService {
       .prepare(
         `UPDATE session_conversation_items
          SET turn_id = ?,
+             agent_run_id = ?,
+             task_id = ?,
              kind = ?,
              state = ?,
              payload_json = ?,
@@ -2619,6 +2684,8 @@ export class SessionService {
       )
       .run(
         row.turnId,
+        row.agentRunId,
+        row.taskId,
         row.kind,
         row.state,
         row.payloadJson,

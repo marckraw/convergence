@@ -1291,6 +1291,12 @@ export function registerIpcHandlers(
   })
 
   // Turn-grouped file-change handlers
+  ipcMain.handle('session:listAgentRuns', (_event, sessionId: string) =>
+    sessionService.listAgentRuns(sessionId),
+  )
+  ipcMain.handle('session:listTasks', (_event, sessionId: string) =>
+    sessionService.listTasks(sessionId),
+  )
   ipcMain.handle('turns:listForSession', (_event, sessionId: string) =>
     turnCaptureService.listTurns(sessionId),
   )

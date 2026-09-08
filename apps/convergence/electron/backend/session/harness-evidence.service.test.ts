@@ -1,0 +1,217 @@
+import { afterEach, expect, it } from 'vitest'
+import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
+import { HarnessEvidenceService } from './harness-evidence.service'
+
+afterEach(() => {
+  closeDatabase()
+  resetDatabase()
+})
+function bed() {
+  const db = getDatabase()
+  db.prepare(
+    "INSERT INTO sessions(id, context_kind, provider_id, name, working_directory) VALUES ('session','global','claude-code','fixture','/tmp')",
+  ).run()
+  db.prepare(
+    "INSERT INTO session_turns(id,session_id,sequence,started_at,status) VALUES ('turn','session',1,'start','running')",
+  ).run()
+  return { db, service: new HarnessEvidenceService(db) }
+}
+
+it('persists agent identity, task state and turn cost — drop a projection/accounting write or identity adoption turns red', () => {
+  const { db, service } = bed()
+  service.apply('session', 'turn', {
+    kind: 'agent.started',
+    run: {
+      id: 'tool',
+      spawnedByItemId: 'call',
+      agentType: 'Explore',
+      description: 'fixture',
+      model: null,
+      depth: 1,
+      startedAt: 'start',
+      transcriptPath: null,
+    },
+  })
+  db.prepare(
+    "INSERT INTO session_conversation_items(id,session_id,sequence,kind,state,payload_json,created_at,updated_at,agent_run_id) VALUES ('child','session',1,'tool-call','complete','{}','start','start','tool')",
+  ).run()
+  service.apply('session', 'turn', {
+    kind: 'agent.identified',
+    spawnedByItemId: 'call',
+    id: 'agent',
+    agentType: null,
+    description: null,
+    depth: 1,
+    transcriptPath: '/fixture/agent.jsonl',
+  })
+  service.apply('session', 'turn', {
+    kind: 'agent.changed',
+    spawnedByItemId: 'call',
+    patch: {
+      model: 'haiku',
+      isBackgrounded: true,
+      lastToolName: 'Read',
+      usageJson: '{"total_tokens":12}',
+      updatedAt: 'progress',
+    },
+  })
+  service.apply('session', 'turn', {
+    kind: 'agent.ended',
+    spawnedByItemId: 'call',
+    status: 'completed',
+    at: 'end',
+  })
+  service.apply('session', 'turn', {
+    kind: 'task.changed',
+    taskId: 'task',
+    at: 'start',
+    patch: { status: 'running', toolUseId: 'bash' },
+  })
+  service.apply('session', 'turn', {
+    kind: 'task.changed',
+    taskId: 'task',
+    at: 'end',
+    patch: { status: 'stopped', endedAt: 'end' },
+  })
+  service.apply('session', 'turn', {
+    kind: 'turn.accounting',
+    resultSubtype: 'success',
+    usage: { output_tokens: 7 },
+    costUsd: 0.125,
+    permissionDenials: [],
+    subagentStats: { completed: 1 },
+  })
+  const reopened = new HarnessEvidenceService(db)
+  expect({
+    agents: reopened
+      .listAgentRuns('session')
+      .map((run) => [
+        run.id,
+        run.status,
+        run.model,
+        run.isBackgrounded,
+        run.lastToolName,
+        run.usageJson,
+        run.updatedAt,
+      ]),
+    child: db
+      .prepare(
+        "SELECT agent_run_id FROM session_conversation_items WHERE id='child'",
+      )
+      .get(),
+    tasks: reopened
+      .listTasks('session')
+      .map((task) => [task.taskId, task.toolUseId, task.status]),
+    turn: db
+      .prepare(
+        "SELECT result_subtype,usage_json,cost_usd,permission_denials_json,subagent_stats_json FROM session_turns WHERE id='turn'",
+      )
+      .get(),
+  }).toEqual({
+    agents: [
+      [
+        'agent',
+        'completed',
+        'haiku',
+        true,
+        'Read',
+        '{"total_tokens":12}',
+        'progress',
+      ],
+    ],
+    child: { agent_run_id: 'agent' },
+    tasks: [['task', 'bash', 'stopped']],
+    turn: {
+      result_subtype: 'success',
+      usage_json: '{"output_tokens":7}',
+      cost_usd: 0.125,
+      permission_denials_json: '[]',
+      subagent_stats_json: '{"completed":1}',
+    },
+  })
+})
+
+it('persists unknown subtypes with byte and row bounds — drop unknown writes or either retention cap turns red', () => {
+  const { db, service } = bed()
+  for (let n = 0; n < 5002; n++)
+    service.apply('session', null, {
+      kind: 'harness.unknown',
+      type: 'system',
+      subtype: 'future_signal',
+      payload: { n, text: '🧬'.repeat(n === 5001 ? 10000 : 1) },
+      at: 'now',
+    })
+  expect({
+    bounds: db
+      .prepare(
+        'SELECT count(*) AS count,min(sequence) AS first,max(sequence) AS last,max(length(CAST(payload_json AS BLOB))) <= 8192 AS bounded FROM session_harness_events',
+      )
+      .get(),
+    last: db
+      .prepare(
+        'SELECT type,subtype FROM session_harness_events ORDER BY sequence DESC LIMIT 1',
+      )
+      .get(),
+  }).toEqual({
+    bounds: { count: 5000, first: 3, last: 5002, bounded: 1 },
+    last: { type: 'system', subtype: 'future_signal' },
+  })
+})
+
+it('L3 persists only changed agent and task rows — mutation upsert every folded row turns red', () => {
+  const { db, service } = bed()
+  for (const id of ['a', 'b']) {
+    service.apply('session', null, {
+      kind: 'agent.started',
+      run: {
+        id,
+        spawnedByItemId: id,
+        agentType: null,
+        description: null,
+        model: null,
+        depth: 1,
+        startedAt: 'start',
+        transcriptPath: null,
+      },
+    })
+    service.apply('session', null, {
+      kind: 'task.changed',
+      taskId: id,
+      at: 'start',
+      patch: { status: 'running' },
+    })
+  }
+  db.exec(`CREATE TEMP TABLE writes(kind TEXT,id TEXT);
+ CREATE TEMP TRIGGER agent_write AFTER UPDATE ON session_agent_runs BEGIN INSERT INTO writes VALUES ('agent',new.id); END;
+ CREATE TEMP TRIGGER task_write AFTER UPDATE ON session_tasks BEGIN INSERT INTO writes VALUES ('task',new.task_id); END;`)
+  service.apply('session', null, {
+    kind: 'agent.changed',
+    spawnedByItemId: 'a',
+    patch: { lastToolName: 'Read' },
+  })
+  service.apply('session', null, {
+    kind: 'task.changed',
+    taskId: 'a',
+    at: 'end',
+    patch: { status: 'completed' },
+  })
+  expect(
+    db.prepare('SELECT kind,id FROM writes ORDER BY kind,id').all(),
+  ).toEqual([
+    { kind: 'agent', id: 'a' },
+    { kind: 'task', id: 'a' },
+  ])
+  db.exec('DELETE FROM writes')
+  service.apply('session', null, {
+    kind: 'agent.changed',
+    spawnedByItemId: 'a',
+    patch: { lastToolName: 'Read' },
+  })
+  service.apply('session', null, {
+    kind: 'task.changed',
+    taskId: 'a',
+    at: 'end',
+    patch: { status: 'completed' },
+  })
+  expect(db.prepare('SELECT * FROM writes').all()).toEqual([])
+})

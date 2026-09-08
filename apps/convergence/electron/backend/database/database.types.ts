@@ -72,6 +72,10 @@ export interface ConversationItemRow {
   provider_id: string
   created_at: string
   updated_at: string
+  agent_run_id?: string | null
+  task_id?: string | null
+  agent_description?: string | null
+  agent_type?: string | null
 }
 
 export interface SessionQueuedInputRow {
