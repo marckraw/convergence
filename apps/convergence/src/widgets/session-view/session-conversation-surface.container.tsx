@@ -24,7 +24,11 @@ interface SessionConversationSurfaceProps {
   conversationItems: ConversationItem[]
   composerContext: ComposerSessionContext | null
   composerDisabledReason?: string | null
-  onApprove: (sessionId: string, providerApprovalId?: string) => void
+  onApprove: (
+    sessionId: string,
+    providerApprovalId?: string,
+    options?: { scope: 'once' | 'session' },
+  ) => void
   onDeny: (sessionId: string, providerApprovalId?: string) => void
   onInputAnswer: (
     sessionId: string,
@@ -101,7 +105,11 @@ interface RenderConversationColumnInput {
   composerDisabledReason: string | null
   selectedUiResponseItemId: string | null
   onUiResponseArtifactSelect: (conversationItemId: string) => void
-  onApprove: (sessionId: string, providerApprovalId?: string) => void
+  onApprove: (
+    sessionId: string,
+    providerApprovalId?: string,
+    options?: { scope: 'once' | 'session' },
+  ) => void
   onDeny: (sessionId: string, providerApprovalId?: string) => void
   onInputAnswer: (
     sessionId: string,

@@ -356,8 +356,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ),
     compactContext: (id: string, instructions?: string) =>
       ipcRenderer.invoke('session:compactContext', id, instructions),
-    approve: (id: string, providerApprovalId?: string) =>
-      ipcRenderer.invoke('session:approve', id, providerApprovalId),
+    approve: (
+      id: string,
+      providerApprovalId?: string,
+      options?: { scope: 'once' | 'session' },
+    ) => ipcRenderer.invoke('session:approve', id, providerApprovalId, options),
     deny: (id: string, providerApprovalId?: string) =>
       ipcRenderer.invoke('session:deny', id, providerApprovalId),
     stop: (id: string) => ipcRenderer.invoke('session:stop', id),

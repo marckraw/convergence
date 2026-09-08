@@ -42,6 +42,7 @@ import type { TranscriptEntryViewModel } from './transcript-entry.pure'
 interface ConversationItemViewProps {
   viewModel: TranscriptEntryViewModel
   onApprove?: () => void
+  onApproveSession?: () => void
   onDeny?: () => void
   onInputAnswer?: (response: InteractionResponse, displayText: string) => void
   onAttachmentOpen?: (attachment: Attachment) => void
@@ -69,6 +70,7 @@ function getHistoryImageAttachmentsClassName(count: number): string {
 export const ConversationItemView: FC<ConversationItemViewProps> = ({
   viewModel,
   onApprove,
+  onApproveSession,
   onDeny,
   onInputAnswer,
   onAttachmentOpen,
@@ -317,17 +319,36 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
     case 'approval-request':
       return (
         <ConversationItemShell copyText={viewModel.copyText}>
+          {entry.agentRunId && (
+            <div className="mb-1 truncate text-xs text-muted-foreground">
+              {entry.agentAttribution?.description?.trim()
+                ? `↳ ${entry.agentAttribution.description} (${entry.agentAttribution.agentType ?? 'unknown'})`
+                : '↳ subagent'}
+            </div>
+          )}
           <div
             className="my-2 max-w-full overflow-hidden rounded-lg border border-warning/30 bg-warning/5 p-4"
             data-testid="approval-request-card"
             role="group"
-            aria-label="Approval needed"
+            aria-label={
+              entry.resolution === 'denied'
+                ? 'Denied'
+                : entry.resolution === 'approved'
+                  ? 'Approved'
+                  : 'Approval needed'
+            }
           >
             <div className="flex min-w-0 items-start gap-3">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-8">
-                  <p className="text-sm font-medium">Approval needed</p>
+                  <p className="text-sm font-medium">
+                    {entry.resolution === 'denied'
+                      ? 'Denied'
+                      : entry.resolution === 'approved'
+                        ? 'Approved'
+                        : 'Approval needed'}
+                  </p>
                   <ConversationItemTimestamp
                     createdAt={entry.createdAt}
                     timing={viewModel.timing}
@@ -338,11 +359,30 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                   content={entry.description}
                   size="sm"
                 />
+                {entry.permissionDetails && (
+                  <p className="mt-1 break-words text-xs text-muted-foreground">
+                    {[
+                      entry.permissionDetails.blockedPath,
+                      entry.permissionDetails.decisionReason,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                )}
                 {viewModel.actionableApproval && onApprove && onDeny && (
-                  <div className="mt-3 flex gap-2">
+                  <div className="mt-3 flex flex-wrap gap-2">
                     <Button size="sm" onClick={onApprove}>
                       Approve
                     </Button>
+                    {entry.supportsSessionApproval && onApproveSession && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={onApproveSession}
+                      >
+                        Always allow (this session)
+                      </Button>
+                    )}
                     <Button variant="ghost" size="sm" onClick={onDeny}>
                       Deny
                     </Button>

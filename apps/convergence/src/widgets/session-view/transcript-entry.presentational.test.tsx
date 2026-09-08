@@ -49,6 +49,43 @@ function renderConversationItemView({
 }
 
 describe('ConversationItemView', () => {
+  it('R7 approval shows agent and muted permission facts — omit the approval label or details turns red', () => {
+    renderConversationItemView({
+      entry: {
+        id: 'approval',
+        sessionId: 'session',
+        sequence: 1,
+        turnId: 'turn',
+        kind: 'approval-request',
+        state: 'complete',
+        createdAt: '2026-09-09T00:00:00Z',
+        updatedAt: '2026-09-09T00:00:00Z',
+        providerMeta: {
+          providerId: 'claude-code',
+          providerItemId: 'tool',
+          providerEventType: 'approval-request',
+        },
+        description: 'Write fixture',
+        agentRunId: 'child',
+        agentAttribution: {
+          description: 'Inspect fixture',
+          agentType: 'Explore',
+        },
+        permissionDetails: {
+          blockedPath: '/fixture/marker',
+          decisionReason: 'needs permission',
+        },
+      },
+    })
+    expect({
+      label: screen.queryByText('↳ Inspect fixture (Explore)')?.textContent,
+      details: screen.queryByText('/fixture/marker · needs permission')
+        ?.className,
+    }).toEqual({
+      label: '↳ Inspect fixture (Explore)',
+      details: 'mt-1 break-words text-xs text-muted-foreground',
+    })
+  })
   it('renders the attributed agent label exactly — drop the label or omit description/type turns red', () => {
     renderConversationItemView({
       entry: {

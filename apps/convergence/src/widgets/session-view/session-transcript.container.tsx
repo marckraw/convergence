@@ -24,7 +24,11 @@ interface SessionTranscriptProps {
   conversationItems: ConversationItemEntry[]
   selectedUiResponseItemId?: string | null
   onUiResponseArtifactSelect?: (conversationItemId: string) => void
-  onApprove: (sessionId: string, providerApprovalId?: string) => void
+  onApprove: (
+    sessionId: string,
+    providerApprovalId?: string,
+    options?: { scope: 'once' | 'session' },
+  ) => void
   onDeny: (sessionId: string, providerApprovalId?: string) => void
   onInputAnswer: (
     sessionId: string,
@@ -73,7 +77,7 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
   )
   const actionableApprovalIds = useMemo(() => {
     if (
-      session.status !== 'running' ||
+      (session.status !== 'running' && session.status !== 'completed') ||
       session.attention !== 'needs-approval'
     ) {
       return new Set<string>()
@@ -83,6 +87,9 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     for (const entry of conversationRenderPlan) {
       if (
         entry.item.kind === 'approval-request' &&
+        entry.item.resolution !== 'approved' &&
+        entry.item.resolution !== 'denied' &&
+        (session.status === 'running' || entry.item.resolution === 'pending') &&
         !resolvedApprovalIds.has(entry.item.id)
       ) {
         ids.add(entry.item.id)
@@ -96,7 +103,10 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     session.status,
   ])
   const actionableInputIds = useMemo(() => {
-    if (session.status !== 'running' || session.attention !== 'needs-input') {
+    if (
+      (session.status !== 'running' && session.status !== 'completed') ||
+      session.attention !== 'needs-input'
+    ) {
       return new Set<string>()
     }
 
@@ -104,6 +114,9 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     for (const entry of conversationRenderPlan) {
       if (
         entry.item.kind === 'input-request' &&
+        entry.item.resolution !== 'approved' &&
+        entry.item.resolution !== 'denied' &&
+        (session.status === 'running' || entry.item.resolution === 'pending') &&
         (entry.item.request?.kind === 'choice' ||
           entry.item.request?.kind === 'plan' ||
           entry.item.request?.kind === 'form' ||
@@ -306,14 +319,28 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
                   onDeny={
                     isActionableApproval
                       ? () => {
+                          setResolvedApprovalIds(
+                            (current) => new Set([...current, entry.id]),
+                          )
+                          onDeny(
+                            session.id,
+                            entry.providerMeta.providerItemId ?? undefined,
+                          )
+                        }
+                      : undefined
+                  }
+                  onApproveSession={
+                    isActionableApproval
+                      ? () => {
                           setResolvedApprovalIds((current) => {
                             const next = new Set(current)
                             next.add(entry.id)
                             return next
                           })
-                          onDeny(
+                          onApprove(
                             session.id,
                             entry.providerMeta.providerItemId ?? undefined,
+                            { scope: 'session' },
                           )
                         }
                       : undefined
@@ -326,7 +353,17 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
                             next.add(entry.id)
                             return next
                           })
-                          onInputAnswer(session.id, response, displayText)
+                          onInputAnswer(
+                            session.id,
+                            entry.kind === 'input-request' &&
+                              entry.responseProviderItemId
+                              ? {
+                                  ...response,
+                                  providerItemId: entry.responseProviderItemId,
+                                }
+                              : response,
+                            displayText,
+                          )
                         }
                       : undefined
                   }

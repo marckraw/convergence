@@ -1028,8 +1028,13 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     'session:approve',
-    (_event, id: string, providerApprovalId?: string) => {
-      sessionApp.approveAttentionRequest(id, providerApprovalId)
+    (
+      _event,
+      id: string,
+      providerApprovalId?: string,
+      options?: { scope: 'once' | 'session' },
+    ) => {
+      sessionApp.approveAttentionRequest(id, providerApprovalId, options)
     },
   )
 

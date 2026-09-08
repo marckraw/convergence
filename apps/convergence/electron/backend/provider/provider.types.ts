@@ -377,6 +377,7 @@ export interface ProviderDescriptor {
   vendorLabel: string
   kind: ProviderKind
   supportsContinuation: boolean
+  supportsApprovals?: boolean
   /**
    * Whether this provider can be told to start the conversation over inside a
    * session that already exists (R8, RUN45).
@@ -474,7 +475,10 @@ export interface SessionHandle {
       providerAccountId?: string | null
     },
   ) => void
-  approve: (providerApprovalId?: string) => void
+  approve: (
+    providerApprovalId?: string,
+    options?: { scope: 'once' | 'session' },
+  ) => void
   deny: (providerApprovalId?: string) => void
   stop: () => void
   /** Releases local resources without changing the persisted session state. */
@@ -485,6 +489,7 @@ export interface Provider {
   id: string
   name: string
   supportsContinuation: boolean
+  supportsApprovals?: boolean
   describe: () => Promise<ProviderDescriptor>
   start: (config: SessionStartConfig) => SessionHandle
   manageContext?: (

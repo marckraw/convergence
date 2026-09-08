@@ -17,6 +17,7 @@ interface ConversationItemProps {
   turnStartedAt?: string | null
   injectedContextText?: string | null
   onApprove?: () => void
+  onApproveSession?: () => void
   onDeny?: () => void
   onInputAnswer?: (response: InteractionResponse, displayText: string) => void
 }
@@ -29,6 +30,7 @@ export const ConversationItem: FC<ConversationItemProps> = ({
   turnStartedAt,
   injectedContextText = null,
   onApprove,
+  onApproveSession,
   onDeny,
   onInputAnswer,
 }) => {
@@ -68,6 +70,7 @@ export const ConversationItem: FC<ConversationItemProps> = ({
       <ConversationItemView
         viewModel={viewModel}
         onApprove={onApprove}
+        onApproveSession={onApproveSession}
         onDeny={onDeny}
         onInputAnswer={onInputAnswer}
         onAttachmentOpen={setPreviewAttachment}

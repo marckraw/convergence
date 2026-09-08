@@ -1,3 +1,4 @@
+import { ClaudePermissionsService } from './claude-permissions.service'
 import { spawn } from 'child_process'
 import {
   createClaudeTransport,
@@ -78,16 +79,6 @@ import {
   startClaudeSkillTelemetrySink,
   type ClaudeSkillTelemetrySink,
 } from './claude-skill-telemetry.service'
-import {
-  buildClaudeAskUserQuestionHookResponse,
-  buildClaudeAskUserQuestionHookSettings,
-  buildClaudeAskUserQuestionRequest,
-  buildClaudeExitPlanModeHookResponse,
-  buildClaudeExitPlanModeRequest,
-  normalizeClaudeDeferredToolUse,
-  type ClaudeDeferredToolHookResponse,
-  type PendingClaudeDeferredToolUse,
-} from './claude-ask-user-question.pure'
 import { resolveClaudeCodePermissionMode } from '../session-permissions.pure'
 import { resolveClaudeAccountEnv } from '../../provider-account/provider-account-env.service'
 import type { ClaudeAccountEnvTarget } from '../../provider-account/provider-account-env.pure'
@@ -132,7 +123,6 @@ interface ClaudeStreamEvent {
   is_error?: boolean
   result?: string
   stop_reason?: string
-  deferred_tool_use?: unknown
   usage?: {
     input_tokens?: number
     cache_creation_input_tokens?: number
@@ -467,35 +457,26 @@ export class ClaudeCodeProvider implements Provider {
     let child: ClaudeTransport | null = null
     let stopped = false
     let idleTimer: ReturnType<typeof setTimeout> | undefined
-    let endingReason: 'idle' | 'account' | 'deferred' | null = null
+    let endingReason: 'idle' | 'account' | null = null
     let connectionEnding: Promise<void> | null = null
     let resolveConnectionEnd: (() => void) | undefined
     function clearIdleTimer(): void {
       if (idleTimer) clearTimeout(idleTimer)
       idleTimer = undefined
     }
-    function endConnection(
-      reason: 'idle' | 'account' | 'deferred',
-    ): Promise<void> {
+    function endConnection(reason: 'idle' | 'account'): Promise<void> {
       if (connectionEnding) return connectionEnding
       if (!child) return Promise.resolve()
       clearIdleTimer()
+      permissions.endConnection()
       endingReason = reason
-      if (reason !== 'deferred')
-        sessionEmitter.addNote({
-          text:
-            reason === 'account'
-              ? 'connection ended: account changed'
-              : `process stopped after ${residentIdleMinutes()} min idle`,
-          level: 'info',
-        })
-      if (pendingDeferredToolUse) {
-        pendingDeferredToolUse = null
-        sessionEmitter.addNote({
-          text: 'Pending approval cancelled: connection ended',
-          level: 'info',
-        })
-      }
+      sessionEmitter.addNote({
+        text:
+          reason === 'account'
+            ? 'connection ended: account changed'
+            : `process stopped after ${residentIdleMinutes()} min idle`,
+        level: 'info',
+      })
       connectionEnding = new Promise<void>((resolve) => {
         resolveConnectionEnd = resolve
       })
@@ -534,8 +515,7 @@ export class ClaudeCodeProvider implements Provider {
     } | null = null
     /**
      * The account serving the logical turn in flight, resolved once when the
-     * turn begins and held for every process it spawns — deferred-tool answers,
-     * plan approvals, recovery restarts. Re-resolving per spawn would let a
+     * turn begins and held through recovery restarts. Re-resolving per spawn would let a
      * selection made mid-turn leak into a continuation the user believes is
      * still running on the previous account.
      */
@@ -555,13 +535,13 @@ export class ClaudeCodeProvider implements Provider {
     let sawTurnOutput = false
     let sawHarnessOutput = false
     let capabilities: string[] = []
+    let interruptInFlight = false
     let interruptRequested = false
     const notifiedTaskMoments = new Set<string>()
     const taskDescriptions = new Map<string, string>()
     // The synthetic result has no task id; its preceding notification owns the note.
     let taskNotificationSinceResult = false
     let stderrBuffer = ''
-    let pendingDeferredToolUse: PendingClaudeDeferredToolUse | null = null
 
     function emitDelta(delta: SessionDelta): void {
       listeners.delta.forEach((cb) => cb(delta))
@@ -572,6 +552,10 @@ export class ClaudeCodeProvider implements Provider {
       emitDelta,
       now,
     })
+    const permissions = new ClaudePermissionsService(
+      sessionEmitter,
+      setAttention,
+    )
     const evidence = new ClaudeEvidenceService(
       config.workingDirectory,
       () => currentTurnAccount?.target?.configDir ?? null,
@@ -832,6 +816,7 @@ export class ClaudeCodeProvider implements Provider {
       if (reason === 'missing-session') claudeSessionId = null
       currentTurn = null
       interruptRequested = false
+      permissions.endConnection()
       child?.close()
     }
 
@@ -1162,7 +1147,7 @@ export class ClaudeCodeProvider implements Provider {
             sessionEmitter.addNote({ text: 'interrupted', level: 'info' })
             setStatus('completed')
             interruptRequested = false
-            setAttention('finished')
+            setAttention(permissions.pendingAttention ?? 'finished')
             armIdleTimer()
             break
           }
@@ -1171,49 +1156,6 @@ export class ClaudeCodeProvider implements Provider {
           flushThinkingBuffer()
           flushAssistantBuffer()
           refreshContextWindowFromLogs()
-          if (event.stop_reason === 'tool_deferred') {
-            const deferredToolUse = normalizeClaudeDeferredToolUse(
-              event.deferred_tool_use,
-            )
-            const inputRequest = deferredToolUse
-              ? (buildClaudeAskUserQuestionRequest(deferredToolUse) ??
-                buildClaudeExitPlanModeRequest(deferredToolUse))
-              : null
-
-            if (inputRequest) {
-              pendingDeferredToolUse =
-                inputRequest.kind === 'exit-plan-mode'
-                  ? {
-                      kind: 'exit-plan-mode',
-                      pending: inputRequest.pending,
-                    }
-                  : {
-                      kind: 'ask-user-question',
-                      pending: inputRequest.pending,
-                    }
-              sessionEmitter.addInputRequest({
-                prompt: inputRequest.prompt,
-                request: inputRequest.request,
-                providerItemId: inputRequest.pending.toolUseId,
-                providerEventType: 'deferred_tool_use',
-              })
-              setStatus('running')
-              setAttention('needs-input')
-              setActivity(null)
-              currentTurn = null
-              armIdleTimer()
-              break
-            }
-
-            sessionEmitter.addNote({
-              text: 'Claude Code deferred a tool call that Convergence could not render.',
-              level: 'error',
-            })
-            setStatus('failed')
-            setAttention('failed')
-            currentTurn = null
-            break
-          }
           if (event.is_error) {
             if (shouldRecoverFromMessage(event.result)) {
               scheduleContinuationRecovery('missing-session')
@@ -1235,7 +1177,7 @@ export class ClaudeCodeProvider implements Provider {
             }
             currentTurn = null
             setStatus('completed')
-            setAttention('finished')
+            setAttention(permissions.pendingAttention ?? 'finished')
             armIdleTimer()
           }
           break
@@ -1333,8 +1275,6 @@ export class ClaudeCodeProvider implements Provider {
         userMessageItemId?: string | null
         emitUserEntry?: boolean
         allowContinuationRecovery?: boolean
-        skipPromptInput?: boolean
-        deferredToolResponse?: ClaudeDeferredToolHookResponse
         providerAccountId?: string | null
         /**
          * True for a process that continues the logical turn already in
@@ -1347,10 +1287,6 @@ export class ClaudeCodeProvider implements Provider {
       clearIdleTimer()
       if (connectionEnding) await connectionEnding
       if (stopped || currentTurn) return
-      if (child && options?.deferredToolResponse) {
-        await endConnection('deferred')
-        if (stopped) return
-      }
       if (
         child &&
         !options?.continuesCurrentTurn &&
@@ -1398,7 +1334,7 @@ export class ClaudeCodeProvider implements Provider {
         skillResolution.skillSelections,
       )
       // Environment belongs to the connection, including telemetry for skills
-      // selected on later turns. Deferred answers deliberately spawn anew.
+      // selected on later turns.
       let env: NodeJS.ProcessEnv | undefined
       if (!child) {
         const telemetrySink = await getTelemetrySink()
@@ -1407,13 +1343,6 @@ export class ClaudeCodeProvider implements Provider {
           workingDirectory: config.workingDirectory,
           injections: {
             ...(telemetrySink?.env ?? {}),
-            ...(options?.deferredToolResponse
-              ? {
-                  CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE: JSON.stringify(
-                    options.deferredToolResponse,
-                  ),
-                }
-              : {}),
           },
         })
       }
@@ -1439,7 +1368,7 @@ export class ClaudeCodeProvider implements Provider {
         usedContinuationToken: !!claudeSessionId,
       }
       setStatus('running')
-      setAttention('none')
+      setAttention(permissions.pendingAttention ?? 'none')
       setActivity(null)
       setContextWindow(
         createUnavailableContextWindow(
@@ -1458,7 +1387,6 @@ export class ClaudeCodeProvider implements Provider {
         resolveClaudeCodePermissionMode(config.permissionConfig),
         '--include-partial-messages',
       ]
-      args.push('--settings', buildClaudeAskUserQuestionHookSettings())
       if (claudeSessionId) {
         args.push('--resume', claudeSessionId)
       }
@@ -1476,6 +1404,10 @@ export class ClaudeCodeProvider implements Provider {
           args,
           cwd: config.workingDirectory,
           env,
+          onPermissionRequest: (request) => {
+            sawHarnessOutput = true
+            return permissions.request(request)
+          },
           onSpawn: (pid) =>
             recordDebug('lifecycle', {
               direction: 'in',
@@ -1493,6 +1425,7 @@ export class ClaudeCodeProvider implements Provider {
           },
           onExit: ({ code, signal, error }) => {
             interruptRequested = false
+            permissions.endConnection()
             if (stopped) return
             const versionRefusal = describeClaudeTransportVersionRefusal(
               error,
@@ -1547,14 +1480,12 @@ export class ClaudeCodeProvider implements Provider {
       try {
         const parts = await loadAttachmentParts(attachments)
         if (stopped || connection !== child) return
-        if (!options?.skipPromptInput) {
-          connection.write(
-            buildClaudeUserMessageLine({
-              text: skillResolution.promptText,
-              parts,
-            }),
-          )
-        }
+        connection.write(
+          buildClaudeUserMessageLine({
+            text: skillResolution.promptText,
+            parts,
+          }),
+        )
         if (userMessageItemId)
           patchUserMessageSkills(
             userMessageItemId,
@@ -1589,6 +1520,7 @@ export class ClaudeCodeProvider implements Provider {
       resolveConnectionEnd?.()
       if (reason === 'quit')
         sessionEmitter.addNote({ text: 'stopped by quit', level: 'info' })
+      permissions.endConnection()
       evidence.processEnded(now(), reason)
       stopped = true
       clearTimeout(startTimer)
@@ -1601,7 +1533,6 @@ export class ClaudeCodeProvider implements Provider {
       currentTurn = null
       interruptRequested = false
       pendingRecoveryTurn = null
-      pendingDeferredToolUse = null
       assistantTextBuffer = ''
       thinkingBuffer = ''
       stderrBuffer = ''
@@ -1627,6 +1558,8 @@ export class ClaudeCodeProvider implements Provider {
         config.effort = effort
       },
       interrupt: async () => {
+        if (interruptInFlight || interruptRequested) return 'not-applicable'
+        permissions.denyPendingForStop()
         if (!child || !currentTurn) return 'not-applicable'
         if (!capabilities.includes('interrupt_receipt_v1')) {
           sessionEmitter.addNote({
@@ -1636,7 +1569,10 @@ export class ClaudeCodeProvider implements Provider {
           return 'not-applicable'
         }
         interruptRequested = true
+        interruptInFlight = true
         try {
+          await new Promise<void>((resolve) => setImmediate(resolve))
+          if (stopped || !child) return 'not-applicable'
           const receipt = await child.interrupt()
           recordDebug('event', {
             direction: 'in',
@@ -1651,6 +1587,8 @@ export class ClaudeCodeProvider implements Provider {
             level: 'error',
           })
           return 'not-applicable'
+        } finally {
+          interruptInFlight = false
         }
       },
       onDelta: (cb) => {
@@ -1678,37 +1616,11 @@ export class ClaudeCodeProvider implements Provider {
         listeners.heartbeat.push(cb)
       },
       sendMessage: (text, attachments, skillSelections, options) => {
-        if (
-          pendingDeferredToolUse &&
-          options?.deliveryMode === 'answer' &&
-          claudeSessionId
-        ) {
-          const pending = pendingDeferredToolUse
-          pendingDeferredToolUse = null
-          const interactionResponse = options.interactionResponse as
-            | InteractionResponse
-            | undefined
-          const deferredToolResponse =
-            pending.kind === 'ask-user-question'
-              ? buildClaudeAskUserQuestionHookResponse(
-                  pending.pending,
-                  interactionResponse,
-                  text,
-                )
-              : buildClaudeExitPlanModeHookResponse(
-                  pending.pending,
-                  interactionResponse,
-                  text,
-                )
-          void startTurn('', undefined, {
-            emitUserEntry: false,
-            allowContinuationRecovery: false,
-            skipPromptInput: true,
-            deferredToolResponse,
-            // An answer belongs to the account that asked the question, so a
-            // selection made while the card was open does not apply here.
-            continuesCurrentTurn: true,
-          })
+        if (options?.deliveryMode === 'answer') {
+          permissions.answer(
+            text,
+            options.interactionResponse as InteractionResponse | undefined,
+          )
           return
         }
 
@@ -1717,15 +1629,12 @@ export class ClaudeCodeProvider implements Provider {
           providerAccountId: options?.providerAccountId,
         })
       },
-      approve: () => {
-        // Claude Code permission handling is controlled at process startup.
-      },
-      deny: () => {
-        // Claude Code permission handling is controlled at process startup.
-      },
+      approve: (id, options) => permissions.approve(id, options),
+      deny: (id) => permissions.deny(id),
       dispose: disposeRuntime,
       stop: () => {
         if (stopped) return
+        sessionEmitter.addNote({ text: 'terminated by user', level: 'info' })
         disposeRuntime()
         setStatus('failed')
         setAttention('failed')

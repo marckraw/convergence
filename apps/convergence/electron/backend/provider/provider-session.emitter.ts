@@ -125,6 +125,14 @@ export class ProviderSessionEmitter {
     })
   }
 
+  resolveInteraction(itemId: string, resolution: 'approved' | 'denied'): void {
+    this.emitDeltaFn({
+      kind: 'conversation.item.patch',
+      itemId,
+      patch: { resolution, updatedAt: this.now() },
+    })
+  }
+
   addThinking(input: {
     text: string
     state?: ThinkingItem['state']
@@ -231,7 +239,10 @@ export class ProviderSessionEmitter {
   }
 
   addApprovalRequest(input: {
+    resolution?: 'pending'
     description: string
+    permissionDetails?: { blockedPath?: string; decisionReason?: string }
+    supportsSessionApproval?: boolean
     timestamp?: string
     providerItemId?: string | null
     providerEventType?: string | null
@@ -249,6 +260,13 @@ export class ProviderSessionEmitter {
       providerEventType: input.providerEventType ?? 'approval-request',
       payload: {
         description: input.description,
+        ...(input.resolution ? { resolution: input.resolution } : {}),
+        ...(input.supportsSessionApproval !== undefined
+          ? { supportsSessionApproval: input.supportsSessionApproval }
+          : {}),
+        ...(input.permissionDetails
+          ? { permissionDetails: input.permissionDetails }
+          : {}),
       },
     })
     this.emitItem(item)
@@ -256,6 +274,8 @@ export class ProviderSessionEmitter {
   }
 
   addInputRequest(input: {
+    responseProviderItemId?: string
+    resolution?: 'pending'
     prompt: string
     request?: InteractionRequest
     timestamp?: string
@@ -275,6 +295,10 @@ export class ProviderSessionEmitter {
       providerEventType: input.providerEventType ?? 'input-request',
       payload: {
         prompt: input.prompt,
+        ...(input.resolution ? { resolution: input.resolution } : {}),
+        ...(input.responseProviderItemId
+          ? { responseProviderItemId: input.responseProviderItemId }
+          : {}),
         ...(input.request ? { request: input.request } : {}),
       },
     })

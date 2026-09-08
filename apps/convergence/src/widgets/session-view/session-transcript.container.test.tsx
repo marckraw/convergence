@@ -336,6 +336,89 @@ describe('SessionTranscript', () => {
     expect(onDeny).not.toHaveBeenCalled()
   })
 
+  it('R2 session action carries scope and needs suggestions — drop scope or show Always without suggestions turns red', async () => {
+    const onApprove = vi.fn()
+    const suggested = {
+      ...approvalRequest({
+        id: 'suggested',
+        sequence: 1,
+        providerItemId: 'tool',
+      }),
+      supportsSessionApproval: true,
+    } as ConversationItem
+    const plain = approvalRequest({ id: 'plain', sequence: 2 })
+    render(
+      <SessionTranscript
+        session={{ ...baseSession, attention: 'needs-approval' }}
+        conversationItems={[suggested, plain]}
+        onApprove={onApprove}
+        onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
+      />,
+    )
+    await screen.findAllByTestId('approval-request-card')
+    const buttons = screen.queryAllByRole('button', {
+      name: 'Always allow (this session)',
+    })
+    if (buttons[0]) fireEvent.click(buttons[0])
+    expect({ buttons: buttons.length, calls: onApprove.mock.calls }).toEqual({
+      buttons: 1,
+      calls: [['session-1', 'tool', { scope: 'session' }]],
+    })
+  })
+
+  it('R6 a persisted denial cannot be acted on after reopening — ignore resolution turns red', async () => {
+    render(
+      <SessionTranscript
+        session={{ ...baseSession, attention: 'needs-approval' }}
+        conversationItems={[
+          {
+            ...approvalRequest({ id: 'ended', sequence: 1 }),
+            resolution: 'denied',
+          } as ConversationItem,
+        ]}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
+      />,
+    )
+    await screen.findByTestId('approval-request-card')
+    expect({
+      approve: screen.queryByRole('button', { name: 'Approve' }) !== null,
+      denied: screen.queryByText('Denied') !== null,
+    }).toEqual({ approve: false, denied: true })
+  })
+
+  it('R1 a resident background approval remains actionable after the answer — require a running turn turns red', async () => {
+    const onApprove = vi.fn()
+    render(
+      <SessionTranscript
+        session={{
+          ...baseSession,
+          status: 'completed',
+          attention: 'needs-approval',
+        }}
+        conversationItems={[
+          {
+            ...approvalRequest({
+              id: 'background',
+              sequence: 1,
+              providerItemId: 'tool',
+            }),
+            resolution: 'pending',
+          } as ConversationItem,
+        ]}
+        onApprove={onApprove}
+        onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
+      />,
+    )
+    await screen.findByTestId('approval-request-card')
+    const approve = screen.queryByRole('button', { name: 'Approve' })
+    if (approve) fireEvent.click(approve)
+    expect(onApprove.mock.calls).toEqual([['session-1', 'tool']])
+  })
+
   it('keeps the approval button when an assistant delta lands after the request', async () => {
     const onApprove = vi.fn()
     const onDeny = vi.fn()
@@ -594,4 +677,44 @@ describe('SessionTranscript', () => {
       'Declined URL request',
     )
   })
+})
+
+it('R4 the rendered question answer carries its provider item id — omit dialog id turns red', async () => {
+  const onInputAnswer = vi.fn()
+  render(
+    <SessionTranscript
+      session={{ ...baseSession, attention: 'needs-input' }}
+      conversationItems={[
+        {
+          ...inputRequest({
+            id: 'question',
+            sequence: 1,
+            providerItemId: 'tool-question',
+          }),
+          responseProviderItemId: 'tool-question',
+          request: {
+            kind: 'choice',
+            questions: [
+              {
+                id: 'q',
+                question: 'Color?',
+                header: 'Color',
+                multiSelect: false,
+                options: [{ label: 'Blue' }],
+              },
+            ],
+          },
+        } as ConversationItem,
+      ]}
+      onApprove={vi.fn()}
+      onDeny={vi.fn()}
+      onInputAnswer={onInputAnswer}
+    />,
+  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Blue' }))
+  const submit = screen.queryByRole('button', {
+    name: /submit|send answer|answer/i,
+  })
+  if (submit) fireEvent.click(submit)
+  expect(onInputAnswer.mock.calls[0]?.[1]?.providerItemId).toBe('tool-question')
 })

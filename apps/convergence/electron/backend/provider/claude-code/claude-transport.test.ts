@@ -36,6 +36,12 @@ it('uses the chosen executable and exposes stderr once and exit — substitute t
     exit = vi.fn(),
     message = vi.fn()
   const transport = createClaudeTransport({
+    onPermissionRequest: async (request) => ({
+      behavior: 'deny',
+      message: 'fixture denies',
+      toolUseID: request.toolUseID,
+      decisionClassification: 'user_reject',
+    }),
     binaryPath: '/chosen/claude',
     args: [],
     cwd: '/tmp',
@@ -97,6 +103,12 @@ it('serializes model, permission and interrupt controls and returns the receipt 
   })
   spawnMock.mockReset().mockReturnValue(child)
   const transport = createClaudeTransport({
+    onPermissionRequest: async (request) => ({
+      behavior: 'deny',
+      message: 'fixture denies',
+      toolUseID: request.toolUseID,
+      decisionClassification: 'user_reject',
+    }),
     binaryPath: '/chosen/claude',
     args: [],
     cwd: '/tmp',

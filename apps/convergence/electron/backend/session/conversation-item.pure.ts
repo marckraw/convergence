@@ -555,14 +555,42 @@ export function conversationItemFromRow(
       return {
         ...base,
         kind,
+        ...(payload.resolution === 'pending' ||
+        payload.resolution === 'approved' ||
+        payload.resolution === 'denied'
+          ? { resolution: payload.resolution }
+          : {}),
         description: payload.description as string,
+        ...(typeof payload.supportsSessionApproval === 'boolean'
+          ? { supportsSessionApproval: payload.supportsSessionApproval }
+          : {}),
+        ...(isRecord(payload.permissionDetails)
+          ? {
+              permissionDetails: {
+                ...(typeof payload.permissionDetails.blockedPath === 'string'
+                  ? { blockedPath: payload.permissionDetails.blockedPath }
+                  : {}),
+                ...(typeof payload.permissionDetails.decisionReason === 'string'
+                  ? { decisionReason: payload.permissionDetails.decisionReason }
+                  : {}),
+              },
+            }
+          : {}),
       }
 
     case 'input-request':
       return {
         ...base,
         kind,
+        ...(payload.resolution === 'pending' ||
+        payload.resolution === 'approved' ||
+        payload.resolution === 'denied'
+          ? { resolution: payload.resolution }
+          : {}),
         prompt: payload.prompt as string,
+        ...(typeof payload.responseProviderItemId === 'string'
+          ? { responseProviderItemId: payload.responseProviderItemId }
+          : {}),
         request: parseInteractionRequest(payload.request),
       }
 

@@ -546,7 +546,10 @@ it('interrupt without the advertised receipt stops the process — bypass capabi
   }).toEqual({
     interrupts: 0,
     status: 'failed',
-    notes: ['This Claude Code process does not support interrupt receipts'],
+    notes: [
+      'This Claude Code process does not support interrupt receipts',
+      'terminated by user',
+    ],
   })
 })
 
@@ -680,87 +683,7 @@ it('quit also awaits a previously released process — forget pending disposal t
 function wire(child: { stdout: PassThrough }, event: unknown): void {
   child.stdout.write(JSON.stringify(event) + '\n')
 }
-function deferred(child: { stdout: PassThrough }): void {
-  wire(child, {
-    type: 'result',
-    subtype: 'success',
-    stop_reason: 'tool_deferred',
-    session_id: 'harness',
-    deferred_tool_use: {
-      id: 'question',
-      name: 'AskUserQuestion',
-      input: {
-        questions: [
-          {
-            question: 'Color?',
-            header: 'Color',
-            multiSelect: false,
-            options: [
-              { label: 'Blue', description: 'blue' },
-              { label: 'Green', description: 'green' },
-            ],
-          },
-        ],
-      },
-    },
-  })
-}
-
-it('H1 answers a resident deferred tool on a new process — keep the connection turns red', async () => {
-  const { service, session, children } = await fixture()
-  await service.start(session.id, { text: 'ask' })
-  await vi.waitUntil(() => children[0]?.lines.length === 1)
-  wire(children[0], { type: 'system', subtype: 'init', session_id: 'harness' })
-  deferred(children[0])
-  await vi.waitUntil(
-    () => service.getById(session.id)?.attention === 'needs-input',
-  )
-  await service.sendMessage(session.id, {
-    text: 'Blue',
-    deliveryMode: 'answer',
-    interactionResponse: {
-      kind: 'choice',
-      answers: [{ questionId: 'Color?', values: ['Blue'] }],
-    },
-  })
-  await vi.waitFor(() =>
-    expect({
-      spawns: children.length,
-      ended: children[0].stdin.writableEnded,
-      response: JSON.parse(
-        spawnMock.mock.calls[1]?.[2]?.env
-          .CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE ?? '{}',
-      ).updatedInput?.answers,
-      resume: spawnMock.mock.calls[1]?.[1]?.includes('--resume=harness'),
-      status: service.getById(session.id)?.status,
-    }).toEqual({
-      spawns: 2,
-      ended: true,
-      response: { 'Color?': 'Blue' },
-      resume: true,
-      status: 'running',
-    }),
-  )
-  wire(children[1], {
-    type: 'result',
-    subtype: 'success',
-    result: 'Blue selected',
-  })
-  await vi.waitFor(() =>
-    expect(service.getById(session.id)?.status).toBe('completed'),
-  )
-})
-
-it('H1 deferred results arm idle reaping — omit the deferred arm turns red', async () => {
-  const { service, session, children } = await fixture(200 / 60000)
-  await service.start(session.id, { text: 'ask' })
-  await vi.waitUntil(() => children[0]?.lines.length === 1)
-  deferred(children[0])
-  await new Promise((r) => setTimeout(r, 350))
-  expect(children[0].stdin.writableEnded).toBe(true)
-})
-
-it.each(['before-spawn', 'between-turns', 'needs-input', 'old-cli'])(
+it.each(['before-spawn', 'between-turns', 'old-cli'])(
   'H2 Stop falls back in %s — swallow not-applicable turns red',
   async (mode) => {
     const { service, session, children } = await fixture()
@@ -773,7 +696,6 @@ it.each(['before-spawn', 'between-turns', 'needs-input', 'old-cli'])(
           subtype: 'success',
           result: 'done',
         })
-      if (mode === 'needs-input') deferred(children[0])
       await new Promise((r) => setTimeout(r, 0))
     }
     service.stop(session.id)

@@ -757,7 +757,7 @@ describe('SessionView', () => {
     expect(screen.queryByText('Convergence')).not.toBeInTheDocument()
   })
 
-  it('does not expose actions for stale approval cards on inactive sessions', () => {
+  it('does not expose actions for stale approval cards on inactive sessions — treating completed legacy cards as pending turns red', () => {
     useSessionStore.setState((state) => ({
       ...state,
       sessions: state.sessions.map((session) =>

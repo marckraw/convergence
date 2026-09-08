@@ -2162,13 +2162,17 @@ export class SessionService {
     return resolved
   }
 
-  approve(id: string, providerApprovalId?: string): void {
+  approve(
+    id: string,
+    providerApprovalId?: string,
+    options?: { scope: 'once' | 'session' },
+  ): void {
     const handle = this.activeHandles.get(id)
     if (!handle) {
       this.handleInactiveApprovalAction(id)
       return
     }
-    handle.approve(providerApprovalId)
+    handle.approve(providerApprovalId, options)
   }
 
   deny(id: string, providerApprovalId?: string): void {

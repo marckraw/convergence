@@ -292,6 +292,7 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
     vendorLabel: 'Anthropic',
     kind: 'conversation',
     supportsContinuation: true,
+    supportsApprovals: true,
     supportsLiveModelSelection: true,
     // From the one resolver rather than a literal here: the answer is a
     // fact about the provider, and a literal per builder is a literal per

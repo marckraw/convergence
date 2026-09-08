@@ -124,8 +124,10 @@ export class SessionAppService {
   approveAttentionRequest(
     sessionId: string,
     providerApprovalId?: string,
+    options?: { scope: 'once' | 'session' },
   ): void {
-    this.sessions.approve(sessionId, providerApprovalId)
+    if (options) this.sessions.approve(sessionId, providerApprovalId, options)
+    else this.sessions.approve(sessionId, providerApprovalId)
   }
 
   denyAttentionRequest(sessionId: string, providerApprovalId?: string): void {

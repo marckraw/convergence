@@ -139,6 +139,17 @@ describe('SessionAppService', () => {
     expect(sessions.stop).toHaveBeenCalledWith('session-1')
   })
 
+  it('R2 app forwards the chosen session scope — drop approval options turns red', () => {
+    const sessions = createSessionBackend()
+    const app = new SessionAppService(sessions, {
+      resolveSessionDefaults: vi.fn(async () => null),
+    })
+    app.approveAttentionRequest('session', 'tool', { scope: 'session' })
+    expect(vi.mocked(sessions.approve).mock.calls).toEqual([
+      ['session', 'tool', { scope: 'session' }],
+    ])
+  })
+
   it('passes a model selection straight through, refusals included (MAR-2550)', () => {
     const sessions = createSessionBackend({
       setModelSelection: vi.fn(() => {
