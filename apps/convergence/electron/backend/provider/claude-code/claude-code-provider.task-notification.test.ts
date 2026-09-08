@@ -34,6 +34,7 @@ async function turn() {
   cleanups.push(() => handle.dispose?.())
   const items: Item[] = []
   const completed: string[][] = []
+  const statuses: string[] = []
   const answers = () =>
     items.flatMap((item) =>
       item.kind === 'message' && item.actor === 'assistant' ? [item.text] : [],
@@ -42,10 +43,14 @@ async function turn() {
     if (delta.kind === 'conversation.item.add') items.push(delta.item)
   })
   handle.onStatusChange((status) => {
+    statuses.push(status)
     if (status === 'completed') completed.push(answers())
   })
   await vi.waitUntil(() => child.stdin.writableEnded)
   return {
+    child,
+    handle,
+    statuses,
     completed,
     notes: () =>
       items.flatMap((item) =>
@@ -69,6 +74,7 @@ const notification = {
   task_id: 'task-1',
   tool_use_id: 'tool-1',
   status: 'stopped',
+  description: 'Background sleep',
   summary: 'Background sleep',
 }
 const init = { type: 'system', subtype: 'init', session_id: 'prior-session' }
@@ -84,13 +90,116 @@ const assistant = {
 }
 const result = { type: 'result', subtype: 'success', result: 'The real answer' }
 const note = {
-  text: 'A background task from an earlier turn was stopped: Background sleep',
+  text: 'Background task Background sleep was stopped',
   level: 'info',
   event: 'harness.task',
   id: 'task-1',
 }
 
 describe('Claude task-notification results', () => {
+  it('records only started and terminal moments — remove the moment from the dedupe key or emit every task patch turns red', async () => {
+    const bed = await turn()
+    for (const event of [
+      {
+        type: 'system',
+        subtype: 'task_started',
+        task_id: 'task-1',
+        description: 'Background sleep',
+      },
+      {
+        type: 'system',
+        subtype: 'task_started',
+        task_id: 'task-1',
+        description: 'Background sleep',
+      },
+      {
+        type: 'system',
+        subtype: 'task_updated',
+        task_id: 'task-1',
+        patch: { status: 'running' },
+      },
+      {
+        type: 'system',
+        subtype: 'background_tasks_changed',
+        tasks: [{ task_id: 'task-1' }],
+      },
+      { type: 'system', subtype: 'background_tasks_changed', tasks: [] },
+      {
+        type: 'system',
+        subtype: 'task_updated',
+        task_id: 'task-1',
+        patch: { status: 'killed' },
+      },
+      notification,
+      synthetic,
+    ])
+      bed.send(event)
+    expect(bed.notes()).toEqual([
+      { ...note, text: 'Background task started: Background sleep' },
+      note,
+    ])
+  })
+  it('fails an unanswered clean exit — drop the open-turn exit branch or clear currentTurn in the synthetic guard turns red', async () => {
+    const bed = await turn()
+    for (const event of [notification, init, synthetic]) bed.send(event)
+    bed.child.emit('exit', 0)
+    await vi.waitUntil(() => bed.statuses.includes('failed'))
+    expect({
+      completed: bed.completed,
+      note: bed.notes().at(-1)?.text,
+    }).toEqual({
+      completed: [],
+      note: 'Claude Code exited without answering; send the message again',
+    })
+  })
+  it('recovers an unproven resume after a synthetic result — set sawTurnOutput in the synthetic guard turns red', async () => {
+    const bed = await turn()
+    const retry = new FakeChild()
+    spawnMock.mockReturnValue(retry)
+    bed.send(synthetic)
+    bed.child.emit('exit', 1)
+    await vi.waitUntil(() => retry.stdin.writableEnded)
+    expect(spawnMock.mock.calls.at(-1)?.[1]).not.toContain('--resume')
+  })
+  it('keeps an init-proven session after a synthetic result and crash — omit sawHarnessOutput from recovery turns red', async () => {
+    const bed = await turn()
+    for (const event of [notification, init, synthetic]) bed.send(event)
+    const next = new FakeChild()
+    spawnMock.mockReturnValue(next)
+    bed.child.emit('exit', 1)
+    await vi.waitUntil(
+      () => bed.statuses.includes('failed') || next.stdin.writableEnded,
+    )
+    const afterCrash = {
+      statuses: [...bed.statuses],
+      spawns: spawnMock.mock.calls.length,
+    }
+    bed.handle.sendMessage('try again')
+    await vi.waitUntil(() => next.stdin.writableEnded)
+    expect({ afterCrash, resume: spawnMock.mock.calls.at(-1)?.[1] }).toEqual({
+      afterCrash: { statuses: ['running', 'failed'], spawns: 1 },
+      resume: expect.arrayContaining(['--resume', 'prior-session']),
+    })
+  })
+  it('starts the next turn without a stale notification — remove the turn-start pending flag reset turns red', async () => {
+    const bed = await turn()
+    bed.send(notification)
+    bed.child.emit('exit', 0)
+    const next = new FakeChild()
+    spawnMock.mockReturnValue(next)
+    bed.handle.sendMessage('try again')
+    await vi.waitUntil(() => next.stdin.writableEnded)
+    next.stdout.write(JSON.stringify(synthetic) + '\n')
+    expect(
+      bed
+        .notes()
+        .filter((entry) => entry.event === 'harness.task')
+        .map((entry) => entry.text),
+    ).toEqual([
+      'Background task Background sleep was stopped',
+      'Claude Code closed a background-task turn without a notification.',
+    ])
+  })
   it('completes only with the real resumed answer and one note — end on every result or duplicate the notification turns red', async () => {
     const bed = await turn()
     for (const event of [
@@ -141,7 +250,7 @@ describe('Claude task-notification results', () => {
       completed: [['The real answer']],
       notes: [
         {
-          text: 'A background task from an earlier turn was stopped: No task summary was supplied.',
+          text: 'Claude Code closed a background-task turn without a notification.',
           level: 'info',
           event: 'harness.task',
           id: null,

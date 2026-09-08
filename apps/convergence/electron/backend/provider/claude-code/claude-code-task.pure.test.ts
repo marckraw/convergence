@@ -5,6 +5,14 @@ import {
 } from './claude-code-task.pure'
 
 describe('Claude harness task readers', () => {
+  it('rejects a string origin — accept origin directly as a kind turns red', () => {
+    expect(
+      readClaudeResultOriginKind({
+        type: 'result',
+        origin: 'task-notification',
+      }),
+    ).toBeNull()
+  })
   it('reads only typed result origins — ignore origin or treat arbitrary values as task notifications turns red', () => {
     expect(
       [
@@ -26,21 +34,13 @@ describe('Claude harness task readers', () => {
       null,
     ])
   })
-  it('keeps task facts and ids in notes without copying output paths — drop a task family or copy raw events turns red', () => {
+  it('writes only human started and terminal notes — emit list snapshots or nonterminal patches or copy raw output turns red', () => {
     expect(
       [
         {
           type: 'system',
-          subtype: 'task_notification',
-          task_id: 'task-1',
-          summary: 'Background sleep',
-          output_file: '/private/task-output',
-        },
-        {
-          type: 'system',
           subtype: 'task_started',
           task_id: 'task-1',
-          tool_use_id: 'tool-1',
           description: 'Background sleep',
         },
         {
@@ -51,45 +51,78 @@ describe('Claude harness task readers', () => {
         },
         {
           type: 'system',
+          subtype: 'task_notification',
+          task_id: 'task-1',
+          status: 'stopped',
+          summary: 'Long diagnostic. Not a task description.',
+          output_file: '/private/task-output',
+        },
+        {
+          type: 'system',
+          subtype: 'task_updated',
+          task_id: 'task-1',
+          patch: { status: 'completed' },
+        },
+        {
+          type: 'system',
+          subtype: 'task_updated',
+          task_id: 'task-1',
+          patch: { status: 'failed' },
+        },
+        {
+          type: 'system',
+          subtype: 'task_updated',
+          task_id: 'task-1',
+          patch: { status: 'running' },
+        },
+        {
+          type: 'system',
           subtype: 'background_tasks_changed',
-          tasks: [
-            {
-              task_id: 'task-1',
-              tool_use_id: 'tool-1',
-              description: 'Background sleep',
-            },
-          ],
+          tasks: [{ task_id: 'task-1' }],
         },
         { type: 'system', subtype: 'background_tasks_changed', tasks: [] },
         { type: 'system', subtype: 'init' },
         null,
-      ].map(readClaudeTaskNote),
+      ].map((event) => readClaudeTaskNote(event)),
     ).toEqual([
       {
         taskId: 'task-1',
+        moment: 'started',
+        notification: false,
+        description: 'Background sleep',
+        text: 'Background task started: Background sleep',
+      },
+      {
+        taskId: 'task-1',
+        moment: 'terminal',
+        notification: false,
+        description: 'task-1',
+        text: 'Background task task-1 was stopped',
+      },
+      {
+        taskId: 'task-1',
+        moment: 'terminal',
         notification: true,
-        text: 'A background task from an earlier turn was stopped: Background sleep',
+        description: 'task-1',
+        text: 'Background task task-1 was stopped',
       },
       {
         taskId: 'task-1',
+        moment: 'terminal',
         notification: false,
-        text: 'task_started: {"task_id":"task-1","tool_use_id":"tool-1","description":"Background sleep"}',
+        description: 'task-1',
+        text: 'Background task task-1 finished',
       },
       {
         taskId: 'task-1',
+        moment: 'terminal',
         notification: false,
-        text: 'task_updated: {"task_id":"task-1","status":"killed"}',
+        description: 'task-1',
+        text: 'Background task task-1 failed',
       },
-      {
-        taskId: null,
-        notification: false,
-        text: 'background_tasks_changed: [{"task_id":"task-1","tool_use_id":"tool-1","description":"Background sleep"}]',
-      },
-      {
-        taskId: null,
-        notification: false,
-        text: 'background_tasks_changed: []',
-      },
+      null,
+      null,
+      null,
       null,
       null,
     ])

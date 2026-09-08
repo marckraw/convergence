@@ -1,6 +1,8 @@
 export interface ClaudeTaskNote {
   taskId: string | null
   notification: boolean
+  moment: 'started' | 'terminal'
+  description: string
   text: string
 }
 
@@ -18,63 +20,42 @@ export function readClaudeResultOriginKind(data: unknown): string | null {
     : null
 }
 
-function taskFacts(
-  data: Record<string, unknown>,
-): Record<string, string | boolean> {
-  const facts: Record<string, string | boolean> = {}
-  for (const key of [
-    'task_id',
-    'tool_use_id',
-    'description',
-    'status',
-    'task_type',
-  ]) {
-    if (typeof data[key] === 'string') facts[key] = data[key]
-  }
-  if (typeof data.is_backgrounded === 'boolean')
-    facts.is_backgrounded = data.is_backgrounded
-  return facts
-}
+export const CLAUDE_TASK_NOTIFICATION_FALLBACK =
+  'Claude Code closed a background-task turn without a notification.'
 
-/** The hotfix records task facts as notes; CC2-1 owns structured projections. */
-export function readClaudeTaskNote(data: unknown): ClaudeTaskNote | null {
+/** The hotfix records lifecycle notes; CC2-1 owns structured projections. */
+export function readClaudeTaskNote(
+  data: unknown,
+  descriptions?: ReadonlyMap<string, string>,
+): ClaudeTaskNote | null {
   const event = record(data)
   if (event?.type !== 'system') return null
+  const notification = event.subtype === 'task_notification'
+  const started = event.subtype === 'task_started'
+  if (!started && !notification && event.subtype !== 'task_updated') return null
+  const status = record(event.patch)?.status ?? event.status
+  const ending =
+    status === 'completed'
+      ? 'finished'
+      : status === 'failed'
+        ? 'failed'
+        : status === 'killed' || status === 'stopped'
+          ? 'was stopped'
+          : null
+  if (!started && !ending) return null
   const taskId = typeof event.task_id === 'string' ? event.task_id : null
-  if (event.subtype === 'task_notification') {
-    const summary =
-      typeof event.summary === 'string' && event.summary.trim()
-        ? event.summary
-        : 'No task summary was supplied.'
-    return {
-      taskId,
-      notification: true,
-      text: `A background task from an earlier turn was stopped: ${summary}`,
-    }
+  const description =
+    (typeof event.description === 'string' && event.description.trim()) ||
+    (taskId && descriptions?.get(taskId)) ||
+    taskId ||
+    'without an id'
+  return {
+    taskId,
+    notification,
+    moment: started ? 'started' : 'terminal',
+    description,
+    text: started
+      ? `Background task started: ${description}`
+      : `Background task ${description} ${ending}`,
   }
-  if (event.subtype === 'task_started' || event.subtype === 'task_updated') {
-    const facts = taskFacts(event)
-    const patch = record(event.patch)
-    if (typeof patch?.status === 'string') facts.status = patch.status
-    return {
-      taskId,
-      notification: false,
-      text: `${event.subtype}: ${JSON.stringify(facts)}`,
-    }
-  }
-  if (
-    event.subtype === 'background_tasks_changed' &&
-    Array.isArray(event.tasks)
-  ) {
-    const tasks = event.tasks.flatMap((task) => {
-      const item = record(task)
-      return item ? [taskFacts(item)] : []
-    })
-    return {
-      taskId: null,
-      notification: false,
-      text: `background_tasks_changed: ${JSON.stringify(tasks)}`,
-    }
-  }
-  return null
 }
