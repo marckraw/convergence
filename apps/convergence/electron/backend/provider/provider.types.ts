@@ -371,6 +371,7 @@ export interface ProviderSettingsInfo {
 }
 
 export interface ProviderDescriptor {
+  supportsLiveModelSelection?: boolean
   id: string
   name: string
   vendorLabel: string
@@ -438,6 +439,14 @@ export interface OneShotResult {
 }
 
 export interface SessionHandle {
+  /** A local process whose lifetime spans completed user turns. */
+  resident?: boolean
+  retainQueuedInputsOnCompletion?: boolean
+  interrupt?: () => Promise<'interrupted' | 'not-applicable'>
+  setModelSelection?: (
+    model: string | null,
+    effort: ReasoningEffort | null,
+  ) => Promise<void>
   onDelta: (callback: (delta: SessionDelta) => void) => void
   onStatusChange: (callback: (status: SessionStatus) => void) => void
   onAttentionChange: (callback: (attention: AttentionState) => void) => void
@@ -469,7 +478,7 @@ export interface SessionHandle {
   deny: (providerApprovalId?: string) => void
   stop: () => void
   /** Releases local resources without changing the persisted session state. */
-  dispose?: () => void
+  dispose?: (reason?: 'quit' | 'stop') => void | Promise<void>
 }
 
 export interface Provider {

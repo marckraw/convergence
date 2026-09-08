@@ -1,3 +1,7 @@
+vi.mock('./claude-transport.service', async () => ({
+  createClaudeTransport: (await import('./claude-transport.fixture'))
+    .createFixtureClaudeTransport,
+}))
 import { EventEmitter } from 'events'
 import { PassThrough } from 'stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -46,7 +50,7 @@ async function turn() {
     statuses.push(status)
     if (status === 'completed') completed.push(answers())
   })
-  await vi.waitUntil(() => child.stdin.writableEnded)
+  await vi.waitUntil(() => child.stdin.readableLength > 0)
   return {
     child,
     handle,
@@ -149,17 +153,17 @@ describe('Claude task-notification results', () => {
       note: bed.notes().at(-1)?.text,
     }).toEqual({
       completed: [],
-      note: 'Claude Code exited without answering; send the message again',
+      note: 'Claude Code ended mid-turn (code 0 / none); nothing was re-sent — send your message again to continue',
     })
   })
-  it('recovers an unproven resume after a synthetic result — set sawTurnOutput in the synthetic guard turns red', async () => {
+  it('does not replay after synthetic harness output — ignore non-init output in the acceptance gate turns red', async () => {
     const bed = await turn()
-    const retry = new FakeChild()
-    spawnMock.mockReturnValue(retry)
     bed.send(synthetic)
     bed.child.emit('exit', 1)
-    await vi.waitUntil(() => retry.stdin.writableEnded)
-    expect(spawnMock.mock.calls.at(-1)?.[1]).not.toContain('--resume')
+    expect({
+      spawns: spawnMock.mock.calls.length,
+      status: bed.statuses.at(-1),
+    }).toEqual({ spawns: 1, status: 'failed' })
   })
   it('keeps an init-proven session after a synthetic result and crash — omit sawHarnessOutput from recovery turns red', async () => {
     const bed = await turn()
@@ -168,14 +172,14 @@ describe('Claude task-notification results', () => {
     spawnMock.mockReturnValue(next)
     bed.child.emit('exit', 1)
     await vi.waitUntil(
-      () => bed.statuses.includes('failed') || next.stdin.writableEnded,
+      () => bed.statuses.includes('failed') || next.stdin.readableLength > 0,
     )
     const afterCrash = {
       statuses: [...bed.statuses],
       spawns: spawnMock.mock.calls.length,
     }
     bed.handle.sendMessage('try again')
-    await vi.waitUntil(() => next.stdin.writableEnded)
+    await vi.waitUntil(() => next.stdin.readableLength > 0)
     expect({ afterCrash, resume: spawnMock.mock.calls.at(-1)?.[1] }).toEqual({
       afterCrash: { statuses: ['running', 'failed'], spawns: 1 },
       resume: expect.arrayContaining(['--resume', 'prior-session']),
@@ -188,7 +192,7 @@ describe('Claude task-notification results', () => {
     const next = new FakeChild()
     spawnMock.mockReturnValue(next)
     bed.handle.sendMessage('try again')
-    await vi.waitUntil(() => next.stdin.writableEnded)
+    await vi.waitUntil(() => next.stdin.readableLength > 0)
     next.stdout.write(JSON.stringify(synthetic) + '\n')
     expect(
       bed

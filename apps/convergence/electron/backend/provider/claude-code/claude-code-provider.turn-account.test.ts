@@ -1,4 +1,16 @@
+vi.mock('./claude-transport.service', async () => ({
+  createClaudeTransport: (await import('./claude-transport.fixture'))
+    .createFixtureClaudeTransport,
+}))
 import { EventEmitter } from 'events'
+import { isDeepStrictEqual } from 'util'
+
+vi.mock('./claude-skill-telemetry.service', () => ({
+  startClaudeSkillTelemetrySink: async () => ({
+    env: { FIXTURE_TELEMETRY: '1' },
+    dispose: () => {},
+  }),
+}))
 import { PassThrough } from 'stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -139,8 +151,13 @@ describe('per-turn account attribution', () => {
 
     await waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
 
-    // Behaviour-neutral: the ambient default account, byte-identical to before.
-    expect(spawnedEnv(0)).toEqual({ ...process.env })
+    // Compare as a boolean so an ambient credential cannot enter a failure diff.
+    expect(
+      isDeepStrictEqual(spawnedEnv(0), {
+        ...process.env,
+        FIXTURE_TELEMETRY: '1',
+      }),
+    ).toBe(true)
   })
 
   /**

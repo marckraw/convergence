@@ -495,6 +495,7 @@ export interface ProviderSettingsInfo {
 }
 
 export interface ProviderInfo {
+  supportsLiveModelSelection?: boolean
   id: string
   name: string
   vendorLabel: string

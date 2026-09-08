@@ -220,6 +220,7 @@ describe('AppSettingsService', () => {
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         lanes: DEFAULT_LANES_PREFS,
+        claude: { residentIdleMinutes: 30 },
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
@@ -239,6 +240,7 @@ describe('AppSettingsService', () => {
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         lanes: DEFAULT_LANES_PREFS,
+        claude: { residentIdleMinutes: 30 },
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
@@ -256,6 +258,7 @@ describe('AppSettingsService', () => {
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         lanes: DEFAULT_LANES_PREFS,
+        claude: { residentIdleMinutes: 30 },
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
@@ -284,6 +287,7 @@ describe('AppSettingsService', () => {
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         lanes: DEFAULT_LANES_PREFS,
+        claude: { residentIdleMinutes: 30 },
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
@@ -312,6 +316,7 @@ describe('AppSettingsService', () => {
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         lanes: DEFAULT_LANES_PREFS,
+        claude: { residentIdleMinutes: 30 },
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
@@ -340,6 +345,7 @@ describe('AppSettingsService', () => {
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         lanes: DEFAULT_LANES_PREFS,
+        claude: { residentIdleMinutes: 30 },
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
@@ -361,6 +367,7 @@ describe('AppSettingsService', () => {
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         lanes: DEFAULT_LANES_PREFS,
+        claude: { residentIdleMinutes: 30 },
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
@@ -498,6 +505,7 @@ describe('AppSettingsService', () => {
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         lanes: DEFAULT_LANES_PREFS,
+        claude: { residentIdleMinutes: 30 },
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })

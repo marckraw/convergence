@@ -100,6 +100,20 @@ function buildDescriptors(): ProviderDescriptor[] {
 }
 
 describe('app-settings pure helpers', () => {
+  it('defaults resident idle to thirty minutes and preserves zero — discard the idle setting turns red', () => {
+    expect(
+      [
+        parseAppSettings(null),
+        parseAppSettings(
+          JSON.stringify({ claude: { residentIdleMinutes: 0 } }),
+        ),
+      ].map(
+        (s) =>
+          (s as unknown as { claude?: { residentIdleMinutes: number } }).claude
+            ?.residentIdleMinutes,
+      ),
+    ).toEqual([30, 0])
+  })
   it('parses model maps without accepting invalid values', () => {
     expect(
       parseModelMap({
@@ -125,6 +139,7 @@ describe('app-settings pure helpers', () => {
       piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       lanes: DEFAULT_LANES_PREFS,
+      claude: { residentIdleMinutes: 30 },
     })
   })
 

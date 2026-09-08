@@ -1,3 +1,8 @@
+vi.mock('../provider/claude-code/claude-transport.service', async () => ({
+  createClaudeTransport: (
+    await import('../provider/claude-code/claude-transport.fixture')
+  ).createFixtureClaudeTransport,
+}))
 import { EventEmitter } from 'events'
 import { PassThrough } from 'stream'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
@@ -66,7 +71,7 @@ it('records attributed calls, links, tasks and cost through the real service —
     rmSync(dir, { recursive: true, force: true })
   })
   await service.start(session.id, { text: 'probe' })
-  await vi.waitUntil(() => child.stdin.writableEnded)
+  await vi.waitUntil(() => child.stdin.readableLength > 0)
   const send = (event: unknown) =>
     child.stdout.write(JSON.stringify(event) + '\n')
   send({

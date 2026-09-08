@@ -1,4 +1,16 @@
+vi.mock('./claude-transport.service', async () => ({
+  createClaudeTransport: (await import('./claude-transport.fixture'))
+    .createFixtureClaudeTransport,
+}))
 import { EventEmitter } from 'events'
+import { isDeepStrictEqual } from 'util'
+
+vi.mock('./claude-skill-telemetry.service', () => ({
+  startClaudeSkillTelemetrySink: async () => ({
+    env: { FIXTURE_TELEMETRY: '1' },
+    dispose: () => {},
+  }),
+}))
 import { readFileSync } from 'fs'
 import { PassThrough } from 'stream'
 import { fileURLToPath } from 'url'
@@ -74,13 +86,13 @@ afterEach(() => {
 /**
  * PA2's acceptance: every Claude process now passes through one environment
  * boundary, and with no account selected — which is every session today — the
- * environment that reaches the child is exactly the one it received before.
+ * environment preserves the ambient account; resident connections add telemetry.
  */
 describe('Claude spawn sites resolve their environment through one boundary', () => {
   it('routes every spawn in the provider through the resolver', () => {
     const source = stripComments(readFileSync(PROVIDER_SOURCE, 'utf8'))
 
-    const spawns = source.match(/\bspawn\(/g) ?? []
+    const spawns = source.match(/\b(?:spawn|createClaudeTransport)\(/g) ?? []
     const resolves = source.match(/\bresolveClaudeAccountEnv\(/g) ?? []
 
     expect(spawns.length).toBeGreaterThan(0)
@@ -108,7 +120,7 @@ describe('Claude spawn sites resolve their environment through one boundary', ()
     child.emitExit(0)
     await promise
 
-    expect(spawnedEnv()).toEqual({ ...process.env })
+    expect(isDeepStrictEqual(spawnedEnv(), { ...process.env })).toBe(true)
   })
 
   it('gives context compaction the same environment as before', async () => {
@@ -140,10 +152,10 @@ describe('Claude spawn sites resolve their environment through one boundary', ()
       { kind: 'compact' },
     )
 
-    expect(spawnedEnv()).toEqual({ ...process.env })
+    expect(isDeepStrictEqual(spawnedEnv(), { ...process.env })).toBe(true)
   })
 
-  it('gives a session turn the same environment as before', async () => {
+  it('adds connection telemetry to the session environment — omit spawn telemetry turns red', async () => {
     const child = new MockChildProcess()
     spawnMock.mockReturnValue(child)
 
@@ -167,7 +179,12 @@ describe('Claude spawn sites resolve their environment through one boundary', ()
 
     await waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
 
-    expect(spawnedEnv()).toEqual({ ...process.env })
+    expect(
+      isDeepStrictEqual(spawnedEnv(), {
+        ...process.env,
+        FIXTURE_TELEMETRY: '1',
+      }),
+    ).toBe(true)
   })
 
   it('carries the deferred tool response into the turn that answers it', async () => {
@@ -238,10 +255,13 @@ describe('Claude spawn sites resolve their environment through one boundary', ()
     const env = spawnedEnv(1)
     const deferredResponse = env.CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE
     expect(deferredResponse).toBeDefined()
-    // The injection survives, and nothing else about the environment moved.
-    expect(env).toEqual({
-      ...process.env,
-      CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE: deferredResponse,
-    })
+    // Compare as a boolean: assertion diffs must never print inherited secrets.
+    expect(
+      isDeepStrictEqual(env, {
+        ...process.env,
+        FIXTURE_TELEMETRY: '1',
+        CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE: deferredResponse,
+      }),
+    ).toBe(true)
   })
 })

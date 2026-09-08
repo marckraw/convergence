@@ -6,6 +6,7 @@ export type AgentRunStatus =
   | 'unknown'
 
 export interface SessionAgentRun {
+  stopReason?: 'quit' | 'idle' | 'account' | 'deferred' | 'stop' | 'exit' | null
   id: string
   sessionId: string
   spawnedByItemId: string
@@ -24,6 +25,7 @@ export interface SessionAgentRun {
 }
 
 export interface SessionTask {
+  stopReason?: 'quit' | 'idle' | 'account' | 'deferred' | 'stop' | 'exit' | null
   taskId: string
   sessionId: string
   toolUseId: string | null

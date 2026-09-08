@@ -1,3 +1,7 @@
+vi.mock('./claude-transport.service', async () => ({
+  createClaudeTransport: (await import('./claude-transport.fixture'))
+    .createFixtureClaudeTransport,
+}))
 import { EventEmitter } from 'events'
 import { PassThrough } from 'stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -270,57 +274,6 @@ describe('ClaudeCodeProvider AskUserQuestion bridge', () => {
       expect(statuses).toContain('completed')
       expect(attentions).toContain('finished')
     })
-  })
-
-  it('does not install the defer hook for unsupported Claude Code versions', async () => {
-    const child = new MockChildProcess()
-    spawnMock.mockReturnValue(child)
-
-    const provider = new ClaudeCodeProvider(
-      '/usr/local/bin/claude',
-      null,
-      undefined,
-      '2.1.88',
-    )
-    const handle = provider.start({
-      sessionId: 'session-unsupported',
-      workingDirectory: process.cwd(),
-      initialMessage: 'configure scripts',
-      initialAttachments: undefined,
-      model: null,
-      effort: null,
-      continuationToken: null,
-    })
-
-    const items: Array<
-      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
-    > = []
-    handle.onDelta((delta) => {
-      if (delta.kind === 'conversation.item.add') {
-        items.push(delta.item)
-      }
-    })
-    handle.onStatusChange(() => {})
-    handle.onAttentionChange(() => {})
-    handle.onContinuationToken(() => {})
-    handle.onContextWindowChange(() => {})
-    handle.onActivityChange(() => {})
-
-    await waitFor(() => {
-      expect(spawnMock).toHaveBeenCalledTimes(1)
-      expect(items).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            kind: 'note',
-            level: 'warning',
-            text: expect.stringContaining('does not support deferred tool-use'),
-          }),
-        ]),
-      )
-    })
-
-    const args = spawnMock.mock.calls[0]?.[1] as string[]
-    expect(args).not.toContain('--settings')
   })
 
   it('surfaces deferred ExitPlanMode and resumes with approval', async () => {

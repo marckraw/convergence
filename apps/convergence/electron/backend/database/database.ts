@@ -9,6 +9,7 @@ import {
 import type { TranscriptEntry } from '../provider/provider.types'
 import { conversationItemToInsertRow } from '../session/conversation-item.pure'
 import { migrateHarnessEvidence } from './harness-evidence-migration.service'
+import { migrateResidentStopReason } from './resident-stop-reason-migration.service'
 import { migrateTranscriptToConversationItems } from '../session/conversation-item.pure'
 import {
   serializeSessionWorkAddress,
@@ -2104,6 +2105,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     migrateLegacySessionConversations(database)
     ensureSessionsTableShape(database)
     migrateHarnessEvidence(database)
+    migrateResidentStopReason(database)
   } catch (error) {
     database.close()
     throw error

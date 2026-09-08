@@ -83,6 +83,13 @@ export class AppSettingsService {
     private readonly executionHostCredentials: ExecutionHostEndpointCredentials,
   ) {}
 
+  getClaudeResidentIdleMinutesSync(): number {
+    return (
+      parseAppSettings(this.stateService.get(APP_SETTINGS_KEY)).claude
+        ?.residentIdleMinutes ?? 30
+    )
+  }
+
   async getAppSettings(): Promise<AppSettings> {
     const raw = this.stateService.get(APP_SETTINGS_KEY)
     const parsed = parseAppSettings(raw)
@@ -320,6 +327,10 @@ export class AppSettingsService {
       piModelVisibility,
       favoriteModels,
       lanes,
+      claude:
+        input.claude === undefined
+          ? existing.claude
+          : parseAppSettings(JSON.stringify({ claude: input.claude })).claude,
     }
 
     // A credential lives and dies with its Endpoint (MAR-2642), and removal is

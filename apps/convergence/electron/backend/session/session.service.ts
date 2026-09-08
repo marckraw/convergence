@@ -240,6 +240,7 @@ function requireStatedWorkAddress(
  */
 export class SessionService {
   private activeHandles = new Map<string, SessionHandle>()
+  private pendingHandleDisposals = new Set<Promise<void>>()
   /**
    * Handles that joined a run which had already come to rest, and so have no
    * run of their own to end yet (MAR-2582).
@@ -890,10 +891,10 @@ export class SessionService {
    * forgotten. It is compared against the row and nothing else — an identity
    * check, not a model catalog.
    */
-  setModelSelection(
+  async setModelSelection(
     id: string,
     input: { providerId: unknown; model: string | null; effort: unknown },
-  ): Session {
+  ): Promise<Session> {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
     if (session.providerId === 'shell') {
@@ -908,12 +909,18 @@ export class SessionService {
     )
     if (mismatch) throw new Error(mismatch)
 
-    const refusal = describeModelSelectionRefusal({
-      status: session.status,
-      attention: session.attention,
-      hasActiveHandle: this.activeHandles.has(id),
-      hasDispatchInFlight: this.dispatches.isDispatching(id),
-    })
+    const liveHandle = this.activeHandles.get(id)
+    const refusal =
+      liveHandle?.setModelSelection && !this.dispatches.isDispatching(id)
+        ? null
+        : describeModelSelectionRefusal({
+            status: session.status,
+            attention: session.attention,
+            hasActiveHandle: liveHandle?.setModelSelection
+              ? false
+              : this.activeHandles.has(id),
+            hasDispatchInFlight: this.dispatches.isDispatching(id),
+          })
     if (refusal) throw new Error(refusal)
 
     const model = input.model?.trim() ? input.model.trim() : null
@@ -926,45 +933,53 @@ export class SessionService {
       { model: session.model, effort: session.effort },
       { model, effort },
     )
+    const controlDispatch = liveHandle?.setModelSelection
+      ? this.dispatches.begin(id)
+      : null
+    try {
+      await liveHandle?.setModelSelection?.(model, effort)
 
-    // One write, because the two halves are only true together. A model that
-    // moved without its divider is a transcript that silently mixes models,
-    // which is the whole thing MAR-2551 exists to prevent; a divider without
-    // the move announces a boundary that never happened. The same answer run
-    // 22 gave the non-atomic settle.
-    const applySelection = this.db.transaction(() => {
-      this.sessionRepository.setModelSelection(id, model, effort)
+      // One write, because the two halves are only true together. A model that
+      // moved without its divider is a transcript that silently mixes models,
+      // which is the whole thing MAR-2551 exists to prevent; a divider without
+      // the move announces a boundary that never happened. The same answer run
+      // 22 gave the non-atomic settle.
+      const applySelection = this.db.transaction(() => {
+        this.sessionRepository.setModelSelection(id, model, effort)
 
-      // The transcript would otherwise go on implying one author (MAR-2551).
-      // Written here rather than at the next turn because this is the moment
-      // the reader made the decision: the note lands under the last answer of
-      // the old model and above whatever they type next.
-      return boundary
-        ? this.addConversationItem(id, {
-            id: randomUUID(),
-            turnId: null,
-            kind: 'note',
-            state: 'complete',
-            level: 'info',
-            text: boundary,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            providerMeta: {
-              providerId: session.providerId,
-              providerItemId: null,
-              providerEventType: MODEL_CHANGED_EVENT_TYPE,
-            },
-          })
-        : null
-    })
+        // The transcript would otherwise go on implying one author (MAR-2551).
+        // Written here rather than at the next turn because this is the moment
+        // the reader made the decision: the note lands under the last answer of
+        // the old model and above whatever they type next.
+        return boundary
+          ? this.addConversationItem(id, {
+              id: randomUUID(),
+              turnId: null,
+              kind: 'note',
+              state: 'complete',
+              level: 'info',
+              text: boundary,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              providerMeta: {
+                providerId: session.providerId,
+                providerItemId: null,
+                providerEventType: MODEL_CHANGED_EVENT_TYPE,
+              },
+            })
+          : null
+      })
 
-    const note = applySelection()
+      const note = applySelection()
 
-    this.notifySessionChange(
-      id,
-      note ? { sessionId: id, op: 'add', item: note } : undefined,
-    )
-    return this.getById(id)!
+      this.notifySessionChange(
+        id,
+        note ? { sessionId: id, op: 'add', item: note } : undefined,
+      )
+      return this.getById(id)!
+    } finally {
+      if (controlDispatch) this.dispatches.settle(controlDispatch)
+    }
   }
 
   async regenerateName(
@@ -2207,14 +2222,39 @@ export class SessionService {
       }
       throw new Error(`Session not active: ${id}`)
     }
+    if (handle.interrupt) {
+      const fallback = () => {
+        if (this.activeHandles.get(id) !== handle) return
+        handle.stop()
+        this.releaseHandle(id)
+      }
+      void handle.interrupt().then((result) => {
+        if (result === 'not-applicable') fallback()
+      }, fallback)
+      return
+    }
     handle.stop()
     this.releaseHandle(id)
   }
 
-  disposeAll(): void {
-    for (const sessionId of Array.from(this.activeHandles.keys())) {
-      this.releaseHandle(sessionId)
+  async disposeAllForQuit(): Promise<void> {
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        this.disposeAll(),
+        new Promise<void>((resolve) => {
+          deadline = setTimeout(resolve, 8000)
+        }),
+      ])
+    } finally {
+      clearTimeout(deadline)
     }
+  }
+
+  async disposeAll(): Promise<void> {
+    for (const sessionId of Array.from(this.activeHandles.keys()))
+      this.releaseHandle(sessionId, 'quit')
+    await Promise.all(this.pendingHandleDisposals)
   }
 
   /**
@@ -3176,6 +3216,7 @@ export class SessionService {
     } else if (status === 'completed') {
       const summary = this.getSummaryById(sessionId)
       if (
+        !source.resident &&
         summary &&
         (!this.continuationSupportedFor(summary) || summary.continuationToken)
       ) {
@@ -3183,17 +3224,22 @@ export class SessionService {
       }
       this.liveness.clear(sessionId)
       this.closeActiveTurn(sessionId, 'completed')
-      this.dispatchNextQueuedInput(sessionId)
+      if (!source.retainQueuedInputsOnCompletion)
+        this.dispatchNextQueuedInput(sessionId)
     }
   }
 
-  private releaseHandle(sessionId: string): void {
+  private releaseHandle(
+    sessionId: string,
+    reason: 'quit' | 'stop' = 'stop',
+  ): Promise<void> {
     const handle = this.activeHandles.get(sessionId)
-    if (!handle) return
+    if (!handle) return Promise.resolve()
 
     this.activeHandles.delete(sessionId)
+    let disposal: void | Promise<void> = undefined
     try {
-      handle.dispose?.()
+      disposal = handle.dispose?.(reason)
     } catch {
       // Resource cleanup is best-effort; the handle is no longer addressable.
     }
@@ -3201,6 +3247,10 @@ export class SessionService {
     this.pendingUserAttachmentIds.delete(sessionId)
     this.pendingUserSkillSelections.delete(sessionId)
     this.onSessionTerminated?.(sessionId)
+    const pending = Promise.resolve(disposal).catch(() => {})
+    this.pendingHandleDisposals.add(pending)
+    void pending.finally(() => this.pendingHandleDisposals.delete(pending))
+    return pending
   }
 
   private dispatchNextQueuedInput(sessionId: string): void {

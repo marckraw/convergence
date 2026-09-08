@@ -233,3 +233,15 @@ describe('the provider-debug sink is a no-throw side channel', () => {
     consoleError.mockRestore()
   })
 })
+
+it('L13 a resident debug ring remains bounded without settling — remove the capacity trim turns red', () => {
+  const service = new ProviderDebugService({ broadcast: vi.fn() })
+  for (let seq = 1; seq <= 501; seq++)
+    service.record(makeEntry('resident', seq))
+  const entries = service.list('resident')
+  expect({
+    count: entries.length,
+    first: entries[0]?.at,
+    last: entries.at(-1)?.at,
+  }).toEqual({ count: 500, first: 2, last: 501 })
+})

@@ -243,8 +243,11 @@ export class ClaudeEvidenceService {
       subagentStats: event?.subagent_stats ?? null,
     })
   }
-  processEnded(at: string): void {
-    this.emit({ kind: 'process.ended', at })
+  processEnded(
+    at: string,
+    reason?: 'quit' | 'idle' | 'account' | 'deferred' | 'stop' | 'exit',
+  ): void {
+    this.emit({ kind: 'process.ended', at, ...(reason ? { reason } : {}) })
   }
 
   private stopAgentForTask(taskId: string, at: string): void {

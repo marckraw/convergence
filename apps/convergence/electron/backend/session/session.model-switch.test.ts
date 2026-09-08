@@ -1,3 +1,8 @@
+vi.mock('../provider/claude-code/claude-transport.service', async () => ({
+  createClaudeTransport: (
+    await import('../provider/claude-code/claude-transport.fixture')
+  ).createFixtureClaudeTransport,
+}))
 import { EventEmitter } from 'events'
 import { PassThrough } from 'stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -80,10 +85,9 @@ function flagValue(args: string[], flag: string): string | null {
  * already pins — it would say nothing about the turn the human is about to
  * watch.
  *
- * The Claude adapter is the right witness because it spawns a fresh process
- * for every turn (`--resume <conversation>` plus `--model`), so the argv of
- * turn two is a complete statement of what turn two is: which conversation,
- * which model, which effort.
+ * These fixtures explicitly end the process after each result, pinning the
+ * crash-between-turns resume path. Resident live control is pinned separately
+ * in session-claude-resident.test.ts and claude-transport.test.ts.
  */
 describe('a session changes model mid-conversation (MAR-2550)', () => {
   let service: SessionService
@@ -198,7 +202,7 @@ describe('a session changes model mid-conversation (MAR-2550)', () => {
     playTurn(first, { conversationId: 'claude-conversation-1' })
     await waitForIdle(session.id)
 
-    service.setModelSelection(session.id, {
+    await service.setModelSelection(session.id, {
       providerId: 'claude-code',
       model: 'opus',
       effort: 'medium',
@@ -235,7 +239,7 @@ describe('a session changes model mid-conversation (MAR-2550)', () => {
     playTurn(first, { conversationId: 'claude-conversation-2' })
     await waitForIdle(session.id)
 
-    service.setModelSelection(session.id, {
+    await service.setModelSelection(session.id, {
       providerId: 'claude-code',
       model: 'opus',
       effort: 'max',
@@ -290,7 +294,7 @@ describe('a session changes model mid-conversation (MAR-2550)', () => {
       usedPercentage: 4,
     })
 
-    service.setModelSelection(session.id, {
+    await service.setModelSelection(session.id, {
       providerId: 'claude-code',
       model: 'sonnet',
       effort: 'medium',
@@ -317,8 +321,8 @@ describe('a session changes model mid-conversation (MAR-2550)', () => {
   /**
    * And when Claude does not name a model on the event — partial messages and
    * some result shapes carry usage without one — the adapter falls back to the
-   * model of the handle it is running under. That handle is built per turn
-   * from the row, so the fallback moves with the switch too. Without this the
+   * model of the handle it is running under. The handle selection is updated by live control, so the fallback moves
+   * with the switch too. Without this the
    * meter could keep a stale tier for a whole turn.
    */
   it('re-tiers the context meter from the new selection when the stream names no model', async () => {
@@ -343,7 +347,7 @@ describe('a session changes model mid-conversation (MAR-2550)', () => {
       windowTokens: 1_000_000,
     })
 
-    service.setModelSelection(session.id, {
+    await service.setModelSelection(session.id, {
       providerId: 'claude-code',
       model: 'sonnet',
       effort: 'medium',
@@ -367,7 +371,7 @@ describe('a session changes model mid-conversation (MAR-2550)', () => {
    * a process already spawned closed over the config it started with, and no
    * argument reaches it afterwards.
    */
-  it('refuses a switch while a turn is running, and the running turn is unchanged', async () => {
+  it('accepts a live switch without respawning — restore the idle-only gate turns red', async () => {
     const [first] = queueChildren(1)
 
     const session = service.create({
@@ -382,13 +386,13 @@ describe('a session changes model mid-conversation (MAR-2550)', () => {
     await service.start(session.id, { text: 'begin' })
     await waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
 
-    expect(() =>
+    await expect(
       service.setModelSelection(session.id, {
         providerId: 'claude-code',
         model: 'opus',
         effort: 'medium',
       }),
-    ).toThrow(/only change while the session is idle/)
+    ).resolves.toMatchObject({ model: 'opus', effort: 'medium' })
 
     expect(flagValue(spawnArgs(0), '--model')).toBe('fable')
     expect(spawnMock).toHaveBeenCalledTimes(1)

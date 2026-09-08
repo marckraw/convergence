@@ -204,6 +204,7 @@ function emptyAppSettings(): StoredAppSettings {
     piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
     favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
     lanes: DEFAULT_LANES_PREFS,
+    claude: { residentIdleMinutes: 30 },
   }
 }
 
@@ -240,6 +241,14 @@ export function parseAppSettings(raw: string | null): StoredAppSettings {
       piModelVisibility: parsePiModelVisibilityPrefs(parsed.piModelVisibility),
       favoriteModels: parseFavoriteModelsPrefs(parsed.favoriteModels),
       lanes: parseLanesPrefs(parsed.lanes),
+      claude: {
+        residentIdleMinutes:
+          typeof parsed.claude?.residentIdleMinutes === 'number' &&
+          Number.isFinite(parsed.claude.residentIdleMinutes) &&
+          parsed.claude.residentIdleMinutes >= 0
+            ? parsed.claude.residentIdleMinutes
+            : 30,
+      },
     }
   } catch {
     return empty
@@ -306,6 +315,7 @@ export function validateAppSettings(
       ),
       favoriteModels,
       lanes: settings.lanes,
+      claude: settings.claude,
     }
   }
 
@@ -330,6 +340,7 @@ export function validateAppSettings(
       ),
       favoriteModels,
       lanes: settings.lanes,
+      claude: settings.claude,
     }
   }
 
@@ -353,6 +364,7 @@ export function validateAppSettings(
     ),
     favoriteModels,
     lanes: settings.lanes,
+    claude: settings.claude,
   }
 }
 

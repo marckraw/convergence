@@ -176,7 +176,7 @@ export function resolveComposerSelectionLocks(
   return {
     mode: 'session',
     providerLocked: true,
-    modelLocked: busy,
+    modelLocked: busy && !provider.supportsLiveModelSelection,
     canContinue: true,
   }
 }
