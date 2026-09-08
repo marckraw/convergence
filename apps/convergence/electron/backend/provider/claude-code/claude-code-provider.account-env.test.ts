@@ -1,3 +1,7 @@
+vi.mock('./claude-transport.service', async () => ({
+  createClaudeTransport: (await import('./claude-transport.fixture'))
+    .createFixtureClaudeTransport,
+}))
 import { EventEmitter } from 'events'
 import { readFileSync } from 'fs'
 import { PassThrough } from 'stream'
@@ -80,7 +84,7 @@ describe('Claude spawn sites resolve their environment through one boundary', ()
   it('routes every spawn in the provider through the resolver', () => {
     const source = stripComments(readFileSync(PROVIDER_SOURCE, 'utf8'))
 
-    const spawns = source.match(/\bspawn\(/g) ?? []
+    const spawns = source.match(/\b(?:spawn|createClaudeTransport)\(/g) ?? []
     const resolves = source.match(/\bresolveClaudeAccountEnv\(/g) ?? []
 
     expect(spawns.length).toBeGreaterThan(0)

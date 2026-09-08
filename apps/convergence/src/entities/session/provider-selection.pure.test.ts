@@ -217,6 +217,14 @@ describe('resolveProviderSelection', () => {
 })
 
 describe('resolveComposerSelectionLocks (MAR-2550)', () => {
+  it('unlocks a live-capable model picker — ignore the advertised live capability turns red', () => {
+    expect(
+      resolveComposerSelectionLocks(
+        providers.map((p) => ({ ...p, supportsLiveModelSelection: true })),
+        { providerId: providers[0].id, status: 'running', attention: 'none' },
+      ).modelLocked,
+    ).toBe(false)
+  })
   const idle = { status: 'completed' as const, attention: 'finished' as const }
 
   it('leaves a draft composer with no session unlocked', () => {

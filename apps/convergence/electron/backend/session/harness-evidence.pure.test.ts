@@ -6,6 +6,62 @@ import {
 } from './harness-evidence.pure'
 import type { AgentRunFact, SessionAgentRun } from './harness-evidence.types'
 
+it('records deliberate shutdown as stopped with its reason — treat quit as an unknown exit turns red', () => {
+  const tasks = foldTasks(
+    [],
+    {
+      kind: 'task.changed',
+      taskId: 't',
+      at: 'start',
+      patch: { status: 'running' },
+    },
+    's',
+  )
+  const result = foldTasks(
+    tasks,
+    { kind: 'process.ended', at: 'end', reason: 'quit' } as AgentRunFact & {
+      kind: 'process.ended'
+    },
+    's',
+  )
+  expect(
+    result.map((task) => ({
+      status: task.status,
+      reason: (task as unknown as { stopReason: string }).stopReason,
+    })),
+  ).toEqual([{ status: 'stopped', reason: 'quit' }])
+})
+
+it('keeps a previous process task unknown — accept a restart notification as completion turns red', () => {
+  const tasks = foldTasks(
+    [],
+    {
+      kind: 'task.changed',
+      taskId: 't',
+      at: 'start',
+      patch: { status: 'running' },
+    },
+    's',
+  )
+  const exited = foldTasks(
+    tasks,
+    { kind: 'process.ended', at: 'exit', reason: 'exit' },
+    's',
+  )
+  expect(
+    foldTasks(
+      exited,
+      {
+        kind: 'task.changed',
+        taskId: 't',
+        at: 'late',
+        patch: { status: 'completed', endedAt: 'late' },
+      },
+      's',
+    ),
+  ).toEqual(exited)
+})
+
 it('folds all five agent states and adopts identity — omit a lifecycle transition or replace known metadata with null turns red', () => {
   const started: AgentRunFact = {
     kind: 'agent.started',

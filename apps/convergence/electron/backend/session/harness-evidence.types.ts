@@ -52,7 +52,11 @@ export type AgentRunFact =
       status: Exclude<AgentRunStatus, 'running' | 'unknown'>
       at: string
     }
-  | { kind: 'process.ended'; at: string }
+  | {
+      kind: 'process.ended'
+      at: string
+      reason?: 'quit' | 'idle' | 'account' | 'stop' | 'exit'
+    }
 
 export type TaskFact = {
   kind: 'task.changed'

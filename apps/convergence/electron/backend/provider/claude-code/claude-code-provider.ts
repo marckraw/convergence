@@ -1,4 +1,9 @@
-import { spawn, type ChildProcess } from 'child_process'
+import { spawn } from 'child_process'
+import {
+  createClaudeTransport,
+  type ClaudeTransport,
+} from './claude-transport.service'
+import { describeClaudeTransportVersionRefusal } from './claude-transport-error.pure'
 import { promises as fs } from 'fs'
 import type {
   InteractionResponse,
@@ -79,9 +84,7 @@ import {
   buildClaudeAskUserQuestionRequest,
   buildClaudeExitPlanModeHookResponse,
   buildClaudeExitPlanModeRequest,
-  CLAUDE_DEFERRED_TOOL_USE_MIN_VERSION,
   normalizeClaudeDeferredToolUse,
-  supportsClaudeDeferredToolUseVersion,
   type ClaudeDeferredToolHookResponse,
   type PendingClaudeDeferredToolUse,
 } from './claude-ask-user-question.pure'
@@ -280,6 +283,7 @@ export class ClaudeCodeProvider implements Provider {
      * than offering an action that would appear to do nothing.
      */
     private canOpenBrowser: boolean = true,
+    private residentIdleMinutes: () => number = () => 30,
   ) {}
 
   async describe(): Promise<ProviderDescriptor> {
@@ -419,12 +423,13 @@ export class ClaudeCodeProvider implements Provider {
 
   start(config: SessionStartConfig): SessionHandle {
     const binaryPath = this.binaryPath
+    const version = this.version
     const skillsService = this.skillsService
     const debugSink = this.debugSink
-    const claudeCodeVersion = this.version
     const accountLookup = this.accountLookup
     const accountLabelLookup = this.accountLabelLookup
     const canOpenBrowser = this.canOpenBrowser
+    const residentIdleMinutes = this.residentIdleMinutes
     /** Servers already reported this turn, so one broken connector says it once. */
     const mcpAuthNotedServers = new Set<string>()
     const sessionId = config.sessionId
@@ -459,8 +464,50 @@ export class ClaudeCodeProvider implements Provider {
       fireHeartbeat()
     }
 
-    let child: ChildProcess | null = null
+    let child: ClaudeTransport | null = null
     let stopped = false
+    let idleTimer: ReturnType<typeof setTimeout> | undefined
+    let endingReason: 'idle' | 'account' | null = null
+    let connectionEnding: Promise<void> | null = null
+    let resolveConnectionEnd: (() => void) | undefined
+    function clearIdleTimer(): void {
+      if (idleTimer) clearTimeout(idleTimer)
+      idleTimer = undefined
+    }
+    function endConnection(reason: 'idle' | 'account'): Promise<void> {
+      if (connectionEnding) return connectionEnding
+      if (!child) return Promise.resolve()
+      clearIdleTimer()
+      endingReason = reason
+      sessionEmitter.addNote({
+        text:
+          reason === 'account'
+            ? 'connection ended: account changed'
+            : `process stopped after ${residentIdleMinutes()} min idle`,
+        level: 'info',
+      })
+      if (pendingDeferredToolUse) {
+        pendingDeferredToolUse = null
+        sessionEmitter.addNote({
+          text: 'Pending approval cancelled: connection ended',
+          level: 'info',
+        })
+      }
+      connectionEnding = new Promise<void>((resolve) => {
+        resolveConnectionEnd = resolve
+      })
+      child.close()
+      return connectionEnding
+    }
+    function armIdleTimer(): void {
+      clearIdleTimer()
+      const minutes = residentIdleMinutes()
+      if (stopped || !child || currentTurn || minutes === 0) return
+      idleTimer = setTimeout(() => {
+        void endConnection('idle')
+      }, minutes * 60000)
+      idleTimer.unref?.()
+    }
     let claudeSessionId: string | null = config.continuationToken
     let assistantTextBuffer = ''
     let assistantMessageItemId: string | null = null
@@ -504,13 +551,14 @@ export class ClaudeCodeProvider implements Provider {
       null
     let sawTurnOutput = false
     let sawHarnessOutput = false
+    let capabilities: string[] = []
+    let interruptRequested = false
     const notifiedTaskMoments = new Set<string>()
     const taskDescriptions = new Map<string, string>()
     // The synthetic result has no task id; its preceding notification owns the note.
     let taskNotificationSinceResult = false
     let stderrBuffer = ''
     let pendingDeferredToolUse: PendingClaudeDeferredToolUse | null = null
-    let warnedUnsupportedDeferredToolUse = false
 
     function emitDelta(delta: SessionDelta): void {
       listeners.delta.forEach((cb) => cb(delta))
@@ -524,7 +572,15 @@ export class ClaudeCodeProvider implements Provider {
     const evidence = new ClaudeEvidenceService(
       config.workingDirectory,
       () => currentTurnAccount?.target?.configDir ?? null,
-      (fact) => sessionEmitter.recordEvidence(fact),
+      (fact) => {
+        sessionEmitter.recordEvidence(fact)
+        if (
+          fact.kind === 'task.changed' &&
+          fact.patch.status &&
+          ['completed', 'failed', 'stopped'].includes(fact.patch.status)
+        )
+          armIdleTimer()
+      },
     )
 
     function setStatus(status: SessionStatus): void {
@@ -740,6 +796,8 @@ export class ClaudeCodeProvider implements Provider {
     function shouldRecoverFromMessage(message: unknown): boolean {
       return (
         canRecoverContinuation() &&
+        !sawTurnOutput &&
+        !sawHarnessOutput &&
         isMissingContinuationError(message, [
           'session',
           'resume',
@@ -761,15 +819,13 @@ export class ClaudeCodeProvider implements Provider {
       }
       const recoveryEntry = buildContinuationRecoveryEntry('Claude Code', now())
       sessionEmitter.addNote({
-        text: recoveryEntry.text,
+        text: 'Claude Code did not accept the message (no output); sent again on a new process.',
         level: recoveryEntry.level,
         timestamp: recoveryEntry.timestamp,
       })
       claudeSessionId = null
       currentTurn = null
-      if (child) {
-        child.kill('SIGTERM')
-      }
+      child?.close()
     }
 
     /**
@@ -844,6 +900,25 @@ export class ClaudeCodeProvider implements Provider {
 
     function handleEvent(data: unknown): void {
       if (stopped) return
+      const raw = data as Record<string, unknown>
+      if (
+        raw.type === 'result' &&
+        raw.is_error &&
+        shouldRecoverFromMessage(raw.result)
+      ) {
+        scheduleContinuationRecovery()
+        return
+      }
+      if (currentTurn) sawHarnessOutput = true
+      if (raw.type === 'system' && raw.subtype === 'init') {
+        if (typeof raw.model === 'string' && raw.model.trim())
+          config.model = raw.model
+        capabilities = Array.isArray(raw.capabilities)
+          ? raw.capabilities.filter(
+              (value): value is string => typeof value === 'string',
+            )
+          : []
+      }
       evidence.consume(data, now())
       const event = data as ClaudeStreamEvent
       const previousActivity = lastActivity
@@ -1070,6 +1145,20 @@ export class ClaudeCodeProvider implements Provider {
           }
           taskNotificationSinceResult = false
           evidence.accounting(data)
+          if (
+            raw.terminal_reason === 'aborted_streaming' &&
+            interruptRequested
+          ) {
+            flushThinkingBuffer()
+            flushAssistantBuffer()
+            currentTurn = null
+            sessionEmitter.addNote({ text: 'interrupted', level: 'info' })
+            setStatus('completed')
+            interruptRequested = false
+            setAttention('finished')
+            armIdleTimer()
+            break
+          }
           sawTurnOutput = true
           flushThinkingBuffer()
           flushAssistantBuffer()
@@ -1135,9 +1224,10 @@ export class ClaudeCodeProvider implements Provider {
                 state: 'complete',
               })
             }
+            currentTurn = null
             setStatus('completed')
             setAttention('finished')
-            currentTurn = null
+            armIdleTimer()
           }
           break
       }
@@ -1244,7 +1334,18 @@ export class ClaudeCodeProvider implements Provider {
         continuesCurrentTurn?: boolean
       },
     ): Promise<void> {
-      if (stopped || child) return
+      if (stopped || currentTurn) return
+      clearIdleTimer()
+      if (connectionEnding) await connectionEnding
+      if (stopped || currentTurn) return
+      if (
+        child &&
+        !options?.continuesCurrentTurn &&
+        currentTurnAccount?.id !== (options?.providerAccountId ?? null)
+      ) {
+        await endConnection('account')
+        if (stopped) return
+      }
 
       // Resolved before any await, so a selection changing mid-turn cannot
       // land between the snapshot and the spawn that uses it.
@@ -1261,7 +1362,7 @@ export class ClaudeCodeProvider implements Provider {
         message,
         options?.skillSelections,
       )
-      if (stopped || child) return
+      if (stopped || currentTurn) return
 
       const userMessageItemId =
         options?.emitUserEntry !== false
@@ -1304,7 +1405,7 @@ export class ClaudeCodeProvider implements Provider {
             : {}),
         },
       })
-      if (stopped || child) return
+      if (stopped || currentTurn) return
 
       assistantTextBuffer = ''
       assistantMessageItemId = null
@@ -1314,6 +1415,7 @@ export class ClaudeCodeProvider implements Provider {
       currentTurnHasThinkingText = false
       sawTurnOutput = false
       sawHarnessOutput = false
+      interruptRequested = false
       taskNotificationSinceResult = false
       stderrBuffer = ''
       currentTurn = {
@@ -1332,16 +1434,6 @@ export class ClaudeCodeProvider implements Provider {
           'Waiting for Claude turn usage. When available, Convergence will show an estimated context value because Claude headless mode does not expose exact live context telemetry yet.',
         ),
       )
-      const supportsDeferredToolUse =
-        claudeCodeVersion === null ||
-        supportsClaudeDeferredToolUseVersion(claudeCodeVersion)
-      if (!supportsDeferredToolUse && !warnedUnsupportedDeferredToolUse) {
-        warnedUnsupportedDeferredToolUse = true
-        sessionEmitter.addNote({
-          text: `Claude Code ${claudeCodeVersion} does not support deferred tool-use. AskUserQuestion and ExitPlanMode cards require Claude Code ${CLAUDE_DEFERRED_TOOL_USE_MIN_VERSION} or newer.`,
-          level: 'warning',
-        })
-      }
 
       const args = [
         '-p',
@@ -1354,9 +1446,7 @@ export class ClaudeCodeProvider implements Provider {
         resolveClaudeCodePermissionMode(config.permissionConfig),
         '--include-partial-messages',
       ]
-      if (supportsDeferredToolUse) {
-        args.push('--settings', buildClaudeAskUserQuestionHookSettings())
-      }
+      args.push('--settings', buildClaudeAskUserQuestionHookSettings())
       if (claudeSessionId) {
         args.push('--resume', claudeSessionId)
       }
@@ -1367,172 +1457,105 @@ export class ClaudeCodeProvider implements Provider {
         args.push('--effort', config.effort.trim())
       }
 
-      child = spawn(binaryPath, args, {
-        cwd: config.workingDirectory,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env,
-      })
-
-      if (child.stdout) {
-        parseJsonLines(
-          child.stdout,
-          (event) => {
-            const eventType =
-              event && typeof event === 'object' && 'type' in event
-                ? typeof (event as { type: unknown }).type === 'string'
-                  ? (event as { type: string }).type
-                  : undefined
-                : undefined
-            recordDebug('event', {
-              direction: 'in',
-              method: eventType,
-              payload: event,
-            })
-            handleEvent(event)
-          },
-          (err) => {
+      if (!child) {
+        capabilities = []
+        child = createClaudeTransport({
+          binaryPath,
+          args,
+          cwd: config.workingDirectory,
+          env,
+          onSpawn: (pid) =>
             recordDebug('lifecycle', {
               direction: 'in',
-              note: `stream parse error: ${err.message}`,
+              note: `spawned resident process ${pid}`,
+            }),
+          onMessage: (event) => {
+            recordDebug('event', { direction: 'in', payload: event })
+            handleEvent(event)
+          },
+          onStderr: (data) => {
+            stderrBuffer += data
+            recordDebug('stderr', { direction: 'in', bytes: data.length })
+            if (shouldRecoverFromMessage(getSignificantStderr()))
+              scheduleContinuationRecovery()
+          },
+          onExit: ({ code, signal, error }) => {
+            if (stopped) return
+            const versionRefusal = describeClaudeTransportVersionRefusal(
+              error,
+              version,
+            )
+            if (versionRefusal)
+              sessionEmitter.addNote({ text: versionRefusal, level: 'error' })
+            evidence.processEnded(now(), endingReason ?? 'exit')
+            if (endingReason) {
+              child = null
+              endingReason = null
+              connectionEnding = null
+              resolveConnectionEnd?.()
+              resolveConnectionEnd = undefined
+              return
+            }
+            recordDebug('lifecycle', {
+              direction: 'in',
+              note: `child exited with code ${code} / ${signal ?? error ?? ''}`,
             })
-            if (!stopped) {
+            flushThinkingBuffer()
+            flushAssistantBuffer()
+            if (
+              currentTurn &&
+              canRecoverContinuation() &&
+              !sawTurnOutput &&
+              !sawHarnessOutput
+            ) {
+              scheduleContinuationRecovery()
+            }
+            child = null
+            if (maybeRestartRecoveredTurn()) return
+            if (currentTurn) {
+              currentTurn = null
               sessionEmitter.addNote({
-                text: `Stream error: ${err.message}`,
+                text: `Claude Code ended mid-turn (code ${code} / ${signal ?? error ?? 'none'}); nothing was re-sent — send your message again to continue`,
                 level: 'error',
+              })
+              setStatus('failed')
+              setAttention('failed')
+            } else {
+              sessionEmitter.addNote({
+                text: `process ended (code ${code})`,
+                level: 'info',
               })
             }
           },
-        )
-      }
-
-      if (child.stderr) {
-        child.stderr.on('data', (chunk: Buffer) => {
-          recordDebug('stderr', { direction: 'in', bytes: chunk.length })
-          stderrBuffer += chunk.toString()
-        })
-        child.stderr.on('end', () => {
-          if (stopped) {
-            return
-          }
-          const significant = getSignificantStderr()
-          if (shouldRecoverFromMessage(significant)) {
-            scheduleContinuationRecovery()
-            return
-          }
-          if (significant && !pendingRecoveryTurn) {
-            sessionEmitter.addNote({
-              text: significant,
-              level: 'info',
-            })
-          }
         })
       }
-
-      const stdin = child.stdin
-      if (stdin) {
-        loadAttachmentParts(attachments)
-          .then((parts) => {
-            if (stopped || stdin.destroyed) return
-            const line = buildClaudeUserMessageLine({
+      const connection = child
+      try {
+        const parts = await loadAttachmentParts(attachments)
+        if (stopped || connection !== child) return
+        if (!options?.skipPromptInput) {
+          connection.write(
+            buildClaudeUserMessageLine({
               text: skillResolution.promptText,
               parts,
-            })
-            if (!options?.skipPromptInput) {
-              stdin.write(line + '\n')
-            }
-            if (userMessageItemId) {
-              patchUserMessageSkills(
-                userMessageItemId,
-                skillResolution.skillSelections,
-                'sent',
-              )
-            }
-            stdin.end()
-          })
-          .catch((err) => {
-            if (stopped) return
-            if (userMessageItemId) {
-              patchUserMessageSkills(
-                userMessageItemId,
-                skillResolution.skillSelections,
-                'failed',
-              )
-            }
-            sessionEmitter.addNote({
-              text: `Failed to send attachments: ${err instanceof Error ? err.message : String(err)}`,
-              level: 'error',
-            })
-            setStatus('failed')
-            setAttention('failed')
-            try {
-              stdin.end()
-            } catch {
-              // ignore
-            }
-          })
-      }
-
-      child.on('exit', (code) => {
-        if (stopped) return
-        evidence.processEnded(now())
-        recordDebug('lifecycle', {
-          direction: 'in',
-          note: `child exited with code ${code}`,
-        })
-        flushThinkingBuffer()
-        flushAssistantBuffer()
-        refreshContextWindowFromLogs()
-        const significant = getSignificantStderr()
-        if (
-          code !== 0 &&
-          code !== null &&
-          (shouldRecoverFromMessage(significant) ||
-            (canRecoverContinuation() && !sawTurnOutput && !sawHarnessOutput))
-        ) {
-          scheduleContinuationRecovery()
+            }),
+          )
         }
-        child = null
-        if (maybeRestartRecoveredTurn()) {
-          return
-        }
-        if (code === 0 && currentTurn) {
-          sessionEmitter.addNote({
-            text: 'Claude Code exited without answering; send the message again',
-            level: 'error',
-          })
-          setStatus('failed')
-          setAttention('failed')
-          currentTurn = null
-        }
-        if (code !== 0 && code !== null) {
-          sessionEmitter.addNote({
-            text: `Process exited with code ${code}`,
-            level: 'error',
-            timestamp: now(),
-          })
-          setStatus('failed')
-          setAttention('failed')
-          currentTurn = null
-        }
-      })
-
-      child.on('error', (err) => {
-        if (stopped) return
-        evidence.processEnded(now())
-        recordDebug('lifecycle', {
-          direction: 'in',
-          note: `child error: ${err.message}`,
-        })
+        if (userMessageItemId)
+          patchUserMessageSkills(
+            userMessageItemId,
+            skillResolution.skillSelections,
+            'sent',
+          )
+      } catch (error) {
         sessionEmitter.addNote({
-          text: `Process error: ${err.message}`,
+          text: `Failed to send attachments: ${String(error)}`,
           level: 'error',
-          timestamp: now(),
         })
+        currentTurn = null
         setStatus('failed')
         setAttention('failed')
-        child = null
-        currentTurn = null
-      })
+      }
     }
 
     // Spawn after a tick so listeners can be attached
@@ -1543,9 +1566,15 @@ export class ClaudeCodeProvider implements Provider {
       })
     }, 10)
 
-    function disposeRuntime(): void {
+    function disposeRuntime(
+      reason: 'quit' | 'stop' = 'stop',
+    ): void | Promise<void> {
       if (stopped) return
-      evidence.processEnded(now())
+      clearIdleTimer()
+      resolveConnectionEnd?.()
+      if (reason === 'quit')
+        sessionEmitter.addNote({ text: 'stopped by quit', level: 'info' })
+      evidence.processEnded(now(), reason)
       stopped = true
       clearTimeout(startTimer)
       disposeTelemetrySink()
@@ -1561,20 +1590,51 @@ export class ClaudeCodeProvider implements Provider {
       thinkingBuffer = ''
       stderrBuffer = ''
 
-      if (child) {
-        const pending = child
-        pending.kill('SIGTERM')
-        const killTimer = setTimeout(() => {
-          if (pending.exitCode === null && pending.signalCode === null) {
-            pending.kill('SIGKILL')
-          }
-        }, 3000)
-        killTimer.unref?.()
-        child = null
-      }
+      const closing = child?.close()
+      child = null
+      return closing
     }
 
     const handle: SessionHandle = {
+      resident: true,
+      get retainQueuedInputsOnCompletion() {
+        return interruptRequested
+      },
+      setModelSelection: async (model, effort) => {
+        if (connectionEnding) await connectionEnding
+        if (child)
+          await child.setModel(
+            model,
+            effort !== config.effort ? effort : undefined,
+          )
+        config.model = model
+        config.effort = effort
+      },
+      interrupt: async () => {
+        if (!child || !currentTurn) return
+        if (!capabilities.includes('interrupt_receipt_v1')) {
+          sessionEmitter.addNote({
+            text: 'This Claude Code process does not support interrupt receipts',
+            level: 'warning',
+          })
+          return
+        }
+        interruptRequested = true
+        try {
+          const receipt = await child.interrupt()
+          recordDebug('event', {
+            direction: 'in',
+            method: 'interrupt',
+            payload: receipt,
+          })
+        } catch (error) {
+          interruptRequested = false
+          sessionEmitter.addNote({
+            text: `Interrupt failed: ${String(error)}`,
+            level: 'error',
+          })
+        }
+      },
       onDelta: (cb) => {
         listeners.delta.push(cb)
       },

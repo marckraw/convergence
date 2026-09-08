@@ -1,3 +1,8 @@
+vi.mock('../provider/claude-code/claude-transport.service', async () => ({
+  createClaudeTransport: (
+    await import('../provider/claude-code/claude-transport.fixture')
+  ).createFixtureClaudeTransport,
+}))
 import { EventEmitter } from 'events'
 import { PassThrough } from 'stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -212,7 +217,7 @@ describe('a transcript that mixes models records it (MAR-2551)', () => {
     playTurn(first, 'claude-conversation-1')
     await waitForIdle(session.id)
 
-    service.setModelSelection(session.id, {
+    await service.setModelSelection(session.id, {
       providerId: 'claude-code',
       model: 'opus',
       effort: 'medium',
@@ -256,7 +261,7 @@ describe('a transcript that mixes models records it (MAR-2551)', () => {
 
     expect(modelChangeNotes(session.id)).toEqual([])
 
-    service.setModelSelection(session.id, {
+    await service.setModelSelection(session.id, {
       providerId: 'claude-code',
       model: 'opus',
       effort: 'medium',
@@ -306,13 +311,13 @@ describe('a transcript that mixes models records it (MAR-2551)', () => {
     // Deliberately not awaited: this is the window, one await wide.
     const dispatch = service.sendMessage(session.id, { text: 'carry on' })
 
-    expect(() =>
+    await expect(
       service.setModelSelection(session.id, {
         providerId: 'claude-code',
         model: 'opus',
         effort: 'medium',
       }),
-    ).toThrow(/already on its way to the provider/)
+    ).rejects.toThrow(/already on its way to the provider/)
 
     await dispatch
     await waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
@@ -347,7 +352,7 @@ describe('a transcript that mixes models records it (MAR-2551)', () => {
     playTurn(first, 'claude-conversation-3')
     await waitForIdle(session.id)
 
-    service.setModelSelection(session.id, {
+    await service.setModelSelection(session.id, {
       providerId: 'claude-code',
       model: 'opus',
       effort: 'max',

@@ -67,6 +67,7 @@ export const DEFAULT_LANES_PREFS: LanesPrefs = {
 }
 
 export interface AppSettings {
+  claude?: { residentIdleMinutes: number }
   defaultProviderId: string | null
   defaultModelId: string | null
   defaultEffortId: ReasoningEffort | null

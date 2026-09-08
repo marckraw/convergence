@@ -15,8 +15,13 @@ import tailwindcss from '@tailwindcss/vite'
  * at runtime, on a user's machine, long after every gate went green. It is a
  * devDependency for the same reason, and this list is the pin that keeps the
  * answer right even if someone later moves it into `dependencies`.
+ * The Claude SDK is bundled for a different reason: its optional executable
+ * packages must stay in the development graph and out of the installed app.
  */
-const BUNDLED_WORKSPACE_PACKAGES = ['@convergence/execution-host-client']
+const BUNDLED_WORKSPACE_PACKAGES = [
+  '@convergence/execution-host-client',
+  '@anthropic-ai/claude-agent-sdk',
+]
 
 export default defineConfig({
   main: {

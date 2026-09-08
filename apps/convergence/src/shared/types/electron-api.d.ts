@@ -1094,6 +1094,7 @@ interface RemoteProjectCatalogData {
 }
 
 interface ProviderInfo {
+  supportsLiveModelSelection?: boolean
   id: string
   name: string
   vendorLabel: string
@@ -2235,6 +2236,7 @@ interface ExecutionHostEndpointInputData {
 }
 
 interface AppSettingsData {
+  claude?: { residentIdleMinutes: number }
   defaultProviderId: string | null
   defaultModelId: string | null
   defaultEffortId: ReasoningEffort | null

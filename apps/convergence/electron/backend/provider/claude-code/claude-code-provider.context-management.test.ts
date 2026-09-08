@@ -1,3 +1,7 @@
+vi.mock('./claude-transport.service', async () => ({
+  createClaudeTransport: (await import('./claude-transport.fixture'))
+    .createFixtureClaudeTransport,
+}))
 import { EventEmitter } from 'events'
 import { PassThrough } from 'stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'

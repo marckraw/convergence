@@ -30,7 +30,13 @@ export function foldAgentRuns(
   return runs.map((run) => {
     if (fact.kind === 'process.ended')
       return run.status === 'running'
-        ? { ...run, status: 'unknown', endedAt: fact.at }
+        ? {
+            ...run,
+            status:
+              fact.reason && fact.reason !== 'exit' ? 'stopped' : 'unknown',
+            endedAt: fact.at,
+            ...(fact.reason ? { stopReason: fact.reason } : {}),
+          }
         : run
     if (run.spawnedByItemId !== fact.spawnedByItemId) return run
     if (fact.kind === 'agent.changed')
@@ -57,10 +63,17 @@ export function foldTasks(
   if (fact.kind === 'process.ended')
     return tasks.map((task) =>
       task.status === 'running'
-        ? { ...task, status: 'unknown', endedAt: fact.at }
+        ? {
+            ...task,
+            status:
+              fact.reason && fact.reason !== 'exit' ? 'stopped' : 'unknown',
+            endedAt: fact.at,
+            ...(fact.reason ? { stopReason: fact.reason } : {}),
+          }
         : task,
     )
   const existing = tasks.find((task) => task.taskId === fact.taskId)
+  if (existing?.stopReason === 'exit') return tasks
   const next: SessionTask = {
     taskId: fact.taskId,
     sessionId,

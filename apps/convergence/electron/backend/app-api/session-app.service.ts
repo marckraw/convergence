@@ -157,7 +157,7 @@ export class SessionAppService {
   setSessionModelSelection(
     sessionId: string,
     input: { providerId: unknown; model: string | null; effort: unknown },
-  ): Session {
+  ): Promise<Session> {
     return this.sessions.setModelSelection(sessionId, input)
   }
 

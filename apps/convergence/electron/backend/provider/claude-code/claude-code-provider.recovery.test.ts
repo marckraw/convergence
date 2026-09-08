@@ -1,3 +1,7 @@
+vi.mock('./claude-transport.service', async () => ({
+  createClaudeTransport: (await import('./claude-transport.fixture'))
+    .createFixtureClaudeTransport,
+}))
 import { EventEmitter } from 'events'
 import { PassThrough } from 'stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -313,7 +317,7 @@ describe('ClaudeCodeProvider continuation recovery', () => {
       expect.arrayContaining([
         expect.objectContaining({
           kind: 'note',
-          text: 'Claude Code continuation was no longer available. Started a new session; previous provider context may be missing.',
+          text: 'Claude Code did not accept the message (no output); sent again on a new process.',
         }),
         expect.objectContaining({
           kind: 'message',

@@ -6668,7 +6668,7 @@ describe('SessionService model selection (MAR-2550)', () => {
     await service.start(sessionId, { text: 'first' })
     settleTurn()
 
-    service.setModelSelection(sessionId, {
+    await service.setModelSelection(sessionId, {
       providerId: 'switchable',
       model: 'opus',
       effort: 'high',
@@ -6690,7 +6690,7 @@ describe('SessionService model selection (MAR-2550)', () => {
     await service.start(sessionId, { text: 'first' })
     settleTurn()
 
-    const updated = service.setModelSelection(sessionId, {
+    const updated = await service.setModelSelection(sessionId, {
       providerId: 'switchable',
       model: 'opus',
       effort: 'high',
@@ -6708,13 +6708,13 @@ describe('SessionService model selection (MAR-2550)', () => {
     await service.start(sessionId, { text: 'first' })
     beginTurn()
 
-    expect(() =>
+    await expect(
       service.setModelSelection(sessionId, {
         providerId: 'switchable',
         model: 'opus',
         effort: 'high',
       }),
-    ).toThrow(/current turn to finish/)
+    ).rejects.toThrow(/current turn to finish/)
     expect(service.getSummaryById(sessionId)).toMatchObject({
       model: 'fable',
       effort: 'medium',
@@ -6740,13 +6740,13 @@ describe('SessionService model selection (MAR-2550)', () => {
     // await, which is exactly the window.
     const dispatch = service.sendMessage(sessionId, { text: 'carry on' })
 
-    expect(() =>
+    await expect(
       service.setModelSelection(sessionId, {
         providerId: 'switchable',
         model: 'opus',
         effort: 'high',
       }),
-    ).toThrow(/already on its way to the provider/)
+    ).rejects.toThrow(/already on its way to the provider/)
 
     await dispatch
 
@@ -6766,13 +6766,13 @@ describe('SessionService model selection (MAR-2550)', () => {
     // `start` has the same shape as `sendMessage`: read the row, await, spawn.
     const opening = service.start(sessionId, { text: 'first' })
 
-    expect(() =>
+    await expect(
       service.setModelSelection(sessionId, {
         providerId: 'switchable',
         model: 'opus',
         effort: 'high',
       }),
-    ).toThrow(/already on its way to the provider/)
+    ).rejects.toThrow(/already on its way to the provider/)
 
     await opening
 
@@ -6800,7 +6800,7 @@ describe('SessionService model selection (MAR-2550)', () => {
     spawnFailure = null
 
     expect(
-      service.setModelSelection(sessionId, {
+      await service.setModelSelection(sessionId, {
         providerId: 'switchable',
         model: 'opus',
         effort: 'high',
@@ -6823,13 +6823,13 @@ describe('SessionService model selection (MAR-2550)', () => {
       patch: { status: 'idle', attention: 'needs-input' },
     })
 
-    expect(() =>
+    await expect(
       service.setModelSelection(sessionId, {
         providerId: 'switchable',
         model: 'opus',
         effort: 'high',
       }),
-    ).toThrow(/Answer the agent first/)
+    ).rejects.toThrow(/Answer the agent first/)
   })
 
   it('refuses a settled session whose provider process is still attached', async () => {
@@ -6841,13 +6841,13 @@ describe('SessionService model selection (MAR-2550)', () => {
       patch: { status: 'completed' },
     })
 
-    expect(() =>
+    await expect(
       service.setModelSelection(sessionId, {
         providerId: 'switchable',
         model: 'opus',
         effort: 'high',
       }),
-    ).toThrow(/provider process attached/)
+    ).rejects.toThrow(/provider process attached/)
   })
 
   /**
@@ -6871,13 +6871,13 @@ describe('SessionService model selection (MAR-2550)', () => {
     }) as typeof db.prepare)
 
     try {
-      expect(() =>
+      await expect(
         service.setModelSelection(sessionId, {
           providerId: 'switchable',
           model: 'opus',
           effort: 'high',
         }),
-      ).toThrow(/the disk went away mid-write/)
+      ).rejects.toThrow(/the disk went away mid-write/)
     } finally {
       prepare.mockRestore()
     }
@@ -6898,17 +6898,17 @@ describe('SessionService model selection (MAR-2550)', () => {
     await service.start(sessionId, { text: 'first' })
     settleTurn()
 
-    expect(() =>
+    await expect(
       service.setModelSelection(sessionId, {
         providerId: 'switchable',
         model: 'opus',
         effort: 'turbo',
       }),
-    ).toThrow(/Unknown reasoning effort/)
+    ).rejects.toThrow(/Unknown reasoning effort/)
     expect(service.getSummaryById(sessionId)).toMatchObject({ model: 'fable' })
   })
 
-  it('refuses a shell session, which has no model to change', () => {
+  it('refuses a shell session, which has no model to change', async () => {
     const shell = service.create({
       projectId: 'switch-project',
       workspaceId: null,
@@ -6919,23 +6919,23 @@ describe('SessionService model selection (MAR-2550)', () => {
       primarySurface: 'terminal',
     })
 
-    expect(() =>
+    await expect(
       service.setModelSelection(shell.id, {
         providerId: 'shell',
         model: 'opus',
         effort: null,
       }),
-    ).toThrow(/shell provider/)
+    ).rejects.toThrow(/shell provider/)
   })
 
-  it('refuses a session that does not exist', () => {
-    expect(() =>
+  it('refuses a session that does not exist', async () => {
+    await expect(
       service.setModelSelection('nope', {
         providerId: 'switchable',
         model: 'opus',
         effort: null,
       }),
-    ).toThrow(/Session not found/)
+    ).rejects.toThrow(/Session not found/)
   })
 
   /**
@@ -6950,13 +6950,13 @@ describe('SessionService model selection (MAR-2550)', () => {
     await service.start(sessionId, { text: 'first' })
     settleTurn()
 
-    expect(() =>
+    await expect(
       service.setModelSelection(sessionId, {
         providerId: 'codex',
         model: 'gpt-5.5',
         effort: null,
       }),
-    ).toThrow(/session runs on switchable/)
+    ).rejects.toThrow(/session runs on switchable/)
     expect(service.getSummaryById(sessionId)).toMatchObject({
       model: 'fable',
       effort: 'medium',
@@ -6970,13 +6970,13 @@ describe('SessionService model selection (MAR-2550)', () => {
     await service.start(sessionId, { text: 'first' })
     settleTurn()
 
-    expect(() =>
+    await expect(
       service.setModelSelection(sessionId, {
         providerId: undefined,
         model: 'opus',
         effort: null,
       }),
-    ).toThrow(/must say which provider/)
+    ).rejects.toThrow(/must say which provider/)
     expect(service.getSummaryById(sessionId)).toMatchObject({ model: 'fable' })
   })
 
@@ -6985,7 +6985,7 @@ describe('SessionService model selection (MAR-2550)', () => {
     settleTurn()
 
     expect(
-      service.setModelSelection(sessionId, {
+      await service.setModelSelection(sessionId, {
         providerId: 'switchable',
         model: 'opus',
         effort: null,

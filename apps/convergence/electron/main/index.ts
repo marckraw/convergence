@@ -394,6 +394,8 @@ async function startApp(): Promise<void> {
             p.version,
             resolveClaudeAccountForTurn,
             describeClaudeAccount,
+            true,
+            () => appSettingsService.getClaudeResidentIdleMinutesSync(),
           ),
         )
         providerAccountEnrolmentService.setBinaryPath(p.id, p.binaryPath)
@@ -828,15 +830,24 @@ async function startApp(): Promise<void> {
   })
   registerTerminalLayoutIpcHandlers(terminalLayoutService)
 
-  app.on('before-quit', () => {
+  let sessionsDisposedForQuit = false
+  let sessionQuitInFlight = false
+  app.on('before-quit', (event) => {
+    if (sessionsDisposedForQuit) return
+    event.preventDefault()
+    if (sessionQuitInFlight) return
+    sessionQuitInFlight = true
     localModelTunnelService.stopMonitoring()
     localModelTunnelService.stopAllManaged()
     // Sessions release their connections; the servers themselves are stopped
     // here, and nowhere else (MAR-2823).
-    sessionService.disposeAll()
-    codexServerHosts.stopAll()
-    terminalService.disposeAll()
-    projectScriptsRunner.disposeAll()
+    void sessionService.disposeAll().finally(() => {
+      codexServerHosts.stopAll()
+      terminalService.disposeAll()
+      projectScriptsRunner.disposeAll()
+      sessionsDisposedForQuit = true
+      app.quit()
+    })
   })
 
   const runtimeIconPath = resolveRuntimeIconPath()
