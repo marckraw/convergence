@@ -31,6 +31,10 @@ import {
   type ClaudeMessagePart,
 } from './claude-code-message.pure'
 import {
+  readClaudeResultOriginKind,
+  readClaudeTaskNote,
+} from './claude-code-task.pure'
+import {
   createUnavailableContextWindow,
   deriveClaudeContextWindow,
   deriveClaudeEstimatedContextWindow,
@@ -493,6 +497,9 @@ export class ClaudeCodeProvider implements Provider {
     let clearSkillInvocationTargetTimer: ReturnType<typeof setTimeout> | null =
       null
     let sawTurnOutput = false
+    const notifiedTaskIds = new Set<string>()
+    // The synthetic result has no task id; its preceding notification owns the note.
+    let taskNotificationSinceResult = false
     let stderrBuffer = ''
     let pendingDeferredToolUse: PendingClaudeDeferredToolUse | null = null
     let warnedUnsupportedDeferredToolUse = false
@@ -869,6 +876,21 @@ export class ClaudeCodeProvider implements Provider {
 
       switch (event.type) {
         case 'system': {
+          const taskNote = readClaudeTaskNote(data)
+          if (taskNote) {
+            if (taskNote.notification) {
+              taskNotificationSinceResult = true
+              if (taskNote.taskId && notifiedTaskIds.has(taskNote.taskId)) break
+              if (taskNote.taskId) notifiedTaskIds.add(taskNote.taskId)
+            }
+            sessionEmitter.addNote({
+              text: taskNote.text,
+              level: 'info',
+              providerEventType: 'harness.task',
+              providerItemId: taskNote.taskId,
+            })
+            break
+          }
           // Skip hook events — they're internal
           const rawEvent = event as unknown as Record<string, unknown>
           const subtype = rawEvent.subtype as string | undefined
@@ -1003,6 +1025,19 @@ export class ClaudeCodeProvider implements Provider {
           break
 
         case 'result':
+          // The harness's cleanup result ends no user turn (MAR-2868).
+          if (readClaudeResultOriginKind(data) === 'task-notification') {
+            if (!taskNotificationSinceResult) {
+              sessionEmitter.addNote({
+                text: 'A background task from an earlier turn was stopped: No task summary was supplied.',
+                level: 'info',
+                providerEventType: 'harness.task',
+              })
+            }
+            taskNotificationSinceResult = false
+            break
+          }
+          taskNotificationSinceResult = false
           sawTurnOutput = true
           flushThinkingBuffer()
           flushAssistantBuffer()
