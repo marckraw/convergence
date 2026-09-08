@@ -31,6 +31,11 @@ import {
   type ClaudeMessagePart,
 } from './claude-code-message.pure'
 import {
+  CLAUDE_TASK_NOTIFICATION_FALLBACK,
+  readClaudeResultOriginKind,
+  readClaudeTaskNote,
+} from './claude-code-task.pure'
+import {
   createUnavailableContextWindow,
   deriveClaudeContextWindow,
   deriveClaudeEstimatedContextWindow,
@@ -493,6 +498,11 @@ export class ClaudeCodeProvider implements Provider {
     let clearSkillInvocationTargetTimer: ReturnType<typeof setTimeout> | null =
       null
     let sawTurnOutput = false
+    let sawHarnessOutput = false
+    const notifiedTaskMoments = new Set<string>()
+    const taskDescriptions = new Map<string, string>()
+    // The synthetic result has no task id; its preceding notification owns the note.
+    let taskNotificationSinceResult = false
     let stderrBuffer = ''
     let pendingDeferredToolUse: PendingClaudeDeferredToolUse | null = null
     let warnedUnsupportedDeferredToolUse = false
@@ -869,9 +879,29 @@ export class ClaudeCodeProvider implements Provider {
 
       switch (event.type) {
         case 'system': {
-          // Skip hook events — they're internal
           const rawEvent = event as unknown as Record<string, unknown>
           const subtype = rawEvent.subtype as string | undefined
+          if (subtype === 'init' && event.session_id) sawHarnessOutput = true
+          const taskNote = readClaudeTaskNote(data, taskDescriptions)
+          if (taskNote) {
+            if (taskNote.notification) {
+              taskNotificationSinceResult = true
+            }
+            if (taskNote.taskId) {
+              taskDescriptions.set(taskNote.taskId, taskNote.description)
+              const key = JSON.stringify([taskNote.taskId, taskNote.moment])
+              if (notifiedTaskMoments.has(key)) break
+              notifiedTaskMoments.add(key)
+            }
+            sessionEmitter.addNote({
+              text: taskNote.text,
+              level: 'info',
+              providerEventType: 'harness.task',
+              providerItemId: taskNote.taskId,
+            })
+            break
+          }
+          // Skip hook events — they're internal
           if (
             subtype === 'hook_started' ||
             subtype === 'hook_response' ||
@@ -879,10 +909,8 @@ export class ClaudeCodeProvider implements Provider {
           ) {
             break
           }
-          // `init` needs nothing of its own: every event carrying a
-          // session_id is adopted above, which is where a replaced id is
-          // noticed. The note this branch used to write could never fire for
-          // exactly that reason.
+          // `init` proves the harness is alive without counting as turn output.
+          // Every event carrying a session_id is adopted above.
           break
         }
 
@@ -1003,6 +1031,19 @@ export class ClaudeCodeProvider implements Provider {
           break
 
         case 'result':
+          // The harness's cleanup result ends no user turn (MAR-2868).
+          if (readClaudeResultOriginKind(data) === 'task-notification') {
+            if (!taskNotificationSinceResult) {
+              sessionEmitter.addNote({
+                text: CLAUDE_TASK_NOTIFICATION_FALLBACK,
+                level: 'info',
+                providerEventType: 'harness.task',
+              })
+            }
+            taskNotificationSinceResult = false
+            break
+          }
+          taskNotificationSinceResult = false
           sawTurnOutput = true
           flushThinkingBuffer()
           flushAssistantBuffer()
@@ -1246,6 +1287,8 @@ export class ClaudeCodeProvider implements Provider {
       currentTurnHasAssistantText = false
       currentTurnHasThinkingText = false
       sawTurnOutput = false
+      sawHarnessOutput = false
+      taskNotificationSinceResult = false
       stderrBuffer = ''
       currentTurn = {
         message,
@@ -1417,13 +1460,22 @@ export class ClaudeCodeProvider implements Provider {
           code !== 0 &&
           code !== null &&
           (shouldRecoverFromMessage(significant) ||
-            (canRecoverContinuation() && !sawTurnOutput))
+            (canRecoverContinuation() && !sawTurnOutput && !sawHarnessOutput))
         ) {
           scheduleContinuationRecovery()
         }
         child = null
         if (maybeRestartRecoveredTurn()) {
           return
+        }
+        if (code === 0 && currentTurn) {
+          sessionEmitter.addNote({
+            text: 'Claude Code exited without answering; send the message again',
+            level: 'error',
+          })
+          setStatus('failed')
+          setAttention('failed')
+          currentTurn = null
         }
         if (code !== 0 && code !== null) {
           sessionEmitter.addNote({
