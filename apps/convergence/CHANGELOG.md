@@ -1,5 +1,13 @@
 # convergence
 
+## 0.46.20
+
+### Patch Changes
+
+- e28abfc: After a background task from an earlier turn, the next message is answered instead of being eaten by the harness's task notification.
+
+  Background tasks from the harness now appear as short notes in the transcript.
+
 ## 0.46.19
 
 ### Patch Changes
