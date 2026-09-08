@@ -35,6 +35,7 @@ import {
   readClaudeResultOriginKind,
   readClaudeTaskNote,
 } from './claude-code-task.pure'
+import { ClaudeEvidenceService } from './claude-evidence.service'
 import {
   createUnavailableContextWindow,
   deriveClaudeContextWindow,
@@ -99,6 +100,8 @@ function now(): string {
 
 interface ClaudeStreamEvent {
   type: string
+  uuid?: string
+  parent_tool_use_id?: string | null
   session_id?: string
   event?: {
     type: string
@@ -113,6 +116,8 @@ interface ClaudeStreamEvent {
     }
     content?: Array<{
       type: string
+      id?: string
+      is_error?: boolean
       text?: string
       thinking?: string
       name?: string
@@ -516,6 +521,11 @@ export class ClaudeCodeProvider implements Provider {
       emitDelta,
       now,
     })
+    const evidence = new ClaudeEvidenceService(
+      config.workingDirectory,
+      () => currentTurnAccount?.target?.configDir ?? null,
+      (fact) => sessionEmitter.recordEvidence(fact),
+    )
 
     function setStatus(status: SessionStatus): void {
       listeners.status.forEach((cb) => cb(status))
@@ -834,6 +844,7 @@ export class ClaudeCodeProvider implements Provider {
 
     function handleEvent(data: unknown): void {
       if (stopped) return
+      evidence.consume(data, now())
       const event = data as ClaudeStreamEvent
       const previousActivity = lastActivity
       const activityDelta = deriveClaudeActivity(data, previousActivity)
@@ -870,10 +881,8 @@ export class ClaudeCodeProvider implements Provider {
       }
 
       if (event.type === 'rate_limit_event') {
-        // Deliberately ignored: Claude's usage surface was retired in
-        // MAR-2401, so nothing reads this signal any more. It is not a
-        // transcript entry either, so it stops here rather than reaching the
-        // switch below.
+        // Retained as bounded harness evidence above. The retired usage
+        // surface (MAR-2401) still emits no transcript entry.
         return
       }
 
@@ -896,8 +905,9 @@ export class ClaudeCodeProvider implements Provider {
             sessionEmitter.addNote({
               text: taskNote.text,
               level: 'info',
+              taskId: taskNote.taskId,
               providerEventType: 'harness.task',
-              providerItemId: taskNote.taskId,
+              providerItemId: event.uuid ?? taskNote.taskId,
             })
             break
           }
@@ -926,6 +936,8 @@ export class ClaudeCodeProvider implements Provider {
               thinkingItemId = sessionEmitter.addThinking({
                 text: thinkingBuffer,
                 state: 'streaming',
+                ...evidence.identity(data),
+                providerItemId: event.uuid,
                 providerEventType: 'stream_event',
               })
             } else {
@@ -945,6 +957,8 @@ export class ClaudeCodeProvider implements Provider {
               assistantMessageItemId = sessionEmitter.addAssistantMessage({
                 text: assistantTextBuffer,
                 state: 'streaming',
+                ...evidence.identity(data),
+                providerItemId: event.uuid,
                 providerEventType: 'stream_event',
               })
             } else {
@@ -970,7 +984,9 @@ export class ClaudeCodeProvider implements Provider {
             for (const block of event.message.content) {
               if (block.type === 'tool_use' && block.name) {
                 flushThinkingBuffer()
-                sessionEmitter.addToolCall({
+                const itemId = sessionEmitter.addToolCall({
+                  ...evidence.identity(data, block.id),
+                  providerItemId: block.id ?? event.uuid,
                   toolName: block.name,
                   inputText:
                     typeof block.input === 'string'
@@ -978,12 +994,15 @@ export class ClaudeCodeProvider implements Provider {
                       : JSON.stringify(block.input, null, 2),
                   providerEventType: 'tool_use',
                 })
+                evidence.toolCall(data, block, itemId, now())
               } else if (block.type === 'thinking' && block.thinking) {
                 if (hadStreamedThinking && !skippedStreamedThinkingBlock) {
                   skippedStreamedThinkingBlock = true
                   continue
                 }
                 sessionEmitter.addThinking({
+                  ...evidence.identity(data),
+                  providerItemId: event.uuid,
                   text: block.thinking,
                   state: 'complete',
                   providerEventType: 'thinking',
@@ -996,6 +1015,8 @@ export class ClaudeCodeProvider implements Provider {
                 !currentTurnHasAssistantText
               ) {
                 sessionEmitter.addAssistantMessage({
+                  ...evidence.identity(data),
+                  providerItemId: event.uuid,
                   text: block.text,
                   state: 'complete',
                 })
@@ -1021,6 +1042,10 @@ export class ClaudeCodeProvider implements Provider {
                           .join('\n')
                       : 'Done'
                 sessionEmitter.addToolResult({
+                  ...evidence.toolResult(data, block, now()),
+                  ...evidence.identity(data, block.tool_use_id),
+                  providerItemId: event.uuid,
+                  state: block.is_error ? 'error' : 'complete',
                   outputText: resultText,
                   providerEventType: 'tool_result',
                 })
@@ -1044,6 +1069,7 @@ export class ClaudeCodeProvider implements Provider {
             break
           }
           taskNotificationSinceResult = false
+          evidence.accounting(data)
           sawTurnOutput = true
           flushThinkingBuffer()
           flushAssistantBuffer()
@@ -1448,6 +1474,7 @@ export class ClaudeCodeProvider implements Provider {
 
       child.on('exit', (code) => {
         if (stopped) return
+        evidence.processEnded(now())
         recordDebug('lifecycle', {
           direction: 'in',
           note: `child exited with code ${code}`,
@@ -1491,6 +1518,7 @@ export class ClaudeCodeProvider implements Provider {
 
       child.on('error', (err) => {
         if (stopped) return
+        evidence.processEnded(now())
         recordDebug('lifecycle', {
           direction: 'in',
           note: `child error: ${err.message}`,
@@ -1517,6 +1545,7 @@ export class ClaudeCodeProvider implements Provider {
 
     function disposeRuntime(): void {
       if (stopped) return
+      evidence.processEnded(now())
       stopped = true
       clearTimeout(startTimer)
       disposeTelemetrySink()

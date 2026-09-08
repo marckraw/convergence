@@ -1,4 +1,5 @@
 import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
+import type { SessionAgentRun, SessionTask } from './harness-evidence.types'
 import type { ProjectMcpVisibility } from './mcp.types'
 import type {
   CreatePromptLibraryInput,
@@ -867,6 +868,9 @@ type ConversationItemKind =
 type ConversationItemState = 'streaming' | 'complete' | 'error'
 
 interface ConversationItemDataBase {
+  agentRunId?: string | null
+  taskId?: string | null
+  agentAttribution?: { description: string | null; agentType: string | null }
   id: string
   sessionId: string
   sequence: number
@@ -1762,6 +1766,8 @@ interface ElectronAPI {
     getGlobalSummaries: () => Promise<SessionSummaryData[]>
     getSummaryById: (id: string) => Promise<SessionSummaryData | null>
     getConversation: (id: string) => Promise<ConversationItemData[]>
+    listAgentRuns: (sessionId: string) => Promise<SessionAgentRun[]>
+    listTasks: (sessionId: string) => Promise<SessionTask[]>
     archive: (id: string) => Promise<void>
     unarchive: (id: string) => Promise<void>
     delete: (id: string) => Promise<void>

@@ -957,6 +957,9 @@ describe('delta round-trip local -> wire -> local', () => {
   it('names the local-only item fields that do not reach the wire', () => {
     expect(EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS).toEqual([
       'turnId',
+      'agentRunId',
+      'taskId',
+      'agentAttribution',
       'attachmentIds',
       'skillSelections',
       'deliveryMode',
@@ -996,6 +999,7 @@ describe('delta round-trip local -> wire -> local', () => {
     expect(EXECUTION_HOST_UNSENT_LOCAL_DELTA_KINDS).toEqual([
       'turn.add',
       'turn.fileChanges.add',
+      'harness.evidence',
     ])
     expect(
       toWireSessionDelta({

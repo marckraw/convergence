@@ -49,6 +49,30 @@ function renderConversationItemView({
 }
 
 describe('ConversationItemView', () => {
+  it('renders the attributed agent label exactly — drop the label or omit description/type turns red', () => {
+    renderConversationItemView({
+      entry: {
+        id: 'attributed-call',
+        sessionId: 'session',
+        sequence: 1,
+        turnId: 'turn',
+        kind: 'tool-call',
+        state: 'complete',
+        createdAt: '2026-09-08T10:00:00Z',
+        updatedAt: '2026-09-08T10:00:00Z',
+        providerMeta: {
+          providerId: 'claude-code',
+          providerItemId: 'tool',
+          providerEventType: 'tool_use',
+        },
+        agentRunId: 'agent',
+        agentAttribution: { description: 'Read fixture', agentType: 'Explore' },
+        toolName: 'Read',
+        inputText: 'fixture',
+      },
+    })
+    expect(screen.getByText('↳ Read fixture (Explore)')).toBeInTheDocument()
+  })
   it('renders selected skills on user messages', () => {
     renderConversationItemView({
       entry: {

@@ -170,6 +170,7 @@ export const EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS = [
 export const EXECUTION_HOST_UNSENT_LOCAL_DELTA_KINDS = [
   'turn.add',
   'turn.fileChanges.add',
+  'harness.evidence',
 ] as const satisfies readonly SessionDelta['kind'][]
 
 /**
@@ -180,6 +181,9 @@ export const EXECUTION_HOST_UNSENT_LOCAL_DELTA_KINDS = [
  */
 export const EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS = [
   'turnId',
+  'agentRunId',
+  'taskId',
+  'agentAttribution',
   'attachmentIds',
   'skillSelections',
   'deliveryMode',
@@ -566,6 +570,7 @@ export function toWireSessionDelta(
       }
     case 'turn.add':
     case 'turn.fileChanges.add':
+    case 'harness.evidence':
       return null
   }
 }

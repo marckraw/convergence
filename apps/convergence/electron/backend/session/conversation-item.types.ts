@@ -2,6 +2,7 @@ import type { TranscriptEntry } from '../provider/provider.types'
 import type { SkillSelection } from '../skills/skills.types'
 import type { SessionSummary } from './session.types'
 import type { Turn, TurnFileChange } from './turn/turn.types'
+import type { HarnessEvidence } from './harness-evidence.types'
 
 export type ConversationItemKind =
   | 'message'
@@ -100,10 +101,13 @@ export type InteractionResponse =
   | InteractionUrlResponse
 
 export interface ConversationItemBase {
+  agentAttribution?: { description: string | null; agentType: string | null }
   id: string
   sessionId: string
   sequence: number
   turnId: string | null
+  agentRunId?: string | null
+  taskId?: string | null
   kind: ConversationItemKind
   state: ConversationItemState
   createdAt: string
@@ -182,6 +186,7 @@ export type ConversationItemDraft = ConversationItem extends infer T
   : never
 
 export type SessionDelta =
+  | { kind: 'harness.evidence'; evidence: HarnessEvidence }
   | {
       kind: 'session.patch'
       patch: Partial<
@@ -235,6 +240,8 @@ export interface ConversationItemInsertRow {
   sessionId: string
   sequence: number
   turnId: string | null
+  agentRunId?: string | null
+  taskId?: string | null
   kind: ConversationItemKind
   state: ConversationItemState
   payloadJson: string
@@ -250,5 +257,7 @@ export interface BuildConversationItemFromTranscriptEntryInput {
   providerId: string
   sequence: number
   turnId: string | null
+  agentRunId?: string | null
+  taskId?: string | null
   entry: TranscriptEntry
 }
