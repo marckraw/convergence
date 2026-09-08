@@ -841,7 +841,7 @@ async function startApp(): Promise<void> {
     localModelTunnelService.stopAllManaged()
     // Sessions release their connections; the servers themselves are stopped
     // here, and nowhere else (MAR-2823).
-    void sessionService.disposeAll().finally(() => {
+    void sessionService.disposeAllForQuit().finally(() => {
       codexServerHosts.stopAll()
       terminalService.disposeAll()
       projectScriptsRunner.disposeAll()

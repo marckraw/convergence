@@ -442,7 +442,7 @@ export interface SessionHandle {
   /** A local process whose lifetime spans completed user turns. */
   resident?: boolean
   retainQueuedInputsOnCompletion?: boolean
-  interrupt?: () => Promise<void>
+  interrupt?: () => Promise<'interrupted' | 'not-applicable'>
   setModelSelection?: (
     model: string | null,
     effort: ReasoningEffort | null,

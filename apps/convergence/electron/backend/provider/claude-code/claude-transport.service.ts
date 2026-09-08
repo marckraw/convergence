@@ -69,7 +69,6 @@ export function createClaudeTransport(input: {
         ...(value('--settings') ? { settings: value('--settings')! } : {}),
         ...(value('--effort') ? { effort: value('--effort')! } : {}),
       },
-      stderr: input.onStderr,
       spawnClaudeCodeProcess: (options) => {
         const child = spawn(input.binaryPath, options.args, {
           cwd: options.cwd,

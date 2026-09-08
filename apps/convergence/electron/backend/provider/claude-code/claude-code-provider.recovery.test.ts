@@ -317,7 +317,7 @@ describe('ClaudeCodeProvider continuation recovery', () => {
       expect.arrayContaining([
         expect.objectContaining({
           kind: 'note',
-          text: 'Claude Code did not accept the message (no output); sent again on a new process.',
+          text: 'Claude Code continuation was no longer available. Started a new session; previous provider context may be missing.',
         }),
         expect.objectContaining({
           kind: 'message',

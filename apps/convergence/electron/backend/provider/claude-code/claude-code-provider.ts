@@ -467,25 +467,28 @@ export class ClaudeCodeProvider implements Provider {
     let child: ClaudeTransport | null = null
     let stopped = false
     let idleTimer: ReturnType<typeof setTimeout> | undefined
-    let endingReason: 'idle' | 'account' | null = null
+    let endingReason: 'idle' | 'account' | 'deferred' | null = null
     let connectionEnding: Promise<void> | null = null
     let resolveConnectionEnd: (() => void) | undefined
     function clearIdleTimer(): void {
       if (idleTimer) clearTimeout(idleTimer)
       idleTimer = undefined
     }
-    function endConnection(reason: 'idle' | 'account'): Promise<void> {
+    function endConnection(
+      reason: 'idle' | 'account' | 'deferred',
+    ): Promise<void> {
       if (connectionEnding) return connectionEnding
       if (!child) return Promise.resolve()
       clearIdleTimer()
       endingReason = reason
-      sessionEmitter.addNote({
-        text:
-          reason === 'account'
-            ? 'connection ended: account changed'
-            : `process stopped after ${residentIdleMinutes()} min idle`,
-        level: 'info',
-      })
+      if (reason !== 'deferred')
+        sessionEmitter.addNote({
+          text:
+            reason === 'account'
+              ? 'connection ended: account changed'
+              : `process stopped after ${residentIdleMinutes()} min idle`,
+          level: 'info',
+        })
       if (pendingDeferredToolUse) {
         pendingDeferredToolUse = null
         sessionEmitter.addNote({
@@ -796,8 +799,6 @@ export class ClaudeCodeProvider implements Provider {
     function shouldRecoverFromMessage(message: unknown): boolean {
       return (
         canRecoverContinuation() &&
-        !sawTurnOutput &&
-        !sawHarnessOutput &&
         isMissingContinuationError(message, [
           'session',
           'resume',
@@ -806,7 +807,9 @@ export class ClaudeCodeProvider implements Provider {
       )
     }
 
-    function scheduleContinuationRecovery(): void {
+    function scheduleContinuationRecovery(
+      reason: 'missing-session' | 'no-output',
+    ): void {
       if (!currentTurn || !canRecoverContinuation()) {
         return
       }
@@ -819,12 +822,16 @@ export class ClaudeCodeProvider implements Provider {
       }
       const recoveryEntry = buildContinuationRecoveryEntry('Claude Code', now())
       sessionEmitter.addNote({
-        text: 'Claude Code did not accept the message (no output); sent again on a new process.',
+        text:
+          reason === 'no-output'
+            ? 'Claude Code did not accept the message (no output); sent again on a new process.'
+            : recoveryEntry.text,
         level: recoveryEntry.level,
         timestamp: recoveryEntry.timestamp,
       })
-      claudeSessionId = null
+      if (reason === 'missing-session') claudeSessionId = null
       currentTurn = null
+      interruptRequested = false
       child?.close()
     }
 
@@ -906,7 +913,7 @@ export class ClaudeCodeProvider implements Provider {
         raw.is_error &&
         shouldRecoverFromMessage(raw.result)
       ) {
-        scheduleContinuationRecovery()
+        scheduleContinuationRecovery('missing-session')
         return
       }
       if (currentTurn) sawHarnessOutput = true
@@ -1159,6 +1166,7 @@ export class ClaudeCodeProvider implements Provider {
             armIdleTimer()
             break
           }
+          interruptRequested = false
           sawTurnOutput = true
           flushThinkingBuffer()
           flushAssistantBuffer()
@@ -1193,6 +1201,7 @@ export class ClaudeCodeProvider implements Provider {
               setAttention('needs-input')
               setActivity(null)
               currentTurn = null
+              armIdleTimer()
               break
             }
 
@@ -1207,7 +1216,7 @@ export class ClaudeCodeProvider implements Provider {
           }
           if (event.is_error) {
             if (shouldRecoverFromMessage(event.result)) {
-              scheduleContinuationRecovery()
+              scheduleContinuationRecovery('missing-session')
               break
             }
             sessionEmitter.addNote({
@@ -1338,6 +1347,10 @@ export class ClaudeCodeProvider implements Provider {
       clearIdleTimer()
       if (connectionEnding) await connectionEnding
       if (stopped || currentTurn) return
+      if (child && options?.deferredToolResponse) {
+        await endConnection('deferred')
+        if (stopped) return
+      }
       if (
         child &&
         !options?.continuesCurrentTurn &&
@@ -1384,27 +1397,26 @@ export class ClaudeCodeProvider implements Provider {
         userMessageItemId,
         skillResolution.skillSelections,
       )
-      const telemetrySink =
-        skillResolution.skillSelections &&
-        skillResolution.skillSelections.length > 0
-          ? await getTelemetrySink()
-          : null
-      // Resolved here, alongside the other pre-spawn await, so the guard below
-      // still covers every suspension point before the process starts.
-      const env = await resolveClaudeAccountEnv({
-        account: currentTurnAccount?.target ?? null,
-        workingDirectory: config.workingDirectory,
-        injections: {
-          ...(telemetrySink?.env ?? {}),
-          ...(options?.deferredToolResponse
-            ? {
-                CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE: JSON.stringify(
-                  options.deferredToolResponse,
-                ),
-              }
-            : {}),
-        },
-      })
+      // Environment belongs to the connection, including telemetry for skills
+      // selected on later turns. Deferred answers deliberately spawn anew.
+      let env: NodeJS.ProcessEnv | undefined
+      if (!child) {
+        const telemetrySink = await getTelemetrySink()
+        env = await resolveClaudeAccountEnv({
+          account: currentTurnAccount?.target ?? null,
+          workingDirectory: config.workingDirectory,
+          injections: {
+            ...(telemetrySink?.env ?? {}),
+            ...(options?.deferredToolResponse
+              ? {
+                  CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE: JSON.stringify(
+                    options.deferredToolResponse,
+                  ),
+                }
+              : {}),
+          },
+        })
+      }
       if (stopped || currentTurn) return
 
       assistantTextBuffer = ''
@@ -1457,7 +1469,7 @@ export class ClaudeCodeProvider implements Provider {
         args.push('--effort', config.effort.trim())
       }
 
-      if (!child) {
+      if (!child && env) {
         capabilities = []
         child = createClaudeTransport({
           binaryPath,
@@ -1477,9 +1489,10 @@ export class ClaudeCodeProvider implements Provider {
             stderrBuffer += data
             recordDebug('stderr', { direction: 'in', bytes: data.length })
             if (shouldRecoverFromMessage(getSignificantStderr()))
-              scheduleContinuationRecovery()
+              scheduleContinuationRecovery('missing-session')
           },
           onExit: ({ code, signal, error }) => {
+            interruptRequested = false
             if (stopped) return
             const versionRefusal = describeClaudeTransportVersionRefusal(
               error,
@@ -1508,7 +1521,7 @@ export class ClaudeCodeProvider implements Provider {
               !sawTurnOutput &&
               !sawHarnessOutput
             ) {
-              scheduleContinuationRecovery()
+              scheduleContinuationRecovery('no-output')
             }
             child = null
             if (maybeRestartRecoveredTurn()) return
@@ -1530,6 +1543,7 @@ export class ClaudeCodeProvider implements Provider {
         })
       }
       const connection = child
+      if (!connection) return
       try {
         const parts = await loadAttachmentParts(attachments)
         if (stopped || connection !== child) return
@@ -1553,6 +1567,7 @@ export class ClaudeCodeProvider implements Provider {
           level: 'error',
         })
         currentTurn = null
+        interruptRequested = false
         setStatus('failed')
         setAttention('failed')
       }
@@ -1584,6 +1599,7 @@ export class ClaudeCodeProvider implements Provider {
       }
       latestSkillInvocationTarget = null
       currentTurn = null
+      interruptRequested = false
       pendingRecoveryTurn = null
       pendingDeferredToolUse = null
       assistantTextBuffer = ''
@@ -1611,13 +1627,13 @@ export class ClaudeCodeProvider implements Provider {
         config.effort = effort
       },
       interrupt: async () => {
-        if (!child || !currentTurn) return
+        if (!child || !currentTurn) return 'not-applicable'
         if (!capabilities.includes('interrupt_receipt_v1')) {
           sessionEmitter.addNote({
             text: 'This Claude Code process does not support interrupt receipts',
             level: 'warning',
           })
-          return
+          return 'not-applicable'
         }
         interruptRequested = true
         try {
@@ -1627,12 +1643,14 @@ export class ClaudeCodeProvider implements Provider {
             method: 'interrupt',
             payload: receipt,
           })
+          return 'interrupted'
         } catch (error) {
           interruptRequested = false
           sessionEmitter.addNote({
             text: `Interrupt failed: ${String(error)}`,
             level: 'error',
           })
+          return 'not-applicable'
         }
       },
       onDelta: (cb) => {

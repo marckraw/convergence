@@ -10,6 +10,7 @@ import { LocalExecutionHost } from '../provider/execution-host/local-execution-h
 import { SessionService } from './session.service'
 import { TurnCaptureService } from './turn/turn-capture.service'
 import { GitService } from '../git/git.service'
+import * as claudeTransport from '../provider/claude-code/claude-transport.service'
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
 vi.mock('child_process', async (original) => ({
@@ -519,7 +520,7 @@ it('between-turn exit opens no turn and freezes old rows — emit running on idl
   })
 })
 
-it('interrupt without the advertised receipt is refused — bypass capability detection turns red', async () => {
+it('interrupt without the advertised receipt stops the process — bypass capability detection or omit fallback turns red', async () => {
   const { service, session, children } = await fixture()
   await service.start(session.id, { text: 'long' })
   await vi.waitUntil(() => children[0]?.lines.length === 1)
@@ -544,7 +545,7 @@ it('interrupt without the advertised receipt is refused — bypass capability de
       .map((i) => i.text),
   }).toEqual({
     interrupts: 0,
-    status: 'running',
+    status: 'failed',
     notes: ['This Claude Code process does not support interrupt receipts'],
   })
 })
@@ -674,4 +675,343 @@ it('quit also awaits a previously released process — forget pending disposal t
   children[0].stdout.end()
   await pending
   expect(beforeExit).toBe(false)
+})
+
+function wire(child: { stdout: PassThrough }, event: unknown): void {
+  child.stdout.write(JSON.stringify(event) + '\n')
+}
+function deferred(child: { stdout: PassThrough }): void {
+  wire(child, {
+    type: 'result',
+    subtype: 'success',
+    stop_reason: 'tool_deferred',
+    session_id: 'harness',
+    deferred_tool_use: {
+      id: 'question',
+      name: 'AskUserQuestion',
+      input: {
+        questions: [
+          {
+            question: 'Color?',
+            header: 'Color',
+            multiSelect: false,
+            options: [
+              { label: 'Blue', description: 'blue' },
+              { label: 'Green', description: 'green' },
+            ],
+          },
+        ],
+      },
+    },
+  })
+}
+
+it('H1 answers a resident deferred tool on a new process — keep the connection turns red', async () => {
+  const { service, session, children } = await fixture()
+  await service.start(session.id, { text: 'ask' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  wire(children[0], { type: 'system', subtype: 'init', session_id: 'harness' })
+  deferred(children[0])
+  await vi.waitUntil(
+    () => service.getById(session.id)?.attention === 'needs-input',
+  )
+  await service.sendMessage(session.id, {
+    text: 'Blue',
+    deliveryMode: 'answer',
+    interactionResponse: {
+      kind: 'choice',
+      answers: [{ questionId: 'Color?', values: ['Blue'] }],
+    },
+  })
+  await vi.waitFor(() =>
+    expect({
+      spawns: children.length,
+      ended: children[0].stdin.writableEnded,
+      response: JSON.parse(
+        spawnMock.mock.calls[1]?.[2]?.env
+          .CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE ?? '{}',
+      ).updatedInput?.answers,
+      resume: spawnMock.mock.calls[1]?.[1]?.includes('--resume=harness'),
+      status: service.getById(session.id)?.status,
+    }).toEqual({
+      spawns: 2,
+      ended: true,
+      response: { 'Color?': 'Blue' },
+      resume: true,
+      status: 'running',
+    }),
+  )
+  wire(children[1], {
+    type: 'result',
+    subtype: 'success',
+    result: 'Blue selected',
+  })
+  await vi.waitFor(() =>
+    expect(service.getById(session.id)?.status).toBe('completed'),
+  )
+})
+
+it('H1 deferred results arm idle reaping — omit the deferred arm turns red', async () => {
+  const { service, session, children } = await fixture(200 / 60000)
+  await service.start(session.id, { text: 'ask' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  deferred(children[0])
+  await new Promise((r) => setTimeout(r, 350))
+  expect(children[0].stdin.writableEnded).toBe(true)
+})
+
+it.each(['before-spawn', 'between-turns', 'needs-input', 'old-cli'])(
+  'H2 Stop falls back in %s — swallow not-applicable turns red',
+  async (mode) => {
+    const { service, session, children } = await fixture()
+    await service.start(session.id, { text: 'first' })
+    if (mode !== 'before-spawn') {
+      await vi.waitUntil(() => children[0]?.lines.length === 1)
+      if (mode === 'between-turns')
+        wire(children[0], {
+          type: 'result',
+          subtype: 'success',
+          result: 'done',
+        })
+      if (mode === 'needs-input') deferred(children[0])
+      await new Promise((r) => setTimeout(r, 0))
+    }
+    service.stop(session.id)
+    await vi.waitFor(() =>
+      expect({
+        status: service.getById(session.id)?.status,
+        closed: children[0]?.stdin.writableEnded ?? true,
+      }).toEqual({ status: 'failed', closed: true }),
+    )
+  },
+)
+
+it('M3 a normal completion racing Stop drains the queue — retain the request flag turns red', async () => {
+  const { service, session, children } = await fixture()
+  await service.start(session.id, { text: 'first' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  wire(children[0], {
+    type: 'system',
+    subtype: 'init',
+    session_id: 'harness',
+    capabilities: ['interrupt_receipt_v1'],
+  })
+  await new Promise((r) => setTimeout(r, 0))
+  await service.sendMessage(session.id, { text: 'queued' })
+  service.stop(session.id)
+  wire(children[0], {
+    type: 'result',
+    subtype: 'success',
+    result: 'finished normally',
+  })
+  await vi.waitFor(() =>
+    expect({
+      writes: children[0].lines.length,
+      queued: service.getQueuedInputs(session.id).length,
+    }).toEqual({ writes: 2, queued: 0 }),
+  )
+})
+
+it('M6 silent turn-three failure resumes the same conversation — drop the token turns red', async () => {
+  const { service, session, children } = await fixture()
+  await service.start(session.id, { text: 'first' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  wire(children[0], { type: 'system', subtype: 'init', session_id: 'harness' })
+  wire(children[0], { type: 'result', subtype: 'success', result: 'one' })
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'completed')
+  await service.sendMessage(session.id, { text: 'second' })
+  await vi.waitUntil(() => children[0].lines.length === 2)
+  wire(children[0], { type: 'result', subtype: 'success', result: 'two' })
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'completed')
+  await service.sendMessage(session.id, { text: 'third' })
+  await vi.waitUntil(() => children[0].lines.length === 3)
+  children[0].emit('exit', 1, null)
+  children[0].stdout.end()
+  await vi.waitUntil(() => children[1]?.lines.length === 1)
+  expect({
+    writes: children.flatMap((c) => c.lines).filter((l) => l.includes('third'))
+      .length,
+    resume: spawnMock.mock.calls[1]?.[1]?.includes('--resume=harness'),
+  }).toEqual({ writes: 2, resume: true })
+})
+
+it('M7 named missing-session refusal after init drops the token — gate behind output turns red', async () => {
+  const { service, session, children, db } = await fixture()
+  db.prepare('UPDATE sessions SET continuation_token=? WHERE id=?').run(
+    'harness',
+    session.id,
+  )
+  await service.start(session.id, { text: 'resume me' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  wire(children[0], { type: 'system', subtype: 'init', session_id: 'harness' })
+  wire(children[0], {
+    type: 'result',
+    subtype: 'error_during_execution',
+    is_error: true,
+    result: 'No such session: harness',
+    errors: ['No such session: harness'],
+    session_id: 'harness',
+    num_turns: 0,
+  })
+  await vi.waitFor(() =>
+    expect({
+      writes: children.flatMap((c) => c.lines).length,
+      spawns: children.length,
+      resume:
+        spawnMock.mock.calls[1]?.[1]?.some((a: string) =>
+          a.startsWith('--resume'),
+        ) ?? null,
+    }).toEqual({ writes: 2, spawns: 2, resume: false }),
+  )
+})
+
+it('M9 the selected model and effort reach the live wire — no-op child.setModel turns red', async () => {
+  const { service, session, children } = await fixture()
+  await service.start(session.id, { text: 'first' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  await service.setModelSelection(session.id, {
+    providerId: 'claude-code',
+    model: 'opus',
+    effort: 'high',
+  })
+  expect(
+    children[0].controls.filter((c) => c.subtype !== 'initialize'),
+  ).toEqual([
+    { subtype: 'set_model', model: 'opus' },
+    { subtype: 'apply_flag_settings', settings: { effortLevel: 'high' } },
+  ])
+})
+
+it('M4 turn-two skill activation uses the spawn telemetry sink — start telemetry only for selected skills turns red', async () => {
+  const { ClaudeCodeSkillsService } =
+    await import('../skills/claude-code-skills.service')
+  const skill = {
+    providerId: 'claude-code' as const,
+    name: 'fixture-skill',
+    path: '/fixture/SKILL.md',
+    scope: 'project' as const,
+    rawScope: null,
+    id: 'fixture-skill',
+    providerName: 'Claude Code',
+    displayName: 'fixture-skill',
+    description: 'fixture',
+    shortDescription: null,
+    sourceLabel: 'project',
+    enabled: true,
+    dependencies: [],
+    warnings: [],
+  }
+  const catalog = vi
+    .spyOn(ClaudeCodeSkillsService.prototype, 'list')
+    .mockResolvedValue({
+      providerId: 'claude-code',
+      providerName: 'Claude Code',
+      catalogSource: 'filesystem',
+      invocationSupport: 'native-command',
+      activationConfirmation: 'native-event',
+      skills: [skill],
+      error: null,
+    })
+  try {
+    const { service, session, children } = await fixture()
+    await service.start(session.id, { text: 'first without skills' })
+    await vi.waitUntil(() => children[0]?.lines.length === 1)
+    const endpoint =
+      spawnMock.mock.calls[0][2].env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT
+    wire(children[0], { type: 'result', subtype: 'success', result: 'first' })
+    await vi.waitUntil(
+      () => service.getById(session.id)?.status === 'completed',
+    )
+    await service.sendMessage(session.id, {
+      text: 'use the skill',
+      skillSelections: [{ ...skill, status: 'selected' }],
+    })
+    await vi.waitUntil(() => children[0].lines.length === 2)
+    if (endpoint)
+      await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          resourceLogs: [
+            {
+              scopeLogs: [
+                {
+                  logRecords: [
+                    {
+                      attributes: [
+                        {
+                          key: 'event.name',
+                          value: { stringValue: 'skill_activated' },
+                        },
+                        { key: 'event.sequence', value: { intValue: 1 } },
+                        {
+                          key: 'skill.name',
+                          value: { stringValue: 'fixture-skill' },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        }),
+      })
+    await vi.waitFor(() =>
+      expect({
+        spawns: children.length,
+        status: service
+          .getConversation(session.id)
+          .flatMap((i) =>
+            i.kind === 'message' && i.actor === 'user'
+              ? [i.skillSelections?.[0]?.status]
+              : [],
+          )
+          .at(-1),
+      }).toEqual({ spawns: 1, status: 'confirmed' }),
+    )
+  } finally {
+    catalog.mockRestore()
+  }
+})
+
+it('M5 quit has an eight-second deadline even when the transport never settles — await disposal without a deadline turns red', async () => {
+  let settle!: () => void
+  const neverSettled = new Promise<void>((resolve) => {
+    settle = resolve
+  })
+  const create = claudeTransport.createClaudeTransport
+  const transport = vi
+    .spyOn(claudeTransport, 'createClaudeTransport')
+    .mockImplementation((input) => {
+      const real = create(input)
+      return {
+        ...real,
+        close: () => {
+          void real.close()
+          return neverSettled
+        },
+      }
+    })
+  const { service, session, children } = await fixture()
+  await service.start(session.id, { text: 'first' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  vi.useFakeTimers()
+  try {
+    let finished = false
+    void service.disposeAllForQuit().then(() => {
+      finished = true
+    })
+    await vi.advanceTimersByTimeAsync(7999)
+    const beforeDeadline = finished
+    await vi.advanceTimersByTimeAsync(1)
+    expect({ beforeDeadline, atDeadline: finished }).toEqual({
+      beforeDeadline: false,
+      atDeadline: true,
+    })
+  } finally {
+    settle()
+    transport.mockRestore()
+    vi.useRealTimers()
+  }
 })

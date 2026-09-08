@@ -245,7 +245,7 @@ export class ClaudeEvidenceService {
   }
   processEnded(
     at: string,
-    reason?: 'quit' | 'idle' | 'account' | 'stop' | 'exit',
+    reason?: 'quit' | 'idle' | 'account' | 'deferred' | 'stop' | 'exit',
   ): void {
     this.emit({ kind: 'process.ended', at, ...(reason ? { reason } : {}) })
   }

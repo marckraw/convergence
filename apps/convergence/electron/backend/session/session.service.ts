@@ -2223,11 +2223,32 @@ export class SessionService {
       throw new Error(`Session not active: ${id}`)
     }
     if (handle.interrupt) {
-      void handle.interrupt()
+      const fallback = () => {
+        if (this.activeHandles.get(id) !== handle) return
+        handle.stop()
+        this.releaseHandle(id)
+      }
+      void handle.interrupt().then((result) => {
+        if (result === 'not-applicable') fallback()
+      }, fallback)
       return
     }
     handle.stop()
     this.releaseHandle(id)
+  }
+
+  async disposeAllForQuit(): Promise<void> {
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        this.disposeAll(),
+        new Promise<void>((resolve) => {
+          deadline = setTimeout(resolve, 8000)
+        }),
+      ])
+    } finally {
+      clearTimeout(deadline)
+    }
   }
 
   async disposeAll(): Promise<void> {

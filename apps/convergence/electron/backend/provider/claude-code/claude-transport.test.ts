@@ -5,7 +5,7 @@ const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
 vi.mock('child_process', () => ({ spawn: spawnMock }))
 import { createClaudeTransport } from './claude-transport.service'
 
-it('uses the chosen executable and exposes stderr once and exit — substitute the binary or hide exit turns red', async () => {
+it('uses the chosen executable and exposes stderr once and exit — substitute the binary, duplicate stderr or hide exit turns red', async () => {
   const child = Object.assign(new EventEmitter(), {
     stdin: new PassThrough(),
     stdout: new PassThrough(),
