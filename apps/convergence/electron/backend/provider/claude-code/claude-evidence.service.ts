@@ -31,6 +31,8 @@ export class ClaudeEvidenceService {
   private readonly tasksByTool = new Map<string, string>()
   private readonly terminalAgents = new Set<string>()
   private readonly readMetadata = new Set<string>()
+  private readonly unmatchedMetadata = new Set<string>()
+  private metadataListing = ''
   private sessionId: string | null = null
   private cwd: string
   constructor(
@@ -93,8 +95,12 @@ export class ClaudeEvidenceService {
               kind: 'agent.changed',
               spawnedByItemId: agent.itemId,
               patch: {
-                lastToolName: claudeString(event.last_tool_name),
-                usageJson: JSON.stringify(event.usage ?? null),
+                ...('last_tool_name' in event
+                  ? { lastToolName: claudeString(event.last_tool_name) }
+                  : {}),
+                ...('usage' in event
+                  ? { usageJson: JSON.stringify(event.usage ?? null) }
+                  : {}),
                 updatedAt: at,
               },
             })
@@ -286,7 +292,7 @@ export class ClaudeEvidenceService {
     if (
       !this.sessionId ||
       !/^[A-Za-z0-9_-]+$/.test(this.sessionId) ||
-      this.agents.size === 0
+      ![...this.agents].some(([toolId, agent]) => agent.id === toolId)
     )
       return
     const root = join(
@@ -302,9 +308,19 @@ export class ClaudeEvidenceService {
     } catch {
       return
     }
+    const listing = files.sort().join('\n')
+    if (listing !== this.metadataListing) {
+      this.unmatchedMetadata.clear()
+      this.metadataListing = listing
+    }
     for (const file of files) {
       const match = /^agent-([A-Za-z0-9_-]+)\.meta\.json$/.exec(file)
-      if (!match || this.readMetadata.has(file)) continue
+      if (
+        !match ||
+        this.readMetadata.has(file) ||
+        this.unmatchedMetadata.has(file)
+      )
+        continue
       let meta: Record<string, unknown> | null
       try {
         meta = claudeRecord(JSON.parse(readFileSync(join(root, file), 'utf8')))
@@ -312,15 +328,19 @@ export class ClaudeEvidenceService {
         continue
       } // A partially written file is retried on the next event.
       const toolId = claudeString(meta?.toolUseId)
-      if (!toolId || !this.agents.has(toolId)) continue
+      const agent = toolId ? this.agents.get(toolId) : undefined
+      if (!toolId || !agent) {
+        this.unmatchedMetadata.add(file)
+        continue
+      }
       const depth =
         typeof meta?.spawnDepth === 'number' &&
         Number.isInteger(meta.spawnDepth)
           ? meta.spawnDepth
-          : (this.agents.get(toolId)?.depth ?? 1)
+          : agent.depth
       this.identify(
         toolId,
-        match[1],
+        agent.id === toolId ? match[1] : agent.id,
         claudeString(meta?.agentType),
         claudeString(meta?.description),
         depth,

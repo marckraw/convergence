@@ -249,7 +249,9 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
             <div className="min-w-0 flex-1 pt-1">
               {entry.agentRunId && (
                 <div className="mb-1 truncate text-xs text-muted-foreground">
-                  {`↳ ${entry.agentAttribution?.description ?? entry.agentRunId} (${entry.agentAttribution?.agentType ?? 'unknown'})`}
+                  {entry.agentAttribution?.description?.trim()
+                    ? `↳ ${entry.agentAttribution.description} (${entry.agentAttribution.agentType ?? 'unknown'})`
+                    : '↳ subagent'}
                 </div>
               )}
               <div className="mb-1 flex min-w-0 flex-wrap items-center gap-1.5">

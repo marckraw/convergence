@@ -1,7 +1,16 @@
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
+import * as fs from 'fs'
+vi.mock('fs', async (original) => {
+  const actual = await original<typeof import('fs')>()
+  return {
+    ...actual,
+    readdirSync: vi.fn(actual.readdirSync),
+    readFileSync: vi.fn(actual.readFileSync),
+  }
+})
 import { ClaudeEvidenceService } from './claude-evidence.service'
 import { foldAgentRuns } from '../../session/harness-evidence.pure'
 import type {
@@ -258,4 +267,173 @@ it('meta alone resolves the harness id and depth — mutation skip meta reading 
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+it('M2 retains omitted progress fields — mutation emit absent fields as null turns red', () => {
+  const f = fixture()
+  f.call()
+  f.start()
+  f.adapter.consume(
+    {
+      type: 'system',
+      subtype: 'task_progress',
+      task_id: 'agent',
+      last_tool_name: 'Read',
+      usage: { total_tokens: 12 },
+    },
+    'first',
+  )
+  f.adapter.consume(
+    { type: 'system', subtype: 'task_progress', task_id: 'agent' },
+    'second',
+  )
+  expect(
+    f.runs().map((run) => [run.lastToolName, run.usageJson, run.updatedAt]),
+  ).toEqual([['Read', '{"total_tokens":12}', 'second']])
+})
+it('M1 stops metadata IO once identified and remembers unmatched files — mutation remove awaiting gate or unmatched cache turns red', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'run54-r2-meta-'))
+  const metaDir = join(dir, 'projects', '-fixture', 'harness', 'subagents')
+  mkdirSync(metaDir, { recursive: true })
+  writeFileSync(
+    join(metaDir, 'agent-foreign.meta.json'),
+    JSON.stringify({ toolUseId: 'old-turn' }),
+  )
+  const adapter = new ClaudeEvidenceService(
+    '/fixture',
+    () => dir,
+    () => {},
+  )
+  try {
+    adapter.consume(
+      { type: 'system', subtype: 'init', session_id: 'harness' },
+      'init',
+    )
+    adapter.toolCall(
+      {},
+      { id: 'spawn', name: 'Agent', input: {} },
+      'call',
+      'start',
+    )
+    vi.mocked(fs.readFileSync).mockClear()
+    for (let n = 0; n < 3; n++)
+      adapter.consume({ type: 'system', subtype: 'status' }, 'waiting')
+    const unmatchedReads = vi.mocked(fs.readFileSync).mock.calls.length
+    vi.mocked(fs.readFileSync).mockClear()
+    writeFileSync(
+      join(metaDir, 'agent-new.meta.json'),
+      JSON.stringify({ toolUseId: 'another-old-turn' }),
+    )
+    adapter.consume({ type: 'system', subtype: 'status' }, 'listing-change')
+    const changedListingReads = vi.mocked(fs.readFileSync).mock.calls.length
+    adapter.consume(
+      {
+        type: 'system',
+        subtype: 'task_started',
+        task_type: 'local_agent',
+        task_id: 'agent',
+        tool_use_id: 'spawn',
+      },
+      'identified',
+    )
+    vi.mocked(fs.readdirSync).mockClear()
+    vi.mocked(fs.readFileSync).mockClear()
+    for (let n = 0; n < 10; n++)
+      adapter.consume({ type: 'system', subtype: 'status' }, 'after')
+    expect({
+      unmatchedReads,
+      changedListingReads,
+      reads: vi.mocked(fs.readFileSync).mock.calls.length,
+      scans: vi.mocked(fs.readdirSync).mock.calls.length,
+    }).toEqual({
+      unmatchedReads: 0,
+      changedListingReads: 2,
+      reads: 0,
+      scans: 0,
+    })
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+it('L1 keeps the adopted id when a later scan finds a different meta filename — mutation overwrite adopted id turns red', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'run54-r2-authority-'))
+  const metaDir = join(dir, 'projects', '-fixture', 'harness', 'subagents')
+  mkdirSync(metaDir, { recursive: true })
+  let runs: SessionAgentRun[] = []
+  const adapter = new ClaudeEvidenceService(
+    '/fixture',
+    () => dir,
+    (fact) => {
+      if (fact.kind.startsWith('agent.'))
+        runs = foldAgentRuns(
+          runs,
+          fact as Parameters<typeof foldAgentRuns>[1],
+          'session',
+        )
+    },
+  )
+  try {
+    adapter.consume(
+      { type: 'system', subtype: 'init', session_id: 'harness' },
+      'init',
+    )
+    adapter.toolCall(
+      {},
+      { id: 'spawn', name: 'Agent', input: {} },
+      'call',
+      'start',
+    )
+    adapter.consume(
+      {
+        type: 'system',
+        subtype: 'task_started',
+        task_type: 'local_agent',
+        task_id: 'authoritative',
+        tool_use_id: 'spawn',
+      },
+      'identified',
+    )
+    writeFileSync(
+      join(metaDir, 'agent-different.meta.json'),
+      JSON.stringify({
+        toolUseId: 'spawn',
+        description: 'From meta',
+        agentType: 'Explore',
+        spawnDepth: 3,
+      }),
+    )
+    adapter.toolCall(
+      {},
+      { id: 'pending', name: 'Agent', input: {} },
+      'pending-call',
+      'pending',
+    )
+    expect(
+      runs
+        .filter((run) => run.spawnedByItemId === 'call')
+        .map((run) => [run.id, run.description, run.depth, run.transcriptPath]),
+    ).toEqual([
+      ['authoritative', 'From meta', 3, join(metaDir, 'agent-different.jsonl')],
+    ])
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+it('M4 result-only adoption and completion need no task event or meta — mutation drop structured agentId or completed result turns red', () => {
+  const f = fixture()
+  f.call()
+  f.adapter.toolResult(
+    {
+      tool_use_result: {
+        agentId: 'result-agent',
+        status: 'completed',
+        resolvedModel: 'haiku',
+      },
+    },
+    { tool_use_id: 'spawn', content: 'done' },
+    'end',
+  )
+  expect(
+    f.runs().map((run) => [run.id, run.status, run.endedAt, run.model]),
+  ).toEqual([['result-agent', 'completed', 'end', 'haiku']])
 })

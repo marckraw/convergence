@@ -33,23 +33,20 @@ export function foldAgentRuns(
         ? { ...run, status: 'unknown', endedAt: fact.at }
         : run
     if (run.spawnedByItemId !== fact.spawnedByItemId) return run
-    if (fact.kind === 'agent.changed') return { ...run, ...fact.patch }
+    if (fact.kind === 'agent.changed')
+      return retainUnchangedProjection(run, { ...run, ...fact.patch })
     if (fact.kind === 'agent.ended')
-      return {
-        ...run,
-        ...(run.status === 'running' || run.status === 'unknown'
-          ? { status: fact.status, endedAt: fact.at }
-          : {}),
-        model: fact.model ?? run.model,
-      }
-    return {
+      return run.status === 'running' || run.status === 'unknown'
+        ? { ...run, status: fact.status, endedAt: fact.at }
+        : run
+    return retainUnchangedProjection(run, {
       ...run,
       id: fact.id,
       agentType: fact.agentType ?? run.agentType,
       description: fact.description ?? run.description,
       depth: fact.depth ?? run.depth,
       transcriptPath: fact.transcriptPath ?? run.transcriptPath,
-    }
+    })
   })
 }
 export function foldTasks(
@@ -85,7 +82,9 @@ export function foldTasks(
     next.endedAt = existing.endedAt
   }
   return existing
-    ? tasks.map((task) => (task === existing ? next : task))
+    ? tasks.map((task) =>
+        task === existing ? retainUnchangedProjection(existing, next) : task,
+      )
     : [...tasks, next]
 }
 
@@ -99,4 +98,12 @@ export function boundedHarnessPayload(payload: unknown): string {
         bytes,
         preview: Buffer.from(json).subarray(0, 2048).toString('utf8'),
       })
+}
+
+function retainUnchangedProjection<T extends object>(previous: T, next: T): T {
+  return Object.keys(next).every(
+    (key) => previous[key as keyof T] === next[key as keyof T],
+  )
+    ? previous
+    : next
 }

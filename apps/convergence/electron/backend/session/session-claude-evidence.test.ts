@@ -26,7 +26,7 @@ afterEach(async () => {
   resetDatabase()
 })
 
-it('records attributed calls, links, tasks and cost through the real service — drop agentRunId, relatedItemId, streamed uuid, or retain an inherited task id turns red', async () => {
+it('records attributed calls, links, tasks and cost through the real service — drop agentRunId, relatedItemId, streamed uuid, retain an inherited task id, or clear the data-only error state (no renderer change) turns red', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'run54-record-'))
   const accountDir = join(dir, 'account')
   const child = Object.assign(new EventEmitter(), {
@@ -204,6 +204,19 @@ it('records attributed calls, links, tasks and cost through the real service —
     },
   })
   send({
+    type: 'user',
+    message: {
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: 'read-tool',
+          content: 'failure data',
+          is_error: true,
+        },
+      ],
+    },
+  })
+  send({
     type: 'result',
     subtype: 'success',
     result: 'answer',
@@ -223,6 +236,10 @@ it('records attributed calls, links, tasks and cost through the real service —
     (item) => item.kind === 'tool-result' && item.outputText === 'fixture',
   )
   expect({
+    errorState: items.find(
+      (item) =>
+        item.kind === 'tool-result' && item.outputText === 'failure data',
+    )?.state,
     stream: items.find(
       (item) => item.kind === 'message' && item.actor === 'assistant',
     )?.providerMeta.providerItemId,
@@ -264,6 +281,7 @@ it('records attributed calls, links, tasks and cost through the real service —
       .prepare('SELECT cost_usd FROM session_turns WHERE session_id=?')
       .get(session.id),
   }).toEqual({
+    errorState: 'error',
     stream: 'stream-text-event',
     label: { description: 'Read fixture', agentType: 'Explore' },
     nestedTask: ['bash-task', 'bash-task'],

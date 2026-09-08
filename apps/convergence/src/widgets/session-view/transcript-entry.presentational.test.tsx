@@ -73,6 +73,30 @@ describe('ConversationItemView', () => {
     })
     expect(screen.getByText('↳ Read fixture (Explore)')).toBeInTheDocument()
   })
+  it('L2 missing description renders a generic label — mutation expose provider id fallback turns red', () => {
+    renderConversationItemView({
+      entry: {
+        id: 'attributed-call',
+        sessionId: 'session',
+        sequence: 1,
+        turnId: 'turn',
+        kind: 'tool-call',
+        state: 'complete',
+        createdAt: '2026-09-08T10:00:00Z',
+        updatedAt: '2026-09-08T10:00:00Z',
+        providerMeta: {
+          providerId: 'claude-code',
+          providerItemId: 'tool',
+          providerEventType: 'tool_use',
+        },
+        agentRunId: 'toolu_private',
+        agentAttribution: { description: null, agentType: null },
+        toolName: 'Read',
+        inputText: 'fixture',
+      },
+    })
+    expect(screen.getByText(/^↳/).textContent).toBe('↳ subagent')
+  })
   it('renders selected skills on user messages', () => {
     renderConversationItemView({
       entry: {

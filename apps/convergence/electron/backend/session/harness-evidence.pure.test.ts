@@ -43,7 +43,6 @@ it('folds all five agent states and adopts identity — omit a lifecycle transit
           spawnedByItemId: 'call-1',
           status: status as 'completed' | 'failed' | 'stopped',
           at: 'end',
-          model: 'haiku',
         },
         'session',
       )[0]?.status,
@@ -148,4 +147,69 @@ it('keeps unknown payloads within eight KiB as valid JSON — retain the unbound
     bytes: Buffer.byteLength(large) <= 8192,
     truncated: JSON.parse(large).truncated,
   }).toEqual({ small: { future: true }, bytes: true, truncated: true })
+})
+
+it('M4 agent fold preserves its first terminal fact — mutation remove agent terminal guard turns red', () => {
+  const f: AgentRunFact = {
+    kind: 'agent.started',
+    run: {
+      id: 'a',
+      spawnedByItemId: 'call',
+      agentType: null,
+      description: null,
+      model: null,
+      depth: 1,
+      startedAt: 'start',
+      transcriptPath: null,
+    },
+  }
+  const running = foldAgentRuns([], f, 's')
+  const done = foldAgentRuns(
+    running,
+    {
+      kind: 'agent.ended',
+      spawnedByItemId: 'call',
+      status: 'completed',
+      at: 'first',
+    },
+    's',
+  )
+  const late = foldAgentRuns(
+    done,
+    {
+      kind: 'agent.ended',
+      spawnedByItemId: 'call',
+      status: 'failed',
+      at: 'later',
+    },
+    's',
+  )
+  expect(late.map((run) => [run.status, run.endedAt])).toEqual([
+    ['completed', 'first'],
+  ])
+})
+it('M4 task fold preserves first terminal state across later facts — mutation remove task terminal guard turns red', () => {
+  const done = foldTasks(
+    [],
+    {
+      kind: 'task.changed',
+      taskId: 'task',
+      at: 'first',
+      patch: { status: 'stopped', endedAt: 'first' },
+    },
+    's',
+  )
+  const later = foldTasks(
+    done,
+    {
+      kind: 'task.changed',
+      taskId: 'task',
+      at: 'later',
+      patch: { status: 'completed', endedAt: 'later', outputFile: 'output' },
+    },
+    's',
+  )
+  expect(
+    later.map((task) => [task.status, task.endedAt, task.outputFile]),
+  ).toEqual([['stopped', 'first', 'output']])
 })

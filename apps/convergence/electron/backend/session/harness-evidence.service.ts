@@ -16,7 +16,7 @@ export class HarnessEvidenceService {
     sessionId: string,
     turnId: string | null,
     fact: HarnessEvidence,
-  ): { newId?: string; taskId?: string } | null {
+  ): { itemIds: string[] } | null {
     return this.db.transaction(() => {
       if (fact.kind === 'harness.unknown') {
         this.db
@@ -58,27 +58,34 @@ export class HarnessEvidenceService {
         return null
       }
       if (fact.kind === 'task.changed' || fact.kind === 'process.ended') {
-        const tasks = foldTasks(this.listTasks(sessionId), fact, sessionId)
+        const previousTasks = this.listTasks(sessionId)
+        const tasks = foldTasks(previousTasks, fact, sessionId)
         const upsert = this.db
           .prepare(`INSERT INTO session_tasks(task_id,session_id,tool_use_id,task_type,description,status,started_at,ended_at,output_file)
           VALUES (@taskId,@sessionId,@toolUseId,@taskType,@description,@status,@startedAt,@endedAt,@outputFile)
           ON CONFLICT(session_id,task_id) DO UPDATE SET tool_use_id=excluded.tool_use_id,task_type=excluded.task_type,description=excluded.description,status=excluded.status,started_at=excluded.started_at,ended_at=excluded.ended_at,output_file=excluded.output_file`)
-        for (const task of tasks) upsert.run(task)
+        for (const task of tasks)
+          if (
+            task !==
+            previousTasks.find((previous) => previous.taskId === task.taskId)
+          )
+            upsert.run(task)
         if (fact.kind === 'task.changed') {
           const toolId = fact.patch.toolUseId
           if (!toolId) return null
-          this.db
+          const changed = this.db
             .prepare(
-              `UPDATE session_conversation_items SET task_id=? WHERE session_id=? AND
+              `UPDATE session_conversation_items SET task_id=? WHERE session_id=? AND task_id IS NOT ? AND
             (provider_item_id=? OR (task_id IS NULL AND (agent_run_id=? OR agent_run_id IN
               (SELECT id FROM session_agent_runs WHERE session_id=? AND spawned_by_item_id IN
                 (SELECT id FROM session_conversation_items WHERE session_id=? AND provider_item_id=?)))) OR
              json_extract(payload_json,'$.relatedItemId') IN
-                (SELECT id FROM session_conversation_items WHERE session_id=? AND provider_item_id=?))`,
+                (SELECT id FROM session_conversation_items WHERE session_id=? AND provider_item_id=?)) RETURNING id`,
             )
-            .run(
+            .all(
               fact.taskId,
               sessionId,
+              fact.taskId,
               toolId,
               toolId,
               sessionId,
@@ -86,33 +93,37 @@ export class HarnessEvidenceService {
               toolId,
               sessionId,
               toolId,
-            )
-          return { taskId: fact.taskId }
+            ) as { id: string }[]
+          return changed.length > 0
+            ? { itemIds: changed.map((item) => item.id) }
+            : null
         }
       }
       const previous = this.listAgentRuns(sessionId)
       const runs = foldAgentRuns(previous, fact, sessionId)
-      let renamed: { newId?: string; taskId?: string } | null = null
+      let renamed: { itemIds: string[] } | null = null
       const upsert = this.db
         .prepare(`INSERT INTO session_agent_runs(id,session_id,spawned_by_item_id,agent_type,description,model,status,depth,started_at,ended_at,transcript_path,is_backgrounded,last_tool_name,usage_json,updated_at)
         VALUES (@id,@sessionId,@spawnedByItemId,@agentType,@description,@model,@status,@depth,@startedAt,@endedAt,@transcriptPath,@isBackgrounded,@lastToolName,@usageJson,@updatedAt)
         ON CONFLICT(session_id,spawned_by_item_id) DO UPDATE SET id=excluded.id,agent_type=excluded.agent_type,description=excluded.description,model=excluded.model,status=excluded.status,depth=excluded.depth,ended_at=excluded.ended_at,transcript_path=excluded.transcript_path,is_backgrounded=excluded.is_backgrounded,last_tool_name=excluded.last_tool_name,usage_json=excluded.usage_json,updated_at=excluded.updated_at`)
       for (const run of runs) {
+        const old = previous.find(
+          (item) => item.spawnedByItemId === run.spawnedByItemId,
+        )
+        if (run === old) continue
         upsert.run({
           ...run,
           isBackgrounded:
             run.isBackgrounded === null ? null : Number(run.isBackgrounded),
         })
-        const old = previous.find(
-          (item) => item.spawnedByItemId === run.spawnedByItemId,
-        )
         if (old && old.id !== run.id) {
-          this.db
+          const changed = this.db
             .prepare(
-              'UPDATE session_conversation_items SET agent_run_id=? WHERE session_id=? AND agent_run_id=?',
+              'UPDATE session_conversation_items SET agent_run_id=? WHERE session_id=? AND agent_run_id=? RETURNING id',
             )
-            .run(run.id, sessionId, old.id)
-          renamed = { newId: run.id }
+            .all(run.id, sessionId, old.id) as { id: string }[]
+          if (changed.length > 0)
+            renamed = { itemIds: changed.map((item) => item.id) }
         }
       }
       return renamed

@@ -51,7 +51,6 @@ export type AgentRunFact =
       spawnedByItemId: string
       status: Exclude<AgentRunStatus, 'running' | 'unknown'>
       at: string
-      model?: string | null
     }
   | { kind: 'process.ended'; at: string }
 

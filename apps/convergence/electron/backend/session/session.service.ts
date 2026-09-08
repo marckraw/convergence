@@ -2236,25 +2236,34 @@ export class SessionService {
       case 'harness.evidence': {
         const live = this.activeHandles.get(sessionId)
         if (live && live !== source) return
-        this.flushPendingConversationPatchesForSession(sessionId)
+        if (
+          delta.evidence.kind === 'agent.identified' ||
+          (delta.evidence.kind === 'task.changed' &&
+            delta.evidence.patch.toolUseId)
+        )
+          this.flushPendingConversationPatchesForSession(sessionId)
         const evidence = new HarnessEvidenceService(this.db)
         const renamed = evidence.apply(
           sessionId,
           this.activeTurnIds.get(sessionId) ?? null,
           delta.evidence,
         )
-        if (renamed)
-          for (const item of this.getConversation(sessionId)) {
-            if (
-              (renamed.newId && item.agentRunId === renamed.newId) ||
-              (renamed.taskId && item.taskId === renamed.taskId)
+        if (renamed) {
+          const rows = this.db
+            .prepare(
+              `SELECT items.*, sessions.provider_id, agents.description AS agent_description, agents.agent_type
+            FROM session_conversation_items items INNER JOIN sessions ON sessions.id=items.session_id
+            LEFT JOIN session_agent_runs agents ON agents.session_id=items.session_id AND agents.id=items.agent_run_id
+            WHERE items.session_id=? AND items.id IN (${renamed.itemIds.map(() => '?').join(',')}) ORDER BY items.sequence`,
             )
-              this.notifySessionChange(sessionId, {
-                sessionId,
-                op: 'patch',
-                item,
-              })
-          }
+            .all(sessionId, ...renamed.itemIds) as ConversationItemRow[]
+          for (const row of rows)
+            this.notifySessionChange(sessionId, {
+              sessionId,
+              op: 'patch',
+              item: conversationItemFromRow(row),
+            })
+        }
         return
       }
       case 'session.patch': {
@@ -2612,9 +2621,13 @@ export class SessionService {
     }
 
     if (item.agentRunId) {
-      const run = new HarnessEvidenceService(this.db)
-        .listAgentRuns(sessionId)
-        .find((run) => run.id === item.agentRunId)
+      const run = this.db
+        .prepare(
+          'SELECT description, agent_type AS agentType FROM session_agent_runs WHERE session_id = ? AND id = ?',
+        )
+        .get(sessionId, item.agentRunId) as
+        | { description: string | null; agentType: string | null }
+        | undefined
       item = {
         ...item,
         agentAttribution: {
