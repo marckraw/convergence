@@ -1,5 +1,11 @@
 # convergence
 
+## 0.48.0
+
+### Minor Changes
+
+- 41b735c: Claude Code sessions now keep one resident process across your messages: background work survives between turns, interrupt works, and quitting the app stops local work and says so.
+
 ## 0.47.0
 
 ### Minor Changes
