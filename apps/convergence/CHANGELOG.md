@@ -1,5 +1,11 @@
 # convergence
 
+## 0.47.0
+
+### Minor Changes
+
+- 12d8266: Convergence now records which agent and which background task each step of a Claude Code session belongs to; the transcript names the agent above its tool calls.
+
 ## 0.46.20
 
 ### Patch Changes
