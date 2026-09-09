@@ -161,6 +161,109 @@ describe('useSessionStore', () => {
     })
   })
 
+  describe('MAR-2891 one row per session id', () => {
+    const addSites = [
+      ['createAndStartSession', 'sessions'],
+      ['createAndStartSession', 'globalSessions'],
+      ['createAndStartGlobalSession', 'globalChatSessions'],
+      ['createAndStartGlobalSession', 'globalSessions'],
+      ['createTerminalSession', 'sessions'],
+      ['createTerminalSession', 'globalSessions'],
+      ['forkFull', 'sessions'],
+      ['forkFull', 'globalSessions'],
+      ['forkSummary', 'sessions'],
+      ['forkSummary', 'globalSessions'],
+    ] as const
+
+    for (const order of ['summary-before-add', 'add-before-summary'] as const) {
+      it.each(addSites)(
+        `${order}: %s upserts %s (mutation: ${order === 'summary-before-add' ? 'action prepends' : 'summary listener prepends'})`,
+        async (action, list) => {
+          const isGlobal = action === 'createAndStartGlobalSession'
+          const makeSummary = isGlobal ? makeGlobalSession : makeSession
+          const created = { ...makeSummary({ id: 'same-id' }), name: 'Created' }
+          const broadcast = {
+            ...created,
+            name: 'Broadcast',
+            updatedAt: '2026-01-01T00:00:01.000Z',
+          }
+          const other = makeSummary({ id: 'other-id' })
+          useSessionStore.setState({ currentProjectId: 'project-1' })
+          useSessionStore.getState().handleSessionSummaryUpdate(other)
+          const emitSummary = () =>
+            useSessionStore.getState().handleSessionSummaryUpdate(broadcast)
+          const beforeReturn = () => {
+            if (order === 'summary-before-add') emitSummary()
+            return created
+          }
+          const request = {
+            projectId: 'project-1',
+            workspaceId: null,
+            providerId: 'claude-code',
+            model: 'sonnet',
+            effort: null,
+            name: created.name,
+            message: 'Hello',
+          }
+          const forkInput = {
+            parentSessionId: 'parent-id',
+            name: created.name,
+            providerId: 'claude-code',
+            modelId: 'sonnet',
+            effort: null,
+            workspaceMode: 'reuse' as const,
+            workspaceBranchName: null,
+            additionalInstruction: null,
+            seedAttachmentIds: [],
+          }
+          switch (action) {
+            case 'createAndStartSession':
+            case 'createAndStartGlobalSession':
+              mockElectronAPI.session.create.mockResolvedValueOnce(created)
+              // The broadcast arrives while start's IPC promise is pending.
+              mockElectronAPI.session.start.mockImplementationOnce(async () => {
+                beforeReturn()
+              })
+              await useSessionStore.getState()[action](request)
+              break
+            case 'createTerminalSession':
+              mockElectronAPI.session.create.mockImplementationOnce(async () =>
+                beforeReturn(),
+              )
+              await useSessionStore
+                .getState()
+                .createTerminalSession('project-1', null, created.name)
+              break
+            case 'forkFull':
+              mockElectronAPI.session.forkFull.mockImplementationOnce(
+                async () => beforeReturn(),
+              )
+              await useSessionStore
+                .getState()
+                .forkFull({ ...forkInput, strategy: 'full' })
+              break
+            case 'forkSummary':
+              mockElectronAPI.session.forkSummary.mockImplementationOnce(
+                async () => beforeReturn(),
+              )
+              await useSessionStore.getState().forkSummary({
+                ...forkInput,
+                strategy: 'summary',
+                seedMarkdown: '# Seed',
+              })
+              break
+          }
+          if (order === 'add-before-summary') emitSummary()
+
+          expect(useSessionStore.getState()[list]).toEqual([
+            order === 'summary-before-add' ? created : broadcast,
+            other,
+          ])
+        },
+      )
+    }
+  })
+
   it('clears project session context when preparing for a different project', () => {
     useSessionStore.setState({
       sessions: [makeSession({ id: 'session-1' })],

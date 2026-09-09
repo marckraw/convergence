@@ -583,8 +583,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       })
       set((state) => ({
         currentProjectId: request.projectId,
-        sessions: [session, ...state.sessions],
-        globalSessions: [session, ...state.globalSessions],
+        sessions: upsertSummary(state.sessions, session),
+        globalSessions: upsertSummary(state.globalSessions, session),
         activeConversation: [],
         activeConversationSessionId: session.id,
         queuedInputsBySessionId: {
@@ -629,8 +629,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         providerAccountId: request.providerAccountId,
       })
       set((state) => ({
-        globalChatSessions: [session, ...state.globalChatSessions],
-        globalSessions: [session, ...state.globalSessions],
+        globalChatSessions: upsertSummary(state.globalChatSessions, session),
+        globalSessions: upsertSummary(state.globalSessions, session),
         activeGlobalConversation: [],
         activeGlobalConversationSessionId: session.id,
         queuedInputsBySessionId: {
@@ -670,9 +670,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       currentProjectId: projectId,
       sessions:
         state.currentProjectId === projectId
-          ? [session, ...state.sessions]
+          ? upsertSummary(state.sessions, session)
           : state.sessions,
-      globalSessions: [session, ...state.globalSessions],
+      globalSessions: upsertSummary(state.globalSessions, session),
       activeConversation: [],
       activeConversationSessionId: session.id,
       queuedInputsBySessionId: {
@@ -1039,9 +1039,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((state) => ({
       sessions:
         state.currentProjectId === session.projectId
-          ? [session, ...state.sessions]
+          ? upsertSummary(state.sessions, session)
           : state.sessions,
-      globalSessions: [session, ...state.globalSessions],
+      globalSessions: upsertSummary(state.globalSessions, session),
       activeConversation: [],
       activeConversationSessionId: session.id,
       queuedInputsBySessionId: {
@@ -1062,9 +1062,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((state) => ({
       sessions:
         state.currentProjectId === session.projectId
-          ? [session, ...state.sessions]
+          ? upsertSummary(state.sessions, session)
           : state.sessions,
-      globalSessions: [session, ...state.globalSessions],
+      globalSessions: upsertSummary(state.globalSessions, session),
       activeConversation: [],
       activeConversationSessionId: session.id,
       queuedInputsBySessionId: {
