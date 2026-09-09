@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { EXECUTION_PROTOCOL_VERSION } from '@mrck-labs/execution-host-protocol'
 import {
+  DAEMON_HEALTH_FIXTURE_0_26_1,
+  parseDaemonHealth,
   parseRemoteExecutionHostMeta,
   RemoteExecutionHostError,
 } from '@convergence/execution-host-client'
@@ -164,10 +166,12 @@ describe('describeRemoteProviderListing', () => {
     })
   }
 
-  it('counts what the machine will run, not what it listed', () => {
+  it('says both numbers when they differ, and names what is blocked', () => {
     // The number Settings shows and the number of options the composer offers
     // are one fact. Counting the listing made them disagree by exactly the
-    // blocked ones (MAR-2682).
+    // blocked ones (MAR-2682) -- and then saying only the runnable count made a
+    // reader add two numbers together to learn what the daemon actually has
+    // (MAR-2580). Five listed, three of them runnable, said once each.
     expect(
       describeRemoteProviderListing(
         listing([
@@ -178,10 +182,10 @@ describe('describeRemoteProviderListing', () => {
           { id: 'gemini', label: 'Gemini', block: 'signed-out' },
         ]),
       ),
-    ).toBe('3 providers available, 2 blocked: Cursor, Gemini.')
+    ).toBe('5 providers, 3 available (blocked: Cursor, Gemini).')
   })
 
-  it('says nothing about blocking when nothing is blocked', () => {
+  it('says one number when every listed provider is runnable', () => {
     expect(
       describeRemoteProviderListing(listing([{ id: 'pi', label: 'Pi' }])),
     ).toBe('1 provider available.')
@@ -192,7 +196,94 @@ describe('describeRemoteProviderListing', () => {
       describeRemoteProviderListing(
         listing([{ id: 'cursor', label: 'Cursor', block: 'absent' }]),
       ),
-    ).toBe('0 providers available, 1 blocked: Cursor.')
+    ).toBe('1 provider, 0 available (blocked: Cursor).')
+  })
+
+  /**
+   * The four combinations the daemon can report per provider, one row each
+   * (MAR-2580).
+   *
+   * Only the first is runnable. The other three are the ways a CLI can be on a
+   * machine and still not start: not installed, installed but signed out, and
+   * the pair a daemon sends for a provider it knows nothing about. Counting
+   * `providers.length` -- the defect -- makes all four say "available".
+   *
+   * Mutation: count every listed entry as available and every row but the
+   * first goes red.
+   */
+  it.each([
+    { available: true, authenticated: true, sentence: '1 provider available.' },
+    {
+      available: true,
+      authenticated: false,
+      sentence: '1 provider, 0 available (blocked: Codex).',
+    },
+    {
+      available: false,
+      authenticated: true,
+      sentence: '1 provider, 0 available (blocked: Codex).',
+    },
+    {
+      available: false,
+      authenticated: false,
+      sentence: '1 provider, 0 available (blocked: Codex).',
+    },
+  ])(
+    'counts available=$available authenticated=$authenticated as $sentence',
+    ({ available, authenticated, sentence }) => {
+      expect(
+        describeRemoteProviderListing(
+          parseRemoteExecutionHostMeta({
+            providers: [
+              {
+                id: 'codex',
+                label: 'Codex',
+                available,
+                authenticated,
+                models: [],
+                features: {},
+              },
+            ],
+          }),
+        ),
+      ).toBe(sentence)
+    },
+  )
+
+  /**
+   * Which source the two flags come from, said out loud (MAR-2580).
+   *
+   * `/v0/meta`, because it is the only listing this sentence is ever handed.
+   * `/health` reports the same two booleans per provider as `providerReadiness`
+   * (`installed`/`authenticated`) and the handshake keeps them, but they are
+   * never merged into a `RemoteExecutionHostProviderInfo`: merging would change
+   * which providers this app will START on a machine, which is a different
+   * decision from how many it says are available, and one this ticket did not
+   * make.
+   *
+   * Pinned by making the two sources disagree. The captured daemon's `/health`
+   * calls Cursor and Gemini neither installed nor signed in; the meta listing
+   * below says all four are ready. The sentence follows the meta listing, so
+   * "which source" is answered by the assertion and not only by this comment --
+   * and the day a daemon really does disagree, this row is where it shows up.
+   */
+  it('counts the /v0/meta flags, not the /health readiness pair', () => {
+    const health = parseDaemonHealth(JSON.parse(DAEMON_HEALTH_FIXTURE_0_26_1))
+    expect(health!.providerReadiness).toMatchObject({
+      cursor: { installed: false, authenticated: false },
+      gemini: { installed: false, authenticated: false },
+    })
+
+    expect(
+      describeRemoteProviderListing(
+        listing([
+          { id: 'claude', label: 'Claude Code' },
+          { id: 'codex', label: 'Codex' },
+          { id: 'cursor', label: 'Cursor' },
+          { id: 'gemini', label: 'Gemini' },
+        ]),
+      ),
+    ).toBe('4 providers available.')
   })
 })
 

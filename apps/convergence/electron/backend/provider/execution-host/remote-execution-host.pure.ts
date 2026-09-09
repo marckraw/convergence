@@ -172,7 +172,8 @@ export function describeRemoteProviderBlock(
 }
 
 /**
- * What Settings says about a connected daemon's provider listing (MAR-2682).
+ * What Settings says about a connected daemon's provider listing (MAR-2682,
+ * MAR-2580).
  *
  * "Available" means one thing in this app: a provider the machine will
  * actually run. The count therefore comes from `describeRemoteProviderBlock`,
@@ -180,9 +181,24 @@ export function describeRemoteProviderBlock(
  * `providers.length`, so Settings said five while the composer offered three,
  * about the same daemon in the same app.
  *
+ * Both numbers are said when they differ (MAR-2580). A sentence reading
+ * "3 providers available, 2 blocked" made a reader do the addition to learn
+ * what the daemon actually listed, and the two clauses were easy to read as
+ * five-plus-two; leading with the listing and then what is runnable of it
+ * states the same fact without arithmetic. When nothing is blocked there is one
+ * number and the sentence says it once.
+ *
  * The blocked ones are named rather than dropped, for the reason a disabled row
  * is kept: a human who installed five CLIs and is told about three needs to
  * know which two the daemon will not run, and where to go and look.
+ *
+ * The flags are the daemon's, from `/v0/meta` -- the only listing this function
+ * is ever handed. `/health` reports the same two booleans per provider as
+ * `providerReadiness` (`installed`/`authenticated`), and the handshake keeps
+ * them, but they are never merged into a `RemoteExecutionHostProviderInfo`:
+ * merging would change what this app will START on a machine, not just what it
+ * counts, and that is a different decision from this sentence. The two agree on
+ * the real captured daemon, which `describeRemoteProviderListing` pins.
  */
 export function describeRemoteProviderListing(
   providers: readonly RemoteExecutionHostProviderInfo[],
@@ -191,11 +207,13 @@ export function describeRemoteProviderListing(
     (info) => describeRemoteProviderBlock(info) !== null,
   )
   const runnable = providers.length - blocked.length
-  const counted = `${runnable} provider${runnable === 1 ? '' : 's'} available`
-  if (blocked.length === 0) return `${counted}.`
-  return `${counted}, ${blocked.length} blocked: ${blocked
+  if (blocked.length === 0) {
+    return `${runnable} provider${runnable === 1 ? '' : 's'} available.`
+  }
+  const listed = `${providers.length} provider${providers.length === 1 ? '' : 's'}`
+  return `${listed}, ${runnable} available (blocked: ${blocked
     .map((info) => info.name)
-    .join(', ')}.`
+    .join(', ')}).`
 }
 
 /**

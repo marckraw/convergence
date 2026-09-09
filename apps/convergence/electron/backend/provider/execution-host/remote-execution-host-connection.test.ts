@@ -88,7 +88,11 @@ function hostWith(
   resolver: AppSettingsRemoteExecutionHostConnectionResolver,
   fetchFn: typeof fetch,
 ): RemoteExecutionHost {
-  return new RemoteExecutionHost({ connection: resolver, fetch: fetchFn })
+  return new RemoteExecutionHost({
+    onEventSeq: () => {},
+    connection: resolver,
+    fetch: fetchFn,
+  })
 }
 
 const okFetch = (async () =>
@@ -190,8 +194,10 @@ describe('testRemoteExecutionHostConnection', () => {
       host: () => hostWith(resolver, mixedFetch),
     })
 
+    // What the daemon listed and what it will run, both said, because they
+    // differ (MAR-2580).
     expect(result.message).toBe(
-      'Connected. 3 providers available, 2 blocked: Cursor, Gemini.',
+      'Connected. 5 providers, 3 available (blocked: Cursor, Gemini).',
     )
     // The blocked two are still carried, so the row that lists them can.
     expect(result.providers).toHaveLength(5)
