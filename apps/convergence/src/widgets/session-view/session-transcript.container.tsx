@@ -1,5 +1,6 @@
 import {
   isSubagentWork,
+  parallelWorkRowState,
   type ParallelWorkRow,
 } from '@/shared/lib/parallel-work.pure'
 import { parallelWorkMarkers } from './parallel-work.pure'
@@ -92,7 +93,9 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
   const knownAgentIds = useMemo(
     () =>
       new Set(
-        parallelRows.filter((row) => row.kind === 'agent').map((row) => row.id),
+        parallelRows
+          .filter((row) => row.kind === 'agent')
+          .flatMap((row) => parallelWorkRowState(row).ids),
       ),
     [parallelRows],
   )

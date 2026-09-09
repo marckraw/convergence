@@ -61,7 +61,10 @@ function fixture() {
     )
   const result = (status: string) =>
     adapter.toolResult(
-      { tool_use_result: { status, resolvedModel: 'haiku' } },
+      {
+        message: { content: [{ type: 'tool_result', tool_use_id: 'spawn' }] },
+        tool_use_result: { status, resolvedModel: 'haiku' },
+      },
       { tool_use_id: 'spawn', content: 'ack' },
       'result',
     )
@@ -424,6 +427,7 @@ it('M4 result-only adoption and completion need no task event or meta — mutati
   f.call()
   f.adapter.toolResult(
     {
+      message: { content: [{ type: 'tool_result', tool_use_id: 'spawn' }] },
       tool_use_result: {
         agentId: 'result-agent',
         status: 'completed',
@@ -448,7 +452,7 @@ it.each([
     call()
     start()
     adapter.toolResult(
-      {},
+      { message: { content: [{ type: 'tool_result', tool_use_id: 'spawn' }] } },
       {
         tool_use_id: 'spawn',
         is_error: true,
@@ -474,3 +478,29 @@ it.each([
     ])
   },
 )
+
+it('H1 Agent+Agent batch cannot adopt, decorate or end the unclaimed run — mutation trust root in identity reader turns red', () => {
+  const f = fixture()
+  f.call('a')
+  f.call('b')
+  f.start({ task_id: 'adopted-a', tool_use_id: 'a' })
+  const blocks = [
+    { type: 'tool_result', tool_use_id: 'a', content: 'A returned' },
+    { type: 'tool_result', tool_use_id: 'b', content: 'B still working' },
+  ]
+  const event = {
+    message: { content: blocks },
+    tool_use_result: {
+      agentId: 'adopted-a',
+      status: 'completed',
+      resolvedModel: 'haiku',
+    },
+  }
+  for (const block of blocks) f.adapter.toolResult(event, block, 'end')
+  expect(
+    f.runs().map(({ id, status, model }) => ({ id, status, model })),
+  ).toEqual([
+    { id: 'adopted-a', status: 'completed', model: 'haiku' },
+    { id: 'b', status: 'running', model: null },
+  ])
+})

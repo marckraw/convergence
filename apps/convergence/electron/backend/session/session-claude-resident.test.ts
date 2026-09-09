@@ -1131,3 +1131,63 @@ it.each([true, false])(
     })
   },
 )
+
+it('H1 Agent+Agent fake stream preserves the unclaimed identity and running state — mutation bypass identity claim gate turns red', async () => {
+  const { service, session, children } = await fixture()
+  await service.start(session.id, { text: 'fixture' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  const send = (event: unknown) =>
+    children[0].stdout.write(JSON.stringify(event) + '\n')
+  send({
+    type: 'assistant',
+    message: {
+      content: ['a', 'b'].map((id) => ({
+        type: 'tool_use',
+        id,
+        name: 'Agent',
+        input: { description: id, subagent_type: 'Explore' },
+      })),
+    },
+  })
+  send({
+    type: 'system',
+    subtype: 'task_started',
+    task_id: 'adopted-a',
+    tool_use_id: 'a',
+    task_type: 'local_agent',
+  })
+  send({
+    type: 'user',
+    message: {
+      content: ['a', 'b'].map((id) => ({
+        type: 'tool_result',
+        tool_use_id: id,
+        content: 'result block',
+      })),
+    },
+    tool_use_result: {
+      agentId: 'adopted-a',
+      status: 'completed',
+      resolvedModel: 'haiku',
+    },
+  })
+  await vi.waitUntil(
+    () =>
+      service.listAgentRuns(session.id).find((run) => run.id === 'adopted-a')
+        ?.status === 'completed',
+  )
+  expect({
+    results: service
+      .getConversation(session.id)
+      .filter((item) => item.kind === 'tool-result').length,
+    runs: service
+      .listAgentRuns(session.id)
+      .map(({ id, status, model }) => ({ id, status, model })),
+  }).toEqual({
+    results: 2,
+    runs: [
+      { id: 'adopted-a', status: 'completed', model: 'haiku' },
+      { id: 'b', status: 'running', model: null },
+    ],
+  })
+})

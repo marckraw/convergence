@@ -2,6 +2,7 @@ import { useMemo, type FC, type ReactNode } from 'react'
 import { ArrowLeft, ChevronDown, ChevronRight, X } from 'lucide-react'
 import {
   countParallelWork,
+  parallelWorkRowState,
   pendingAgentDecision,
   type AttributedWorkItem,
   type ParallelWorkRow,
@@ -39,6 +40,7 @@ export interface ParallelWorkPanelProps {
 }
 
 const EMPTY_ITEMS: AttributedWorkItem[] = []
+const EMPTY_COLLAPSED = new Set<string>()
 
 export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
   const {
@@ -46,32 +48,42 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
     now,
     selectedId,
     items = EMPTY_ITEMS,
-    collapsed = new Set(),
+    collapsed = EMPTY_COLLAPSED,
     stopStates = new Map(),
   } = props
-  const { counts, completed, descendantCounts, decisionIds, childrenById } =
-    useMemo(() => {
-      const childrenById = new Map<string, ParallelWorkRow[]>()
-      for (const row of rows)
-        if (row.parentId) {
-          const children = childrenById.get(row.parentId) ?? []
-          children.push(row)
-          childrenById.set(row.parentId, children)
-        }
-      return {
-        counts: countParallelWork(rows),
-        completed: rows.filter(
-          (row) => (row.run ?? row.task)?.status === 'completed',
-        ).length,
-        descendantCounts: new Map(
-          rows.map((row) => [row.id, descendantActivity(rows, row.id)]),
-        ),
-        decisionIds: new Map(
-          rows.map((row) => [row.id, pendingAgentDecision(items, row.id)]),
-        ),
-        childrenById,
+  const { counts, completed, childrenById } = useMemo(() => {
+    const childrenById = new Map<string, ParallelWorkRow[]>()
+    for (const row of rows)
+      if (row.parentId) {
+        const children = childrenById.get(row.parentId) ?? []
+        children.push(row)
+        childrenById.set(row.parentId, children)
       }
-    }, [rows, items])
+    return {
+      counts: countParallelWork(rows),
+      completed: rows.filter(
+        (row) => parallelWorkRowState(row).fact?.status === 'completed',
+      ).length,
+      childrenById,
+    }
+  }, [rows])
+  const descendantCounts = useMemo(
+    () =>
+      new Map([...collapsed].map((id) => [id, descendantActivity(rows, id)])),
+    [rows, collapsed],
+  )
+  const decisionIds = useMemo(
+    () =>
+      new Map(
+        rows.map((row) => [
+          row.id,
+          parallelWorkRowState(row)
+            .ids.map((id) => pendingAgentDecision(items, id))
+            .find(Boolean),
+        ]),
+      ),
+    [rows, items],
+  )
   const inventoryLabel = [
     'This session',
     `${counts.running} running`,
@@ -95,7 +107,7 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
   }
   const controls = (row: ParallelWorkRow) => {
     const state = stopStates.get(row.id)
-    const running = (row.run ?? row.task)?.status === 'running'
+    const running = parallelWorkRowState(row).fact?.status === 'running'
     const stopReason = !props.canStop
       ? 'Stop is not available on this Claude Code version'
       : !running
@@ -159,7 +171,7 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
             Stop requested… awaiting confirmation
           </p>
         )}
-        {state?.error && running && (
+        {state?.error && (
           <p role="alert" className="text-xs text-red-500">
             {state.error}
           </p>
@@ -189,10 +201,10 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
           Last tool: {row.run.lastToolName ?? 'Not reported'}
         </p>
       )}
-      {(row.run ?? row.task)?.status === 'failed' && (
+      {parallelWorkRowState(row).fact?.status === 'failed' && (
         <p className="text-xs text-red-500">
-          {(row.run ?? row.task)?.endedSummary
-            ? `Reported by the harness: ${(row.run ?? row.task)!.endedSummary}`
+          {parallelWorkRowState(row).fact?.endedSummary
+            ? `Reported by the harness: ${parallelWorkRowState(row).fact!.endedSummary}`
             : 'Not reported'}
         </p>
       )}

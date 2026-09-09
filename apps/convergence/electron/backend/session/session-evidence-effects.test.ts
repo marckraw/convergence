@@ -272,3 +272,43 @@ it.each([false, true])(
     })
   },
 )
+
+it('M6 deleting inside the coalescing window leaves no timer, cache or notification — mutation retain delete timer turns red', () => {
+  vi.useFakeTimers()
+  const { service, emitter } = bed()
+  const notify = vi.fn()
+  service.setEvidenceUpdateListener(notify)
+  emitter.recordEvidence({
+    kind: 'task.changed',
+    taskId: 'task',
+    at: 'now',
+    patch: { status: 'running' },
+  })
+  service.delete('session')
+  const timerAfterDelete = service['evidenceUpdateTimers'].has('session')
+  vi.advanceTimersByTime(250)
+  expect({
+    timerAfterDelete,
+    cached: service['parallelWorkCounts'].has('session'),
+    notifications: notify.mock.calls,
+  }).toEqual({ timerAfterDelete: false, cached: false, notifications: [] })
+})
+
+it('M6 a scheduled flush whose row disappeared cannot recreate evidence state — mutation omit row-existence guard turns red', () => {
+  vi.useFakeTimers()
+  const { db, service, emitter } = bed()
+  const notify = vi.fn()
+  service.setEvidenceUpdateListener(notify)
+  emitter.recordEvidence({
+    kind: 'task.changed',
+    taskId: 'task',
+    at: 'now',
+    patch: { status: 'running' },
+  })
+  db.prepare('DELETE FROM sessions WHERE id=?').run('session')
+  vi.advanceTimersByTime(250)
+  expect({
+    cached: service['parallelWorkCounts'].has('session'),
+    notifications: notify.mock.calls,
+  }).toEqual({ cached: false, notifications: [] })
+})

@@ -1,7 +1,15 @@
-import { useEffect, useLayoutEffect, useRef, useState, type FC } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FC,
+} from 'react'
 import type { ConversationItem as Item, Session } from '@/entities/session'
 import {
   isSubagentWork,
+  parallelWorkRowState,
   type ParallelWorkRow,
 } from '@/shared/lib/parallel-work.pure'
 import { Button } from '@/shared/ui/button'
@@ -82,7 +90,7 @@ export const ParallelWork: FC<Props> = ({
   useEffect(() => {
     if (
       !open ||
-      !rows.some((row) => (row.run ?? row.task)?.status === 'running')
+      !rows.some((row) => parallelWorkRowState(row).fact?.status === 'running')
     )
       return
     const timer = setInterval(() => setNow(Date.now()), 1000)
@@ -105,12 +113,13 @@ export const ParallelWork: FC<Props> = ({
     setStopStates(
       (current) =>
         new Map(
-          [...current].filter(
-            ([id]) =>
-              (
-                rows.find((row) => row.id === id)?.run ??
-                rows.find((row) => row.id === id)?.task
-              )?.status === 'running',
+          [...current].filter(([id, state]) =>
+            rows.some(
+              (row) =>
+                row.id === id &&
+                (state.error ||
+                  parallelWorkRowState(row).fact?.status === 'running'),
+            ),
           ),
         ),
     )
@@ -130,8 +139,10 @@ export const ParallelWork: FC<Props> = ({
   const visibleItems = selected
     ? items.filter((item) =>
         selected.kind === 'agent'
-          ? item.agentRunId === selected.id && isSubagentWork(item)
-          : item.taskId === selected.id &&
+          ? parallelWorkRowState(selected).ids.includes(
+              item.agentRunId ?? '',
+            ) && isSubagentWork(item)
+          : parallelWorkRowState(selected).ids.includes(item.taskId ?? '') &&
             ['tool-call', 'tool-result'].includes(item.kind),
       )
     : []
@@ -154,7 +165,7 @@ export const ParallelWork: FC<Props> = ({
       ))}
     </div>
   )
-  const fact = selected?.run ?? selected?.task
+  const fact = selected ? parallelWorkRowState(selected).fact : undefined
   const detailFields =
     selected && fact
       ? [
@@ -177,20 +188,28 @@ export const ParallelWork: FC<Props> = ({
           ],
         ]
       : []
-  const resultItems = new Map(
-    [...parallelWorkMarkers(items, rows)]
-      .filter(([, marker]) => marker.label.startsWith('Result returned'))
-      .map(([itemId, marker]) => [marker.agentId, itemId]),
-  )
-  for (const item of items) {
-    if (
-      item.kind === 'note' &&
-      item.taskId &&
-      item.providerMeta.providerEventType === 'harness.task.terminal' &&
-      !resultItems.has(item.taskId)
+  const resultItems = useMemo(() => {
+    const resultItems = new Map(
+      [...parallelWorkMarkers(items, rows)]
+        .filter(([, marker]) => marker.label.startsWith('Result returned'))
+        .map(([itemId, marker]) => [marker.agentId, itemId]),
     )
-      resultItems.set(item.taskId, item.id)
-  }
+    for (const item of items) {
+      if (
+        item.kind === 'note' &&
+        item.taskId &&
+        item.providerMeta.providerEventType === 'harness.task.terminal' &&
+        !resultItems.has(item.taskId)
+      )
+        resultItems.set(item.taskId, item.id)
+    }
+    for (const row of rows) {
+      const ids = parallelWorkRowState(row).ids
+      const itemId = ids.map((id) => resultItems.get(id)).find(Boolean)
+      if (itemId) for (const id of ids) resultItems.set(id, itemId)
+    }
+    return resultItems
+  }, [items, rows])
   const panel = (
     <div
       ref={host}
@@ -322,19 +341,21 @@ export const ParallelWork: FC<Props> = ({
             </Button>
             <Button
               onClick={() => {
-                if (!confirmId) return
+                if (!confirmId || !confirm) return
                 const id = confirmId
                 setConfirmId(null)
                 setStopStates((current) =>
                   new Map(current).set(id, { pending: true }),
                 )
-                void parallelWorkApi.stop(session.id, id).catch((failure) =>
-                  setStopStates((current) =>
-                    new Map(current).set(id, {
-                      error: parallelWorkRefusal(failure),
-                    }),
-                  ),
-                )
+                void parallelWorkApi
+                  .stop(session.id, parallelWorkRowState(confirm).stopId)
+                  .catch((failure) =>
+                    setStopStates((current) =>
+                      new Map(current).set(id, {
+                        error: parallelWorkRefusal(failure),
+                      }),
+                    ),
+                  )
               }}
             >
               Stop task

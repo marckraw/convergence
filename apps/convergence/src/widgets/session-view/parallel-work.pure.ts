@@ -1,4 +1,7 @@
-import type { ParallelWorkRow } from '@/shared/lib/parallel-work.pure'
+import {
+  parallelWorkRowState,
+  type ParallelWorkRow,
+} from '@/shared/lib/parallel-work.pure'
 import type { ConversationItem } from '@/entities/session'
 
 export interface ParallelWorkMarker {
@@ -16,7 +19,11 @@ export function parallelWorkMarkers(
     rows.filter((row) => row.run).map((row) => [row.run!.spawnedByItemId, row]),
   )
   const runsById = new Map(
-    rows.filter((row) => row.run).map((row) => [row.id, row]),
+    rows
+      .filter((row) => row.run)
+      .flatMap((row) =>
+        parallelWorkRowState(row).ids.map((id) => [id, row] as const),
+      ),
   )
   const returned = new Set<string>()
   for (const item of items) {
@@ -58,7 +65,7 @@ export function parallelWorkMarkers(
           ? 'failed'
           : eventType === 'tool_result.completed'
             ? 'completed'
-            : row.run!.status
+            : parallelWorkRowState(row).fact?.status
       markers.set(item.id, {
         agentId: row.id,
         replace: item.kind !== 'note',
@@ -78,7 +85,7 @@ export function workTitle(row: ParallelWorkRow): string {
 }
 
 export function workStatus(row: ParallelWorkRow): string {
-  const fact = row.run ?? row.task
+  const fact = parallelWorkRowState(row).fact
   if (fact?.status === 'stopped') {
     switch (fact.stopReason) {
       case 'quit':
@@ -103,7 +110,7 @@ export function workStatus(row: ParallelWorkRow): string {
 }
 
 export function workElapsed(row: ParallelWorkRow, now: number): string {
-  const fact = row.run ?? row.task
+  const fact = parallelWorkRowState(row).fact
   const start = fact?.startedAt ? Date.parse(fact.startedAt) : NaN
   const end =
     fact?.status === 'running'
@@ -127,7 +134,7 @@ export function descendantActivity(
     for (const row of rows)
       if (row.parentId === parent && !visited.has(row.id)) {
         visited.add(row.id)
-        if ((row.run ?? row.task)?.status === 'running') count++
+        if (parallelWorkRowState(row).fact?.status === 'running') count++
         visit(row.id)
       }
   }

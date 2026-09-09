@@ -1,3 +1,4 @@
+import { claudeRootResultClaimsBlock } from './claude-code-task.pure'
 import { readdirSync, readFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
@@ -211,36 +212,42 @@ export class ClaudeEvidenceService {
     if (tool && id) {
       if (tool.name === 'Agent') {
         this.readMeta()
-        const structured = claudeRecord(event?.tool_use_result)
-        const text =
-          typeof result?.content === 'string'
-            ? result.content
-            : JSON.stringify(result?.content)
-        const textId =
-          claudeString(structured?.agentId) ??
-          text?.match(/\bagentId:\s*([A-Za-z0-9_-]+)/)?.[1]
-        const agent = this.agents.get(id)
-        if (agent && textId && agent.id === id)
-          this.identify(id, textId, null, null, agent.depth, null)
-        const model = claudeString(structured?.resolvedModel)
-        if (model)
-          this.emit({
-            kind: 'agent.changed',
-            spawnedByItemId: tool.itemId,
-            patch: { model },
-          })
         if (
-          agent &&
-          (result?.is_error === true || structured?.status === 'completed')
-        )
-          this.endAgent(
-            agent,
-            result?.is_error === true ? 'failed' : 'completed',
-            at,
-            result?.is_error === true
-              ? claudeContentText(result.content)
-              : undefined,
+          claudeRootResultClaimsBlock(data, block, (toolId) =>
+            this.adoptedAgentId(toolId),
           )
+        ) {
+          const structured = claudeRecord(event?.tool_use_result)
+          const text =
+            typeof result?.content === 'string'
+              ? result.content
+              : JSON.stringify(result?.content)
+          const textId =
+            claudeString(structured?.agentId) ??
+            text?.match(/\bagentId:\s*([A-Za-z0-9_-]+)/)?.[1]
+          const agent = this.agents.get(id)
+          if (agent && textId && agent.id === id)
+            this.identify(id, textId, null, null, agent.depth, null)
+          const model = claudeString(structured?.resolvedModel)
+          if (model)
+            this.emit({
+              kind: 'agent.changed',
+              spawnedByItemId: tool.itemId,
+              patch: { model },
+            })
+          if (
+            agent &&
+            (result?.is_error === true || structured?.status === 'completed')
+          )
+            this.endAgent(
+              agent,
+              result?.is_error === true ? 'failed' : 'completed',
+              at,
+              result?.is_error === true
+                ? claudeContentText(result.content)
+                : undefined,
+            )
+        }
       } else if (tool.name === 'TaskStop' && result?.is_error !== true) {
         const taskId =
           claudeString(tool.input?.task_id) ??

@@ -136,7 +136,7 @@ it('R4 retains launch versus actual completion — mutation call an async launch
       readClaudeToolResultMoment(
         {
           message: { content: [{ type: 'tool_result', tool_use_id: 'tool' }] },
-          tool_use_result: { status },
+          tool_use_result: { status, agentId: 'agent' },
         },
         { type: 'tool_result', tool_use_id: 'tool' },
         () => null,
@@ -168,3 +168,17 @@ it.each([true, false])(
     ).toEqual([null, confirmed ? 'async_launched' : null])
   },
 )
+
+it('M5 a single non-Agent status has no moment — mutation trust any status turns red', () => {
+  const block = { type: 'tool_result', tool_use_id: 'bash-output' }
+  expect(
+    readClaudeToolResultMoment(
+      {
+        message: { content: [block] },
+        tool_use_result: { status: 'completed' },
+      },
+      block,
+      () => null,
+    ),
+  ).toBeNull()
+})

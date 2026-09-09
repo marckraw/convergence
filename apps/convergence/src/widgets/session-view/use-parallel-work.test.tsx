@@ -1,6 +1,10 @@
+import type { ConversationItem } from '@/entities/session'
 import { act, renderHook } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
-import type { SessionTask } from '@/shared/types/harness-evidence.types'
+import type {
+  SessionAgentRun,
+  SessionTask,
+} from '@/shared/types/harness-evidence.types'
 import { useParallelWork } from './use-parallel-work'
 import { parallelWorkApi } from './parallel-work.api'
 
@@ -71,4 +75,32 @@ it('M4/T10 a rejected read settles loading and reports the error — mutation le
     error: result.current.error,
     rows: result.current.rows,
   }).toEqual({ loading: false, error: 'Record unavailable', rows: [] })
+})
+
+it('M7 streaming text keeps row identity stable while a changed parent updates it — mutation memoize rows on whole items turns red', async () => {
+  vi.mocked(parallelWorkApi.subscribe).mockReturnValue(() => {})
+  vi.mocked(parallelWorkApi.read).mockResolvedValue({
+    runs: [
+      { id: 'parent', spawnedByItemId: 'parent-spawn' },
+      { id: 'child', spawnedByItemId: 'child-spawn' },
+    ] as SessionAgentRun[],
+    tasks: [],
+  })
+  const items = (inputText: string, agentRunId: string | null = null) =>
+    [
+      { id: 'child-spawn', kind: 'tool-call', inputText, agentRunId },
+    ] as ConversationItem[]
+  const { result, rerender } = renderHook(
+    ({ value }) => useParallelWork('s', value),
+    { initialProps: { value: items('first') } },
+  )
+  await act(async () => {})
+  const first = result.current.rows
+  for (let i = 0; i < 20; i++) rerender({ value: items(String(i)) })
+  const stable = first === result.current.rows
+  rerender({ value: items('last', 'parent') })
+  expect({
+    stable,
+    parent: result.current.rows.find((row) => row.id === 'child')?.parentId,
+  }).toEqual({ stable: true, parent: 'parent' })
 })

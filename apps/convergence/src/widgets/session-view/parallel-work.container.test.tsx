@@ -1,8 +1,12 @@
+import * as markerHelpers from './parallel-work.pure'
 import { useState } from 'react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { ConversationItem, Session } from '@/entities/session'
-import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
+import type {
+  SessionAgentRun,
+  SessionTask,
+} from '@/shared/types/harness-evidence.types'
 import { buildParallelWork } from '@/shared/lib/parallel-work.pure'
 import { ParallelWork } from './parallel-work.container'
 import { parallelWorkApi } from './parallel-work.api'
@@ -253,4 +257,91 @@ it('T10 cyclic ancestry finishes selection — mutation remove visited parent gu
   expect(() =>
     render(<ParallelWork {...props()} rows={rows} selectedId="agent" />),
   ).not.toThrow()
+})
+
+it('H2 a missed-adoption row stops by the harness id and settles from its task with a result link — mutation stop by row id or use run status turns red', async () => {
+  vi.mocked(parallelWorkApi.stop).mockReset().mockResolvedValue(undefined)
+  const task = {
+    taskId: 'harness',
+    sessionId: 's',
+    taskType: 'local_agent',
+    status: 'running',
+  } as SessionTask
+  const linkedRun = { ...run, taskId: 'harness' }
+  const input = { ...props(), rows: buildParallelWork([linkedRun], [task], []) }
+  const { rerender } = render(<ParallelWork {...input} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+  await act(async () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Stop task' })),
+  )
+  rerender(
+    <ParallelWork
+      {...input}
+      rows={buildParallelWork(
+        [linkedRun],
+        [{ ...task, status: 'completed', endedAt: '2026-09-09T00:00:12Z' }],
+        [],
+      )}
+      items={[
+        {
+          id: 'terminal',
+          kind: 'note',
+          taskId: 'harness',
+          text: 'returned',
+          providerMeta: { providerEventType: 'harness.task.terminal' },
+        } as ConversationItem,
+      ]}
+    />,
+  )
+  const result = screen.queryByRole('button', { name: 'View result' })
+  if (result) fireEvent.click(result)
+  expect({
+    requests: vi.mocked(parallelWorkApi.stop).mock.calls,
+    disabled: (
+      screen.getByRole('button', { name: 'Stop' }) as HTMLButtonElement
+    ).disabled,
+    destination: input.onNavigate.mock.calls,
+  }).toEqual({
+    requests: [['s', 'harness']],
+    disabled: true,
+    destination: [['terminal']],
+  })
+})
+
+it('L8 a refused Stop stays visible after the row is no longer running — mutation hide or erase settled refusal turns red', async () => {
+  vi.mocked(parallelWorkApi.stop)
+    .mockReset()
+    .mockRejectedValue(new Error('This task is not running'))
+  const input = props()
+  const { rerender } = render(<ParallelWork {...input} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+  await act(async () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Stop task' })),
+  )
+  rerender(
+    <ParallelWork
+      {...input}
+      rows={buildParallelWork([{ ...run, status: 'completed' }], [], [])}
+    />,
+  )
+  expect(screen.queryByText('This task is not running')).not.toBeNull()
+})
+
+it('M7 the container marker scan runs per item/row revision, not per clock tick — mutation scan each render turns red', () => {
+  vi.useFakeTimers()
+  const scan = vi.spyOn(markerHelpers, 'parallelWorkMarkers')
+  try {
+    const input = props()
+    const { rerender } = render(<ParallelWork {...input} />)
+    act(() => vi.advanceTimersByTime(3000))
+    const afterTicks = scan.mock.calls.length
+    rerender(<ParallelWork {...input} items={[]} />)
+    expect({ afterTicks, revised: scan.mock.calls.length }).toEqual({
+      afterTicks: 1,
+      revised: 2,
+    })
+  } finally {
+    scan.mockRestore()
+    vi.useRealTimers()
+  }
 })

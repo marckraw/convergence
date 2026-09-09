@@ -53,13 +53,25 @@ export function useParallelWork(
       unsubscribe()
     }
   }, [sessionId])
-  const rows = useMemo(
-    () =>
-      record?.sessionId === sessionId
-        ? buildParallelWork(record.runs, record.tasks, items)
-        : [],
-    [record, sessionId, items],
+  const parentByItem = new Map(
+    items.map((item) => [item.id, item.agentRunId ?? null]),
   )
+  const parentLinksKey = JSON.stringify(
+    (record?.runs ?? []).map((run) => [
+      run.spawnedByItemId,
+      parentByItem.get(run.spawnedByItemId) ?? null,
+    ]),
+  )
+  const rows = useMemo(() => {
+    const links = JSON.parse(parentLinksKey) as Array<[string, string | null]>
+    return record?.sessionId === sessionId
+      ? buildParallelWork(
+          record.runs,
+          record.tasks,
+          links.map(([id, agentRunId]) => ({ id, agentRunId })),
+        )
+      : []
+  }, [record, sessionId, parentLinksKey])
   return {
     rows,
     error: error?.sessionId === sessionId ? error.message : null,

@@ -1,5 +1,8 @@
 import { expect, it } from 'vitest'
-import type { ParallelWorkRow } from '@/shared/lib/parallel-work.pure'
+import {
+  countParallelWork,
+  type ParallelWorkRow,
+} from '@/shared/lib/parallel-work.pure'
 import type { SessionTask } from '@/shared/types/harness-evidence.types'
 import type { ConversationItem } from '@/entities/session'
 import {
@@ -141,4 +144,47 @@ it('H2′ withheld result moments leave the terminal task fact as the return mar
       },
     ],
   ])
+})
+
+it('H2 merged state and return marker follow the terminal task — mutations prefer run state or index run id only turn red', () => {
+  const row = {
+    id: 'provisional',
+    kind: 'agent',
+    parentId: null,
+    run: {
+      id: 'provisional',
+      status: 'running',
+      spawnedByItemId: 'spawn',
+      description: 'Read routes',
+      startedAt: '2026-09-09T00:00:00Z',
+    },
+    task: {
+      taskId: 'harness',
+      status: 'completed',
+      startedAt: '2026-09-09T00:00:01Z',
+      endedAt: '2026-09-09T00:00:05Z',
+    },
+  } as ParallelWorkRow
+  const markers = parallelWorkMarkers(
+    [
+      {
+        id: 'terminal',
+        kind: 'note',
+        taskId: 'harness',
+        providerMeta: { providerEventType: 'harness.task.terminal' },
+      },
+    ] as ConversationItem[],
+    [row],
+  )
+  expect({
+    status: workStatus(row),
+    elapsed: workElapsed(row, Date.parse('2026-09-09T00:01:00Z')),
+    counts: countParallelWork([row]),
+    marker: markers.get('terminal')?.label,
+  }).toEqual({
+    status: 'Completed',
+    elapsed: '0:04',
+    counts: { running: 0, unknown: 0, failed: 0, stopped: 0 },
+    marker: 'Result returned · Read routes · completed',
+  })
 })

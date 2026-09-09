@@ -111,11 +111,12 @@ export function selectGlobalStatus(
     return rightRecency.localeCompare(leftRecency)
   })
 
+  const runningIds = new Set(running.map((session) => session.id))
   const lastCompleted = sessions
     .filter(
       (session) =>
         (session.status === 'completed' || session.status === 'failed') &&
-        !parallelWorkStatus(session),
+        !runningIds.has(session.id),
     )
     .reduce<SessionSummary | null>((latest, session) => {
       if (!latest) return session

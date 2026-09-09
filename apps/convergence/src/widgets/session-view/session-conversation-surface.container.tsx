@@ -1,5 +1,6 @@
 import {
   isSubagentWork,
+  parallelWorkRowState,
   type ParallelWorkRow,
 } from '@/shared/lib/parallel-work.pure'
 import { useMemo, useState, type FC, type ReactNode } from 'react'
@@ -68,7 +69,7 @@ export const SessionConversationSurface: FC<
         new Set(
           (parallelRows ?? [])
             .filter((row) => row.kind === 'agent')
-            .map((row) => row.id),
+            .flatMap((row) => parallelWorkRowState(row).ids),
         ),
       ),
     [conversationItems, parallelRows],

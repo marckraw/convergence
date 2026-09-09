@@ -155,19 +155,14 @@ it('R1 resolves parent by the spawning item and merges only local-agent ids — 
   ])
 })
 
-it('H3 a missed adoption merges by the spawning tool id — mutation merge only adopted ids turns red', () => {
+it('H3 a backend link merges without renderer items — mutation derive join from renderer items turns red', () => {
   const rows = buildParallelWork(
-    [run('provisional', 1)],
+    [{ ...run('provisional', 1), taskId: 'harness-agent' }],
     [
       { ...task('harness-agent', 'local_agent'), toolUseId: 'tool-spawn' },
       { ...task('unrelated', 'local_bash'), toolUseId: 'tool-spawn' },
     ],
-    [
-      {
-        id: 'spawn-provisional',
-        providerMeta: { providerItemId: 'tool-spawn' },
-      },
-    ],
+    [],
   )
   expect(rows.map((row) => [row.id, row.task?.taskId])).toEqual([
     ['provisional', 'harness-agent'],

@@ -75,10 +75,28 @@ export function parallelWorkStatus(session: {
   return parts.length ? `answered · ${parts.join(' · ')}` : null
 }
 
+export function parallelWorkRowState(row: ParallelWorkRow) {
+  const fact =
+    row.task && row.task.status !== 'running' && row.run?.status === 'running'
+      ? row.task
+      : (row.run ?? row.task)
+  return {
+    fact,
+    stopId: row.task?.taskId ?? row.run?.id ?? row.id,
+    ids: [
+      ...new Set(
+        [row.id, row.run?.id, row.task?.taskId].filter((id): id is string =>
+          Boolean(id),
+        ),
+      ),
+    ],
+  }
+}
+
 export function countParallelWork(rows: ParallelWorkRow[]): ParallelWorkCounts {
   const counts = { running: 0, unknown: 0, failed: 0, stopped: 0 }
   for (const row of rows) {
-    const status = row.run?.status ?? row.task?.status
+    const status = parallelWorkRowState(row).fact?.status
     if (status && status !== 'completed') counts[status]++
   }
   return counts
@@ -95,29 +113,20 @@ export function buildParallelWork(
 ): ParallelWorkRow[] {
   const runIds = new Set(runs.map((run) => run.id))
   const parents = new Map(items.map((item) => [item.id, item.agentRunId]))
-  const providerIds = new Map(
-    items.map((item) => [item.id, item.providerMeta?.providerItemId]),
+  const tasksById = new Map(
+    tasks
+      .filter((task) => task.taskType === 'local_agent')
+      .map((task) => [task.taskId, task]),
   )
-  const runByTool = new Map(
+  const agentTasks = new Map(
     runs.flatMap((run) => {
-      const tool = providerIds.get(run.spawnedByItemId)
-      return tool ? [[tool, run.id] as const] : []
+      const task = tasksById.get(run.taskId ?? run.id)
+      return task ? [[run.id, task] as const] : []
     }),
   )
-  const agentTasks = new Map<string, SessionTask>()
-  const mergedTaskIds = new Set<string>()
-  for (const task of tasks) {
-    if (task.taskType !== 'local_agent') continue
-    const runId = runIds.has(task.taskId)
-      ? task.taskId
-      : task.toolUseId
-        ? runByTool.get(task.toolUseId)
-        : undefined
-    if (runId) {
-      agentTasks.set(runId, task)
-      mergedTaskIds.add(task.taskId)
-    }
-  }
+  const mergedTaskIds = new Set(
+    [...agentTasks.values()].map((task) => task.taskId),
+  )
   return [
     ...runs.map((run): ParallelWorkRow => {
       const parent = parents.get(run.spawnedByItemId)

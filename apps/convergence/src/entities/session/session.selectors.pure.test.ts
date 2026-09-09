@@ -336,3 +336,16 @@ it('M5 foreground failure outranks a stranded running monitor in both global fil
     completed: result.lastCompleted?.id,
   }).toEqual({ running: [], completed: failed.id })
 })
+
+it('L9 an answered session with only unknown work remains in last-completed — mutation exclude every parallel label turns red', () => {
+  const session = makeSession({
+    status: 'completed',
+    attention: 'finished',
+    parallelWork: { running: 0, unknown: 1, failed: 0, stopped: 0 },
+  })
+  const result = selectGlobalStatus([session], {}, [])
+  expect({
+    running: result.running,
+    completed: result.lastCompleted?.id,
+  }).toEqual({ running: [], completed: session.id })
+})

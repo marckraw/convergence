@@ -11,6 +11,12 @@ import {
   foldTasks,
 } from './harness-evidence.pure'
 
+const linkedTaskIdSql = `COALESCE(
+  (SELECT t.task_id FROM session_tasks t WHERE t.session_id=a.session_id AND t.task_type='local_agent' AND t.task_id=a.id),
+  (SELECT t.task_id FROM session_tasks t JOIN session_conversation_items spawn ON spawn.session_id=a.session_id AND spawn.id=a.spawned_by_item_id
+   WHERE t.session_id=a.session_id AND t.task_type='local_agent' AND t.tool_use_id=spawn.provider_item_id ORDER BY t.rowid DESC LIMIT 1)
+)`
+
 export class HarnessEvidenceService {
   private singleCounts: Database.Statement | null = null
   constructor(private readonly db: Database.Database) {}
@@ -23,15 +29,14 @@ export class HarnessEvidenceService {
     )
     if (!sessionIds.length) return counts
     const placeholders = sessionIds.map(() => '?').join(',')
-    const query = `SELECT session_id, status, COUNT(*) AS count FROM (
-      SELECT session_id,status FROM session_agent_runs WHERE session_id IN (${placeholders})
+    const query = `WITH linked AS (
+      SELECT a.*, ${linkedTaskIdSql} AS linked_task_id FROM session_agent_runs a WHERE a.session_id IN (${placeholders})
+    ) SELECT session_id, status, COUNT(*) AS count FROM (
+      SELECT a.session_id, CASE WHEN a.status='running' AND t.status<>'running' THEN t.status ELSE a.status END AS status
+      FROM linked a LEFT JOIN session_tasks t ON t.session_id=a.session_id AND t.task_id=a.linked_task_id
       UNION ALL
       SELECT t.session_id,t.status FROM session_tasks t WHERE t.session_id IN (${placeholders})
-      AND NOT (COALESCE(t.task_type,'')='local_agent' AND EXISTS (
-        SELECT 1 FROM session_agent_runs a
-        LEFT JOIN session_conversation_items spawn ON spawn.id=a.spawned_by_item_id AND spawn.session_id=a.session_id
-        WHERE a.session_id=t.session_id AND (a.id=t.task_id OR (t.tool_use_id IS NOT NULL AND spawn.provider_item_id=t.tool_use_id))
-      ))
+      AND NOT EXISTS (SELECT 1 FROM linked a WHERE a.session_id=t.session_id AND a.linked_task_id=t.task_id)
     ) WHERE status IN ('running','unknown','failed','stopped') GROUP BY session_id,status`
     const statement =
       sessionIds.length === 1
@@ -171,7 +176,7 @@ export class HarnessEvidenceService {
   listAgentRuns(sessionId: string): SessionAgentRun[] {
     return this.db
       .prepare(
-        `SELECT id,session_id AS sessionId,spawned_by_item_id AS spawnedByItemId,agent_type AS agentType,description,model,status,depth,started_at AS startedAt,ended_at AS endedAt,transcript_path AS transcriptPath,is_backgrounded AS isBackgrounded,last_tool_name AS lastToolName,usage_json AS usageJson,updated_at AS updatedAt,stop_reason AS stopReason,ended_summary AS endedSummary FROM session_agent_runs WHERE session_id=? ORDER BY started_at,rowid`,
+        `SELECT ${linkedTaskIdSql} AS taskId,id,session_id AS sessionId,spawned_by_item_id AS spawnedByItemId,agent_type AS agentType,description,model,status,depth,started_at AS startedAt,ended_at AS endedAt,transcript_path AS transcriptPath,is_backgrounded AS isBackgrounded,last_tool_name AS lastToolName,usage_json AS usageJson,updated_at AS updatedAt,stop_reason AS stopReason,ended_summary AS endedSummary FROM session_agent_runs a WHERE session_id=? ORDER BY started_at,rowid`,
       )
       .all(sessionId)
       .map((row) => {

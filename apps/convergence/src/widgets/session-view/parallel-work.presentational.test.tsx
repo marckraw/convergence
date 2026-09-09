@@ -1,10 +1,12 @@
 import { render, screen } from '@testing-library/react'
-import { expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
 import { buildParallelWork } from '@/shared/lib/parallel-work.pure'
 import * as rowHelpers from './parallel-work.pure'
 import * as workHelpers from '@/shared/lib/parallel-work.pure'
 import { ParallelWorkPanel } from './parallel-work.presentational'
+
+afterEach(() => vi.restoreAllMocks())
 
 const agent: SessionAgentRun = {
   id: 'agent',
@@ -222,4 +224,37 @@ it('T10 duplicate identity in a malformed branch cannot recurse forever — muta
       />,
     ),
   ).not.toThrow()
+})
+
+it('M7 descendant scans are lazy and independent of streaming items — mutation sweep every row per token turns red', () => {
+  const rows = buildParallelWork(
+    [
+      { ...agent, id: 'parent' },
+      { ...agent, id: 'child', status: 'running' },
+    ],
+    [],
+    [],
+  )
+  rows[1].parentId = 'parent'
+  const scan = vi.spyOn(rowHelpers, 'descendantActivity')
+  try {
+    const input = { rows, now: 0, onSelect: vi.fn(), onClose: vi.fn() }
+    const { rerender } = render(<ParallelWorkPanel {...input} />)
+    const expanded = scan.mock.calls.length
+    const collapsed = new Set(['parent'])
+    for (let i = 0; i < 20; i++)
+      rerender(
+        <ParallelWorkPanel
+          {...input}
+          collapsed={collapsed}
+          items={[{ id: 'stream', kind: 'message', actor: 'assistant' }]}
+        />,
+      )
+    expect({ expanded, scans: scan.mock.calls.map(([, id]) => id) }).toEqual({
+      expanded: 0,
+      scans: ['parent'],
+    })
+  } finally {
+    scan.mockRestore()
+  }
 })

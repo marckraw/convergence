@@ -1051,6 +1051,7 @@ export class SessionService {
       sessionId,
       setTimeout(() => {
         this.evidenceUpdateTimers.delete(sessionId)
+        if (!this.sessionRepository.findById(sessionId)) return
         this.parallelWorkCounts.set(
           sessionId,
           this.evidenceCounts.countParallelWork([sessionId]).get(sessionId)!,
@@ -1456,6 +1457,9 @@ export class SessionService {
       this.releaseHandle(id)
     }
     this.sessionRepository.delete(id)
+    const evidenceTimer = this.evidenceUpdateTimers.get(id)
+    if (evidenceTimer) clearTimeout(evidenceTimer)
+    this.evidenceUpdateTimers.delete(id)
     this.parallelWorkCounts.delete(id)
     // Committed. Only now is ownership consumed and the ending told: the
     // turn's settle is never coming, and its receipts end here with the
