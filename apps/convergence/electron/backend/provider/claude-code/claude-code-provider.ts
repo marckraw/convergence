@@ -6,10 +6,7 @@ import {
 } from './claude-transport.service'
 import { describeClaudeTransportVersionRefusal } from './claude-transport-error.pure'
 import { promises as fs } from 'fs'
-import type {
-  InteractionResponse,
-  SessionDelta,
-} from '../../session/conversation-item.types'
+import type { SessionDelta } from '../../session/conversation-item.types'
 import type {
   Provider,
   SessionStartConfig,
@@ -807,6 +804,16 @@ export class ClaudeCodeProvider implements Provider {
       )
     }
 
+    function noteContinuationRecovery(
+      note: Parameters<ProviderSessionEmitter['addNote']>[0],
+    ): void {
+      try {
+        sessionEmitter.addNote(note)
+      } catch {
+        // Recording a note must never prevent recovery or permission settlement.
+      }
+    }
+
     function scheduleContinuationRecovery(
       reason: 'missing-session' | 'no-output',
     ): void {
@@ -821,7 +828,7 @@ export class ClaudeCodeProvider implements Provider {
         userMessageItemId: currentTurn.userMessageItemId,
       }
       const recoveryEntry = buildContinuationRecoveryEntry('Claude Code', now())
-      sessionEmitter.addNote({
+      noteContinuationRecovery({
         text:
           reason === 'no-output'
             ? 'Claude Code did not accept the message (no output); sent again on a new process.'
@@ -832,6 +839,10 @@ export class ClaudeCodeProvider implements Provider {
       if (reason === 'missing-session') claudeSessionId = null
       currentTurn = null
       interruptRequested = false
+      connectionGeneration++
+      connectionEnding ??= new Promise<void>((resolve) => {
+        resolveConnectionEnd = resolve
+      })
       permissions.endConnection()
       void child?.close().catch((error) => {
         sessionEmitter.addNote({
@@ -1427,6 +1438,7 @@ export class ClaudeCodeProvider implements Provider {
           cwd: config.workingDirectory,
           env,
           onPermissionRequest: (request) => {
+            sawHarnessOutput = true
             const ended =
               stopped ||
               !!connectionEnding ||
@@ -1440,7 +1452,6 @@ export class ClaudeCodeProvider implements Provider {
                 decisionClassification: 'user_reject',
                 message: ended ? 'connection ended' : 'Stopped in Convergence',
               })
-            sawHarnessOutput = true
             return permissions.request(request)
           },
           onSpawn: (pid) =>
@@ -1492,6 +1503,9 @@ export class ClaudeCodeProvider implements Provider {
               scheduleContinuationRecovery('no-output')
             }
             child = null
+            connectionEnding = null
+            resolveConnectionEnd?.()
+            resolveConnectionEnd = undefined
             if (maybeRestartRecoveredTurn()) return
             if (currentTurn) {
               currentTurn = null
@@ -1651,14 +1665,13 @@ export class ClaudeCodeProvider implements Provider {
         listeners.heartbeat.push(cb)
       },
       sendMessage: (text, attachments, skillSelections, options) => {
-        if (
-          options?.deliveryMode === 'answer' &&
-          permissions.answer(
-            text,
-            options.interactionResponse as InteractionResponse | undefined,
-          )
-        )
-          return
+        if (connectionEnding && pendingRecoveryTurn) return 'queue-follow-up'
+        if (options?.deliveryMode === 'answer') {
+          if (permissions.answer(text, options.interactionResponse)) return
+          if (currentTurn) {
+            return 'queue-follow-up'
+          }
+        }
 
         void startTurn(text, attachments, {
           skillSelections,

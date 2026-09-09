@@ -46,7 +46,7 @@ const BASE_ENV: NodeJS.ProcessEnv = {
 }
 
 describe('resolveClaudeAccountEnv — ambient default account', () => {
-  it('is byte-equivalent to the environment Convergence spawns today', async () => {
+  it('RUN57 resolved ambient key set is exact — inject an extra environment key turns red', async () => {
     const env = await resolveClaudeAccountEnv({
       account: null,
       workingDirectory: CWD,
@@ -55,7 +55,12 @@ describe('resolveClaudeAccountEnv — ambient default account', () => {
       io: explodingIo(),
     })
 
-    expect(env).toEqual({ ...BASE_ENV })
+    expect(Object.keys(env).sort()).toEqual([
+      'ANTHROPIC_API_KEY',
+      'HOME',
+      'PATH',
+      'SOME_PERSONAL_VAR',
+    ])
   })
 
   it('reads and writes nothing when no account is selected', async () => {
@@ -73,7 +78,7 @@ describe('resolveClaudeAccountEnv — ambient default account', () => {
     expect(io.writeFile).not.toHaveBeenCalled()
   })
 
-  it('still applies telemetry injections — drop injection forwarding turns red', async () => {
+  it('R2 M4 telemetry endpoint is exact — replace endpoint while forwarding turns red', async () => {
     const env = await resolveClaudeAccountEnv({
       account: null,
       workingDirectory: CWD,
@@ -85,6 +90,13 @@ describe('resolveClaudeAccountEnv — ambient default account', () => {
       },
     })
 
+    expect(Object.keys(env).sort()).toEqual([
+      'ANTHROPIC_API_KEY',
+      'HOME',
+      'OTEL_EXPORTER_OTLP_LOGS_ENDPOINT',
+      'PATH',
+      'SOME_PERSONAL_VAR',
+    ])
     expect(env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT).toBe(
       'http://127.0.0.1:1234/v1/logs',
     )
@@ -140,7 +152,7 @@ describe('resolveClaudeAccountEnv — selected account', () => {
     expect(io.writeFile).not.toHaveBeenCalled()
   })
 
-  it('allowlists the environment and points at the account slot', async () => {
+  it('R2 M4 resolved account directories are exact — substitute directory after the guard turns red', async () => {
     const { io } = fakeIo({ [`${HOME}/.claude.json`]: {} })
 
     const env = await resolveClaudeAccountEnv({
@@ -151,11 +163,16 @@ describe('resolveClaudeAccountEnv — selected account', () => {
       io,
     })
 
-    expect(env.ANTHROPIC_API_KEY).toBeUndefined()
-    expect(env.SOME_PERSONAL_VAR).toBeUndefined()
-    expect(env.PATH).toBe('/usr/local/bin')
-    expect(env.CLAUDE_CONFIG_DIR).toBe(ACCOUNT.configDir)
-    expect(env.CLAUDE_SECURESTORAGE_CONFIG_DIR).toBe(ACCOUNT.credentialDir)
+    expect(Object.keys(env).sort()).toEqual([
+      'CLAUDE_CONFIG_DIR',
+      'CLAUDE_SECURESTORAGE_CONFIG_DIR',
+      'HOME',
+      'PATH',
+    ])
+    expect({
+      configDir: env.CLAUDE_CONFIG_DIR,
+      credentialDir: env.CLAUDE_SECURESTORAGE_CONFIG_DIR,
+    }).toEqual(ACCOUNT)
   })
 
   it('lets a configured stdio MCP server keep the variables it references', async () => {
@@ -178,7 +195,13 @@ describe('resolveClaudeAccountEnv — selected account', () => {
       io,
     })
 
-    expect(env.GITHUB_TOKEN).toBe('ghp-real')
+    expect(Object.keys(env).sort()).toEqual([
+      'CLAUDE_CONFIG_DIR',
+      'CLAUDE_SECURESTORAGE_CONFIG_DIR',
+      'GITHUB_TOKEN',
+      'HOME',
+      'PATH',
+    ])
   })
 
   it('still resolves an environment when the reconcile write fails', async () => {
@@ -198,7 +221,12 @@ describe('resolveClaudeAccountEnv — selected account', () => {
     })
 
     // A failed reconcile costs a trust prompt, never the wrong credential.
-    expect(env.CLAUDE_SECURESTORAGE_CONFIG_DIR).toBe(ACCOUNT.credentialDir)
+    expect(Object.keys(env).sort()).toEqual([
+      'CLAUDE_CONFIG_DIR',
+      'CLAUDE_SECURESTORAGE_CONFIG_DIR',
+      'HOME',
+      'PATH',
+    ])
   })
 
   it('survives an unreadable shared profile', async () => {
@@ -212,6 +240,11 @@ describe('resolveClaudeAccountEnv — selected account', () => {
       io,
     })
 
-    expect(env.CLAUDE_CONFIG_DIR).toBe(ACCOUNT.configDir)
+    expect(Object.keys(env).sort()).toEqual([
+      'CLAUDE_CONFIG_DIR',
+      'CLAUDE_SECURESTORAGE_CONFIG_DIR',
+      'HOME',
+      'PATH',
+    ])
   })
 })

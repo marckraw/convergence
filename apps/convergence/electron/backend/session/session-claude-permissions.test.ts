@@ -6,8 +6,10 @@ import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { ProviderRegistry } from '../provider/provider-registry'
 import { LocalExecutionHost } from '../provider/execution-host/local-execution-host'
 import { SessionService } from './session.service'
+import { SessionQueuedInputService } from './session-queued-input.service'
 import * as claudeTransport from '../provider/claude-code/claude-transport.service'
 import { ProviderSessionEmitter } from '../provider/provider-session.emitter'
+import { ClaudePermissionsService } from '../provider/claude-code/claude-permissions.service'
 import { ClaudeCodeProvider } from '../provider/claude-code/claude-code-provider'
 import type { SessionPermissionConfig } from '../provider/provider.types'
 import type {
@@ -948,6 +950,7 @@ it('H2 a matched ask rule always prompts and names the rule — ignore matchedAs
   service.deny(session.id, 'forced')
   expect({
     result: await next,
+    button: card?.kind === 'approval-request' && card.supportsSessionApproval,
     reason:
       card?.kind === 'approval-request'
         ? card.permissionDetails?.decisionReason
@@ -959,6 +962,7 @@ it('H2 a matched ask rule always prompts and names the rule — ignore matchedAs
       toolUseID: 'forced',
       decisionClassification: 'user_reject',
     },
+    button: false,
     reason: 'needs permission · Ask rule: Bash(build:*) (userSettings)',
   })
 })
@@ -1295,3 +1299,732 @@ it('H1prime repeated grants ignore the setMode alternative — count setMode as 
     })),
   })
 })
+
+it.each(['stop', 'end'] as const)(
+  'RUN57 endings %s settle all three despite the first recording failure — remove per-iteration catch turns red',
+  async (ending) => {
+    const { service, session, connections } = await fixture()
+    const requests = vi.spyOn(ClaudePermissionsService.prototype, 'request')
+    const suggestions = [
+      {
+        type: 'addRules',
+        behavior: 'allow',
+        rules: [{ toolName: 'Bash', ruleContent: 'fixture' }],
+      },
+    ]
+    const remembered = request(connections[0], 'remember', { suggestions })
+    service.approve(session.id, 'remember', { scope: 'session' })
+    await remembered
+    const permissions = requests.mock.contexts[0] as ClaudePermissionsService
+    const settled: string[] = []
+    const pending = ['one', 'two', 'three'].map((id) =>
+      request(connections[0], id)?.then((result) => {
+        settled.push(id)
+        return result?.behavior
+      }),
+    )
+    vi.spyOn(
+      ProviderSessionEmitter.prototype,
+      'resolveInteraction',
+    ).mockImplementationOnce(() => {
+      throw new Error('first recording fails')
+    })
+    let error: unknown
+    try {
+      if (ending === 'stop') permissions.denyPendingForStop()
+      else permissions.endConnection()
+    } catch (caught) {
+      error = caught
+    }
+    await new Promise((r) => setTimeout(r, 0))
+    const afterEnding = [...settled]
+    // Settle leftovers before asserting so a red test does not leak callbacks.
+    permissions.endConnection()
+    const repeat = request(connections[0], 'repeat', { suggestions })
+    const repeatCard = service
+      .getConversation(session.id)
+      .find((i) => i.providerMeta.providerItemId === 'repeat')
+    service.deny(session.id, 'repeat')
+    await repeat
+    expect({
+      error,
+      afterEnding,
+      results: await Promise.all(pending),
+      repeatKind: repeatCard?.kind,
+    }).toEqual({
+      error: undefined,
+      afterEnding: ['one', 'two', 'three'],
+      results: ['deny', 'deny', 'deny'],
+      repeatKind: 'approval-request',
+    })
+  },
+)
+
+it('RUN57 ending failure still releases connectionEnding and clears rules — abort ending loop on first resolve error turns red', async () => {
+  const { service, session, connections } = await fixture(30 / 60000)
+  const suggestions = [
+    {
+      type: 'addRules',
+      behavior: 'allow',
+      rules: [{ toolName: 'Bash', ruleContent: 'fixture' }],
+    },
+  ]
+  const remembered = request(connections[0], 'remember', { suggestions })
+  service.approve(session.id, 'remember', { scope: 'session' })
+  await remembered
+  const pending = ['one', 'two', 'three'].map((id) =>
+    request(connections[0], id),
+  )
+  vi.spyOn(
+    ProviderSessionEmitter.prototype,
+    'resolveInteraction',
+  ).mockImplementationOnce(() => {
+    throw new Error('first recording fails')
+  })
+  // Capture a broken implementation's throw without an unhandled timer rejection.
+  const original = ClaudePermissionsService.prototype.endConnection
+  const errors: unknown[] = []
+  vi.spyOn(
+    ClaudePermissionsService.prototype,
+    'endConnection',
+  ).mockImplementation(function (this: ClaudePermissionsService) {
+    try {
+      original.call(this)
+    } catch (error) {
+      errors.push(error)
+    }
+  })
+  connections[0].push({ type: 'result', subtype: 'success', result: 'done' })
+  await vi.waitUntil(() => connections[0].closed)
+  await service.sendMessage(session.id, { text: 'after ending' })
+  await vi.waitUntil(() => connections[1]?.writes.length === 1)
+  const repeat = request(connections[1], 'repeat', { suggestions })
+  const repeatCard = service
+    .getConversation(session.id)
+    .find((i) => i.providerMeta.providerItemId === 'repeat')
+  service.deny(session.id, 'repeat')
+  await repeat
+  expect({
+    errors,
+    results: (await Promise.all(pending)).map((r) => r?.behavior),
+    writes: connections[1].writes.length,
+    repeatKind: repeatCard?.kind,
+  }).toEqual({
+    errors: [],
+    results: ['deny', 'deny', 'deny'],
+    writes: 1,
+    repeatKind: 'approval-request',
+  })
+})
+
+it('RUN57 foreign tool grants offer no Always allow and never match — restore any-rule button or skip rememberable predicate turns red', async () => {
+  const { service, session, connections } = await fixture()
+  const suggestions = [
+    {
+      type: 'addRules',
+      behavior: 'allow',
+      rules: [{ toolName: 'Write', ruleContent: 'fixture' }],
+    },
+  ]
+  const first = request(connections[0], 'first', { suggestions })
+  const firstCard = service
+    .getConversation(session.id)
+    .find((i) => i.providerMeta.providerItemId === 'first')
+  service.approve(session.id, 'first', { scope: 'session' })
+  await first
+  const repeat = request(connections[0], 'repeat', { suggestions })
+  const repeatCard = service
+    .getConversation(session.id)
+    .find((i) => i.providerMeta.providerItemId === 'repeat')
+  service.deny(session.id, 'repeat')
+  expect({
+    button:
+      firstCard?.kind === 'approval-request' &&
+      firstCard.supportsSessionApproval,
+    repeatKind: repeatCard?.kind,
+    result: (await repeat)?.behavior,
+  }).toEqual({ button: false, repeatKind: 'approval-request', result: 'deny' })
+})
+
+it('R2 H3 tool-wide rules are not remembered — accept absent ruleContent turns red', async () => {
+  const { service, session, connections } = await fixture()
+  const suggestions = [
+    { type: 'addRules', behavior: 'allow', rules: [{ toolName: 'Bash' }] },
+  ]
+  const first = request(connections[0], 'first', { suggestions })
+  const firstCard = service
+    .getConversation(session.id)
+    .find((i) => i.providerMeta.providerItemId === 'first')
+  service.approve(session.id, 'first', { scope: 'session' })
+  await first
+  const repeat = request(connections[0], 'repeat', { suggestions })
+  await Promise.race([repeat, new Promise((r) => setTimeout(r, 25))])
+  service.deny(session.id, 'repeat')
+  expect({
+    button:
+      firstCard?.kind === 'approval-request' &&
+      firstCard.supportsSessionApproval,
+    result: (await repeat)?.behavior,
+  }).toEqual({ button: false, result: 'deny' })
+})
+
+it('RUN57 every directory must be remembered — change directory every to some turns red', async () => {
+  const { service, session, connections } = await fixture()
+  const rule = {
+    type: 'addRules',
+    behavior: 'allow',
+    rules: [{ toolName: 'Bash', ruleContent: 'fixture' }],
+  }
+  const first = request(connections[0], 'first', {
+    suggestions: [rule, { type: 'addDirectories', directories: ['/known'] }],
+  })
+  service.approve(session.id, 'first', { scope: 'session' })
+  await first
+  const repeat = request(connections[0], 'broader', {
+    suggestions: [
+      rule,
+      { type: 'addDirectories', directories: ['/known', '/unknown'] },
+    ],
+  })
+  const card = service
+    .getConversation(session.id)
+    .find((i) => i.providerMeta.providerItemId === 'broader')
+  service.deny(session.id, 'broader')
+  expect({ kind: card?.kind, result: (await repeat)?.behavior }).toEqual({
+    kind: 'approval-request',
+    result: 'deny',
+  })
+})
+
+it('RUN57 unconsumed mid-turn answer queues its own next turn and note — return early or ignore queue outcome turns red', async () => {
+  const { service, session, connections, db } = await fixture()
+  const terminals: string[] = []
+  service.onSessionSettled((event) => terminals.push(...event.dispatchIds))
+  const dispatchId = await service.sendMessage(session.id, {
+    text: 'late answer',
+    deliveryMode: 'answer',
+    muteRelays: true,
+  })
+  const queued = service.getQueuedInputs(session.id).map((i) => ({
+    text: i.text,
+    mode: i.deliveryMode,
+    dispatchId: i.dispatchId,
+  }))
+  const notes = service
+    .getConversation(session.id)
+    .filter(
+      (i) =>
+        i.kind === 'note' &&
+        i.text === 'nothing to answer; queued as your next message',
+    ).length
+  const mutedBefore =
+    (
+      db
+        .prepare('SELECT relays_muted FROM sessions WHERE id = ?')
+        .get(session.id) as { relays_muted: number }
+    ).relays_muted === 1
+  const before = connections[0].writes.length
+  connections[0].push({
+    type: 'result',
+    subtype: 'success',
+    result: 'first done',
+  })
+  await new Promise((r) => setTimeout(r, 40))
+  const completedByFirst = terminals.includes(dispatchId)
+  const after = connections[0].writes.map((w) => w.message.content)
+  connections[0].push({
+    type: 'result',
+    subtype: 'success',
+    result: 'late answer done',
+  })
+  await new Promise((r) => setTimeout(r, 20))
+  expect({
+    queued,
+    mutedBefore,
+    notes,
+    before,
+    after,
+    completedByFirst,
+    completedBySecond: terminals.includes(dispatchId),
+  }).toEqual({
+    queued: [{ text: 'late answer', mode: 'follow-up', dispatchId }],
+    mutedBefore: false,
+    notes: 1,
+    before: 1,
+    after: [
+      [{ type: 'text', text: 'write fixture' }],
+      [{ type: 'text', text: 'late answer' }],
+    ],
+    completedByFirst: false,
+    completedBySecond: true,
+  })
+})
+
+it('RUN57 recovery close window denies a stale callback — omit recovery generation bump turns red', async () => {
+  const create = claudeTransport.createClaudeTransport
+  let release: (() => void) | undefined
+  vi.spyOn(claudeTransport, 'createClaudeTransport').mockImplementation(
+    (input) => {
+      const transport = create(input)
+      if (release) return transport
+      return {
+        ...transport,
+        close: () =>
+          new Promise<void>((resolve) => {
+            release = () => {
+              void transport.close().then(resolve)
+            }
+          }),
+      }
+    },
+  )
+  const { service, session, connections } = await fixture(
+    0,
+    { preset: 'ask' },
+    false,
+  )
+  connections[0].push({
+    type: 'result',
+    subtype: 'error_during_execution',
+    is_error: true,
+    result: 'No such session: harness',
+    errors: ['No such session: harness'],
+    session_id: 'harness',
+    num_turns: 0,
+  })
+  await vi.waitUntil(() => !!release)
+  const pending = request(connections[0], 'recovery-window')
+  const card = service
+    .getConversation(session.id)
+    .find((i) => i.providerMeta.providerItemId === 'recovery-window')
+  service.deny(session.id, 'recovery-window')
+  const result = await pending
+  release!()
+  await vi.waitUntil(() => connections.length === 2)
+  vi.restoreAllMocks()
+  expect({ card: card?.kind, result }).toEqual({
+    card: undefined,
+    result: {
+      behavior: 'deny',
+      toolUseID: 'recovery-window',
+      decisionClassification: 'user_reject',
+      message: 'connection ended',
+    },
+  })
+})
+
+it('RUN57 a denied request is harness output before a crash — move sawHarnessOutput below denial turns red', async () => {
+  const { service, session, connections } = await fixture()
+  connections[0].push({
+    type: 'result',
+    subtype: 'success',
+    result: 'first done',
+  })
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'completed')
+  await service.sendMessage(session.id, { text: 'do not resend' })
+  await vi.waitUntil(() => connections[0].writes.length === 2)
+  service.stop(session.id)
+  await vi.waitUntil(() => connections[0].interrupt.mock.calls.length === 1)
+  const denied = await request(connections[0], 'after-stop')
+  connections[0].close()
+  await new Promise((r) => setTimeout(r, 70))
+  expect({
+    denied: denied?.behavior,
+    spawns: connections.length,
+    writes: connections.flatMap((c) => c.writes).length,
+    status: service.getById(session.id)?.status,
+  }).toEqual({ denied: 'deny', spawns: 1, writes: 2, status: 'failed' })
+})
+
+it.each([
+  'Pending approval cancelled: connection ended',
+  'session rule cleared: connection ended',
+])(
+  'R2 H1 throwing ending note %s still denies all and forgets memory — unwrap ending note turns red',
+  async (text) => {
+    const { service, session, connections } = await fixture()
+    const requests = vi.spyOn(ClaudePermissionsService.prototype, 'request')
+    const suggestions = [
+      {
+        type: 'addRules',
+        behavior: 'allow',
+        rules: [{ toolName: 'Bash', ruleContent: 'fixture' }],
+      },
+    ]
+    const first = request(connections[0], 'remember', { suggestions })
+    service.approve(session.id, 'remember', { scope: 'session' })
+    await first
+    const permissions = requests.mock.contexts[0] as ClaudePermissionsService
+    const settled: string[] = []
+    const pending = ['a', 'b', 'c'].map((id) =>
+      request(connections[0], id)?.then((result) => {
+        settled.push(id)
+        return result?.behavior
+      }),
+    )
+    const original = ProviderSessionEmitter.prototype.addNote
+    const notes = vi
+      .spyOn(ProviderSessionEmitter.prototype, 'addNote')
+      .mockImplementation(function (this: ProviderSessionEmitter, input) {
+        if (input.text === text) throw new Error('ending note refused')
+        return original.call(this, input)
+      })
+    let error: unknown
+    try {
+      permissions.endConnection()
+    } catch (e) {
+      error = e
+    }
+    await new Promise((r) => setTimeout(r, 0))
+    const settledAtEnd = [...settled]
+    const repeat = request(connections[0], 'repeat', { suggestions })
+    const card = service
+      .getConversation(session.id)
+      .find((i) => i.providerMeta.providerItemId === 'repeat')
+    service.deny(session.id, 'repeat')
+    await repeat
+    notes.mockRestore()
+    permissions.endConnection()
+    expect({
+      error,
+      settledAtEnd,
+      results: await Promise.all(pending),
+      repeat: card?.kind,
+    }).toEqual({
+      error: undefined,
+      settledAtEnd: ['a', 'b', 'c'],
+      results: ['deny', 'deny', 'deny'],
+      repeat: 'approval-request',
+    })
+  },
+)
+
+it('R2 H1 abort note failure still settles its callback — unwrap abort note turns red', async () => {
+  const { connections } = await fixture()
+  const controller = new AbortController()
+  const listener = vi.spyOn(controller.signal, 'addEventListener')
+  const pending = request(connections[0], 'abort', {
+    signal: controller.signal,
+  })
+  vi.spyOn(ProviderSessionEmitter.prototype, 'addNote').mockImplementationOnce(
+    () => {
+      throw new Error('abort note refused')
+    },
+  )
+  const callback = listener.mock.calls.find(
+    ([name]) => name === 'abort',
+  )![1] as (event: Event) => void
+  let error: unknown
+  try {
+    callback(new Event('abort'))
+  } catch (e) {
+    error = e
+  }
+  const result = await Promise.race([
+    pending,
+    new Promise<undefined>((r) => setTimeout(() => r(undefined), 20)),
+  ])
+  expect({ error, result: result?.behavior }).toEqual({
+    error: undefined,
+    result: 'deny',
+  })
+})
+
+it('R2 M5 a queued answer preserves all three per-send slots — write slots before disposition turns red', async () => {
+  const { service, session } = await fixture()
+  const attachments = ['previous-attachment']
+  const skills: [] = []
+  service['pendingUserAttachmentIds'].set(session.id, attachments)
+  service['pendingUserSkillSelections'].set(session.id, skills)
+  service['pendingTurnAccountIds'].set(session.id, 'previous-account')
+  await service.sendMessage(session.id, {
+    text: 'late answer',
+    deliveryMode: 'answer',
+  })
+  expect([
+    service['pendingUserAttachmentIds'].get(session.id) === attachments,
+    service['pendingUserSkillSelections'].get(session.id) === skills,
+    service['pendingTurnAccountIds'].get(session.id) === 'previous-account',
+  ]).toEqual([true, true, true])
+})
+
+it('R2 L7 a failed enqueue emits no queued note — emit note before enqueue turns red', async () => {
+  const { service, session } = await fixture()
+  vi.spyOn(
+    SessionQueuedInputService.prototype,
+    'enqueue',
+  ).mockImplementationOnce(() => {
+    throw new Error('queue unavailable')
+  })
+  let failure: unknown
+  try {
+    await service.sendMessage(session.id, {
+      text: 'late answer',
+      deliveryMode: 'answer',
+    })
+  } catch (error) {
+    failure = error
+  }
+  expect({
+    failed: failure instanceof Error,
+    notes: service
+      .getConversation(session.id)
+      .filter((i) => i.kind === 'note' && i.text.includes('nothing to answer'))
+      .length,
+  }).toEqual({ failed: true, notes: 0 })
+})
+
+it.each(['normal', 'answer'] as const)(
+  'R2 L6 %s during recovery waits for close and follows the retry — omit recovery ending promise or resolver turns red',
+  async (deliveryMode) => {
+    const create = claudeTransport.createClaudeTransport
+    let release: (() => void) | undefined
+    vi.spyOn(claudeTransport, 'createClaudeTransport').mockImplementation(
+      (input) => {
+        const transport = create(input)
+        if (release) return transport
+        return {
+          ...transport,
+          close: () =>
+            new Promise<void>((resolve) => {
+              release = () => {
+                void transport.close().then(resolve)
+              }
+            }),
+        }
+      },
+    )
+    const { service, session, connections } = await fixture(
+      0,
+      { preset: 'ask' },
+      false,
+    )
+    connections[0].push({
+      type: 'result',
+      subtype: 'error_during_execution',
+      is_error: true,
+      result: 'No such session: harness',
+      errors: ['No such session: harness'],
+      session_id: 'harness',
+      num_turns: 0,
+    })
+    await vi.waitUntil(() => !!release)
+    let controlSettled = false
+    void Promise.resolve(
+      service['activeHandles']
+        .get(session.id)!
+        .setModelSelection?.('fixture-model', null),
+    ).then(() => {
+      controlSettled = true
+    })
+    await service.sendMessage(session.id, {
+      text: 'late recovery input',
+      deliveryMode,
+    })
+    await new Promise((r) => setTimeout(r, 30))
+    const beforeClose = connections[0].writes.length
+    release!()
+    await vi.waitUntil(() => !!connections[1]?.writes.length).catch(() => {})
+    connections[1]?.push({
+      type: 'result',
+      subtype: 'success',
+      result: 'retry done',
+    })
+    await new Promise((r) => setTimeout(r, 40))
+    const texts = connections[1]?.writes.map((w) => w.message.content) ?? []
+    expect({ beforeClose, texts, controlSettled }).toEqual({
+      beforeClose: 1,
+      controlSettled: true,
+      texts: [
+        [{ type: 'text', text: 'write fixture' }],
+        [{ type: 'text', text: 'late recovery input' }],
+      ],
+    })
+  },
+)
+
+function holdFirstRecoveryClose() {
+  const create = claudeTransport.createClaudeTransport
+  let release: (() => void) | undefined
+  let wrapped = false
+  vi.spyOn(claudeTransport, 'createClaudeTransport').mockImplementation(
+    (input) => {
+      const transport = create(input)
+      if (wrapped) return transport
+      wrapped = true
+      return {
+        ...transport,
+        close: () =>
+          new Promise<void>((resolve) => {
+            release = () => {
+              void transport.close().then(resolve)
+            }
+          }),
+      }
+    },
+  )
+  return { pending: () => !!release, release: () => release?.() }
+}
+const missingSessionResult = {
+  type: 'result',
+  subtype: 'error_during_execution',
+  is_error: true,
+  result: 'No such session: harness',
+  errors: ['No such session: harness'],
+  session_id: 'harness',
+  num_turns: 0,
+}
+
+it('R3 H1 refused queue drain retains the front row until completion retries — mark refused input sent turns red', async () => {
+  const close = holdFirstRecoveryClose()
+  const { service, session, connections } = await fixture(
+    0,
+    { preset: 'ask' },
+    false,
+  )
+  connections[0].push(missingSessionResult)
+  await vi.waitUntil(close.pending)
+  await service.sendMessage(session.id, { text: 'B', deliveryMode: 'normal' })
+  await service.sendMessage(session.id, { text: 'C', deliveryMode: 'normal' })
+  const before = service
+    .getQueuedInputs(session.id)
+    .map(({ id, text, state }) => ({ id, text, state }))
+  const notes = service
+    .getConversation(session.id)
+    .filter((i) => i.kind === 'note')
+  // Invoke the real drain while the real provider is refusing sends during close.
+  service['dispatchNextQueuedInput'](session.id)
+  const refused = service
+    .getQueuedInputs(session.id)
+    .map(({ id, text, state }) => ({ id, text, state }))
+  const notesAfter = service
+    .getConversation(session.id)
+    .filter((i) => i.kind === 'note')
+  close.release()
+  await vi.waitUntil(() => connections[1]?.writes.length === 1)
+  connections[1].push({
+    type: 'result',
+    subtype: 'success',
+    result: 'retry done',
+  })
+  await vi.waitUntil(() => connections[1].writes.length === 2)
+  const afterRetry = service.getQueuedInputs(session.id).map((i) => i.text)
+  connections[1].push({ type: 'result', subtype: 'success', result: 'B done' })
+  await new Promise((r) => setTimeout(r, 40))
+  expect({
+    refused,
+    notesAfter,
+    afterRetry,
+    writes: connections[1].writes.map((w) => w.message.content),
+  }).toEqual({
+    refused: before,
+    notesAfter: notes,
+    afterRetry: ['C'],
+    writes: ['write fixture', 'B', 'C'].map((text) => [{ type: 'text', text }]),
+  })
+})
+
+it.each([false, true])(
+  'R3 M2 recovery note throws=%s without changing recovery — unwrap recovery note turns red',
+  async (throws) => {
+    const close = holdFirstRecoveryClose()
+    const { service, session, connections } = await fixture(
+      0,
+      { preset: 'ask' },
+      false,
+    )
+    const original = ProviderSessionEmitter.prototype.addNote
+    const note = vi
+      .spyOn(ProviderSessionEmitter.prototype, 'addNote')
+      .mockImplementation(function (this: ProviderSessionEmitter, input) {
+        if (throws && input.text.includes('session'))
+          throw new Error('note unavailable')
+        return original.call(this, input)
+      })
+    connections[0].push(missingSessionResult)
+    await vi.waitUntil(close.pending).catch(() => {})
+    const closing = close.pending()
+    await service
+      .sendMessage(session.id, { text: 'B', deliveryMode: 'normal' })
+      .catch(() => {})
+    const queued = service
+      .getQueuedInputs(session.id)
+      .map((i) => ({ text: i.text, state: i.state }))
+    note.mockRestore()
+    close.release()
+    await vi.waitUntil(() => !!connections[1]?.writes.length).catch(() => {})
+    connections[1]?.push({
+      type: 'result',
+      subtype: 'success',
+      result: 'retry done',
+    })
+    await new Promise((r) => setTimeout(r, 40))
+    expect({
+      closing,
+      queued,
+      closed: connections[0].closed,
+      writes: connections[1]?.writes.map((w) => w.message.content),
+    }).toEqual({
+      closing: true,
+      queued: [{ text: 'B', state: 'queued' }],
+      closed: true,
+      writes: ['write fixture', 'B'].map((text) => [{ type: 'text', text }]),
+    })
+  },
+)
+
+it.each([false, true])(
+  'R3 M2 queued-answer note throws=%s without failing or duplicating dispatch — unwrap queued note turns red',
+  async (throws) => {
+    const { service, session, connections } = await fixture()
+    const recorder = service as unknown as {
+      addConversationItem: SessionService['addConversationItem']
+    }
+    const original = recorder.addConversationItem.bind(service)
+    vi.spyOn(recorder, 'addConversationItem').mockImplementation((id, item) => {
+      if (
+        throws &&
+        item.kind === 'note' &&
+        item.text === 'nothing to answer; queued as your next message'
+      )
+        throw new Error('note unavailable')
+      return original(id, item)
+    })
+    let failed = false
+    await service
+      .sendMessage(session.id, { text: 'late answer', deliveryMode: 'answer' })
+      .catch(() => {
+        failed = true
+      })
+    const queued = service
+      .getQueuedInputs(session.id)
+      .map((i) => ({ text: i.text, state: i.state }))
+    connections[0].push({
+      type: 'result',
+      subtype: 'success',
+      result: 'first done',
+    })
+    await vi.waitUntil(() => connections[0].writes.length === 2)
+    connections[0].push({
+      type: 'result',
+      subtype: 'success',
+      result: 'answer done',
+    })
+    await vi.waitUntil(
+      () => service.getById(session.id)?.status === 'completed',
+    )
+    expect({
+      failed,
+      queued,
+      remaining: service.getQueuedInputs(session.id),
+      writes: connections[0].writes.map((w) => w.message.content),
+    }).toEqual({
+      failed: false,
+      queued: [{ text: 'late answer', state: 'queued' }],
+      remaining: [],
+      writes: ['write fixture', 'late answer'].map((text) => [
+        { type: 'text', text },
+      ]),
+    })
+  },
+)

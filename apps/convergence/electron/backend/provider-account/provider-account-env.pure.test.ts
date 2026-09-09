@@ -25,24 +25,34 @@ function realisticEnv(): NodeJS.ProcessEnv {
 }
 
 describe('buildClaudeAccountEnv — ambient default account', () => {
-  it('returns the base environment byte-for-byte when no account is selected', () => {
+  it('R2 M4 ambient keys and non-secret bytes are exact — alter ambient PATH or inject a key turns red', () => {
     const baseEnv = realisticEnv()
 
     const env = buildClaudeAccountEnv({ baseEnv, account: null })
 
-    expect(env).toEqual(baseEnv)
-  })
-
-  it('keeps inherited credentials for the default account, because that is today', () => {
-    // Stripping these with no account selected would itself be a behaviour
-    // change: a user who sets ANTHROPIC_API_KEY today gets API billing today.
-    const env = buildClaudeAccountEnv({
-      baseEnv: realisticEnv(),
-      account: null,
+    expect(Object.keys(env).sort()).toEqual([
+      'ANTHROPIC_API_KEY',
+      'CLAUDE_CODE_OAUTH_TOKEN',
+      'HOME',
+      'LANG',
+      'PATH',
+      'SHELL',
+      'SOME_PERSONAL_VAR',
+      'TMPDIR',
+    ])
+    expect({
+      PATH: env.PATH,
+      HOME: env.HOME,
+      SHELL: env.SHELL,
+      LANG: env.LANG,
+      TMPDIR: env.TMPDIR,
+    }).toEqual({
+      PATH: baseEnv.PATH,
+      HOME: baseEnv.HOME,
+      SHELL: baseEnv.SHELL,
+      LANG: baseEnv.LANG,
+      TMPDIR: baseEnv.TMPDIR,
     })
-
-    expect(env.ANTHROPIC_API_KEY).toBe('sk-ant-should-never-travel')
-    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe('oauth-should-never-travel')
   })
 
   it('applies telemetry injections — drop input.injections turns red', () => {
@@ -56,7 +66,17 @@ describe('buildClaudeAccountEnv — ambient default account', () => {
       },
     })
 
-    expect(env.OTEL_LOGS_EXPORTER).toBe('otlp')
+    expect(Object.keys(env).sort()).toEqual([
+      'ANTHROPIC_API_KEY',
+      'CLAUDE_CODE_OAUTH_TOKEN',
+      'HOME',
+      'LANG',
+      'OTEL_LOGS_EXPORTER',
+      'PATH',
+      'SHELL',
+      'SOME_PERSONAL_VAR',
+      'TMPDIR',
+    ])
   })
 })
 
@@ -72,11 +92,15 @@ describe('buildClaudeAccountEnv — selected account', () => {
       account: ACCOUNT,
     })
 
-    expect(env.ANTHROPIC_API_KEY).toBeUndefined()
-    expect(env.ANTHROPIC_AUTH_TOKEN).toBeUndefined()
-    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
-    expect(env.CCR_OAUTH_TOKEN_FILE).toBeUndefined()
-    expect(env.CLAUDE_CODE_USE_BEDROCK).toBeUndefined()
+    expect(Object.keys(env).sort()).toEqual([
+      'CLAUDE_CONFIG_DIR',
+      'CLAUDE_SECURESTORAGE_CONFIG_DIR',
+      'HOME',
+      'LANG',
+      'PATH',
+      'SHELL',
+      'TMPDIR',
+    ])
   })
 
   it('drops unknown variables rather than enumerating what to remove', () => {
@@ -90,8 +114,15 @@ describe('buildClaudeAccountEnv — selected account', () => {
       account: ACCOUNT,
     })
 
-    expect(env.ANTHROPIC_FUTURE_CREDENTIAL_2027).toBeUndefined()
-    expect(env.SOME_PERSONAL_VAR).toBeUndefined()
+    expect(Object.keys(env).sort()).toEqual([
+      'CLAUDE_CONFIG_DIR',
+      'CLAUDE_SECURESTORAGE_CONFIG_DIR',
+      'HOME',
+      'LANG',
+      'PATH',
+      'SHELL',
+      'TMPDIR',
+    ])
   })
 
   it('keeps the process basics a Claude run needs', () => {
@@ -100,14 +131,18 @@ describe('buildClaudeAccountEnv — selected account', () => {
       account: ACCOUNT,
     })
 
-    expect(env.PATH).toBe('/usr/local/bin:/usr/bin')
-    expect(env.HOME).toBe('/Users/tester')
-    expect(env.SHELL).toBe('/bin/zsh')
-    expect(env.LANG).toBe('en_US.UTF-8')
-    expect(env.TMPDIR).toBe('/var/folders/tmp/')
+    expect(Object.keys(env).sort()).toEqual([
+      'CLAUDE_CONFIG_DIR',
+      'CLAUDE_SECURESTORAGE_CONFIG_DIR',
+      'HOME',
+      'LANG',
+      'PATH',
+      'SHELL',
+      'TMPDIR',
+    ])
   })
 
-  it('points the child at the account credential slot', () => {
+  it('R2 M4 account directory values are exact — substitute either directory after the guard turns red', () => {
     const env = buildClaudeAccountEnv({
       baseEnv: {
         ...realisticEnv(),
@@ -117,8 +152,19 @@ describe('buildClaudeAccountEnv — selected account', () => {
       account: ACCOUNT,
     })
 
-    expect(env.CLAUDE_CONFIG_DIR).toBe(ACCOUNT.configDir)
-    expect(env.CLAUDE_SECURESTORAGE_CONFIG_DIR).toBe(ACCOUNT.credentialDir)
+    expect(Object.keys(env).sort()).toEqual([
+      'CLAUDE_CONFIG_DIR',
+      'CLAUDE_SECURESTORAGE_CONFIG_DIR',
+      'HOME',
+      'LANG',
+      'PATH',
+      'SHELL',
+      'TMPDIR',
+    ])
+    expect({
+      configDir: env.CLAUDE_CONFIG_DIR,
+      credentialDir: env.CLAUDE_SECURESTORAGE_CONFIG_DIR,
+    }).toEqual(ACCOUNT)
   })
 
   it('passes the user own OTLP telemetry configuration through', () => {
@@ -133,17 +179,22 @@ describe('buildClaudeAccountEnv — selected account', () => {
       account: ACCOUNT,
     })
 
-    expect(env.CLAUDE_CODE_ENABLE_TELEMETRY).toBe('1')
-    expect(env.OTEL_LOGS_EXPORTER).toBe('otlp')
-    expect(env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT).toBe(
-      'https://otel.example.com/v1/logs',
-    )
-    expect(env.OTEL_EXPORTER_OTLP_HEADERS).toBe(
-      'authorization=Bearer their-own-token',
-    )
+    expect(Object.keys(env).sort()).toEqual([
+      'CLAUDE_CODE_ENABLE_TELEMETRY',
+      'CLAUDE_CONFIG_DIR',
+      'CLAUDE_SECURESTORAGE_CONFIG_DIR',
+      'HOME',
+      'LANG',
+      'OTEL_EXPORTER_OTLP_HEADERS',
+      'OTEL_EXPORTER_OTLP_LOGS_ENDPOINT',
+      'OTEL_LOGS_EXPORTER',
+      'PATH',
+      'SHELL',
+      'TMPDIR',
+    ])
   })
 
-  it('preserves the connection telemetry switch', () => {
+  it('preserves the connection telemetry switch key', () => {
     const env = buildClaudeAccountEnv({
       baseEnv: {
         ...realisticEnv(),
@@ -152,7 +203,16 @@ describe('buildClaudeAccountEnv — selected account', () => {
       account: ACCOUNT,
     })
 
-    expect(env.CONVERGENCE_CLAUDE_SKILL_TELEMETRY).toBe('0')
+    expect(Object.keys(env).sort()).toEqual([
+      'CLAUDE_CONFIG_DIR',
+      'CLAUDE_SECURESTORAGE_CONFIG_DIR',
+      'CONVERGENCE_CLAUDE_SKILL_TELEMETRY',
+      'HOME',
+      'LANG',
+      'PATH',
+      'SHELL',
+      'TMPDIR',
+    ])
   })
 
   it('inherits the variables a configured stdio MCP server asks for', () => {
@@ -166,8 +226,17 @@ describe('buildClaudeAccountEnv — selected account', () => {
       passthroughNames: ['GITHUB_TOKEN', 'SENTRY_DSN'],
     })
 
-    expect(env.GITHUB_TOKEN).toBe('ghp-for-the-mcp-server')
-    expect(env.SENTRY_DSN).toBe('https://sentry.example.com/1')
+    expect(Object.keys(env).sort()).toEqual([
+      'CLAUDE_CONFIG_DIR',
+      'CLAUDE_SECURESTORAGE_CONFIG_DIR',
+      'GITHUB_TOKEN',
+      'HOME',
+      'LANG',
+      'PATH',
+      'SENTRY_DSN',
+      'SHELL',
+      'TMPDIR',
+    ])
   })
 
   it('refuses to smuggle a credential in through the MCP passthrough list', () => {
@@ -177,8 +246,15 @@ describe('buildClaudeAccountEnv — selected account', () => {
       passthroughNames: ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN'],
     })
 
-    expect(env.ANTHROPIC_API_KEY).toBeUndefined()
-    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
+    expect(Object.keys(env).sort()).toEqual([
+      'CLAUDE_CONFIG_DIR',
+      'CLAUDE_SECURESTORAGE_CONFIG_DIR',
+      'HOME',
+      'LANG',
+      'PATH',
+      'SHELL',
+      'TMPDIR',
+    ])
   })
 
   it('throws rather than spawn when an injection carries a credential', () => {

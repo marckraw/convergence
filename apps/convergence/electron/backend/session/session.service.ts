@@ -2019,6 +2019,70 @@ export class SessionService {
       }
     }
 
+    const augmentedText = this.prepareUserTurnText(
+      session,
+      input.input.text,
+      input.input.skipContextInjection,
+    )
+
+    assertLocalAccountSelection({
+      executionHost: input.session.executionHost,
+      accountId: input.input.providerAccountId,
+    })
+
+    const previousMute = input.input.muteRelays
+      ? this.getRowById(session.id)?.relays_muted
+      : undefined
+    this.requestRelayMute(input.session.id, input.input.muteRelays)
+    const disposition = handle.sendMessage(
+      augmentedText,
+      attachments,
+      input.input.skillSelections,
+      {
+        deliveryMode,
+        interactionResponse: input.input.interactionResponse,
+        providerAccountId: input.input.providerAccountId,
+      },
+    )
+    if (disposition === 'queue-follow-up') {
+      // This input belongs to the next turn, including its relay choice.
+      if (previousMute === 0)
+        this.db
+          .prepare('UPDATE sessions SET relays_muted = 0 WHERE id = ?')
+          .run(session.id)
+      this.queuedInputs.enqueue(
+        session.id,
+        { ...input.input, dispatchId: input.dispatchId },
+        'follow-up',
+      )
+      if (deliveryMode === 'answer') {
+        try {
+          const timestamp = new Date().toISOString()
+          const note = this.addConversationItem(session.id, {
+            id: randomUUID(),
+            turnId: null,
+            kind: 'note',
+            state: 'complete',
+            level: 'info',
+            text: 'nothing to answer; queued as your next message',
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            providerMeta: {
+              providerId: session.providerId,
+              providerItemId: null,
+              providerEventType: 'unconsumed-answer-queued',
+            },
+          })
+          this.notifySessionChange(
+            session.id,
+            note ? { sessionId: session.id, op: 'add', item: note } : undefined,
+          )
+        } catch {
+          // The input is already queued; a note cannot turn it into a failed dispatch.
+        }
+      }
+      return
+    }
     const shouldStartConversationTurn =
       deliveryMode === 'normal' || deliveryMode === 'answer'
     if (shouldStartConversationTurn) {
@@ -2032,31 +2096,9 @@ export class SessionService {
       )
     }
 
-    const augmentedText = this.prepareUserTurnText(
-      session,
-      input.input.text,
-      input.input.skipContextInjection,
-    )
-
-    assertLocalAccountSelection({
-      executionHost: input.session.executionHost,
-      accountId: input.input.providerAccountId,
-    })
-
     this.pendingTurnAccountIds.set(
       input.session.id,
       input.input.providerAccountId ?? null,
-    )
-    this.requestRelayMute(input.session.id, input.input.muteRelays)
-    handle.sendMessage(
-      augmentedText,
-      attachments,
-      input.input.skillSelections,
-      {
-        deliveryMode,
-        interactionResponse: input.input.interactionResponse,
-        providerAccountId: input.input.providerAccountId,
-      },
     )
     // Whatever the mode, the input just went INTO the turn this handle is
     // running (a native follow-up joins it; a normal send starts it), so that
@@ -3116,6 +3158,7 @@ export class SessionService {
     this.pendingTurnAccountIds.set(session.id, providerAccountId ?? null)
     this.requestRelayMute(session.id, turn?.muteRelays)
     this.activeHandles.set(session.id, handle)
+    this.notifySummaryUpdated(session.id)
     handle.onDelta((delta: SessionDelta) => {
       this.applyDelta(session.id, delta, handle)
     })
@@ -3247,6 +3290,7 @@ export class SessionService {
     if (!handle) return Promise.resolve()
 
     this.activeHandles.delete(sessionId)
+    this.notifySummaryUpdated(sessionId)
     let disposal: void | Promise<void> = undefined
     try {
       disposal = handle.dispose?.(reason)
@@ -3288,11 +3332,21 @@ export class SessionService {
         // The mute the user chose when they wrote this, not the composer's
         // state now -- the toggle reset the moment they pressed send.
         this.requestRelayMute(sessionId, item.relaysMuted)
-        handle.sendMessage(augmentedText, attachments, item.skillSelections, {
-          deliveryMode: 'normal',
-          queuedInputId: item.id,
-          providerAccountId: item.providerAccountId,
-        })
+        const disposition = handle.sendMessage(
+          augmentedText,
+          attachments,
+          item.skillSelections,
+          {
+            deliveryMode: 'normal',
+            queuedInputId: item.id,
+            providerAccountId: item.providerAccountId,
+          },
+        )
+        if (disposition === 'queue-follow-up') {
+          // Keep its original row and ordering; the next completion retries it.
+          this.queuedInputs.patch(item.id, 'queued')
+          return
+        }
         // The receipt moves from the durable queue row to the turn it just
         // started (MAR-2759): this turn's settle names it.
         this.attachDispatchToTurn(sessionId, item.dispatchId)
@@ -3418,6 +3472,7 @@ export class SessionService {
       this.sessionRepository.getExecutionHostLastSeq(session.id),
     )
     this.activeHandles.set(session.id, handle)
+    this.notifySummaryUpdated(session.id)
     if (isTerminalSessionStatus(session.status)) {
       this.handlesAwaitingTheirRun.add(handle)
     }

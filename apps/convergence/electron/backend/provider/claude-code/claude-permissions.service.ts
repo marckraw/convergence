@@ -5,6 +5,7 @@ import type {
 } from './claude-permission.types'
 import {
   readClaudeSessionRules,
+  isRememberableSuggestionSet,
   matchesClaudeSessionRule,
   type ClaudeSessionRules,
 } from './claude-session-rules.pure'
@@ -75,11 +76,11 @@ export class ClaudePermissionsService {
         decisionClassification: 'user_reject',
       })
     if (
-      !request.matchedAskRule &&
       matchesClaudeSessionRule(
         this.sessionAllowRules,
         request.suggestions,
         request.toolName,
+        !!request.matchedAskRule,
       )
     ) {
       this.emitter.addNote({
@@ -133,8 +134,11 @@ export class ClaudePermissionsService {
         `${request.displayName ?? request.toolName}: ${request.description ?? ''}`,
       providerItemId: request.toolUseID,
       agentRunId: request.agentID,
-      supportsSessionApproval:
-        readClaudeSessionRules(request.suggestions).rules.length > 0,
+      supportsSessionApproval: isRememberableSuggestionSet(
+        request.suggestions,
+        request.toolName,
+        !!request.matchedAskRule,
+      ),
       permissionDetails: {
         blockedPath: request.blockedPath,
         decisionReason: request.matchedAskRule
@@ -234,36 +238,40 @@ export class ClaudePermissionsService {
   }
 
   denyPendingForStop(): void {
-    for (const id of this.pending.keys())
-      this.resolve(id, {
-        behavior: 'deny',
-        toolUseID: id,
-        decisionClassification: 'user_reject',
-        message: 'Stopped in Convergence',
-      })
+    for (const id of this.pending.keys()) {
+      try {
+        this.resolve(id, {
+          behavior: 'deny',
+          toolUseID: id,
+          decisionClassification: 'user_reject',
+          message: 'Stopped in Convergence',
+        })
+      } catch {
+        // resolve settles this callback even if recording fails; settle the rest.
+      }
+    }
   }
 
   endConnection(): void {
     if (this.pending.size)
-      this.emitter.addNote({
-        text: 'Pending approval cancelled: connection ended',
-        level: 'info',
-      })
-    for (const id of this.pending.keys())
-      this.resolve(id, {
-        behavior: 'deny',
-        toolUseID: id,
-        decisionClassification: 'user_reject',
-        message: 'connection ended',
-      })
+      this.noteConnectionEnd('Pending approval cancelled: connection ended')
+    for (const id of this.pending.keys()) {
+      try {
+        this.resolve(id, {
+          behavior: 'deny',
+          toolUseID: id,
+          decisionClassification: 'user_reject',
+          message: 'connection ended',
+        })
+      } catch {
+        // resolve settles this callback even if recording fails; settle the rest.
+      }
+    }
     if (
       this.sessionAllowRules.rules.length ||
       this.sessionAllowRules.directories.length
     )
-      this.emitter.addNote({
-        text: 'session rule cleared: connection ended',
-        level: 'info',
-      })
+      this.noteConnectionEnd('session rule cleared: connection ended')
     this.sessionAllowRules = { rules: [], directories: [] }
   }
 
@@ -275,13 +283,18 @@ export class ClaudePermissionsService {
     return this.pending.size ? 'needs-approval' : null
   }
 
+  private noteConnectionEnd(text: string): void {
+    try {
+      this.emitter.addNote({ text, level: 'info' })
+    } catch {
+      // Recording a note must never prevent permission settlement or memory cleanup.
+    }
+  }
+
   private watchAbort(request: ClaudePermissionRequest): void {
     const pending = this.pending.get(request.toolUseID)!
     pending.abort = () => {
-      this.emitter.addNote({
-        text: 'Pending approval cancelled: connection ended',
-        level: 'info',
-      })
+      this.noteConnectionEnd('Pending approval cancelled: connection ended')
       this.resolve(request.toolUseID, {
         behavior: 'deny',
         message: 'connection ended',
