@@ -5,6 +5,11 @@ import type {
 } from './session-crew.types'
 
 export const sessionCrewApi = {
+  export: (
+    crewId: string,
+    options: { includePositions?: boolean; force?: boolean },
+  ): Promise<{ path: string; yaml: string }> =>
+    window.electronAPI.crew.export(crewId, options),
   list: (): Promise<SessionCrew[]> => window.electronAPI.crew.list(),
 
   create: (input: CreateSessionCrewInput): Promise<SessionCrew> =>

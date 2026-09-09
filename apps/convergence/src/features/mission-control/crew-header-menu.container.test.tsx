@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSessionCrewStore } from '@/entities/session-crew'
 import type { SessionCrew } from '@/entities/session-crew'
+import { toast } from 'sonner'
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 import { CrewHeaderMenu } from './crew-header-menu.container'
 
 function makeCrew(overrides: Partial<SessionCrew> = {}): SessionCrew {
@@ -23,6 +25,10 @@ function makeCrew(overrides: Partial<SessionCrew> = {}): SessionCrew {
 
 function installCrewApi() {
   const api = {
+    export: vi.fn(async () => ({
+      path: '/home/repo/.convergence/crews/night-shift.yaml',
+      yaml: 'version: 1',
+    })),
     list: vi.fn(async () => []),
     create: vi.fn(),
     update: vi.fn(async (id: string, patch: Partial<SessionCrew>) => ({
@@ -165,4 +171,63 @@ describe('CrewHeaderMenu', () => {
     )
     expect(api.delete).not.toHaveBeenCalled()
   })
+})
+
+it('exports without positions by default and offers Reveal (mutation: omit export action)', async () => {
+  const api = installCrewApi()
+  render(<CrewHeaderMenu crew={makeCrew()} />)
+  await openMenu()
+  fireEvent.click(screen.getByRole('button', { name: 'Export crew…' }))
+  await waitFor(() =>
+    expect({
+      calls: api.export.mock.calls,
+      toast: vi.mocked(toast.success).mock.calls,
+    }).toEqual({
+      calls: [['crew-1', { includePositions: false }]],
+      toast: [
+        [
+          'Crew exported',
+          {
+            description: '/home/repo/.convergence/crews/night-shift.yaml',
+            action: { label: 'Reveal', onClick: expect.any(Function) },
+          },
+        ],
+      ],
+    }),
+  )
+})
+
+it('sends positions only after the checkbox is ticked (mutation: force positions off)', async () => {
+  const api = installCrewApi()
+  render(<CrewHeaderMenu crew={makeCrew()} />)
+  await openMenu()
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Include positions' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Export crew…' }))
+  await waitFor(() =>
+    expect(api.export.mock.calls).toEqual([
+      ['crew-1', { includePositions: true }],
+    ]),
+  )
+})
+
+it('Reveal opens the exported file’s folder (mutation: drop the Finder call)', async () => {
+  installCrewApi()
+  const open = vi.fn(async () => undefined)
+  window.electronAPI.projectOpen = { listApps: vi.fn(), open }
+  render(<CrewHeaderMenu crew={makeCrew()} />)
+  await openMenu()
+  fireEvent.click(screen.getByRole('button', { name: 'Export crew…' }))
+  await waitFor(() => {
+    if (!vi.mocked(toast.success).mock.calls.length)
+      throw new Error('No toast yet')
+  })
+  const action = vi.mocked(toast.success).mock.calls[0]![1]!.action
+  if (!action || typeof action !== 'object' || !('onClick' in action))
+    throw new Error('Missing Reveal action')
+  action.onClick({} as Parameters<typeof action.onClick>[0])
+  await waitFor(() =>
+    expect(open.mock.calls).toEqual([
+      [{ appId: 'finder', path: '/home/repo/.convergence/crews' }],
+    ]),
+  )
 })

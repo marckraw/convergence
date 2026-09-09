@@ -1,3 +1,5 @@
+import { CrewExportService } from '../backend/crew/crew-export.service'
+import { registerCrewExportIpc } from '../backend/crew/crew-export.ipc'
 import {
   app,
   BrowserWindow,
@@ -680,6 +682,7 @@ async function startApp(): Promise<void> {
   })
   registerFeedbackIpcHandlers(feedbackService)
   registerCrewIpcHandlers({ service: crewService })
+  registerCrewExportIpc(new CrewExportService(db))
   const crewHailService = new CrewHailService(db)
   const relayEngine = new RelayEngine({
     relays: relayService,
