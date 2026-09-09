@@ -2,7 +2,6 @@ import type {
   HarnessFact,
   HarnessOutput,
 } from '../../../../src/shared/types/harness-facts.types'
-import { boundedHarnessPayload } from '../../session/harness-evidence.pure'
 import { claudeRecord, claudeString } from './claude-evidence.pure'
 
 const number = (value: unknown): number | null =>
@@ -59,17 +58,16 @@ export function readClaudeHarnessFact(
       status:
         e.subtype !== 'hook_response'
           ? null
-          : e.exit_code === 2
-            ? 'blocked'
-            : e.outcome === 'success'
-              ? 'ok'
-              : e.outcome === 'error'
-                ? 'failed'
-                : null,
-      output:
-        typeof e.output === 'string'
-          ? (JSON.parse(boundedHarnessPayload(e.output)) as HarnessOutput)
-          : null,
+          : e.outcome === 'cancelled'
+            ? 'cancelled'
+            : e.exit_code === 2
+              ? 'blocked'
+              : e.outcome === 'success'
+                ? 'ok'
+                : e.outcome === 'error'
+                  ? 'failed'
+                  : null,
+      output: typeof e.output === 'string' ? boundHookOutput(e.output) : null,
     }
   }
   if (e.subtype === 'api_retry')
@@ -98,6 +96,9 @@ export function readClaudeHarnessFact(
   if (e.subtype === 'permission_denied')
     return {
       kind: 'harness.denial',
+      ...(claudeString(e.tool_use_id)
+        ? { toolUseId: claudeString(e.tool_use_id) }
+        : {}),
       at,
       toolName: claudeString(e.tool_name),
       reasonType: claudeString(e.decision_reason_type),
@@ -139,4 +140,19 @@ export function readClaudeHarnessFact(
         : null,
     }
   return null
+}
+
+/** Bound the variable text field once, leaving room for the fact envelope. */
+function boundHookOutput(output: string): HarnessOutput {
+  const bytes = Buffer.byteLength(output, 'utf8')
+  if (bytes <= 4096) return output
+  let size = 0,
+    preview = ''
+  for (const point of output) {
+    const next = Buffer.byteLength(point, 'utf8')
+    if (size + next > 4096) break
+    size += next
+    preview += point
+  }
+  return { truncated: true, bytes, preview }
 }

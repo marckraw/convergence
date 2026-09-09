@@ -273,6 +273,7 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
   )
 
   const totalSize = rowVirtualizer.getTotalSize()
+  const lastCompactionSequence = compactions.at(-1)?.sequence
   useLayoutEffect(() => {
     const sessionChanged = previousSessionIdRef.current !== session.id
     previousSessionIdRef.current = session.id
@@ -284,7 +285,13 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     if (sessionChanged || bottomFollowRef.current) {
       scrollToLatest()
     }
-  }, [session.id, totalSize, compactions, scrollToLatest])
+  }, [
+    session.id,
+    totalSize,
+    compactions.length,
+    lastCompactionSequence,
+    scrollToLatest,
+  ])
 
   useLayoutEffect(
     () => () => {

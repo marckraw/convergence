@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PROJECT_SETTINGS, useProjectStore } from '@/entities/project'
 import { useDialogStore } from '@/entities/dialog'
@@ -279,6 +279,30 @@ describe('SessionView', () => {
       writable: true,
     })
   })
+
+  it.each([
+    ['claude-code', 'daemon-a'],
+    ['codex', 'local'],
+    ['pi', 'local'],
+  ])(
+    'R10 no harness promise for %s on %s — mutation remove provider or host gate turns red',
+    async (providerId, executionHost) => {
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) => ({
+          ...session,
+          providerId,
+          executionHost,
+        })),
+      }))
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+      await act(async () => {})
+      expect(screen.queryByTestId('harness-pill')).toBeNull()
+    },
+  )
 
   it('RUN61 reads the shared projection into the header and transcript — mutation omit harness view or compactions prop turns red', async () => {
     vi.mocked(window.electronAPI.session.harnessFacts).mockResolvedValue({

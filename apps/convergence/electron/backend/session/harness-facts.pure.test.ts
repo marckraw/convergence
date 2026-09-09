@@ -206,3 +206,33 @@ it('R3 session facts retain compactions and latest init and rate limit — mutat
     compactions: f.compactions,
   }).toEqual({ init, rate, compactions: [{ ...compact, sequence: 4 }] })
 })
+
+it('R7 tool-use identity wins over tool-name order — mutation match only by order turns red', () => {
+  const denial = {
+    kind: 'harness.denial' as const,
+    toolName: 'Bash',
+    reasonType: 'rule',
+    at: attempt.at,
+  }
+  const facts = foldHarnessFacts(
+    [
+      event({ ...denial, toolUseId: 'A', reason: 'first' }),
+      event({ ...denial, toolUseId: 'B', reason: 'second' }, 2),
+    ],
+    [
+      {
+        ...turn,
+        permissionDenials: [
+          { tool_name: 'Bash', tool_use_id: 'B' },
+          { tool_name: 'Bash', tool_use_id: 'A' },
+          { tool_name: 'Bash', tool_use_id: 'C' },
+        ],
+      },
+    ],
+  )
+  expect(facts.currentTurn?.denials?.map((d) => d.reason)).toEqual([
+    'second',
+    'first',
+    null,
+  ])
+})

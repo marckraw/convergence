@@ -47,17 +47,25 @@ export function foldHarnessFacts(
         attempts:
           fact.phase === 'attempt'
             ? (current.retries?.attempts ?? 0) + 1
-            : (current.retries?.attempts ?? fact.attempts),
-        state: fact.phase === 'attempt' ? 'in-flight' : fact.outcome,
+            : (current.retries?.attempts ??
+              (fact.phase === 'resolved' ? fact.attempts : 0)),
+        state:
+          fact.phase === 'attempt'
+            ? 'in-flight'
+            : fact.phase === 'resolved'
+              ? fact.outcome
+              : 'unknown',
         last: fact,
       }
     }
     if (fact.kind === 'harness.denial')
       (current.denials ??= []).push({
         toolName: fact.toolName,
+        ...(fact.toolUseId ? { toolUseId: fact.toolUseId } : {}),
         reasonType: fact.reasonType,
         reason: fact.reason,
         at: fact.at,
+        ...(fact.truncated ? { truncated: true as const } : {}),
       })
     if (fact.kind === 'harness.hook') {
       const id = fact.hookId ?? `unidentified-${event.sequence}`
@@ -67,7 +75,8 @@ export function foldHarnessFacts(
           id,
           name: fact.hookName,
           event: fact.hookEvent,
-          status: 'running',
+          status: fact.phase === 'unknown' ? 'unknown' : 'running',
+          ...(fact.truncated ? { truncated: true as const } : {}),
           startedAt: null,
           durationMs: null,
           output: null,
@@ -94,7 +103,7 @@ export function foldHarnessFacts(
       value.retries.state = 'unknown'
     if (Array.isArray(turn.permissionDenials)) {
       const early = value.denials ?? []
-      const orders = new Map<string | null, number>()
+      const used = new Set<number>()
       value.denials = turn.permissionDenials.map((raw) => {
         const entry =
           raw !== null && typeof raw === 'object'
@@ -102,10 +111,24 @@ export function foldHarnessFacts(
             : {}
         const toolName =
           typeof entry.tool_name === 'string' ? entry.tool_name : null
-        const order = orders.get(toolName) ?? 0
-        orders.set(toolName, order + 1)
-        const match = early.filter((d) => d.toolName === toolName)[order]
-        return match ?? { toolName, reasonType: null, reason: null, at: null }
+        const toolUseId =
+          typeof entry.tool_use_id === 'string' ? entry.tool_use_id : null
+        let index = toolUseId
+          ? early.findIndex((d, i) => !used.has(i) && d.toolUseId === toolUseId)
+          : -1
+        if (index < 0)
+          index = early.findIndex(
+            (d, i) =>
+              !used.has(i) &&
+              d.toolName === toolName &&
+              (!toolUseId || !d.toolUseId),
+          )
+        if (index >= 0) used.add(index)
+        const match = early[index]
+        return {
+          ...(match ?? { toolName, reasonType: null, reason: null, at: null }),
+          ...(toolUseId ? { toolUseId } : {}),
+        }
       })
     }
   }

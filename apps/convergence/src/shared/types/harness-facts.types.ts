@@ -2,14 +2,14 @@ export type HarnessOutput =
   | string
   | { truncated: true; bytes: number; preview: string }
 
-export type HarnessFact = { at: string } & (
+export type HarnessFact = { at: string; truncated?: true } & (
   | {
       kind: 'harness.hook'
       hookId: string | null
       hookName: string | null
       hookEvent: string | null
-      phase: 'started' | 'progress' | 'response'
-      status: 'ok' | 'failed' | 'blocked' | null
+      phase: 'started' | 'progress' | 'response' | 'unknown'
+      status: 'ok' | 'failed' | 'blocked' | 'cancelled' | null
       output: HarnessOutput | null
     }
   | {
@@ -29,6 +29,7 @@ export type HarnessFact = { at: string } & (
       attempts: number
       errorSubtype?: string | null
     }
+  | { kind: 'harness.retry'; phase: 'unknown' }
   | {
       kind: 'harness.compaction'
       trigger: string | null
@@ -38,6 +39,7 @@ export type HarnessFact = { at: string } & (
     }
   | {
       kind: 'harness.denial'
+      toolUseId?: string | null
       toolName: string | null
       reasonType: string | null
       reason: string | null
@@ -83,10 +85,11 @@ export interface HarnessTurn {
   permissionDenials: unknown
 }
 export interface HarnessHook {
+  truncated?: true
   id: string
   name: string | null
   event: string | null
-  status: 'running' | 'ok' | 'failed' | 'blocked' | 'unknown'
+  status: 'running' | 'ok' | 'failed' | 'blocked' | 'cancelled' | 'unknown'
   startedAt: string | null
   durationMs: number | null
   output: HarnessOutput | null
@@ -102,6 +105,8 @@ export interface HarnessTurnFacts {
   retries: HarnessRetry | null
   denials:
     | {
+        truncated?: true
+        toolUseId?: string | null
         toolName: string | null
         reasonType: string | null
         reason: string | null

@@ -41,12 +41,10 @@ export function useHarnessFacts(sessionId: string | null) {
       if (event.sessionId === sessionId) refresh()
     }
     const unsubscribe = harnessFactsApi.subscribe(update)
-    const unsubscribeSummary = harnessFactsApi.subscribeSummary(update)
     refresh()
     return () => {
       alive = false
       unsubscribe()
-      unsubscribeSummary()
     }
   }, [sessionId, revision])
   const current = record?.id === sessionId ? record : null

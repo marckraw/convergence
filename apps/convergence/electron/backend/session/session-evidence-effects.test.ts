@@ -363,3 +363,27 @@ it('R3 typed facts share the existing 250ms flush — mutation skip evidence sch
     events: [3],
   })
 })
+
+it('R3prime turn accounting schedules the final fact flush — mutation skip accounting flush turns red', () => {
+  vi.useFakeTimers()
+  const { service, emitter, db } = bed(),
+    counts: unknown[] = []
+  db.prepare(
+    "INSERT INTO session_turns(id,session_id,sequence,started_at,status) VALUES ('t','session',1,'now','running')",
+  ).run()
+  service['activeTurnIds'].set('session', 't')
+  service.setEvidenceUpdateListener(() =>
+    counts.push(service.harnessFacts('session').currentTurn?.denials?.length),
+  )
+  emitter.recordEvidence({
+    kind: 'turn.accounting',
+    resultSubtype: 'success',
+    usage: null,
+    costUsd: null,
+    permissionDenials: [{ tool_name: 'Bash' }],
+    subagentStats: null,
+  })
+  const before = counts.length
+  vi.advanceTimersByTime(250)
+  expect({ before, counts }).toEqual({ before: 0, counts: [1] })
+})

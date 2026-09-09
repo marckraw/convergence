@@ -5,7 +5,11 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
 } from '@/shared/ui/dropdown-menu'
-import { harnessPill, compactionLabel } from './harness-facts.pure'
+import {
+  harnessPill,
+  compactionLabel,
+  isMcpAlertStatus,
+} from './harness-facts.pure'
 
 export function HarnessFactsView({
   facts,
@@ -74,6 +78,7 @@ export function HarnessFactsView({
                 </div>
                 <div>
                   {hook.status}
+                  {hook.truncated ? ' · record truncated' : ''}
                   {hook.durationMs !== null ? ` · ${hook.durationMs} ms` : ''}
                 </div>
                 {hook.output !== null && (
@@ -100,7 +105,9 @@ export function HarnessFactsView({
           <section aria-label="Retries" className="mb-3">
             <h3 className="font-medium">Retries · current turn</h3>
             <p>
-              {current.retries.attempts} attempts · {current.retries.state}
+              {current.retries.last.truncated
+                ? 'Retry record truncated'
+                : `${current.retries.attempts} attempts · ${current.retries.state}`}
             </p>
             {current.retries.last.phase === 'attempt' ? (
               <p>
@@ -112,7 +119,8 @@ export function HarnessFactsView({
                   ? ` · HTTP ${current.retries.last.errorStatus}`
                   : ''}
               </p>
-            ) : current.retries.last.errorSubtype ? (
+            ) : current.retries.last.phase === 'resolved' &&
+              current.retries.last.errorSubtype ? (
               <p>{current.retries.last.errorSubtype}</p>
             ) : null}
           </section>
@@ -125,6 +133,7 @@ export function HarnessFactsView({
             {current.denials.map((denial, index) => (
               <p key={index}>
                 {denial.toolName ?? 'Tool not reported'}
+                {denial.truncated ? ' · record truncated' : ''}
                 {denial.reasonType ? ` · ${denial.reasonType}` : ''}
                 {denial.reason ? ` · ${denial.reason}` : ''}
               </p>
@@ -145,6 +154,7 @@ export function HarnessFactsView({
         {rate && (
           <section aria-label="Rate limit" className="mb-3">
             <h3 className="font-medium">Rate limit · last reported</h3>
+            {rate.truncated && <p>Rate limit record truncated</p>}
             {[
               ['Status', rate.status],
               ['Limit', rate.type],
@@ -198,6 +208,7 @@ export function HarnessFactsView({
         {init && (
           <section aria-label="Harness">
             <h3 className="font-medium">Harness</h3>
+            {init.truncated && <p>Harness record truncated</p>}
             {init.claudeCodeVersion !== null && (
               <p>Claude Code {init.claudeCodeVersion}</p>
             )}
@@ -212,9 +223,7 @@ export function HarnessFactsView({
                   <p
                     key={server.name}
                     className={
-                      server.status !== null && server.status !== 'connected'
-                        ? 'text-destructive'
-                        : ''
+                      isMcpAlertStatus(server.status) ? 'text-destructive' : ''
                     }
                   >
                     {server.name} · {server.status ?? 'Not reported'}

@@ -130,7 +130,11 @@ export const SessionView: FC = () => {
   } | null>(null)
   const parallelButton = useRef<HTMLButtonElement>(null)
   const parallelInvoker = useRef<HTMLElement | null>(null)
-  const harness = useHarnessFacts(activeSessionId)
+  const session = sessions.find((s) => s.id === activeSessionId) ?? null
+  const supportsHarnessFacts =
+    session?.providerId === 'claude-code' &&
+    !isRemoteExecutionHost(session.executionHost)
+  const harness = useHarnessFacts(supportsHarnessFacts ? activeSessionId : null)
   const parallel = useParallelWork(activeSessionId, activeConversation)
   const selectParallel = (id: string | null) => {
     if (!parallelOpen && document.activeElement instanceof HTMLElement)
@@ -146,7 +150,6 @@ export const SessionView: FC = () => {
       : parallelButton.current
     )?.focus()
   }
-  const session = sessions.find((s) => s.id === activeSessionId) ?? null
   const remoteSessionId = isRemoteExecutionHost(session?.executionHost)
     ? (session?.id ?? null)
     : null
@@ -445,12 +448,14 @@ export const SessionView: FC = () => {
                 Worktree removed
               </span>
             )}
-            <HarnessFactsView
-              facts={harness.facts}
-              error={harness.error}
-              loading={harness.loading}
-              onRetry={harness.retry}
-            />
+            {supportsHarnessFacts && (
+              <HarnessFactsView
+                facts={harness.facts}
+                error={harness.error}
+                loading={harness.loading}
+                onRetry={harness.retry}
+              />
+            )}
             <SessionWiresContainer sessionId={session.id} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

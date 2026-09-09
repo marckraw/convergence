@@ -1,3 +1,4 @@
+import { readClaudeHarnessFact } from '../provider/claude-code/claude-harness.pure'
 import { afterEach, expect, it } from 'vitest'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import { HarnessEvidenceService } from './harness-evidence.service'
@@ -506,4 +507,63 @@ it('RUN61 reads legacy recorded harness events without backfill — mutation omi
       output: null,
     },
   ])
+})
+
+it('R2prime 8190-byte hook response survives the envelope — mutation remove output bound turns red', () => {
+  const { service } = bed()
+  const started = readClaudeHarnessFact(
+    {
+      type: 'system',
+      subtype: 'hook_started',
+      hook_id: 'h',
+      hook_name: 'guard',
+      hook_event: 'PreToolUse',
+    },
+    '2026-09-09T00:00:01Z',
+  )!
+  const response = readClaudeHarnessFact(
+    {
+      type: 'system',
+      subtype: 'hook_response',
+      hook_id: 'h',
+      hook_name: 'guard',
+      hook_event: 'PreToolUse',
+      outcome: 'success',
+      output: 'x'.repeat(8190),
+    },
+    '2026-09-09T00:00:02Z',
+  )!
+  service.apply('session', 'turn', started)
+  service.apply('session', 'turn', response)
+  expect(service.harnessFacts('session').currentTurn?.hooks).toMatchObject([
+    {
+      id: 'h',
+      status: 'ok',
+      output: { truncated: true, bytes: 8190, preview: 'x'.repeat(4096) },
+    },
+  ])
+})
+it('R2prime oversized init becomes an explicit placeholder — mutation drop truncated rows turns red', () => {
+  const { service } = bed()
+  service.apply(
+    'session',
+    'turn',
+    readClaudeHarnessFact(
+      {
+        type: 'system',
+        subtype: 'init',
+        plugins: Array.from({ length: 100 }, (_, n) => ({
+          name: `plugin ${n}`,
+          path: 'x'.repeat(200),
+        })),
+      },
+      'now',
+    )!,
+  )
+  expect(service.harnessFacts('session').init).toMatchObject({
+    kind: 'harness.init',
+    truncated: true,
+    model: null,
+    plugins: null,
+  })
 })

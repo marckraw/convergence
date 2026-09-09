@@ -3,11 +3,12 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 import { useHarnessFacts } from './use-harness-facts'
 import { harnessFactsApi } from './harness-facts.api'
+const summarySubscribe = vi.hoisted(() => vi.fn())
 vi.mock('./harness-facts.api', () => ({
   harnessFactsApi: {
     read: vi.fn(),
     subscribe: vi.fn(),
-    subscribeSummary: vi.fn(),
+    subscribeSummary: summarySubscribe,
   },
 }))
 const empty: SessionHarnessFacts = {
@@ -18,46 +19,38 @@ const empty: SessionHarnessFacts = {
   init: null,
 }
 beforeEach(() => vi.resetAllMocks())
-it('refreshes from both existing broadcasts and coalesces one flush — mutations omit either subscription or microtask guard turn red', async () => {
-  const listeners: Array<(e: { sessionId: string }) => void> = [],
+it('R3prime only a coalesced fact flush rereads — mutation restore summary subscription turns red', async () => {
+  const flushes: Array<(e: { sessionId: string }) => void> = [],
+    summaries: Array<(e: { sessionId: string }) => void> = [],
     off = vi.fn()
   vi.mocked(harnessFactsApi.subscribe).mockImplementation((cb) => {
-    listeners[0] = cb
+    flushes.push(cb)
     return off
   })
-  vi.mocked(harnessFactsApi.subscribeSummary).mockImplementation((cb) => {
-    listeners[1] = cb
+  summarySubscribe.mockImplementation((cb) => {
+    summaries.push(cb)
     return off
   })
   vi.mocked(harnessFactsApi.read).mockResolvedValue(empty)
   const { result, unmount } = renderHook(() => useHarnessFacts('s'))
   await act(async () => {})
-  await act(async () => {
-    listeners[0]?.({ sessionId: 'other' })
-    listeners[0]?.({ sessionId: 's' })
-    listeners[1]?.({ sessionId: 's' })
-  })
-  const coalesced = vi.mocked(harnessFactsApi.read).mock.calls.length
-  await act(async () => listeners[1]?.({ sessionId: 's' }))
-  await act(async () => listeners[0]?.({ sessionId: 's' }))
+  for (let n = 0; n < 3; n++)
+    await act(async () => summaries.forEach((cb) => cb({ sessionId: 's' })))
+  const afterSummaries = vi.mocked(harnessFactsApi.read).mock.calls.length
+  await act(async () => flushes.forEach((cb) => cb({ sessionId: 'other' })))
+  await act(async () => flushes.forEach((cb) => cb({ sessionId: 's' })))
+  const afterFlush = vi.mocked(harnessFactsApi.read).mock.calls.length
   unmount()
   expect({
-    coalesced,
-    reads: vi.mocked(harnessFactsApi.read).mock.calls,
-    facts: result.current.facts,
-    loading: result.current.loading,
+    afterSummaries,
+    afterFlush,
     off: off.mock.calls.length,
-  }).toEqual({
-    coalesced: 2,
-    reads: [['s'], ['s'], ['s'], ['s']],
-    facts: empty,
-    loading: false,
-    off: 2,
-  })
+    facts: result.current.facts,
+  }).toEqual({ afterSummaries: 1, afterFlush: 2, off: 1, facts: empty })
 })
 it('rejects stale reads and retries a failed read — mutations accept stale session or swallow read failure turn red', async () => {
   vi.mocked(harnessFactsApi.subscribe).mockReturnValue(() => {})
-  vi.mocked(harnessFactsApi.subscribeSummary).mockReturnValue(() => {})
+  summarySubscribe.mockReturnValue(() => {})
   let resolve!: (value: SessionHarnessFacts) => void
   vi.mocked(harnessFactsApi.read)
     .mockReturnValueOnce(

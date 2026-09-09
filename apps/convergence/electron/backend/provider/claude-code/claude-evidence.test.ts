@@ -645,3 +645,109 @@ it('R4prime process end records no guessed resolution and clears outstanding att
     ),
   ).toEqual(['attempt', 'process.ended'])
 })
+
+it.each(['stream_event', 'assistant'])(
+  'R4double main-thread witness rejects child %s — mutation accept child frames turns red',
+  (type) => {
+    const f = fixture()
+    f.adapter.consume(
+      { type: 'system', subtype: 'api_retry', attempt: 1 },
+      'retry',
+    )
+    f.adapter.consume(
+      {
+        type,
+        parent_tool_use_id: 'toolu_x',
+        event: { type: 'message_start' },
+        message: { content: [] },
+      },
+      'child',
+    )
+    const atChild = f.facts.filter(
+      (f) => f.kind === 'harness.retry' && f.phase === 'resolved',
+    )
+    f.adapter.consume(
+      { type: 'result', subtype: 'error_during_execution' },
+      'failed',
+    )
+    expect({
+      atChild,
+      resolved: f.facts.filter(
+        (f) => f.kind === 'harness.retry' && f.phase === 'resolved',
+      ),
+    }).toEqual({
+      atChild: [],
+      resolved: [
+        {
+          kind: 'harness.retry',
+          phase: 'resolved',
+          outcome: 'failed',
+          attempts: 1,
+          errorSubtype: 'error_during_execution',
+          at: 'failed',
+        },
+      ],
+    })
+  },
+)
+it.each([undefined, 'completed'])(
+  'R4double result %s resolves turn A before turn B — mutation ignore successful result turns red',
+  (terminal_reason) => {
+    const f = fixture()
+    f.adapter.consume(
+      { type: 'system', subtype: 'api_retry', attempt: 1 },
+      'turn A retry',
+    )
+    f.adapter.consume(
+      { type: 'result', subtype: 'success', terminal_reason },
+      'turn A end',
+    )
+    f.adapter.consume(
+      { type: 'stream_event', event: { type: 'message_start' } },
+      'turn B',
+    )
+    expect(
+      f.facts.filter(
+        (f) => f.kind === 'harness.retry' && f.phase === 'resolved',
+      ),
+    ).toEqual([
+      {
+        kind: 'harness.retry',
+        phase: 'resolved',
+        outcome: 'succeeded',
+        attempts: 1,
+        at: 'turn A end',
+      },
+    ])
+  },
+)
+it.each([
+  'aborted_streaming',
+  'aborted_tools',
+  'hook_stopped',
+  'tool_deferred',
+  'max_turns',
+  'background_requested',
+])(
+  'R4double %s clears without guessed success — mutation carry retries across result turns red',
+  (terminal_reason) => {
+    const f = fixture()
+    f.adapter.consume(
+      { type: 'system', subtype: 'api_retry', attempt: 1 },
+      'retry',
+    )
+    f.adapter.consume(
+      { type: 'result', subtype: 'success', terminal_reason },
+      'end',
+    )
+    f.adapter.consume(
+      { type: 'stream_event', event: { type: 'message_start' } },
+      'next turn',
+    )
+    expect(
+      f.facts.filter(
+        (f) => f.kind === 'harness.retry' && f.phase === 'resolved',
+      ),
+    ).toEqual([])
+  },
+)

@@ -2,7 +2,7 @@ import type {
   HarnessEvent,
   HarnessTurn,
 } from '../../../src/shared/types/harness-facts.types'
-import { readClaudeHarnessFact } from '../provider/claude-code/claude-harness.pure'
+import { readHarnessFactRow } from './harness-fact-row.pure'
 import { foldHarnessFacts } from './harness-facts.pure'
 import type Database from 'better-sqlite3'
 import type { ParallelWorkCounts } from '../../../src/shared/lib/parallel-work.pure'
@@ -242,11 +242,7 @@ export class HarnessEvidenceService {
     const latestTurns = [...turns].reverse()
     const events: HarnessEvent[] = rows.flatMap((row) => {
       const payload = JSON.parse(row.payload)
-      const fact: HarnessEvent['fact'] | null =
-        payload?.kind === row.type &&
-        (row.type.startsWith('harness.') || row.type === 'process.ended')
-          ? (payload as HarnessEvent['fact'])
-          : readClaudeHarnessFact(payload, row.at)
+      const fact = readHarnessFactRow(row.type, payload, row.at)
       if (!fact) return []
       const turnId =
         typeof payload.turnId === 'string'

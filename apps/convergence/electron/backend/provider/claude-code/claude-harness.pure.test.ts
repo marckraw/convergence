@@ -191,7 +191,57 @@ it('bounds hook output before persistence — mutation bypass boundedHarnessPayl
     )
   expect(fact?.kind === 'harness.hook' ? fact.output : null).toMatchObject({
     truncated: true,
-    bytes: 9002,
+    bytes: 9000,
     preview: expect.stringContaining('xxx'),
   })
+})
+
+it.each([4092, 4094])(
+  'R2prime raw UTF-8 preview at %i bytes — mutation JSON preview or split code point turns red',
+  (n) => {
+    const output = 'a'.repeat(n) + '😀' + '\n"tail"'
+    const fact = readClaudeHarnessFact(
+      { type: 'system', subtype: 'hook_response', output },
+      'now',
+    )
+    expect(fact?.kind === 'harness.hook' ? fact.output : null).toEqual({
+      truncated: true,
+      bytes: Buffer.byteLength(output),
+      preview: 'a'.repeat(n) + (n === 4092 ? '😀' : ''),
+    })
+  },
+)
+it('R2prime preview is raw text — mutation JSON stringify preview turns red', () => {
+  const output = 'line\n"quoted"\n' + 'x'.repeat(9000),
+    fact = readClaudeHarnessFact(
+      { type: 'system', subtype: 'hook_response', output },
+      'now',
+    )
+  expect(fact?.kind === 'harness.hook' ? fact.output : null).toEqual({
+    truncated: true,
+    bytes: Buffer.byteLength(output),
+    preview: output.slice(0, 4096),
+  })
+})
+
+it('small cancelled outcome remains cancelled — mutation map cancellation to unknown turns red', () => {
+  expect(
+    readClaudeHarnessFact(
+      { type: 'system', subtype: 'hook_response', outcome: 'cancelled' },
+      'now',
+    ),
+  ).toMatchObject({ status: 'cancelled' })
+})
+it('R7 carries the harness tool-use key — mutation drop denial identity turns red', () => {
+  expect(
+    readClaudeHarnessFact(
+      {
+        type: 'system',
+        subtype: 'permission_denied',
+        tool_name: 'Bash',
+        tool_use_id: 'B',
+      },
+      'now',
+    ),
+  ).toMatchObject({ toolUseId: 'B' })
 })

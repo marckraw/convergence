@@ -21,8 +21,8 @@ export function harnessPill(facts: SessionHarnessFacts | null): {
     label: parts.join(' · '),
     alert:
       retry?.state === 'in-flight' ||
-      !!facts?.init?.mcpServers?.some(
-        (server) => server.status !== null && server.status !== 'connected',
+      !!facts?.init?.mcpServers?.some((server) =>
+        isMcpAlertStatus(server.status),
       ),
   }
 }
@@ -42,7 +42,7 @@ export function compactionLabel(
       : fact.preTokens !== null
         ? ` · ${format(fact.preTokens)} tokens before`
         : ''
-  return `Compacted (${fact.trigger ?? 'not reported'})${counts}`
+  return `Compacted (${fact.trigger ?? 'not reported'})${counts}${fact.truncated ? ' · record truncated' : ''}`
 }
 
 export function placeCompactions(
@@ -51,12 +51,19 @@ export function placeCompactions(
 ) {
   const before = new Map<string, SessionHarnessFacts['compactions']>(),
     tail: SessionHarnessFacts['compactions'] = []
+  const byTime = [...items].sort((a, b) =>
+    a.createdAt.localeCompare(b.createdAt),
+  )
   for (const fact of [...compactions].sort(
     (a, b) => a.at.localeCompare(b.at) || a.sequence - b.sequence,
   )) {
-    const next = items.find((item) => item.createdAt >= fact.at)
+    const next = byTime.find((item) => item.createdAt >= fact.at)
     if (next) before.set(next.id, [...(before.get(next.id) ?? []), fact])
     else tail.push(fact)
   }
   return { before, tail }
+}
+
+export function isMcpAlertStatus(status: string | null): boolean {
+  return status === 'failed' || status === 'needs-auth'
 }
