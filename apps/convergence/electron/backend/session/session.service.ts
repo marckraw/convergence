@@ -1404,6 +1404,10 @@ export class SessionService {
     await handle.stopTask(id)
   }
 
+  harnessFacts(sessionId: string) {
+    return new HarnessEvidenceService(this.db).harnessFacts(sessionId)
+  }
+
   listAgentRuns(sessionId: string) {
     return new HarnessEvidenceService(this.db).listAgentRuns(sessionId)
   }

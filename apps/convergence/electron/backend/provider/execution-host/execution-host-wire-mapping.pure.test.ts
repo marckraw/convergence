@@ -1,3 +1,4 @@
+import { EXECUTION_HOST_UNSENT_HARNESS_FACT_KINDS } from './execution-host-wire-mapping.pure'
 import { describe, expect, it } from 'vitest'
 import {
   decodeExecutionCommandEnvelope,
@@ -1058,4 +1059,15 @@ describe('execution protocol descriptor from a captured /health', () => {
       decodeExecutionProtocolDescriptor({ version: 2, capabilities: [] }),
     ).toEqual({ ok: false, reason: 'unsupported-protocol-version' })
   })
+})
+
+it('names every local harness family remote cannot show — mutation remove an inventory entry turns red', () => {
+  expect(Object.keys(EXECUTION_HOST_UNSENT_HARNESS_FACT_KINDS)).toEqual([
+    'harness.hook',
+    'harness.retry',
+    'harness.compaction',
+    'harness.denial',
+    'harness.rateLimit',
+    'harness.init',
+  ])
 })

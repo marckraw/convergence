@@ -430,3 +430,80 @@ it.each(['running', 'unknown'] as const)(
     })
   },
 )
+
+it('RUN61 persists a typed harness fact and its turn in the existing table — mutation skip typed write', () => {
+  const { db, service } = bed()
+  const fact = {
+    kind: 'harness.compaction' as const,
+    at: 'boundary',
+    trigger: 'manual',
+    preTokens: 20686,
+    postTokens: 4630,
+    durationMs: 14465,
+  }
+  service.apply('session', 'turn', fact)
+  expect(
+    db
+      .prepare(
+        'SELECT type,subtype,payload_json,created_at FROM session_harness_events',
+      )
+      .all(),
+  ).toEqual([
+    {
+      type: 'harness.compaction',
+      subtype: null,
+      payload_json: JSON.stringify({ ...fact, turnId: 'turn' }),
+      created_at: 'boundary',
+    },
+  ])
+})
+
+it('RUN61 reads typed evidence and process endings through the durable fold — mutation omit read or process record', () => {
+  const { service } = bed()
+  service.apply('session', 'turn', {
+    kind: 'harness.retry',
+    phase: 'attempt',
+    attempt: 1,
+    maxRetries: 10,
+    retryDelayMs: 615,
+    errorStatus: null,
+    message: 'unknown',
+    noResponse: null,
+    at: 'retry',
+  })
+  service.apply('session', null, { kind: 'process.ended', at: 'exit' })
+  expect(service.harnessFacts('session').currentTurn?.retries?.state).toBe(
+    'unknown',
+  )
+})
+
+it('RUN61 reads legacy recorded harness events without backfill — mutation omit legacy decoder turns red', () => {
+  const { db, service } = bed()
+  db.prepare(
+    "UPDATE session_turns SET started_at='2026-09-09T00:00:00.000Z'",
+  ).run()
+  service.apply('session', null, {
+    kind: 'harness.unknown',
+    type: 'system',
+    subtype: 'hook_started',
+    payload: {
+      type: 'system',
+      subtype: 'hook_started',
+      hook_id: 'legacy',
+      hook_name: 'Old hook',
+      hook_event: 'PreToolUse',
+    },
+    at: '2026-09-09T00:00:01.000Z',
+  })
+  expect(service.harnessFacts('session').currentTurn?.hooks).toEqual([
+    {
+      id: 'legacy',
+      name: 'Old hook',
+      event: 'PreToolUse',
+      status: 'running',
+      startedAt: '2026-09-09T00:00:01.000Z',
+      durationMs: null,
+      output: null,
+    },
+  ])
+})

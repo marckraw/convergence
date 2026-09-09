@@ -1,3 +1,4 @@
+import { readClaudeHarnessFact } from './claude-harness.pure'
 import { claudeRootResultClaimsBlock } from './claude-code-task.pure'
 import { readdirSync, readFileSync } from 'fs'
 import { homedir } from 'os'
@@ -36,6 +37,7 @@ export class ClaudeEvidenceService {
   private readonly readMetadata = new Set<string>()
   private readonly unmatchedMetadata = new Set<string>()
   private metadataListing = ''
+  private outstandingRetries = 0
   private sessionId: string | null = null
   private cwd: string
   constructor(
@@ -59,6 +61,26 @@ export class ClaudeEvidenceService {
   consume(data: unknown, at: string): void {
     const event = claudeRecord(data)
     if (!event) return
+    if (event.type === 'system' && event.subtype === 'api_retry')
+      this.outstandingRetries++
+    const failed =
+      event.type === 'result' &&
+      (event.is_error === true || String(event.subtype).startsWith('error_'))
+    const succeeded =
+      event.type === 'assistant' ||
+      (event.type === 'stream_event' &&
+        claudeRecord(event.event)?.type === 'message_start')
+    if (this.outstandingRetries > 0 && (failed || succeeded)) {
+      this.emit({
+        kind: 'harness.retry',
+        phase: 'resolved',
+        outcome: failed ? 'failed' : 'succeeded',
+        attempts: this.outstandingRetries,
+        at,
+        ...(failed ? { errorSubtype: claudeString(event.subtype) } : {}),
+      })
+      this.outstandingRetries = 0
+    }
     this.sessionId = claudeString(event.session_id) ?? this.sessionId
     if (event.type === 'system' && event.subtype === 'init')
       this.cwd = claudeString(event.cwd) ?? this.cwd
@@ -144,13 +166,15 @@ export class ClaudeEvidenceService {
         String(event.type),
       )
     ) {
-      this.emit({
-        kind: 'harness.unknown',
-        type: claudeString(event.type) ?? 'unknown',
-        subtype: claudeString(event.subtype),
-        payload: event,
-        at,
-      })
+      this.emit(
+        readClaudeHarnessFact(event, at) ?? {
+          kind: 'harness.unknown',
+          type: claudeString(event.type) ?? 'unknown',
+          subtype: claudeString(event.subtype),
+          payload: event,
+          at,
+        },
+      )
     }
   }
 
@@ -275,6 +299,7 @@ export class ClaudeEvidenceService {
     at: string,
     reason?: 'quit' | 'idle' | 'account' | 'stop' | 'exit',
   ): void {
+    this.outstandingRetries = 0
     this.requestedStops.clear()
     this.emit({ kind: 'process.ended', at, ...(reason ? { reason } : {}) })
   }

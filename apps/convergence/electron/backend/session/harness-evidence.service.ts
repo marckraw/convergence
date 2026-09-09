@@ -1,3 +1,9 @@
+import type {
+  HarnessEvent,
+  HarnessTurn,
+} from '../../../src/shared/types/harness-facts.types'
+import { readClaudeHarnessFact } from '../provider/claude-code/claude-harness.pure'
+import { foldHarnessFacts } from './harness-facts.pure'
 import type Database from 'better-sqlite3'
 import type { ParallelWorkCounts } from '../../../src/shared/lib/parallel-work.pure'
 import type {
@@ -56,28 +62,36 @@ export class HarnessEvidenceService {
     fact: HarnessEvidence,
   ): { itemIds: string[] } | null {
     return this.db.transaction(() => {
-      if (fact.kind === 'harness.unknown') {
-        this.db
-          .prepare(
-            `INSERT INTO session_harness_events(session_id,sequence,type,subtype,payload_json,created_at)
-          SELECT ?,COALESCE(MAX(sequence),0)+1,?,?,?,? FROM session_harness_events WHERE session_id=?`,
-          )
-          .run(
-            sessionId,
-            fact.type,
-            fact.subtype,
-            boundedHarnessPayload(fact.payload),
-            fact.at,
-            sessionId,
-          )
-        this.db
-          .prepare(
-            `DELETE FROM session_harness_events WHERE session_id=? AND sequence IN
-          (SELECT sequence FROM session_harness_events WHERE session_id=? ORDER BY sequence DESC LIMIT -1 OFFSET 5000)`,
-          )
-          .run(sessionId, sessionId)
+      if (
+        fact.kind === 'harness.unknown' ||
+        fact.kind === 'harness.hook' ||
+        fact.kind === 'harness.retry' ||
+        fact.kind === 'harness.compaction' ||
+        fact.kind === 'harness.denial' ||
+        fact.kind === 'harness.rateLimit' ||
+        fact.kind === 'harness.init'
+      ) {
+        this.recordHarnessEvent(
+          sessionId,
+          fact.kind === 'harness.unknown' ? fact.type : fact.kind,
+          fact.kind === 'harness.unknown'
+            ? fact.subtype
+            : 'phase' in fact
+              ? fact.phase
+              : null,
+          fact.kind === 'harness.unknown' ? fact.payload : { ...fact, turnId },
+          fact.at,
+        )
         return null
       }
+      if (fact.kind === 'process.ended')
+        this.recordHarnessEvent(
+          sessionId,
+          fact.kind,
+          null,
+          { ...fact, turnId },
+          fact.at,
+        )
       if (fact.kind === 'turn.accounting') {
         if (turnId)
           this.db
@@ -172,6 +186,75 @@ export class HarnessEvidenceService {
       }
       return renamed
     })()
+  }
+  private recordHarnessEvent(
+    sessionId: string,
+    type: string,
+    subtype: string | null,
+    payload: unknown,
+    at: string,
+  ): void {
+    this.db
+      .prepare(
+        `INSERT INTO session_harness_events(session_id,sequence,type,subtype,payload_json,created_at)
+      SELECT ?,COALESCE(MAX(sequence),0)+1,?,?,?,? FROM session_harness_events WHERE session_id=?`,
+      )
+      .run(
+        sessionId,
+        type,
+        subtype,
+        boundedHarnessPayload(payload),
+        at,
+        sessionId,
+      )
+    this.db
+      .prepare(
+        `DELETE FROM session_harness_events WHERE session_id=? AND sequence IN
+      (SELECT sequence FROM session_harness_events WHERE session_id=? ORDER BY sequence DESC LIMIT -1 OFFSET 5000)`,
+      )
+      .run(sessionId, sessionId)
+  }
+  harnessFacts(sessionId: string) {
+    const turns = (
+      this.db
+        .prepare(
+          'SELECT id,status,started_at AS startedAt,ended_at AS endedAt,permission_denials_json AS permissionDenials FROM session_turns WHERE session_id=? ORDER BY sequence',
+        )
+        .all(sessionId) as (Omit<HarnessTurn, 'permissionDenials'> & {
+        permissionDenials: string | null
+      })[]
+    ).map((turn) => ({
+      ...turn,
+      permissionDenials: turn.permissionDenials
+        ? JSON.parse(turn.permissionDenials)
+        : null,
+    }))
+    const rows = this.db
+      .prepare(
+        'SELECT sequence,type,payload_json AS payload,created_at AS at FROM session_harness_events WHERE session_id=? ORDER BY sequence',
+      )
+      .all(sessionId) as {
+      sequence: number
+      type: string
+      payload: string
+      at: string
+    }[]
+    const latestTurns = [...turns].reverse()
+    const events: HarnessEvent[] = rows.flatMap((row) => {
+      const payload = JSON.parse(row.payload)
+      const fact: HarnessEvent['fact'] | null =
+        payload?.kind === row.type &&
+        (row.type.startsWith('harness.') || row.type === 'process.ended')
+          ? (payload as HarnessEvent['fact'])
+          : readClaudeHarnessFact(payload, row.at)
+      if (!fact) return []
+      const turnId =
+        typeof payload.turnId === 'string'
+          ? payload.turnId
+          : (latestTurns.find((turn) => turn.startedAt <= row.at)?.id ?? null)
+      return [{ sequence: row.sequence, turnId, fact }]
+    })
+    return foldHarnessFacts(events, turns)
   }
   listAgentRuns(sessionId: string): SessionAgentRun[] {
     return this.db

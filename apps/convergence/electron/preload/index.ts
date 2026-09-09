@@ -316,6 +316,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('session:getConversation', id),
     stopTask: (sessionId: string, id: string) =>
       ipcRenderer.invoke('session:stopTask', sessionId, id),
+    harnessFacts: (sessionId: string) =>
+      ipcRenderer.invoke('session:harnessFacts', sessionId),
+    onHarnessFacts: (callback: (event: { sessionId: string }) => void) => {
+      const handler = (_event: unknown, event: { sessionId: string }) =>
+        callback(event)
+      ipcRenderer.on('harness.facts', handler)
+      return () => ipcRenderer.removeListener('harness.facts', handler)
+    },
     listAgentRuns: (sessionId: string) =>
       ipcRenderer.invoke('session:listAgentRuns', sessionId),
     listTasks: (sessionId: string) =>

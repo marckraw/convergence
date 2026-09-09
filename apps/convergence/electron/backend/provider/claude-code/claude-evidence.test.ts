@@ -524,3 +524,124 @@ it('R8 H1 both block-local errors end unadopted agents without a root result —
     ['b', 'failed', 'end', '  b interrupted\nreason  '],
   ])
 })
+
+it.each([
+  [
+    { type: 'system', subtype: 'hook_started', hook_id: 'hook' },
+    'harness.hook',
+  ],
+  [{ type: 'system', subtype: 'api_retry', attempt: 1 }, 'harness.retry'],
+  [
+    {
+      type: 'system',
+      subtype: 'compact_boundary',
+      compact_metadata: { trigger: 'manual' },
+    },
+    'harness.compaction',
+  ],
+  [
+    { type: 'system', subtype: 'permission_denied', tool_name: 'Bash' },
+    'harness.denial',
+  ],
+  [
+    { type: 'rate_limit_event', rate_limit_info: { status: 'rejected' } },
+    'harness.rateLimit',
+  ],
+  [{ type: 'system', subtype: 'init' }, 'harness.init'],
+])('RUN61 emits %j as %s — mutation remove family mapping', (wire, kind) => {
+  const f = fixture()
+  f.adapter.consume(wire, 'now')
+  expect(f.facts.map((fact) => fact.kind)).toEqual([kind])
+})
+
+it.each([
+  [
+    'message_start',
+    1,
+    { type: 'stream_event', event: { type: 'message_start' } },
+    'succeeded',
+    null,
+  ],
+  [
+    'assistant fallback',
+    1,
+    { type: 'assistant', message: { content: [] } },
+    'succeeded',
+    null,
+  ],
+  [
+    'error result',
+    1,
+    { type: 'result', subtype: 'error_during_execution' },
+    'failed',
+    'error_during_execution',
+  ],
+  [
+    'error flag',
+    1,
+    { type: 'result', subtype: 'other', is_error: true },
+    'failed',
+    'other',
+  ],
+  [
+    'all outstanding attempts',
+    2,
+    { type: 'stream_event', event: { type: 'message_start' } },
+    'succeeded',
+    null,
+  ],
+] as const)(
+  'R4prime %s records resolution — mutation delete resolution or resolve only last',
+  (_name, n, event, outcome, errorSubtype) => {
+    const f = fixture()
+    for (let attempt = 1; attempt <= n; attempt++)
+      f.adapter.consume(
+        { type: 'system', subtype: 'api_retry', attempt },
+        'retry',
+      )
+    f.adapter.consume(event, 'response')
+    f.adapter.consume(event, 'duplicate')
+    expect(
+      f.facts.filter(
+        (f) =>
+          f.kind === 'harness.retry' && 'phase' in f && f.phase === 'resolved',
+      ),
+    ).toEqual([
+      {
+        kind: 'harness.retry',
+        phase: 'resolved',
+        outcome,
+        attempts: n,
+        at: 'response',
+        ...(errorSubtype ? { errorSubtype } : {}),
+      },
+    ])
+  },
+)
+
+it('R4prime no outstanding attempt emits no resolution — mutation emit anyway', () => {
+  const f = fixture()
+  f.adapter.consume(
+    { type: 'stream_event', event: { type: 'message_start' } },
+    'now',
+  )
+  expect(f.facts).toEqual([])
+})
+
+it('R4prime process end records no guessed resolution and clears outstanding attempts — mutation keep retries after process end turns red', () => {
+  const f = fixture()
+  f.adapter.consume(
+    { type: 'system', subtype: 'api_retry', attempt: 1 },
+    'retry',
+  )
+  f.adapter.processEnded('exit', 'exit')
+  f.adapter.consume(
+    { type: 'stream_event', event: { type: 'message_start' } },
+    'later',
+  )
+  expect(
+    f.facts.map((fact) =>
+      fact.kind === 'harness.retry' ? fact.phase : fact.kind,
+    ),
+  ).toEqual(['attempt', 'process.ended'])
+})
