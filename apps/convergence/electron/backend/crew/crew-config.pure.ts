@@ -120,6 +120,8 @@ export function crewToConfig(
         .map((m) => [roleKey(m), [m.canvasX!, m.canvasY!] as [number, number]]),
     )
   return config
+  // Lanes are one level deep: LaneService.create refuses a lane of a lane;
+  // deleting the root cascades to its lanes.
   function projectReference(project: CrewConfigProject | null): string | null {
     if (!project) return null
     const root = project.laneOf
@@ -144,6 +146,7 @@ export function crewToConfig(
         model: spec.model,
         effort: spec.effort,
         project: projectReference(project),
+        ...(project?.laneName ? { lane: project.laneName } : {}),
         account: 'default',
       },
     }

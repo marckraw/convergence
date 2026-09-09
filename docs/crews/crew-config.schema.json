@@ -159,6 +159,9 @@
                       "project": {
                         "type": ["string", "null"]
                       },
+                      "lane": {
+                        "type": "string"
+                      },
                       "account": {
                         "const": "default"
                       }

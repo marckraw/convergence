@@ -1,6 +1,9 @@
 import Ajv from 'ajv'
 import { parse } from 'yaml'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { preProcessFile } from 'typescript'
 import { describe, expect, it } from 'vitest'
 import {
   crewToConfig,
@@ -84,7 +87,7 @@ describe('crew config export', () => {
   })
 })
 
-it('pins the live five-member six-wire YAML (mutations: emit id; reverse wire order)', () => {
+it('pins the live five-member six-wire YAML (mutations: emit id; reverse wire order; use the lane row)', () => {
   expect(
     renderCrewYaml(
       crewToConfig(
@@ -345,18 +348,81 @@ it.each([
   },
 )
 
-it('keeps the canary libraries out of runtime dependencies (mutation: promote yaml to runtime)', () => {
+it('keeps the canary libraries out of runtime dependencies (mutations: promote yaml to runtime; remove ajv declaration)', () => {
   const manifest = JSON.parse(
     readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),
   )
   expect({
-    runtimeYaml: manifest.dependencies.yaml,
-    testYaml: manifest.devDependencies.yaml,
-    testAjv: manifest.devDependencies.ajv,
-  }).toEqual({ runtimeYaml: undefined, testYaml: '^2.8.2', testAjv: '^6.14.0' })
+    runtimeYaml: Object.hasOwn(manifest.dependencies, 'yaml'),
+    testYaml: Object.hasOwn(manifest.devDependencies, 'yaml'),
+    testAjv: Object.hasOwn(manifest.devDependencies, 'ajv'),
+  }).toEqual({ runtimeYaml: false, testYaml: true, testAjv: true })
 })
 
 /** C1 inverse belongs only to the canary; production never imports YAML parsing. */
 function parseCrewYaml(yaml: string): CrewConfig {
   return parse(yaml) as CrewConfig
 }
+
+it('preserves the spawn lane beside its root project (mutations: use the lane row; drop spawn lane; forbid spawn lane in schema)', () => {
+  const relay = {
+    ...liveRelays[0]!,
+    action: 'spawn' as const,
+    targetSessionId: null,
+    spawnSpec: {
+      name: 'Lane worker',
+      providerId: 'codex',
+      model: 'gpt-6-astra',
+      effort: 'high',
+      projectId: 'lane-id',
+      providerAccountId: null,
+    },
+  }
+  const config = crewToConfig(
+    liveCrew,
+    liveMembers,
+    liveSessions,
+    liveProjects,
+    [relay],
+  )
+  expect(config.wires[0]?.to).toEqual({
+    spawn: {
+      name: 'Lane worker',
+      provider: 'codex',
+      model: 'gpt-6-astra',
+      effort: 'high',
+      project: 'github.com/marckraw/convergence',
+      lane: 'studio',
+      account: 'default',
+    },
+  })
+  const validate = new Ajv({ allErrors: true }).compile(schema)
+  expect({
+    valid: validate(parseCrewYaml(renderCrewYaml(config))),
+    errors: validate.errors,
+  }).toEqual({ valid: true, errors: null })
+})
+
+it('keeps YAML imports out of production source (mutation: re-add the yaml import)', () => {
+  const workspace = fileURLToPath(new URL('../../../', import.meta.url))
+  const imports = ['electron', 'src'].flatMap((directory) => {
+    const root = join(workspace, directory)
+    return readdirSync(root, { recursive: true })
+      .map(String)
+      .filter(
+        (file) =>
+          /\.[cm]?[jt]sx?$/.test(file) &&
+          !/\.(test|spec)\.|(^|[/\\])__tests__[/\\]/.test(file),
+      )
+      .flatMap((file) => {
+        const path = join(root, file)
+        return preProcessFile(readFileSync(path, 'utf8'), true, true)
+          .importedFiles.filter(
+            ({ fileName }) =>
+              fileName === 'yaml' || fileName.startsWith('yaml/'),
+          )
+          .map(({ fileName }) => `${relative(workspace, path)}: ${fileName}`)
+      })
+  })
+  expect(imports.sort()).toEqual([])
+})

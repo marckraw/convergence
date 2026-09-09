@@ -39,6 +39,7 @@ export interface CrewConfigSpawn {
   model: string | null
   effort: string | null
   project: string | null
+  lane?: string
   account: 'default'
 }
 export interface CrewConfigWire {

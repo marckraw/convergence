@@ -71,6 +71,8 @@ export class CrewExportService {
       ...sessions.map((s) => s.projectId),
       ...relays.map((r) => r.spawnSpec?.projectId),
     ])
+    // Lanes are one level deep: LaneService.create refuses a lane of a lane;
+    // deleting the root cascades to its lanes.
     for (const project of projects) {
       if (needed.has(project.id) && project.laneOf) needed.add(project.laneOf)
     }

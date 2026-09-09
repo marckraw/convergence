@@ -68,7 +68,7 @@ export const liveProjects = [
   {
     id: 'lane-id',
     name: 'convergence · lane: studio',
-    origin: 'git@github.com:marckraw/convergence.git',
+    origin: null,
     laneOf: 'root-id',
     laneName: 'studio',
   },
