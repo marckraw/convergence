@@ -153,6 +153,11 @@ export class ClaudeEvidenceService {
     }
   }
 
+  adoptedAgentId(toolUseId: string): string | null {
+    const id = this.agents.get(toolUseId)?.id
+    return id && id !== toolUseId ? id : null
+  }
+
   identity(
     data: unknown,
     toolUseId?: string | null,

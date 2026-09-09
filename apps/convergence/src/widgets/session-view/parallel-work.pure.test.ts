@@ -103,3 +103,42 @@ it('T10 cyclic descendants terminate and exclude the starting row — mutation r
   ] as ParallelWorkRow[]
   expect(descendantActivity(rows, 'a')).toBe(1)
 })
+
+it('H2′ withheld result moments leave the terminal task fact as the return marker — mutation discard task-fact returns turns red', () => {
+  const rows = [
+    {
+      id: 'adopted',
+      kind: 'agent',
+      parentId: null,
+      run: {
+        spawnedByItemId: 'spawn',
+        description: 'Read routes',
+        status: 'completed',
+      },
+    },
+  ] as ParallelWorkRow[]
+  const items = [
+    {
+      id: 'unassociated-result',
+      kind: 'tool-result',
+      relatedItemId: 'spawn',
+      providerMeta: { providerEventType: 'tool_result' },
+    },
+    {
+      id: 'terminal',
+      kind: 'note',
+      taskId: 'adopted',
+      providerMeta: { providerEventType: 'harness.task.terminal' },
+    },
+  ] as ConversationItem[]
+  expect([...parallelWorkMarkers(items, rows)]).toEqual([
+    [
+      'terminal',
+      {
+        agentId: 'adopted',
+        label: 'Result returned · Read routes · completed',
+        replace: false,
+      },
+    ],
+  ])
+})

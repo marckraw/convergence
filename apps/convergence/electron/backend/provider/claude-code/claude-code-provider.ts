@@ -1141,6 +1141,9 @@ export class ClaudeCodeProvider implements Provider {
           if (event.message?.content) {
             for (const block of event.message.content) {
               if (block.type === 'tool_result') {
+                const moment = readClaudeToolResultMoment(data, block, (id) =>
+                  evidence.adoptedAgentId(id),
+                )
                 const resultText =
                   typeof block.content === 'string'
                     ? block.content
@@ -1158,8 +1161,8 @@ export class ClaudeCodeProvider implements Provider {
                   outputText: resultText,
                   providerEventType: block.is_error
                     ? 'tool_result.failed'
-                    : readClaudeToolResultMoment(data)
-                      ? `tool_result.${readClaudeToolResultMoment(data)}`
+                    : moment
+                      ? `tool_result.${moment}`
                       : 'tool_result',
                 })
                 noteMcpAuthFailure(resultText)

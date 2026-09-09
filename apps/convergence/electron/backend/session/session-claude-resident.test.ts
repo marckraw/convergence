@@ -1042,3 +1042,92 @@ it('M5 quit has an eight-second deadline even when the transport never settles �
     vi.useRealTimers()
   }
 })
+
+it.each([true, false])(
+  'H2′ provider associates a batch through adopted identity and task facts still return — mutations stamp both or first turn red (confirmed=%s)',
+  async (confirmed) => {
+    const { service, session, children } = await fixture()
+    await service.start(session.id, { text: 'fixture' })
+    await vi.waitUntil(() => children[0]?.lines.length === 1)
+    const send = (event: unknown) =>
+      children[0].stdout.write(JSON.stringify(event) + '\n')
+    send({
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'other-tool',
+            name: 'Bash',
+            input: { command: 'echo fixture' },
+          },
+          {
+            type: 'tool_use',
+            id: 'agent-tool',
+            name: 'Agent',
+            input: { description: 'Read routes', subagent_type: 'Explore' },
+          },
+        ],
+      },
+    })
+    send({
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 'adopted',
+      tool_use_id: 'agent-tool',
+      task_type: 'local_agent',
+      description: 'Read routes',
+    })
+    send({
+      type: 'user',
+      uuid: 'batch',
+      message: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'other-tool',
+            content: 'command output',
+          },
+          {
+            type: 'tool_result',
+            tool_use_id: 'agent-tool',
+            content: 'launch acknowledged',
+          },
+        ],
+      },
+      tool_use_result: {
+        status: 'async_launched',
+        ...(confirmed ? { agentId: 'adopted' } : {}),
+      },
+    })
+    send({
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: 'adopted',
+      status: 'completed',
+      summary: 'Read routes complete',
+    })
+    await vi.waitUntil(
+      () => service.listTasks(session.id)[0]?.status === 'completed',
+    )
+    const items = service.getConversation(session.id)
+    expect({
+      moments: items
+        .filter((item) => item.kind === 'tool-result')
+        .map((item) => item.providerMeta.providerEventType),
+      returns: items
+        .filter(
+          (item) =>
+            item.kind === 'note' &&
+            item.providerMeta.providerEventType === 'harness.task.terminal',
+        )
+        .map((item) => item.taskId),
+    }).toEqual({
+      moments: [
+        'tool_result',
+        confirmed ? 'tool_result.async_launched' : 'tool_result',
+      ],
+      returns: ['adopted'],
+    })
+  },
+)

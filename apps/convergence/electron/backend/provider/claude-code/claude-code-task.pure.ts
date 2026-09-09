@@ -8,8 +8,25 @@ export interface ClaudeTaskNote {
 
 export function readClaudeToolResultMoment(
   data: unknown,
+  block: unknown,
+  resolveAgentId: (toolUseId: string) => string | null,
 ): 'async_launched' | 'completed' | null {
-  const status = record(record(data)?.tool_use_result)?.status
+  const event = record(data)
+  const structured = record(event?.tool_use_result)
+  const content = record(event?.message)?.content
+  const results = Array.isArray(content)
+    ? content.filter((item) => record(item)?.type === 'tool_result')
+    : []
+  if (results.length !== 1) {
+    const toolUseId = record(block)?.tool_use_id
+    if (
+      typeof toolUseId !== 'string' ||
+      typeof structured?.agentId !== 'string' ||
+      resolveAgentId(toolUseId) !== structured.agentId
+    )
+      return null
+  }
+  const status = structured?.status
   return status === 'async_launched' || status === 'completed' ? status : null
 }
 
