@@ -1,5 +1,11 @@
 # convergence
 
+## 0.50.1
+
+### Patch Changes
+
+- 3511c04: A new session appears once in the sidebar, not twice
+
 ## 0.50.0
 
 ### Minor Changes
