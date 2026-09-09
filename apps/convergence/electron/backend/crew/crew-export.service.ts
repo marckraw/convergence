@@ -1,10 +1,9 @@
 import type Database from 'better-sqlite3'
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
 import { lstat, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { CrewService } from './crew.service'
 import { RelayService } from '../relay/relay.service'
+import { readGitOriginUrlAsync } from '../git/git-origin'
 import { parseSessionPermissionConfig } from '../provider/session-permissions.pure'
 import {
   crewToConfig,
@@ -28,7 +27,6 @@ interface ExportProject {
 export type ChooseCrewHome = (
   projects: readonly Pick<ExportProject, 'id' | 'name'>[],
 ) => Promise<string | null>
-const exec = promisify(execFile)
 
 /** Facade for snapshotting a crew and writing its recipe; the serializer never sees IO. */
 export class CrewExportService {
@@ -73,25 +71,18 @@ export class CrewExportService {
       ...sessions.map((s) => s.projectId),
       ...relays.map((r) => r.spawnSpec?.projectId),
     ])
+    for (const project of projects) {
+      if (needed.has(project.id) && project.laneOf) needed.add(project.laneOf)
+    }
     const exportProjects = await Promise.all(
       projects
-        .filter((p) => needed.has(p.id))
-        .map(async (project) => {
-          let origin: string | null = null
-          try {
-            origin =
-              (
-                await exec('git', ['config', '--get', 'remote.origin.url'], {
-                  cwd: project.repositoryPath,
-                  timeout: 5000,
-                  encoding: 'utf8',
-                })
-              ).stdout.trim() || null
-          } catch {
-            /* A repository without an origin uses its project name. */
-          }
-          return { ...project, origin }
-        }),
+        .filter((project) => needed.has(project.id))
+        .map(async (project) => ({
+          ...project,
+          origin: project.laneOf
+            ? null
+            : await readGitOriginUrlAsync(project.repositoryPath),
+        })),
     )
     const yaml = renderCrewYaml(
       crewToConfig(

@@ -1,4 +1,3 @@
-import { parse } from 'yaml'
 import { normalizeOriginKey } from '@mrck-labs/execution-host-protocol'
 import { resolveRoundCap } from '../relay/relay.pure'
 import { resolveStallMinutes } from '../relay/crew-hail.pure'
@@ -63,9 +62,7 @@ export function crewToConfig(
                 : {}),
             }
           : permissions.preset,
-      project: project
-        ? (normalizeOriginKey(project.origin) ?? project.name)
-        : null,
+      project: projectReference(project),
       ...(project?.laneName ? { lane: project.laneName } : {}),
       host: session.executionHost,
     }
@@ -123,6 +120,15 @@ export function crewToConfig(
         .map((m) => [roleKey(m), [m.canvasX!, m.canvasY!] as [number, number]]),
     )
   return config
+  function projectReference(project: CrewConfigProject | null): string | null {
+    if (!project) return null
+    const root = project.laneOf
+      ? projects.find((candidate) => candidate.id === project.laneOf)
+      : project
+    if (!root)
+      throw new Error(`Root project missing for lane ${project.laneName}`)
+    return normalizeOriginKey(root.origin) ?? root.name
+  }
   function spawnTarget(relay: SessionRelay): CrewConfigWire['to'] {
     const spec = relay.spawnSpec
     if (!spec) throw new Error('A spawn wire has no recipe')
@@ -137,9 +143,7 @@ export function crewToConfig(
         provider: spec.providerId,
         model: spec.model,
         effort: spec.effort,
-        project: project
-          ? (normalizeOriginKey(project.origin) ?? project.name)
-          : null,
+        project: projectReference(project),
         account: 'default',
       },
     }
@@ -199,11 +203,6 @@ function flow(value: unknown): string {
       .map(([k, v]) => `${yamlKey(k)}: ${flow(v)}`)
       .join(', ')} }`
   return JSON.stringify(value)
-}
-
-/** C1 inverse for the round-trip canary only; no import/apply entry point. */
-export function parseCrewYaml(yaml: string): CrewConfig {
-  return parse(yaml) as CrewConfig
 }
 
 /** A file name segment, never a relative path supplied by a crew name. */

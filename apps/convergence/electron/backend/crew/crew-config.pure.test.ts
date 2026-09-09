@@ -1,10 +1,10 @@
 import Ajv from 'ajv'
+import { parse } from 'yaml'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   crewToConfig,
   renderCrewYaml,
-  parseCrewYaml,
   crewExportSlug,
   crewHomeCandidates,
 } from './crew-config.pure'
@@ -16,7 +16,7 @@ import {
   liveProjects,
   liveRelays,
 } from './crew-config.fixture'
-import type { CrewConfigSession } from './crew-config.types'
+import type { CrewConfig, CrewConfigSession } from './crew-config.types'
 
 // The schema is a shipped data artifact, not a cross-workspace code import.
 const schema = JSON.parse(
@@ -312,3 +312,51 @@ it('keeps the configured remote host label (mutation: coerce host to local)', ()
     ).roles.fable?.host,
   ).toBe('remote:workshop')
 })
+
+it.each([
+  [
+    'git@github.com:marckraw/convergence.git',
+    'github.com/marckraw/convergence',
+  ],
+  [null, 'Root project'],
+])(
+  'names the root project for a lane with root origin %s (mutation: use the lane row)',
+  (origin, expected) => {
+    const root = { ...project, name: 'Root project', origin }
+    const lane = {
+      ...project,
+      id: 'lane-id',
+      name: 'Root project · lane: studio',
+      origin: null,
+      laneOf: root.id,
+      laneName: 'studio',
+    }
+    const role = crewToConfig(
+      crew,
+      [member],
+      [{ ...session, projectId: lane.id }],
+      [lane, root],
+      [],
+    ).roles.fable!
+    expect({ project: role.project, lane: role.lane }).toEqual({
+      project: expected,
+      lane: 'studio',
+    })
+  },
+)
+
+it('keeps the canary libraries out of runtime dependencies (mutation: promote yaml to runtime)', () => {
+  const manifest = JSON.parse(
+    readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),
+  )
+  expect({
+    runtimeYaml: manifest.dependencies.yaml,
+    testYaml: manifest.devDependencies.yaml,
+    testAjv: manifest.devDependencies.ajv,
+  }).toEqual({ runtimeYaml: undefined, testYaml: '^2.8.2', testAjv: '^6.14.0' })
+})
+
+/** C1 inverse belongs only to the canary; production never imports YAML parsing. */
+function parseCrewYaml(yaml: string): CrewConfig {
+  return parse(yaml) as CrewConfig
+}

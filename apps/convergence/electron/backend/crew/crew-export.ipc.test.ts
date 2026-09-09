@@ -1,3 +1,5 @@
+import { parse } from 'yaml'
+import { readGitOriginUrlAsync } from '../git/git-origin'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   mkdir,
@@ -24,6 +26,9 @@ const mocks = vi.hoisted(() => ({
     ) => Promise<{ path: string; yaml: string }>
   >(),
   choose: vi.fn(),
+}))
+vi.mock('../git/git-origin', () => ({
+  readGitOriginUrlAsync: vi.fn(async () => null),
 }))
 vi.mock('electron', () => ({
   ipcMain: {
@@ -53,6 +58,7 @@ beforeEach(async () => {
     name: 'Night shift',
     sessionIds: ['s'],
   }).id
+  vi.mocked(readGitOriginUrlAsync).mockReset().mockResolvedValue(null)
   mocks.choose.mockReset()
   mocks.handlers.clear()
   registerCrewExportIpc(new CrewExportService(db))
@@ -142,5 +148,29 @@ it('refuses a symlinked export directory (mutation: follow directory symlink)', 
   expect({ refused, files: await readdir(outside) }).toEqual({
     refused: true,
     files: [],
+  })
+})
+
+it('reads the root origin through the shared reader for a lane-only crew (mutations: omit root row; bypass shared reader)', async () => {
+  const lane = join(root, 'studio')
+  await mkdir(lane)
+  const db = getDatabase()
+  db.prepare(
+    "INSERT INTO projects (id,name,repository_path,lane_of,lane_name) VALUES ('lane','Home · lane: studio',?,'p','studio')",
+  ).run(lane)
+  db.prepare("UPDATE sessions SET project_id='lane' WHERE id='s'").run()
+  vi.mocked(readGitOriginUrlAsync).mockImplementation(async (path) =>
+    path === root ? 'git@github.com:marckraw/convergence.git' : null,
+  )
+  const result = await mocks.handlers.get('crew:export')!({}, crewId, {})
+  const role = parse(await readFile(result.path, 'utf8')).roles.horse
+  expect({
+    project: role.project,
+    lane: role.lane,
+    reads: vi.mocked(readGitOriginUrlAsync).mock.calls,
+  }).toEqual({
+    project: 'github.com/marckraw/convergence',
+    lane: 'studio',
+    reads: [[root]],
   })
 })
