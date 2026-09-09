@@ -2019,19 +2019,6 @@ export class SessionService {
       }
     }
 
-    const shouldStartConversationTurn =
-      deliveryMode === 'normal' || deliveryMode === 'answer'
-    if (shouldStartConversationTurn) {
-      this.pendingUserAttachmentIds.set(
-        session.id,
-        input.input.attachmentIds ?? [],
-      )
-      this.pendingUserSkillSelections.set(
-        session.id,
-        input.input.skillSelections ?? [],
-      )
-    }
-
     const augmentedText = this.prepareUserTurnText(
       session,
       input.input.text,
@@ -2043,10 +2030,6 @@ export class SessionService {
       accountId: input.input.providerAccountId,
     })
 
-    this.pendingTurnAccountIds.set(
-      input.session.id,
-      input.input.providerAccountId ?? null,
-    )
     const previousMute = input.input.muteRelays
       ? this.getRowById(session.id)?.relays_muted
       : undefined
@@ -2072,8 +2055,47 @@ export class SessionService {
         { ...input.input, dispatchId: input.dispatchId },
         'follow-up',
       )
+      if (deliveryMode === 'answer') {
+        const timestamp = new Date().toISOString()
+        const note = this.addConversationItem(session.id, {
+          id: randomUUID(),
+          turnId: null,
+          kind: 'note',
+          state: 'complete',
+          level: 'info',
+          text: 'nothing to answer; queued as your next message',
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          providerMeta: {
+            providerId: session.providerId,
+            providerItemId: null,
+            providerEventType: 'unconsumed-answer-queued',
+          },
+        })
+        this.notifySessionChange(
+          session.id,
+          note ? { sessionId: session.id, op: 'add', item: note } : undefined,
+        )
+      }
       return
     }
+    const shouldStartConversationTurn =
+      deliveryMode === 'normal' || deliveryMode === 'answer'
+    if (shouldStartConversationTurn) {
+      this.pendingUserAttachmentIds.set(
+        session.id,
+        input.input.attachmentIds ?? [],
+      )
+      this.pendingUserSkillSelections.set(
+        session.id,
+        input.input.skillSelections ?? [],
+      )
+    }
+
+    this.pendingTurnAccountIds.set(
+      input.session.id,
+      input.input.providerAccountId ?? null,
+    )
     // Whatever the mode, the input just went INTO the turn this handle is
     // running (a native follow-up joins it; a normal send starts it), so that
     // turn's settle is the one that consumed this dispatch (MAR-2759).

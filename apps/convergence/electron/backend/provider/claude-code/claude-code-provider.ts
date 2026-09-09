@@ -830,6 +830,9 @@ export class ClaudeCodeProvider implements Provider {
       currentTurn = null
       interruptRequested = false
       connectionGeneration++
+      connectionEnding ??= new Promise<void>((resolve) => {
+        resolveConnectionEnd = resolve
+      })
       permissions.endConnection()
       void child?.close().catch((error) => {
         sessionEmitter.addNote({
@@ -1490,6 +1493,9 @@ export class ClaudeCodeProvider implements Provider {
               scheduleContinuationRecovery('no-output')
             }
             child = null
+            connectionEnding = null
+            resolveConnectionEnd?.()
+            resolveConnectionEnd = undefined
             if (maybeRestartRecoveredTurn()) return
             if (currentTurn) {
               currentTurn = null
@@ -1649,13 +1655,10 @@ export class ClaudeCodeProvider implements Provider {
         listeners.heartbeat.push(cb)
       },
       sendMessage: (text, attachments, skillSelections, options) => {
+        if (connectionEnding && pendingRecoveryTurn) return 'queue-follow-up'
         if (options?.deliveryMode === 'answer') {
           if (permissions.answer(text, options.interactionResponse)) return
           if (currentTurn) {
-            sessionEmitter.addNote({
-              text: 'nothing to answer; sent as your next message',
-              level: 'info',
-            })
             return 'queue-follow-up'
           }
         }

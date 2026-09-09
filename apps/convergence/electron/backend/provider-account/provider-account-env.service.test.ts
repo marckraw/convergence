@@ -78,7 +78,7 @@ describe('resolveClaudeAccountEnv — ambient default account', () => {
     expect(io.writeFile).not.toHaveBeenCalled()
   })
 
-  it('still applies telemetry injections — drop injection forwarding turns red', async () => {
+  it('R2 M4 telemetry endpoint is exact — replace endpoint while forwarding turns red', async () => {
     const env = await resolveClaudeAccountEnv({
       account: null,
       workingDirectory: CWD,
@@ -97,6 +97,9 @@ describe('resolveClaudeAccountEnv — ambient default account', () => {
       'PATH',
       'SOME_PERSONAL_VAR',
     ])
+    expect(env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT).toBe(
+      'http://127.0.0.1:1234/v1/logs',
+    )
   })
 })
 
@@ -149,7 +152,7 @@ describe('resolveClaudeAccountEnv — selected account', () => {
     expect(io.writeFile).not.toHaveBeenCalled()
   })
 
-  it('allowlists environment keys and includes both account directory keys', async () => {
+  it('R2 M4 resolved account directories are exact — substitute directory after the guard turns red', async () => {
     const { io } = fakeIo({ [`${HOME}/.claude.json`]: {} })
 
     const env = await resolveClaudeAccountEnv({
@@ -166,6 +169,10 @@ describe('resolveClaudeAccountEnv — selected account', () => {
       'HOME',
       'PATH',
     ])
+    expect({
+      configDir: env.CLAUDE_CONFIG_DIR,
+      credentialDir: env.CLAUDE_SECURESTORAGE_CONFIG_DIR,
+    }).toEqual(ACCOUNT)
   })
 
   it('lets a configured stdio MCP server keep the variables it references', async () => {

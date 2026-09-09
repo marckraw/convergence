@@ -6,6 +6,7 @@ import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { ProviderRegistry } from '../provider/provider-registry'
 import { LocalExecutionHost } from '../provider/execution-host/local-execution-host'
 import { SessionService } from './session.service'
+import { SessionQueuedInputService } from './session-queued-input.service'
 import * as claudeTransport from '../provider/claude-code/claude-transport.service'
 import { ProviderSessionEmitter } from '../provider/provider-session.emitter'
 import { ClaudePermissionsService } from '../provider/claude-code/claude-permissions.service'
@@ -949,6 +950,7 @@ it('H2 a matched ask rule always prompts and names the rule — ignore matchedAs
   service.deny(session.id, 'forced')
   expect({
     result: await next,
+    button: card?.kind === 'approval-request' && card.supportsSessionApproval,
     reason:
       card?.kind === 'approval-request'
         ? card.permissionDetails?.decisionReason
@@ -960,6 +962,7 @@ it('H2 a matched ask rule always prompts and names the rule — ignore matchedAs
       toolUseID: 'forced',
       decisionClassification: 'user_reject',
     },
+    button: false,
     reason: 'needs permission · Ask rule: Bash(build:*) (userSettings)',
   })
 })
@@ -1443,7 +1446,7 @@ it('RUN57 foreign tool grants offer no Always allow and never match — restore 
   }).toEqual({ button: false, repeatKind: 'approval-request', result: 'deny' })
 })
 
-it('RUN57 a tool-wide rule without ruleContent is rememberable — require string ruleContent turns red', async () => {
+it('R2 H3 tool-wide rules are not remembered — accept absent ruleContent turns red', async () => {
   const { service, session, connections } = await fixture()
   const suggestions = [
     { type: 'addRules', behavior: 'allow', rules: [{ toolName: 'Bash' }] },
@@ -1462,7 +1465,7 @@ it('RUN57 a tool-wide rule without ruleContent is rememberable — require strin
       firstCard?.kind === 'approval-request' &&
       firstCard.supportsSessionApproval,
     result: (await repeat)?.behavior,
-  }).toEqual({ button: true, result: 'allow' })
+  }).toEqual({ button: false, result: 'deny' })
 })
 
 it('RUN57 every directory must be remembered — change directory every to some turns red', async () => {
@@ -1512,7 +1515,7 @@ it('RUN57 unconsumed mid-turn answer queues its own next turn and note — retur
     .filter(
       (i) =>
         i.kind === 'note' &&
-        i.text === 'nothing to answer; sent as your next message',
+        i.text === 'nothing to answer; queued as your next message',
     ).length
   const mutedBefore =
     (
@@ -1632,3 +1635,210 @@ it('RUN57 a denied request is harness output before a crash — move sawHarnessO
     status: service.getById(session.id)?.status,
   }).toEqual({ denied: 'deny', spawns: 1, writes: 2, status: 'failed' })
 })
+
+it.each([
+  'Pending approval cancelled: connection ended',
+  'session rule cleared: connection ended',
+])(
+  'R2 H1 throwing ending note %s still denies all and forgets memory — unwrap ending note turns red',
+  async (text) => {
+    const { service, session, connections } = await fixture()
+    const requests = vi.spyOn(ClaudePermissionsService.prototype, 'request')
+    const suggestions = [
+      {
+        type: 'addRules',
+        behavior: 'allow',
+        rules: [{ toolName: 'Bash', ruleContent: 'fixture' }],
+      },
+    ]
+    const first = request(connections[0], 'remember', { suggestions })
+    service.approve(session.id, 'remember', { scope: 'session' })
+    await first
+    const permissions = requests.mock.contexts[0] as ClaudePermissionsService
+    const settled: string[] = []
+    const pending = ['a', 'b', 'c'].map((id) =>
+      request(connections[0], id)?.then((result) => {
+        settled.push(id)
+        return result?.behavior
+      }),
+    )
+    const original = ProviderSessionEmitter.prototype.addNote
+    const notes = vi
+      .spyOn(ProviderSessionEmitter.prototype, 'addNote')
+      .mockImplementation(function (this: ProviderSessionEmitter, input) {
+        if (input.text === text) throw new Error('ending note refused')
+        return original.call(this, input)
+      })
+    let error: unknown
+    try {
+      permissions.endConnection()
+    } catch (e) {
+      error = e
+    }
+    await new Promise((r) => setTimeout(r, 0))
+    const settledAtEnd = [...settled]
+    const repeat = request(connections[0], 'repeat', { suggestions })
+    const card = service
+      .getConversation(session.id)
+      .find((i) => i.providerMeta.providerItemId === 'repeat')
+    service.deny(session.id, 'repeat')
+    await repeat
+    notes.mockRestore()
+    permissions.endConnection()
+    expect({
+      error,
+      settledAtEnd,
+      results: await Promise.all(pending),
+      repeat: card?.kind,
+    }).toEqual({
+      error: undefined,
+      settledAtEnd: ['a', 'b', 'c'],
+      results: ['deny', 'deny', 'deny'],
+      repeat: 'approval-request',
+    })
+  },
+)
+
+it('R2 H1 abort note failure still settles its callback — unwrap abort note turns red', async () => {
+  const { connections } = await fixture()
+  const controller = new AbortController()
+  const listener = vi.spyOn(controller.signal, 'addEventListener')
+  const pending = request(connections[0], 'abort', {
+    signal: controller.signal,
+  })
+  vi.spyOn(ProviderSessionEmitter.prototype, 'addNote').mockImplementationOnce(
+    () => {
+      throw new Error('abort note refused')
+    },
+  )
+  const callback = listener.mock.calls.find(
+    ([name]) => name === 'abort',
+  )![1] as (event: Event) => void
+  let error: unknown
+  try {
+    callback(new Event('abort'))
+  } catch (e) {
+    error = e
+  }
+  const result = await Promise.race([
+    pending,
+    new Promise<undefined>((r) => setTimeout(() => r(undefined), 20)),
+  ])
+  expect({ error, result: result?.behavior }).toEqual({
+    error: undefined,
+    result: 'deny',
+  })
+})
+
+it('R2 M5 a queued answer preserves all three per-send slots — write slots before disposition turns red', async () => {
+  const { service, session } = await fixture()
+  const attachments = ['previous-attachment']
+  const skills: [] = []
+  service['pendingUserAttachmentIds'].set(session.id, attachments)
+  service['pendingUserSkillSelections'].set(session.id, skills)
+  service['pendingTurnAccountIds'].set(session.id, 'previous-account')
+  await service.sendMessage(session.id, {
+    text: 'late answer',
+    deliveryMode: 'answer',
+  })
+  expect([
+    service['pendingUserAttachmentIds'].get(session.id) === attachments,
+    service['pendingUserSkillSelections'].get(session.id) === skills,
+    service['pendingTurnAccountIds'].get(session.id) === 'previous-account',
+  ]).toEqual([true, true, true])
+})
+
+it('R2 L7 a failed enqueue emits no queued note — emit note before enqueue turns red', async () => {
+  const { service, session } = await fixture()
+  vi.spyOn(
+    SessionQueuedInputService.prototype,
+    'enqueue',
+  ).mockImplementationOnce(() => {
+    throw new Error('queue unavailable')
+  })
+  let failure: unknown
+  try {
+    await service.sendMessage(session.id, {
+      text: 'late answer',
+      deliveryMode: 'answer',
+    })
+  } catch (error) {
+    failure = error
+  }
+  expect({
+    failed: failure instanceof Error,
+    notes: service
+      .getConversation(session.id)
+      .filter((i) => i.kind === 'note' && i.text.includes('nothing to answer'))
+      .length,
+  }).toEqual({ failed: true, notes: 0 })
+})
+
+it.each(['normal', 'answer'] as const)(
+  'R2 L6 %s during recovery waits for close and follows the retry — omit recovery ending promise or resolver turns red',
+  async (deliveryMode) => {
+    const create = claudeTransport.createClaudeTransport
+    let release: (() => void) | undefined
+    vi.spyOn(claudeTransport, 'createClaudeTransport').mockImplementation(
+      (input) => {
+        const transport = create(input)
+        if (release) return transport
+        return {
+          ...transport,
+          close: () =>
+            new Promise<void>((resolve) => {
+              release = () => {
+                void transport.close().then(resolve)
+              }
+            }),
+        }
+      },
+    )
+    const { service, session, connections } = await fixture(
+      0,
+      { preset: 'ask' },
+      false,
+    )
+    connections[0].push({
+      type: 'result',
+      subtype: 'error_during_execution',
+      is_error: true,
+      result: 'No such session: harness',
+      errors: ['No such session: harness'],
+      session_id: 'harness',
+      num_turns: 0,
+    })
+    await vi.waitUntil(() => !!release)
+    let controlSettled = false
+    void Promise.resolve(
+      service['activeHandles']
+        .get(session.id)!
+        .setModelSelection?.('fixture-model', null),
+    ).then(() => {
+      controlSettled = true
+    })
+    await service.sendMessage(session.id, {
+      text: 'late recovery input',
+      deliveryMode,
+    })
+    await new Promise((r) => setTimeout(r, 30))
+    const beforeClose = connections[0].writes.length
+    release!()
+    await vi.waitUntil(() => !!connections[1]?.writes.length).catch(() => {})
+    connections[1]?.push({
+      type: 'result',
+      subtype: 'success',
+      result: 'retry done',
+    })
+    await new Promise((r) => setTimeout(r, 40))
+    const texts = connections[1]?.writes.map((w) => w.message.content) ?? []
+    expect({ beforeClose, texts, controlSettled }).toEqual({
+      beforeClose: 1,
+      controlSettled: true,
+      texts: [
+        [{ type: 'text', text: 'write fixture' }],
+        [{ type: 'text', text: 'late recovery input' }],
+      ],
+    })
+  },
+)

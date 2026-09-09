@@ -25,7 +25,7 @@ function realisticEnv(): NodeJS.ProcessEnv {
 }
 
 describe('buildClaudeAccountEnv — ambient default account', () => {
-  it('RUN57 ambient key set is exact — inject an extra environment key turns red', () => {
+  it('R2 M4 ambient keys and non-secret bytes are exact — alter ambient PATH or inject a key turns red', () => {
     const baseEnv = realisticEnv()
 
     const env = buildClaudeAccountEnv({ baseEnv, account: null })
@@ -40,26 +40,19 @@ describe('buildClaudeAccountEnv — ambient default account', () => {
       'SOME_PERSONAL_VAR',
       'TMPDIR',
     ])
-  })
-
-  it('keeps inherited credential keys for the default account', () => {
-    // Stripping these with no account selected would itself be a behaviour
-    // change: a user who sets ANTHROPIC_API_KEY today gets API billing today.
-    const env = buildClaudeAccountEnv({
-      baseEnv: realisticEnv(),
-      account: null,
+    expect({
+      PATH: env.PATH,
+      HOME: env.HOME,
+      SHELL: env.SHELL,
+      LANG: env.LANG,
+      TMPDIR: env.TMPDIR,
+    }).toEqual({
+      PATH: baseEnv.PATH,
+      HOME: baseEnv.HOME,
+      SHELL: baseEnv.SHELL,
+      LANG: baseEnv.LANG,
+      TMPDIR: baseEnv.TMPDIR,
     })
-
-    expect(Object.keys(env).sort()).toEqual([
-      'ANTHROPIC_API_KEY',
-      'CLAUDE_CODE_OAUTH_TOKEN',
-      'HOME',
-      'LANG',
-      'PATH',
-      'SHELL',
-      'SOME_PERSONAL_VAR',
-      'TMPDIR',
-    ])
   })
 
   it('applies telemetry injections — drop input.injections turns red', () => {
@@ -149,7 +142,7 @@ describe('buildClaudeAccountEnv — selected account', () => {
     ])
   })
 
-  it('includes the two selected-account directory keys', () => {
+  it('R2 M4 account directory values are exact — substitute either directory after the guard turns red', () => {
     const env = buildClaudeAccountEnv({
       baseEnv: {
         ...realisticEnv(),
@@ -168,6 +161,10 @@ describe('buildClaudeAccountEnv — selected account', () => {
       'SHELL',
       'TMPDIR',
     ])
+    expect({
+      configDir: env.CLAUDE_CONFIG_DIR,
+      credentialDir: env.CLAUDE_SECURESTORAGE_CONFIG_DIR,
+    }).toEqual(ACCOUNT)
   })
 
   it('passes the user own OTLP telemetry configuration through', () => {

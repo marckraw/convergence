@@ -457,7 +457,7 @@ export interface SessionHandle {
   onActivityChange: (callback: (activity: ActivitySignal) => void) => void
   onActivityHeartbeat?: (callback: () => void) => void
 
-  /** A local handle can return queue-follow-up when an answer has no pending interaction. */
+  /** A local handle can return queue-follow-up when this input must wait for the current turn. */
   sendMessage: (
     text: string,
     attachments?: Attachment[],

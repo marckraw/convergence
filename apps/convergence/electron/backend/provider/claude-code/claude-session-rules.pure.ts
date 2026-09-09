@@ -2,13 +2,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-type ClaudeSessionRule = { toolName: string; ruleContent?: string }
+type ClaudeSessionRule = { toolName: string; ruleContent: string }
 
 function isRule(value: unknown): value is ClaudeSessionRule {
   return (
     isRecord(value) &&
     typeof value.toolName === 'string' &&
-    (value.ruleContent === undefined || typeof value.ruleContent === 'string')
+    typeof value.ruleContent === 'string'
   )
 }
 
@@ -53,8 +53,13 @@ export function readClaudeSessionRules(
 export function isRememberableSuggestionSet(
   suggestions: unknown[] | undefined,
   toolName: string,
+  hasMatchedAskRule = false,
 ): boolean {
-  if (!suggestions?.length || !readClaudeSessionRules(suggestions).rules.length)
+  if (
+    hasMatchedAskRule ||
+    !suggestions?.length ||
+    !readClaudeSessionRules(suggestions).rules.length
+  )
     return false
   return suggestions.every((suggestion) => {
     if (!isRecord(suggestion)) return false
@@ -83,15 +88,17 @@ export function matchesClaudeSessionRule(
   remembered: ClaudeSessionRules,
   suggestions: unknown[] | undefined,
   toolName: string,
+  hasMatchedAskRule = false,
 ): boolean {
-  if (!isRememberableSuggestionSet(suggestions, toolName)) return false
+  if (!isRememberableSuggestionSet(suggestions, toolName, hasMatchedAskRule))
+    return false
   const grants = readClaudeSessionRules(suggestions)
   return (
     grants.rules.every((rule) =>
       remembered.rules.some(
         (known) =>
           known.toolName === rule.toolName &&
-          (known.ruleContent ?? null) === (rule.ruleContent ?? null),
+          known.ruleContent === rule.ruleContent,
       ),
     ) &&
     grants.directories.every((directory) =>
