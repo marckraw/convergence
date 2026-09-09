@@ -864,7 +864,20 @@ it.each([
   ],
   ['unknown directory', { type: 'addDirectories', directories: ['/etc'] }],
   ['removeRules', { type: 'removeRules', behavior: 'allow', rules: [] }],
-  ['setMode', { type: 'setMode', mode: 'bypassPermissions' }],
+  ['replaceRules', { type: 'replaceRules', behavior: 'allow', rules: [] }],
+  [
+    'removeDirectories',
+    { type: 'removeDirectories', directories: ['/fixture'] },
+  ],
+  [
+    'deny rule',
+    {
+      type: 'addRules',
+      behavior: 'deny',
+      rules: [{ toolName: 'Bash', ruleContent: 'build:*' }],
+    },
+  ],
+  ['unknown update', { type: 'futurePermissionUpdate' }],
   [
     'another tool',
     {
@@ -882,11 +895,16 @@ it.each([
       behavior: 'allow',
       rules: [{ toolName: 'Bash', ruleContent: 'build:*' }],
     }
-    const first = request(connections[0], 'remember', { suggestions: [known] })
+    const suggestions = [
+      known,
+      { type: 'addDirectories', directories: ['/fixture'] },
+      { type: 'setMode', mode: 'acceptEdits' },
+    ]
+    const first = request(connections[0], 'remember', { suggestions })
     service.approve(session.id, 'remember', { scope: 'session' })
     await first
     const second = request(connections[0], 'broader', {
-      suggestions: [known, broader],
+      suggestions: [...suggestions, broader],
     })
     const card = service
       .getConversation(session.id)
@@ -1225,5 +1243,55 @@ it('H1 the request tool must own every remembered rule — ignore request tool t
   expect({ kind: card?.kind, result: (await next)?.behavior }).toEqual({
     kind: 'approval-request',
     result: 'deny',
+  })
+})
+
+it('H1prime repeated grants ignore the setMode alternative — count setMode as a blocker turns red', async () => {
+  const { service, session, connections } = await fixture()
+  const suggestions = [
+    {
+      type: 'addRules',
+      behavior: 'allow',
+      destination: 'localSettings',
+      rules: [{ toolName: 'Bash', ruleContent: 'touch /fixture/marker.txt' }],
+    },
+    {
+      type: 'addDirectories',
+      directories: ['/fixture'],
+      destination: 'session',
+    },
+    { type: 'setMode', mode: 'acceptEdits', destination: 'session' },
+  ]
+  const responses = []
+  for (const id of ['first', 'second', 'third']) {
+    const pending = request(connections[0], id, { suggestions })
+    if (id === 'first') service.approve(session.id, id, { scope: 'session' })
+    else {
+      await Promise.race([pending, new Promise((r) => setTimeout(r, 25))])
+      service.deny(session.id, id)
+    }
+    responses.push(await pending)
+  }
+  const items = service.getConversation(session.id)
+  expect({
+    cards: items
+      .filter((i) => i.kind === 'approval-request')
+      .map((i) => i.providerMeta.providerItemId),
+    notes: items
+      .filter((i) => i.kind === 'note')
+      .map((i) => i.text)
+      .filter((t) => t.includes('session rule')),
+    responses,
+  }).toEqual({
+    cards: ['first'],
+    notes: [
+      '↳ allowed by your session rule: Bash',
+      '↳ allowed by your session rule: Bash',
+    ],
+    responses: ['first', 'second', 'third'].map((toolUseID) => ({
+      behavior: 'allow',
+      toolUseID,
+      decisionClassification: 'user_permanent',
+    })),
   })
 })

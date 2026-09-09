@@ -52,6 +52,8 @@ export function matchesClaudeSessionRule(
     return false
   return suggestions.every((suggestion) => {
     if (!isRecord(suggestion)) return false
+    // A mode is an alternative to the chosen grants, never stored or sent.
+    if (suggestion.type === 'setMode') return true
     if (
       suggestion.type === 'addRules' &&
       suggestion.behavior === 'allow' &&
