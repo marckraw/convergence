@@ -1,3 +1,4 @@
+import type { HarnessFact } from '../../../../src/shared/types/harness-facts.types'
 import {
   EXECUTION_PROTOCOL_VERSION,
   type ExecutionConversationItem,
@@ -656,3 +657,13 @@ function pickDefined<T>(source: object, fields: readonly string[]): T {
   }
   return picked as T
 }
+
+/** Nested evidence inventory: these local facts have no host-wire encoding. */
+export const EXECUTION_HOST_UNSENT_HARNESS_FACT_KINDS = {
+  'harness.hook': true,
+  'harness.retry': true,
+  'harness.compaction': true,
+  'harness.denial': true,
+  'harness.rateLimit': true,
+  'harness.init': true,
+} satisfies Record<HarnessFact['kind'], true>

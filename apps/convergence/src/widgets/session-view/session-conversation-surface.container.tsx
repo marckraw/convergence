@@ -1,3 +1,4 @@
+import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 import { Button } from '@/shared/ui/button'
 import {
   isSubagentWork,
@@ -26,6 +27,7 @@ import { SessionTranscript } from './session-transcript.container'
 import { UiResponsePanel } from './ui-response-panel.presentational'
 
 interface SessionConversationSurfaceProps {
+  compactions?: SessionHarnessFacts['compactions']
   parallelRows?: ParallelWorkRow[]
   parallelLoading?: boolean
   parallelError?: string | null
@@ -53,6 +55,7 @@ export const SessionConversationSurface: FC<
   SessionConversationSurfaceProps
 > = ({
   session,
+  compactions,
   parallelRows,
   parallelLoading,
   parallelError,
@@ -95,6 +98,7 @@ export const SessionConversationSurface: FC<
   const conversationColumn = renderConversationColumn({
     sessionId: session.id,
     session,
+    compactions,
     parallelRows,
     parallelLoading,
     parallelError,
@@ -132,6 +136,7 @@ export const SessionConversationSurface: FC<
 }
 
 interface RenderConversationColumnInput {
+  compactions?: SessionHarnessFacts['compactions']
   parallelRows?: ParallelWorkRow[]
   parallelLoading?: boolean
   parallelError?: string | null
@@ -161,6 +166,7 @@ interface RenderConversationColumnInput {
 function renderConversationColumn({
   sessionId,
   session,
+  compactions,
   parallelRows,
   parallelLoading,
   parallelError,
@@ -193,6 +199,7 @@ function renderConversationColumn({
       )}
       <SessionTranscript
         session={session}
+        compactions={compactions}
         parallelRows={parallelRows}
         parallelLoading={parallelLoading}
         onParallelSelect={onParallelSelect}

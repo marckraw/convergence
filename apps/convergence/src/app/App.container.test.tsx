@@ -153,6 +153,14 @@ const mockElectronAPI = {
     getCloneableRepositoryUrl: vi.fn().mockResolvedValue(null),
   },
   session: {
+    harnessFacts: vi.fn().mockResolvedValue({
+      turns: [],
+      currentTurn: null,
+      compactions: [],
+      rateLimit: null,
+      init: null,
+    }),
+    onHarnessFacts: vi.fn().mockReturnValue(() => {}),
     listAgentRuns: vi.fn().mockResolvedValue([]),
     listTasks: vi.fn().mockResolvedValue([]),
     onEvidenceUpdated: vi.fn().mockReturnValue(() => {}),

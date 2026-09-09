@@ -1,3 +1,4 @@
+import type { HarnessFact } from '../../../src/shared/types/harness-facts.types'
 import type {
   AgentRunStatus,
   SessionAgentRun,
@@ -69,6 +70,7 @@ export type TaskFact = {
 }
 
 export type HarnessEvidence =
+  | HarnessFact
   | AgentRunFact
   | TaskFact
   | {

@@ -1,3 +1,5 @@
+import { useHarnessFacts } from './use-harness-facts'
+import { HarnessFactsView } from './harness-facts.presentational'
 import { ParallelWork } from './parallel-work.container'
 import { useParallelWork } from './use-parallel-work'
 import { isRemoteExecutionHost } from '@/entities/execution-host'
@@ -128,6 +130,11 @@ export const SessionView: FC = () => {
   } | null>(null)
   const parallelButton = useRef<HTMLButtonElement>(null)
   const parallelInvoker = useRef<HTMLElement | null>(null)
+  const session = sessions.find((s) => s.id === activeSessionId) ?? null
+  const supportsHarnessFacts =
+    session?.providerId === 'claude-code' &&
+    !isRemoteExecutionHost(session.executionHost)
+  const harness = useHarnessFacts(supportsHarnessFacts ? activeSessionId : null)
   const parallel = useParallelWork(activeSessionId, activeConversation)
   const selectParallel = (id: string | null) => {
     if (!parallelOpen && document.activeElement instanceof HTMLElement)
@@ -143,7 +150,6 @@ export const SessionView: FC = () => {
       : parallelButton.current
     )?.focus()
   }
-  const session = sessions.find((s) => s.id === activeSessionId) ?? null
   const remoteSessionId = isRemoteExecutionHost(session?.executionHost)
     ? (session?.id ?? null)
     : null
@@ -442,6 +448,14 @@ export const SessionView: FC = () => {
                 Worktree removed
               </span>
             )}
+            {supportsHarnessFacts && (
+              <HarnessFactsView
+                facts={harness.facts}
+                error={harness.error}
+                loading={harness.loading}
+                onRetry={harness.retry}
+              />
+            )}
             <SessionWiresContainer sessionId={session.id} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -699,6 +713,7 @@ export const SessionView: FC = () => {
         </div>
 
         <SessionConversationSurface
+          compactions={harness.facts?.compactions}
           session={session}
           conversationItems={activeConversation}
           parallelRows={parallel.rows}

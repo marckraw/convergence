@@ -69,6 +69,7 @@ export function createClaudeTransport(input: {
       resume: value('--resume'),
       includePartialMessages: true,
       forwardSubagentText: true,
+      includeHookEvents: true,
       canUseTool: (toolName, inputValue, options) =>
         input.onPermissionRequest({ toolName, input: inputValue, ...options }),
       permissionMode: mode as

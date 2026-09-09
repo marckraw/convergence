@@ -1,3 +1,4 @@
+import type { SessionHarnessFacts } from './harness-facts.types'
 import type { ParallelWorkCounts } from '../lib/parallel-work.pure'
 import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
 import type { SessionAgentRun, SessionTask } from './harness-evidence.types'
@@ -1785,6 +1786,10 @@ interface ElectronAPI {
       callback: (event: { sessionId: string }) => void,
     ) => () => void
     stopTask: (sessionId: string, id: string) => Promise<void>
+    harnessFacts: (sessionId: string) => Promise<SessionHarnessFacts>
+    onHarnessFacts: (
+      callback: (event: { sessionId: string }) => void,
+    ) => () => void
     listAgentRuns: (sessionId: string) => Promise<SessionAgentRun[]>
     listTasks: (sessionId: string) => Promise<SessionTask[]>
     archive: (id: string) => Promise<void>

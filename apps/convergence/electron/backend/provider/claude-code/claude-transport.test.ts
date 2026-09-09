@@ -72,7 +72,7 @@ it('uses the chosen executable and exposes stderr once and exit — substitute t
   transport.close()
 })
 
-it('serializes controls and forwards child text — mutations drop permission control, disable forwarding or replace stop_task with interrupt turn red', async () => {
+it('serializes controls and forwards child text — mutations drop permission control, disable forwarding, remove includeHookEvents or replace stop_task with interrupt turn red', async () => {
   const child = Object.assign(new EventEmitter(), {
     stdin: new PassThrough(),
     stdout: new PassThrough(),
@@ -128,10 +128,12 @@ it('serializes controls and forwards child text — mutations drop permission co
           forwardSubagentText?: boolean
         }
       )?.forwardSubagentText,
+      hooks: spawnMock.mock.calls[0]?.[1].includes('--include-hook-events'),
       controls: requests.filter((r) => r.subtype !== 'initialize'),
       receipt,
     }).toEqual({
       forwarded: true,
+      hooks: true,
       controls: [
         { subtype: 'set_model', model: 'fixture-model' },
         { subtype: 'set_permission_mode', mode: 'plan' },

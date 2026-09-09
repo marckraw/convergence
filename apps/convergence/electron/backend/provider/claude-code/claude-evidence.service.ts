@@ -1,3 +1,4 @@
+import { readClaudeHarnessFact, boundHarnessText } from './claude-harness.pure'
 import { claudeRootResultClaimsBlock } from './claude-code-task.pure'
 import { readdirSync, readFileSync } from 'fs'
 import { homedir } from 'os'
@@ -36,6 +37,11 @@ export class ClaudeEvidenceService {
   private readonly readMetadata = new Set<string>()
   private readonly unmatchedMetadata = new Set<string>()
   private metadataListing = ''
+  /** api_retry has no attribution key, so this counter is session-scoped;
+   * only the main thread can witness its successful answer. Every result ends it.
+   * A child's failed retry and its parent's successful response cannot be attributed
+   * separately, so a main-thread tool error resolves outstanding retries as unknown. */
+  private outstandingRetries = 0
   private sessionId: string | null = null
   private cwd: string
   constructor(
@@ -59,6 +65,75 @@ export class ClaudeEvidenceService {
   consume(data: unknown, at: string): void {
     const event = claudeRecord(data)
     if (!event) return
+    if (event.type === 'system' && event.subtype === 'api_retry')
+      this.outstandingRetries++
+    const isResult = event.type === 'result'
+    const failed =
+      isResult &&
+      (event.is_error === true || String(event.subtype).startsWith('error_'))
+    const mainThread = event.parent_tool_use_id == null
+    const content = claudeRecord(event.message)?.content
+    const toolError =
+      mainThread &&
+      event.type === 'user' &&
+      Array.isArray(content) &&
+      content.some((value) => {
+        const block = claudeRecord(value)
+        return block?.type === 'tool_result' && block.is_error === true
+      })
+    if (this.outstandingRetries > 0 && toolError) {
+      this.emit({
+        kind: 'harness.retry',
+        phase: 'resolved',
+        outcome: 'unknown',
+        reason: 'tool-error-while-outstanding',
+        attempts: this.outstandingRetries,
+        at,
+      })
+      this.outstandingRetries = 0
+    }
+    const succeeded =
+      mainThread &&
+      (event.type === 'assistant' ||
+        (event.type === 'stream_event' &&
+          claudeRecord(event.event)?.type === 'message_start') ||
+        (isResult &&
+          !failed &&
+          (event.terminal_reason == null ||
+            event.terminal_reason === 'completed')))
+    if (this.outstandingRetries > 0 && (failed || succeeded)) {
+      const subtype =
+        typeof event.subtype === 'string'
+          ? boundHarnessText(event.subtype, 64)
+          : null
+      this.emit({
+        kind: 'harness.retry',
+        phase: 'resolved',
+        outcome: failed ? 'failed' : 'succeeded',
+        attempts: this.outstandingRetries,
+        at,
+        ...(failed
+          ? {
+              errorSubtype:
+                typeof subtype === 'object' && subtype !== null
+                  ? subtype.preview
+                  : subtype,
+              ...(typeof subtype === 'object' && subtype !== null
+                ? {
+                    fieldBounds: {
+                      errorSubtype: {
+                        truncated: true as const,
+                        bytes: subtype.bytes,
+                      },
+                    },
+                  }
+                : {}),
+            }
+          : {}),
+      })
+      this.outstandingRetries = 0
+    }
+    if (isResult) this.outstandingRetries = 0
     this.sessionId = claudeString(event.session_id) ?? this.sessionId
     if (event.type === 'system' && event.subtype === 'init')
       this.cwd = claudeString(event.cwd) ?? this.cwd
@@ -144,13 +219,15 @@ export class ClaudeEvidenceService {
         String(event.type),
       )
     ) {
-      this.emit({
-        kind: 'harness.unknown',
-        type: claudeString(event.type) ?? 'unknown',
-        subtype: claudeString(event.subtype),
-        payload: event,
-        at,
-      })
+      this.emit(
+        readClaudeHarnessFact(event, at) ?? {
+          kind: 'harness.unknown',
+          type: claudeString(event.type) ?? 'unknown',
+          subtype: claudeString(event.subtype),
+          payload: event,
+          at,
+        },
+      )
     }
   }
 
@@ -275,6 +352,7 @@ export class ClaudeEvidenceService {
     at: string,
     reason?: 'quit' | 'idle' | 'account' | 'stop' | 'exit',
   ): void {
+    this.outstandingRetries = 0
     this.requestedStops.clear()
     this.emit({ kind: 'process.ended', at, ...(reason ? { reason } : {}) })
   }

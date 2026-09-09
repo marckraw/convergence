@@ -896,3 +896,52 @@ it.each([
     }).toEqual({ main: true, child: visible, label: visible })
   },
 )
+
+it('places compaction at its recorded boundary — mutation omit marker placement turns red', () => {
+  const before = {
+    ...assistantMessage({ id: 'before', sequence: 1, text: 'Before compact' }),
+    createdAt: '2026-01-01T00:00:01.000Z',
+  }
+  const after = {
+    ...assistantMessage({ id: 'after', sequence: 2, text: 'After compact' }),
+    createdAt: '2026-01-01T00:00:03.000Z',
+  }
+  render(
+    <SessionTranscript
+      session={baseSession}
+      conversationItems={[before, after]}
+      compactions={[
+        {
+          kind: 'harness.compaction',
+          sequence: 1,
+          at: '2026-01-01T00:00:02.000Z',
+          trigger: 'auto',
+          preTokens: 84000,
+          postTokens: 12000,
+          durationMs: null,
+        },
+      ]}
+      onApprove={vi.fn()}
+      onDeny={vi.fn()}
+      onInputAnswer={vi.fn()}
+    />,
+  )
+  const marker = screen.queryByTestId('compaction-marker')
+  expect({
+    text: marker?.textContent,
+    before:
+      !!marker &&
+      (screen.getByText('Before compact').compareDocumentPosition(marker) &
+        Node.DOCUMENT_POSITION_FOLLOWING) !==
+        0,
+    after:
+      !!marker &&
+      (marker.compareDocumentPosition(screen.getByText('After compact')) &
+        Node.DOCUMENT_POSITION_FOLLOWING) !==
+        0,
+  }).toEqual({
+    text: 'Compacted (auto) · 84k → 12k tokens',
+    before: true,
+    after: true,
+  })
+})

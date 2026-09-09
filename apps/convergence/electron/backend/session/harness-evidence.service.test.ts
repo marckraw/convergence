@@ -1,3 +1,5 @@
+import { harnessPill } from '../../../src/widgets/session-view/harness-facts.pure'
+import { readClaudeHarnessFact } from '../provider/claude-code/claude-harness.pure'
 import { afterEach, expect, it } from 'vitest'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import { HarnessEvidenceService } from './harness-evidence.service'
@@ -430,3 +432,208 @@ it.each(['running', 'unknown'] as const)(
     })
   },
 )
+
+it('RUN61 persists a typed harness fact and its turn in the existing table — mutation skip typed write', () => {
+  const { db, service } = bed()
+  const fact = {
+    kind: 'harness.compaction' as const,
+    at: 'boundary',
+    trigger: 'manual',
+    preTokens: 20686,
+    postTokens: 4630,
+    durationMs: 14465,
+  }
+  service.apply('session', 'turn', fact)
+  expect(
+    db
+      .prepare(
+        'SELECT type,subtype,payload_json,created_at FROM session_harness_events',
+      )
+      .all(),
+  ).toEqual([
+    {
+      type: 'harness.compaction',
+      subtype: null,
+      payload_json: JSON.stringify({ ...fact, turnId: 'turn' }),
+      created_at: 'boundary',
+    },
+  ])
+})
+
+it('RUN61 reads typed evidence and process endings through the durable fold — mutation omit read or process record', () => {
+  const { service } = bed()
+  service.apply('session', 'turn', {
+    kind: 'harness.retry',
+    phase: 'attempt',
+    attempt: 1,
+    maxRetries: 10,
+    retryDelayMs: 615,
+    errorStatus: null,
+    message: 'unknown',
+    noResponse: null,
+    at: 'retry',
+  })
+  service.apply('session', null, { kind: 'process.ended', at: 'exit' })
+  expect(service.harnessFacts('session').currentTurn?.retries?.state).toBe(
+    'unknown',
+  )
+})
+
+it('RUN61 reads legacy recorded harness events without backfill — mutation omit legacy decoder turns red', () => {
+  const { db, service } = bed()
+  db.prepare(
+    "UPDATE session_turns SET started_at='2026-09-09T00:00:00.000Z'",
+  ).run()
+  service.apply('session', null, {
+    kind: 'harness.unknown',
+    type: 'system',
+    subtype: 'hook_started',
+    payload: {
+      type: 'system',
+      subtype: 'hook_started',
+      hook_id: 'legacy',
+      hook_name: 'Old hook',
+      hook_event: 'PreToolUse',
+    },
+    at: '2026-09-09T00:00:01.000Z',
+  })
+  expect(service.harnessFacts('session').currentTurn?.hooks).toEqual([
+    {
+      id: 'legacy',
+      name: 'Old hook',
+      event: 'PreToolUse',
+      status: 'running',
+      startedAt: '2026-09-09T00:00:01.000Z',
+      durationMs: null,
+      output: null,
+    },
+  ])
+})
+
+it('R2prime 8190-byte hook response survives the envelope — mutation remove output bound turns red', () => {
+  const { service } = bed()
+  const started = readClaudeHarnessFact(
+    {
+      type: 'system',
+      subtype: 'hook_started',
+      hook_id: 'h',
+      hook_name: 'guard',
+      hook_event: 'PreToolUse',
+    },
+    '2026-09-09T00:00:01Z',
+  )!
+  const response = readClaudeHarnessFact(
+    {
+      type: 'system',
+      subtype: 'hook_response',
+      hook_id: 'h',
+      hook_name: 'guard',
+      hook_event: 'PreToolUse',
+      outcome: 'success',
+      output: 'x'.repeat(8190),
+    },
+    '2026-09-09T00:00:02Z',
+  )!
+  service.apply('session', 'turn', started)
+  service.apply('session', 'turn', response)
+  expect(service.harnessFacts('session').currentTurn?.hooks).toMatchObject([
+    {
+      id: 'h',
+      status: 'ok',
+      output: { truncated: true, bytes: 8190, preview: 'x'.repeat(4094) },
+    },
+  ])
+})
+it.each(['"', '\u001b'])(
+  'R2double encoded output %j stays one hook — mutation measure raw bytes turns red',
+  (point) => {
+    const { service } = bed()
+    for (const subtype of ['hook_started', 'hook_response']) {
+      service.apply(
+        'session',
+        'turn',
+        readClaudeHarnessFact(
+          {
+            type: 'system',
+            subtype,
+            hook_id: 'h',
+            hook_name: 'guard',
+            hook_event: 'PreToolUse',
+            outcome: 'success',
+            ...(subtype === 'hook_response'
+              ? { output: point.repeat(5000) }
+              : {}),
+          },
+          'now',
+        )!,
+      )
+    }
+    const hooks = service.harnessFacts('session').currentTurn!.hooks
+    expect(hooks).toHaveLength(1)
+    expect(hooks[0]).toMatchObject({
+      id: 'h',
+      status: 'ok',
+      output: { truncated: true, bytes: 5000 },
+    })
+    const output = hooks[0]!.output
+    expect(
+      typeof output === 'object' && output !== null
+        ? Buffer.byteLength(JSON.stringify(output.preview))
+        : Infinity,
+    ).toBeLessThanOrEqual(4096)
+  },
+)
+
+it('R2triple failed MCP survives 120 plugins through apply and pill — mutation omit init bounds turns red', () => {
+  const { service } = bed()
+  service.apply(
+    'session',
+    'turn',
+    readClaudeHarnessFact(
+      {
+        type: 'system',
+        subtype: 'init',
+        mcp_servers: [{ name: 'linear', status: 'failed' }],
+        plugins: Array.from({ length: 120 }, (_, i) => ({
+          name: `plugin-${i}`,
+          path: 'x'.repeat(200),
+        })),
+      },
+      'now',
+    )!,
+  )
+  const facts = service.harnessFacts('session')
+  expect({ alert: harnessPill(facts).alert, init: facts.init }).toMatchObject({
+    alert: true,
+    init: {
+      plugins: { count: 120, names: expect.any(Array), omitted: 104 },
+      mcpServers: {
+        total: 1,
+        connected: 0,
+        others: [{ name: 'linear', status: 'failed' }],
+        omittedAlerts: 0,
+        omitted: 0,
+      },
+    },
+  })
+  expect(facts.init?.plugins?.names).toHaveLength(16)
+})
+it('RUN61 r5 raw init subtype reaches the placeholder — mutation omit SELECT subtype turns red', () => {
+  const { db, service } = bed()
+  db.prepare(
+    'INSERT INTO session_harness_events(session_id,sequence,type,subtype,payload_json,created_at) VALUES(?,?,?,?,?,?)',
+  ).run(
+    'session',
+    1,
+    'system',
+    'init',
+    JSON.stringify({ truncated: true }),
+    '2026-09-09T00:00:01.000Z',
+  )
+  expect(service.harnessFacts('session').init).toMatchObject({
+    kind: 'harness.init',
+    truncated: true,
+    mcpServers: null,
+    at: '2026-09-09T00:00:01.000Z',
+  })
+})

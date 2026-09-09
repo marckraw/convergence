@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PROJECT_SETTINGS, useProjectStore } from '@/entities/project'
 import { useDialogStore } from '@/entities/dialog'
@@ -181,6 +181,15 @@ describe('SessionView', () => {
     Object.defineProperty(window, 'electronAPI', {
       value: {
         session: {
+          harnessFacts: vi.fn().mockResolvedValue({
+            turns: [],
+            currentTurn: null,
+            compactions: [],
+            rateLimit: null,
+            init: null,
+          }),
+          onHarnessFacts: vi.fn().mockReturnValue(() => {}),
+          onSessionSummaryUpdate: vi.fn().mockReturnValue(() => {}),
           listAgentRuns: vi.fn().mockResolvedValue([]),
           listTasks: vi.fn().mockResolvedValue([]),
           onEvidenceUpdated: vi.fn().mockReturnValue(() => {}),
@@ -269,6 +278,64 @@ describe('SessionView', () => {
       configurable: true,
       writable: true,
     })
+  })
+
+  it.each([
+    ['claude-code', 'daemon-a'],
+    ['codex', 'local'],
+    ['pi', 'local'],
+  ])(
+    'R10 no harness promise for %s on %s — mutation remove provider or host gate turns red',
+    async (providerId, executionHost) => {
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) => ({
+          ...session,
+          providerId,
+          executionHost,
+        })),
+      }))
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+      await act(async () => {})
+      expect(screen.queryByTestId('harness-pill')).toBeNull()
+    },
+  )
+
+  it('RUN61 reads the shared projection into the header and transcript — mutation omit harness view or compactions prop turns red', async () => {
+    vi.mocked(window.electronAPI.session.harnessFacts).mockResolvedValue({
+      turns: [],
+      currentTurn: null,
+      init: null,
+      rateLimit: null,
+      compactions: [
+        {
+          kind: 'harness.compaction',
+          sequence: 1,
+          at: '2026-01-01T00:00:00Z',
+          trigger: 'auto',
+          preTokens: 84000,
+          postTokens: 12000,
+          durationMs: null,
+        },
+      ],
+    })
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    await waitFor(() =>
+      expect({
+        pill: screen.queryByTestId('harness-pill')?.textContent,
+        marker: screen.queryByTestId('compaction-marker')?.textContent,
+      }).toEqual({
+        pill: 'Harness · compacted',
+        marker: 'Compacted (auto) · 84k → 12k tokens',
+      }),
+    )
   })
 
   it('R8 M2 failed evidence read keeps child work moved and exposes Retry in the conversation — mutation settle on error turns red', async () => {

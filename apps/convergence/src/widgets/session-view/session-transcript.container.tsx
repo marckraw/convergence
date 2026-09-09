@@ -1,3 +1,6 @@
+import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
+import { placeCompactions } from './harness-facts.pure'
+import { CompactionMarker } from './compaction-marker.presentational'
 import {
   isSubagentWork,
   parallelWorkRowState,
@@ -27,6 +30,7 @@ import { buildConversationRenderPlan } from './session-transcript-render-plan.pu
 import { isTranscriptNearBottom } from './session-transcript-scroll.pure'
 
 interface SessionTranscriptProps {
+  compactions?: SessionHarnessFacts['compactions']
   parallelRows?: ParallelWorkRow[]
   parallelLoading?: boolean
   onParallelSelect?: (id: string) => void
@@ -48,12 +52,14 @@ interface SessionTranscriptProps {
   ) => void
 }
 
+const EMPTY_COMPACTIONS: SessionHarnessFacts['compactions'] = []
 const EMPTY_PARALLEL_ROWS: ParallelWorkRow[] = []
 const TRANSCRIPT_ROW_ESTIMATE_PX = 160
 const TRANSCRIPT_OVERSCAN = 6
 
 export const SessionTranscript: FC<SessionTranscriptProps> = ({
   session,
+  compactions = EMPTY_COMPACTIONS,
   parallelRows = EMPTY_PARALLEL_ROWS,
   parallelLoading = false,
   onParallelSelect,
@@ -117,6 +123,14 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
         ),
       ),
     [conversationItems, workMarkers, knownAgentIds, parallelLoading],
+  )
+  const compactionPlacement = useMemo(
+    () =>
+      placeCompactions(
+        conversationRenderPlan.map((entry) => entry.item),
+        compactions,
+      ),
+    [conversationRenderPlan, compactions],
   )
   const actionableApprovalIds = useMemo(() => {
     if (session.status !== 'running' && session.status !== 'completed') {
@@ -259,6 +273,7 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
   )
 
   const totalSize = rowVirtualizer.getTotalSize()
+  const lastCompactionSequence = compactions.at(-1)?.sequence
   useLayoutEffect(() => {
     const sessionChanged = previousSessionIdRef.current !== session.id
     previousSessionIdRef.current = session.id
@@ -270,7 +285,13 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     if (sessionChanged || bottomFollowRef.current) {
       scrollToLatest()
     }
-  }, [session.id, totalSize, scrollToLatest])
+  }, [
+    session.id,
+    totalSize,
+    compactions.length,
+    lastCompactionSequence,
+    scrollToLatest,
+  ])
 
   useLayoutEffect(
     () => () => {
@@ -337,6 +358,9 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
                     : undefined
                 }
               >
+                {compactionPlacement.before.get(entry.id)?.map((fact) => (
+                  <CompactionMarker key={fact.sequence} fact={fact} />
+                ))}
                 {renderEntry.turnBoundary && (
                   <div
                     className="my-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
@@ -447,6 +471,9 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
             )
           })}
         </div>
+        {compactionPlacement.tail.map((fact) => (
+          <CompactionMarker key={fact.sequence} fact={fact} />
+        ))}
       </div>
     </div>
   )

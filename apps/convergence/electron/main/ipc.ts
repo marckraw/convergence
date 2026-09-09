@@ -1269,8 +1269,10 @@ export function registerIpcHandlers(
 
   sessionApp.onEvidenceUpdate((event) => {
     for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed())
+      if (!win.isDestroyed()) {
         win.webContents.send('session:evidenceUpdated', event)
+        win.webContents.send('harness.facts', event)
+      }
     }
   })
 
@@ -1307,6 +1309,9 @@ export function registerIpcHandlers(
     sessionService.stopTask(sessionId, id),
   )
 
+  ipcMain.handle('session:harnessFacts', (_event, sessionId: string) =>
+    sessionService.harnessFacts(sessionId),
+  )
   ipcMain.handle('session:listAgentRuns', (_event, sessionId: string) =>
     sessionService.listAgentRuns(sessionId),
   )
