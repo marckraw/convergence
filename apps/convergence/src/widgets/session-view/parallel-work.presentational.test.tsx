@@ -73,9 +73,7 @@ it('RUN64 R2 unknown last sighting has a relative age and provisional identity s
   expect({
     title: Boolean(screen.queryByText('Subagent')),
     idInTitle: container.textContent?.includes('tool-provisional'),
-    fixed: Boolean(
-      screen.queryByText('Unknown · last seen 2026-09-09T00:00:12Z · 4 m ago'),
-    ),
+    fixed: Boolean(screen.queryByText('Unknown · last seen 4 m ago')),
   }).toEqual({ title: true, idInTitle: false, fixed: true })
 })
 

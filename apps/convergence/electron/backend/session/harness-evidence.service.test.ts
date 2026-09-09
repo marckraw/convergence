@@ -666,7 +666,7 @@ it('RUN64 R2′ snapshot records its first sighting durably — mutation omit ob
   ])
 })
 
-it('RUN64 R4′ current-answer window excludes old failures and NULL time but includes first sightings — mutation drop turn bound or count NULL-time rows turns red', () => {
+it('RUN64 round2 window excludes failed NULL times but keeps alive NULL times — mutation window running turns red', () => {
   const { db, service } = bed()
   const first = '2026-09-09T10:00:00.000Z',
     second = '2026-09-09T11:00:00.000Z'
@@ -714,8 +714,32 @@ it('RUN64 R4′ current-answer window excludes old failures and NULL time but in
   const noTurn = service.countParallelWork(['session']).get('session')
   expect({ before, after, sighting, noTurn }).toEqual({
     before: { running: 0, unknown: 0, failed: 2, stopped: 0 },
-    after: { running: 0, unknown: 0, failed: 0, stopped: 0 },
-    sighting: { running: 1, unknown: 0, failed: 0, stopped: 0 },
-    noTurn: { running: 1, unknown: 0, failed: 2, stopped: 0 },
+    after: { running: 1, unknown: 0, failed: 0, stopped: 0 },
+    sighting: { running: 2, unknown: 0, failed: 0, stopped: 0 },
+    noTurn: { running: 2, unknown: 0, failed: 2, stopped: 0 },
+  })
+})
+
+it('RUN64 round2 alive statuses cross turns but failures need known current time — mutations window unknown or include old/NULL failures turn red', () => {
+  const { db, service } = bed()
+  db.prepare("UPDATE session_turns SET started_at='2026-09-09T11:00:00Z'").run()
+  for (const [id, status, start] of [
+    ['monitor', 'running', '2026-09-09T10:00:00Z'],
+    ['lost', 'unknown', '2026-09-09T10:00:00Z'],
+    ['old-fail', 'failed', '2026-09-09T10:00:00Z'],
+    ['old-stop', 'stopped', '2026-09-09T10:00:00Z'],
+    ['current-fail', 'failed', '2026-09-09T11:00:00Z'],
+    ['current-stop', 'stopped', '2026-09-09T11:00:00Z'],
+    ['null-fail', 'failed', null],
+    ['null-stop', 'stopped', null],
+  ])
+    db.prepare(
+      "INSERT INTO session_tasks(task_id,session_id,status,started_at) VALUES (?,'session',?,?)",
+    ).run(id, status, start)
+  expect(service.countParallelWork(['session']).get('session')).toEqual({
+    running: 1,
+    unknown: 1,
+    failed: 1,
+    stopped: 1,
   })
 })

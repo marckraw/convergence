@@ -288,7 +288,7 @@ describe('GlobalChatSessionList', () => {
   })
 })
 
-it('RUN64 R4 header and sidebar clear old failures using real window counts — mutation remove SQL window turns red', () => {
+it('RUN64 round2 alive is current in header and sidebar — mutations window running or unwindow failures turn red', () => {
   const db = getDatabase()
   try {
     db.prepare(
@@ -317,11 +317,11 @@ it('RUN64 R4 header and sidebar clear old failures using real window counts — 
     const oldLabels = screen.queryAllByText('answered · 2 failed').length
     sidebar.unmount()
     header.unmount()
-    service.apply('window', 'second', {
+    service.apply('window', 'first', {
       kind: 'task.changed',
-      taskId: 'new',
-      at: '2026-09-09T11:00:00Z',
-      patch: { status: 'running' },
+      taskId: 'older-monitor',
+      at: '2026-09-09T10:00:00Z',
+      patch: { status: 'running', startedAt: '2026-09-09T10:00:00Z' },
     })
     const running = service.countParallelWork(['window']).get('window')!
     renderList({ sessions: [{ ...baseSession, parallelWork: running }] })

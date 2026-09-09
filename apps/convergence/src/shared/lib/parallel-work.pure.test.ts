@@ -7,6 +7,7 @@ import {
   buildParallelWork,
   orderParallelWork,
   parallelWorkTime,
+  parallelWorkAnchor,
   formatRelativeTime,
   archiveParallelWork,
   type ParallelWorkRow,
@@ -246,7 +247,7 @@ it('RUN64 R1′ keeps active oldest first and finished newest within parents —
     timedTask('finished-new', 'completed', 1),
     timedTask('legacy-done', 'completed', null),
   ]
-  expect(orderParallelWork(rows, clock).map((row) => row.id)).toEqual([
+  expect(orderParallelWork(rows).map((row) => row.id)).toEqual([
     'unknown',
     'parent',
     'child-old',
@@ -300,7 +301,97 @@ it('RUN64 R3 buckets 61m but never 59m or running and keeps active descendants v
     visible: groups.visible.map((row) => row.id),
     older: groups.older.map((row) => row.id),
   }).toEqual({
-    visible: ['59', 'running', 'parent', 'child', 'legacy'],
-    older: ['61'],
+    visible: ['59', 'running', 'parent', 'child'],
+    older: ['61', 'legacy'],
+  })
+})
+
+it('RUN64 round2 anchor unifies unknown order label and archive — mutations unknown uses start, running uses end, archive unknown or omit finite guard turn red', () => {
+  const a: ParallelWorkRow = {
+    id: 'A',
+    kind: 'agent',
+    parentId: null,
+    run: {
+      ...run('A', 1),
+      status: 'unknown',
+      startedAt: ago(90),
+      endedAt: ago(1),
+    },
+  }
+  const b: ParallelWorkRow = {
+    id: 'B',
+    kind: 'agent',
+    parentId: null,
+    run: { ...run('B', 1), startedAt: ago(4), endedAt: ago(80) },
+  }
+  const c = timedTask('C', 'completed', 120)
+  const invalid = { ...b, run: { ...b.run!, startedAt: 'start' } }
+  expect({
+    anchors: [a, b, c, invalid].map(parallelWorkAnchor),
+    order: orderParallelWork([a, b, c]).map((row) => row.id),
+    labels: [a, b, c, invalid].map((row) => parallelWorkTime(row, clock).label),
+    future: archiveParallelWork([a], clock + 86400000).older,
+  }).toEqual({
+    anchors: [
+      { at: ago(1), phase: 'lastSeen' },
+      { at: ago(4), phase: 'started' },
+      { at: ago(120), phase: 'ended' },
+      { at: null, phase: 'none' },
+    ],
+    order: ['B', 'A', 'C'],
+    labels: ['last seen 1 m ago', '4 m', '2 h ago', 'time not reported'],
+    future: [],
+  })
+})
+
+it('RUN64 round2 archive partitions complete roots — mutations archive visible-root descendants or leave no-time root visible turn red', () => {
+  const rows = [
+    timedTask('active-root', 'running', 4),
+    timedTask('old-child', 'completed', 120, 'active-root'),
+    timedTask('mixed-root', 'completed', 180),
+    timedTask('mixed-old', 'completed', 120, 'mixed-root'),
+    timedTask('mixed-young', 'completed', 4, 'mixed-root'),
+    timedTask('legacy-root', 'completed', null),
+    timedTask('old-root', 'failed', 180),
+    timedTask('old-grandchild', 'completed', 120, 'old-root'),
+  ]
+  const partition = archiveParallelWork(rows, clock)
+  expect({
+    visible: partition.visible.map((row) => row.id),
+    older: partition.older.map((row) => row.id),
+  }).toEqual({
+    visible: [
+      'active-root',
+      'old-child',
+      'mixed-root',
+      'mixed-old',
+      'mixed-young',
+    ],
+    older: ['legacy-root', 'old-root', 'old-grandchild'],
+  })
+})
+
+it('RUN64 round2 tree identity includes kind — mutation key the walk by id alone turns red', () => {
+  const agent: ParallelWorkRow = {
+    id: 'shared',
+    kind: 'agent',
+    parentId: null,
+    run: { ...run('shared', 1), status: 'completed', endedAt: ago(120) },
+  }
+  const task = timedTask('shared', 'completed', 180)
+  const child: ParallelWorkRow = {
+    id: 'child',
+    kind: 'agent',
+    parentId: 'shared',
+    run: { ...run('child', 2), startedAt: ago(4) },
+  }
+  const ordered = orderParallelWork([agent, task, child])
+  const archived = archiveParallelWork(ordered, clock)
+  expect({
+    rows: ordered.map((row) => `${row.kind}:${row.id}`),
+    older: archived.older.map((row) => `${row.kind}:${row.id}`),
+  }).toEqual({
+    rows: ['agent:shared', 'agent:child', 'task:shared'],
+    older: ['task:shared'],
   })
 })

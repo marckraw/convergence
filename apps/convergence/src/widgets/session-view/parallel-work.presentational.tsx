@@ -5,6 +5,7 @@ import {
   orderParallelWork,
   archiveParallelWork,
   parallelWorkTime,
+  parallelWorkAnchor,
   formatRelativeTime,
   parallelWorkRowState,
   pendingAgentDecision,
@@ -53,18 +54,39 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
     stopStates = new Map(),
   } = props
   const ordered = useMemo(() => orderParallelWork(rows), [rows])
-  const archived = useMemo(
-    () => new Set(archiveParallelWork(ordered, now).older.map((row) => row.id)),
+  const archive = useMemo(
+    () => archiveParallelWork(ordered, now),
     [ordered, now],
   )
+  const archived = useMemo(() => new Set(archive.older), [archive])
+  const newest = useMemo(
+    () =>
+      archive.older.reduce<string | null>((latest, row) => {
+        const anchor = parallelWorkAnchor(row)
+        return anchor.phase === 'ended' &&
+          anchor.at &&
+          (!latest || Date.parse(anchor.at) > Date.parse(latest))
+          ? anchor.at
+          : latest
+      }, null),
+    [archive],
+  )
   const { counts, completed, childrenById, roots } = useMemo(() => {
-    const childrenById = new Map<string, ParallelWorkRow[]>()
-    for (const row of ordered)
-      if (row.parentId) {
-        const children = childrenById.get(row.parentId) ?? []
+    const childrenById = new Map<ParallelWorkRow, ParallelWorkRow[]>()
+    const parents = new Map(
+      [
+        ...rows.filter((row) => row.kind === 'task'),
+        ...rows.filter((row) => row.kind === 'agent'),
+      ].map((row) => [row.id, row]),
+    )
+    for (const row of ordered) {
+      const parent = row.parentId ? parents.get(row.parentId) : undefined
+      if (parent) {
+        const children = childrenById.get(parent) ?? []
         children.push(row)
-        childrenById.set(row.parentId, children)
+        childrenById.set(parent, children)
       }
+    }
     return {
       counts: countParallelWork(rows),
       completed: rows.filter(
@@ -228,9 +250,10 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
     row: ParallelWorkRow,
     seen = new Set<string>(),
   ): ReactNode => {
-    if (seen.has(row.id)) return null
-    const next = new Set([...seen, row.id])
-    const children = childrenById.get(row.id) ?? []
+    const key = `${row.kind}:${row.id}`
+    if (seen.has(key)) return null
+    const next = new Set([...seen, key])
+    const children = childrenById.get(row) ?? []
     const hidden = collapsed.has(row.id)
     return (
       <div key={`${row.kind}:${row.id}`} className="space-y-2">
@@ -260,55 +283,10 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
         </div>
         {!hidden && children.length > 0 && (
           <div className="ml-3.5 space-y-2 border-l border-border pl-3.5">
-            {archived.has(row.id)
-              ? children.map((child) => renderBranch(child, next))
-              : renderSiblings(children, next)}
+            {children.map((child) => renderBranch(child, next))}
           </div>
         )}
       </div>
-    )
-  }
-  const renderSiblings = (
-    siblings: ParallelWorkRow[],
-    seen = new Set<string>(),
-  ): ReactNode => {
-    const older = siblings.filter((row) => archived.has(row.id))
-    const descendants = new Set<string>()
-    const collect = (row: ParallelWorkRow) => {
-      if (descendants.has(row.id)) return
-      descendants.add(row.id)
-      for (const child of childrenById.get(row.id) ?? []) collect(child)
-    }
-    for (const row of older) collect(row)
-    const newest = ordered
-      .filter((row) => descendants.has(row.id))
-      .reduce<string | null>((latest, row) => {
-        const at = parallelWorkRowState(row).fact?.endedAt ?? null
-        return at && (!latest || Date.parse(at) > Date.parse(latest))
-          ? at
-          : latest
-      }, null)
-    return (
-      <>
-        {siblings
-          .filter((row) => !archived.has(row.id))
-          .map((row) => renderBranch(row, seen))}
-        {older.length > 0 && (
-          <div className="space-y-2">
-            <Button
-              variant="ghost"
-              className="text-xs text-muted-foreground"
-              aria-expanded={props.olderOpen ?? false}
-              onClick={props.onToggleOlder}
-            >
-              {descendants.size} older · newest{' '}
-              {newest ? formatRelativeTime(newest, now) : 'time not reported'}
-              {newest ? ' ago' : ''}
-            </Button>
-            {props.olderOpen && older.map((row) => renderBranch(row, seen))}
-          </div>
-        )}
-      </>
     )
   }
   return (
@@ -363,7 +341,30 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
             {props.details ?? props.transcript}
           </>
         ) : (
-          <>{renderSiblings(roots)}</>
+          <>
+            {roots
+              .filter((row) => !archived.has(row))
+              .map((row) => renderBranch(row))}
+            {archive.older.length > 0 && (
+              <div className="space-y-2">
+                <Button
+                  variant="ghost"
+                  className="text-xs text-muted-foreground"
+                  aria-expanded={props.olderOpen ?? false}
+                  onClick={props.onToggleOlder}
+                >
+                  {archive.older.length} older ·{' '}
+                  {newest
+                    ? `newest ${formatRelativeTime(newest, now)} ago`
+                    : 'time not reported'}
+                </Button>
+                {props.olderOpen &&
+                  roots
+                    .filter((row) => archived.has(row))
+                    .map((row) => renderBranch(row))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </aside>

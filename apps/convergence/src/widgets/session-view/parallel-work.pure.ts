@@ -100,8 +100,7 @@ export function workStatus(row: ParallelWorkRow): string {
         return 'Stopped'
     }
   }
-  if (fact?.status === 'unknown')
-    return `Unknown · last seen ${fact.endedAt ?? 'Not reported'}`
+  if (fact?.status === 'unknown') return 'Unknown'
   return fact?.status === 'running'
     ? 'Running'
     : fact?.status === 'failed'

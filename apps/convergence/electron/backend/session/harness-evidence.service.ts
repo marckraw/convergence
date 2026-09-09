@@ -35,7 +35,7 @@ export class HarnessEvidenceService {
     )
     if (!sessionIds.length) return counts
     const placeholders = sessionIds.map(() => '?').join(',')
-    // Current-answer counts are the shared derivation CC2-4c reuses for answered status.
+    // CC2-4c reuses this derivation: alive is current; only failed/stopped use the answer window.
     const query = `WITH linked AS (
       SELECT a.*, ${linkedTaskIdSql} AS linked_task_id FROM session_agent_runs a WHERE a.session_id IN (${placeholders})
     ) SELECT session_id, status, COUNT(*) AS count FROM (
@@ -44,9 +44,10 @@ export class HarnessEvidenceService {
       UNION ALL
       SELECT t.session_id,t.status,COALESCE(t.started_at,t.observed_at) AS window_start FROM session_tasks t WHERE t.session_id IN (${placeholders})
       AND NOT EXISTS (SELECT 1 FROM linked a WHERE a.session_id=t.session_id AND a.linked_task_id=t.task_id)
-    ) work WHERE window_start IS NOT NULL
-      AND window_start >= COALESCE((SELECT started_at FROM session_turns turn WHERE turn.session_id=work.session_id ORDER BY turn.sequence DESC LIMIT 1),window_start)
-      AND status IN ('running','unknown','failed','stopped') GROUP BY session_id,status`
+    ) work WHERE status IN ('running','unknown') OR (status IN ('failed','stopped')
+      AND window_start IS NOT NULL
+      AND window_start >= COALESCE((SELECT started_at FROM session_turns turn WHERE turn.session_id=work.session_id ORDER BY turn.sequence DESC LIMIT 1),window_start))
+      GROUP BY session_id,status`
     const statement =
       sessionIds.length === 1
         ? (this.singleCounts ??= this.db.prepare(query))

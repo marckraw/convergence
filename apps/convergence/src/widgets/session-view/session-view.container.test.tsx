@@ -1160,6 +1160,11 @@ describe('SessionView', () => {
       </TooltipProvider>,
     )
     fireEvent.click(screen.getByRole('button', { name: 'Parallel work' }))
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: '1 older · time not reported',
+      }),
+    )
     const spawn = await screen.findByRole('button', { name: 'View spawn' })
     navigationScroll.mockClear()
     fireEvent.click(spawn)
