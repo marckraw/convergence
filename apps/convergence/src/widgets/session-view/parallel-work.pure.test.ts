@@ -8,6 +8,7 @@ import {
   parallelWorkMarkers,
   workTitle,
   workStatus,
+  parallelWorkRefusal,
 } from './parallel-work.pure'
 
 it('R2 collapsed activity includes deep descendants and missing elapsed stays missing — mutations count direct children only or invent zero elapsed turn red', () => {
@@ -83,4 +84,22 @@ it('R4/R7 nested markers name the recorded parent with a generic child title and
     title: 'Subagent',
     status: 'Stopped by you',
   })
+})
+
+it('L7 unwraps only the Stop IPC envelope — mutation display the remote-method wrapper turns red', () => {
+  expect(
+    parallelWorkRefusal(
+      new Error(
+        "Error invoking remote method 'session:stopTask': Error: Control refused",
+      ),
+    ),
+  ).toBe('Control refused')
+})
+
+it('T10 cyclic descendants terminate and exclude the starting row — mutation remove visited guard turns red', () => {
+  const rows = [
+    { id: 'a', parentId: 'b', kind: 'task', task: { status: 'running' } },
+    { id: 'b', parentId: 'a', kind: 'task', task: { status: 'running' } },
+  ] as ParallelWorkRow[]
+  expect(descendantActivity(rows, 'a')).toBe(1)
 })

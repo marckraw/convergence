@@ -8,6 +8,8 @@ import { useSessionRelayStore } from '@/entities/session-relay'
 import { useProjectScriptStore } from '@/entities/project-script'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { TooltipProvider } from '@/shared/ui/tooltip'
+import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
+const navigationScroll = vi.hoisted(() => vi.fn())
 import { SessionView } from './session-view.container'
 
 vi.mock('@/features/composer', () => ({
@@ -31,7 +33,7 @@ vi.mock('@tanstack/react-virtual', () => ({
         options.estimateSize(index),
       ).reduce((total, size) => total + size, 0),
     measureElement: vi.fn(),
-    scrollToIndex: vi.fn(),
+    scrollToIndex: navigationScroll,
   }),
 }))
 
@@ -271,6 +273,7 @@ describe('SessionView', () => {
 
   afterEach(() => {
     vi.clearAllMocks()
+    vi.restoreAllMocks()
   })
 
   it('shows the live session activity in the header', async () => {
@@ -986,5 +989,73 @@ describe('SessionView', () => {
     expect(useDialogStore.getState().payload).toEqual({
       spaceId: 'space-1',
     })
+  })
+
+  it('L8 two navigation clicks in one millisecond both reach the transcript — mutation Date.now nonce turns red', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(17)
+    vi.mocked(window.electronAPI.session.listAgentRuns).mockResolvedValue([
+      {
+        id: 'agent',
+        sessionId: 'session-1',
+        spawnedByItemId: 'spawn',
+        description: 'Inspect routing',
+        agentType: 'Explore',
+        status: 'completed',
+      } as SessionAgentRun,
+    ])
+    useSessionStore.setState({
+      activeConversation: [
+        {
+          id: 'spawn',
+          sessionId: 'session-1',
+          sequence: 1,
+          turnId: null,
+          kind: 'tool-call',
+          state: 'complete',
+          toolName: 'Agent',
+          inputText: '{}',
+          createdAt: 'now',
+          updatedAt: 'now',
+          providerMeta: {
+            providerId: 'claude-code',
+            providerItemId: 'tool',
+            providerEventType: 'tool',
+          },
+        },
+      ],
+    })
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Parallel work' }))
+    const spawn = await screen.findByRole('button', { name: 'View spawn' })
+    navigationScroll.mockClear()
+    fireEvent.click(spawn)
+    fireEvent.click(spawn)
+    expect(
+      navigationScroll.mock.calls.filter(
+        ([, options]) => options?.align === 'center',
+      ),
+    ).toHaveLength(2)
+    vi.restoreAllMocks()
+  })
+
+  it('T10 closing parallel work returns focus to its invoking control — mutation omit focus return turns red', async () => {
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    const opener = screen.getByRole('button', { name: 'Parallel work' })
+    opener.focus()
+    fireEvent.click(opener)
+    const close = await screen.findByRole('button', {
+      name: 'Close parallel work',
+    })
+    close.focus()
+    fireEvent.click(close)
+    expect(document.activeElement).toBe(opener)
   })
 })

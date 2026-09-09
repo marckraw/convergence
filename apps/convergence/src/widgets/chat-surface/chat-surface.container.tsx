@@ -720,7 +720,12 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
           }
           onSelect={selectParallel}
           onClose={closeParallel}
-          onNavigate={(id) => setParallelNavigation({ id, nonce: Date.now() })}
+          onNavigate={(id) =>
+            setParallelNavigation((previous) => ({
+              id,
+              nonce: (previous?.nonce ?? 0) + 1,
+            }))
+          }
           loading={parallel.loading}
           error={parallel.error}
         />

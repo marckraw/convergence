@@ -62,8 +62,16 @@ export const SessionConversationSurface: FC<
     string | null
   >(null)
   const artifacts = useMemo(
-    () => findUiResponseArtifacts(conversationItems),
-    [conversationItems],
+    () =>
+      findUiResponseArtifacts(
+        conversationItems,
+        new Set(
+          (parallelRows ?? [])
+            .filter((row) => row.kind === 'agent')
+            .map((row) => row.id),
+        ),
+      ),
+    [conversationItems, parallelRows],
   )
   const artifact =
     (selectedArtifactItemId
@@ -198,11 +206,12 @@ function renderComposerArea(
 
 function findUiResponseArtifacts(
   items: ConversationItem[],
+  knownAgentIds: ReadonlySet<string>,
 ): UiResponseArtifact[] {
   return items.flatMap((item) => {
     if (
       !item ||
-      isSubagentWork(item) ||
+      isSubagentWork(item, knownAgentIds) ||
       item.kind !== 'message' ||
       item.actor !== 'assistant'
     ) {

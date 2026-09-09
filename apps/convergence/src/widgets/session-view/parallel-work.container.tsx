@@ -15,7 +15,11 @@ import {
 import { ConversationItem } from './conversation-item.container'
 import { ParallelWorkPanel } from './parallel-work.presentational'
 import { parallelWorkApi } from './parallel-work.api'
-import { parallelWorkMarkers, workTitle } from './parallel-work.pure'
+import {
+  parallelWorkMarkers,
+  workTitle,
+  parallelWorkRefusal,
+} from './parallel-work.pure'
 
 interface Props {
   session: Session
@@ -327,10 +331,7 @@ export const ParallelWork: FC<Props> = ({
                 void parallelWorkApi.stop(session.id, id).catch((failure) =>
                   setStopStates((current) =>
                     new Map(current).set(id, {
-                      error:
-                        failure instanceof Error
-                          ? failure.message
-                          : String(failure),
+                      error: parallelWorkRefusal(failure),
                     }),
                   ),
                 )

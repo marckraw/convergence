@@ -342,3 +342,39 @@ it('R5 summary counts are persisted unique identities — mutation include the l
     stopped: 1,
   })
 })
+
+it('H3 SQL counts a missed adoption once by the spawning provider item — mutation match run id only turns red', () => {
+  const { db, service } = bed()
+  db.prepare(
+    "INSERT INTO session_conversation_items(id,session_id,sequence,kind,state,payload_json,created_at,updated_at,provider_item_id) VALUES ('spawn','session',1,'tool-call','complete','{}','start','start','tool-spawn')",
+  ).run()
+  service.apply('session', null, {
+    kind: 'agent.started',
+    run: {
+      id: 'provisional',
+      spawnedByItemId: 'spawn',
+      agentType: null,
+      description: null,
+      model: null,
+      depth: 1,
+      startedAt: 'start',
+      transcriptPath: null,
+    },
+  })
+  service.apply('session', null, {
+    kind: 'task.changed',
+    taskId: 'harness-agent',
+    at: 'start',
+    patch: {
+      status: 'running',
+      taskType: 'local_agent',
+      toolUseId: 'tool-spawn',
+    },
+  })
+  expect(service.countParallelWork(['session']).get('session')).toEqual({
+    running: 1,
+    unknown: 0,
+    failed: 0,
+    stopped: 0,
+  })
+})

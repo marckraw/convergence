@@ -2,6 +2,7 @@ import { SESSION_RESTARTED_EVENT_TYPE } from '../provider/session-restart.pure'
 import { CONVERSATION_RESET_COMMAND } from '../../../src/shared/lib/conversation-reset.pure'
 import { randomUUID } from 'crypto'
 import { HarnessEvidenceService } from './harness-evidence.service'
+import type { ParallelWorkCounts } from '../../../src/shared/lib/parallel-work.pure'
 import { mkdirSync } from 'fs'
 import type Database from 'better-sqlite3'
 import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
@@ -272,6 +273,8 @@ export class SessionService {
   >()
   private onEvidenceUpdate: ((event: { sessionId: string }) => void) | null =
     null
+  private readonly evidenceCounts: HarnessEvidenceService
+  private parallelWorkCounts = new Map<string, ParallelWorkCounts>()
   private evidenceUpdateTimers = new Map<
     string,
     ReturnType<typeof setTimeout>
@@ -321,6 +324,7 @@ export class SessionService {
     private executionHost: ProviderExecutionHost,
     private globalWorkingDirectory: string = process.cwd(),
   ) {
+    this.evidenceCounts = new HarnessEvidenceService(db)
     this.sessionRepository = new SessionRepository(db)
     this.executionHostEndpoints = new ExecutionHostEndpointRepository(db)
     this.queuedInputs = new SessionQueuedInputService(db)
@@ -1047,6 +1051,10 @@ export class SessionService {
       sessionId,
       setTimeout(() => {
         this.evidenceUpdateTimers.delete(sessionId)
+        this.parallelWorkCounts.set(
+          sessionId,
+          this.evidenceCounts.countParallelWork([sessionId]).get(sessionId)!,
+        )
         this.onEvidenceUpdate?.({ sessionId })
         this.notifySummaryUpdated(sessionId)
       }, 250),
@@ -1210,14 +1218,22 @@ export class SessionService {
     return row ? this.buildSessionSummary(row) : null
   }
 
+  private cachedParallelWork(
+    sessionIds: string[],
+  ): Map<string, ParallelWorkCounts> {
+    const missing = sessionIds.filter((id) => !this.parallelWorkCounts.has(id))
+    if (missing.length)
+      for (const [id, counts] of this.evidenceCounts.countParallelWork(missing))
+        this.parallelWorkCounts.set(id, counts)
+    return this.parallelWorkCounts
+  }
+
   private buildSessionSummary(row: SessionRow): SessionSummary {
     const summary = {
       ...sessionSummaryFromRow(row),
       hasActiveHandle: this.activeHandles.has(row.id),
       canStopTasks: this.activeHandles.get(row.id)?.canStopTasks === true,
-      parallelWork: new HarnessEvidenceService(this.db)
-        .countParallelWork([row.id])
-        .get(row.id)!,
+      parallelWork: this.cachedParallelWork([row.id]).get(row.id)!,
     }
     const attentionRequestKind = resolveAttentionRequestKind(
       summary,
@@ -1227,9 +1243,7 @@ export class SessionService {
   }
 
   private buildSessionSummaries(rows: SessionRow[]): SessionSummary[] {
-    const counts = new HarnessEvidenceService(this.db).countParallelWork(
-      rows.map((row) => row.id),
-    )
+    const counts = this.cachedParallelWork(rows.map((row) => row.id))
     const summaries = rows.map((row) => ({
       ...sessionSummaryFromRow(row),
       hasActiveHandle: this.activeHandles.has(row.id),
@@ -1442,6 +1456,7 @@ export class SessionService {
       this.releaseHandle(id)
     }
     this.sessionRepository.delete(id)
+    this.parallelWorkCounts.delete(id)
     // Committed. Only now is ownership consumed and the ending told: the
     // turn's settle is never coming, and its receipts end here with the
     // queued ones.
@@ -2357,6 +2372,7 @@ export class SessionService {
     await Promise.all(this.pendingHandleDisposals)
     for (const timer of this.evidenceUpdateTimers.values()) clearTimeout(timer)
     this.evidenceUpdateTimers.clear()
+    this.parallelWorkCounts.clear()
   }
 
   /**

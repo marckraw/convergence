@@ -1,4 +1,4 @@
-import type { FC, ReactNode } from 'react'
+import { useMemo, type FC, type ReactNode } from 'react'
 import { ArrowLeft, ChevronDown, ChevronRight, X } from 'lucide-react'
 import {
   countParallelWork,
@@ -38,19 +38,40 @@ export interface ParallelWorkPanelProps {
   details?: ReactNode
 }
 
+const EMPTY_ITEMS: AttributedWorkItem[] = []
+
 export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
   const {
     rows,
     now,
     selectedId,
-    items = [],
+    items = EMPTY_ITEMS,
     collapsed = new Set(),
     stopStates = new Map(),
   } = props
-  const counts = countParallelWork(rows)
-  const completed = rows.filter(
-    (row) => (row.run ?? row.task)?.status === 'completed',
-  ).length
+  const { counts, completed, descendantCounts, decisionIds, childrenById } =
+    useMemo(() => {
+      const childrenById = new Map<string, ParallelWorkRow[]>()
+      for (const row of rows)
+        if (row.parentId) {
+          const children = childrenById.get(row.parentId) ?? []
+          children.push(row)
+          childrenById.set(row.parentId, children)
+        }
+      return {
+        counts: countParallelWork(rows),
+        completed: rows.filter(
+          (row) => (row.run ?? row.task)?.status === 'completed',
+        ).length,
+        descendantCounts: new Map(
+          rows.map((row) => [row.id, descendantActivity(rows, row.id)]),
+        ),
+        decisionIds: new Map(
+          rows.map((row) => [row.id, pendingAgentDecision(items, row.id)]),
+        ),
+        childrenById,
+      }
+    }, [rows, items])
   const inventoryLabel = [
     'This session',
     `${counts.running} running`,
@@ -61,7 +82,7 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
   ].join(' · ')
   const selected = rows.find((row) => row.id === selectedId)
   const decision = (row: ParallelWorkRow) => {
-    const id = pendingAgentDecision(items, row.id)
+    const id = decisionIds.get(row.id)
     return id ? (
       <Button
         variant="ghost"
@@ -184,7 +205,7 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
   ): ReactNode => {
     if (seen.has(row.id)) return null
     const next = new Set([...seen, row.id])
-    const children = rows.filter((child) => child.parentId === row.id)
+    const children = childrenById.get(row.id) ?? []
     const hidden = collapsed.has(row.id)
     return (
       <div key={`${row.kind}:${row.id}`} className="space-y-2">
@@ -205,7 +226,8 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
               ) : (
                 <ChevronDown className="size-3" />
               )}
-              {descendantActivity(rows, row.id)} descendants running
+              {hidden &&
+                `${descendantCounts.get(row.id) ?? 0} descendants running`}
             </Button>
           )}
           {content(row)}

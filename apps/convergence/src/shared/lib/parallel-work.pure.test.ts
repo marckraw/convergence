@@ -52,7 +52,7 @@ it('R3′ partitions work only and links the pending interaction — mutations m
     { id: 'user', kind: 'message', actor: 'user', agentRunId: 'child' },
   ]
   expect({
-    panel: items.filter(isSubagentWork).map((item) => item.id),
+    panel: items.filter((item) => isSubagentWork(item)).map((item) => item.id),
     main: items.filter((item) => !isSubagentWork(item)).map((item) => item.id),
     pending: pendingAgentDecision(items, 'child'),
     resolved: pendingAgentDecision(
@@ -152,5 +152,25 @@ it('R1 resolves parent by the spawning item and merges only local-agent ids — 
     ['child', 'agent', 'parent'],
     ['orphan', 'agent', null],
     ['command', 'task', null],
+  ])
+})
+
+it('H3 a missed adoption merges by the spawning tool id — mutation merge only adopted ids turns red', () => {
+  const rows = buildParallelWork(
+    [run('provisional', 1)],
+    [
+      { ...task('harness-agent', 'local_agent'), toolUseId: 'tool-spawn' },
+      { ...task('unrelated', 'local_bash'), toolUseId: 'tool-spawn' },
+    ],
+    [
+      {
+        id: 'spawn-provisional',
+        providerMeta: { providerItemId: 'tool-spawn' },
+      },
+    ],
+  )
+  expect(rows.map((row) => [row.id, row.task?.taskId])).toEqual([
+    ['provisional', 'harness-agent'],
+    ['unrelated', 'unrelated'],
   ])
 })

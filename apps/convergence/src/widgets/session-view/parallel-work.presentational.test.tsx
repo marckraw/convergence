@@ -2,6 +2,8 @@ import { render, screen } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
 import { buildParallelWork } from '@/shared/lib/parallel-work.pure'
+import * as rowHelpers from './parallel-work.pure'
+import * as workHelpers from '@/shared/lib/parallel-work.pure'
 import { ParallelWorkPanel } from './parallel-work.presentational'
 
 const agent: SessionAgentRun = {
@@ -176,4 +178,48 @@ it('R3′ links a pending decision and removes the link when resolved — mutati
       screen.queryByText('Waiting for your decision in the conversation →') !==
       null,
   }).toEqual({ pending: true, resolved: false })
+})
+
+it('L9 descendant count is collapsed-only and decorations are cached across ticks — mutations show expanded count or rescan every tick turn red', () => {
+  const descendants = vi.spyOn(rowHelpers, 'descendantActivity')
+  const decisions = vi.spyOn(workHelpers, 'pendingAgentDecision')
+  const rows = buildParallelWork(
+    [
+      { ...agent, id: 'parent', spawnedByItemId: 'root', status: 'completed' },
+      { ...agent, id: 'child', spawnedByItemId: 'spawn', status: 'running' },
+    ],
+    [],
+    [{ id: 'spawn', agentRunId: 'parent' }],
+  )
+  const items: [] = []
+  const input = { rows, items, now: 0, onSelect: vi.fn(), onClose: vi.fn() }
+  const { rerender } = render(<ParallelWorkPanel {...input} />)
+  const expandedCount = !!screen.queryByText('1 descendants running')
+  const first = [descendants.mock.calls.length, decisions.mock.calls.length]
+  rerender(<ParallelWorkPanel {...input} now={1000} />)
+  const next = [descendants.mock.calls.length, decisions.mock.calls.length]
+  rerender(
+    <ParallelWorkPanel {...input} now={2000} collapsed={new Set(['parent'])} />,
+  )
+  expect({
+    expandedCount,
+    stable: JSON.stringify(first) === JSON.stringify(next),
+    collapsedCount: !!screen.queryByText('1 descendants running'),
+  }).toEqual({ expandedCount: false, stable: true, collapsedCount: true })
+})
+
+it('T10 duplicate identity in a malformed branch cannot recurse forever — mutation remove render seen guard turns red', () => {
+  const rows = buildParallelWork([agent, { ...agent, id: 'child' }], [], [])
+  rows[1].parentId = 'agent'
+  rows.push({ ...rows[0], parentId: 'child' })
+  expect(() =>
+    render(
+      <ParallelWorkPanel
+        rows={rows}
+        now={0}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    ),
+  ).not.toThrow()
 })

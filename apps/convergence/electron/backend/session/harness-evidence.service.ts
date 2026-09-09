@@ -12,6 +12,7 @@ import {
 } from './harness-evidence.pure'
 
 export class HarnessEvidenceService {
+  private singleCounts: Database.Statement | null = null
   constructor(private readonly db: Database.Database) {}
   countParallelWork(sessionIds: string[]): Map<string, ParallelWorkCounts> {
     const counts = new Map(
@@ -22,18 +23,21 @@ export class HarnessEvidenceService {
     )
     if (!sessionIds.length) return counts
     const placeholders = sessionIds.map(() => '?').join(',')
-    const rows = this.db
-      .prepare(
-        `SELECT session_id, status, COUNT(*) AS count FROM (
+    const query = `SELECT session_id, status, COUNT(*) AS count FROM (
       SELECT session_id,status FROM session_agent_runs WHERE session_id IN (${placeholders})
       UNION ALL
       SELECT t.session_id,t.status FROM session_tasks t WHERE t.session_id IN (${placeholders})
       AND NOT (COALESCE(t.task_type,'')='local_agent' AND EXISTS (
-        SELECT 1 FROM session_agent_runs a WHERE a.session_id=t.session_id AND a.id=t.task_id
+        SELECT 1 FROM session_agent_runs a
+        LEFT JOIN session_conversation_items spawn ON spawn.id=a.spawned_by_item_id AND spawn.session_id=a.session_id
+        WHERE a.session_id=t.session_id AND (a.id=t.task_id OR (t.tool_use_id IS NOT NULL AND spawn.provider_item_id=t.tool_use_id))
       ))
-    ) WHERE status IN ('running','unknown','failed','stopped') GROUP BY session_id,status`,
-      )
-      .all(...sessionIds, ...sessionIds) as {
+    ) WHERE status IN ('running','unknown','failed','stopped') GROUP BY session_id,status`
+    const statement =
+      sessionIds.length === 1
+        ? (this.singleCounts ??= this.db.prepare(query))
+        : this.db.prepare(query)
+    const rows = statement.all(...sessionIds, ...sessionIds) as {
       session_id: string
       status: keyof ParallelWorkCounts
       count: number

@@ -60,7 +60,9 @@ export function selectGlobalStatus(
 ): GlobalStatus {
   const running = sessions.filter(
     (session) =>
-      session.status === 'running' || Boolean(session.parallelWork?.running),
+      session.status === 'running' ||
+      (Boolean(parallelWorkStatus(session)) &&
+        Boolean(session.parallelWork?.running)),
   )
   const needsAttention = sessions.filter((session) =>
     isAttentionSession(session, dismissals),

@@ -11,6 +11,7 @@ export function useParallelWork(
   sessionId: string | null,
   items: ConversationItem[],
 ) {
+  const [settledSessionId, setSettledSessionId] = useState<string | null>(null)
   const [record, setRecord] = useState<{
     sessionId: string
     runs: SessionAgentRun[]
@@ -39,6 +40,8 @@ export function useParallelWork(
             message:
               failure instanceof Error ? failure.message : String(failure),
           })
+      } finally {
+        if (active && current === revision) setSettledSessionId(sessionId)
       }
     }
     void read()
@@ -60,6 +63,6 @@ export function useParallelWork(
   return {
     rows,
     error: error?.sessionId === sessionId ? error.message : null,
-    loading: record?.sessionId !== sessionId,
+    loading: Boolean(sessionId) && settledSessionId !== sessionId,
   }
 }

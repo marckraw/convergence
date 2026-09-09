@@ -207,3 +207,68 @@ it('L3 labels use one indexed agent read — mutation list all agent runs for a 
     ),
   }).toEqual({ count: 1, indexed: true })
 })
+
+it('M6 streaming patches reuse counts until the coalesced evidence flush — mutation query counts per summary turns red', () => {
+  vi.useFakeTimers()
+  const { db, service, emitter } = bed()
+  service.getSummaryById('session')
+  const counts = vi.spyOn(HarnessEvidenceService.prototype, 'countParallelWork')
+  const prepare = vi.spyOn(db, 'prepare')
+  service.setSummaryUpdateListener(vi.fn())
+  const textId = emitter.addAssistantMessage({ text: '', state: 'streaming' })
+  emitter.recordEvidence({
+    kind: 'task.changed',
+    taskId: 'monitor',
+    at: 'now',
+    patch: { status: 'running', taskType: 'monitor' },
+  })
+  for (let i = 0; i < 20; i++)
+    emitter.patchMessage(textId, { text: `${i}`, state: 'streaming' })
+  vi.advanceTimersByTime(250)
+  const summary = service.getSummaryById('session')
+  expect({
+    reads: counts.mock.calls.length,
+    prepared: prepare.mock.calls.filter(([sql]) =>
+      String(sql).includes('COUNT(*) AS count'),
+    ).length,
+    counts: summary?.parallelWork,
+  }).toEqual({
+    reads: 1,
+    prepared: 0,
+    counts: { running: 1, unknown: 0, failed: 0, stopped: 0 },
+  })
+})
+
+it.each([false, true])(
+  'T10 scoped Stop refuses unavailable capability or terminal row — mutation remove the corresponding refusal turns red (capable=%s)',
+  async (capable) => {
+    const { service, source, emitter } = bed()
+    const stopTask = vi.fn().mockResolvedValue(undefined)
+    service['activeHandles'].set('session', {
+      ...source,
+      canStopTasks: capable,
+      stopTask,
+    })
+    emitter.recordEvidence({
+      kind: 'task.changed',
+      taskId: 'task',
+      at: 'now',
+      patch: {
+        status: capable ? 'completed' : 'running',
+        taskType: 'local_bash',
+      },
+    })
+    let error: string | null = null
+    try {
+      await service.stopTask('session', 'task')
+    } catch (failure) {
+      error = (failure as Error).message
+    }
+    expect({ error, requests: stopTask.mock.calls }).toEqual({
+      error: capable
+        ? 'This task is not running'
+        : 'Stop is not available on this Claude Code version',
+      requests: [],
+    })
+  },
+)

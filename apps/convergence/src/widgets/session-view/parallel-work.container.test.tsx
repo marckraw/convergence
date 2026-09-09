@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import type { ConversationItem, Session } from '@/entities/session'
 import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
 import { buildParallelWork } from '@/shared/lib/parallel-work.pure'
@@ -84,21 +84,27 @@ it('R6′ keeps Stop pending after the receipt until evidence settles — mutati
   })
 })
 
-it('R6′ a refusal keeps the confirmed state and offers Retry stop — mutation swallow the refusal turns red', async () => {
-  vi.mocked(parallelWorkApi.stop)
-    .mockReset()
-    .mockRejectedValue(new Error('Control refused'))
-  render(<ParallelWork {...props()} />)
-  fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
-  await act(async () =>
-    fireEvent.click(screen.getByRole('button', { name: 'Stop task' })),
-  )
-  expect({
-    retry: Boolean(screen.queryByRole('button', { name: 'Retry stop' })),
-    refusal: Boolean(screen.queryByText('Control refused')),
-    running: Boolean(screen.queryByText(/^Running ·/)),
-  }).toEqual({ retry: true, refusal: true, running: true })
-})
+it.each([
+  'Control refused',
+  "Error invoking remote method 'session:stopTask': Error: Control refused",
+])(
+  'L7/R6′ a refusal shows the service message and offers Retry stop — mutation show raw IPC wrapper or swallow refusal turns red (%s)',
+  async (message) => {
+    vi.mocked(parallelWorkApi.stop)
+      .mockReset()
+      .mockRejectedValue(new Error(message))
+    render(<ParallelWork {...props()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Stop task' })),
+    )
+    expect({
+      retry: Boolean(screen.queryByRole('button', { name: 'Retry stop' })),
+      refusal: Boolean(screen.queryByText('Control refused')),
+      running: Boolean(screen.queryByText(/^Running ·/)),
+    }).toEqual({ retry: true, refusal: true, running: true })
+  },
+)
 
 it('R3′ renders the child tool in its own transcript and links rather than relocating its card — mutation omit child tool turns red', () => {
   const common = {
@@ -202,4 +208,49 @@ it('R4 View result exists only at a recorded return — mutation use terminal ro
     absent: true,
     destination: [['terminal-note']],
   })
+})
+
+afterEach(() => vi.unstubAllGlobals())
+
+it('T10 narrow sheet closes when navigating to the spawn — mutations force wide or omit close on navigate turn red', async () => {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  )
+  const input = props()
+  function Harness() {
+    const [open, setOpen] = useState(true)
+    return (
+      <ParallelWork {...input} open={open} onClose={() => setOpen(false)} />
+    )
+  }
+  render(<Harness />)
+  const sheet = Boolean(screen.queryByRole('dialog', { name: 'Parallel work' }))
+  await act(async () =>
+    fireEvent.click(screen.getByRole('button', { name: 'View spawn' })),
+  )
+  expect({
+    sheet,
+    closed: screen.queryByRole('dialog', { name: 'Parallel work' }) === null,
+    destination: input.onNavigate.mock.calls,
+  }).toEqual({ sheet: true, closed: true, destination: [['spawn']] })
+})
+
+it('T10 cyclic ancestry finishes selection — mutation remove visited parent guard turns red', () => {
+  const rows = buildParallelWork([run, { ...run, id: 'other' }], [], [])
+  rows[0].parentId = 'other'
+  rows[1].parentId = 'agent'
+  let reads = 0
+  const originalFind = rows.find.bind(rows)
+  rows.find = ((...args: Parameters<typeof rows.find>) => {
+    if (++reads > 100) throw new Error('Ancestry traversal did not terminate')
+    return originalFind(...args)
+  }) as typeof rows.find
+  expect(() =>
+    render(<ParallelWork {...props()} rows={rows} selectedId="agent" />),
+  ).not.toThrow()
 })

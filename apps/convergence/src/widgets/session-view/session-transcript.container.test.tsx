@@ -8,6 +8,7 @@ import {
 import { describe, expect, it, vi } from 'vitest'
 import type { ConversationItem, Session } from '@/entities/session'
 import { useAttachmentStore } from '@/entities/attachment'
+import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
 import { SessionTranscript } from './session-transcript.container'
 
 vi.mock('@tanstack/react-virtual', () => ({
@@ -79,6 +80,14 @@ it('R3′ keeps an attributed approval actionable while child work leaves the ma
   render(
     <SessionTranscript
       session={baseSession}
+      parallelRows={[
+        {
+          id: 'child',
+          kind: 'agent',
+          parentId: null,
+          run: { id: 'child', spawnedByItemId: 'spawn' } as SessionAgentRun,
+        },
+      ]}
       conversationItems={[approval, work]}
       onApprove={approve}
       onDeny={vi.fn()}
@@ -835,3 +844,41 @@ it.each([
     })
   },
 )
+
+it('H1 unmatched attribution stays visible with its label, including while rows load — mutation drop all attributed work turns red', () => {
+  const items = ['known', 'orphan'].map((id, i) => ({
+    ...assistantMessage({ id, sequence: i + 1, text: `${id} work` }),
+    agentRunId: id,
+    agentAttribution: { description: `${id} agent`, agentType: 'Explore' },
+  }))
+  const props = {
+    session: baseSession,
+    conversationItems: items,
+    onApprove: vi.fn(),
+    onDeny: vi.fn(),
+    onInputAnswer: vi.fn(),
+  }
+  const { rerender } = render(
+    <SessionTranscript
+      {...props}
+      parallelRows={[
+        {
+          id: 'known',
+          kind: 'agent',
+          parentId: null,
+          run: { id: 'known', spawnedByItemId: 'spawn' } as SessionAgentRun,
+        },
+      ]}
+    />,
+  )
+  const loaded = {
+    known: !!screen.queryByText('known work'),
+    orphan: !!screen.queryByText('orphan work'),
+    label: !!screen.queryByText('↳ orphan agent (Explore)'),
+  }
+  rerender(<SessionTranscript {...props} parallelRows={[]} />)
+  expect({ loaded, loading: !!screen.queryByText('known work') }).toEqual({
+    loaded: { known: false, orphan: true, label: true },
+    loading: true,
+  })
+})

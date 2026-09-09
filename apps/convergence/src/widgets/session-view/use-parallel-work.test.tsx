@@ -58,3 +58,17 @@ it('R1/R2 rereads evidence for its session and rejects a stale session read — 
     unsubscribed: 2,
   })
 })
+
+it('M4/T10 a rejected read settles loading and reports the error — mutation leave loading tied to the record turns red', async () => {
+  vi.mocked(parallelWorkApi.subscribe).mockReturnValue(() => {})
+  vi.mocked(parallelWorkApi.read).mockRejectedValue(
+    new Error('Record unavailable'),
+  )
+  const { result } = renderHook(() => useParallelWork('broken', []))
+  await act(async () => {})
+  expect({
+    loading: result.current.loading,
+    error: result.current.error,
+    rows: result.current.rows,
+  }).toEqual({ loading: false, error: 'Record unavailable', rows: [] })
+})

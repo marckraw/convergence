@@ -89,14 +89,22 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     () => parallelWorkMarkers(conversationItems, parallelRows),
     [conversationItems, parallelRows],
   )
+  const knownAgentIds = useMemo(
+    () =>
+      new Set(
+        parallelRows.filter((row) => row.kind === 'agent').map((row) => row.id),
+      ),
+    [parallelRows],
+  )
   const conversationRenderPlan = useMemo(
     () =>
       buildConversationRenderPlan(
         conversationItems.filter(
-          (item) => !isSubagentWork(item) || workMarkers.has(item.id),
+          (item) =>
+            !isSubagentWork(item, knownAgentIds) || workMarkers.has(item.id),
         ),
       ),
-    [conversationItems, workMarkers],
+    [conversationItems, workMarkers, knownAgentIds],
   )
   const actionableApprovalIds = useMemo(() => {
     if (session.status !== 'running' && session.status !== 'completed') {
@@ -329,6 +337,15 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
                     <span className="h-px flex-1 bg-border" />
                   </div>
                 )}
+                {isSubagentWork(entry) &&
+                  !knownAgentIds.has(entry.agentRunId!) &&
+                  entry.kind !== 'tool-call' && (
+                    <div className="mb-1 truncate text-xs text-muted-foreground">
+                      {entry.agentAttribution?.description?.trim()
+                        ? `↳ ${entry.agentAttribution.description} (${entry.agentAttribution.agentType ?? 'unknown'})`
+                        : '↳ subagent'}
+                    </div>
+                  )}
                 {workMarker && (
                   <ParallelWorkMarkerView
                     marker={workMarker}

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { selectOption } from '@/shared/testing/select-option'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type {
   ConversationItem,
   Session,
@@ -72,17 +72,36 @@ vi.mock('@/features/command-center', () => ({
 
 vi.mock('@/widgets/session-view', () => ({
   useParallelWork: () => ({ rows: [], error: null, loading: false }),
-  ParallelWork: () => null,
+  ParallelWork: ({
+    open,
+    onNavigate,
+    onClose,
+  }: {
+    open: boolean
+    onNavigate: (id: string) => void
+    onClose: () => void
+  }) =>
+    open ? (
+      <div>
+        <button onClick={() => onNavigate('spawn')}>mock view spawn</button>
+        <button onClick={onClose}>mock close parallel</button>
+      </div>
+    ) : null,
   SessionConversationSurface: ({
     session,
     conversationItems,
     composerContext,
+    navigationTarget,
   }: {
     session: Session
     conversationItems: ConversationItem[]
     composerContext: ComposerSessionContext
+    navigationTarget?: { id: string; nonce: number } | null
   }) => (
-    <div data-testid="conversation-surface">
+    <div
+      data-testid="conversation-surface"
+      data-navigation={JSON.stringify(navigationTarget)}
+    >
       {session.name}:{conversationItems.length}:{composerContext.kind}
     </div>
   ),
@@ -674,5 +693,38 @@ describe('ChatSurface', () => {
       expect(deleteSpace).toHaveBeenCalledWith('space-1')
       expect(onSpaceDeleted).toHaveBeenCalledWith('space-1')
     })
+  })
+  afterEach(() => vi.restoreAllMocks())
+  it('L8/T10 global navigation advances within one millisecond and closing restores focus — mutations Date.now nonce or omit focus turn red', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(17)
+    useSessionStore.setState({
+      globalChatSessions: [globalSession],
+      activeGlobalSessionId: globalSession.id,
+    })
+    render(<ChatSurface selectedSpaceId={null} />)
+    const opener = screen.getByRole('button', { name: 'Parallel work' })
+    opener.focus()
+    fireEvent.click(opener)
+    const navigate = screen.getByRole('button', { name: 'mock view spawn' })
+    fireEvent.click(navigate)
+    const first = JSON.parse(
+      screen
+        .getByTestId('conversation-surface')
+        .getAttribute('data-navigation')!,
+    )
+    fireEvent.click(navigate)
+    const second = JSON.parse(
+      screen
+        .getByTestId('conversation-surface')
+        .getAttribute('data-navigation')!,
+    )
+    const close = screen.getByRole('button', { name: 'mock close parallel' })
+    close.focus()
+    fireEvent.click(close)
+    expect({
+      next: second.nonce === first.nonce + 1,
+      destination: second.id,
+      focus: document.activeElement === opener,
+    }).toEqual({ next: true, destination: 'spawn', focus: true })
   })
 })

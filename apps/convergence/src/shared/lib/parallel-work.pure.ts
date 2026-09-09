@@ -19,9 +19,13 @@ export interface AttributedWorkItem {
   resolution?: string
 }
 
-export function isSubagentWork(item: AttributedWorkItem): boolean {
+export function isSubagentWork(
+  item: AttributedWorkItem,
+  knownAgentIds?: ReadonlySet<string>,
+): boolean {
   return (
     Boolean(item.agentRunId) &&
+    (!knownAgentIds || knownAgentIds.has(item.agentRunId!)) &&
     (['tool-call', 'tool-result', 'thinking'].includes(item.kind) ||
       (item.kind === 'message' && item.actor === 'assistant'))
   )
@@ -83,15 +87,37 @@ export function countParallelWork(rows: ParallelWorkRow[]): ParallelWorkCounts {
 export function buildParallelWork(
   runs: SessionAgentRun[],
   tasks: SessionTask[],
-  items: { id: string; agentRunId?: string | null }[],
+  items: {
+    id: string
+    agentRunId?: string | null
+    providerMeta?: { providerItemId?: string | null }
+  }[],
 ): ParallelWorkRow[] {
   const runIds = new Set(runs.map((run) => run.id))
   const parents = new Map(items.map((item) => [item.id, item.agentRunId]))
-  const agentTasks = new Map(
-    tasks
-      .filter((task) => task.taskType === 'local_agent')
-      .map((task) => [task.taskId, task]),
+  const providerIds = new Map(
+    items.map((item) => [item.id, item.providerMeta?.providerItemId]),
   )
+  const runByTool = new Map(
+    runs.flatMap((run) => {
+      const tool = providerIds.get(run.spawnedByItemId)
+      return tool ? [[tool, run.id] as const] : []
+    }),
+  )
+  const agentTasks = new Map<string, SessionTask>()
+  const mergedTaskIds = new Set<string>()
+  for (const task of tasks) {
+    if (task.taskType !== 'local_agent') continue
+    const runId = runIds.has(task.taskId)
+      ? task.taskId
+      : task.toolUseId
+        ? runByTool.get(task.toolUseId)
+        : undefined
+    if (runId) {
+      agentTasks.set(runId, task)
+      mergedTaskIds.add(task.taskId)
+    }
+  }
   return [
     ...runs.map((run): ParallelWorkRow => {
       const parent = parents.get(run.spawnedByItemId)
@@ -105,9 +131,7 @@ export function buildParallelWork(
       }
     }),
     ...tasks
-      .filter(
-        (task) => !(task.taskType === 'local_agent' && runIds.has(task.taskId)),
-      )
+      .filter((task) => !mergedTaskIds.has(task.taskId))
       .map(
         (task): ParallelWorkRow => ({
           id: task.taskId,

@@ -323,3 +323,16 @@ describe('selectLatestAgentMessageId', () => {
     ).toBeNull()
   })
 })
+
+it('M5 foreground failure outranks a stranded running monitor in both global filters — mutation raw running count turns red', () => {
+  const failed = makeSession({
+    status: 'failed',
+    attention: 'failed',
+    parallelWork: { running: 1, unknown: 0, failed: 0, stopped: 0 },
+  })
+  const result = selectGlobalStatus([failed], {}, [])
+  expect({
+    running: result.running,
+    completed: result.lastCompleted?.id,
+  }).toEqual({ running: [], completed: failed.id })
+})
