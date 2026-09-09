@@ -7,6 +7,7 @@ import {
 } from '@convergence/execution-host-client'
 import { RemoteExecutionHost } from './remote-execution-host'
 import type { SessionStartConfig, SessionStatus } from '../provider.types'
+import type { SessionDelta } from '../../session/conversation-item.types'
 import type { ProviderDebugEntry } from '../../provider-debug/provider-debug.types'
 
 /**
@@ -31,7 +32,17 @@ describe('a remote stream that skips a sequence', () => {
   let entries: ProviderDebugEntry[]
   let kept: number[]
 
-  function hostWith(maxAttempts: number): RemoteExecutionHost {
+  /**
+   * Omitting the budget leaves the shipped one (`DEFAULT_MAX_RECONNECT_ATTEMPTS`)
+   * in place, which is the number a real session runs on. Only the LENGTH of
+   * the backoff is stubbed: a zero-length wait is still a timer, as the real
+   * one is, and that matters here. `async () => {}` resolves on a microtask, so
+   * a reconnect loop that never terminates starves every timer in the process —
+   * the poll below, and the test timeout meant to catch it. The suite hangs
+   * instead of failing, which is also the honest shape of the defect: this loop
+   * spinning does not merely re-dial, it stops the app's event loop dead.
+   */
+  function hostWith(maxAttempts?: number): RemoteExecutionHost {
     return new RemoteExecutionHost({
       connection: {
         resolveConnection: async () => ({
@@ -40,7 +51,10 @@ describe('a remote stream that skips a sequence', () => {
         }),
       },
       fetch: stub.fetchFn,
-      reconnect: { maxAttempts, wait: async () => {} },
+      reconnect: {
+        ...(maxAttempts === undefined ? {} : { maxAttempts }),
+        wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
+      },
       // The reader's own report of what it kept, whatever the event kind:
       // only some kinds reach the transcript as a delta carrying a sequence,
       // and the claim here is about every envelope.
@@ -205,4 +219,193 @@ describe('a remote stream that skips a sequence', () => {
     expect(statuses).not.toContain('completed')
     expect(stub.eventStreamLastEventIds).toEqual([null])
   })
+
+  /**
+   * A hole the daemon cannot heal spends the budget and fails the session,
+   * rather than re-dialling forever (MAR-2779 round 2).
+   *
+   * The staging is the one `loseFrame` exists to avoid, and here that is the
+   * point: nothing ever logged a `3`, so the daemon's log is `1, 2, 4` too and
+   * every resume from `2` replays the same hole. `loseFrame` would make this
+   * daemon able to answer the resume, which is the healing case two tests
+   * above; this is its opposite, and the only one that puts the reconnect
+   * budget under load, because each re-open delivers nothing.
+   *
+   * What it pins is the budget's meaning. An attempt only counts as having
+   * WORKED once the daemon delivered an envelope, so the budget resets on an
+   * accepted envelope and never on a successful open -- which is what the
+   * Studio client already does (`daemon-client.ts`, `followSession`).
+   * Resetting on the open alone gave this loop an unlimited one: open, gap,
+   * close, reopen, at whatever rate the machine allows -- 775 re-opens per
+   * second measured, a session that never fails, and a debug ring flushed of
+   * everything that would explain it.
+   *
+   * Mutation: reset the budget on a successful open and this never fails --
+   * red on the timeout, which is the spin itself.
+   */
+  it('spends the reconnect budget on a hole the daemon cannot heal', async () => {
+    const host = hostWith(3)
+    await host.refreshProviders()
+    const statuses: SessionStatus[] = []
+    const deltas: SessionDelta[] = []
+    const handle = host.start('claude', startConfig('s-1'))
+    handle.onStatusChange((status) => statuses.push(status))
+    handle.onDelta((delta) => deltas.push(delta))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    stub.emit(envelope(2, { kind: 'activity', activity: 'thinking' }))
+    // No `loseFrame`: as far as this daemon is concerned, 3 never existed.
+    stub.emit(envelope(4, { kind: 'status', status: 'completed' }))
+
+    await waitUntil(() => statuses.includes('failed'), 'the session to fail')
+    // Three opens, not three hundred. The first delivered 1 and 2 and renewed
+    // the budget; the two that delivered nothing spent it.
+    expect(stub.eventStreamLastEventIds).toEqual([null, '2', '2'])
+    expect(kept).toEqual([1, 2])
+    expect(statuses).not.toContain('completed')
+    // The sentence is the one this adapter already uses for a stream it could
+    // not re-establish: a gap that outlives the budget IS that.
+    const note = deltas.find(
+      (delta) =>
+        delta.kind === 'conversation.item.add' && delta.item.kind === 'note',
+    )
+    expect(
+      note?.kind === 'conversation.item.add' && note.item.kind === 'note'
+        ? note.item.text
+        : null,
+    ).toBe(
+      'Remote session event stream dropped and could not be re-established.',
+    )
+  }, 5_000)
+
+  /**
+   * The same hole against the budget a real session actually runs on.
+   *
+   * The test above could be passed by a budget that resets on the open as long
+   * as one gap happened to equal the whole allowance; ten cannot be reached by
+   * accident. This is the assertion that says the loop terminates at all.
+   *
+   * Mutation: reset the budget on a successful open and this never fails -- red.
+   */
+  it('gives up within the default budget rather than re-dial forever', async () => {
+    const host = hostWith()
+    await host.refreshProviders()
+    const statuses: SessionStatus[] = []
+    const handle = host.start('claude', startConfig('s-1'))
+    handle.onStatusChange((status) => statuses.push(status))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    stub.emit(envelope(2, { kind: 'activity', activity: 'thinking' }))
+    stub.emit(envelope(4, { kind: 'status', status: 'completed' }))
+
+    await waitUntil(() => statuses.includes('failed'), 'the session to fail')
+    expect(stub.eventStreamLastEventIds).toHaveLength(10)
+    expect(kept).toEqual([1, 2])
+  }, 5_000)
+
+  /**
+   * The other direction of the same rule: a stream that KEEPS DELIVERING may
+   * drop as often as it likes.
+   *
+   * Without this, "the budget resets on an accepted envelope" is pinned only
+   * from one side -- deleting the reset entirely leaves every other test in
+   * this file green, and turns a long remote session that reconnects now and
+   * then into one that dies on its fourth blip with a three-attempt budget.
+   * The budget is for a host that has stopped answering, not for a connection
+   * that is merely long.
+   *
+   * Five drops against a budget of three, each one after an envelope landed.
+   *
+   * Mutation: delete `if (envelopes > 0) attempt = 0` and this is red -- the
+   * session fails on the third drop.
+   */
+  it('renews the budget for a stream that keeps delivering', async () => {
+    const host = hostWith(3)
+    await host.refreshProviders()
+    const statuses: SessionStatus[] = []
+    const handle = host.start('claude', startConfig('s-1'))
+    handle.onStatusChange((status) => statuses.push(status))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    await waitUntil(() => kept.length === 1, 'the first envelope')
+
+    for (let drop = 0; drop < 5; drop += 1) {
+      const opens = stub.eventStreamLastEventIds.length
+      stub.dropStream()
+      await waitUntil(
+        () => stub.eventStreamLastEventIds.length === opens + 1,
+        `the reconnect after drop ${drop + 1}`,
+      )
+      stub.emit(envelope(drop + 2, { kind: 'heartbeat' }))
+      await waitUntil(
+        () => kept.length === drop + 2,
+        `the envelope after drop ${drop + 1}`,
+      )
+    }
+
+    stub.emit(envelope(7, { kind: 'status', status: 'completed' }))
+    await waitUntil(
+      () => statuses.includes('completed'),
+      'the session to settle',
+    )
+    expect(statuses).not.toContain('failed')
+    expect(kept).toEqual([1, 2, 3, 4, 5, 6, 7])
+
+    handle.stop()
+  }, 5_000)
+
+  /**
+   * Everything after a gap in the SAME batch is discarded, and the discarding
+   * is written down.
+   *
+   * A daemon replay arrives coalesced, so one read can carry the hole and
+   * several frames above it. Those frames are dropped on purpose -- they sit
+   * over a hole whatever their own sequence says -- and the resume brings them
+   * back. Until now they were the only drop in this adapter that left no
+   * trace, so a debug log showed a gap at 4 and then, unexplained, a 5 and a 6
+   * that had plainly been on the wire.
+   *
+   * Mutation: drop the trace row and this is red on the count.
+   */
+  it('names the frames it discarded above the hole', async () => {
+    const host = hostWith(5)
+    await host.refreshProviders()
+    const handle = host.start('claude', startConfig('s-1'))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    stub.emit(envelope(2, { kind: 'heartbeat' }))
+    stub.loseFrame(envelope(3, { kind: 'heartbeat' }))
+    // One read, three frames: the hole and the two that sit above it.
+    stub.emitBatch([
+      envelope(4, { kind: 'activity', activity: 'thinking' }),
+      envelope(5, { kind: 'heartbeat' }),
+      envelope(6, { kind: 'status', status: 'completed' }),
+    ])
+
+    await waitUntil(() => kept.length === 6, 'the resume to heal the hole')
+    expect(kept).toEqual([1, 2, 3, 4, 5, 6])
+    expect(
+      entries.filter(
+        (entry) => entry.note === '2 frames above the hole discarded',
+      ),
+    ).toHaveLength(1)
+
+    handle.stop()
+  }, 5_000)
 })

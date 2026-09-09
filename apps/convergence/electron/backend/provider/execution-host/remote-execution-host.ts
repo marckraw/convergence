@@ -1596,7 +1596,6 @@ class RemoteSessionRun {
           this.lastSeq,
           this.abort.signal,
         )
-        attempt = 0
         this.recordDebug('lifecycle', {
           direction: 'in',
           note: `event stream open from seq ${this.lastSeq}`,
@@ -1614,7 +1613,7 @@ class RemoteSessionRun {
         continue
       }
 
-      await this.readStream(response)
+      const envelopes = await this.readStream(response)
       if (this.stopped || this.dead) return
 
       // The daemon holds the stream open for a live session; reaching the
@@ -1623,6 +1622,22 @@ class RemoteSessionRun {
         direction: 'in',
         note: `event stream ended at seq ${this.lastSeq}; reconnecting`,
       })
+      // The budget is spent by ATTEMPTS, and an attempt only counts as having
+      // worked once the daemon delivered something this run KEPT. Resetting on
+      // a successful open -- which is what this loop used to do, above -- gave
+      // it no budget at all: a gap the daemon cannot heal (its own log has the
+      // hole too) re-opens, reads the same gap, closes and re-opens, forever.
+      // Measured at 775 re-opens per second, with the per-session debug ring
+      // flushed of everything that would explain it and a session that never
+      // fails; the loop is microtask-bound, so it also starves every timer in
+      // the process. Delivering an envelope is the difference between a stream
+      // and a socket -- the rule the Studio client already follows
+      // (`daemon-client.ts`, `followSession`) (MAR-2779 round 2).
+      //
+      // It renews in the other direction too: a long session that reconnects
+      // now and then must not die of its own length, and the budget is for a
+      // host that has stopped answering.
+      if (envelopes > 0) attempt = 0
       attempt += 1
       if (attempt >= policy.maxAttempts) {
         this.failSession(
@@ -1634,34 +1649,49 @@ class RemoteSessionRun {
     }
   }
 
-  private async readStream(response: Response): Promise<void> {
+  /**
+   * Reads one open stream to its end, and reports how many envelopes it KEPT.
+   *
+   * The count is what tells `consumeEventStream` whether this attempt was a
+   * stream or merely a socket, and only an envelope that reached the run is
+   * counted: a frame dropped as undecodable, as another session's, as a
+   * duplicate replay or as sitting above a gap has delivered nothing, and
+   * counting one would hand a daemon that answers-and-gaps an endless
+   * reconnect budget.
+   */
+  private async readStream(response: Response): Promise<number> {
     const body = response.body
-    if (!body) return
+    if (!body) return 0
     const reader = body.getReader()
     const decoder = new TextDecoder()
     const parser = createSseParser()
     this.streamGap = false
+    let envelopes = 0
 
     try {
       for (;;) {
         const { done, value } = await reader.read()
-        if (done) return
+        if (done) return envelopes
         const events = parser.feed(decoder.decode(value, { stream: true }))
         // One read delivers a batch: a daemon replay writes its frames back to
         // back and they arrive coalesced. A listener that disposes the run on
         // the first of them must not be handed the rest, which `dispatchRawEvent`
         // decides per event rather than the loop deciding once -- an event
         // dropped for that reason is traced like every other drop.
-        for (const event of events) {
-          this.dispatchRawEvent(event.data)
+        for (const [index, event] of events.entries()) {
+          if (this.dispatchRawEvent(event.data)) envelopes += 1
           // Everything after a gap in this batch sits above a hole, whatever
           // its own sequence says. Leaving here ends the stream and hands the
           // resume to `consumeEventStream` (MAR-2779).
-          if (this.streamGap) return
+          if (this.streamGap) {
+            this.traceFramesAboveHole(events.length - index - 1)
+            return envelopes
+          }
         }
       }
     } catch {
       // Read errors (including aborts) fall through to the reconnect loop.
+      return envelopes
     } finally {
       reader.releaseLock()
       // A gap is the one exit that leaves the daemon still writing: `done`
@@ -1700,7 +1730,30 @@ class RemoteSessionRun {
     })
   }
 
-  private dispatchRawEvent(raw: string): void {
+  /**
+   * The one row for the frames a gap took down with it.
+   *
+   * They were on the wire and they are not on the transcript, which without
+   * this looks like the daemon skipped them: a debug log showed the hole at 4
+   * and then nothing about the 5 and 6 that plainly arrived in the same read.
+   * The resume brings them back, and one line saying how many were set aside is
+   * the difference between reading that recovery and guessing at it. One row
+   * rather than one per frame -- a coalesced replay can carry a whole turn.
+   */
+  private traceFramesAboveHole(count: number): void {
+    if (count === 0) return
+    this.recordDebug('event', {
+      direction: 'in',
+      note: `${count} frame${count === 1 ? '' : 's'} above the hole discarded`,
+    })
+  }
+
+  /**
+   * Dispatches one wire frame, and answers whether the run KEPT it: true only
+   * for an envelope that reached the session and moved the cursor. Every
+   * `false` is a drop this method has already traced with its reason.
+   */
+  private dispatchRawEvent(raw: string): boolean {
     // A disposed run has no voice. Its listeners belong to a handle the
     // session service has already released, and an event delivered through
     // them lands on a session whose live turn is being served by a different
@@ -1711,7 +1764,7 @@ class RemoteSessionRun {
         bytes: raw.length,
         note: 'dropped: the run is disposed',
       })
-      return
+      return false
     }
     const decoded = decodeExecutionEventEnvelope(raw)
     if (!decoded.ok) {
@@ -1720,7 +1773,7 @@ class RemoteSessionRun {
         bytes: raw.length,
         note: `dropped: undecodable envelope (${decoded.reason})`,
       })
-      return
+      return false
     }
     const envelope = decoded.value
     if (envelope.sessionId !== this.params.config.sessionId) {
@@ -1730,7 +1783,7 @@ class RemoteSessionRun {
         method: envelope.event.kind,
         note: 'dropped: envelope belongs to another session',
       })
-      return
+      return false
     }
     const reading = readEnvelopeSeq(this.lastSeq, envelope.seq)
     if (reading === 'duplicate') {
@@ -1741,7 +1794,7 @@ class RemoteSessionRun {
         payload: { seq: envelope.seq, lastSeq: this.lastSeq },
         note: 'dropped: already-seen sequence',
       })
-      return
+      return false
     }
     if (reading === 'gap') {
       // Events were missed in transit, and the protocol says what to do about
@@ -1764,7 +1817,7 @@ class RemoteSessionRun {
         note: describeSeqGap(this.lastSeq, envelope.seq),
       })
       this.streamGap = true
-      return
+      return false
     }
     this.lastSeq = envelope.seq
     this.recordDebug('event', {
@@ -1786,6 +1839,7 @@ class RemoteSessionRun {
     // repository keeps the column monotonic, so this call is a no-op for
     // those rather than a second, later source of truth.
     this.params.host.notifyEventSeq(this.params.config.sessionId, envelope.seq)
+    return true
   }
 
   /**
