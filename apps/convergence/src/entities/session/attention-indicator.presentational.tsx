@@ -1,3 +1,7 @@
+import {
+  parallelWorkStatus,
+  type ParallelWorkCounts,
+} from '@/shared/lib/parallel-work.pure'
 import type { FC } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { AttentionState, SessionStatus } from './session.types'
@@ -49,6 +53,7 @@ function isLabelledAttention(
 }
 
 interface AttentionIndicatorProps {
+  parallelWork?: ParallelWorkCounts
   attention: AttentionState
   status: SessionStatus
 }
@@ -69,7 +74,16 @@ interface AttentionIndicatorProps {
 export const AttentionIndicator: FC<AttentionIndicatorProps> = ({
   attention,
   status,
+  parallelWork,
 }) => {
+  const parallelLabel = parallelWorkStatus({ status, attention, parallelWork })
+  if (parallelLabel)
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-foreground">
+        <Loader2 className="size-3 opacity-50" />
+        {parallelLabel}
+      </span>
+    )
   // Blocked on a human outranks the spinner, and it has to: the turn IS still
   // running while an approval prompt is up. Every provider's `setAttention`
   // patches attention alone and leaves the status where the turn put it

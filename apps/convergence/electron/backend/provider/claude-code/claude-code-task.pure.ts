@@ -6,6 +6,42 @@ export interface ClaudeTaskNote {
   text: string
 }
 
+export function claudeRootResultClaimsBlock(
+  data: unknown,
+  block: unknown,
+  resolveAgentId: (toolUseId: string) => string | null,
+): boolean {
+  const event = record(data)
+  const structured = record(event?.tool_use_result)
+  const content = record(event?.message)?.content
+  const results = Array.isArray(content)
+    ? content.filter((item) => record(item)?.type === 'tool_result')
+    : []
+  if (results.length === 1) return true
+  const toolUseId = record(block)?.tool_use_id
+  return (
+    results.length > 1 &&
+    typeof toolUseId === 'string' &&
+    typeof structured?.agentId === 'string' &&
+    resolveAgentId(toolUseId) === structured.agentId
+  )
+}
+
+export function readClaudeToolResultMoment(
+  data: unknown,
+  block: unknown,
+  resolveAgentId: (toolUseId: string) => string | null,
+): 'async_launched' | 'completed' | null {
+  const structured = record(record(data)?.tool_use_result)
+  if (
+    typeof structured?.agentId !== 'string' ||
+    !claudeRootResultClaimsBlock(data, block, resolveAgentId)
+  )
+    return null
+  const status = structured.status
+  return status === 'async_launched' || status === 'completed' ? status : null
+}
+
 function record(data: unknown): Record<string, unknown> | null {
   return data !== null && typeof data === 'object' && !Array.isArray(data)
     ? (data as Record<string, unknown>)

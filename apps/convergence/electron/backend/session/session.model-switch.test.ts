@@ -117,7 +117,8 @@ describe('a session changes model mid-conversation (MAR-2550)', () => {
     ).run(projectId, repoPath)
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await service.disposeAll()
     spawnMock.mockReset()
     closeDatabase()
     resetDatabase()

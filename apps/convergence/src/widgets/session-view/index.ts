@@ -8,3 +8,6 @@ export type {
   DiffFileHeaderSubtitleVariant,
 } from './diff-file-header.presentational'
 export type { PierreDiffViewerProps } from './pierre-diff-viewer.presentational'
+
+export { ParallelWork } from './parallel-work.container'
+export { useParallelWork } from './use-parallel-work'

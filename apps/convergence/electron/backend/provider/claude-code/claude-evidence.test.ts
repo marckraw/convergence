@@ -61,7 +61,10 @@ function fixture() {
     )
   const result = (status: string) =>
     adapter.toolResult(
-      { tool_use_result: { status, resolvedModel: 'haiku' } },
+      {
+        message: { content: [{ type: 'tool_result', tool_use_id: 'spawn' }] },
+        tool_use_result: { status, resolvedModel: 'haiku' },
+      },
       { tool_use_id: 'spawn', content: 'ack' },
       'result',
     )
@@ -424,6 +427,7 @@ it('M4 result-only adoption and completion need no task event or meta — mutati
   f.call()
   f.adapter.toolResult(
     {
+      message: { content: [{ type: 'tool_result', tool_use_id: 'spawn' }] },
       tool_use_result: {
         agentId: 'result-agent',
         status: 'completed',
@@ -436,4 +440,87 @@ it('M4 result-only adoption and completion need no task event or meta — mutati
   expect(
     f.runs().map((run) => [run.id, run.status, run.endedAt, run.model]),
   ).toEqual([['result-agent', 'completed', 'end', 'haiku']])
+})
+
+it.each([
+  '  exact error\nreason  ',
+  [{ type: 'text', text: '  exact error\nreason  ' }],
+])(
+  'R11 failed Agent result and task terminal carry their reported summary — drop summary or serialize text blocks turns red (%j)',
+  (content) => {
+    const { adapter, call, start, runs } = fixture()
+    call()
+    start()
+    adapter.toolResult(
+      { message: { content: [{ type: 'tool_result', tool_use_id: 'spawn' }] } },
+      {
+        tool_use_id: 'spawn',
+        is_error: true,
+        content,
+      },
+      'end',
+    )
+    call('second')
+    start({ tool_use_id: 'second', task_id: 'other-agent' })
+    adapter.consume(
+      {
+        type: 'system',
+        subtype: 'task_notification',
+        task_id: 'other-agent',
+        status: 'failed',
+        summary: 'task reason',
+      },
+      'end',
+    )
+    expect(runs().map((run) => run.endedSummary)).toEqual([
+      '  exact error\nreason  ',
+      'task reason',
+    ])
+  },
+)
+
+it('H1 Agent+Agent batch cannot adopt, decorate or end the unclaimed run — mutation trust root in identity reader turns red', () => {
+  const f = fixture()
+  f.call('a')
+  f.call('b')
+  f.start({ task_id: 'adopted-a', tool_use_id: 'a' })
+  const blocks = [
+    { type: 'tool_result', tool_use_id: 'a', content: 'A returned' },
+    { type: 'tool_result', tool_use_id: 'b', content: 'B still working' },
+  ]
+  const event = {
+    message: { content: blocks },
+    tool_use_result: {
+      agentId: 'adopted-a',
+      status: 'completed',
+      resolvedModel: 'haiku',
+    },
+  }
+  for (const block of blocks) f.adapter.toolResult(event, block, 'end')
+  expect(
+    f.runs().map(({ id, status, model }) => ({ id, status, model })),
+  ).toEqual([
+    { id: 'adopted-a', status: 'completed', model: 'haiku' },
+    { id: 'b', status: 'running', model: null },
+  ])
+})
+
+it('R8 H1 both block-local errors end unadopted agents without a root result — mutation gate block errors turns red', () => {
+  const f = fixture()
+  f.call('a')
+  f.call('b')
+  const blocks = ['a', 'b'].map((id) => ({
+    type: 'tool_result',
+    tool_use_id: id,
+    is_error: true,
+    content: `  ${id} interrupted\nreason  `,
+  }))
+  for (const block of blocks)
+    f.adapter.toolResult({ message: { content: blocks } }, block, 'end')
+  expect(
+    f.runs().map((run) => [run.id, run.status, run.endedAt, run.endedSummary]),
+  ).toEqual([
+    ['a', 'failed', 'end', '  a interrupted\nreason  '],
+    ['b', 'failed', 'end', '  b interrupted\nreason  '],
+  ])
 })

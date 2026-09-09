@@ -1,3 +1,5 @@
+import { ParallelWork } from './parallel-work.container'
+import { useParallelWork } from './use-parallel-work'
 import { isRemoteExecutionHost } from '@/entities/execution-host'
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import type { FC } from 'react'
@@ -115,6 +117,32 @@ export const SessionView: FC = () => {
     useState<RemoteSessionWorkspaceResult | null>(null)
   const sessionRootRef = useRef<HTMLDivElement>(null)
 
+  const [parallelOpen, setParallelOpen] = useState(false)
+  const [parallelSelection, setParallelSelection] = useState<{
+    sessionId: string
+    id: string | null
+  } | null>(null)
+  const [parallelNavigation, setParallelNavigation] = useState<{
+    id: string
+    nonce: number
+  } | null>(null)
+  const parallelButton = useRef<HTMLButtonElement>(null)
+  const parallelInvoker = useRef<HTMLElement | null>(null)
+  const parallel = useParallelWork(activeSessionId, activeConversation)
+  const selectParallel = (id: string | null) => {
+    if (!parallelOpen && document.activeElement instanceof HTMLElement)
+      parallelInvoker.current = document.activeElement
+    if (activeSessionId)
+      setParallelSelection({ sessionId: activeSessionId, id })
+    setParallelOpen(true)
+  }
+  const closeParallel = () => {
+    setParallelOpen(false)
+    ;(parallelInvoker.current?.isConnected
+      ? parallelInvoker.current
+      : parallelButton.current
+    )?.focus()
+  }
   const session = sessions.find((s) => s.id === activeSessionId) ?? null
   const remoteSessionId = isRemoteExecutionHost(session?.executionHost)
     ? (session?.id ?? null)
@@ -368,7 +396,26 @@ export const SessionView: FC = () => {
             <span className="min-w-0 truncate text-sm font-medium">
               {session.name}
             </span>
+            <Button
+              ref={parallelButton}
+              variant="ghost"
+              size="sm"
+              aria-expanded={parallelOpen}
+              onClick={() => {
+                if (parallelOpen) closeParallel()
+                else {
+                  parallelInvoker.current = parallelButton.current
+                  setParallelOpen(true)
+                }
+              }}
+            >
+              Parallel work
+              {session.parallelWork?.running
+                ? ` · ${session.parallelWork.running}`
+                : ''}
+            </Button>
             <AttentionIndicator
+              parallelWork={session.parallelWork}
               attention={session.attention}
               status={session.status}
             />
@@ -654,6 +701,12 @@ export const SessionView: FC = () => {
         <SessionConversationSurface
           session={session}
           conversationItems={activeConversation}
+          parallelRows={parallel.rows}
+          parallelLoading={!parallel.hasRecord}
+          parallelError={parallel.error}
+          onParallelRetry={parallel.retry}
+          onParallelSelect={selectParallel}
+          navigationTarget={parallelNavigation}
           composerContext={
             activeProject
               ? {
@@ -681,6 +734,29 @@ export const SessionView: FC = () => {
           }}
         />
       </div>
+
+      <ParallelWork
+        key={session.id}
+        session={session}
+        rows={parallel.rows}
+        items={activeConversation}
+        open={parallelOpen}
+        selectedId={
+          parallelSelection?.sessionId === session.id
+            ? parallelSelection.id
+            : null
+        }
+        onSelect={selectParallel}
+        onClose={closeParallel}
+        onNavigate={(id) =>
+          setParallelNavigation((previous) => ({
+            id,
+            nonce: (previous?.nonce ?? 0) + 1,
+          }))
+        }
+        loading={parallel.loading}
+        error={parallel.error}
+      />
 
       {showPullRequestPanel && (
         <PullRequestPanel

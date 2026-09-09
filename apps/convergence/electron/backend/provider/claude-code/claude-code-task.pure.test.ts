@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   readClaudeResultOriginKind,
   readClaudeTaskNote,
+  readClaudeToolResultMoment,
 } from './claude-code-task.pure'
 
 describe('Claude harness task readers', () => {
@@ -127,4 +128,57 @@ describe('Claude harness task readers', () => {
       null,
     ])
   })
+})
+
+it('R4 retains launch versus actual completion — mutation call an async launch completed turns red', () => {
+  expect(
+    ['async_launched', 'completed', 'future'].map((status) =>
+      readClaudeToolResultMoment(
+        {
+          message: { content: [{ type: 'tool_result', tool_use_id: 'tool' }] },
+          tool_use_result: { status, agentId: 'agent' },
+        },
+        { type: 'tool_result', tool_use_id: 'tool' },
+        () => null,
+      ),
+    ),
+  ).toEqual(['async_launched', 'completed', null])
+})
+
+it.each([true, false])(
+  'H2′ a batch carries only the confirmed adopted run moment — mutations stamp both or stamp first turn red (confirmed=%s)',
+  (confirmed) => {
+    const blocks = [
+      { type: 'tool_result', tool_use_id: 'other' },
+      { type: 'tool_result', tool_use_id: 'agent-tool' },
+    ]
+    const event = {
+      message: { content: blocks },
+      tool_use_result: {
+        status: 'async_launched',
+        ...(confirmed ? { agentId: 'adopted' } : {}),
+      },
+    }
+    expect(
+      blocks.map((block) =>
+        readClaudeToolResultMoment(event, block, (id) =>
+          id === 'agent-tool' ? 'adopted' : null,
+        ),
+      ),
+    ).toEqual([null, confirmed ? 'async_launched' : null])
+  },
+)
+
+it('M5 a single non-Agent status has no moment — mutation trust any status turns red', () => {
+  const block = { type: 'tool_result', tool_use_id: 'bash-output' }
+  expect(
+    readClaudeToolResultMoment(
+      {
+        message: { content: [block] },
+        tool_use_result: { status: 'completed' },
+      },
+      block,
+      () => null,
+    ),
+  ).toBeNull()
 })

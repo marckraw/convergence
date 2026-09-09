@@ -2,6 +2,7 @@ import { SESSION_RESTARTED_EVENT_TYPE } from '../provider/session-restart.pure'
 import { CONVERSATION_RESET_COMMAND } from '../../../src/shared/lib/conversation-reset.pure'
 import { randomUUID } from 'crypto'
 import { HarnessEvidenceService } from './harness-evidence.service'
+import type { ParallelWorkCounts } from '../../../src/shared/lib/parallel-work.pure'
 import { mkdirSync } from 'fs'
 import type Database from 'better-sqlite3'
 import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
@@ -270,6 +271,15 @@ export class SessionService {
     string,
     ReturnType<typeof setTimeout>
   >()
+  private onEvidenceUpdate: ((event: { sessionId: string }) => void) | null =
+    null
+  private readonly evidenceCounts: HarnessEvidenceService
+  private parallelWorkCounts = new Map<string, ParallelWorkCounts>()
+  private evidenceUpdateTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >()
+
   private onSummaryUpdate: ((summary: SessionSummary) => void) | null = null
   private onConversationPatch:
     | ((event: ConversationPatchEvent) => void)
@@ -314,6 +324,7 @@ export class SessionService {
     private executionHost: ProviderExecutionHost,
     private globalWorkingDirectory: string = process.cwd(),
   ) {
+    this.evidenceCounts = new HarnessEvidenceService(db)
     this.sessionRepository = new SessionRepository(db)
     this.executionHostEndpoints = new ExecutionHostEndpointRepository(db)
     this.queuedInputs = new SessionQueuedInputService(db)
@@ -1028,6 +1039,29 @@ export class SessionService {
     return this.sessionRepository.isAutoNamed(id)
   }
 
+  setEvidenceUpdateListener(
+    listener: (event: { sessionId: string }) => void,
+  ): void {
+    this.onEvidenceUpdate = listener
+  }
+
+  private scheduleEvidenceUpdate(sessionId: string): void {
+    if (this.evidenceUpdateTimers.has(sessionId)) return
+    this.evidenceUpdateTimers.set(
+      sessionId,
+      setTimeout(() => {
+        this.evidenceUpdateTimers.delete(sessionId)
+        if (!this.sessionRepository.findById(sessionId)) return
+        this.parallelWorkCounts.set(
+          sessionId,
+          this.evidenceCounts.countParallelWork([sessionId]).get(sessionId)!,
+        )
+        this.onEvidenceUpdate?.({ sessionId })
+        this.notifySummaryUpdated(sessionId)
+      }, 250),
+    )
+  }
+
   setSummaryUpdateListener(listener: (summary: SessionSummary) => void): void {
     this.onSummaryUpdate = listener
   }
@@ -1185,10 +1219,22 @@ export class SessionService {
     return row ? this.buildSessionSummary(row) : null
   }
 
+  private cachedParallelWork(
+    sessionIds: string[],
+  ): Map<string, ParallelWorkCounts> {
+    const missing = sessionIds.filter((id) => !this.parallelWorkCounts.has(id))
+    if (missing.length)
+      for (const [id, counts] of this.evidenceCounts.countParallelWork(missing))
+        this.parallelWorkCounts.set(id, counts)
+    return this.parallelWorkCounts
+  }
+
   private buildSessionSummary(row: SessionRow): SessionSummary {
     const summary = {
       ...sessionSummaryFromRow(row),
       hasActiveHandle: this.activeHandles.has(row.id),
+      canStopTasks: this.activeHandles.get(row.id)?.canStopTasks === true,
+      parallelWork: this.cachedParallelWork([row.id]).get(row.id)!,
     }
     const attentionRequestKind = resolveAttentionRequestKind(
       summary,
@@ -1198,9 +1244,12 @@ export class SessionService {
   }
 
   private buildSessionSummaries(rows: SessionRow[]): SessionSummary[] {
+    const counts = this.cachedParallelWork(rows.map((row) => row.id))
     const summaries = rows.map((row) => ({
       ...sessionSummaryFromRow(row),
       hasActiveHandle: this.activeHandles.has(row.id),
+      canStopTasks: this.activeHandles.get(row.id)?.canStopTasks === true,
+      parallelWork: counts.get(row.id)!,
     }))
     const attentionRowsBySessionId =
       this.readLatestAttentionRequestRows(summaries)
@@ -1341,6 +1390,20 @@ export class SessionService {
     return rows.map(conversationItemFromRow)
   }
 
+  async stopTask(sessionId: string, id: string): Promise<void> {
+    const handle = this.activeHandles.get(sessionId)
+    if (!handle?.canStopTasks || !handle.stopTask)
+      throw new Error('Stop is not available on this Claude Code version')
+    const row = this.db
+      .prepare(
+        `SELECT status FROM session_agent_runs WHERE session_id=? AND id=?
+      UNION ALL SELECT status FROM session_tasks WHERE session_id=? AND task_id=? LIMIT 1`,
+      )
+      .get(sessionId, id, sessionId, id) as { status: string } | undefined
+    if (row?.status !== 'running') throw new Error('This task is not running')
+    await handle.stopTask(id)
+  }
+
   listAgentRuns(sessionId: string) {
     return new HarnessEvidenceService(this.db).listAgentRuns(sessionId)
   }
@@ -1394,6 +1457,10 @@ export class SessionService {
       this.releaseHandle(id)
     }
     this.sessionRepository.delete(id)
+    const evidenceTimer = this.evidenceUpdateTimers.get(id)
+    if (evidenceTimer) clearTimeout(evidenceTimer)
+    this.evidenceUpdateTimers.delete(id)
+    this.parallelWorkCounts.delete(id)
     // Committed. Only now is ownership consumed and the ending told: the
     // turn's settle is never coming, and its receipts end here with the
     // queued ones.
@@ -2307,6 +2374,11 @@ export class SessionService {
     for (const sessionId of Array.from(this.activeHandles.keys()))
       this.releaseHandle(sessionId, 'quit')
     await Promise.all(this.pendingHandleDisposals)
+    for (const key of this.pendingConversationPatches.keys())
+      this.flushPendingConversationPatchByKey(key)
+    for (const timer of this.evidenceUpdateTimers.values()) clearTimeout(timer)
+    this.evidenceUpdateTimers.clear()
+    this.parallelWorkCounts.clear()
   }
 
   /**
@@ -2340,6 +2412,7 @@ export class SessionService {
           this.activeTurnIds.get(sessionId) ?? null,
           delta.evidence,
         )
+        this.scheduleEvidenceUpdate(sessionId)
         if (renamed) {
           const rows = this.db
             .prepare(

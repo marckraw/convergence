@@ -49,3 +49,31 @@ it('reads task birth, killed patches and consumed snapshots without inventing un
     null,
   ])
 })
+
+it('R11 preserves terminal summaries verbatim — drop endedSummary at the reader turns red', () => {
+  const summary = '  Fixture failure: upstream request rejected\nexact detail  '
+  expect([
+    readClaudeTaskFacts(
+      {
+        type: 'system',
+        subtype: 'task_notification',
+        task_id: 'task',
+        status: 'failed',
+        summary,
+      },
+      'now',
+    )?.[0].patch,
+    readClaudeTaskFacts(
+      {
+        type: 'system',
+        subtype: 'task_updated',
+        task_id: 'task',
+        patch: { status: 'failed', summary },
+      },
+      'now',
+    )?.[0].patch,
+  ]).toEqual([
+    { status: 'failed', endedAt: 'now', endedSummary: summary },
+    { status: 'failed', endedAt: 'now', endedSummary: summary },
+  ])
+})

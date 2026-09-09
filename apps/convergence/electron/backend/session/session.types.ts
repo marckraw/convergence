@@ -1,3 +1,4 @@
+import type { ParallelWorkCounts } from '../../../src/shared/lib/parallel-work.pure'
 import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
 import type { SessionRow } from '../database/database.types'
 import { parseExecutionHostId } from '../execution-host-endpoint/execution-host-endpoint.pure'
@@ -152,6 +153,8 @@ export type AttentionRequestKind =
   | 'input'
 
 export interface SessionSummary {
+  canStopTasks?: boolean
+  parallelWork?: ParallelWorkCounts
   /** Runtime fact; never persisted or inferred from attention. */
   hasActiveHandle?: boolean
   id: string

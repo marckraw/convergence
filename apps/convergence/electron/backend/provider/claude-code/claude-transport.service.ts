@@ -13,7 +13,9 @@ export interface ClaudeTransportExit {
 
 /** Adapter: the seam where Claude's wire meets its process; SDK types stay here. */
 export interface ClaudeTransport {
+  readonly canStopTasks: boolean
   write(userLine: string): void
+  stopTask(id: string): Promise<void>
   interrupt(): Promise<unknown>
   setModel(model: string | null, effort?: string | null): Promise<void>
   setPermissionMode(mode: string): Promise<void>
@@ -66,6 +68,7 @@ export function createClaudeTransport(input: {
       model: value('--model'),
       resume: value('--resume'),
       includePartialMessages: true,
+      forwardSubagentText: true,
       canUseTool: (toolName, inputValue, options) =>
         input.onPermissionRequest({ toolName, input: inputValue, ...options }),
       permissionMode: mode as
@@ -112,10 +115,18 @@ export function createClaudeTransport(input: {
     }
   })()
   return {
+    get canStopTasks() {
+      return typeof runner.stopTask === 'function'
+    },
     write: (line) => {
       if (closed) throw new Error('Claude connection has ended')
       messages.push(JSON.parse(line) as SDKUserMessage)
       wake?.()
+    },
+    stopTask: async (id) => {
+      if (typeof runner.stopTask !== 'function')
+        throw new Error('Stop is not available on this Claude Code version')
+      await runner.stopTask(id)
     },
     interrupt: () => runner.interrupt(),
     setModel: async (model, effort) => {

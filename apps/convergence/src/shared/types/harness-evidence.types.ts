@@ -6,6 +6,9 @@ export type AgentRunStatus =
   | 'unknown'
 
 export interface SessionAgentRun {
+  /** Linked local-agent task, resolved by the backend read. */
+  taskId?: string | null
+  endedSummary?: string | null
   stopReason?: 'quit' | 'idle' | 'account' | 'stop' | 'exit' | null
   id: string
   sessionId: string
@@ -25,6 +28,7 @@ export interface SessionAgentRun {
 }
 
 export interface SessionTask {
+  endedSummary?: string | null
   stopReason?: 'quit' | 'idle' | 'account' | 'stop' | 'exit' | null
   taskId: string
   sessionId: string

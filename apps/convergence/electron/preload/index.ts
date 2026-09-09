@@ -314,6 +314,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('session:getSummaryById', id),
     getConversation: (id: string) =>
       ipcRenderer.invoke('session:getConversation', id),
+    stopTask: (sessionId: string, id: string) =>
+      ipcRenderer.invoke('session:stopTask', sessionId, id),
     listAgentRuns: (sessionId: string) =>
       ipcRenderer.invoke('session:listAgentRuns', sessionId),
     listTasks: (sessionId: string) =>
@@ -385,6 +387,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getRecentIds: () => ipcRenderer.invoke('session:getRecentIds'),
     setRecentIds: (ids: string[]) =>
       ipcRenderer.invoke('session:setRecentIds', ids),
+    onEvidenceUpdated: (callback: (event: { sessionId: string }) => void) => {
+      const handler = (_event: unknown, event: { sessionId: string }) =>
+        callback(event)
+      ipcRenderer.on('session:evidenceUpdated', handler)
+      return () => {
+        ipcRenderer.removeListener('session:evidenceUpdated', handler)
+      }
+    },
     onSessionSummaryUpdate: (callback: (summary: unknown) => void) => {
       const handler = (_event: unknown, summary: unknown) => callback(summary)
       ipcRenderer.on('session:summaryUpdated', handler)

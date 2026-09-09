@@ -38,6 +38,19 @@ function makeSession(overrides: Partial<Session>): Session {
   }
 }
 
+it('R5 global activity includes answered background work and excludes it from finished recency — mutation use foreground completion alone turns red', () => {
+  const session = makeSession({
+    status: 'completed',
+    attention: 'finished',
+    parallelWork: { running: 1, unknown: 0, failed: 0, stopped: 0 },
+  })
+  const result = selectGlobalStatus([session], {}, [])
+  expect({
+    running: result.running.map((row) => row.id),
+    completed: result.lastCompleted,
+  }).toEqual({ running: ['session-1'], completed: null })
+})
+
 function makeProject(overrides: Partial<Project>): Project {
   return {
     id: 'project-1',
@@ -309,4 +322,30 @@ describe('selectLatestAgentMessageId', () => {
       selectLatestAgentMessageId([message({ id: 'mine', actor: 'user' })]),
     ).toBeNull()
   })
+})
+
+it('M5 foreground failure outranks a stranded running monitor in both global filters — mutation raw running count turns red', () => {
+  const failed = makeSession({
+    status: 'failed',
+    attention: 'failed',
+    parallelWork: { running: 1, unknown: 0, failed: 0, stopped: 0 },
+  })
+  const result = selectGlobalStatus([failed], {}, [])
+  expect({
+    running: result.running,
+    completed: result.lastCompleted?.id,
+  }).toEqual({ running: [], completed: failed.id })
+})
+
+it('L9 an answered session with only unknown work remains in last-completed — mutation exclude every parallel label turns red', () => {
+  const session = makeSession({
+    status: 'completed',
+    attention: 'finished',
+    parallelWork: { running: 0, unknown: 1, failed: 0, stopped: 0 },
+  })
+  const result = selectGlobalStatus([session], {}, [])
+  expect({
+    running: result.running,
+    completed: result.lastCompleted?.id,
+  }).toEqual({ running: [], completed: session.id })
 })

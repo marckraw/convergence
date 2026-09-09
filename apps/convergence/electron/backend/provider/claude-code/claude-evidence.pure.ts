@@ -13,6 +13,18 @@ export function claudeString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null
 }
 
+export function claudeContentText(value: unknown): string | null {
+  if (typeof value === 'string') return value
+  if (!Array.isArray(value)) return null
+  const blocks = value.flatMap((value) => {
+    const block = claudeRecord(value)
+    return block?.type === 'text' && typeof block.text === 'string'
+      ? [block.text]
+      : []
+  })
+  return blocks.length ? blocks.join('\n') : null
+}
+
 function taskStatus(value: unknown): AgentRunStatus {
   if (value === 'killed' || value === 'stopped') return 'stopped'
   return value === 'running' || value === 'completed' || value === 'failed'
@@ -68,6 +80,7 @@ export function readClaudeTaskFacts(
       patch.status &&
       ['completed', 'failed', 'stopped'].includes(patch.status)
     ) {
+      if (typeof input.summary === 'string') patch.endedSummary = input.summary
       const ended =
         typeof input.end_time === 'number' ? new Date(input.end_time) : null
       patch.endedAt =

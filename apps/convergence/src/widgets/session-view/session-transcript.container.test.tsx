@@ -8,6 +8,7 @@ import {
 import { describe, expect, it, vi } from 'vitest'
 import type { ConversationItem, Session } from '@/entities/session'
 import { useAttachmentStore } from '@/entities/attachment'
+import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
 import { SessionTranscript } from './session-transcript.container'
 
 vi.mock('@tanstack/react-virtual', () => ({
@@ -55,6 +56,58 @@ const baseSession: Session = {
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
+
+it('R3′ keeps an attributed approval actionable while child work leaves the main transcript — mutations move approval or keep child work turn red', () => {
+  const approve = vi.fn()
+  const approval = {
+    ...approvalRequest({
+      id: 'decision',
+      sequence: 1,
+      providerItemId: 'permission',
+    }),
+    agentRunId: 'child',
+    resolution: 'pending' as const,
+    agentAttribution: { description: 'Read routes', agentType: 'Explore' },
+  }
+  const work = {
+    ...assistantMessage({
+      id: 'child-text',
+      sequence: 2,
+      text: 'private child voice',
+    }),
+    agentRunId: 'child',
+  }
+  render(
+    <SessionTranscript
+      session={baseSession}
+      parallelRows={[
+        {
+          id: 'child',
+          kind: 'agent',
+          parentId: null,
+          run: { id: 'child', spawnedByItemId: 'spawn' } as SessionAgentRun,
+        },
+      ]}
+      conversationItems={[approval, work]}
+      onApprove={approve}
+      onDeny={vi.fn()}
+      onInputAnswer={vi.fn()}
+    />,
+  )
+  const allow =
+    screen.queryByRole('button', { name: 'Allow once' }) ??
+    screen.queryByRole('button', { name: 'Approve' })
+  if (allow) fireEvent.click(allow)
+  expect({
+    childInMain: screen.queryByText('private child voice') !== null,
+    approved: approve.mock.calls,
+    attributed: screen.queryByText('↳ Read routes (Explore)') !== null,
+  }).toEqual({
+    childInMain: false,
+    approved: [['session-1', 'permission']],
+    attributed: true,
+  })
+})
 
 function userMessage(overrides: {
   id: string
@@ -789,5 +842,57 @@ it.each([
       live: { approve: true, answer: true },
       dead: { approve: false, answer: false },
     })
+  },
+)
+
+it.each([
+  { state: 'unsettled', loading: true, matched: false, visible: false },
+  { state: 'settled matched', loading: false, matched: true, visible: false },
+  { state: 'settled unmatched', loading: false, matched: false, visible: true },
+])(
+  'M4′ $state preserves main work and partitions attributed work — mutations show unsettled work or hide settled orphans turn red',
+  ({ loading, matched, visible }) => {
+    const items = [
+      assistantMessage({
+        id: 'main',
+        sequence: 1,
+        text: 'main work immediately',
+      }),
+      {
+        ...assistantMessage({ id: 'child', sequence: 2, text: 'child work' }),
+        agentRunId: 'child',
+        agentAttribution: { description: 'child agent', agentType: 'Explore' },
+      },
+    ]
+    render(
+      <SessionTranscript
+        session={baseSession}
+        conversationItems={items}
+        parallelLoading={loading}
+        parallelRows={
+          matched
+            ? [
+                {
+                  id: 'child',
+                  kind: 'agent',
+                  parentId: null,
+                  run: {
+                    id: 'child',
+                    spawnedByItemId: 'spawn',
+                  } as SessionAgentRun,
+                },
+              ]
+            : []
+        }
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
+      />,
+    )
+    expect({
+      main: !!screen.queryByText('main work immediately'),
+      child: !!screen.queryByText('child work'),
+      label: !!screen.queryByText('↳ child agent (Explore)'),
+    }).toEqual({ main: true, child: visible, label: visible })
   },
 )

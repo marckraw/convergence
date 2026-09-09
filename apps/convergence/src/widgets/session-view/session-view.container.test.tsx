@@ -8,6 +8,8 @@ import { useSessionRelayStore } from '@/entities/session-relay'
 import { useProjectScriptStore } from '@/entities/project-script'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { TooltipProvider } from '@/shared/ui/tooltip'
+import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
+const navigationScroll = vi.hoisted(() => vi.fn())
 import { SessionView } from './session-view.container'
 
 vi.mock('@/features/composer', () => ({
@@ -31,7 +33,7 @@ vi.mock('@tanstack/react-virtual', () => ({
         options.estimateSize(index),
       ).reduce((total, size) => total + size, 0),
     measureElement: vi.fn(),
-    scrollToIndex: vi.fn(),
+    scrollToIndex: navigationScroll,
   }),
 }))
 
@@ -178,6 +180,11 @@ describe('SessionView', () => {
 
     Object.defineProperty(window, 'electronAPI', {
       value: {
+        session: {
+          listAgentRuns: vi.fn().mockResolvedValue([]),
+          listTasks: vi.fn().mockResolvedValue([]),
+          onEvidenceUpdated: vi.fn().mockReturnValue(() => {}),
+        },
         projectScripts: {
           list: vi.fn().mockResolvedValue([]),
           create: vi.fn(),
@@ -264,8 +271,72 @@ describe('SessionView', () => {
     })
   })
 
+  it('R8 M2 failed evidence read keeps child work moved and exposes Retry in the conversation — mutation settle on error turns red', async () => {
+    vi.mocked(window.electronAPI.session.listAgentRuns).mockRejectedValueOnce(
+      new Error('offline'),
+    )
+    useSessionStore.setState({
+      activeConversation: [
+        {
+          id: 'main',
+          sessionId: 'session-1',
+          sequence: 1,
+          kind: 'message',
+          actor: 'assistant',
+          text: 'main immediately',
+          state: 'complete',
+          providerMeta: {},
+          createdAt: 'now',
+        },
+        {
+          id: 'child',
+          sessionId: 'session-1',
+          sequence: 2,
+          kind: 'message',
+          actor: 'assistant',
+          text: 'child hidden',
+          state: 'complete',
+          agentRunId: 'orphan',
+          agentAttribution: { description: 'child', agentType: 'Explore' },
+          providerMeta: {},
+          createdAt: 'now',
+        },
+      ] as import('@/entities/session').ConversationItem[],
+    })
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeNull(),
+    )
+    const failed = {
+      main: !!screen.queryByText('main immediately'),
+      child: !!screen.queryByText('child hidden'),
+      error: !!screen.queryByText('Parallel work could not be read ·'),
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() =>
+      expect(screen.queryByText('child hidden')).not.toBeNull(),
+    )
+    expect({
+      failed,
+      errorAfterRetry: !!screen.queryByText(
+        'Parallel work could not be read ·',
+      ),
+      reads: vi.mocked(window.electronAPI.session.listAgentRuns).mock.calls
+        .length,
+    }).toEqual({
+      failed: { main: true, child: false, error: true },
+      errorAfterRetry: false,
+      reads: 2,
+    })
+  })
+
   afterEach(() => {
     vi.clearAllMocks()
+    vi.restoreAllMocks()
   })
 
   it('shows the live session activity in the header', async () => {
@@ -981,5 +1052,73 @@ describe('SessionView', () => {
     expect(useDialogStore.getState().payload).toEqual({
       spaceId: 'space-1',
     })
+  })
+
+  it('L8 two navigation clicks in one millisecond both reach the transcript — mutation Date.now nonce turns red', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(17)
+    vi.mocked(window.electronAPI.session.listAgentRuns).mockResolvedValue([
+      {
+        id: 'agent',
+        sessionId: 'session-1',
+        spawnedByItemId: 'spawn',
+        description: 'Inspect routing',
+        agentType: 'Explore',
+        status: 'completed',
+      } as SessionAgentRun,
+    ])
+    useSessionStore.setState({
+      activeConversation: [
+        {
+          id: 'spawn',
+          sessionId: 'session-1',
+          sequence: 1,
+          turnId: null,
+          kind: 'tool-call',
+          state: 'complete',
+          toolName: 'Agent',
+          inputText: '{}',
+          createdAt: 'now',
+          updatedAt: 'now',
+          providerMeta: {
+            providerId: 'claude-code',
+            providerItemId: 'tool',
+            providerEventType: 'tool',
+          },
+        },
+      ],
+    })
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Parallel work' }))
+    const spawn = await screen.findByRole('button', { name: 'View spawn' })
+    navigationScroll.mockClear()
+    fireEvent.click(spawn)
+    fireEvent.click(spawn)
+    expect(
+      navigationScroll.mock.calls.filter(
+        ([, options]) => options?.align === 'center',
+      ),
+    ).toHaveLength(2)
+    vi.restoreAllMocks()
+  })
+
+  it('T10 closing parallel work returns focus to its invoking control — mutation omit focus return turns red', async () => {
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    const opener = screen.getByRole('button', { name: 'Parallel work' })
+    opener.focus()
+    fireEvent.click(opener)
+    const close = await screen.findByRole('button', {
+      name: 'Close parallel work',
+    })
+    close.focus()
+    fireEvent.click(close)
+    expect(document.activeElement).toBe(opener)
   })
 })

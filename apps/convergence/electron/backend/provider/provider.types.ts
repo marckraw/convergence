@@ -439,6 +439,8 @@ export interface OneShotResult {
 }
 
 export interface SessionHandle {
+  readonly canStopTasks?: boolean
+  stopTask?: (id: string) => Promise<void>
   /** A local process whose lifetime spans completed user turns. */
   resident?: boolean
   retainQueuedInputsOnCompletion?: boolean

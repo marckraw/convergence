@@ -17,6 +17,36 @@ function bed() {
   return { db, service: new HarnessEvidenceService(db) }
 }
 
+it('R2 preserves spawn order across identity adoption — mutation order tied spawns by mutable provider id turns red', () => {
+  const { service } = bed()
+  for (const id of ['z-first', 'a-second'])
+    service.apply('session', null, {
+      kind: 'agent.started',
+      run: {
+        id,
+        spawnedByItemId: id,
+        agentType: null,
+        description: null,
+        model: null,
+        depth: 1,
+        startedAt: 'same-time',
+        transcriptPath: null,
+      },
+    })
+  service.apply('session', null, {
+    kind: 'agent.identified',
+    spawnedByItemId: 'z-first',
+    id: 'zz-adopted',
+    agentType: null,
+    description: null,
+    depth: 1,
+    transcriptPath: null,
+  })
+  expect(
+    service.listAgentRuns('session').map((run) => run.spawnedByItemId),
+  ).toEqual(['z-first', 'a-second'])
+})
+
 it('persists agent identity, task state and turn cost — drop a projection/accounting write or identity adoption turns red', () => {
   const { db, service } = bed()
   service.apply('session', 'turn', {
@@ -215,3 +245,188 @@ it('L3 persists only changed agent and task rows — mutation upsert every folde
   })
   expect(db.prepare('SELECT * FROM writes').all()).toEqual([])
 })
+
+it('R11 persists the first terminal summary on both lists — drop a summary write or overwrite the second terminal turns red', () => {
+  const { db, service } = bed()
+  service.apply('session', 'turn', {
+    kind: 'agent.started',
+    run: {
+      id: 'agent',
+      spawnedByItemId: 'call',
+      agentType: 'Explore',
+      description: 'fixture',
+      model: null,
+      depth: 1,
+      startedAt: 'start',
+      transcriptPath: null,
+    },
+  })
+  service.apply('session', 'turn', {
+    kind: 'agent.ended',
+    spawnedByItemId: 'call',
+    status: 'failed',
+    at: 'first',
+    summary: 'first reason',
+  } as Parameters<typeof service.apply>[2])
+  service.apply('session', 'turn', {
+    kind: 'agent.ended',
+    spawnedByItemId: 'call',
+    status: 'completed',
+    at: 'second',
+    summary: 'second reason',
+  } as Parameters<typeof service.apply>[2])
+  service.apply('session', 'turn', {
+    kind: 'task.changed',
+    taskId: 'task',
+    at: 'first',
+    patch: { status: 'failed', endedAt: 'first', endedSummary: 'first reason' },
+  })
+  service.apply('session', 'turn', {
+    kind: 'task.changed',
+    taskId: 'task',
+    at: 'second',
+    patch: {
+      status: 'completed',
+      endedAt: 'second',
+      endedSummary: 'second reason',
+    },
+  })
+  const reopened = new HarnessEvidenceService(db)
+  expect(
+    [
+      reopened.listAgentRuns('session')[0],
+      reopened.listTasks('session')[0],
+    ].map((row) => ({
+      status: row.status,
+      endedAt: row.endedAt,
+      summary: row.endedSummary,
+    })),
+  ).toEqual([
+    { status: 'failed', endedAt: 'first', summary: 'first reason' },
+    { status: 'failed', endedAt: 'first', summary: 'first reason' },
+  ])
+})
+
+it('R5 summary counts are persisted unique identities — mutation include the local-agent task twice turns red', () => {
+  const { service } = bed()
+  service.apply('session', null, {
+    kind: 'agent.started',
+    run: {
+      id: 'agent',
+      spawnedByItemId: 'spawn',
+      agentType: 'Explore',
+      description: null,
+      model: null,
+      depth: 1,
+      startedAt: 'now',
+      transcriptPath: null,
+    },
+  })
+  for (const [taskId, taskType, status] of [
+    ['agent', 'local_agent', 'running'],
+    ['monitor', 'monitor', 'running'],
+    ['lost', 'local_bash', 'unknown'],
+    ['failure', 'local_bash', 'failed'],
+    ['stopped', 'local_bash', 'stopped'],
+  ] as const)
+    service.apply('session', null, {
+      kind: 'task.changed',
+      taskId,
+      at: 'now',
+      patch: { taskType, status },
+    })
+  expect(service.countParallelWork(['session']).get('session')).toEqual({
+    running: 2,
+    unknown: 1,
+    failed: 1,
+    stopped: 1,
+  })
+})
+
+it('H3 SQL counts a missed adoption once by the spawning provider item — mutation match run id only turns red', () => {
+  const { db, service } = bed()
+  db.prepare(
+    "INSERT INTO session_conversation_items(id,session_id,sequence,kind,state,payload_json,created_at,updated_at,provider_item_id) VALUES ('spawn','session',1,'tool-call','complete','{}','start','start','tool-spawn')",
+  ).run()
+  service.apply('session', null, {
+    kind: 'agent.started',
+    run: {
+      id: 'provisional',
+      spawnedByItemId: 'spawn',
+      agentType: null,
+      description: null,
+      model: null,
+      depth: 1,
+      startedAt: 'start',
+      transcriptPath: null,
+    },
+  })
+  service.apply('session', null, {
+    kind: 'task.changed',
+    taskId: 'harness-agent',
+    at: 'start',
+    patch: {
+      status: 'running',
+      taskType: 'local_agent',
+      toolUseId: 'tool-spawn',
+    },
+  })
+  expect(service.countParallelWork(['session']).get('session')).toEqual({
+    running: 1,
+    unknown: 0,
+    failed: 0,
+    stopped: 0,
+  })
+})
+
+it.each(['running', 'unknown'] as const)(
+  'H2/H3 / R8 M3 backend link and terminal task settle a missed adoption — mutation running-only winner turns red (%s)',
+  (status) => {
+    const { db, service } = bed()
+    db.prepare(
+      "INSERT INTO session_conversation_items(id,session_id,sequence,kind,state,payload_json,created_at,updated_at,provider_item_id) VALUES ('spawn','session',1,'tool-call','complete','{}','start','start','tool-spawn')",
+    ).run()
+    service.apply('session', null, {
+      kind: 'agent.started',
+      run: {
+        id: 'provisional',
+        spawnedByItemId: 'spawn',
+        agentType: null,
+        description: null,
+        model: null,
+        depth: 1,
+        startedAt: 'start',
+        transcriptPath: null,
+      },
+    })
+    service.apply('session', null, {
+      kind: 'task.changed',
+      taskId: 'harness-agent',
+      at: 'start',
+      patch: {
+        status: 'running',
+        taskType: 'local_agent',
+        toolUseId: 'tool-spawn',
+      },
+    })
+    service.apply('session', null, {
+      kind: 'task.changed',
+      taskId: 'harness-agent',
+      at: 'end',
+      patch: { status: 'completed', endedAt: 'end' },
+    })
+    if (status === 'unknown')
+      service.apply('session', null, {
+        kind: 'process.ended',
+        at: 'exit',
+        reason: 'exit',
+      })
+    expect({
+      link: service.listAgentRuns('session')[0].taskId,
+      counts: service.countParallelWork(['session']).get('session'),
+    }).toEqual({
+      link: 'harness-agent',
+      counts: { running: 0, unknown: 0, failed: 0, stopped: 0 },
+    })
+  },
+)

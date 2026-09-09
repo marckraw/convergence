@@ -1,3 +1,9 @@
+import { Button } from '@/shared/ui/button'
+import {
+  isSubagentWork,
+  parallelWorkRowState,
+  type ParallelWorkRow,
+} from '@/shared/lib/parallel-work.pure'
 import { useMemo, useState, type FC, type ReactNode } from 'react'
 import type {
   ConversationItem,
@@ -20,6 +26,12 @@ import { SessionTranscript } from './session-transcript.container'
 import { UiResponsePanel } from './ui-response-panel.presentational'
 
 interface SessionConversationSurfaceProps {
+  parallelRows?: ParallelWorkRow[]
+  parallelLoading?: boolean
+  parallelError?: string | null
+  onParallelRetry?: () => void
+  onParallelSelect?: (id: string) => void
+  navigationTarget?: { id: string; nonce: number } | null
   session: Session
   conversationItems: ConversationItem[]
   composerContext: ComposerSessionContext | null
@@ -41,6 +53,12 @@ export const SessionConversationSurface: FC<
   SessionConversationSurfaceProps
 > = ({
   session,
+  parallelRows,
+  parallelLoading,
+  parallelError,
+  onParallelRetry,
+  onParallelSelect,
+  navigationTarget,
   conversationItems,
   composerContext,
   composerDisabledReason = null,
@@ -52,8 +70,18 @@ export const SessionConversationSurface: FC<
     string | null
   >(null)
   const artifacts = useMemo(
-    () => findUiResponseArtifacts(conversationItems),
-    [conversationItems],
+    () =>
+      findUiResponseArtifacts(
+        conversationItems,
+        parallelLoading
+          ? undefined
+          : new Set(
+              (parallelRows ?? [])
+                .filter((row) => row.kind === 'agent')
+                .flatMap((row) => parallelWorkRowState(row).ids),
+            ),
+      ),
+    [conversationItems, parallelRows, parallelLoading],
   )
   const artifact =
     (selectedArtifactItemId
@@ -67,6 +95,12 @@ export const SessionConversationSurface: FC<
   const conversationColumn = renderConversationColumn({
     sessionId: session.id,
     session,
+    parallelRows,
+    parallelLoading,
+    parallelError,
+    onParallelRetry,
+    onParallelSelect,
+    navigationTarget,
     conversationItems,
     composerContext,
     composerDisabledReason,
@@ -98,6 +132,12 @@ export const SessionConversationSurface: FC<
 }
 
 interface RenderConversationColumnInput {
+  parallelRows?: ParallelWorkRow[]
+  parallelLoading?: boolean
+  parallelError?: string | null
+  onParallelRetry?: () => void
+  onParallelSelect?: (id: string) => void
+  navigationTarget?: { id: string; nonce: number } | null
   sessionId: string
   session: Session
   conversationItems: ConversationItem[]
@@ -121,6 +161,12 @@ interface RenderConversationColumnInput {
 function renderConversationColumn({
   sessionId,
   session,
+  parallelRows,
+  parallelLoading,
+  parallelError,
+  onParallelRetry,
+  onParallelSelect,
+  navigationTarget,
   conversationItems,
   composerContext,
   composerDisabledReason,
@@ -132,8 +178,25 @@ function renderConversationColumn({
 }: RenderConversationColumnInput): ReactNode {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {parallelError && (
+        <div role="alert" className="px-4 py-2 text-sm text-muted-foreground">
+          Parallel work could not be read ·{' '}
+          <Button
+            type="button"
+            variant="link"
+            className="h-auto p-0"
+            onClick={onParallelRetry}
+          >
+            Retry
+          </Button>
+        </div>
+      )}
       <SessionTranscript
         session={session}
+        parallelRows={parallelRows}
+        parallelLoading={parallelLoading}
+        onParallelSelect={onParallelSelect}
+        navigationTarget={navigationTarget}
         conversationItems={conversationItems}
         selectedUiResponseItemId={selectedUiResponseItemId}
         onUiResponseArtifactSelect={onUiResponseArtifactSelect}
@@ -176,9 +239,15 @@ function renderComposerArea(
 
 function findUiResponseArtifacts(
   items: ConversationItem[],
+  knownAgentIds: ReadonlySet<string> | undefined,
 ): UiResponseArtifact[] {
   return items.flatMap((item) => {
-    if (!item || item.kind !== 'message' || item.actor !== 'assistant') {
+    if (
+      !item ||
+      isSubagentWork(item, knownAgentIds) ||
+      item.kind !== 'message' ||
+      item.actor !== 'assistant'
+    ) {
       return []
     }
 

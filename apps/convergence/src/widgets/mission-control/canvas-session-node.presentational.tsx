@@ -1,3 +1,4 @@
+import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import type { FC } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { formatSessionAttentionLabel } from '@/entities/session'
@@ -48,7 +49,8 @@ export const CanvasSessionNode: FC<NodeProps> = ({ data }) => {
   } = data as unknown as CanvasSessionNodeData
   const { session } = card
   const running = session.status === 'running'
-  const needsYou = session.attention !== 'none'
+  const needsYou =
+    session.attention !== 'none' || Boolean(parallelWorkStatus(session))
   const handleClass = authoring ? DRAW_HANDLE : HIDDEN_HANDLE
 
   /**
@@ -117,7 +119,11 @@ export const CanvasSessionNode: FC<NodeProps> = ({ data }) => {
               className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground"
               title={formatSessionAttentionLabel(session)}
             >
-              <SessionBadge attention={session.attention} />
+              <SessionBadge
+                attention={session.attention}
+                status={session.status}
+                parallelWork={session.parallelWork}
+              />
             </span>
           ) : (
             <span
@@ -138,7 +144,7 @@ export const CanvasSessionNode: FC<NodeProps> = ({ data }) => {
         </div>
 
         <p className="mt-auto truncate text-[11px] text-muted-foreground">
-          {card.activityLabel}
+          {parallelWorkStatus(session) ?? card.activityLabel}
         </p>
       </div>
 

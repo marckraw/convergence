@@ -1267,6 +1267,13 @@ export function registerIpcHandlers(
     promptsService.delete(input),
   )
 
+  sessionApp.onEvidenceUpdate((event) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed())
+        win.webContents.send('session:evidenceUpdated', event)
+    }
+  })
+
   // Session update event forwarding
   sessionApp.onSessionSummaryUpdate((summary) => {
     const windows = BrowserWindow.getAllWindows()
@@ -1296,6 +1303,10 @@ export function registerIpcHandlers(
   })
 
   // Turn-grouped file-change handlers
+  ipcMain.handle('session:stopTask', (_event, sessionId: string, id: string) =>
+    sessionService.stopTask(sessionId, id),
+  )
+
   ipcMain.handle('session:listAgentRuns', (_event, sessionId: string) =>
     sessionService.listAgentRuns(sessionId),
   )

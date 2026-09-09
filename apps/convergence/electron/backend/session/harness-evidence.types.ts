@@ -14,6 +14,7 @@ export type AgentRunFact =
       kind: 'agent.started'
       run: Omit<
         SessionAgentRun,
+        | 'taskId'
         | 'sessionId'
         | 'status'
         | 'endedAt'
@@ -48,6 +49,8 @@ export type AgentRunFact =
     }
   | {
       kind: 'agent.ended'
+      stopReason?: 'stop'
+      summary?: string | null
       spawnedByItemId: string
       status: Exclude<AgentRunStatus, 'running' | 'unknown'>
       at: string

@@ -1,3 +1,4 @@
+import { claudeRootResultClaimsBlock } from './claude-code-task.pure'
 import { readdirSync, readFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
@@ -8,6 +9,7 @@ import type {
 import { toClaudeProjectsKey } from './claude-context-log.service'
 import {
   claudeRecord,
+  claudeContentText,
   claudeString,
   readClaudeTaskFacts,
 } from './claude-evidence.pure'
@@ -29,6 +31,7 @@ export class ClaudeEvidenceService {
   private readonly agents = new Map<string, AgentIdentity>()
   private readonly tools = new Map<string, ToolIdentity>()
   private readonly tasksByTool = new Map<string, string>()
+  private readonly requestedStops = new Set<string>()
   private readonly terminalAgents = new Set<string>()
   private readonly readMetadata = new Set<string>()
   private readonly unmatchedMetadata = new Set<string>()
@@ -43,6 +46,16 @@ export class ClaudeEvidenceService {
     this.cwd = workingDirectory
   }
 
+  requestStop(id: string): void {
+    if (this.requestedStops.has(id))
+      throw new Error('Stop already requested; awaiting confirmation')
+    this.requestedStops.add(id)
+  }
+
+  cancelStop(id: string): void {
+    this.requestedStops.delete(id)
+  }
+
   consume(data: unknown, at: string): void {
     const event = claudeRecord(data)
     if (!event) return
@@ -55,6 +68,11 @@ export class ClaudeEvidenceService {
       for (const fact of tasks) {
         if (fact.patch.toolUseId)
           this.tasksByTool.set(fact.patch.toolUseId, fact.taskId)
+        if (
+          fact.patch.status === 'stopped' &&
+          this.requestedStops.has(fact.taskId)
+        )
+          fact.patch.stopReason = 'stop'
         this.emit(fact)
         const toolId = fact.patch.toolUseId
         if (
@@ -112,8 +130,14 @@ export class ClaudeEvidenceService {
               agent,
               fact.patch.status as 'completed' | 'failed' | 'stopped',
               fact.patch.endedAt ?? at,
+              fact.patch.endedSummary,
             )
         }
+        if (
+          fact.patch.status &&
+          ['completed', 'failed', 'stopped'].includes(fact.patch.status)
+        )
+          this.requestedStops.delete(fact.taskId)
       }
     } else if (
       !['assistant', 'user', 'stream_event', 'result'].includes(
@@ -128,6 +152,11 @@ export class ClaudeEvidenceService {
         at,
       })
     }
+  }
+
+  adoptedAgentId(toolUseId: string): string | null {
+    const id = this.agents.get(toolUseId)?.id
+    return id && id !== toolUseId ? id : null
   }
 
   identity(
@@ -183,7 +212,11 @@ export class ClaudeEvidenceService {
     if (tool && id) {
       if (tool.name === 'Agent') {
         this.readMeta()
-        const structured = claudeRecord(event?.tool_use_result)
+        const structured = claudeRootResultClaimsBlock(data, block, (toolId) =>
+          this.adoptedAgentId(toolId),
+        )
+          ? claudeRecord(event?.tool_use_result)
+          : null
         const text =
           typeof result?.content === 'string'
             ? result.content
@@ -201,15 +234,10 @@ export class ClaudeEvidenceService {
             spawnedByItemId: tool.itemId,
             patch: { model },
           })
-        if (
-          agent &&
-          (result?.is_error === true || structured?.status === 'completed')
-        )
-          this.endAgent(
-            agent,
-            result?.is_error === true ? 'failed' : 'completed',
-            at,
-          )
+        if (agent && result?.is_error === true)
+          this.endAgent(agent, 'failed', at, claudeContentText(result.content))
+        else if (agent && structured?.status === 'completed')
+          this.endAgent(agent, 'completed', at)
       } else if (tool.name === 'TaskStop' && result?.is_error !== true) {
         const taskId =
           claudeString(tool.input?.task_id) ??
@@ -247,6 +275,7 @@ export class ClaudeEvidenceService {
     at: string,
     reason?: 'quit' | 'idle' | 'account' | 'stop' | 'exit',
   ): void {
+    this.requestedStops.clear()
     this.emit({ kind: 'process.ended', at, ...(reason ? { reason } : {}) })
   }
 
@@ -259,12 +288,17 @@ export class ClaudeEvidenceService {
     agent: AgentIdentity,
     status: Exclude<AgentRunStatus, 'running' | 'unknown'>,
     at: string,
+    summary?: string | null,
   ): void {
     // The task update, notification and foreground result name one terminal moment.
     if (this.terminalAgents.has(agent.itemId)) return
     this.terminalAgents.add(agent.itemId)
     this.emit({
       kind: 'agent.ended',
+      ...(status === 'stopped' && this.requestedStops.has(agent.id)
+        ? { stopReason: 'stop' as const }
+        : {}),
+      ...(summary !== undefined ? { summary } : {}),
       spawnedByItemId: agent.itemId,
       status,
       at,

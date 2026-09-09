@@ -1,3 +1,4 @@
+import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import type { Project } from '../project/project.types'
 import type {
   ConversationItem,
@@ -57,7 +58,12 @@ export function selectGlobalStatus(
   dismissals: NeedsYouDismissals,
   projects: Project[],
 ): GlobalStatus {
-  const running = sessions.filter((session) => session.status === 'running')
+  const running = sessions.filter(
+    (session) =>
+      session.status === 'running' ||
+      (Boolean(parallelWorkStatus(session)) &&
+        Boolean(session.parallelWork?.running)),
+  )
   const needsAttention = sessions.filter((session) =>
     isAttentionSession(session, dismissals),
   )
@@ -105,10 +111,12 @@ export function selectGlobalStatus(
     return rightRecency.localeCompare(leftRecency)
   })
 
+  const runningIds = new Set(running.map((session) => session.id))
   const lastCompleted = sessions
     .filter(
       (session) =>
-        session.status === 'completed' || session.status === 'failed',
+        (session.status === 'completed' || session.status === 'failed') &&
+        !runningIds.has(session.id),
     )
     .reduce<SessionSummary | null>((latest, session) => {
       if (!latest) return session

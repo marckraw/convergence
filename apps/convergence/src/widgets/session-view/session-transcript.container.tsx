@@ -1,3 +1,10 @@
+import {
+  isSubagentWork,
+  parallelWorkRowState,
+  type ParallelWorkRow,
+} from '@/shared/lib/parallel-work.pure'
+import { parallelWorkMarkers } from './parallel-work.pure'
+import { ParallelWorkMarkerView } from './parallel-work-marker.presentational'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   useCallback,
@@ -20,6 +27,10 @@ import { buildConversationRenderPlan } from './session-transcript-render-plan.pu
 import { isTranscriptNearBottom } from './session-transcript-scroll.pure'
 
 interface SessionTranscriptProps {
+  parallelRows?: ParallelWorkRow[]
+  parallelLoading?: boolean
+  onParallelSelect?: (id: string) => void
+  navigationTarget?: { id: string; nonce: number } | null
   session: Session
   conversationItems: ConversationItemEntry[]
   selectedUiResponseItemId?: string | null
@@ -37,11 +48,16 @@ interface SessionTranscriptProps {
   ) => void
 }
 
+const EMPTY_PARALLEL_ROWS: ParallelWorkRow[] = []
 const TRANSCRIPT_ROW_ESTIMATE_PX = 160
 const TRANSCRIPT_OVERSCAN = 6
 
 export const SessionTranscript: FC<SessionTranscriptProps> = ({
   session,
+  parallelRows = EMPTY_PARALLEL_ROWS,
+  parallelLoading = false,
+  onParallelSelect,
+  navigationTarget,
   conversationItems,
   selectedUiResponseItemId = null,
   onUiResponseArtifactSelect,
@@ -49,6 +65,7 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
   onDeny,
   onInputAnswer,
 }) => {
+  const navigatedNonce = useRef<number | null>(null)
   const scrollParentRef = useRef<HTMLDivElement>(null)
   const [scrollParent, setScrollParent] = useState<HTMLDivElement | null>(null)
   const bottomFollowRef = useRef(true)
@@ -71,9 +88,35 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     return startedAtById
   }, [conversationItems])
 
+  const workMarkers = useMemo(
+    () =>
+      parallelWorkMarkers(
+        conversationItems,
+        parallelLoading ? [] : parallelRows,
+      ),
+    [conversationItems, parallelRows, parallelLoading],
+  )
+  const knownAgentIds = useMemo(
+    () =>
+      new Set(
+        parallelRows
+          .filter((row) => row.kind === 'agent')
+          .flatMap((row) => parallelWorkRowState(row).ids),
+      ),
+    [parallelRows],
+  )
   const conversationRenderPlan = useMemo(
-    () => buildConversationRenderPlan(conversationItems),
-    [conversationItems],
+    () =>
+      buildConversationRenderPlan(
+        conversationItems.filter(
+          (item) =>
+            !isSubagentWork(
+              item,
+              parallelLoading ? undefined : knownAgentIds,
+            ) || workMarkers.has(item.id),
+        ),
+      ),
+    [conversationItems, workMarkers, knownAgentIds, parallelLoading],
   )
   const actionableApprovalIds = useMemo(() => {
     if (session.status !== 'running' && session.status !== 'completed') {
@@ -164,6 +207,18 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     },
   })
 
+  useEffect(() => {
+    if (!navigationTarget || navigatedNonce.current === navigationTarget.nonce)
+      return
+    const index = conversationRenderPlan.findIndex(
+      (entry) => entry.item.id === navigationTarget.id,
+    )
+    if (index < 0) return
+    navigatedNonce.current = navigationTarget.nonce
+    bottomFollowRef.current = false
+    rowVirtualizer.scrollToIndex(index, { align: 'center' })
+  }, [navigationTarget, conversationRenderPlan, rowVirtualizer])
+
   const scrollToLatest = useCallback(() => {
     if (conversationRenderPlan.length === 0) return
 
@@ -245,6 +300,7 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
             if (!renderEntry) return null
 
             const entry = renderEntry.item
+            const workMarker = workMarkers.get(entry.id)
             const isActionableApproval =
               entry.kind === 'approval-request' &&
               actionableApprovalIds.has(entry.id)
@@ -260,6 +316,7 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
                 ref={measureRow}
                 data-index={virtualItem.index}
                 data-testid="session-transcript-row"
+                data-conversation-item-id={entry.id}
                 data-ui-response-artifact={
                   hasUiResponseArtifact ? true : undefined
                 }
@@ -292,82 +349,100 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
                     <span className="h-px flex-1 bg-border" />
                   </div>
                 )}
-                <ConversationItem
-                  entry={entry}
-                  sessionId={session.id}
-                  injectedContextText={renderEntry.injectedContextText}
-                  turnStartedAt={
-                    entry.turnId
-                      ? (turnStartedAtById.get(entry.turnId) ?? null)
-                      : null
-                  }
-                  onApprove={
-                    isActionableApproval
-                      ? () => {
-                          setResolvedApprovalIds((current) => {
-                            const next = new Set(current)
-                            next.add(entry.id)
-                            return next
-                          })
-                          onApprove(
-                            session.id,
-                            entry.providerMeta.providerItemId ?? undefined,
-                          )
-                        }
-                      : undefined
-                  }
-                  onDeny={
-                    isActionableApproval
-                      ? () => {
-                          setResolvedApprovalIds(
-                            (current) => new Set([...current, entry.id]),
-                          )
-                          onDeny(
-                            session.id,
-                            entry.providerMeta.providerItemId ?? undefined,
-                          )
-                        }
-                      : undefined
-                  }
-                  onApproveSession={
-                    isActionableApproval
-                      ? () => {
-                          setResolvedApprovalIds((current) => {
-                            const next = new Set(current)
-                            next.add(entry.id)
-                            return next
-                          })
-                          onApprove(
-                            session.id,
-                            entry.providerMeta.providerItemId ?? undefined,
-                            { scope: 'session' },
-                          )
-                        }
-                      : undefined
-                  }
-                  onInputAnswer={
-                    isActionableInput
-                      ? (response, displayText) => {
-                          setResolvedInputIds((current) => {
-                            const next = new Set(current)
-                            next.add(entry.id)
-                            return next
-                          })
-                          onInputAnswer(
-                            session.id,
-                            entry.kind === 'input-request' &&
-                              entry.responseProviderItemId
-                              ? {
-                                  ...response,
-                                  providerItemId: entry.responseProviderItemId,
-                                }
-                              : response,
-                            displayText,
-                          )
-                        }
-                      : undefined
-                  }
-                />
+                {isSubagentWork(entry) &&
+                  !knownAgentIds.has(entry.agentRunId!) &&
+                  entry.kind !== 'tool-call' && (
+                    <div className="mb-1 truncate text-xs text-muted-foreground">
+                      {entry.agentAttribution?.description?.trim()
+                        ? `↳ ${entry.agentAttribution.description} (${entry.agentAttribution.agentType ?? 'unknown'})`
+                        : '↳ subagent'}
+                    </div>
+                  )}
+                {workMarker && (
+                  <ParallelWorkMarkerView
+                    marker={workMarker}
+                    onSelect={(id) => onParallelSelect?.(id)}
+                  />
+                )}
+                {!workMarker?.replace && (
+                  <ConversationItem
+                    entry={entry}
+                    sessionId={session.id}
+                    injectedContextText={renderEntry.injectedContextText}
+                    turnStartedAt={
+                      entry.turnId
+                        ? (turnStartedAtById.get(entry.turnId) ?? null)
+                        : null
+                    }
+                    onApprove={
+                      isActionableApproval
+                        ? () => {
+                            setResolvedApprovalIds((current) => {
+                              const next = new Set(current)
+                              next.add(entry.id)
+                              return next
+                            })
+                            onApprove(
+                              session.id,
+                              entry.providerMeta.providerItemId ?? undefined,
+                            )
+                          }
+                        : undefined
+                    }
+                    onDeny={
+                      isActionableApproval
+                        ? () => {
+                            setResolvedApprovalIds(
+                              (current) => new Set([...current, entry.id]),
+                            )
+                            onDeny(
+                              session.id,
+                              entry.providerMeta.providerItemId ?? undefined,
+                            )
+                          }
+                        : undefined
+                    }
+                    onApproveSession={
+                      isActionableApproval
+                        ? () => {
+                            setResolvedApprovalIds((current) => {
+                              const next = new Set(current)
+                              next.add(entry.id)
+                              return next
+                            })
+                            onApprove(
+                              session.id,
+                              entry.providerMeta.providerItemId ?? undefined,
+                              { scope: 'session' },
+                            )
+                          }
+                        : undefined
+                    }
+                    onInputAnswer={
+                      isActionableInput
+                        ? (response, displayText) => {
+                            setResolvedInputIds((current) => {
+                              const next = new Set(current)
+                              next.add(entry.id)
+                              return next
+                            })
+                            onInputAnswer(
+                              session.id,
+                              entry.kind === 'input-request' &&
+                                entry.responseProviderItemId
+                                ? {
+                                    ...response,
+                                    providerItemId:
+                                      entry.responseProviderItemId,
+                                  }
+                                : response,
+                              displayText,
+                            )
+                          }
+                        : undefined
+                    }
+                  />
+                )}
               </div>
             )
           })}

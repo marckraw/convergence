@@ -39,6 +39,7 @@ export type SessionAppBackend = Pick<
   | 'regenerateName'
   | 'setPrimarySurface'
   | 'setModelSelection'
+  | 'setEvidenceUpdateListener'
   | 'setSummaryUpdateListener'
   | 'setConversationPatchListener'
   | 'setQueuedInputPatchListener'
@@ -161,6 +162,10 @@ export class SessionAppService {
     input: { providerId: unknown; model: string | null; effort: unknown },
   ): Promise<Session> {
     return this.sessions.setModelSelection(sessionId, input)
+  }
+
+  onEvidenceUpdate(listener: (event: { sessionId: string }) => void): void {
+    this.sessions.setEvidenceUpdateListener(listener)
   }
 
   onSessionSummaryUpdate(listener: (summary: SessionSummary) => void): void {

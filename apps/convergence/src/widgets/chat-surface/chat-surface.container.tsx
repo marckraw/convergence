@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import type { FC } from 'react'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import {
@@ -15,7 +15,11 @@ import {
 } from '@/entities/session'
 import { switchToSession } from '@/features/command-center'
 import { ComposerContainer } from '@/features/composer'
-import { SessionConversationSurface } from '@/widgets/session-view'
+import {
+  SessionConversationSurface,
+  ParallelWork,
+  useParallelWork,
+} from '@/widgets/session-view'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { CheckSquare, Folder, MessageSquareText, Square } from 'lucide-react'
@@ -123,6 +127,32 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
       selectedSourceIds: [],
     })
 
+  const [parallelOpen, setParallelOpen] = useState(false)
+  const [parallelSelection, setParallelSelection] = useState<{
+    sessionId: string
+    id: string | null
+  } | null>(null)
+  const [parallelNavigation, setParallelNavigation] = useState<{
+    id: string
+    nonce: number
+  } | null>(null)
+  const parallelButton = useRef<HTMLButtonElement>(null)
+  const parallelInvoker = useRef<HTMLElement | null>(null)
+  const parallel = useParallelWork(activeSessionId, conversationItems)
+  const selectParallel = (id: string | null) => {
+    if (!parallelOpen && document.activeElement instanceof HTMLElement)
+      parallelInvoker.current = document.activeElement
+    if (activeSessionId)
+      setParallelSelection({ sessionId: activeSessionId, id })
+    setParallelOpen(true)
+  }
+  const closeParallel = () => {
+    setParallelOpen(false)
+    ;(parallelInvoker.current?.isConnected
+      ? parallelInvoker.current
+      : parallelButton.current
+    )?.focus()
+  }
   const session = sessions.find((entry) => entry.id === activeSessionId) ?? null
   const selectedSpace =
     spaces.find((entry) => entry.id === selectedSpaceId) ?? null
@@ -607,7 +637,26 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
         >
           <MessageSquareText className="h-4 w-4 shrink-0 text-muted-foreground" />
           <span className="truncate text-sm font-medium">{session.name}</span>
+          <Button
+            ref={parallelButton}
+            variant="ghost"
+            size="sm"
+            aria-expanded={parallelOpen}
+            onClick={() => {
+              if (parallelOpen) closeParallel()
+              else {
+                parallelInvoker.current = parallelButton.current
+                setParallelOpen(true)
+              }
+            }}
+          >
+            Parallel work
+            {session.parallelWork?.running
+              ? ` · ${session.parallelWork.running}`
+              : ''}
+          </Button>
           <AttentionIndicator
+            parallelWork={session.parallelWork}
             attention={session.attention}
             status={session.status}
           />
@@ -639,21 +688,51 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
         ) : null}
       </div>
 
-      <SessionConversationSurface
-        session={session}
-        conversationItems={conversationItems}
-        composerContext={{ kind: 'global', activeSessionId: session.id }}
-        onApprove={approveSession}
-        onDeny={denySession}
-        onInputAnswer={(sessionId, response, displayText) => {
-          void sendMessageToSession({
-            sessionId,
-            text: displayText,
-            deliveryMode: 'answer',
-            interactionResponse: response,
-          })
-        }}
-      />
+      <div className="relative flex min-h-0 flex-1">
+        <SessionConversationSurface
+          session={session}
+          conversationItems={conversationItems}
+          parallelRows={parallel.rows}
+          parallelLoading={!parallel.hasRecord}
+          parallelError={parallel.error}
+          onParallelRetry={parallel.retry}
+          onParallelSelect={selectParallel}
+          navigationTarget={parallelNavigation}
+          composerContext={{ kind: 'global', activeSessionId: session.id }}
+          onApprove={approveSession}
+          onDeny={denySession}
+          onInputAnswer={(sessionId, response, displayText) => {
+            void sendMessageToSession({
+              sessionId,
+              text: displayText,
+              deliveryMode: 'answer',
+              interactionResponse: response,
+            })
+          }}
+        />
+        <ParallelWork
+          key={session.id}
+          session={session}
+          rows={parallel.rows}
+          items={conversationItems}
+          open={parallelOpen}
+          selectedId={
+            parallelSelection?.sessionId === session.id
+              ? parallelSelection.id
+              : null
+          }
+          onSelect={selectParallel}
+          onClose={closeParallel}
+          onNavigate={(id) =>
+            setParallelNavigation((previous) => ({
+              id,
+              nonce: (previous?.nonce ?? 0) + 1,
+            }))
+          }
+          loading={parallel.loading}
+          error={parallel.error}
+        />
+      </div>
     </div>
   )
 }
