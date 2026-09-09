@@ -1,5 +1,11 @@
 # convergence
 
+## 0.51.0
+
+### Minor Changes
+
+- 5ff1e19: The harness's own facts on the strip: hooks, retries, denials, compactions, rate limits, MCP status.
+
 ## 0.50.1
 
 ### Patch Changes
