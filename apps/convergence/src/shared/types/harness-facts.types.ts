@@ -72,6 +72,7 @@ export type HarnessFact = {
         connected: number
         others: { name: string; status: string | null }[]
         omitted: number
+        omittedAlerts: number
       } | null
       plugins: { count: number; names: string[]; omitted: number } | null
       capabilities: { values: string[]; omitted: number } | null

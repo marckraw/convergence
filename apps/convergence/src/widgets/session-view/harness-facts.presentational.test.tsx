@@ -1,3 +1,5 @@
+import { readClaudeHarnessFact } from '../../../electron/backend/provider/claude-code/claude-harness.pure'
+import { readHarnessFactRow } from '../../../electron/backend/session/harness-fact-row.pure'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
@@ -117,6 +119,7 @@ it.each([
           total: 1,
           connected: 0,
           others: [{ name: 'server', status }],
+          omittedAlerts: 0,
           omitted: 0,
         },
         plugins: null,
@@ -165,6 +168,7 @@ it('R2triple bounded init stays useful — mutation hide omitted counts or alert
         total: 121,
         connected: 1,
         others: [{ name: 'linear', status: 'failed' }],
+        omittedAlerts: 0,
         omitted: 104,
       },
       plugins: { count: 120, names: ['plugin'], omitted: 104 },
@@ -189,7 +193,9 @@ it('R2triple bounded init stays useful — mutation hide omitted counts or alert
   })
   expect({
     alert: screen.getByTestId('harness-pill').getAttribute('data-alert'),
-    servers: screen.queryByText('… and 104 more not connected')?.textContent,
+    servers: screen.queryByText(
+      '… and 104 more not connected (0 failed or needing auth)',
+    )?.textContent,
     plugins: screen.queryByText('… and 104 more plugins')?.textContent,
     capabilities: screen.queryByText(/88 more capabilities/)?.textContent,
     tools: screen.queryByText('Tools: 7')?.textContent,
@@ -199,7 +205,7 @@ it('R2triple bounded init stays useful — mutation hide omitted counts or alert
       ?.textContent,
   }).toEqual({
     alert: 'true',
-    servers: '… and 104 more not connected',
+    servers: '… and 104 more not connected (0 failed or needing auth)',
     plugins: '… and 104 more plugins',
     capabilities: 'Capabilities: control · 88 more capabilities',
     tools: 'Tools: 7',
@@ -308,4 +314,120 @@ it('R2triple cuts are disclosed beside their text — mutation hide cut indicato
     retry: 'Retry text truncated',
     denial: 'Bash · text truncated · cut',
   })
+})
+
+it('RUN61 r5 pending then failed names linear — mutation remove priority sort turns red', () => {
+  const init = readClaudeHarnessFact(
+    {
+      type: 'system',
+      subtype: 'init',
+      mcp_servers: [
+        ...Array.from({ length: 16 }, (_, i) => ({
+          name: `pending-${i}`,
+          status: 'pending',
+        })),
+        { name: 'linear', status: 'failed' },
+      ],
+    },
+    'now',
+  )
+  const facts: SessionHarnessFacts = {
+    turns: [],
+    currentTurn: null,
+    compactions: [],
+    rateLimit: null,
+    init: init?.kind === 'harness.init' ? init : null,
+  }
+  render(
+    <HarnessFactsView
+      facts={facts}
+      error={null}
+      loading={false}
+      onRetry={vi.fn()}
+    />,
+  )
+  fireEvent.pointerDown(screen.getByTestId('harness-pill'), {
+    button: 0,
+    ctrlKey: false,
+    pointerType: 'mouse',
+  })
+  expect({
+    alert: screen.getByTestId('harness-pill').getAttribute('data-alert'),
+    linear: screen.queryByText('linear · failed')?.textContent,
+    overflow: screen.queryByText(
+      '… and 1 more not connected (0 failed or needing auth)',
+    )?.textContent,
+  }).toEqual({
+    alert: 'true',
+    linear: 'linear · failed',
+    overflow: '… and 1 more not connected (0 failed or needing auth)',
+  })
+})
+it('RUN61 r5 omitted alerts alone remain visible — mutation ignore omittedAlerts turns red', () => {
+  const init = readClaudeHarnessFact(
+    { type: 'system', subtype: 'init', mcp_servers: [] },
+    'now',
+  )
+  if (init?.kind !== 'harness.init') throw Error('fixture init')
+  // Isolate the omitted-count arm independently of the named-row arm.
+  init.mcpServers = {
+    total: 2,
+    connected: 0,
+    others: [],
+    omitted: 2,
+    omittedAlerts: 2,
+  }
+  const facts: SessionHarnessFacts = {
+    turns: [],
+    currentTurn: null,
+    compactions: [],
+    rateLimit: null,
+    init,
+  }
+  render(
+    <HarnessFactsView
+      facts={facts}
+      error={null}
+      loading={false}
+      onRetry={vi.fn()}
+    />,
+  )
+  fireEvent.pointerDown(screen.getByTestId('harness-pill'), {
+    button: 0,
+    ctrlKey: false,
+    pointerType: 'mouse',
+  })
+  expect({
+    alert: screen.getByTestId('harness-pill').getAttribute('data-alert'),
+    overflow: screen.queryByText(
+      '… and 2 more not connected (2 failed or needing auth)',
+    )?.textContent,
+  }).toEqual({
+    alert: 'true',
+    overflow: '… and 2 more not connected (2 failed or needing auth)',
+  })
+})
+it('RUN61 r5 raw init placeholder is shown — mutation drop raw mapping turns red', () => {
+  const init = readHarnessFactRow('system', { truncated: true }, 'now', 'init')
+  const facts: SessionHarnessFacts = {
+    turns: [],
+    currentTurn: null,
+    compactions: [],
+    rateLimit: null,
+    init: init?.kind === 'harness.init' ? init : null,
+  }
+  render(
+    <HarnessFactsView
+      facts={facts}
+      error={null}
+      loading={false}
+      onRetry={vi.fn()}
+    />,
+  )
+  fireEvent.pointerDown(screen.getByTestId('harness-pill'), {
+    button: 0,
+    ctrlKey: false,
+    pointerType: 'mouse',
+  })
+  expect(screen.queryByText('Harness record truncated')).not.toBeNull()
 })

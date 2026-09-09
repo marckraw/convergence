@@ -175,6 +175,7 @@ it.each([
         total: 1,
         connected: 0,
         others: [{ name: 'linear', status: 'failed' }],
+        omittedAlerts: 0,
         omitted: 0,
       },
       plugins: { count: 1, names: ['plug'], omitted: 0 },
@@ -278,6 +279,7 @@ it.each(['x', '😀', '"', '\u001b'])(
         total: 121,
         connected: 1,
         others: expect.any(Array),
+        omittedAlerts: 0,
         omitted: 104,
       },
       plugins: { count: 120, names: expect.any(Array), omitted: 104 },
@@ -440,3 +442,83 @@ it.each([
     ).toBeLessThanOrEqual(4096)
   },
 )
+
+it('RUN61 r5 alerts precede pending in stable wire order — mutation remove priority sort turns red', () => {
+  const fact = readClaudeHarnessFact(
+    {
+      type: 'system',
+      subtype: 'init',
+      mcp_servers: [
+        ...Array.from({ length: 16 }, (_, i) => ({
+          name: `pending-${i}`,
+          status: 'pending',
+        })),
+        { name: 'linear', status: 'failed' },
+        { name: 'auth', status: 'needs-auth' },
+        { name: 'second-failure', status: 'failed' },
+      ],
+    },
+    'now',
+  )
+  expect(fact).toMatchObject({
+    mcpServers: {
+      total: 19,
+      connected: 0,
+      others: [
+        { name: 'linear', status: 'failed' },
+        { name: 'auth', status: 'needs-auth' },
+        { name: 'second-failure', status: 'failed' },
+        ...Array.from({ length: 13 }, (_, i) => ({
+          name: `pending-${i}`,
+          status: 'pending',
+        })),
+      ],
+      omitted: 3,
+      omittedAlerts: 0,
+    },
+  })
+})
+it('RUN61 r5 omitted alerts are counted — mutation discard overflow alert count turns red', () => {
+  const fact = readClaudeHarnessFact(
+    {
+      type: 'system',
+      subtype: 'init',
+      mcp_servers: Array.from({ length: 18 }, (_, i) => ({
+        name: `server-${i}`,
+        status: i % 2 ? 'needs-auth' : 'failed',
+      })),
+    },
+    'now',
+  )
+  expect(fact).toMatchObject({
+    mcpServers: { total: 18, omitted: 2, omittedAlerts: 2 },
+  })
+})
+it('RUN61 r5 nameless servers and plugins remain visible — mutation filter unnamed entries turns red', () => {
+  const fact = readClaudeHarnessFact(
+    {
+      type: 'system',
+      subtype: 'init',
+      mcp_servers: [
+        { status: 'failed' },
+        { name: '', status: 'pending' },
+        { status: 'connected' },
+      ],
+      plugins: [{}, { name: '' }, { name: 'named' }],
+    },
+    'now',
+  )
+  expect(fact).toMatchObject({
+    mcpServers: {
+      total: 3,
+      connected: 1,
+      others: [
+        { name: 'unnamed', status: 'failed' },
+        { name: 'unnamed', status: 'pending' },
+      ],
+      omitted: 0,
+      omittedAlerts: 0,
+    },
+    plugins: { count: 3, names: ['unnamed', 'unnamed', 'named'], omitted: 0 },
+  })
+})

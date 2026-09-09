@@ -167,6 +167,7 @@ it('R3 session facts retain compactions and latest init and rate limit — mutat
       total: 1,
       connected: 0,
       others: [{ name: 'linear', status: 'failed' }],
+      omittedAlerts: 0,
       omitted: 0,
     },
     plugins: { count: 0, names: [], omitted: 0 },

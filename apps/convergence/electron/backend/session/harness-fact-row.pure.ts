@@ -19,13 +19,17 @@ export function readHarnessFactRow(
   type: string,
   payload: unknown,
   at: string,
+  subtype?: string | null,
 ): HarnessEvent['fact'] | null {
   const record = claudeRecord(payload)
-  if (record?.truncated === true && Object.hasOwn(placeholderSources, type)) {
+  if (record?.truncated === true) {
     const fact = readClaudeHarnessFact(
-      placeholderSources[type as HarnessFact['kind']],
+      Object.hasOwn(placeholderSources, type)
+        ? placeholderSources[type as HarnessFact['kind']]
+        : { type, subtype },
       at,
-    )!
+    )
+    if (!fact) return null
     if (fact.kind === 'harness.retry')
       return { kind: fact.kind, phase: 'unknown', truncated: true, at }
     if (fact.kind === 'harness.hook')

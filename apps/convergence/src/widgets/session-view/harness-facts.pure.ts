@@ -23,7 +23,8 @@ export function harnessPill(facts: SessionHarnessFacts | null): {
       retry?.state === 'in-flight' ||
       !!facts?.init?.mcpServers?.others.some((server) =>
         isMcpAlertStatus(server.status),
-      ),
+      ) ||
+      (facts?.init?.mcpServers?.omittedAlerts ?? 0) > 0,
   }
 }
 export function compactionLabel(

@@ -236,7 +236,7 @@ export function HarnessFactsView({
                   </p>
                 ))}
                 {init.mcpServers.omitted > 0 && (
-                  <p>… and {init.mcpServers.omitted} more not connected</p>
+                  <p>{`… and ${init.mcpServers.omitted} more not connected (${init.mcpServers.omittedAlerts} failed or needing auth)`}</p>
                 )}
               </div>
             )}

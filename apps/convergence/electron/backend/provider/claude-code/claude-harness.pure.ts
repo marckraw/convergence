@@ -123,14 +123,20 @@ export function readClaudeHarnessFact(
   }
   if (e.subtype === 'init') {
     const servers = Array.isArray(e.mcp_servers)
-      ? e.mcp_servers.flatMap((value) => {
+      ? e.mcp_servers.map((value) => {
           const r = claudeRecord(value),
-            name = claudeString(r?.name)
-          return name ? [{ name, status: claudeString(r?.status) }] : []
+            name = claudeString(r?.name) ?? 'unnamed'
+          return { name, status: claudeString(r?.status) }
         })
       : null
+    const isAlert = (status: string | null) =>
+      status === 'failed' || status === 'needs-auth'
     const others =
-      servers?.filter((server) => server.status !== 'connected') ?? []
+      servers
+        ?.filter((server) => server.status !== 'connected')
+        .sort(
+          (a, b) => Number(isAlert(b.status)) - Number(isAlert(a.status)),
+        ) ?? []
     const plugins = Array.isArray(e.plugins) ? e.plugins : null
     const capabilities = strings(e.capabilities)
     return boundedFact({
@@ -148,15 +154,24 @@ export function readClaudeHarnessFact(
               status: text('mcpServers', server.status),
             })),
             omitted: Math.max(0, others.length - 16),
+            omittedAlerts: others
+              .slice(16)
+              .filter((server) => isAlert(server.status)).length,
           }
         : null,
       plugins: plugins
         ? {
             count: plugins.length,
-            names: plugins.slice(0, 16).flatMap((value) => {
-              const name = text('plugins', claudeRecord(value)?.name, 48)
-              return name === null ? [] : [name]
-            }),
+            names: plugins
+              .slice(0, 16)
+              .map(
+                (value) =>
+                  text(
+                    'plugins',
+                    claudeString(claudeRecord(value)?.name) ?? 'unnamed',
+                    48,
+                  )!,
+              ),
             omitted: Math.max(0, plugins.length - 16),
           }
         : null,

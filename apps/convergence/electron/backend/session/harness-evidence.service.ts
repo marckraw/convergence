@@ -231,18 +231,19 @@ export class HarnessEvidenceService {
     }))
     const rows = this.db
       .prepare(
-        'SELECT sequence,type,payload_json AS payload,created_at AS at FROM session_harness_events WHERE session_id=? ORDER BY sequence',
+        'SELECT sequence,type,subtype,payload_json AS payload,created_at AS at FROM session_harness_events WHERE session_id=? ORDER BY sequence',
       )
       .all(sessionId) as {
       sequence: number
       type: string
+      subtype: string | null
       payload: string
       at: string
     }[]
     const latestTurns = [...turns].reverse()
     const events: HarnessEvent[] = rows.flatMap((row) => {
       const payload = JSON.parse(row.payload)
-      const fact = readHarnessFactRow(row.type, payload, row.at)
+      const fact = readHarnessFactRow(row.type, payload, row.at, row.subtype)
       if (!fact) return []
       const turnId =
         typeof payload.turnId === 'string'

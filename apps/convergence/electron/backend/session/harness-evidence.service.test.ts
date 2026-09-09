@@ -611,9 +611,29 @@ it('R2triple failed MCP survives 120 plugins through apply and pill — mutation
         total: 1,
         connected: 0,
         others: [{ name: 'linear', status: 'failed' }],
+        omittedAlerts: 0,
         omitted: 0,
       },
     },
   })
   expect(facts.init?.plugins?.names).toHaveLength(16)
+})
+it('RUN61 r5 raw init subtype reaches the placeholder — mutation omit SELECT subtype turns red', () => {
+  const { db, service } = bed()
+  db.prepare(
+    'INSERT INTO session_harness_events(session_id,sequence,type,subtype,payload_json,created_at) VALUES(?,?,?,?,?,?)',
+  ).run(
+    'session',
+    1,
+    'system',
+    'init',
+    JSON.stringify({ truncated: true }),
+    '2026-09-09T00:00:01.000Z',
+  )
+  expect(service.harnessFacts('session').init).toMatchObject({
+    kind: 'harness.init',
+    truncated: true,
+    mcpServers: null,
+    at: '2026-09-09T00:00:01.000Z',
+  })
 })

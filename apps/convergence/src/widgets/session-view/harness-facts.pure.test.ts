@@ -59,6 +59,7 @@ it('R3 disconnected MCP is red — mutation ignore MCP status', () => {
           total: 1,
           connected: 0,
           others: [{ name: 'linear', status: 'failed' }],
+          omittedAlerts: 0,
           omitted: 0,
         },
       },
@@ -113,6 +114,7 @@ it.each([
             total: 1,
             connected: 0,
             others: [{ name: 'server', status }],
+            omittedAlerts: 0,
             omitted: 0,
           },
         },
@@ -132,4 +134,35 @@ it('small compaction placement searches stable time order — mutation search re
     [fact],
   )
   expect([...placed.before]).toEqual([['tie-first', [fact]]])
+})
+it('RUN61 r5 omitted alert count controls the pill — mutation ignore omittedAlerts turns red', () => {
+  const alerts = [0, 2].map(
+    (omittedAlerts) =>
+      harnessPill({
+        turns: [],
+        currentTurn: null,
+        compactions: [],
+        rateLimit: null,
+        init: {
+          kind: 'harness.init',
+          at: 'now',
+          claudeCodeVersion: null,
+          model: null,
+          permissionMode: null,
+          mcpServers: {
+            total: 2,
+            connected: 0,
+            others: [],
+            omitted: 2,
+            omittedAlerts,
+          },
+          plugins: null,
+          capabilities: null,
+          tools: null,
+          skills: null,
+          slashCommands: null,
+        },
+      }).alert,
+  )
+  expect(alerts).toEqual([false, true])
 })
