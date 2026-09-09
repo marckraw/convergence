@@ -5,6 +5,7 @@ import type {
 } from '../types/harness-evidence.types'
 import {
   buildParallelWork,
+  parallelWorkRowState,
   countParallelWork,
   parallelWorkStatus,
   isSubagentWork,
@@ -168,4 +169,22 @@ it('H3 a backend link merges without renderer items — mutation derive join fro
     ['provisional', 'harness-agent'],
     ['unrelated', 'unrelated'],
   ])
+})
+
+it('H2 merged-row accessor uses terminal task state and both identities — mutation prefer the running run turns red', () => {
+  const terminal = {
+    ...task('harness', 'local_agent'),
+    status: 'completed' as const,
+    endedAt: '2026-09-09T00:01:00Z',
+  }
+  const row = buildParallelWork(
+    [{ ...run('provisional', 1), taskId: 'harness' }],
+    [terminal],
+    [],
+  )[0]!
+  expect(parallelWorkRowState(row)).toEqual({
+    fact: terminal,
+    stopId: 'harness',
+    ids: ['provisional', 'harness'],
+  })
 })

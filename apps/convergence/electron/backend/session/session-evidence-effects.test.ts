@@ -8,8 +8,11 @@ import { SessionService } from './session.service'
 import { HarnessEvidenceService } from './harness-evidence.service'
 
 const services: SessionService[] = []
-afterEach(() => {
-  for (const service of services.splice(0)) service.disposeAll()
+afterEach(async () => {
+  for (const service of services.splice(0)) {
+    service['flushPendingConversationPatchesForSession']('session')
+    await service.disposeAll()
+  }
   vi.restoreAllMocks()
   vi.useRealTimers()
   closeDatabase()
@@ -284,14 +287,25 @@ it('M6 deleting inside the coalescing window leaves no timer, cache or notificat
     at: 'now',
     patch: { status: 'running' },
   })
+  const evidenceTimer = service['evidenceUpdateTimers'].get('session')
+  const clear = vi.spyOn(globalThis, 'clearTimeout')
   service.delete('session')
   const timerAfterDelete = service['evidenceUpdateTimers'].has('session')
+  const evidenceTimerCleared = clear.mock.calls.some(
+    ([timer]) => timer === evidenceTimer,
+  )
   vi.advanceTimersByTime(250)
   expect({
     timerAfterDelete,
+    evidenceTimerCleared,
     cached: service['parallelWorkCounts'].has('session'),
     notifications: notify.mock.calls,
-  }).toEqual({ timerAfterDelete: false, cached: false, notifications: [] })
+  }).toEqual({
+    timerAfterDelete: false,
+    evidenceTimerCleared: true,
+    cached: false,
+    notifications: [],
+  })
 })
 
 it('M6 a scheduled flush whose row disappeared cannot recreate evidence state — mutation omit row-existence guard turns red', () => {

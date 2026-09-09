@@ -702,6 +702,7 @@ export const SessionView: FC = () => {
           session={session}
           conversationItems={activeConversation}
           parallelRows={parallel.rows}
+          parallelLoading={parallel.loading}
           onParallelSelect={selectParallel}
           navigationTarget={parallelNavigation}
           composerContext={

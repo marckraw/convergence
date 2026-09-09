@@ -196,7 +196,7 @@ it('L9 descendant count is collapsed-only and decorations are cached across tick
   const items: [] = []
   const input = { rows, items, now: 0, onSelect: vi.fn(), onClose: vi.fn() }
   const { rerender } = render(<ParallelWorkPanel {...input} />)
-  const expandedCount = !!screen.queryByText('1 descendants running')
+  const expandedCount = !!screen.queryByText(/descendants running/)
   const first = [descendants.mock.calls.length, decisions.mock.calls.length]
   rerender(<ParallelWorkPanel {...input} now={1000} />)
   const next = [descendants.mock.calls.length, decisions.mock.calls.length]

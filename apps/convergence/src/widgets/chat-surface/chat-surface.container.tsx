@@ -693,6 +693,7 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
           session={session}
           conversationItems={conversationItems}
           parallelRows={parallel.rows}
+          parallelLoading={parallel.loading}
           onParallelSelect={selectParallel}
           navigationTarget={parallelNavigation}
           composerContext={{ kind: 'global', activeSessionId: session.id }}

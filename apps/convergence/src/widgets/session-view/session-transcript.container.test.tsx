@@ -845,40 +845,54 @@ it.each([
   },
 )
 
-it('H1 unmatched attribution stays visible with its label, including while rows load — mutation drop all attributed work turns red', () => {
-  const items = ['known', 'orphan'].map((id, i) => ({
-    ...assistantMessage({ id, sequence: i + 1, text: `${id} work` }),
-    agentRunId: id,
-    agentAttribution: { description: `${id} agent`, agentType: 'Explore' },
-  }))
-  const props = {
-    session: baseSession,
-    conversationItems: items,
-    onApprove: vi.fn(),
-    onDeny: vi.fn(),
-    onInputAnswer: vi.fn(),
-  }
-  const { rerender } = render(
-    <SessionTranscript
-      {...props}
-      parallelRows={[
-        {
-          id: 'known',
-          kind: 'agent',
-          parentId: null,
-          run: { id: 'known', spawnedByItemId: 'spawn' } as SessionAgentRun,
-        },
-      ]}
-    />,
-  )
-  const loaded = {
-    known: !!screen.queryByText('known work'),
-    orphan: !!screen.queryByText('orphan work'),
-    label: !!screen.queryByText('↳ orphan agent (Explore)'),
-  }
-  rerender(<SessionTranscript {...props} parallelRows={[]} />)
-  expect({ loaded, loading: !!screen.queryByText('known work') }).toEqual({
-    loaded: { known: false, orphan: true, label: true },
-    loading: true,
-  })
-})
+it.each([
+  { state: 'unsettled', loading: true, matched: false, visible: false },
+  { state: 'settled matched', loading: false, matched: true, visible: false },
+  { state: 'settled unmatched', loading: false, matched: false, visible: true },
+])(
+  'M4′ $state preserves main work and partitions attributed work — mutations show unsettled work or hide settled orphans turn red',
+  ({ loading, matched, visible }) => {
+    const items = [
+      assistantMessage({
+        id: 'main',
+        sequence: 1,
+        text: 'main work immediately',
+      }),
+      {
+        ...assistantMessage({ id: 'child', sequence: 2, text: 'child work' }),
+        agentRunId: 'child',
+        agentAttribution: { description: 'child agent', agentType: 'Explore' },
+      },
+    ]
+    render(
+      <SessionTranscript
+        session={baseSession}
+        conversationItems={items}
+        parallelLoading={loading}
+        parallelRows={
+          matched
+            ? [
+                {
+                  id: 'child',
+                  kind: 'agent',
+                  parentId: null,
+                  run: {
+                    id: 'child',
+                    spawnedByItemId: 'spawn',
+                  } as SessionAgentRun,
+                },
+              ]
+            : []
+        }
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
+      />,
+    )
+    expect({
+      main: !!screen.queryByText('main work immediately'),
+      child: !!screen.queryByText('child work'),
+      label: !!screen.queryByText('↳ child agent (Explore)'),
+    }).toEqual({ main: true, child: visible, label: visible })
+  },
+)

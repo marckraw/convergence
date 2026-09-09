@@ -26,6 +26,7 @@ import { UiResponsePanel } from './ui-response-panel.presentational'
 
 interface SessionConversationSurfaceProps {
   parallelRows?: ParallelWorkRow[]
+  parallelLoading?: boolean
   onParallelSelect?: (id: string) => void
   navigationTarget?: { id: string; nonce: number } | null
   session: Session
@@ -50,6 +51,7 @@ export const SessionConversationSurface: FC<
 > = ({
   session,
   parallelRows,
+  parallelLoading,
   onParallelSelect,
   navigationTarget,
   conversationItems,
@@ -66,13 +68,15 @@ export const SessionConversationSurface: FC<
     () =>
       findUiResponseArtifacts(
         conversationItems,
-        new Set(
-          (parallelRows ?? [])
-            .filter((row) => row.kind === 'agent')
-            .flatMap((row) => parallelWorkRowState(row).ids),
-        ),
+        parallelLoading
+          ? undefined
+          : new Set(
+              (parallelRows ?? [])
+                .filter((row) => row.kind === 'agent')
+                .flatMap((row) => parallelWorkRowState(row).ids),
+            ),
       ),
-    [conversationItems, parallelRows],
+    [conversationItems, parallelRows, parallelLoading],
   )
   const artifact =
     (selectedArtifactItemId
@@ -87,6 +91,7 @@ export const SessionConversationSurface: FC<
     sessionId: session.id,
     session,
     parallelRows,
+    parallelLoading,
     onParallelSelect,
     navigationTarget,
     conversationItems,
@@ -121,6 +126,7 @@ export const SessionConversationSurface: FC<
 
 interface RenderConversationColumnInput {
   parallelRows?: ParallelWorkRow[]
+  parallelLoading?: boolean
   onParallelSelect?: (id: string) => void
   navigationTarget?: { id: string; nonce: number } | null
   sessionId: string
@@ -147,6 +153,7 @@ function renderConversationColumn({
   sessionId,
   session,
   parallelRows,
+  parallelLoading,
   onParallelSelect,
   navigationTarget,
   conversationItems,
@@ -163,6 +170,7 @@ function renderConversationColumn({
       <SessionTranscript
         session={session}
         parallelRows={parallelRows}
+        parallelLoading={parallelLoading}
         onParallelSelect={onParallelSelect}
         navigationTarget={navigationTarget}
         conversationItems={conversationItems}
@@ -207,7 +215,7 @@ function renderComposerArea(
 
 function findUiResponseArtifacts(
   items: ConversationItem[],
-  knownAgentIds: ReadonlySet<string>,
+  knownAgentIds: ReadonlySet<string> | undefined,
 ): UiResponseArtifact[] {
   return items.flatMap((item) => {
     if (

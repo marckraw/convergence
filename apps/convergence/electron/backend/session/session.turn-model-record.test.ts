@@ -123,6 +123,7 @@ describe('a transcript that mixes models records it (MAR-2551)', () => {
   })
 
   afterEach(async () => {
+    await service.disposeAll()
     // Turn finalization is debounced and async; letting it land after the
     // database closes turns a green run into a wall of unhandled rejections.
     for (const id of sessionIds) await turnCapture.flushPendingEnd(id)

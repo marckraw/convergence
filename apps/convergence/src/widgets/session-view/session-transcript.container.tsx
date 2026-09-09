@@ -28,6 +28,7 @@ import { isTranscriptNearBottom } from './session-transcript-scroll.pure'
 
 interface SessionTranscriptProps {
   parallelRows?: ParallelWorkRow[]
+  parallelLoading?: boolean
   onParallelSelect?: (id: string) => void
   navigationTarget?: { id: string; nonce: number } | null
   session: Session
@@ -54,6 +55,7 @@ const TRANSCRIPT_OVERSCAN = 6
 export const SessionTranscript: FC<SessionTranscriptProps> = ({
   session,
   parallelRows = EMPTY_PARALLEL_ROWS,
+  parallelLoading = false,
   onParallelSelect,
   navigationTarget,
   conversationItems,
@@ -87,8 +89,12 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
   }, [conversationItems])
 
   const workMarkers = useMemo(
-    () => parallelWorkMarkers(conversationItems, parallelRows),
-    [conversationItems, parallelRows],
+    () =>
+      parallelWorkMarkers(
+        conversationItems,
+        parallelLoading ? [] : parallelRows,
+      ),
+    [conversationItems, parallelRows, parallelLoading],
   )
   const knownAgentIds = useMemo(
     () =>
@@ -104,10 +110,13 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
       buildConversationRenderPlan(
         conversationItems.filter(
           (item) =>
-            !isSubagentWork(item, knownAgentIds) || workMarkers.has(item.id),
+            !isSubagentWork(
+              item,
+              parallelLoading ? undefined : knownAgentIds,
+            ) || workMarkers.has(item.id),
         ),
       ),
-    [conversationItems, workMarkers, knownAgentIds],
+    [conversationItems, workMarkers, knownAgentIds, parallelLoading],
   )
   const actionableApprovalIds = useMemo(() => {
     if (session.status !== 'running' && session.status !== 'completed') {
