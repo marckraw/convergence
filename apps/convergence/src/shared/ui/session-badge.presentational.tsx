@@ -1,3 +1,7 @@
+import {
+  parallelWorkStatus,
+  type ParallelWorkCounts,
+} from '@/shared/lib/parallel-work.pure'
 import type { FC } from 'react'
 import {
   Loader2,
@@ -9,15 +13,28 @@ import {
 import { cn } from '@/shared/lib/cn.pure'
 
 interface SessionBadgeProps {
+  parallelWork?: ParallelWorkCounts
+  status?: string
   attention: string
   className?: string
 }
 
 export const SessionBadge: FC<SessionBadgeProps> = ({
   attention,
+  parallelWork,
+  status = 'completed',
   className,
 }) => {
   const iconClassName = cn('size-3 shrink-0', className)
+
+  const parallel = parallelWorkStatus({ status, attention, parallelWork })
+  if (parallel)
+    return (
+      <Loader2
+        aria-label={parallel}
+        className={cn(iconClassName, 'opacity-50 text-muted-foreground')}
+      />
+    )
 
   switch (attention) {
     case 'needs-approval':

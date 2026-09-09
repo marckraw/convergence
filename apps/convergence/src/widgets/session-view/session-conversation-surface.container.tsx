@@ -1,3 +1,7 @@
+import {
+  isSubagentWork,
+  type ParallelWorkRow,
+} from '@/shared/lib/parallel-work.pure'
 import { useMemo, useState, type FC, type ReactNode } from 'react'
 import type {
   ConversationItem,
@@ -20,6 +24,9 @@ import { SessionTranscript } from './session-transcript.container'
 import { UiResponsePanel } from './ui-response-panel.presentational'
 
 interface SessionConversationSurfaceProps {
+  parallelRows?: ParallelWorkRow[]
+  onParallelSelect?: (id: string) => void
+  navigationTarget?: { id: string; nonce: number } | null
   session: Session
   conversationItems: ConversationItem[]
   composerContext: ComposerSessionContext | null
@@ -41,6 +48,9 @@ export const SessionConversationSurface: FC<
   SessionConversationSurfaceProps
 > = ({
   session,
+  parallelRows,
+  onParallelSelect,
+  navigationTarget,
   conversationItems,
   composerContext,
   composerDisabledReason = null,
@@ -67,6 +77,9 @@ export const SessionConversationSurface: FC<
   const conversationColumn = renderConversationColumn({
     sessionId: session.id,
     session,
+    parallelRows,
+    onParallelSelect,
+    navigationTarget,
     conversationItems,
     composerContext,
     composerDisabledReason,
@@ -98,6 +111,9 @@ export const SessionConversationSurface: FC<
 }
 
 interface RenderConversationColumnInput {
+  parallelRows?: ParallelWorkRow[]
+  onParallelSelect?: (id: string) => void
+  navigationTarget?: { id: string; nonce: number } | null
   sessionId: string
   session: Session
   conversationItems: ConversationItem[]
@@ -121,6 +137,9 @@ interface RenderConversationColumnInput {
 function renderConversationColumn({
   sessionId,
   session,
+  parallelRows,
+  onParallelSelect,
+  navigationTarget,
   conversationItems,
   composerContext,
   composerDisabledReason,
@@ -134,6 +153,9 @@ function renderConversationColumn({
     <div className="flex min-h-0 flex-1 flex-col">
       <SessionTranscript
         session={session}
+        parallelRows={parallelRows}
+        onParallelSelect={onParallelSelect}
+        navigationTarget={navigationTarget}
         conversationItems={conversationItems}
         selectedUiResponseItemId={selectedUiResponseItemId}
         onUiResponseArtifactSelect={onUiResponseArtifactSelect}
@@ -178,7 +200,12 @@ function findUiResponseArtifacts(
   items: ConversationItem[],
 ): UiResponseArtifact[] {
   return items.flatMap((item) => {
-    if (!item || item.kind !== 'message' || item.actor !== 'assistant') {
+    if (
+      !item ||
+      isSubagentWork(item) ||
+      item.kind !== 'message' ||
+      item.actor !== 'assistant'
+    ) {
       return []
     }
 

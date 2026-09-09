@@ -31,7 +31,7 @@ afterEach(async () => {
   resetDatabase()
 })
 
-it('records attributed calls, links, tasks and cost through the real service — drop agentRunId, relatedItemId, streamed uuid, retain an inherited task id, or clear the data-only error state (no renderer change) turns red', async () => {
+it('records attributed calls, links, tasks and cost through the real service — drop agentRunId, relatedItemId, streamed uuid, retain an inherited task id, clear the data-only error state, mix child thinking into main, or drop launch/return metadata turns red', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'run54-record-'))
   const accountDir = join(dir, 'account')
   const child = Object.assign(new EventEmitter(), {
@@ -208,6 +208,33 @@ it('records attributed calls, links, tasks and cost through the real service —
       delta: { type: 'text_delta', text: 'answer' },
     },
   })
+  // R3′ mutation: let a child's stream use the main buffers, or suppress its
+  // full messages with the main turn's deduplication flag, and this tape is red.
+  send({
+    type: 'stream_event',
+    parent_tool_use_id: 'spawn-tool',
+    event: {
+      type: 'content_block_delta',
+      delta: { type: 'text_delta', text: 'child first' },
+    },
+  })
+  for (const text of ['child first', 'child second'])
+    send({
+      type: 'assistant',
+      parent_tool_use_id: 'spawn-tool',
+      message: {
+        content: [
+          ...(text === 'child first'
+            ? [{ type: 'thinking', thinking: 'child reasoning' }]
+            : []),
+          { type: 'text', text },
+        ],
+      },
+    })
+  send({
+    type: 'assistant',
+    message: { content: [{ type: 'thinking', thinking: 'main reasoning' }] },
+  })
   send({
     type: 'user',
     message: {
@@ -241,6 +268,26 @@ it('records attributed calls, links, tasks and cost through the real service —
     (item) => item.kind === 'tool-result' && item.outputText === 'fixture',
   )
   expect({
+    thinking: items
+      .filter((item) => item.kind === 'thinking')
+      .map((item) => ({
+        text: item.kind === 'thinking' ? item.text : '',
+        agent: item.agentRunId ?? null,
+      })),
+    returnMoment: items.find(
+      (item) =>
+        item.kind === 'tool-result' &&
+        item.providerMeta.providerItemId === 'agent-result-event',
+    )?.providerMeta.providerEventType,
+    taskMoments: items
+      .filter((item) => item.kind === 'note' && item.taskId === 'bash-task')
+      .map((item) => item.providerMeta.providerEventType),
+    attributedText: items
+      .filter((item) => item.kind === 'message' && item.actor === 'assistant')
+      .map((item) => ({
+        text: item.kind === 'message' ? item.text : '',
+        agent: item.agentRunId ?? null,
+      })),
     errorState: items.find(
       (item) =>
         item.kind === 'tool-result' && item.outputText === 'failure data',
@@ -286,6 +333,17 @@ it('records attributed calls, links, tasks and cost through the real service —
       .prepare('SELECT cost_usd FROM session_turns WHERE session_id=?')
       .get(session.id),
   }).toEqual({
+    thinking: [
+      { text: 'child reasoning', agent: 'agent-id' },
+      { text: 'main reasoning', agent: null },
+    ],
+    returnMoment: 'tool_result.completed',
+    taskMoments: ['harness.task', 'harness.task.terminal'],
+    attributedText: [
+      { text: 'answer', agent: null },
+      { text: 'child first', agent: 'agent-id' },
+      { text: 'child second', agent: 'agent-id' },
+    ],
     errorState: 'error',
     stream: 'stream-text-event',
     label: { description: 'Read fixture', agentType: 'Explore' },

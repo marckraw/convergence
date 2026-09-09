@@ -71,6 +71,8 @@ vi.mock('@/features/command-center', () => ({
 }))
 
 vi.mock('@/widgets/session-view', () => ({
+  useParallelWork: () => ({ rows: [], error: null, loading: false }),
+  ParallelWork: () => null,
   SessionConversationSurface: ({
     session,
     conversationItems,
@@ -193,6 +195,23 @@ describe('ChatSurface', () => {
 
     expect(screen.getByText('Planning chat')).toBeInTheDocument()
     expect(screen.queryByText('Running')).not.toBeInTheDocument()
+  })
+
+  it('R5 threads persisted background counts to the header — mutation omit parallelWork prop turns red', () => {
+    useSessionStore.setState({
+      globalChatSessions: [
+        {
+          ...globalSession,
+          status: 'completed',
+          attention: 'finished',
+          parallelWork: { running: 2, unknown: 0, failed: 0, stopped: 0 },
+        },
+      ],
+      activeGlobalSessionId: globalSession.id,
+      activeGlobalConversation: [],
+    })
+    render(<ChatSurface selectedSpaceId={null} />)
+    expect(screen.getByText('answered · 2 tasks running')).toBeInTheDocument()
   })
 
   /**

@@ -38,6 +38,19 @@ function makeSession(overrides: Partial<Session>): Session {
   }
 }
 
+it('R5 global activity includes answered background work and excludes it from finished recency — mutation use foreground completion alone turns red', () => {
+  const session = makeSession({
+    status: 'completed',
+    attention: 'finished',
+    parallelWork: { running: 1, unknown: 0, failed: 0, stopped: 0 },
+  })
+  const result = selectGlobalStatus([session], {}, [])
+  expect({
+    running: result.running.map((row) => row.id),
+    completed: result.lastCompleted,
+  }).toEqual({ running: ['session-1'], completed: null })
+})
+
 function makeProject(overrides: Partial<Project>): Project {
   return {
     id: 'project-1',

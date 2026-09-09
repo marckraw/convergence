@@ -1,3 +1,4 @@
+import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import type { FC, ReactNode } from 'react'
 import { Cable, Loader2, Radio } from 'lucide-react'
 import { formatSessionAttentionLabel } from '@/entities/session'
@@ -35,7 +36,8 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
 }) => {
   const { session } = card
   const running = session.status === 'running'
-  const needsYou = session.attention !== 'none'
+  const needsYou =
+    session.attention !== 'none' || Boolean(parallelWorkStatus(session))
 
   return (
     <div
@@ -74,7 +76,11 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
               className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground"
               title={formatSessionAttentionLabel(session)}
             >
-              <SessionBadge attention={session.attention} />
+              <SessionBadge
+                attention={session.attention}
+                status={session.status}
+                parallelWork={session.parallelWork}
+              />
               {formatSessionAttentionLabel(session)}
             </span>
           ) : (
@@ -155,7 +161,9 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
           {running ? (
             <Loader2 className="size-3 shrink-0 animate-spin" />
           ) : null}
-          <span className="truncate">{card.activityLabel}</span>
+          <span className="truncate">
+            {parallelWorkStatus(session) ?? card.activityLabel}
+          </span>
         </span>
 
         <div className="flex shrink-0 items-center gap-1">

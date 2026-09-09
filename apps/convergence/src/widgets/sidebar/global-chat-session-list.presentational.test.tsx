@@ -80,6 +80,31 @@ function renderList(
 }
 
 describe('GlobalChatSessionList', () => {
+  it.each(['chat', 'space'] as const)(
+    'R5 %s reads the same answered count — mutation omit parallel summary from the row turns red',
+    (kind) => {
+      const session = {
+        ...baseSession,
+        parallelWork: { running: 2, unknown: 1, failed: 0, stopped: 0 },
+      }
+      renderList(
+        kind === 'chat'
+          ? { sessions: [session] }
+          : {
+              spaces: [
+                {
+                  ...linkedSpace,
+                  attempts: [{ ...linkedSpace.attempts[0], session }],
+                },
+              ],
+              expandedSpaceIds: new Set([linkedSpace.id]),
+            },
+      )
+      expect(
+        screen.getByText('answered · 2 tasks running · 1 unknown'),
+      ).toBeInTheDocument()
+    },
+  )
   it('selects a global chat session from the list', () => {
     const onSelectSession = vi.fn()
 

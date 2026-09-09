@@ -270,6 +270,13 @@ export class SessionService {
     string,
     ReturnType<typeof setTimeout>
   >()
+  private onEvidenceUpdate: ((event: { sessionId: string }) => void) | null =
+    null
+  private evidenceUpdateTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >()
+
   private onSummaryUpdate: ((summary: SessionSummary) => void) | null = null
   private onConversationPatch:
     | ((event: ConversationPatchEvent) => void)
@@ -1028,6 +1035,24 @@ export class SessionService {
     return this.sessionRepository.isAutoNamed(id)
   }
 
+  setEvidenceUpdateListener(
+    listener: (event: { sessionId: string }) => void,
+  ): void {
+    this.onEvidenceUpdate = listener
+  }
+
+  private scheduleEvidenceUpdate(sessionId: string): void {
+    if (this.evidenceUpdateTimers.has(sessionId)) return
+    this.evidenceUpdateTimers.set(
+      sessionId,
+      setTimeout(() => {
+        this.evidenceUpdateTimers.delete(sessionId)
+        this.onEvidenceUpdate?.({ sessionId })
+        this.notifySummaryUpdated(sessionId)
+      }, 250),
+    )
+  }
+
   setSummaryUpdateListener(listener: (summary: SessionSummary) => void): void {
     this.onSummaryUpdate = listener
   }
@@ -1189,6 +1214,10 @@ export class SessionService {
     const summary = {
       ...sessionSummaryFromRow(row),
       hasActiveHandle: this.activeHandles.has(row.id),
+      canStopTasks: this.activeHandles.get(row.id)?.canStopTasks === true,
+      parallelWork: new HarnessEvidenceService(this.db)
+        .countParallelWork([row.id])
+        .get(row.id)!,
     }
     const attentionRequestKind = resolveAttentionRequestKind(
       summary,
@@ -1198,9 +1227,14 @@ export class SessionService {
   }
 
   private buildSessionSummaries(rows: SessionRow[]): SessionSummary[] {
+    const counts = new HarnessEvidenceService(this.db).countParallelWork(
+      rows.map((row) => row.id),
+    )
     const summaries = rows.map((row) => ({
       ...sessionSummaryFromRow(row),
       hasActiveHandle: this.activeHandles.has(row.id),
+      canStopTasks: this.activeHandles.get(row.id)?.canStopTasks === true,
+      parallelWork: counts.get(row.id)!,
     }))
     const attentionRowsBySessionId =
       this.readLatestAttentionRequestRows(summaries)
@@ -1339,6 +1373,20 @@ export class SessionService {
       .all(id) as ConversationItemRow[]
 
     return rows.map(conversationItemFromRow)
+  }
+
+  async stopTask(sessionId: string, id: string): Promise<void> {
+    const handle = this.activeHandles.get(sessionId)
+    if (!handle?.canStopTasks || !handle.stopTask)
+      throw new Error('Stop is not available on this Claude Code version')
+    const row = this.db
+      .prepare(
+        `SELECT status FROM session_agent_runs WHERE session_id=? AND id=?
+      UNION ALL SELECT status FROM session_tasks WHERE session_id=? AND task_id=? LIMIT 1`,
+      )
+      .get(sessionId, id, sessionId, id) as { status: string } | undefined
+    if (row?.status !== 'running') throw new Error('This task is not running')
+    await handle.stopTask(id)
   }
 
   listAgentRuns(sessionId: string) {
@@ -2307,6 +2355,8 @@ export class SessionService {
     for (const sessionId of Array.from(this.activeHandles.keys()))
       this.releaseHandle(sessionId, 'quit')
     await Promise.all(this.pendingHandleDisposals)
+    for (const timer of this.evidenceUpdateTimers.values()) clearTimeout(timer)
+    this.evidenceUpdateTimers.clear()
   }
 
   /**
@@ -2340,6 +2390,7 @@ export class SessionService {
           this.activeTurnIds.get(sessionId) ?? null,
           delta.evidence,
         )
+        this.scheduleEvidenceUpdate(sessionId)
         if (renamed) {
           const rows = this.db
             .prepare(

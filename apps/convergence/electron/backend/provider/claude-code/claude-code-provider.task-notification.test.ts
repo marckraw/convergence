@@ -96,7 +96,7 @@ const result = { type: 'result', subtype: 'success', result: 'The real answer' }
 const note = {
   text: 'Background task Background sleep was stopped',
   level: 'info',
-  event: 'harness.task',
+  event: 'harness.task.terminal',
   id: 'task-1',
 }
 
@@ -139,7 +139,11 @@ describe('Claude task-notification results', () => {
     ])
       bed.send(event)
     expect(bed.notes()).toEqual([
-      { ...note, text: 'Background task started: Background sleep' },
+      {
+        ...note,
+        event: 'harness.task',
+        text: 'Background task started: Background sleep',
+      },
       note,
     ])
   })
@@ -197,7 +201,9 @@ describe('Claude task-notification results', () => {
     expect(
       bed
         .notes()
-        .filter((entry) => entry.event === 'harness.task')
+        .filter((entry) =>
+          ['harness.task', 'harness.task.terminal'].includes(entry.event ?? ''),
+        )
         .map((entry) => entry.text),
     ).toEqual([
       'Background task Background sleep was stopped',

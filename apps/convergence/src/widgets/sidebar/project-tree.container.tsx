@@ -1,3 +1,4 @@
+import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import { isRemoteExecutionHost } from '@/entities/execution-host'
 import { useEffect, useState } from 'react'
 import type { FC } from 'react'
@@ -325,7 +326,11 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                 aria-label="Terminal session"
               />
             ) : (
-              <SessionBadge attention={session.attention} />
+              <SessionBadge
+                attention={session.attention}
+                status={session.status}
+                parallelWork={session.parallelWork}
+              />
             )}
             <Input
               value={renameDraft}
@@ -361,9 +366,20 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                     aria-label="Terminal session"
                   />
                 ) : (
-                  <SessionBadge attention={session.attention} />
+                  <SessionBadge
+                    attention={session.attention}
+                    status={session.status}
+                    parallelWork={session.parallelWork}
+                  />
                 )}
-                <span className="truncate">{session.name}</span>
+                <span className="min-w-0 text-left">
+                  <span className="block truncate">{session.name}</span>
+                  {parallelWorkStatus(session) && (
+                    <span className="block truncate text-[10px] text-muted-foreground">
+                      {parallelWorkStatus(session)}
+                    </span>
+                  )}
+                </span>
                 {isRemoteExecutionHost(session.executionHost) && (
                   <Cloud
                     className="h-3 w-3 shrink-0 text-sky-500/80"

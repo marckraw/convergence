@@ -178,6 +178,11 @@ describe('SessionView', () => {
 
     Object.defineProperty(window, 'electronAPI', {
       value: {
+        session: {
+          listAgentRuns: vi.fn().mockResolvedValue([]),
+          listTasks: vi.fn().mockResolvedValue([]),
+          onEvidenceUpdated: vi.fn().mockReturnValue(() => {}),
+        },
         projectScripts: {
           list: vi.fn().mockResolvedValue([]),
           create: vi.fn(),

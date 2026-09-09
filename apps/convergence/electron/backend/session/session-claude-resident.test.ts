@@ -27,7 +27,7 @@ afterEach(async () => {
   resetDatabase()
 })
 
-async function fixture(idleMinutes = 0, holdExit = false) {
+async function fixture(idleMinutes = 0, holdExit = false, refuseStops = 0) {
   const dir = mkdtempSync(join(tmpdir(), 'resident-'))
   let nextPid = 100
   const children: Array<ReturnType<typeof makeChild>> = []
@@ -67,7 +67,11 @@ async function fixture(idleMinutes = 0, holdExit = false) {
             JSON.stringify({
               type: 'control_response',
               response: {
-                subtype: 'success',
+                subtype:
+                  event.request.subtype === 'stop_task' && refuseStops-- > 0
+                    ? 'error'
+                    : 'success',
+                error: 'fixture stop refusal',
                 request_id: event.request_id,
                 response: { still_queued: [] },
               },
@@ -126,6 +130,107 @@ async function fixture(idleMinutes = 0, holdExit = false) {
   }
   return { service, session, children, db }
 }
+
+it('R6′ retries a refused scoped stop without changing the task — mutation retain requested id after refusal turns red', async () => {
+  const { service, session, children } = await fixture(0, false, 1)
+  await service.start(session.id, { text: 'first' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  children[0].stdout.write(
+    JSON.stringify({
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 'task',
+      task_type: 'local_bash',
+    }) + '\n',
+  )
+  await vi.waitUntil(() => service.listTasks(session.id).length === 1)
+  const results: string[] = []
+  for (let n = 0; n < 2; n++) {
+    try {
+      await service.stopTask(session.id, 'task')
+      results.push('receipt')
+    } catch (error) {
+      results.push(error instanceof Error ? error.message : String(error))
+    }
+  }
+  expect({
+    results,
+    status: service.listTasks(session.id)[0].status,
+    stops: children[0].controls.filter((c) => c.subtype === 'stop_task').length,
+  }).toEqual({
+    results: ['fixture stop refusal', 'receipt'],
+    status: 'running',
+    stops: 2,
+  })
+})
+
+it('R6′ stops only the selected id and waits for its terminal fact — mutations interrupt session, settle on receipt, accept duplicates or drop stop reason turn red', async () => {
+  const { service, session, children } = await fixture()
+  await service.start(session.id, { text: 'first' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  const send = (event: unknown) =>
+    children[0].stdout.write(JSON.stringify(event) + '\n')
+  send({ type: 'system', subtype: 'init', session_id: 'scope' })
+  send({
+    type: 'assistant',
+    message: {
+      content: [
+        {
+          type: 'tool_use',
+          id: 'spawn',
+          name: 'Agent',
+          input: { description: 'selected', subagent_type: 'Explore' },
+        },
+      ],
+    },
+  })
+  send({
+    type: 'system',
+    subtype: 'task_started',
+    task_id: 'selected',
+    tool_use_id: 'spawn',
+    task_type: 'local_agent',
+  })
+  await vi.waitUntil(
+    () => service.listAgentRuns(session.id)[0]?.id === 'selected',
+  )
+  await service.stopTask(session.id, 'selected')
+  let duplicate = false
+  try {
+    await service.stopTask(session.id, 'selected')
+  } catch {
+    duplicate = true
+  }
+  const before = service.listAgentRuns(session.id)[0].status
+  send({
+    type: 'system',
+    subtype: 'task_updated',
+    task_id: 'selected',
+    patch: { status: 'killed' },
+  })
+  await vi.waitUntil(
+    () => service.listAgentRuns(session.id)[0]?.status === 'stopped',
+  )
+  expect({
+    controls: children[0].controls.filter(
+      (control) => control.subtype !== 'initialize',
+    ),
+    before,
+    duplicate,
+    killed: children[0].kill.mock.calls.length,
+    status: service.getById(session.id)?.status,
+    reason: service.listAgentRuns(session.id)[0].stopReason,
+    taskReason: service.listTasks(session.id)[0].stopReason,
+  }).toEqual({
+    controls: [{ subtype: 'stop_task', task_id: 'selected' }],
+    before: 'running',
+    duplicate: true,
+    killed: 0,
+    status: 'running',
+    reason: 'stop',
+    taskReason: 'stop',
+  })
+})
 
 it('keeps two turns on one process — spawn per turn or close stdin after a message turns red', async () => {
   const { service, session, children } = await fixture()

@@ -438,33 +438,39 @@ it('M4 result-only adoption and completion need no task event or meta — mutati
   ).toEqual([['result-agent', 'completed', 'end', 'haiku']])
 })
 
-it('R11 failed Agent result and task terminal carry their reported summary — drop terminal summary turns red', () => {
-  const { adapter, call, start, runs } = fixture()
-  call()
-  start()
-  adapter.toolResult(
-    {},
-    {
-      tool_use_id: 'spawn',
-      is_error: true,
-      content: '  exact error\nreason  ',
-    },
-    'end',
-  )
-  call('second')
-  start({ tool_use_id: 'second', task_id: 'other-agent' })
-  adapter.consume(
-    {
-      type: 'system',
-      subtype: 'task_notification',
-      task_id: 'other-agent',
-      status: 'failed',
-      summary: 'task reason',
-    },
-    'end',
-  )
-  expect(runs().map((run) => run.endedSummary)).toEqual([
-    '  exact error\nreason  ',
-    'task reason',
-  ])
-})
+it.each([
+  '  exact error\nreason  ',
+  [{ type: 'text', text: '  exact error\nreason  ' }],
+])(
+  'R11 failed Agent result and task terminal carry their reported summary — drop summary or serialize text blocks turns red (%j)',
+  (content) => {
+    const { adapter, call, start, runs } = fixture()
+    call()
+    start()
+    adapter.toolResult(
+      {},
+      {
+        tool_use_id: 'spawn',
+        is_error: true,
+        content,
+      },
+      'end',
+    )
+    call('second')
+    start({ tool_use_id: 'second', task_id: 'other-agent' })
+    adapter.consume(
+      {
+        type: 'system',
+        subtype: 'task_notification',
+        task_id: 'other-agent',
+        status: 'failed',
+        summary: 'task reason',
+      },
+      'end',
+    )
+    expect(runs().map((run) => run.endedSummary)).toEqual([
+      '  exact error\nreason  ',
+      'task reason',
+    ])
+  },
+)

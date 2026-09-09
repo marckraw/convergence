@@ -73,6 +73,7 @@ function registerHandlers(
   args[SESSION_SERVICE_ARGUMENT] = {
     ...(args[SESSION_SERVICE_ARGUMENT] as object),
     setSummaryUpdateListener: noop,
+    setEvidenceUpdateListener: noop,
     setConversationPatchListener: noop,
     setQueuedInputPatchListener: noop,
     setTurnDeltaListener: noop,

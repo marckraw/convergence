@@ -57,6 +57,7 @@ function createSessionBackend(
     regenerateName: vi.fn(),
     setPrimarySurface: vi.fn(() => sessionFixture),
     setModelSelection: vi.fn(async () => sessionFixture),
+    setEvidenceUpdateListener: vi.fn(),
     setSummaryUpdateListener: vi.fn(),
     setConversationPatchListener: vi.fn(),
     setQueuedInputPatchListener: vi.fn(),

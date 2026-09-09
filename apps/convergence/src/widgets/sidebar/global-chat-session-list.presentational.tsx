@@ -1,3 +1,4 @@
+import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import type { FC } from 'react'
 import type { SessionSummary } from '@/entities/session'
 import type { SpaceAttemptRole } from '@/entities/space'
@@ -112,8 +113,19 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
             aria-label={`Open chat session ${session.name}`}
             className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
           >
-            <SessionBadge attention={session.attention} />
-            <span className="truncate">{session.name}</span>
+            <SessionBadge
+              attention={session.attention}
+              status={session.status}
+              parallelWork={session.parallelWork}
+            />
+            <span className="min-w-0 text-left">
+              <span className="block truncate">{session.name}</span>
+              {parallelWorkStatus(session) && (
+                <span className="block truncate text-[10px] text-muted-foreground">
+                  {parallelWorkStatus(session)}
+                </span>
+              )}
+            </span>
           </Button>
         </TooltipTrigger>
         <TooltipContent side="right">{session.name}</TooltipContent>
@@ -300,12 +312,20 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
                                   className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
                                 >
                                   <SessionBadge
+                                    status={attempt.session?.status}
+                                    parallelWork={attempt.session?.parallelWork}
                                     attention={
                                       attempt.session?.attention ?? 'none'
                                     }
                                   />
                                   <span className="truncate">
                                     {attempt.sessionName}
+                                    {attempt.session &&
+                                      parallelWorkStatus(attempt.session) && (
+                                        <span className="block truncate text-[10px] text-muted-foreground">
+                                          {parallelWorkStatus(attempt.session)}
+                                        </span>
+                                      )}
                                   </span>
                                 </Button>
                               </TooltipTrigger>

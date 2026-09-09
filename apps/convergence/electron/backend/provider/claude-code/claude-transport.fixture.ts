@@ -21,9 +21,11 @@ export function createFixtureClaudeTransport(
     input.onExit({ code: null, signal: null, error: error.message }),
   )
   return {
+    canStopTasks: true,
     write: (line) => {
       child.stdin.write(line + '\n')
     },
+    stopTask: async () => {},
     interrupt: async () => ({ still_queued: [] }),
     setModel: async () => {},
     setPermissionMode: async () => {},

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   readClaudeResultOriginKind,
   readClaudeTaskNote,
+  readClaudeToolResultMoment,
 } from './claude-code-task.pure'
 
 describe('Claude harness task readers', () => {
@@ -127,4 +128,12 @@ describe('Claude harness task readers', () => {
       null,
     ])
   })
+})
+
+it('R4 retains launch versus actual completion — mutation call an async launch completed turns red', () => {
+  expect(
+    ['async_launched', 'completed', 'future'].map((status) =>
+      readClaudeToolResultMoment({ tool_use_result: { status } }),
+    ),
+  ).toEqual(['async_launched', 'completed', null])
 })

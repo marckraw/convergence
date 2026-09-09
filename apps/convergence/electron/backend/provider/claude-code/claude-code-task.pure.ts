@@ -6,6 +6,13 @@ export interface ClaudeTaskNote {
   text: string
 }
 
+export function readClaudeToolResultMoment(
+  data: unknown,
+): 'async_launched' | 'completed' | null {
+  const status = record(record(data)?.tool_use_result)?.status
+  return status === 'async_launched' || status === 'completed' ? status : null
+}
+
 function record(data: unknown): Record<string, unknown> | null {
   return data !== null && typeof data === 'object' && !Array.isArray(data)
     ? (data as Record<string, unknown>)

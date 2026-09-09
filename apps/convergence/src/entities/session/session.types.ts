@@ -1,3 +1,4 @@
+import type { ParallelWorkCounts } from '@/shared/lib/parallel-work.pure'
 import type {
   SkillActivationConfirmation,
   SkillCatalogSource,
@@ -345,6 +346,8 @@ export interface QueuedInputPatchEvent {
 }
 
 export interface SessionSummary {
+  canStopTasks?: boolean
+  parallelWork?: ParallelWorkCounts
   /** Runtime fact; never persisted or inferred from attention. */
   hasActiveHandle?: boolean
   id: string

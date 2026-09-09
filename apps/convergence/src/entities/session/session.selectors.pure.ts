@@ -1,3 +1,4 @@
+import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import type { Project } from '../project/project.types'
 import type {
   ConversationItem,
@@ -57,7 +58,10 @@ export function selectGlobalStatus(
   dismissals: NeedsYouDismissals,
   projects: Project[],
 ): GlobalStatus {
-  const running = sessions.filter((session) => session.status === 'running')
+  const running = sessions.filter(
+    (session) =>
+      session.status === 'running' || Boolean(session.parallelWork?.running),
+  )
   const needsAttention = sessions.filter((session) =>
     isAttentionSession(session, dismissals),
   )
@@ -108,7 +112,8 @@ export function selectGlobalStatus(
   const lastCompleted = sessions
     .filter(
       (session) =>
-        session.status === 'completed' || session.status === 'failed',
+        (session.status === 'completed' || session.status === 'failed') &&
+        !parallelWorkStatus(session),
     )
     .reduce<SessionSummary | null>((latest, session) => {
       if (!latest) return session

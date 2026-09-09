@@ -56,6 +56,50 @@ const baseSession: Session = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
 
+it('R3′ keeps an attributed approval actionable while child work leaves the main transcript — mutations move approval or keep child work turn red', () => {
+  const approve = vi.fn()
+  const approval = {
+    ...approvalRequest({
+      id: 'decision',
+      sequence: 1,
+      providerItemId: 'permission',
+    }),
+    agentRunId: 'child',
+    resolution: 'pending' as const,
+    agentAttribution: { description: 'Read routes', agentType: 'Explore' },
+  }
+  const work = {
+    ...assistantMessage({
+      id: 'child-text',
+      sequence: 2,
+      text: 'private child voice',
+    }),
+    agentRunId: 'child',
+  }
+  render(
+    <SessionTranscript
+      session={baseSession}
+      conversationItems={[approval, work]}
+      onApprove={approve}
+      onDeny={vi.fn()}
+      onInputAnswer={vi.fn()}
+    />,
+  )
+  const allow =
+    screen.queryByRole('button', { name: 'Allow once' }) ??
+    screen.queryByRole('button', { name: 'Approve' })
+  if (allow) fireEvent.click(allow)
+  expect({
+    childInMain: screen.queryByText('private child voice') !== null,
+    approved: approve.mock.calls,
+    attributed: screen.queryByText('↳ Read routes (Explore)') !== null,
+  }).toEqual({
+    childInMain: false,
+    approved: [['session-1', 'permission']],
+    attributed: true,
+  })
+})
+
 function userMessage(overrides: {
   id: string
   sequence: number

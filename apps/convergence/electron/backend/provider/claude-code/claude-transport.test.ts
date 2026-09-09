@@ -72,7 +72,7 @@ it('uses the chosen executable and exposes stderr once and exit — substitute t
   transport.close()
 })
 
-it('serializes model, permission and interrupt controls and returns the receipt — drop permission control turns red', async () => {
+it('serializes controls and forwards child text — mutations drop permission control, disable forwarding or replace stop_task with interrupt turn red', async () => {
   const child = Object.assign(new EventEmitter(), {
     stdin: new PassThrough(),
     stdout: new PassThrough(),
@@ -121,14 +121,22 @@ it('serializes model, permission and interrupt controls and returns the receipt 
     await transport.setModel('fixture-model')
     await transport.setPermissionMode('plan')
     const receipt = await transport.interrupt()
+    await transport.stopTask('selected-agent')
     expect({
+      forwarded: (
+        requests.find((r) => r.subtype === 'initialize') as {
+          forwardSubagentText?: boolean
+        }
+      )?.forwardSubagentText,
       controls: requests.filter((r) => r.subtype !== 'initialize'),
       receipt,
     }).toEqual({
+      forwarded: true,
       controls: [
         { subtype: 'set_model', model: 'fixture-model' },
         { subtype: 'set_permission_mode', mode: 'plan' },
         { subtype: 'interrupt' },
+        { subtype: 'stop_task', task_id: 'selected-agent' },
       ],
       receipt: { still_queued: [] },
     })

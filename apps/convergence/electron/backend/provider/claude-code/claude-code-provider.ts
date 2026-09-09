@@ -37,6 +37,7 @@ import {
   CLAUDE_TASK_NOTIFICATION_FALLBACK,
   readClaudeResultOriginKind,
   readClaudeTaskNote,
+  readClaudeToolResultMoment,
 } from './claude-code-task.pure'
 import { ClaudeEvidenceService } from './claude-evidence.service'
 import {
@@ -1005,7 +1006,10 @@ export class ClaudeCodeProvider implements Provider {
               text: taskNote.text,
               level: 'info',
               taskId: taskNote.taskId,
-              providerEventType: 'harness.task',
+              providerEventType:
+                taskNote.moment === 'terminal'
+                  ? 'harness.task.terminal'
+                  : 'harness.task',
               providerItemId: event.uuid ?? taskNote.taskId,
             })
             break
@@ -1024,6 +1028,9 @@ export class ClaudeCodeProvider implements Provider {
         }
 
         case 'stream_event':
+          // Forwarded child messages arrive complete as assistant events. Their
+          // partials must never enter the foreground turn's streaming buffers.
+          if (evidence.identity(data).agentRunId) break
           sawTurnOutput = true
           if (
             event.event?.type === 'content_block_delta' &&
@@ -1070,19 +1077,23 @@ export class ClaudeCodeProvider implements Provider {
           break
 
         case 'assistant': {
+          const isChild = Boolean(evidence.identity(data).agentRunId)
           sawTurnOutput = true
           // If we already streamed text via stream_events, flush that
           // and skip text blocks in the assistant message (they're duplicates)
-          const hadStreamedText = assistantTextBuffer.length > 0
+          const hadStreamedText = !isChild && assistantTextBuffer.length > 0
           const hadStreamedThinking =
-            currentTurnHasThinkingText || thinkingBuffer.length > 0
+            !isChild &&
+            (currentTurnHasThinkingText || thinkingBuffer.length > 0)
           let skippedStreamedThinkingBlock = false
-          flushThinkingBuffer()
-          flushAssistantBuffer()
+          if (!isChild) {
+            flushThinkingBuffer()
+            flushAssistantBuffer()
+          }
           if (event.message?.content) {
             for (const block of event.message.content) {
               if (block.type === 'tool_use' && block.name) {
-                flushThinkingBuffer()
+                if (!isChild) flushThinkingBuffer()
                 const itemId = sessionEmitter.addToolCall({
                   ...evidence.identity(data, block.id),
                   providerItemId: block.id ?? event.uuid,
@@ -1106,12 +1117,11 @@ export class ClaudeCodeProvider implements Provider {
                   state: 'complete',
                   providerEventType: 'thinking',
                 })
-                currentTurnHasThinkingText = true
+                if (!isChild) currentTurnHasThinkingText = true
               } else if (
                 block.type === 'text' &&
                 block.text &&
-                !hadStreamedText &&
-                !currentTurnHasAssistantText
+                (isChild || (!hadStreamedText && !currentTurnHasAssistantText))
               ) {
                 sessionEmitter.addAssistantMessage({
                   ...evidence.identity(data),
@@ -1119,7 +1129,7 @@ export class ClaudeCodeProvider implements Provider {
                   text: block.text,
                   state: 'complete',
                 })
-                currentTurnHasAssistantText = true
+                if (!isChild) currentTurnHasAssistantText = true
               }
             }
           }
@@ -1146,7 +1156,11 @@ export class ClaudeCodeProvider implements Provider {
                   providerItemId: event.uuid,
                   state: block.is_error ? 'error' : 'complete',
                   outputText: resultText,
-                  providerEventType: 'tool_result',
+                  providerEventType: block.is_error
+                    ? 'tool_result.failed'
+                    : readClaudeToolResultMoment(data)
+                      ? `tool_result.${readClaudeToolResultMoment(data)}`
+                      : 'tool_result',
                 })
                 noteMcpAuthFailure(resultText)
               }
@@ -1592,6 +1606,20 @@ export class ClaudeCodeProvider implements Provider {
     }
 
     const handle: SessionHandle = {
+      get canStopTasks() {
+        return !stopped && !connectionEnding && child?.canStopTasks === true
+      },
+      stopTask: async (id) => {
+        if (stopped || connectionEnding || !child?.canStopTasks)
+          throw new Error('Stop is not available on this Claude Code version')
+        evidence.requestStop(id)
+        try {
+          await child.stopTask(id)
+        } catch (error) {
+          evidence.cancelStop(id)
+          throw error
+        }
+      },
       resident: true,
       get retainQueuedInputsOnCompletion() {
         return interruptRequested

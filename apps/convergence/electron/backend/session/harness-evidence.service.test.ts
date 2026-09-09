@@ -17,6 +17,36 @@ function bed() {
   return { db, service: new HarnessEvidenceService(db) }
 }
 
+it('R2 preserves spawn order across identity adoption — mutation order tied spawns by mutable provider id turns red', () => {
+  const { service } = bed()
+  for (const id of ['z-first', 'a-second'])
+    service.apply('session', null, {
+      kind: 'agent.started',
+      run: {
+        id,
+        spawnedByItemId: id,
+        agentType: null,
+        description: null,
+        model: null,
+        depth: 1,
+        startedAt: 'same-time',
+        transcriptPath: null,
+      },
+    })
+  service.apply('session', null, {
+    kind: 'agent.identified',
+    spawnedByItemId: 'z-first',
+    id: 'zz-adopted',
+    agentType: null,
+    description: null,
+    depth: 1,
+    transcriptPath: null,
+  })
+  expect(
+    service.listAgentRuns('session').map((run) => run.spawnedByItemId),
+  ).toEqual(['z-first', 'a-second'])
+})
+
 it('persists agent identity, task state and turn cost — drop a projection/accounting write or identity adoption turns red', () => {
   const { db, service } = bed()
   service.apply('session', 'turn', {
@@ -275,4 +305,40 @@ it('R11 persists the first terminal summary on both lists — drop a summary wri
     { status: 'failed', endedAt: 'first', summary: 'first reason' },
     { status: 'failed', endedAt: 'first', summary: 'first reason' },
   ])
+})
+
+it('R5 summary counts are persisted unique identities — mutation include the local-agent task twice turns red', () => {
+  const { service } = bed()
+  service.apply('session', null, {
+    kind: 'agent.started',
+    run: {
+      id: 'agent',
+      spawnedByItemId: 'spawn',
+      agentType: 'Explore',
+      description: null,
+      model: null,
+      depth: 1,
+      startedAt: 'now',
+      transcriptPath: null,
+    },
+  })
+  for (const [taskId, taskType, status] of [
+    ['agent', 'local_agent', 'running'],
+    ['monitor', 'monitor', 'running'],
+    ['lost', 'local_bash', 'unknown'],
+    ['failure', 'local_bash', 'failed'],
+    ['stopped', 'local_bash', 'stopped'],
+  ] as const)
+    service.apply('session', null, {
+      kind: 'task.changed',
+      taskId,
+      at: 'now',
+      patch: { taskType, status },
+    })
+  expect(service.countParallelWork(['session']).get('session')).toEqual({
+    running: 2,
+    unknown: 1,
+    failed: 1,
+    stopped: 1,
+  })
 })

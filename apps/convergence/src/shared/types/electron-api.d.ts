@@ -1,3 +1,4 @@
+import type { ParallelWorkCounts } from '../lib/parallel-work.pure'
 import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
 import type { SessionAgentRun, SessionTask } from './harness-evidence.types'
 import type { ProjectMcpVisibility } from './mcp.types'
@@ -1018,6 +1019,8 @@ type AttentionRequestKindData =
   | 'input'
 
 interface SessionSummaryData {
+  canStopTasks?: boolean
+  parallelWork?: ParallelWorkCounts
   /** Runtime fact; never persisted or inferred from attention. */
   hasActiveHandle?: boolean
   id: string
@@ -1778,6 +1781,10 @@ interface ElectronAPI {
     getGlobalSummaries: () => Promise<SessionSummaryData[]>
     getSummaryById: (id: string) => Promise<SessionSummaryData | null>
     getConversation: (id: string) => Promise<ConversationItemData[]>
+    onEvidenceUpdated: (
+      callback: (event: { sessionId: string }) => void,
+    ) => () => void
+    stopTask: (sessionId: string, id: string) => Promise<void>
     listAgentRuns: (sessionId: string) => Promise<SessionAgentRun[]>
     listTasks: (sessionId: string) => Promise<SessionTask[]>
     archive: (id: string) => Promise<void>

@@ -14,6 +14,27 @@ import {
 } from './session-card-state.pure'
 
 const STATUSES: SessionStatus[] = ['idle', 'running', 'completed', 'failed']
+
+it('R5 counts background work as activity and never finishes unknown work — mutation classify only foreground status turns red', () => {
+  const base = makeCard({
+    status: 'completed',
+    attention: 'finished',
+    activity: null,
+  })
+  expect(
+    [
+      { running: 2, unknown: 0, failed: 0, stopped: 0 },
+      { running: 0, unknown: 1, failed: 0, stopped: 0 },
+      { running: 0, unknown: 0, failed: 1, stopped: 0 },
+      { running: 0, unknown: 0, failed: 0, stopped: 1 },
+    ].map((parallelWork) =>
+      classifySessionCardState({
+        ...base,
+        session: { ...base.session, parallelWork },
+      }),
+    ),
+  ).toEqual(['working', 'idle', 'failed', 'idle'])
+})
 const ATTENTIONS: AttentionState[] = [
   'none',
   'needs-input',

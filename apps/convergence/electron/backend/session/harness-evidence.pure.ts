@@ -48,6 +48,7 @@ export function foldAgentRuns(
             status: fact.status,
             endedAt: fact.at,
             endedSummary: fact.summary ?? null,
+            ...(fact.stopReason ? { stopReason: fact.stopReason } : {}),
           }
         : run
     return retainUnchangedProjection(run, {

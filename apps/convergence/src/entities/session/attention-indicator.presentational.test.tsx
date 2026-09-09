@@ -15,6 +15,26 @@ import { AttentionIndicator } from './attention-indicator.presentational'
  * defect was only ever visible as rendered output (MAR-2280).
  */
 describe('AttentionIndicator', () => {
+  it('R5 renders answered activity until evidence settles — mutation omit parallel counts from the indicator turns red', () => {
+    const { rerender } = render(
+      <AttentionIndicator
+        attention="finished"
+        status="completed"
+        parallelWork={{ running: 2, unknown: 1, failed: 0, stopped: 0 }}
+      />,
+    )
+    expect(
+      screen.getByText('answered · 2 tasks running · 1 unknown'),
+    ).toBeInTheDocument()
+    rerender(
+      <AttentionIndicator
+        attention="finished"
+        status="completed"
+        parallelWork={{ running: 0, unknown: 0, failed: 0, stopped: 0 }}
+      />,
+    )
+    expect(screen.getByText('Finished')).toBeInTheDocument()
+  })
   /**
    * The four labelled states, pinned before the refactor that introduced
    * `status`. They are the behaviour that must not change.

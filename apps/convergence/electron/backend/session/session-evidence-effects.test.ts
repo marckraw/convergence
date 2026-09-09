@@ -11,8 +11,58 @@ const services: SessionService[] = []
 afterEach(() => {
   for (const service of services.splice(0)) service.disposeAll()
   vi.restoreAllMocks()
+  vi.useRealTimers()
   closeDatabase()
   resetDatabase()
+})
+
+it('R1 broadcasts evidence at most four times per second with persisted summary counts — mutation skip scheduling or broadcast each fact turns red', () => {
+  vi.useFakeTimers()
+  const { service, emitter } = bed()
+  const events: string[] = []
+  const summaries: unknown[] = []
+  service.setEvidenceUpdateListener(({ sessionId }) => events.push(sessionId))
+  service.setSummaryUpdateListener((summary) =>
+    summaries.push(summary.parallelWork),
+  )
+  for (let n = 0; n < 10; n++)
+    emitter.recordEvidence({
+      kind: 'task.changed',
+      taskId: 'monitor',
+      at: 'now',
+      patch: { status: 'running', taskType: 'monitor' },
+    })
+  const before = events.length
+  for (let n = 0; n < 20; n++) {
+    emitter.recordEvidence({
+      kind: 'task.changed',
+      taskId: 'monitor',
+      at: 'now',
+      patch: { status: 'running' },
+    })
+    vi.advanceTimersByTime(50)
+  }
+  emitter.recordEvidence({
+    kind: 'task.changed',
+    taskId: 'monitor',
+    at: 'end',
+    patch: { status: 'completed' },
+  })
+  vi.advanceTimersByTime(250)
+  expect({
+    before,
+    events,
+    summaries,
+    final: service.getSummaryById('session')?.parallelWork,
+  }).toEqual({
+    before: 0,
+    events: Array(5).fill('session'),
+    summaries: [
+      ...Array(4).fill({ running: 1, unknown: 0, failed: 0, stopped: 0 }),
+      { running: 0, unknown: 0, failed: 0, stopped: 0 },
+    ],
+    final: { running: 0, unknown: 0, failed: 0, stopped: 0 },
+  })
 })
 function bed() {
   const db = getDatabase()

@@ -1,3 +1,4 @@
+import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import type { SessionSummary } from './session.types'
 
 export function formatSessionAttentionLabel(session: SessionSummary): string {
@@ -23,6 +24,9 @@ export function formatSessionAttentionLabel(session: SessionSummary): string {
   if (session.attention === 'failed') {
     return 'Session failed'
   }
+
+  const parallel = parallelWorkStatus(session)
+  if (parallel) return parallel
 
   if (session.attention === 'finished') {
     return 'Finished'

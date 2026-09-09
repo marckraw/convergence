@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3'
+import type { ParallelWorkCounts } from '../../../src/shared/lib/parallel-work.pure'
 import type {
   HarnessEvidence,
   SessionAgentRun,
@@ -12,6 +13,34 @@ import {
 
 export class HarnessEvidenceService {
   constructor(private readonly db: Database.Database) {}
+  countParallelWork(sessionIds: string[]): Map<string, ParallelWorkCounts> {
+    const counts = new Map(
+      sessionIds.map((id) => [
+        id,
+        { running: 0, unknown: 0, failed: 0, stopped: 0 },
+      ]),
+    )
+    if (!sessionIds.length) return counts
+    const placeholders = sessionIds.map(() => '?').join(',')
+    const rows = this.db
+      .prepare(
+        `SELECT session_id, status, COUNT(*) AS count FROM (
+      SELECT session_id,status FROM session_agent_runs WHERE session_id IN (${placeholders})
+      UNION ALL
+      SELECT t.session_id,t.status FROM session_tasks t WHERE t.session_id IN (${placeholders})
+      AND NOT (COALESCE(t.task_type,'')='local_agent' AND EXISTS (
+        SELECT 1 FROM session_agent_runs a WHERE a.session_id=t.session_id AND a.id=t.task_id
+      ))
+    ) WHERE status IN ('running','unknown','failed','stopped') GROUP BY session_id,status`,
+      )
+      .all(...sessionIds, ...sessionIds) as {
+      session_id: string
+      status: keyof ParallelWorkCounts
+      count: number
+    }[]
+    for (const row of rows) counts.get(row.session_id)![row.status] = row.count
+    return counts
+  }
   apply(
     sessionId: string,
     turnId: string | null,
@@ -138,7 +167,7 @@ export class HarnessEvidenceService {
   listAgentRuns(sessionId: string): SessionAgentRun[] {
     return this.db
       .prepare(
-        `SELECT id,session_id AS sessionId,spawned_by_item_id AS spawnedByItemId,agent_type AS agentType,description,model,status,depth,started_at AS startedAt,ended_at AS endedAt,transcript_path AS transcriptPath,is_backgrounded AS isBackgrounded,last_tool_name AS lastToolName,usage_json AS usageJson,updated_at AS updatedAt,stop_reason AS stopReason,ended_summary AS endedSummary FROM session_agent_runs WHERE session_id=? ORDER BY started_at,id`,
+        `SELECT id,session_id AS sessionId,spawned_by_item_id AS spawnedByItemId,agent_type AS agentType,description,model,status,depth,started_at AS startedAt,ended_at AS endedAt,transcript_path AS transcriptPath,is_backgrounded AS isBackgrounded,last_tool_name AS lastToolName,usage_json AS usageJson,updated_at AS updatedAt,stop_reason AS stopReason,ended_summary AS endedSummary FROM session_agent_runs WHERE session_id=? ORDER BY started_at,rowid`,
       )
       .all(sessionId)
       .map((row) => {
@@ -157,7 +186,7 @@ export class HarnessEvidenceService {
   listTasks(sessionId: string): SessionTask[] {
     return this.db
       .prepare(
-        `SELECT task_id AS taskId,session_id AS sessionId,tool_use_id AS toolUseId,task_type AS taskType,description,status,started_at AS startedAt,ended_at AS endedAt,output_file AS outputFile,stop_reason AS stopReason,ended_summary AS endedSummary FROM session_tasks WHERE session_id=? ORDER BY started_at,task_id`,
+        `SELECT task_id AS taskId,session_id AS sessionId,tool_use_id AS toolUseId,task_type AS taskType,description,status,started_at AS startedAt,ended_at AS endedAt,output_file AS outputFile,stop_reason AS stopReason,ended_summary AS endedSummary FROM session_tasks WHERE session_id=? ORDER BY started_at,rowid`,
       )
       .all(sessionId) as SessionTask[]
   }
