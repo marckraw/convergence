@@ -581,25 +581,28 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         contextItemIds: request.contextItemIds,
         providerAccountId: request.providerAccountId,
       })
-      set((state) => ({
-        currentProjectId: request.projectId,
-        sessions: [session, ...state.sessions],
-        globalSessions: [session, ...state.globalSessions],
-        activeConversation: [],
-        activeConversationSessionId: session.id,
-        queuedInputsBySessionId: {
-          ...state.queuedInputsBySessionId,
-          [session.id]: [],
-        },
-        needsYouDismissals: Object.fromEntries(
-          Object.entries(state.needsYouDismissals).filter(
-            ([sessionId]) => sessionId !== session.id,
+      set((state) => {
+        const latest = findSummaryById(state, session.id) ?? session
+        return {
+          currentProjectId: request.projectId,
+          sessions: upsertSummary(state.sessions, latest),
+          globalSessions: upsertSummary(state.globalSessions, latest),
+          activeConversation: [],
+          activeConversationSessionId: session.id,
+          queuedInputsBySessionId: {
+            ...state.queuedInputsBySessionId,
+            [session.id]: [],
+          },
+          needsYouDismissals: Object.fromEntries(
+            Object.entries(state.needsYouDismissals).filter(
+              ([sessionId]) => sessionId !== session.id,
+            ),
           ),
-        ),
-        activeSessionId: session.id,
-        activeProjectSessionId: session.id,
-        draftWorkspaceId: null,
-      }))
+          activeSessionId: session.id,
+          activeProjectSessionId: session.id,
+          draftWorkspaceId: null,
+        }
+      })
       get().recordRecentSession(session.id)
       void get().loadActiveConversation(session.id)
     } catch (err) {
@@ -628,22 +631,25 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         skillSelections: request.skillSelections,
         providerAccountId: request.providerAccountId,
       })
-      set((state) => ({
-        globalChatSessions: [session, ...state.globalChatSessions],
-        globalSessions: [session, ...state.globalSessions],
-        activeGlobalConversation: [],
-        activeGlobalConversationSessionId: session.id,
-        queuedInputsBySessionId: {
-          ...state.queuedInputsBySessionId,
-          [session.id]: [],
-        },
-        needsYouDismissals: Object.fromEntries(
-          Object.entries(state.needsYouDismissals).filter(
-            ([sessionId]) => sessionId !== session.id,
+      set((state) => {
+        const latest = findSummaryById(state, session.id) ?? session
+        return {
+          globalChatSessions: upsertSummary(state.globalChatSessions, latest),
+          globalSessions: upsertSummary(state.globalSessions, latest),
+          activeGlobalConversation: [],
+          activeGlobalConversationSessionId: session.id,
+          queuedInputsBySessionId: {
+            ...state.queuedInputsBySessionId,
+            [session.id]: [],
+          },
+          needsYouDismissals: Object.fromEntries(
+            Object.entries(state.needsYouDismissals).filter(
+              ([sessionId]) => sessionId !== session.id,
+            ),
           ),
-        ),
-        activeGlobalSessionId: session.id,
-      }))
+          activeGlobalSessionId: session.id,
+        }
+      })
       get().recordRecentSession(session.id)
       void get().loadActiveGlobalConversation(session.id)
       return session
@@ -670,9 +676,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       currentProjectId: projectId,
       sessions:
         state.currentProjectId === projectId
-          ? [session, ...state.sessions]
+          ? upsertSummary(state.sessions, session)
           : state.sessions,
-      globalSessions: [session, ...state.globalSessions],
+      globalSessions: upsertSummary(state.globalSessions, session),
       activeConversation: [],
       activeConversationSessionId: session.id,
       queuedInputsBySessionId: {
@@ -1039,9 +1045,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((state) => ({
       sessions:
         state.currentProjectId === session.projectId
-          ? [session, ...state.sessions]
+          ? upsertSummary(state.sessions, session)
           : state.sessions,
-      globalSessions: [session, ...state.globalSessions],
+      globalSessions: upsertSummary(state.globalSessions, session),
       activeConversation: [],
       activeConversationSessionId: session.id,
       queuedInputsBySessionId: {
@@ -1062,9 +1068,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((state) => ({
       sessions:
         state.currentProjectId === session.projectId
-          ? [session, ...state.sessions]
+          ? upsertSummary(state.sessions, session)
           : state.sessions,
-      globalSessions: [session, ...state.globalSessions],
+      globalSessions: upsertSummary(state.globalSessions, session),
       activeConversation: [],
       activeConversationSessionId: session.id,
       queuedInputsBySessionId: {
