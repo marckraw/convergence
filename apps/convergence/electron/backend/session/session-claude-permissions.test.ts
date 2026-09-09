@@ -8,6 +8,7 @@ import { LocalExecutionHost } from '../provider/execution-host/local-execution-h
 import { SessionService } from './session.service'
 import * as claudeTransport from '../provider/claude-code/claude-transport.service'
 import { ProviderSessionEmitter } from '../provider/provider-session.emitter'
+import { ClaudePermissionsService } from '../provider/claude-code/claude-permissions.service'
 import { ClaudeCodeProvider } from '../provider/claude-code/claude-code-provider'
 import type { SessionPermissionConfig } from '../provider/provider.types'
 import type {
@@ -1294,4 +1295,340 @@ it('H1prime repeated grants ignore the setMode alternative — count setMode as 
       decisionClassification: 'user_permanent',
     })),
   })
+})
+
+it.each(['stop', 'end'] as const)(
+  'RUN57 endings %s settle all three despite the first recording failure — remove per-iteration catch turns red',
+  async (ending) => {
+    const { service, session, connections } = await fixture()
+    const requests = vi.spyOn(ClaudePermissionsService.prototype, 'request')
+    const suggestions = [
+      {
+        type: 'addRules',
+        behavior: 'allow',
+        rules: [{ toolName: 'Bash', ruleContent: 'fixture' }],
+      },
+    ]
+    const remembered = request(connections[0], 'remember', { suggestions })
+    service.approve(session.id, 'remember', { scope: 'session' })
+    await remembered
+    const permissions = requests.mock.contexts[0] as ClaudePermissionsService
+    const settled: string[] = []
+    const pending = ['one', 'two', 'three'].map((id) =>
+      request(connections[0], id)?.then((result) => {
+        settled.push(id)
+        return result?.behavior
+      }),
+    )
+    vi.spyOn(
+      ProviderSessionEmitter.prototype,
+      'resolveInteraction',
+    ).mockImplementationOnce(() => {
+      throw new Error('first recording fails')
+    })
+    let error: unknown
+    try {
+      if (ending === 'stop') permissions.denyPendingForStop()
+      else permissions.endConnection()
+    } catch (caught) {
+      error = caught
+    }
+    await new Promise((r) => setTimeout(r, 0))
+    const afterEnding = [...settled]
+    // Settle leftovers before asserting so a red test does not leak callbacks.
+    permissions.endConnection()
+    const repeat = request(connections[0], 'repeat', { suggestions })
+    const repeatCard = service
+      .getConversation(session.id)
+      .find((i) => i.providerMeta.providerItemId === 'repeat')
+    service.deny(session.id, 'repeat')
+    await repeat
+    expect({
+      error,
+      afterEnding,
+      results: await Promise.all(pending),
+      repeatKind: repeatCard?.kind,
+    }).toEqual({
+      error: undefined,
+      afterEnding: ['one', 'two', 'three'],
+      results: ['deny', 'deny', 'deny'],
+      repeatKind: 'approval-request',
+    })
+  },
+)
+
+it('RUN57 ending failure still releases connectionEnding and clears rules — abort ending loop on first resolve error turns red', async () => {
+  const { service, session, connections } = await fixture(30 / 60000)
+  const suggestions = [
+    {
+      type: 'addRules',
+      behavior: 'allow',
+      rules: [{ toolName: 'Bash', ruleContent: 'fixture' }],
+    },
+  ]
+  const remembered = request(connections[0], 'remember', { suggestions })
+  service.approve(session.id, 'remember', { scope: 'session' })
+  await remembered
+  const pending = ['one', 'two', 'three'].map((id) =>
+    request(connections[0], id),
+  )
+  vi.spyOn(
+    ProviderSessionEmitter.prototype,
+    'resolveInteraction',
+  ).mockImplementationOnce(() => {
+    throw new Error('first recording fails')
+  })
+  // Capture a broken implementation's throw without an unhandled timer rejection.
+  const original = ClaudePermissionsService.prototype.endConnection
+  const errors: unknown[] = []
+  vi.spyOn(
+    ClaudePermissionsService.prototype,
+    'endConnection',
+  ).mockImplementation(function (this: ClaudePermissionsService) {
+    try {
+      original.call(this)
+    } catch (error) {
+      errors.push(error)
+    }
+  })
+  connections[0].push({ type: 'result', subtype: 'success', result: 'done' })
+  await vi.waitUntil(() => connections[0].closed)
+  await service.sendMessage(session.id, { text: 'after ending' })
+  await vi.waitUntil(() => connections[1]?.writes.length === 1)
+  const repeat = request(connections[1], 'repeat', { suggestions })
+  const repeatCard = service
+    .getConversation(session.id)
+    .find((i) => i.providerMeta.providerItemId === 'repeat')
+  service.deny(session.id, 'repeat')
+  await repeat
+  expect({
+    errors,
+    results: (await Promise.all(pending)).map((r) => r?.behavior),
+    writes: connections[1].writes.length,
+    repeatKind: repeatCard?.kind,
+  }).toEqual({
+    errors: [],
+    results: ['deny', 'deny', 'deny'],
+    writes: 1,
+    repeatKind: 'approval-request',
+  })
+})
+
+it('RUN57 foreign tool grants offer no Always allow and never match — restore any-rule button or skip rememberable predicate turns red', async () => {
+  const { service, session, connections } = await fixture()
+  const suggestions = [
+    {
+      type: 'addRules',
+      behavior: 'allow',
+      rules: [{ toolName: 'Write', ruleContent: 'fixture' }],
+    },
+  ]
+  const first = request(connections[0], 'first', { suggestions })
+  const firstCard = service
+    .getConversation(session.id)
+    .find((i) => i.providerMeta.providerItemId === 'first')
+  service.approve(session.id, 'first', { scope: 'session' })
+  await first
+  const repeat = request(connections[0], 'repeat', { suggestions })
+  const repeatCard = service
+    .getConversation(session.id)
+    .find((i) => i.providerMeta.providerItemId === 'repeat')
+  service.deny(session.id, 'repeat')
+  expect({
+    button:
+      firstCard?.kind === 'approval-request' &&
+      firstCard.supportsSessionApproval,
+    repeatKind: repeatCard?.kind,
+    result: (await repeat)?.behavior,
+  }).toEqual({ button: false, repeatKind: 'approval-request', result: 'deny' })
+})
+
+it('RUN57 a tool-wide rule without ruleContent is rememberable — require string ruleContent turns red', async () => {
+  const { service, session, connections } = await fixture()
+  const suggestions = [
+    { type: 'addRules', behavior: 'allow', rules: [{ toolName: 'Bash' }] },
+  ]
+  const first = request(connections[0], 'first', { suggestions })
+  const firstCard = service
+    .getConversation(session.id)
+    .find((i) => i.providerMeta.providerItemId === 'first')
+  service.approve(session.id, 'first', { scope: 'session' })
+  await first
+  const repeat = request(connections[0], 'repeat', { suggestions })
+  await Promise.race([repeat, new Promise((r) => setTimeout(r, 25))])
+  service.deny(session.id, 'repeat')
+  expect({
+    button:
+      firstCard?.kind === 'approval-request' &&
+      firstCard.supportsSessionApproval,
+    result: (await repeat)?.behavior,
+  }).toEqual({ button: true, result: 'allow' })
+})
+
+it('RUN57 every directory must be remembered — change directory every to some turns red', async () => {
+  const { service, session, connections } = await fixture()
+  const rule = {
+    type: 'addRules',
+    behavior: 'allow',
+    rules: [{ toolName: 'Bash', ruleContent: 'fixture' }],
+  }
+  const first = request(connections[0], 'first', {
+    suggestions: [rule, { type: 'addDirectories', directories: ['/known'] }],
+  })
+  service.approve(session.id, 'first', { scope: 'session' })
+  await first
+  const repeat = request(connections[0], 'broader', {
+    suggestions: [
+      rule,
+      { type: 'addDirectories', directories: ['/known', '/unknown'] },
+    ],
+  })
+  const card = service
+    .getConversation(session.id)
+    .find((i) => i.providerMeta.providerItemId === 'broader')
+  service.deny(session.id, 'broader')
+  expect({ kind: card?.kind, result: (await repeat)?.behavior }).toEqual({
+    kind: 'approval-request',
+    result: 'deny',
+  })
+})
+
+it('RUN57 unconsumed mid-turn answer queues its own next turn and note — return early or ignore queue outcome turns red', async () => {
+  const { service, session, connections, db } = await fixture()
+  const terminals: string[] = []
+  service.onSessionSettled((event) => terminals.push(...event.dispatchIds))
+  const dispatchId = await service.sendMessage(session.id, {
+    text: 'late answer',
+    deliveryMode: 'answer',
+    muteRelays: true,
+  })
+  const queued = service.getQueuedInputs(session.id).map((i) => ({
+    text: i.text,
+    mode: i.deliveryMode,
+    dispatchId: i.dispatchId,
+  }))
+  const notes = service
+    .getConversation(session.id)
+    .filter(
+      (i) =>
+        i.kind === 'note' &&
+        i.text === 'nothing to answer; sent as your next message',
+    ).length
+  const mutedBefore =
+    (
+      db
+        .prepare('SELECT relays_muted FROM sessions WHERE id = ?')
+        .get(session.id) as { relays_muted: number }
+    ).relays_muted === 1
+  const before = connections[0].writes.length
+  connections[0].push({
+    type: 'result',
+    subtype: 'success',
+    result: 'first done',
+  })
+  await new Promise((r) => setTimeout(r, 40))
+  const completedByFirst = terminals.includes(dispatchId)
+  const after = connections[0].writes.map((w) => w.message.content)
+  connections[0].push({
+    type: 'result',
+    subtype: 'success',
+    result: 'late answer done',
+  })
+  await new Promise((r) => setTimeout(r, 20))
+  expect({
+    queued,
+    mutedBefore,
+    notes,
+    before,
+    after,
+    completedByFirst,
+    completedBySecond: terminals.includes(dispatchId),
+  }).toEqual({
+    queued: [{ text: 'late answer', mode: 'follow-up', dispatchId }],
+    mutedBefore: false,
+    notes: 1,
+    before: 1,
+    after: [
+      [{ type: 'text', text: 'write fixture' }],
+      [{ type: 'text', text: 'late answer' }],
+    ],
+    completedByFirst: false,
+    completedBySecond: true,
+  })
+})
+
+it('RUN57 recovery close window denies a stale callback — omit recovery generation bump turns red', async () => {
+  const create = claudeTransport.createClaudeTransport
+  let release: (() => void) | undefined
+  vi.spyOn(claudeTransport, 'createClaudeTransport').mockImplementation(
+    (input) => {
+      const transport = create(input)
+      if (release) return transport
+      return {
+        ...transport,
+        close: () =>
+          new Promise<void>((resolve) => {
+            release = () => {
+              void transport.close().then(resolve)
+            }
+          }),
+      }
+    },
+  )
+  const { service, session, connections } = await fixture(
+    0,
+    { preset: 'ask' },
+    false,
+  )
+  connections[0].push({
+    type: 'result',
+    subtype: 'error_during_execution',
+    is_error: true,
+    result: 'No such session: harness',
+    errors: ['No such session: harness'],
+    session_id: 'harness',
+    num_turns: 0,
+  })
+  await vi.waitUntil(() => !!release)
+  const pending = request(connections[0], 'recovery-window')
+  const card = service
+    .getConversation(session.id)
+    .find((i) => i.providerMeta.providerItemId === 'recovery-window')
+  service.deny(session.id, 'recovery-window')
+  const result = await pending
+  release!()
+  await vi.waitUntil(() => connections.length === 2)
+  vi.restoreAllMocks()
+  expect({ card: card?.kind, result }).toEqual({
+    card: undefined,
+    result: {
+      behavior: 'deny',
+      toolUseID: 'recovery-window',
+      decisionClassification: 'user_reject',
+      message: 'connection ended',
+    },
+  })
+})
+
+it('RUN57 a denied request is harness output before a crash — move sawHarnessOutput below denial turns red', async () => {
+  const { service, session, connections } = await fixture()
+  connections[0].push({
+    type: 'result',
+    subtype: 'success',
+    result: 'first done',
+  })
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'completed')
+  await service.sendMessage(session.id, { text: 'do not resend' })
+  await vi.waitUntil(() => connections[0].writes.length === 2)
+  service.stop(session.id)
+  await vi.waitUntil(() => connections[0].interrupt.mock.calls.length === 1)
+  const denied = await request(connections[0], 'after-stop')
+  connections[0].close()
+  await new Promise((r) => setTimeout(r, 70))
+  expect({
+    denied: denied?.behavior,
+    spawns: connections.length,
+    writes: connections.flatMap((c) => c.writes).length,
+    status: service.getById(session.id)?.status,
+  }).toEqual({ denied: 'deny', spawns: 1, writes: 2, status: 'failed' })
 })

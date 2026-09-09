@@ -457,6 +457,7 @@ export interface SessionHandle {
   onActivityChange: (callback: (activity: ActivitySignal) => void) => void
   onActivityHeartbeat?: (callback: () => void) => void
 
+  /** A local handle can return queue-follow-up when an answer has no pending interaction. */
   sendMessage: (
     text: string,
     attachments?: Attachment[],
@@ -473,7 +474,7 @@ export interface SessionHandle {
        */
       providerAccountId?: string | null
     },
-  ) => void
+  ) => void | 'queue-follow-up'
   approve: (
     providerApprovalId?: string,
     options?: { scope: 'once' | 'session' },

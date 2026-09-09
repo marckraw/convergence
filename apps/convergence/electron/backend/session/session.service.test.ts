@@ -360,6 +360,33 @@ describe('SessionService', () => {
     )
   }
 
+  it('RUN57 local handle broadcasts attach and release without a provider event — remove set/release notify turns red', async () => {
+    registry.register({
+      ...createTestProvider(),
+      start: () => ({ ...SYNTHETIC_HANDLE }),
+    })
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: null,
+      effort: null,
+      name: 'silent handle',
+    })
+    const seen: Array<boolean | undefined> = []
+    service.setSummaryUpdateListener((summary) => {
+      if (summary.id === session.id) seen.push(summary.hasActiveHandle)
+    })
+    await service.start(session.id, { text: 'start' })
+    const attached = seen.at(-1)
+    seen.length = 0
+    await service.disposeAll()
+    expect({ attached, released: seen }).toEqual({
+      attached: true,
+      released: [false],
+    })
+  })
+
   it('creates a session', () => {
     const session = service.create({
       projectId,
@@ -5635,7 +5662,7 @@ describe('SessionService — liveness clock', () => {
       )
     })
 
-    it('reattaches running remote sessions after a restart instead of failing them', async () => {
+    it('RUN57 remote reattach broadcasts liveness without replay — remove attachRemoteHandle notify turns red', async () => {
       const session = service.create({
         projectId,
         workspaceId: null,
@@ -5693,12 +5720,17 @@ describe('SessionService — liveness clock', () => {
       restartedService.setRemoteWorkspaceSourceResolver(() => ({
         repository: 'git@github.com:acme/repo.git',
       }))
+      const live: Array<boolean | undefined> = []
+      restartedService.setSummaryUpdateListener((summary) => {
+        if (summary.id === session.id) live.push(summary.hasActiveHandle)
+      })
       restartedService.setRemoteExecutionHosts(
         executionHostRegistryFor({
           [TEST_EXECUTION_HOST_ENDPOINT_ID]: attachableHost,
         }),
       )
 
+      expect(live).toEqual([true])
       expect(attachCalls).toEqual([
         { providerId: 'claude', sessionId: session.id, afterSeq: 7 },
       ])

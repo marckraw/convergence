@@ -6,10 +6,7 @@ import {
 } from './claude-transport.service'
 import { describeClaudeTransportVersionRefusal } from './claude-transport-error.pure'
 import { promises as fs } from 'fs'
-import type {
-  InteractionResponse,
-  SessionDelta,
-} from '../../session/conversation-item.types'
+import type { SessionDelta } from '../../session/conversation-item.types'
 import type {
   Provider,
   SessionStartConfig,
@@ -832,6 +829,7 @@ export class ClaudeCodeProvider implements Provider {
       if (reason === 'missing-session') claudeSessionId = null
       currentTurn = null
       interruptRequested = false
+      connectionGeneration++
       permissions.endConnection()
       void child?.close().catch((error) => {
         sessionEmitter.addNote({
@@ -1427,6 +1425,7 @@ export class ClaudeCodeProvider implements Provider {
           cwd: config.workingDirectory,
           env,
           onPermissionRequest: (request) => {
+            sawHarnessOutput = true
             const ended =
               stopped ||
               !!connectionEnding ||
@@ -1440,7 +1439,6 @@ export class ClaudeCodeProvider implements Provider {
                 decisionClassification: 'user_reject',
                 message: ended ? 'connection ended' : 'Stopped in Convergence',
               })
-            sawHarnessOutput = true
             return permissions.request(request)
           },
           onSpawn: (pid) =>
@@ -1651,14 +1649,16 @@ export class ClaudeCodeProvider implements Provider {
         listeners.heartbeat.push(cb)
       },
       sendMessage: (text, attachments, skillSelections, options) => {
-        if (
-          options?.deliveryMode === 'answer' &&
-          permissions.answer(
-            text,
-            options.interactionResponse as InteractionResponse | undefined,
-          )
-        )
-          return
+        if (options?.deliveryMode === 'answer') {
+          if (permissions.answer(text, options.interactionResponse)) return
+          if (currentTurn) {
+            sessionEmitter.addNote({
+              text: 'nothing to answer; sent as your next message',
+              level: 'info',
+            })
+            return 'queue-follow-up'
+          }
+        }
 
         void startTurn(text, attachments, {
           skillSelections,

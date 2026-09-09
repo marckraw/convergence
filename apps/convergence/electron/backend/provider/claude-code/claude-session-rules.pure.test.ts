@@ -28,7 +28,10 @@ it('R2 only well-formed allow suggestions enter memory — omit shape/behavior c
       { type: 'addDirectories', directories: ['/fixture', 42] },
     ]),
   ).toEqual({
-    rules: [{ toolName: 'Bash', ruleContent: 'exact: * text' }],
+    rules: [
+      { toolName: 'Bash', ruleContent: undefined },
+      { toolName: 'Bash', ruleContent: 'exact: * text' },
+    ],
     directories: ['/fixture'],
   })
 })

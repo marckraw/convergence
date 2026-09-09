@@ -5,6 +5,7 @@ import type {
 } from './claude-permission.types'
 import {
   readClaudeSessionRules,
+  isRememberableSuggestionSet,
   matchesClaudeSessionRule,
   type ClaudeSessionRules,
 } from './claude-session-rules.pure'
@@ -133,8 +134,10 @@ export class ClaudePermissionsService {
         `${request.displayName ?? request.toolName}: ${request.description ?? ''}`,
       providerItemId: request.toolUseID,
       agentRunId: request.agentID,
-      supportsSessionApproval:
-        readClaudeSessionRules(request.suggestions).rules.length > 0,
+      supportsSessionApproval: isRememberableSuggestionSet(
+        request.suggestions,
+        request.toolName,
+      ),
       permissionDetails: {
         blockedPath: request.blockedPath,
         decisionReason: request.matchedAskRule
@@ -234,13 +237,18 @@ export class ClaudePermissionsService {
   }
 
   denyPendingForStop(): void {
-    for (const id of this.pending.keys())
-      this.resolve(id, {
-        behavior: 'deny',
-        toolUseID: id,
-        decisionClassification: 'user_reject',
-        message: 'Stopped in Convergence',
-      })
+    for (const id of this.pending.keys()) {
+      try {
+        this.resolve(id, {
+          behavior: 'deny',
+          toolUseID: id,
+          decisionClassification: 'user_reject',
+          message: 'Stopped in Convergence',
+        })
+      } catch {
+        // resolve settles this callback even if recording fails; settle the rest.
+      }
+    }
   }
 
   endConnection(): void {
@@ -249,13 +257,18 @@ export class ClaudePermissionsService {
         text: 'Pending approval cancelled: connection ended',
         level: 'info',
       })
-    for (const id of this.pending.keys())
-      this.resolve(id, {
-        behavior: 'deny',
-        toolUseID: id,
-        decisionClassification: 'user_reject',
-        message: 'connection ended',
-      })
+    for (const id of this.pending.keys()) {
+      try {
+        this.resolve(id, {
+          behavior: 'deny',
+          toolUseID: id,
+          decisionClassification: 'user_reject',
+          message: 'connection ended',
+        })
+      } catch {
+        // resolve settles this callback even if recording fails; settle the rest.
+      }
+    }
     if (
       this.sessionAllowRules.rules.length ||
       this.sessionAllowRules.directories.length

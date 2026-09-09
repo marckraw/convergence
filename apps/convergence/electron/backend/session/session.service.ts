@@ -2047,8 +2047,11 @@ export class SessionService {
       input.session.id,
       input.input.providerAccountId ?? null,
     )
+    const previousMute = input.input.muteRelays
+      ? this.getRowById(session.id)?.relays_muted
+      : undefined
     this.requestRelayMute(input.session.id, input.input.muteRelays)
-    handle.sendMessage(
+    const disposition = handle.sendMessage(
       augmentedText,
       attachments,
       input.input.skillSelections,
@@ -2058,6 +2061,19 @@ export class SessionService {
         providerAccountId: input.input.providerAccountId,
       },
     )
+    if (disposition === 'queue-follow-up') {
+      // This input belongs to the next turn, including its relay choice.
+      if (previousMute === 0)
+        this.db
+          .prepare('UPDATE sessions SET relays_muted = 0 WHERE id = ?')
+          .run(session.id)
+      this.queuedInputs.enqueue(
+        session.id,
+        { ...input.input, dispatchId: input.dispatchId },
+        'follow-up',
+      )
+      return
+    }
     // Whatever the mode, the input just went INTO the turn this handle is
     // running (a native follow-up joins it; a normal send starts it), so that
     // turn's settle is the one that consumed this dispatch (MAR-2759).
@@ -3116,6 +3132,7 @@ export class SessionService {
     this.pendingTurnAccountIds.set(session.id, providerAccountId ?? null)
     this.requestRelayMute(session.id, turn?.muteRelays)
     this.activeHandles.set(session.id, handle)
+    this.notifySummaryUpdated(session.id)
     handle.onDelta((delta: SessionDelta) => {
       this.applyDelta(session.id, delta, handle)
     })
@@ -3247,6 +3264,7 @@ export class SessionService {
     if (!handle) return Promise.resolve()
 
     this.activeHandles.delete(sessionId)
+    this.notifySummaryUpdated(sessionId)
     let disposal: void | Promise<void> = undefined
     try {
       disposal = handle.dispose?.(reason)
@@ -3418,6 +3436,7 @@ export class SessionService {
       this.sessionRepository.getExecutionHostLastSeq(session.id),
     )
     this.activeHandles.set(session.id, handle)
+    this.notifySummaryUpdated(session.id)
     if (isTerminalSessionStatus(session.status)) {
       this.handlesAwaitingTheirRun.add(handle)
     }
