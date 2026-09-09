@@ -3,9 +3,9 @@ import { ArrowLeft, ChevronDown, ChevronRight, X } from 'lucide-react'
 import {
   countParallelWork,
   orderParallelWork,
+  parallelWorkParents,
   archiveParallelWork,
   parallelWorkTime,
-  parallelWorkAnchor,
   formatRelativeTime,
   parallelWorkRowState,
   pendingAgentDecision,
@@ -59,26 +59,9 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
     [ordered, now],
   )
   const archived = useMemo(() => new Set(archive.older), [archive])
-  const newest = useMemo(
-    () =>
-      archive.older.reduce<string | null>((latest, row) => {
-        const anchor = parallelWorkAnchor(row)
-        return anchor.phase === 'ended' &&
-          anchor.at &&
-          (!latest || Date.parse(anchor.at) > Date.parse(latest))
-          ? anchor.at
-          : latest
-      }, null),
-    [archive],
-  )
   const { counts, completed, childrenById, roots } = useMemo(() => {
     const childrenById = new Map<ParallelWorkRow, ParallelWorkRow[]>()
-    const parents = new Map(
-      [
-        ...rows.filter((row) => row.kind === 'task'),
-        ...rows.filter((row) => row.kind === 'agent'),
-      ].map((row) => [row.id, row]),
-    )
+    const parents = parallelWorkParents(rows)
     for (const row of ordered) {
       const parent = row.parentId ? parents.get(row.parentId) : undefined
       if (parent) {
@@ -94,8 +77,7 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
       ).length,
       childrenById,
       roots: ordered.filter(
-        (row) =>
-          !row.parentId || !rows.some((parent) => parent.id === row.parentId),
+        (row) => !row.parentId || !parents.has(row.parentId),
       ),
     }
   }, [rows, ordered])
@@ -211,41 +193,41 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
       </div>
     )
   }
-  const content = (row: ParallelWorkRow) => (
-    <>
-      <Button
-        variant="ghost"
-        className="h-auto justify-start rounded-none p-0 hover:bg-transparent block max-w-full truncate text-left text-[13px] font-medium hover:underline"
-        onClick={() => props.onSelect(row.id)}
-      >
-        {workTitle(row)}
-      </Button>
-      <p className="text-[11px] text-muted-foreground">
-        {row.run
-          ? `${row.run.agentType ?? 'Not reported'} · ${row.run.model ?? 'Not reported'} · depth ${row.run.depth ?? 'Not reported'}`
-          : (row.task?.taskType ?? 'Not reported')}
-      </p>
-      <p
-        className="text-[11px]"
-        title={parallelWorkTime(row, now).at ?? undefined}
-      >
-        {workStatus(row)} · {parallelWorkTime(row, now).label}
-      </p>
-      {row.run && (
+  const content = (row: ParallelWorkRow) => {
+    const time = parallelWorkTime(row, now)
+    return (
+      <>
+        <Button
+          variant="ghost"
+          className="h-auto justify-start rounded-none p-0 hover:bg-transparent block max-w-full truncate text-left text-[13px] font-medium hover:underline"
+          onClick={() => props.onSelect(row.id)}
+        >
+          {workTitle(row)}
+        </Button>
         <p className="text-[11px] text-muted-foreground">
-          Last tool: {row.run.lastToolName ?? 'Not reported'}
+          {row.run
+            ? `${row.run.agentType ?? 'Not reported'} · ${row.run.model ?? 'Not reported'} · depth ${row.run.depth ?? 'Not reported'}`
+            : (row.task?.taskType ?? 'Not reported')}
         </p>
-      )}
-      {parallelWorkRowState(row).fact?.status === 'failed' && (
-        <p className="text-xs text-red-500">
-          {parallelWorkRowState(row).fact?.endedSummary
-            ? `Reported by the harness: ${parallelWorkRowState(row).fact!.endedSummary}`
-            : 'Not reported'}
+        <p className="text-[11px]" title={time.at ?? undefined}>
+          {workStatus(row)} · {time.label}
         </p>
-      )}
-      {decision(row)}
-    </>
-  )
+        {row.run && (
+          <p className="text-[11px] text-muted-foreground">
+            Last tool: {row.run.lastToolName ?? 'Not reported'}
+          </p>
+        )}
+        {parallelWorkRowState(row).fact?.status === 'failed' && (
+          <p className="text-xs text-red-500">
+            {parallelWorkRowState(row).fact?.endedSummary
+              ? `Reported by the harness: ${parallelWorkRowState(row).fact!.endedSummary}`
+              : 'Not reported'}
+          </p>
+        )}
+        {decision(row)}
+      </>
+    )
+  }
   const renderBranch = (
     row: ParallelWorkRow,
     seen = new Set<string>(),
@@ -354,8 +336,8 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
                   onClick={props.onToggleOlder}
                 >
                   {archive.older.length} older ·{' '}
-                  {newest
-                    ? `newest ${formatRelativeTime(newest, now)} ago`
+                  {archive.newest
+                    ? `newest ${formatRelativeTime(archive.newest, now)} ago`
                     : 'time not reported'}
                 </Button>
                 {props.olderOpen &&

@@ -181,6 +181,17 @@ export function parallelWorkTime(
   }
 }
 
+export function parallelWorkParents(
+  rows: ParallelWorkRow[],
+): Map<string, ParallelWorkRow> {
+  return new Map(
+    [
+      ...rows.filter((row) => row.kind === 'task'),
+      ...rows.filter((row) => row.kind === 'agent'),
+    ].map((row) => [row.id, row]),
+  )
+}
+
 export function orderParallelWork(rows: ParallelWorkRow[]): ParallelWorkRow[] {
   const active = (row: ParallelWorkRow) =>
     ['running', 'unknown'].includes(
@@ -195,12 +206,7 @@ export function orderParallelWork(rows: ParallelWorkRow[]): ParallelWorkRow[] {
     return (Date.parse(left) - Date.parse(right)) * (active(a) ? 1 : -1)
   })
   const children = new Map<ParallelWorkRow | null, ParallelWorkRow[]>()
-  const parents = new Map(
-    [
-      ...rows.filter((row) => row.kind === 'task'),
-      ...rows.filter((row) => row.kind === 'agent'),
-    ].map((row) => [row.id, row]),
-  )
+  const parents = parallelWorkParents(rows)
   for (const row of sorted) {
     const parent = row.parentId ? (parents.get(row.parentId) ?? null) : null
     children.set(parent, [...(children.get(parent) ?? []), row])
@@ -222,19 +228,20 @@ export function orderParallelWork(rows: ParallelWorkRow[]): ParallelWorkRow[] {
 export function archiveParallelWork(
   rows: ParallelWorkRow[],
   now: number,
-): { visible: ParallelWorkRow[]; older: ParallelWorkRow[] } {
-  const byId = new Map(
-    [
-      ...rows.filter((row) => row.kind === 'task'),
-      ...rows.filter((row) => row.kind === 'agent'),
-    ].map((row) => [row.id, row]),
-  )
+): {
+  visible: ParallelWorkRow[]
+  older: ParallelWorkRow[]
+  newest: string | null
+} {
+  const parents = parallelWorkParents(rows)
   const children = new Map<ParallelWorkRow, ParallelWorkRow[]>()
   for (const row of rows) {
-    const parent = row.parentId ? byId.get(row.parentId) : undefined
+    const parent = row.parentId ? parents.get(row.parentId) : undefined
     if (parent) children.set(parent, [...(children.get(parent) ?? []), row])
   }
-  const roots = rows.filter((row) => !row.parentId || !byId.has(row.parentId))
+  const roots = rows.filter(
+    (row) => !row.parentId || !parents.has(row.parentId),
+  )
   const old = new Set<ParallelWorkRow>()
   for (const root of roots) {
     const branch = new Set<ParallelWorkRow>()
@@ -249,15 +256,19 @@ export function archiveParallelWork(
       const status = parallelWorkRowState(row).fact?.status
       if (status === 'running' || status === 'unknown') return false
       return (
-        (row === root && anchor.phase === 'none') ||
-        (anchor.phase === 'ended' &&
-          anchor.at !== null &&
+        anchor.phase === 'none' ||
+        (anchor.at !== null &&
           now - Date.parse(anchor.at) > PARALLEL_WORK_ARCHIVE_AFTER_MS)
       )
     })
     if (eligible) for (const row of branch) old.add(row)
   }
+  const newest = [...old].reduce<string | null>((latest, row) => {
+    const { at } = parallelWorkAnchor(row)
+    return at && (!latest || Date.parse(at) > Date.parse(latest)) ? at : latest
+  }, null)
   return {
+    newest,
     visible: rows.filter((row) => !old.has(row)),
     older: rows.filter((row) => old.has(row)),
   }

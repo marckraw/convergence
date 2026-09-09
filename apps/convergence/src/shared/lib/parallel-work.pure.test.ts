@@ -6,6 +6,7 @@ import type {
 import {
   buildParallelWork,
   orderParallelWork,
+  parallelWorkParents,
   parallelWorkTime,
   parallelWorkAnchor,
   formatRelativeTime,
@@ -394,4 +395,45 @@ it('RUN64 round2 tree identity includes kind — mutation key the walk by id alo
     rows: ['agent:shared', 'agent:child', 'task:shared'],
     older: ['task:shared'],
   })
+})
+
+it('RUN64 round3 archives timeless descendants and seen anchors — mutations ended-only or root-only none turn red', () => {
+  const seen = timedTask('seen-root', 'completed', 180)
+  seen.task!.endedAt = null
+  const rows = [
+    timedTask('root', 'completed', 240),
+    timedTask('timeless-child', 'completed', null, 'root'),
+    seen,
+  ]
+  expect(archiveParallelWork(rows, clock)).toEqual({
+    visible: [],
+    older: rows,
+    newest: ago(180),
+  })
+})
+
+it('RUN64 round3 recent seen descendant keeps the whole tree — mutation ignore seen horizon turns red', () => {
+  const child = timedTask('seen-child', 'completed', 10, 'root')
+  child.task!.endedAt = null
+  const rows = [timedTask('root', 'completed', 240), child]
+  expect(archiveParallelWork(rows, clock)).toEqual({
+    visible: rows,
+    older: [],
+    newest: null,
+  })
+})
+
+it('RUN64 round3 parents choose agents over colliding tasks — mutation reverse parent precedence turns red', () => {
+  const agent: ParallelWorkRow = {
+    id: 'shared',
+    kind: 'agent',
+    parentId: null,
+    run: run('shared', 1),
+  }
+  const task = timedTask('shared', 'running', 10)
+  const orphan = timedTask('orphan', 'running', 4, 'missing')
+  expect([...parallelWorkParents([agent, orphan, task])]).toEqual([
+    ['orphan', orphan],
+    ['shared', agent],
+  ])
 })

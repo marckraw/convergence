@@ -55,7 +55,7 @@ export const ParallelWork: FC<Props> = ({
   error,
 }) => {
   const [olderOpen, setOlderOpen] = useState(false)
-  useEffect(() => setOlderOpen(false), [session.id])
+  useEffect(() => setOlderOpen(false), [open, session.id])
   const [collapsed, setCollapsed] = useState(new Set<string>())
   const [stopStates, setStopStates] = useState(
     new Map<string, { pending?: boolean; error?: string }>(),

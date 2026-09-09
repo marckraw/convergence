@@ -531,3 +531,36 @@ it('RUN64 round2 one root bucket keeps visible trees whole — mutation bucket e
     after: ['active', 'old-child', 'old-root', 'old-descendant', 'legacy'],
   })
 })
+
+it.each(['reopen', 'session'] as const)(
+  'RUN64 round3 bucket collapses on %s — mutation omit reset dependency turns red',
+  (change) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-09T12:00:00Z'))
+    const input = {
+      ...props(),
+      rows: buildParallelWork(
+        [{ ...run, status: 'completed', endedAt: '2026-09-09T09:00:00Z' }],
+        [],
+        [],
+      ),
+    }
+    const { rerender, unmount } = render(<ParallelWork {...input} />)
+    const bucket = () =>
+      screen.getByRole('button', { name: '1 older · newest 3 h ago' })
+    fireEvent.click(bucket())
+    const expanded = bucket().getAttribute('aria-expanded')
+    if (change === 'reopen') {
+      rerender(<ParallelWork {...input} open={false} />)
+      rerender(<ParallelWork {...input} open />)
+    } else {
+      rerender(
+        <ParallelWork {...input} session={{ ...input.session, id: 'other' }} />,
+      )
+    }
+    const after = bucket().getAttribute('aria-expanded')
+    unmount()
+    vi.useRealTimers()
+    expect({ expanded, after }).toEqual({ expanded: 'true', after: 'false' })
+  },
+)

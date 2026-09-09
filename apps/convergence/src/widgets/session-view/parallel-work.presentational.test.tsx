@@ -303,3 +303,100 @@ it('RUN64 R2′ task labels distinguish sighting and missing time with ISO title
       ?.hasAttribute('title'),
   }).toEqual({ seen: '2026-09-09T00:00:00Z', legacy: false })
 })
+
+it('RUN64 round3 bucket uses the folded seen anchor — mutation restate ended-only newest in the view turns red', () => {
+  const now = Date.parse('2026-09-09T12:00:00Z')
+  render(
+    <ParallelWorkPanel
+      rows={buildParallelWork(
+        [{ ...agent, status: 'completed', endedAt: '2026-09-09T08:00:00Z' }],
+        [
+          {
+            taskId: 'seen',
+            sessionId: 's',
+            status: 'completed',
+            description: 'Seen task',
+            startedAt: null,
+            endedAt: null,
+            observedAt: '2026-09-09T09:00:00Z',
+            toolUseId: null,
+            taskType: null,
+            outputFile: null,
+          },
+        ],
+        [],
+      )}
+      now={now}
+      onSelect={vi.fn()}
+      onClose={vi.fn()}
+    />,
+  )
+  expect(
+    screen.queryByRole('button', { name: '2 older · newest 3 h ago' })
+      ?.textContent,
+  ).toBe('2 older · newest 3 h ago')
+})
+
+it('RUN64 round3 rendered children belong to the agent on an id collision — mutation reverse view parent precedence turns red', () => {
+  const rows = buildParallelWork(
+    [
+      {
+        ...agent,
+        id: 'shared',
+        description: 'Agent parent',
+        status: 'running',
+      },
+      { ...agent, id: 'child', description: 'Child', status: 'running' },
+    ],
+    [
+      {
+        taskId: 'shared',
+        sessionId: 's',
+        status: 'running',
+        description: 'Task parent',
+        startedAt: null,
+        endedAt: null,
+        observedAt: null,
+        toolUseId: null,
+        taskType: null,
+        outputFile: null,
+      },
+    ],
+    [],
+  )
+  rows.find((row) => row.id === 'child')!.parentId = 'shared'
+  render(
+    <ParallelWorkPanel
+      rows={rows}
+      now={0}
+      onSelect={vi.fn()}
+      onClose={vi.fn()}
+    />,
+  )
+  expect({
+    agentParent: Boolean(
+      screen.queryByRole('button', { name: 'Collapse Agent parent' }),
+    ),
+    taskParent: Boolean(
+      screen.queryByRole('button', { name: 'Collapse Task parent' }),
+    ),
+  }).toEqual({ agentParent: true, taskParent: false })
+})
+
+it('RUN64 round3 computes one time per rendered row — mutation recompute the label turns red', () => {
+  const time = vi.spyOn(workHelpers, 'parallelWorkTime')
+  const now = Date.parse('2026-09-09T00:04:00Z')
+  const rows = buildParallelWork([{ ...agent, status: 'running' }], [], [])
+  render(
+    <ParallelWorkPanel
+      rows={rows}
+      now={now}
+      onSelect={vi.fn()}
+      onClose={vi.fn()}
+    />,
+  )
+  expect({
+    calls: time.mock.calls,
+    title: screen.getByText('Running · 4 m').title,
+  }).toEqual({ calls: [[rows[0], now]], title: agent.startedAt })
+})
