@@ -1,5 +1,17 @@
 # convergence
 
+## 0.49.0
+
+### Minor Changes
+
+- ee94108: Claude Code sessions in Ask mode now ask you: every tool that needs permission shows an approval card, with Always allow for this session, and Claude's questions are answered in place without restarting the process.
+
+  Session rules approve only fully covered grants and respect forced asks. Concurrent permission cards stay actionable, and every request settles when its connection ends.
+
+### Patch Changes
+
+- b657dc5: Always allow is offered only where the app can honour it; every pending permission request settles on every ending; a late answer is never dropped.
+
 ## 0.48.0
 
 ### Minor Changes
