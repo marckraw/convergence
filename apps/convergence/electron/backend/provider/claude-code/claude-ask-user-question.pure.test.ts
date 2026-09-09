@@ -2,24 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   buildClaudeAskUserQuestionRequest,
   buildClaudeAskUserQuestionUpdatedInput,
-  buildClaudeExitPlanModeHookResponse,
   buildClaudeExitPlanModeRequest,
-  normalizeClaudeDeferredToolUse,
-  supportsClaudeDeferredToolUseVersion,
 } from './claude-ask-user-question.pure'
 
 describe('Claude AskUserQuestion mapping', () => {
-  it('gates deferred tool-use support at Claude Code 2.1.89', () => {
-    expect(supportsClaudeDeferredToolUseVersion('2.1.88')).toBe(false)
-    expect(supportsClaudeDeferredToolUseVersion('Claude Code v2.1.89')).toBe(
-      true,
-    )
-    expect(supportsClaudeDeferredToolUseVersion('2.2.0')).toBe(true)
-    expect(supportsClaudeDeferredToolUseVersion(null)).toBe(false)
-  })
-
-  it('maps deferred AskUserQuestion tool input to a choice request', () => {
-    const toolUse = normalizeClaudeDeferredToolUse({
+  it('maps AskUserQuestion tool input to a choice request', () => {
+    const toolUse = {
       id: 'toolu_123',
       name: 'AskUserQuestion',
       input: {
@@ -41,7 +29,7 @@ describe('Claude AskUserQuestion mapping', () => {
           },
         ],
       },
-    })
+    }
 
     expect(toolUse).not.toBeNull()
     const request = buildClaudeAskUserQuestionRequest(toolUse!)
@@ -114,7 +102,7 @@ describe('Claude AskUserQuestion mapping', () => {
     })
   })
 
-  it('maps deferred ExitPlanMode tool input to a plan request', () => {
+  it('maps ExitPlanMode tool input to a plan request', () => {
     const request = buildClaudeExitPlanModeRequest({
       id: 'toolu_plan',
       name: 'ExitPlanMode',
@@ -136,47 +124,6 @@ describe('Claude AskUserQuestion mapping', () => {
       pending: {
         toolUseId: 'toolu_plan',
       },
-    })
-  })
-
-  it('builds ExitPlanMode hook responses for approve and reject', () => {
-    const request = buildClaudeExitPlanModeRequest({
-      id: 'toolu_plan',
-      name: 'ExitPlanMode',
-      input: {
-        plan: 'Plan text',
-        allowedPrompts: ['Edit files'],
-      },
-    })
-
-    expect(
-      buildClaudeExitPlanModeHookResponse(
-        request!.pending,
-        { kind: 'plan', decision: 'approve' },
-        '',
-      ),
-    ).toEqual({
-      permissionDecision: 'allow',
-      permissionDecisionReason: 'The user approved the plan in Convergence.',
-      updatedInput: {
-        plan: 'Plan text',
-        allowedPrompts: ['Edit files'],
-      },
-    })
-
-    expect(
-      buildClaudeExitPlanModeHookResponse(
-        request!.pending,
-        {
-          kind: 'plan',
-          decision: 'reject',
-          message: 'Use a smaller slice.',
-        },
-        '',
-      ),
-    ).toEqual({
-      permissionDecision: 'deny',
-      permissionDecisionReason: 'Use a smaller slice.',
     })
   })
 })

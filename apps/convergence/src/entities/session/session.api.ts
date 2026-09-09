@@ -82,8 +82,12 @@ export const sessionApi = {
   compactContext: (id: string, instructions?: string): Promise<void> =>
     window.electronAPI.session.compactContext(id, instructions),
 
-  approve: (id: string, providerApprovalId?: string): Promise<void> =>
-    window.electronAPI.session.approve(id, providerApprovalId),
+  approve: (
+    id: string,
+    providerApprovalId?: string,
+    options?: { scope: 'once' | 'session' },
+  ): Promise<void> =>
+    window.electronAPI.session.approve(id, providerApprovalId, options),
 
   deny: (id: string, providerApprovalId?: string): Promise<void> =>
     window.electronAPI.session.deny(id, providerApprovalId),

@@ -174,7 +174,7 @@ export const CLAUDE_CODE_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability
     supportsInterrupt: true,
     defaultRunningMode: 'follow-up',
     notes:
-      'Claude Code supports app-managed answers for deferred AskUserQuestion requests and app-managed follow-up queueing with a resident process.',
+      'Claude Code supports in-place answers to AskUserQuestion requests and app-managed follow-up queueing with a resident process.',
   }
 
 export const CODEX_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability = {

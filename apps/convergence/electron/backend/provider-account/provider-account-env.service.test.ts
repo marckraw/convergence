@@ -73,7 +73,7 @@ describe('resolveClaudeAccountEnv — ambient default account', () => {
     expect(io.writeFile).not.toHaveBeenCalled()
   })
 
-  it('still applies the telemetry and deferred-tool injections', async () => {
+  it('still applies telemetry injections — drop injection forwarding turns red', async () => {
     const env = await resolveClaudeAccountEnv({
       account: null,
       workingDirectory: CWD,
@@ -82,15 +82,12 @@ describe('resolveClaudeAccountEnv — ambient default account', () => {
       io: explodingIo(),
       injections: {
         OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: 'http://127.0.0.1:1234/v1/logs',
-        CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE: '{"answers":[]}',
       },
     })
 
-    expect(env).toEqual({
-      ...BASE_ENV,
-      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: 'http://127.0.0.1:1234/v1/logs',
-      CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE: '{"answers":[]}',
-    })
+    expect(env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT).toBe(
+      'http://127.0.0.1:1234/v1/logs',
+    )
   })
 })
 

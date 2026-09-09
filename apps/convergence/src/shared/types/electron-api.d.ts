@@ -826,6 +826,7 @@ type InteractionRequestData =
     }
 
 interface InteractionChoiceResponseData {
+  providerItemId?: string
   kind: 'choice'
   answers: Array<{
     questionId: string
@@ -834,18 +835,21 @@ interface InteractionChoiceResponseData {
 }
 
 interface InteractionPlanResponseData {
+  providerItemId?: string
   kind: 'plan'
   decision: 'approve' | 'reject'
   message?: string
 }
 
 interface InteractionFormResponseData {
+  providerItemId?: string
   kind: 'form'
   action: 'accept' | 'decline'
   values: Record<string, string | number | boolean>
 }
 
 interface InteractionUrlResponseData {
+  providerItemId?: string
   kind: 'url'
   action: 'accept' | 'decline'
 }
@@ -913,10 +917,15 @@ type ConversationItemData =
     })
   | (ConversationItemDataBase & {
       kind: 'approval-request'
+      resolution?: 'pending' | 'approved' | 'denied'
       description: string
+      permissionDetails?: { blockedPath?: string; decisionReason?: string }
+      supportsSessionApproval?: boolean
     })
   | (ConversationItemDataBase & {
       kind: 'input-request'
+      responseProviderItemId?: string
+      resolution?: 'pending' | 'approved' | 'denied'
       prompt: string
       request?: InteractionRequestData
     })
@@ -1009,6 +1018,8 @@ type AttentionRequestKindData =
   | 'input'
 
 interface SessionSummaryData {
+  /** Runtime fact; never persisted or inferred from attention. */
+  hasActiveHandle?: boolean
   id: string
   contextKind: SessionContextKindData
   projectId: string | null
@@ -1781,7 +1792,11 @@ interface ElectronAPI {
       input: SendSessionMessageInput | string,
     ) => Promise<void>
     compactContext: (id: string, instructions?: string) => Promise<void>
-    approve: (id: string, providerApprovalId?: string) => Promise<void>
+    approve: (
+      id: string,
+      providerApprovalId?: string,
+      options?: { scope: 'once' | 'session' },
+    ) => Promise<void>
     deny: (id: string, providerApprovalId?: string) => Promise<void>
     stop: (id: string) => Promise<void>
     rename: (id: string, name: string) => Promise<void>

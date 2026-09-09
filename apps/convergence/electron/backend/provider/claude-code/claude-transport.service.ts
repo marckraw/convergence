@@ -1,3 +1,7 @@
+import type {
+  ClaudePermissionRequest,
+  ClaudePermissionResult,
+} from './claude-permission.types'
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process'
 import { query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 
@@ -25,6 +29,9 @@ export function createClaudeTransport(input: {
   onExit: (exit: ClaudeTransportExit) => void
   onStderr: (data: string) => void
   onSpawn?: (pid: number) => void
+  onPermissionRequest: (
+    request: ClaudePermissionRequest,
+  ) => Promise<ClaudePermissionResult>
 }): ClaudeTransport {
   const value = (name: string) => {
     const index = input.args.indexOf(name)
@@ -59,6 +66,8 @@ export function createClaudeTransport(input: {
       model: value('--model'),
       resume: value('--resume'),
       includePartialMessages: true,
+      canUseTool: (toolName, inputValue, options) =>
+        input.onPermissionRequest({ toolName, input: inputValue, ...options }),
       permissionMode: mode as
         | 'default'
         | 'acceptEdits'
@@ -66,7 +75,6 @@ export function createClaudeTransport(input: {
         | 'plan',
       allowDangerouslySkipPermissions: mode === 'bypassPermissions',
       extraArgs: {
-        ...(value('--settings') ? { settings: value('--settings')! } : {}),
         ...(value('--effort') ? { effort: value('--effort')! } : {}),
       },
       spawnClaudeCodeProcess: (options) => {
@@ -127,9 +135,11 @@ export function createClaudeTransport(input: {
       runner.setPermissionMode(
         next as 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan',
       ),
-    close: () => {
+    close: async () => {
       closed = true
       wake?.()
+      // Drain resolved permission callbacks before the SDK closes its input.
+      await new Promise<void>((resolve) => setImmediate(resolve))
       runner.close()
       const force = setTimeout(() => spawnedProcess?.kill('SIGKILL'), 5000)
       force.unref?.()

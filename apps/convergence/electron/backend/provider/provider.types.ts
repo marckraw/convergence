@@ -474,7 +474,10 @@ export interface SessionHandle {
       providerAccountId?: string | null
     },
   ) => void
-  approve: (providerApprovalId?: string) => void
+  approve: (
+    providerApprovalId?: string,
+    options?: { scope: 'once' | 'session' },
+  ) => void
   deny: (providerApprovalId?: string) => void
   stop: () => void
   /** Releases local resources without changing the persisted session state. */

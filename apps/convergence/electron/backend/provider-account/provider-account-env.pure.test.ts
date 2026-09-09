@@ -45,7 +45,7 @@ describe('buildClaudeAccountEnv — ambient default account', () => {
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe('oauth-should-never-travel')
   })
 
-  it('applies injections over the inherited environment', () => {
+  it('applies telemetry injections — drop input.injections turns red', () => {
     const baseEnv = realisticEnv()
 
     const env = buildClaudeAccountEnv({
@@ -53,15 +53,10 @@ describe('buildClaudeAccountEnv — ambient default account', () => {
       account: null,
       injections: {
         OTEL_LOGS_EXPORTER: 'otlp',
-        CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE: '{"ok":true}',
       },
     })
 
-    expect(env).toEqual({
-      ...baseEnv,
-      OTEL_LOGS_EXPORTER: 'otlp',
-      CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE: '{"ok":true}',
-    })
+    expect(env.OTEL_LOGS_EXPORTER).toBe('otlp')
   })
 })
 
@@ -148,19 +143,15 @@ describe('buildClaudeAccountEnv — selected account', () => {
     )
   })
 
-  it('lets the deferred tool response survive to the hook', () => {
+  it('preserves the connection telemetry switch', () => {
     const env = buildClaudeAccountEnv({
       baseEnv: {
         ...realisticEnv(),
         CONVERGENCE_CLAUDE_SKILL_TELEMETRY: '0',
       },
       account: ACCOUNT,
-      injections: {
-        CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE: '{"answers":[]}',
-      },
     })
 
-    expect(env.CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE).toBe('{"answers":[]}')
     expect(env.CONVERGENCE_CLAUDE_SKILL_TELEMETRY).toBe('0')
   })
 

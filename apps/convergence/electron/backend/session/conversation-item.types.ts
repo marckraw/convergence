@@ -70,6 +70,7 @@ export type InteractionRequest =
     }
 
 export interface InteractionChoiceResponse {
+  providerItemId?: string
   kind: 'choice'
   answers: Array<{
     questionId: string
@@ -78,18 +79,21 @@ export interface InteractionChoiceResponse {
 }
 
 export interface InteractionPlanResponse {
+  providerItemId?: string
   kind: 'plan'
   decision: 'approve' | 'reject'
   message?: string
 }
 
 export interface InteractionFormResponse {
+  providerItemId?: string
   kind: 'form'
   action: 'accept' | 'decline'
   values: Record<string, string | number | boolean>
 }
 
 export interface InteractionUrlResponse {
+  providerItemId?: string
   kind: 'url'
   action: 'accept' | 'decline'
 }
@@ -146,10 +150,15 @@ export type ConversationItem =
     })
   | (ConversationItemBase & {
       kind: 'approval-request'
+      resolution?: 'pending' | 'approved' | 'denied'
       description: string
+      permissionDetails?: { blockedPath?: string; decisionReason?: string }
+      supportsSessionApproval?: boolean
     })
   | (ConversationItemBase & {
       kind: 'input-request'
+      responseProviderItemId?: string
+      resolution?: 'pending' | 'approved' | 'denied'
       prompt: string
       request?: InteractionRequest
     })
