@@ -804,6 +804,16 @@ export class ClaudeCodeProvider implements Provider {
       )
     }
 
+    function noteContinuationRecovery(
+      note: Parameters<ProviderSessionEmitter['addNote']>[0],
+    ): void {
+      try {
+        sessionEmitter.addNote(note)
+      } catch {
+        // Recording a note must never prevent recovery or permission settlement.
+      }
+    }
+
     function scheduleContinuationRecovery(
       reason: 'missing-session' | 'no-output',
     ): void {
@@ -818,7 +828,7 @@ export class ClaudeCodeProvider implements Provider {
         userMessageItemId: currentTurn.userMessageItemId,
       }
       const recoveryEntry = buildContinuationRecoveryEntry('Claude Code', now())
-      sessionEmitter.addNote({
+      noteContinuationRecovery({
         text:
           reason === 'no-output'
             ? 'Claude Code did not accept the message (no output); sent again on a new process.'

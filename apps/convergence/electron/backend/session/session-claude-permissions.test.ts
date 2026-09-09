@@ -1842,3 +1842,189 @@ it.each(['normal', 'answer'] as const)(
     })
   },
 )
+
+function holdFirstRecoveryClose() {
+  const create = claudeTransport.createClaudeTransport
+  let release: (() => void) | undefined
+  let wrapped = false
+  vi.spyOn(claudeTransport, 'createClaudeTransport').mockImplementation(
+    (input) => {
+      const transport = create(input)
+      if (wrapped) return transport
+      wrapped = true
+      return {
+        ...transport,
+        close: () =>
+          new Promise<void>((resolve) => {
+            release = () => {
+              void transport.close().then(resolve)
+            }
+          }),
+      }
+    },
+  )
+  return { pending: () => !!release, release: () => release?.() }
+}
+const missingSessionResult = {
+  type: 'result',
+  subtype: 'error_during_execution',
+  is_error: true,
+  result: 'No such session: harness',
+  errors: ['No such session: harness'],
+  session_id: 'harness',
+  num_turns: 0,
+}
+
+it('R3 H1 refused queue drain retains the front row until completion retries — mark refused input sent turns red', async () => {
+  const close = holdFirstRecoveryClose()
+  const { service, session, connections } = await fixture(
+    0,
+    { preset: 'ask' },
+    false,
+  )
+  connections[0].push(missingSessionResult)
+  await vi.waitUntil(close.pending)
+  await service.sendMessage(session.id, { text: 'B', deliveryMode: 'normal' })
+  await service.sendMessage(session.id, { text: 'C', deliveryMode: 'normal' })
+  const before = service
+    .getQueuedInputs(session.id)
+    .map(({ id, text, state }) => ({ id, text, state }))
+  const notes = service
+    .getConversation(session.id)
+    .filter((i) => i.kind === 'note')
+  // Invoke the real drain while the real provider is refusing sends during close.
+  service['dispatchNextQueuedInput'](session.id)
+  const refused = service
+    .getQueuedInputs(session.id)
+    .map(({ id, text, state }) => ({ id, text, state }))
+  const notesAfter = service
+    .getConversation(session.id)
+    .filter((i) => i.kind === 'note')
+  close.release()
+  await vi.waitUntil(() => connections[1]?.writes.length === 1)
+  connections[1].push({
+    type: 'result',
+    subtype: 'success',
+    result: 'retry done',
+  })
+  await vi.waitUntil(() => connections[1].writes.length === 2)
+  const afterRetry = service.getQueuedInputs(session.id).map((i) => i.text)
+  connections[1].push({ type: 'result', subtype: 'success', result: 'B done' })
+  await new Promise((r) => setTimeout(r, 40))
+  expect({
+    refused,
+    notesAfter,
+    afterRetry,
+    writes: connections[1].writes.map((w) => w.message.content),
+  }).toEqual({
+    refused: before,
+    notesAfter: notes,
+    afterRetry: ['C'],
+    writes: ['write fixture', 'B', 'C'].map((text) => [{ type: 'text', text }]),
+  })
+})
+
+it.each([false, true])(
+  'R3 M2 recovery note throws=%s without changing recovery — unwrap recovery note turns red',
+  async (throws) => {
+    const close = holdFirstRecoveryClose()
+    const { service, session, connections } = await fixture(
+      0,
+      { preset: 'ask' },
+      false,
+    )
+    const original = ProviderSessionEmitter.prototype.addNote
+    const note = vi
+      .spyOn(ProviderSessionEmitter.prototype, 'addNote')
+      .mockImplementation(function (this: ProviderSessionEmitter, input) {
+        if (throws && input.text.includes('session'))
+          throw new Error('note unavailable')
+        return original.call(this, input)
+      })
+    connections[0].push(missingSessionResult)
+    await vi.waitUntil(close.pending).catch(() => {})
+    const closing = close.pending()
+    await service
+      .sendMessage(session.id, { text: 'B', deliveryMode: 'normal' })
+      .catch(() => {})
+    const queued = service
+      .getQueuedInputs(session.id)
+      .map((i) => ({ text: i.text, state: i.state }))
+    note.mockRestore()
+    close.release()
+    await vi.waitUntil(() => !!connections[1]?.writes.length).catch(() => {})
+    connections[1]?.push({
+      type: 'result',
+      subtype: 'success',
+      result: 'retry done',
+    })
+    await new Promise((r) => setTimeout(r, 40))
+    expect({
+      closing,
+      queued,
+      closed: connections[0].closed,
+      writes: connections[1]?.writes.map((w) => w.message.content),
+    }).toEqual({
+      closing: true,
+      queued: [{ text: 'B', state: 'queued' }],
+      closed: true,
+      writes: ['write fixture', 'B'].map((text) => [{ type: 'text', text }]),
+    })
+  },
+)
+
+it.each([false, true])(
+  'R3 M2 queued-answer note throws=%s without failing or duplicating dispatch — unwrap queued note turns red',
+  async (throws) => {
+    const { service, session, connections } = await fixture()
+    const recorder = service as unknown as {
+      addConversationItem: SessionService['addConversationItem']
+    }
+    const original = recorder.addConversationItem.bind(service)
+    vi.spyOn(recorder, 'addConversationItem').mockImplementation((id, item) => {
+      if (
+        throws &&
+        item.kind === 'note' &&
+        item.text === 'nothing to answer; queued as your next message'
+      )
+        throw new Error('note unavailable')
+      return original(id, item)
+    })
+    let failed = false
+    await service
+      .sendMessage(session.id, { text: 'late answer', deliveryMode: 'answer' })
+      .catch(() => {
+        failed = true
+      })
+    const queued = service
+      .getQueuedInputs(session.id)
+      .map((i) => ({ text: i.text, state: i.state }))
+    connections[0].push({
+      type: 'result',
+      subtype: 'success',
+      result: 'first done',
+    })
+    await vi.waitUntil(() => connections[0].writes.length === 2)
+    connections[0].push({
+      type: 'result',
+      subtype: 'success',
+      result: 'answer done',
+    })
+    await vi.waitUntil(
+      () => service.getById(session.id)?.status === 'completed',
+    )
+    expect({
+      failed,
+      queued,
+      remaining: service.getQueuedInputs(session.id),
+      writes: connections[0].writes.map((w) => w.message.content),
+    }).toEqual({
+      failed: false,
+      queued: [{ text: 'late answer', state: 'queued' }],
+      remaining: [],
+      writes: ['write fixture', 'late answer'].map((text) => [
+        { type: 'text', text },
+      ]),
+    })
+  },
+)

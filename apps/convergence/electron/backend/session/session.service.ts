@@ -2056,26 +2056,30 @@ export class SessionService {
         'follow-up',
       )
       if (deliveryMode === 'answer') {
-        const timestamp = new Date().toISOString()
-        const note = this.addConversationItem(session.id, {
-          id: randomUUID(),
-          turnId: null,
-          kind: 'note',
-          state: 'complete',
-          level: 'info',
-          text: 'nothing to answer; queued as your next message',
-          createdAt: timestamp,
-          updatedAt: timestamp,
-          providerMeta: {
-            providerId: session.providerId,
-            providerItemId: null,
-            providerEventType: 'unconsumed-answer-queued',
-          },
-        })
-        this.notifySessionChange(
-          session.id,
-          note ? { sessionId: session.id, op: 'add', item: note } : undefined,
-        )
+        try {
+          const timestamp = new Date().toISOString()
+          const note = this.addConversationItem(session.id, {
+            id: randomUUID(),
+            turnId: null,
+            kind: 'note',
+            state: 'complete',
+            level: 'info',
+            text: 'nothing to answer; queued as your next message',
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            providerMeta: {
+              providerId: session.providerId,
+              providerItemId: null,
+              providerEventType: 'unconsumed-answer-queued',
+            },
+          })
+          this.notifySessionChange(
+            session.id,
+            note ? { sessionId: session.id, op: 'add', item: note } : undefined,
+          )
+        } catch {
+          // The input is already queued; a note cannot turn it into a failed dispatch.
+        }
       }
       return
     }
@@ -3328,11 +3332,21 @@ export class SessionService {
         // The mute the user chose when they wrote this, not the composer's
         // state now -- the toggle reset the moment they pressed send.
         this.requestRelayMute(sessionId, item.relaysMuted)
-        handle.sendMessage(augmentedText, attachments, item.skillSelections, {
-          deliveryMode: 'normal',
-          queuedInputId: item.id,
-          providerAccountId: item.providerAccountId,
-        })
+        const disposition = handle.sendMessage(
+          augmentedText,
+          attachments,
+          item.skillSelections,
+          {
+            deliveryMode: 'normal',
+            queuedInputId: item.id,
+            providerAccountId: item.providerAccountId,
+          },
+        )
+        if (disposition === 'queue-follow-up') {
+          // Keep its original row and ordering; the next completion retries it.
+          this.queuedInputs.patch(item.id, 'queued')
+          return
+        }
         // The receipt moves from the durable queue row to the turn it just
         // started (MAR-2759): this turn's settle names it.
         this.attachDispatchToTurn(sessionId, item.dispatchId)
