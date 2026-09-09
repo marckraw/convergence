@@ -58,6 +58,13 @@ export interface DaemonClientDeps {
   healthProbeTimeoutMs?: number
 }
 
+/**
+ * `gap`: frames were missed and the resume will ask for them again.
+ * `unreadable`: the frame could not become an envelope for this session, and
+ * nothing will re-send it.
+ */
+export type StreamFrameLoss = 'gap' | 'unreadable'
+
 export interface StreamHandlers {
   /**
    * One envelope, in arrival order. Awaited, so the record is written before
@@ -66,12 +73,18 @@ export interface StreamHandlers {
    */
   onEnvelope: (envelope: ExecutionHostEventEnvelope) => Promise<void>
   /**
-   * A frame that could not be turned into an envelope for this session.
+   * A frame that did not reach the record, and what kind of loss it was.
    *
    * A drop with nobody to tell is a defect of its own, so the reason travels
    * out of here rather than being swallowed at the parse.
+   *
+   * The kind matters to the caller because only one of the two is undone by
+   * what happens next: a `gap` is re-requested by the reconnect and the daemon
+   * replays it, while an `unreadable` frame is gone for good. A caller that
+   * cannot tell them apart either keeps a healed gap on screen forever or
+   * quietly forgets a frame nobody will send again (MAR-2779 round 2).
    */
-  onDroppedFrame: (reason: string) => void
+  onDroppedFrame: (reason: string, loss: StreamFrameLoss) => void
 }
 
 /**
@@ -295,7 +308,7 @@ export class DaemonClient {
         )) {
           const reading = readEnvelopeFrame(frame.data, sessionId)
           if (!reading.ok) {
-            handlers.onDroppedFrame(reading.reason)
+            handlers.onDroppedFrame(reading.reason, 'unreadable')
             continue
           }
           // What this envelope's sequence means is the package's rule, not this
@@ -315,6 +328,7 @@ export class DaemonClient {
             // which the daemon answers by replaying what was lost.
             handlers.onDroppedFrame(
               describeSeqGap(lastSeq, reading.envelope.seq),
+              'gap',
             )
             gap = true
             return { lastSeq, envelopes }

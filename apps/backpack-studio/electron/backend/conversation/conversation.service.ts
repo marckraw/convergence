@@ -56,6 +56,15 @@ interface LiveConversation {
   unreadableTailLines: number
   streamError: string | null
   /**
+   * Set while `streamError` is a gap the resume has not filled yet.
+   *
+   * A gap is the one loss that undoes itself: the reconnect asks from the last
+   * contiguous sequence and the daemon replays what was missed, so the first
+   * envelope that lands afterwards is the proof the hole is gone. An unreadable
+   * frame has no such proof and keeps its sentence (MAR-2779 round 2).
+   */
+  gapAwaitingResume: boolean
+  /**
    * Why the record last refused a write, while it is still refusing.
    *
    * A refused append ends the stream, and the reconnect meets the same disk and
@@ -112,6 +121,7 @@ export class ConversationService {
         fold: foldEntries(emptyFold(record.createdAt), entries),
         unreadableTailLines,
         streamError: null,
+        gapAwaitingResume: false,
         recordFailure: null,
         abort: null,
         following: null,
@@ -163,6 +173,7 @@ export class ConversationService {
       fold: emptyFold(record.createdAt),
       unreadableTailLines: 0,
       streamError: null,
+      gapAwaitingResume: false,
       recordFailure: null,
       abort: null,
       following: null,
@@ -361,11 +372,15 @@ export class ConversationService {
         live.fold.lastSeq,
         {
           onEnvelope: (envelope) => this.record(live, envelope),
-          onDroppedFrame: (reason) => {
-            // A frame that could not become an envelope is a hole in the
+          onDroppedFrame: (reason, loss) => {
+            // A frame that did not reach the record is a hole in the
             // transcript. It never reaches the log — it is not this session's
             // to store — so the conversation carries the reason instead.
             live.streamError = reason
+            // Said while it is true, and only until it stops being true: a gap
+            // is answered by the resume, and `record` retires the sentence the
+            // moment the replayed frames land.
+            live.gapAwaitingResume = loss === 'gap'
             this.publish(live)
           },
         },
@@ -449,6 +464,14 @@ export class ConversationService {
       throw error
     }
     live.recordFailure = null
+    // The envelope the resume was asking for. Nothing retired this sentence
+    // before, so a conversation whose record came back whole — 1, 2, 3, 4, in
+    // order — kept showing "gap: expected 3..." until the person typed their
+    // next message: the recovery worked and the app said it had not.
+    if (live.gapAwaitingResume) {
+      live.gapAwaitingResume = false
+      live.streamError = null
+    }
     // A conversation that has stopped running has nothing left to stream. The
     // follow is ended here rather than left open for the app's lifetime — one
     // idle SSE per conversation is a connection the daemon holds for nobody.

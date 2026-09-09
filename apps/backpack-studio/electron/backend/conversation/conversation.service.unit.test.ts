@@ -1054,6 +1054,89 @@ describe('what a restart makes of a conversation', () => {
 
 describe('the follow', () => {
   /**
+   * A gap that HEALED must not keep saying so (MAR-2779 round 2).
+   *
+   * The gap reaches the conversation as a dropped frame, and a dropped frame is
+   * a hole in the transcript, so it becomes the conversation's error. But this
+   * particular hole is the one the resume fills: the reconnect asks from the
+   * last contiguous sequence and the daemon replays what was lost. Nothing
+   * cleared it, so a record that ends up complete — 1, 2, 3, 4, in order — sat
+   * under "gap: expected 3, got 4; reconnecting from 2" until the person typed
+   * their next message. The recovery worked and the app said it had not.
+   *
+   * The error is shown while it is true: the assertion is that it WAS
+   * published, and that the last word is `null`.
+   *
+   * Mutation: keep the error (drop the clear in `record`) and this is red on
+   * the settled snapshot.
+   */
+  it('clears a gap error once the resume has filled the hole', async () => {
+    const { service } = buildService()
+    await service.start('hello')
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length > 0,
+      'the stream to open',
+    )
+    daemon.emit(status(1, 'running'))
+    daemon.emit(add(2, item({ id: 'a-1', text: 'On it' })))
+    // The daemon holds 3; the wire loses it.
+    daemon.loseFrame(patch(3, 'a-1', 'On it — here is your page.'))
+    daemon.emit(status(4, 'completed'))
+
+    await waitUntil(
+      () => latest(CONVERSATION_ID)?.status === 'idle',
+      'the conversation to settle',
+    )
+    // It was said, while it was true.
+    expect(
+      published.some((snapshot) =>
+        snapshot.streamError?.startsWith('gap: expected 3'),
+      ),
+    ).toBe(true)
+    // And it is not said any more: the record is whole.
+    expect(latest(CONVERSATION_ID)?.streamError).toBeNull()
+    expect(latest(CONVERSATION_ID)?.items.map((row) => row.text)).toEqual([
+      'On it — here is your page.',
+    ])
+    expect(daemon.eventStreamLastEventIds).toEqual([null, '2'])
+
+    await service.dispose()
+  }, 5_000)
+
+  /**
+   * The loss that does NOT heal keeps its sentence.
+   *
+   * An unreadable frame is gone for good — no resume asks for it again — so the
+   * envelopes that follow are not evidence that it arrived. Only a gap is
+   * cleared by what comes next, and telling the two apart is the whole reason
+   * the client says which kind of loss it had.
+   *
+   * Mutation: clear the error on any accepted envelope and this is red.
+   */
+  it('keeps an unreadable frame on the conversation, envelopes or not', async () => {
+    const { service } = buildService()
+    await service.start('hello')
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length > 0,
+      'the stream to open',
+    )
+    daemon.emit(status(1, 'running'))
+    daemon.emitRaw('{ not an envelope')
+    daemon.emit(add(2, item({ id: 'a-1', text: 'On it', state: 'complete' })))
+    daemon.emit(status(3, 'completed'))
+
+    await waitUntil(
+      () => latest(CONVERSATION_ID)?.status === 'idle',
+      'the conversation to settle',
+    )
+    expect(latest(CONVERSATION_ID)?.streamError).not.toBeNull()
+    // One stream throughout: an unreadable frame is not a reason to re-dial.
+    expect(daemon.eventStreamLastEventIds).toEqual([null])
+
+    await service.dispose()
+  }, 5_000)
+
+  /**
    * L2: a conversation that has stopped running has nothing left to stream, and
    * the follow was never ended — every conversation held one idle SSE open
    * against the daemon for the app's whole lifetime.
