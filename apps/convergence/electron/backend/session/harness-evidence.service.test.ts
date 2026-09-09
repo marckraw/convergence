@@ -1,3 +1,4 @@
+import { readClaudeTaskFacts } from '../provider/claude-code/claude-evidence.pure'
 import { harnessPill } from '../../../src/widgets/session-view/harness-facts.pure'
 import { readClaudeHarnessFact } from '../provider/claude-code/claude-harness.pure'
 import { afterEach, expect, it } from 'vitest'
@@ -320,7 +321,7 @@ it('R5 summary counts are persisted unique identities — mutation include the l
       description: null,
       model: null,
       depth: 1,
-      startedAt: 'now',
+      startedAt: 'start',
       transcriptPath: null,
     },
   })
@@ -334,7 +335,7 @@ it('R5 summary counts are persisted unique identities — mutation include the l
     service.apply('session', null, {
       kind: 'task.changed',
       taskId,
-      at: 'now',
+      at: 'start',
       patch: { taskType, status },
     })
   expect(service.countParallelWork(['session']).get('session')).toEqual({
@@ -635,5 +636,86 @@ it('RUN61 r5 raw init subtype reaches the placeholder — mutation omit SELECT s
     truncated: true,
     mcpServers: null,
     at: '2026-09-09T00:00:01.000Z',
+  })
+})
+
+it('RUN64 R2′ snapshot records its first sighting durably — mutation omit observed write/read or replace on update turns red', () => {
+  const { service } = bed()
+  const first = '2026-09-09T21:00:00.000Z'
+  for (const at of [first, '2026-09-09T21:10:00.000Z']) {
+    const facts = readClaudeTaskFacts(
+      {
+        type: 'system',
+        subtype: 'background_tasks_changed',
+        tasks: [
+          { task_id: 'snapshot-only', description: 'Background command' },
+        ],
+      },
+      at,
+    )!
+    for (const fact of facts) service.apply('session', 'turn', fact)
+  }
+  expect(service.listTasks('session')).toEqual([
+    expect.objectContaining({
+      taskId: 'snapshot-only',
+      status: 'running',
+      startedAt: null,
+      endedAt: null,
+      observedAt: first,
+    }),
+  ])
+})
+
+it('RUN64 R4′ current-answer window excludes old failures and NULL time but includes first sightings — mutation drop turn bound or count NULL-time rows turns red', () => {
+  const { db, service } = bed()
+  const first = '2026-09-09T10:00:00.000Z',
+    second = '2026-09-09T11:00:00.000Z'
+  db.prepare('UPDATE session_turns SET started_at=?').run(first)
+  for (const id of ['failed-a', 'failed-b']) {
+    service.apply('session', 'turn', {
+      kind: 'agent.started',
+      run: {
+        id,
+        spawnedByItemId: id,
+        agentType: null,
+        description: null,
+        model: null,
+        depth: 1,
+        startedAt: first,
+        transcriptPath: null,
+      },
+    })
+    service.apply('session', 'turn', {
+      kind: 'agent.ended',
+      spawnedByItemId: id,
+      status: 'failed',
+      at: first,
+    })
+  }
+  const before = service.countParallelWork(['session']).get('session')
+  db.prepare(
+    "INSERT INTO session_turns(id,session_id,sequence,started_at,status) VALUES ('turn2','session',2,?,'completed')",
+  ).run(second)
+  db.prepare(
+    "INSERT INTO session_tasks(task_id,session_id,status) VALUES ('legacy','session','running')",
+  ).run()
+  const after = service.countParallelWork(['session']).get('session')
+  for (const fact of readClaudeTaskFacts(
+    {
+      type: 'system',
+      subtype: 'background_tasks_changed',
+      tasks: [{ task_id: 'sighting' }],
+    },
+    second,
+  )!)
+    service.apply('session', 'turn2', fact)
+  const sighting = service.countParallelWork(['session']).get('session')
+  db.prepare("DELETE FROM session_turns WHERE session_id='session'").run()
+  const noTurn = service.countParallelWork(['session']).get('session')
+  expect({ before, after, sighting, noTurn }).toEqual({
+    before: { running: 0, unknown: 0, failed: 2, stopped: 0 },
+    after: { running: 0, unknown: 0, failed: 0, stopped: 0 },
+    sighting: { running: 1, unknown: 0, failed: 0, stopped: 0 },
+    noTurn: { running: 1, unknown: 0, failed: 2, stopped: 0 },
   })
 })

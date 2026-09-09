@@ -1,13 +1,13 @@
 import { expect, it } from 'vitest'
 import {
   countParallelWork,
+  parallelWorkTime,
   type ParallelWorkRow,
 } from '@/shared/lib/parallel-work.pure'
 import type { SessionTask } from '@/shared/types/harness-evidence.types'
 import type { ConversationItem } from '@/entities/session'
 import {
   descendantActivity,
-  workElapsed,
   parallelWorkMarkers,
   workTitle,
   workStatus,
@@ -43,8 +43,8 @@ it('R2 collapsed activity includes deep descendants and missing elapsed stays mi
   }
   expect({
     descendants: descendantActivity(rows, 'parent'),
-    elapsed: workElapsed(missing, 1000),
-  }).toEqual({ descendants: 1, elapsed: '—' })
+    elapsed: parallelWorkTime(missing, 1000).label,
+  }).toEqual({ descendants: 1, elapsed: 'time not reported' })
 })
 
 it('R4/R7 nested markers name the recorded parent with a generic child title and local stop reason — mutations omit parent, reveal provisional id or erase stop reason turn red', () => {
@@ -178,12 +178,12 @@ it('H2 merged state and return marker follow the terminal task — mutations pre
   )
   expect({
     status: workStatus(row),
-    elapsed: workElapsed(row, Date.parse('2026-09-09T00:01:00Z')),
+    elapsed: parallelWorkTime(row, Date.parse('2026-09-09T00:01:00Z')).label,
     counts: countParallelWork([row]),
     marker: markers.get('terminal')?.label,
   }).toEqual({
     status: 'Completed',
-    elapsed: '0:04',
+    elapsed: '< 1 m ago',
     counts: { running: 0, unknown: 0, failed: 0, stopped: 0 },
     marker: 'Result returned · Read routes · completed',
   })

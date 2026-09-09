@@ -1,3 +1,10 @@
+import {
+  getDatabase,
+  closeDatabase,
+  resetDatabase,
+} from '../../../electron/backend/database/database'
+import { HarnessEvidenceService } from '../../../electron/backend/session/harness-evidence.service'
+import { AttentionIndicator } from '@/entities/session'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { SessionSummary } from '@/entities/session'
@@ -279,4 +286,58 @@ describe('GlobalChatSessionList', () => {
     fireEvent.click(await screen.findByText('Delete session'))
     expect(onDeleteSession).toHaveBeenCalledWith(baseSession.id)
   })
+})
+
+it('RUN64 R4 header and sidebar clear old failures using real window counts — mutation remove SQL window turns red', () => {
+  const db = getDatabase()
+  try {
+    db.prepare(
+      "INSERT INTO sessions(id,context_kind,provider_id,name,working_directory) VALUES ('window','global','claude-code','window','/tmp')",
+    ).run()
+    db.prepare(
+      "INSERT INTO session_turns(id,session_id,sequence,started_at,status) VALUES ('first','window',1,'2026-09-09T10:00:00Z','completed'),('second','window',2,'2026-09-09T11:00:00Z','completed')",
+    ).run()
+    const service = new HarnessEvidenceService(db)
+    for (const taskId of ['old-a', 'old-b'])
+      service.apply('window', 'first', {
+        kind: 'task.changed',
+        taskId,
+        at: '2026-09-09T10:00:00Z',
+        patch: { status: 'failed', startedAt: '2026-09-09T10:00:00Z' },
+      })
+    const parallelWork = service.countParallelWork(['window']).get('window')!
+    const sidebar = renderList({ sessions: [{ ...baseSession, parallelWork }] })
+    const header = render(
+      <AttentionIndicator
+        attention="finished"
+        status="completed"
+        parallelWork={parallelWork}
+      />,
+    )
+    const oldLabels = screen.queryAllByText('answered · 2 failed').length
+    sidebar.unmount()
+    header.unmount()
+    service.apply('window', 'second', {
+      kind: 'task.changed',
+      taskId: 'new',
+      at: '2026-09-09T11:00:00Z',
+      patch: { status: 'running' },
+    })
+    const running = service.countParallelWork(['window']).get('window')!
+    renderList({ sessions: [{ ...baseSession, parallelWork: running }] })
+    render(
+      <AttentionIndicator
+        attention="finished"
+        status="completed"
+        parallelWork={running}
+      />,
+    )
+    expect({
+      oldLabels,
+      newLabels: screen.queryAllByText('answered · 1 tasks running').length,
+    }).toEqual({ oldLabels: 0, newLabels: 2 })
+  } finally {
+    closeDatabase()
+    resetDatabase()
+  }
 })

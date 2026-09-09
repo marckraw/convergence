@@ -5,6 +5,11 @@ import type {
 } from '../types/harness-evidence.types'
 import {
   buildParallelWork,
+  orderParallelWork,
+  parallelWorkTime,
+  formatRelativeTime,
+  archiveParallelWork,
+  type ParallelWorkRow,
   parallelWorkRowState,
   countParallelWork,
   parallelWorkStatus,
@@ -199,3 +204,103 @@ it.each(['running', 'unknown'] as const)(
     })
   },
 )
+
+const clock = Date.parse('2026-09-09T12:00:00.000Z')
+const ago = (minutes: number) => new Date(clock - minutes * 60000).toISOString()
+function timedTask(
+  id: string,
+  status: SessionTask['status'],
+  minutes: number | null,
+  parentId: string | null = null,
+): ParallelWorkRow {
+  return {
+    id,
+    kind: 'task',
+    parentId,
+    task: {
+      taskId: id,
+      sessionId: 's',
+      toolUseId: null,
+      taskType: null,
+      description: id,
+      status,
+      startedAt: null,
+      observedAt: minutes === null ? null : ago(minutes),
+      endedAt:
+        status === 'running' || status === 'unknown' || minutes === null
+          ? null
+          : ago(minutes),
+      outputFile: null,
+    },
+  }
+}
+it('RUN64 R1′ keeps active oldest first and finished newest within parents — mutations drop active/time/null-last keys or flatten children turn red', () => {
+  const rows = [
+    timedTask('finished-old', 'failed', 90),
+    timedTask('child-new', 'completed', 2, 'parent'),
+    timedTask('legacy', 'running', null),
+    timedTask('young', 'running', 4),
+    timedTask('parent', 'running', 10),
+    timedTask('child-old', 'running', 7, 'parent'),
+    timedTask('unknown', 'unknown', 20),
+    timedTask('finished-new', 'completed', 1),
+    timedTask('legacy-done', 'completed', null),
+  ]
+  expect(orderParallelWork(rows, clock).map((row) => row.id)).toEqual([
+    'unknown',
+    'parent',
+    'child-old',
+    'child-new',
+    'young',
+    'legacy',
+    'finished-new',
+    'finished-old',
+    'legacy-done',
+  ])
+})
+it('RUN64 R2′ formats reported and observed time honestly — mutation age from now or invent legacy time turns red', () => {
+  const seen = timedTask('seen', 'running', 4)
+  const started = { ...seen, task: { ...seen.task!, startedAt: ago(8) } }
+  expect([
+    parallelWorkTime(seen, clock),
+    parallelWorkTime(started, clock),
+    parallelWorkTime(timedTask('done', 'completed', 120), clock),
+    parallelWorkTime(timedTask('legacy', 'running', null), clock),
+  ]).toEqual([
+    { at: ago(4), label: 'seen 4 m ago' },
+    { at: ago(8), label: '8 m' },
+    { at: ago(120), label: '2 h ago' },
+    { at: null, label: 'time not reported' },
+  ])
+})
+it('RUN64 R2 relative formatting table — mutation change minute/hour/day divisor turns red', () => {
+  expect(
+    [0.5, 4, 120, 2880].map((minutes) =>
+      formatRelativeTime(ago(minutes), clock),
+    ),
+  ).toEqual(['< 1 m', '4 m', '2 h', '2 d'])
+})
+it('RUN64 R3 buckets 61m but never 59m or running and keeps active descendants visible — mutation horizon off by one hour or hide running branch turns red', () => {
+  const rows = [
+    timedTask('59', 'completed', 59),
+    timedTask('61', 'failed', 61),
+    {
+      ...timedTask('running', 'running', 120),
+      task: {
+        ...timedTask('running', 'running', 120).task!,
+        endedAt: ago(120),
+      },
+    },
+    timedTask('parent', 'completed', 120),
+    timedTask('child', 'running', 90, 'parent'),
+    timedTask('legacy', 'completed', null),
+  ]
+  const groups = archiveParallelWork(rows, clock)
+  expect({
+    visible: groups.visible.map((row) => row.id),
+    older: groups.older.map((row) => row.id),
+  }).toEqual({
+    visible: ['59', 'running', 'parent', 'child', 'legacy'],
+    older: ['61'],
+  })
+})

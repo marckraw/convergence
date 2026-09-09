@@ -268,7 +268,11 @@ it('H2 a missed-adoption row stops by the harness id and settles from its task w
     status: 'running',
   } as SessionTask
   const linkedRun = { ...run, taskId: 'harness' }
-  const input = { ...props(), rows: buildParallelWork([linkedRun], [task], []) }
+  const input = {
+    ...props(),
+    selectedId: 'agent',
+    rows: buildParallelWork([linkedRun], [task], []),
+  }
   const { rerender } = render(<ParallelWork {...input} />)
   fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
   await act(async () =>
@@ -333,7 +337,7 @@ it('M7 the container marker scan runs per item/row revision, not per clock tick 
   try {
     const input = props()
     const { rerender } = render(<ParallelWork {...input} />)
-    act(() => vi.advanceTimersByTime(3000))
+    act(() => vi.advanceTimersByTime(90000))
     const afterTicks = scan.mock.calls.length
     rerender(<ParallelWork {...input} items={[]} />)
     expect({ afterTicks, revised: scan.mock.calls.length }).toEqual({
@@ -344,4 +348,113 @@ it('M7 the container marker scan runs per item/row revision, not per clock tick 
     scan.mockRestore()
     vi.useRealTimers()
   }
+})
+
+it('RUN64 R2 open-only 30s clock and ISO title — mutation tick closed or use 1s interval turns red', () => {
+  vi.useFakeTimers()
+  const clock = Date.parse('2026-09-09T00:04:00Z')
+  vi.setSystemTime(clock)
+  const interval = vi.spyOn(globalThis, 'setInterval')
+  const input = props()
+  const { rerender, unmount } = render(<ParallelWork {...input} open={false} />)
+  const closed = interval.mock.calls.length
+  rerender(<ParallelWork {...input} />)
+  const first = screen.queryByText('Running · 4 m')?.getAttribute('title')
+  act(() => vi.advanceTimersByTime(60000))
+  const later = Boolean(screen.queryByText('Running · 5 m'))
+  rerender(<ParallelWork {...input} open={false} />)
+  const timersAfterClose = vi.getTimerCount()
+  unmount()
+  vi.useRealTimers()
+  expect({
+    closed,
+    periods: interval.mock.calls.map((call) => call[1]),
+    first,
+    later,
+    timersAfterClose,
+  }).toEqual({
+    closed: 0,
+    periods: [30000],
+    first: run.startedAt,
+    later: true,
+    timersAfterClose: 0,
+  })
+})
+it('RUN64 R3 older bucket expands without changing all-time summary — mutation render all rows or drop archive expansion turns red', () => {
+  vi.useFakeTimers()
+  const clock = Date.parse('2026-09-09T12:00:00Z')
+  vi.setSystemTime(clock)
+  const at = (m: number) => new Date(clock - m * 60000).toISOString()
+  const input = {
+    ...props(),
+    rows: buildParallelWork(
+      [
+        {
+          ...run,
+          id: 'old',
+          description: 'Old reviewer',
+          status: 'failed',
+          endedAt: at(61),
+        },
+        {
+          ...run,
+          id: 'young',
+          description: 'Recent reviewer',
+          status: 'completed',
+          endedAt: at(59),
+        },
+        {
+          ...run,
+          id: 'active',
+          description: 'Active reviewer',
+          startedAt: at(2),
+        },
+      ],
+      [],
+      [],
+    ),
+  }
+  const { container, unmount } = render(<ParallelWork {...input} />)
+  const before = [...container.querySelectorAll('[data-work-id]')].map((row) =>
+    row.getAttribute('data-work-id'),
+  )
+  const bucket = screen.queryByRole('button', {
+    name: '1 older · newest 1 h ago',
+  })
+  if (bucket) fireEvent.click(bucket)
+  const after = [...container.querySelectorAll('[data-work-id]')].map((row) =>
+    row.getAttribute('data-work-id'),
+  )
+  const summary = Boolean(
+    screen.queryByText('This session · 1 running · 1 completed · 1 failed'),
+  )
+  unmount()
+  vi.useRealTimers()
+  expect({ before, after, summary }).toEqual({
+    before: ['active', 'young'],
+    after: ['active', 'young', 'old'],
+    summary: true,
+  })
+})
+
+it('RUN64 R2/R3 finished-only panel ages into archive — mutation clock only with running rows turns red', () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-09-09T01:00:00Z'))
+  const input = {
+    ...props(),
+    rows: buildParallelWork(
+      [{ ...run, status: 'completed', endedAt: '2026-09-09T00:00:30Z' }],
+      [],
+      [],
+    ),
+  }
+  const { unmount } = render(<ParallelWork {...input} />)
+  const before = Boolean(screen.queryByText('Completed · 59 m ago'))
+  act(() => vi.advanceTimersByTime(60000))
+  const bucket = Boolean(
+    screen.queryByRole('button', { name: '1 older · newest 1 h ago' }),
+  )
+  unmount()
+  vi.useRealTimers()
+  expect({ before, bucket }).toEqual({ before: true, bucket: true })
 })

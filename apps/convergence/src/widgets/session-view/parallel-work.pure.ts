@@ -109,21 +109,6 @@ export function workStatus(row: ParallelWorkRow): string {
       : 'Completed'
 }
 
-export function workElapsed(row: ParallelWorkRow, now: number): string {
-  const fact = parallelWorkRowState(row).fact
-  const start = fact?.startedAt ? Date.parse(fact.startedAt) : NaN
-  const end =
-    fact?.status === 'running'
-      ? now
-      : fact?.endedAt
-        ? Date.parse(fact.endedAt)
-        : NaN
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start)
-    return '—'
-  const seconds = Math.floor((end - start) / 1000)
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
-}
-
 export function descendantActivity(
   rows: ParallelWorkRow[],
   id: string,

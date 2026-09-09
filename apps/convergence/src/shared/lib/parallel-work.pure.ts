@@ -155,3 +155,105 @@ export function buildParallelWork(
       ),
   ]
 }
+
+export const PARALLEL_WORK_ARCHIVE_AFTER_MS = 60 * 60 * 1000
+
+export function formatRelativeTime(from: string, now: number): string {
+  const minutes = Math.max(0, Math.floor((now - Date.parse(from)) / 60000))
+  if (minutes < 1) return '< 1 m'
+  if (minutes < 60) return `${minutes} m`
+  if (minutes < 1440) return `${Math.floor(minutes / 60)} h`
+  return `${Math.floor(minutes / 1440)} d`
+}
+
+export function parallelWorkTime(
+  row: ParallelWorkRow,
+  now: number,
+): { at: string | null; label: string } {
+  const fact = parallelWorkRowState(row).fact
+  const running = fact?.status === 'running'
+  const reported = running ? fact?.startedAt : fact?.endedAt
+  const at = reported ?? row.task?.observedAt ?? null
+  return {
+    at,
+    label: at
+      ? `${reported ? '' : 'seen '}${formatRelativeTime(at, now)}${running && reported ? '' : ' ago'}`
+      : 'time not reported',
+  }
+}
+
+export function orderParallelWork(
+  rows: ParallelWorkRow[],
+  _now?: number,
+): ParallelWorkRow[] {
+  const active = (row: ParallelWorkRow) =>
+    ['running', 'unknown'].includes(
+      parallelWorkRowState(row).fact?.status ?? '',
+    )
+  const time = (row: ParallelWorkRow) => {
+    const fact = parallelWorkRowState(row).fact
+    return (
+      (active(row) ? fact?.startedAt : fact?.endedAt) ??
+      row.task?.observedAt ??
+      null
+    )
+  }
+  const sorted = [...rows].sort((a, b) => {
+    if (active(a) !== active(b)) return active(a) ? -1 : 1
+    const left = time(a),
+      right = time(b)
+    if (!left || !right) return left ? -1 : right ? 1 : 0
+    return (Date.parse(left) - Date.parse(right)) * (active(a) ? 1 : -1)
+  })
+  const children = new Map<string | null, ParallelWorkRow[]>()
+  const ids = new Set(rows.map((row) => row.id))
+  for (const row of sorted) {
+    const parent = row.parentId && ids.has(row.parentId) ? row.parentId : null
+    children.set(parent, [...(children.get(parent) ?? []), row])
+  }
+  const result: ParallelWorkRow[] = [],
+    visited = new Set<string>()
+  const visit = (row: ParallelWorkRow) => {
+    if (visited.has(row.id)) return
+    visited.add(row.id)
+    result.push(row)
+    for (const child of children.get(row.id) ?? []) visit(child)
+  }
+  for (const row of children.get(null) ?? []) visit(row)
+  for (const row of sorted) visit(row)
+  return result
+}
+
+export function archiveParallelWork(
+  rows: ParallelWorkRow[],
+  now: number,
+): { visible: ParallelWorkRow[]; older: ParallelWorkRow[] } {
+  const old = new Set(
+    rows
+      .filter((row) => {
+        const fact = parallelWorkRowState(row).fact
+        return (
+          fact?.status !== 'running' &&
+          fact?.endedAt &&
+          now - Date.parse(fact.endedAt) > PARALLEL_WORK_ARCHIVE_AFTER_MS
+        )
+      })
+      .map((row) => row.id),
+  )
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  // Keep the parent context of work that must remain visible.
+  for (const row of rows)
+    if (!old.has(row.id)) {
+      const visited = new Set<string>()
+      let parent = row.parentId
+      while (parent && !visited.has(parent)) {
+        visited.add(parent)
+        old.delete(parent)
+        parent = byId.get(parent)?.parentId ?? null
+      }
+    }
+  return {
+    visible: rows.filter((row) => !old.has(row.id)),
+    older: rows.filter((row) => old.has(row.id)),
+  }
+}
