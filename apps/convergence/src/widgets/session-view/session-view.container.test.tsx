@@ -271,6 +271,69 @@ describe('SessionView', () => {
     })
   })
 
+  it('R8 M2 failed evidence read keeps child work moved and exposes Retry in the conversation — mutation settle on error turns red', async () => {
+    vi.mocked(window.electronAPI.session.listAgentRuns).mockRejectedValueOnce(
+      new Error('offline'),
+    )
+    useSessionStore.setState({
+      activeConversation: [
+        {
+          id: 'main',
+          sessionId: 'session-1',
+          sequence: 1,
+          kind: 'message',
+          actor: 'assistant',
+          text: 'main immediately',
+          state: 'complete',
+          providerMeta: {},
+          createdAt: 'now',
+        },
+        {
+          id: 'child',
+          sessionId: 'session-1',
+          sequence: 2,
+          kind: 'message',
+          actor: 'assistant',
+          text: 'child hidden',
+          state: 'complete',
+          agentRunId: 'orphan',
+          agentAttribution: { description: 'child', agentType: 'Explore' },
+          providerMeta: {},
+          createdAt: 'now',
+        },
+      ] as import('@/entities/session').ConversationItem[],
+    })
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeNull(),
+    )
+    const failed = {
+      main: !!screen.queryByText('main immediately'),
+      child: !!screen.queryByText('child hidden'),
+      error: !!screen.queryByText('Parallel work could not be read ·'),
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() =>
+      expect(screen.queryByText('child hidden')).not.toBeNull(),
+    )
+    expect({
+      failed,
+      errorAfterRetry: !!screen.queryByText(
+        'Parallel work could not be read ·',
+      ),
+      reads: vi.mocked(window.electronAPI.session.listAgentRuns).mock.calls
+        .length,
+    }).toEqual({
+      failed: { main: true, child: false, error: true },
+      errorAfterRetry: false,
+      reads: 2,
+    })
+  })
+
   afterEach(() => {
     vi.clearAllMocks()
     vi.restoreAllMocks()

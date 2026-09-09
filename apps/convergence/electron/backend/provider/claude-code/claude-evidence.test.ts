@@ -504,3 +504,23 @@ it('H1 Agent+Agent batch cannot adopt, decorate or end the unclaimed run — mut
     { id: 'b', status: 'running', model: null },
   ])
 })
+
+it('R8 H1 both block-local errors end unadopted agents without a root result — mutation gate block errors turns red', () => {
+  const f = fixture()
+  f.call('a')
+  f.call('b')
+  const blocks = ['a', 'b'].map((id) => ({
+    type: 'tool_result',
+    tool_use_id: id,
+    is_error: true,
+    content: `  ${id} interrupted\nreason  `,
+  }))
+  for (const block of blocks)
+    f.adapter.toolResult({ message: { content: blocks } }, block, 'end')
+  expect(
+    f.runs().map((run) => [run.id, run.status, run.endedAt, run.endedSummary]),
+  ).toEqual([
+    ['a', 'failed', 'end', '  a interrupted\nreason  '],
+    ['b', 'failed', 'end', '  b interrupted\nreason  '],
+  ])
+})

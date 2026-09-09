@@ -32,7 +32,7 @@ export class HarnessEvidenceService {
     const query = `WITH linked AS (
       SELECT a.*, ${linkedTaskIdSql} AS linked_task_id FROM session_agent_runs a WHERE a.session_id IN (${placeholders})
     ) SELECT session_id, status, COUNT(*) AS count FROM (
-      SELECT a.session_id, CASE WHEN a.status='running' AND t.status<>'running' THEN t.status ELSE a.status END AS status
+      SELECT a.session_id, CASE WHEN a.status IN ('running','unknown') AND t.status<>'running' THEN t.status ELSE a.status END AS status
       FROM linked a LEFT JOIN session_tasks t ON t.session_id=a.session_id AND t.task_id=a.linked_task_id
       UNION ALL
       SELECT t.session_id,t.status FROM session_tasks t WHERE t.session_id IN (${placeholders})

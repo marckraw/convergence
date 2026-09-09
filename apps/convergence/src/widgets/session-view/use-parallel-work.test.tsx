@@ -72,9 +72,15 @@ it('M4/T10 a rejected read settles loading and reports the error — mutation le
   await act(async () => {})
   expect({
     loading: result.current.loading,
+    hasRecord: result.current.hasRecord,
     error: result.current.error,
     rows: result.current.rows,
-  }).toEqual({ loading: false, error: 'Record unavailable', rows: [] })
+  }).toEqual({
+    loading: false,
+    hasRecord: false,
+    error: 'Record unavailable',
+    rows: [],
+  })
 })
 
 it('M7 streaming text keeps row identity stable while a changed parent updates it — mutation memoize rows on whole items turns red', async () => {
@@ -103,4 +109,20 @@ it('M7 streaming text keeps row identity stable while a changed parent updates i
     stable,
     parent: result.current.rows.find((row) => row.id === 'child')?.parentId,
   }).toEqual({ stable: true, parent: 'parent' })
+})
+
+it('R8 L5 parent key is memoised across unchanged renders — mutation map items each render turns red', async () => {
+  vi.mocked(parallelWorkApi.subscribe).mockReturnValue(() => {})
+  vi.mocked(parallelWorkApi.read).mockResolvedValue({
+    runs: [{ id: 'child', spawnedByItemId: 'spawn' }] as SessionAgentRun[],
+    tasks: [],
+  })
+  const items = [{ id: 'spawn', agentRunId: 'parent' }] as ConversationItem[]
+  const scan = vi.spyOn(items, 'map')
+  const { rerender } = renderHook(() => useParallelWork('s', items))
+  await act(async () => {})
+  const initial = scan.mock.calls.length
+  for (let i = 0; i < 20; i++) rerender()
+  expect(scan.mock.calls.length - initial).toBe(0)
+  scan.mockRestore()
 })

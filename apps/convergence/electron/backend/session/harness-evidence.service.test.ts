@@ -379,45 +379,54 @@ it('H3 SQL counts a missed adoption once by the spawning provider item — mutat
   })
 })
 
-it('H2/H3 backend link and terminal task settle a missed adoption — mutation omit backend link or count run first turns red', () => {
-  const { db, service } = bed()
-  db.prepare(
-    "INSERT INTO session_conversation_items(id,session_id,sequence,kind,state,payload_json,created_at,updated_at,provider_item_id) VALUES ('spawn','session',1,'tool-call','complete','{}','start','start','tool-spawn')",
-  ).run()
-  service.apply('session', null, {
-    kind: 'agent.started',
-    run: {
-      id: 'provisional',
-      spawnedByItemId: 'spawn',
-      agentType: null,
-      description: null,
-      model: null,
-      depth: 1,
-      startedAt: 'start',
-      transcriptPath: null,
-    },
-  })
-  service.apply('session', null, {
-    kind: 'task.changed',
-    taskId: 'harness-agent',
-    at: 'start',
-    patch: {
-      status: 'running',
-      taskType: 'local_agent',
-      toolUseId: 'tool-spawn',
-    },
-  })
-  service.apply('session', null, {
-    kind: 'task.changed',
-    taskId: 'harness-agent',
-    at: 'end',
-    patch: { status: 'completed', endedAt: 'end' },
-  })
-  expect({
-    link: service.listAgentRuns('session')[0].taskId,
-    counts: service.countParallelWork(['session']).get('session'),
-  }).toEqual({
-    link: 'harness-agent',
-    counts: { running: 0, unknown: 0, failed: 0, stopped: 0 },
-  })
-})
+it.each(['running', 'unknown'] as const)(
+  'H2/H3 / R8 M3 backend link and terminal task settle a missed adoption — mutation running-only winner turns red (%s)',
+  (status) => {
+    const { db, service } = bed()
+    db.prepare(
+      "INSERT INTO session_conversation_items(id,session_id,sequence,kind,state,payload_json,created_at,updated_at,provider_item_id) VALUES ('spawn','session',1,'tool-call','complete','{}','start','start','tool-spawn')",
+    ).run()
+    service.apply('session', null, {
+      kind: 'agent.started',
+      run: {
+        id: 'provisional',
+        spawnedByItemId: 'spawn',
+        agentType: null,
+        description: null,
+        model: null,
+        depth: 1,
+        startedAt: 'start',
+        transcriptPath: null,
+      },
+    })
+    service.apply('session', null, {
+      kind: 'task.changed',
+      taskId: 'harness-agent',
+      at: 'start',
+      patch: {
+        status: 'running',
+        taskType: 'local_agent',
+        toolUseId: 'tool-spawn',
+      },
+    })
+    service.apply('session', null, {
+      kind: 'task.changed',
+      taskId: 'harness-agent',
+      at: 'end',
+      patch: { status: 'completed', endedAt: 'end' },
+    })
+    if (status === 'unknown')
+      service.apply('session', null, {
+        kind: 'process.ended',
+        at: 'exit',
+        reason: 'exit',
+      })
+    expect({
+      link: service.listAgentRuns('session')[0].taskId,
+      counts: service.countParallelWork(['session']).get('session'),
+    }).toEqual({
+      link: 'harness-agent',
+      counts: { running: 0, unknown: 0, failed: 0, stopped: 0 },
+    })
+  },
+)

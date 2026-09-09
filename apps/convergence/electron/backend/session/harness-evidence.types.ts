@@ -14,6 +14,7 @@ export type AgentRunFact =
       kind: 'agent.started'
       run: Omit<
         SessionAgentRun,
+        | 'taskId'
         | 'sessionId'
         | 'status'
         | 'endedAt'

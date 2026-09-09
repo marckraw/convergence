@@ -2374,6 +2374,8 @@ export class SessionService {
     for (const sessionId of Array.from(this.activeHandles.keys()))
       this.releaseHandle(sessionId, 'quit')
     await Promise.all(this.pendingHandleDisposals)
+    for (const key of this.pendingConversationPatches.keys())
+      this.flushPendingConversationPatchByKey(key)
     for (const timer of this.evidenceUpdateTimers.values()) clearTimeout(timer)
     this.evidenceUpdateTimers.clear()
     this.parallelWorkCounts.clear()

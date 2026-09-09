@@ -1,3 +1,4 @@
+import { Button } from '@/shared/ui/button'
 import {
   isSubagentWork,
   parallelWorkRowState,
@@ -27,6 +28,8 @@ import { UiResponsePanel } from './ui-response-panel.presentational'
 interface SessionConversationSurfaceProps {
   parallelRows?: ParallelWorkRow[]
   parallelLoading?: boolean
+  parallelError?: string | null
+  onParallelRetry?: () => void
   onParallelSelect?: (id: string) => void
   navigationTarget?: { id: string; nonce: number } | null
   session: Session
@@ -52,6 +55,8 @@ export const SessionConversationSurface: FC<
   session,
   parallelRows,
   parallelLoading,
+  parallelError,
+  onParallelRetry,
   onParallelSelect,
   navigationTarget,
   conversationItems,
@@ -92,6 +97,8 @@ export const SessionConversationSurface: FC<
     session,
     parallelRows,
     parallelLoading,
+    parallelError,
+    onParallelRetry,
     onParallelSelect,
     navigationTarget,
     conversationItems,
@@ -127,6 +134,8 @@ export const SessionConversationSurface: FC<
 interface RenderConversationColumnInput {
   parallelRows?: ParallelWorkRow[]
   parallelLoading?: boolean
+  parallelError?: string | null
+  onParallelRetry?: () => void
   onParallelSelect?: (id: string) => void
   navigationTarget?: { id: string; nonce: number } | null
   sessionId: string
@@ -154,6 +163,8 @@ function renderConversationColumn({
   session,
   parallelRows,
   parallelLoading,
+  parallelError,
+  onParallelRetry,
   onParallelSelect,
   navigationTarget,
   conversationItems,
@@ -167,6 +178,19 @@ function renderConversationColumn({
 }: RenderConversationColumnInput): ReactNode {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {parallelError && (
+        <div role="alert" className="px-4 py-2 text-sm text-muted-foreground">
+          Parallel work could not be read ·{' '}
+          <Button
+            type="button"
+            variant="link"
+            className="h-auto p-0"
+            onClick={onParallelRetry}
+          >
+            Retry
+          </Button>
+        </div>
+      )}
       <SessionTranscript
         session={session}
         parallelRows={parallelRows}

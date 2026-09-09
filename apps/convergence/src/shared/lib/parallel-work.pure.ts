@@ -77,11 +77,15 @@ export function parallelWorkStatus(session: {
 
 export function parallelWorkRowState(row: ParallelWorkRow) {
   const fact =
-    row.task && row.task.status !== 'running' && row.run?.status === 'running'
+    row.task &&
+    row.task.status !== 'running' &&
+    (row.run?.status === 'running' || row.run?.status === 'unknown')
       ? row.task
       : (row.run ?? row.task)
   return {
-    fact,
+    fact: fact
+      ? { ...fact, startedAt: fact.startedAt ?? row.run?.startedAt ?? null }
+      : undefined,
     stopId: row.task?.taskId ?? row.run?.id ?? row.id,
     ids: [
       ...new Set(

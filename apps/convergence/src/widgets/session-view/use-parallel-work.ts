@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ConversationItem } from '@/entities/session'
 import type {
   SessionAgentRun,
@@ -11,6 +11,8 @@ export function useParallelWork(
   sessionId: string | null,
   items: ConversationItem[],
 ) {
+  const [readRevision, setReadRevision] = useState(0)
+  const retry = useCallback(() => setReadRevision((value) => value + 1), [])
   const [settledSessionId, setSettledSessionId] = useState<string | null>(null)
   const [record, setRecord] = useState<{
     sessionId: string
@@ -52,16 +54,18 @@ export function useParallelWork(
       active = false
       unsubscribe()
     }
-  }, [sessionId])
-  const parentByItem = new Map(
-    items.map((item) => [item.id, item.agentRunId ?? null]),
-  )
-  const parentLinksKey = JSON.stringify(
-    (record?.runs ?? []).map((run) => [
-      run.spawnedByItemId,
-      parentByItem.get(run.spawnedByItemId) ?? null,
-    ]),
-  )
+  }, [sessionId, readRevision])
+  const parentLinksKey = useMemo(() => {
+    const parentByItem = new Map(
+      items.map((item) => [item.id, item.agentRunId ?? null]),
+    )
+    return JSON.stringify(
+      (record?.runs ?? []).map((run) => [
+        run.spawnedByItemId,
+        parentByItem.get(run.spawnedByItemId) ?? null,
+      ]),
+    )
+  }, [items, record?.runs])
   const rows = useMemo(() => {
     const links = JSON.parse(parentLinksKey) as Array<[string, string | null]>
     return record?.sessionId === sessionId
@@ -74,6 +78,8 @@ export function useParallelWork(
   }, [record, sessionId, parentLinksKey])
   return {
     rows,
+    hasRecord: record?.sessionId === sessionId,
+    retry,
     error: error?.sessionId === sessionId ? error.message : null,
     loading: Boolean(sessionId) && settledSessionId !== sessionId,
   }

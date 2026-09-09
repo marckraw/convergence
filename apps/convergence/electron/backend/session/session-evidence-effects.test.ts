@@ -10,7 +10,6 @@ import { HarnessEvidenceService } from './harness-evidence.service'
 const services: SessionService[] = []
 afterEach(async () => {
   for (const service of services.splice(0)) {
-    service['flushPendingConversationPatchesForSession']('session')
     await service.disposeAll()
   }
   vi.restoreAllMocks()
@@ -325,4 +324,15 @@ it('M6 a scheduled flush whose row disappeared cannot recreate evidence state â€
     cached: service['parallelWorkCounts'].has('session'),
     notifications: notify.mock.calls,
   }).toEqual({ cached: false, notifications: [] })
+})
+
+it('R8 L7 public disposal drains pending conversation patches â€” mutation omit dispose drain turns red', async () => {
+  const { service, emitter } = bed()
+  const id = emitter.addAssistantMessage({ text: 'first', state: 'streaming' })
+  emitter.patchMessage(id, { text: 'last', state: 'streaming' })
+  await service.disposeAll()
+  expect({
+    pending: service['pendingConversationPatches'].size,
+    text: service.getConversation('session').find((item) => item.id === id),
+  }).toMatchObject({ pending: 0, text: { text: 'last' } })
 })

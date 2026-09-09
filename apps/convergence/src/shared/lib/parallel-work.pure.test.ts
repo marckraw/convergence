@@ -171,20 +171,31 @@ it('H3 a backend link merges without renderer items — mutation derive join fro
   ])
 })
 
-it('H2 merged-row accessor uses terminal task state and both identities — mutation prefer the running run turns red', () => {
-  const terminal = {
-    ...task('harness', 'local_agent'),
-    status: 'completed' as const,
-    endedAt: '2026-09-09T00:01:00Z',
-  }
-  const row = buildParallelWork(
-    [{ ...run('provisional', 1), taskId: 'harness' }],
-    [terminal],
-    [],
-  )[0]!
-  expect(parallelWorkRowState(row)).toEqual({
-    fact: terminal,
-    stopId: 'harness',
-    ids: ['provisional', 'harness'],
-  })
-})
+it.each(['running', 'unknown'] as const)(
+  'H2 / R8 M3 M4 merged-row accessor composes terminal task state and start — mutations prefer run or lose start turn red (%s)',
+  (status) => {
+    const terminal = {
+      ...task('harness', 'local_agent'),
+      status: 'completed' as const,
+      endedAt: '2026-09-09T00:01:00Z',
+      endedSummary: 'task reported completion',
+    }
+    const row = buildParallelWork(
+      [
+        {
+          ...run('provisional', 1),
+          taskId: 'harness',
+          status,
+          endedSummary: 'run last seen',
+        },
+      ],
+      [terminal],
+      [],
+    )[0]!
+    expect(parallelWorkRowState(row)).toEqual({
+      fact: { ...terminal, startedAt: '2026-09-09T00:00:00Z' },
+      stopId: 'harness',
+      ids: ['provisional', 'harness'],
+    })
+  },
+)
