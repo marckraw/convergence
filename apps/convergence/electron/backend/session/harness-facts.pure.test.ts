@@ -163,11 +163,17 @@ it('R3 session facts retain compactions and latest init and rate limit — mutat
     claudeCodeVersion: '2',
     model: 'haiku',
     permissionMode: 'default',
-    mcpServers: [{ name: 'linear', status: 'failed' }],
-    plugins: [],
-    capabilities: ['control'],
-    skillsCount: 1,
-    slashCommandsCount: 2,
+    mcpServers: {
+      total: 1,
+      connected: 0,
+      others: [{ name: 'linear', status: 'failed' }],
+      omitted: 0,
+    },
+    plugins: { count: 0, names: [], omitted: 0 },
+    capabilities: { values: ['control'], omitted: 0 },
+    tools: null,
+    skills: { count: 1 },
+    slashCommands: { count: 2 },
   }
   const rate = {
     kind: 'harness.rateLimit' as const,
@@ -235,4 +241,71 @@ it('R7 tool-use identity wins over tool-name order — mutation match only by or
     'first',
     null,
   ])
+})
+
+it('R7 two passes reserve ids before names — mutation greedy name matching turns red', () => {
+  const denial = {
+    kind: 'harness.denial' as const,
+    toolName: 'Bash',
+    reasonType: 'rule',
+    at: attempt.at,
+  }
+  const facts = foldHarnessFacts(
+    [
+      event({ ...denial, toolUseId: 'A', reason: 'reserved' }),
+      event({ ...denial, reason: 'idless' }, 2),
+    ],
+    [
+      {
+        ...turn,
+        permissionDenials: [
+          { tool_name: 'Bash' },
+          { tool_name: 'Bash', tool_use_id: 'A' },
+        ],
+      },
+    ],
+  )
+  expect(
+    facts.currentTurn?.denials?.map((d) => ({
+      id: d.toolUseId ?? null,
+      reason: d.reason,
+    })),
+  ).toEqual([
+    { id: null, reason: 'idless' },
+    { id: 'A', reason: 'reserved' },
+  ])
+})
+it('R2triple field bounds survive the fold — mutation drop cut metadata turns red', () => {
+  const fieldBounds = { reason: { truncated: true as const, bytes: 9000 } }
+  const f = foldHarnessFacts(
+    [
+      event({
+        kind: 'harness.denial',
+        toolName: 'Bash',
+        reasonType: null,
+        reason: 'cut',
+        at: attempt.at,
+        fieldBounds,
+      }),
+      event(
+        {
+          kind: 'harness.hook',
+          hookId: 'h',
+          hookName: 'cut',
+          hookEvent: 'PreToolUse',
+          phase: 'started',
+          status: null,
+          output: null,
+          at: attempt.at,
+          fieldBounds: { hookName: { truncated: true, bytes: 9000 } },
+        },
+        2,
+      ),
+    ],
+    [turn],
+  )
+  expect(f.currentTurn).toMatchObject({
+    denials: [{ fieldBounds }],
+    hooks: [{ fieldBounds: { hookName: { truncated: true, bytes: 9000 } } }],
+  })
 })

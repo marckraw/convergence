@@ -1,4 +1,4 @@
-import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
+import type { SessionHarnessFacts } from '../../shared/types/harness-facts.types'
 export function harnessPill(facts: SessionHarnessFacts | null): {
   label: string
   alert: boolean
@@ -21,7 +21,7 @@ export function harnessPill(facts: SessionHarnessFacts | null): {
     label: parts.join(' · '),
     alert:
       retry?.state === 'in-flight' ||
-      !!facts?.init?.mcpServers?.some((server) =>
+      !!facts?.init?.mcpServers?.others.some((server) =>
         isMcpAlertStatus(server.status),
       ),
   }
@@ -42,7 +42,7 @@ export function compactionLabel(
       : fact.preTokens !== null
         ? ` · ${format(fact.preTokens)} tokens before`
         : ''
-  return `Compacted (${fact.trigger ?? 'not reported'})${counts}${fact.truncated ? ' · record truncated' : ''}`
+  return `Compacted (${fact.trigger ?? 'not reported'})${counts}${fact.truncated ? ' · record truncated' : ''}${fact.fieldBounds ? ' · text truncated' : ''}`
 }
 
 export function placeCompactions(

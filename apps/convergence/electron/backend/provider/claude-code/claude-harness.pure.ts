@@ -19,23 +19,39 @@ export function readClaudeHarnessFact(
   at: string,
 ): HarnessFact | null {
   const e = claudeRecord(data)
+  const fieldBounds: NonNullable<HarnessFact['fieldBounds']> = {}
+  const text = (field: string, value: unknown, budget = 64): string | null => {
+    if (typeof value !== 'string') return null
+    const bounded = boundHarnessText(value, budget)
+    if (typeof bounded === 'string') return bounded
+    fieldBounds[field] = {
+      truncated: true,
+      bytes: (fieldBounds[field]?.bytes ?? 0) + bounded.bytes,
+    }
+    return bounded.preview
+  }
+  const boundedFact = <T extends HarnessFact>(fact: T): T =>
+    Object.keys(fieldBounds).length ? { ...fact, fieldBounds } : fact
   if (!e) return null
   if (e.type === 'rate_limit_event') {
     const r = claudeRecord(e.rate_limit_info) ?? {}
-    return {
+    return boundedFact({
       kind: 'harness.rateLimit',
       at,
-      status: claudeString(r.status),
-      type: claudeString(r.rateLimitType),
+      status: text('status', r.status),
+      type: text('rateLimitType', r.rateLimitType),
       utilization: number(r.utilization),
       resetsAt: number(r.resetsAt),
-      overageStatus: claudeString(r.overageStatus),
+      overageStatus: text('overageStatus', r.overageStatus),
       overageResetsAt: number(r.overageResetsAt),
-      overageDisabledReason: claudeString(r.overageDisabledReason),
+      overageDisabledReason: text(
+        'overageDisabledReason',
+        r.overageDisabledReason,
+      ),
       isUsingOverage: boolean(r.isUsingOverage),
       overageInUse: boolean(r.overageInUse),
       surpassedThreshold: number(r.surpassedThreshold),
-    }
+    })
   }
   if (e.type !== 'system') return null
   if (
@@ -43,12 +59,12 @@ export function readClaudeHarnessFact(
       String(e.subtype),
     )
   ) {
-    return {
+    return boundedFact({
       kind: 'harness.hook',
       at,
-      hookId: claudeString(e.hook_id),
-      hookName: claudeString(e.hook_name),
-      hookEvent: claudeString(e.hook_event),
+      hookId: text('hookId', e.hook_id),
+      hookName: text('hookName', e.hook_name),
+      hookEvent: text('hookEvent', e.hook_event),
       phase:
         e.subtype === 'hook_started'
           ? 'started'
@@ -67,11 +83,12 @@ export function readClaudeHarnessFact(
                 : e.outcome === 'error'
                   ? 'failed'
                   : null,
-      output: typeof e.output === 'string' ? boundHookOutput(e.output) : null,
-    }
+      output:
+        typeof e.output === 'string' ? boundHarnessText(e.output, 4096) : null,
+    })
   }
   if (e.subtype === 'api_retry')
-    return {
+    return boundedFact({
       kind: 'harness.retry',
       phase: 'attempt',
       at,
@@ -79,78 +96,100 @@ export function readClaudeHarnessFact(
       maxRetries: number(e.max_retries),
       retryDelayMs: number(e.retry_delay_ms),
       errorStatus: number(e.error_status),
-      message: claudeString(e.error),
+      message: text('message', e.error, 512),
       noResponse: boolean(e.no_response),
-    }
+    })
   if (e.subtype === 'compact_boundary') {
     const c = claudeRecord(e.compact_metadata) ?? {}
-    return {
+    return boundedFact({
       kind: 'harness.compaction',
       at,
-      trigger: claudeString(c.trigger),
+      trigger: text('trigger', c.trigger),
       preTokens: number(c.pre_tokens),
       postTokens: number(c.post_tokens),
       durationMs: number(c.duration_ms),
-    }
+    })
   }
-  if (e.subtype === 'permission_denied')
-    return {
+  if (e.subtype === 'permission_denied') {
+    const toolUseId = text('toolUseId', e.tool_use_id)
+    return boundedFact({
       kind: 'harness.denial',
-      ...(claudeString(e.tool_use_id)
-        ? { toolUseId: claudeString(e.tool_use_id) }
-        : {}),
+      ...(toolUseId ? { toolUseId } : {}),
       at,
-      toolName: claudeString(e.tool_name),
-      reasonType: claudeString(e.decision_reason_type),
-      reason: claudeString(e.decision_reason),
-    }
-  if (e.subtype === 'init')
-    return {
+      toolName: text('toolName', e.tool_name),
+      reasonType: text('reasonType', e.decision_reason_type),
+      reason: text('reason', e.decision_reason, 1024),
+    })
+  }
+  if (e.subtype === 'init') {
+    const servers = Array.isArray(e.mcp_servers)
+      ? e.mcp_servers.flatMap((value) => {
+          const r = claudeRecord(value),
+            name = claudeString(r?.name)
+          return name ? [{ name, status: claudeString(r?.status) }] : []
+        })
+      : null
+    const others =
+      servers?.filter((server) => server.status !== 'connected') ?? []
+    const plugins = Array.isArray(e.plugins) ? e.plugins : null
+    const capabilities = strings(e.capabilities)
+    return boundedFact({
       kind: 'harness.init',
       at,
-      claudeCodeVersion: claudeString(e.claude_code_version),
-      model: claudeString(e.model),
-      permissionMode: claudeString(e.permissionMode),
-      mcpServers: Array.isArray(e.mcp_servers)
-        ? e.mcp_servers.flatMap((value) => {
-            const r = claudeRecord(value)
-            const name = claudeString(r?.name)
-            return name ? [{ name, status: claudeString(r?.status) }] : []
-          })
+      claudeCodeVersion: text('claudeCodeVersion', e.claude_code_version),
+      model: text('model', e.model),
+      permissionMode: text('permissionMode', e.permissionMode),
+      mcpServers: servers
+        ? {
+            total: servers.length,
+            connected: servers.length - others.length,
+            others: others.slice(0, 16).map((server) => ({
+              name: text('mcpServers', server.name, 48)!,
+              status: text('mcpServers', server.status),
+            })),
+            omitted: Math.max(0, others.length - 16),
+          }
         : null,
-      plugins: Array.isArray(e.plugins)
-        ? e.plugins.flatMap((value) => {
-            const r = claudeRecord(value)
-            const name = claudeString(r?.name)
-            return name
-              ? [
-                  {
-                    name,
-                    path: claudeString(r?.path),
-                    version: claudeString(r?.version),
-                  },
-                ]
-              : []
-          })
+      plugins: plugins
+        ? {
+            count: plugins.length,
+            names: plugins.slice(0, 16).flatMap((value) => {
+              const name = text('plugins', claudeRecord(value)?.name, 48)
+              return name === null ? [] : [name]
+            }),
+            omitted: Math.max(0, plugins.length - 16),
+          }
         : null,
-      capabilities: strings(e.capabilities),
-      skillsCount: Array.isArray(e.skills) ? e.skills.length : null,
-      slashCommandsCount: Array.isArray(e.slash_commands)
-        ? e.slash_commands.length
+      capabilities: capabilities
+        ? {
+            values: capabilities
+              .slice(0, 32)
+              .map((value) => text('capabilities', value, 32)!),
+            omitted: Math.max(0, capabilities.length - 32),
+          }
         : null,
-    }
+      tools: Array.isArray(e.tools) ? { count: e.tools.length } : null,
+      skills: Array.isArray(e.skills) ? { count: e.skills.length } : null,
+      slashCommands: Array.isArray(e.slash_commands)
+        ? { count: e.slash_commands.length }
+        : null,
+    })
+  }
   return null
 }
 
-/** Bound the variable text field once, leaving room for the fact envelope. */
-function boundHookOutput(output: string): HarnessOutput {
+/** Bound text in the envelope's JSON UTF-8 unit; never split a code point. */
+export function boundHarnessText(
+  output: string,
+  budget: number,
+): HarnessOutput {
   const bytes = Buffer.byteLength(output, 'utf8')
-  if (bytes <= 4096) return output
-  let size = 0,
+  if (Buffer.byteLength(JSON.stringify(output)) <= budget) return output
+  let size = 2,
     preview = ''
   for (const point of output) {
-    const next = Buffer.byteLength(point, 'utf8')
-    if (size + next > 4096) break
+    const next = Buffer.byteLength(JSON.stringify(point)) - 2
+    if (size + next > budget) break
     size += next
     preview += point
   }

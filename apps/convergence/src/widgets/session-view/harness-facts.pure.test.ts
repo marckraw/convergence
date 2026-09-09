@@ -54,7 +54,14 @@ it('R3 disconnected MCP is red — mutation ignore MCP status', () => {
     harnessPill({
       currentTurn: null,
       compactions: [],
-      init: { mcpServers: [{ name: 'linear', status: 'failed' }] },
+      init: {
+        mcpServers: {
+          total: 1,
+          connected: 0,
+          others: [{ name: 'linear', status: 'failed' }],
+          omitted: 0,
+        },
+      },
     } as unknown as SessionHarnessFacts).alert,
   ).toBe(true)
 })
@@ -101,7 +108,14 @@ it.each([
       pill: harnessPill({
         currentTurn: null,
         compactions: [],
-        init: { mcpServers: [{ name: 'server', status }] },
+        init: {
+          mcpServers: {
+            total: 1,
+            connected: 0,
+            others: [{ name: 'server', status }],
+            omitted: 0,
+          },
+        },
       } as unknown as SessionHarnessFacts).alert,
     }).toEqual({ status: alert, pill: alert })
   },

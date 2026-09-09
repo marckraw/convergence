@@ -1,4 +1,4 @@
-import { readClaudeHarnessFact } from './claude-harness.pure'
+import { readClaudeHarnessFact, boundHarnessText } from './claude-harness.pure'
 import { claudeRootResultClaimsBlock } from './claude-code-task.pure'
 import { readdirSync, readFileSync } from 'fs'
 import { homedir } from 'os'
@@ -38,7 +38,9 @@ export class ClaudeEvidenceService {
   private readonly unmatchedMetadata = new Set<string>()
   private metadataListing = ''
   /** api_retry has no attribution key, so this counter is session-scoped;
-   * only the main thread can witness its successful answer. Every result ends it. */
+   * only the main thread can witness its successful answer. Every result ends it.
+   * A child's failed retry and its parent's successful response cannot be attributed
+   * separately, so a main-thread tool error resolves outstanding retries as unknown. */
   private outstandingRetries = 0
   private sessionId: string | null = null
   private cwd: string
@@ -70,6 +72,26 @@ export class ClaudeEvidenceService {
       isResult &&
       (event.is_error === true || String(event.subtype).startsWith('error_'))
     const mainThread = event.parent_tool_use_id == null
+    const content = claudeRecord(event.message)?.content
+    const toolError =
+      mainThread &&
+      event.type === 'user' &&
+      Array.isArray(content) &&
+      content.some((value) => {
+        const block = claudeRecord(value)
+        return block?.type === 'tool_result' && block.is_error === true
+      })
+    if (this.outstandingRetries > 0 && toolError) {
+      this.emit({
+        kind: 'harness.retry',
+        phase: 'resolved',
+        outcome: 'unknown',
+        reason: 'tool-error-while-outstanding',
+        attempts: this.outstandingRetries,
+        at,
+      })
+      this.outstandingRetries = 0
+    }
     const succeeded =
       mainThread &&
       (event.type === 'assistant' ||
@@ -80,13 +102,34 @@ export class ClaudeEvidenceService {
           (event.terminal_reason == null ||
             event.terminal_reason === 'completed')))
     if (this.outstandingRetries > 0 && (failed || succeeded)) {
+      const subtype =
+        typeof event.subtype === 'string'
+          ? boundHarnessText(event.subtype, 64)
+          : null
       this.emit({
         kind: 'harness.retry',
         phase: 'resolved',
         outcome: failed ? 'failed' : 'succeeded',
         attempts: this.outstandingRetries,
         at,
-        ...(failed ? { errorSubtype: claudeString(event.subtype) } : {}),
+        ...(failed
+          ? {
+              errorSubtype:
+                typeof subtype === 'object' && subtype !== null
+                  ? subtype.preview
+                  : subtype,
+              ...(typeof subtype === 'object' && subtype !== null
+                ? {
+                    fieldBounds: {
+                      errorSubtype: {
+                        truncated: true as const,
+                        bytes: subtype.bytes,
+                      },
+                    },
+                  }
+                : {}),
+            }
+          : {}),
       })
       this.outstandingRetries = 0
     }

@@ -2,7 +2,11 @@ export type HarnessOutput =
   | string
   | { truncated: true; bytes: number; preview: string }
 
-export type HarnessFact = { at: string; truncated?: true } & (
+export type HarnessFact = {
+  at: string
+  truncated?: true
+  fieldBounds?: Record<string, { truncated: true; bytes: number }>
+} & (
   | {
       kind: 'harness.hook'
       hookId: string | null
@@ -25,7 +29,8 @@ export type HarnessFact = { at: string; truncated?: true } & (
   | {
       kind: 'harness.retry'
       phase: 'resolved'
-      outcome: 'succeeded' | 'failed'
+      outcome: 'succeeded' | 'failed' | 'unknown'
+      reason?: 'tool-error-while-outstanding'
       attempts: number
       errorSubtype?: string | null
     }
@@ -62,13 +67,17 @@ export type HarnessFact = { at: string; truncated?: true } & (
       claudeCodeVersion: string | null
       model: string | null
       permissionMode: string | null
-      mcpServers: { name: string; status: string | null }[] | null
-      plugins:
-        | { name: string; path: string | null; version: string | null }[]
-        | null
-      capabilities: string[] | null
-      skillsCount: number | null
-      slashCommandsCount: number | null
+      mcpServers: {
+        total: number
+        connected: number
+        others: { name: string; status: string | null }[]
+        omitted: number
+      } | null
+      plugins: { count: number; names: string[]; omitted: number } | null
+      capabilities: { values: string[]; omitted: number } | null
+      tools: { count: number } | null
+      skills: { count: number } | null
+      slashCommands: { count: number } | null
     }
 )
 
@@ -85,6 +94,7 @@ export interface HarnessTurn {
   permissionDenials: unknown
 }
 export interface HarnessHook {
+  fieldBounds?: HarnessFact['fieldBounds']
   truncated?: true
   id: string
   name: string | null
@@ -105,6 +115,7 @@ export interface HarnessTurnFacts {
   retries: HarnessRetry | null
   denials:
     | {
+        fieldBounds?: HarnessFact['fieldBounds']
         truncated?: true
         toolUseId?: string | null
         toolName: string | null

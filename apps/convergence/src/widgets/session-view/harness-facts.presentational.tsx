@@ -81,6 +81,7 @@ export function HarnessFactsView({
                   {hook.truncated ? ' · record truncated' : ''}
                   {hook.durationMs !== null ? ` · ${hook.durationMs} ms` : ''}
                 </div>
+                {hook.fieldBounds && <p>Hook text truncated</p>}
                 {hook.output !== null && (
                   <details>
                     <summary className="cursor-pointer">
@@ -109,6 +110,7 @@ export function HarnessFactsView({
                 ? 'Retry record truncated'
                 : `${current.retries.attempts} attempts · ${current.retries.state}`}
             </p>
+            {current.retries.last.fieldBounds && <p>Retry text truncated</p>}
             {current.retries.last.phase === 'attempt' ? (
               <p>
                 {current.retries.last.message}
@@ -134,6 +136,7 @@ export function HarnessFactsView({
               <p key={index}>
                 {denial.toolName ?? 'Tool not reported'}
                 {denial.truncated ? ' · record truncated' : ''}
+                {denial.fieldBounds ? ' · text truncated' : ''}
                 {denial.reasonType ? ` · ${denial.reasonType}` : ''}
                 {denial.reason ? ` · ${denial.reason}` : ''}
               </p>
@@ -155,6 +158,7 @@ export function HarnessFactsView({
           <section aria-label="Rate limit" className="mb-3">
             <h3 className="font-medium">Rate limit · last reported</h3>
             {rate.truncated && <p>Rate limit record truncated</p>}
+            {rate.fieldBounds && <p>Rate limit text truncated</p>}
             {[
               ['Status', rate.status],
               ['Limit', rate.type],
@@ -209,6 +213,7 @@ export function HarnessFactsView({
           <section aria-label="Harness">
             <h3 className="font-medium">Harness</h3>
             {init.truncated && <p>Harness record truncated</p>}
+            {init.fieldBounds && <p>Some reported text was truncated.</p>}
             {init.claudeCodeVersion !== null && (
               <p>Claude Code {init.claudeCodeVersion}</p>
             )}
@@ -218,10 +223,11 @@ export function HarnessFactsView({
             )}
             {init.mcpServers !== null && (
               <div className="mt-2">
-                MCP servers
-                {init.mcpServers.map((server) => (
+                MCP servers · {init.mcpServers.connected} connected of{' '}
+                {init.mcpServers.total}
+                {init.mcpServers.others.map((server, index) => (
                   <p
-                    key={server.name}
+                    key={`${index}:${server.name}`}
                     className={
                       isMcpAlertStatus(server.status) ? 'text-destructive' : ''
                     }
@@ -229,28 +235,35 @@ export function HarnessFactsView({
                     {server.name} · {server.status ?? 'Not reported'}
                   </p>
                 ))}
+                {init.mcpServers.omitted > 0 && (
+                  <p>… and {init.mcpServers.omitted} more not connected</p>
+                )}
               </div>
             )}
             {init.plugins !== null && (
               <div className="mt-2">
-                Plugins
-                {init.plugins.map((plugin) => (
-                  <p key={`${plugin.name}:${plugin.path}`}>
-                    {plugin.name}
-                    {plugin.version ? ` · ${plugin.version}` : ''}
-                    {plugin.path ? ` · ${plugin.path}` : ''}
-                  </p>
+                Plugins · {init.plugins.count}
+                {init.plugins.names.map((name, index) => (
+                  <p key={`${index}:${name}`}>{name}</p>
                 ))}
+                {init.plugins.omitted > 0 && (
+                  <p>… and {init.plugins.omitted} more plugins</p>
+                )}
               </div>
             )}
             {init.capabilities !== null && (
               <p className="mt-2">
-                Capabilities: {init.capabilities.join(', ') || 'None reported'}
+                Capabilities:{' '}
+                {init.capabilities.values.join(', ') || 'None reported'}
+                {init.capabilities.omitted > 0 && (
+                  <> · {init.capabilities.omitted} more capabilities</>
+                )}
               </p>
             )}
-            {init.skillsCount !== null && <p>Skills: {init.skillsCount}</p>}
-            {init.slashCommandsCount !== null && (
-              <p>Slash commands: {init.slashCommandsCount}</p>
+            {init.tools !== null && <p>Tools: {init.tools.count}</p>}
+            {init.skills !== null && <p>Skills: {init.skills.count}</p>}
+            {init.slashCommands !== null && (
+              <p>Slash commands: {init.slashCommands.count}</p>
             )}
           </section>
         )}

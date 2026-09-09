@@ -1,3 +1,4 @@
+import { harnessPill } from '../../../src/widgets/session-view/harness-facts.pure'
 import { readClaudeHarnessFact } from '../provider/claude-code/claude-harness.pure'
 import { afterEach, expect, it } from 'vitest'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
@@ -539,11 +540,51 @@ it('R2prime 8190-byte hook response survives the envelope — mutation remove ou
     {
       id: 'h',
       status: 'ok',
-      output: { truncated: true, bytes: 8190, preview: 'x'.repeat(4096) },
+      output: { truncated: true, bytes: 8190, preview: 'x'.repeat(4094) },
     },
   ])
 })
-it('R2prime oversized init becomes an explicit placeholder — mutation drop truncated rows turns red', () => {
+it.each(['"', '\u001b'])(
+  'R2double encoded output %j stays one hook — mutation measure raw bytes turns red',
+  (point) => {
+    const { service } = bed()
+    for (const subtype of ['hook_started', 'hook_response']) {
+      service.apply(
+        'session',
+        'turn',
+        readClaudeHarnessFact(
+          {
+            type: 'system',
+            subtype,
+            hook_id: 'h',
+            hook_name: 'guard',
+            hook_event: 'PreToolUse',
+            outcome: 'success',
+            ...(subtype === 'hook_response'
+              ? { output: point.repeat(5000) }
+              : {}),
+          },
+          'now',
+        )!,
+      )
+    }
+    const hooks = service.harnessFacts('session').currentTurn!.hooks
+    expect(hooks).toHaveLength(1)
+    expect(hooks[0]).toMatchObject({
+      id: 'h',
+      status: 'ok',
+      output: { truncated: true, bytes: 5000 },
+    })
+    const output = hooks[0]!.output
+    expect(
+      typeof output === 'object' && output !== null
+        ? Buffer.byteLength(JSON.stringify(output.preview))
+        : Infinity,
+    ).toBeLessThanOrEqual(4096)
+  },
+)
+
+it('R2triple failed MCP survives 120 plugins through apply and pill — mutation omit init bounds turns red', () => {
   const { service } = bed()
   service.apply(
     'session',
@@ -552,18 +593,27 @@ it('R2prime oversized init becomes an explicit placeholder — mutation drop tru
       {
         type: 'system',
         subtype: 'init',
-        plugins: Array.from({ length: 100 }, (_, n) => ({
-          name: `plugin ${n}`,
+        mcp_servers: [{ name: 'linear', status: 'failed' }],
+        plugins: Array.from({ length: 120 }, (_, i) => ({
+          name: `plugin-${i}`,
           path: 'x'.repeat(200),
         })),
       },
       'now',
     )!,
   )
-  expect(service.harnessFacts('session').init).toMatchObject({
-    kind: 'harness.init',
-    truncated: true,
-    model: null,
-    plugins: null,
+  const facts = service.harnessFacts('session')
+  expect({ alert: harnessPill(facts).alert, init: facts.init }).toMatchObject({
+    alert: true,
+    init: {
+      plugins: { count: 120, names: expect.any(Array), omitted: 104 },
+      mcpServers: {
+        total: 1,
+        connected: 0,
+        others: [{ name: 'linear', status: 'failed' }],
+        omitted: 0,
+      },
+    },
   })
+  expect(facts.init?.plugins?.names).toHaveLength(16)
 })

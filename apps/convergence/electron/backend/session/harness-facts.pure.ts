@@ -66,6 +66,7 @@ export function foldHarnessFacts(
         reason: fact.reason,
         at: fact.at,
         ...(fact.truncated ? { truncated: true as const } : {}),
+        ...(fact.fieldBounds ? { fieldBounds: fact.fieldBounds } : {}),
       })
     if (fact.kind === 'harness.hook') {
       const id = fact.hookId ?? `unidentified-${event.sequence}`
@@ -83,6 +84,8 @@ export function foldHarnessFacts(
         }
         current.hooks.push(hook)
       }
+      if (fact.fieldBounds)
+        hook.fieldBounds = { ...hook.fieldBounds, ...fact.fieldBounds }
       hook.name = fact.hookName ?? hook.name
       hook.event = fact.hookEvent ?? hook.event
       if (fact.phase === 'started') hook.startedAt = fact.at
@@ -104,18 +107,28 @@ export function foldHarnessFacts(
     if (Array.isArray(turn.permissionDenials)) {
       const early = value.denials ?? []
       const used = new Set<number>()
-      value.denials = turn.permissionDenials.map((raw) => {
+      const entries = turn.permissionDenials.map((raw) => {
         const entry =
           raw !== null && typeof raw === 'object'
             ? (raw as Record<string, unknown>)
             : {}
-        const toolName =
-          typeof entry.tool_name === 'string' ? entry.tool_name : null
-        const toolUseId =
-          typeof entry.tool_use_id === 'string' ? entry.tool_use_id : null
-        let index = toolUseId
+        return {
+          toolName:
+            typeof entry.tool_name === 'string' ? entry.tool_name : null,
+          toolUseId:
+            typeof entry.tool_use_id === 'string' ? entry.tool_use_id : null,
+        }
+      })
+      // Reserve every exact identity before any fallback consumes an early note.
+      const matches = entries.map(({ toolUseId }) => {
+        const index = toolUseId
           ? early.findIndex((d, i) => !used.has(i) && d.toolUseId === toolUseId)
           : -1
+        if (index >= 0) used.add(index)
+        return index
+      })
+      value.denials = entries.map(({ toolName, toolUseId }, position) => {
+        let index = matches[position]!
         if (index < 0)
           index = early.findIndex(
             (d, i) =>

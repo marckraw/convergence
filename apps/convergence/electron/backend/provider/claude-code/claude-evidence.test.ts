@@ -751,3 +751,106 @@ it.each([
     ).toEqual([])
   },
 )
+
+it('R4triple tool error ends outstanding retries unknown — mutation remove tool-error branch or reset turns red', () => {
+  const f = fixture()
+  for (let attempt = 1; attempt <= 2; attempt++)
+    f.adapter.consume(
+      { type: 'system', subtype: 'api_retry', attempt },
+      'retry',
+    )
+  f.adapter.consume(
+    {
+      type: 'user',
+      parent_tool_use_id: null,
+      message: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'child',
+            is_error: true,
+            content: 'Child exhausted retries',
+          },
+        ],
+      },
+    },
+    'tool error',
+  )
+  const before = f.facts.filter(
+    (f) => f.kind === 'harness.retry' && f.phase === 'resolved',
+  )
+  f.adapter.consume(
+    { type: 'assistant', message: { content: [] } },
+    'parent answers',
+  )
+  const after = f.facts.filter(
+    (f) => f.kind === 'harness.retry' && f.phase === 'resolved',
+  )
+  const expected = [
+    {
+      kind: 'harness.retry',
+      phase: 'resolved',
+      outcome: 'unknown',
+      reason: 'tool-error-while-outstanding',
+      attempts: 2,
+      at: 'tool error',
+    },
+  ]
+  expect({ before, after }).toEqual({ before: expected, after: expected })
+})
+it('R2triple resolution subtype stays bounded — mutation bypass subtype bound turns red', () => {
+  const f = fixture()
+  f.adapter.consume({ type: 'system', subtype: 'api_retry' }, 'retry')
+  f.adapter.consume(
+    { type: 'result', is_error: true, subtype: '😀'.repeat(10000) },
+    'end',
+  )
+  const fact = f.facts.find(
+    (f) => f.kind === 'harness.retry' && f.phase === 'resolved',
+  )
+  expect(Buffer.byteLength(JSON.stringify(fact))).toBeLessThan(6144)
+  expect(fact).toMatchObject({
+    fieldBounds: { errorSubtype: { truncated: true, bytes: 40000 } },
+  })
+})
+it('R4triple tool-error guards — mutation accept a child or non-error or zero attempts turns red', () => {
+  const f = fixture()
+  const error = {
+    type: 'user',
+    message: {
+      content: [
+        {
+          type: 'tool_result',
+          is_error: true,
+          tool_use_id: 'child',
+          content: 'error',
+        },
+      ],
+    },
+  }
+  f.adapter.consume(error, 'nothing outstanding')
+  f.adapter.consume({ type: 'system', subtype: 'api_retry' }, 'retry')
+  f.adapter.consume({ ...error, parent_tool_use_id: 'child' }, 'child error')
+  f.adapter.consume(
+    {
+      type: 'user',
+      message: {
+        content: [{ type: 'tool_result', is_error: false, content: 'ok' }],
+      },
+    },
+    'normal result',
+  )
+  f.adapter.consume(error, 'main error')
+  expect(
+    f.facts.filter((f) => f.kind === 'harness.retry' && f.phase === 'resolved'),
+  ).toEqual([
+    {
+      kind: 'harness.retry',
+      phase: 'resolved',
+      outcome: 'unknown',
+      reason: 'tool-error-while-outstanding',
+      attempts: 1,
+      at: 'main error',
+    },
+  ])
+})
