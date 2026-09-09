@@ -32,6 +32,7 @@ function createHost(
   } = {},
 ): RemoteExecutionHost {
   return new RemoteExecutionHost({
+    onEventSeq: () => {},
     connection: {
       resolveConnection: async () => ({
         baseUrl: 'http://daemon.test',
@@ -123,6 +124,7 @@ function createRacingDaemon(identities: DaemonIdentity[]): RacingDaemon {
 
 function createRacingHost(racing: RacingDaemon): RemoteExecutionHost {
   return new RemoteExecutionHost({
+    onEventSeq: () => {},
     connection: {
       resolveConnection: async () => ({
         baseUrl: 'http://daemon.test',
@@ -186,6 +188,7 @@ describe('RemoteExecutionHost', () => {
 
   it('classifies unreachable daemons as network errors', async () => {
     const offline = new RemoteExecutionHost({
+      onEventSeq: () => {},
       connection: {
         resolveConnection: async () => ({
           baseUrl: 'http://daemon.test',
@@ -1224,6 +1227,7 @@ describe('RemoteExecutionHost', () => {
      */
     it('records an attach that never reached the daemon as an attach, not as a refused start', async () => {
       const offline = new RemoteExecutionHost({
+        onEventSeq: () => {},
         connection: {
           resolveConnection: async () => {
             throw new RemoteExecutionHostError(

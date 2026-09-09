@@ -34,6 +34,7 @@ function endpointEditedDuringItsFirstListings(edits: number): MovingEndpoint {
   let editsLeft = edits
 
   const host = new RemoteExecutionHost({
+    onEventSeq: () => {},
     connection: {
       resolveConnection: async () => ({
         baseUrl: machineUrl(machine),

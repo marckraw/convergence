@@ -86,6 +86,7 @@ describe('a remote start carries the place the session recorded', () => {
       join(tempDir, 'global-sessions'),
     )
     host = new RemoteExecutionHost({
+      onEventSeq: () => {},
       connection: {
         resolveConnection: async () => ({
           baseUrl: 'http://daemon.test',
@@ -441,6 +442,7 @@ describe('a remote start carries the place the session recorded', () => {
    */
   it('keeps a start the daemon accepted when the record write throws', async () => {
     const throwingRecord = new RemoteExecutionHost({
+      onEventSeq: () => {},
       connection: {
         resolveConnection: async () => ({
           baseUrl: 'http://daemon.test',
@@ -525,6 +527,7 @@ describe('a remote start carries the place the session recorded', () => {
         },
       })
       const noisyHost = new RemoteExecutionHost({
+        onEventSeq: () => {},
         connection: {
           resolveConnection: async () => ({
             baseUrl: 'http://daemon.test',
@@ -753,6 +756,7 @@ describe('a remote start carries the place the session recorded', () => {
       recordingExecutionHostCredentials(),
     )
     const registry = new AppSettingsRemoteExecutionHostRegistry({
+      onEventSeq: () => {},
       appSettings,
       credentials: { resolveToken: async (id: string) => `token-${id}` },
       fetch: stub.fetchFn,
@@ -946,6 +950,7 @@ describe('describeProjectCatalog', () => {
 
   function buildHost(): RemoteExecutionHost {
     return new RemoteExecutionHost({
+      onEventSeq: () => {},
       connection: {
         resolveConnection: async () => ({
           baseUrl: 'http://daemon.test',
@@ -1508,6 +1513,7 @@ describe('describeProjectCatalog', () => {
     // of a machine, because before that listing the capability is `unknown`.
     let baseUrl = 'http://daemon-a.test'
     const repointed = new RemoteExecutionHost({
+      onEventSeq: () => {},
       connection: {
         resolveConnection: async () => ({ baseUrl, token: 'test-token' }),
       },
@@ -1584,6 +1590,7 @@ describe('describeProjectCatalog', () => {
     // captured at the request, and this goes red.
     let baseUrl = 'http://daemon-a.test'
     const repointing = new RemoteExecutionHost({
+      onEventSeq: () => {},
       connection: {
         resolveConnection: async () => ({ baseUrl, token: 'test-token' }),
       },

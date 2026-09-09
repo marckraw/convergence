@@ -149,6 +149,7 @@ describe('an endpoint whose base url moves under a live host', () => {
    */
   function coldRegistry(): AppSettingsRemoteExecutionHostRegistry {
     return new AppSettingsRemoteExecutionHostRegistry({
+      onEventSeq: () => {},
       appSettings,
       credentials: { resolveToken: async (id: string) => `token-${id}` },
       fetch: routedFetch(),
@@ -213,6 +214,7 @@ describe('an endpoint whose base url moves under a live host', () => {
       recordingExecutionHostCredentials(),
     )
     registry = new AppSettingsRemoteExecutionHostRegistry({
+      onEventSeq: () => {},
       appSettings,
       // One token for both machines, so the only thing that differs across the
       // edit is the address — the half the bug was about.

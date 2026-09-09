@@ -25,8 +25,17 @@ interface RemoteExecutionHostRegistryDeps {
   >
   credentials: Pick<ExecutionHostDaemonCredentialsService, 'resolveToken'>
   fetch?: typeof fetch
-  /** Forwarded to every host: the stream cursor each run persists. */
-  onEventSeq?: (sessionId: string, seq: number) => void
+  /**
+   * Forwarded to every host: the stream cursor each run persists.
+   *
+   * Required, like its neighbour below and for the same reason (MAR-2721).
+   * This one was the optional half of the pair, and optional is exactly what
+   * made it deletable: removing the forwarding line, or `main/index.ts`'s
+   * `sessionService.recordRemoteEventSeq`, kept every suite green while
+   * `execution_host_last_seq` stopped moving on the record — so a remote
+   * session survived a restart by replaying itself from the beginning.
+   */
+  onEventSeq: (sessionId: string, seq: number) => void
   /**
    * Forwarded to every host: the workspace each daemon says it made.
    *

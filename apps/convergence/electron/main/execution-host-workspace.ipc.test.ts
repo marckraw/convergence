@@ -136,6 +136,7 @@ describe('the executionHost:getSessionWorkspace ipc handler', () => {
       recordingExecutionHostCredentials(),
     )
     const registry = new AppSettingsRemoteExecutionHostRegistry({
+      onEventSeq: () => {},
       appSettings,
       credentials: { resolveToken: async (id: string) => `token-${id}` },
       fetch: routedFetch(),

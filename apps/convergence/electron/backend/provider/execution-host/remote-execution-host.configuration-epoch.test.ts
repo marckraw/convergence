@@ -76,6 +76,7 @@ describe('the configuration epoch', () => {
       recordingExecutionHostCredentials(),
     )
     registry = new AppSettingsRemoteExecutionHostRegistry({
+      onEventSeq: () => {},
       appSettings,
       // The credential store the resolver reads at call time, which is how a
       // token rotation reaches a host that is already built and already
