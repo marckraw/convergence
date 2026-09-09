@@ -112,6 +112,7 @@ export class ClaudeEvidenceService {
               agent,
               fact.patch.status as 'completed' | 'failed' | 'stopped',
               fact.patch.endedAt ?? at,
+              fact.patch.endedSummary,
             )
         }
       }
@@ -209,6 +210,7 @@ export class ClaudeEvidenceService {
             agent,
             result?.is_error === true ? 'failed' : 'completed',
             at,
+            result?.is_error === true ? text : undefined,
           )
       } else if (tool.name === 'TaskStop' && result?.is_error !== true) {
         const taskId =
@@ -259,12 +261,14 @@ export class ClaudeEvidenceService {
     agent: AgentIdentity,
     status: Exclude<AgentRunStatus, 'running' | 'unknown'>,
     at: string,
+    summary?: string | null,
   ): void {
     // The task update, notification and foreground result name one terminal moment.
     if (this.terminalAgents.has(agent.itemId)) return
     this.terminalAgents.add(agent.itemId)
     this.emit({
       kind: 'agent.ended',
+      ...(summary !== undefined ? { summary } : {}),
       spawnedByItemId: agent.itemId,
       status,
       at,

@@ -215,3 +215,64 @@ it('L3 persists only changed agent and task rows — mutation upsert every folde
   })
   expect(db.prepare('SELECT * FROM writes').all()).toEqual([])
 })
+
+it('R11 persists the first terminal summary on both lists — drop a summary write or overwrite the second terminal turns red', () => {
+  const { db, service } = bed()
+  service.apply('session', 'turn', {
+    kind: 'agent.started',
+    run: {
+      id: 'agent',
+      spawnedByItemId: 'call',
+      agentType: 'Explore',
+      description: 'fixture',
+      model: null,
+      depth: 1,
+      startedAt: 'start',
+      transcriptPath: null,
+    },
+  })
+  service.apply('session', 'turn', {
+    kind: 'agent.ended',
+    spawnedByItemId: 'call',
+    status: 'failed',
+    at: 'first',
+    summary: 'first reason',
+  } as Parameters<typeof service.apply>[2])
+  service.apply('session', 'turn', {
+    kind: 'agent.ended',
+    spawnedByItemId: 'call',
+    status: 'completed',
+    at: 'second',
+    summary: 'second reason',
+  } as Parameters<typeof service.apply>[2])
+  service.apply('session', 'turn', {
+    kind: 'task.changed',
+    taskId: 'task',
+    at: 'first',
+    patch: { status: 'failed', endedAt: 'first', endedSummary: 'first reason' },
+  })
+  service.apply('session', 'turn', {
+    kind: 'task.changed',
+    taskId: 'task',
+    at: 'second',
+    patch: {
+      status: 'completed',
+      endedAt: 'second',
+      endedSummary: 'second reason',
+    },
+  })
+  const reopened = new HarnessEvidenceService(db)
+  expect(
+    [
+      reopened.listAgentRuns('session')[0],
+      reopened.listTasks('session')[0],
+    ].map((row) => ({
+      status: row.status,
+      endedAt: row.endedAt,
+      summary: row.endedSummary,
+    })),
+  ).toEqual([
+    { status: 'failed', endedAt: 'first', summary: 'first reason' },
+    { status: 'failed', endedAt: 'first', summary: 'first reason' },
+  ])
+})

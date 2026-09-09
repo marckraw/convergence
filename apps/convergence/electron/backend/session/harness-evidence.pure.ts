@@ -43,7 +43,12 @@ export function foldAgentRuns(
       return retainUnchangedProjection(run, { ...run, ...fact.patch })
     if (fact.kind === 'agent.ended')
       return run.status === 'running' || run.status === 'unknown'
-        ? { ...run, status: fact.status, endedAt: fact.at }
+        ? {
+            ...run,
+            status: fact.status,
+            endedAt: fact.at,
+            endedSummary: fact.summary ?? null,
+          }
         : run
     return retainUnchangedProjection(run, {
       ...run,
@@ -93,6 +98,7 @@ export function foldTasks(
   ) {
     next.status = existing.status
     next.endedAt = existing.endedAt
+    next.endedSummary = existing.endedSummary
   }
   return existing
     ? tasks.map((task) =>

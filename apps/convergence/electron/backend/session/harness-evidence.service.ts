@@ -61,15 +61,19 @@ export class HarnessEvidenceService {
         const previousTasks = this.listTasks(sessionId)
         const tasks = foldTasks(previousTasks, fact, sessionId)
         const upsert = this.db
-          .prepare(`INSERT INTO session_tasks(task_id,session_id,tool_use_id,task_type,description,status,started_at,ended_at,output_file,stop_reason)
-          VALUES (@taskId,@sessionId,@toolUseId,@taskType,@description,@status,@startedAt,@endedAt,@outputFile,@stopReason)
-          ON CONFLICT(session_id,task_id) DO UPDATE SET tool_use_id=excluded.tool_use_id,task_type=excluded.task_type,description=excluded.description,status=excluded.status,started_at=excluded.started_at,ended_at=excluded.ended_at,output_file=excluded.output_file,stop_reason=excluded.stop_reason`)
+          .prepare(`INSERT INTO session_tasks(task_id,session_id,tool_use_id,task_type,description,status,started_at,ended_at,output_file,stop_reason,ended_summary)
+          VALUES (@taskId,@sessionId,@toolUseId,@taskType,@description,@status,@startedAt,@endedAt,@outputFile,@stopReason,@endedSummary)
+          ON CONFLICT(session_id,task_id) DO UPDATE SET tool_use_id=excluded.tool_use_id,task_type=excluded.task_type,description=excluded.description,status=excluded.status,started_at=excluded.started_at,ended_at=excluded.ended_at,output_file=excluded.output_file,stop_reason=excluded.stop_reason,ended_summary=excluded.ended_summary`)
         for (const task of tasks)
           if (
             task !==
             previousTasks.find((previous) => previous.taskId === task.taskId)
           )
-            upsert.run({ ...task, stopReason: task.stopReason ?? null })
+            upsert.run({
+              ...task,
+              endedSummary: task.endedSummary ?? null,
+              stopReason: task.stopReason ?? null,
+            })
         if (fact.kind === 'task.changed') {
           const toolId = fact.patch.toolUseId
           if (!toolId) return null
@@ -103,9 +107,9 @@ export class HarnessEvidenceService {
       const runs = foldAgentRuns(previous, fact, sessionId)
       let renamed: { itemIds: string[] } | null = null
       const upsert = this.db
-        .prepare(`INSERT INTO session_agent_runs(id,session_id,spawned_by_item_id,agent_type,description,model,status,depth,started_at,ended_at,transcript_path,is_backgrounded,last_tool_name,usage_json,updated_at,stop_reason)
-        VALUES (@id,@sessionId,@spawnedByItemId,@agentType,@description,@model,@status,@depth,@startedAt,@endedAt,@transcriptPath,@isBackgrounded,@lastToolName,@usageJson,@updatedAt,@stopReason)
-        ON CONFLICT(session_id,spawned_by_item_id) DO UPDATE SET id=excluded.id,agent_type=excluded.agent_type,description=excluded.description,model=excluded.model,status=excluded.status,depth=excluded.depth,ended_at=excluded.ended_at,transcript_path=excluded.transcript_path,is_backgrounded=excluded.is_backgrounded,last_tool_name=excluded.last_tool_name,usage_json=excluded.usage_json,updated_at=excluded.updated_at,stop_reason=excluded.stop_reason`)
+        .prepare(`INSERT INTO session_agent_runs(id,session_id,spawned_by_item_id,agent_type,description,model,status,depth,started_at,ended_at,transcript_path,is_backgrounded,last_tool_name,usage_json,updated_at,stop_reason,ended_summary)
+        VALUES (@id,@sessionId,@spawnedByItemId,@agentType,@description,@model,@status,@depth,@startedAt,@endedAt,@transcriptPath,@isBackgrounded,@lastToolName,@usageJson,@updatedAt,@stopReason,@endedSummary)
+        ON CONFLICT(session_id,spawned_by_item_id) DO UPDATE SET id=excluded.id,agent_type=excluded.agent_type,description=excluded.description,model=excluded.model,status=excluded.status,depth=excluded.depth,ended_at=excluded.ended_at,transcript_path=excluded.transcript_path,is_backgrounded=excluded.is_backgrounded,last_tool_name=excluded.last_tool_name,usage_json=excluded.usage_json,updated_at=excluded.updated_at,stop_reason=excluded.stop_reason,ended_summary=excluded.ended_summary`)
       for (const run of runs) {
         const old = previous.find(
           (item) => item.spawnedByItemId === run.spawnedByItemId,
@@ -113,6 +117,7 @@ export class HarnessEvidenceService {
         if (run === old) continue
         upsert.run({
           ...run,
+          endedSummary: run.endedSummary ?? null,
           stopReason: run.stopReason ?? null,
           isBackgrounded:
             run.isBackgrounded === null ? null : Number(run.isBackgrounded),
@@ -133,7 +138,7 @@ export class HarnessEvidenceService {
   listAgentRuns(sessionId: string): SessionAgentRun[] {
     return this.db
       .prepare(
-        `SELECT id,session_id AS sessionId,spawned_by_item_id AS spawnedByItemId,agent_type AS agentType,description,model,status,depth,started_at AS startedAt,ended_at AS endedAt,transcript_path AS transcriptPath,is_backgrounded AS isBackgrounded,last_tool_name AS lastToolName,usage_json AS usageJson,updated_at AS updatedAt,stop_reason AS stopReason FROM session_agent_runs WHERE session_id=? ORDER BY started_at,id`,
+        `SELECT id,session_id AS sessionId,spawned_by_item_id AS spawnedByItemId,agent_type AS agentType,description,model,status,depth,started_at AS startedAt,ended_at AS endedAt,transcript_path AS transcriptPath,is_backgrounded AS isBackgrounded,last_tool_name AS lastToolName,usage_json AS usageJson,updated_at AS updatedAt,stop_reason AS stopReason,ended_summary AS endedSummary FROM session_agent_runs WHERE session_id=? ORDER BY started_at,id`,
       )
       .all(sessionId)
       .map((row) => {
@@ -142,6 +147,7 @@ export class HarnessEvidenceService {
         }
         return {
           ...run,
+          endedSummary: run.endedSummary ?? null,
           stopReason: run.stopReason ?? null,
           isBackgrounded:
             run.isBackgrounded === null ? null : Boolean(run.isBackgrounded),
@@ -151,7 +157,7 @@ export class HarnessEvidenceService {
   listTasks(sessionId: string): SessionTask[] {
     return this.db
       .prepare(
-        `SELECT task_id AS taskId,session_id AS sessionId,tool_use_id AS toolUseId,task_type AS taskType,description,status,started_at AS startedAt,ended_at AS endedAt,output_file AS outputFile,stop_reason AS stopReason FROM session_tasks WHERE session_id=? ORDER BY started_at,task_id`,
+        `SELECT task_id AS taskId,session_id AS sessionId,tool_use_id AS toolUseId,task_type AS taskType,description,status,started_at AS startedAt,ended_at AS endedAt,output_file AS outputFile,stop_reason AS stopReason,ended_summary AS endedSummary FROM session_tasks WHERE session_id=? ORDER BY started_at,task_id`,
       )
       .all(sessionId) as SessionTask[]
   }

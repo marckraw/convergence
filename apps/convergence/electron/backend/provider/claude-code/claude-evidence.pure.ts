@@ -68,6 +68,7 @@ export function readClaudeTaskFacts(
       patch.status &&
       ['completed', 'failed', 'stopped'].includes(patch.status)
     ) {
+      if (typeof input.summary === 'string') patch.endedSummary = input.summary
       const ended =
         typeof input.end_time === 'number' ? new Date(input.end_time) : null
       patch.endedAt =
