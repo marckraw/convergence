@@ -76,10 +76,7 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     [conversationItems],
   )
   const actionableApprovalIds = useMemo(() => {
-    if (
-      (session.status !== 'running' && session.status !== 'completed') ||
-      session.attention !== 'needs-approval'
-    ) {
+    if (session.status !== 'running' && session.status !== 'completed') {
       return new Set<string>()
     }
 
@@ -87,9 +84,11 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     for (const entry of conversationRenderPlan) {
       if (
         entry.item.kind === 'approval-request' &&
-        entry.item.resolution !== 'approved' &&
-        entry.item.resolution !== 'denied' &&
-        (session.status === 'running' || entry.item.resolution === 'pending') &&
+        (entry.item.resolution === 'pending'
+          ? session.hasActiveHandle === true
+          : entry.item.resolution === undefined &&
+            session.status === 'running' &&
+            session.attention === 'needs-approval') &&
         !resolvedApprovalIds.has(entry.item.id)
       ) {
         ids.add(entry.item.id)
@@ -100,13 +99,11 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     conversationRenderPlan,
     resolvedApprovalIds,
     session.attention,
+    session.hasActiveHandle,
     session.status,
   ])
   const actionableInputIds = useMemo(() => {
-    if (
-      (session.status !== 'running' && session.status !== 'completed') ||
-      session.attention !== 'needs-input'
-    ) {
+    if (session.status !== 'running' && session.status !== 'completed') {
       return new Set<string>()
     }
 
@@ -114,9 +111,11 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     for (const entry of conversationRenderPlan) {
       if (
         entry.item.kind === 'input-request' &&
-        entry.item.resolution !== 'approved' &&
-        entry.item.resolution !== 'denied' &&
-        (session.status === 'running' || entry.item.resolution === 'pending') &&
+        (entry.item.resolution === 'pending'
+          ? session.hasActiveHandle === true
+          : entry.item.resolution === undefined &&
+            session.status === 'running' &&
+            session.attention === 'needs-input') &&
         (entry.item.request?.kind === 'choice' ||
           entry.item.request?.kind === 'plan' ||
           entry.item.request?.kind === 'form' ||
@@ -131,6 +130,7 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     conversationRenderPlan,
     resolvedInputIds,
     session.attention,
+    session.hasActiveHandle,
     session.status,
   ])
 

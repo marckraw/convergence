@@ -49,7 +49,7 @@ function renderConversationItemView({
 }
 
 describe('ConversationItemView', () => {
-  it('R7 approval shows agent and muted permission facts — omit the approval label or details turns red', () => {
+  it('R7/H2 approval shows agent and the forced ask on the muted line — omit label or decision reason turns red', () => {
     renderConversationItemView({
       entry: {
         id: 'approval',
@@ -73,14 +73,16 @@ describe('ConversationItemView', () => {
         },
         permissionDetails: {
           blockedPath: '/fixture/marker',
-          decisionReason: 'needs permission',
+          decisionReason:
+            'needs permission · Ask rule: Bash(build:*) (userSettings)',
         },
       },
     })
     expect({
       label: screen.queryByText('↳ Inspect fixture (Explore)')?.textContent,
-      details: screen.queryByText('/fixture/marker · needs permission')
-        ?.className,
+      details: screen.queryByText(
+        '/fixture/marker · needs permission · Ask rule: Bash(build:*) (userSettings)',
+      )?.className,
     }).toEqual({
       label: '↳ Inspect fixture (Explore)',
       details: 'mt-1 break-words text-xs text-muted-foreground',

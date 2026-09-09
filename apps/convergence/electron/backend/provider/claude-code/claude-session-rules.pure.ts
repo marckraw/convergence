@@ -45,13 +45,37 @@ export function readClaudeSessionRules(
 
 export function matchesClaudeSessionRule(
   remembered: ClaudeSessionRules,
-  suggestions: ClaudeSessionRules,
+  suggestions: unknown[] | undefined,
+  toolName: string,
 ): boolean {
-  return suggestions.rules.some((rule) =>
-    remembered.rules.some(
-      (known) =>
-        known.toolName === rule.toolName &&
-        known.ruleContent === rule.ruleContent,
-    ),
-  )
+  if (!suggestions?.length || !readClaudeSessionRules(suggestions).rules.length)
+    return false
+  return suggestions.every((suggestion) => {
+    if (!isRecord(suggestion)) return false
+    if (
+      suggestion.type === 'addRules' &&
+      suggestion.behavior === 'allow' &&
+      Array.isArray(suggestion.rules)
+    )
+      return suggestion.rules.every(
+        (rule) =>
+          isRecord(rule) &&
+          rule.toolName === toolName &&
+          remembered.rules.some(
+            (known) =>
+              known.toolName === rule.toolName &&
+              known.ruleContent === rule.ruleContent,
+          ),
+      )
+    if (
+      suggestion.type === 'addDirectories' &&
+      Array.isArray(suggestion.directories)
+    )
+      return suggestion.directories.every(
+        (directory) =>
+          typeof directory === 'string' &&
+          remembered.directories.includes(directory),
+      )
+    return false
+  })
 }

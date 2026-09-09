@@ -455,6 +455,7 @@ export class ClaudeCodeProvider implements Provider {
     }
 
     let child: ClaudeTransport | null = null
+    let connectionGeneration = 0
     let stopped = false
     let idleTimer: ReturnType<typeof setTimeout> | undefined
     let endingReason: 'idle' | 'account' | null = null
@@ -480,7 +481,12 @@ export class ClaudeCodeProvider implements Provider {
       connectionEnding = new Promise<void>((resolve) => {
         resolveConnectionEnd = resolve
       })
-      child.close()
+      void child.close().catch((error) => {
+        sessionEmitter.addNote({
+          text: `Claude Code close failed: ${String(error)}`,
+          level: 'error',
+        })
+      })
       return connectionEnding
     }
     function armIdleTimer(): void {
@@ -552,9 +558,13 @@ export class ClaudeCodeProvider implements Provider {
       emitDelta,
       now,
     })
+    let settledAttention: AttentionState = 'none'
     const permissions = new ClaudePermissionsService(
       sessionEmitter,
-      setAttention,
+      (attention) =>
+        setAttention(
+          attention === 'none' && !currentTurn ? settledAttention : attention,
+        ),
     )
     const evidence = new ClaudeEvidenceService(
       config.workingDirectory,
@@ -571,6 +581,12 @@ export class ClaudeCodeProvider implements Provider {
     )
 
     function setStatus(status: SessionStatus): void {
+      settledAttention =
+        status === 'completed'
+          ? 'finished'
+          : status === 'failed'
+            ? 'failed'
+            : 'none'
       listeners.status.forEach((cb) => cb(status))
       sessionEmitter.patchSession({ status })
       if (status === 'failed') {
@@ -817,7 +833,12 @@ export class ClaudeCodeProvider implements Provider {
       currentTurn = null
       interruptRequested = false
       permissions.endConnection()
-      child?.close()
+      void child?.close().catch((error) => {
+        sessionEmitter.addNote({
+          text: `Claude Code close failed: ${String(error)}`,
+          level: 'error',
+        })
+      })
     }
 
     /**
@@ -1399,12 +1420,26 @@ export class ClaudeCodeProvider implements Provider {
 
       if (!child && env) {
         capabilities = []
+        const generation = ++connectionGeneration
         child = createClaudeTransport({
           binaryPath,
           args,
           cwd: config.workingDirectory,
           env,
           onPermissionRequest: (request) => {
+            const ended =
+              stopped ||
+              !!connectionEnding ||
+              !child ||
+              generation !== connectionGeneration
+            const stopping = interruptInFlight || interruptRequested
+            if (ended || stopping)
+              return Promise.resolve({
+                behavior: 'deny',
+                toolUseID: request.toolUseID,
+                decisionClassification: 'user_reject',
+                message: ended ? 'connection ended' : 'Stopped in Convergence',
+              })
             sawHarnessOutput = true
             return permissions.request(request)
           },
@@ -1616,13 +1651,14 @@ export class ClaudeCodeProvider implements Provider {
         listeners.heartbeat.push(cb)
       },
       sendMessage: (text, attachments, skillSelections, options) => {
-        if (options?.deliveryMode === 'answer') {
+        if (
+          options?.deliveryMode === 'answer' &&
           permissions.answer(
             text,
             options.interactionResponse as InteractionResponse | undefined,
           )
+        )
           return
-        }
 
         void startTurn(text, attachments, {
           skillSelections,

@@ -377,7 +377,6 @@ export interface ProviderDescriptor {
   vendorLabel: string
   kind: ProviderKind
   supportsContinuation: boolean
-  supportsApprovals?: boolean
   /**
    * Whether this provider can be told to start the conversation over inside a
    * session that already exists (R8, RUN45).
@@ -489,7 +488,6 @@ export interface Provider {
   id: string
   name: string
   supportsContinuation: boolean
-  supportsApprovals?: boolean
   describe: () => Promise<ProviderDescriptor>
   start: (config: SessionStartConfig) => SessionHandle
   manageContext?: (

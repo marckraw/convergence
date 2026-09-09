@@ -15,12 +15,6 @@ import {
 } from './provider-descriptor.pure'
 
 describe('provider-descriptor', () => {
-  it('R3 Claude advertises approval support without changing Codex — omit Claude approval capability turns red', () => {
-    expect({
-      claude: buildClaudeDescriptor().supportsApprovals,
-      codex: buildFallbackCodexDescriptor().supportsApprovals,
-    }).toEqual({ claude: true, codex: undefined })
-  })
   it('advertises Codex reset and keeps Pi unsupported — disable Codex or enable Pi turns red', () => {
     expect({
       codex: buildFallbackCodexDescriptor().supportsConversationReset,

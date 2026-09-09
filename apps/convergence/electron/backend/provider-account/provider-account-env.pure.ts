@@ -102,9 +102,8 @@ export const CLAUDE_ACCOUNT_ENV_ALLOWLIST: readonly string[] = [
  * `OTEL_` carries the user's own skill-telemetry configuration — Convergence
  * only injects its embedded sink when the user has not configured one, so
  * dropping these would silently disable telemetry the user set up.
- * `CONVERGENCE_` is our own injection channel, including
- * `CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE`, which the AskUserQuestion hook
- * reads out of its own environment.
+ * `CONVERGENCE_` carries app-owned connection configuration, including the
+ * skill-telemetry switch.
  */
 export const CLAUDE_ACCOUNT_ENV_PASSTHROUGH_PREFIXES: readonly string[] = [
   'OTEL_',

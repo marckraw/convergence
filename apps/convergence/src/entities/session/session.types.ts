@@ -345,6 +345,8 @@ export interface QueuedInputPatchEvent {
 }
 
 export interface SessionSummary {
+  /** Runtime fact; never persisted or inferred from attention. */
+  hasActiveHandle?: boolean
   id: string
   contextKind: SessionContextKind
   projectId: string | null
@@ -510,7 +512,6 @@ export interface ProviderInfo {
   vendorLabel: string
   kind: ProviderKind
   supportsContinuation: boolean
-  supportsApprovals?: boolean
   /**
    * Whether this provider can start the conversation over inside a session
    * that already exists (R8). The connection inspector offers "clear the

@@ -1018,6 +1018,8 @@ type AttentionRequestKindData =
   | 'input'
 
 interface SessionSummaryData {
+  /** Runtime fact; never persisted or inferred from attention. */
+  hasActiveHandle?: boolean
   id: string
   contextKind: SessionContextKindData
   projectId: string | null
@@ -1109,7 +1111,6 @@ interface ProviderInfo {
   vendorLabel: string
   kind: 'conversation' | 'shell'
   supportsContinuation: boolean
-  supportsApprovals?: boolean
   /** Whether the conversation can be started over in place (R8). */
   supportsConversationReset: boolean
   defaultModelId: string
@@ -2493,7 +2494,6 @@ interface RemoteExecutionHostConnectionResultData {
     available: boolean
     authenticated: boolean
     supportsContinuation: boolean
-    supportsApprovals?: boolean
     models: Array<{ id: string; label: string }>
   }> | null
   daemon: {

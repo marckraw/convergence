@@ -37,7 +37,7 @@ export interface ResolveClaudeAccountEnvInput {
   account: ClaudeAccountEnvTarget | null
   /** The session's working directory, whose trust entry is reconciled. */
   workingDirectory: string
-  /** Values Convergence sets itself: telemetry sink, deferred tool response. */
+  /** Values Convergence sets itself: telemetry sink and connection configuration. */
   injections?: NodeJS.ProcessEnv
   baseEnv?: NodeJS.ProcessEnv
   homeDir?: string

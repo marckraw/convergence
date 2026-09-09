@@ -6,6 +6,8 @@ import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { ProviderRegistry } from '../provider/provider-registry'
 import { LocalExecutionHost } from '../provider/execution-host/local-execution-host'
 import { SessionService } from './session.service'
+import * as claudeTransport from '../provider/claude-code/claude-transport.service'
+import { ProviderSessionEmitter } from '../provider/provider-session.emitter'
 import { ClaudeCodeProvider } from '../provider/claude-code/claude-code-provider'
 import type { SessionPermissionConfig } from '../provider/provider.types'
 import type {
@@ -22,6 +24,7 @@ afterEach(async () => {
   await cleanup?.()
   cleanup = undefined
   queryMock.mockReset()
+  vi.restoreAllMocks()
   closeDatabase()
   resetDatabase()
 })
@@ -278,7 +281,7 @@ it('R2 session approval is a plain allow — drop scope forwarding or send updat
   })
 })
 
-it('R2 only the harness exact suggestion repeats — disable memory or match raw command instead turns red', async () => {
+it('R2/M3 only exact suggestions repeat and directory-only has no button — any suggestions show session scope turns red', async () => {
   const { service, session, connections } = await fixture()
   const c = connections[0]
   const suggestions = [
@@ -328,6 +331,10 @@ it('R2 only the harness exact suggestion repeats — disable memory or match raw
   await Promise.all([repeat, different, directory])
   expect({
     response,
+    directoryButton: items
+      .filter((i) => i.kind === 'approval-request')
+      .find((i) => i.providerMeta.providerItemId === 'four')
+      ?.supportsSessionApproval,
     cards: items
       .filter((i) => i.kind === 'approval-request')
       .map((i) => i.providerMeta.providerItemId),
@@ -341,6 +348,7 @@ it('R2 only the harness exact suggestion repeats — disable memory or match raw
       toolUseID: 'two',
       decisionClassification: 'user_permanent',
     },
+    directoryButton: false,
     cards: ['one', 'three', 'four'],
     notes: ['↳ allowed by your session rule: Bash'],
   })
@@ -713,7 +721,7 @@ it('R1 mixed requests restore the remaining attention — keep the last resolved
   expect(attention).toBe('needs-approval')
 })
 
-it('R1 the main answer cannot hide a pending background approval — overwrite attention with finished turns red', async () => {
+it('R1/M10 background approval preserves pending then finished attention — resolve to none turns red', async () => {
   const { service, session, connections } = await fixture()
   const c = connections[0]
   const pending = request(c)
@@ -723,6 +731,7 @@ it('R1 the main answer cannot hide a pending background approval — overwrite a
   service.approve(session.id, 'tool')
   await pending
   expect(attention).toBe('needs-approval')
+  expect(service.getById(session.id)?.attention).toBe('finished')
 })
 
 it('R4 concurrent dialogs answer the selected tool — choose the first pending dialog instead of its id turns red', async () => {
@@ -839,4 +848,382 @@ it('R1 permission before init proves acceptance — omit harness-output receipt 
     writes: connections.reduce((n, c) => n + c.writes.length, 0),
     status: service.getById(session.id)?.status,
   }).toEqual({ processes: 1, writes: 1, status: 'failed' })
+})
+
+it.each([
+  [
+    'unknown rule',
+    {
+      type: 'addRules',
+      behavior: 'allow',
+      rules: [
+        { toolName: 'Bash', ruleContent: 'build:*' },
+        { toolName: 'Bash', ruleContent: 'rm:*' },
+      ],
+    },
+  ],
+  ['unknown directory', { type: 'addDirectories', directories: ['/etc'] }],
+  ['removeRules', { type: 'removeRules', behavior: 'allow', rules: [] }],
+  ['setMode', { type: 'setMode', mode: 'bypassPermissions' }],
+  [
+    'another tool',
+    {
+      type: 'addRules',
+      behavior: 'allow',
+      rules: [{ toolName: 'Write', ruleContent: 'build:*' }],
+    },
+  ],
+])(
+  'H1 whole suggestions require a card for %s — match some remembered rule turns red',
+  async (_label, broader) => {
+    const { service, session, connections } = await fixture()
+    const known = {
+      type: 'addRules',
+      behavior: 'allow',
+      rules: [{ toolName: 'Bash', ruleContent: 'build:*' }],
+    }
+    const first = request(connections[0], 'remember', { suggestions: [known] })
+    service.approve(session.id, 'remember', { scope: 'session' })
+    await first
+    const second = request(connections[0], 'broader', {
+      suggestions: [known, broader],
+    })
+    const card = service
+      .getConversation(session.id)
+      .find((i) => i.providerMeta.providerItemId === 'broader')
+    service.deny(session.id, 'broader')
+    expect({ card: card?.kind, result: await second }).toEqual({
+      card: 'approval-request',
+      result: {
+        behavior: 'deny',
+        message: 'Denied in Convergence',
+        toolUseID: 'broader',
+        decisionClassification: 'user_reject',
+      },
+    })
+  },
+)
+
+it('H2 a matched ask rule always prompts and names the rule — ignore matchedAskRule turns red', async () => {
+  const { service, session, connections } = await fixture()
+  const suggestions = [
+    {
+      type: 'addRules',
+      behavior: 'allow',
+      rules: [{ toolName: 'Bash', ruleContent: 'build:*' }],
+    },
+  ]
+  const first = request(connections[0], 'remember', { suggestions })
+  service.approve(session.id, 'remember', { scope: 'session' })
+  await first
+  const next = request(connections[0], 'forced', {
+    suggestions,
+    matchedAskRule: {
+      source: 'userSettings',
+      toolName: 'Bash',
+      ruleContent: 'build:*',
+    },
+  })
+  const card = service
+    .getConversation(session.id)
+    .find((i) => i.providerMeta.providerItemId === 'forced')
+  service.deny(session.id, 'forced')
+  expect({
+    result: await next,
+    reason:
+      card?.kind === 'approval-request'
+        ? card.permissionDetails?.decisionReason
+        : null,
+  }).toEqual({
+    result: {
+      behavior: 'deny',
+      message: 'Denied in Convergence',
+      toolUseID: 'forced',
+      decisionClassification: 'user_reject',
+    },
+    reason: 'needs permission · Ask rule: Bash(build:*) (userSettings)',
+  })
+})
+
+it('M4 summaries expose the live handle across completion and release — infer liveness from status turns red', async () => {
+  const { service, session, connections } = await fixture()
+  const snapshot = () => [
+    service.getById(session.id)?.hasActiveHandle,
+    service.getAllSummaries().find((s) => s.id === session.id)?.hasActiveHandle,
+  ]
+  const running = snapshot()
+  connections[0].push({ type: 'result', subtype: 'success', result: 'done' })
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'completed')
+  const completed = snapshot()
+  await service.disposeAll()
+  expect({ running, completed, released: snapshot() }).toEqual({
+    running: [true, true],
+    completed: [true, true],
+    released: [false, false],
+  })
+})
+
+it('M5 a repeated id denies the old request and removes its listener — overwrite pending turns red', async () => {
+  const { service, session, connections } = await fixture()
+  const abort = new AbortController()
+  let oldResult: unknown
+  void request(connections[0], 'same', { signal: abort.signal })?.then((r) => {
+    oldResult = r
+  })
+  const next = request(connections[0], 'same')
+  abort.abort()
+  service.approve(session.id, 'same')
+  const nextResult = await next
+  await new Promise((r) => setTimeout(r, 0))
+  const cards = service
+    .getConversation(session.id)
+    .filter((i) => i.kind === 'approval-request')
+  expect({
+    oldResult,
+    nextResult,
+    resolutions: cards.map((c) => c.resolution),
+  }).toEqual({
+    oldResult: {
+      behavior: 'deny',
+      message: 'superseded',
+      toolUseID: 'same',
+      decisionClassification: 'user_reject',
+    },
+    nextResult: {
+      behavior: 'allow',
+      toolUseID: 'same',
+      decisionClassification: 'user_temporary',
+    },
+    resolutions: ['denied', 'approved'],
+  })
+})
+
+it.each(['interrupt', 'dispose', 'exit', 'idle'] as const)(
+  'M7 %s refuses a late request without a card — remove process admission gate turns red',
+  async (ending) => {
+    const { service, session, connections } = await fixture(
+      ending === 'idle' ? 0.0002 : 0,
+    )
+    const c = connections[0]
+    let finishInterrupt: (() => void) | undefined
+    if (ending === 'interrupt') {
+      c.interrupt.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finishInterrupt = () => resolve({ still_queued: [] })
+          }),
+      )
+      service.stop(session.id)
+      await vi.waitUntil(() => !!finishInterrupt)
+    } else if (ending === 'dispose') await service.disposeAll()
+    else if (ending === 'exit') {
+      c.close()
+      await new Promise((r) => setTimeout(r, 0))
+    } else {
+      c.push({ type: 'result', subtype: 'success', result: 'done' })
+      await vi.waitUntil(() => c.closed)
+      await service.sendMessage(session.id, { text: 'resume' })
+      await vi.waitUntil(() => connections.length === 2)
+    }
+    const late = request(c, 'late')
+    const result = await Promise.race([
+      late,
+      new Promise((r) => setTimeout(r, 25)),
+    ])
+    const cards = service
+      .getConversation(session.id)
+      .filter((i) => i.kind === 'approval-request').length
+    finishInterrupt?.()
+    expect({ result, cards }).toEqual({
+      result: {
+        behavior: 'deny',
+        message:
+          ending === 'interrupt'
+            ? 'Stopped in Convergence'
+            : 'connection ended',
+        toolUseID: 'late',
+        decisionClassification: 'user_reject',
+      },
+      cards: 0,
+    })
+  },
+)
+
+it('M8 an answer with no pending dialog starts a normal turn — always return after answer turns red', async () => {
+  const { service, session, connections } = await fixture()
+  const c = connections[0]
+  c.push({ type: 'result', subtype: 'success', result: 'done' })
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'completed')
+  await service.sendMessage(session.id, {
+    text: 'This still needs an answer',
+    deliveryMode: 'answer',
+  })
+  await new Promise((r) => setTimeout(r, 30))
+  expect({
+    writes: c.writes.map((w) => w.message.content),
+    status: service.getById(session.id)?.status,
+    recorded: service
+      .getConversation(session.id)
+      .some(
+        (i) =>
+          i.kind === 'message' &&
+          i.actor === 'user' &&
+          i.text === 'This still needs an answer',
+      ),
+  }).toEqual({
+    writes: [
+      [{ type: 'text', text: 'write fixture' }],
+      [{ type: 'text', text: 'This still needs an answer' }],
+    ],
+    status: 'running',
+    recorded: true,
+  })
+})
+
+it('L9 text answers choose the newest pending dialog — find the first dialog turns red', async () => {
+  const { service, session, connections } = await fixture()
+  const c = connections[0]
+  const input = {
+    questions: [{ question: 'Color?', options: [{ label: 'Blue' }] }],
+  }
+  let firstResponse: unknown, secondResponse: unknown
+  const first = c.options
+    .canUseTool?.('AskUserQuestion', input, {
+      signal: new AbortController().signal,
+      toolUseID: 'first',
+      requestId: 'r1',
+    } as Parameters<CanUseTool>[2])
+    .then((v) => (firstResponse = v))
+  const second = c.options
+    .canUseTool?.('AskUserQuestion', input, {
+      signal: new AbortController().signal,
+      toolUseID: 'second',
+      requestId: 'r2',
+    } as Parameters<CanUseTool>[2])
+    .then((v) => (secondResponse = v))
+  await service.sendMessage(session.id, {
+    text: 'Blue',
+    deliveryMode: 'answer',
+  })
+  await new Promise((r) => setTimeout(r, 0))
+  const observed = { first: firstResponse, second: secondResponse }
+  service.deny(session.id, 'first')
+  service.deny(session.id, 'second')
+  await Promise.all([first, second])
+  expect(observed).toEqual({
+    first: undefined,
+    second: {
+      behavior: 'allow',
+      toolUseID: 'second',
+      decisionClassification: 'user_temporary',
+      updatedInput: { ...input, answers: { 'Color?': 'Blue' } },
+    },
+  })
+})
+
+it.each(['addApprovalRequest', 'addInputRequest'] as const)(
+  'minor request failure in %s denies and clears pending — omit fail-closed wrap turns red',
+  async (method) => {
+    const { service, session, connections } = await fixture()
+    vi.spyOn(ProviderSessionEmitter.prototype, method).mockImplementationOnce(
+      () => {
+        throw new Error('fixture emitter failure')
+      },
+    )
+    const result = await Promise.resolve()
+      .then(() =>
+        method === 'addApprovalRequest'
+          ? request(connections[0], 'broken')
+          : connections[0].options.canUseTool?.(
+              'AskUserQuestion',
+              {
+                questions: [
+                  { question: 'Color?', options: [{ label: 'Blue' }] },
+                ],
+              },
+              {
+                signal: new AbortController().signal,
+                toolUseID: 'broken',
+                requestId: 'r',
+              } as Parameters<CanUseTool>[2],
+            ),
+      )
+      .catch(() => 'rejected')
+    const next = request(connections[0], 'next')
+    service.approve(session.id, 'next')
+    await next
+    expect({
+      result,
+      attention: service.getById(session.id)?.attention,
+    }).toEqual({
+      result: {
+        behavior: 'deny',
+        message: 'Permission request failed in Convergence',
+        toolUseID: 'broken',
+        decisionClassification: 'user_reject',
+      },
+      attention: 'none',
+    })
+  },
+)
+
+it.each(['idle', 'recovery'] as const)(
+  'minor %s close rejection becomes a note — float close without catch turns red',
+  async (ending) => {
+    const create = claudeTransport.createClaudeTransport
+    vi.spyOn(claudeTransport, 'createClaudeTransport').mockImplementation(
+      (input) => {
+        const transport = create(input)
+        return {
+          ...transport,
+          close: async () => {
+            await transport.close()
+            throw new Error('fixture close refusal')
+          },
+        }
+      },
+    )
+    const { service, session, connections } = await fixture(
+      ending === 'idle' ? 0.0002 : 0,
+      { preset: 'ask' },
+      ending !== 'recovery',
+    )
+    if (ending === 'idle')
+      connections[0].push({
+        type: 'result',
+        subtype: 'success',
+        result: 'done',
+      })
+    else connections[0].close()
+    await new Promise((r) => setTimeout(r, 90))
+    expect(
+      service
+        .getConversation(session.id)
+        .filter((i) => i.kind === 'note')
+        .map((i) => i.text),
+    ).toContain('Claude Code close failed: Error: fixture close refusal')
+  },
+)
+
+it('H1 the request tool must own every remembered rule — ignore request tool turns red', async () => {
+  const { service, session, connections } = await fixture()
+  const suggestions = [
+    {
+      type: 'addRules',
+      behavior: 'allow',
+      rules: [{ toolName: 'Write', ruleContent: 'fixture' }],
+    },
+  ]
+  const first = request(connections[0], 'remember', { suggestions })
+  service.approve(session.id, 'remember', { scope: 'session' })
+  await first
+  const next = request(connections[0], 'wrong-tool', { suggestions })
+  const card = service
+    .getConversation(session.id)
+    .find((i) => i.providerMeta.providerItemId === 'wrong-tool')
+  service.deny(session.id, 'wrong-tool')
+  expect({ kind: card?.kind, result: (await next)?.behavior }).toEqual({
+    kind: 'approval-request',
+    result: 'deny',
+  })
 })

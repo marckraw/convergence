@@ -37,7 +37,36 @@ export class ClaudePermissionsService {
     ) => void,
   ) {}
 
-  request(request: ClaudePermissionRequest): Promise<ClaudePermissionResult> {
+  async request(
+    request: ClaudePermissionRequest,
+  ): Promise<ClaudePermissionResult> {
+    try {
+      return await this.requestDecision(request)
+    } catch {
+      const denied: ClaudePermissionResult = {
+        behavior: 'deny',
+        message: 'Permission request failed in Convergence',
+        toolUseID: request.toolUseID,
+        decisionClassification: 'user_reject',
+      }
+      try {
+        this.resolve(request.toolUseID, denied)
+      } catch {
+        // The callback still settles if recording its denial also fails.
+      }
+      return denied
+    }
+  }
+
+  private requestDecision(
+    request: ClaudePermissionRequest,
+  ): Promise<ClaudePermissionResult> {
+    this.resolve(request.toolUseID, {
+      behavior: 'deny',
+      message: 'superseded',
+      toolUseID: request.toolUseID,
+      decisionClassification: 'user_reject',
+    })
     if (request.signal.aborted)
       return Promise.resolve({
         behavior: 'deny',
@@ -46,9 +75,11 @@ export class ClaudePermissionsService {
         decisionClassification: 'user_reject',
       })
     if (
+      !request.matchedAskRule &&
       matchesClaudeSessionRule(
         this.sessionAllowRules,
-        readClaudeSessionRules(request.suggestions),
+        request.suggestions,
+        request.toolName,
       )
     ) {
       this.emitter.addNote({
@@ -102,10 +133,18 @@ export class ClaudePermissionsService {
         `${request.displayName ?? request.toolName}: ${request.description ?? ''}`,
       providerItemId: request.toolUseID,
       agentRunId: request.agentID,
-      supportsSessionApproval: !!request.suggestions?.length,
+      supportsSessionApproval:
+        readClaudeSessionRules(request.suggestions).rules.length > 0,
       permissionDetails: {
         blockedPath: request.blockedPath,
-        decisionReason: request.decisionReason,
+        decisionReason: request.matchedAskRule
+          ? [
+              request.decisionReason,
+              `Ask rule: ${request.matchedAskRule.toolName}${request.matchedAskRule.ruleContent !== undefined ? `(${request.matchedAskRule.ruleContent})` : ''} (${request.matchedAskRule.source})`,
+            ]
+              .filter(Boolean)
+              .join(' · ')
+          : request.decisionReason,
       },
     })
     this.pending.get(request.toolUseID)!.itemId = itemId
@@ -143,11 +182,13 @@ export class ClaudePermissionsService {
     })
   }
 
-  answer(text: string, response?: InteractionResponse): void {
+  answer(text: string, response?: InteractionResponse): boolean {
     const pending = response?.providerItemId
       ? this.pending.get(response.providerItemId)
-      : [...this.pending.values()].find((value) => value.question || value.plan)
-    if (!pending) return
+      : [...this.pending.values()]
+          .reverse()
+          .find((value) => value.question || value.plan)
+    if (!pending) return false
     if (pending.plan) {
       this.resolve(
         pending.request.toolUseID,
@@ -176,9 +217,9 @@ export class ClaudePermissionsService {
               ],
             },
       )
-      return
+      return true
     }
-    if (!pending.question) return
+    if (!pending.question) return false
     this.resolve(pending.request.toolUseID, {
       behavior: 'allow',
       toolUseID: pending.request.toolUseID,
@@ -189,6 +230,7 @@ export class ClaudePermissionsService {
         text,
       ),
     })
+    return true
   }
 
   denyPendingForStop(): void {
@@ -256,12 +298,15 @@ export class ClaudePermissionsService {
     this.pending.delete(id)
     if (pending.abort)
       pending.request.signal.removeEventListener('abort', pending.abort)
-    if (pending.itemId)
-      this.emitter.resolveInteraction(
-        pending.itemId,
-        result.behavior === 'allow' ? 'approved' : 'denied',
-      )
-    pending.resolve(result)
-    this.attention(this.pendingAttention ?? 'none')
+    try {
+      if (pending.itemId)
+        this.emitter.resolveInteraction(
+          pending.itemId,
+          result.behavior === 'allow' ? 'approved' : 'denied',
+        )
+    } finally {
+      pending.resolve(result)
+      this.attention(this.pendingAttention ?? 'none')
+    }
   }
 }

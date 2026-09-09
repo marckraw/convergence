@@ -174,7 +174,7 @@ export const CLAUDE_CODE_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability
     supportsInterrupt: true,
     defaultRunningMode: 'follow-up',
     notes:
-      'Claude Code supports app-managed answers for deferred AskUserQuestion requests and app-managed follow-up queueing with a resident process.',
+      'Claude Code supports in-place answers to AskUserQuestion requests and app-managed follow-up queueing with a resident process.',
   }
 
 export const CODEX_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability = {
@@ -292,7 +292,6 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
     vendorLabel: 'Anthropic',
     kind: 'conversation',
     supportsContinuation: true,
-    supportsApprovals: true,
     supportsLiveModelSelection: true,
     // From the one resolver rather than a literal here: the answer is a
     // fact about the provider, and a literal per builder is a literal per

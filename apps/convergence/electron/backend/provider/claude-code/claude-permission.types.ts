@@ -10,6 +10,7 @@ export interface ClaudePermissionRequest {
   description?: string
   blockedPath?: string
   decisionReason?: string
+  matchedAskRule?: { source: string; toolName: string; ruleContent?: string }
   suggestions?: unknown[]
 }
 

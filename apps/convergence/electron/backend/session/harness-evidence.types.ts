@@ -55,7 +55,7 @@ export type AgentRunFact =
   | {
       kind: 'process.ended'
       at: string
-      reason?: 'quit' | 'idle' | 'account' | 'deferred' | 'stop' | 'exit'
+      reason?: 'quit' | 'idle' | 'account' | 'stop' | 'exit'
     }
 
 export type TaskFact = {

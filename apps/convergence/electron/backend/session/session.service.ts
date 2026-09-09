@@ -1186,7 +1186,10 @@ export class SessionService {
   }
 
   private buildSessionSummary(row: SessionRow): SessionSummary {
-    const summary = sessionSummaryFromRow(row)
+    const summary = {
+      ...sessionSummaryFromRow(row),
+      hasActiveHandle: this.activeHandles.has(row.id),
+    }
     const attentionRequestKind = resolveAttentionRequestKind(
       summary,
       this.readAttentionRequestRow(summary.id),
@@ -1195,7 +1198,10 @@ export class SessionService {
   }
 
   private buildSessionSummaries(rows: SessionRow[]): SessionSummary[] {
-    const summaries = rows.map(sessionSummaryFromRow)
+    const summaries = rows.map((row) => ({
+      ...sessionSummaryFromRow(row),
+      hasActiveHandle: this.activeHandles.has(row.id),
+    }))
     const attentionRowsBySessionId =
       this.readLatestAttentionRequestRows(summaries)
 

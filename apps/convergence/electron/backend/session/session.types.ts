@@ -152,6 +152,8 @@ export type AttentionRequestKind =
   | 'input'
 
 export interface SessionSummary {
+  /** Runtime fact; never persisted or inferred from attention. */
+  hasActiveHandle?: boolean
   id: string
   contextKind: SessionContextKind
   projectId: string | null

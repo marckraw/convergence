@@ -33,27 +33,52 @@ it('R2 only well-formed allow suggestions enter memory — omit shape/behavior c
   })
 })
 
-it('R2 rules compare both opaque strings and never directories — relax exact tool/content matching turns red', () => {
+it('R2 rules compare both opaque strings and directories alone never approve — relax exact tool/content matching turns red', () => {
   const remembered = {
     rules: [{ toolName: 'Bash', ruleContent: 'EXACT *' }],
     directories: ['/fixture'],
   }
   expect([
-    matchesClaudeSessionRule(remembered, {
-      rules: [{ toolName: 'Bash', ruleContent: 'EXACT *' }],
-      directories: [],
-    }),
-    matchesClaudeSessionRule(remembered, {
-      rules: [{ toolName: 'Write', ruleContent: 'EXACT *' }],
-      directories: [],
-    }),
-    matchesClaudeSessionRule(remembered, {
-      rules: [{ toolName: 'Bash', ruleContent: 'exact *' }],
-      directories: [],
-    }),
-    matchesClaudeSessionRule(remembered, {
-      rules: [],
-      directories: ['/fixture'],
-    }),
+    matchesClaudeSessionRule(
+      remembered,
+      [
+        {
+          type: 'addRules',
+          behavior: 'allow',
+          rules: [{ toolName: 'Bash', ruleContent: 'EXACT *' }],
+          directories: [],
+        },
+      ],
+      'Bash',
+    ),
+    matchesClaudeSessionRule(
+      remembered,
+      [
+        {
+          type: 'addRules',
+          behavior: 'allow',
+          rules: [{ toolName: 'Write', ruleContent: 'EXACT *' }],
+          directories: [],
+        },
+      ],
+      'Bash',
+    ),
+    matchesClaudeSessionRule(
+      remembered,
+      [
+        {
+          type: 'addRules',
+          behavior: 'allow',
+          rules: [{ toolName: 'Bash', ruleContent: 'exact *' }],
+          directories: [],
+        },
+      ],
+      'Bash',
+    ),
+    matchesClaudeSessionRule(
+      remembered,
+      [{ type: 'addDirectories', directories: ['/fixture'] }],
+      'Bash',
+    ),
   ]).toEqual([true, false, false, false])
 })

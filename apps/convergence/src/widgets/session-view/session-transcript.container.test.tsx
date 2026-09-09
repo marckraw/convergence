@@ -41,6 +41,7 @@ const baseSession: Session = {
   effort: 'medium',
   name: 'Test session',
   status: 'running',
+  hasActiveHandle: true,
   attention: 'none',
   activity: null,
   workingDirectory: '/tmp/project',
@@ -199,7 +200,7 @@ function planRequest(overrides: {
     providerMeta: {
       providerId: 'claude-code',
       providerItemId: overrides.providerItemId ?? null,
-      providerEventType: 'deferred_tool_use',
+      providerEventType: 'input-request',
     },
   }
 }
@@ -718,3 +719,75 @@ it('R4 the rendered question answer carries its provider item id — omit dialog
   if (submit) fireEvent.click(submit)
   expect(onInputAnswer.mock.calls[0]?.[1]?.providerItemId).toBe('tool-question')
 })
+
+it.each([
+  ['running', 'needs-input'],
+  ['completed', 'needs-input'],
+  ['running', 'needs-approval'],
+  ['completed', 'needs-approval'],
+] as const)(
+  'M4 mixed pending cards remain actionable while %s %s — gate on attention turns red',
+  async (status, attention) => {
+    const { rerender } = render(
+      <SessionTranscript
+        session={{
+          ...baseSession,
+          status,
+          attention,
+          hasActiveHandle: true,
+        }}
+        conversationItems={[
+          {
+            ...approvalRequest({ id: 'approval', sequence: 1 }),
+            resolution: 'pending',
+          } as ConversationItem,
+          {
+            ...inputRequest({ id: 'question', sequence: 2 }),
+            resolution: 'pending',
+          } as ConversationItem,
+        ]}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
+      />,
+    )
+    await screen.findByTestId('approval-request-card')
+    const live = {
+      approve: !!screen.queryByRole('button', { name: 'Approve' }),
+      answer: !!screen.queryByRole('button', { name: 'Answer' }),
+    }
+    rerender(
+      <SessionTranscript
+        session={{
+          ...baseSession,
+          status,
+          attention,
+          hasActiveHandle: false,
+        }}
+        conversationItems={[
+          {
+            ...approvalRequest({ id: 'approval', sequence: 1 }),
+            resolution: 'pending',
+          } as ConversationItem,
+          {
+            ...inputRequest({ id: 'question', sequence: 2 }),
+            resolution: 'pending',
+          } as ConversationItem,
+        ]}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
+      />,
+    )
+    expect({
+      live,
+      dead: {
+        approve: !!screen.queryByRole('button', { name: 'Approve' }),
+        answer: !!screen.queryByRole('button', { name: 'Answer' }),
+      },
+    }).toEqual({
+      live: { approve: true, answer: true },
+      dead: { approve: false, answer: false },
+    })
+  },
+)
