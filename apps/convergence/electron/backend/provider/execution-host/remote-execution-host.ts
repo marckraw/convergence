@@ -51,11 +51,13 @@ import {
   daemonCapabilitiesFingerprint,
   daemonConfigurationFingerprint,
   decodeRemoteProjects,
+  describeSeqGap,
   evaluateHandshake,
   parseDaemonHealth,
   parseRemoteExecutionHostMeta,
   parseRemoteExecutionHostStartResponse,
   parseRemoteSessionWorkspaceInfo,
+  readEnvelopeSeq,
   RemoteExecutionHostError,
   remoteProjectCatalogFromOutcome,
   remoteProjectsCapability,
@@ -146,8 +148,17 @@ export interface RemoteExecutionHostDeps {
   /**
    * Called after each processed event envelope with its sequence number.
    * Callers persist this to resume the stream after an app restart.
+   *
+   * Required, like `onWorkspaceReported` below and for the same reason
+   * (MAR-2721): the type is the only thing holding this wire in place. Deleting
+   * the registry's forwarding line, or the composition root's, left every gate
+   * green while `execution_host_last_seq` quietly stopped advancing — and a
+   * cursor that never moves makes a restart replay the whole session from zero,
+   * which reads as a transcript that duplicated itself rather than as a missing
+   * callback. A caller with nothing to persist says so out loud with a no-op;
+   * it cannot forget.
    */
-  onEventSeq?: (sessionId: string, seq: number) => void
+  onEventSeq: (sessionId: string, seq: number) => void
   /**
    * Called with the workspace the daemon says it materialised, the moment it
    * says it (MAR-2694).
@@ -1187,7 +1198,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
 
   /** @internal Shared by RemoteSessionRun. */
   notifyEventSeq(sessionId: string, seq: number): void {
-    this.deps.onEventSeq?.(sessionId, seq)
+    this.deps.onEventSeq(sessionId, seq)
   }
 
   /** @internal Shared by RemoteSessionRun. */
@@ -1405,6 +1416,12 @@ class RemoteSessionRun {
   private stopped = false
   private dead = false
   private lastSeq = 0
+  /**
+   * Set when the stream in progress delivered a sequence gap, cleared when the
+   * next one opens. Read by `readStream` so the batch a gap arrived in stops
+   * being consumed, and by nothing else (MAR-2779).
+   */
+  private streamGap = false
 
   constructor(private readonly params: RemoteSessionRunParams) {
     this.lastSeq = params.resume?.afterSeq ?? 0
@@ -1623,6 +1640,7 @@ class RemoteSessionRun {
     const reader = body.getReader()
     const decoder = new TextDecoder()
     const parser = createSseParser()
+    this.streamGap = false
 
     try {
       for (;;) {
@@ -1636,12 +1654,20 @@ class RemoteSessionRun {
         // dropped for that reason is traced like every other drop.
         for (const event of events) {
           this.dispatchRawEvent(event.data)
+          // Everything after a gap in this batch sits above a hole, whatever
+          // its own sequence says. Leaving here ends the stream and hands the
+          // resume to `consumeEventStream` (MAR-2779).
+          if (this.streamGap) return
         }
       }
     } catch {
       // Read errors (including aborts) fall through to the reconnect loop.
     } finally {
       reader.releaseLock()
+      // A gap is the one exit that leaves the daemon still writing: `done`
+      // means it closed, an abort already tore the socket down, and only this
+      // path walks away from a stream that is otherwise healthy.
+      if (this.streamGap) void body.cancel().catch(() => {})
     }
   }
 
@@ -1706,7 +1732,8 @@ class RemoteSessionRun {
       })
       return
     }
-    if (envelope.seq <= this.lastSeq) {
+    const reading = readEnvelopeSeq(this.lastSeq, envelope.seq)
+    if (reading === 'duplicate') {
       this.recordDebug('event', {
         direction: 'in',
         bytes: raw.length,
@@ -1714,6 +1741,29 @@ class RemoteSessionRun {
         payload: { seq: envelope.seq, lastSeq: this.lastSeq },
         note: 'dropped: already-seen sequence',
       })
+      return
+    }
+    if (reading === 'gap') {
+      // Events were missed in transit, and the protocol says what to do about
+      // it: resume from the last CONTIGUOUS sequence rather than continue
+      // (MAR-2779). So this envelope is not dispatched and `lastSeq` does not
+      // move -- dispatching it would put an event on the transcript with a hole
+      // underneath it, and advancing the mark would mean nothing ever asks the
+      // daemon for the missing frames again.
+      //
+      // The stream is left rather than retried here: `consumeEventStream` is
+      // the only thing that knows the attempt budget, and it re-opens with
+      // `Last-Event-ID: lastSeq`, which is precisely the resume the protocol
+      // asks for. A daemon that cannot serve it spends the budget and the
+      // session fails out loud, because a silent hole is the thing being fixed.
+      this.recordDebug('event', {
+        direction: 'in',
+        bytes: raw.length,
+        method: envelope.event.kind,
+        payload: { seq: envelope.seq, lastSeq: this.lastSeq },
+        note: describeSeqGap(this.lastSeq, envelope.seq),
+      })
+      this.streamGap = true
       return
     }
     this.lastSeq = envelope.seq

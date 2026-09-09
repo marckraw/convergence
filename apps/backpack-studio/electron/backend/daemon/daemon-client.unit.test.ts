@@ -4,6 +4,7 @@ import { RemoteExecutionHostError } from '@convergence/execution-host-client'
 import {
   createStubDaemon,
   envelope,
+  waitUntil,
   type StubDaemon,
 } from '@convergence/execution-host-client'
 import { DaemonClient } from './daemon-client'
@@ -272,4 +273,167 @@ it('spends its budget on replay-only streams — mutation: count duplicate envel
   ).rejects.toBeInstanceOf(RemoteExecutionHostError)
   expect(opens).toBe(3)
   expect(onEnvelope).not.toHaveBeenCalled()
+})
+
+/**
+ * The same gap rule as Convergence, through the same organ, against Studio's
+ * append-only record (MAR-2779).
+ *
+ * This side had the worse consequence: `if (seq <= lastSeq) continue` and then
+ * `lastSeq = seq` meant a lost frame was written out of the conversation
+ * permanently — no panel refetch, no snapshot, nothing that would ever put it
+ * back. `loseFrame` stages it honestly: the daemon logs the envelope and the
+ * wire does not carry it, so the resume the client asks for is one the daemon
+ * can answer.
+ */
+describe('DaemonClient.followSession, when the stream skips a sequence', () => {
+  it('resumes from the last contiguous sequence, so the record has no hole', async () => {
+    const daemon = createStubDaemon()
+    const record: number[] = []
+    const dropped: string[] = []
+    const abort = new AbortController()
+    const client = new DaemonClient({
+      baseUrl: 'https://daemon.test',
+      token: 'tok-secret',
+      fetchFn: daemon.fetchFn,
+      wait: () => Promise.resolve(),
+      maxStreamAttempts: 5,
+    })
+
+    const following = client.followSession(
+      'c-1',
+      0,
+      {
+        onEnvelope: (received) => {
+          record.push(received.seq)
+          return Promise.resolve()
+        },
+        onDroppedFrame: (reason) => dropped.push(reason),
+      },
+      abort.signal,
+    )
+
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    daemon.emit(envelope(1, { kind: 'status', status: 'running' }, 'c-1'))
+    daemon.emit(envelope(2, { kind: 'heartbeat' }, 'c-1'))
+    daemon.loseFrame(envelope(3, { kind: 'heartbeat' }, 'c-1'))
+    daemon.emit(envelope(4, { kind: 'status', status: 'completed' }, 'c-1'))
+
+    await waitUntil(() => record.length === 4, 'the replayed frames')
+    // Contiguous and in order, which is the only thing an append-only record
+    // can be trusted for.
+    expect(record).toEqual([1, 2, 3, 4])
+    expect(daemon.eventStreamLastEventIds).toEqual([null, '2'])
+    expect(dropped).toEqual(['gap: expected 3, got 4; reconnecting from 2'])
+
+    abort.abort()
+    await following
+  }, 5_000)
+
+  /**
+   * A replay re-delivering the boundary is not a gap: the duplicate is dropped
+   * and the stream is left open.
+   */
+  it('drops a re-delivered sequence without reconnecting', async () => {
+    const daemon = createStubDaemon()
+    const record: number[] = []
+    const dropped: string[] = []
+    const abort = new AbortController()
+    const client = new DaemonClient({
+      baseUrl: 'https://daemon.test',
+      token: 'tok-secret',
+      fetchFn: daemon.fetchFn,
+      wait: () => Promise.resolve(),
+      maxStreamAttempts: 5,
+    })
+
+    const following = client.followSession(
+      'c-1',
+      0,
+      {
+        onEnvelope: (received) => {
+          record.push(received.seq)
+          return Promise.resolve()
+        },
+        onDroppedFrame: (reason) => dropped.push(reason),
+      },
+      abort.signal,
+    )
+
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    daemon.emit(envelope(1, { kind: 'status', status: 'running' }, 'c-1'))
+    daemon.emit(envelope(2, { kind: 'heartbeat' }, 'c-1'))
+    daemon.emit(envelope(2, { kind: 'heartbeat' }, 'c-1'))
+    daemon.emit(envelope(3, { kind: 'status', status: 'completed' }, 'c-1'))
+
+    await waitUntil(() => record.length === 3, 'the three kept envelopes')
+    expect(record).toEqual([1, 2, 3])
+    expect(daemon.eventStreamLastEventIds).toEqual([null])
+    expect(dropped).toEqual([])
+
+    abort.abort()
+    await following
+  }, 5_000)
+
+  /**
+   * A gap the budget cannot cover ends the follow with the sentence the caller
+   * records on the conversation. Loud, because the alternative is a transcript
+   * that silently skipped an event.
+   *
+   * The daemon refuses to re-open, so the resume cannot land and the attempts
+   * run out. `lastSeq` stayed at 2 throughout: every retry asked for the same
+   * missing frame rather than stepping over it.
+   */
+  it('ends the follow loudly when the resume never lands', async () => {
+    const daemon = createStubDaemon()
+    const record: number[] = []
+    const abort = new AbortController()
+    const client = new DaemonClient({
+      baseUrl: 'https://daemon.test',
+      token: 'tok-secret',
+      fetchFn: daemon.fetchFn,
+      wait: () => Promise.resolve(),
+      maxStreamAttempts: 3,
+    })
+
+    const following = client.followSession(
+      'c-1',
+      0,
+      {
+        onEnvelope: (received) => {
+          record.push(received.seq)
+          return Promise.resolve()
+        },
+        onDroppedFrame: () => {},
+      },
+      abort.signal,
+    )
+
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    daemon.emit(envelope(1, { kind: 'status', status: 'running' }, 'c-1'))
+    daemon.emit(envelope(2, { kind: 'heartbeat' }, 'c-1'))
+    await waitUntil(() => record.length === 2, 'the two contiguous envelopes')
+    // From here the daemon will not serve the stream again, so the resume the
+    // gap asks for can never land.
+    daemon.setEventsStatus(500)
+    daemon.loseFrame(envelope(3, { kind: 'heartbeat' }, 'c-1'))
+    daemon.emit(envelope(4, { kind: 'status', status: 'completed' }, 'c-1'))
+
+    await expect(following).rejects.toBeInstanceOf(RemoteExecutionHostError)
+    expect(record).toEqual([1, 2])
+    // Every retry asked from 2 — never from 4.
+    expect(daemon.eventStreamLastEventIds.filter((id) => id !== null)).toEqual([
+      '2',
+      '2',
+    ])
+  }, 5_000)
 })

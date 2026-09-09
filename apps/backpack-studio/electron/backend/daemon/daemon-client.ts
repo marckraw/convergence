@@ -1,8 +1,10 @@
 import {
   createSseParser,
+  describeSeqGap,
   evaluateHandshake,
   parseDaemonHealth,
   parseRemoteExecutionHostStartResponse,
+  readEnvelopeSeq,
   RemoteExecutionHostError,
   type EndpointHandshakeResult,
   type MetaProbeOutcome,
@@ -260,6 +262,12 @@ export class DaemonClient {
    * `envelopes` counts only what the handler ACCEPTED. An envelope the handler
    * threw on — the record refusing a write — has not been kept, and counting it
    * would hand a dead disk a budget that never runs out.
+   *
+   * Returns early on a sequence gap, which is the same thing as the stream
+   * ending as far as the loop above is concerned: `lastSeq` is the last
+   * CONTIGUOUS sequence, so the reconnect re-requests the missing frames rather
+   * than stepping over them (MAR-2779). This mattered most here — the record is
+   * append-only, so a skipped envelope was a hole in a conversation forever.
    */
   private async readStream(
     response: Response,
@@ -274,6 +282,7 @@ export class DaemonClient {
     const parser = createSseParser()
     let lastSeq = fromSeq
     let envelopes = 0
+    let gap = false
 
     try {
       for (;;) {
@@ -289,11 +298,27 @@ export class DaemonClient {
             handlers.onDroppedFrame(reading.reason)
             continue
           }
+          // What this envelope's sequence means is the package's rule, not this
+          // file's: Convergence reads the daemon's numbers through the same
+          // organ, and two apps disagreeing about one daemon's stream is how
+          // the gap case came to be missing from both (MAR-2779).
+          const seqReading = readEnvelopeSeq(lastSeq, reading.envelope.seq)
           // A replay can re-deliver what this conversation already holds; the
           // record is append-only, so anything at or below the high-water mark
           // is dropped here rather than written twice. A replay is not progress
           // and must not renew the reconnect budget.
-          if (reading.envelope.seq <= lastSeq) continue
+          if (seqReading === 'duplicate') continue
+          if (seqReading === 'gap') {
+            // Frames were missed. Nothing above the hole is written — the whole
+            // point of an append-only record is that its order is the
+            // conversation — and the reconnect above resumes from `lastSeq`,
+            // which the daemon answers by replaying what was lost.
+            handlers.onDroppedFrame(
+              describeSeqGap(lastSeq, reading.envelope.seq),
+            )
+            gap = true
+            return { lastSeq, envelopes }
+          }
           await handlers.onEnvelope(reading.envelope)
           envelopes += 1
           lastSeq = reading.envelope.seq
@@ -307,6 +332,9 @@ export class DaemonClient {
       return { lastSeq, envelopes }
     } finally {
       reader.releaseLock()
+      // A gap is the one exit that walks away from a daemon still writing:
+      // `done` means it closed, and an abort has already torn the socket down.
+      if (gap) void body.cancel().catch(() => {})
     }
   }
 
