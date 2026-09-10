@@ -1,5 +1,11 @@
 # convergence
 
+## 0.54.0
+
+### Minor Changes
+
+- 97b77f1: Import a crew from YAML
+
 ## 0.53.1
 
 ### Patch Changes
