@@ -396,57 +396,62 @@ describe('the recorded-event panel, rendered', () => {
   })
 })
 
-it('RUN66 R2 screenshot names the live debt and handback time — mutations drop owedBy or use startedAt turn red', () => {
-  const waiting: RelayRun = {
-    flowRunId: 'waiting',
-    crewId: 'c1',
-    startedAt: '2026-09-10T10:09:00',
-    endedAt: '2026-09-10T10:19:00',
-    lastActivityAt: '2026-09-10T10:19:00',
-    owedBy: {
-      hopId: 'h',
-      targetSessionId: 'astra',
-      firedAt: '2026-09-10T10:19:00',
-    },
-    handedBackAt: null,
-    laps: [],
-    hails: [],
-    status: { word: 'running', reason: null },
-    counts: { deliveries: 1, failures: 0, laps: 1, events: 1 },
-  }
-  const returned: RelayRun = {
-    ...waiting,
-    flowRunId: 'returned',
-    owedBy: null,
-    handedBackAt: '2026-09-10T10:53:00',
-    status: { word: 'handed-back', reason: null },
-  }
-  renderPanel({
-    runs: [waiting, returned].map((run) =>
-      buildRunRow(
-        run,
-        () => 'Lane: Studio - Horse Astra Executor',
-        new Date('2026-09-10T10:55:00'),
-        () => 'running',
+it.each([
+  ['running', 'running'],
+  ['completed', 'finished'],
+] as const)(
+  'RUN66 R2 screenshot %s names the live debt and handback time — mutations raw status, drop owedBy or use startedAt turn red',
+  (status, label) => {
+    const waiting: RelayRun = {
+      flowRunId: 'waiting',
+      crewId: 'c1',
+      startedAt: '2026-09-10T10:09:00',
+      endedAt: '2026-09-10T10:19:00',
+      lastActivityAt: '2026-09-10T10:19:00',
+      owedBy: {
+        hopId: 'h',
+        targetSessionId: 'astra',
+        firedAt: '2026-09-10T10:19:00',
+      },
+      handedBackAt: null,
+      laps: [],
+      hails: [],
+      status: { word: 'running', reason: null },
+      counts: { deliveries: 1, failures: 0, laps: 1, events: 1 },
+    }
+    const returned: RelayRun = {
+      ...waiting,
+      flowRunId: 'returned',
+      owedBy: null,
+      handedBackAt: '2026-09-10T10:53:00',
+      status: { word: 'handed-back', reason: null },
+    }
+    renderPanel({
+      runs: [waiting, returned].map((run) =>
+        buildRunRow(
+          run,
+          () => 'Lane: Studio - Horse Astra Executor',
+          new Date('2026-09-10T10:55:00'),
+          () => status,
+        ),
       ),
-    ),
-  })
-  const waitingLine = screen.queryByText(
-    'Waiting · Lane: Studio - Horse Astra Executor · since 10:19 · running',
-  )
-  expect({
-    waiting: waitingLine?.textContent,
-    returned: screen.queryByText('Handed back · 10:53')?.textContent,
-    first: document
-      .querySelector('ul > li button')
-      ?.contains(waitingLine ?? null),
-  }).toEqual({
-    waiting:
-      'Waiting · Lane: Studio - Horse Astra Executor · since 10:19 · running',
-    returned: 'Handed back · 10:53',
-    first: true,
-  })
-})
+    })
+    const waitingLine = screen.queryByText(
+      `Waiting · Lane: Studio - Horse Astra Executor · since 10:19 · ${label}`,
+    )
+    expect({
+      waiting: waitingLine?.textContent,
+      returned: screen.queryByText('Handed back · 10:53')?.textContent,
+      first: document
+        .querySelector('ul > li button')
+        ?.contains(waitingLine ?? null),
+    }).toEqual({
+      waiting: `Waiting · Lane: Studio - Horse Astra Executor · since 10:19 · ${label}`,
+      returned: 'Handed back · 10:53',
+      first: true,
+    })
+  },
+)
 
 it('RUN66 R3 held summary shows its sentence and reasons without an expander — mutation hide folded reasons turns red', () => {
   renderPanel({

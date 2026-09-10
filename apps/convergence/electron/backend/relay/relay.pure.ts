@@ -256,7 +256,10 @@ export function buildPayloadPreview(text: string | null): string | null {
       /^\s*(?:📍.*|#{1,6}\s+.*|[-*_]{3,})\s*$/.test(lines[0]))
   )
     lines.shift()
-  return collapse(lines.join('\n'), RELAY_PAYLOAD_PREVIEW_LENGTH)
+  return (
+    collapse(lines.join('\n'), RELAY_PAYLOAD_PREVIEW_LENGTH) ??
+    collapse(text, RELAY_PAYLOAD_PREVIEW_LENGTH)
+  )
 }
 
 /**

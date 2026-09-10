@@ -282,6 +282,7 @@ describe('MissionControl', () => {
         delete: vi.fn(),
         onUpdated: vi.fn(() => () => undefined),
         onHopAppended: vi.fn(() => () => undefined),
+        onHopSettled: vi.fn(() => () => undefined),
         onHopsCleared: vi.fn(() => () => undefined),
       },
       providerAccounts: { list: vi.fn(async () => []) },
@@ -1500,9 +1501,14 @@ describe('MissionControl', () => {
      * Mutation that reds it: drop the `hasMore` row, or call `listRuns`
      * without the `before` cursor.
      */
-    it.each(['hop', 'hail'] as const)(
-      'RUN66 R5 refreshes on %s only for the open crew — mutation drop subscription or reset selection turns red',
-      async (source) => {
+    it.each([
+      ['hop', false],
+      ['hail', false],
+      ['settled', false],
+      ['hop', true],
+    ] as const)(
+      'RUN66 R5 refreshes on %s (retain deeper %s) — mutations subscription, stale merge or shallow cursor turn red',
+      async (source, retainDeeper) => {
         seedCrews([
           makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
         ])
@@ -1511,11 +1517,22 @@ describe('MissionControl', () => {
           [CLAUDE_CODE],
         )
         const listeners = new Set<(hop: RelayHop) => void>()
+        const settleListeners = new Set<
+          (event: { crewId: string; hopIds: string[] }) => void
+        >()
         vi.mocked(window.electronAPI.relay.onHopAppended).mockImplementation(
           (listener) => {
             listeners.add(listener)
             return () => {
               listeners.delete(listener)
+            }
+          },
+        )
+        vi.mocked(window.electronAPI.relay.onHopSettled).mockImplementation(
+          (listener) => {
+            settleListeners.add(listener)
+            return () => {
+              settleListeners.delete(listener)
             }
           },
         )
@@ -1543,18 +1560,42 @@ describe('MissionControl', () => {
           hasMore: true,
           nextCursor: cursor,
         }
+        const deeperCursor = {
+          ...cursor,
+          flowRunId: 'r3',
+          lastActivityAt: '2026-09-10T10:01:00',
+        }
         listRuns
           .mockResolvedValueOnce(first)
           .mockResolvedValueOnce({
             ...first,
             runs: [makeRun('r3', '2026-09-10T10:01:00')],
-            hasMore: false,
-            nextCursor: null,
+            hasMore: retainDeeper,
+            nextCursor: retainDeeper ? deeperCursor : null,
           })
-          .mockResolvedValue({
+          .mockResolvedValueOnce({
             ...first,
+            runs: first.runs.map((run) =>
+              run.flowRunId === 'r1'
+                ? {
+                    ...run,
+                    owedBy: null,
+                    handedBackAt: '2026-09-10T10:56:00',
+                    status: { word: 'handed-back', reason: null },
+                  }
+                : run,
+            ),
             nextCursor: { ...cursor, asOf: '2026-09-10T10:56:00.000Z' },
           })
+          .mockImplementation(async (_crew, options) => ({
+            ...first,
+            runs:
+              retainDeeper && options?.before?.flowRunId === 'r3'
+                ? [makeRun('r4', '2026-09-10T10:00:00')]
+                : [makeRun('r3', '2026-09-10T10:01:00')],
+            hasMore: false,
+            nextCursor: null,
+          }))
         const { unmount } = render(<MissionControl />)
         await switchToCanvas()
         fireEvent.click(await screen.findByRole('button', { name: /History/ }))
@@ -1567,6 +1608,9 @@ describe('MissionControl', () => {
             document.querySelectorAll('ul > li > button[aria-pressed]'),
           ).toHaveLength(3),
         )
+        const debtShown = Boolean(
+          screen.queryByText(/Waiting · Fable · since .*10:03 · running/),
+        )
         const selected = document.querySelectorAll<HTMLButtonElement>(
           'ul > li > button[aria-pressed]',
         )[2]
@@ -1575,7 +1619,10 @@ describe('MissionControl', () => {
         scroll.scrollTop = 72
         listRuns.mockClear()
         const broadcast = (crewId: string) => {
-          if (source === 'hop')
+          if (source === 'settled')
+            for (const listener of settleListeners)
+              listener({ crewId, hopIds: ['owed'] })
+          else if (source === 'hop')
             for (const listener of listeners)
               listener({ id: 'hop', crewId } as RelayHop)
           else
@@ -1610,8 +1657,9 @@ describe('MissionControl', () => {
           const before = listRuns.mock.calls.length
           await act(async () => vi.advanceTimersByTimeAsync(1))
           const after = listRuns.mock.calls.slice()
-          const debtShown = Boolean(
-            screen.queryByText(/Waiting · Fable · since .*10:03 · running/),
+          expect(after).toEqual([['crew-1', undefined]])
+          const handbackShown = Boolean(
+            screen.queryByText(/Handed back · .*10:56/),
           )
           fireEvent.click(
             screen.getByRole('button', { name: 'Load older runs' }),
@@ -1633,6 +1681,7 @@ describe('MissionControl', () => {
             before,
             after,
             debtShown,
+            handbackShown,
             freshCursor,
             preserved,
             closed: listRuns.mock.calls.length,
@@ -1641,14 +1690,17 @@ describe('MissionControl', () => {
             before: 0,
             after: [['crew-1', undefined]],
             debtShown: true,
+            handbackShown: true,
             freshCursor: {
-              before: { ...cursor, asOf: '2026-09-10T10:56:00.000Z' },
+              before: retainDeeper
+                ? deeperCursor
+                : { ...cursor, asOf: '2026-09-10T10:56:00.000Z' },
             },
             preserved: {
               pressed: 'true',
               connected: true,
               scroll: 72,
-              rows: 3,
+              rows: retainDeeper ? 4 : 3,
             },
             closed: 2,
           })

@@ -663,7 +663,16 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
             ? {
                 ...appendRunPage(page, current),
                 hasMore: page.hasMore,
-                nextCursor: page.nextCursor,
+                nextCursor:
+                  page.hasMore &&
+                  current.nextCursor &&
+                  page.runs.every((run) =>
+                    current.runs.some(
+                      (held) => held.flowRunId === run.flowRunId,
+                    ),
+                  )
+                    ? current.nextCursor
+                    : page.nextCursor,
               }
             : page,
         )
@@ -685,8 +694,8 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
    * The next page down, joined onto the one on screen (L2).
    *
    * The full cursor carries the first page's asOf and order key. A refresh
-   * replaces it with a new snapshot, even while retained older rows remain
-   * visible; dedupe absorbs those rows as the new snapshot is paged.
+   * starts a new snapshot when it adds a run. If it adds none, retain the
+   * deeper cursor so the next click reaches unread rows rather than overlap.
    */
   const loadOlderRuns = useCallback(async () => {
     const cursor = historyPage?.nextCursor
@@ -735,6 +744,9 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
     const offHop = sessionRelayApi.onHopAppended((hop) => {
       if (hop.crewId === crewId) refresh()
     })
+    const offSettled = sessionRelayApi.onHopSettled((event) => {
+      if (event.crewId === crewId) refresh()
+    })
     const offHail = useCrewHailStore.subscribe((current, previous) => {
       const next = current.hails.filter((hail) => hail.crewId === crewId)
       const before = previous.hails.filter((hail) => hail.crewId === crewId)
@@ -743,6 +755,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
     return () => {
       clearTimeout(timer)
       offHop()
+      offSettled()
       offHail()
     }
   }, [historyOpen, historyCrewId, loadHistory])

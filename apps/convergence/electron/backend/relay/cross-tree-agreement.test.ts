@@ -90,6 +90,23 @@ it('RUN66 R2 all three history mirrors carry the same debt and cursor shape — 
       ])
       .sort()
   }
+  expect([
+    fields('relay.types.ts', 'RelayHop', ['settleId']),
+    fields(
+      '../../../src/entities/session-relay/session-relay.types.ts',
+      'RelayHop',
+      ['settleId'],
+    ),
+    fields('../../../src/shared/types/electron-api.d.ts', 'RelayHopData', [
+      'settleId',
+    ]),
+    fields('../database/database.types.ts', 'RelayHopRow', ['settle_id']),
+  ]).toEqual([
+    [['settleId', 'string|null']],
+    [['settleId', 'string|null']],
+    [['settleId', 'string|null']],
+    [['settle_id', 'string|null']],
+  ])
   const mirrors = [
     ['run-history.pure.ts', 'RelayRun', 'RunHistoryCursor'],
     [

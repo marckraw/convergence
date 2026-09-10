@@ -35,6 +35,7 @@ function relay(overrides: Partial<SessionRelay> = {}): SessionRelay {
 
 function hop(overrides: Partial<RelayHop> & { id: string }): RelayHop {
   return {
+    settleId: null,
     relayId: 'r1',
     crewId: 'c1',
     flowRunId: 'run-1',

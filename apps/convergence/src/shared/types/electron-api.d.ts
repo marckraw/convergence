@@ -410,6 +410,8 @@ interface SessionRelayData {
 }
 
 interface RelayHopData {
+  /** Recorded source settle; null on legacy rows, which are not folded. */
+  settleId: string | null
   id: string
   relayId: string
   crewId: string
@@ -1780,6 +1782,9 @@ interface ElectronAPI {
       options?: ListRunsOptionsData,
     ) => Promise<RelayRunPageData>
     onUpdated: (callback: (relays: SessionRelayData[]) => void) => () => void
+    onHopSettled: (
+      callback: (event: { crewId: string; hopIds: string[] }) => void,
+    ) => () => void
     onHopAppended: (callback: (hop: RelayHopData) => void) => () => void
     onHopsCleared: (callback: (crewId: string) => void) => () => void
   }

@@ -35,6 +35,7 @@ const resolveName = (id: string): string | null => NAMES[id] ?? null
 
 function hop(overrides: Partial<RelayHop> & { id: string }): RelayHop {
   return {
+    settleId: null,
     relayId: 'wire-a',
     crewId: 'c1',
     flowRunId: 'run-1',
@@ -621,7 +622,7 @@ describe('L-vi delivery-bearing display laps', () => {
           buildRunEvents(record, { resolveName, outcomes }).laps.map((lap) =>
             lap.events.map((event) => event.id),
           ),
-        ).toEqual([['delivery', 'held:delivery']])
+        ).toEqual([['delivery', 'held']])
       if (proof === 'highlight')
         expect(buildRunHighlight(record, outcomes).get('wire-a')?.label).toBe(
           'Held',
@@ -633,6 +634,7 @@ describe('L-vi delivery-bearing display laps', () => {
 it('RUN66 R3 folds held siblings after delivery only — mutation fold without a sibling delivery turns red', () => {
   const delivered = hop({
     id: 'delivery',
+    settleId: 'settle',
     baton: 'studio horse astra',
     payloadPreview: 'The brief',
     firedAt: '2026-09-10T10:19:00.100Z',
@@ -640,6 +642,7 @@ it('RUN66 R3 folds held siblings after delivery only — mutation fold without a
   const held = [1, 2, 3, 4].map((n) =>
     hop({
       id: 'held-' + n,
+      settleId: 'settle',
       outcome: 'skipped-baton',
       targetSessionId: 'sol',
       error: 'Different baton',
@@ -649,9 +652,15 @@ it('RUN66 R3 folds held siblings after delivery only — mutation fold without a
   const parked = held.map((h) => ({
     ...h,
     id: 'park-' + h.id,
+    settleId: 'parked',
     firedAt: '2026-09-10T10:20:00.200Z',
   }))
-  const otherSource = { ...held[0], id: 'other-source', sourceSessionId: 'sol' }
+  const otherSource = {
+    ...held[0],
+    id: 'other-source',
+    sourceSessionId: 'sol',
+    settleId: 'other',
+  }
   const hops = [held[0], delivered, ...held.slice(1), ...parked, otherSource]
   const groups = buildRunEvents(run({ laps: [{ lap: 1, hops }] }), {
     resolveName,
@@ -693,3 +702,30 @@ it('RUN66 R3 folds held siblings after delivery only — mutation fold without a
     },
   ])
 })
+
+it.each(['shared', 'distinct', 'legacy'] as const)(
+  'RUN66 round2 fold uses recorded settle only: %s — mutation use clock or fold NULLs turns red',
+  (kind) => {
+    const rows = ['held-a', 'delivery', 'held-b'].map((id, index) =>
+      hop({
+        id,
+        outcome: id === 'delivery' ? 'delivered' : 'skipped-baton',
+        firedAt:
+          kind === 'shared'
+            ? `2026-09-10T10:19:0${index}.000Z`
+            : '2026-09-10T10:19:00.100Z',
+        settleId:
+          kind === 'shared' ? 'settle' : kind === 'distinct' ? id : null,
+      }),
+    )
+    const events = buildRunEvents(run({ laps: [{ lap: 1, hops: rows }] }), {
+      resolveName,
+      outcomes: { 'held-a': 'held', delivery: 'delivered', 'held-b': 'held' },
+    }).laps[0].events
+    expect(events.map((e) => e.id)).toEqual(
+      kind === 'shared'
+        ? ['delivery', 'held:delivery']
+        : rows.map((row) => row.id),
+    )
+  },
+)

@@ -36,6 +36,7 @@ import type { CrewHail, RaiseCrewHailInput } from './crew-hail.types'
 import type { RelayService } from './relay.service'
 import type {
   RelayHop,
+  RelayHopSettled,
   RelayHopOutcome,
   RelaySpawnSpec,
   SessionRelay,
@@ -158,6 +159,7 @@ interface RelayEngineDeps {
   accounts: AutomaticTurnAccountSource
   hails: RelayHailGateway
   /** Called for every ledger row, so windows can watch the trail live. */
+  onHopSettled?: (event: RelayHopSettled) => void
   onHopAppended?: (hop: RelayHop) => void
   /** Called when a loop parks, so the chair lights in every window. */
   onHailsChanged?: () => void
@@ -183,6 +185,7 @@ export class RelayEngine {
   private readonly crews: RelayCrewGateway
   private readonly accounts: AutomaticTurnAccountSource
   private readonly hails: RelayHailGateway
+  private readonly onHopSettled?: (event: RelayHopSettled) => void
   private readonly onHopAppended?: (hop: RelayHop) => void
   private readonly onHailsChanged?: () => void
   private readonly onRelaysChanged?: () => void
@@ -276,6 +279,7 @@ export class RelayEngine {
     this.crews = deps.crews
     this.accounts = deps.accounts
     this.hails = deps.hails
+    this.onHopSettled = deps.onHopSettled
     this.onHopAppended = deps.onHopAppended
     this.onHailsChanged = deps.onHailsChanged
     this.onRelaysChanged = deps.onRelaysChanged
@@ -287,6 +291,7 @@ export class RelayEngine {
    * lifecycle, and a broken wire must not be able to damage a session.
    */
   async handleSettle(event: SessionSettledEvent): Promise<void> {
+    const settleId = randomUUID()
     try {
       // The ledger hears EVERY settle, plumbing included, and it hears it
       // first: the settle names the dispatch ids its turn consumed, and only
@@ -302,6 +307,7 @@ export class RelayEngine {
         event.status,
         event.settledAt,
         event.dispatchIds,
+        this.onHopSettled,
       )
 
       // Recognised by identity before the baton is taken: a settle that names
@@ -340,6 +346,7 @@ export class RelayEngine {
             flowRunId,
             message,
             emittedBaton,
+            settleId,
           )
           if (answered) answeredCrewIds.add(relay.crewId)
         }
@@ -390,6 +397,7 @@ export class RelayEngine {
         event.dispatchIds,
         event.at,
         event.reason,
+        this.onHopSettled,
       )
     } catch (error) {
       console.error(
@@ -648,6 +656,7 @@ export class RelayEngine {
     flowRunId: string,
     message: string | null,
     emittedBaton: string | null,
+    settleId: string,
   ): Promise<boolean> {
     let roundNumberForHop: number | null = null
     let lapNumberForHop: number | null = null
@@ -656,6 +665,7 @@ export class RelayEngine {
       extra: RecordHopExtra = {},
     ) => {
       const hop = this.relays.appendHop({
+        settleId,
         relayId: relay.id,
         crewId: relay.crewId,
         flowRunId,

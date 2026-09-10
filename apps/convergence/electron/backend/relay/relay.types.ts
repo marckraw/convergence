@@ -130,6 +130,8 @@ export interface SessionRelay {
 
 /** One firing, recorded whether or not anything was delivered. */
 export interface RelayHop {
+  /** Recorded source settle; null on legacy rows, which are not folded. */
+  settleId: string | null
   id: string
   relayId: string
   crewId: string
@@ -286,6 +288,7 @@ export function sessionRelayFromRow(row: SessionRelayRow): SessionRelay {
 
 export function relayHopFromRow(row: RelayHopRow): RelayHop {
   return {
+    settleId: row.settle_id ?? null,
     id: row.id,
     relayId: row.relay_id,
     crewId: row.crew_id,
@@ -308,4 +311,10 @@ export function relayHopFromRow(row: RelayHopRow): RelayHop {
     outcome: row.outcome,
     error: row.error,
   }
+}
+
+/** Existing ledger hops whose terminal stamp changed. */
+export interface RelayHopSettled {
+  crewId: string
+  hopIds: string[]
 }

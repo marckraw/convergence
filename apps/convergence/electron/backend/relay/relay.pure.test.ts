@@ -783,3 +783,10 @@ it('RUN66 R4 preview begins with prose after the status table — mutation keep 
     plain: 'Plain message, unchanged.',
   })
 })
+
+it.each(['| Status | Ready |\n|---|---|', '# Ready', '📍 **WHERE WE ARE**'])(
+  'RUN66 round2 stripped-empty preview retains %s — mutation drop unstripped fallback turns red',
+  (text) => {
+    expect(buildPayloadPreview(text)).toBe(text.replace(/\s+/g, ' ').trim())
+  },
+)

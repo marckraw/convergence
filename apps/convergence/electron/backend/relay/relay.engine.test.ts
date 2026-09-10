@@ -191,6 +191,7 @@ function settleCarried(
 describe('RelayEngine', () => {
   let db: Database.Database
   let relays: RelayService
+  let settledHops: Array<{ crewId: string; hopIds: string[] }>
   let hops: RelayHop[]
   let relaysChanged: number
   let crewsChanged: number
@@ -213,6 +214,7 @@ describe('RelayEngine', () => {
     hailsChanged = 0
     loopLimits = {}
     hops = []
+    settledHops = []
     relaysChanged = 0
     crewsChanged = 0
     crewAdditions = []
@@ -246,6 +248,7 @@ describe('RelayEngine', () => {
         listByProvider: (providerId) => accountsByProvider[providerId] ?? [],
       },
       onHopAppended: (hop) => hops.push(hop),
+      onHopSettled: (event) => settledHops.push(event),
       onHailsChanged: () => {
         hailsChanged += 1
       },
@@ -257,6 +260,85 @@ describe('RelayEngine', () => {
       },
     })
   }
+
+  it.each(['settle', 'terminal'] as const)(
+    'RUN66 round2 stamp broadcasts %s once per changed crew — mutation drop stamp callback turns red',
+    async (kind) => {
+      const seeded = ['c1', 'c1', 'c2'].map((crewId, index) =>
+        relays.appendHop({
+          relayId: 'old-wire',
+          crewId,
+          flowRunId: 'old-run',
+          sourceSessionId: 's1',
+          targetSessionId: 's2',
+          triggerStatus: 'completed',
+          outcome: 'delivered',
+          dispatchId: `d${index}`,
+        }),
+      )
+      const engine = createEngine(createGateway({}))
+      const dispatchIds = ['d0', 'd1', 'd2']
+      const finish = async () => {
+        if (kind === 'settle')
+          await engine.handleSettle(
+            settled('s2', 'completed', false, dispatchIds),
+          )
+        else
+          engine.handleDispatchTerminal({
+            sessionId: 's2',
+            dispatchIds,
+            reason: 'cancelled',
+            at: new Date().toISOString(),
+          })
+      }
+      await finish()
+      await finish()
+      expect({
+        events: settledHops,
+        appended: hops,
+        hails: hails.listOpen(),
+      }).toEqual({
+        events: [
+          { crewId: 'c1', hopIds: seeded.slice(0, 2).map((hop) => hop.id) },
+          { crewId: 'c2', hopIds: [seeded[2].id] },
+        ],
+        appended: [],
+        hails: [],
+      })
+    },
+  )
+
+  it('RUN66 round2 one recorded settle id per invocation — mutations drop either settleId write or reuse id turn red', async () => {
+    batonWire('s1', 's2', 'BATON: other')
+    wire('s1', 's2')
+    batonWire('s1', 's3', 'BATON: other')
+    const engine = createEngine(createGateway({}))
+    await engine.handleSettle(settled('s1'))
+    await engine.handleSettle(settled('s1'))
+    const first = hops.slice(0, 3).map((hop) => hop.settleId)
+    const second = hops.slice(3).map((hop) => hop.settleId)
+    expect({
+      sizes: [first.length, second.length],
+      first: new Set(first).size,
+      second: new Set(second).size,
+      ids: [first[0], second[0]],
+      distinct: first[0] !== second[0],
+      durable: relays
+        .listHops('c1', 100)
+        .map((hop) => hop.settleId)
+        .sort(),
+    }).toEqual({
+      sizes: [3, 3],
+      first: 1,
+      second: 1,
+      ids: [
+        expect.stringMatching(/^[0-9a-f-]{36}$/),
+        expect.stringMatching(/^[0-9a-f-]{36}$/),
+      ],
+      distinct: true,
+      durable: [...first, ...second].sort(),
+    })
+  })
 
   /**
    * Narrow, and backed by the real membership table for the one question that

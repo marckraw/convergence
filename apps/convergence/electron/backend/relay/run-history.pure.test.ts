@@ -16,6 +16,7 @@ function deriveStatusWord(input: Parameters<typeof deriveRunStatus>[0]) {
 
 function hop(overrides: Partial<RelayHop> & { id: string }): RelayHop {
   return {
+    settleId: null,
     relayId: 'wire-a',
     crewId: 'c1',
     flowRunId: 'run-1',
@@ -579,3 +580,20 @@ it('RUN66 R2 returns the newest owed hop and terminal time — mutations lose de
     },
   })
 })
+
+it.each([false, true])(
+  'RUN66 round2 newest terminal wins reversed=%s — mutation choose oldest terminal turns red',
+  (reverse) => {
+    const hails = [
+      hail({ id: 'old', raisedAt: '2026-09-06T12:10:00Z' }),
+      hail({ id: 'new', raisedAt: '2026-09-06T12:25:00Z' }),
+    ]
+    expect(
+      deriveRunStatus({
+        hops: [],
+        hails: reverse ? hails.reverse() : hails,
+        now: new Date('2026-09-06T12:30:00Z'),
+      }).handedBackAt,
+    ).toBe('2026-09-06T12:25:00Z')
+  },
+)

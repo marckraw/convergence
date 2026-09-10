@@ -202,6 +202,13 @@ export function runStartingStation(
   return hail ? resolveName(hail.sessionId) : null
 }
 
+const debtStatusLabels: Record<SessionStatus, string> = {
+  running: 'running',
+  completed: 'finished',
+  failed: 'failed',
+  idle: 'idle',
+}
+
 export function buildRunRow(
   run: RelayRun,
   resolveName: ResolveSessionName,
@@ -220,7 +227,7 @@ export function buildRunRow(
     : null
   const lastActivityLabel = formatRunTime(run.lastActivityAt, now)
   const activityLine = debt
-    ? `Waiting · ${debt.name} · since ${debt.since}${debt.live ? ` · ${debt.live}` : ''}`
+    ? `Waiting · ${debt.name} · since ${debt.since}${debt.live ? ` · ${debtStatusLabels[debt.live]}` : ''}`
     : run.handedBackAt
       ? `Handed back · ${formatRunTime(run.handedBackAt, now)}`
       : `${formatRunStatusLine(run)} · ${lastActivityLabel}`
@@ -432,17 +439,15 @@ function foldHeldRows(
   },
 ): HistoryEventRow[] {
   const groups = new Map<string, RelayHop[]>()
-  const key = (hop: RelayHop) =>
-    `${hop.sourceSessionId}:${Math.floor(Date.parse(hop.firedAt) / 1000)}`
   for (const hop of hops) {
-    if (!Number.isFinite(Date.parse(hop.firedAt))) continue
-    const group = groups.get(key(hop)) ?? []
+    if (!hop.settleId) continue
+    const group = groups.get(hop.settleId) ?? []
     group.push(hop)
-    groups.set(key(hop), group)
+    groups.set(hop.settleId, group)
   }
   const result: HistoryEventRow[] = []
   for (const hop of hops) {
-    const group = groups.get(key(hop)) ?? []
+    const group = hop.settleId ? (groups.get(hop.settleId) ?? []) : []
     const deliveries = group.filter((h) =>
       ['delivered', 'queued'].includes(input.outcomes[h.id]),
     )

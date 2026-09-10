@@ -71,6 +71,8 @@ export type RelayHopOutcome =
 
 /** One firing, recorded whether or not anything was carried. */
 export interface RelayHop {
+  /** Recorded source settle; null on legacy rows, which are not folded. */
+  settleId: string | null
   id: string
   relayId: string
   crewId: string

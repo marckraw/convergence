@@ -517,13 +517,21 @@ other live.
 crew's runs, live first and then by last activity. The cursor carries the
 first page's `asOf`, live key, last activity and run id. Later pages project
 the ledger at that same instant: later hops/hails are excluded and later
-settlement stamps are absent. Refresh starts a new instant. It is the read side of everything above, and it has
+settlement stamps are absent. Refresh starts a new instant; when its first
+page adds no run, the drawer retains the deeper loaded cursor for the next
+explicit older-page read. It is the read side of everything above, and it has
 its own class (`RunHistoryService`) rather than a method on `RelayService` or
 `CrewHailService` for one reason: **a run is hops AND hails**, and it owns
 neither table. A station whose baton nothing answered may have no outgoing wire
 at all, so its call has no `relay_id` and no hop — which means the ledger alone
 cannot even list the runs. The page's key set is the UNION of the two tables',
 and a run that is only a hail is still a run.
+
+Each source settle mints a UUID stored on every emitted hop as `settle_id`.
+Only that recorded id groups held siblings behind a delivery; older NULL-id
+rows remain separate. A terminal stamp broadcasts `relayHop:settled` with the
+changed hop ids grouped by crew, including terminal stations that append no
+new hop and raise no hail. The open drawer refreshes from that ledger fact.
 
 Three rules, all of them pinned:
 
