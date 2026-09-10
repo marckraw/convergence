@@ -148,6 +148,7 @@ describe('the per-machine ipc doors', () => {
       recordingExecutionHostCredentials(),
     )
     const registry = new AppSettingsRemoteExecutionHostRegistry({
+      onEventSeq: () => {},
       appSettings,
       credentials: { resolveToken: async (id: string) => `token-${id}` },
       fetch: routedFetch(),

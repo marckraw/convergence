@@ -167,6 +167,7 @@ describe('a daemon changing behind the settings dialog', () => {
       recordingExecutionHostCredentials(),
     )
     registry = new AppSettingsRemoteExecutionHostRegistry({
+      onEventSeq: () => {},
       appSettings,
       credentials: { resolveToken: async (id: string) => tokens[id] ?? null },
       fetch: stub.fetchFn,

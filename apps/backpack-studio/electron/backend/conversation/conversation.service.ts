@@ -1,4 +1,7 @@
-import { RemoteExecutionHostError } from '@convergence/execution-host-client'
+import {
+  describeStreamEndAboveHole,
+  RemoteExecutionHostError,
+} from '@convergence/execution-host-client'
 import type { ExecutionHostEventEnvelope } from '@mrck-labs/execution-host-protocol'
 import type {
   ConversationSnapshot,
@@ -56,6 +59,41 @@ interface LiveConversation {
   unreadableTailLines: number
   streamError: string | null
   /**
+   * The hole the resume has not filled yet, described — `expected 3, got 4` —
+   * or null when no hole is open.
+   *
+   * A gap is the one loss that undoes itself: the reconnect asks from the last
+   * contiguous sequence and the daemon replays what was missed, so the first
+   * envelope that lands afterwards is the proof the hole is gone. An unreadable
+   * frame has no such proof and keeps its sentence (MAR-2779 round 2).
+   *
+   * The description rather than a flag, because the resume is not guaranteed to
+   * arrive: a budget that runs out while this is held owes the person the hole
+   * itself, not "the stream dropped" (MAR-2779 round 3).
+   *
+   * One fact with one lifecycle: a gap opens it, and three things close it —
+   * the heal (`record`), the exhaustion (`follow`'s catch), the send. Nothing
+   * else touches it. It is not the visible sentence and not a record of the
+   * last loss, so an unreadable frame or a refused write landing on top of an
+   * open hole leaves it exactly where it was (MAR-2779 round 4).
+   */
+  gapAwaitingResume: string | null
+  /**
+   * The last loss nothing will ever undo, held for as long as it is true.
+   *
+   * An unreadable frame is gone: no resume asks for it, so its sentence is not
+   * retired by anything the daemon does next. That put it in conflict with the
+   * gap clearing above — a healed gap cleared `streamError` outright, and an
+   * unreadable frame from EARLIER in the same stream was cleared with it, so
+   * the conversation settled looking whole while a frame was missing from it
+   * forever. Kept beside the visible sentence so a healed gap can restore the
+   * permanent loss instead of erasing it (MAR-2779 round 3).
+   *
+   * Cleared only by the person moving on: the next send starts a turn whose
+   * transcript this loss says nothing about.
+   */
+  permanentLoss: string | null
+  /**
    * Why the record last refused a write, while it is still refusing.
    *
    * A refused append ends the stream, and the reconnect meets the same disk and
@@ -112,6 +150,8 @@ export class ConversationService {
         fold: foldEntries(emptyFold(record.createdAt), entries),
         unreadableTailLines,
         streamError: null,
+        gapAwaitingResume: null,
+        permanentLoss: null,
         recordFailure: null,
         abort: null,
         following: null,
@@ -163,6 +203,8 @@ export class ConversationService {
       fold: emptyFold(record.createdAt),
       unreadableTailLines: 0,
       streamError: null,
+      gapAwaitingResume: null,
+      permanentLoss: null,
       recordFailure: null,
       abort: null,
       following: null,
@@ -266,7 +308,12 @@ export class ConversationService {
     } catch (error) {
       return { kind: 'refused', reason: this.reportDiskFailure(live, error) }
     }
+    // Every loss this conversation is carrying, including the ones nothing was
+    // ever going to undo: the person has read them and moved on, and the turn
+    // starting here has a transcript of its own that they say nothing about.
     live.streamError = null
+    live.permanentLoss = null
+    live.gapAwaitingResume = null
     this.publish(live)
 
     try {
@@ -361,11 +408,25 @@ export class ConversationService {
         live.fold.lastSeq,
         {
           onEnvelope: (envelope) => this.record(live, envelope),
-          onDroppedFrame: (reason) => {
-            // A frame that could not become an envelope is a hole in the
+          onDroppedFrame: (reason, loss) => {
+            // A frame that did not reach the record is a hole in the
             // transcript. It never reaches the log — it is not this session's
             // to store — so the conversation carries the reason instead.
             live.streamError = reason
+            // Said while it is true, and only until it stops being true: a gap
+            // is answered by the resume, and `record` retires the sentence the
+            // moment the replayed frames land.
+            //
+            // SET here and nowhere else, and cleared by exactly three things:
+            // the heal, the exhaustion, the send. An unreadable frame is not
+            // one of them -- it says nothing about whether the resume is still
+            // coming, and clearing on it lost the hole from the sentence a
+            // stream that then gave up was left with (MAR-2779 round 4).
+            if (loss.kind === 'gap') live.gapAwaitingResume = loss.hole
+            // The other kind is never retired by the wire. Held apart from the
+            // visible sentence so that a gap arriving on top of it can say its
+            // own piece while it is true, and this one comes back afterwards.
+            if (loss.kind === 'unreadable') live.permanentLoss = reason
             this.publish(live)
           },
         },
@@ -380,7 +441,16 @@ export class ConversationService {
         // A record that would not take the writes is why this stream kept
         // ending; saying "the stream dropped" would name the symptom and bury
         // the cause the person can actually do something about.
-        const reason = live.recordFailure ?? describeDaemonFailure(error)
+        const reason = live.recordFailure ?? this.describeStreamEnd(live, error)
+        // Read into the sentence above FIRST, then closed: nothing is resuming
+        // any more, so nothing can heal a hole this stream was still holding,
+        // and leaving it open would let a replayed envelope from some later
+        // stream retire the sentence that says we gave up.
+        //
+        // The belt to the send's braces: the next send clears it too, and
+        // either one alone stops a later stream inheriting this hole. Both are
+        // a line each, and the sentence a person is left with is the product.
+        live.gapAwaitingResume = null
         live.streamError = reason
         await this.recordExhaustion(live, reason)
         this.publish(live)
@@ -449,6 +519,19 @@ export class ConversationService {
       throw error
     }
     live.recordFailure = null
+    // The envelope the resume was asking for. Nothing retired this sentence
+    // before, so a conversation whose record came back whole — 1, 2, 3, 4, in
+    // order — kept showing "gap: expected 3..." until the person typed their
+    // next message: the recovery worked and the app said it had not.
+    //
+    // RESTORED, not cleared. The healed gap is only this conversation's most
+    // recent loss, and clearing outright took an unreadable frame from earlier
+    // in the same stream down with it — a hole nothing will ever fill, on a
+    // conversation that then settled looking whole (MAR-2779 round 3).
+    if (live.gapAwaitingResume !== null) {
+      live.gapAwaitingResume = null
+      live.streamError = live.permanentLoss
+    }
     // A conversation that has stopped running has nothing left to stream. The
     // follow is ended here rather than left open for the app's lifetime — one
     // idle SSE per conversation is a connection the daemon holds for nobody.
@@ -523,7 +606,29 @@ export class ConversationService {
     }
   }
 
-  /** One sentence for a record that would not take a write, said out loud. */
+  /**
+   * The last word on a stream that stopped trying, and what it was carrying.
+   *
+   * The client's own sentence — "the stream dropped and could not be
+   * re-established" — is true of every exhausted budget and names nothing. When
+   * the loss that ended it was a gap, the hole the resume never filled is the
+   * part a person can act on, so it travels into the sentence instead of being
+   * replaced by it.
+   */
+  private describeStreamEnd(live: LiveConversation, error: unknown): string {
+    const sentence = describeDaemonFailure(error)
+    return live.gapAwaitingResume === null
+      ? sentence
+      : describeStreamEndAboveHole(sentence, live.gapAwaitingResume)
+  }
+
+  /**
+   * One sentence for a record that would not take a write, said out loud.
+   *
+   * It takes the visible sentence and nothing else: a hole this stream is still
+   * holding is the wire's business, and a disk that refused a write says
+   * nothing about whether the resume is coming (MAR-2779 round 4).
+   */
   private reportDiskFailure(live: LiveConversation, error: unknown): string {
     const sentence = `The conversation could not be written to disk: ${describeDaemonFailure(error)}`
     live.streamError = sentence

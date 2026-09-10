@@ -37,6 +37,14 @@ export type {
 } from './execution-host-handshake.types'
 
 export {
+  describeSeqGap,
+  describeSeqHole,
+  describeStreamEndAboveHole,
+  readEnvelopeSeq,
+  type EnvelopeSeqReading,
+} from './execution-host-sequence.pure'
+
+export {
   DAEMON_HEALTH_FIXTURE_0_26_1,
   DAEMON_HEALTH_FIXTURE_GIT_SHA,
   DAEMON_HEALTH_FIXTURE_VERSION,

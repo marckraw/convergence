@@ -33,6 +33,30 @@ export interface StubDaemon {
   emitBatch: (envelopes: ExecutionHostEventEnvelope[]) => void
   /** Pushes an SSE frame the protocol decoder will reject. */
   emitRaw: (data: string) => void
+  /**
+   * Logs an envelope WITHOUT writing it to the open stream: the daemon holds
+   * it, the wire lost it (MAR-2779).
+   *
+   * The only honest way to produce a sequence gap. Simply emitting `1, 2, 4`
+   * would leave a daemon whose log is also `1, 2, 4`, so the reconnect it
+   * provokes replays the same hole forever and the test proves nothing about
+   * recovery. A real gap is a frame the daemon can still serve on resume, and
+   * that is exactly what this makes: `emit(1); emit(2); loseFrame(3); emit(4)`
+   * puts `1, 2, 4` on the wire and `1, 2, 3, 4` in the log.
+   */
+  loseFrame: (envelope: ExecutionHostEventEnvelope) => void
+  /**
+   * The inverse of `loseFrame`: writes an envelope to the open stream WITHOUT
+   * logging it, so the daemon has no memory of ever having sent it.
+   *
+   * `emit(1); emitUnlogged(3)` puts a gap on the wire above a log that holds
+   * only `1`, so the resume it provokes answers with NOTHING rather than with
+   * the same hole again. That is what makes a test about a hole staying open
+   * across re-opens stageable at all: the client is left holding the gap while
+   * the test decides, frame by frame, what the reconnected stream delivers next
+   * (MAR-2779 round 4).
+   */
+  emitUnlogged: (envelope: ExecutionHostEventEnvelope) => void
   dropStream: () => void
   startRequests: Array<Record<string, unknown>>
   commandEnvelopes: Array<Record<string, unknown>>
@@ -338,6 +362,12 @@ export function createStubDaemon(): StubDaemon {
     },
     emitRaw(data) {
       current.controller?.enqueue(encoder.encode(`data: ${data}\n\n`))
+    },
+    loseFrame(envelope) {
+      log.push(envelope)
+    },
+    emitUnlogged(envelope) {
+      current.controller?.enqueue(sseChunk(envelope))
     },
     dropStream() {
       const controller = current.controller

@@ -186,6 +186,7 @@ describe('the execution host daemon ipc handlers', () => {
       resolveToken: async (endpointId: string) => `token-${endpointId}`,
     }
     const registry = new AppSettingsRemoteExecutionHostRegistry({
+      onEventSeq: () => {},
       appSettings,
       credentials,
       fetch: routedFetch(),

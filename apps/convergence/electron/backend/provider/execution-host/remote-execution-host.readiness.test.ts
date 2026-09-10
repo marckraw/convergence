@@ -115,6 +115,7 @@ describe('a turn on an endpoint whose listing has not landed', () => {
       recordingExecutionHostCredentials(),
     )
     registry = new AppSettingsRemoteExecutionHostRegistry({
+      onEventSeq: () => {},
       appSettings,
       credentials: { resolveToken: async (id: string) => `token-${id}` },
       fetch: gatedFetch(),

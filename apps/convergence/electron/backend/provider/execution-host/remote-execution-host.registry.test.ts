@@ -132,6 +132,7 @@ describe('remote execution hosts, one per endpoint', () => {
       recordingExecutionHostCredentials(),
     )
     registry = new AppSettingsRemoteExecutionHostRegistry({
+      onEventSeq: () => {},
       appSettings,
       // Each Endpoint keys its own token, so a host that asked for the wrong
       // machine's would present a token the other daemon issued.
