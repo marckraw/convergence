@@ -547,3 +547,39 @@ it('reports an applied baton rename beside a refused model update (mutation: rep
     next: ['model'],
   })
 })
+
+it('refuses invalid conditions during planning before any write (mutation: pass when raw)', async () => {
+  config.wires[0]!.when = 'BATON: marcin'
+  await save()
+  await expect(service.plan(path)).rejects.toThrow(
+    'wires[0].when: BATON: marcin is reserved',
+  )
+  expect(counts()).toEqual([0, 0, 0, 0])
+})
+it('blocks colliding rename decisions in preview and Apply (mutation: omit update decisions from planning)', async () => {
+  const first = await service.plan(path)
+  const applied = await service.apply(path, decisions(first))
+  const before = crews.getById(applied.crewId)!.members
+  config.roles = { mastermind: config.roles.fable!, fable: config.roles.horse! }
+  config.wires = []
+  await save()
+  const updates = { 'role:mastermind': false, 'role:fable': true }
+  const plan = await service.plan(path, {}, updates)
+  expect(plan.canApply).toBe(false)
+  await expect(
+    service.apply(path, { ...decisions(plan), updates }),
+  ).rejects.toThrow('Resolve every choose or missing row')
+  expect(crews.getById(applied.crewId)!.members).toEqual(before)
+})
+it('ignores an invalid layout reference during Apply (mutation: remove reference catch)', async () => {
+  config.layout = { 'a:b': [17, 29] }
+  await save()
+  const plan = await service.plan(path)
+  const report = await service.apply(path, decisions(plan))
+  expect(
+    crews.getById(report.crewId)!.members.map((m) => [m.canvasX, m.canvasY]),
+  ).toEqual([
+    [null, null],
+    [null, null],
+  ])
+})

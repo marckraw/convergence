@@ -13,8 +13,9 @@ export const sessionCrewApi = {
   importPlan: (
     path?: string,
     choices: Record<string, string> = {},
+    updates: Record<string, boolean> = {},
   ): Promise<CrewImportPlan | null> =>
-    window.electronAPI.crew.importPlan(path, choices),
+    window.electronAPI.crew.importPlan(path, choices, updates),
   importApply: (
     path: string,
     decisions: CrewImportDecisions,

@@ -1717,6 +1717,7 @@ interface ElectronAPI {
     importPlan: (
       path?: string,
       choices?: Record<string, string>,
+      updates?: Record<string, boolean>,
     ) => Promise<CrewImportPlan | null>
     importApply: (
       path: string,

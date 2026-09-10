@@ -13,7 +13,12 @@ export function registerCrewImportIpc(
 ): void {
   ipcMain.handle(
     'crew:importPlan',
-    async (event, path?: string, choices: Record<string, string> = {}) => {
+    async (
+      event,
+      path?: string,
+      choices: Record<string, string> = {},
+      updates: Record<string, boolean> = {},
+    ) => {
       if (path === undefined) {
         const window = BrowserWindow.fromWebContents(event.sender)
         if (!window) return null
@@ -24,7 +29,7 @@ export function registerCrewImportIpc(
         if (result.canceled || !result.filePaths[0]) return null
         path = result.filePaths[0]
       }
-      return service.plan(path, choices)
+      return service.plan(path, choices, updates)
     },
   )
   ipcMain.handle(

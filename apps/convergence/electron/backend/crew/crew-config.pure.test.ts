@@ -239,7 +239,7 @@ it('round-trips baton names that are YAML scalars (mutation: leave null keys unq
     crew,
     [
       { ...member, batonName: 'null' },
-      { ...member, sessionId: 'second-session', batonName: 'Null' },
+      { ...member, sessionId: 'second-session', batonName: 'True' },
     ],
     sessions,
     [project],
@@ -712,5 +712,68 @@ it('imports its own live crew export with layout (mutation: skip a required expo
   expect(readCrewConfig(renderCrewYaml(exported))).toEqual({
     ok: true,
     config: exported,
+  })
+})
+
+it.each([
+  ['', 'expected settled or a condition'],
+  ['  \t', 'expected settled or a condition'],
+  ['BATON:', 'a relay condition that says BATON: must name somebody'],
+  [
+    'BATON: marcin',
+    'BATON: marcin is reserved — it always parks the loop and hails Marcin, so no wire may claim it',
+  ],
+  [
+    '**',
+    'a relay condition must wait on a letter or a number, not only formatting marks',
+  ],
+  ['one\ntwo', 'a relay condition is one line, not a paragraph'],
+  ['x'.repeat(121), 'a relay condition cannot be longer than 120 characters'],
+])(
+  'refuses condition %s at the reader (mutation: pass when raw)',
+  (when, reason) => {
+    const recipe = parseCrewYaml(liveCrewYaml)
+    recipe.wires[2]!.when = when
+    expect(readCrewConfig(JSON.stringify(recipe))).toEqual({
+      ok: false,
+      reason: `wires[2].when: ${reason}`,
+    })
+  },
+)
+
+it('refuses an exported reserved condition (mutation: export settled token)', () => {
+  expect(() =>
+    crewToConfig(liveCrew, liveMembers, liveSessions, liveProjects, [
+      { ...liveRelays[0]!, conditionToken: 'settled' },
+    ]),
+  ).toThrow(
+    'A wire condition reads as the reserved word "settled"; rename it before export',
+  )
+})
+it.each(['a:b', '**horse**', 'x'.repeat(33), ''])(
+  'refuses invalid stored baton %s (mutation: return stored baton raw)',
+  (batonName) => {
+    expect(() =>
+      crewToConfig(crew, [{ ...member, batonName }], [session], [project], []),
+    ).toThrow('A conversation needs a baton name before export')
+  },
+)
+it('normalizes stored baton names through the export door (mutation: return stored baton raw)', () => {
+  const exported = crewToConfig(
+    crew,
+    [{ ...member, batonName: '  Horse   Opus ' }],
+    [session],
+    [project],
+    [],
+  )
+  expect(Object.keys(exported.roles)).toEqual(['horse opus'])
+})
+
+it('refuses normalized layout-key collisions (mutation: omit layout-key validation)', () => {
+  const recipe = parseCrewYaml(liveCrewYaml)
+  recipe.layout = { fable: [1, 2], ' Fable ': [3, 4] }
+  expect(readCrewConfig(JSON.stringify(recipe))).toEqual({
+    ok: false,
+    reason: 'layout[" Fable "]: duplicate baton name fable',
   })
 })

@@ -7,7 +7,7 @@ is off by default; positions describe only cards the user has moved.
 
 The file starts with a YAML language-server reference to
 [`crew-config.schema.json`](crew-config.schema.json). Roles are keyed by baton
-name, or by a conversation-name slug when no baton exists. Wire targets need
+name, or by a normalized conversation name when no baton exists. Wire targets need
 a baton name. Duplicate role keys and missing wire endpoints refuse export.
 Roles sort by key; wires sort by source, target and condition, with their
 remaining content breaking ties. Project references use normalized Git origin
@@ -23,8 +23,15 @@ records and local Git metadata and makes no execution-host request.
 
 `crewToConfig` and `renderCrewYaml` are pure. The test-local `parseCrewYaml` is
 only the inverse for the C1 round-trip canary. Runtime `readCrewConfig` parses
-YAML and returns the first path-qualified shape error. Dev-only AJV tests
+YAML and returns the first path-qualified shape or record-law error. Dev-only AJV tests
 check it against the published schema. The database remains the live instance.
+
+A wire's `when` is either the exact reserved word `settled` (unconditional)
+or a nonblank condition accepted by the record's condition normalizer.
+Case or whitespace variants are ordinary conditions, not the reserved word.
+Export refuses a stored condition literally `settled`; rename that condition
+before export. Layout references with invalid baton names are ignored; two
+layout keys normalizing to the same name refuse import.
 
 Export resolves default limits into numbers; importing them makes those limits
 explicit choices rather than inherited defaults.
@@ -51,7 +58,8 @@ Model and effort differences offer **Update to file**, checked by default,
 when the provider matches. Baton-name differences use the same checkbox and
 apply in Phase A only when selected. Kept wires waiting on a renamed baton
 show a warning while the rename is selected, unless another selected rename
-takes over that baton. Wire conditions use the engine’s canonical comparison,
+takes over that baton. The plan blocks decisions that would leave two members
+with the same baton, including kept members. Wire conditions use the engine’s canonical comparison,
 including case, whitespace and baton formatting. Wire and layout references
 resolve through normalized role keys. Unnamed export fallbacks use the same
 32-character baton-name law; an invalid fallback asks for a baton name before export.

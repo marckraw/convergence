@@ -45,15 +45,20 @@ export function CrewImport({
     path: string | undefined,
     choices: Record<string, string>,
     fresh = false,
+    updates: Record<string, boolean> = decisions.updates,
   ) {
-    const next = await sessionCrewApi.importPlan(path, choices)
+    const next = await sessionCrewApi.importPlan(
+      path,
+      choices,
+      fresh ? {} : updates,
+    )
     if (!next) return
     setPlan(next)
     setReport(null)
     setDecisions((current) => ({
       revision: next.revision,
       choices,
-      updates: fresh ? {} : current.updates,
+      updates: fresh ? {} : updates,
       includeLayout: fresh ? next.hasLayout : current.includeLayout,
     }))
   }
@@ -95,10 +100,12 @@ export function CrewImport({
             )
           }
           onUpdate={(key, value) =>
-            setDecisions((current) => ({
-              ...current,
-              updates: { ...current.updates, [key]: value },
-            }))
+            void run(() =>
+              replan(plan.path, decisions.choices, false, {
+                ...decisions.updates,
+                [key]: value,
+              }),
+            )
           }
           onIncludeLayout={(includeLayout) =>
             setDecisions((current) => ({ ...current, includeLayout }))

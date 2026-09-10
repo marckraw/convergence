@@ -84,6 +84,7 @@ const classify: [string, (w: CrewImportWorld) => void, string, string[]][] = [
     'no conversation',
     (w) => {
       w.sessions = []
+      w.crews = []
     },
     'create',
     [],
@@ -289,6 +290,7 @@ it.each(['remote', 'global'])(
         ...world,
         sessions: [...world.sessions, expected],
         endpointIds: ['remote:known'],
+        crews: [],
       },
     )
     expect({
@@ -602,4 +604,88 @@ it('carries the takeover rename decision with the kept-wire warning (mutation: s
       message: 'wire horse opus → fable waits on a baton no member will carry',
     },
   ])
+})
+
+it.each([
+  [true, true, true],
+  [true, false, true],
+  [false, true, false],
+  [false, false, true],
+])(
+  'keeps one member per baton for original=%s takeover=%s (mutation: omit final baton collision check)',
+  (original, takeover, canApply) => {
+    const recipe = {
+      ...one,
+      roles: {
+        mastermind: one.roles.fable!,
+        fable: config.roles['horse opus']!,
+      },
+    }
+    const plan = planCrewImport(
+      recipe,
+      world,
+      {},
+      { 'role:mastermind': original, 'role:fable': takeover },
+    )
+    expect({
+      canApply: plan.canApply,
+      detail: plan.canApply ? null : plan.crew.detail,
+    }).toEqual({
+      canApply,
+      detail: canApply
+        ? null
+        : 'Two members would share baton name "fable". Change the rename decisions or choose distinct conversations.',
+    })
+  },
+)
+
+it('keeps same endpoints with different conditions distinct (mutation: drop sameCondition from duplicate check)', () => {
+  const wire = config.wires.find((w) => w.when === 'BATON: horse opus')!
+  const plan = planCrewImport(
+    { ...config, wires: [wire, { ...wire, when: 'settled' }] },
+    world,
+  )
+  expect(plan.wires.map((w) => w.state)).toEqual(['existing', 'create'])
+})
+it('reports an invalid source reference as one absent row (mutation: remove reference catch)', () => {
+  const plan = planCrewImport(
+    { ...config, wires: [{ ...config.wires[0]!, from: 'a:b' }] },
+    world,
+  )
+  expect(plan.wires.map((w) => ({ state: w.state, detail: w.detail }))).toEqual(
+    [
+      {
+        state: 'choose',
+        detail: 'Wire names a role absent from the file; edit the recipe.',
+      },
+    ],
+  )
+})
+it.each(['settled', ' settled ', 'Settled'])(
+  'reserves only the exact condition %s (mutation: trim or lowercase the reserved word)',
+  (when) => {
+    const recipe = { ...config, wires: [{ ...config.wires[0]!, when }] }
+    const read = readCrewConfig(JSON.stringify(recipe))
+    if (!read.ok) throw new Error(read.reason)
+    expect(
+      crewImportRelayFields(read.config.wires[0]!, null).conditionToken,
+    ).toBe(when === 'settled' ? null : when)
+  },
+)
+it('blocks a new member taking a kept members baton (mutation: ignore kept names)', () => {
+  const recipe = {
+    ...one,
+    roles: { fable: { ...one.roles.fable!, conversation: 'New Fable' } },
+  }
+  const plan = planCrewImport(recipe, world)
+  expect({
+    role: plan.roles[0]!.state,
+    canApply: plan.canApply,
+    detail: plan.crew.detail,
+  }).toEqual({
+    role: 'create',
+    canApply: false,
+    detail:
+      'Two members would share baton name "fable". Change the rename decisions or choose distinct conversations.',
+  })
 })

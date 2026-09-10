@@ -1,7 +1,10 @@
 import { normalizeCrewBatonName } from './crew.pure'
 import { parse } from 'yaml'
 import { normalizeOriginKey } from '@mrck-labs/execution-host-protocol'
-import { resolveRoundCap } from '../relay/relay.pure'
+import {
+  resolveRoundCap,
+  normalizeRelayConditionToken,
+} from '../relay/relay.pure'
 import { resolveStallMinutes } from '../relay/crew-hail.pure'
 import type {
   CrewConfig,
@@ -81,6 +84,10 @@ export function crewToConfig(
     roles,
     wires: relays
       .map((relay): CrewConfigWire => {
+        if (relay.conditionToken === 'settled')
+          throw new Error(
+            'A wire condition reads as the reserved word "settled"; rename it before export',
+          )
         const from = wireRole(relay.sourceSessionId, false)
         const to =
           relay.action === 'hail'
@@ -161,13 +168,10 @@ export function crewToConfig(
     return roleKey(member)
   }
   function roleKey(member: SessionCrewMember): string {
-    if (member.batonName) return member.batonName
-    const name =
-      member.batonName ??
-      sessions.find((s) => s.id === member.sessionId)?.name ??
-      ''
+    const sessionName =
+      sessions.find((s) => s.id === member.sessionId)?.name ?? ''
     try {
-      const key = normalizeCrewBatonName(name)
+      const key = normalizeCrewBatonName(member.batonName ?? sessionName)
       if (key) return key
     } catch {
       // Export uses the same name law as the record and the import reader.
@@ -248,23 +252,37 @@ export function readCrewConfig(
     }
   }
   const reason =
-    validateRecipe(value, '') ?? validateRoleKeys((value as CrewConfig).roles)
+    validateRecipe(value, '') ??
+    validateBatonKeys(Object.keys((value as CrewConfig).roles), 'roles') ??
+    validateBatonKeys(
+      Object.keys((value as CrewConfig).layout ?? {}),
+      'layout',
+      true,
+    )
   return reason
     ? { ok: false, reason }
     : { ok: true, config: value as CrewConfig }
 }
 
 // JSON Schema checks structure; the record's normalizer owns baton semantics.
-function validateRoleKeys(roles: CrewConfig['roles']): string | null {
+function validateBatonKeys(
+  keys: string[],
+  field: string,
+  ignoreInvalid = false,
+): string | null {
   const names = new Set<string>()
-  for (const key of Object.keys(roles)) {
-    const path = `roles[${JSON.stringify(key)}]`
+  for (const key of keys) {
+    const path = `${field}[${JSON.stringify(key)}]`
     try {
       const name = normalizeCrewBatonName(key)
-      if (!name) return `${path}: a baton name must not be empty`
+      if (!name) {
+        if (ignoreInvalid) continue
+        return `${path}: a baton name must not be empty`
+      }
       if (names.has(name)) return `${path}: duplicate baton name ${name}`
       names.add(name)
     } catch (error) {
+      if (ignoreInvalid) continue
       const reason = error instanceof Error ? error.message : String(error)
       return `${path}: ${reason.charAt(0).toLowerCase()}${reason.slice(1)}`
     }
@@ -380,6 +398,18 @@ const opener: Check = (v, p) =>
     : object(v)
       ? shape({ first: string })(v, p)
       : expected(p, 'keep | clear | { first }')
+const condition: Check = (v, p) => {
+  if (typeof v !== 'string') return expected(p, 'string')
+  if (v === 'settled') return null
+  try {
+    return normalizeRelayConditionToken(v) === null
+      ? expected(p, 'settled or a condition')
+      : null
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    return `${p}: ${reason.replace(/^A /, 'a ')}`
+  }
+}
 const pair: Check = (v, p) =>
   !Array.isArray(v) || v.length !== 2
     ? expected(p, 'pair of coordinates')
@@ -409,7 +439,7 @@ const validateRecipe = shape({
     shape({
       from: string,
       to: target,
-      when: string,
+      when: condition,
       opener,
       instruction: optional(string),
       armed: optional(oneOf(false)),

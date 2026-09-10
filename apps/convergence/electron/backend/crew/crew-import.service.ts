@@ -36,9 +36,11 @@ export class CrewImportService {
   async plan(
     path: string,
     choices: Record<string, string> = {},
+    updates: Record<string, boolean> = {},
   ): Promise<CrewImportPlan> {
     requireRecord(choices, 'choices', 'string')
-    return (await this.prepare(path, choices)).plan
+    requireRecord(updates, 'updates', 'boolean')
+    return (await this.prepare(path, choices, updates)).plan
   }
   async apply(
     path: string,
@@ -55,6 +57,7 @@ export class CrewImportService {
     const { plan, config, hash, world } = await this.prepare(
       path,
       decisions.choices,
+      decisions.updates,
     )
     if (plan.revision !== decisions.revision)
       throw new Error('The file or local records changed; reopen the plan')
@@ -272,7 +275,11 @@ export class CrewImportService {
       nothingToChange: !changed,
     }
   }
-  private async prepare(path: string, choices: Record<string, string>) {
+  private async prepare(
+    path: string,
+    choices: Record<string, string>,
+    updates: Record<string, boolean>,
+  ) {
     if (typeof path !== 'string' || !path.trim())
       throw new Error('Choose a crew YAML file')
     const absolutePath = resolve(path)
@@ -280,7 +287,7 @@ export class CrewImportService {
     const result = readCrewConfig(text)
     if (!result.ok) throw new Error(result.reason)
     const world = await this.world()
-    const plan = planCrewImport(result.config, world, choices)
+    const plan = planCrewImport(result.config, world, choices, updates)
     const hash = digest(text)
     return {
       config: result.config,

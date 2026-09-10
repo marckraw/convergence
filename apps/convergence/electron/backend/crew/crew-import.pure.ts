@@ -23,6 +23,7 @@ export function planCrewImport(
   config: CrewConfig,
   world: CrewImportWorld,
   choices: Record<string, string> = {},
+  updates: Record<string, boolean> = {},
 ): CrewImportPlan {
   const crews = world.crews.filter((c) => c.name === config.crew)
   const crew = choices.crew
@@ -385,6 +386,28 @@ export function planCrewImport(
           })),
       ]
     : []
+  // Evaluate the membership after the selected Phase A renames, including
+  // kept members and mandatory names on newly added conversations.
+  const finalNames = [
+    ...(crew?.members ?? []).map((member) => {
+      const role = roles.find((r) => r.sessionId === member.sessionId)
+      return role && updates[role.key] !== false
+        ? normalizeCrewBatonName(role.role)
+        : normalizedRoleReference(member.batonName ?? '')
+    }),
+    ...roles
+      .filter(
+        (role) => !crew?.members.some((m) => m.sessionId === role.sessionId),
+      )
+      .map((role) => normalizeCrewBatonName(role.role)),
+  ]
+  const duplicate = finalNames.find(
+    (name, i) => name && finalNames.indexOf(name) !== i,
+  )
+  if (duplicate) {
+    crewRow.state = 'choose'
+    crewRow.detail = `Two members would share baton name "${duplicate}". Change the rename decisions or choose distinct conversations.`
+  }
   return {
     path: '',
     revision: '',

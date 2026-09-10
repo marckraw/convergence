@@ -18,7 +18,12 @@ import type {
 const mocks = vi.hoisted(() => ({
   handlers: new Map<
     string,
-    (event: unknown, path?: string, input?: unknown) => Promise<unknown>
+    (
+      event: unknown,
+      path?: string,
+      input?: unknown,
+      updates?: unknown,
+    ) => Promise<unknown>
   >(),
   parent: { id: 'parent' },
   choose: vi.fn(),
@@ -33,6 +38,7 @@ vi.mock('electron', () => ({
         event: unknown,
         path?: string,
         input?: unknown,
+        updates?: unknown,
       ) => Promise<unknown>,
     ) => mocks.handlers.set(key, handler),
   },
@@ -153,4 +159,15 @@ it('replans a supplied path without another picker and refuses malformed YAML be
     pickers: mocks.choose.mock.calls.length,
     crews: crews.list(),
   }).toEqual({ pickers: 0, crews: [] })
+})
+
+it('validates update decisions through the plan handler (mutation: drop IPC updates)', async () => {
+  await expect(
+    mocks.handlers.get('crew:importPlan')!(
+      { sender: {} },
+      path,
+      {},
+      { 'role:horse': 'false' },
+    ),
+  ).rejects.toThrow('Invalid import updates')
 })

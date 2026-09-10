@@ -102,8 +102,8 @@ it('opens the picker, replans a choice, applies and shows the report (mutation: 
     refreshes: mocks.refreshSessions.mock.calls,
   }).toEqual({
     plans: [
-      [undefined, {}],
-      ['/crew.yaml', { 'role:horse': 's' }],
+      [undefined, {}, {}],
+      ['/crew.yaml', { 'role:horse': 's' }, {}],
     ],
     apply: [
       [
@@ -192,4 +192,66 @@ it('refreshes affected project and global sidebars after apply (mutation: omit s
     projects: mocks.refreshSessions.mock.calls,
     global: mocks.loadGlobalChatSessions.mock.calls.length,
   }).toEqual({ projects: [[['p', 'q']]], global: 1 })
+})
+
+it('replans rename checkboxes and blocks conflicting decisions (mutation: keep updates only in the renderer)', async () => {
+  const ready = {
+    ...plan,
+    canApply: true,
+    roles: [
+      {
+        ...plan.roles[0]!,
+        state: 'differs' as const,
+        canUpdate: true,
+        differences: ['batonName'],
+        sessionId: 's',
+      },
+    ],
+  }
+  mocks.plan
+    .mockResolvedValueOnce(ready)
+    .mockResolvedValueOnce({
+      ...ready,
+      canApply: false,
+      crew: {
+        ...ready.crew,
+        state: 'choose',
+        detail: 'Two members would share baton name "horse".',
+      },
+    })
+    .mockResolvedValueOnce(ready)
+  render(<CrewImport />)
+  fireEvent.click(screen.getByRole('button', { name: 'Import crew…' }))
+  const checkbox = await screen.findByRole('checkbox', {
+    name: 'Update Horse to file',
+  })
+  fireEvent.click(checkbox)
+  await waitFor(() =>
+    expect(mocks.plan).toHaveBeenLastCalledWith(
+      '/crew.yaml',
+      {},
+      { 'role:horse': false },
+    ),
+  )
+  expect(
+    screen.getByText('Two members would share baton name "horse".'),
+  ).toBeTruthy()
+  expect(
+    (screen.getByRole('button', { name: 'Apply' }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true)
+  fireEvent.click(checkbox)
+  await waitFor(() =>
+    expect(mocks.plan).toHaveBeenLastCalledWith(
+      '/crew.yaml',
+      {},
+      { 'role:horse': true },
+    ),
+  )
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Apply' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  )
 })

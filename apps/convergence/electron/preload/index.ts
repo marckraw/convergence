@@ -191,8 +191,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('pullRequest:refreshForSession', sessionId),
   },
   crew: {
-    importPlan: (path?: string, choices: Record<string, string> = {}) =>
-      ipcRenderer.invoke('crew:importPlan', path, choices),
+    importPlan: (
+      path?: string,
+      choices: Record<string, string> = {},
+      updates: Record<string, boolean> = {},
+    ) => ipcRenderer.invoke('crew:importPlan', path, choices, updates),
     importApply: (path: string, decisions: CrewImportDecisions) =>
       ipcRenderer.invoke('crew:importApply', path, decisions),
     export: (
