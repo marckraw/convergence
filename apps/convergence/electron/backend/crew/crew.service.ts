@@ -191,6 +191,16 @@ export class CrewService {
     return this.requireById(id)
   }
 
+  /** The stamp records an applied recipe hash, not success of later guarded model changes. */
+  stampConfig(id: string, path: string, sha256: string): void {
+    this.requireRow(id)
+    this.db
+      .prepare(
+        'UPDATE session_crews SET config_path=?,config_sha256=?,config_applied_at=? WHERE id=?',
+      )
+      .run(path, sha256, new Date().toISOString(), id)
+  }
+
   delete(id: string): void {
     this.db.transaction(() => {
       this.db

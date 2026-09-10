@@ -122,6 +122,15 @@ describe('SessionCrewPicker', () => {
     expect(screen.getByText('New crew')).toBeInTheDocument()
   })
 
+  it('offers import beside New crew (mutation: remove the import entry)', async () => {
+    installCrewBackend([])
+    renderPicker()
+    await openPicker()
+    expect(
+      screen.getByRole('button', { name: 'Import crew…' }),
+    ).toBeInTheDocument()
+  })
+
   it('creates a decorated crew and puts the session in it', async () => {
     const api = installCrewBackend([])
     renderPicker()

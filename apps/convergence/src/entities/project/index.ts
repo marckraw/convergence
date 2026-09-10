@@ -9,7 +9,7 @@ export type {
 } from './project.types'
 export { useProjectStore } from './project.model'
 export type { ProjectStore } from './project.model'
-export { dialogApi, laneApi } from './project.api'
+export { dialogApi, laneApi, projectApi } from './project.api'
 export {
   laneBaseBranchLabel,
   laneProgressLabel,

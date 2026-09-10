@@ -9,6 +9,7 @@ import {
 import type { TranscriptEntry } from '../provider/provider.types'
 import { conversationItemToInsertRow } from '../session/conversation-item.pure'
 import { migrateTaskObserved } from './task-observed-migration.service'
+import { migrateCrewConfig } from './crew-config-migration.service'
 import { migrateEndedSummary } from './ended-summary-migration.service'
 import { migrateHarnessEvidence } from './harness-evidence-migration.service'
 import { migrateResidentStopReason } from './resident-stop-reason-migration.service'
@@ -2110,6 +2111,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     migrateResidentStopReason(database)
     migrateEndedSummary(database)
     migrateTaskObserved(database)
+    migrateCrewConfig(database)
   } catch (error) {
     database.close()
     throw error

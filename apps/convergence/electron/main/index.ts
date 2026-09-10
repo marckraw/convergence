@@ -1,3 +1,5 @@
+import { CrewImportService } from '../backend/crew/crew-import.service'
+import { registerCrewImportIpc } from '../backend/crew/crew-import.ipc'
 import { CrewExportService } from '../backend/crew/crew-export.service'
 import { registerCrewExportIpc } from '../backend/crew/crew-export.ipc'
 import {
@@ -683,6 +685,11 @@ async function startApp(): Promise<void> {
   registerFeedbackIpcHandlers(feedbackService)
   registerCrewIpcHandlers({ service: crewService })
   registerCrewExportIpc(new CrewExportService(db))
+  registerCrewImportIpc(
+    new CrewImportService(db, sessionService, crewService, relayService),
+    crewService,
+    relayService,
+  )
   const crewHailService = new CrewHailService(db)
   const relayEngine = new RelayEngine({
     relays: relayService,

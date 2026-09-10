@@ -83,6 +83,7 @@ interface SessionState {
 
 interface SessionActions {
   loadSessions: (projectId: string) => Promise<void>
+  refreshSessions: (projectIds: string[]) => Promise<void>
   loadGlobalSessions: () => Promise<void>
   loadGlobalChatSessions: () => Promise<void>
   loadRecents: () => Promise<void>
@@ -336,6 +337,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         ? state.draftWorkspaceId
         : null,
     }))
+  },
+
+  // Import refreshes the visible affected project; other projects load when opened.
+  // Unlike loadSessions, this never changes the active project or conversation.
+  refreshSessions: async (projectIds) => {
+    const projectId = get().currentProjectId
+    if (!projectId || !projectIds.includes(projectId)) return
+    const sessions = await sessionApi.getSummariesByProjectId(projectId)
+    set((state) => (state.currentProjectId === projectId ? { sessions } : {}))
   },
 
   loadGlobalSessions: async () => {

@@ -7,6 +7,7 @@ import { preProcessFile } from 'typescript'
 import { describe, expect, it } from 'vitest'
 import {
   crewToConfig,
+  readCrewConfig,
   renderCrewYaml,
   crewExportSlug,
   crewHomeCandidates,
@@ -238,7 +239,7 @@ it('round-trips baton names that are YAML scalars (mutation: leave null keys unq
     crew,
     [
       { ...member, batonName: 'null' },
-      { ...member, sessionId: 'second-session', batonName: 'Null' },
+      { ...member, sessionId: 'second-session', batonName: 'True' },
     ],
     sessions,
     [project],
@@ -348,18 +349,18 @@ it.each([
   },
 )
 
-it('keeps the canary libraries out of runtime dependencies (mutations: promote yaml to runtime; remove ajv declaration)', () => {
+it('declares runtime YAML and test-only AJV (mutations: demote yaml; promote ajv)', () => {
   const manifest = JSON.parse(
     readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),
   )
   expect({
     runtimeYaml: Object.hasOwn(manifest.dependencies, 'yaml'),
-    testYaml: Object.hasOwn(manifest.devDependencies, 'yaml'),
+    runtimeAjv: Object.hasOwn(manifest.dependencies, 'ajv'),
     testAjv: Object.hasOwn(manifest.devDependencies, 'ajv'),
-  }).toEqual({ runtimeYaml: false, testYaml: true, testAjv: true })
+  }).toEqual({ runtimeYaml: true, runtimeAjv: false, testAjv: true })
 })
 
-/** C1 inverse belongs only to the canary; production never imports YAML parsing. */
+/** Independent YAML inverse for serializer canaries. */
 function parseCrewYaml(yaml: string): CrewConfig {
   return parse(yaml) as CrewConfig
 }
@@ -403,7 +404,7 @@ it('preserves the spawn lane beside its root project (mutations: use the lane ro
   }).toEqual({ valid: true, errors: null })
 })
 
-it('keeps YAML imports out of production source (mutation: re-add the yaml import)', () => {
+it('keeps AJV imports out of production source (mutation: add runtime ajv import)', () => {
   const workspace = fileURLToPath(new URL('../../../', import.meta.url))
   const imports = ['electron', 'src'].flatMap((directory) => {
     const root = join(workspace, directory)
@@ -418,11 +419,389 @@ it('keeps YAML imports out of production source (mutation: re-add the yaml impor
         const path = join(root, file)
         return preProcessFile(readFileSync(path, 'utf8'), true, true)
           .importedFiles.filter(
-            ({ fileName }) =>
-              fileName === 'yaml' || fileName.startsWith('yaml/'),
+            ({ fileName }) => fileName === 'ajv' || fileName.startsWith('ajv/'),
           )
           .map(({ fileName }) => `${relative(workspace, path)}: ${fileName}`)
       })
   })
   expect(imports.sort()).toEqual([])
+})
+
+it('reads the exported recipe at runtime (mutation: refuse valid YAML)', () => {
+  expect(readCrewConfig(liveCrewYaml)).toEqual({
+    ok: true,
+    config: parseCrewYaml(liveCrewYaml),
+  })
+})
+
+const invalidRecipes: [string, (value: ReturnType<typeof parse>) => void][] = [
+  [
+    'version',
+    (c) => {
+      c.version = 2
+    },
+  ],
+  [
+    'crew',
+    (c) => {
+      c.crew = null
+    },
+  ],
+  [
+    'emoji',
+    (c) => {
+      delete c.emoji
+    },
+  ],
+  [
+    'color',
+    (c) => {
+      c.color = 1
+    },
+  ],
+  [
+    'limits.deliveriesPerRun',
+    (c) => {
+      c.limits.deliveriesPerRun = 0
+    },
+  ],
+  [
+    'limits.attentionAfterMinutes',
+    (c) => {
+      c.limits.attentionAfterMinutes = 1.2
+    },
+  ],
+  [
+    'roles',
+    (c) => {
+      c.roles = []
+    },
+  ],
+  [
+    'roles.fable.conversation',
+    (c) => {
+      c.roles.fable.conversation = null
+    },
+  ],
+  [
+    'roles.fable.provider',
+    (c) => {
+      delete c.roles.fable.provider
+    },
+  ],
+  [
+    'roles.fable.model',
+    (c) => {
+      c.roles.fable.model = 1
+    },
+  ],
+  [
+    'roles.fable.effort',
+    (c) => {
+      delete c.roles.fable.effort
+    },
+  ],
+  [
+    'roles.fable.project',
+    (c) => {
+      c.roles.fable.project = false
+    },
+  ],
+  [
+    'roles.fable.lane',
+    (c) => {
+      c.roles.fable.lane = 1
+    },
+  ],
+  [
+    'roles.fable.host',
+    (c) => {
+      delete c.roles.fable.host
+    },
+  ],
+  [
+    'roles.fable.permissions',
+    (c) => {
+      c.roles.fable.permissions = 'silent'
+    },
+  ],
+  [
+    'roles.fable.permissions.codex.sandbox',
+    (c) => {
+      c.roles.fable.permissions = {
+        preset: 'custom',
+        codex: { approvalPolicy: 'never', sandbox: 'anything' },
+      }
+    },
+  ],
+  [
+    'roles.fable.permissions.claudeCode.permissionMode',
+    (c) => {
+      c.roles.fable.permissions = {
+        preset: 'custom',
+        claudeCode: { permissionMode: 'anything' },
+      }
+    },
+  ],
+  [
+    'wires',
+    (c) => {
+      c.wires = {}
+    },
+  ],
+  [
+    'wires[2].when',
+    (c) => {
+      delete c.wires[2].when
+    },
+  ],
+  [
+    'wires[0].from',
+    (c) => {
+      c.wires[0].from = null
+    },
+  ],
+  [
+    'wires[0].to',
+    (c) => {
+      c.wires[0].to = 1
+    },
+  ],
+  [
+    'wires[0].opener',
+    (c) => {
+      c.wires[0].opener = 'restart'
+    },
+  ],
+  [
+    'wires[0].instruction',
+    (c) => {
+      c.wires[0].instruction = null
+    },
+  ],
+  [
+    'wires[0].armed',
+    (c) => {
+      c.wires[0].armed = true
+    },
+  ],
+  [
+    'layout.fable',
+    (c) => {
+      c.layout = { fable: [1] }
+    },
+  ],
+  [
+    'extra',
+    (c) => {
+      c.extra = true
+    },
+  ],
+]
+it.each(invalidRecipes)(
+  'agrees with the schema and names %s first (mutation: accept that malformed field)',
+  (path, corrupt) => {
+    const config = parse(liveCrewYaml)
+    corrupt(config)
+    const result = readCrewConfig(JSON.stringify(config))
+    const schemaValid = new Ajv().validate(schema, config)
+    expect({
+      schemaValid,
+      ok: result.ok,
+      path: result.ok ? null : result.reason.split(':')[0],
+    }).toEqual({ schemaValid: false, ok: false, path })
+  },
+)
+
+it.each(['custom permissions', 'spawn and layout', 'empty crew'])(
+  'accepts schema-valid %s at runtime (mutation: refuse valid YAML)',
+  (kind) => {
+    const config = parse(liveCrewYaml)
+    if (kind === 'custom permissions')
+      config.roles.fable.permissions = {
+        preset: 'custom',
+        codex: { approvalPolicy: 'on-request', sandbox: 'workspace-write' },
+        claudeCode: { permissionMode: 'acceptEdits' },
+      }
+    if (kind === 'spawn and layout') {
+      config.wires[0].to = {
+        spawn: {
+          name: 'Worker',
+          provider: 'codex',
+          model: null,
+          effort: null,
+          project: null,
+          account: 'default',
+        },
+      }
+      config.wires[0].opener = { first: 'Hello\nworld' }
+      config.layout = { fable: [-1, 2.5] }
+    }
+    if (kind === 'empty crew') {
+      config.roles = {}
+      config.wires = []
+    }
+    expect({
+      schemaValid: new Ajv().validate(schema, config),
+      result: readCrewConfig(JSON.stringify(config)),
+    }).toEqual({ schemaValid: true, result: { ok: true, config } })
+  },
+)
+
+it.each([
+  ['a:b', 'a baton name cannot contain a colon'],
+  ['   ', 'a baton name must not be empty'],
+  ['***', 'a baton name cannot start or end with a formatting mark'],
+])(
+  'rejects invalid role key %s before apply (mutation: omit baton-name validation)',
+  (key, reason) => {
+    const config = parseCrewYaml(liveCrewYaml)
+    config.roles = { [key]: config.roles.fable! }
+    config.wires = []
+    expect(readCrewConfig(JSON.stringify(config))).toEqual({
+      ok: false,
+      reason: `roles[${JSON.stringify(key)}]: ${reason}`,
+    })
+  },
+)
+it('refuses normalized role-key collisions (mutation: allow duplicate normalized keys)', () => {
+  const config = parseCrewYaml(liveCrewYaml)
+  config.roles.Fable = config.roles.fable!
+  expect(readCrewConfig(JSON.stringify(config))).toEqual({
+    ok: false,
+    reason: 'roles["Fable"]: duplicate baton name fable',
+  })
+})
+
+it.each(['a'.repeat(50), '', '**Horse**'])(
+  'refuses an unnameable unnamed export: %s (mutation: skip roleKey normalizer)',
+  (name) => {
+    expect(() =>
+      crewToConfig(
+        crew,
+        [{ ...member, batonName: null }],
+        [{ ...session, name }],
+        [project],
+        [],
+      ),
+    ).toThrow('A conversation needs a baton name before export')
+  },
+)
+it('imports its own 20-character unnamed export (mutation: emit an over-length fallback)', () => {
+  const exported = crewToConfig(
+    crew,
+    [{ ...member, batonName: null }],
+    [{ ...session, name: 'a'.repeat(20) }],
+    [project],
+    [],
+  )
+  expect(readCrewConfig(renderCrewYaml(exported))).toEqual({
+    ok: true,
+    config: exported,
+  })
+})
+it('imports its own live crew export with layout (mutation: skip a required exported field)', () => {
+  const exported = crewToConfig(
+    liveCrew,
+    liveMembers,
+    liveSessions,
+    liveProjects,
+    liveRelays,
+    { includePositions: true },
+  )
+  expect(readCrewConfig(renderCrewYaml(exported))).toEqual({
+    ok: true,
+    config: exported,
+  })
+})
+
+it.each([
+  ['', 'expected settled or a condition'],
+  ['  \t', 'expected settled or a condition'],
+  ['BATON:', 'a relay condition that says BATON: must name somebody'],
+  [
+    'BATON: marcin',
+    'BATON: marcin is reserved — it always parks the loop and hails Marcin, so no wire may claim it',
+  ],
+  [
+    '**',
+    'a relay condition must wait on a letter or a number, not only formatting marks',
+  ],
+  ['one\ntwo', 'a relay condition is one line, not a paragraph'],
+  ['x'.repeat(121), 'a relay condition cannot be longer than 120 characters'],
+])(
+  'refuses condition %s at the reader (mutation: pass when raw)',
+  (when, reason) => {
+    const recipe = parseCrewYaml(liveCrewYaml)
+    recipe.wires[2]!.when = when
+    expect(readCrewConfig(JSON.stringify(recipe))).toEqual({
+      ok: false,
+      reason: `wires[2].when: ${reason}`,
+    })
+  },
+)
+
+it('refuses an exported reserved condition (mutation: export settled token)', () => {
+  expect(() =>
+    crewToConfig(liveCrew, liveMembers, liveSessions, liveProjects, [
+      { ...liveRelays[0]!, conditionToken: 'settled' },
+    ]),
+  ).toThrow(
+    'A wire condition reads as the reserved word "settled"; rename it before export',
+  )
+})
+it.each(['a:b', '**horse**', 'x'.repeat(33)])(
+  'refuses invalid stored baton %s (mutation: return stored baton raw)',
+  (batonName) => {
+    expect(() =>
+      crewToConfig(crew, [{ ...member, batonName }], [session], [project], []),
+    ).toThrow('A conversation needs a baton name before export')
+  },
+)
+it('normalizes stored baton names through the export door (mutation: return stored baton raw)', () => {
+  const exported = crewToConfig(
+    crew,
+    [{ ...member, batonName: '  Horse   Opus ' }],
+    [session],
+    [project],
+    [],
+  )
+  expect(Object.keys(exported.roles)).toEqual(['horse opus'])
+})
+
+it('refuses normalized layout-key collisions (mutation: omit layout-key validation)', () => {
+  const recipe = parseCrewYaml(liveCrewYaml)
+  recipe.layout = { fable: [1, 2], ' Fable ': [3, 4] }
+  expect(readCrewConfig(JSON.stringify(recipe))).toEqual({
+    ok: false,
+    reason: 'layout[" Fable "]: duplicate baton name fable',
+  })
+})
+
+it.each(['settled', 'Settled', ' settled ', ' BATON: horse '])(
+  'reads only unchanged condition %s (mutation: accept the trimmed form)',
+  (when) => {
+    const recipe = parseCrewYaml(liveCrewYaml)
+    recipe.wires[0]!.when = when
+    expect(readCrewConfig(JSON.stringify(recipe))).toEqual(
+      when === when.trim()
+        ? { ok: true, config: recipe }
+        : {
+            ok: false,
+            reason: `wires[0].when: written as ${JSON.stringify(when)}; the record would store it as ${JSON.stringify(when.trim())} — write it exactly`,
+          },
+    )
+  },
+)
+
+it('refuses an empty stored baton without falling back to the conversation name (mutation: treat empty baton as absent)', () => {
+  expect(() =>
+    crewToConfig(
+      crew,
+      [{ ...member, batonName: '' }],
+      [{ ...session, name: 'Valid fallback' }],
+      [project],
+      [],
+    ),
+  ).toThrow('A conversation needs a baton name before export')
 })

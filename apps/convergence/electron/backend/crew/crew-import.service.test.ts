@@ -1,0 +1,628 @@
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { createHash } from 'node:crypto'
+import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
+import { LocalExecutionHost } from '../provider/execution-host/local-execution-host'
+import { ProviderRegistry } from '../provider/provider-registry'
+import { SessionService } from '../session/session.service'
+import { CrewService } from './crew.service'
+import { RelayService } from '../relay/relay.service'
+import { CrewImportService } from './crew-import.service'
+import { readGitOriginUrlAsync } from '../git/git-origin'
+import type { CrewConfig } from './crew-config.types'
+import { crewToConfig } from './crew-config.pure'
+import type { CrewImportPlan } from './crew-import.types'
+
+vi.mock('../git/git-origin', () => ({
+  readGitOriginUrlAsync: vi.fn(async () => null),
+}))
+let root: string
+let path: string
+let sessions: SessionService
+let crews: CrewService
+let relays: RelayService
+let service: CrewImportService
+let config: CrewConfig
+const decisions = (plan: CrewImportPlan) => ({
+  revision: plan.revision,
+  choices: {},
+  updates: {},
+  includeLayout: true,
+})
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'crew-import-'))
+  path = join(root, 'recipe.yaml')
+  const db = getDatabase()
+  db.prepare(
+    "INSERT INTO projects(id,name,repository_path) VALUES ('root','Convergence',?)",
+  ).run(root)
+  db.prepare(
+    "INSERT INTO projects(id,name,repository_path,lane_of,lane_name) VALUES ('lane','Studio',?,'root','studio')",
+  ).run(join(root, 'lane'))
+  vi.mocked(readGitOriginUrlAsync)
+    .mockReset()
+    .mockResolvedValue('git@github.com:marckraw/convergence.git')
+  sessions = new SessionService(
+    db,
+    new LocalExecutionHost(new ProviderRegistry()),
+    join(root, 'global'),
+  )
+  crews = new CrewService(db)
+  relays = new RelayService(db)
+  service = new CrewImportService(db, sessions, crews, relays)
+  config = {
+    version: 1,
+    crew: 'Import test',
+    emoji: '🧩',
+    limits: { deliveriesPerRun: 12, attentionAfterMinutes: 30 },
+    roles: {
+      horse: {
+        conversation: 'Horse',
+        provider: 'codex',
+        model: 'old-model',
+        effort: 'high',
+        permissions: 'ask',
+        project: 'github.com/marckraw/convergence',
+        lane: 'studio',
+        host: 'local',
+      },
+      fable: {
+        conversation: 'Fable',
+        provider: 'codex',
+        model: null,
+        effort: null,
+        permissions: 'yolo',
+        project: null,
+        host: 'local',
+      },
+    },
+    wires: [
+      {
+        from: 'fable',
+        to: 'horse',
+        when: 'BATON: horse',
+        opener: 'clear',
+        instruction: 'Ride',
+      },
+    ],
+    layout: { horse: [4, 8] },
+  }
+  await save()
+})
+afterEach(async () => {
+  vi.restoreAllMocks()
+  await sessions.disposeAll()
+  closeDatabase()
+  resetDatabase()
+  await rm(root, { recursive: true, force: true })
+})
+async function save() {
+  await writeFile(path, JSON.stringify(config))
+}
+function counts() {
+  const db = getDatabase()
+  return [
+    'sessions',
+    'session_crews',
+    'session_crew_members',
+    'session_relays',
+  ].map(
+    (t) =>
+      (db.prepare(`SELECT count(*) AS n FROM ${t}`).get() as { n: number }).n,
+  )
+}
+
+it('applies through services, stamps the hash and is idempotent (mutations: skip stamp; always create relay)', async () => {
+  const plan = await service.plan(path)
+  const report = await service.apply(path, decisions(plan))
+  const crew = crews.getById(report.crewId)!
+  const horse = sessions.getAll().find((s) => s.name === 'Horse')!
+  const stamp = getDatabase()
+    .prepare(
+      'SELECT config_path,config_sha256,config_applied_at FROM session_crews WHERE id=?',
+    )
+    .get(crew.id)
+  expect({
+    counts: counts(),
+    project: horse.projectId,
+    model: horse.model,
+    permissions: horse.permissionConfig,
+    member: crew.members.find((m) => m.sessionId === horse.id),
+    wire: relays.list().map((r) => [r.conditionToken, r.opener, r.instruction]),
+    stamp,
+    reads: vi.mocked(readGitOriginUrlAsync).mock.calls,
+  }).toEqual({
+    counts: [2, 1, 2, 1],
+    project: 'lane',
+    model: 'old-model',
+    permissions: { preset: 'ask' },
+    member: { sessionId: horse.id, batonName: 'horse', canvasX: 4, canvasY: 8 },
+    wire: [['BATON: horse', '/clear', 'Ride']],
+    stamp: {
+      config_path: path,
+      config_sha256: createHash('sha256')
+        .update(JSON.stringify(config))
+        .digest('hex'),
+      config_applied_at: expect.any(String),
+    },
+    reads: [[root], [root]],
+  })
+  const again = await service.plan(path)
+  const second = await service.apply(path, decisions(again))
+  expect({
+    states: again.roles.map((r) => r.state),
+    wire: again.wires[0]!.state,
+    nothing: second.nothingToChange,
+    counts: counts(),
+  }).toEqual({
+    states: ['bound', 'bound'],
+    wire: 'existing',
+    nothing: true,
+    counts: [2, 1, 2, 1],
+  })
+})
+
+it('rolls back Phase A after the first real session insert (mutation: remove outer transaction)', async () => {
+  const original = sessions.create.bind(sessions)
+  vi.spyOn(sessions, 'create').mockImplementation((input) => {
+    original(input)
+    throw new Error('interrupt after insert')
+  })
+  const plan = await service.plan(path)
+  await expect(service.apply(path, decisions(plan))).rejects.toThrow(
+    'interrupt after insert',
+  )
+  expect(counts()).toEqual([0, 0, 0, 0])
+})
+
+it('keeps Phase A when a running conversation refuses Phase B (mutation: report refusal as updated)', async () => {
+  const horse = sessions.create({
+    projectId: 'lane',
+    workspaceId: null,
+    providerId: 'codex',
+    name: 'Horse',
+    model: 'local-model',
+    effort: 'high',
+    permissionConfig: { preset: 'ask' },
+  })
+  getDatabase()
+    .prepare("UPDATE sessions SET status='running' WHERE id=?")
+    .run(horse.id)
+  const plan = await service.plan(path)
+  const report = await service.apply(path, decisions(plan))
+  const next = await service.plan(path)
+  expect({
+    counts: counts(),
+    outcome: report.entries.find((e) => e.key === 'role:horse'),
+    model: sessions.getById(horse.id)!.model,
+    next: next.roles.find((r) => r.role === 'horse')!.state,
+    stamp: getDatabase().prepare('SELECT config_path FROM session_crews').get(),
+  }).toEqual({
+    counts: [2, 1, 2, 1],
+    outcome: {
+      key: 'role:horse',
+      label: 'Horse',
+      outcome: 'not updated',
+      reason: expect.stringMatching(/running|turn|idle/i),
+    },
+    model: 'local-model',
+    next: 'differs',
+    stamp: { config_path: path },
+  })
+})
+
+it('records the service model-change note after commit (mutation: raw UPDATE sessions)', async () => {
+  const horse = sessions.create({
+    projectId: 'lane',
+    workspaceId: null,
+    providerId: 'codex',
+    name: 'Horse',
+    model: 'local-model',
+    effort: 'high',
+    permissionConfig: { preset: 'ask' },
+  })
+  const original = sessions.setModelSelection.bind(sessions)
+  const inTransaction: boolean[] = []
+  vi.spyOn(sessions, 'setModelSelection').mockImplementation((id, input) => {
+    inTransaction.push(getDatabase().inTransaction)
+    return original(id, input)
+  })
+  const plan = await service.plan(path)
+  const report = await service.apply(path, decisions(plan))
+  expect({
+    model: sessions.getById(horse.id)!.model,
+    notes: sessions
+      .getConversation(horse.id)
+      .filter((i) => i.kind === 'note')
+      .map((i) => i.text),
+    outcome: report.entries.find((e) => e.key === 'role:horse')!.outcome,
+    inTransaction,
+  }).toEqual({
+    model: 'old-model',
+    notes: [expect.stringMatching(/local-model.*old-model/)],
+    outcome: 'updated',
+    inTransaction: [false],
+  })
+})
+
+it('refuses stale files and decisions without writing (mutation: omit revision comparison)', async () => {
+  const plan = await service.plan(path)
+  config.roles.horse!.model = 'changed'
+  await save()
+  await expect(service.apply(path, decisions(plan))).rejects.toThrow(
+    /changed.*plan|plan.*changed/i,
+  )
+  expect(counts()).toEqual([0, 0, 0, 0])
+})
+
+it('keeps omitted members and wires and respects update/layout opt-outs (mutation: update unchecked rows)', async () => {
+  const initial = await service.plan(path)
+  const first = await service.apply(path, decisions(initial))
+  const local = sessions.create({
+    contextKind: 'global',
+    providerId: 'codex',
+    name: 'Local only',
+    model: null,
+    effort: null,
+  })
+  crews.addMember(first.crewId, local.id)
+  const oldWire = relays.create({
+    crewId: first.crewId,
+    sourceSessionId: local.id,
+    action: 'hail',
+    targetSessionId: crews.getById(first.crewId)!.sessionIds[0]!,
+  })
+  config.roles.horse!.model = 'file-model'
+  config.wires[0]!.instruction = 'changed'
+  config.limits.deliveriesPerRun = 20
+  config.layout = { horse: [50, 50] }
+  await save()
+  const plan = await service.plan(path)
+  const report = await service.apply(path, {
+    ...decisions(plan),
+    updates: { 'role:horse': false, 'wire:0': false, limits: false },
+    includeLayout: false,
+  })
+  const horse = sessions.getAll().find((s) => s.name === 'Horse')!
+  expect({
+    kept: report.entries.filter((e) => e.outcome === 'kept').map((e) => e.key),
+    model: horse.model,
+    wire: relays.list().find((r) => r.id !== oldWire.id)!.instruction,
+    limits: crews.getById(first.crewId)!.roundCap,
+    position: crews
+      .getById(first.crewId)!
+      .members.find((m) => m.sessionId === horse.id)!.canvasX,
+    counts: counts(),
+  }).toEqual({
+    kept: expect.arrayContaining([
+      `member:${local.id}`,
+      `relay:${oldWire.id}`,
+      'role:horse',
+      'wire:0',
+      'limits',
+    ]),
+    model: 'old-model',
+    wire: 'Ride',
+    limits: 12,
+    position: 4,
+    counts: [3, 1, 3, 2],
+  })
+})
+
+it('rejects a concurrent stale apply before it can duplicate records (mutation: omit in-transaction recheck)', async () => {
+  const plan = await service.plan(path)
+  const waiting: (() => void)[] = []
+  vi.mocked(readGitOriginUrlAsync).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        waiting.push(() => resolve('git@github.com:marckraw/convergence.git'))
+        if (waiting.length === 2) waiting.forEach((release) => release())
+      }),
+  )
+  const results = await Promise.allSettled([
+    service.apply(path, decisions(plan)),
+    service.apply(path, decisions(plan)),
+  ])
+  expect({
+    outcomes: results.map((r) => r.status).sort(),
+    counts: counts(),
+  }).toEqual({ outcomes: ['fulfilled', 'rejected'], counts: [2, 1, 2, 1] })
+})
+
+it('materializes exported defaults without an effective limits change (mutation: keep inherited defaults)', async () => {
+  const firstPlan = await service.plan(path)
+  const first = await service.apply(path, decisions(firstPlan))
+  crews.update(first.crewId, { roundCap: null, stallMinutes: null })
+  const plan = await service.plan(path)
+  const report = await service.apply(path, decisions(plan))
+  const crew = crews.getById(first.crewId)!
+  expect({
+    state: plan.limits.state,
+    roundCap: crew.roundCap,
+    stallMinutes: crew.stallMinutes,
+    nothing: report.nothingToChange,
+  }).toEqual({
+    state: 'existing',
+    roundCap: 12,
+    stallMinutes: 30,
+    nothing: true,
+  })
+})
+
+it('lets live activity reach the model guard without invalidating bindings (mutation: hash activity timestamps)', async () => {
+  const horse = sessions.create({
+    projectId: 'lane',
+    workspaceId: null,
+    providerId: 'codex',
+    name: 'Horse',
+    model: 'local-model',
+    effort: 'high',
+    permissionConfig: { preset: 'ask' },
+  })
+  const plan = await service.plan(path)
+  getDatabase()
+    .prepare(
+      "UPDATE sessions SET status='running',updated_at='2099-01-01' WHERE id=?",
+    )
+    .run(horse.id)
+  const report = await service.apply(path, decisions(plan))
+  expect({
+    counts: counts(),
+    outcome: report.entries.find((e) => e.key === 'role:horse')!.outcome,
+  }).toEqual({ counts: [2, 1, 2, 1], outcome: 'not updated' })
+})
+
+it('reads archive state before planning and rejects a newly archived binding (mutation: omit archived_at projection)', async () => {
+  const first = await service.apply(path, decisions(await service.plan(path)))
+  const horse = sessions.getAll().find((s) => s.name === 'Horse')!
+  const beforeArchive = await service.plan(path)
+  getDatabase()
+    .prepare('UPDATE sessions SET archived_at=? WHERE id=?')
+    .run('2026-09-10', horse.id)
+  await expect(service.apply(path, decisions(beforeArchive))).rejects.toThrow(
+    /changed.*plan/,
+  )
+  const plan = await service.plan(path)
+  expect(plan.roles.find((r) => r.role === 'horse')).toMatchObject({
+    state: 'create',
+    sessionId: null,
+    detail:
+      'an archived conversation of this name exists; import does not unarchive',
+  })
+  expect(crews.getById(first.crewId)!.sessionIds).toContain(horse.id)
+})
+
+it.each([false, true])(
+  'applies baton rename only when checked: %s (mutation: rename unconditionally)',
+  async (update) => {
+    const first = await service.apply(path, decisions(await service.plan(path)))
+    const fable = sessions.getAll().find((s) => s.name === 'Fable')!
+    config.roles.mastermind = config.roles.fable!
+    delete config.roles.fable
+    config.wires = []
+    await save()
+    const modelUpdate = vi.spyOn(sessions, 'setModelSelection')
+    const plan = await service.plan(path)
+    const report = await service.apply(path, {
+      ...decisions(plan),
+      updates: { 'role:mastermind': update },
+    })
+    expect({
+      baton: crews
+        .getById(first.crewId)!
+        .members.find((m) => m.sessionId === fable.id)!.batonName,
+      outcome: report.entries.find((e) => e.key === 'role:mastermind')!.outcome,
+      modelCalls: modelUpdate.mock.calls.length,
+      next: (await service.plan(path)).roles.find(
+        (r) => r.role === 'mastermind',
+      )!.state,
+    }).toEqual({
+      baton: update ? 'mastermind' : 'fable',
+      outcome: update ? 'updated' : 'kept',
+      modelCalls: 0,
+      next: update ? 'bound' : 'differs',
+    })
+  },
+)
+
+it('keeps a mixed-case recipe idempotent after the first apply (mutation: compare raw role key)', async () => {
+  config.roles.Fable = config.roles.fable!
+  delete config.roles.fable
+  config.wires[0]!.from = 'Fable'
+  await save()
+  const first = await service.apply(path, decisions(await service.plan(path)))
+  const next = await service.plan(path)
+  const again = await service.apply(path, decisions(next))
+  expect({
+    batons: crews
+      .getById(first.crewId)!
+      .members.map((m) => m.batonName)
+      .sort(),
+    states: next.roles.map((r) => r.state),
+    nothing: again.nothingToChange,
+    counts: counts(),
+  }).toEqual({
+    batons: ['fable', 'horse'],
+    states: ['bound', 'bound'],
+    nothing: true,
+    counts: [2, 1, 2, 1],
+  })
+})
+
+it('binds across providers without attempting a model update (mutation: offer an impossible provider update)', async () => {
+  await service.apply(path, decisions(await service.plan(path)))
+  const fable = sessions.getAll().find((s) => s.name === 'Fable')!
+  config.roles.fable!.provider = 'claude-code'
+  config.roles.fable!.model = 'file-model'
+  await save()
+  const choices = { 'role:fable': fable.id }
+  const plan = await service.plan(path, choices)
+  const update = vi.spyOn(sessions, 'setModelSelection')
+  const report = await service.apply(path, { ...decisions(plan), choices })
+  expect({
+    calls: update.mock.calls,
+    outcome: report.entries.find((e) => e.key === 'role:fable')!.outcome,
+    provider: sessions.getById(fable.id)!.providerId,
+    model: sessions.getById(fable.id)!.model,
+  }).toEqual({ calls: [], outcome: 'bound', provider: 'codex', model: null })
+})
+
+it('keeps one relay across canonical condition variants (mutation: compare existing condition raw)', async () => {
+  await service.apply(path, decisions(await service.plan(path)))
+  getDatabase()
+    .prepare("UPDATE session_relays SET condition_token='BATON: Horse'")
+    .run()
+  const plan = await service.plan(path)
+  const report = await service.apply(path, decisions(plan))
+  expect({
+    state: plan.wires[0]!.state,
+    relays: relays.list().length,
+    nothing: report.nothingToChange,
+  }).toEqual({ state: 'existing', relays: 1, nothing: true })
+})
+
+it('applies normalized wire and layout references idempotently (mutation: use raw reference lookup)', async () => {
+  config.roles.Horse = config.roles.horse!
+  config.roles.Fable = config.roles.fable!
+  delete config.roles.horse
+  delete config.roles.fable
+  config.layout = { '  HORSE  ': [17, 29] }
+  config.wires[0]!.from = '  FaBle  '
+  config.wires[0]!.to = 'hOrSe'
+  await save()
+  const plan = await service.plan(path)
+  expect(plan.canApply).toBe(true)
+  const result = await service.apply(path, decisions(plan))
+  const horse = sessions.getAll().find((s) => s.name === 'Horse')!
+  const fable = sessions.getAll().find((s) => s.name === 'Fable')!
+  const next = await service.plan(path)
+  expect({
+    member: crews
+      .getById(result.crewId)!
+      .members.find((m) => m.sessionId === horse.id),
+    wire: relays.list().map((r) => [r.sourceSessionId, r.targetSessionId]),
+    nothing: (await service.apply(path, decisions(next))).nothingToChange,
+  }).toEqual({
+    member: {
+      sessionId: horse.id,
+      batonName: 'horse',
+      canvasX: 17,
+      canvasY: 29,
+    },
+    wire: [[fable.id, horse.id]],
+    nothing: true,
+  })
+})
+
+it('reports an applied baton rename beside a refused model update (mutation: report plain not updated)', async () => {
+  const first = await service.apply(path, decisions(await service.plan(path)))
+  const fable = sessions.getAll().find((s) => s.name === 'Fable')!
+  config.roles.mastermind = { ...config.roles.fable!, model: 'new-model' }
+  delete config.roles.fable
+  config.wires[0]!.from = 'mastermind'
+  getDatabase()
+    .prepare("UPDATE sessions SET status='running' WHERE id=?")
+    .run(fable.id)
+  await save()
+  const plan = await service.plan(path)
+  const report = await service.apply(path, decisions(plan))
+  expect({
+    entry: report.entries.find((e) => e.key === 'role:mastermind'),
+    baton: crews
+      .getById(first.crewId)!
+      .members.find((m) => m.sessionId === fable.id)!.batonName,
+    model: sessions.getById(fable.id)!.model,
+    next: (await service.plan(path)).roles.find((r) => r.role === 'mastermind')!
+      .differences,
+  }).toEqual({
+    entry: {
+      key: 'role:mastermind',
+      label: 'Fable',
+      outcome: 'baton updated; model not updated',
+      reason: expect.stringMatching(/running|turn|idle/i),
+    },
+    baton: 'mastermind',
+    model: null,
+    next: ['model'],
+  })
+})
+
+it('refuses invalid conditions during planning before any write (mutation: pass when raw)', async () => {
+  config.wires[0]!.when = 'BATON: marcin'
+  await save()
+  await expect(service.plan(path)).rejects.toThrow(
+    'wires[0].when: BATON: marcin is reserved',
+  )
+  expect(counts()).toEqual([0, 0, 0, 0])
+})
+it('blocks colliding rename decisions in preview and Apply (mutation: omit update decisions from planning)', async () => {
+  const first = await service.plan(path)
+  const applied = await service.apply(path, decisions(first))
+  const before = crews.getById(applied.crewId)!.members
+  config.roles = { mastermind: config.roles.fable!, fable: config.roles.horse! }
+  config.wires = []
+  await save()
+  const updates = { 'role:mastermind': false, 'role:fable': true }
+  const plan = await service.plan(path, {}, updates)
+  expect(plan.canApply).toBe(false)
+  await expect(
+    service.apply(path, { ...decisions(plan), updates }),
+  ).rejects.toThrow('Resolve every choose or missing row')
+  expect(crews.getById(applied.crewId)!.members).toEqual(before)
+})
+it('ignores an invalid layout reference during Apply (mutation: remove reference catch)', async () => {
+  config.layout = { 'a:b': [17, 29] }
+  await save()
+  const plan = await service.plan(path)
+  const report = await service.apply(path, decisions(plan))
+  expect(
+    crews.getById(report.crewId)!.members.map((m) => [m.canvasX, m.canvasY]),
+  ).toEqual([
+    [null, null],
+    [null, null],
+  ])
+})
+
+it('refuses rewritten conditions before Apply and exports the accepted stored fixture (mutations: accept trimmed form; rewrite case at Apply)', async () => {
+  config.wires[0]!.when = ' settled '
+  await save()
+  await expect(
+    (async () => {
+      const rejectedPlan = await service.plan(path)
+      return service.apply(path, decisions(rejectedPlan))
+    })(),
+  ).rejects.toThrow(
+    'wires[0].when: written as " settled "; the record would store it as "settled" — write it exactly',
+  )
+  expect(counts()).toEqual([0, 0, 0, 0])
+  config.wires[0]!.when = 'Settled'
+  await save()
+  const plan = await service.plan(path)
+  const report = await service.apply(path, decisions(plan))
+  const crew = crews.getById(report.crewId)!
+  const exported = crewToConfig(
+    crew,
+    crew.members,
+    sessions.getAll(),
+    [
+      {
+        id: 'root',
+        name: 'Convergence',
+        origin: 'git@github.com:marckraw/convergence.git',
+        laneOf: null,
+        laneName: null,
+      },
+      {
+        id: 'lane',
+        name: 'Studio',
+        origin: null,
+        laneOf: 'root',
+        laneName: 'studio',
+      },
+    ],
+    relays.list(),
+  )
+  expect(exported.wires.map((wire) => wire.when)).toEqual(['Settled'])
+})

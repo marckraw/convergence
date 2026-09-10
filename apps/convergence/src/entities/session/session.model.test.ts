@@ -1295,3 +1295,69 @@ describe('selectLocalProviders (MAR-2682)', () => {
     expect(selectLocalProviders(useSessionStore.getState())).toBe(empty)
   })
 })
+
+describe('import sidebar refresh', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    Object.defineProperty(globalThis, 'window', {
+      value: { electronAPI: mockElectronAPI },
+      writable: true,
+      configurable: true,
+    })
+    useSessionStore.setState({
+      currentProjectId: 'project-1',
+      sessions: [],
+      activeSessionId: 'selected',
+      activeProjectSessionId: 'selected',
+    })
+  })
+  it('refreshes the affected sidebar without changing selection (mutation: skip refresh)', async () => {
+    const imported = makeSession({ id: 'imported' })
+    mockElectronAPI.session.getSummariesByProjectId.mockResolvedValue([
+      imported,
+    ])
+    await useSessionStore.getState().refreshSessions(['project-1', 'project-2'])
+    const state = useSessionStore.getState()
+    expect({
+      reads: mockElectronAPI.session.getSummariesByProjectId.mock.calls,
+      sessions: state.sessions,
+      project: state.currentProjectId,
+      selected: state.activeSessionId,
+    }).toEqual({
+      reads: [['project-1']],
+      sessions: [imported],
+      project: 'project-1',
+      selected: 'selected',
+    })
+  })
+  it('leaves an unaffected sidebar alone (mutation: refresh an unrelated project)', async () => {
+    await useSessionStore.getState().refreshSessions(['project-2'])
+    expect(
+      mockElectronAPI.session.getSummariesByProjectId,
+    ).not.toHaveBeenCalled()
+  })
+  it('discards a refresh if the user switches project during IO (mutation: omit current-project guard)', async () => {
+    let release!: (sessions: ReturnType<typeof makeSession>[]) => void
+    mockElectronAPI.session.getSummariesByProjectId.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve
+        }),
+    )
+    const pending = useSessionStore.getState().refreshSessions(['project-1'])
+    const other = makeSession({ id: 'other', projectId: 'project-2' })
+    useSessionStore.setState({
+      currentProjectId: 'project-2',
+      sessions: [other],
+      activeSessionId: 'other',
+    })
+    release([makeSession({ id: 'imported' })])
+    await pending
+    const state = useSessionStore.getState()
+    expect({
+      project: state.currentProjectId,
+      sessions: state.sessions,
+      selected: state.activeSessionId,
+    }).toEqual({ project: 'project-2', sessions: [other], selected: 'other' })
+  })
+})

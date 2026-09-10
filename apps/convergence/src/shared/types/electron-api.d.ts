@@ -1,3 +1,8 @@
+import type {
+  CrewImportPlan,
+  CrewImportDecisions,
+  CrewImportReport,
+} from './crew-import.types'
 import type { SessionHarnessFacts } from './harness-facts.types'
 import type { ParallelWorkCounts } from '../lib/parallel-work.pure'
 import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
@@ -1709,6 +1714,15 @@ interface ElectronAPI {
     ) => Promise<WorkspacePullRequestData | null>
   }
   crew: {
+    importPlan: (
+      path?: string,
+      choices?: Record<string, string>,
+      updates?: Record<string, boolean>,
+    ) => Promise<CrewImportPlan | null>
+    importApply: (
+      path: string,
+      decisions: CrewImportDecisions,
+    ) => Promise<CrewImportReport>
     export: (
       crewId: string,
       options: { includePositions?: boolean; force?: boolean },

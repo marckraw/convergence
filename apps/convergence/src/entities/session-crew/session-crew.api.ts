@@ -1,10 +1,26 @@
 import type {
+  CrewImportPlan,
+  CrewImportDecisions,
+  CrewImportReport,
+} from '@/shared/types/crew-import.types'
+import type {
   CreateSessionCrewInput,
   SessionCrew,
   UpdateSessionCrewInput,
 } from './session-crew.types'
 
 export const sessionCrewApi = {
+  importPlan: (
+    path?: string,
+    choices: Record<string, string> = {},
+    updates: Record<string, boolean> = {},
+  ): Promise<CrewImportPlan | null> =>
+    window.electronAPI.crew.importPlan(path, choices, updates),
+  importApply: (
+    path: string,
+    decisions: CrewImportDecisions,
+  ): Promise<CrewImportReport> =>
+    window.electronAPI.crew.importApply(path, decisions),
   export: (
     crewId: string,
     options: { includePositions?: boolean; force?: boolean },
