@@ -547,14 +547,16 @@ export function relayConditionMatches(
   if (conditionToken === null) return true
   const line = lastNonEmptyLine(message)
   if (line === null) return false
-  const canonicalLine = canonicalBatonLine(line)
-  const canonicalToken = canonicalBatonLine(conditionToken)
-  // A side made of nothing but marks (`**`, `____`) peels away to the empty
-  // string, and two empties are not an agreement about anything: they are two
-  // things that said nothing. Without this, a wire whose token was `**` fired
-  // on every message ending in `__`.
-  if (canonicalLine.length === 0 || canonicalToken.length === 0) return false
-  return canonicalLine === canonicalToken
+  return sameCondition(conditionToken, line)
+}
+
+/** Conditions share the engine's canonical comparison; null denotes an unconditional wire. */
+export function sameCondition(a: string | null, b: string | null): boolean {
+  if (a === null || b === null) return a === b
+  const left = canonicalBatonLine(a)
+  const right = canonicalBatonLine(b)
+  // Two empty declarations do not agree about any condition.
+  return left.length > 0 && right.length > 0 && left === right
 }
 
 /**

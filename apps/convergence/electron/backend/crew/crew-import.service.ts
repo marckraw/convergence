@@ -11,7 +11,12 @@ import { ExecutionHostEndpointRepository } from '../execution-host-endpoint/exec
 import { readGitOriginUrlAsync } from '../git/git-origin'
 import { parseSessionPermissionConfig } from '../provider/session-permissions.pure'
 import { readCrewConfig } from './crew-config.pure'
-import { planCrewImport, crewImportRelayFields } from './crew-import.pure'
+import {
+  planCrewImport,
+  crewImportRelayFields,
+  normalizedRoleReference,
+  modelUpdateOffered,
+} from './crew-import.pure'
 import type {
   CrewImportWorld,
   CrewImportPlan,
@@ -81,15 +86,10 @@ export class CrewImportService {
     // Phase B is deliberately after commit: a running session may refuse a model
     // change while its new crew membership and the other rows have already landed.
     for (const role of plan.roles) {
-      if (
-        !role.sessionId ||
-        !role.differences.some((f) => f === 'model' || f === 'effort') ||
-        decisions.updates[role.key] === false
-      )
-        continue
+      if (!role.sessionId || decisions.updates[role.key] === false) continue
       const spec = config.roles[role.role]!
       const bound = world.sessions.find((s) => s.id === role.sessionId)!
-      if (spec.provider !== bound.providerId) continue
+      if (!modelUpdateOffered(spec, bound, role.differences)) continue
       const entry = report.entries.find((e) => e.key === role.key)!
       report.nothingToChange = false
       try {
@@ -101,7 +101,10 @@ export class CrewImportService {
         entry.outcome = 'updated'
         report.nothingToChange = false
       } catch (error) {
-        entry.outcome = 'not updated'
+        entry.outcome =
+          entry.outcome === 'updated'
+            ? 'baton updated; model not updated'
+            : 'not updated'
         entry.reason = error instanceof Error ? error.message : String(error)
       }
     }
@@ -143,7 +146,7 @@ export class CrewImportService {
         changed = true
       }
       if (!id) throw new Error(`No conversation resolved for ${role.role}`)
-      ids.set(role.role, id)
+      ids.set(normalizeCrewBatonName(role.role)!, id)
       entries.push({
         key: role.key,
         label: role.label,
@@ -183,7 +186,7 @@ export class CrewImportService {
             : 'bound',
     })
     for (const role of plan.roles) {
-      const id = ids.get(role.role)!
+      const id = ids.get(normalizeCrewBatonName(role.role)!)!
       const member = crew.members.find((m) => m.sessionId === id)
       const batonName = normalizeCrewBatonName(role.role)!
       if (!member) {
@@ -198,7 +201,9 @@ export class CrewImportService {
         if (member) entries.find((e) => e.key === role.key)!.outcome = 'updated'
         changed = true
       }
-      const position = config.layout?.[role.role]
+      const position = Object.entries(config.layout ?? {}).find(
+        ([key]) => normalizedRoleReference(key) === batonName,
+      )?.[1]
       if (
         decisions.includeLayout &&
         position &&
@@ -215,8 +220,11 @@ export class CrewImportService {
       const wire = config.wires[row.index]!
       const input = {
         ...crewImportRelayFields(wire, row.spawnProjectId),
-        sourceSessionId: ids.get(wire.from)!,
-        targetSessionId: typeof wire.to === 'string' ? ids.get(wire.to)! : null,
+        sourceSessionId: ids.get(normalizedRoleReference(wire.from)!)!,
+        targetSessionId:
+          typeof wire.to === 'string'
+            ? ids.get(normalizedRoleReference(wire.to)!)!
+            : null,
       }
       let outcome: CrewImportReport['entries'][number]['outcome'] = 'bound'
       if (!row.relayId) {

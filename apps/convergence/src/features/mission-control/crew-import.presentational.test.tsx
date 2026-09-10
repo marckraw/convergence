@@ -161,3 +161,46 @@ it('renders a baton rename and its selected kept-wire warning (mutation: omit wa
     ),
   ).not.toBeInTheDocument()
 })
+
+it.each([
+  [true, false, true],
+  [true, true, false],
+  [false, true, false],
+  [false, false, false],
+])(
+  'shows a takeover warning for rename=%s takeover=%s (mutation: ignore takeover checkbox)',
+  (rename, takeover, visible) => {
+    const warning = 'wire horse → fable waits on a baton no member will carry'
+    const preview = {
+      ...plan,
+      kept: [
+        {
+          ...row('kept wire', 'kept'),
+          warnings: [
+            {
+              updateKey: 'rename',
+              takeoverUpdateKey: 'takeover',
+              message: warning,
+            },
+          ],
+        },
+      ],
+    }
+    render(
+      <CrewImportView
+        plan={preview}
+        decisions={{ ...decisions, updates: { rename, takeover } }}
+        busy={false}
+        error={null}
+        report={null}
+        onClose={vi.fn()}
+        onApply={vi.fn()}
+        onChoice={vi.fn()}
+        onUpdate={vi.fn()}
+        onIncludeLayout={vi.fn()}
+        onChooseFolder={vi.fn()}
+      />,
+    )
+    expect(screen.queryByText(warning) !== null).toBe(visible)
+  },
+)

@@ -50,7 +50,11 @@ excluded: an archived-only match creates a new conversation without unarchiving.
 Model and effort differences offer **Update to file**, checked by default,
 when the provider matches. Baton-name differences use the same checkbox and
 apply in Phase A only when selected. Kept wires waiting on a renamed baton
-show a warning while the rename is selected.
+show a warning while the rename is selected, unless another selected rename
+takes over that baton. Wire conditions use the engine’s canonical comparison,
+including case, whitespace and baton formatting. Wire and layout references
+resolve through normalized role keys. Unnamed export fallbacks use the same
+32-character baton-name law; an invalid fallback asks for a baton name before export.
 Provider and permissions are fixed at creation: choose **Bind as is** to keep
 those local values, or **Create new** to use the recipe's values in a fresh
 conversation. A bind-as-is choice can request a model/effort update only when
@@ -70,6 +74,8 @@ Phase B runs after commit, sequentially calling `SessionService.setModelSelectio
 for each requested model/effort update. Its guards decide whether the update
 lands, and its own transaction records the model-change transcript note.
 A refusal is reported as **not updated: <reason>** without rolling back Phase A.
+If that row’s baton rename already landed, the report says
+**baton updated; model not updated: <reason>**.
 The stamp means **applied at this hash**; it does not promise every requested
 model change succeeded. A refused update stays visible in the report and in
 the next plan. Reapplying an unchanged, fully reconciled file creates no

@@ -124,7 +124,10 @@ export function CrewImportView({
                         {r.warnings
                           ?.filter(
                             (warning) =>
-                              decisions.updates[warning.updateKey] !== false,
+                              decisions.updates[warning.updateKey] !== false &&
+                              (!warning.takeoverUpdateKey ||
+                                decisions.updates[warning.takeoverUpdateKey] ===
+                                  false),
                           )
                           .map((warning) => (
                             <p

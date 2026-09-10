@@ -672,3 +672,45 @@ it('refuses normalized role-key collisions (mutation: allow duplicate normalized
     reason: 'roles["Fable"]: duplicate baton name fable',
   })
 })
+
+it.each(['a'.repeat(50), '', '**Horse**'])(
+  'refuses an unnameable unnamed export: %s (mutation: skip roleKey normalizer)',
+  (name) => {
+    expect(() =>
+      crewToConfig(
+        crew,
+        [{ ...member, batonName: null }],
+        [{ ...session, name }],
+        [project],
+        [],
+      ),
+    ).toThrow('A conversation needs a baton name before export')
+  },
+)
+it('imports its own 20-character unnamed export (mutation: emit an over-length fallback)', () => {
+  const exported = crewToConfig(
+    crew,
+    [{ ...member, batonName: null }],
+    [{ ...session, name: 'a'.repeat(20) }],
+    [project],
+    [],
+  )
+  expect(readCrewConfig(renderCrewYaml(exported))).toEqual({
+    ok: true,
+    config: exported,
+  })
+})
+it('imports its own live crew export with layout (mutation: skip a required exported field)', () => {
+  const exported = crewToConfig(
+    liveCrew,
+    liveMembers,
+    liveSessions,
+    liveProjects,
+    liveRelays,
+    { includePositions: true },
+  )
+  expect(readCrewConfig(renderCrewYaml(exported))).toEqual({
+    ok: true,
+    config: exported,
+  })
+})

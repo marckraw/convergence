@@ -467,3 +467,83 @@ it('binds across providers without attempting a model update (mutation: offer an
     model: sessions.getById(fable.id)!.model,
   }).toEqual({ calls: [], outcome: 'bound', provider: 'codex', model: null })
 })
+
+it('keeps one relay across canonical condition variants (mutation: compare existing condition raw)', async () => {
+  await service.apply(path, decisions(await service.plan(path)))
+  getDatabase()
+    .prepare("UPDATE session_relays SET condition_token='BATON: Horse'")
+    .run()
+  const plan = await service.plan(path)
+  const report = await service.apply(path, decisions(plan))
+  expect({
+    state: plan.wires[0]!.state,
+    relays: relays.list().length,
+    nothing: report.nothingToChange,
+  }).toEqual({ state: 'existing', relays: 1, nothing: true })
+})
+
+it('applies normalized wire and layout references idempotently (mutation: use raw reference lookup)', async () => {
+  config.roles.Horse = config.roles.horse!
+  config.roles.Fable = config.roles.fable!
+  delete config.roles.horse
+  delete config.roles.fable
+  config.layout = { '  HORSE  ': [17, 29] }
+  config.wires[0]!.from = '  FaBle  '
+  config.wires[0]!.to = 'hOrSe'
+  await save()
+  const plan = await service.plan(path)
+  expect(plan.canApply).toBe(true)
+  const result = await service.apply(path, decisions(plan))
+  const horse = sessions.getAll().find((s) => s.name === 'Horse')!
+  const fable = sessions.getAll().find((s) => s.name === 'Fable')!
+  const next = await service.plan(path)
+  expect({
+    member: crews
+      .getById(result.crewId)!
+      .members.find((m) => m.sessionId === horse.id),
+    wire: relays.list().map((r) => [r.sourceSessionId, r.targetSessionId]),
+    nothing: (await service.apply(path, decisions(next))).nothingToChange,
+  }).toEqual({
+    member: {
+      sessionId: horse.id,
+      batonName: 'horse',
+      canvasX: 17,
+      canvasY: 29,
+    },
+    wire: [[fable.id, horse.id]],
+    nothing: true,
+  })
+})
+
+it('reports an applied baton rename beside a refused model update (mutation: report plain not updated)', async () => {
+  const first = await service.apply(path, decisions(await service.plan(path)))
+  const fable = sessions.getAll().find((s) => s.name === 'Fable')!
+  config.roles.mastermind = { ...config.roles.fable!, model: 'new-model' }
+  delete config.roles.fable
+  config.wires[0]!.from = 'mastermind'
+  getDatabase()
+    .prepare("UPDATE sessions SET status='running' WHERE id=?")
+    .run(fable.id)
+  await save()
+  const plan = await service.plan(path)
+  const report = await service.apply(path, decisions(plan))
+  expect({
+    entry: report.entries.find((e) => e.key === 'role:mastermind'),
+    baton: crews
+      .getById(first.crewId)!
+      .members.find((m) => m.sessionId === fable.id)!.batonName,
+    model: sessions.getById(fable.id)!.model,
+    next: (await service.plan(path)).roles.find((r) => r.role === 'mastermind')!
+      .differences,
+  }).toEqual({
+    entry: {
+      key: 'role:mastermind',
+      label: 'Fable',
+      outcome: 'baton updated; model not updated',
+      reason: expect.stringMatching(/running|turn|idle/i),
+    },
+    baton: 'mastermind',
+    model: null,
+    next: ['model'],
+  })
+})

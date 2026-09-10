@@ -17,7 +17,11 @@ export interface CrewImportRow {
   detail: string
   differences: string[]
   canUpdate: boolean
-  warnings?: { updateKey: string; message: string }[]
+  warnings?: {
+    updateKey: string
+    takeoverUpdateKey?: string
+    message: string
+  }[]
   choiceKey?: string
   options: { value: string; label: string }[]
 }
@@ -54,7 +58,13 @@ export interface CrewImportReport {
   entries: {
     key: string
     label: string
-    outcome: 'created' | 'bound' | 'updated' | 'not updated' | 'kept'
+    outcome:
+      | 'created'
+      | 'bound'
+      | 'updated'
+      | 'not updated'
+      | 'baton updated; model not updated'
+      | 'kept'
     reason?: string
   }[]
   nothingToChange: boolean

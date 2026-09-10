@@ -161,18 +161,18 @@ export function crewToConfig(
     return roleKey(member)
   }
   function roleKey(member: SessionCrewMember): string {
+    if (member.batonName) return member.batonName
     const name =
       member.batonName ??
       sessions.find((s) => s.id === member.sessionId)?.name ??
       ''
-    const key =
-      member.batonName ??
-      name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '')
-    if (!key) throw new Error('A conversation needs a name before export')
-    return key
+    try {
+      const key = normalizeCrewBatonName(name)
+      if (key) return key
+    } catch {
+      // Export uses the same name law as the record and the import reader.
+    }
+    throw new Error('A conversation needs a baton name before export')
   }
 }
 function compare(a: string, b: string): number {

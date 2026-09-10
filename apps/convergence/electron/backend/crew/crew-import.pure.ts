@@ -6,7 +6,11 @@ import type {
   CrewConfigWire,
 } from './crew-config.types'
 import type { CrewImportWorld, CrewImportPlan } from './crew-import.types'
-import { resolveRoundCap } from '../relay/relay.pure'
+import {
+  resolveRoundCap,
+  sameCondition,
+  batonConditionToken,
+} from '../relay/relay.pure'
 import { resolveStallMinutes } from '../relay/crew-hail.pure'
 import type {
   CrewImportRow,
@@ -107,8 +111,7 @@ export function planCrewImport(
       )
       const canUpdate =
         differences.includes('batonName') ||
-        (spec.provider === bound.providerId &&
-          differences.some((f) => f === 'model' || f === 'effort'))
+        modelUpdateOffered(spec, bound, differences)
       if (immutable.length && !selected)
         return {
           ...base,
@@ -193,9 +196,16 @@ export function planCrewImport(
       relayId: null,
       spawnProjectId: null,
     }
-    const source = roles.find((r) => r.role === wire.from)
+    const source = roles.find(
+      (r) =>
+        normalizeCrewBatonName(r.role) === normalizedRoleReference(wire.from),
+    )
+    const targetReference =
+      typeof wire.to === 'string' ? normalizedRoleReference(wire.to) : null
     const target =
-      typeof wire.to === 'string' ? roles.find((r) => r.role === wire.to) : null
+      typeof wire.to === 'string'
+        ? roles.find((r) => normalizeCrewBatonName(r.role) === targetReference)
+        : null
     if (!source || (typeof wire.to === 'string' && !target))
       return {
         ...base,
@@ -204,7 +214,13 @@ export function planCrewImport(
       }
     if (
       config.wires.some(
-        (other, i) => i < index && wireKey(other) === wireKey(wire),
+        (other, i) =>
+          i < index &&
+          wireKey(other) === wireKey(wire) &&
+          sameCondition(
+            crewImportRelayFields(other, null).conditionToken,
+            crewImportRelayFields(wire, null).conditionToken,
+          ),
       )
     )
       return {
@@ -234,7 +250,10 @@ export function planCrewImport(
           (r) =>
             r.crewId === crew.id &&
             r.sourceSessionId === source.sessionId &&
-            (r.conditionToken ?? 'settled') === wire.when &&
+            sameCondition(
+              r.conditionToken,
+              crewImportRelayFields(wire, null).conditionToken,
+            ) &&
             (typeof wire.to === 'string'
               ? r.action === 'hail' && r.targetSessionId === target?.sessionId
               : r.action === 'spawn' &&
@@ -328,9 +347,14 @@ export function planCrewImport(
                 return (
                   oldName &&
                   role.differences.includes('batonName') &&
-                  r.conditionToken === `BATON: ${oldName}` &&
+                  sameCondition(
+                    r.conditionToken,
+                    batonConditionToken(oldName),
+                  ) &&
                   !roles.some(
-                    (next) => normalizeCrewBatonName(next.role) === oldName,
+                    (next) =>
+                      normalizeCrewBatonName(next.role) === oldName &&
+                      !next.differences.includes('batonName'),
                   ) &&
                   !crew.members.some(
                     (m) =>
@@ -349,8 +373,12 @@ export function planCrewImport(
                   world.sessions.find((s) => s.id === r.sourceSessionId)
                     ?.name ??
                   r.sourceSessionId
+                const takeover = roles.find(
+                  (next) => normalizeCrewBatonName(next.role) === oldName,
+                )
                 return {
                   updateKey: role.key,
+                  ...(takeover ? { takeoverUpdateKey: takeover.key } : {}),
                   message: `wire ${source} → ${oldName} waits on a baton no member will carry`,
                 }
               }),
@@ -519,10 +547,30 @@ export function crewImportRelayFields(
 }
 function wireKey(wire: CrewConfigWire): string {
   return JSON.stringify([
-    wire.from,
+    normalizedRoleReference(wire.from),
     typeof wire.to === 'string'
-      ? ['role', wire.to]
+      ? ['role', normalizedRoleReference(wire.to)]
       : ['spawn', wire.to.spawn.name],
-    wire.when,
   ])
+}
+
+/** Invalid references remain unresolved; valid ones use the record's name law. */
+export function normalizedRoleReference(reference: string): string | null {
+  try {
+    return normalizeCrewBatonName(reference)
+  } catch {
+    return null
+  }
+}
+
+/** The preview and Phase B offer exactly the same model/effort operation. */
+export function modelUpdateOffered(
+  spec: CrewConfigRole,
+  bound: CrewImportWorld['sessions'][number],
+  differences: string[],
+): boolean {
+  return (
+    spec.provider === bound.providerId &&
+    differences.some((field) => field === 'model' || field === 'effort')
+  )
 }

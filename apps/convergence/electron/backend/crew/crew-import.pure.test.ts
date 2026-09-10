@@ -508,3 +508,98 @@ it('keeps candidate context when two roles resolve to the same conversation (mut
     ),
   ])
 })
+
+it.each(['BATON: Horse Opus', '**BATON: horse opus**'])(
+  'matches stored condition %s canonically (mutation: compare existing condition raw)',
+  (token) => {
+    const copy = structuredClone(world)
+    copy.relays[0]!.conditionToken = token
+    expect(
+      planCrewImport(
+        {
+          ...config,
+          wires: config.wires.filter((w) => w.when === 'BATON: horse opus'),
+        },
+        copy,
+      ).wires[0],
+    ).toMatchObject({ state: 'existing', relayId: copy.relays[0]!.id })
+  },
+)
+it('warns about a formatted kept baton condition (mutation: compare warning condition raw)', () => {
+  const copy = structuredClone(world)
+  copy.relays = [
+    {
+      ...copy.relays[0]!,
+      sourceSessionId: 'session-1',
+      targetSessionId: 'session-0',
+      conditionToken: '**BATON: fable**',
+    },
+  ]
+  const plan = planCrewImport(
+    { ...one, roles: { mastermind: one.roles.fable! } },
+    copy,
+  )
+  expect(plan.kept.find((r) => r.key.startsWith('relay:'))?.warnings).toEqual([
+    {
+      updateKey: 'role:mastermind',
+      message: 'wire horse opus → fable waits on a baton no member will carry',
+    },
+  ])
+})
+it('refuses two recipe wires with canonically equal conditions (mutation: compare recipe conditions raw)', () => {
+  const wire = config.wires.find((w) => w.when === 'BATON: horse opus')!
+  const plan = planCrewImport(
+    { ...config, wires: [wire, { ...wire, when: '**BATON: Horse Opus**' }] },
+    world,
+  )
+  expect(plan.wires[1]).toMatchObject({
+    state: 'choose',
+    detail: 'Duplicate wire key in the file; edit the recipe.',
+  })
+})
+
+it('resolves wire references through normalized role keys (mutation: compare raw role references)', () => {
+  const recipe = {
+    ...config,
+    roles: {
+      'Horse Opus': config.roles['horse opus']!,
+      Fable: config.roles.fable!,
+    },
+    wires: [
+      {
+        from: 'horse opus',
+        to: 'fable',
+        when: 'settled',
+        opener: 'keep' as const,
+      },
+    ],
+  }
+  expect(planCrewImport(recipe, world).wires[0]).toMatchObject({
+    state: 'existing',
+    relayId: 'wire-1',
+  })
+})
+
+it('carries the takeover rename decision with the kept-wire warning (mutation: suppress every takeover warning)', () => {
+  const copy = structuredClone(world)
+  copy.relays = [
+    {
+      ...copy.relays[0]!,
+      sourceSessionId: 'session-1',
+      targetSessionId: 'session-0',
+      conditionToken: '**BATON: fable**',
+    },
+  ]
+  const recipe = {
+    ...one,
+    roles: { mastermind: one.roles.fable!, fable: config.roles['horse opus']! },
+  }
+  const plan = planCrewImport(recipe, copy)
+  expect(plan.kept.find((r) => r.key.startsWith('relay:'))?.warnings).toEqual([
+    {
+      updateKey: 'role:mastermind',
+      takeoverUpdateKey: 'role:fable',
+      message: 'wire horse opus → fable waits on a baton no member will carry',
+    },
+  ])
+})
