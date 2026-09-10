@@ -102,3 +102,62 @@ it.each([
     expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled()
   },
 )
+
+it('renders a baton rename and its selected kept-wire warning (mutation: omit warning rendering)', () => {
+  const renamed = {
+    ...plan,
+    roles: [
+      {
+        ...plan.roles[0]!,
+        detail: 'differs: baton name (fable → mastermind)',
+        differences: ['batonName'],
+      },
+    ],
+    kept: [
+      {
+        ...row('kept wire', 'kept'),
+        warnings: [
+          {
+            updateKey: 'horse',
+            message: 'wire horse → fable waits on a baton no member will carry',
+          },
+        ],
+      },
+    ],
+  }
+  const props = {
+    plan: renamed,
+    decisions,
+    busy: false,
+    error: null,
+    report: null,
+    onClose: vi.fn(),
+    onApply: vi.fn(),
+    onChoice: vi.fn(),
+    onUpdate: vi.fn(),
+    onIncludeLayout: vi.fn(),
+    onChooseFolder: vi.fn(),
+  }
+  const { rerender } = render(<CrewImportView {...props} />)
+  expect({
+    rename: screen.getByText('differs: baton name (fable → mastermind)')
+      .textContent,
+    warning: screen.queryByText(
+      'wire horse → fable waits on a baton no member will carry',
+    )?.textContent,
+  }).toEqual({
+    rename: 'differs: baton name (fable → mastermind)',
+    warning: 'wire horse → fable waits on a baton no member will carry',
+  })
+  rerender(
+    <CrewImportView
+      {...props}
+      decisions={{ ...decisions, updates: { horse: false } }}
+    />,
+  )
+  expect(
+    screen.queryByText(
+      'wire horse → fable waits on a baton no member will carry',
+    ),
+  ).not.toBeInTheDocument()
+})

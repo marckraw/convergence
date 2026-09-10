@@ -17,6 +17,7 @@ const world: CrewImportWorld = {
     ...s,
     contextKind: 'project',
     lastActivity: null,
+    archivedAt: null,
   })),
   projects: liveProjects,
   endpointIds: [],
@@ -225,7 +226,12 @@ it('requires an immutable-field choice and updates the model only when binding a
       create.roles[0]!.canUpdate,
     ],
   }).toEqual({
-    options: ['Bind as is', 'Create new'],
+    options: [
+      expect.stringContaining(
+        'Bind as is · claude-code · other · {"preset":"ask"}',
+      ),
+      'Create new',
+    ],
     bind: ['differs', copy.sessions[0]!.id, true],
     create: ['create', null, false],
   })
@@ -353,4 +359,152 @@ it('refuses a spawn first-message opener the relay service cannot store (mutatio
       'wires[0].opener: spawn wires start fresh and cannot store an opener; use keep.',
     canApply: false,
   })
+})
+
+it.each([false, true])(
+  'excludes archived candidates, live match present: %s (mutation: include archived rows)',
+  (withLive) => {
+    const archived = {
+      ...world.sessions[0]!,
+      archivedAt: '2026-09-10',
+      id: 'archived',
+    }
+    const plan = planCrewImport(one, {
+      ...world,
+      sessions: [archived, ...(withLive ? [world.sessions[0]!] : [])],
+    })
+    expect({
+      state: plan.roles[0]!.state,
+      id: plan.roles[0]!.sessionId,
+      detail: plan.roles[0]!.detail,
+    }).toEqual(
+      withLive
+        ? { state: 'bound', id: world.sessions[0]!.id, detail: 'bound' }
+        : {
+            state: 'create',
+            id: null,
+            detail:
+              'an archived conversation of this name exists; import does not unarchive',
+          },
+    )
+  },
+)
+
+it('plans a baton rename and warns about a kept wire (mutation: omit baton difference)', () => {
+  const copy = structuredClone(world)
+  copy.relays = [
+    {
+      ...copy.relays[0]!,
+      sourceSessionId: 'session-1',
+      targetSessionId: 'session-0',
+      conditionToken: 'BATON: fable',
+    },
+  ]
+  const plan = planCrewImport(
+    { ...one, roles: { mastermind: one.roles.fable! } },
+    copy,
+  )
+  expect({
+    row: plan.roles[0],
+    warning: plan.kept.find((r) => r.key.startsWith('relay:'))?.warnings,
+  }).toMatchObject({
+    row: {
+      state: 'differs',
+      differences: ['batonName'],
+      canUpdate: true,
+      detail: 'differs: baton name (fable → mastermind)',
+    },
+    warning: [
+      {
+        updateKey: 'role:mastermind',
+        message:
+          'wire horse opus → fable waits on a baton no member will carry',
+      },
+    ],
+  })
+})
+
+it('compares normalized role keys to persisted batons (mutation: compare raw role key)', () => {
+  const plan = planCrewImport(
+    { ...one, roles: { Fable: one.roles.fable! } },
+    world,
+  )
+  expect(plan.roles[0]).toMatchObject({
+    state: 'bound',
+    differences: [],
+    canUpdate: false,
+    sessionId: world.sessions[0]!.id,
+  })
+})
+
+it('offers no model update across providers when binding as is (mutation: ignore provider equality)', () => {
+  const copy = structuredClone(world)
+  copy.sessions[0]!.providerId = 'codex'
+  copy.sessions[0]!.model = 'local-model'
+  const plan = planCrewImport(one, copy, { 'role:fable': copy.sessions[0]!.id })
+  expect(plan.roles[0]).toMatchObject({
+    state: 'bound',
+    canUpdate: false,
+    differences: ['provider', 'model'],
+  })
+})
+it('normalizes a Git origin reference from the file (mutation: compare raw project reference)', () => {
+  const plan = planCrewImport(
+    {
+      ...one,
+      roles: {
+        fable: {
+          ...one.roles.fable!,
+          project: 'git@github.com:marckraw/convergence.git',
+        },
+      },
+    },
+    world,
+  )
+  expect(plan.roles[0]).toMatchObject({
+    state: 'bound',
+    projectId: 'root-id',
+    sessionId: 'session-0',
+  })
+})
+it('labels ambiguous candidates with provider, model and permissions (mutation: omit candidate context)', () => {
+  const copy = structuredClone(world)
+  copy.sessions.push({
+    ...copy.sessions[0]!,
+    id: 'second',
+    providerId: 'codex',
+    model: 'gpt-6-astra',
+    permissionConfig: { preset: 'ask' },
+  })
+  const options = planCrewImport(one, copy).roles[0]!.options
+  expect(options.filter((o) => o.value !== 'new').map((o) => o.label)).toEqual([
+    expect.stringContaining(
+      'claude-code · claude-fable-5-1 · {"preset":"yolo"}',
+    ),
+    expect.stringContaining('codex · gpt-6-astra · {"preset":"ask"}'),
+  ])
+})
+it('never binds a lane conversation to a root role (mutation: accept laneOf === projectId)', () => {
+  const copy = structuredClone(world)
+  copy.sessions = [{ ...copy.sessions[0]!, projectId: 'lane-id' }]
+  expect(planCrewImport(one, copy).roles[0]).toMatchObject({
+    state: 'create',
+    sessionId: null,
+    projectId: 'root-id',
+  })
+})
+
+it('keeps candidate context when two roles resolve to the same conversation (mutation: omit duplicate-binding context)', () => {
+  const plan = planCrewImport(
+    { ...one, roles: { fable: one.roles.fable!, duplicate: one.roles.fable! } },
+    world,
+  )
+  expect(plan.roles.map((r) => r.options[0]!.label)).toEqual([
+    expect.stringContaining(
+      'claude-code · claude-fable-5-1 · {"preset":"yolo"}',
+    ),
+    expect.stringContaining(
+      'claude-code · claude-fable-5-1 · {"preset":"yolo"}',
+    ),
+  ])
 })

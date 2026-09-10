@@ -121,6 +121,19 @@ export function CrewImportView({
                       </td>
                       <td className="max-w-72 break-words px-2 py-3 text-muted-foreground">
                         {r.detail}
+                        {r.warnings
+                          ?.filter(
+                            (warning) =>
+                              decisions.updates[warning.updateKey] !== false,
+                          )
+                          .map((warning) => (
+                            <p
+                              className="mt-1 text-warning"
+                              key={warning.updateKey}
+                            >
+                              {warning.message}
+                            </p>
+                          ))}
                       </td>
                       <td className="px-2 py-3">
                         {r.state === 'choose' && r.options.length > 0 && (

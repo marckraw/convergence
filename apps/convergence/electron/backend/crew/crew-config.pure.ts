@@ -1,3 +1,4 @@
+import { normalizeCrewBatonName } from './crew.pure'
 import { parse } from 'yaml'
 import { normalizeOriginKey } from '@mrck-labs/execution-host-protocol'
 import { resolveRoundCap } from '../relay/relay.pure'
@@ -246,10 +247,29 @@ export function readCrewConfig(
       reason: `document: ${error instanceof Error ? error.message : 'invalid YAML'}`,
     }
   }
-  const reason = validateRecipe(value, '')
+  const reason =
+    validateRecipe(value, '') ?? validateRoleKeys((value as CrewConfig).roles)
   return reason
     ? { ok: false, reason }
     : { ok: true, config: value as CrewConfig }
+}
+
+// JSON Schema checks structure; the record's normalizer owns baton semantics.
+function validateRoleKeys(roles: CrewConfig['roles']): string | null {
+  const names = new Set<string>()
+  for (const key of Object.keys(roles)) {
+    const path = `roles[${JSON.stringify(key)}]`
+    try {
+      const name = normalizeCrewBatonName(key)
+      if (!name) return `${path}: a baton name must not be empty`
+      if (names.has(name)) return `${path}: duplicate baton name ${name}`
+      names.add(name)
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      return `${path}: ${reason.charAt(0).toLowerCase()}${reason.slice(1)}`
+    }
+  }
+  return null
 }
 
 type Check = (value: unknown, path: string) => string | null

@@ -647,3 +647,28 @@ it.each(['custom permissions', 'spawn and layout', 'empty crew'])(
     }).toEqual({ schemaValid: true, result: { ok: true, config } })
   },
 )
+
+it.each([
+  ['a:b', 'a baton name cannot contain a colon'],
+  ['   ', 'a baton name must not be empty'],
+  ['***', 'a baton name cannot start or end with a formatting mark'],
+])(
+  'rejects invalid role key %s before apply (mutation: omit baton-name validation)',
+  (key, reason) => {
+    const config = parseCrewYaml(liveCrewYaml)
+    config.roles = { [key]: config.roles.fable! }
+    config.wires = []
+    expect(readCrewConfig(JSON.stringify(config))).toEqual({
+      ok: false,
+      reason: `roles[${JSON.stringify(key)}]: ${reason}`,
+    })
+  },
+)
+it('refuses normalized role-key collisions (mutation: allow duplicate normalized keys)', () => {
+  const config = parseCrewYaml(liveCrewYaml)
+  config.roles.Fable = config.roles.fable!
+  expect(readCrewConfig(JSON.stringify(config))).toEqual({
+    ok: false,
+    reason: 'roles["Fable"]: duplicate baton name fable',
+  })
+})

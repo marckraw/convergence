@@ -17,6 +17,7 @@ export interface CrewImportRow {
   detail: string
   differences: string[]
   canUpdate: boolean
+  warnings?: { updateKey: string; message: string }[]
   choiceKey?: string
   options: { value: string; label: string }[]
 }

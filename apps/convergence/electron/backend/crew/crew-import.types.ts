@@ -4,6 +4,7 @@ import type { SessionRelay } from '../relay/relay.types'
 export interface CrewImportWorld {
   sessions: (CrewConfigSession & {
     contextKind: 'project' | 'global'
+    archivedAt: string | null
     lastActivity: string | null
   })[]
   projects: CrewConfigProject[]

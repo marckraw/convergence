@@ -2,7 +2,7 @@ import { useRef, useState, type ReactNode } from 'react'
 import { useSessionStore } from '@/entities/session'
 import { sessionCrewApi, useSessionCrewStore } from '@/entities/session-crew'
 import { useSessionRelayStore } from '@/entities/session-relay'
-import { useProjectStore } from '@/entities/project'
+import { useProjectStore, projectApi, dialogApi } from '@/entities/project'
 import type {
   CrewImportPlan,
   CrewImportDecisions,
@@ -105,12 +105,11 @@ export function CrewImport({
           }
           onChooseFolder={() =>
             void run(async () => {
-              const project = await useProjectStore.getState().createProject()
-              if (project) await replan(plan.path, decisions.choices)
-              else {
-                const reason = useProjectStore.getState().error
-                if (reason) throw new Error(reason)
-              }
+              const repositoryPath = await dialogApi.selectDirectory()
+              if (!repositoryPath) return
+              await projectApi.create({ repositoryPath })
+              await useProjectStore.getState().loadProjects()
+              await replan(plan.path, decisions.choices)
             })
           }
           onApply={() =>
@@ -124,6 +123,18 @@ export function CrewImport({
                 useSessionCrewStore.getState().load(),
                 useSessionRelayStore.getState().load(),
                 useSessionStore.getState().loadGlobalSessions(),
+                useSessionStore
+                  .getState()
+                  .refreshSessions([
+                    ...new Set(
+                      plan.roles.flatMap((role) =>
+                        role.projectId === null ? [] : [role.projectId],
+                      ),
+                    ),
+                  ]),
+                ...(plan.roles.some((role) => role.projectId === null)
+                  ? [useSessionStore.getState().loadGlobalChatSessions()]
+                  : []),
               ])
             })
           }

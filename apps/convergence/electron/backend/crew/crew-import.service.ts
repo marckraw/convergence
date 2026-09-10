@@ -1,3 +1,4 @@
+import { normalizeCrewBatonName } from './crew.pure'
 import type Database from 'better-sqlite3'
 import { readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
@@ -82,16 +83,18 @@ export class CrewImportService {
     for (const role of plan.roles) {
       if (
         !role.sessionId ||
-        !role.canUpdate ||
+        !role.differences.some((f) => f === 'model' || f === 'effort') ||
         decisions.updates[role.key] === false
       )
         continue
       const spec = config.roles[role.role]!
+      const bound = world.sessions.find((s) => s.id === role.sessionId)!
+      if (spec.provider !== bound.providerId) continue
       const entry = report.entries.find((e) => e.key === role.key)!
       report.nothingToChange = false
       try {
         await this.sessions.setModelSelection(role.sessionId, {
-          providerId: spec.provider,
+          providerId: bound.providerId,
           model: spec.model,
           effort: spec.effort,
         })
@@ -182,12 +185,17 @@ export class CrewImportService {
     for (const role of plan.roles) {
       const id = ids.get(role.role)!
       const member = crew.members.find((m) => m.sessionId === id)
+      const batonName = normalizeCrewBatonName(role.role)!
       if (!member) {
         this.crews.addMember(crew.id, id)
         changed = true
       }
-      if (member?.batonName !== role.role) {
-        this.crews.setMemberBatonName(crew.id, id, role.role)
+      if (
+        member?.batonName !== batonName &&
+        (!member || decisions.updates[role.key] !== false)
+      ) {
+        this.crews.setMemberBatonName(crew.id, id, batonName)
+        if (member) entries.find((e) => e.key === role.key)!.outcome = 'updated'
         changed = true
       }
       const position = config.layout?.[role.role]
@@ -317,7 +325,7 @@ export class CrewImportService {
     }))
     const sessions = this.db
       .prepare(
-        'SELECT id,name,provider_id AS providerId,model,effort,permission_config AS permissionConfig,project_id AS projectId,execution_host AS executionHost,context_kind AS contextKind,updated_at AS lastActivity FROM sessions ORDER BY id',
+        'SELECT id,name,provider_id AS providerId,model,effort,permission_config AS permissionConfig,project_id AS projectId,execution_host AS executionHost,context_kind AS contextKind,updated_at AS lastActivity,archived_at AS archivedAt FROM sessions ORDER BY id',
       )
       .all() as (Omit<
       CrewImportWorld['sessions'][number],

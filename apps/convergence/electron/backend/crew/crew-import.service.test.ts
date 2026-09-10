@@ -372,3 +372,98 @@ it('lets live activity reach the model guard without invalidating bindings (muta
     outcome: report.entries.find((e) => e.key === 'role:horse')!.outcome,
   }).toEqual({ counts: [2, 1, 2, 1], outcome: 'not updated' })
 })
+
+it('reads archive state before planning and rejects a newly archived binding (mutation: omit archived_at projection)', async () => {
+  const first = await service.apply(path, decisions(await service.plan(path)))
+  const horse = sessions.getAll().find((s) => s.name === 'Horse')!
+  const beforeArchive = await service.plan(path)
+  getDatabase()
+    .prepare('UPDATE sessions SET archived_at=? WHERE id=?')
+    .run('2026-09-10', horse.id)
+  await expect(service.apply(path, decisions(beforeArchive))).rejects.toThrow(
+    /changed.*plan/,
+  )
+  const plan = await service.plan(path)
+  expect(plan.roles.find((r) => r.role === 'horse')).toMatchObject({
+    state: 'create',
+    sessionId: null,
+    detail:
+      'an archived conversation of this name exists; import does not unarchive',
+  })
+  expect(crews.getById(first.crewId)!.sessionIds).toContain(horse.id)
+})
+
+it.each([false, true])(
+  'applies baton rename only when checked: %s (mutation: rename unconditionally)',
+  async (update) => {
+    const first = await service.apply(path, decisions(await service.plan(path)))
+    const fable = sessions.getAll().find((s) => s.name === 'Fable')!
+    config.roles.mastermind = config.roles.fable!
+    delete config.roles.fable
+    config.wires = []
+    await save()
+    const modelUpdate = vi.spyOn(sessions, 'setModelSelection')
+    const plan = await service.plan(path)
+    const report = await service.apply(path, {
+      ...decisions(plan),
+      updates: { 'role:mastermind': update },
+    })
+    expect({
+      baton: crews
+        .getById(first.crewId)!
+        .members.find((m) => m.sessionId === fable.id)!.batonName,
+      outcome: report.entries.find((e) => e.key === 'role:mastermind')!.outcome,
+      modelCalls: modelUpdate.mock.calls.length,
+      next: (await service.plan(path)).roles.find(
+        (r) => r.role === 'mastermind',
+      )!.state,
+    }).toEqual({
+      baton: update ? 'mastermind' : 'fable',
+      outcome: update ? 'updated' : 'kept',
+      modelCalls: 0,
+      next: update ? 'bound' : 'differs',
+    })
+  },
+)
+
+it('keeps a mixed-case recipe idempotent after the first apply (mutation: compare raw role key)', async () => {
+  config.roles.Fable = config.roles.fable!
+  delete config.roles.fable
+  config.wires[0]!.from = 'Fable'
+  await save()
+  const first = await service.apply(path, decisions(await service.plan(path)))
+  const next = await service.plan(path)
+  const again = await service.apply(path, decisions(next))
+  expect({
+    batons: crews
+      .getById(first.crewId)!
+      .members.map((m) => m.batonName)
+      .sort(),
+    states: next.roles.map((r) => r.state),
+    nothing: again.nothingToChange,
+    counts: counts(),
+  }).toEqual({
+    batons: ['fable', 'horse'],
+    states: ['bound', 'bound'],
+    nothing: true,
+    counts: [2, 1, 2, 1],
+  })
+})
+
+it('binds across providers without attempting a model update (mutation: offer an impossible provider update)', async () => {
+  await service.apply(path, decisions(await service.plan(path)))
+  const fable = sessions.getAll().find((s) => s.name === 'Fable')!
+  config.roles.fable!.provider = 'claude-code'
+  config.roles.fable!.model = 'file-model'
+  await save()
+  const choices = { 'role:fable': fable.id }
+  const plan = await service.plan(path, choices)
+  const update = vi.spyOn(sessions, 'setModelSelection')
+  const report = await service.apply(path, { ...decisions(plan), choices })
+  expect({
+    calls: update.mock.calls,
+    outcome: report.entries.find((e) => e.key === 'role:fable')!.outcome,
+    provider: sessions.getById(fable.id)!.providerId,
+    model: sessions.getById(fable.id)!.model,
+  }).toEqual({ calls: [], outcome: 'bound', provider: 'codex', model: null })
+})

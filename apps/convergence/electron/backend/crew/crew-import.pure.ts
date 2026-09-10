@@ -1,3 +1,4 @@
+import { normalizeCrewBatonName } from './crew.pure'
 import { normalizeOriginKey } from '@mrck-labs/execution-host-protocol'
 import type {
   CrewConfig,
@@ -29,6 +30,7 @@ export function planCrewImport(
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([role, spec]): CrewImportRoleRow => {
       const key = `role:${role}`
+      const batonName = normalizeCrewBatonName(role)!
       const project = resolveProject(
         spec.project,
         spec.lane,
@@ -49,16 +51,17 @@ export function planCrewImport(
           state: 'missing-endpoint',
           detail: `missing endpoint ${spec.host}; configure it in Settings → execution hosts`,
         }
-      const candidates = world.sessions.filter(
+      const matches = world.sessions.filter(
         (s) =>
           s.name.trim() === spec.conversation.trim() &&
           s.projectId === project.projectId &&
           s.executionHost === spec.host &&
           (project.projectId !== null || s.contextKind === 'global'),
       )
+      const candidates = matches.filter((s) => s.archivedAt === null)
       const options = candidates.map((s) => ({
         value: s.id,
-        label: `${s.name} · ${s.id} · ${world.crews.some((c) => c.sessionIds.includes(s.id)) ? 'in a crew' : 'not in a crew'} · ${s.lastActivity ?? 'no activity'}`,
+        label: `${s.name} · ${candidateContext(s)} · ${s.id} · ${world.crews.some((c) => c.sessionIds.includes(s.id)) ? 'in a crew' : 'not in a crew'} · ${s.lastActivity ?? 'no activity'}`,
       }))
       if (spec.host === 'local')
         options.push({ value: 'new', label: 'Create new' })
@@ -69,7 +72,10 @@ export function planCrewImport(
           state: spec.host === 'local' ? 'create' : 'remote-create-unsupported',
           detail:
             spec.host === 'local'
-              ? 'will create'
+              ? matches.some((s) => s.archivedAt !== null) &&
+                candidates.length === 0
+                ? 'an archived conversation of this name exists; import does not unarchive'
+                : 'will create'
               : 'Remote conversations can be bound, but cannot be created by import yet.',
         }
       const bound = selected
@@ -85,18 +91,35 @@ export function planCrewImport(
           options,
         }
       const differences = roleDifferences(spec, bound)
+      const member = crew?.members.find((m) => m.sessionId === bound.id)
+      if (member && member.batonName !== batonName)
+        differences.push('batonName')
+      const describeDifferences = () =>
+        differences
+          .map((field) =>
+            field === 'batonName'
+              ? `baton name (${member?.batonName ?? 'unnamed'} → ${batonName})`
+              : field,
+          )
+          .join(', ')
       const immutable = differences.filter(
         (f) => f === 'provider' || f === 'permissions',
       )
-      const canUpdate = differences.some((f) => f === 'model' || f === 'effort')
+      const canUpdate =
+        differences.includes('batonName') ||
+        (spec.provider === bound.providerId &&
+          differences.some((f) => f === 'model' || f === 'effort'))
       if (immutable.length && !selected)
         return {
           ...base,
           state: 'choose',
-          detail: `differs: ${differences.join(', ')}`,
+          detail: `differs: ${describeDifferences()}`,
           differences,
           options: [
-            { value: bound.id, label: 'Bind as is' },
+            {
+              value: bound.id,
+              label: `Bind as is · ${candidateContext(bound)}`,
+            },
             ...(spec.host === 'local'
               ? [{ value: 'new', label: 'Create new' }]
               : []),
@@ -109,7 +132,7 @@ export function planCrewImport(
         differences,
         canUpdate,
         detail: differences.length
-          ? `differs: ${differences.join(', ')}${immutable.length ? '; provider/permissions kept when binding as is' : ''}`
+          ? `differs: ${describeDifferences()}${immutable.length ? (spec.provider !== bound.providerId ? '; provider, model, effort and permissions kept when binding as is' : '; provider/permissions kept when binding as is') : ''}`
           : 'bound',
       }
     })
@@ -124,7 +147,10 @@ export function planCrewImport(
       role.detail =
         'Two roles bind the same conversation. Choose distinct conversations or create new.'
       role.options = [
-        { value: role.sessionId, label: 'Bind this conversation' },
+        {
+          value: role.sessionId,
+          label: `Bind this conversation · ${candidateContext(world.sessions.find((s) => s.id === role.sessionId)!)}`,
+        },
         ...(config.roles[role.role]!.host === 'local'
           ? [{ value: 'new', label: 'Create new' }]
           : []),
@@ -294,6 +320,40 @@ export function planCrewImport(
           .map((r) => ({
             ...row(`relay:${r.id}`, r.id, 'kept'),
             detail: 'wire not in file — kept',
+            warnings: roles
+              .filter((role) => {
+                const oldName = crew.members.find(
+                  (m) => m.sessionId === role.sessionId,
+                )?.batonName
+                return (
+                  oldName &&
+                  role.differences.includes('batonName') &&
+                  r.conditionToken === `BATON: ${oldName}` &&
+                  !roles.some(
+                    (next) => normalizeCrewBatonName(next.role) === oldName,
+                  ) &&
+                  !crew.members.some(
+                    (m) =>
+                      m.batonName === oldName &&
+                      !roles.some((next) => next.sessionId === m.sessionId),
+                  )
+                )
+              })
+              .map((role) => {
+                const oldName = crew.members.find(
+                  (m) => m.sessionId === role.sessionId,
+                )!.batonName!
+                const source =
+                  crew.members.find((m) => m.sessionId === r.sourceSessionId)
+                    ?.batonName ??
+                  world.sessions.find((s) => s.id === r.sourceSessionId)
+                    ?.name ??
+                  r.sourceSessionId
+                return {
+                  updateKey: role.key,
+                  message: `wire ${source} → ${oldName} waits on a baton no member will carry`,
+                }
+              }),
           })),
       ]
     : []
@@ -352,12 +412,13 @@ function resolveProject(
           detail: `missing lane ${lane}: global conversations have no lanes`,
         }
       : { projectId: null }
+  const normalizedReference = normalizeOriginKey(reference) ?? reference
   const roots = world.projects.filter(
     (p) =>
       !p.laneOf &&
-      (reference.includes('/')
-        ? normalizeOriginKey(p.origin) === reference
-        : p.name === reference),
+      (normalizedReference.includes('/')
+        ? normalizeOriginKey(p.origin) === normalizedReference
+        : p.name === normalizedReference),
   )
   if (!roots.length)
     return {
@@ -393,6 +454,11 @@ function resolveProject(
       detail: `missing lane ${lane} in ${reference}; create it in the project's Lanes UI`,
     }
   return { projectId: lanes[0]!.id }
+}
+function candidateContext(
+  session: CrewImportWorld['sessions'][number],
+): string {
+  return `${session.providerId} · ${session.model ?? 'default model'} · ${stable(session.permissionConfig)}`
 }
 function roleDifferences(
   spec: CrewConfigRole,

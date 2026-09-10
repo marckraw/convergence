@@ -41,11 +41,20 @@ Remote conversations can be bound, but import cannot create them in this
 version. Spawn wires require `opener: keep`, because RelayService cannot store
 an opener on a fresh conversation; an incompatible recipe stays blocked. Plan and Apply make no execution-host requests.
 
-Model and effort differences offer **Update to file**, checked by default.
+Role keys use the record's baton-name normalization (trimmed, whitespace
+collapsed, lowercase). Invalid names and duplicate normalized keys are refused
+with a role-qualified reason before planning; the schema checks structure and
+the record normalizer owns these semantic rules. Archived conversations are
+excluded: an archived-only match creates a new conversation without unarchiving.
+
+Model and effort differences offer **Update to file**, checked by default,
+when the provider matches. Baton-name differences use the same checkbox and
+apply in Phase A only when selected. Kept wires waiting on a renamed baton
+show a warning while the rename is selected.
 Provider and permissions are fixed at creation: choose **Bind as is** to keep
 those local values, or **Create new** to use the recipe's values in a fresh
-conversation. A bind-as-is choice can still request a model/effort update;
-the session service may refuse it, including for a provider mismatch.
+conversation. A bind-as-is choice can request a model/effort update only when
+the provider matches; the session service can still refuse a running conversation.
 Local members and wires absent from the recipe are kept. Layout applies only
 to listed roles when **Include layout** is checked.
 
