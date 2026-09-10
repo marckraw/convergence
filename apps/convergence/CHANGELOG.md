@@ -1,5 +1,11 @@
 # convergence
 
+## 0.53.0
+
+### Minor Changes
+
+- 066d5e9: Export a crew as YAML.
+
 ## 0.52.0
 
 ### Minor Changes
