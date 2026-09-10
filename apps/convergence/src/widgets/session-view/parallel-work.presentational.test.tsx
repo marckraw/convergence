@@ -48,7 +48,7 @@ it('R6 renders capability reasons with disabled controls — mutation enable una
   }).toEqual({ stop: true, message: true })
 })
 
-it('R7 unknown elapsed is fixed and provisional identity stays out of the title — mutation advance unknown elapsed or show provider id turns red', () => {
+it('RUN64 R2 unknown last sighting has a relative age and provisional identity stays out of the title — mutation omit relative age or show provider id turns red', () => {
   const { container } = render(
     <ParallelWorkPanel
       rows={buildParallelWork(
@@ -65,7 +65,7 @@ it('R7 unknown elapsed is fixed and provisional identity stays out of the title 
         [],
         [],
       )}
-      now={Date.parse('2026-09-10T00:00:00Z')}
+      now={Date.parse('2026-09-09T00:04:12Z')}
       onSelect={vi.fn()}
       onClose={vi.fn()}
     />,
@@ -73,16 +73,14 @@ it('R7 unknown elapsed is fixed and provisional identity stays out of the title 
   expect({
     title: Boolean(screen.queryByText('Subagent')),
     idInTitle: container.textContent?.includes('tool-provisional'),
-    fixed: Boolean(
-      screen.queryByText('Unknown · last seen 2026-09-09T00:00:12Z · 0:12'),
-    ),
+    fixed: Boolean(screen.queryByText('Unknown · last seen 4 m ago')),
   }).toEqual({ title: true, idInTitle: false, fixed: true })
 })
 
 it.each([
   'Inspect routing',
   'Explore · haiku · depth 2',
-  'Failed · 0:12',
+  'Failed · 59 m ago',
   'Last tool: Read',
   'Reported by the harness: Upstream refused the request',
 ])('R2/R7 renders %s — mutation omit that reported field turns red', (text) => {
@@ -134,7 +132,7 @@ it.each([
         onClose={vi.fn()}
       />,
     )
-    expect(screen.getByText(`${label} · 0:12`)).toBeInTheDocument()
+    expect(screen.getByText(`${label} · < 1 m ago`)).toBeInTheDocument()
   },
 )
 
@@ -257,4 +255,148 @@ it('M7 descendant scans are lazy and independent of streaming items — mutation
   } finally {
     scan.mockRestore()
   }
+})
+
+it('RUN64 R2′ task labels distinguish sighting and missing time with ISO titles — mutation use start or now for sighting turns red', () => {
+  const rows = buildParallelWork(
+    [],
+    [
+      {
+        taskId: 'seen',
+        sessionId: 's',
+        toolUseId: null,
+        taskType: null,
+        description: 'Seen command',
+        status: 'running',
+        startedAt: null,
+        endedAt: null,
+        observedAt: '2026-09-09T00:00:00Z',
+        outputFile: null,
+      },
+      {
+        taskId: 'legacy',
+        sessionId: 's',
+        toolUseId: null,
+        taskType: null,
+        description: 'Legacy command',
+        status: 'running',
+        startedAt: null,
+        endedAt: null,
+        observedAt: null,
+        outputFile: null,
+      },
+    ],
+    [],
+  )
+  render(
+    <ParallelWorkPanel
+      rows={rows}
+      now={Date.parse('2026-09-09T00:04:00Z')}
+      onSelect={vi.fn()}
+      onClose={vi.fn()}
+    />,
+  )
+  expect({
+    seen: screen.queryByText('Running · seen 4 m ago')?.getAttribute('title'),
+    legacy: screen
+      .queryByText('Running · time not reported')
+      ?.hasAttribute('title'),
+  }).toEqual({ seen: '2026-09-09T00:00:00Z', legacy: false })
+})
+
+it('RUN64 round3 bucket uses the folded seen anchor — mutation restate ended-only newest in the view turns red', () => {
+  const now = Date.parse('2026-09-09T12:00:00Z')
+  render(
+    <ParallelWorkPanel
+      rows={buildParallelWork(
+        [{ ...agent, status: 'completed', endedAt: '2026-09-09T08:00:00Z' }],
+        [
+          {
+            taskId: 'seen',
+            sessionId: 's',
+            status: 'completed',
+            description: 'Seen task',
+            startedAt: null,
+            endedAt: null,
+            observedAt: '2026-09-09T09:00:00Z',
+            toolUseId: null,
+            taskType: null,
+            outputFile: null,
+          },
+        ],
+        [],
+      )}
+      now={now}
+      onSelect={vi.fn()}
+      onClose={vi.fn()}
+    />,
+  )
+  expect(
+    screen.queryByRole('button', { name: '2 older · newest 3 h ago' })
+      ?.textContent,
+  ).toBe('2 older · newest 3 h ago')
+})
+
+it('RUN64 round3 rendered children belong to the agent on an id collision — mutation reverse view parent precedence turns red', () => {
+  const rows = buildParallelWork(
+    [
+      {
+        ...agent,
+        id: 'shared',
+        description: 'Agent parent',
+        status: 'running',
+      },
+      { ...agent, id: 'child', description: 'Child', status: 'running' },
+    ],
+    [
+      {
+        taskId: 'shared',
+        sessionId: 's',
+        status: 'running',
+        description: 'Task parent',
+        startedAt: null,
+        endedAt: null,
+        observedAt: null,
+        toolUseId: null,
+        taskType: null,
+        outputFile: null,
+      },
+    ],
+    [],
+  )
+  rows.find((row) => row.id === 'child')!.parentId = 'shared'
+  render(
+    <ParallelWorkPanel
+      rows={rows}
+      now={0}
+      onSelect={vi.fn()}
+      onClose={vi.fn()}
+    />,
+  )
+  expect({
+    agentParent: Boolean(
+      screen.queryByRole('button', { name: 'Collapse Agent parent' }),
+    ),
+    taskParent: Boolean(
+      screen.queryByRole('button', { name: 'Collapse Task parent' }),
+    ),
+  }).toEqual({ agentParent: true, taskParent: false })
+})
+
+it('RUN64 round3 computes one time per rendered row — mutation recompute the label turns red', () => {
+  const time = vi.spyOn(workHelpers, 'parallelWorkTime')
+  const now = Date.parse('2026-09-09T00:04:00Z')
+  const rows = buildParallelWork([{ ...agent, status: 'running' }], [], [])
+  render(
+    <ParallelWorkPanel
+      rows={rows}
+      now={now}
+      onSelect={vi.fn()}
+      onClose={vi.fn()}
+    />,
+  )
+  expect({
+    calls: time.mock.calls,
+    title: screen.getByText('Running · 4 m').title,
+  }).toEqual({ calls: [[rows[0], now]], title: agent.startedAt })
 })

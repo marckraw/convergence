@@ -155,3 +155,139 @@ export function buildParallelWork(
       ),
   ]
 }
+
+export const PARALLEL_WORK_ARCHIVE_AFTER_MS = 60 * 60 * 1000
+
+export function formatRelativeTime(from: string, now: number): string {
+  const minutes = Math.max(0, Math.floor((now - Date.parse(from)) / 60000))
+  if (minutes < 1) return '< 1 m'
+  if (minutes < 60) return `${minutes} m`
+  if (minutes < 1440) return `${Math.floor(minutes / 60)} h`
+  return `${Math.floor(minutes / 1440)} d`
+}
+
+export function parallelWorkTime(
+  row: ParallelWorkRow,
+  now: number,
+): { at: string | null; label: string } {
+  const { at, phase } = parallelWorkAnchor(row)
+  const prefix =
+    phase === 'lastSeen' ? 'last seen ' : phase === 'seen' ? 'seen ' : ''
+  return {
+    at,
+    label: at
+      ? `${prefix}${formatRelativeTime(at, now)}${phase === 'started' ? '' : ' ago'}`
+      : 'time not reported',
+  }
+}
+
+export function parallelWorkParents(
+  rows: ParallelWorkRow[],
+): Map<string, ParallelWorkRow> {
+  return new Map(
+    [
+      ...rows.filter((row) => row.kind === 'task'),
+      ...rows.filter((row) => row.kind === 'agent'),
+    ].map((row) => [row.id, row]),
+  )
+}
+
+export function orderParallelWork(rows: ParallelWorkRow[]): ParallelWorkRow[] {
+  const active = (row: ParallelWorkRow) =>
+    ['running', 'unknown'].includes(
+      parallelWorkRowState(row).fact?.status ?? '',
+    )
+  const time = (row: ParallelWorkRow) => parallelWorkAnchor(row).at
+  const sorted = [...rows].sort((a, b) => {
+    if (active(a) !== active(b)) return active(a) ? -1 : 1
+    const left = time(a),
+      right = time(b)
+    if (!left || !right) return left ? -1 : right ? 1 : 0
+    return (Date.parse(left) - Date.parse(right)) * (active(a) ? 1 : -1)
+  })
+  const children = new Map<ParallelWorkRow | null, ParallelWorkRow[]>()
+  const parents = parallelWorkParents(rows)
+  for (const row of sorted) {
+    const parent = row.parentId ? (parents.get(row.parentId) ?? null) : null
+    children.set(parent, [...(children.get(parent) ?? []), row])
+  }
+  const result: ParallelWorkRow[] = [],
+    visited = new Set<string>()
+  const visit = (row: ParallelWorkRow) => {
+    const key = `${row.kind}:${row.id}`
+    if (visited.has(key)) return
+    visited.add(key)
+    result.push(row)
+    for (const child of children.get(row) ?? []) visit(child)
+  }
+  for (const row of children.get(null) ?? []) visit(row)
+  for (const row of sorted) visit(row)
+  return result
+}
+
+export function archiveParallelWork(
+  rows: ParallelWorkRow[],
+  now: number,
+): {
+  visible: ParallelWorkRow[]
+  older: ParallelWorkRow[]
+  newest: string | null
+} {
+  const parents = parallelWorkParents(rows)
+  const children = new Map<ParallelWorkRow, ParallelWorkRow[]>()
+  for (const row of rows) {
+    const parent = row.parentId ? parents.get(row.parentId) : undefined
+    if (parent) children.set(parent, [...(children.get(parent) ?? []), row])
+  }
+  const roots = rows.filter(
+    (row) => !row.parentId || !parents.has(row.parentId),
+  )
+  const old = new Set<ParallelWorkRow>()
+  for (const root of roots) {
+    const branch = new Set<ParallelWorkRow>()
+    const collect = (row: ParallelWorkRow) => {
+      if (branch.has(row)) return
+      branch.add(row)
+      for (const child of children.get(row) ?? []) collect(child)
+    }
+    collect(root)
+    const eligible = [...branch].every((row) => {
+      const anchor = parallelWorkAnchor(row)
+      const status = parallelWorkRowState(row).fact?.status
+      if (status === 'running' || status === 'unknown') return false
+      return (
+        anchor.phase === 'none' ||
+        (anchor.at !== null &&
+          now - Date.parse(anchor.at) > PARALLEL_WORK_ARCHIVE_AFTER_MS)
+      )
+    })
+    if (eligible) for (const row of branch) old.add(row)
+  }
+  const newest = [...old].reduce<string | null>((latest, row) => {
+    const { at } = parallelWorkAnchor(row)
+    return at && (!latest || Date.parse(at) > Date.parse(latest)) ? at : latest
+  }, null)
+  return {
+    newest,
+    visible: rows.filter((row) => !old.has(row)),
+    older: rows.filter((row) => old.has(row)),
+  }
+}
+
+export function parallelWorkAnchor(row: ParallelWorkRow): {
+  at: string | null
+  phase: 'started' | 'lastSeen' | 'ended' | 'seen' | 'none'
+} {
+  const fact = parallelWorkRowState(row).fact
+  const phase =
+    fact?.status === 'running'
+      ? 'started'
+      : fact?.status === 'unknown'
+        ? 'lastSeen'
+        : 'ended'
+  const reported = phase === 'started' ? fact?.startedAt : fact?.endedAt
+  const at = reported ?? row.task?.observedAt ?? null
+  if (!at || !Number.isFinite(Date.parse(at)))
+    return { at: null, phase: 'none' }
+  return { at, phase: reported ? phase : 'seen' }
+}

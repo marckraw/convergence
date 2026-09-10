@@ -92,6 +92,7 @@ export function foldTasks(
     outputFile: null,
     ...existing,
     ...fact.patch,
+    observedAt: existing ? (existing.observedAt ?? null) : fact.at,
   }
   if (
     existing &&

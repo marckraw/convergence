@@ -54,6 +54,8 @@ export const ParallelWork: FC<Props> = ({
   loading,
   error,
 }) => {
+  const [olderOpen, setOlderOpen] = useState(false)
+  useEffect(() => setOlderOpen(false), [open, session.id])
   const [collapsed, setCollapsed] = useState(new Set<string>())
   const [stopStates, setStopStates] = useState(
     new Map<string, { pending?: boolean; error?: string }>(),
@@ -88,14 +90,11 @@ export const ParallelWork: FC<Props> = ({
     return () => query.removeEventListener('change', update)
   }, [])
   useEffect(() => {
-    if (
-      !open ||
-      !rows.some((row) => parallelWorkRowState(row).fact?.status === 'running')
-    )
-      return
-    const timer = setInterval(() => setNow(Date.now()), 1000)
+    if (!open) return
+    setNow(Date.now())
+    const timer = setInterval(() => setNow(Date.now()), 30000)
     return () => clearInterval(timer)
-  }, [open, rows])
+  }, [open])
   useEffect(() => {
     setCollapsed((current) => {
       const next = new Set(current)
@@ -236,6 +235,8 @@ export const ParallelWork: FC<Props> = ({
         </p>
       )}
       <ParallelWorkPanel
+        olderOpen={olderOpen}
+        onToggleOlder={() => setOlderOpen((current) => !current)}
         showEmpty={!loading && !error}
         highlightedId={selectedId ?? highlightedId}
         rows={rows}

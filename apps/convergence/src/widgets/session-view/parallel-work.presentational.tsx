@@ -2,20 +2,22 @@ import { useMemo, type FC, type ReactNode } from 'react'
 import { ArrowLeft, ChevronDown, ChevronRight, X } from 'lucide-react'
 import {
   countParallelWork,
+  orderParallelWork,
+  parallelWorkParents,
+  archiveParallelWork,
+  parallelWorkTime,
+  formatRelativeTime,
   parallelWorkRowState,
   pendingAgentDecision,
   type AttributedWorkItem,
   type ParallelWorkRow,
 } from '@/shared/lib/parallel-work.pure'
 import { Button } from '@/shared/ui/button'
-import {
-  descendantActivity,
-  workElapsed,
-  workStatus,
-  workTitle,
-} from './parallel-work.pure'
+import { descendantActivity, workStatus, workTitle } from './parallel-work.pure'
 
 export interface ParallelWorkPanelProps {
+  olderOpen?: boolean
+  onToggleOlder?: () => void
   rows: ParallelWorkRow[]
   now: number
   onSelect: (id: string) => void
@@ -51,22 +53,34 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
     collapsed = EMPTY_COLLAPSED,
     stopStates = new Map(),
   } = props
-  const { counts, completed, childrenById } = useMemo(() => {
-    const childrenById = new Map<string, ParallelWorkRow[]>()
-    for (const row of rows)
-      if (row.parentId) {
-        const children = childrenById.get(row.parentId) ?? []
+  const ordered = useMemo(() => orderParallelWork(rows), [rows])
+  const archive = useMemo(
+    () => archiveParallelWork(ordered, now),
+    [ordered, now],
+  )
+  const archived = useMemo(() => new Set(archive.older), [archive])
+  const { counts, completed, childrenById, roots } = useMemo(() => {
+    const childrenById = new Map<ParallelWorkRow, ParallelWorkRow[]>()
+    const parents = parallelWorkParents(rows)
+    for (const row of ordered) {
+      const parent = row.parentId ? parents.get(row.parentId) : undefined
+      if (parent) {
+        const children = childrenById.get(parent) ?? []
         children.push(row)
-        childrenById.set(row.parentId, children)
+        childrenById.set(parent, children)
       }
+    }
     return {
       counts: countParallelWork(rows),
       completed: rows.filter(
         (row) => parallelWorkRowState(row).fact?.status === 'completed',
       ).length,
       childrenById,
+      roots: ordered.filter(
+        (row) => !row.parentId || !parents.has(row.parentId),
+      ),
     }
-  }, [rows])
+  }, [rows, ordered])
   const descendantCounts = useMemo(
     () =>
       new Map([...collapsed].map((id) => [id, descendantActivity(rows, id)])),
@@ -179,45 +193,49 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
       </div>
     )
   }
-  const content = (row: ParallelWorkRow) => (
-    <>
-      <Button
-        variant="ghost"
-        className="h-auto justify-start rounded-none p-0 hover:bg-transparent block max-w-full truncate text-left text-[13px] font-medium hover:underline"
-        onClick={() => props.onSelect(row.id)}
-      >
-        {workTitle(row)}
-      </Button>
-      <p className="text-[11px] text-muted-foreground">
-        {row.run
-          ? `${row.run.agentType ?? 'Not reported'} · ${row.run.model ?? 'Not reported'} · depth ${row.run.depth ?? 'Not reported'}`
-          : (row.task?.taskType ?? 'Not reported')}
-      </p>
-      <p className="text-[11px]">
-        {workStatus(row)} · {workElapsed(row, now)}
-      </p>
-      {row.run && (
+  const content = (row: ParallelWorkRow) => {
+    const time = parallelWorkTime(row, now)
+    return (
+      <>
+        <Button
+          variant="ghost"
+          className="h-auto justify-start rounded-none p-0 hover:bg-transparent block max-w-full truncate text-left text-[13px] font-medium hover:underline"
+          onClick={() => props.onSelect(row.id)}
+        >
+          {workTitle(row)}
+        </Button>
         <p className="text-[11px] text-muted-foreground">
-          Last tool: {row.run.lastToolName ?? 'Not reported'}
+          {row.run
+            ? `${row.run.agentType ?? 'Not reported'} · ${row.run.model ?? 'Not reported'} · depth ${row.run.depth ?? 'Not reported'}`
+            : (row.task?.taskType ?? 'Not reported')}
         </p>
-      )}
-      {parallelWorkRowState(row).fact?.status === 'failed' && (
-        <p className="text-xs text-red-500">
-          {parallelWorkRowState(row).fact?.endedSummary
-            ? `Reported by the harness: ${parallelWorkRowState(row).fact!.endedSummary}`
-            : 'Not reported'}
+        <p className="text-[11px]" title={time.at ?? undefined}>
+          {workStatus(row)} · {time.label}
         </p>
-      )}
-      {decision(row)}
-    </>
-  )
+        {row.run && (
+          <p className="text-[11px] text-muted-foreground">
+            Last tool: {row.run.lastToolName ?? 'Not reported'}
+          </p>
+        )}
+        {parallelWorkRowState(row).fact?.status === 'failed' && (
+          <p className="text-xs text-red-500">
+            {parallelWorkRowState(row).fact?.endedSummary
+              ? `Reported by the harness: ${parallelWorkRowState(row).fact!.endedSummary}`
+              : 'Not reported'}
+          </p>
+        )}
+        {decision(row)}
+      </>
+    )
+  }
   const renderBranch = (
     row: ParallelWorkRow,
     seen = new Set<string>(),
   ): ReactNode => {
-    if (seen.has(row.id)) return null
-    const next = new Set([...seen, row.id])
-    const children = childrenById.get(row.id) ?? []
+    const key = `${row.kind}:${row.id}`
+    if (seen.has(key)) return null
+    const next = new Set([...seen, key])
+    const children = childrenById.get(row) ?? []
     const hidden = collapsed.has(row.id)
     return (
       <div key={`${row.kind}:${row.id}`} className="space-y-2">
@@ -306,25 +324,27 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
           </>
         ) : (
           <>
-            {rows.some((row) => row.kind === 'agent') && (
-              <section className="space-y-2">
-                <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Agents
-                </h3>
-                {rows
-                  .filter((row) => row.kind === 'agent' && !row.parentId)
-                  .map((row) => renderBranch(row))}
-              </section>
-            )}
-            {rows.some((row) => row.kind === 'task') && (
-              <section className="space-y-2">
-                <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Commands and monitors
-                </h3>
-                {rows
-                  .filter((row) => row.kind === 'task')
-                  .map((row) => renderBranch(row))}
-              </section>
+            {roots
+              .filter((row) => !archived.has(row))
+              .map((row) => renderBranch(row))}
+            {archive.older.length > 0 && (
+              <div className="space-y-2">
+                <Button
+                  variant="ghost"
+                  className="text-xs text-muted-foreground"
+                  aria-expanded={props.olderOpen ?? false}
+                  onClick={props.onToggleOlder}
+                >
+                  {archive.older.length} older ·{' '}
+                  {archive.newest
+                    ? `newest ${formatRelativeTime(archive.newest, now)} ago`
+                    : 'time not reported'}
+                </Button>
+                {props.olderOpen &&
+                  roots
+                    .filter((row) => archived.has(row))
+                    .map((row) => renderBranch(row))}
+              </div>
             )}
           </>
         )}

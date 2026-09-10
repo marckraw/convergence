@@ -192,6 +192,7 @@ it('folds task start through killed without losing known facts — discard the p
       startedAt: 'start',
       endedAt: 'end',
       outputFile: '/fixture/output',
+      observedAt: 'start',
     },
   ])
 })
@@ -268,4 +269,21 @@ it('M4 task fold preserves first terminal state across later facts — mutation 
   expect(
     later.map((task) => [task.status, task.endedAt, task.outputFile]),
   ).toEqual([['stopped', 'first', 'output']])
+})
+
+it('RUN64 R2′ the reducer keeps first and legacy sightings — mutation replace observedAt on update turns red', () => {
+  const fact = {
+    kind: 'task.changed' as const,
+    taskId: 'snapshot',
+    at: 'first',
+    patch: { status: 'running' as const },
+  }
+  const first = foldTasks([], fact, 'session')
+  const updated = foldTasks(first, { ...fact, at: 'second' }, 'session')
+  const legacy = foldTasks(
+    [{ ...first[0], observedAt: null }],
+    { ...fact, at: 'second' },
+    'session',
+  )
+  expect([updated[0].observedAt, legacy[0].observedAt]).toEqual(['first', null])
 })

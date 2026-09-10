@@ -268,7 +268,11 @@ it('H2 a missed-adoption row stops by the harness id and settles from its task w
     status: 'running',
   } as SessionTask
   const linkedRun = { ...run, taskId: 'harness' }
-  const input = { ...props(), rows: buildParallelWork([linkedRun], [task], []) }
+  const input = {
+    ...props(),
+    selectedId: 'agent',
+    rows: buildParallelWork([linkedRun], [task], []),
+  }
   const { rerender } = render(<ParallelWork {...input} />)
   fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
   await act(async () =>
@@ -324,6 +328,9 @@ it('L8 a refused Stop stays visible after the row is no longer running — mutat
       rows={buildParallelWork([{ ...run, status: 'completed' }], [], [])}
     />,
   )
+  fireEvent.click(
+    screen.getByRole('button', { name: '1 older · time not reported' }),
+  )
   expect(screen.queryByText('This task is not running')).not.toBeNull()
 })
 
@@ -333,7 +340,7 @@ it('M7 the container marker scan runs per item/row revision, not per clock tick 
   try {
     const input = props()
     const { rerender } = render(<ParallelWork {...input} />)
-    act(() => vi.advanceTimersByTime(3000))
+    act(() => vi.advanceTimersByTime(90000))
     const afterTicks = scan.mock.calls.length
     rerender(<ParallelWork {...input} items={[]} />)
     expect({ afterTicks, revised: scan.mock.calls.length }).toEqual({
@@ -345,3 +352,215 @@ it('M7 the container marker scan runs per item/row revision, not per clock tick 
     vi.useRealTimers()
   }
 })
+
+it('RUN64 R2 open-only 30s clock and ISO title — mutation tick closed or use 1s interval turns red', () => {
+  vi.useFakeTimers()
+  const clock = Date.parse('2026-09-09T00:04:00Z')
+  vi.setSystemTime(clock)
+  const interval = vi.spyOn(globalThis, 'setInterval')
+  const input = props()
+  const { rerender, unmount } = render(<ParallelWork {...input} open={false} />)
+  const closed = interval.mock.calls.length
+  rerender(<ParallelWork {...input} />)
+  const first = screen.queryByText('Running · 4 m')?.getAttribute('title')
+  act(() => vi.advanceTimersByTime(60000))
+  const later = Boolean(screen.queryByText('Running · 5 m'))
+  rerender(<ParallelWork {...input} open={false} />)
+  const timersAfterClose = vi.getTimerCount()
+  unmount()
+  vi.useRealTimers()
+  expect({
+    closed,
+    periods: interval.mock.calls.map((call) => call[1]),
+    first,
+    later,
+    timersAfterClose,
+  }).toEqual({
+    closed: 0,
+    periods: [30000],
+    first: run.startedAt,
+    later: true,
+    timersAfterClose: 0,
+  })
+})
+it('RUN64 R3 older bucket expands without changing all-time summary — mutation render all rows or drop archive expansion turns red', () => {
+  vi.useFakeTimers()
+  const clock = Date.parse('2026-09-09T12:00:00Z')
+  vi.setSystemTime(clock)
+  const at = (m: number) => new Date(clock - m * 60000).toISOString()
+  const input = {
+    ...props(),
+    rows: buildParallelWork(
+      [
+        {
+          ...run,
+          id: 'old',
+          description: 'Old reviewer',
+          status: 'failed',
+          endedAt: at(61),
+        },
+        {
+          ...run,
+          id: 'young',
+          description: 'Recent reviewer',
+          status: 'completed',
+          endedAt: at(59),
+        },
+        {
+          ...run,
+          id: 'active',
+          description: 'Active reviewer',
+          startedAt: at(2),
+        },
+      ],
+      [],
+      [],
+    ),
+  }
+  const { container, unmount } = render(<ParallelWork {...input} />)
+  const before = [...container.querySelectorAll('[data-work-id]')].map((row) =>
+    row.getAttribute('data-work-id'),
+  )
+  const bucket = screen.queryByRole('button', {
+    name: '1 older · newest 1 h ago',
+  })
+  if (bucket) fireEvent.click(bucket)
+  const after = [...container.querySelectorAll('[data-work-id]')].map((row) =>
+    row.getAttribute('data-work-id'),
+  )
+  const summary = Boolean(
+    screen.queryByText('This session · 1 running · 1 completed · 1 failed'),
+  )
+  unmount()
+  vi.useRealTimers()
+  expect({ before, after, summary }).toEqual({
+    before: ['active', 'young'],
+    after: ['active', 'young', 'old'],
+    summary: true,
+  })
+})
+
+it('RUN64 R2/R3 finished-only panel ages into archive — mutation clock only with running rows turns red', () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-09-09T01:00:00Z'))
+  const input = {
+    ...props(),
+    rows: buildParallelWork(
+      [{ ...run, status: 'completed', endedAt: '2026-09-09T00:00:30Z' }],
+      [],
+      [],
+    ),
+  }
+  const { unmount } = render(<ParallelWork {...input} />)
+  const before = Boolean(screen.queryByText('Completed · 59 m ago'))
+  act(() => vi.advanceTimersByTime(60000))
+  const bucket = Boolean(
+    screen.queryByRole('button', { name: '1 older · newest 1 h ago' }),
+  )
+  unmount()
+  vi.useRealTimers()
+  expect({ before, bucket }).toEqual({ before: true, bucket: true })
+})
+
+it('RUN64 round2 one root bucket keeps visible trees whole — mutation bucket each sibling group or lose root expansion turns red', () => {
+  vi.useFakeTimers()
+  const clock = Date.parse('2026-09-09T12:00:00Z')
+  vi.setSystemTime(clock)
+  const at = (m: number) => new Date(clock - m * 60000).toISOString()
+  const rows = buildParallelWork(
+    [
+      { ...run, id: 'active', description: 'Active', startedAt: at(4) },
+      {
+        ...run,
+        id: 'old-child',
+        description: 'Old child',
+        status: 'completed',
+        endedAt: at(120),
+      },
+      {
+        ...run,
+        id: 'old-root',
+        description: 'Old root',
+        status: 'completed',
+        endedAt: at(180),
+      },
+      {
+        ...run,
+        id: 'old-descendant',
+        description: 'Old descendant',
+        status: 'completed',
+        endedAt: at(120),
+      },
+    ],
+    [
+      {
+        taskId: 'legacy',
+        sessionId: 's',
+        status: 'completed',
+        description: 'Legacy',
+        startedAt: null,
+        endedAt: null,
+        observedAt: null,
+        toolUseId: null,
+        taskType: null,
+        outputFile: null,
+      },
+    ],
+    [],
+  )
+  rows.find((row) => row.id === 'old-child')!.parentId = 'active'
+  rows.find((row) => row.id === 'old-descendant')!.parentId = 'old-root'
+  const { container, unmount } = render(
+    <ParallelWork {...props()} rows={rows} />,
+  )
+  const before = [...container.querySelectorAll('[data-work-id]')].map((row) =>
+    row.getAttribute('data-work-id'),
+  )
+  const buttons = screen.queryAllByRole('button', { name: /older · newest/ })
+  const label = buttons[0]?.textContent
+  if (buttons[0]) fireEvent.click(buttons[0])
+  const after = [...container.querySelectorAll('[data-work-id]')].map((row) =>
+    row.getAttribute('data-work-id'),
+  )
+  unmount()
+  vi.useRealTimers()
+  expect({ before, buttons: buttons.length, label, after }).toEqual({
+    before: ['active', 'old-child'],
+    buttons: 1,
+    label: '3 older · newest 2 h ago',
+    after: ['active', 'old-child', 'old-root', 'old-descendant', 'legacy'],
+  })
+})
+
+it.each(['reopen', 'session'] as const)(
+  'RUN64 round3 bucket collapses on %s — mutation omit reset dependency turns red',
+  (change) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-09T12:00:00Z'))
+    const input = {
+      ...props(),
+      rows: buildParallelWork(
+        [{ ...run, status: 'completed', endedAt: '2026-09-09T09:00:00Z' }],
+        [],
+        [],
+      ),
+    }
+    const { rerender, unmount } = render(<ParallelWork {...input} />)
+    const bucket = () =>
+      screen.getByRole('button', { name: '1 older · newest 3 h ago' })
+    fireEvent.click(bucket())
+    const expanded = bucket().getAttribute('aria-expanded')
+    if (change === 'reopen') {
+      rerender(<ParallelWork {...input} open={false} />)
+      rerender(<ParallelWork {...input} open />)
+    } else {
+      rerender(
+        <ParallelWork {...input} session={{ ...input.session, id: 'other' }} />,
+      )
+    }
+    const after = bucket().getAttribute('aria-expanded')
+    unmount()
+    vi.useRealTimers()
+    expect({ expanded, after }).toEqual({ expanded: 'true', after: 'false' })
+  },
+)

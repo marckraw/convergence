@@ -28,6 +28,8 @@ export interface SessionAgentRun {
 }
 
 export interface SessionTask {
+  /** First recorded sighting; null for legacy tasks with no known time. */
+  observedAt?: string | null
   endedSummary?: string | null
   stopReason?: 'quit' | 'idle' | 'account' | 'stop' | 'exit' | null
   taskId: string
