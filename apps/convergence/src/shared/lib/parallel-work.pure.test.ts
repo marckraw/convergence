@@ -423,6 +423,17 @@ it('RUN64 round3 recent seen descendant keeps the whole tree — mutation ignore
   })
 })
 
+it('RUN64 round3 newest is the latest folded anchor, not the last one walked — mutation take the last anchor turns red', () => {
+  // Ordered as the panel feeds it: finished roots newest-first, children after
+  // their parent, so the LAST anchor walked (B, 200 m) is not the LATEST (child, 90 m).
+  const rows = [
+    timedTask('A', 'completed', 120),
+    timedTask('child', 'completed', 90, 'A'),
+    timedTask('B', 'completed', 200),
+  ]
+  expect(archiveParallelWork(rows, clock).newest).toBe(ago(90))
+})
+
 it('RUN64 round3 parents choose agents over colliding tasks — mutation reverse parent precedence turns red', () => {
   const agent: ParallelWorkRow = {
     id: 'shared',
