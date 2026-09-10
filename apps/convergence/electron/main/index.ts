@@ -131,6 +131,7 @@ import {
 } from '../backend/relay/crew-hail.ipc'
 import {
   broadcastRelayHop,
+  broadcastRelayHopSettled,
   broadcastRelays,
   registerRelayIpcHandlers,
 } from '../backend/relay/relay.ipc'
@@ -719,6 +720,7 @@ async function startApp(): Promise<void> {
         providerAccountRepository.listByProvider(providerId),
     },
     onHopAppended: broadcastRelayHop,
+    onHopSettled: broadcastRelayHopSettled,
     onHailsChanged: () => broadcastCrewHails(crewHailService.listOpen()),
     onRelaysChanged: () => broadcastRelays(relayService.list()),
     onCrewsChanged: () => broadcastCrews(crewService.list()),

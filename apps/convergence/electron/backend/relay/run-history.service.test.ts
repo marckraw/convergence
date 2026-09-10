@@ -82,9 +82,7 @@ describe('RunHistoryService', () => {
       'UPDATE relay_hops SET fired_at = ?, settled_at = ? WHERE id = ?',
     ).run(
       input.firedAt,
-      input.settledAt === undefined
-        ? '2099-01-01T00:00:00.000Z'
-        : input.settledAt,
+      input.settledAt === undefined ? input.firedAt : input.settledAt,
       row.id,
     )
     return row.id
@@ -121,7 +119,7 @@ describe('RunHistoryService', () => {
    * `assembleRuns` (drop the `flowRunId === null` skip) -- the orphan lands in
    * a chain that was fine, and the newest run's status flips to needs-you.
    */
-  it('groups by run, newest first, and keeps a call with no run out of them', () => {
+  it('groups by run, newest activity first, and keeps a call with no run out of them', () => {
     const a = wire('s1', 's2')
     const b = wire('s2', 's3')
     hop({
@@ -167,6 +165,177 @@ describe('RunHistoryService', () => {
       )
     }
     expect(page.hasMore).toBe(false)
+  })
+
+  it('RUN66 R1 parked runs use newest activity — mutation order by startedAt turns red', () => {
+    history = new RunHistoryService(db, () => new Date('2026-09-10T12:00:00Z'))
+    const a = wire()
+    hop({
+      relayId: a.id,
+      flowRunId: 'old-start',
+      firedAt: '2026-09-10T08:00:00Z',
+      settledAt: '2026-09-10T11:00:00Z',
+    })
+    raise({
+      reason: 'terminal',
+      flowRunId: 'middle',
+      raisedAt: '2026-09-10T10:00:00Z',
+    })
+    raise({
+      reason: 'terminal',
+      flowRunId: 'latest-start',
+      raisedAt: '2026-09-10T10:30:00Z',
+    })
+    const page = history.listRuns('c1', { limit: 2 })
+    const rest = history.listRuns('c1', { limit: 2, before: page.nextCursor })
+    expect({
+      first: page.runs.map((r) => r.flowRunId),
+      last: rest.runs.map((r) => r.flowRunId),
+      time: page.runs[0].lastActivityAt,
+    }).toEqual({
+      first: ['old-start', 'latest-start'],
+      last: ['middle'],
+      time: '2026-09-10T11:00:00Z',
+    })
+  })
+
+  it.each(['clock', 'settlement'] as const)(
+    'RUN66 R1 paging freezes %s — mutation recompute snapshot per page turns red',
+    (change) => {
+      let now = new Date('2026-09-10T10:55:00Z')
+      history = new RunHistoryService(db, () => now)
+      const a = wire()
+      const live = hop({
+        relayId: a.id,
+        flowRunId: 'waiting',
+        firedAt: '2026-09-10T10:09:00Z',
+        settledAt: null,
+      })
+      if (change === 'settlement')
+        hop({
+          relayId: a.id,
+          flowRunId: 'also-waiting',
+          firedAt: '2026-09-10T10:08:00Z',
+          settledAt: null,
+        })
+      raise({
+        reason: 'terminal',
+        flowRunId: 'newer-quiet',
+        raisedAt: '2026-09-10T10:53:00Z',
+      })
+      raise({
+        reason: 'terminal',
+        flowRunId: 'older-quiet',
+        raisedAt: '2026-09-10T10:18:00Z',
+      })
+      const page = history.listRuns('c1', { limit: 2 })
+      now = new Date('2026-09-10T12:01:00Z')
+      if (change === 'settlement')
+        db.prepare('UPDATE relay_hops SET settled_at=? WHERE id=?').run(
+          now.toISOString(),
+          live,
+        )
+      // A later fact must not move an unseen row across this snapshot's cursor.
+      raise({
+        reason: 'unrouted',
+        flowRunId: 'older-quiet',
+        raisedAt: now.toISOString(),
+      })
+      const rest = history.listRuns('c1', { limit: 2, before: page.nextCursor })
+      const fresh = history.listRuns('c1', { limit: 2 })
+      expect({
+        all: [...page.runs, ...rest.runs].map((r) => r.flowRunId),
+        asOf: page.nextCursor?.asOf,
+        fresh: fresh.runs[0].flowRunId,
+      }).toEqual({
+        all:
+          change === 'settlement'
+            ? ['waiting', 'also-waiting', 'newer-quiet', 'older-quiet']
+            : ['waiting', 'newer-quiet', 'older-quiet'],
+        asOf: '2026-09-10T10:55:00.000Z',
+        fresh: change === 'settlement' ? 'waiting' : 'older-quiet',
+      })
+    },
+  )
+
+  it('RUN66 R2 first card debt is the hop making SQL live — mutation derive another hop turns red', () => {
+    history = new RunHistoryService(db, () => new Date('2026-09-10T10:55:00Z'))
+    const a = wire()
+    hop({
+      relayId: a.id,
+      flowRunId: 'waiting',
+      firedAt: '2026-09-10T10:09:00Z',
+      settledAt: null,
+    })
+    const newest = hop({
+      relayId: a.id,
+      flowRunId: 'waiting',
+      firedAt: '2026-09-10T10:19:00Z',
+      settledAt: null,
+    })
+    hop({
+      relayId: a.id,
+      flowRunId: 'waiting',
+      firedAt: '2026-09-10T10:20:00Z',
+      settledAt: null,
+      outcome: 'skipped-baton',
+    })
+    raise({
+      reason: 'terminal',
+      flowRunId: 'returned',
+      raisedAt: '2026-09-10T10:53:00Z',
+    })
+    const first = history.listRuns('c1').runs[0]
+    expect({ id: first.flowRunId, owedBy: first.owedBy }).toEqual({
+      id: 'waiting',
+      owedBy: {
+        hopId: newest,
+        targetSessionId: 's2',
+        firedAt: '2026-09-10T10:19:00Z',
+      },
+    })
+  })
+
+  it('RUN66 R2 later-page debt uses the same historical settle as SQL — mutation keep later settle stamp turns red', () => {
+    let now = new Date('2026-09-10T10:55:00Z')
+    history = new RunHistoryService(db, () => now)
+    const a = wire()
+    hop({
+      relayId: a.id,
+      flowRunId: 'first',
+      firedAt: '2026-09-10T10:54:00Z',
+      settledAt: null,
+    })
+    const owed = hop({
+      relayId: a.id,
+      flowRunId: 'second',
+      firedAt: '2026-09-10T10:53:00Z',
+      settledAt: null,
+    })
+    const first = history.listRuns('c1', { limit: 1 })
+    now = new Date('2026-09-10T11:00:00Z')
+    db.prepare(
+      'UPDATE relay_hops SET settled_at=?,settled_status=? WHERE id=?',
+    ).run(now.toISOString(), 'completed', owed)
+    const second = history.listRuns('c1', {
+      limit: 1,
+      before: first.nextCursor,
+    }).runs[0]
+    expect({
+      id: second.flowRunId,
+      status: second.status,
+      owedBy: second.owedBy,
+      activity: second.lastActivityAt,
+    }).toEqual({
+      id: 'second',
+      status: { word: 'running', reason: null },
+      owedBy: {
+        hopId: owed,
+        targetSessionId: 's2',
+        firedAt: '2026-09-10T10:53:00Z',
+      },
+      activity: '2026-09-10T10:53:00Z',
+    })
   })
 
   it('orders a run’s events by when they happened, oldest first', () => {
@@ -293,7 +462,10 @@ describe('RunHistoryService', () => {
       ])
       expect(page.hasMore).toBe(true)
 
-      const rest = history.listRuns('c1', { limit: 2, before: 'run-01' })
+      const rest = history.listRuns('c1', {
+        limit: 2,
+        before: history.listRuns('c1', { limit: 2 }).nextCursor,
+      })
       expect(rest.runs.map((run) => run.flowRunId)).toEqual(['run-00'])
       expect(rest.hasMore).toBe(false)
     })
@@ -315,8 +487,10 @@ describe('RunHistoryService', () => {
         history.listRuns('c1', { limit: 2 }).unattributedHails,
       ).toHaveLength(1)
       expect(
-        history.listRuns('c1', { limit: 2, before: 'run-01' })
-          .unattributedHails,
+        history.listRuns('c1', {
+          limit: 2,
+          before: history.listRuns('c1', { limit: 2 }).nextCursor,
+        }).unattributedHails,
       ).toEqual([])
     })
 
@@ -328,12 +502,20 @@ describe('RunHistoryService', () => {
       seed(2)
 
       expect(
-        history.listRuns('c1', { before: 'a-run-that-was-cleared' }),
+        history.listRuns('c1', {
+          before: {
+            asOf: '2026-09-10T12:00:00.000Z',
+            live: 0,
+            lastActivityAt: '2026-09-06T10:00:00.000Z',
+            flowRunId: 'a-run-that-was-cleared',
+          },
+        }),
       ).toEqual({
         runs: [],
         unattributedHails: [],
         outcomes: {},
         hasMore: false,
+        nextCursor: null,
       })
     })
 

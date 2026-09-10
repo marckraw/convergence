@@ -885,6 +885,10 @@ function ensureRelayColumns(database: Database.Database): void {
   }
 
   const hopColumns = getTableColumnNames(database, 'relay_hops')
+  // Source-settle provenance. Old rows never recorded it; do not backfill.
+  if (!hopColumns.has('settle_id')) {
+    database.exec('ALTER TABLE relay_hops ADD COLUMN settle_id TEXT')
+  }
   // What the trail could not say before: which baton the finishing message
   // handed on, and which round of the loop the hop belonged to. Null on every
   // row written before the baton existed, which is the honest answer -- a

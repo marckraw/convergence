@@ -18,7 +18,7 @@ export const RELAY_PAYLOAD_PREVIEW_LENGTH = 500
 export const MAX_AUTOMATIC_HOPS_PER_FLOW_RUN = 20
 
 /** Outcomes that actually consumed a provider turn, and so consume budget. */
-const BUDGETED_OUTCOMES: readonly RelayHopOutcome[] = [
+export const BUDGETED_OUTCOMES: readonly RelayHopOutcome[] = [
   'delivered',
   'queued',
   'spawned',
@@ -246,7 +246,20 @@ function collapse(text: string | null, limit: number): string | null {
  * The ledger's glance at what was carried.
  */
 export function buildPayloadPreview(text: string | null): string | null {
-  return collapse(text, RELAY_PAYLOAD_PREVIEW_LENGTH)
+  if (text === null) return null
+  const lines = text
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*\|.*\|\s*$/.test(line))
+  while (
+    lines.length &&
+    (!lines[0].trim() ||
+      /^\s*(?:📍.*|#{1,6}\s+.*|[-*_]{3,})\s*$/.test(lines[0]))
+  )
+    lines.shift()
+  return (
+    collapse(lines.join('\n'), RELAY_PAYLOAD_PREVIEW_LENGTH) ??
+    collapse(text, RELAY_PAYLOAD_PREVIEW_LENGTH)
+  )
 }
 
 /**

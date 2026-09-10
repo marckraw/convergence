@@ -251,6 +251,7 @@ export interface SessionRelayRow {
 }
 
 export interface RelayHopRow {
+  settle_id: string | null
   id: string
   relay_id: string
   crew_id: string

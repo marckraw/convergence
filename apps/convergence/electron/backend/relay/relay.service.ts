@@ -18,6 +18,7 @@ import {
   sessionRelayFromRow,
   type CreateSessionRelayInput,
   type RelayHop,
+  type RelayHopSettled,
   type RelayHopOutcome,
   type SessionRelay,
   type UpdateSessionRelayInput,
@@ -25,6 +26,7 @@ import {
 
 /** What the engine records about one firing. */
 export interface AppendRelayHopInput {
+  settleId?: string | null
   relayId: string
   crewId: string
   flowRunId: string
@@ -269,9 +271,9 @@ export class RelayService {
            id, relay_id, crew_id, flow_run_id, fired_at, source_session_id,
            target_session_id, spawned_session_id, trigger_status,
            payload_preview, baton, round_number, lap_number, dispatch_id,
-           outcome, error
+           outcome, error, settle_id
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -290,6 +292,7 @@ export class RelayService {
         input.dispatchId ?? null,
         input.outcome,
         input.error ?? null,
+        input.settleId ?? null,
       )
 
     return this.requireHopById(id)
@@ -523,15 +526,17 @@ export class RelayService {
     status: string,
     settledAt: string,
     dispatchIds: readonly string[],
+    onSettled?: (event: RelayHopSettled) => void,
   ): number {
     const rows = this.db
       .prepare(
-        `SELECT id, outcome, fired_at, dispatch_id FROM relay_hops
+        `SELECT id, crew_id, outcome, fired_at, dispatch_id FROM relay_hops
          WHERE settled_at IS NULL
            AND COALESCE(spawned_session_id, target_session_id) = ?`,
       )
       .all(sessionId) as {
       id: string
+      crew_id: string
       outcome: string
       fired_at: string
       dispatch_id: string | null
@@ -558,12 +563,13 @@ export class RelayService {
     if (owed.length === 0) return 0
 
     const stamp = this.db.prepare(
-      'UPDATE relay_hops SET settled_at = ?, settled_status = ? WHERE id = ?',
+      'UPDATE relay_hops SET settled_at = ?, settled_status = ? WHERE id = ? AND settled_at IS NULL',
     )
-    for (const row of owed) {
-      stamp.run(settledAt, status, row.id)
-    }
-    return owed.length
+    const changed = owed.filter(
+      (row) => stamp.run(settledAt, status, row.id).changes > 0,
+    )
+    this.broadcastSettled(changed, onSettled)
+    return changed.length
   }
 
   /**
@@ -583,17 +589,32 @@ export class RelayService {
     dispatchIds: readonly string[],
     at: string,
     reason: DispatchTerminalReason,
+    onSettled?: (event: RelayHopSettled) => void,
   ): number {
     if (dispatchIds.length === 0) return 0
     const stamp = this.db.prepare(
       `UPDATE relay_hops SET settled_at = ?, settled_status = ?
-       WHERE settled_at IS NULL AND dispatch_id = ?`,
+       WHERE settled_at IS NULL AND dispatch_id = ? RETURNING id, crew_id`,
     )
-    let stamped = 0
-    for (const dispatchId of dispatchIds) {
-      stamped += stamp.run(at, reason, dispatchId).changes
+    const changed = dispatchIds.flatMap(
+      (dispatchId) =>
+        stamp.all(at, reason, dispatchId) as { id: string; crew_id: string }[],
+    )
+    this.broadcastSettled(changed, onSettled)
+    return changed.length
+  }
+
+  private broadcastSettled(
+    rows: { id: string; crew_id: string }[],
+    onSettled?: (event: RelayHopSettled) => void,
+  ): void {
+    const crews = new Map<string, string[]>()
+    for (const row of rows) {
+      const ids = crews.get(row.crew_id) ?? []
+      ids.push(row.id)
+      crews.set(row.crew_id, ids)
     }
-    return stamped
+    for (const [crewId, hopIds] of crews) onSettled?.({ crewId, hopIds })
   }
 
   private requireById(id: string): SessionRelay {

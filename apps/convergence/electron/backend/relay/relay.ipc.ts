@@ -4,11 +4,13 @@ import type { ListRunsOptions, RunHistoryService } from './run-history.service'
 import type {
   CreateSessionRelayInput,
   RelayHop,
+  RelayHopSettled,
   SessionRelay,
   UpdateSessionRelayInput,
 } from './relay.types'
 
 export const RELAY_UPDATED_CHANNEL = 'relay:updated'
+export const RELAY_HOP_SETTLED_CHANNEL = 'relayHop:settled'
 export const RELAY_HOP_APPENDED_CHANNEL = 'relayHop:appended'
 export const RELAY_HOP_CLEARED_CHANNEL = 'relayHop:cleared'
 
@@ -30,6 +32,10 @@ export const broadcastRelays: RelayBroadcastFn = (relays) => {
 
 export const broadcastRelayHop: RelayHopBroadcastFn = (hop) => {
   sendToAllWindows(RELAY_HOP_APPENDED_CHANNEL, hop)
+}
+
+export const broadcastRelayHopSettled = (event: RelayHopSettled): void => {
+  sendToAllWindows(RELAY_HOP_SETTLED_CHANNEL, event)
 }
 
 /**

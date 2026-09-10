@@ -410,6 +410,8 @@ interface SessionRelayData {
 }
 
 interface RelayHopData {
+  /** Recorded source settle; null on legacy rows, which are not folded. */
+  settleId: string | null
   id: string
   relayId: string
   crewId: string
@@ -458,6 +460,13 @@ interface RelayRunData {
   crewId: string
   startedAt: string
   endedAt: string
+  lastActivityAt: string
+  owedBy: {
+    hopId: string
+    targetSessionId: string | null
+    firedAt: string
+  } | null
+  handedBackAt: string | null
   laps: RelayRunLapData[]
   hails: CrewHailData[]
   status: RunStatusData
@@ -470,6 +479,7 @@ interface RelayRunPageData {
   unattributedHails: CrewHailData[]
   /** The design's word for every event on this page, by hop or hail id. */
   outcomes: Record<string, RunHistoryOutcomeData>
+  nextCursor: RunHistoryCursorData | null
   hasMore: boolean
 }
 
@@ -488,7 +498,7 @@ type RunHistoryOutcomeData =
 interface ListRunsOptionsData {
   limit?: number
   /** The oldest run already held; the page resumes below it. */
-  before?: string | null
+  before?: RunHistoryCursorData | null
 }
 
 interface ClearRelayHopsResultData {
@@ -1772,6 +1782,9 @@ interface ElectronAPI {
       options?: ListRunsOptionsData,
     ) => Promise<RelayRunPageData>
     onUpdated: (callback: (relays: SessionRelayData[]) => void) => () => void
+    onHopSettled: (
+      callback: (event: { crewId: string; hopIds: string[] }) => void,
+    ) => () => void
     onHopAppended: (callback: (hop: RelayHopData) => void) => () => void
     onHopsCleared: (callback: (crewId: string) => void) => () => void
   }
@@ -2540,3 +2553,10 @@ declare global {
 }
 
 export {}
+
+interface RunHistoryCursorData {
+  asOf: string
+  live: 0 | 1
+  lastActivityAt: string
+  flowRunId: string
+}

@@ -770,3 +770,23 @@ describe('compileRelayPayload with a round', () => {
     )
   })
 })
+
+it('RUN66 R4 preview begins with prose after the status table — mutation keep table or leading headings turns red', () => {
+  const message =
+    '📍 **WHERE WE ARE**\n\n| | |\n|---|---|\n| Feature | History |\n| Health | green |\n\n---\n\n## Dispatch\n\n→ studio horse astra: RUN65 round 2.\nRead the verdict.\n\nBATON: studio horse astra'
+  expect({
+    preview: buildPayloadPreview(message),
+    plain: buildPayloadPreview('Plain message, unchanged.'),
+  }).toEqual({
+    preview:
+      '→ studio horse astra: RUN65 round 2. Read the verdict. BATON: studio horse astra',
+    plain: 'Plain message, unchanged.',
+  })
+})
+
+it.each(['| Status | Ready |\n|---|---|', '# Ready', '📍 **WHERE WE ARE**'])(
+  'RUN66 round2 stripped-empty preview retains %s — mutation drop unstripped fallback turns red',
+  (text) => {
+    expect(buildPayloadPreview(text)).toBe(text.replace(/\s+/g, ' ').trim())
+  },
+)

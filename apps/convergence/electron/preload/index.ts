@@ -257,6 +257,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeListener('relay:updated', handler)
       }
     },
+    onHopSettled: (
+      callback: (event: { crewId: string; hopIds: string[] }) => void,
+    ) => {
+      const handler = (
+        _: unknown,
+        event: { crewId: string; hopIds: string[] },
+      ) => callback(event)
+      ipcRenderer.on('relayHop:settled', handler)
+      return () => ipcRenderer.removeListener('relayHop:settled', handler)
+    },
     onHopAppended: (callback: (hop: unknown) => void) => {
       const handler = (_: unknown, hop: unknown) => callback(hop)
       ipcRenderer.on('relayHop:appended', handler)

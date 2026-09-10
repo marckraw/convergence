@@ -1028,6 +1028,7 @@ describe('database', () => {
     expect(hopColumns.map((c) => c.name).sort()).toEqual(
       [
         'id',
+        'settle_id',
         'relay_id',
         'crew_id',
         'flow_run_id',
@@ -3680,4 +3681,37 @@ describe('project lanes migration', () => {
       ])
     })
   })
+})
+
+it('RUN66 round2 adds nullable settle provenance without backfill and reopens — mutation remove migration or backfill turns red', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'run66-settle-migration-'))
+  const path = join(dir, 'legacy.sqlite')
+  try {
+    const legacy = getDatabase(path)
+    const columns = legacy.prepare("PRAGMA table_info('relay_hops')").all() as {
+      name: string
+    }[]
+    if (columns.some((c) => c.name === 'settle_id'))
+      legacy.exec('ALTER TABLE relay_hops DROP COLUMN settle_id')
+    legacy.exec(
+      "INSERT INTO relay_hops (id, relay_id, crew_id, flow_run_id, fired_at, source_session_id, trigger_status, outcome) VALUES ('old', 'wire', 'crew', 'run', '2026-09-10T10:00:00Z', 'source', 'completed', 'skipped-baton')",
+    )
+    closeDatabase()
+    const migrated = getDatabase(path)
+    const first = migrated
+      .prepare("SELECT * FROM relay_hops WHERE id = 'old'")
+      .get() as { settle_id?: string | null }
+    closeDatabase()
+    const reopened = getDatabase(path)
+    expect({
+      first: first.settle_id,
+      again: reopened
+        .prepare("SELECT * FROM relay_hops WHERE id = 'old'")
+        .get(),
+    }).toMatchObject({ first: null, again: { settle_id: null, id: 'old' } })
+  } finally {
+    closeDatabase()
+    resetDatabase()
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

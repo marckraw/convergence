@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FC } from 'react'
 import { Waypoints } from 'lucide-react'
 import { useCrewHailStore } from '@/entities/crew-hail'
@@ -15,6 +15,7 @@ import { selectLocalProviders, useSessionStore } from '@/entities/session'
 import { sessionCrewApi, useSessionCrewStore } from '@/entities/session-crew'
 import {
   selectRelaysForCrew,
+  sessionRelayApi,
   useSessionRelayStore,
 } from '@/entities/session-relay'
 import type { SessionRelay } from '@/entities/session-relay'
@@ -644,45 +645,74 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
    * fear the panel's own sentence answers. The selected run survives a
    * reload, so "try again" after a load error does not also lose the place.
    */
-  const loadHistory = useCallback(async () => {
-    if (!crew) return
-    setHistoryLoading(true)
-    setHistoryError(null)
-    setOlderError(null)
-    try {
-      const page = await runHistoryApi.listRuns(crew.id)
-      setHistoryPage(page)
-    } catch (error) {
-      setHistoryPage(null)
-      setHistoryError(
-        error instanceof Error
-          ? error.message
-          : 'Convergence could not read this crew’s history.',
-      )
-    }
-    setHistoryLoading(false)
-  }, [crew])
+  const historyCrewId = crew?.id
+  const historyEpoch = useRef(0)
+  const loadHistory = useCallback(
+    async (preserve = false) => {
+      if (!historyCrewId) return
+      const epoch = ++historyEpoch.current
+      setHistoryLoading(true)
+      setHistoryLoadingOlder(false)
+      setHistoryError(null)
+      setOlderError(null)
+      try {
+        const page = await runHistoryApi.listRuns(historyCrewId)
+        if (epoch !== historyEpoch.current) return
+        setHistoryPage((current) =>
+          preserve && current
+            ? {
+                ...appendRunPage(page, current),
+                hasMore: page.hasMore,
+                nextCursor:
+                  page.hasMore &&
+                  current.nextCursor &&
+                  page.runs.every((run) =>
+                    current.runs.some(
+                      (held) => held.flowRunId === run.flowRunId,
+                    ),
+                  )
+                    ? current.nextCursor
+                    : page.nextCursor,
+              }
+            : page,
+        )
+      } catch (error) {
+        if (epoch !== historyEpoch.current) return
+        if (!preserve) setHistoryPage(null)
+        setHistoryError(
+          error instanceof Error
+            ? error.message
+            : 'Convergence could not read this crew’s history.',
+        )
+      }
+      setHistoryLoading(false)
+    },
+    [historyCrewId],
+  )
 
   /**
    * The next page down, joined onto the one on screen (L2).
    *
-   * Anchored on the oldest run already held rather than on an offset, for the
-   * reason the read model's cursor is a run id: history grows at the head, and
-   * an offset would repeat a run the moment a wire fires mid-read.
+   * The full cursor carries the first page's asOf and order key. A refresh
+   * starts a new snapshot when it adds a run. If it adds none, retain the
+   * deeper cursor so the next click reaches unread rows rather than overlap.
    */
   const loadOlderRuns = useCallback(async () => {
-    const oldest = historyPage?.runs[historyPage.runs.length - 1]
-    if (!crew || !historyPage?.hasMore || !oldest) return
+    const cursor = historyPage?.nextCursor
+    if (!crew || !historyPage?.hasMore || !cursor) return
+    const epoch = historyEpoch.current
     setHistoryLoadingOlder(true)
     setOlderError(null)
     try {
       const older = await runHistoryApi.listRuns(crew.id, {
-        before: oldest.flowRunId,
+        before: cursor,
       })
+      if (epoch !== historyEpoch.current) return
       setHistoryPage((current) =>
         current ? appendRunPage(current, older) : older,
       )
     } catch (error) {
+      if (epoch !== historyEpoch.current) return
       // The runs already read stay on screen: losing them because the page
       // below them would not load would be the button destroying the thing it
       // was meant to extend.
@@ -698,7 +728,37 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   useEffect(() => {
     if (!historyOpen) return
     void loadHistory()
+    return () => {
+      historyEpoch.current += 1
+    }
   }, [historyOpen, loadHistory])
+
+  useEffect(() => {
+    if (!historyOpen || !historyCrewId) return
+    const crewId = historyCrewId
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const refresh = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => void loadHistory(true), 500)
+    }
+    const offHop = sessionRelayApi.onHopAppended((hop) => {
+      if (hop.crewId === crewId) refresh()
+    })
+    const offSettled = sessionRelayApi.onHopSettled((event) => {
+      if (event.crewId === crewId) refresh()
+    })
+    const offHail = useCrewHailStore.subscribe((current, previous) => {
+      const next = current.hails.filter((hail) => hail.crewId === crewId)
+      const before = previous.hails.filter((hail) => hail.crewId === crewId)
+      if (JSON.stringify(next) !== JSON.stringify(before)) refresh()
+    })
+    return () => {
+      clearTimeout(timer)
+      offHop()
+      offSettled()
+      offHail()
+    }
+  }, [historyOpen, historyCrewId, loadHistory])
 
   const visibleRuns = useMemo(
     () => filterRuns(historyPage?.runs ?? [], historyFilter),
@@ -912,7 +972,12 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                 visibleRuns: visibleRuns.length,
               })}
               runs={visibleRuns.map((run) =>
-                buildRunRow(run, resolveName, new Date()),
+                buildRunRow(
+                  run,
+                  resolveName,
+                  new Date(),
+                  (id) => sessionsById.get(id)?.status ?? null,
+                ),
               )}
               selectedRunId={selectedRun?.flowRunId ?? null}
               summary={selectedRun ? formatRunSummary(selectedRun) : null}

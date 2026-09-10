@@ -1,3 +1,4 @@
+import type { SessionStatus } from '@/entities/session'
 import type { CrewHail } from '@/entities/crew-hail'
 import type { RelayHop } from '@/entities/session-relay'
 import type {
@@ -140,6 +141,9 @@ export interface HistoryRunRow {
   flowRunId: string
   /** "14:32", or "Yesterday · 17:46" for anything older than today. */
   timeLabel: string
+  lastActivityLabel: string
+  debt: { name: string; since: string; live: SessionStatus | null } | null
+  activityLine: string
   /** The conversation the run started from, named, or null. */
   startingStation: string | null
   statusLine: string
@@ -198,14 +202,42 @@ export function runStartingStation(
   return hail ? resolveName(hail.sessionId) : null
 }
 
+const debtStatusLabels: Record<SessionStatus, string> = {
+  running: 'running',
+  completed: 'finished',
+  failed: 'failed',
+  idle: 'idle',
+}
+
 export function buildRunRow(
   run: RelayRun,
   resolveName: ResolveSessionName,
   now: Date,
+  resolveStatus: (id: string) => SessionStatus | null = () => null,
 ): HistoryRunRow {
+  const owed = run.owedBy
+  const debt = owed
+    ? {
+        name: owed.targetSessionId
+          ? (resolveName(owed.targetSessionId) ?? 'a conversation that is gone')
+          : 'a conversation that is gone',
+        since: formatRunTime(owed.firedAt, now),
+        live: owed.targetSessionId ? resolveStatus(owed.targetSessionId) : null,
+      }
+    : null
+  const lastActivityLabel = formatRunTime(run.lastActivityAt, now)
+  const activityLine = debt
+    ? `Waiting · ${debt.name} · since ${debt.since}${debt.live ? ` · ${debtStatusLabels[debt.live]}` : ''}`
+    : run.handedBackAt
+      ? `Handed back · ${formatRunTime(run.handedBackAt, now)}`
+      : `${formatRunStatusLine(run)} · ${lastActivityLabel}`
+
   return {
     flowRunId: run.flowRunId,
     timeLabel: formatRunTime(run.startedAt, now),
+    lastActivityLabel,
+    debt,
+    activityLine,
     startingStation: runStartingStation(run, resolveName),
     statusLine: formatRunStatusLine(run),
     tone: runTone(run.status),
@@ -301,7 +333,7 @@ export function historyPanelState(input: {
 /** One recorded event, ready to render. */
 export interface HistoryEventRow {
   id: string
-  kind: 'hop' | 'hail'
+  kind: 'hop' | 'hail' | 'held-group'
   timeLabel: string
   /** "Fable → Opus", or "Sol asked for Marcin" for a call. */
   title: string
@@ -316,6 +348,7 @@ export interface HistoryEventRow {
    * read.
    */
   reason: string | null
+  preview?: string | null
   /** The stored wire this event names, when it names one. */
   relayId: string | null
 }
@@ -366,6 +399,7 @@ export function buildHopEventRow(
     outcomeLabel: historyOutcomeWord(outcome),
     tone: historyOutcomeTone(outcome),
     reason: hop.error,
+    preview: hop.payloadPreview,
     relayId: hop.relayId,
   }
 }
@@ -397,6 +431,64 @@ export function buildHailEventRow(
   }
 }
 
+function foldHeldRows(
+  hops: RelayHop[],
+  input: {
+    resolveName: ResolveSessionName
+    outcomes: Record<string, RunHistoryOutcome>
+  },
+): HistoryEventRow[] {
+  const groups = new Map<string, RelayHop[]>()
+  for (const hop of hops) {
+    if (!hop.settleId) continue
+    const group = groups.get(hop.settleId) ?? []
+    group.push(hop)
+    groups.set(hop.settleId, group)
+  }
+  const result: HistoryEventRow[] = []
+  for (const hop of hops) {
+    const group = hop.settleId ? (groups.get(hop.settleId) ?? []) : []
+    const deliveries = group.filter((h) =>
+      ['delivered', 'queued'].includes(input.outcomes[h.id]),
+    )
+    const held = group.filter((h) => h.outcome === 'skipped-baton')
+    if (deliveries.length && held.includes(hop)) continue
+    result.push(buildHopEventRow(hop, input))
+    if (held.length && hop === deliveries.at(-1)) {
+      const targets = [
+        ...new Set(
+          deliveries.map(
+            (h) =>
+              h.baton ??
+              input.resolveName(
+                h.spawnedSessionId ?? h.targetSessionId ?? '',
+              ) ??
+              'a conversation that is gone',
+          ),
+        ),
+      ]
+      result.push({
+        id: `held:${hop.id}`,
+        kind: 'held-group',
+        timeLabel: formatEventTime(hop.firedAt),
+        title: `${held.length} ${held.length === 1 ? 'wire' : 'wires'} held — the message went to ${targets.join(', ')}`,
+        outcome: 'held',
+        outcomeLabel: 'Held',
+        tone: 'held',
+        reason: held
+          .map(
+            (h) =>
+              `${input.resolveName(h.targetSessionId ?? '') ?? 'a conversation that is gone'}${h.error ? `: ${h.error}` : ''}`,
+          )
+          .join('; '),
+        preview: null,
+        relayId: null,
+      })
+    }
+  }
+  return result
+}
+
 /**
  * One run's laps, in order, with its calls placed after the deliveries.
  *
@@ -413,12 +505,7 @@ export function buildRunEvents(
   },
 ): { laps: HistoryLapGroup[]; calls: HistoryEventRow[] } {
   const laps = displayRunLaps(run).map((lap) => {
-    const events = lap.hops.map((hop) =>
-      buildHopEventRow(hop, {
-        resolveName: input.resolveName,
-        outcomes: input.outcomes,
-      }),
-    )
+    const events = foldHeldRows(lap.hops, input)
     const baton = lap.hops.find((hop) => hop.baton !== null)?.baton ?? null
     return {
       lap: lap.lap,
@@ -509,10 +596,10 @@ export function buildRunHighlight(
  * page's `hasMore` becomes the list's, since it is the one that saw the
  * bottom.
  *
- * Runs already held are dropped rather than repeated. The cursor is a run id
- * and history grows at the HEAD, so an overlap is not the normal case -- but a
- * wire firing mid-read can produce one, and a repeated run reads as two
- * attempts where there was one. `outcomes` is a map by event id, so merging is
+ * Runs already held are dropped rather than repeated. A first-page refresh
+ * starts a fresh snapshot cursor while keeping older rows on screen, so its
+ * continuation can overlap those retained rows. `outcomes` is a map by event
+ * id, so merging is
  * the only work it needs; the older page carries no unattributed calls by
  * construction (they ride the first page only).
  */
@@ -529,5 +616,6 @@ export function appendRunPage(
     ],
     outcomes: { ...current.outcomes, ...older.outcomes },
     hasMore: older.hasMore,
+    nextCursor: older.nextCursor,
   }
 }

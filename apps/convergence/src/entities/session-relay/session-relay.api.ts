@@ -35,6 +35,10 @@ export const sessionRelayApi = {
   onUpdated: (callback: (relays: SessionRelay[]) => void): (() => void) =>
     window.electronAPI.relay.onUpdated(callback),
 
+  onHopSettled: (
+    callback: (event: { crewId: string; hopIds: string[] }) => void,
+  ): (() => void) => window.electronAPI.relay.onHopSettled(callback),
+
   onHopAppended: (callback: (hop: RelayHop) => void): (() => void) =>
     window.electronAPI.relay.onHopAppended(callback),
 

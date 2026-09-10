@@ -1,3 +1,5 @@
+import { useCrewHailStore } from '@/entities/crew-hail'
+import type { RelayHop } from '@/entities/session-relay'
 import {
   act,
   fireEvent,
@@ -136,6 +138,9 @@ function makeRun(flowRunId: string, startedAt: string) {
     crewId: 'crew-1',
     startedAt,
     endedAt: startedAt,
+    lastActivityAt: startedAt,
+    owedBy: null,
+    handedBackAt: null,
     laps: [],
     hails: [],
     status: { word: 'finished-quiet' as const, reason: null },
@@ -277,6 +282,7 @@ describe('MissionControl', () => {
         delete: vi.fn(),
         onUpdated: vi.fn(() => () => undefined),
         onHopAppended: vi.fn(() => () => undefined),
+        onHopSettled: vi.fn(() => () => undefined),
         onHopsCleared: vi.fn(() => () => undefined),
       },
       providerAccounts: { list: vi.fn(async () => []) },
@@ -1495,6 +1501,297 @@ describe('MissionControl', () => {
      * Mutation that reds it: drop the `hasMore` row, or call `listRuns`
      * without the `before` cursor.
      */
+    it.each([
+      ['hop', false],
+      ['hail', false],
+      ['settled', false],
+      ['hop', true],
+    ] as const)(
+      'RUN66 R5 refreshes on %s (retain deeper %s) — mutations subscription, stale merge or shallow cursor turn red',
+      async (source, retainDeeper) => {
+        seedCrews([
+          makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
+        ])
+        seed(
+          [makeSession({ id: 'a', name: 'Fable', status: 'running' })],
+          [CLAUDE_CODE],
+        )
+        const listeners = new Set<(hop: RelayHop) => void>()
+        const settleListeners = new Set<
+          (event: { crewId: string; hopIds: string[] }) => void
+        >()
+        vi.mocked(window.electronAPI.relay.onHopAppended).mockImplementation(
+          (listener) => {
+            listeners.add(listener)
+            return () => {
+              listeners.delete(listener)
+            }
+          },
+        )
+        vi.mocked(window.electronAPI.relay.onHopSettled).mockImplementation(
+          (listener) => {
+            settleListeners.add(listener)
+            return () => {
+              settleListeners.delete(listener)
+            }
+          },
+        )
+        const cursor = {
+          asOf: '2026-09-10T10:55:00.000Z',
+          live: 0 as const,
+          lastActivityAt: '2026-09-10T10:02:00',
+          flowRunId: 'r2',
+        }
+        const first = {
+          runs: [
+            {
+              ...makeRun('r1', '2026-09-10T10:03:00'),
+              status: { word: 'running' as const, reason: null },
+              owedBy: {
+                hopId: 'owed',
+                targetSessionId: 'a',
+                firedAt: '2026-09-10T10:03:00',
+              },
+            },
+            makeRun('r2', '2026-09-10T10:02:00'),
+          ],
+          unattributedHails: [],
+          outcomes: {},
+          hasMore: true,
+          nextCursor: cursor,
+        }
+        const deeperCursor = {
+          ...cursor,
+          flowRunId: 'r3',
+          lastActivityAt: '2026-09-10T10:01:00',
+        }
+        listRuns
+          .mockResolvedValueOnce(first)
+          .mockResolvedValueOnce({
+            ...first,
+            runs: [makeRun('r3', '2026-09-10T10:01:00')],
+            hasMore: retainDeeper,
+            nextCursor: retainDeeper ? deeperCursor : null,
+          })
+          .mockResolvedValueOnce({
+            ...first,
+            runs: first.runs.map((run) =>
+              run.flowRunId === 'r1'
+                ? {
+                    ...run,
+                    owedBy: null,
+                    handedBackAt: '2026-09-10T10:56:00',
+                    status: { word: 'handed-back', reason: null },
+                  }
+                : run,
+            ),
+            nextCursor: { ...cursor, asOf: '2026-09-10T10:56:00.000Z' },
+          })
+          .mockImplementation(async (_crew, options) => ({
+            ...first,
+            runs:
+              retainDeeper && options?.before?.flowRunId === 'r3'
+                ? [makeRun('r4', '2026-09-10T10:00:00')]
+                : [makeRun('r3', '2026-09-10T10:01:00')],
+            hasMore: false,
+            nextCursor: null,
+          }))
+        const { unmount } = render(<MissionControl />)
+        await switchToCanvas()
+        fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+        await waitFor(() => expect(listRuns).toHaveBeenCalledTimes(1))
+        fireEvent.click(
+          await screen.findByRole('button', { name: 'Load older runs' }),
+        )
+        await waitFor(() =>
+          expect(
+            document.querySelectorAll('ul > li > button[aria-pressed]'),
+          ).toHaveLength(3),
+        )
+        const debtShown = Boolean(
+          screen.queryByText(/Waiting · Fable · since .*10:03 · running/),
+        )
+        const selected = document.querySelectorAll<HTMLButtonElement>(
+          'ul > li > button[aria-pressed]',
+        )[2]
+        fireEvent.click(selected)
+        const scroll = selected.closest('ul')!
+        scroll.scrollTop = 72
+        listRuns.mockClear()
+        const broadcast = (crewId: string) => {
+          if (source === 'settled')
+            for (const listener of settleListeners)
+              listener({ crewId, hopIds: ['owed'] })
+          else if (source === 'hop')
+            for (const listener of listeners)
+              listener({ id: 'hop', crewId } as RelayHop)
+          else
+            useCrewHailStore.setState({
+              hails: [
+                {
+                  id: 'hail',
+                  crewId,
+                  flowRunId: 'r1',
+                  sessionId: 'a',
+                  reason: 'terminal',
+                  baton: 'marcin',
+                  message: null,
+                  detail: 'Returned',
+                  raisedAt: new Date().toISOString(),
+                  acknowledgedAt: null,
+                },
+              ],
+            })
+        }
+        vi.useFakeTimers()
+        try {
+          act(() => broadcast('other-crew'))
+          await act(async () => vi.advanceTimersByTimeAsync(600))
+          const unrelated = listRuns.mock.calls.length
+          act(() => {
+            broadcast('crew-1')
+            broadcast('crew-1')
+            broadcast('crew-1')
+          })
+          await act(async () => vi.advanceTimersByTimeAsync(499))
+          const before = listRuns.mock.calls.length
+          await act(async () => vi.advanceTimersByTimeAsync(1))
+          const after = listRuns.mock.calls.slice()
+          expect(after).toEqual([['crew-1', undefined]])
+          const handbackShown = Boolean(
+            screen.queryByText(/Handed back · .*10:56/),
+          )
+          fireEvent.click(
+            screen.getByRole('button', { name: 'Load older runs' }),
+          )
+          await act(async () => {})
+          const freshCursor = listRuns.mock.calls.at(-1)?.[1]
+          const preserved = {
+            pressed: selected.getAttribute('aria-pressed'),
+            connected: selected.isConnected,
+            scroll: scroll.scrollTop,
+            rows: document.querySelectorAll('ul > li > button[aria-pressed]')
+              .length,
+          }
+          fireEvent.click(screen.getByRole('button', { name: 'Close history' }))
+          act(() => broadcast('crew-1'))
+          await act(async () => vi.advanceTimersByTimeAsync(600))
+          expect({
+            unrelated,
+            before,
+            after,
+            debtShown,
+            handbackShown,
+            freshCursor,
+            preserved,
+            closed: listRuns.mock.calls.length,
+          }).toEqual({
+            unrelated: 0,
+            before: 0,
+            after: [['crew-1', undefined]],
+            debtShown: true,
+            handbackShown: true,
+            freshCursor: {
+              before: retainDeeper
+                ? deeperCursor
+                : { ...cursor, asOf: '2026-09-10T10:56:00.000Z' },
+            },
+            preserved: {
+              pressed: 'true',
+              connected: true,
+              scroll: 72,
+              rows: retainDeeper ? 4 : 3,
+            },
+            closed: 2,
+          })
+        } finally {
+          unmount()
+          vi.useRealTimers()
+        }
+      },
+    )
+
+    it.each(['older-result', 'older-error', 'refresh-result', 'refresh-error'])(
+      'RUN66 R5 ignores obsolete %s — mutation remove history epoch guard turns red',
+      async (mode) => {
+        seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])
+        seed([makeSession({ id: 'a', name: 'Fable' })], [CLAUDE_CODE])
+        const listeners = new Set<(hop: RelayHop) => void>()
+        vi.mocked(window.electronAPI.relay.onHopAppended).mockImplementation(
+          (listener) => {
+            listeners.add(listener)
+            return () => {
+              listeners.delete(listener)
+            }
+          },
+        )
+        const page = (id: string) => ({
+          runs: [makeRun(id, '2026-09-10T10:03:00')],
+          unattributedHails: [],
+          outcomes: {},
+          hasMore: true,
+          nextCursor: {
+            asOf: '2026-09-10T10:55:00Z',
+            live: 0,
+            lastActivityAt: '2026-09-10T10:03:00',
+            flowRunId: id,
+          },
+        })
+        let resolve!: (value: ReturnType<typeof page>) => void
+        let reject!: (reason: Error) => void
+        const pending = new Promise<ReturnType<typeof page>>((yes, no) => {
+          resolve = yes
+          reject = no
+        })
+        listRuns
+          .mockResolvedValueOnce(page('first'))
+          .mockReturnValueOnce(pending)
+          .mockResolvedValueOnce(page('fresh'))
+        const { unmount } = render(<MissionControl />)
+        await switchToCanvas()
+        fireEvent.click(await screen.findByRole('button', { name: /History/ }))
+        await waitFor(() => expect(listRuns).toHaveBeenCalledTimes(1))
+        const broadcast = () => {
+          for (const listener of listeners)
+            listener({ id: 'hop', crewId: 'crew-1' } as RelayHop)
+        }
+        vi.useFakeTimers()
+        try {
+          if (mode.startsWith('older'))
+            fireEvent.click(
+              screen.getByRole('button', { name: 'Load older runs' }),
+            )
+          else {
+            act(broadcast)
+            await act(async () => vi.advanceTimersByTimeAsync(500))
+          }
+          act(broadcast)
+          await act(async () => vi.advanceTimersByTimeAsync(500))
+          await act(async () => {
+            if (mode.endsWith('error')) reject(new Error('obsolete failure'))
+            else resolve(page('obsolete'))
+          })
+          expect({
+            calls: listRuns.mock.calls.length,
+            rows: document.querySelectorAll('ul > li > button[aria-pressed]')
+              .length,
+            error: screen.queryByText('obsolete failure')?.textContent ?? null,
+            older:
+              screen.queryByRole('button', { name: 'Load older runs' })
+                ?.textContent ?? null,
+          }).toEqual({
+            calls: 3,
+            rows: 2,
+            error: null,
+            older: 'Load older runs',
+          })
+        } finally {
+          unmount()
+          vi.useRealTimers()
+        }
+      },
+    )
+
     it('keeps every loaded run on an older-page failure and retries that page (mutation: historyError)', async () => {
       seedCrews([
         makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a'] }),
@@ -1505,6 +1802,14 @@ describe('MissionControl', () => {
         unattributedHails: [],
         outcomes: {},
         hasMore,
+        nextCursor: hasMore
+          ? {
+              asOf: '2026-09-10T12:00:00.000Z',
+              live: 0,
+              lastActivityAt: '2026-09-06T12:00:00.000Z',
+              flowRunId: ids.at(-1)!,
+            }
+          : null,
       })
       listRuns
         .mockResolvedValueOnce(page(['run-1', 'run-2']))
@@ -1547,7 +1852,7 @@ describe('MissionControl', () => {
           error: screen.queryByText('Older records unavailable'),
         }).toEqual({
           runs: 4,
-          lastRead: ['crew-1', { before: 'run-3' }],
+          lastRead: ['crew-1', { before: page(['run-3']).nextCursor }],
           error: null,
         })
       })
@@ -1560,7 +1865,9 @@ describe('MissionControl', () => {
       seed([makeSession({ id: 'a', name: 'Fable' })], [CLAUDE_CODE])
       listRuns.mockImplementation(
         async (_crewId: string, options?: unknown) => {
-          const before = (options as { before?: string } | undefined)?.before
+          const before = (
+            options as { before?: { flowRunId: string } } | undefined
+          )?.before?.flowRunId
           return before === 'run-2'
             ? {
                 runs: [makeRun('run-3', '2026-09-04T12:00:00.000Z')],
@@ -1576,6 +1883,12 @@ describe('MissionControl', () => {
                 unattributedHails: [],
                 outcomes: {},
                 hasMore: true,
+                nextCursor: {
+                  asOf: '2026-09-10T12:00:00.000Z',
+                  live: 0,
+                  lastActivityAt: '2026-09-05T12:00:00.000Z',
+                  flowRunId: 'run-2',
+                },
               }
         },
       )
@@ -1590,7 +1903,14 @@ describe('MissionControl', () => {
       fireEvent.click(older)
 
       await waitFor(() => {
-        expect(listRuns).toHaveBeenCalledWith('crew-1', { before: 'run-2' })
+        expect(listRuns).toHaveBeenCalledWith('crew-1', {
+          before: {
+            asOf: '2026-09-10T12:00:00.000Z',
+            live: 0,
+            lastActivityAt: '2026-09-05T12:00:00.000Z',
+            flowRunId: 'run-2',
+          },
+        })
       })
       // The older page is appended, not swapped in: the run already on screen
       // stays, and the row that offered more is gone.

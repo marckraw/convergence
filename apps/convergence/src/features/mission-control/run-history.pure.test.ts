@@ -35,6 +35,7 @@ const resolveName = (id: string): string | null => NAMES[id] ?? null
 
 function hop(overrides: Partial<RelayHop> & { id: string }): RelayHop {
   return {
+    settleId: null,
     relayId: 'wire-a',
     crewId: 'c1',
     flowRunId: 'run-1',
@@ -76,6 +77,9 @@ function run(overrides: Partial<RelayRun> = {}): RelayRun {
     crewId: 'c1',
     startedAt: '2026-09-06T14:32:10.000Z',
     endedAt: '2026-09-06T14:39:00.000Z',
+    lastActivityAt: '2026-09-06T14:39:00.000Z',
+    owedBy: null,
+    handedBackAt: null,
     laps: [{ lap: 1, hops }],
     hails: [],
     status: { word: 'finished-quiet', reason: null } as RunStatus,
@@ -237,6 +241,7 @@ describe('historyPanelState', () => {
       unattributedHails: [],
       outcomes: {},
       hasMore: false,
+      nextCursor: null,
       ...overrides,
     }
   }
@@ -540,7 +545,13 @@ describe('appendRunPage', () => {
     runs: RelayRun[],
     hasMore: boolean,
     outcomes: Record<string, RunHistoryOutcome> = {},
-  ): RelayRunPage => ({ runs, unattributedHails: [], outcomes, hasMore })
+  ): RelayRunPage => ({
+    runs,
+    unattributedHails: [],
+    outcomes,
+    hasMore,
+    nextCursor: null,
+  })
 
   /**
    * L2. The older page joins the bottom of the list, and the page that saw
@@ -619,3 +630,102 @@ describe('L-vi delivery-bearing display laps', () => {
     },
   )
 })
+
+it('RUN66 R3 folds held siblings after delivery only — mutation fold without a sibling delivery turns red', () => {
+  const delivered = hop({
+    id: 'delivery',
+    settleId: 'settle',
+    baton: 'studio horse astra',
+    payloadPreview: 'The brief',
+    firedAt: '2026-09-10T10:19:00.100Z',
+  })
+  const held = [1, 2, 3, 4].map((n) =>
+    hop({
+      id: 'held-' + n,
+      settleId: 'settle',
+      outcome: 'skipped-baton',
+      targetSessionId: 'sol',
+      error: 'Different baton',
+      firedAt: '2026-09-10T10:19:00.200Z',
+    }),
+  )
+  const parked = held.map((h) => ({
+    ...h,
+    id: 'park-' + h.id,
+    settleId: 'parked',
+    firedAt: '2026-09-10T10:20:00.200Z',
+  }))
+  const otherSource = {
+    ...held[0],
+    id: 'other-source',
+    sourceSessionId: 'sol',
+    settleId: 'other',
+  }
+  const hops = [held[0], delivered, ...held.slice(1), ...parked, otherSource]
+  const groups = buildRunEvents(run({ laps: [{ lap: 1, hops }] }), {
+    resolveName,
+    outcomes: Object.fromEntries(
+      hops.map((h) => [h.id, h.id === 'delivery' ? 'delivered' : 'held']),
+    ),
+  })
+  expect(
+    groups.laps[0].events.map((e) => ({
+      id: e.id,
+      title: e.title,
+      reason: e.reason,
+      preview: e.preview,
+    })),
+  ).toEqual([
+    {
+      id: 'delivery',
+      title: 'Fable → Opus',
+      reason: null,
+      preview: 'The brief',
+    },
+    {
+      id: 'held:delivery',
+      title: '4 wires held — the message went to studio horse astra',
+      reason: Array(4).fill('Sol · reviewer: Different baton').join('; '),
+      preview: null,
+    },
+    ...parked.map((h) => ({
+      id: h.id,
+      title: 'Fable → Sol · reviewer',
+      reason: 'Different baton',
+      preview: null,
+    })),
+    {
+      id: 'other-source',
+      title: 'Sol · reviewer → Sol · reviewer',
+      reason: 'Different baton',
+      preview: null,
+    },
+  ])
+})
+
+it.each(['shared', 'distinct', 'legacy'] as const)(
+  'RUN66 round2 fold uses recorded settle only: %s — mutation use clock or fold NULLs turns red',
+  (kind) => {
+    const rows = ['held-a', 'delivery', 'held-b'].map((id, index) =>
+      hop({
+        id,
+        outcome: id === 'delivery' ? 'delivered' : 'skipped-baton',
+        firedAt:
+          kind === 'shared'
+            ? `2026-09-10T10:19:0${index}.000Z`
+            : '2026-09-10T10:19:00.100Z',
+        settleId:
+          kind === 'shared' ? 'settle' : kind === 'distinct' ? id : null,
+      }),
+    )
+    const events = buildRunEvents(run({ laps: [{ lap: 1, hops: rows }] }), {
+      resolveName,
+      outcomes: { 'held-a': 'held', delivery: 'delivered', 'held-b': 'held' },
+    }).laps[0].events
+    expect(events.map((e) => e.id)).toEqual(
+      kind === 'shared'
+        ? ['delivery', 'held:delivery']
+        : rows.map((row) => row.id),
+    )
+  },
+)

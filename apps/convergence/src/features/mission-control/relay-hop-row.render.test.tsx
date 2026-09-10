@@ -14,6 +14,7 @@ import { buildRelayHopLine } from './relay-hop.pure'
  */
 function hop(overrides: Partial<RelayHop> = {}): RelayHop {
   return {
+    settleId: null,
     id: 'h1',
     relayId: 'r1',
     crewId: 'c1',

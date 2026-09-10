@@ -36,24 +36,14 @@ export const HistoryEventRowView: FC<HistoryEventRowViewProps> = ({
   event,
   selected,
   onSelect,
-}) => (
-  <li>
-    <Button
-      type="button"
-      variant="ghost"
-      aria-pressed={selected}
-      onClick={onSelect}
-      className={cn(
-        'flex h-auto w-full flex-col items-start gap-0.5 rounded-md border px-3 py-2 text-left font-normal',
-        HISTORY_TONE_BORDER[event.tone],
-        selected && 'bg-white/[0.06]',
-      )}
-    >
+}) => {
+  const content = (
+    <>
       <span className="flex w-full items-baseline gap-2">
         <span className="shrink-0 tabular-nums text-[10px] text-muted-foreground">
           {event.timeLabel}
         </span>
-        <span className="min-w-0 flex-1 truncate text-[12px]">
+        <span className="min-w-0 flex-1 whitespace-normal break-words text-[12px]">
           {event.title}
         </span>
         <span
@@ -62,11 +52,38 @@ export const HistoryEventRowView: FC<HistoryEventRowViewProps> = ({
           {event.outcomeLabel}
         </span>
       </span>
-      {event.reason ? (
-        <span className="w-full truncate text-[10px] text-muted-foreground">
+      {event.reason && (
+        <span className="w-full whitespace-normal break-words text-[10px] text-muted-foreground">
           {event.reason}
         </span>
-      ) : null}
-    </Button>
-  </li>
-)
+      )}
+      {event.preview && (
+        <span className="w-full whitespace-normal break-words text-[10px] text-muted-foreground">
+          {event.preview}
+        </span>
+      )}
+    </>
+  )
+  const classes = cn(
+    'flex h-auto w-full flex-col items-start gap-0.5 rounded-md border px-3 py-2 text-left font-normal',
+    HISTORY_TONE_BORDER[event.tone],
+    selected && 'bg-white/[0.06]',
+  )
+  return (
+    <li>
+      {event.kind === 'held-group' ? (
+        <div className={classes}>{content}</div>
+      ) : (
+        <Button
+          type="button"
+          variant="ghost"
+          aria-pressed={selected}
+          onClick={onSelect}
+          className={classes}
+        >
+          {content}
+        </Button>
+      )}
+    </li>
+  )
+}

@@ -144,6 +144,9 @@ export function normalizeHistoryOutcome(
 
 /** The little of a hop `deriveRunStatus` needs. */
 export interface RunStatusHop {
+  id: string
+  targetSessionId: string | null
+  spawnedSessionId: string | null
   outcome: string
   /** When the hop fired, so an unsettled one can be asked its age. */
   firedAt: string
@@ -189,6 +192,7 @@ function isStillOwed(hop: RunStatusHop, now: Date): boolean {
 
 /** The little of a hail `deriveRunStatus` needs. */
 export interface RunStatusHail {
+  raisedAt: string
   reason: string
 }
 
@@ -234,16 +238,20 @@ export function deriveRunStatus(input: {
   hails: readonly RunStatusHail[]
   /** Read once by the caller, so one page of runs is judged by one clock. */
   now: Date
-}): RunStatus {
+}): {
+  status: RunStatus
+  owedBy: RelayRun['owedBy']
+  handedBackAt: string | null
+} {
   const needs = new Set<RunNeedsYouReason>()
-  let handedBack = false
+  let handedBackAt: string | null = null
   // Whether this build can read the run's records AT ALL -- a question about
   // the vocabulary, never about whether a turn was spent. A run of nothing
   // but held wires is perfectly readable and simply spent nothing.
   let readable = false
   // Work a station genuinely still owes, and work whose ending nobody wrote
   // down. They are different answers and neither is the other's default.
-  let owed = false
+  let owedBy: RelayRun['owedBy'] = null
   let unrecorded = false
 
   for (const hop of input.hops) {
@@ -253,15 +261,26 @@ export function deriveRunStatus(input: {
     if (word === 'limit-reached') needs.add('limit')
     if (!isBudgetedOutcome(hop.outcome)) continue
     if (hop.settledAt !== null) continue
-    if (isStillOwed(hop, input.now)) owed = true
-    else unrecorded = true
+    if (isStillOwed(hop, input.now)) {
+      if (!owedBy || Date.parse(hop.firedAt) >= Date.parse(owedBy.firedAt)) {
+        owedBy = {
+          hopId: hop.id,
+          targetSessionId: hop.spawnedSessionId ?? hop.targetSessionId,
+          firedAt: hop.firedAt,
+        }
+      }
+    } else unrecorded = true
   }
 
   for (const hail of input.hails) {
     if (normalizeHailReason(hail.reason) !== 'unknown') readable = true
     switch (hail.reason) {
       case 'terminal':
-        handedBack = true
+        if (
+          !handedBackAt ||
+          Date.parse(hail.raisedAt) > Date.parse(handedBackAt)
+        )
+          handedBackAt = hail.raisedAt
         break
       case 'delivery-failed':
         needs.add('failed')
@@ -286,22 +305,27 @@ export function deriveRunStatus(input: {
     }
   }
 
+  const finish = (status: RunStatus) => ({
+    status,
+    owedBy,
+    handedBackAt: status.word === 'handed-back' ? handedBackAt : null,
+  })
   for (const reason of NEEDS_YOU_SEVERITY) {
-    if (needs.has(reason)) return { word: 'needs-you', reason }
+    if (needs.has(reason)) return finish({ word: 'needs-you', reason })
   }
 
-  if (handedBack) return { word: 'handed-back', reason: null }
+  if (handedBackAt) return finish({ word: 'handed-back', reason: null })
 
-  if (owed) return { word: 'running', reason: null }
+  if (owedBy) return finish({ word: 'running', reason: null })
 
   // Three roads to the same word, and one sentence covers all of them: a run
   // recorded entirely in another build's vocabulary, a run with no records at
   // all, and a run whose last delivery has no ending written down. Saying
   // "finished quiet" about any of them would be vouching for something
   // nothing here can read.
-  if (unrecorded || !readable) return { word: 'unknown', reason: null }
+  if (unrecorded || !readable) return finish({ word: 'unknown', reason: null })
 
-  return { word: 'finished-quiet', reason: null }
+  return finish({ word: 'finished-quiet', reason: null })
 }
 
 /** One generation of the run: every hop whose wire was on its Nth pass. */
@@ -329,6 +353,13 @@ export interface RelayRun {
   startedAt: string
   /** The last recorded event's time. */
   endedAt: string
+  lastActivityAt: string
+  owedBy: {
+    hopId: string
+    targetSessionId: string | null
+    firedAt: string
+  } | null
+  handedBackAt: string | null
   laps: RelayRunLap[]
   hails: CrewHail[]
   status: RunStatus
@@ -355,6 +386,7 @@ export interface RelayRunPage {
    * crosses it needs nothing.
    */
   outcomes: Record<string, RunHistoryOutcome>
+  nextCursor: RunHistoryCursor | null
   hasMore: boolean
 }
 
@@ -447,14 +479,22 @@ export function assembleRuns(input: {
       ...hails.map((hail) => hail.raisedAt),
     ].sort()
 
+    const derived = deriveRunStatus({ hops, hails, now: input.now })
     runs.push({
       flowRunId,
       crewId: input.crewId,
       startedAt: times[0] ?? '',
       endedAt: times[times.length - 1] ?? '',
+      lastActivityAt:
+        [
+          ...times,
+          ...hops.flatMap((hop) => (hop.settledAt ? [hop.settledAt] : [])),
+        ]
+          .sort((a, b) => Date.parse(a) - Date.parse(b))
+          .at(-1) ?? '',
       laps,
       hails,
-      status: deriveRunStatus({ hops, hails, now: input.now }),
+      ...derived,
       counts: {
         deliveries: hops.filter((hop) => isBudgetedOutcome(hop.outcome)).length,
         failures: hops.filter((hop) => hop.outcome === 'error').length,
@@ -481,5 +521,13 @@ export function assembleRuns(input: {
       .sort((a, b) => (a.raisedAt < b.raisedAt ? 1 : -1)),
     outcomes,
     hasMore: input.hasMore,
+    nextCursor: null,
   }
+}
+
+export interface RunHistoryCursor {
+  asOf: string
+  live: 0 | 1
+  lastActivityAt: string
+  flowRunId: string
 }

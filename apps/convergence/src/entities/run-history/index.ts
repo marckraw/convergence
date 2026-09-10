@@ -1,5 +1,6 @@
 export type {
   ListRunsOptions,
+  RunHistoryCursor,
   RelayRun,
   RelayRunCounts,
   RelayRunLap,

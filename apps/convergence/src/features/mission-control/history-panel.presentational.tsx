@@ -205,14 +205,13 @@ export const HistoryPanel: FC<HistoryPanelProps> = ({
                 >
                   {run.statusLine}
                 </span>
+                <span className="text-[10px]">{run.activityLine}</span>
               </Button>
             </li>
           ))}
 
-          {/* Older runs are asked for rather than fetched on a scroll: a
-              read that happens because the list moved is a read nobody
-              chose, and this panel's whole promise is that it only ever
-              reads when told to. */}
+          {/* Live events refresh the first page; older pages are loaded
+              explicitly so scrolling alone never starts another read. */}
           {hasMore ? (
             <li className="pt-1">
               {olderError ? (
