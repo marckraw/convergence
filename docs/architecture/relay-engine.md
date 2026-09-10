@@ -519,7 +519,9 @@ first page's `asOf`, live key, last activity and run id. Later pages project
 the ledger at that same instant: later hops/hails are excluded and later
 settlement stamps are absent. Refresh starts a new instant; when its first
 page adds no run, the drawer retains the deeper loaded cursor for the next
-explicit older-page read. It is the read side of everything above, and it has
+explicit older-page read — and that page reads at the RETAINED instant, so a
+run below the loaded rows whose stamp landed after it still reads as owed until
+a refresh adds a run. It is the read side of everything above, and it has
 its own class (`RunHistoryService`) rather than a method on `RelayService` or
 `CrewHailService` for one reason: **a run is hops AND hails**, and it owns
 neither table. A station whose baton nothing answered may have no outgoing wire
