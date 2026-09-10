@@ -1129,9 +1129,207 @@ describe('the follow', () => {
       () => latest(CONVERSATION_ID)?.status === 'idle',
       'the conversation to settle',
     )
-    expect(latest(CONVERSATION_ID)?.streamError).not.toBeNull()
+    // The sentence itself, not merely a non-null one: `not.toBeNull()` passes
+    // on any error at all, including one about a frame that is not this loss.
+    expect(latest(CONVERSATION_ID)?.streamError).toMatch(/cannot read/)
     // One stream throughout: an unreadable frame is not a reason to re-dial.
     expect(daemon.eventStreamLastEventIds).toEqual([null])
+
+    await service.dispose()
+  }, 5_000)
+
+  /**
+   * The two losses in one stream: the healed gap must not take the permanent
+   * one down with it (MAR-2779 round 3).
+   *
+   * A gap clears `streamError` when the replay lands, and that clear was
+   * unconditional -- so an unreadable frame from EARLIER in the same stream was
+   * erased by a hole that healed after it. The conversation settled with no
+   * error at all, while a frame it never read is missing from the record for
+   * good. The one loss nothing undoes was the one thing the app stopped saying.
+   *
+   * Mutation: null the error on the heal (`live.streamError = null`) instead of
+   * restoring the permanent loss and this is red on the settled snapshot.
+   */
+  it('gives the permanent loss back when a later gap heals', async () => {
+    const { service } = buildService()
+    await service.start('hello')
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length > 0,
+      'the stream to open',
+    )
+    daemon.emit(status(1, 'running'))
+    // Gone for good: nothing will re-send this frame.
+    daemon.emitRaw('{ not an envelope')
+    daemon.emit(add(2, item({ id: 'a-1', text: 'On it' })))
+    // And a hole that WILL heal, on top of it.
+    daemon.loseFrame(patch(3, 'a-1', 'On it — here is your page.'))
+    daemon.emit(status(4, 'completed'))
+
+    await waitUntil(
+      () => latest(CONVERSATION_ID)?.status === 'idle',
+      'the conversation to settle',
+    )
+    // The gap said its piece while it was true...
+    expect(
+      published.some((snapshot) =>
+        snapshot.streamError?.startsWith('gap: expected 3'),
+      ),
+    ).toBe(true)
+    // ...and the loss that outlives it is the last word.
+    expect(latest(CONVERSATION_ID)?.streamError).toMatch(/cannot read/)
+    // The record itself came back whole: this is a sentence about the frame
+    // nobody could read, not about the one the resume replayed.
+    expect(latest(CONVERSATION_ID)?.items.map((row) => row.text)).toEqual([
+      'On it — here is your page.',
+    ])
+    expect(daemon.eventStreamLastEventIds).toEqual([null, '2'])
+
+    await service.dispose()
+  }, 5_000)
+
+  /**
+   * The order the two losses arrive in does not change which one survives.
+   *
+   * Gap, healed; then the unreadable frame; then a second gap on top of it.
+   * While the second hole is open the conversation says so -- that is the true
+   * thing at that moment -- and when the replay lands it goes back to the loss
+   * that never healed rather than to silence.
+   *
+   * The first heal is asserted on its own: it clears to NULL, because nothing
+   * permanent had been lost yet. Without that half, restoring a stale sentence
+   * for every heal would pass.
+   *
+   * Mutation: restore unconditionally (drop the clear on the send, or hold the
+   * gap sentence in `permanentLoss` too) and the first heal is red.
+   */
+  it('shows the open gap while it is open and the permanent loss after', async () => {
+    const { service } = buildService()
+    await service.start('hello')
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length > 0,
+      'the stream to open',
+    )
+    daemon.emit(status(1, 'running'))
+    daemon.loseFrame(add(2, item({ id: 'a-1', text: 'On it' })))
+    daemon.emit(patch(3, 'a-1', 'On it — here is your page.'))
+
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length === 2,
+      'the resume to re-open the stream',
+    )
+    await waitUntil(
+      () => latest(CONVERSATION_ID)?.streamError === null,
+      'the first healed gap to clear outright',
+    )
+
+    daemon.emitRaw('{ not an envelope')
+    await waitUntil(
+      () =>
+        (latest(CONVERSATION_ID)?.streamError ?? '').includes('cannot read'),
+      'the unreadable frame to be reported',
+    )
+
+    daemon.loseFrame(add(4, item({ id: 'a-2', text: 'and one more thing' })))
+    daemon.emit(status(5, 'completed'))
+
+    await waitUntil(
+      () => latest(CONVERSATION_ID)?.status === 'idle',
+      'the conversation to settle',
+    )
+    // Said while it was true, on top of a permanent loss already held.
+    expect(
+      published.some((snapshot) =>
+        snapshot.streamError?.startsWith('gap: expected 4'),
+      ),
+    ).toBe(true)
+    expect(latest(CONVERSATION_ID)?.streamError).toMatch(/cannot read/)
+    expect(latest(CONVERSATION_ID)?.items.map((row) => row.text)).toEqual([
+      'On it — here is your page.',
+      'and one more thing',
+    ])
+
+    await service.dispose()
+  }, 5_000)
+
+  /**
+   * A budget that runs out with a hole still open says which hole
+   * (MAR-2779 round 3).
+   *
+   * This daemon's own log skips 2, so the resume it is asked for is one it
+   * cannot answer: every re-open reads the same gap and delivers nothing, the
+   * budget is spent, and the conversation is left with the client's generic
+   * sentence -- true of every exhausted stream, and silent about the frame that
+   * is actually missing.
+   *
+   * Mutation: report `describeDaemonFailure(error)` alone and this is red on
+   * the suffix.
+   */
+  it('names the hole it gave up on when the stream budget runs out', async () => {
+    const { service } = buildService()
+    await service.start('hello')
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length > 0,
+      'the stream to open',
+    )
+    daemon.emit(status(1, 'running'))
+    // No `loseFrame`: as far as this daemon is concerned, 2 never existed, so
+    // the resume replays the same hole for as long as it is asked to.
+    daemon.emit(status(3, 'completed'))
+
+    await waitUntil(
+      () => latest(CONVERSATION_ID)?.status === 'failed',
+      'the reconnect budget to run out',
+    )
+    expect(latest(CONVERSATION_ID)?.streamError).toBe(
+      'Conversation stream dropped and could not be re-established: expected 2, got 3.',
+    )
+    // maxStreamAttempts is 2 here: the budget is spent, not renewed.
+    expect(daemon.eventStreamLastEventIds).toEqual([null, '1'])
+
+    await service.dispose()
+  }, 5_000)
+
+  /**
+   * A hole belongs to the stream that fell into it, and to no later one.
+   *
+   * The suffix above is read off the gap the conversation is still holding, so
+   * the holding has to end when the reconnecting does — otherwise the next
+   * stream to give up, for reasons of its own, inherits a hole from a stream
+   * that ended minutes ago and blames it for something it had nothing to do
+   * with.
+   *
+   * Mutation: drop BOTH resets — the send's and the exhaustion's — and this is
+   * red on the borrowed suffix. Either one alone closes this path, which is
+   * what "reset wherever `streamError` is assigned by anything but a gap" is
+   * for: the belt and the braces are both cheap and the sentence is the
+   * product.
+   */
+  it('does not blame a later failure on an older hole', async () => {
+    const { service } = buildService()
+    await service.start('hello')
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length > 0,
+      'the stream to open',
+    )
+    daemon.emit(status(1, 'running'))
+    daemon.emit(status(3, 'completed'))
+    await waitUntil(
+      () => latest(CONVERSATION_ID)?.status === 'failed',
+      'the reconnect budget to run out on the hole',
+    )
+
+    // The next turn's stream fails for a reason of its own.
+    daemon.setEventsStatus(500)
+    expect(await service.send(CONVERSATION_ID, 'again')).toEqual({
+      kind: 'sent',
+    })
+    await waitUntil(
+      () =>
+        (latest(CONVERSATION_ID)?.streamError ?? '').includes('unavailable'),
+      'the second stream to give up too',
+    )
+    expect(latest(CONVERSATION_ID)?.streamError).not.toContain('expected 2')
 
     await service.dispose()
   }, 5_000)

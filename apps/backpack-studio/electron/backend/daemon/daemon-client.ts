@@ -1,6 +1,7 @@
 import {
   createSseParser,
   describeSeqGap,
+  describeSeqHole,
   evaluateHandshake,
   parseDaemonHealth,
   parseRemoteExecutionHostStartResponse,
@@ -59,11 +60,18 @@ export interface DaemonClientDeps {
 }
 
 /**
- * `gap`: frames were missed and the resume will ask for them again.
+ * `gap`: frames were missed and the resume will ask for them again. It carries
+ * the hole it fell into — `expected 3, got 4` — because the caller may still be
+ * holding it when the reconnect budget runs out, and the sentence a person is
+ * left with then has to say what was lost rather than only that something was
+ * (MAR-2779 round 3).
  * `unreadable`: the frame could not become an envelope for this session, and
- * nothing will re-send it.
+ * nothing will re-send it. There is no hole: the sequence never moved, so
+ * there is no number to name.
  */
-export type StreamFrameLoss = 'gap' | 'unreadable'
+export type StreamFrameLoss =
+  | { kind: 'gap'; hole: string }
+  | { kind: 'unreadable' }
 
 export interface StreamHandlers {
   /**
@@ -308,7 +316,7 @@ export class DaemonClient {
         )) {
           const reading = readEnvelopeFrame(frame.data, sessionId)
           if (!reading.ok) {
-            handlers.onDroppedFrame(reading.reason, 'unreadable')
+            handlers.onDroppedFrame(reading.reason, { kind: 'unreadable' })
             continue
           }
           // What this envelope's sequence means is the package's rule, not this
@@ -328,7 +336,10 @@ export class DaemonClient {
             // which the daemon answers by replaying what was lost.
             handlers.onDroppedFrame(
               describeSeqGap(lastSeq, reading.envelope.seq),
-              'gap',
+              {
+                kind: 'gap',
+                hole: describeSeqHole(lastSeq, reading.envelope.seq),
+              },
             )
             gap = true
             return { lastSeq, envelopes }
