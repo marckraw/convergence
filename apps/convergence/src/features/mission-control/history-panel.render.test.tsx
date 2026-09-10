@@ -1,3 +1,5 @@
+import { buildRunRow } from './run-history.pure'
+import type { RelayRun } from '@/entities/run-history'
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { HistoryPanel } from './history-panel.presentational'
@@ -35,6 +37,9 @@ function runRow(overrides: Partial<HistoryRunRow> = {}): HistoryRunRow {
   return {
     flowRunId: 'run-1',
     timeLabel: '14:32',
+    lastActivityLabel: '14:39',
+    debt: null,
+    activityLine: '',
     startingStation: 'Fable',
     statusLine: '3 laps · handed back',
     tone: 'terminal',
@@ -388,5 +393,100 @@ describe('the recorded-event panel, rendered', () => {
     ).not.toBeInTheDocument()
     // The record itself is still fully readable.
     expect(screen.getByText('Opus')).toBeInTheDocument()
+  })
+})
+
+it('RUN66 R2 screenshot names the live debt and handback time — mutations drop owedBy or use startedAt turn red', () => {
+  const waiting: RelayRun = {
+    flowRunId: 'waiting',
+    crewId: 'c1',
+    startedAt: '2026-09-10T10:09:00',
+    endedAt: '2026-09-10T10:19:00',
+    lastActivityAt: '2026-09-10T10:19:00',
+    owedBy: {
+      hopId: 'h',
+      targetSessionId: 'astra',
+      firedAt: '2026-09-10T10:19:00',
+    },
+    handedBackAt: null,
+    laps: [],
+    hails: [],
+    status: { word: 'running', reason: null },
+    counts: { deliveries: 1, failures: 0, laps: 1, events: 1 },
+  }
+  const returned: RelayRun = {
+    ...waiting,
+    flowRunId: 'returned',
+    owedBy: null,
+    handedBackAt: '2026-09-10T10:53:00',
+    status: { word: 'handed-back', reason: null },
+  }
+  renderPanel({
+    runs: [waiting, returned].map((run) =>
+      buildRunRow(
+        run,
+        () => 'Lane: Studio - Horse Astra Executor',
+        new Date('2026-09-10T10:55:00'),
+        () => 'running',
+      ),
+    ),
+  })
+  const waitingLine = screen.queryByText(
+    'Waiting · Lane: Studio - Horse Astra Executor · since 10:19 · running',
+  )
+  expect({
+    waiting: waitingLine?.textContent,
+    returned: screen.queryByText('Handed back · 10:53')?.textContent,
+    first: document
+      .querySelector('ul > li button')
+      ?.contains(waitingLine ?? null),
+  }).toEqual({
+    waiting:
+      'Waiting · Lane: Studio - Horse Astra Executor · since 10:19 · running',
+    returned: 'Handed back · 10:53',
+    first: true,
+  })
+})
+
+it('RUN66 R3 held summary shows its sentence and reasons without an expander — mutation hide folded reasons turns red', () => {
+  renderPanel({
+    laps: [
+      {
+        lap: 1,
+        label: 'Lap 1',
+        deliveries: 1,
+        events: [
+          event({
+            id: 'delivery',
+            title: 'Fable → Astra',
+            preview: 'Read the brief.',
+          }),
+          event({
+            id: 'held:delivery',
+            kind: 'held-group',
+            title: '4 wires held — the message went to studio horse astra',
+            outcome: 'held',
+            outcomeLabel: 'Held',
+            tone: 'held',
+            reason: 'Opus: Different baton; Sol: Different baton',
+          }),
+        ],
+      },
+    ],
+  })
+  const summary = screen.queryByText(
+    '4 wires held — the message went to studio horse astra',
+  )
+  expect({
+    summary: summary?.textContent,
+    reason: screen.queryByText('Opus: Different baton; Sol: Different baton')
+      ?.textContent,
+    preview: screen.queryByText('Read the brief.')?.textContent,
+    interactive: Boolean(summary?.closest('button')),
+  }).toEqual({
+    summary: '4 wires held — the message went to studio horse astra',
+    reason: 'Opus: Different baton; Sol: Different baton',
+    preview: 'Read the brief.',
+    interactive: false,
   })
 })

@@ -69,3 +69,66 @@ describe('the literals that cross the tree boundary (MAR-2759)', () => {
     ).toBe(false)
   })
 })
+
+it('RUN66 R2 all three history mirrors carry the same debt and cursor shape — mutation drop or rename a mirror field turns red', async () => {
+  const { readFileSync } = await import('node:fs')
+  const { resolve } = await import('node:path')
+  const ts = await import('typescript')
+  const fields = (file: string, name: string, keys: string[]) => {
+    const text = readFileSync(resolve(import.meta.dirname, file), 'utf8')
+    const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true)
+    const node = source.statements.find(
+      (n) => ts.isInterfaceDeclaration(n) && n.name.text === name,
+    )
+    if (!node || !ts.isInterfaceDeclaration(node)) return []
+    return node.members
+      .filter(ts.isPropertySignature)
+      .filter((n) => keys.includes(n.name.getText(source)))
+      .map((n) => [
+        n.name.getText(source),
+        n.type?.getText(source).replace(/[;\s]+/g, ''),
+      ])
+      .sort()
+  }
+  const mirrors = [
+    ['run-history.pure.ts', 'RelayRun', 'RunHistoryCursor'],
+    [
+      '../../../src/entities/run-history/run-history.types.ts',
+      'RelayRun',
+      'RunHistoryCursor',
+    ],
+    [
+      '../../../src/shared/types/electron-api.d.ts',
+      'RelayRunData',
+      'RunHistoryCursorData',
+    ],
+  ]
+  expect(
+    mirrors.map(([file, run, cursor]) => ({
+      run: fields(file, run, ['lastActivityAt', 'owedBy', 'handedBackAt']),
+      cursor: fields(file, cursor, [
+        'asOf',
+        'live',
+        'lastActivityAt',
+        'flowRunId',
+      ]),
+    })),
+  ).toEqual(
+    Array(3).fill({
+      run: [
+        ['handedBackAt', 'string|null'],
+        ['lastActivityAt', 'string'],
+        [
+          'owedBy',
+          '{hopId:stringtargetSessionId:string|nullfiredAt:string}|null',
+        ],
+      ],
+      cursor: [
+        ['asOf', 'string'],
+        ['flowRunId', 'string'],
+        ['lastActivityAt', 'string'],
+        ['live', '0|1'],
+      ],
+    }),
+  )
+})

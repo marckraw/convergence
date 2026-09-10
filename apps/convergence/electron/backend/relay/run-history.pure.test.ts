@@ -10,6 +10,10 @@ import {
 import type { CrewHail } from './crew-hail.types'
 import type { RelayHop } from './relay.types'
 
+function deriveStatusWord(input: Parameters<typeof deriveRunStatus>[0]) {
+  return deriveRunStatus(input).status
+}
+
 function hop(overrides: Partial<RelayHop> & { id: string }): RelayHop {
   return {
     relayId: 'wire-a',
@@ -106,7 +110,7 @@ describe('deriveRunStatus', () => {
 
   it('says handed back when a station gave the work to the chair', () => {
     expect(
-      deriveRunStatus({
+      deriveStatusWord({
         now,
         hops: [hop({ id: 'h1' })],
         hails: [hail({ id: 'x1', reason: 'terminal' })],
@@ -131,11 +135,11 @@ describe('deriveRunStatus', () => {
     ]
     for (const [reason, expected] of cases) {
       expect(
-        deriveRunStatus({ now, hops: [], hails: [hail({ id: 'x', reason })] }),
+        deriveStatusWord({ now, hops: [], hails: [hail({ id: 'x', reason })] }),
       ).toEqual({ word: 'needs-you', reason: expected })
       // And the same run reaching the chair as well does not paint over it.
       expect(
-        deriveRunStatus({
+        deriveStatusWord({
           now,
           hops: [],
           hails: [
@@ -149,7 +153,7 @@ describe('deriveRunStatus', () => {
 
   it('leads with the ending least likely to resolve itself', () => {
     expect(
-      deriveRunStatus({
+      deriveStatusWord({
         now,
         hops: [],
         hails: [
@@ -167,7 +171,7 @@ describe('deriveRunStatus', () => {
    */
   it('does not change when the call has been marked seen', () => {
     expect(
-      deriveRunStatus({
+      deriveStatusWord({
         now,
         hops: [],
         hails: [
@@ -188,7 +192,7 @@ describe('deriveRunStatus', () => {
    */
   it('says running while a delivered hop is still owed', () => {
     expect(
-      deriveRunStatus({
+      deriveStatusWord({
         now,
         hops: [hop({ id: 'h1', settledAt: null })],
         hails: [],
@@ -198,7 +202,7 @@ describe('deriveRunStatus', () => {
 
   it('does not call a refusal outstanding work', () => {
     expect(
-      deriveRunStatus({
+      deriveStatusWord({
         now,
         hops: [hop({ id: 'h1', outcome: 'skipped-baton', settledAt: null })],
         hails: [],
@@ -208,7 +212,7 @@ describe('deriveRunStatus', () => {
 
   it('says finished quiet when every delivery came back and nobody asked', () => {
     expect(
-      deriveRunStatus({ now, hops: [hop({ id: 'h1' })], hails: [] }),
+      deriveStatusWord({ now, hops: [hop({ id: 'h1' })], hails: [] }),
     ).toEqual({
       word: 'finished-quiet',
       reason: null,
@@ -217,13 +221,13 @@ describe('deriveRunStatus', () => {
 
   it('says unknown for a run recorded entirely in another build’s words', () => {
     expect(
-      deriveRunStatus({
+      deriveStatusWord({
         now,
         hops: [hop({ id: 'h1', outcome: 'skipped-disarmed' })],
         hails: [hail({ id: 'x', reason: 'something-newer' })],
       }),
     ).toEqual({ word: 'unknown', reason: null })
-    expect(deriveRunStatus({ now, hops: [], hails: [] })).toEqual({
+    expect(deriveStatusWord({ now, hops: [], hails: [] })).toEqual({
       word: 'unknown',
       reason: null,
     })
@@ -241,7 +245,7 @@ describe('deriveRunStatus', () => {
    */
   it('reads a failure and a spent limit off the hops, with no call filed', () => {
     expect(
-      deriveRunStatus({
+      deriveStatusWord({
         now,
         hops: [hop({ id: 'h1', outcome: 'error', settledAt: null })],
         hails: [],
@@ -249,7 +253,7 @@ describe('deriveRunStatus', () => {
     ).toEqual({ word: 'needs-you', reason: 'failed' })
 
     expect(
-      deriveRunStatus({
+      deriveStatusWord({
         now,
         hops: [hop({ id: 'h1', outcome: 'error', settledAt: null })],
         hails: [hail({ id: 'x', reason: 'terminal' })],
@@ -258,7 +262,7 @@ describe('deriveRunStatus', () => {
 
     for (const outcome of ['skipped-budget', 'skipped-round-budget']) {
       expect(
-        deriveRunStatus({
+        deriveStatusWord({
           now,
           hops: [hop({ id: 'h1', outcome, settledAt: null })],
           hails: [hail({ id: 'x', reason: 'terminal' })],
@@ -275,7 +279,7 @@ describe('deriveRunStatus', () => {
    */
   it('does not call a turn with no message to carry a failure', () => {
     expect(
-      deriveRunStatus({
+      deriveStatusWord({
         now,
         hops: [
           hop({ id: 'h1', outcome: 'skipped-no-message', settledAt: null }),
@@ -295,7 +299,7 @@ describe('deriveRunStatus', () => {
    */
   it('does not call an unreceipted delivery outstanding work', () => {
     expect(
-      deriveRunStatus({
+      deriveStatusWord({
         now,
         hops: [hop({ id: 'h1', settledAt: null, dispatchId: null })],
         hails: [],
@@ -313,12 +317,12 @@ describe('deriveRunStatus', () => {
    */
   it('stops calling a run running once its owed hop is older than the live window', () => {
     const hops = [hop({ id: 'h1', settledAt: null })]
-    expect(deriveRunStatus({ now, hops, hails: [] })).toEqual({
+    expect(deriveStatusWord({ now, hops, hails: [] })).toEqual({
       word: 'running',
       reason: null,
     })
     expect(
-      deriveRunStatus({
+      deriveStatusWord({
         now: new Date('2026-09-06T13:30:00.000Z'),
         hops,
         hails: [],
@@ -329,7 +333,7 @@ describe('deriveRunStatus', () => {
   /** A run still owing work that ALSO failed elsewhere leads with the failure. */
   it('keeps a failure ahead of work still owed', () => {
     expect(
-      deriveRunStatus({
+      deriveStatusWord({
         now,
         hops: [
           hop({ id: 'h1', settledAt: null }),
@@ -342,7 +346,7 @@ describe('deriveRunStatus', () => {
 
   it('reads a legacy loop-closed call as the parked run it was', () => {
     expect(
-      deriveRunStatus({
+      deriveStatusWord({
         now,
         hops: [],
         hails: [hail({ id: 'x', reason: 'loop-closed' })],
@@ -522,5 +526,56 @@ describe('assembleRuns', () => {
     expect(run.endedAt).toBe('2026-09-06T12:03:00.000Z')
     expect(run.status).toEqual({ word: 'needs-you', reason: 'failed' })
     expect(page.hasMore).toBe(true)
+  })
+})
+
+it('RUN66 R2 returns the newest owed hop and terminal time — mutations lose debt or choose the other hop turn red', () => {
+  const now = new Date('2026-09-06T12:30:00Z')
+  const older = hop({
+    id: 'older',
+    settledAt: null,
+    targetSessionId: 'wrong',
+    firedAt: '2026-09-06T12:09:00Z',
+  })
+  const newest = hop({
+    id: 'newest',
+    settledAt: null,
+    targetSessionId: 'astra',
+    firedAt: '2026-09-06T12:19:00Z',
+  })
+  const waiting = deriveRunStatus({
+    now,
+    hops: [
+      newest,
+      older,
+      hop({
+        id: 'refused',
+        outcome: 'skipped-baton',
+        settledAt: null,
+        firedAt: '2026-09-06T12:20:00Z',
+      }),
+    ],
+    hails: [],
+  })
+  const terminal = deriveRunStatus({
+    now,
+    hops: [],
+    hails: [hail({ id: 'terminal', raisedAt: '2026-09-06T12:25:00Z' })],
+  })
+  expect({ waiting, terminal }).toEqual({
+    waiting: {
+      status: { word: 'running', reason: null },
+      owedBy: {
+        hopId: 'newest',
+        targetSessionId: 'astra',
+        firedAt: '2026-09-06T12:19:00Z',
+      },
+      handedBackAt: null,
+    },
+    terminal: {
+      status: { word: 'handed-back', reason: null },
+      owedBy: null,
+      handedBackAt: '2026-09-06T12:25:00Z',
+    },
   })
 })

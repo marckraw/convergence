@@ -76,6 +76,9 @@ function run(overrides: Partial<RelayRun> = {}): RelayRun {
     crewId: 'c1',
     startedAt: '2026-09-06T14:32:10.000Z',
     endedAt: '2026-09-06T14:39:00.000Z',
+    lastActivityAt: '2026-09-06T14:39:00.000Z',
+    owedBy: null,
+    handedBackAt: null,
     laps: [{ lap: 1, hops }],
     hails: [],
     status: { word: 'finished-quiet', reason: null } as RunStatus,
@@ -237,6 +240,7 @@ describe('historyPanelState', () => {
       unattributedHails: [],
       outcomes: {},
       hasMore: false,
+      nextCursor: null,
       ...overrides,
     }
   }
@@ -540,7 +544,13 @@ describe('appendRunPage', () => {
     runs: RelayRun[],
     hasMore: boolean,
     outcomes: Record<string, RunHistoryOutcome> = {},
-  ): RelayRunPage => ({ runs, unattributedHails: [], outcomes, hasMore })
+  ): RelayRunPage => ({
+    runs,
+    unattributedHails: [],
+    outcomes,
+    hasMore,
+    nextCursor: null,
+  })
 
   /**
    * L2. The older page joins the bottom of the list, and the page that saw
@@ -611,11 +621,75 @@ describe('L-vi delivery-bearing display laps', () => {
           buildRunEvents(record, { resolveName, outcomes }).laps.map((lap) =>
             lap.events.map((event) => event.id),
           ),
-        ).toEqual([['delivery', 'held']])
+        ).toEqual([['delivery', 'held:delivery']])
       if (proof === 'highlight')
         expect(buildRunHighlight(record, outcomes).get('wire-a')?.label).toBe(
           'Held',
         )
     },
   )
+})
+
+it('RUN66 R3 folds held siblings after delivery only — mutation fold without a sibling delivery turns red', () => {
+  const delivered = hop({
+    id: 'delivery',
+    baton: 'studio horse astra',
+    payloadPreview: 'The brief',
+    firedAt: '2026-09-10T10:19:00.100Z',
+  })
+  const held = [1, 2, 3, 4].map((n) =>
+    hop({
+      id: 'held-' + n,
+      outcome: 'skipped-baton',
+      targetSessionId: 'sol',
+      error: 'Different baton',
+      firedAt: '2026-09-10T10:19:00.200Z',
+    }),
+  )
+  const parked = held.map((h) => ({
+    ...h,
+    id: 'park-' + h.id,
+    firedAt: '2026-09-10T10:20:00.200Z',
+  }))
+  const otherSource = { ...held[0], id: 'other-source', sourceSessionId: 'sol' }
+  const hops = [held[0], delivered, ...held.slice(1), ...parked, otherSource]
+  const groups = buildRunEvents(run({ laps: [{ lap: 1, hops }] }), {
+    resolveName,
+    outcomes: Object.fromEntries(
+      hops.map((h) => [h.id, h.id === 'delivery' ? 'delivered' : 'held']),
+    ),
+  })
+  expect(
+    groups.laps[0].events.map((e) => ({
+      id: e.id,
+      title: e.title,
+      reason: e.reason,
+      preview: e.preview,
+    })),
+  ).toEqual([
+    {
+      id: 'delivery',
+      title: 'Fable → Opus',
+      reason: null,
+      preview: 'The brief',
+    },
+    {
+      id: 'held:delivery',
+      title: '4 wires held — the message went to studio horse astra',
+      reason: Array(4).fill('Sol · reviewer: Different baton').join('; '),
+      preview: null,
+    },
+    ...parked.map((h) => ({
+      id: h.id,
+      title: 'Fable → Sol · reviewer',
+      reason: 'Different baton',
+      preview: null,
+    })),
+    {
+      id: 'other-source',
+      title: 'Sol · reviewer → Sol · reviewer',
+      reason: 'Different baton',
+      preview: null,
+    },
+  ])
 })

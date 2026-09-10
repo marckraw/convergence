@@ -3,7 +3,9 @@ import type { CrewHailRow, RelayHopRow } from '../database/database.types'
 import { crewHailFromRow } from './crew-hail.types'
 import { relayHopFromRow } from './relay.types'
 import { assembleRuns } from './run-history.pure'
-import type { RelayRunPage } from './run-history.pure'
+import { CREW_LIVE_WINDOW_MS } from './crew-hail.pure'
+import { BUDGETED_OUTCOMES } from './relay.pure'
+import type { RunHistoryCursor, RelayRunPage } from './run-history.pure'
 
 /** How many runs one page of history carries when the caller says nothing. */
 export const DEFAULT_RUN_HISTORY_LIMIT = 20
@@ -16,18 +18,10 @@ export interface ListRunsOptions {
   /**
    * The oldest run the caller already holds; the page resumes below it.
    *
-   * A run id rather than an offset, for the reason the hop trail's cursor is
-   * a hop id: history grows at the head, and paging by offset would repeat a
-   * run the moment a wire fires mid-read.
+   * The full key and asOf keep a continuation on the first page's snapshot.
+   * A run id alone would be re-evaluated after activity moved its key.
    */
-  before?: string | null
-}
-
-/** One run's place in the page order: when it began, and its tie-break. */
-interface RunCursorRow {
-  flowRunId: string
-  startedAt: string
-  endedAt: string
+  before?: RunHistoryCursor | null
 }
 
 /**
@@ -53,33 +47,19 @@ export class RunHistoryService {
 
   listRuns(crewId: string, options: ListRunsOptions = {}): RelayRunPage {
     const limit = resolveLimit(options.limit)
-    const cursor = options.before
-      ? this.getRunCursor(crewId, options.before)
-      : null
-
-    // The anchor was cleared out from under this read. Answering with the
-    // newest page instead would repeat runs the caller is already showing, so
-    // the honest answer is "nothing older" and the next full load corrects it
-    // -- the rule the hop trail's cursor already follows.
-    if (options.before && !cursor) {
-      return {
-        runs: [],
-        unattributedHails: [],
-        outcomes: {},
-        hasMore: false,
-      }
-    }
+    const cursor = options.before ?? null
+    const asOf = cursor?.asOf ?? this.now().toISOString()
+    const rows = this.readRunCursors(crewId, cursor, asOf, limit + 1)
 
     // One page more than asked for, so `hasMore` is an observation rather
     // than a guess: "there was another row" is the only honest way to know.
-    const rows = this.readRunCursors(crewId, cursor, limit + 1)
     const hasMore = rows.length > limit
     const page = hasMore ? rows.slice(0, limit) : rows
     const flowRunIds = page.map((row) => row.flowRunId)
 
-    return assembleRuns({
+    const result = assembleRuns({
       crewId,
-      hops: this.readHops(crewId, flowRunIds),
+      hops: this.readHops(crewId, flowRunIds, asOf),
       // Both kinds of call in one list: which of them belongs to a run is
       // `assembleRuns`'s single decision, not a filter smuggled into SQL
       // where no test can put an orphan in and watch it stay out.
@@ -88,117 +68,125 @@ export class RunHistoryService {
       // is no run order to page them by, and repeating them under every page
       // would make one dropped call look like several.
       hails: [
-        ...this.readHails(crewId, flowRunIds),
-        ...(cursor ? [] : this.readUnattributedHails(crewId)),
+        ...this.readHails(crewId, flowRunIds, asOf),
+        ...(cursor ? [] : this.readUnattributedHails(crewId, asOf)),
       ],
       flowRunIds,
       hasMore,
       // One instant for the whole page: two runs a millisecond either side of
       // the live window would otherwise be judged by two different clocks.
-      now: this.now(),
+      now: new Date(asOf),
     })
+    const last = page.at(-1)
+    return { ...result, nextCursor: hasMore && last ? { ...last, asOf } : null }
   }
 
   /**
-   * The runs this crew has, newest first.
-   *
-   * The key set is the UNION of the two tables', not the ledger's alone: a
-   * station with no outgoing wire has no hop to attribute a row to, and its
-   * unrouted call is exactly the case the hail book exists for. A run that is
-   * only a hail must still be a run.
-   *
-   * Ordered by when the run began, tie-broken by its id. Two runs starting
-   * inside the same second in one crew is possible -- two sessions settling
-   * together -- and `fired_at` has second resolution, so the id is what makes
-   * the order total. It is arbitrary between such a pair and identical on
-   * every read, which is what a cursor needs.
+   * Keyset over the ledger at one instant. Later events and later settle
+   * stamps belong to the next refresh, not to this page's order or debt.
+   * The same snapshot is passed to the pure read model below.
    */
   private readRunCursors(
     crewId: string,
-    cursor: RunCursorRow | null,
+    cursor: RunHistoryCursor | null,
+    asOf: string,
     limit: number,
-  ): RunCursorRow[] {
-    const where = cursor
-      ? `HAVING startedAt < ? OR (startedAt = ? AND flowRunId < ?)`
+  ): Omit<RunHistoryCursor, 'asOf'>[] {
+    const before = cursor
+      ? `WHERE EXISTS (SELECT 1 FROM runs anchor WHERE anchor.flowRunId = @id) AND (live, lastActivityAt, flowRunId) < (@live, @at, @id)`
       : ''
-    const params: unknown[] = [crewId, crewId]
-    if (cursor) {
-      params.push(cursor.startedAt, cursor.startedAt, cursor.flowRunId)
-    }
-    params.push(limit)
-
+    const budget = BUDGETED_OUTCOMES.map((_, index) => `@budget${index}`).join(
+      ', ',
+    )
     return this.db
       .prepare(
-        `SELECT flow_run_id AS flowRunId,
-                MIN(at) AS startedAt,
-                MAX(at) AS endedAt
-         FROM (
-           SELECT flow_run_id, fired_at AS at FROM relay_hops WHERE crew_id = ?
-           UNION ALL
-           SELECT flow_run_id, raised_at AS at FROM crew_hails
-             WHERE crew_id = ? AND flow_run_id IS NOT NULL
-         )
-         GROUP BY flowRunId
-         ${where}
-         ORDER BY startedAt DESC, flowRunId DESC
-         LIMIT ?`,
+        `
+      WITH hops AS (
+        SELECT flow_run_id, strftime('%Y-%m-%dT%H:%M:%fZ', fired_at) AS fired_at,
+          CASE WHEN julianday(settled_at) <= julianday(@asOf) THEN strftime('%Y-%m-%dT%H:%M:%fZ', settled_at) ELSE NULL END AS settled_at,
+          outcome, dispatch_id
+        FROM relay_hops WHERE crew_id = @crew AND julianday(fired_at) <= julianday(@asOf)
+      ), events AS (
+        SELECT flow_run_id, fired_at AS at,
+          CASE WHEN outcome IN (${budget}) AND dispatch_id IS NOT NULL AND settled_at IS NULL AND fired_at >= @floor THEN 1 ELSE 0 END AS live
+        FROM hops
+        UNION ALL SELECT flow_run_id, settled_at, 0 FROM hops WHERE settled_at IS NOT NULL
+        UNION ALL SELECT flow_run_id, strftime('%Y-%m-%dT%H:%M:%fZ', raised_at), 0 FROM crew_hails
+          WHERE crew_id = @crew AND flow_run_id IS NOT NULL AND julianday(raised_at) <= julianday(@asOf)
+      ), runs AS (
+        SELECT flow_run_id AS flowRunId, MAX(at) AS lastActivityAt, MAX(live) AS live
+        FROM events GROUP BY flow_run_id
       )
-      .all(...params) as RunCursorRow[]
-  }
-
-  private getRunCursor(crewId: string, flowRunId: string): RunCursorRow | null {
-    const row = this.db
-      .prepare(
-        `SELECT flow_run_id AS flowRunId,
-                MIN(at) AS startedAt,
-                MAX(at) AS endedAt
-         FROM (
-           SELECT flow_run_id, fired_at AS at FROM relay_hops
-             WHERE crew_id = ? AND flow_run_id = ?
-           UNION ALL
-           SELECT flow_run_id, raised_at AS at FROM crew_hails
-             WHERE crew_id = ? AND flow_run_id = ?
-         )
-         GROUP BY flowRunId`,
+      SELECT * FROM runs ${before}
+      ORDER BY live DESC, lastActivityAt DESC, flowRunId DESC LIMIT @limit
+    `,
       )
-      .get(crewId, flowRunId, crewId, flowRunId) as RunCursorRow | undefined
-    return row ?? null
+      .all({
+        crew: crewId,
+        asOf,
+        floor: new Date(Date.parse(asOf) - CREW_LIVE_WINDOW_MS).toISOString(),
+        limit,
+        ...Object.fromEntries(
+          BUDGETED_OUTCOMES.map((value, index) => ['budget' + index, value]),
+        ),
+        ...(cursor
+          ? {
+              live: cursor.live,
+              at: cursor.lastActivityAt,
+              id: cursor.flowRunId,
+            }
+          : {}),
+      }) as Omit<RunHistoryCursor, 'asOf'>[]
   }
 
   /** Oldest first: the order the run happened in, and the order laps read in. */
-  private readHops(crewId: string, flowRunIds: readonly string[]) {
+  private readHops(
+    crewId: string,
+    flowRunIds: readonly string[],
+    asOf: string,
+  ) {
     if (flowRunIds.length === 0) return []
     const rows = this.db
       .prepare(
         `SELECT * FROM relay_hops
-         WHERE crew_id = ? AND flow_run_id IN (${placeholders(flowRunIds.length)})
+         WHERE crew_id = ? AND flow_run_id IN (${placeholders(flowRunIds.length)}) AND julianday(fired_at) <= julianday(?)
          ORDER BY fired_at ASC, rowid ASC`,
       )
-      .all(crewId, ...flowRunIds) as RelayHopRow[]
-    return rows.map(relayHopFromRow)
+      .all(crewId, ...flowRunIds, asOf) as RelayHopRow[]
+    return rows.map((row) =>
+      relayHopFromRow(
+        Date.parse(row.settled_at ?? '') > Date.parse(asOf)
+          ? { ...row, settled_at: null, settled_status: null }
+          : row,
+      ),
+    )
   }
 
-  private readHails(crewId: string, flowRunIds: readonly string[]) {
+  private readHails(
+    crewId: string,
+    flowRunIds: readonly string[],
+    asOf: string,
+  ) {
     if (flowRunIds.length === 0) return []
     const rows = this.db
       .prepare(
         `SELECT * FROM crew_hails
-         WHERE crew_id = ? AND flow_run_id IN (${placeholders(flowRunIds.length)})
+         WHERE crew_id = ? AND flow_run_id IN (${placeholders(flowRunIds.length)}) AND julianday(raised_at) <= julianday(?)
          ORDER BY raised_at ASC, rowid ASC`,
       )
-      .all(crewId, ...flowRunIds) as CrewHailRow[]
+      .all(crewId, ...flowRunIds, asOf) as CrewHailRow[]
     return rows.map(crewHailFromRow)
   }
 
-  private readUnattributedHails(crewId: string) {
+  private readUnattributedHails(crewId: string, asOf: string) {
     const rows = this.db
       .prepare(
         `SELECT * FROM crew_hails
-         WHERE crew_id = ? AND flow_run_id IS NULL
+         WHERE crew_id = ? AND flow_run_id IS NULL AND julianday(raised_at) <= julianday(?)
          ORDER BY raised_at DESC, rowid DESC
          LIMIT ?`,
       )
-      .all(crewId, MAX_RUN_HISTORY_LIMIT) as CrewHailRow[]
+      .all(crewId, asOf, MAX_RUN_HISTORY_LIMIT) as CrewHailRow[]
     return rows.map(crewHailFromRow)
   }
 }

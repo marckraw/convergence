@@ -56,6 +56,13 @@ export interface RelayRun {
   crewId: string
   startedAt: string
   endedAt: string
+  lastActivityAt: string
+  owedBy: {
+    hopId: string
+    targetSessionId: string | null
+    firedAt: string
+  } | null
+  handedBackAt: string | null
   laps: RelayRunLap[]
   hails: CrewHail[]
   status: RunStatus
@@ -79,11 +86,19 @@ export interface RelayRunPage {
    * that crosses the tree boundary needs no barrier, while a literal does.
    */
   outcomes: Record<string, RunHistoryOutcome>
+  nextCursor: RunHistoryCursor | null
   hasMore: boolean
 }
 
 export interface ListRunsOptions {
   limit?: number
   /** The oldest run already held; the page resumes below it. */
-  before?: string | null
+  before?: RunHistoryCursor | null
+}
+
+export interface RunHistoryCursor {
+  asOf: string
+  live: 0 | 1
+  lastActivityAt: string
+  flowRunId: string
 }
