@@ -28,7 +28,9 @@ check it against the published schema. The database remains the live instance.
 
 A wire's `when` is either the exact reserved word `settled` (unconditional)
 or a nonblank condition accepted by the record's condition normalizer.
-Case or whitespace variants are ordinary conditions, not the reserved word.
+Case variants are ordinary conditions, not the reserved word. Any condition
+the record would rewrite is refused with the written and stored values;
+write it exactly as the record would keep it.
 Export refuses a stored condition literally `settled`; rename that condition
 before export. Layout references with invalid baton names are ignored; two
 layout keys normalizing to the same name refuse import.
@@ -59,7 +61,8 @@ when the provider matches. Baton-name differences use the same checkbox and
 apply in Phase A only when selected. Kept wires waiting on a renamed baton
 show a warning while the rename is selected, unless another selected rename
 takes over that baton. The plan blocks decisions that would leave two members
-with the same baton, including kept members. Wire conditions use the engine’s canonical comparison,
+with the same baton, including kept members; unresolved role choices do not
+count as new members. Wire conditions use the engine’s canonical comparison,
 including case, whitespace and baton formatting. Wire and layout references
 resolve through normalized role keys. Unnamed export fallbacks use the same
 32-character baton-name law; an invalid fallback asks for a baton name before export.

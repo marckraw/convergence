@@ -396,6 +396,7 @@ export function planCrewImport(
         : normalizedRoleReference(member.batonName ?? '')
     }),
     ...roles
+      .filter((role) => role.sessionId !== null || role.state === 'create')
       .filter(
         (role) => !crew?.members.some((m) => m.sessionId === role.sessionId),
       )
@@ -405,6 +406,8 @@ export function planCrewImport(
     (name, i) => name && finalNames.indexOf(name) !== i,
   )
   if (duplicate) {
+    crewRow.canUpdate = false
+    crewRow.differences = []
     crewRow.state = 'choose'
     crewRow.detail = `Two members would share baton name "${duplicate}". Change the rename decisions or choose distinct conversations.`
   }

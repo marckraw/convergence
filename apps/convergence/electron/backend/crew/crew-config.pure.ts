@@ -284,7 +284,7 @@ function validateBatonKeys(
     } catch (error) {
       if (ignoreInvalid) continue
       const reason = error instanceof Error ? error.message : String(error)
-      return `${path}: ${reason.charAt(0).toLowerCase()}${reason.slice(1)}`
+      return `${path}: ${reason.replace(/^A /, 'a ')}`
     }
   }
   return null
@@ -402,9 +402,11 @@ const condition: Check = (v, p) => {
   if (typeof v !== 'string') return expected(p, 'string')
   if (v === 'settled') return null
   try {
-    return normalizeRelayConditionToken(v) === null
-      ? expected(p, 'settled or a condition')
-      : null
+    const normalized = normalizeRelayConditionToken(v)
+    if (normalized === null) return expected(p, 'settled or a condition')
+    return normalized === v
+      ? null
+      : `${p}: written as ${JSON.stringify(v)}; the record would store it as ${JSON.stringify(normalized)} — write it exactly`
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
     return `${p}: ${reason.replace(/^A /, 'a ')}`

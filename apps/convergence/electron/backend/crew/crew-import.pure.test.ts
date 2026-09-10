@@ -661,17 +661,6 @@ it('reports an invalid source reference as one absent row (mutation: remove refe
     ],
   )
 })
-it.each(['settled', ' settled ', 'Settled'])(
-  'reserves only the exact condition %s (mutation: trim or lowercase the reserved word)',
-  (when) => {
-    const recipe = { ...config, wires: [{ ...config.wires[0]!, when }] }
-    const read = readCrewConfig(JSON.stringify(recipe))
-    if (!read.ok) throw new Error(read.reason)
-    expect(
-      crewImportRelayFields(read.config.wires[0]!, null).conditionToken,
-    ).toBe(when === 'settled' ? null : when)
-  },
-)
 it('blocks a new member taking a kept members baton (mutation: ignore kept names)', () => {
   const recipe = {
     ...one,
@@ -687,5 +676,37 @@ it('blocks a new member taking a kept members baton (mutation: ignore kept names
     canApply: false,
     detail:
       'Two members would share baton name "fable". Change the rename decisions or choose distinct conversations.',
+  })
+})
+
+it('leaves the crew row honest until an ambiguous role resolves (mutation: count unresolved roles)', () => {
+  const copy = structuredClone(world)
+  copy.sessions.push({ ...copy.sessions[0]!, id: 'second-fable' })
+  const plan = planCrewImport(one, copy)
+  expect({
+    role: plan.roles[0]!.state,
+    crew: plan.crew.state,
+    detail: plan.crew.detail,
+  }).toEqual({
+    role: 'choose',
+    crew: 'existing',
+    detail: 'existing',
+  })
+})
+it('clears crew updates when a collision overrides them (mutation: retain collision update fields)', () => {
+  const recipe = {
+    ...one,
+    emoji: '🎒',
+    roles: { mastermind: one.roles.fable!, fable: config.roles['horse opus']! },
+  }
+  const plan = planCrewImport(recipe, world, {}, { 'role:mastermind': false })
+  expect({
+    state: plan.crew.state,
+    canUpdate: plan.crew.canUpdate,
+    differences: plan.crew.differences,
+  }).toEqual({
+    state: 'choose',
+    canUpdate: false,
+    differences: [],
   })
 })

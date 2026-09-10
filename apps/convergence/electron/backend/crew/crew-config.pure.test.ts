@@ -750,7 +750,7 @@ it('refuses an exported reserved condition (mutation: export settled token)', ()
     'A wire condition reads as the reserved word "settled"; rename it before export',
   )
 })
-it.each(['a:b', '**horse**', 'x'.repeat(33), ''])(
+it.each(['a:b', '**horse**', 'x'.repeat(33)])(
   'refuses invalid stored baton %s (mutation: return stored baton raw)',
   (batonName) => {
     expect(() =>
@@ -776,4 +776,32 @@ it('refuses normalized layout-key collisions (mutation: omit layout-key validati
     ok: false,
     reason: 'layout[" Fable "]: duplicate baton name fable',
   })
+})
+
+it.each(['settled', 'Settled', ' settled ', ' BATON: horse '])(
+  'reads only unchanged condition %s (mutation: accept the trimmed form)',
+  (when) => {
+    const recipe = parseCrewYaml(liveCrewYaml)
+    recipe.wires[0]!.when = when
+    expect(readCrewConfig(JSON.stringify(recipe))).toEqual(
+      when === when.trim()
+        ? { ok: true, config: recipe }
+        : {
+            ok: false,
+            reason: `wires[0].when: written as ${JSON.stringify(when)}; the record would store it as ${JSON.stringify(when.trim())} — write it exactly`,
+          },
+    )
+  },
+)
+
+it('refuses an empty stored baton without falling back to the conversation name (mutation: treat empty baton as absent)', () => {
+  expect(() =>
+    crewToConfig(
+      crew,
+      [{ ...member, batonName: '' }],
+      [{ ...session, name: 'Valid fallback' }],
+      [project],
+      [],
+    ),
+  ).toThrow('A conversation needs a baton name before export')
 })

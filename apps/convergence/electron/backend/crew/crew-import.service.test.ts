@@ -12,6 +12,7 @@ import { RelayService } from '../relay/relay.service'
 import { CrewImportService } from './crew-import.service'
 import { readGitOriginUrlAsync } from '../git/git-origin'
 import type { CrewConfig } from './crew-config.types'
+import { crewToConfig } from './crew-config.pure'
 import type { CrewImportPlan } from './crew-import.types'
 
 vi.mock('../git/git-origin', () => ({
@@ -582,4 +583,46 @@ it('ignores an invalid layout reference during Apply (mutation: remove reference
     [null, null],
     [null, null],
   ])
+})
+
+it('refuses rewritten conditions before Apply and exports the accepted stored fixture (mutations: accept trimmed form; rewrite case at Apply)', async () => {
+  config.wires[0]!.when = ' settled '
+  await save()
+  await expect(
+    (async () => {
+      const rejectedPlan = await service.plan(path)
+      return service.apply(path, decisions(rejectedPlan))
+    })(),
+  ).rejects.toThrow(
+    'wires[0].when: written as " settled "; the record would store it as "settled" — write it exactly',
+  )
+  expect(counts()).toEqual([0, 0, 0, 0])
+  config.wires[0]!.when = 'Settled'
+  await save()
+  const plan = await service.plan(path)
+  const report = await service.apply(path, decisions(plan))
+  const crew = crews.getById(report.crewId)!
+  const exported = crewToConfig(
+    crew,
+    crew.members,
+    sessions.getAll(),
+    [
+      {
+        id: 'root',
+        name: 'Convergence',
+        origin: 'git@github.com:marckraw/convergence.git',
+        laneOf: null,
+        laneName: null,
+      },
+      {
+        id: 'lane',
+        name: 'Studio',
+        origin: null,
+        laneOf: 'root',
+        laneName: 'studio',
+      },
+    ],
+    relays.list(),
+  )
+  expect(exported.wires.map((wire) => wire.when)).toEqual(['Settled'])
 })
