@@ -1,5 +1,11 @@
 # convergence
 
+## 0.52.0
+
+### Minor Changes
+
+- a0d13e3: The Parallel work panel is ordered in time, with an older bucket; the row label describes the current answer.
+
 ## 0.51.0
 
 ### Minor Changes
