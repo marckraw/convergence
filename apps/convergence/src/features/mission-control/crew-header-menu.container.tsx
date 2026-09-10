@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { FC } from 'react'
+import { toast } from 'sonner'
+import { projectOpenApi } from '@/entities/project-open'
 import { MoreHorizontal, Trash2 } from 'lucide-react'
-import { useSessionCrewStore } from '@/entities/session-crew'
+import { useSessionCrewStore, sessionCrewApi } from '@/entities/session-crew'
 import type { SessionCrew } from '@/entities/session-crew'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
@@ -25,6 +27,8 @@ export const CrewHeaderMenu: FC<CrewHeaderMenuProps> = ({ crew }) => {
   const updateCrew = useSessionCrewStore((state) => state.updateCrew)
   const deleteCrew = useSessionCrewStore((state) => state.deleteCrew)
 
+  const [includePositions, setIncludePositions] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(crew.name)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -46,6 +50,51 @@ export const CrewHeaderMenu: FC<CrewHeaderMenuProps> = ({ crew }) => {
     if (!canSave) return
     await updateCrew(crew.id, { name })
     close()
+  }
+
+  const exportCrew = async (force = false) => {
+    setExporting(true)
+    try {
+      const result = await sessionCrewApi.export(crew.id, {
+        includePositions,
+        ...(force ? { force: true } : {}),
+      })
+      toast.success('Crew exported', {
+        description: result.path,
+        action: {
+          label: 'Reveal',
+          onClick: () => {
+            // The existing Finder door opens the containing directory.
+            const directory = result.path.slice(
+              0,
+              Math.max(
+                result.path.lastIndexOf('/'),
+                result.path.lastIndexOf('\\'),
+              ),
+            )
+            void projectOpenApi
+              .open({ appId: 'finder', path: directory })
+              .catch((error) => toast.error(String(error)))
+          },
+        },
+      })
+      close()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      toast.error('Could not export crew', {
+        description: message,
+        ...(message.includes('EEXIST')
+          ? {
+              action: {
+                label: 'Replace existing file',
+                onClick: () => void exportCrew(true),
+              },
+            }
+          : {}),
+      })
+    } finally {
+      setExporting(false)
+    }
   }
 
   return (
@@ -124,6 +173,28 @@ export const CrewHeaderMenu: FC<CrewHeaderMenuProps> = ({ crew }) => {
           Save name
         </Button>
 
+        <div className="flex flex-col gap-2 border-t border-white/10 pt-2">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Input
+              type="checkbox"
+              className="size-3.5 rounded-sm p-0"
+              checked={includePositions}
+              disabled={exporting}
+              onChange={(event) => setIncludePositions(event.target.checked)}
+            />
+            Include positions
+          </label>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="h-7 text-xs"
+            disabled={exporting}
+            onClick={() => void exportCrew()}
+          >
+            {exporting ? 'Exporting…' : 'Export crew…'}
+          </Button>
+        </div>
         <div className="border-t border-white/10 pt-2">
           {confirmingDelete ? (
             <div className="flex flex-col gap-2">

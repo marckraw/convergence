@@ -1709,6 +1709,10 @@ interface ElectronAPI {
     ) => Promise<WorkspacePullRequestData | null>
   }
   crew: {
+    export: (
+      crewId: string,
+      options: { includePositions?: boolean; force?: boolean },
+    ) => Promise<{ path: string; yaml: string }>
     list: () => Promise<SessionCrewData[]>
     create: (input: CreateSessionCrewInputData) => Promise<SessionCrewData>
     update: (

@@ -82,7 +82,7 @@ export async function readCloneableRepositoryUrlAsync(
 }
 
 /** The asynchronous half of `readGitOriginUrl`, with the identical refusal. */
-async function readGitOriginUrlAsync(
+export async function readGitOriginUrlAsync(
   repositoryPath: string,
 ): Promise<string | null> {
   try {

@@ -1,0 +1,226 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/marckraw/convergence/master/docs/crews/crew-config.schema.json",
+  "title": "Convergence crew configuration v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "crew": {
+      "type": "string"
+    },
+    "emoji": {
+      "type": ["string", "null"]
+    },
+    "color": {
+      "type": "string"
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deliveriesPerRun": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "attentionAfterMinutes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": ["deliveriesPerRun", "attentionAfterMinutes"]
+    },
+    "roles": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "conversation": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "model": {
+            "type": ["string", "null"]
+          },
+          "effort": {
+            "type": ["string", "null"]
+          },
+          "permissions": {
+            "oneOf": [
+              {
+                "enum": ["ask", "yolo"]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "preset": {
+                    "const": "custom"
+                  },
+                  "codex": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "approvalPolicy": {
+                        "enum": ["untrusted", "on-request", "never"]
+                      },
+                      "sandbox": {
+                        "enum": [
+                          "read-only",
+                          "workspace-write",
+                          "danger-full-access"
+                        ]
+                      }
+                    },
+                    "required": ["approvalPolicy", "sandbox"]
+                  },
+                  "claudeCode": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "permissionMode": {
+                        "enum": [
+                          "default",
+                          "acceptEdits",
+                          "auto",
+                          "dontAsk",
+                          "plan",
+                          "bypassPermissions"
+                        ]
+                      }
+                    },
+                    "required": ["permissionMode"]
+                  }
+                },
+                "required": ["preset"]
+              }
+            ]
+          },
+          "project": {
+            "type": ["string", "null"]
+          },
+          "lane": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "conversation",
+          "provider",
+          "model",
+          "effort",
+          "permissions",
+          "project",
+          "host"
+        ]
+      }
+    },
+    "wires": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "spawn": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "provider": {
+                        "type": "string"
+                      },
+                      "model": {
+                        "type": ["string", "null"]
+                      },
+                      "effort": {
+                        "type": ["string", "null"]
+                      },
+                      "project": {
+                        "type": ["string", "null"]
+                      },
+                      "lane": {
+                        "type": "string"
+                      },
+                      "account": {
+                        "const": "default"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "provider",
+                      "model",
+                      "effort",
+                      "project",
+                      "account"
+                    ]
+                  }
+                },
+                "required": ["spawn"]
+              }
+            ]
+          },
+          "when": {
+            "type": "string"
+          },
+          "opener": {
+            "oneOf": [
+              {
+                "enum": ["keep", "clear"]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "first": {
+                    "type": "string"
+                  }
+                },
+                "required": ["first"]
+              }
+            ]
+          },
+          "instruction": {
+            "type": "string"
+          },
+          "armed": {
+            "const": false
+          }
+        },
+        "required": ["from", "to", "when", "opener"]
+      }
+    },
+    "layout": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        },
+        "minItems": 2,
+        "maxItems": 2
+      }
+    }
+  },
+  "required": ["version", "crew", "emoji", "limits", "roles", "wires"]
+}

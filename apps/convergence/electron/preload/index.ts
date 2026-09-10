@@ -190,6 +190,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('pullRequest:refreshForSession', sessionId),
   },
   crew: {
+    export: (
+      crewId: string,
+      options: { includePositions?: boolean; force?: boolean },
+    ) => ipcRenderer.invoke('crew:export', crewId, options),
     list: () => ipcRenderer.invoke('crew:list'),
     create: (input: unknown) => ipcRenderer.invoke('crew:create', input),
     update: (id: string, patch: unknown) =>
