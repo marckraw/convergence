@@ -45,6 +45,18 @@ export interface StubDaemon {
    * puts `1, 2, 4` on the wire and `1, 2, 3, 4` in the log.
    */
   loseFrame: (envelope: ExecutionHostEventEnvelope) => void
+  /**
+   * The inverse of `loseFrame`: writes an envelope to the open stream WITHOUT
+   * logging it, so the daemon has no memory of ever having sent it.
+   *
+   * `emit(1); emitUnlogged(3)` puts a gap on the wire above a log that holds
+   * only `1`, so the resume it provokes answers with NOTHING rather than with
+   * the same hole again. That is what makes a test about a hole staying open
+   * across re-opens stageable at all: the client is left holding the gap while
+   * the test decides, frame by frame, what the reconnected stream delivers next
+   * (MAR-2779 round 4).
+   */
+  emitUnlogged: (envelope: ExecutionHostEventEnvelope) => void
   dropStream: () => void
   startRequests: Array<Record<string, unknown>>
   commandEnvelopes: Array<Record<string, unknown>>
@@ -353,6 +365,9 @@ export function createStubDaemon(): StubDaemon {
     },
     loseFrame(envelope) {
       log.push(envelope)
+    },
+    emitUnlogged(envelope) {
+      current.controller?.enqueue(sseChunk(envelope))
     },
     dropStream() {
       const controller = current.controller
