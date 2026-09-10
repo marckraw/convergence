@@ -1615,8 +1615,16 @@ class RemoteSessionRun {
         if (this.stopped) return
         attempt += 1
         if (attempt >= policy.maxAttempts) {
+          // The other exit from this loop, and it owes the person the same
+          // sentence. A budget can run out either way -- on reads that closed
+          // empty, or on opens the daemon would not answer at all -- and a hole
+          // the resume never filled is the part they can act on whichever way
+          // it ended (MAR-2779 round 4).
+          const unavailable = `Remote session event stream is unavailable: ${describeRemoteExecutionHostFailure(error)}`
           this.failSession(
-            `Remote session event stream is unavailable: ${describeRemoteExecutionHostFailure(error)}`,
+            unhealedGap === null
+              ? unavailable
+              : describeStreamEndAboveHole(unavailable, unhealedGap),
           )
           return
         }

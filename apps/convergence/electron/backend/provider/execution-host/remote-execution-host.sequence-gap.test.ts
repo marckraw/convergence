@@ -63,6 +63,21 @@ describe('a remote stream that skips a sequence', () => {
     })
   }
 
+  /**
+   * The note a failed session leaves on the transcript, which is the only place
+   * its last word can be read: `failSession` says it once, as a note, and the
+   * status alone cannot carry a sentence.
+   */
+  function noteText(deltas: SessionDelta[]): string | null {
+    const note = deltas.find(
+      (delta) =>
+        delta.kind === 'conversation.item.add' && delta.item.kind === 'note',
+    )
+    return note?.kind === 'conversation.item.add' && note.item.kind === 'note'
+      ? note.item.text
+      : null
+  }
+
   function startConfig(sessionId: string): SessionStartConfig {
     return {
       sessionId,
@@ -274,16 +289,162 @@ describe('a remote stream that skips a sequence', () => {
     // (MAR-2779 round 3).
     //
     // Mutation: drop the suffix and this is red on the sentence.
-    const note = deltas.find(
-      (delta) =>
-        delta.kind === 'conversation.item.add' && delta.item.kind === 'note',
-    )
-    expect(
-      note?.kind === 'conversation.item.add' && note.item.kind === 'note'
-        ? note.item.text
-        : null,
-    ).toBe(
+    expect(noteText(deltas)).toBe(
       'Remote session event stream dropped and could not be re-established: expected 3, got 4.',
+    )
+  }, 5_000)
+
+  /**
+   * The OTHER way this loop gives up says which hole it left behind too
+   * (MAR-2779 round 4).
+   *
+   * A budget runs out in one of two places: on reads that closed empty, and on
+   * opens the daemon would not answer at all. Only the first carried the hole,
+   * so a gap followed by a daemon that stopped answering left the person with
+   * "the event stream is unavailable" and no word about the frame that is
+   * missing -- while the Studio client, reading the same wire through the same
+   * organ, said it. Two clients disagreeing is how this whole ticket started.
+   *
+   * The 500 is set on the same tick as the emits, before the reader has run:
+   * the read that gaps is the one already open, and every open after it is
+   * refused, so the budget is spent entirely by failing OPENS.
+   *
+   * Mutation: report the bare `unavailable` sentence and this is red on the
+   * suffix.
+   */
+  it('names the hole it left behind when the re-open is refused', async () => {
+    const host = hostWith(3)
+    await host.refreshProviders()
+    const statuses: SessionStatus[] = []
+    const deltas: SessionDelta[] = []
+    const handle = host.start('claude', startConfig('s-1'))
+    handle.onStatusChange((status) => statuses.push(status))
+    handle.onDelta((delta) => deltas.push(delta))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    stub.emit(envelope(2, { kind: 'activity', activity: 'thinking' }))
+    stub.emit(envelope(4, { kind: 'heartbeat' }))
+    stub.setEventsStatus(500)
+
+    await waitUntil(() => statuses.includes('failed'), 'the session to fail')
+    expect(kept).toEqual([1, 2])
+    expect(noteText(deltas)).toBe(
+      'Remote session event stream is unavailable: Remote execution host ' +
+        'event stream failed with 500. (HTTP 500): expected 3, got 4.',
+    )
+  }, 5_000)
+
+  /**
+   * The hole belongs to the run, not to the read that found it: re-opens that
+   * deliver nothing leave it exactly as they found it (MAR-2779 round 4).
+   *
+   * `streamGap` is one read's business and is cleared when the next one opens,
+   * and the read that spends the last attempt is usually one that delivered
+   * nothing at all -- so a sentence taken from it would be the bare one, on a
+   * run whose transcript is missing a frame. This is the case the test above
+   * cannot show: there, every re-open reads the same hole again, and reading
+   * either variable gives the same answer.
+   *
+   * `emitUnlogged` is what makes the difference visible. The daemon never
+   * logged 4, so the resume it is asked for is answered with NOTHING: the
+   * re-opens below are empty, not gapped.
+   *
+   * Mutation: read `this.streamGap` at the `failSession` site instead of the
+   * carried `unhealedGap` and this is red on the missing suffix.
+   */
+  it('carries the hole across re-opens that delivered nothing', async () => {
+    const host = hostWith(3)
+    await host.refreshProviders()
+    const statuses: SessionStatus[] = []
+    const deltas: SessionDelta[] = []
+    const handle = host.start('claude', startConfig('s-1'))
+    handle.onStatusChange((status) => statuses.push(status))
+    handle.onDelta((delta) => deltas.push(delta))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    stub.emit(envelope(2, { kind: 'activity', activity: 'thinking' }))
+    // On the wire, and nowhere in the daemon's log.
+    stub.emitUnlogged(envelope(4, { kind: 'heartbeat' }))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 2,
+      'the resume the gap asked for',
+    )
+    stub.dropStream()
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 3,
+      'the re-open after the first empty read',
+    )
+    stub.dropStream()
+
+    await waitUntil(() => statuses.includes('failed'), 'the budget to run out')
+    // Both resumes asked from the last contiguous sequence and were answered
+    // with an empty stream; neither of them saw a gap of its own.
+    expect(stub.eventStreamLastEventIds).toEqual([null, '2', '2'])
+    expect(kept).toEqual([1, 2])
+    expect(noteText(deltas)).toBe(
+      'Remote session event stream dropped and could not be re-established: expected 3, got 4.',
+    )
+  }, 5_000)
+
+  /**
+   * And the hole stops being carried the moment a read delivers: the resume is
+   * the one thing that heals one, and a stream that gives up long afterwards
+   * must not name a frame the daemon already replayed (MAR-2779 round 4).
+   *
+   * Without this, "carry the hole across reads" has only its holding half
+   * pinned, and a run that recovered at 09:00 and lost its host at 17:00 blames
+   * a hole that was filled eight hours earlier.
+   *
+   * Three drops: the first ends the read that delivered the replay and renews
+   * the budget, and the two after it spend it on empty ones.
+   *
+   * Mutation: delete `else if (envelopes > 0) unhealedGap = null` and this is
+   * red -- the last word carries `: expected 3, got 4.` for a hole that healed.
+   */
+  it('stops carrying a hole a later read has healed', async () => {
+    const host = hostWith(3)
+    await host.refreshProviders()
+    const statuses: SessionStatus[] = []
+    const deltas: SessionDelta[] = []
+    const handle = host.start('claude', startConfig('s-1'))
+    handle.onStatusChange((status) => statuses.push(status))
+    handle.onDelta((delta) => deltas.push(delta))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    stub.emit(envelope(2, { kind: 'activity', activity: 'thinking' }))
+    stub.loseFrame(envelope(3, { kind: 'heartbeat' }))
+    stub.emit(envelope(4, { kind: 'heartbeat' }))
+
+    await waitUntil(() => kept.length === 4, 'the resume to heal the hole')
+    stub.dropStream()
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 3,
+      'the re-open after the healed stream dropped',
+    )
+    stub.dropStream()
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 4,
+      'the re-open after the first empty read',
+    )
+    stub.dropStream()
+
+    await waitUntil(() => statuses.includes('failed'), 'the budget to run out')
+    expect(kept).toEqual([1, 2, 3, 4])
+    expect(noteText(deltas)).toBe(
+      'Remote session event stream dropped and could not be re-established.',
     )
   }, 5_000)
 
@@ -428,8 +589,10 @@ describe('a remote stream that skips a sequence', () => {
    * Without the qualifier a debug log reads "0 discarded" as "nothing else was
    * on the wire", which is exactly the wrong conclusion to draw about a hole.
    *
-   * Mutation: count the frames the reader never read (anything but the current
-   * batch) and this is red on the absence of the row.
+   * Mutation: drop the `count === 0` guard in `traceFramesAboveHole` and this
+   * is red on the absence of the row -- the hole traces "0 frames above the
+   * hole discarded in this read", which is the sentence this test exists to
+   * keep out of the log.
    */
   it('counts only the frames the read that gapped was holding', async () => {
     const host = hostWith(5)
