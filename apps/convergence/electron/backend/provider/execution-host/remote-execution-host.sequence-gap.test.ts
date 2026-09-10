@@ -268,7 +268,12 @@ describe('a remote stream that skips a sequence', () => {
     expect(kept).toEqual([1, 2])
     expect(statuses).not.toContain('completed')
     // The sentence is the one this adapter already uses for a stream it could
-    // not re-establish: a gap that outlives the budget IS that.
+    // not re-establish, CARRYING the hole that ended it: without the suffix the
+    // last word a person is left with is "the stream dropped", which is true of
+    // every exhausted budget and says nothing about the frame that is missing
+    // (MAR-2779 round 3).
+    //
+    // Mutation: drop the suffix and this is red on the sentence.
     const note = deltas.find(
       (delta) =>
         delta.kind === 'conversation.item.add' && delta.item.kind === 'note',
@@ -278,7 +283,7 @@ describe('a remote stream that skips a sequence', () => {
         ? note.item.text
         : null,
     ).toBe(
-      'Remote session event stream dropped and could not be re-established.',
+      'Remote session event stream dropped and could not be re-established: expected 3, got 4.',
     )
   }, 5_000)
 
@@ -402,9 +407,57 @@ describe('a remote stream that skips a sequence', () => {
     expect(kept).toEqual([1, 2, 3, 4, 5, 6])
     expect(
       entries.filter(
-        (entry) => entry.note === '2 frames above the hole discarded',
+        (entry) =>
+          entry.note === '2 frames above the hole discarded in this read',
       ),
     ).toHaveLength(1)
+
+    handle.stop()
+  }, 5_000)
+
+  /**
+   * The count is what the SAME read carried, and the row says so.
+   *
+   * The daemon writes when it likes: the hole can be the last frame of its own
+   * chunk while more are already queued behind it. Those are cancelled unread
+   * when the reader walks away, so the adapter never sees them to count them --
+   * the same two frames that traced "2 frames above the hole discarded" in the
+   * test above trace nothing here, having arrived one chunk later. Both are
+   * replayed by the resume either way, which is what the transcript below says.
+   *
+   * Without the qualifier a debug log reads "0 discarded" as "nothing else was
+   * on the wire", which is exactly the wrong conclusion to draw about a hole.
+   *
+   * Mutation: count the frames the reader never read (anything but the current
+   * batch) and this is red on the absence of the row.
+   */
+  it('counts only the frames the read that gapped was holding', async () => {
+    const host = hostWith(5)
+    await host.refreshProviders()
+    const handle = host.start('claude', startConfig('s-1'))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    stub.emit(envelope(2, { kind: 'heartbeat' }))
+    stub.loseFrame(envelope(3, { kind: 'heartbeat' }))
+    // The hole arrives alone; 5 and 6 are still queued behind it when the
+    // reader cancels the body.
+    stub.emitBatch([envelope(4, { kind: 'activity', activity: 'thinking' })])
+    stub.emitBatch([
+      envelope(5, { kind: 'heartbeat' }),
+      envelope(6, { kind: 'status', status: 'completed' }),
+    ])
+
+    await waitUntil(() => kept.length === 6, 'the resume to heal the hole')
+    expect(kept).toEqual([1, 2, 3, 4, 5, 6])
+    expect(
+      entries.filter(
+        (entry) => entry.note?.includes('above the hole') ?? false,
+      ),
+    ).toEqual([])
 
     handle.stop()
   }, 5_000)

@@ -52,6 +52,8 @@ import {
   daemonConfigurationFingerprint,
   decodeRemoteProjects,
   describeSeqGap,
+  describeSeqHole,
+  describeStreamEndAboveHole,
   evaluateHandshake,
   parseDaemonHealth,
   parseRemoteExecutionHostMeta,
@@ -1417,11 +1419,15 @@ class RemoteSessionRun {
   private dead = false
   private lastSeq = 0
   /**
-   * Set when the stream in progress delivered a sequence gap, cleared when the
-   * next one opens. Read by `readStream` so the batch a gap arrived in stops
-   * being consumed, and by nothing else (MAR-2779).
+   * The hole the stream in progress fell into — `expected 3, got 4` — cleared
+   * when the next one opens.
+   *
+   * Read by `readStream` so the batch a gap arrived in stops being consumed,
+   * and by `consumeEventStream`, which carries it as far as the reconnect
+   * budget lasts: a budget that runs out while a hole is open owes the person
+   * the hole rather than "the stream dropped" (MAR-2779 round 3).
    */
-  private streamGap = false
+  private streamGap: string | null = null
 
   constructor(private readonly params: RemoteSessionRunParams) {
     this.lastSeq = params.resume?.afterSeq ?? 0
@@ -1586,6 +1592,11 @@ class RemoteSessionRun {
   private async consumeEventStream(): Promise<void> {
     const policy = this.params.host.reconnectPolicy()
     let attempt = 0
+    // The hole no reconnect has filled yet, carried ACROSS reads: `streamGap`
+    // belongs to one read and is cleared when the next one opens, and the read
+    // that spends the last attempt is usually one that delivered nothing at
+    // all (MAR-2779 round 3).
+    let unhealedGap: string | null = null
 
     while (!this.stopped && !this.dead) {
       let response: Response
@@ -1616,6 +1627,13 @@ class RemoteSessionRun {
       const envelopes = await this.readStream(response)
       if (this.stopped || this.dead) return
 
+      // A read that gapped names the hole; a read that delivered without
+      // gapping is the resume arriving, which is the only thing that heals one.
+      // A read that did neither — an open that closed empty — leaves the hole
+      // exactly as it found it.
+      if (this.streamGap !== null) unhealedGap = this.streamGap
+      else if (envelopes > 0) unhealedGap = null
+
       // The daemon holds the stream open for a live session; reaching the
       // end means the connection dropped. Resume from the last sequence.
       this.recordDebug('lifecycle', {
@@ -1640,8 +1658,12 @@ class RemoteSessionRun {
       if (envelopes > 0) attempt = 0
       attempt += 1
       if (attempt >= policy.maxAttempts) {
+        const dropped =
+          'Remote session event stream dropped and could not be re-established.'
         this.failSession(
-          'Remote session event stream dropped and could not be re-established.',
+          unhealedGap === null
+            ? dropped
+            : describeStreamEndAboveHole(dropped, unhealedGap),
         )
         return
       }
@@ -1665,7 +1687,7 @@ class RemoteSessionRun {
     const reader = body.getReader()
     const decoder = new TextDecoder()
     const parser = createSseParser()
-    this.streamGap = false
+    this.streamGap = null
     let envelopes = 0
 
     try {
@@ -1683,7 +1705,7 @@ class RemoteSessionRun {
           // Everything after a gap in this batch sits above a hole, whatever
           // its own sequence says. Leaving here ends the stream and hands the
           // resume to `consumeEventStream` (MAR-2779).
-          if (this.streamGap) {
+          if (this.streamGap !== null) {
             this.traceFramesAboveHole(events.length - index - 1)
             return envelopes
           }
@@ -1697,7 +1719,7 @@ class RemoteSessionRun {
       // A gap is the one exit that leaves the daemon still writing: `done`
       // means it closed, an abort already tore the socket down, and only this
       // path walks away from a stream that is otherwise healthy.
-      if (this.streamGap) void body.cancel().catch(() => {})
+      if (this.streamGap !== null) void body.cancel().catch(() => {})
     }
   }
 
@@ -1739,12 +1761,21 @@ class RemoteSessionRun {
    * The resume brings them back, and one line saying how many were set aside is
    * the difference between reading that recovery and guessing at it. One row
    * rather than one per frame -- a coalesced replay can carry a whole turn.
+   *
+   * IN THIS READ, and the wording says so: the count is the frames the SAME
+   * chunk carried above the hole, which is all this method can see. Whatever
+   * the daemon had already written after that chunk is cancelled unread when
+   * the reader walks away, so a hole that arrives at the end of its own chunk
+   * traces no row at all while frames were plainly still coming. None of them
+   * are lost either way -- the resume replays everything above the last
+   * contiguous sequence -- but a debug log that said "0 frames discarded" and
+   * meant "0 in this chunk, unknown after it" would be read as the first.
    */
   private traceFramesAboveHole(count: number): void {
     if (count === 0) return
     this.recordDebug('event', {
       direction: 'in',
-      note: `${count} frame${count === 1 ? '' : 's'} above the hole discarded`,
+      note: `${count} frame${count === 1 ? '' : 's'} above the hole discarded in this read`,
     })
   }
 
@@ -1816,7 +1847,7 @@ class RemoteSessionRun {
         payload: { seq: envelope.seq, lastSeq: this.lastSeq },
         note: describeSeqGap(this.lastSeq, envelope.seq),
       })
-      this.streamGap = true
+      this.streamGap = describeSeqHole(this.lastSeq, envelope.seq)
       return false
     }
     this.lastSeq = envelope.seq
