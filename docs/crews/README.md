@@ -22,9 +22,48 @@ carried in the recipe; spawn accounts become `default`. Export reads local
 records and local Git metadata and makes no execution-host request.
 
 `crewToConfig` and `renderCrewYaml` are pure. The test-local `parseCrewYaml` is
-only the inverse for the C1 round-trip canary; it is not a validation or import
-API. The schema pins the data shape, while the exporter checks references
-between roles and wires. The database remains the live instance.
+only the inverse for the C1 round-trip canary. Runtime `readCrewConfig` parses
+YAML and returns the first path-qualified shape error. Dev-only AJV tests
+check it against the published schema. The database remains the live instance.
 
 Export resolves default limits into numbers; importing them makes those limits
 explicit choices rather than inherited defaults.
+
+## Import and reconciliation
+
+**Import crew…** sits beside **New crew** in Mission Control's session crew
+picker. It reads a YAML file from any path. The pure `planCrewImport(config,
+world)` compares it with an explicit local snapshot: conversation name, root
+origin (or root name), optional lane, and execution host determine candidates.
+Ambiguity always asks; missing projects can use **Choose folder…**, while
+missing lanes and execution hosts must be created through their existing UI.
+Remote conversations can be bound, but import cannot create them in this
+version. Spawn wires require `opener: keep`, because RelayService cannot store
+an opener on a fresh conversation; an incompatible recipe stays blocked. Plan and Apply make no execution-host requests.
+
+Model and effort differences offer **Update to file**, checked by default.
+Provider and permissions are fixed at creation: choose **Bind as is** to keep
+those local values, or **Create new** to use the recipe's values in a fresh
+conversation. A bind-as-is choice can still request a model/effort update;
+the session service may refuse it, including for a provider mismatch.
+Local members and wires absent from the recipe are kept. Layout applies only
+to listed roles when **Include layout** is checked.
+
+Apply rereads the file and refuses stale decisions. Phase A is one synchronous
+transaction through the session, crew and relay services: create conversations,
+reconcile membership/baton names, positions, wires and limits, then stamp the
+crew with `config_path`, `config_sha256` and `config_applied_at`. The migration
+adds nullable columns once under an `app_state` marker. No records are deleted.
+A transaction interruption rolls back these database writes; creating the
+shared global working directory can leave an empty directory behind.
+
+Phase B runs after commit, sequentially calling `SessionService.setModelSelection`
+for each requested model/effort update. Its guards decide whether the update
+lands, and its own transaction records the model-change transcript note.
+A refusal is reported as **not updated: <reason>** without rolling back Phase A.
+The stamp means **applied at this hash**; it does not promise every requested
+model change succeeded. A refused update stays visible in the report and in
+the next plan. Reapplying an unchanged, fully reconciled file creates no
+conversations or wires and reports **Nothing to change**. This means no
+effective configuration change: the provenance stamp is still refreshed, and
+inherited limits equal to the file become explicit stored values.

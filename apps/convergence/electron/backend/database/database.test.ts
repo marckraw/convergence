@@ -940,7 +940,7 @@ describe('database', () => {
     ])
   })
 
-  it('creates crew tables with decoration columns and no foreign keys', () => {
+  it('creates crew tables with decoration and provenance columns, no foreign keys (mutation: skip crew config migration)', () => {
     const db = getDatabase()
 
     const crewColumns = db
@@ -955,6 +955,9 @@ describe('database', () => {
         'position',
         'round_cap',
         'stall_minutes',
+        'config_path',
+        'config_sha256',
+        'config_applied_at',
         'created_at',
         'updated_at',
       ].sort(),

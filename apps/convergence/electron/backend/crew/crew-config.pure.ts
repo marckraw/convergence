@@ -1,3 +1,4 @@
+import { parse } from 'yaml'
 import { normalizeOriginKey } from '@mrck-labs/execution-host-protocol'
 import { resolveRoundCap } from '../relay/relay.pure'
 import { resolveStallMinutes } from '../relay/crew-hail.pure'
@@ -231,3 +232,168 @@ export function crewHomeCandidates<T extends { id: string }>(
     (project) => highest === 0 || counts.get(project.id) === highest,
   )
 }
+
+/** Reads the portable recipe before planning any local changes; AJV stays test-only. */
+export function readCrewConfig(
+  text: string,
+): { ok: true; config: CrewConfig } | { ok: false; reason: string } {
+  let value: unknown
+  try {
+    value = parse(text)
+  } catch (error) {
+    return {
+      ok: false,
+      reason: `document: ${error instanceof Error ? error.message : 'invalid YAML'}`,
+    }
+  }
+  const reason = validateRecipe(value, '')
+  return reason
+    ? { ok: false, reason }
+    : { ok: true, config: value as CrewConfig }
+}
+
+type Check = (value: unknown, path: string) => string | null
+const expected = (path: string, kind: string): string =>
+  `${path || 'document'}: expected ${kind}`
+const string: Check = (v, p) =>
+  typeof v === 'string' ? null : expected(p, 'string')
+const number: Check = (v, p) =>
+  typeof v === 'number' && Number.isFinite(v)
+    ? null
+    : expected(p, 'finite number')
+const positiveInteger: Check = (v, p) =>
+  typeof v === 'number' && Number.isInteger(v) && v >= 1
+    ? null
+    : expected(p, 'positive integer')
+const nullable =
+  (check: Check): Check =>
+  (v, p) =>
+    v === null ? null : check(v, p)
+const optional =
+  (check: Check): Check =>
+  (v, p) =>
+    v === undefined ? null : check(v, p)
+const oneOf =
+  (...values: unknown[]): Check =>
+  (v, p) =>
+    values.includes(v) ? null : expected(p, values.map(String).join(' | '))
+const object = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v)
+const childPath = (p: string, key: string): string => (p ? `${p}.${key}` : key)
+function shape(fields: Record<string, Check>): Check {
+  return (v, p) => {
+    if (!object(v)) return expected(p, 'object')
+    for (const [key, check] of Object.entries(fields)) {
+      const reason = check(
+        Object.hasOwn(v, key) ? v[key] : undefined,
+        childPath(p, key),
+      )
+      if (reason) return reason
+    }
+    const extra = Object.keys(v).find((key) => !Object.hasOwn(fields, key))
+    return extra === undefined
+      ? null
+      : `${childPath(p, extra)}: unexpected field`
+  }
+}
+const record =
+  (check: Check): Check =>
+  (v, p) => {
+    if (!object(v)) return expected(p, 'record')
+    for (const [key, value] of Object.entries(v)) {
+      const reason = check(value, childPath(p, key))
+      if (reason) return reason
+    }
+    return null
+  }
+const list =
+  (check: Check): Check =>
+  (v, p) => {
+    if (!Array.isArray(v)) return expected(p, 'array')
+    for (let i = 0; i < v.length; i++) {
+      const reason = check(v[i], `${p}[${i}]`)
+      if (reason) return reason
+    }
+    return null
+  }
+const customPermissions = shape({
+  preset: oneOf('custom'),
+  codex: optional(
+    shape({
+      approvalPolicy: oneOf('untrusted', 'on-request', 'never'),
+      sandbox: oneOf('read-only', 'workspace-write', 'danger-full-access'),
+    }),
+  ),
+  claudeCode: optional(
+    shape({
+      permissionMode: oneOf(
+        'default',
+        'acceptEdits',
+        'auto',
+        'dontAsk',
+        'plan',
+        'bypassPermissions',
+      ),
+    }),
+  ),
+})
+const permissions: Check = (v, p) =>
+  typeof v === 'string' ? oneOf('ask', 'yolo')(v, p) : customPermissions(v, p)
+const spawn = shape({
+  name: string,
+  provider: string,
+  model: nullable(string),
+  effort: nullable(string),
+  project: nullable(string),
+  lane: optional(string),
+  account: oneOf('default'),
+})
+const target: Check = (v, p) =>
+  typeof v === 'string'
+    ? null
+    : object(v)
+      ? shape({ spawn })(v, p)
+      : expected(p, 'role | { spawn }')
+const opener: Check = (v, p) =>
+  typeof v === 'string'
+    ? oneOf('keep', 'clear')(v, p)
+    : object(v)
+      ? shape({ first: string })(v, p)
+      : expected(p, 'keep | clear | { first }')
+const pair: Check = (v, p) =>
+  !Array.isArray(v) || v.length !== 2
+    ? expected(p, 'pair of coordinates')
+    : list(number)(v, p)
+const validateRecipe = shape({
+  version: oneOf(1),
+  crew: string,
+  emoji: nullable(string),
+  color: optional(string),
+  limits: shape({
+    deliveriesPerRun: positiveInteger,
+    attentionAfterMinutes: positiveInteger,
+  }),
+  roles: record(
+    shape({
+      conversation: string,
+      provider: string,
+      model: nullable(string),
+      effort: nullable(string),
+      permissions,
+      project: nullable(string),
+      lane: optional(string),
+      host: string,
+    }),
+  ),
+  wires: list(
+    shape({
+      from: string,
+      to: target,
+      when: string,
+      opener,
+      instruction: optional(string),
+      armed: optional(oneOf(false)),
+    }),
+  ),
+  layout: optional(record(pair)),
+})

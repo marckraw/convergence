@@ -7,6 +7,7 @@ import { preProcessFile } from 'typescript'
 import { describe, expect, it } from 'vitest'
 import {
   crewToConfig,
+  readCrewConfig,
   renderCrewYaml,
   crewExportSlug,
   crewHomeCandidates,
@@ -348,18 +349,18 @@ it.each([
   },
 )
 
-it('keeps the canary libraries out of runtime dependencies (mutations: promote yaml to runtime; remove ajv declaration)', () => {
+it('declares runtime YAML and test-only AJV (mutations: demote yaml; promote ajv)', () => {
   const manifest = JSON.parse(
     readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),
   )
   expect({
     runtimeYaml: Object.hasOwn(manifest.dependencies, 'yaml'),
-    testYaml: Object.hasOwn(manifest.devDependencies, 'yaml'),
+    runtimeAjv: Object.hasOwn(manifest.dependencies, 'ajv'),
     testAjv: Object.hasOwn(manifest.devDependencies, 'ajv'),
-  }).toEqual({ runtimeYaml: false, testYaml: true, testAjv: true })
+  }).toEqual({ runtimeYaml: true, runtimeAjv: false, testAjv: true })
 })
 
-/** C1 inverse belongs only to the canary; production never imports YAML parsing. */
+/** Independent YAML inverse for serializer canaries. */
 function parseCrewYaml(yaml: string): CrewConfig {
   return parse(yaml) as CrewConfig
 }
@@ -403,7 +404,7 @@ it('preserves the spawn lane beside its root project (mutations: use the lane ro
   }).toEqual({ valid: true, errors: null })
 })
 
-it('keeps YAML imports out of production source (mutation: re-add the yaml import)', () => {
+it('keeps AJV imports out of production source (mutation: add runtime ajv import)', () => {
   const workspace = fileURLToPath(new URL('../../../', import.meta.url))
   const imports = ['electron', 'src'].flatMap((directory) => {
     const root = join(workspace, directory)
@@ -418,11 +419,231 @@ it('keeps YAML imports out of production source (mutation: re-add the yaml impor
         const path = join(root, file)
         return preProcessFile(readFileSync(path, 'utf8'), true, true)
           .importedFiles.filter(
-            ({ fileName }) =>
-              fileName === 'yaml' || fileName.startsWith('yaml/'),
+            ({ fileName }) => fileName === 'ajv' || fileName.startsWith('ajv/'),
           )
           .map(({ fileName }) => `${relative(workspace, path)}: ${fileName}`)
       })
   })
   expect(imports.sort()).toEqual([])
 })
+
+it('reads the exported recipe at runtime (mutation: refuse valid YAML)', () => {
+  expect(readCrewConfig(liveCrewYaml)).toEqual({
+    ok: true,
+    config: parseCrewYaml(liveCrewYaml),
+  })
+})
+
+const invalidRecipes: [string, (value: ReturnType<typeof parse>) => void][] = [
+  [
+    'version',
+    (c) => {
+      c.version = 2
+    },
+  ],
+  [
+    'crew',
+    (c) => {
+      c.crew = null
+    },
+  ],
+  [
+    'emoji',
+    (c) => {
+      delete c.emoji
+    },
+  ],
+  [
+    'color',
+    (c) => {
+      c.color = 1
+    },
+  ],
+  [
+    'limits.deliveriesPerRun',
+    (c) => {
+      c.limits.deliveriesPerRun = 0
+    },
+  ],
+  [
+    'limits.attentionAfterMinutes',
+    (c) => {
+      c.limits.attentionAfterMinutes = 1.2
+    },
+  ],
+  [
+    'roles',
+    (c) => {
+      c.roles = []
+    },
+  ],
+  [
+    'roles.fable.conversation',
+    (c) => {
+      c.roles.fable.conversation = null
+    },
+  ],
+  [
+    'roles.fable.provider',
+    (c) => {
+      delete c.roles.fable.provider
+    },
+  ],
+  [
+    'roles.fable.model',
+    (c) => {
+      c.roles.fable.model = 1
+    },
+  ],
+  [
+    'roles.fable.effort',
+    (c) => {
+      delete c.roles.fable.effort
+    },
+  ],
+  [
+    'roles.fable.project',
+    (c) => {
+      c.roles.fable.project = false
+    },
+  ],
+  [
+    'roles.fable.lane',
+    (c) => {
+      c.roles.fable.lane = 1
+    },
+  ],
+  [
+    'roles.fable.host',
+    (c) => {
+      delete c.roles.fable.host
+    },
+  ],
+  [
+    'roles.fable.permissions',
+    (c) => {
+      c.roles.fable.permissions = 'silent'
+    },
+  ],
+  [
+    'roles.fable.permissions.codex.sandbox',
+    (c) => {
+      c.roles.fable.permissions = {
+        preset: 'custom',
+        codex: { approvalPolicy: 'never', sandbox: 'anything' },
+      }
+    },
+  ],
+  [
+    'roles.fable.permissions.claudeCode.permissionMode',
+    (c) => {
+      c.roles.fable.permissions = {
+        preset: 'custom',
+        claudeCode: { permissionMode: 'anything' },
+      }
+    },
+  ],
+  [
+    'wires',
+    (c) => {
+      c.wires = {}
+    },
+  ],
+  [
+    'wires[2].when',
+    (c) => {
+      delete c.wires[2].when
+    },
+  ],
+  [
+    'wires[0].from',
+    (c) => {
+      c.wires[0].from = null
+    },
+  ],
+  [
+    'wires[0].to',
+    (c) => {
+      c.wires[0].to = 1
+    },
+  ],
+  [
+    'wires[0].opener',
+    (c) => {
+      c.wires[0].opener = 'restart'
+    },
+  ],
+  [
+    'wires[0].instruction',
+    (c) => {
+      c.wires[0].instruction = null
+    },
+  ],
+  [
+    'wires[0].armed',
+    (c) => {
+      c.wires[0].armed = true
+    },
+  ],
+  [
+    'layout.fable',
+    (c) => {
+      c.layout = { fable: [1] }
+    },
+  ],
+  [
+    'extra',
+    (c) => {
+      c.extra = true
+    },
+  ],
+]
+it.each(invalidRecipes)(
+  'agrees with the schema and names %s first (mutation: accept that malformed field)',
+  (path, corrupt) => {
+    const config = parse(liveCrewYaml)
+    corrupt(config)
+    const result = readCrewConfig(JSON.stringify(config))
+    const schemaValid = new Ajv().validate(schema, config)
+    expect({
+      schemaValid,
+      ok: result.ok,
+      path: result.ok ? null : result.reason.split(':')[0],
+    }).toEqual({ schemaValid: false, ok: false, path })
+  },
+)
+
+it.each(['custom permissions', 'spawn and layout', 'empty crew'])(
+  'accepts schema-valid %s at runtime (mutation: refuse valid YAML)',
+  (kind) => {
+    const config = parse(liveCrewYaml)
+    if (kind === 'custom permissions')
+      config.roles.fable.permissions = {
+        preset: 'custom',
+        codex: { approvalPolicy: 'on-request', sandbox: 'workspace-write' },
+        claudeCode: { permissionMode: 'acceptEdits' },
+      }
+    if (kind === 'spawn and layout') {
+      config.wires[0].to = {
+        spawn: {
+          name: 'Worker',
+          provider: 'codex',
+          model: null,
+          effort: null,
+          project: null,
+          account: 'default',
+        },
+      }
+      config.wires[0].opener = { first: 'Hello\nworld' }
+      config.layout = { fable: [-1, 2.5] }
+    }
+    if (kind === 'empty crew') {
+      config.roles = {}
+      config.wires = []
+    }
+    expect({
+      schemaValid: new Ajv().validate(schema, config),
+      result: readCrewConfig(JSON.stringify(config)),
+    }).toEqual({ schemaValid: true, result: { ok: true, config } })
+  },
+)
