@@ -1253,6 +1253,76 @@ describe('the follow', () => {
   }, 5_000)
 
   /**
+   * The other order: an unreadable frame arriving while a gap is still OPEN,
+   * and the resume landing afterwards (MAR-2779 round 4).
+   *
+   * The hole is one fact with one lifecycle -- a gap opens it, and the heal,
+   * the exhaustion and the send are the only three things that close it. An
+   * unreadable frame is none of them: it says nothing about whether the resume
+   * is still coming, and it used to null the hole on its way past. What that
+   * cost is in the test below; what it costs HERE is the restore, which a run
+   * with no open hole never reaches.
+   *
+   * `emitUnlogged` keeps the hole open on purpose: the daemon never logged 3,
+   * so the resume it is asked for is answered with an empty stream and the
+   * conversation is left holding the gap while the frames arrive one at a time.
+   *
+   * The settled sentence is the same either way -- the unreadable frame's, said
+   * from the moment it lands -- so this is the belt: it pins that the heal
+   * RESTORES the permanent loss rather than clearing to silence, on a path that
+   * only exists now the hole survives.
+   *
+   * Mutation: clear outright on the heal (`live.streamError = null` in
+   * `record`) and this is red on the settled snapshot.
+   */
+  it('heals a hole an unreadable frame landed on, and keeps the loss', async () => {
+    const { service } = buildService()
+    await service.start('hello')
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length > 0,
+      'the stream to open',
+    )
+    daemon.emit(status(1, 'running'))
+    // On the wire and nowhere in the log.
+    daemon.emitUnlogged(add(3, item({ id: 'a-2', text: 'never delivered' })))
+
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length === 2,
+      'the resume the gap asked for',
+    )
+    // Gone for good, on top of a hole that is still open.
+    daemon.emitRaw('{ not an envelope')
+    await waitUntil(
+      () =>
+        (latest(CONVERSATION_ID)?.streamError ?? '').includes('cannot read'),
+      'the unreadable frame to be reported',
+    )
+
+    // And the frame the hole was waiting for, arriving late.
+    daemon.emit(add(2, item({ id: 'a-1', text: 'On it', state: 'complete' })))
+    daemon.emit(status(3, 'completed'))
+
+    await waitUntil(
+      () => latest(CONVERSATION_ID)?.status === 'idle',
+      'the conversation to settle',
+    )
+    expect(
+      published.some((snapshot) =>
+        snapshot.streamError?.startsWith('gap: expected 2'),
+      ),
+    ).toBe(true)
+    // The hole is filled and the conversation still says the one thing that is
+    // true of it: a frame nobody could read is missing from the record.
+    expect(latest(CONVERSATION_ID)?.streamError).toMatch(/cannot read/)
+    expect(latest(CONVERSATION_ID)?.items.map((row) => row.text)).toEqual([
+      'On it',
+    ])
+    expect(daemon.eventStreamLastEventIds).toEqual([null, '1'])
+
+    await service.dispose()
+  }, 5_000)
+
+  /**
    * A budget that runs out with a hole still open says which hole
    * (MAR-2779 round 3).
    *
@@ -1285,6 +1355,59 @@ describe('the follow', () => {
       'Conversation stream dropped and could not be re-established: expected 2, got 3.',
     )
     // maxStreamAttempts is 2 here: the budget is spent, not renewed.
+    expect(daemon.eventStreamLastEventIds).toEqual([null, '1'])
+
+    await service.dispose()
+  }, 5_000)
+
+  /**
+   * And it still says which hole after an unreadable frame has landed on top of
+   * it (MAR-2779 round 4).
+   *
+   * The suffix is read off the gap the conversation is still holding, and that
+   * hole used to be nulled by the next dropped frame of any kind. So a stream
+   * that gapped, then met a frame it could not read, then gave up, was left
+   * with the generic sentence -- while Convergence, reading the same wire
+   * through the same organ, named the hole. Two clients disagreeing about one
+   * daemon's stream is the defect this ticket exists to end.
+   *
+   * The unreadable frame is not the reason the stream died and is not the last
+   * word: the hole is, because it is the one a person can act on.
+   *
+   * Mutation: null the hole on a loss that is not a gap (`: null` on the
+   * unreadable branch) and this is red on the missing suffix.
+   */
+  it('names the hole even after an unreadable frame landed on it', async () => {
+    const { service } = buildService()
+    await service.start('hello')
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length > 0,
+      'the stream to open',
+    )
+    daemon.emit(status(1, 'running'))
+    daemon.emitUnlogged(add(3, item({ id: 'a-1', text: 'never delivered' })))
+
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length === 2,
+      'the resume the gap asked for',
+    )
+    daemon.emitRaw('{ not an envelope')
+    await waitUntil(
+      () =>
+        (latest(CONVERSATION_ID)?.streamError ?? '').includes('cannot read'),
+      'the unreadable frame to be reported',
+    )
+    // Nothing kept on this attempt: the budget is spent and the stream gives up
+    // with the hole from the attempt before it still open.
+    daemon.dropStream()
+
+    await waitUntil(
+      () => latest(CONVERSATION_ID)?.status === 'failed',
+      'the reconnect budget to run out',
+    )
+    expect(latest(CONVERSATION_ID)?.streamError).toBe(
+      'Conversation stream dropped and could not be re-established: expected 2, got 3.',
+    )
     expect(daemon.eventStreamLastEventIds).toEqual([null, '1'])
 
     await service.dispose()

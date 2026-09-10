@@ -60,7 +60,7 @@ interface LiveConversation {
   streamError: string | null
   /**
    * The hole the resume has not filled yet, described — `expected 3, got 4` —
-   * or null when the last loss was not a gap.
+   * or null when no hole is open.
    *
    * A gap is the one loss that undoes itself: the reconnect asks from the last
    * contiguous sequence and the daemon replays what was missed, so the first
@@ -70,6 +70,12 @@ interface LiveConversation {
    * The description rather than a flag, because the resume is not guaranteed to
    * arrive: a budget that runs out while this is held owes the person the hole
    * itself, not "the stream dropped" (MAR-2779 round 3).
+   *
+   * One fact with one lifecycle: a gap opens it, and three things close it —
+   * the heal (`record`), the exhaustion (`follow`'s catch), the send. Nothing
+   * else touches it. It is not the visible sentence and not a record of the
+   * last loss, so an unreadable frame or a refused write landing on top of an
+   * open hole leaves it exactly where it was (MAR-2779 round 4).
    */
   gapAwaitingResume: string | null
   /**
@@ -410,7 +416,13 @@ export class ConversationService {
             // Said while it is true, and only until it stops being true: a gap
             // is answered by the resume, and `record` retires the sentence the
             // moment the replayed frames land.
-            live.gapAwaitingResume = loss.kind === 'gap' ? loss.hole : null
+            //
+            // SET here and nowhere else, and cleared by exactly three things:
+            // the heal, the exhaustion, the send. An unreadable frame is not
+            // one of them -- it says nothing about whether the resume is still
+            // coming, and clearing on it lost the hole from the sentence a
+            // stream that then gave up was left with (MAR-2779 round 4).
+            if (loss.kind === 'gap') live.gapAwaitingResume = loss.hole
             // The other kind is never retired by the wire. Held apart from the
             // visible sentence so that a gap arriving on top of it can say its
             // own piece while it is true, and this one comes back afterwards.
@@ -430,9 +442,14 @@ export class ConversationService {
         // ending; saying "the stream dropped" would name the symptom and bury
         // the cause the person can actually do something about.
         const reason = live.recordFailure ?? this.describeStreamEnd(live, error)
-        // Nothing is resuming any more, so nothing can heal a hole this stream
-        // was still holding: leaving the flag set would let a replayed envelope
-        // from some later stream retire the sentence that says we gave up.
+        // Read into the sentence above FIRST, then closed: nothing is resuming
+        // any more, so nothing can heal a hole this stream was still holding,
+        // and leaving it open would let a replayed envelope from some later
+        // stream retire the sentence that says we gave up.
+        //
+        // The belt to the send's braces: the next send clears it too, and
+        // either one alone stops a later stream inheriting this hole. Both are
+        // a line each, and the sentence a person is left with is the product.
         live.gapAwaitingResume = null
         live.streamError = reason
         await this.recordExhaustion(live, reason)
@@ -605,7 +622,13 @@ export class ConversationService {
       : describeStreamEndAboveHole(sentence, live.gapAwaitingResume)
   }
 
-  /** One sentence for a record that would not take a write, said out loud. */
+  /**
+   * One sentence for a record that would not take a write, said out loud.
+   *
+   * It takes the visible sentence and nothing else: a hole this stream is still
+   * holding is the wire's business, and a disk that refused a write says
+   * nothing about whether the resume is coming (MAR-2779 round 4).
+   */
   private reportDiskFailure(live: LiveConversation, error: unknown): string {
     const sentence = `The conversation could not be written to disk: ${describeDaemonFailure(error)}`
     live.streamError = sentence
