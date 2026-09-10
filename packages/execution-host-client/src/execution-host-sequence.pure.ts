@@ -52,5 +52,39 @@ export function readEnvelopeSeq(
  * Convergence log about one daemon is reading about one daemon.
  */
 export function describeSeqGap(lastSeq: number, seq: number): string {
-  return `gap: expected ${lastSeq + 1}, got ${seq}; reconnecting from ${lastSeq}`
+  return `gap: ${describeSeqHole(lastSeq, seq)}; reconnecting from ${lastSeq}`
+}
+
+/**
+ * The hole alone: what was expected, and what arrived instead.
+ *
+ * Split out of the sentence above because the two are said at different
+ * moments. `describeSeqGap` is said while the resume is still coming — it ends
+ * with where the reconnect will start, which is the useful half of it — and
+ * this one is said afterwards, by a client that has stopped reconnecting.
+ * Telling someone a stream gave up and then that it is "reconnecting from 2"
+ * in the same breath is the sentence contradicting itself.
+ */
+export function describeSeqHole(lastSeq: number, seq: number): string {
+  return `expected ${lastSeq + 1}, got ${seq}`
+}
+
+/**
+ * The last word on a stream that spent its reconnect budget with a hole still
+ * open.
+ *
+ * "The stream could not be re-established" is true of every exhausted budget
+ * and says nothing about what was lost. A gap is the one loss whose own
+ * sentence the exhaustion supersedes — the resume it promised never came — so
+ * the hole travels into the last word rather than being replaced by it
+ * (MAR-2779 round 3).
+ *
+ * The trailing full stop is moved rather than doubled: both callers pass a
+ * finished sentence, and `…re-established.: expected 3, got 4` is not one.
+ */
+export function describeStreamEndAboveHole(
+  sentence: string,
+  hole: string,
+): string {
+  return `${sentence.replace(/\.$/, '')}: ${hole}.`
 }

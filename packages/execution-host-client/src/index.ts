@@ -38,6 +38,8 @@ export type {
 
 export {
   describeSeqGap,
+  describeSeqHole,
+  describeStreamEndAboveHole,
   readEnvelopeSeq,
   type EnvelopeSeqReading,
 } from './execution-host-sequence.pure'
