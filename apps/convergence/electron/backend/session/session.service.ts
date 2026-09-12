@@ -2226,10 +2226,17 @@ export class SessionService {
     } catch (error) {
       if (!isProviderBusyError(error)) throw error
       const dispatchId = randomUUID()
+      // The WHOLE input, the shape both enqueues in `deliverMessage` use.
+      // Naming three fields by hand was an incomplete copy: it dropped
+      // `muteRelays` and `skipContextInjection`, so a row queued here lost
+      // properties the same row keeps on every other path. Nothing changes at
+      // runtime -- the one caller passes text and account -- but the trap goes,
+      // and it had already cost a lap: a pin meant to prove a borrowed mute
+      // came back was hollow because the row it queued was never muted.
       this.queuedInputs.enqueue(
         id,
         {
-          text: input.text,
+          ...input,
           providerAccountId: input.providerAccountId ?? null,
           dispatchId,
         },
@@ -2543,7 +2550,12 @@ export class SessionService {
   private isTurnUnderWayOrArriving(session: Session): boolean {
     if (this.dispatches.isDispatching(session.id)) return true
     if (!this.activeHandles.has(session.id)) return false
-    return session.status !== 'completed' && session.status !== 'failed'
+    // `isTerminalSessionStatus`, not two words written out again: that helper
+    // is what the settle path asks, and its own docblock names the hazard --
+    // a session with two ideas of "terminal" behaves differently depending on
+    // which one a reader happened to use. A third word would land here and in
+    // the settle at different times.
+    return !isTerminalSessionStatus(session.status)
   }
 
   private isCarryingATurn(session: Session): boolean {

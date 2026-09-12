@@ -444,79 +444,87 @@ describe('SessionService', () => {
     }
   }
 
-  it('sends a /clear to an idle resident Claude session rather than queueing it forever (MAR-2888 lap 2)', async () => {
-    // The strand, as the failing input names it: a hail wire with opener
-    // `/clear` fired at an idle Claude Code session that has completed one
-    // turn this app lifetime.
-    //
-    // A resident handle is NOT released when its turn completes, so the row
-    // reads `completed` with a handle still attached. A door that asked "is a
-    // handle attached" called that busy; the refusal became a queued opener +
-    // payload; and the only automatic drain is a handle's own `completed`,
-    // which is never coming again. On master that hail failed loudly — with
-    // the door typed but the predicate unchanged it would wait forever.
-    const ownRegistry = new ProviderRegistry()
-    const base = createTestProvider()
-    const sent: string[] = []
-    ownRegistry.register({
-      ...base,
-      // `providerSupportsConversationReset` is keyed by id, so only a real
-      // reset-capable provider reaches the door at all.
-      id: 'claude-code',
-      describe: async () => ({
-        ...(await base.describe()),
+  it.each(['completed', 'failed'] as const)(
+    'sends a /clear to a %s resident Claude session rather than queueing it forever (MAR-2888 lap 2)',
+    async (terminalStatus) => {
+      // The strand, as the failing input names it: a hail wire with opener
+      // `/clear` fired at an idle Claude Code session that has completed one
+      // turn this app lifetime.
+      //
+      // BOTH terminal words, because the strand does not care which one: a
+      // turn that failed is as over as one that completed, and a resident
+      // handle survives either. Reading only `completed` leaves the same
+      // stranding for a session whose turn broke.
+      //
+      // A resident handle is NOT released when its turn completes, so the row
+      // reads terminal with a handle still attached. A door that asked "is a A door that asked "is a
+      // handle attached" called that busy; the refusal became a queued opener +
+      // payload; and the only automatic drain is a handle's own `completed`,
+      // which is never coming again. On master that hail failed loudly — with
+      // the door typed but the predicate unchanged it would wait forever.
+      const ownRegistry = new ProviderRegistry()
+      const base = createTestProvider()
+      const sent: string[] = []
+      ownRegistry.register({
+        ...base,
+        // `providerSupportsConversationReset` is keyed by id, so only a real
+        // reset-capable provider reaches the door at all.
         id: 'claude-code',
-        supportsConversationReset: true,
-      }),
-      start: (config) => {
-        const handle = base.start(config)
-        return {
-          ...handle,
-          // Resident: this handle outlives its turn (Claude Code's shape).
-          resident: true,
-          sendMessage: (...args) => {
-            sent.push(args[0])
-            return handle.sendMessage(...args)
-          },
-        }
-      },
-    })
-    const own = new SessionService(
-      getDatabase(),
-      new LocalExecutionHost(ownRegistry),
-    )
-    const session = own.create({
-      projectId,
-      workspaceId: null,
-      providerId: 'claude-code',
-      model: null,
-      effort: null,
-      name: 'idle resident',
-    })
-    await own.start(session.id, { text: 'first turn' })
-    // The turn ends; the handle stays.
-    getDatabase()
-      .prepare("UPDATE sessions SET status = 'completed' WHERE id = ?")
-      .run(session.id)
-    expect({
-      status: own.getById(session.id)?.status,
-      hasHandle: (
-        own as unknown as { activeHandles: Map<string, unknown> }
-      ).activeHandles.has(session.id),
-    }).toEqual({ status: 'completed', hasHandle: true })
+        describe: async () => ({
+          ...(await base.describe()),
+          id: 'claude-code',
+          supportsConversationReset: true,
+        }),
+        start: (config) => {
+          const handle = base.start(config)
+          return {
+            ...handle,
+            // Resident: this handle outlives its turn (Claude Code's shape).
+            resident: true,
+            sendMessage: (...args) => {
+              sent.push(args[0])
+              return handle.sendMessage(...args)
+            },
+          }
+        },
+      })
+      const own = new SessionService(
+        getDatabase(),
+        new LocalExecutionHost(ownRegistry),
+      )
+      const session = own.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: null,
+        effort: null,
+        name: 'idle resident',
+      })
+      await own.start(session.id, { text: 'first turn' })
+      // The turn ends; the handle stays.
+      getDatabase()
+        .prepare('UPDATE sessions SET status = ? WHERE id = ?')
+        .run(terminalStatus, session.id)
+      expect({
+        status: own.getById(session.id)?.status,
+        hasHandle: (
+          own as unknown as { activeHandles: Map<string, unknown> }
+        ).activeHandles.has(session.id),
+      }).toEqual({ status: terminalStatus, hasHandle: true })
 
-    const receipt = await own.sendMessageWithOpener(session.id, {
-      opener: '/clear',
-      text: 'RUN100 round 1, lap 1 of 6',
-    })
+      const receipt = await own.sendMessageWithOpener(session.id, {
+        opener: '/clear',
+        text: 'RUN100 round 1, lap 1 of 6',
+      })
 
-    // The opener went out as its own turn; only the payload waits behind it.
-    expect(receipt.openerQueued).toBe(false)
-    expect(sent).toContain('/clear')
-    expect(own.getQueuedInputs(session.id).map((item) => item.text)).toEqual([
-      'RUN100 round 1, lap 1 of 6',
-    ])
-  })
+      // The opener went out as its own turn; only the payload waits behind it.
+      expect(receipt.openerQueued).toBe(false)
+      expect(sent).toContain('/clear')
+      expect(own.getQueuedInputs(session.id).map((item) => item.text)).toEqual([
+        'RUN100 round 1, lap 1 of 6',
+      ])
+    },
+  )
 
   it('queues a relay opener the provider refuses as busy, instead of dropping it (R1, MAR-2888)', async () => {
     // The 09-09 failure. `isCarryingATurn` reads Convergence's record; Codex
@@ -594,14 +602,15 @@ describe('SessionService', () => {
       text: '/clear',
       muteRelays: true,
     })
-    getDatabase()
-      .prepare(
-        "UPDATE session_queued_inputs SET state = 'queued' WHERE session_id = ?",
-      )
-      .run(sessionId)
-    getDatabase()
-      .prepare('UPDATE sessions SET relays_muted = 0 WHERE id = ?')
-      .run(sessionId)
+
+    // The precondition, asserted rather than assumed: the row the drain is
+    // about to send IS muted, and the session is armed. Without both, the
+    // restore below has nothing to give back and this pin would pass on a
+    // mutation -- which is exactly how its sibling was hollow for a lap.
+    expect(
+      own.getQueuedInputs(sessionId).map((item) => item.relaysMuted),
+    ).toEqual([true])
+    expect(row()).toBe(0)
 
     // The turn ends, the drain runs, the provider defers the row.
     emit({ kind: 'session.patch', patch: { status: 'completed' } })
@@ -619,12 +628,16 @@ describe('SessionService', () => {
     // Lap 4 put a restore in the drain's catch and pinned the DIRECT path's
     // settle; this pins the drain's own.
     //
-    // It has to arrive by the opener's route, because that is the only thing
-    // that queues a muted row: `sendMessageWithOpener` enqueues its `/clear`
-    // with `muteRelays: true`. My first attempt used `deliverRelayMessage`,
-    // whose enqueue does not carry the flag, so the row was never muted and
-    // deleting the restore stayed green — a pin that tested nothing.
+    // By the opener's route, which queues a muted `/clear` and an unmuted
+    // payload in one beat -- and the precondition below says so, so this
+    // cannot quietly stop testing a borrowed mute the way it once did.
     const { service: own, sessionId, emit } = await relayTargetRefusing('busy')
+    const muteRow = () =>
+      (
+        getDatabase()
+          .prepare('SELECT relays_muted FROM sessions WHERE id = ?')
+          .get(sessionId) as { relays_muted: number }
+      ).relays_muted
     getDatabase()
       .prepare("UPDATE sessions SET status = 'completed' WHERE id = ?")
       .run(sessionId)
@@ -633,10 +646,15 @@ describe('SessionService', () => {
       text: 'payload',
     })
     expect(receipt.openerQueued).toBe(true)
-    // The opener is waiting and muted; the session is armed again.
-    getDatabase()
-      .prepare('UPDATE sessions SET relays_muted = 0 WHERE id = ?')
-      .run(sessionId)
+    // The precondition: the opener is muted, its payload is not, and the
+    // session itself is armed -- lap 4's own restore already gave the mute
+    // back when the direct send was refused. Asserted, because everything
+    // below is about a mute being borrowed and returned, and a row that was
+    // never muted would make all of it vacuous.
+    expect(
+      own.getQueuedInputs(sessionId).map((item) => item.relaysMuted),
+    ).toEqual([true, false])
+    expect(muteRow()).toBe(0)
 
     // A turn boundary arrives, the drain sends the opener, the provider is
     // still busy.
@@ -650,13 +668,33 @@ describe('SessionService', () => {
       '/clear',
       'payload',
     ])
+    expect(muteRow()).toBe(0)
+  })
+
+  it('queues a refused relay delivery with everything it arrived with (MAR-2888 lap 6)', async () => {
+    // The trap that made a pin hollow for a lap, closed and pinned rather
+    // than commented. `deliverRelayMessage`'s own enqueue named three fields
+    // by hand, so a row queued by a busy refusal silently lost `muteRelays`
+    // and `skipContextInjection` -- properties the same row keeps on every
+    // other path into the queue.
+    //
+    // Dead at runtime today, because the one caller passes text and account.
+    // That is exactly why it needed a test: an incomplete copy nothing
+    // exercises is a trap waiting for the first caller that does.
+    const { service: own, sessionId } = await relayTargetRefusing('busy')
+
+    const delivery = await own.deliverRelayMessage(sessionId, {
+      text: '/clear',
+      muteRelays: true,
+      skipContextInjection: true,
+    })
+
+    expect(delivery.queued).toBe(true)
     expect(
-      (
-        getDatabase()
-          .prepare('SELECT relays_muted FROM sessions WHERE id = ?')
-          .get(sessionId) as { relays_muted: number }
-      ).relays_muted,
-    ).toBe(0)
+      own
+        .getQueuedInputs(sessionId)
+        .map((item) => [item.relaysMuted, item.skipContextInjection]),
+    ).toEqual([[true, true]])
   })
 
   it('never clears a quiet the human asked for (MAR-2888 lap 5)', async () => {
