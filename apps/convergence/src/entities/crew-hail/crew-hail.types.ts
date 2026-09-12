@@ -13,7 +13,10 @@ export type CrewHailReason =
   | 'terminal'
   | 'unrouted'
   | 'round-budget'
-  /** The 20-hop backstop tripped and disarmed a wire (R3). */
+  /**
+   * The run's hop backstop (the crew's delivery limit, floored at 20) tripped
+   * and disarmed a wire (R3).
+   */
   | 'budget'
   /** A wire could not deliver at all; nothing is coming next (R3). */
   | 'delivery-failed'

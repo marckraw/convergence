@@ -132,8 +132,9 @@ READABLE for old ones — the ledger is a historical record (§3). Nothing was
 merely deleted: the run still ends, but at guards that answer a human's
 question rather than a graph's. What ends a run now, in order of how often it
 should: the terminal baton reaching the chair (§2a), the crew's **cumulative**
-delivery limit (§2c), the 20-hop backstop, a delivery that failed, and the
-stall clock. All five are loud (§2b).
+delivery limit (§2c), the run's hop backstop (the crew's delivery limit,
+floored at 20), a delivery that failed, and the stall clock. All five are loud
+(§2b).
 
 **Emptying the ledger is worse under laps, not better.** The lap count and the
 crew's cumulative delivery limit both read `relay_hops`, so deleting a live
@@ -246,10 +247,10 @@ its hop unstamped and the stall clock asks a human. Neither direction can read
 as a false "completed"; persisting the in-flight set across reattach (design
 Y) remains a possible follow-up if the loud side proves noisy in practice.
 
-The 20-hop **budget** (`MAX_AUTOMATIC_HOPS_PER_FLOW_RUN`) stays as a backstop
-for the case the crew's own limit cannot see: a run spread across several
-crews, each under its own cap. It disarms loudly, says why, and hails
-(`budget`, §2b).
+The hop **backstop** stays for the case the crew's own limit cannot see: a run
+spread across several crews, each under its own cap. Its ceiling is the firing
+crew's delivery limit, floored at twenty (`flowRunCeiling`, §2c). It disarms
+loudly, says why, and hails (`budget`, §2b).
 
 **The ledger is load-bearing, so emptying it is guarded.** Because both the
 lap count and the budget counts read `relay_hops`, deleting a live run's rows
@@ -321,11 +322,11 @@ Folding it in would also make "Clear trail" dismiss alarms.
   Only on a completed, unmuted settle.
 - `round-budget`: raised inside `fire()` at the crew's cumulative delivery
   limit, below.
-- `budget`: raised inside `fire()` at the 20-hop backstop, **beside the
-  disarm** (R3). The backstop is the one guard that switches a wire off, and
-  a switch thrown behind the user's back with nobody told was the last silent
-  ending in the engine — reachable rather than theoretical now that a run may
-  lap.
+- `budget`: raised inside `fire()` at the run's hop backstop (the crew's
+  delivery limit, floored at 20), **beside the disarm** (R3). The backstop is
+  the one guard that switches a wire off, and a switch thrown behind the
+  user's back with nobody told was the last silent ending in the engine —
+  reachable rather than theoretical now that a run may lap.
 - `delivery-failed`: raised inside `record()` whenever a firing writes an
   `error` row (R3). Inside the one function every error row goes through,
   spawn's included, rather than at each of the six sites that can write one —
@@ -373,19 +374,50 @@ first station refills nothing. `stall_minutes` is a threshold on an OWED REPLY,
 never a limit on how long a run may take. The code did not change with the
 words; only the words did.
 
-The round cap and the 20-hop `MAX_AUTOMATIC_HOPS_PER_FLOW_RUN` are deliberately
-both kept, because they answer different questions with different responses:
-the cap says "this loop needs eyes" and **disarms nothing** while hailing, and
-the hop budget says "this wire has run away" and disarms loudly. On the default
-cap the backstop is unreachable; a crew that raises its cap above twenty gets
-it back.
+The round cap and the hop backstop are deliberately both kept, because they
+answer different questions with different responses: the cap says "this loop
+needs eyes" and **disarms nothing** while hailing, and the backstop says "this
+wire has run away" and disarms loudly.
+
+**The backstop's ceiling follows the crew (R1, MAR-2966):** it is
+`flowRunCeiling(resolveRoundCap(round_cap))` — `max(MIN_FLOW_RUN_HOP_CEILING,
+cap)` — read from the cap the resolver already answered, so `resolveRoundCap`
+stays the only reader of the column and there is exactly one derivation of the
+ceiling (R2). Twenty is now the FLOOR, for a crew that never stated a limit,
+rather than the ceiling itself.
+
+Why: a fan-out of six spends six deliveries out and six back, twelve hops a
+round, so a fixed twenty tripped in round two and **disarmed a wire a crew had
+explicitly budgeted 48 hops for**. Any stated limit above twenty was
+decoration, and the guard that is supposed to say "this ran away" was firing
+where the guard that merely hails was meant to.
+
+**A consequence worth stating: inside a single crew the backstop can no longer
+speak.** The ceiling is never below that crew's cap and the round check runs
+first, so a single-crew run always meets the cap — which hails and leaves the
+wire armed. The backstop fires only when the run's hops span more than one
+room, which is precisely the case it was always documented as existing for.
 
 **They count different things, because they are different questions.** The
 round meter is `countBudgetedHopsInCrew(crewId, flowRunId)` — the cap belongs
 to a crew, and a session in two crews would otherwise spend one crew's rounds
 against the other's budget and number its first row "round 2". The backstop is
 `countBudgetedHops(flowRunId)`, the whole run across every crew, because a
-runaway chain is a runaway however many rooms it passes through.
+runaway chain is a runaway however many rooms it passes through. That count
+stayed run-wide when the ceiling became per-crew, deliberately: a session in
+two crews must not be able to spend each room's limit and loop between them
+forever.
+
+The refusal names both numbers — what the run spent and the ceiling it hit —
+because a run can arrive past its ceiling rather than exactly on it, and one
+number cannot tell a runaway from a limit somebody set low. The crew settings
+panel says the same rule from the other side: the delivery limit box carries
+one sentence about the ceiling, derived from the same `flowRunCeiling`
+(mirrored into `src/features/mission-control/crew-loop.pure.ts`, because a
+renderer cannot import from `electron/`, and pinned by
+`cross-tree-agreement.test.ts`). A crew under the floor is told the number
+that actually disarms rather than being allowed to believe its own limit
+does.
 
 The round number is fixed once, above every guard that records a row, so the
 number the ledger records, the number a refusal names and the number the

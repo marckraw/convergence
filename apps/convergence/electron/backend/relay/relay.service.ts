@@ -464,9 +464,11 @@ export class RelayService {
   /**
    * Hops in this run that actually spent a provider turn, across every crew.
    *
-   * The 20-hop backstop's question, and only that one: a chain of distinct
-   * wires long enough to outrun the loop law is a runaway however many rooms
-   * it passes through.
+   * The backstop's question, and only that one: a chain of distinct wires long
+   * enough to outrun the loop law is a runaway however many rooms it passes
+   * through. Cross-crew on purpose, and it stayed that way when the ceiling
+   * became the firing crew's own (MAR-2966) -- a session in two crews must
+   * not be able to spend each crew's limit and loop forever between them.
    */
   countBudgetedHops(flowRunId: string): number {
     const rows = this.db

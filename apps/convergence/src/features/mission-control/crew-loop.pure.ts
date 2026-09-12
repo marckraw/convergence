@@ -21,6 +21,54 @@ export const DEFAULT_CREW_ROUND_CAP = 12
 export const DEFAULT_CREW_STALL_MINUTES = 30
 
 /**
+ * The floor under a run's hop ceiling (R1/R2, MAR-2966).
+ *
+ * **This number crosses the tree boundary too**, for the same reason and under
+ * the same barrier as the two above: the engine owns it in
+ * `electron/backend/relay/relay.pure.ts` (`MIN_FLOW_RUN_HOP_CEILING`), the
+ * renderer cannot import from `electron/`, and
+ * `electron/backend/relay/cross-tree-agreement.test.ts` is what makes the two
+ * halves an agreement rather than two literals.
+ *
+ * The renderer needs it because the settings panel must say what the ceiling
+ * ACTUALLY is. A crew under the floor has a delivery limit that is not its
+ * ceiling, and a note that claimed otherwise would blur the one distinction
+ * the two guards exist for: the limit hails, the ceiling disarms.
+ */
+export const MIN_FLOW_RUN_HOP_CEILING = 20
+
+/** The engine's derivation, mirrored: `Math.max` of the floor and the cap. */
+export function flowRunCeiling(roundCap: number): number {
+  return Math.max(MIN_FLOW_RUN_HOP_CEILING, roundCap)
+}
+
+/**
+ * What the delivery limit box says about the run's hard ceiling (R3).
+ *
+ * Two sentences because there are two truths. At or above the floor the crew's
+ * stated limit IS the ceiling, and saying so is the whole point of MAR-2966.
+ * Below it the ceiling is the floor, and the honest sentence names the number
+ * rather than letting the box imply that twelve deliveries switch a wire off --
+ * they do not; they hail, and the wire stays armed.
+ *
+ * Both sentences then name the CONDITION, because the ceiling is not reachable
+ * from inside one crew at all. The two guards read different counters: the
+ * delivery limit counts this crew's hops, the backstop counts the whole run
+ * across every crew. A crew at cap 60 therefore trips its own limit at hop 60
+ * -- which hails and leaves the wire armed -- and never reaches the ceiling
+ * standing at the same number. Only a run that crosses into another crew
+ * spends hops the firing crew's limit cannot see, and only that run is
+ * disarmed past the ceiling. A note that said "past it the wire is disarmed"
+ * flat promised a single-crew loop a switch that will never be thrown.
+ */
+export function flowRunCeilingNote(deliveryLimit: number): string {
+  const ceiling = flowRunCeiling(deliveryLimit)
+  return ceiling === deliveryLimit
+    ? "This is also the run's hard ceiling. Inside this crew the limit hails and the wire stays armed; a run that crosses into another crew is disarmed past it."
+    : `The run's hard ceiling is ${ceiling}. Inside this crew the limit hails and the wire stays armed; a run that crosses into another crew is disarmed past ${ceiling}.`
+}
+
+/**
  * The convention a wire's condition is pre-filled with.
  *
  * **This literal crosses the tree boundary.** The engine reads it in

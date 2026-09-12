@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_CREW_ROUND_CAP,
+  MIN_FLOW_RUN_HOP_CEILING,
   batonConditionToken,
+  flowRunCeiling,
   normalizeRelayConditionToken,
   relayConditionMatches,
 } from './relay.pure'
@@ -13,7 +15,10 @@ import { DEFAULT_CREW_STALL_MINUTES } from './crew-hail.pure'
 import {
   DEFAULT_CREW_ROUND_CAP as RENDERER_ROUND_CAP,
   DEFAULT_CREW_STALL_MINUTES as RENDERER_STALL_MINUTES,
+  MIN_FLOW_RUN_HOP_CEILING as RENDERER_CEILING_FLOOR,
   batonConditionToken as rendererBatonConditionToken,
+  flowRunCeiling as rendererFlowRunCeiling,
+  flowRunCeilingNote,
 } from '../../../src/features/mission-control/crew-loop.pure'
 
 /**
@@ -35,6 +40,33 @@ describe('the literals that cross the tree boundary (MAR-2759)', () => {
 
   it('agrees on the stall window an empty box means', () => {
     expect(RENDERER_STALL_MINUTES).toBe(DEFAULT_CREW_STALL_MINUTES)
+  })
+
+  it('agrees on the floor under a run hop ceiling (MAR-2966)', () => {
+    expect(RENDERER_CEILING_FLOOR).toBe(MIN_FLOW_RUN_HOP_CEILING)
+  })
+
+  it('derives the same ceiling on both sides of the boundary', () => {
+    // The note in the settings panel promises what the engine will actually
+    // do, so the two derivations have to BE the same function. Mutation that
+    // reds it: change the floor, or the `Math.max`, on one side only.
+    for (const cap of [1, DEFAULT_CREW_ROUND_CAP, 19, 20, 21, 48, 60]) {
+      expect(rendererFlowRunCeiling(cap)).toBe(flowRunCeiling(cap))
+    }
+  })
+
+  it('never promises the stated limit is the ceiling when the floor is higher', () => {
+    // The sentence a crew under the floor reads must name the number that
+    // actually disarms, because the limit it states does not: it hails, and
+    // the wire stays armed. Mutation that reds it: return R3's sentence
+    // unconditionally -- the default crew is told twelve switches a wire off.
+    const floored = flowRunCeilingNote(DEFAULT_CREW_ROUND_CAP)
+    expect(floored).toContain(String(flowRunCeiling(DEFAULT_CREW_ROUND_CAP)))
+    expect(floored).not.toContain(String(DEFAULT_CREW_ROUND_CAP))
+    // And a crew at or above the floor is told its own limit is the ceiling.
+    expect(flowRunCeilingNote(60)).toBe(
+      "This is also the run's hard ceiling. Inside this crew the limit hails and the wire stays armed; a run that crosses into another crew is disarmed past it.",
+    )
   })
 
   it('pre-fills a condition the engine itself would store', () => {

@@ -3,6 +3,7 @@ import { X, Trash2 } from 'lucide-react'
 import type { SessionCrewMember } from '@/entities/session-crew'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
+import { flowRunCeilingNote } from './crew-loop.pure'
 import { formatCrewMemberCount } from './session-crew-groups.pure'
 import { CrewDecorationPicker } from './crew-decoration-picker.presentational'
 
@@ -266,6 +267,9 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
         />
         <span className="text-[11px] text-muted-foreground">per run</span>
       </div>
+      <p className="text-[10px] text-muted-foreground/70">
+        {flowRunCeilingNote(deliveryLimit ?? defaultDeliveryLimit)}
+      </p>
       <div className="flex items-center gap-2">
         <label
           htmlFor="crew-attention-minutes"
