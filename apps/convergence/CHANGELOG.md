@@ -1,5 +1,48 @@
 # convergence
 
+## 0.56.2
+
+### Patch Changes
+
+- 0ce449a: The parallel-work panel tells two rows with the same id apart, and the answer
+  window compares times rather than their spelling (MAR-2902).
+
+  A row's id in the panel is the harness's own — a run id for an agent row, a task
+  id for a task row — and those two namespaces are not disjoint. A background task
+  whose id happened to equal a run id produced two rows that every per-row surface
+  read as one: collapsing either folded both, a selection resolved to whichever
+  came first, and a Stop pressed on one named the other in its confirmation. Every
+  surface now keys on the row's kind and id together — collapse, select, confirm,
+  stop state, the ancestor walk, the result link and the panel's own row markers —
+  so the two rows can never be mistaken for each other.
+
+  The count beside a finished answer had a second, quieter version of the same
+  problem. "Did this failure happen in the current turn?" was decided by comparing
+  two timestamps as text, and `…00.000Z` sorts before `…00Z` even though they are
+  the same instant: a failure stamped at exactly the turn's start was counted or
+  dropped depending on which writer wrote it and at what precision. The comparison
+  now reads both sides as times. Stamps that are not timestamps at all — pre-ISO
+  rows — still compare exactly as they did.
+
+- f8ecd85: The remote resume cursor moves only after an event has actually been delivered
+  (MAR-2901).
+
+  A remote run's wire adapter marked an envelope as seen before handing it to the
+  session's listeners. A listener that throws escapes into the stream reader's
+  catch, which was already the right shape in two ways — the frame is not counted
+  toward the reconnect budget, and the durable cursor is never told about it, so a
+  restart replays it. But this run's in-memory cursor had already moved past the
+  event, so the reconnect asked the daemon for everything _after_ the one frame
+  the session never received. The failed event was the single event no resume
+  could bring back.
+
+  The cursor is now assigned after the listeners return, beside the durable write,
+  so the two "seen" facts move together or neither moves: a throwing listener
+  leaves both where the last delivered event was, and the reconnect replays the
+  frame it failed on. The throw is still not swallowed — a listener that keeps
+  throwing spends the reconnect budget and fails the session out loud rather than
+  spinning on a replay it cannot finish.
+
 ## 0.56.1
 
 ### Patch Changes
