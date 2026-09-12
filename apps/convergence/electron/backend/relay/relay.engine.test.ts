@@ -1,3 +1,6 @@
+import { SessionService } from '../session/session.service'
+import { LocalExecutionHost } from '../provider/execution-host/local-execution-host'
+import { ProviderRegistry } from '../provider/provider-registry'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type Database from 'better-sqlite3'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
@@ -2798,6 +2801,24 @@ describe('RelayEngine', () => {
   })
 
   describe('the spawn action', () => {
+    it('real spawn origin survives clearHops (mutation: derive origin from ledger)', async () => {
+      spawnWire()
+      const sessions = new SessionService(
+        db,
+        new LocalExecutionHost(new ProviderRegistry()),
+      )
+      const gateway = createGateway({})
+      gateway.create = (input) => sessions.create(input)
+      try {
+        await createEngine(gateway).handleSettle(settled('s1'))
+        const id = relays.listHops('c1')[0].spawnedSessionId!
+        relays.clearHops('c1')
+        expect(sessions.getSummaryById(id)?.originKind).toBe('spawn')
+      } finally {
+        await sessions.disposeAll()
+      }
+    })
+
     it('opens a session on the spec and starts it on the payload', async () => {
       const relay = spawnWire()
       const gateway = createGateway({
@@ -2809,6 +2830,7 @@ describe('RelayEngine', () => {
       expect(gateway.created).toEqual([
         {
           contextKind: 'project',
+          origin: 'spawn',
           projectId: 'p1',
           workspaceId: null,
           providerId: 'codex',
@@ -2855,6 +2877,7 @@ describe('RelayEngine', () => {
 
       expect(gateway.created[0]).toEqual({
         contextKind: 'global',
+        origin: 'spawn',
         providerId: 'codex',
         model: 'gpt-5.6',
         effort: null,

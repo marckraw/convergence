@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { useHarnessFacts } from './use-harness-facts'
 import { HarnessFactsView } from './harness-facts.presentational'
 import { ParallelWork } from './parallel-work.container'
@@ -42,6 +43,7 @@ import {
   GitFork,
   Link2,
   MoreVertical,
+  Pin,
   ScrollText,
   Square,
   GitBranch,
@@ -81,6 +83,7 @@ export const SessionView: FC = () => {
   const stopSession = useSessionStore((s) => s.stopSession)
   const hydratePaneTree = useTerminalStore((s) => s.hydratePaneTree)
   const closeAllTerminals = useTerminalStore((s) => s.closeAllForSession)
+  const setPinned = useSessionStore((s) => s.setPinned)
   const setPrimarySurface = useSessionStore((s) => s.setPrimarySurface)
   const spaces = useSpaceStore((s) => s.spaces)
   const attemptsBySessionId = useSpaceStore((s) => s.attemptsBySessionId)
@@ -600,6 +603,30 @@ export const SessionView: FC = () => {
               aria-pressed={hasTerminal ? true : undefined}
             >
               <TerminalSquare className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10"
+              title={session.pinnedAt ? 'Unpin session' : 'Pin session'}
+              aria-label={`${session.pinnedAt ? 'Unpin' : 'Pin'} ${session.name}`}
+              aria-pressed={!!session.pinnedAt}
+              onClick={() =>
+                void setPinned(session.id, !session.pinnedAt).catch((error) =>
+                  toast.error(
+                    error instanceof Error ? error.message : String(error),
+                  ),
+                )
+              }
+            >
+              <Pin
+                className={
+                  session.pinnedAt
+                    ? 'h-3.5 w-3.5 fill-current text-primary'
+                    : 'h-3.5 w-3.5'
+                }
+              />
             </Button>
             {session.status === 'running' && (
               <Button

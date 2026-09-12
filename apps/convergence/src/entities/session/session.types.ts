@@ -358,6 +358,8 @@ export interface QueuedInputPatchEvent {
 }
 
 export interface SessionSummary {
+  pinnedAt?: string | null
+  originKind?: 'spawn' | 'resident' | null
   pullRequest?: SessionPullRequest | null
   canStopTasks?: boolean
   parallelWork?: ParallelWorkCounts

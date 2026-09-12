@@ -16,6 +16,7 @@ import type {
 } from './session.types'
 
 export interface CreateSessionRecordInput {
+  origin?: 'spawn' | 'resident'
   id: string
   contextKind: SessionContextKind
   projectId: string | null
@@ -57,9 +58,10 @@ export class SessionRepository {
            fork_strategy,
            primary_surface,
            execution_host,
-           work_address
+           work_address,
+           origin_kind
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.id,
@@ -80,6 +82,9 @@ export class SessionRepository {
         input.workAddress
           ? serializeSessionWorkAddress(input.workAddress)
           : null,
+        input.parentSessionId
+          ? (this.findById(input.parentSessionId)?.origin_kind ?? null)
+          : (input.origin ?? 'resident'),
       )
   }
 
@@ -147,6 +152,13 @@ export class SessionRepository {
         "UPDATE sessions SET name = ?, name_auto_generated = 1, updated_at = datetime('now') WHERE id = ?",
       )
       .run(name, id)
+  }
+
+  setPinned(id: string, pinned: boolean): void {
+    const result = this.db
+      .prepare('UPDATE sessions SET pinned_at = ? WHERE id = ?')
+      .run(pinned ? new Date().toISOString() : null, id)
+    if (result.changes === 0) throw new Error(`Session not found: ${id}`)
   }
 
   setPrimarySurface(id: string, surface: PrimarySurface): void {

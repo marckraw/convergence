@@ -1087,6 +1087,16 @@ export function registerIpcHandlers(
       sessionApp.regenerateSessionName(id, requestId),
   )
 
+  ipcMain.handle('session:setPinned', (_event, id: string, pinned: boolean) => {
+    if (typeof id !== 'string' || typeof pinned !== 'boolean')
+      throw new Error('Expected a session id and pin state')
+    sessionService.setPinned(id, pinned)
+    const summary = sessionService.getSummaryById(id)
+    for (const win of BrowserWindow.getAllWindows())
+      win.webContents.send('session:summaryUpdated', summary)
+    return summary
+  })
+
   ipcMain.handle(
     'session:setPrimarySurface',
     (_event, id: string, surface: 'conversation' | 'terminal') =>

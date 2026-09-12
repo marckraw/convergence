@@ -292,6 +292,36 @@ describe('SessionView', () => {
     })
   })
 
+  it('header toggles the shared pin action (mutation: remove header pin handler)', async () => {
+    const original = useSessionStore.getState().setPinned
+    const setPinned = vi.fn().mockResolvedValue(undefined)
+    useSessionStore.setState({ setPinned })
+    try {
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+      await act(async () => {})
+      fireEvent.click(screen.getByRole('button', { name: 'Pin Test session' }))
+      expect(setPinned).toHaveBeenCalledWith('session-1', true)
+      act(() =>
+        useSessionStore.setState((state) => ({
+          sessions: state.sessions.map((s) => ({
+            ...s,
+            pinnedAt: '2026-09-12',
+          })),
+        })),
+      )
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Unpin Test session' }),
+      )
+      expect(setPinned).toHaveBeenLastCalledWith('session-1', false)
+    } finally {
+      useSessionStore.setState({ setPinned: original })
+    }
+  })
+
   it.each([
     ['claude-code', 'daemon-a'],
     ['codex', 'local'],

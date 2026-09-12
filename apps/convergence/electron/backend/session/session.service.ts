@@ -939,6 +939,10 @@ export class SessionService {
     return this.getById(id)!
   }
 
+  setPinned(id: string, pinned: boolean): void {
+    return this.sessionRepository.setPinned(id, pinned)
+  }
+
   setPrimarySurface(id: string, surface: 'conversation' | 'terminal'): Session {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
@@ -1203,6 +1207,7 @@ export class SessionService {
       : null
 
     this.sessionRepository.create({
+      origin: input.origin,
       id,
       contextKind: input.contextKind ?? 'project',
       projectId,

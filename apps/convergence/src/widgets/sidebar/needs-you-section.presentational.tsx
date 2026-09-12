@@ -1,168 +1,42 @@
-import type { FC } from 'react'
-import { Archive, BellOff, Check } from 'lucide-react'
-import type { SessionSummary, NeedsYouDisposition } from '@/entities/session'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
-import { SessionBadge } from '@/shared/ui/session-badge.presentational'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
-
-interface NeedsYouSession {
-  session: SessionSummary
-  projectName: string
-  summary: string
-  priority: number
-}
-
-interface NeedsYouSectionProps {
+import {
+  NeedsYouCard,
+  type NeedsYouCardModel,
+  type NeedsYouCardProps,
+} from '@/features/needs-you'
+export interface NeedsYouSectionProps {
   title: string
-  sessions: NeedsYouSession[]
+  cards: NeedsYouCardModel[]
   activeSessionId: string | null
   pulsingSessionIds?: Readonly<Record<string, true>>
-  onSelect: (id: string) => void
-  onDismiss: (id: string) => void | Promise<void>
-  onArchive: (id: string) => void | Promise<void>
+  onSelect: NeedsYouCardProps['onSelect']
+  onPin: NeedsYouCardProps['onPin']
+  onDismiss: NeedsYouCardProps['onDismiss']
+  onArchive: NeedsYouCardProps['onArchive']
 }
-
-export const NeedsYouSection: FC<NeedsYouSectionProps> = ({
+export function NeedsYouSection({
   title,
-  sessions,
+  cards,
   activeSessionId,
   pulsingSessionIds,
-  onSelect,
-  onDismiss,
-  onArchive,
-}) => (
-  <div>
-    <p className="mb-1 flex items-center justify-between gap-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
-      <span className="truncate">{title}</span>
-      <span className="shrink-0 text-muted-foreground/60">
-        {sessions.length}
-      </span>
-    </p>
-    <div className="space-y-0.5">
-      {sessions.map(({ session, projectName, summary }) => {
-        const action = resolveNeedsYouAction(session)
-        const showArchive = action.disposition === 'acknowledged'
-
-        const pulsing = pulsingSessionIds?.[session.id] === true
-
-        return (
-          <div
-            key={session.id}
-            data-pulse={pulsing ? 'true' : undefined}
-            className={cn(
-              'group flex min-w-0 items-start gap-1 rounded-md transition-colors hover:bg-accent',
-              activeSessionId === session.id && 'bg-accent',
-            )}
-          >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => onSelect(session.id)}
-                  aria-label={`${session.name}, ${summary}, ${projectName}`}
-                  className="h-auto min-w-0 flex-1 items-start justify-start gap-1.5 px-1.5 py-0.5 text-left text-xs leading-tight"
-                >
-                  <span className="mt-0.5 shrink-0">
-                    <SessionBadge attention={session.attention} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{session.name}</p>
-                    <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground/85">
-                      <span className="shrink-0">{summary}</span>
-                      {session.pullRequest && (
-                        <span className="shrink-0 rounded border border-border px-1">
-                          #{session.pullRequest.number} ·{' '}
-                          {session.pullRequest.state}
-                        </span>
-                      )}
-                      <span className="shrink-0 text-muted-foreground/45">
-                        •
-                      </span>
-                      <span className="truncate text-muted-foreground/70">
-                        {projectName}
-                      </span>
-                    </div>
-                  </div>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p>{session.name}</p>
-                <p className="text-[11px] opacity-70">
-                  {summary} - {projectName}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-
-            <div className="mr-0.5 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`${action.label} ${session.name}`}
-                    className="h-5 w-5 shrink-0"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      void onDismiss(session.id)
-                    }}
-                  >
-                    {action.disposition === 'snoozed' ? (
-                      <BellOff className="h-2.5 w-2.5" />
-                    ) : (
-                      <Check className="h-2.5 w-2.5" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="left">
-                  <p>{action.label}</p>
-                </TooltipContent>
-              </Tooltip>
-
-              {showArchive && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Archive ${session.name}`}
-                      className="h-5 w-5 shrink-0"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        void onArchive(session.id)
-                      }}
-                    >
-                      <Archive className="h-2.5 w-2.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="left">
-                    <p>Archive</p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  </div>
-)
-
-function resolveNeedsYouAction(session: SessionSummary): {
-  label: string
-  disposition: NeedsYouDisposition
-} {
-  switch (session.attention) {
-    case 'needs-approval':
-    case 'needs-input':
-      return { label: 'Snooze', disposition: 'snoozed' }
-    case 'failed':
-    case 'finished':
-      return { label: 'Acknowledge', disposition: 'acknowledged' }
-    default:
-      return { label: 'Dismiss', disposition: 'snoozed' }
-  }
+  ...actions
+}: NeedsYouSectionProps) {
+  return (
+    <section aria-label={title}>
+      <h2 className="mb-1.5 flex justify-between gap-2 text-[11px] font-medium text-muted-foreground">
+        <span>{title}</span>
+        <span className="tabular-nums">{cards.length}</span>
+      </h2>
+      <div className="space-y-2">
+        {cards.map((card) => (
+          <NeedsYouCard
+            key={card.session.id}
+            card={card}
+            active={activeSessionId === card.session.id}
+            pulsing={pulsingSessionIds?.[card.session.id]}
+            {...actions}
+          />
+        ))}
+      </div>
+    </section>
+  )
 }
