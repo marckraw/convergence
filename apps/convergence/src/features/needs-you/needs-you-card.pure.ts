@@ -6,7 +6,10 @@ import {
   executionHostEndpointDisplayName,
   isLocalExecutionHost,
 } from '@/entities/execution-host'
-import { formatRelativeTime } from '@/shared/lib/parallel-work.pure'
+import {
+  formatRelativeTime,
+  parallelWorkStatus,
+} from '@/shared/lib/parallel-work.pure'
 
 export interface CardContext {
   projectName: string
@@ -31,8 +34,15 @@ export function needsYouCardModel(
   const waiting =
     session.attention === 'needs-approval' ||
     session.attention === 'needs-input'
+  const parallelSummary = parallelWorkStatus(session)
+  const working =
+    !waiting &&
+    session.attention !== 'failed' &&
+    (session.status === 'running' ||
+      (Boolean(parallelSummary) && Boolean(session.parallelWork?.running)))
   const review =
-    session.attention === 'finished' || session.attention === 'failed'
+    session.attention === 'failed' ||
+    (session.attention === 'finished' && !working)
   return {
     session,
     projectName: context.projectName,
@@ -50,7 +60,15 @@ export function needsYouCardModel(
     kind,
     canArchive:
       review || (kind === 'errand' && session.pullRequest?.state === 'merged'),
-    summary: waiting || review ? formatSessionAttentionLabel(session) : null,
+    working,
+    summary:
+      waiting || review
+        ? formatSessionAttentionLabel(session)
+        : working
+          ? session.status === 'running'
+            ? 'Working'
+            : parallelSummary
+          : null,
     dismissLabel: waiting ? 'Snooze' : review ? 'Acknowledge' : null,
     attentionGroup: waiting ? 'Waiting on you' : review ? 'Needs review' : null,
     dismissed: context.dismissed ?? false,
@@ -65,6 +83,7 @@ export function groupNeedsYou(
     'Pinned',
     'Waiting on you',
     'Needs review',
+    'Working',
     'Errands with a PR',
   ]
   const groups = titles.map((title) => ({
@@ -79,9 +98,11 @@ export function groupNeedsYou(
       ? 'Pinned'
       : !card.dismissed && card.attentionGroup
         ? card.attentionGroup
-        : card.kind === 'errand' && card.session.pullRequest
-          ? 'Errands with a PR'
-          : null
+        : card.working
+          ? 'Working'
+          : card.kind === 'errand' && card.session.pullRequest
+            ? 'Errands with a PR'
+            : null
     groups.find((group) => group.title === title)?.cards.push(card)
   }
   return groups
