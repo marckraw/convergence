@@ -979,6 +979,10 @@ export function registerIpcHandlers(
     sessionApp.cancelQueuedInput(id)
   })
 
+  ipcMain.handle('session:redeliverQueuedInput', (_event, id: string) =>
+    sessionApp.redeliverQueuedInput(id),
+  )
+
   // Attachments handlers
   ipcMain.handle(
     'attachments:ingestFiles',

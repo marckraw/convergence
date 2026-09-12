@@ -29,8 +29,12 @@ describe('SessionQueuedInputService', () => {
     ).run('session-1')
 
     events = []
+    // Monotonic per test, not derived from `events.length`: a test that
+    // clears the event log mid-way (to watch one operation in isolation)
+    // would otherwise mint an id it has already used.
+    let nextId = 1
     service = new SessionQueuedInputService(db, {
-      idFactory: () => `queued-${events.length + 1}`,
+      idFactory: () => `queued-${nextId++}`,
       now: () => '2026-04-26T12:00:00.000Z',
     })
     service.setPatchListener((event) => events.push(event))
@@ -134,6 +138,103 @@ describe('SessionQueuedInputService', () => {
     })
   })
 
+  /**
+   * R2 (MAR-2971). "Deliver now" on a failed row re-enqueues the work as a
+   * fresh waiting row. The failed row is the record of an attempt that did
+   * happen and is never rewritten — the new row is a second attempt at the
+   * same errand, so it carries the same receipt (`dispatchId`) and the same
+   * payload the wire wrote.
+   */
+  it('redelivers a failed input as a fresh queued row without touching the old one', () => {
+    const original = service.enqueue(
+      'session-1',
+      {
+        text: 'RUN100 round 1, lap 1 of 6',
+        attachmentIds: ['att-1'],
+        skillSelections: [{ name: 'skill-a' } as never],
+        providerAccountId: 'acct-7',
+        skipContextInjection: true,
+        muteRelays: true,
+        dispatchId: 'dispatch-9',
+      },
+      'follow-up',
+    )
+    service.patch(
+      original.id,
+      'failed',
+      'The turn this input was waiting behind failed.',
+    )
+    events = []
+
+    const fresh = service.redeliver(original.id)
+
+    expect(fresh.id).not.toBe(original.id)
+    expect(fresh).toMatchObject({
+      sessionId: 'session-1',
+      state: 'queued',
+      deliveryMode: 'follow-up',
+      text: 'RUN100 round 1, lap 1 of 6',
+      attachmentIds: ['att-1'],
+      providerAccountId: 'acct-7',
+      skipContextInjection: true,
+      relaysMuted: true,
+      // The same errand, so the same receipt: this delivery settles the hop
+      // the first attempt left owed.
+      dispatchId: 'dispatch-9',
+      error: null,
+    })
+    // The failed row is a record, not a draft: it is never rewritten.
+    const rows = service.list('session-1')
+    expect(rows).toMatchObject([
+      {
+        id: original.id,
+        state: 'failed',
+        error: 'The turn this input was waiting behind failed.',
+      },
+      { id: fresh.id, state: 'queued' },
+    ])
+    expect(events).toEqual([
+      expect.objectContaining({
+        op: 'add',
+        item: expect.objectContaining({ id: fresh.id }),
+      }),
+    ])
+  })
+
+  it('refuses to redeliver an input that did not fail', () => {
+    const queued = service.enqueue(
+      'session-1',
+      { text: 'waiting' },
+      'follow-up',
+    )
+    expect(() => service.redeliver(queued.id)).toThrow(/cannot be redelivered/)
+  })
+
+  /**
+   * R3 (MAR-2971). The four cards Marcin was left with were `failed` with a
+   * DISABLED ✕ — no way to act on them at all. Dismiss has to reach a failed
+   * row, or "weird indefinite state" is exactly what it stays.
+   */
+  it('dismisses a failed input as well as a waiting one', () => {
+    const failed = service.enqueue('session-1', { text: 'failed' }, 'follow-up')
+    service.patch(
+      failed.id,
+      'failed',
+      'The turn this input was waiting behind failed.',
+    )
+
+    const dismissed = service.cancel(failed.id)
+
+    expect(dismissed).toMatchObject({ id: failed.id, state: 'cancelled' })
+    expect(service.list('session-1')).toEqual([])
+  })
+
+  it('refuses to dismiss an input already on the wire', () => {
+    const item = service.enqueue('session-1', { text: 'go' }, 'follow-up')
+    service.patch(item.id, 'dispatching')
+    expect(() => service.cancel(item.id)).toThrow(/cannot be cancelled/)
+  })
+
   it('returns the oldest queued input', () => {
     service.enqueue('session-1', { text: 'first' }, 'follow-up')
     service.enqueue('session-1', { text: 'second' }, 'follow-up')
@@ -168,7 +269,15 @@ describe('SessionQueuedInputService', () => {
     expect(events).toEqual([])
   })
 
-  it('fails pending queued inputs for a session and emits patch events', () => {
+  /**
+   * R1 (MAR-2971). A follow-up that was never attempted does not fail with
+   * the turn ahead of it. Four relay terminals were lost this way on
+   * 2026-09-11: a Fable's turn was stopped and the queue behind it — rows
+   * nothing had tried to deliver — was marked failed, so the loop recovered
+   * only because a human re-pasted the text. A queued row fails when ITS OWN
+   * delivery fails; until then it waits for the next turn.
+   */
+  it('leaves a never-attempted input queued when the turn ahead of it ends', () => {
     const queued = service.enqueue('session-1', { text: 'queued' }, 'follow-up')
     const dispatching = service.enqueue(
       'session-1',
@@ -178,30 +287,24 @@ describe('SessionQueuedInputService', () => {
     service.patch(dispatching.id, 'dispatching')
     events = []
 
-    service.failPendingForSession('session-1', 'Provider stopped')
+    const ended = service.failAttemptedForSession(
+      'session-1',
+      'Provider stopped',
+    )
 
+    // The attempted row ends; the one that was only waiting does not.
+    expect(ended.map((item) => item.id)).toEqual([dispatching.id])
     expect(service.list('session-1')).toMatchObject([
-      { id: queued.id, state: 'failed', error: 'Provider stopped' },
+      { id: queued.id, state: 'queued', error: null },
       { id: dispatching.id, state: 'failed', error: 'Provider stopped' },
     ])
-    expect(events).toHaveLength(2)
-    expect(events).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          op: 'patch',
-          item: expect.objectContaining({
-            id: queued.id,
-            state: 'failed',
-          }),
-        }),
-        expect.objectContaining({
-          op: 'patch',
-          item: expect.objectContaining({
-            id: dispatching.id,
-            state: 'failed',
-          }),
-        }),
-      ]),
+    // Exactly one patch event: a row that did not change is not news.
+    expect(events).toHaveLength(1)
+    expect(events[0]).toEqual(
+      expect.objectContaining({
+        op: 'patch',
+        item: expect.objectContaining({ id: dispatching.id, state: 'failed' }),
+      }),
     )
   })
 })

@@ -816,19 +816,28 @@ export class SessionService {
   }
 
   /**
-   * The loud terminal (MAR-2759, design P): fails every input still waiting
-   * on this session and emits `failed` for their receipts, in one event.
+   * The loud terminal (MAR-2759, design P): fails every input this session
+   * ATTEMPTED and emits `failed` for their receipts, in one event.
+   *
+   * Attempted only (R1, MAR-2971). A `dispatching` row was tried and its
+   * failure is its own; a `queued` row was not, so it stays queued and the
+   * next turn drains it. That distinction is also what keeps the ledger
+   * honest (R3): a never-attempted row's receipt never reaches this event,
+   * so `markDispatchesTerminated` never stamps its hop, and the hop stays
+   * unsettled and owed — `Waiting · <target> · since HH:MM` — instead of
+   * claiming a delivery that was never tried.
    *
    * Called from every transition out of carrying a turn that does not drain
    * the queue. The queue drains only on `completed`; any other way out
-   * leaves rows waiting for a settle that is not coming, and a row nobody
-   * owns is exactly the stranded work this invariant exists to remove.
+   * leaves ATTEMPTED rows waiting for a settle that is not coming, and a row
+   * nobody owns is exactly the stranded work this invariant exists to
+   * remove.
    * Termination over a retry, by ruling: the failure that got here was not
    * transient as far as this process can tell, and a quiet retry would be
    * a guess.
    */
   private terminateQueuedInputs(sessionId: string, reason: string): void {
-    const ended = this.queuedInputs.failPendingForSession(sessionId, reason)
+    const ended = this.queuedInputs.failAttemptedForSession(sessionId, reason)
     this.emitDispatchTerminal(
       sessionId,
       'failed',
@@ -1419,14 +1428,61 @@ export class SessionService {
     return this.queuedInputs.list(sessionId)
   }
 
+  /**
+   * Dismiss (✕), from `queued` or from `failed` (R3, MAR-2971).
+   *
+   * The terminal's word is the row's own story. A `queued` row is work the
+   * user called off before anything tried it -- `cancelled`. A `failed` row
+   * is work that was tried and did not land, and the user is now letting it
+   * go rather than delivering it -- `abandoned`. Both read quiet to the
+   * stall clock, so neither raises a false alarm; the difference is
+   * observable exactly where it matters, on a row `recoverDispatching()`
+   * failed across a restart, whose hop never got a terminal and is still
+   * unsettled. That hop settles here, with the true word, instead of
+   * hanging owed forever.
+   */
   cancelQueuedInput(id: string): void {
+    const before = this.queuedInputs.get(id)
     const cancelled = this.queuedInputs.cancel(id)
     // That one receipt and no other: the row's siblings are still waiting.
     if (cancelled.dispatchId) {
-      this.emitDispatchTerminal(cancelled.sessionId, 'cancelled', [
-        cancelled.dispatchId,
-      ])
+      this.emitDispatchTerminal(
+        cancelled.sessionId,
+        before?.state === 'failed' ? 'abandoned' : 'cancelled',
+        [cancelled.dispatchId],
+      )
     }
+  }
+
+  /**
+   * Deliver now (R2, MAR-2971): re-enqueue a failed input as the next thing
+   * this session sends.
+   *
+   * No terminal is emitted and none is owed. The receipt rides on the new
+   * row, so the errand is still in flight -- it is the delivery that settles
+   * the hop, and saying anything here would be announcing an ending to work
+   * that has just been given another beginning.
+   *
+   * If the session is idle, nothing would otherwise drain the row until the
+   * user sends again, so the drain is kicked here: "now" is the button's
+   * whole promise.
+   */
+  redeliverQueuedInput(id: string): SessionQueuedInput {
+    const fresh = this.queuedInputs.redeliver(id)
+    const session = this.getById(fresh.sessionId)
+    // Idle by the session's OWN status, not by `isCarryingATurn` (R4).
+    // That helper answers "is there a local handle mid-turn", and a remote
+    // run has no local handle at all -- so on a remote session it reads
+    // "idle" while the daemon is mid-turn, and this would push the input
+    // into a turn already running. The status is the fact both hosts keep.
+    if (
+      session &&
+      session.status !== 'running' &&
+      !this.dispatches.isDispatching(session.id)
+    ) {
+      this.dispatchNextQueuedInput(fresh.sessionId)
+    }
+    return fresh
   }
 
   /**

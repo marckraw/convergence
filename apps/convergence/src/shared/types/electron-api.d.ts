@@ -1871,6 +1871,7 @@ interface ElectronAPI {
     ) => () => void
     getQueuedInputs: (sessionId: string) => Promise<SessionQueuedInputData[]>
     cancelQueuedInput: (id: string) => Promise<void>
+    redeliverQueuedInput: (id: string) => Promise<SessionQueuedInput>
     onSessionQueuedInputPatched: (
       callback: (event: QueuedInputPatchEventData) => void,
     ) => () => void

@@ -119,6 +119,7 @@ interface SessionActions {
   loadActiveGlobalConversation: (sessionId: string) => Promise<void>
   loadQueuedInputs: (sessionId: string) => Promise<void>
   cancelQueuedInput: (id: string) => Promise<void>
+  redeliverQueuedInput: (id: string) => Promise<void>
   prepareForProject: (projectId: string | null) => void
   beginSessionDraft: (workspaceId: string | null) => void
   setActiveSession: (id: string | null) => void
@@ -898,6 +899,20 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       set({
         error:
           err instanceof Error ? err.message : 'Failed to cancel queued input',
+      })
+    }
+  },
+
+  redeliverQueuedInput: async (id: string) => {
+    set({ error: null })
+    try {
+      await sessionApi.redeliverQueuedInput(id)
+    } catch (err) {
+      set({
+        error:
+          err instanceof Error
+            ? err.message
+            : 'Failed to redeliver queued input',
       })
     }
   },

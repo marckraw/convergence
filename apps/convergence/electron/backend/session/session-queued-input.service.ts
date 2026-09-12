@@ -75,6 +75,12 @@ export class SessionQueuedInputService {
     this.onPatch = listener
   }
 
+  /** One row by id, whatever its state, or null. */
+  get(id: string): SessionQueuedInput | null {
+    const row = this.getRowById(id)
+    return row ? queuedInputFromRow(row) : null
+  }
+
   list(sessionId: string): SessionQueuedInput[] {
     const rows = this.db
       .prepare(
@@ -155,17 +161,62 @@ export class SessionQueuedInputService {
     return item
   }
 
-  /** Returns the cancelled row, receipt included, so its ending can be told. */
+  /**
+   * Returns the cancelled row, receipt included, so its ending can be told.
+   *
+   * From `queued` OR `failed` (R3, MAR-2971). A failed row used to be a dead
+   * end: the card rendered a DISABLED ✕, so the four rows Marcin was left
+   * with on 2026-09-11 could be neither delivered nor dismissed — the "weird
+   * indefinite state" he reported. A row on the wire (`dispatching`) still
+   * refuses, because its turn may yet answer and dismissing it would be a
+   * lie about work already in flight.
+   */
   cancel(id: string): SessionQueuedInput {
     const row = this.getRowById(id)
     if (!row) throw new Error(`Queued input not found: ${id}`)
-    if (row.state !== 'queued') {
+    if (row.state !== 'queued' && row.state !== 'failed') {
       throw new Error(`Queued input cannot be cancelled from ${row.state}`)
     }
 
     const cancelled = this.patch(id, 'cancelled')
     if (!cancelled) throw new Error(`Queued input not found: ${id}`)
     return cancelled
+  }
+
+  /**
+   * Deliver now (R2, MAR-2971): a failed row's work, queued again as a fresh
+   * row waiting for the next turn.
+   *
+   * A new row rather than a revived one, on purpose. The failed row is the
+   * record that an attempt happened and how it ended; rewriting it would
+   * erase the only evidence of the first try, and the ledger reads these
+   * rows. The new row carries the payload exactly as the wire wrote it --
+   * text, attachments, skills, the account chosen then, the injection bypass
+   * and the mute -- and the SAME `dispatchId`, because it is a second attempt
+   * at one errand, not a second errand: delivering it settles the hop the
+   * first attempt left owed.
+   */
+  redeliver(id: string): SessionQueuedInput {
+    const row = this.getRowById(id)
+    if (!row) throw new Error(`Queued input not found: ${id}`)
+    if (row.state !== 'failed') {
+      throw new Error(`Queued input cannot be redelivered from ${row.state}`)
+    }
+
+    const previous = queuedInputFromRow(row)
+    return this.enqueue(
+      previous.sessionId,
+      {
+        text: previous.text,
+        attachmentIds: previous.attachmentIds,
+        skillSelections: previous.skillSelections,
+        providerAccountId: previous.providerAccountId,
+        skipContextInjection: previous.skipContextInjection,
+        muteRelays: previous.relaysMuted,
+        dispatchId: previous.dispatchId,
+      },
+      previous.deliveryMode,
+    )
   }
 
   /**
@@ -232,11 +283,23 @@ export class SessionQueuedInputService {
   }
 
   /**
-   * Fails every input still waiting on this session and returns them, receipts
-   * included, so their ending can be told (MAR-2759, design P): a row that
-   * ends short of a turn owes a terminal, and the caller emits it.
+   * Fails every input this session ATTEMPTED to deliver and returns them,
+   * receipts included, so their ending can be told (MAR-2759, design P): a
+   * row that ends short of a turn owes a terminal, and the caller emits it.
+   *
+   * Attempted, and only attempted — `dispatching`, never `queued` (R1,
+   * MAR-2971). A `queued` row is one nothing has tried yet; the turn ahead of
+   * it ending is news about that turn, not about this row, and the next turn
+   * drains it in order. Four relay terminals were lost on 2026-09-11 because
+   * this swept the whole queue: the rows behind a stopped turn were marked
+   * `failed` with "The turn this input was waiting behind failed", their hops
+   * were stamped `failed`, and the loop recovered only because a human
+   * re-pasted four messages by hand.
+   *
+   * The name carries the rule: there is no method here that fails a row
+   * nobody attempted, so the old sweep cannot be written back by accident.
    */
-  failPendingForSession(
+  failAttemptedForSession(
     sessionId: string,
     reason: string,
   ): SessionQueuedInput[] {
@@ -245,7 +308,7 @@ export class SessionQueuedInputService {
         `SELECT id
          FROM session_queued_inputs
          WHERE session_id = ?
-           AND state IN ('queued', 'dispatching')
+           AND state = 'dispatching'
          ORDER BY created_at ASC, rowid ASC`,
       )
       .all(sessionId) as Array<{ id: string }>
