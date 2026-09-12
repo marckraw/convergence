@@ -300,9 +300,11 @@ describe('database', () => {
         'skip_context_injection',
         'relays_muted',
         'dispatch_id',
-        // Redelivery lineage and the told-ending stamp (MAR-2971).
+        // Redelivery lineage, the told-ending stamp, and the place in line
+        // every reader orders by (MAR-2971).
         'redelivered_from',
         'ending_told_at',
+        'queue_position',
         'error',
         'created_at',
         'updated_at',

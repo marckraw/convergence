@@ -194,6 +194,17 @@ const SCHEMA = `
     -- the turn its input eventually starts, so the relay ledger can stamp the
     -- right hop. Null for input people typed: only the relay engine holds ids.
     dispatch_id TEXT,
+    -- This input's place in line (MAR-2971 lap 4). The queue's order is a
+    -- fact on the row, not something re-derived per reader: arrival time
+    -- cannot carry it, because an opener and its payload are enqueued in one
+    -- beat and share a millisecond, and the flag that used to break that tie
+    -- was a mute flag standing in for "is an opener" -- true of user
+    -- follow-ups too, and wrong the moment two wires fire into one station,
+    -- where it drains O1,O2,P1,P2 and the second payload runs with no
+    -- /clear before it. Set from rowid, which IS the design-X order: an
+    -- opener is inserted before its own payload. A re-attempt inherits its
+    -- predecessor's position, so it keeps the place the errand had.
+    queue_position INTEGER,
     -- The row this one is a second attempt at (MAR-2971, R2). "Deliver now"
     -- never rewrites the failed row -- that row is the record that an attempt
     -- happened and how it ended -- so the retry is a NEW row pointing back at
@@ -1166,6 +1177,28 @@ function ensureQueuedInputColumns(database: Database.Database): void {
     database.exec(
       'ALTER TABLE session_queued_inputs ADD COLUMN ending_told_at TEXT',
     )
+  }
+
+  // The place in line (MAR-2971 lap 4). Added AND backfilled in one
+  // transaction, because the column is the only thing that answers "what
+  // order does this queue drain in" -- every reader sorts by it alone, and a
+  // row left null would sort ahead of everything (SQLite puts NULLs first
+  // ASC), so an interrupt between the DDL and the backfill would permanently
+  // move somebody's follow-up to the head of the queue. `rowid` is the
+  // honest backfill: it is the insertion order these rows already drained in.
+  if (
+    !getTableColumnNames(database, 'session_queued_inputs').has(
+      'queue_position',
+    )
+  ) {
+    database.transaction(() => {
+      database.exec(
+        'ALTER TABLE session_queued_inputs ADD COLUMN queue_position INTEGER',
+      )
+      database.exec(
+        'UPDATE session_queued_inputs SET queue_position = rowid WHERE queue_position IS NULL',
+      )
+    })()
   }
 }
 

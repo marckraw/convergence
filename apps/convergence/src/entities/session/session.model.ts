@@ -264,9 +264,16 @@ function upsertQueuedInput(
     ? items.map((item) => (item.id === nextItem.id ? nextItem : item))
     : [...items, nextItem]
 
-  return nextItems
-    .filter((item) => visibleStates.has(item.state))
-    .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+  return (
+    nextItems
+      .filter((item) => visibleStates.has(item.state))
+      // The queue's own order, not a second opinion about it (MAR-2971 lap 4).
+      // Sorting by arrival time here let the cards disagree with the drain:
+      // after Deliver now on an opener the list showed payload-then-clear
+      // while the queue sent clear-then-payload, because a re-attempt keeps
+      // its predecessor's PLACE but is created now.
+      .sort((left, right) => left.queuePosition - right.queuePosition)
+  )
 }
 
 function persistRecents(ids: string[]): void {

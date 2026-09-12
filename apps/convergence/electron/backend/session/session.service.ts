@@ -1510,10 +1510,14 @@ export class SessionService {
    * Deliver now (R2, MAR-2971): re-enqueue a failed input as the next thing
    * this session sends.
    *
-   * No terminal is emitted and none is owed. The receipt rides on the new
-   * row, so the errand is still in flight -- it is the delivery that settles
-   * the hop, and saying anything here would be announcing an ending to work
-   * that has just been given another beginning.
+   * The NEW receipt is told nothing, because it is owed: it rides on the
+   * fresh row and it is the delivery that will settle its hop. The OLD one
+   * is a different question -- if nobody ever announced its ending it is
+   * closed here, quietly, below.
+   *
+   * The fresh row keeps its predecessor's place in line rather than joining
+   * the back, so "now" means the next turn this session takes and an opener
+   * still leads the payload it clears for (lap 4).
    *
    * If the session is idle, nothing would otherwise drain the row until the
    * user sends again, so the drain is kicked here: "now" is the button's
@@ -1533,9 +1537,15 @@ export class SessionService {
     // attempt that is over -- and a receipt with no ending is the one thing
     // design P forbids. Told BEFORE the handover, so the ledger never holds
     // two live hops for one errand.
-
+    //
+    // `abandoned`, the word dismiss uses, and not `failed` (lap 4). The
+    // user is superseding this attempt with another one they just asked
+    // for; it is quiet to the stall clock, and `failed` here would hail a
+    // chair about the very delivery being retried a line later.
     if (before && before.dispatchId && before.endingToldAt === null) {
-      this.emitDispatchTerminal(fresh.sessionId, 'failed', [before.dispatchId])
+      this.emitDispatchTerminal(fresh.sessionId, 'abandoned', [
+        before.dispatchId,
+      ])
       this.queuedInputs.markEndingTold([before.id])
     }
 

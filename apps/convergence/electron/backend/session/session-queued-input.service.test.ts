@@ -207,6 +207,75 @@ describe('SessionQueuedInputService', () => {
     ])
   })
 
+  /**
+   * The clock in this suite is frozen, so every row below shares a
+   * `created_at` by construction rather than by luck -- which is exactly the
+   * beat the ordering has to survive (MAR-2971 lap 4).
+   */
+  function drainOrder(sessionId: string): string[] {
+    const sent: string[] = []
+    for (;;) {
+      const next = service.nextQueued(sessionId)
+      if (!next) return sent
+      sent.push(next.text)
+      service.patch(next.id, 'sent')
+    }
+  }
+
+  it('keeps each opener next to the payload it clears for, across two wires in one beat (MAR-2971 lap 4)', () => {
+    // Two wires firing into one busy station enqueue O1,P1,O2,P2 in a single
+    // beat. The rule is NOT "openers first": that drains O1,O2,P1,P2 and P2
+    // runs with no `/clear` in front of it, having had O2's clear spent on
+    // P1. The rule is the order they were queued in, which is design X's
+    // order -- each opener is inserted immediately before its own payload.
+    service.enqueue('session-1', { text: 'O1', muteRelays: true }, 'follow-up')
+    service.enqueue('session-1', { text: 'P1' }, 'follow-up')
+    service.enqueue('session-1', { text: 'O2', muteRelays: true }, 'follow-up')
+    service.enqueue('session-1', { text: 'P2' }, 'follow-up')
+
+    expect(drainOrder('session-1')).toEqual(['O1', 'P1', 'O2', 'P2'])
+  })
+
+  it('sends a redelivered opener before the payload it clears for (MAR-2971 lap 4)', () => {
+    // The other input the old proxy got wrong. The opener failed, its
+    // payload is still waiting, and Deliver now must put the `/clear` back
+    // in FRONT of it -- the errand keeps the place it had.
+    const opener = service.enqueue(
+      'session-1',
+      { text: '/clear', muteRelays: true, dispatchId: 'd-opener' },
+      'follow-up',
+    )
+    service.enqueue('session-1', { text: 'payload' }, 'follow-up')
+    service.patch(opener.id, 'failed', 'the provider went away')
+
+    const { input: fresh } = service.redeliver(opener.id)
+
+    expect(fresh.queuePosition).toBe(opener.queuePosition)
+    expect(drainOrder('session-1')).toEqual(['/clear', 'payload'])
+  })
+
+  it('shows the cards in the order the queue will drain them (MAR-2971 lap 4)', () => {
+    // One order for every reader. `list` feeds the cards and `nextQueued`
+    // feeds the drain; when they disagreed, Deliver now on an opener left
+    // the cards reading payload-then-clear while the queue sent
+    // clear-then-payload.
+    const opener = service.enqueue(
+      'session-1',
+      { text: '/clear', muteRelays: true },
+      'follow-up',
+    )
+    service.enqueue('session-1', { text: 'payload' }, 'follow-up')
+    service.patch(opener.id, 'failed', 'the provider went away')
+    service.redeliver(opener.id)
+
+    const cards = service
+      .list('session-1')
+      .filter((item) => item.state === 'queued')
+      .map((item) => item.text)
+    expect(cards).toEqual(drainOrder('session-1'))
+    expect(cards).toEqual(['/clear', 'payload'])
+  })
+
   it('refuses to redeliver an input that did not fail', () => {
     const queued = service.enqueue(
       'session-1',

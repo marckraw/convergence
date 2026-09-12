@@ -227,6 +227,17 @@ export class RelayEngine {
   private readonly batons = new Map<string, string>()
 
   /**
+   * Every receipt the engine is still holding a run for.
+   *
+   * A reader rather than a reach into the field: the sweep's law is about
+   * receipts -- no baton may outlive the work it names -- and a law worth
+   * asserting is worth being able to ask about (MAR-2971 lap 4).
+   */
+  heldDispatchIds(): string[] {
+    return [...this.batons.keys()]
+  }
+
+  /**
    * The dispatch ids of openers this engine has sent: the settles that
    * belong to Convergence rather than to the agent, recognised BY IDENTITY
    * when they arrive (MAR-2759).

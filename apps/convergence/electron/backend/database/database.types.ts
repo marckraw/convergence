@@ -95,6 +95,11 @@ export interface SessionQueuedInputRow {
   /** The dispatch id minted when this input was handed over (MAR-2759). */
   dispatch_id: string | null
   /**
+   * This input's place in line (MAR-2971 lap 4). Never null after the
+   * migration, which adds and backfills in one transaction.
+   */
+  queue_position?: number | null
+  /**
    * The row this one is a second attempt at (MAR-2971); null on a first.
    *
    * Optional, like the reader treats it: `queuedInputFromRow` resolves both

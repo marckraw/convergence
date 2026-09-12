@@ -43,10 +43,10 @@ export interface SessionQueuedInputDraft {
   redeliveredFrom?: string | null
   /**
    * The place in line this input already had, when it has one (MAR-2971 lap
-   * 3). Only a re-attempt passes it: everything else is arriving now, and
-   * "now" is the honest answer for those.
+   * 4). Only a re-attempt passes it: everything else is joining the back of
+   * the line, and its `rowid` says where that is.
    */
-  createdAt?: string
+  queuePosition?: number
 }
 
 export type QueuedInputDeliveryMode = Extract<
@@ -96,7 +96,7 @@ export class SessionQueuedInputService {
          FROM session_queued_inputs
          WHERE session_id = ?
            AND state IN ('queued', 'dispatching', 'failed')
-         ORDER BY created_at ASC, rowid ASC`,
+         ORDER BY queue_position ASC`,
       )
       .all(sessionId) as SessionQueuedInputRow[]
 
@@ -125,15 +125,16 @@ export class SessionQueuedInputService {
       redeliveredFrom: input.redeliveredFrom ?? null,
       endingToldAt: null,
       error: null,
-      // A re-attempt keeps the place its first attempt had; everything else
-      // is arriving now (MAR-2971 lap 3, Finding C).
-      createdAt: input.createdAt ?? timestamp,
+      // Filled from `rowid` right after the insert, or inherited by a
+      // re-attempt. Zero is never read: the update below runs in the same
+      // transaction as the insert.
+      queuePosition: input.queuePosition ?? 0,
+      createdAt: timestamp,
       updatedAt: timestamp,
     }
 
-    this.db
-      .prepare(
-        `INSERT INTO session_queued_inputs (
+    const insert = this.db.prepare(
+      `INSERT INTO session_queued_inputs (
            id,
            session_id,
            delivery_mode,
@@ -147,12 +148,21 @@ export class SessionQueuedInputService {
            relays_muted,
            dispatch_id,
            redelivered_from,
+           queue_position,
            error,
            created_at,
            updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    // Its own place in line, from `rowid`, unless it inherited one. Two
+    // statements in ONE transaction: every reader orders by `queue_position`
+    // alone, and SQLite sorts NULLs first, so a row that got its insert but
+    // not its position would jump the whole queue. `rowid` is the insertion
+    // order, which is design X's order -- an opener is inserted before its
+    // own payload, and two wires firing into one station keep each opener
+    // next to the payload it clears for.
+    this.db.transaction(() => {
+      insert.run(
         item.id,
         item.sessionId,
         item.deliveryMode,
@@ -166,10 +176,21 @@ export class SessionQueuedInputService {
         item.relaysMuted ? 1 : 0,
         item.dispatchId,
         item.redeliveredFrom,
+        item.queuePosition === 0 ? null : item.queuePosition,
         item.error,
         item.createdAt,
         item.updatedAt,
       )
+      if (item.queuePosition === 0) {
+        this.db
+          .prepare(
+            'UPDATE session_queued_inputs SET queue_position = rowid WHERE id = ?',
+          )
+          .run(item.id)
+      }
+    })()
+    const stored = this.getRowById(item.id)
+    if (stored) item.queuePosition = stored.queue_position ?? 0
 
     this.notify(item.sessionId, 'add', item)
     return item
@@ -220,11 +241,15 @@ export class SessionQueuedInputService {
    * typed) still carries none.
    *
    * The fresh row KEEPS its predecessor's place in line -- it inherits its
-   * `created_at` (MAR-2971 lap 3, Finding C). Deliver now re-attempts an
+   * `queue_position` (MAR-2971 lap 4, Finding C). Deliver now re-attempts an
    * errand; it does not resubmit it, and an errand does not lose its turn by
    * having failed. The sharp case is an opener: its payload is still queued
-   * ahead of it, so a fresh timestamp would send the payload FIRST and the
-   * `/clear` would arrive after the work it was supposed to clear for.
+   * ahead of it, so a row sent to the back would have the payload run FIRST
+   * and the `/clear` arrive after the work it was supposed to clear for.
+   *
+   * The two rows briefly share a position, and nothing has to break that
+   * tie: the predecessor is `failed`, so it is never in the same ordered set
+   * as the row that replaced it.
    */
   redeliver(id: string): {
     input: SessionQueuedInput
@@ -241,16 +266,18 @@ export class SessionQueuedInputService {
     const fresh = this.enqueue(
       previous.sessionId,
       {
-        createdAt: previous.createdAt,
         text: previous.text,
         attachmentIds: previous.attachmentIds,
         skillSelections: previous.skillSelections,
         providerAccountId: previous.providerAccountId,
         skipContextInjection: previous.skipContextInjection,
         muteRelays: previous.relaysMuted,
-        // Its predecessor's place in line, not a new one: an errand does
-        // not go to the back of the queue for having failed, and an opener
-        // that did would arrive behind its own payload.
+        queuePosition: previous.queuePosition,
+        // Its predecessor's PLACE, not its arrival time: an errand does not
+        // go to the back of the line for having failed, and an opener that
+        // did would arrive behind the payload it clears for. The new row's
+        // `created_at` is honestly now -- it really was queued now -- and
+        // the place is the column.
 
         // A NEW receipt, never the old one (R2 as amended in lap 2). By the
         // time a row is failed the engine has usually already been told the
@@ -267,18 +294,20 @@ export class SessionQueuedInputService {
   }
 
   /**
-   * The oldest waiting input, and when two share a beat, the opener.
+   * The next input this session will send: the one earliest in line.
    *
-   * An opener and its payload are enqueued in one beat, and the opener must
-   * go first (MAR-2759, design X). `rowid` used to carry that rule, which
-   * only worked because insertion order happened to agree: a redelivered
-   * opener keeps its predecessor's `created_at` but gets a NEW rowid, so it
-   * would sort behind the payload it is supposed to clear the way for, and
-   * the `/clear` would arrive after the work it was meant to precede.
+   * One number, and the same one every other reader uses (MAR-2971 lap 4).
+   * Two earlier attempts at this ordering were proxies for it and each broke
+   * at an input where the proxy and the question disagreed. `created_at`
+   * cannot answer it, because an opener and its payload are enqueued in one
+   * beat and share a millisecond. `relays_muted DESC` -- "a muted row is an
+   * opener, openers lead" -- was worse: the mute is a flag people set on
+   * their own follow-ups, and when two wires fire into one busy station the
+   * beat holds O1,P1,O2,P2, which that rule drains O1,O2,P1,P2, running the
+   * second payload with no `/clear` in front of it.
    *
-   * `relays_muted DESC` says the rule itself -- a muted row is an opener,
-   * openers lead -- and `rowid` stays underneath it as the last tie-break so
-   * the order is still total (MAR-2971 lap 3, Finding C).
+   * `queue_position` is the fact itself, so there is nothing left to infer
+   * and no second tie-break to get wrong.
    */
   nextQueued(sessionId: string): SessionQueuedInput | null {
     const row = this.db
@@ -286,7 +315,7 @@ export class SessionQueuedInputService {
         `SELECT *
          FROM session_queued_inputs
          WHERE session_id = ? AND state = 'queued'
-         ORDER BY created_at ASC, relays_muted DESC, rowid ASC
+         ORDER BY queue_position ASC
          LIMIT 1`,
       )
       .get(sessionId) as SessionQueuedInputRow | undefined
@@ -365,7 +394,7 @@ export class SessionQueuedInputService {
          FROM session_queued_inputs
          WHERE session_id = ?
            AND state = 'dispatching'
-         ORDER BY created_at ASC, rowid ASC`,
+         ORDER BY queue_position ASC`,
       )
       .all(sessionId) as Array<{ id: string }>
 

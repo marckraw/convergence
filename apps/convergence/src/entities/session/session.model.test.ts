@@ -712,6 +712,7 @@ describe('useSessionStore', () => {
       attachmentIds: [],
       skillSelections: [],
       providerRequestId: null,
+      queuePosition: 1,
       error: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
@@ -726,6 +727,59 @@ describe('useSessionStore', () => {
     })
   })
 
+  it("shows the cards in the queue's order, not in arrival order (MAR-2971 lap 4)", () => {
+    // The renderer is the fourth reader of the queue's order, and it used to
+    // hold its own opinion: it sorted by `createdAt`. A redelivered opener
+    // keeps its predecessor's PLACE but is created now, so after Deliver now
+    // the cards read payload-then-clear while the queue sent
+    // clear-then-payload — the list telling Marcin something the drain would
+    // not do.
+    const base = {
+      sessionId: 'session-a',
+      deliveryMode: 'follow-up' as const,
+      state: 'queued' as const,
+      attachmentIds: [],
+      skillSelections: [],
+      providerRequestId: null,
+      error: null,
+    }
+    const payload = {
+      ...base,
+      id: 'payload',
+      text: 'payload',
+      queuePosition: 2,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+    // The re-attempt: earlier in line, later on the clock.
+    const redeliveredOpener = {
+      ...base,
+      id: 'opener-2',
+      text: '/clear',
+      queuePosition: 1,
+      createdAt: '2026-01-01T00:05:00.000Z',
+      updatedAt: '2026-01-01T00:05:00.000Z',
+    }
+
+    useSessionStore.setState({ queuedInputsBySessionId: {} })
+    useSessionStore.getState().handleQueuedInputPatched({
+      sessionId: 'session-a',
+      op: 'add',
+      item: payload,
+    })
+    useSessionStore.getState().handleQueuedInputPatched({
+      sessionId: 'session-a',
+      op: 'add',
+      item: redeliveredOpener,
+    })
+
+    expect(
+      useSessionStore
+        .getState()
+        .queuedInputsBySessionId['session-a']?.map((item) => item.text),
+    ).toEqual(['/clear', 'payload'])
+  })
+
   it('removes queued inputs from the visible list when they are sent', () => {
     const queuedInput = {
       id: 'queued-1',
@@ -736,6 +790,7 @@ describe('useSessionStore', () => {
       attachmentIds: [],
       skillSelections: [],
       providerRequestId: null,
+      queuePosition: 1,
       error: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',

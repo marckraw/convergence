@@ -280,6 +280,17 @@ export interface SessionQueuedInput {
    */
   dispatchId: string | null
   /**
+   * This input's place in line (MAR-2971 lap 4).
+   *
+   * One order for every reader. The drain, the visible list, the terminal
+   * sweep and the renderer's own sort all read this one number, so the cards
+   * can never show an order the queue will not follow. Arrival time cannot
+   * carry it (an opener and its payload share a beat) and the mute flag that
+   * used to break the tie was a proxy for "is an opener" that user
+   * follow-ups also satisfy.
+   */
+  queuePosition: number
+  /**
    * The row this one is a second attempt at (MAR-2971, R2), or null on a
    * first attempt. The failed row is never rewritten, so the retry points
    * back at it instead.

@@ -2010,9 +2010,13 @@ describe('SessionService', () => {
 
     const fresh = queueService.redeliverQueuedInput(row.id)
 
-    // Exactly one ending, and it names the OLD receipt.
+    // Exactly one ending, it names the OLD receipt, and the word is
+    // `abandoned` -- the same one dismiss uses. The user is superseding this
+    // attempt with another they just asked for, so it must read QUIET to the
+    // stall clock; `failed` would hail a chair about the very delivery being
+    // retried on the next line (lap 4).
     expect(terminals.map((event) => [event.reason, event.dispatchIds])).toEqual(
-      [['failed', [dispatchId]]],
+      [['abandoned', [dispatchId]]],
     )
     expect(fresh).toMatchObject({
       state: 'queued',
@@ -8467,11 +8471,7 @@ describe('THE SWEEP: every dispatched receipt reaches exactly one terminal (MAR-
       // off the receipts: every baton the engine still holds must belong to
       // a receipt that is still owed. With nothing owed this collapses to
       // the original law, hold nothing.
-      const heldBatons = [
-        ...(
-          rig.engine as unknown as { batons: Map<string, string> }
-        ).batons.keys(),
-      ]
+      const heldBatons = rig.engine.heldDispatchIds()
       expect({
         path,
         heldForEndedWork: heldBatons.filter(

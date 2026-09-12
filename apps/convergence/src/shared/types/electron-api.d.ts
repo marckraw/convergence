@@ -974,6 +974,11 @@ interface SessionQueuedInputData {
   attachmentIds: string[]
   skillSelections: SkillSelection[]
   providerRequestId: string | null
+  /**
+   * This input's place in line (MAR-2971 lap 4). The cards sort by it, so
+   * the list can never claim an order the queue will not follow.
+   */
+  queuePosition: number
   error: string | null
   createdAt: string
   updatedAt: string

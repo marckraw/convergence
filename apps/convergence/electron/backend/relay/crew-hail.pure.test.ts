@@ -77,6 +77,40 @@ describe('findStalledStations', () => {
     ])
   })
 
+  it('stays quiet about an attempt the user superseded with Deliver now (MAR-2971 lap 4)', () => {
+    // The word the redelivery closes the old attempt with is chosen HERE, by
+    // the reader that decides whether a chair gets called. `abandoned` is
+    // quiet: the user is retrying the delivery, so accusing the station of
+    // silence about the attempt they just replaced would be a false alarm.
+    // `failed` is loud, which is why it is the wrong word for this one.
+    expect(
+      findStalledStations({
+        hops: [
+          hop({
+            firedAt: firedMinutesAgo(31),
+            settledAt: firedMinutesAgo(1),
+            settledStatus: 'abandoned',
+          }),
+        ],
+        now: NOW,
+        stallMinutes: 30,
+      }),
+    ).toEqual([])
+    expect(
+      findStalledStations({
+        hops: [
+          hop({
+            firedAt: firedMinutesAgo(31),
+            settledAt: firedMinutesAgo(1),
+            settledStatus: 'failed',
+          }),
+        ],
+        now: NOW,
+        stallMinutes: 30,
+      }),
+    ).not.toEqual([])
+  })
+
   it('waits until the window has actually passed', () => {
     expect(
       findStalledStations({
