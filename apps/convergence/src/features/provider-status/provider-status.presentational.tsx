@@ -1,3 +1,4 @@
+import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import type { FC, ReactNode } from 'react'
 import type {
   ProviderRuntimeInfo,
@@ -181,6 +182,11 @@ function renderProviderRow(
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
+            <ProviderIcon
+              providerId={provider.id}
+              vendorLabel={provider.vendorLabel}
+              name={provider.name}
+            />
             <p className="truncate text-sm font-semibold">{provider.name}</p>
             <span className="text-xs text-muted-foreground">
               {provider.vendorLabel}

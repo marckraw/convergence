@@ -58,7 +58,7 @@ export function SearchableSelect({
       triggerSize={triggerSize}
       triggerClassName={triggerClassName}
       contentClassName={contentClassName}
-      icon={icon}
+      icon={icon ?? items.find((item) => item.id === selectedId)?.icon}
       action={action}
       selectedBadge={selectedBadge}
       inputRef={inputRef}

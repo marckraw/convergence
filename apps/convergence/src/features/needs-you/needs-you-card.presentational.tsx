@@ -1,3 +1,4 @@
+import { ProviderModel } from '@/shared/ui/provider-model.presentational'
 import { MoreHorizontal, Pin } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import {
@@ -59,12 +60,11 @@ export function NeedsYouCard({
           >
             {card.projectName}
           </span>
-          <span
-            className="block truncate text-[11px] text-muted-foreground"
-            title={card.providerModel}
-          >
-            {card.providerModel}
-          </span>
+          <ProviderModel
+            providerId={session.providerId}
+            model={session.model}
+            className="text-[11px] text-muted-foreground"
+          />
           <span className="flex flex-wrap gap-1 text-[10px] font-normal">
             <span className="rounded bg-muted px-1.5 py-0.5">{card.host}</span>
             {card.prLabel && (

@@ -1,3 +1,4 @@
+import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import type {
   FC,
   ClipboardEvent,
@@ -497,6 +498,13 @@ export const Composer: FC<ComposerProps> = ({
   const providerItems = providerCatalog.map(
     ({ descriptor, blockedReason }) => ({
       id: descriptor.id,
+      icon: (
+        <ProviderIcon
+          providerId={descriptor.id}
+          vendorLabel={descriptor.vendorLabel}
+          name={descriptor.name}
+        />
+      ),
       label: descriptor.vendorLabel || descriptor.name,
       description:
         blockedReason ??

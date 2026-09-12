@@ -36,7 +36,6 @@ export function needsYouCardModel(
   return {
     session,
     projectName: context.projectName,
-    providerModel: `${session.providerId} · ${session.model ?? 'Model not recorded'}`,
     host: isLocalExecutionHost(session.executionHost)
       ? 'laptop'
       : endpoint

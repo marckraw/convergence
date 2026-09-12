@@ -22,7 +22,8 @@ it.each(Object.entries(cardFixtures))(
     render(<NeedsYouCard card={card} {...actions()} />)
     expect(screen.getByText('Horse')).toBeInTheDocument()
     expect(screen.getByText('Convergence')).toBeInTheDocument()
-    expect(screen.getByText('codex · gpt-6')).toBeInTheDocument()
+    expect(screen.getByText('gpt-6')).toBeInTheDocument()
+    expect(screen.getByTitle('OpenAI · gpt-6')).toBeInTheDocument()
     expect(
       screen.getByText(
         session.executionHost === 'lm' ? 'little-monster' : 'laptop',

@@ -1,3 +1,4 @@
+import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import type { FC } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
@@ -140,6 +141,7 @@ export const CanvasSessionNode: FC<NodeProps> = ({ data }) => {
         <div className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
           <span className="truncate font-medium">{card.projectName}</span>
           <span aria-hidden>·</span>
+          <ProviderIcon providerId={session.providerId} className="size-3.5" />
           <span className="truncate">{card.providerLabel}</span>
         </div>
 
