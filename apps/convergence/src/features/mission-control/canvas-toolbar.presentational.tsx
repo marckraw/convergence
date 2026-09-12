@@ -1,9 +1,11 @@
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 import { Link2, Plus, Settings2, History } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
 
 interface CanvasToolbarProps {
+  importCrew: ReactNode
+  hasCrew?: boolean
   crewName: string
   /** "4 connections · off", or the empty crew's "0 conversations · 0 …". */
   summary: string
@@ -20,8 +22,8 @@ interface CanvasToolbarProps {
 }
 
 /**
- * The row above the crew frame: what this crew is, and the four things you can
- * do to it.
+ * The row above the crew frame: Add conversation, Import crew, Connect,
+ * Crew settings and History. Import remains available before a crew exists.
  *
  * Every capability the retired Crews view had is reachable from here or from
  * the panel one of these buttons opens (R13) — membership, wire authoring,
@@ -30,6 +32,8 @@ interface CanvasToolbarProps {
  * where nobody finds the authoring.
  */
 export const CanvasToolbar: FC<CanvasToolbarProps> = ({
+  importCrew,
+  hasCrew = true,
   crewName,
   summary,
   connecting,
@@ -47,17 +51,19 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
     <h2 className="text-sm font-medium">{crewName}</h2>
     <p className="text-[11px] text-muted-foreground">{summary}</p>
 
-    <div className="ml-auto flex items-center gap-1.5">
+    <div className="ml-auto flex flex-wrap items-center gap-1.5">
       <Button
         type="button"
         variant="ghost"
         size="sm"
+        disabled={!hasCrew}
         onClick={onAddConversation}
         className="h-7 gap-1 px-2 text-[11px]"
       >
         <Plus className="size-3" />
         Add conversation
       </Button>
+      {importCrew}
 
       <Button
         type="button"
@@ -84,6 +90,7 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
         type="button"
         variant="ghost"
         size="sm"
+        disabled={!hasCrew}
         onClick={onCrewSettings}
         className="h-7 gap-1 px-2 text-[11px]"
       >
@@ -95,6 +102,7 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
         type="button"
         variant="ghost"
         size="sm"
+        disabled={!hasCrew}
         onClick={onHistory}
         className="h-7 gap-1 px-2 text-[11px]"
       >

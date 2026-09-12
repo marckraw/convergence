@@ -1,3 +1,5 @@
+import { toast } from 'sonner'
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 import { useCrewHailStore } from '@/entities/crew-hail'
 import type { RelayHop } from '@/entities/session-relay'
 import {
@@ -230,6 +232,8 @@ function seedRelays(relays: SessionRelay[]) {
 
 describe('MissionControl', () => {
   beforeEach(() => {
+    vi.mocked(toast.success).mockClear()
+    vi.mocked(toast.error).mockClear()
     localStorage.clear()
     sendMessageToSession = vi.fn<SendMessage>(async () => undefined)
     getAllSummaries = vi.fn(async () => [])
@@ -1204,6 +1208,286 @@ describe('MissionControl', () => {
 
       expect(onOpenSession).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'a' }),
+      )
+    })
+
+    async function openCrewSettings() {
+      const crew = makeCrew({
+        id: 'crew-1',
+        name: 'Night shift',
+        emoji: '🌙',
+        accentColor: '#7c3aed',
+        sessionIds: ['a', 'b'],
+      })
+      seedCrews([crew])
+      seed([makeSession({ id: 'a' }), makeSession({ id: 'b' })], [CLAUDE_CODE])
+      const api = window.electronAPI.crew
+      api.export = vi.fn(async () => ({
+        path: '/home/repo/.convergence/crews/night-shift.yaml',
+        yaml: 'version: 1',
+      }))
+      api.delete = vi.fn(async () => undefined)
+      vi.mocked(api.update).mockImplementation(async (id, patch) => {
+        const updated = { ...crew, ...patch, id }
+        listCrews.mockResolvedValue([updated])
+        return updated
+      })
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Crew settings' }),
+      )
+      await screen.findByRole('region', { name: 'Crew settings' })
+      return api
+    }
+
+    // RUN67 R1′ retires the dead menu's Save/Enter tests; inline rename stays.
+    it('will not save a blank or unchanged name (mutation: update on a blank)', async () => {
+      const api = await openCrewSettings()
+      const name = screen.getByLabelText('Crew name')
+      fireEvent.change(name, { target: { value: '   ' } })
+      fireEvent.change(name, { target: { value: ' Night shift ' } })
+      expect(api.update).not.toHaveBeenCalled()
+      fireEvent.change(name, { target: { value: 'Owls' } })
+      await waitFor(() =>
+        expect(api.update).toHaveBeenCalledExactlyOnceWith('crew-1', {
+          name: 'Owls',
+        }),
+      )
+    })
+
+    it('changes decoration immediately, one field at a time (mutation: omit decoration update)', async () => {
+      const api = await openCrewSettings()
+
+      fireEvent.click(await screen.findByLabelText('Emoji 🐎'))
+      await waitFor(() =>
+        expect(api.update).toHaveBeenCalledWith('crew-1', { emoji: '🐎' }),
+      )
+
+      fireEvent.click(screen.getByLabelText('Green'))
+      await waitFor(() =>
+        expect(api.update).toHaveBeenCalledWith('crew-1', {
+          accentColor: '#10b981',
+        }),
+      )
+    })
+
+    it('clears a decoration by picking the active choice again (mutation: always choose emoji)', async () => {
+      const api = await openCrewSettings()
+
+      fireEvent.click(await screen.findByLabelText('Emoji 🌙'))
+
+      await waitFor(() =>
+        expect(api.update).toHaveBeenCalledWith('crew-1', { emoji: null }),
+      )
+    })
+
+    it('asks before deleting, and says the sessions survive (mutation: delete without confirm)', async () => {
+      const api = await openCrewSettings()
+
+      fireEvent.click(await screen.findByText('Delete crew'))
+
+      expect(
+        screen.getByText(/stay exactly where they are/),
+      ).toBeInTheDocument()
+      expect(
+        within(screen.getByRole('region', { name: 'Danger' })).getByText(
+          /2 sessions/,
+        ),
+      ).toBeInTheDocument()
+      expect(api.delete).not.toHaveBeenCalled()
+    })
+
+    it('deletes once confirmed (mutation: omit delete)', async () => {
+      const api = await openCrewSettings()
+
+      fireEvent.click(await screen.findByText('Delete crew'))
+      fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
+
+      await waitFor(() => expect(api.delete).toHaveBeenCalledWith('crew-1'))
+    })
+
+    it('backs out of the confirm without deleting (mutation: omit cancel)', async () => {
+      const api = await openCrewSettings()
+
+      fireEvent.click(await screen.findByText('Delete crew'))
+      fireEvent.click(screen.getByText('Cancel'))
+
+      await waitFor(() =>
+        expect(
+          screen.queryByText(/stay exactly where they are/),
+        ).not.toBeInTheDocument(),
+      )
+      expect(api.delete).not.toHaveBeenCalled()
+    })
+
+    it('exports without positions by default and offers Reveal (mutation: omit export action)', async () => {
+      const api = await openCrewSettings()
+      fireEvent.click(screen.getByRole('button', { name: 'Export crew…' }))
+      await waitFor(() =>
+        expect({
+          calls: vi.mocked(api.export).mock.calls,
+          toast: vi.mocked(toast.success).mock.calls,
+        }).toEqual({
+          calls: [['crew-1', { includePositions: false }]],
+          toast: [
+            [
+              'Crew exported',
+              {
+                description: '/home/repo/.convergence/crews/night-shift.yaml',
+                action: { label: 'Reveal', onClick: expect.any(Function) },
+              },
+            ],
+          ],
+        }),
+      )
+    })
+
+    it('sends positions only after the checkbox is ticked (mutation: force positions off)', async () => {
+      const api = await openCrewSettings()
+      fireEvent.click(
+        screen.getByRole('checkbox', { name: 'Include positions' }),
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Export crew…' }))
+      await waitFor(() =>
+        expect(vi.mocked(api.export).mock.calls).toEqual([
+          ['crew-1', { includePositions: true }],
+        ]),
+      )
+    })
+
+    it('Reveal opens the exported file’s folder (mutation: drop the Finder call)', async () => {
+      await openCrewSettings()
+      const open = vi.fn(async () => undefined)
+      window.electronAPI.projectOpen = { listApps: vi.fn(), open }
+      fireEvent.click(screen.getByRole('button', { name: 'Export crew…' }))
+      await waitFor(() => {
+        if (!vi.mocked(toast.success).mock.calls.length)
+          throw new Error('No toast yet')
+      })
+      const action = vi.mocked(toast.success).mock.calls[0]![1]!.action
+      if (!action || typeof action !== 'object' || !('onClick' in action))
+        throw new Error('Missing Reveal action')
+      action.onClick({} as Parameters<typeof action.onClick>[0])
+      await waitFor(() =>
+        expect(open.mock.calls).toEqual([
+          [{ appId: 'finder', path: '/home/repo/.convergence/crews' }],
+        ]),
+      )
+    })
+
+    it.each([false, true])(
+      'imports from the Canvas with existing crew %s and selects the reported crew (mutation: omit import mount or selection)',
+      async (existing) => {
+        const prior = makeCrew({
+          id: 'crew-1',
+          name: 'Prior crew',
+          sessionIds: ['a'],
+        })
+        const imported = makeCrew({
+          id: 'imported',
+          name: 'Imported crew',
+          sessionIds: ['b'],
+        })
+        seedCrews(existing ? [prior] : [])
+        seed(
+          existing ? [makeSession({ id: 'a' }), makeSession({ id: 'b' })] : [],
+          [CLAUDE_CODE],
+        )
+        const row = {
+          detail: '',
+          differences: [],
+          canUpdate: false,
+          options: [],
+          state: 'existing' as const,
+        }
+        window.electronAPI.crew.importPlan = vi.fn(async () => ({
+          path: '/crew.yaml',
+          revision: 'v1',
+          crew: { ...row, key: 'crew', label: 'Imported crew', id: 'imported' },
+          roles: [],
+          wires: [],
+          limits: { ...row, key: 'limits', label: 'Limits' },
+          kept: [],
+          hasLayout: false,
+          canApply: true,
+        }))
+        window.electronAPI.crew.importApply = vi.fn(async () => {
+          listCrews.mockResolvedValue(existing ? [prior, imported] : [imported])
+          return {
+            path: '/crew.yaml',
+            crewId: 'imported',
+            entries: [],
+            nothingToChange: true,
+          }
+        })
+        getAllSummaries.mockResolvedValue([
+          makeSession({ id: 'a' }),
+          makeSession({ id: 'b' }),
+        ])
+        window.electronAPI.session.getNeedsYouDismissals = vi.fn(
+          async () => ({}),
+        )
+        render(<MissionControl />)
+        await switchToCanvas()
+        fireEvent.click(
+          await screen.findByRole('button', { name: 'Import crew…' }),
+        )
+        fireEvent.click(await screen.findByRole('button', { name: 'Apply' }))
+        await screen.findByText('Crew import report')
+        await waitFor(() =>
+          expect(
+            document.querySelector('[data-canvas-toolbar] h2'),
+          ).toHaveTextContent('Imported crew'),
+        )
+      },
+    )
+
+    /** A component only its own test renders is the defect: pin the real Canvas mounts. */
+    it('every crew act has a door in the Canvas (mutation: unmount the section)', async () => {
+      await openCrewSettings()
+      for (const name of [
+        'Add conversation',
+        'Connect',
+        'Crew settings',
+        'History',
+        'Import crew…',
+        'Export crew…',
+        'Delete crew',
+      ]) {
+        expect(screen.getByRole('button', { name })).toBeEnabled()
+      }
+      expect(
+        screen.getByRole('region', { name: 'Decoration' }),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Emoji 🐎' })).toBeEnabled()
+    })
+
+    it('offers replacement only after EEXIST and exports with force after the choice (mutation: omit replacement action)', async () => {
+      const api = await openCrewSettings()
+      vi.mocked(api.export).mockRejectedValueOnce(
+        new Error('EEXIST: night-shift.yaml'),
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Export crew…' }))
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith('Could not export crew', {
+          description: 'EEXIST: night-shift.yaml',
+          action: {
+            label: 'Replace existing file',
+            onClick: expect.any(Function),
+          },
+        }),
+      )
+      expect(api.export).toHaveBeenCalledTimes(1)
+      const action = vi.mocked(toast.error).mock.calls[0]![1]!.action
+      if (!action || typeof action !== 'object' || !('onClick' in action))
+        throw new Error('Missing Replace action')
+      action.onClick({} as Parameters<typeof action.onClick>[0])
+      await waitFor(() =>
+        expect(api.export).toHaveBeenLastCalledWith('crew-1', {
+          includePositions: false,
+          force: true,
+        }),
       )
     })
 

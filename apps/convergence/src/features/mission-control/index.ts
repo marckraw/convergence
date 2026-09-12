@@ -28,7 +28,7 @@ export { SessionCardView } from './session-card.presentational'
 export { SessionCrewPicker } from './session-crew-picker.container'
 export { SessionCrewChips } from './session-crew-chips.presentational'
 export { CrewDecorationPicker } from './crew-decoration-picker.presentational'
-export { CrewHeaderMenu } from './crew-header-menu.container'
+export { CrewImport } from './crew-import.container'
 export {
   DEFAULT_CREW_ROUND_CAP,
   DEFAULT_CREW_STALL_MINUTES,

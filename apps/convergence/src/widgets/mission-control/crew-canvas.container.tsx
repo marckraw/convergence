@@ -1,3 +1,5 @@
+import { toast } from 'sonner'
+import { projectOpenApi } from '@/entities/project-open'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FC } from 'react'
 import { Waypoints } from 'lucide-react'
@@ -24,6 +26,8 @@ import {
   ANY_PROJECT_OPTION_ID,
   CONNECT_MODE_OFF,
   CanvasToolbar,
+  CrewImport,
+  isValidCrewName,
   ConnectionInspector,
   CrewSettingsPanel,
   DEFAULT_CREW_ROUND_CAP,
@@ -123,6 +127,10 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const [savedDraft, setSavedDraft] = useState<ConnectionDraft | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [includePositions, setIncludePositions] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const deleteCrew = useSessionCrewStore((state) => state.deleteCrew)
   /**
    * What leaving the draft would do, held until the person answers.
    *
@@ -234,6 +242,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const supportsReset = recipientProvider?.supportsConversationReset ?? false
 
   const closePanel = useCallback(() => {
+    setConfirmingDelete(false)
     setPanelState({ kind: 'none' })
     setDraft(null)
     setSavedDraft(null)
@@ -893,26 +902,120 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
     historyOutcomes,
   ])
 
-  if (!crew || !selectedGroup) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
-        <Waypoints className="size-6 text-muted-foreground" />
-        <p className="text-sm font-medium">Start with a conversation</p>
-        <p className="max-w-sm text-xs text-muted-foreground">
-          Add existing conversations to a crew, then connect their replies.
-        </p>
-        <p className="max-w-sm text-xs text-muted-foreground/70">
-          Conversations outside crews remain available in Flat.
-        </p>
-      </div>
-    )
+  const exportCrew = async (force = false) => {
+    if (!crew) return
+    setExporting(true)
+    try {
+      const result = await sessionCrewApi.export(crew.id, {
+        includePositions,
+        ...(force ? { force: true } : {}),
+      })
+      toast.success('Crew exported', {
+        description: result.path,
+        action: {
+          label: 'Reveal',
+          onClick: () => {
+            // The existing Finder door opens the containing directory.
+            const directory = result.path.slice(
+              0,
+              Math.max(
+                result.path.lastIndexOf('/'),
+                result.path.lastIndexOf('\\'),
+              ),
+            )
+            void projectOpenApi
+              .open({ appId: 'finder', path: directory })
+              .catch((error) => toast.error(String(error)))
+          },
+        },
+      })
+      closePanel()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      toast.error('Could not export crew', {
+        description: message,
+        ...(message.includes('EEXIST')
+          ? {
+              action: {
+                label: 'Replace existing file',
+                onClick: () => void exportCrew(true),
+              },
+            }
+          : {}),
+      })
+    } finally {
+      setExporting(false)
+    }
   }
+  useEffect(() => {
+    setIncludePositions(false)
+    setConfirmingDelete(false)
+  }, [crew?.id, panel.kind])
 
   const armedCount = relays.filter((relay) => relay.armed).length
   const summary =
     relays.length === 0
-      ? `${crew.sessionIds.length} conversation${crew.sessionIds.length === 1 ? '' : 's'} · 0 connections`
+      ? `${crew?.sessionIds.length ?? 0} conversation${(crew?.sessionIds.length ?? 0) === 1 ? '' : 's'} · 0 connections`
       : `${relays.length} connection${relays.length === 1 ? '' : 's'} · ${armedCount === 0 ? 'all off' : `${armedCount} on`}`
+
+  const toolbar = (
+    <CanvasToolbar
+      crewName={crew?.name ?? ''}
+      hasCrew={crew !== null}
+      importCrew={
+        <CrewImport
+          onApplied={(report) => setSelectedCrewId(report.crewId)}
+          trigger={(start, importing) => (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[11px]"
+              disabled={importing}
+              onClick={() =>
+                leaveDraft(() => {
+                  closePanel()
+                  start()
+                })
+              }
+            >
+              Import crew…
+            </Button>
+          )}
+        />
+      }
+      summary={summary}
+      connecting={connectMode.kind !== 'off'}
+      canConnect={(crew?.sessionIds.length ?? 0) >= 2}
+      waitingCount={openHails.length}
+      onAddConversation={() => leavePanel({ kind: 'add-conversations' })}
+      onToggleConnect={() =>
+        setConnectMode((current) => toggleConnectMode(current))
+      }
+      onCrewSettings={() => leavePanel({ kind: 'crew-settings' })}
+      onHistory={() => {
+        setHistoryOpen((open) => !open)
+      }}
+    />
+  )
+
+  if (!crew || !selectedGroup) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        {toolbar}
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
+          <Waypoints className="size-6 text-muted-foreground" />
+          <p className="text-sm font-medium">Start with a conversation</p>
+          <p className="max-w-sm text-xs text-muted-foreground">
+            Add existing conversations to a crew, then connect their replies.
+          </p>
+          <p className="max-w-sm text-xs text-muted-foreground/70">
+            Conversations outside crews remain available in Flat.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -934,21 +1037,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         if (!left) event.stopPropagation()
       }}
     >
-      <CanvasToolbar
-        crewName={crew.name}
-        summary={summary}
-        connecting={connectMode.kind !== 'off'}
-        canConnect={crew.sessionIds.length >= 2}
-        waitingCount={openHails.length}
-        onAddConversation={() => leavePanel({ kind: 'add-conversations' })}
-        onToggleConnect={() =>
-          setConnectMode((current) => toggleConnectMode(current))
-        }
-        onCrewSettings={() => leavePanel({ kind: 'crew-settings' })}
-        onHistory={() => {
-          setHistoryOpen((open) => !open)
-        }}
-      />
+      {toolbar}
 
       <div className="flex min-h-0 flex-1">
         <div
@@ -1190,6 +1279,30 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         {panel.kind === 'crew-settings' ? (
           <div className="w-[340px] shrink-0">
             <CrewSettingsPanel
+              memberCount={crew.sessionIds.length}
+              includePositions={includePositions}
+              exporting={exporting}
+              confirmingDelete={confirmingDelete}
+              onIncludePositionsChange={setIncludePositions}
+              onExport={() => {
+                void exportCrew()
+              }}
+              onRequestDelete={() => setConfirmingDelete(true)}
+              onCancelDelete={() => setConfirmingDelete(false)}
+              onConfirmDelete={() => {
+                void deleteCrew(crew.id)
+                closePanel()
+              }}
+              emoji={crew.emoji}
+              accentColor={crew.accentColor}
+              onEmojiChange={(emoji) => {
+                void sessionCrewApi.update(crew.id, { emoji }).then(loadCrews)
+              }}
+              onAccentColorChange={(accentColor) => {
+                void sessionCrewApi
+                  .update(crew.id, { accentColor })
+                  .then(loadCrews)
+              }}
               crewName={crew.name}
               members={crew.members}
               resolveName={resolveName}
@@ -1202,6 +1315,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               batonNameProblem={batonNameProblem}
               batonNameDrafts={batonNameDrafts}
               onCrewNameChange={(name) => {
+                if (!isValidCrewName(name) || name.trim() === crew.name) return
                 void sessionCrewApi.update(crew.id, { name }).then(loadCrews)
               }}
               onBatonNameEdit={(sessionId, batonName) =>
