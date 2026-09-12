@@ -3580,6 +3580,8 @@ describe('ComposerContainer', () => {
       skipContextInjection: false,
       relaysMuted: false,
       dispatchId: 'dispatch-1',
+      queuePosition: 1,
+      redeliveredBy: false,
       error: null,
       createdAt: '2026-09-11T22:20:25.000Z',
       updatedAt: '2026-09-11T22:20:25.000Z',
@@ -3639,6 +3641,87 @@ describe('ComposerContainer', () => {
     fireEvent.click(deliverNow)
     await waitFor(() =>
       expect(redeliverQueuedInput).toHaveBeenCalledWith('q-1'),
+    )
+  })
+
+  it('offers no Deliver now on a failed row something already replaced (MAR-2971 lap 6)', async () => {
+    // The rendered half of "once only". A failed row keeps its card as the
+    // record of the first attempt, so the button would otherwise stay
+    // clickable forever — and pressing it again is refused at the service,
+    // which means the card was offering something it could not do.
+    seedQueuedInputs([
+      queuedInput({
+        state: 'failed',
+        error: 'The turn this input was waiting behind failed.',
+        redeliveredBy: true,
+      }),
+    ])
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
+      />,
+    )
+
+    await screen.findByTestId('queued-inputs')
+    expect(
+      screen.queryByRole('button', { name: 'Deliver now' }),
+    ).not.toBeInTheDocument()
+    // The card is still there, and still dismissible: it is the record.
+    expect(
+      screen.getByRole('button', { name: 'Cancel queued input' }),
+    ).toBeEnabled()
+  })
+
+  it('drops Deliver now the moment a redelivery is reported, without a reload (MAR-2971 lap 6)', async () => {
+    // The live path, which is where this actually bit. `redeliveredBy` is a
+    // fact about ANOTHER row, so only a read that asks about both can carry
+    // it — and the read that does runs on session activation. Until the
+    // service said so on the patch, the successor's card appeared while the
+    // old one kept its button until the user switched sessions.
+    seedQueuedInputs([
+      queuedInput({
+        state: 'failed',
+        error: 'The turn this input was waiting behind failed.',
+      }),
+    ])
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
+      />,
+    )
+    expect(
+      await screen.findByRole('button', { name: 'Deliver now' }),
+    ).toBeInTheDocument()
+
+    // What the service emits for the predecessor once the successor exists.
+    act(() => {
+      useSessionStore.getState().handleQueuedInputPatched({
+        sessionId: 'session-1',
+        op: 'patch',
+        item: queuedInput({
+          state: 'failed',
+          error: 'The turn this input was waiting behind failed.',
+          redeliveredBy: true,
+        }) as never,
+      })
+    })
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: 'Deliver now' }),
+      ).not.toBeInTheDocument(),
     )
   })
 

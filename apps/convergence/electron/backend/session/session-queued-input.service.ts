@@ -289,12 +289,15 @@ export class SessionQueuedInputService {
     // first's place in line: two queued rows at one position, which is the
     // one case the ordering cannot decide by itself. The successor is the
     // answer: this errand is already being carried again.
-
+    // Scoped by session so it rides `idx_session_queued_inputs_session`:
+    // nothing indexes `redelivered_from`, and this runs on a button press.
     const successor = this.db
       .prepare(
-        'SELECT id FROM session_queued_inputs WHERE redelivered_from = ? LIMIT 1',
+        `SELECT id FROM session_queued_inputs
+         WHERE session_id = ? AND redelivered_from = ?
+         LIMIT 1`,
       )
-      .get(id) as { id: string } | undefined
+      .get(row.session_id, id) as { id: string } | undefined
     if (successor) {
       throw new Error(
         `Queued input ${id} was already redelivered as ${successor.id}`,
@@ -311,13 +314,12 @@ export class SessionQueuedInputService {
         providerAccountId: previous.providerAccountId,
         skipContextInjection: previous.skipContextInjection,
         muteRelays: previous.relaysMuted,
-        queuePosition: previous.queuePosition,
         // Its predecessor's PLACE, not its arrival time: an errand does not
         // go to the back of the line for having failed, and an opener that
         // did would arrive behind the payload it clears for. The new row's
         // `created_at` is honestly now -- it really was queued now -- and
         // the place is the column.
-
+        queuePosition: previous.queuePosition,
         // A NEW receipt, never the old one (R2 as amended in lap 2). By the
         // time a row is failed the engine has usually already been told the
         // `failed` ending and released the baton, so the old id names a
@@ -329,6 +331,18 @@ export class SessionQueuedInputService {
       },
       previous.deliveryMode,
     )
+    // The predecessor learns it has been replaced, now (MAR-2971 lap 6).
+    // `redeliveredBy` is a fact about ANOTHER row, so only a read that asks
+    // about both can carry it -- and `list()` runs on session activation.
+    // Without this the successor's card appears while the old one keeps its
+    // Deliver now button until the user switches sessions: the second press
+    // is refused at the service, so the queue stays right, but the card has
+    // been lying about what pressing it would do. Told from here, because
+    // this is the moment the fact becomes true.
+    this.notify(previous.sessionId, 'patch', {
+      ...previous,
+      redeliveredBy: true,
+    })
     return { input: fresh, fromDispatchId: previous.dispatchId }
   }
 
@@ -351,6 +365,14 @@ export class SessionQueuedInputService {
    * purpose, and between two rows at one place the later attempt is the
    * later row. Without it SQLite's order between equals is undefined, so the
    * pair could come back either way across a reload.
+   *
+   * HERE the tie is unreachable, and that is worth saying rather than
+   * testing: this reader sees only `queued` rows, an errand can be
+   * re-attempted only once (`redeliver` refuses a row that already has a
+   * successor), and the predecessor it shares a position with is `failed`.
+   * The key still belongs in this query -- it is the same ordering law as
+   * `list`'s, and a reader that agreed with it only by luck is the shape
+   * this lap removed -- but the failure it prevents is visible in `list`.
    */
   nextQueued(sessionId: string): SessionQueuedInput | null {
     const row = this.db

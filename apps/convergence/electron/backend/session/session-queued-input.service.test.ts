@@ -199,10 +199,21 @@ describe('SessionQueuedInputService', () => {
       },
       { id: fresh.id, state: 'queued' },
     ])
+    // The successor is announced, and the predecessor is told it has been
+    // replaced (lap 6). That second event is a NOTIFICATION, not a write:
+    // the failed row in the database is still exactly what it was, which is
+    // what the assertions above just checked.
     expect(events).toEqual([
       expect.objectContaining({
         op: 'add',
         item: expect.objectContaining({ id: fresh.id }),
+      }),
+      expect.objectContaining({
+        op: 'patch',
+        item: expect.objectContaining({
+          id: original.id,
+          redeliveredBy: true,
+        }),
       }),
     ])
   })
@@ -296,13 +307,15 @@ describe('SessionQueuedInputService', () => {
       fresh.id,
     ])
 
-    // And it must not depend on the query plan. Ordering by position alone
-    // happens to come back right today only because a table scan visits rows
-    // in rowid order; give the planner an index it prefers and the same SQL
-    // returns the pair REVERSED -- the re-attempt ahead of the row it
-    // replaced. Measured: with an index on `queue_position DESC`, position-
-    // only ordering emits succ,pred. The lineage key is what makes the order
-    // a property of the query rather than of the plan.
+    // And it must not depend on the query plan. There is no table scan here
+    // to lean on: `idx_session_queued_inputs_session (session_id, state,
+    // created_at)` already drives this read, and the pair comes back right
+    // today only because that index is walked once per `state` in the IN
+    // list and `'failed'` is visited before `'queued'` -- an accident of
+    // which state each row happens to be in, not an ordering. Give the
+    // planner an index it prefers over that one and the same SQL returns the
+    // pair REVERSED, the re-attempt ahead of the row it replaced. The
+    // lineage key is what makes the order a property of the query.
     db.exec(
       'CREATE INDEX idx_queued_position_desc ON session_queued_inputs(session_id, state, queue_position DESC)',
     )
@@ -310,7 +323,6 @@ describe('SessionQueuedInputService', () => {
       opener.id,
       fresh.id,
     ])
-    expect(service.nextQueued('session-1')?.id).toBe(fresh.id)
   })
 
   it('refuses a second re-attempt at an errand already being carried (MAR-2971 lap 5)', () => {
@@ -341,6 +353,45 @@ describe('SessionQueuedInputService', () => {
     expect(waiting.map((item) => item.id)).toEqual([fresh.id])
     // And it said why, rather than failing silently.
     expect(String(refusal)).toContain(`already redelivered as ${fresh.id}`)
+  })
+
+  it('tells the predecessor it was superseded, the moment it is (MAR-2971 lap 6)', () => {
+    // `redeliveredBy` is a fact about ANOTHER row, so the only read that can
+    // carry it is one that asks about both -- and that read runs on session
+    // activation. Without an event here the successor's card appears while
+    // the old one keeps its Deliver now button until the user switches
+    // sessions: the second press is refused, so the queue stays right, but
+    // the card has been lying about what pressing it would do.
+    const opener = service.enqueue(
+      'session-1',
+      { text: 'once', dispatchId: 'd-1' },
+      'follow-up',
+    )
+    service.patch(opener.id, 'failed', 'the provider went away')
+    events = []
+
+    const { input: fresh } = service.redeliver(opener.id)
+
+    // Two events, in the order the facts became true: the successor exists,
+    // and only then is the predecessor superseded by it.
+    expect(
+      events.map((event) => [
+        event.op,
+        event.item.id,
+        event.item.redeliveredBy,
+      ]),
+    ).toEqual([
+      ['add', fresh.id, false],
+      ['patch', opener.id, true],
+    ])
+    // The predecessor is still failed and still carries its error: the patch
+    // reports that it was replaced, it does not rewrite what happened to it.
+    const patched = events[1]?.item
+    expect(patched).toMatchObject({
+      state: 'failed',
+      error: 'the provider went away',
+      queuePosition: opener.queuePosition,
+    })
   })
 
   it('stops offering Deliver now on a row something already replaced (MAR-2971 lap 5)', () => {
