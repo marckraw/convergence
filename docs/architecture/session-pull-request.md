@@ -13,8 +13,8 @@ git command in a remote filesystem path. A session without a recorded branch
 says `no branch recorded for this session`; the current checkout's HEAD is not
 a substitute.
 
-A daemon `prUrl` string is an ephemeral hint (null does not trigger a lookup): it triggers the same lookup, and
-the URL itself is never persisted. Accepted patches emit the session id after
+A daemon `prUrl` string is an ephemeral hint: it triggers the same lookup, and
+the URL itself is never persisted. Null does not trigger a lookup. Accepted patches emit the session id after
 the ownership/replay guards. Observer failures are logged with that id while
 other listeners and the session pipeline continue.
 

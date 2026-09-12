@@ -22,7 +22,7 @@ describe('PullRequestService', () => {
     resetDatabase()
   })
 
-  it('times out gh lookups and stores an error status', async () => {
+  it('times out gh lookups without creating a workspace fact', async () => {
     const db = getDatabase()
     db.prepare(
       `INSERT INTO projects (id, name, repository_path, settings)
@@ -70,11 +70,7 @@ describe('PullRequestService', () => {
       expect.objectContaining({ cwd: '/repo-ws', timeout: 15_000 }),
       expect.any(Function),
     )
-    expect(service.getByWorkspaceId('workspace-1')).toMatchObject({
-      lookupStatus: 'error',
-      state: 'unknown',
-      error: 'GitHub CLI timed out while looking up pull request.',
-    })
+    expect(service.getByWorkspaceId('workspace-1')).toBeNull()
   })
 
   it('lists cached pull requests for a project in one read', () => {
@@ -386,7 +382,7 @@ describe('session PR fact (MAR-2978)', () => {
   })
 
   it.each(['missing', 'auth', 'timeout', 'unsupported'])(
-    'keeps the verified fact on %s and retries on the next poll (mutation: write on error)',
+    'keeps both encodings of the verified fact on %s (mutation: upsert on error)',
     async (failure) => {
       const { db, service, git } = fixture()
       const verified = (await service.refreshForSession('s')).pullRequest
@@ -395,6 +391,10 @@ describe('session PR fact (MAR-2978)', () => {
         .get()
       db.exec(
         "CREATE TRIGGER reject_pr_write BEFORE UPDATE OF pull_request_json ON sessions BEGIN SELECT RAISE(ABORT, 'a lookup error must not write the fact'); END",
+      )
+      const workspaceBefore = service.getByWorkspaceId('w')
+      db.exec(
+        "CREATE TRIGGER reject_workspace_write BEFORE UPDATE ON workspace_pull_requests BEGIN SELECT RAISE(ABORT, 'a lookup error must not write the workspace fact'); END",
       )
       const expectedMessage =
         failure === 'missing'
@@ -431,10 +431,55 @@ describe('session PR fact (MAR-2978)', () => {
       expect(
         db.prepare("SELECT pull_request_json FROM sessions WHERE id='s'").get(),
       ).toEqual(before)
+      expect(service.getByWorkspaceId('w')).toEqual(workspaceBefore)
       expect(service.getForSession('s')).toEqual(reading)
       const refresh = vi.spyOn(service, 'refreshForSession')
       await service.pollOpenSessions()
       expect(refresh).toHaveBeenCalledExactlyOnceWith('s')
+    },
+  )
+
+  it.each([
+    { headRefName: 'feature/local' },
+    { headRefName: 'feature/local', number: 42, state: 'OPEN' },
+    {
+      headRefName: 'feature/local',
+      number: 42,
+      url: 'https://github.com/acme/app/pull/42',
+    },
+    {
+      headRefName: 'feature/local',
+      number: 0,
+      url: 'https://github.com/acme/app/pull/42',
+      state: 'OPEN',
+    },
+    {
+      headRefName: 'feature/local',
+      number: 1.5,
+      url: 'https://github.com/acme/app/pull/42',
+      state: 'OPEN',
+    },
+  ])(
+    'retains both facts for an unparseable found reply %j (mutation: treat found as answered)',
+    async (reply) => {
+      const { db, service } = fixture()
+      const verified = await service.refreshForSession('s')
+      const workspaceBefore = service.getByWorkspaceId('w')
+      const rowBefore = db
+        .prepare("SELECT pull_request_json FROM sessions WHERE id='s'")
+        .get()
+      execFileMock.mockImplementation((_file, _args, _options, callback) => {
+        callback?.(null, JSON.stringify([reply]), '')
+        return null as never
+      })
+      expect(await service.refreshForSession('s')).toEqual({
+        ...verified,
+        message: 'gh answered without a PR number',
+      })
+      expect(
+        db.prepare("SELECT pull_request_json FROM sessions WHERE id='s'").get(),
+      ).toEqual(rowBefore)
+      expect(service.getByWorkspaceId('w')).toEqual(workspaceBefore)
     },
   )
 
@@ -468,7 +513,7 @@ describe('session PR fact (MAR-2978)', () => {
     })
   })
 
-  it('a lookup finishing after deletion cannot restore a cached reading (mutation: cache late replies)', async () => {
+  it('a lookup finishing after workspace deletion cannot write or cache (mutation: omit post-await existence guard)', async () => {
     const { db, service } = fixture()
     let answer!: () => void
     execFileMock.mockImplementation((_file, _args, _options, callback) => {
@@ -477,10 +522,16 @@ describe('session PR fact (MAR-2978)', () => {
     })
     const pending = service.refreshForSession('s')
     await vi.waitFor(() => expect(answer).toBeTypeOf('function'))
-    db.prepare("DELETE FROM sessions WHERE id='s'").run()
+    db.prepare("DELETE FROM workspaces WHERE id='w'").run()
     service.evictDeletedSessions()
     answer()
-    await pending
+    await expect(pending).resolves.toMatchObject({
+      pullRequest: null,
+      message: 'Session was deleted',
+    })
+    db.prepare(
+      "INSERT INTO workspaces (id,project_id,branch_name,path,type) VALUES ('w','p','feature/local','/mac/worktree','worktree')",
+    ).run()
     db.prepare(
       "INSERT INTO sessions (id,project_id,workspace_id,provider_id,name,working_directory) VALUES ('s','p','w','codex','Replacement','/mac/worktree')",
     ).run()

@@ -220,37 +220,45 @@ export class PullRequestService {
     const lookup = branchName
       ? await this.lookupGithubPullRequest(cwd, branchName, repository)
       : null
-    const answered =
-      lookup?.lookupStatus === 'found' || lookup?.lookupStatus === 'not-found'
+    if (!this.db.prepare('SELECT 1 FROM sessions WHERE id=?').get(sessionId)) {
+      this.readings.delete(sessionId)
+      return {
+        pullRequest: null,
+        branchName: null,
+        message: 'Session was deleted',
+      }
+    }
+    const found =
+      lookup?.lookupStatus === 'found' && lookup.url
+        ? parseSessionPullRequest(
+            JSON.stringify({
+              number: lookup.number,
+              url: lookup.url,
+              state: lookup.state,
+              headBranch: branchName,
+              checkedAt: new Date().toISOString(),
+              source: 'gh',
+            }),
+          )
+        : null
+    const answered = found !== null || lookup?.lookupStatus === 'not-found'
     const pullRequest =
-      lookup?.lookupStatus === 'found' &&
-      lookup.number &&
-      lookup.url &&
-      (lookup.state === 'open' ||
-        lookup.state === 'merged' ||
-        lookup.state === 'closed' ||
-        lookup.state === 'draft')
-        ? {
-            number: lookup.number,
-            url: lookup.url,
-            state: lookup.state,
-            headBranch: branchName!,
-            checkedAt: new Date().toISOString(),
-            source: 'gh' as const,
-          }
-        : lookup && !answered
-          ? parseSessionPullRequest(row.pull_request_json)
-          : null
+      found ??
+      (lookup && !answered
+        ? parseSessionPullRequest(row.pull_request_json)
+        : null)
     const reading = {
       pullRequest,
       branchName,
       message: !branchName
         ? 'no branch recorded for this session'
-        : lookup?.lookupStatus === 'gh-unavailable'
-          ? 'PR unknown — gh not found'
-          : lookup?.lookupStatus === 'not-found'
-            ? 'No PR for this branch'
-            : (lookup?.error ?? null),
+        : lookup?.lookupStatus === 'found' && !found
+          ? 'gh answered without a PR number'
+          : lookup?.lookupStatus === 'gh-unavailable'
+            ? 'PR unknown — gh not found'
+            : lookup?.lookupStatus === 'not-found'
+              ? 'No PR for this branch'
+              : (lookup?.error ?? null),
     }
     // This is the sole writer of the session PR fact. No daemon hint is stored.
     if (answered) {
@@ -258,15 +266,13 @@ export class PullRequestService {
         .prepare('UPDATE sessions SET pull_request_json=? WHERE id=?')
         .run(pullRequest ? JSON.stringify(pullRequest) : null, sessionId)
     }
-    if (row.workspace_id && lookup)
+    if (row.workspace_id && lookup && answered)
       this.upsertWorkspacePullRequest({
         projectId: row.project_id,
         workspaceId: row.workspace_id,
         result: lookup,
       })
     this.readings.set(sessionId, reading)
-    // A lookup may finish after a session (or its project) was deleted.
-    this.evictDeletedSessions()
     this.onChanged(sessionId)
     return reading
   }
