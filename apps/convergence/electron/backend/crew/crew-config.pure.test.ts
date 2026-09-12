@@ -1,3 +1,4 @@
+import { crewImportRelayFields } from './crew-import.pure'
 import Ajv from 'ajv'
 import { parse } from 'yaml'
 import { readFileSync } from 'node:fs'
@@ -105,6 +106,10 @@ it('exports a spawn recipe with the default account (mutation: retain account id
     action: 'spawn' as const,
     targetSessionId: null,
     spawnSpec: {
+      executionHost: 'local',
+      workAddress: null,
+      roleCard: null,
+      returnWire: null,
       name: 'Reviewer · lap {lap}',
       providerId: 'codex',
       model: 'gpt-6-astra',
@@ -124,6 +129,10 @@ it('exports a spawn recipe with the default account (mutation: retain account id
       effort: 'high',
       project: null,
       account: 'default',
+      host: 'local',
+      workAddress: null,
+      roleCard: null,
+      returnWire: null,
     },
   })
 })
@@ -368,6 +377,10 @@ it('preserves the spawn lane beside its root project (mutations: use the lane ro
     action: 'spawn' as const,
     targetSessionId: null,
     spawnSpec: {
+      executionHost: 'local',
+      workAddress: null,
+      roleCard: null,
+      returnWire: null,
       name: 'Lane worker',
       providerId: 'codex',
       model: 'gpt-6-astra',
@@ -392,6 +405,10 @@ it('preserves the spawn lane beside its root project (mutations: use the lane ro
       project: 'github.com/marckraw/convergence',
       lane: 'studio',
       account: 'default',
+      host: 'local',
+      workAddress: null,
+      roleCard: null,
+      returnWire: null,
     },
   })
   const validate = new Ajv({ allErrors: true }).compile(schema)
@@ -606,6 +623,10 @@ it.each(['custom permissions', 'spawn and layout', 'empty crew'])(
           effort: null,
           project: null,
           account: 'default',
+          host: 'local',
+          workAddress: null,
+          roleCard: null,
+          returnWire: null,
         },
       }
       config.wires[0].opener = { first: 'Hello\nworld' }
@@ -779,3 +800,120 @@ it('refuses an empty stored baton without falling back to the conversation name 
     ),
   ).toThrow('A conversation needs a baton name before export')
 })
+
+it.each([null, 'root-id'])(
+  'round-trips only project-bound remote recipes: %s (mutation: drop remote project refusal or omit spawn place)',
+  (projectId) => {
+    const spec = {
+      name: 'Remote review',
+      providerId: 'codex',
+      model: null,
+      effort: null,
+      projectId,
+      providerAccountId: null,
+      executionHost: 'little-monster',
+      workAddress: {
+        mode: 'repository' as const,
+        repository: 'https://github.com/marckraw/convergence',
+        branchName: null,
+        label: 'marckraw/convergence',
+      },
+      roleCard: 'You are the reviewer.',
+      returnWire: { instruction: 'Report the result.' },
+    }
+    const exportRecipe = () =>
+      crewToConfig(liveCrew, liveMembers, liveSessions, liveProjects, [
+        {
+          ...liveRelays[0]!,
+          action: 'spawn',
+          targetSessionId: null,
+          spawnSpec: spec,
+        },
+      ])
+    if (projectId === null) {
+      expect(exportRecipe).toThrow(
+        'An errand on a remote host belongs to a project',
+      )
+      return
+    }
+    const config = exportRecipe()
+    expect(new Ajv().validate(schema, config)).toBe(true)
+    const to = config.wires[0]!.to
+    expect(to).toMatchObject({
+      spawn: {
+        host: spec.executionHost,
+        workAddress: spec.workAddress,
+        roleCard: spec.roleCard,
+        returnWire: spec.returnWire,
+      },
+    })
+    const read = readCrewConfig(renderCrewYaml(config))
+    expect(read).toEqual({ ok: true, config })
+    expect(
+      crewImportRelayFields(config.wires[0]!, projectId).spawnSpec,
+    ).toEqual(spec)
+  },
+)
+
+it.each([
+  { host: '', workAddress: null },
+  { host: 'little-monster', workAddress: null },
+  {
+    host: 'local',
+    workAddress: {
+      mode: 'repository' as const,
+      repository: 'https://github.com/marckraw/convergence',
+      branchName: null,
+      label: 'repo',
+    },
+  },
+  { host: 'local', roleCard: ' padded ' },
+])(
+  'refuses a spawn field the record would change: %j (mutation: bypass record validation)',
+  (fields) => {
+    const config = crewToConfig(
+      liveCrew,
+      liveMembers,
+      liveSessions,
+      liveProjects,
+      liveRelays,
+    )
+    config.wires[0]!.to = {
+      spawn: {
+        name: 'Remote',
+        provider: 'codex',
+        model: null,
+        effort: null,
+        project: null,
+        account: 'default',
+        ...fields,
+      },
+    }
+    expect(readCrewConfig(renderCrewYaml(config)).ok).toBe(false)
+  },
+)
+
+it.each([8000, 8001])(
+  'inherits the role-card bound at %s characters (mutation: change the one role-card cap)',
+  (length) => {
+    const config = crewToConfig(
+      liveCrew,
+      liveMembers,
+      liveSessions,
+      liveProjects,
+      liveRelays,
+    )
+    config.wires[0]!.to = {
+      spawn: {
+        name: 'Reviewer',
+        provider: 'codex',
+        model: null,
+        effort: null,
+        project: null,
+        account: 'default',
+        roleCard: 'x'.repeat(length),
+      },
+    }
+    expect(readCrewConfig(renderCrewYaml(config)).ok).toBe(length <= 8000)
+  },
+)

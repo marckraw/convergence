@@ -87,6 +87,10 @@ function spawnWire(
     action: 'spawn',
     targetSessionId: null,
     spawnSpec: {
+      executionHost: 'local',
+      workAddress: null,
+      roleCard: null,
+      returnWire: null,
       projectId: 'p1',
       providerId: 'codex',
       model: 'gpt-5.6',

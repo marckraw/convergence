@@ -710,3 +710,41 @@ it('clears crew updates when a collision overrides them (mutation: retain collis
     differences: [],
   })
 })
+
+it.each([null, 'github.com/marckraw/convergence'])(
+  'validates the resolved remote spawn project: %s (mutation: skip planner spawn validation)',
+  (project) => {
+    const wire = {
+      ...config.wires[0]!,
+      to: {
+        spawn: {
+          name: 'Remote',
+          provider: 'codex',
+          model: null,
+          effort: null,
+          project,
+          account: 'default' as const,
+          host: 'little-monster',
+          workAddress: {
+            mode: 'project' as const,
+            projectId: 'remote',
+            workingDirectory: '/repo',
+            label: 'Remote',
+          },
+        },
+      },
+      opener: 'keep' as const,
+    }
+    const plan = planCrewImport({ ...config, wires: [wire] }, world)
+    expect({
+      state: plan.wires[0]!.state,
+      detail: project === null ? plan.wires[0]!.detail : null,
+    }).toEqual({
+      state: project === null ? 'choose' : 'create',
+      detail:
+        project === null
+          ? 'An errand on a remote host belongs to a project'
+          : null,
+    })
+  },
+)

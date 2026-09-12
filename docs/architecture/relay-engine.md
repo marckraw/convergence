@@ -691,6 +691,47 @@ refuse. Ruled 2026-08-20: **a two-arm switch is the simplest honest shape
 here.** Revisit at the third action, when the shared shape is evidence rather
 than a guess.
 
+### Spawn places and return connections (MAR-2980)
+
+`normalizeRelaySpawnSpec` owns the recipe's host and work address. Older
+recipes default to `local`; local addresses normalize to null. A remote
+recipe must belong to a local project and name a concrete remote repository or
+Project before it can be stored. `spawnSpecProblem` shares the birth refusals
+between the normalizer and the draft; import validation and planning use the
+normalizer. Malformed addresses retain their decoder reason, and role cards
+are limited to `MAX_ROLE_CARD_LENGTH` (8,000 characters).
+The engine passes the host and address through the existing session create
+boundary. Local create inputs retain their original shape, and local account
+ids never select an account on a remote host. A null repository branch asks
+the daemon to name the branch.
+
+`returnWire: { instruction } | null` describes an optional real connection,
+not a reporting side channel. After the new conversation joins the crew and starts successfully,
+the spawn path uses `RelayService.create` to connect it back to the source:
+`settled`, `hail`, armed, with no condition. Null creates no return connection. A return-connection failure gets its own
+error row and does not prevent the errand from starting.
+New local recipes default reporting on; the first host pick of a new recipe
+defaults remote reporting off unless the person already chose reporting. That
+birth default is draft-only; later host changes preserve the reporting choice.
+
+`composeErrandBrief` puts the role card before the compiled payload, with blank
+lines separating the blocks. With a return connection, one intervening line
+names where the final message is delivered; Any finish has no baton word, so
+composition generates no `BATON:` instruction. Without a return connection,
+there is no delivery line. A null role card preserves the payload byte for
+byte. The spawn ledger preview describes this composed first message.
+
+The recipe and composer share the work-address slot in
+`entities/execution-host`. The composer adapts its execution-bar view into
+the entity's structural inputs. The recipe derives both its visible address
+and save input from that slot; pending catalog reads do not erase its saved
+draft. A recorded address no longer offered by the endpoint remains a stated
+fact; it is never replaced with a catalog default. Projects match by id: a
+renamed Project remains selectable with a rename notice. The inspector compares the
+resolved draft with the saved one, and retains typed return instructions in
+draft-only state across host/reporting changes. YAML export, validation and import use the spawn normalizer, with
+provided values refused when normalization would change them.
+
 ### Adding a payload transform
 
 `fire()` reads the source's last assistant message and compiles the payload in

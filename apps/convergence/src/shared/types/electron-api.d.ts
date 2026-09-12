@@ -385,6 +385,10 @@ interface UpdateSessionCrewInputData {
 }
 
 interface RelaySpawnSpecData {
+  executionHost: string
+  workAddress: SessionWorkAddressData | null
+  roleCard: string | null
+  returnWire: { instruction: string } | null
   projectId: string | null
   providerId: string
   model: string | null

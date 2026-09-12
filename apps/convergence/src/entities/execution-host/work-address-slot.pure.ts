@@ -1,9 +1,4 @@
-import { isLocalExecutionHost } from '@/entities/execution-host'
-import {
-  remoteProjectMatchingOrigin,
-  type RemoteProject,
-  type RemoteProjectCatalogState,
-} from '@/entities/session'
+import { isLocalExecutionHost } from './execution-host.pure'
 import {
   describeBranchPhrase,
   describeBranchToBeCut,
@@ -14,7 +9,21 @@ import {
   type ReportedWorkspace,
   type SessionWorkAddress,
 } from '@/shared/lib/work-address.pure'
-import type { ExecutionBarView } from './execution-bar.pure'
+/** The remote catalog facts the place picker consumes, independent of its caller. */
+export interface WorkAddressProject {
+  id: string
+  name: string
+  workingDirectory: string
+  origin: string | null
+}
+export type WorkAddressProjects =
+  | { status: 'pending' }
+  | { status: 'failed'; reason: string }
+  | {
+      status: 'landed'
+      projects: readonly WorkAddressProject[]
+      unreachableReason: string | null
+    }
 
 /** The one choice in the slot that is not a Project on the machine. */
 export const REPOSITORY_WORK_ADDRESS_CHOICE_ID = 'repository'
@@ -89,6 +98,7 @@ export type WorkAddressSlotView =
       label: string
       /** The branch that was asked for, when the daemon cut another one. */
       requestedBranch: string | null
+      notice?: string | null
     }
 
 /**
@@ -106,9 +116,10 @@ export interface BranchFieldView {
 
 export interface WorkAddressSlotInput {
   /** The machine, resolved first: the place is a fact *about* that machine. */
-  executionBar: ExecutionBarView
+  host: { mode: 'hidden' | 'choosing' | 'settled'; hostId: string }
   hostLabel: string
-  projects: RemoteProjectCatalogState | null
+  matchingProjectId: string | null
+  projects: WorkAddressProjects | null
   localRepository: LocalRepositoryState
   /** The last place he picked, honoured only while it is still offered. */
   selectedId: string | null
@@ -157,7 +168,7 @@ export function branchNameFromDraft(draft: string): string | null {
 export function resolveWorkAddressSlot(
   input: WorkAddressSlotInput,
 ): WorkAddressSlotView {
-  const bar = input.executionBar
+  const bar = input.host
   if (bar.mode === 'hidden') return { mode: 'hidden' }
   if (isLocalExecutionHost(bar.hostId)) return { mode: 'hidden' }
 
@@ -246,8 +257,7 @@ export function resolveWorkAddressSlot(
   }
 
   const picked = choices.find((choice) => choice.id === input.selectedId)
-  const preselected =
-    picked ?? defaultChoice(choices, listed?.projects ?? [], localRepository)
+  const preselected = picked ?? defaultChoice(choices, input.matchingProjectId)
   return {
     mode: 'choosing',
     choices,
@@ -285,13 +295,11 @@ function askingText(hostLabel: string): string {
  */
 function defaultChoice(
   choices: readonly WorkAddressChoice[],
-  projects: readonly RemoteProject[],
-  localRepository: string | null,
+  matchingProjectId: string | null,
 ): WorkAddressChoice | null {
-  const match = remoteProjectMatchingOrigin(projects, localRepository)
-  if (match) {
+  if (matchingProjectId) {
     const matched = choices.find(
-      (choice) => choice.id === projectChoiceId(match.id),
+      (choice) => choice.id === projectChoiceId(matchingProjectId),
     )
     if (matched) return matched
   }

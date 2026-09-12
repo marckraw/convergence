@@ -7,6 +7,7 @@ import {
   executionHostForNewSession,
   LOCAL_EXECUTION_HOST_LABEL,
   resolveExecutionBarView,
+  resolveWorkAddressSlot,
   type ExecutionBarInput,
   type ExecutionBarView,
 } from './execution-bar.pure'
@@ -271,5 +272,42 @@ describe('defaultPermissionPresetForHost', () => {
     // second reading here would be the second place the rule could drift.
     expect(defaultPermissionPresetForHost(' local ')).toBe('ask')
     expect(defaultPermissionPresetForHost('')).toBe('ask')
+  })
+})
+
+it('adapts the composer origin into the entity place choice (mutation: omit origin match)', () => {
+  const slot = resolveWorkAddressSlot({
+    executionBar: view({ selectedHostId: 'kuba' }),
+    hostLabel: 'kuba',
+    projects: {
+      status: 'landed',
+      projects: [
+        {
+          id: 'remote',
+          name: 'Remote',
+          workingDirectory: '/srv/repo',
+          origin: 'git@github.com:marckraw/convergence.git',
+        },
+      ],
+      unreachableReason: null,
+    },
+    localRepository: {
+      status: 'known',
+      repository: 'https://github.com/marckraw/convergence',
+    },
+    selectedId: null,
+    branchDraft: '',
+    recordedAddress: null,
+    reportedWorkspace: null,
+  })
+  expect(slot).toMatchObject({
+    mode: 'choosing',
+    selectedId: 'project:remote',
+    address: {
+      mode: 'project',
+      projectId: 'remote',
+      workingDirectory: '/srv/repo',
+      label: 'Project Remote',
+    },
   })
 })

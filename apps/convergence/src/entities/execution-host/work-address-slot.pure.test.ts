@@ -1,16 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { ExecutionHostEndpoint } from '@/entities/execution-host'
 import {
-  providerCatalogSourceForHost,
-  type RemoteProject,
-  type RemoteProjectCatalogState,
-} from '@/entities/session'
-import { resolveExecutionBarView } from './execution-bar.pure'
-import {
   REPOSITORY_WORK_ADDRESS_CHOICE_ID,
   resolveWorkAddressSlot,
   workAddressForNewSession,
   workAddressReadyForSend,
+  type WorkAddressProject as RemoteProject,
+  type WorkAddressProjects as RemoteProjectCatalogState,
   type LocalRepositoryState,
   type WorkAddressSlotInput,
 } from './work-address-slot.pure'
@@ -37,37 +33,22 @@ function project(overrides: Partial<RemoteProject> = {}): RemoteProject {
   }
 }
 
-const SOURCE = providerCatalogSourceForHost(ENDPOINT.id, [ENDPOINT])
-
 function landed(
   projects: RemoteProject[],
   overrides: { supported?: boolean; unreachableReason?: string | null } = {},
 ): RemoteProjectCatalogState {
   return {
     status: 'landed',
-    source: SOURCE,
-    supported: overrides.supported ?? true,
     projects,
     unreachableReason: overrides.unreachableReason ?? null,
   }
 }
 
 function bar(hostId: string) {
-  return resolveExecutionBarView({
-    endpoints: [ENDPOINT],
-    liveSessionHostId: null,
-    contextKind: 'project',
-    selectedHostId: hostId,
-  })
+  return { mode: 'choosing' as const, hostId }
 }
-
 function liveBar(hostId: string) {
-  return resolveExecutionBarView({
-    endpoints: [ENDPOINT],
-    liveSessionHostId: hostId,
-    contextKind: 'project',
-    selectedHostId: hostId,
-  })
+  return { mode: 'settled' as const, hostId }
 }
 
 function slot(
@@ -77,8 +58,9 @@ function slot(
     status: 'known',
     repository: LOCAL_REPOSITORY,
   }
-  return resolveWorkAddressSlot({
-    executionBar: bar(ENDPOINT.id),
+  const input = {
+    matchingProjectId: 'new-blok',
+    host: bar(ENDPOINT.id),
     hostLabel: 'little-monster',
     projects: landed([project()]),
     localRepository: known,
@@ -87,16 +69,17 @@ function slot(
     recordedAddress: null,
     reportedWorkspace: null,
     ...overrides,
-  })
+  }
+  return resolveWorkAddressSlot(input)
 }
 
 describe('the slot on Local', () => {
   it('does not exist', () => {
-    expect(slot({ executionBar: bar('local') })).toEqual({ mode: 'hidden' })
+    expect(slot({ host: bar('local') })).toEqual({ mode: 'hidden' })
   })
 
   it('does not exist for a live local session either', () => {
-    expect(slot({ executionBar: liveBar('local') })).toEqual({
+    expect(slot({ host: liveBar('local') })).toEqual({
       mode: 'hidden',
     })
   })
@@ -104,12 +87,7 @@ describe('the slot on Local', () => {
   it('does not exist on a global chat, where the strip itself is hidden', () => {
     expect(
       slot({
-        executionBar: resolveExecutionBarView({
-          endpoints: [ENDPOINT],
-          liveSessionHostId: null,
-          contextKind: 'global',
-          selectedHostId: ENDPOINT.id,
-        }),
+        host: { mode: 'hidden', hostId: ENDPOINT.id },
       }),
     ).toEqual({ mode: 'hidden' })
   })
@@ -133,9 +111,7 @@ describe('what a machine offers', () => {
 
   it('says it is asking while the machine has not answered', () => {
     expect(slot({ projects: null }).mode).toBe('asking')
-    expect(slot({ projects: { status: 'pending', source: SOURCE } }).mode).toBe(
-      'asking',
-    )
+    expect(slot({ projects: { status: 'pending' } }).mode).toBe('asking')
   })
 
   it('says it is asking while this project origin has not been read', () => {
@@ -144,7 +120,7 @@ describe('what a machine offers', () => {
 
   it('still offers the repository when the machine could not be asked', () => {
     const view = slot({
-      projects: { status: 'failed', source: SOURCE, reason: 'timed out.' },
+      projects: { status: 'failed', reason: 'timed out.' },
     })
     expect(view.mode === 'choosing' && view.choices.map((c) => c.id)).toEqual([
       REPOSITORY_WORK_ADDRESS_CHOICE_ID,
@@ -191,19 +167,6 @@ describe('what is preselected', () => {
     })
   })
 
-  it('matches across spellings of one repository', () => {
-    const view = slot({
-      projects: landed([
-        project({ origin: 'git@github.com:marckraw/new-blok.git' }),
-      ]),
-      localRepository: {
-        status: 'known',
-        repository: 'https://github.com/marckraw/new-blok',
-      },
-    })
-    expect(view.mode === 'choosing' && view.selectedId).toBe('project:new-blok')
-  })
-
   it('falls back to the repository when no Project holds it', () => {
     const view = slot({
       projects: landed([project({ id: 'other', name: 'other', origin: null })]),
@@ -220,7 +183,10 @@ describe('what is preselected', () => {
   })
 
   it('falls back to the repository when the daemon reports no origins yet', () => {
-    const view = slot({ projects: landed([project({ origin: null })]) })
+    const view = slot({
+      matchingProjectId: null,
+      projects: landed([project({ origin: null })]),
+    })
     expect(view.mode === 'choosing' && view.selectedId).toBe(
       REPOSITORY_WORK_ADDRESS_CHOICE_ID,
     )
@@ -228,6 +194,7 @@ describe('what is preselected', () => {
 
   it('chooses nothing rather than the first Project when nothing can be matched', () => {
     const view = slot({
+      matchingProjectId: null,
       projects: landed([project({ origin: null })]),
       localRepository: { status: 'known', repository: null },
     })
@@ -264,7 +231,7 @@ describe('a live session', () => {
   it('states the place from its record rather than offering a choice', () => {
     expect(
       slot({
-        executionBar: liveBar(ENDPOINT.id),
+        host: liveBar(ENDPOINT.id),
         recordedAddress: {
           mode: 'project',
           projectId: 'new-blok',
@@ -282,7 +249,7 @@ describe('a live session', () => {
   it('says Unknown for a row written before places were recorded', () => {
     expect(
       slot({
-        executionBar: liveBar(ENDPOINT.id),
+        host: liveBar(ENDPOINT.id),
         recordedAddress: { mode: 'unknown' },
       }),
     ).toEqual({ mode: 'settled', label: 'Unknown', requestedBranch: null })
@@ -292,7 +259,7 @@ describe('a live session', () => {
     expect(
       workAddressForNewSession(
         slot({
-          executionBar: liveBar(ENDPOINT.id),
+          host: liveBar(ENDPOINT.id),
           recordedAddress: { mode: 'unknown' },
         }),
       ),
@@ -335,6 +302,7 @@ describe('whether a send may leave', () => {
     // no place to state. A guard keyed on the *mode* rather than on the
     // address would let this one through.
     const view = slot({
+      matchingProjectId: null,
       projects: landed([project({ origin: null })]),
       localRepository: { status: 'known', repository: null },
     })
@@ -348,15 +316,13 @@ describe('whether a send may leave', () => {
   })
 
   it('never holds a Local send, which has no place to state', () => {
-    expect(workAddressReadyForSend(slot({ executionBar: bar('local') }))).toBe(
-      true,
-    )
+    expect(workAddressReadyForSend(slot({ host: bar('local') }))).toBe(true)
   })
 
   it('never holds a live session, whose place was recorded at birth', () => {
     expect(
       workAddressReadyForSend(
-        slot({ executionBar: liveBar(ENDPOINT.id), recordedAddress: null }),
+        slot({ host: liveBar(ENDPOINT.id), recordedAddress: null }),
       ),
     ).toBe(true)
   })
@@ -435,7 +401,7 @@ describe('the branch field (MAR-2694)', () => {
   it('states the daemon branch once the echo has landed', () => {
     expect(
       slot({
-        executionBar: liveBar(ENDPOINT.id),
+        host: liveBar(ENDPOINT.id),
         recordedAddress: {
           mode: 'repository',
           repository: LOCAL_REPOSITORY,
@@ -461,7 +427,7 @@ describe('the branch field (MAR-2694)', () => {
   it('says daemon-named on a live errand the machine has not described yet', () => {
     expect(
       slot({
-        executionBar: liveBar(ENDPOINT.id),
+        host: liveBar(ENDPOINT.id),
         recordedAddress: {
           mode: 'repository',
           repository: LOCAL_REPOSITORY,

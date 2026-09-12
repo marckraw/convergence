@@ -1,3 +1,4 @@
+import type { RelaySpawnSpec } from '../relay/relay.types'
 import type { SessionPermissionConfig } from '../provider/provider.types'
 import type { SessionCrew } from './crew.types'
 import type { SessionSummary } from '../session/session.types'
@@ -41,6 +42,10 @@ export interface CrewConfigSpawn {
   project: string | null
   lane?: string
   account: 'default'
+  host?: string
+  workAddress?: RelaySpawnSpec['workAddress']
+  roleCard?: RelaySpawnSpec['roleCard']
+  returnWire?: RelaySpawnSpec['returnWire']
 }
 export interface CrewConfigWire {
   from: string

@@ -1,3 +1,11 @@
+import { spawnSpecProblem } from '../../../src/shared/lib/spawn-spec.pure'
+export {
+  MAX_ROLE_CARD_LENGTH,
+  REMOTE_SPAWN_PROJECT_REQUIRED,
+  REMOTE_SPAWN_PLACE_REQUIRED,
+} from '../../../src/shared/lib/spawn-spec.pure'
+import { namesThisMachine } from '../../../src/shared/lib/execution-host-id.pure'
+import { decodeSessionWorkAddress } from '../../../src/shared/lib/work-address.pure'
 import type {
   RelayAction,
   RelayHopOutcome,
@@ -84,7 +92,34 @@ export function normalizeRelaySpawnSpec(
     )
   }
 
+  const executionHost = namesThisMachine(spec.executionHost)
+    ? 'local'
+    : spec.executionHost
+  if (
+    typeof executionHost !== 'string' ||
+    !executionHost.trim() ||
+    executionHost.trim() !== executionHost
+  )
+    throw new Error('A spawn host must be an exact endpoint id')
+  const problem = spawnSpecProblem({ ...spec, executionHost, projectId })
+  if (problem) throw new Error(problem)
+  const decoded =
+    executionHost === 'local'
+      ? { status: 'absent' as const }
+      : decodeSessionWorkAddress(spec.workAddress)
+  const workAddress = decoded.status === 'decoded' ? decoded.address : null
+
   return {
+    executionHost,
+    workAddress,
+    roleCard: spec.roleCard?.trim() || null,
+    returnWire:
+      spec.returnWire == null
+        ? null
+        : {
+            instruction:
+              normalizeRelayInstruction(spec.returnWire.instruction) ?? '',
+          },
     projectId,
     providerId,
     model: spec.model?.trim() ? spec.model.trim() : null,

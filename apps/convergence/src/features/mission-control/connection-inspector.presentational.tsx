@@ -1,3 +1,7 @@
+import {
+  WorkAddressSlot,
+  type WorkAddressSlotView,
+} from '@/entities/execution-host'
 import type { FC } from 'react'
 import { ArrowRight, X } from 'lucide-react'
 import { ProviderAccountPicker } from '@/entities/provider-account'
@@ -58,6 +62,10 @@ interface ConnectionInspectorProps {
   providerOptions: RelayEndpointOption[]
   modelOptions: RelayEndpointOption[]
   effortOptions: RelayEndpointOption[]
+  hostOptions: RelayEndpointOption[]
+  workAddressSlot: WorkAddressSlotView
+  onWorkAddressChange: (id: string) => void
+  onBranchChange: (branch: string) => void
   spawnAccounts: ProviderAccount[]
   onRecipientChange: (optionId: string) => void
   onSpawnChange: (patch: Partial<ConnectionSpawnSpec>) => void
@@ -117,6 +125,10 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
   providerOptions,
   modelOptions,
   effortOptions,
+  hostOptions,
+  workAddressSlot,
+  onWorkAddressChange,
+  onBranchChange,
   spawnAccounts,
   onRecipientChange,
   onSpawnChange,
@@ -261,6 +273,72 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
           <p className="text-[11px] text-muted-foreground">
             The session this connection opens
           </p>
+          <p className="text-[11px] text-muted-foreground">Execution host</p>
+          <SearchableSelect
+            selectedId={spec.executionHost}
+            value={
+              hostOptions.find((option) => option.id === spec.executionHost)
+                ?.label ?? spec.executionHost
+            }
+            items={hostOptions}
+            onChange={(executionHost) =>
+              onSpawnChange({
+                executionHost,
+                workAddress: null,
+                providerAccountId: null,
+              })
+            }
+            disabled={busy}
+            searchPlaceholder="Search hosts…"
+            triggerClassName="h-7 text-xs"
+          />
+          <WorkAddressSlot
+            view={workAddressSlot}
+            disabled={busy}
+            onChange={onWorkAddressChange}
+            onBranchChange={onBranchChange}
+          />
+          <label
+            htmlFor="spawn-role-card"
+            className="text-[11px] text-muted-foreground"
+          >
+            Role card
+          </label>
+          <Textarea
+            id="spawn-role-card"
+            value={spec.roleCard ?? ''}
+            disabled={busy}
+            onChange={(event) =>
+              onSpawnChange({ roleCard: event.target.value || null })
+            }
+          />
+          <SwitchRow
+            id="spawn-return-wire"
+            label={`Report back to ${sourceName} when it finishes`}
+            checked={spec.returnWire !== null}
+            disabled={busy}
+            onChange={(enabled) =>
+              onSpawnChange({
+                returnWire: enabled
+                  ? { instruction: spec.returnInstructionDraft ?? '' }
+                  : null,
+              })
+            }
+          />
+          {spec.returnWire ? (
+            <label className="text-[11px] text-muted-foreground">
+              Return instructions
+              <Textarea
+                value={spec.returnWire.instruction}
+                disabled={busy}
+                onChange={(event) =>
+                  onSpawnChange({
+                    returnWire: { instruction: event.target.value },
+                  })
+                }
+              />
+            </label>
+          ) : null}
           <SearchableSelect
             selectedId={spec.providerId}
             value={
@@ -484,7 +562,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             type="button"
             variant="secondary"
             size="sm"
-            disabled={busy || problem !== null}
+            disabled={busy || problem !== null || (!isNew && !dirty)}
             onClick={onSave}
             className="h-8 px-3 text-[11px]"
           >

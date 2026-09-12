@@ -1,14 +1,14 @@
 import type { FC } from 'react'
 import type { SearchableSelectItem } from '@/shared/ui/searchable-select.presentational'
 import { Input } from '@/shared/ui/input'
-import { ComposerSelect } from './composer-select.presentational'
+import { SearchableSelect } from '@/shared/ui/searchable-select.container'
 import {
   stripFactClass,
   stripInputClass,
   stripLabelClass,
   stripNoticeClass,
   stripSelectClass,
-} from './execution-bar.styles'
+} from './work-address-slot.styles'
 import type { WorkAddressSlotView } from './work-address-slot.pure'
 
 interface WorkAddressSlotProps {
@@ -72,6 +72,11 @@ export const WorkAddressSlot: FC<WorkAddressSlotProps> = ({
           that exists rather than instead of it (MAR-2694). Reconciling the two
           silently would make the strip claim a branch nobody cut.
         */}
+        {view.notice ? (
+          <span className={stripNoticeClass} data-testid="work-address-notice">
+            {view.notice}
+          </span>
+        ) : null}
         {view.requestedBranch ? (
           <span
             className={stripNoticeClass}
@@ -88,7 +93,7 @@ export const WorkAddressSlot: FC<WorkAddressSlotProps> = ({
   return (
     <>
       <span className={stripLabelClass}>Works in</span>
-      <ComposerSelect
+      <SearchableSelect
         selectedId={view.selectedId ?? ''}
         value={selected?.label ?? UNCHOSEN_PLACE_LABEL}
         items={view.choices.map(
@@ -99,7 +104,11 @@ export const WorkAddressSlot: FC<WorkAddressSlotProps> = ({
         )}
         onChange={onChange}
         disabled={disabled}
-        className={stripSelectClass}
+        triggerClassName={stripSelectClass}
+        searchPlaceholder="Search options..."
+        emptyMessage="No matching options."
+        triggerVariant="ghost"
+        triggerSize="sm"
       />
       {view.branch ? (
         <>

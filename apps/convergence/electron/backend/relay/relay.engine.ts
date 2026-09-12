@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import { composeErrandBrief } from './errand-brief.pure'
 import type { SessionStatus } from '../provider/provider.types'
 import type {
   CreateSessionInput,
@@ -55,6 +56,7 @@ import type {
 export interface RelaySessionGateway {
   getById(sessionId: string): {
     id: string
+    name: string
     status: SessionStatus
     providerId: string
     /** Remote sessions cannot carry a local account (PA10). */
@@ -1092,12 +1094,11 @@ export class RelayEngine {
    * no correcting a spawn that came up on the wrong account.
    */
   private resolveSpawnAccountId(spec: RelaySpawnSpec): string | null {
-    if (spec.providerAccountId) return spec.providerAccountId
+    if (spec.executionHost === 'local' && spec.providerAccountId)
+      return spec.providerAccountId
 
     return resolveAccountForAutomaticTurn({
-      // A spawn opens a local session; nothing in a spawn spec can ask for a
-      // remote host today.
-      executionHost: 'local',
+      executionHost: spec.executionHost,
       lastTurnAccountId: null,
       accounts: this.accounts.listByProvider(spec.providerId),
     })
@@ -1130,6 +1131,14 @@ export class RelayEngine {
       return
     }
 
+    const brief = composeErrandBrief(
+      spec,
+      this.sessions.getById(relay.sourceSessionId)?.name ??
+        'the source conversation',
+      payload,
+    )
+    payloadPreview = buildRelayHopPreview(null, brief)
+
     let spawnedSessionId: string
     try {
       const created = this.sessions.create({
@@ -1150,6 +1159,12 @@ export class RelayEngine {
               model: spec.model,
               effort: spec.effort as CreateSessionInput['effort'],
               name: spec.name,
+            }),
+        ...(spec.executionHost === 'local'
+          ? {}
+          : {
+              executionHost: spec.executionHost,
+              workAddress: spec.workAddress,
             }),
       })
       spawnedSessionId = created.id
@@ -1173,7 +1188,7 @@ export class RelayEngine {
 
     try {
       const dispatchId = await this.sessions.start(spawnedSessionId, {
-        text: payload,
+        text: brief,
         providerAccountId: this.resolveSpawnAccountId(spec),
       })
       record('spawned', { spawnedSessionId, payloadPreview, dispatchId })
@@ -1185,6 +1200,30 @@ export class RelayEngine {
           error instanceof Error ? error.message : String(error)
         }`,
       })
+      return
+    }
+
+    if (spec.returnWire) {
+      try {
+        this.relays.create({
+          crewId: relay.crewId,
+          sourceSessionId: spawnedSessionId,
+          targetSessionId: relay.sourceSessionId,
+          action: 'hail',
+          conditionToken: null,
+          instruction: spec.returnWire.instruction,
+          armed: true,
+        })
+        this.onRelaysChanged?.()
+      } catch (error) {
+        record('error', {
+          spawnedSessionId,
+          payloadPreview,
+          error: `Started the errand but could not draw its return wire: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        })
+      }
     }
   }
 }

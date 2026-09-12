@@ -1,3 +1,4 @@
+import type { SessionWorkAddress } from '@/shared/lib/work-address.pure'
 /**
  * A relay is one wire inside a crew: when its source session settles,
  * Convergence carries that session's last assistant message to its target.
@@ -7,6 +8,10 @@ export type RelayAction = 'hail' | 'spawn'
 
 /** The session a spawn relay opens, stated in full on the wire itself. */
 export interface RelaySpawnSpec {
+  executionHost: string
+  workAddress: SessionWorkAddress | null
+  roleCard: string | null
+  returnWire: { instruction: string } | null
   /** Null opens a global session, not tied to any project. */
   projectId: string | null
   providerId: string

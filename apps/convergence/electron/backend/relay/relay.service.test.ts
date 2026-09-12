@@ -257,6 +257,10 @@ describe('RelayService', () => {
         action: 'spawn',
         instruction: 'Start from the branch diff.',
         spawnSpec: {
+          executionHost: 'local',
+          workAddress: null,
+          roleCard: null,
+          returnWire: null,
           projectId: 'p1',
           providerId: 'codex',
           model: null,
@@ -354,6 +358,10 @@ describe('RelayService', () => {
         action: 'spawn',
         opener: '/clear',
         spawnSpec: {
+          executionHost: 'local',
+          workAddress: null,
+          roleCard: null,
+          returnWire: null,
           projectId: 'p1',
           providerId: 'codex',
           model: null,
@@ -375,6 +383,10 @@ describe('RelayService', () => {
         action: 'spawn',
         targetSessionId: null,
         spawnSpec: {
+          executionHost: 'local',
+          workAddress: null,
+          roleCard: null,
+          returnWire: null,
           projectId: 'p1',
           providerId: 'codex',
           model: null,
@@ -390,6 +402,10 @@ describe('RelayService', () => {
 
   describe('spawn wires', () => {
     const spec = {
+      executionHost: 'local',
+      workAddress: null,
+      roleCard: null,
+      returnWire: null,
       projectId: 'p1',
       providerId: 'codex',
       model: 'gpt-5.6',
@@ -397,6 +413,28 @@ describe('RelayService', () => {
       name: 'Reviewer',
       providerAccountId: null,
     }
+
+    it('persists the remote recipe without changing its host (mutation: store a local host)', () => {
+      const remote = {
+        ...spec,
+        executionHost: 'little-monster',
+        workAddress: {
+          mode: 'repository' as const,
+          repository: 'https://github.com/marckraw/convergence',
+          branchName: null,
+          label: 'marckraw/convergence',
+        },
+        roleCard: 'You are the reviewer.',
+        returnWire: { instruction: 'Report back.' },
+      }
+      const relay = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'spawn',
+        spawnSpec: remote,
+      })
+      expect(service.getById(relay.id)?.spawnSpec).toEqual(remote)
+    })
 
     it('stores and reads back the whole session spec', () => {
       const relay = service.create({

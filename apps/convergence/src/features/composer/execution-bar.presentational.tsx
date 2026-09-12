@@ -3,8 +3,8 @@ import { AlertTriangle } from 'lucide-react'
 import type { SearchableSelectItem } from '@/shared/ui/searchable-select.presentational'
 import { ComposerSelect } from './composer-select.presentational'
 import type { ExecutionBarView } from './execution-bar.pure'
-import { WorkAddressSlot } from './work-address-slot.presentational'
-import type { WorkAddressSlotView } from './work-address-slot.pure'
+import { WorkAddressSlot } from '@/entities/execution-host'
+import type { WorkAddressSlotView } from '@/entities/execution-host'
 import {
   stripClass,
   stripFactClass,

@@ -7,6 +7,7 @@ import type {
 } from './crew-config.types'
 import type { CrewImportWorld, CrewImportPlan } from './crew-import.types'
 import {
+  normalizeRelaySpawnSpec,
   resolveRoundCap,
   sameCondition,
   batonConditionToken,
@@ -218,10 +219,7 @@ export function planCrewImport(
         (other, i) =>
           i < index &&
           wireKey(other) === wireKey(wire) &&
-          sameCondition(
-            crewImportRelayFields(other, null).conditionToken,
-            crewImportRelayFields(wire, null).conditionToken,
-          ),
+          sameCondition(wireCondition(other), wireCondition(wire)),
       )
     )
       return {
@@ -246,15 +244,22 @@ export function planCrewImport(
       base.spawnProjectId = project.projectId
       if (project.state) return { ...base, ...project }
     }
+    let fields: ReturnType<typeof crewImportRelayFields>
+    try {
+      fields = crewImportRelayFields(wire, base.spawnProjectId)
+    } catch (error) {
+      return {
+        ...base,
+        state: 'choose',
+        detail: error instanceof Error ? error.message : String(error),
+      }
+    }
     const existing = crew
       ? world.relays.filter(
           (r) =>
             r.crewId === crew.id &&
             r.sourceSessionId === source.sessionId &&
-            sameCondition(
-              r.conditionToken,
-              crewImportRelayFields(wire, null).conditionToken,
-            ) &&
+            sameCondition(r.conditionToken, wireCondition(wire)) &&
             (typeof wire.to === 'string'
               ? r.action === 'hail' && r.targetSessionId === target?.sessionId
               : r.action === 'spawn' &&
@@ -281,7 +286,6 @@ export function planCrewImport(
         ],
       }
     if (!bound) return base
-    const fields = crewImportRelayFields(wire, base.spawnProjectId)
     const differences = [
       ...(bound.opener !== fields.opener ? ['opener'] : []),
       ...(bound.instruction !== fields.instruction ? ['instruction'] : []),
@@ -549,18 +553,22 @@ export function crewImportRelayFields(
   const spawnSpec =
     typeof wire.to === 'string'
       ? null
-      : {
+      : normalizeRelaySpawnSpec({
           projectId,
           providerId: wire.to.spawn.provider,
           model: wire.to.spawn.model,
           effort: wire.to.spawn.effort,
           name: wire.to.spawn.name,
           providerAccountId: null,
-        }
+          executionHost: wire.to.spawn.host,
+          workAddress: wire.to.spawn.workAddress,
+          roleCard: wire.to.spawn.roleCard,
+          returnWire: wire.to.spawn.returnWire,
+        })
   return {
     action: spawnSpec ? ('spawn' as const) : ('hail' as const),
     spawnSpec,
-    conditionToken: wire.when === 'settled' ? null : wire.when,
+    conditionToken: wireCondition(wire),
     opener:
       wire.opener === 'keep'
         ? null
@@ -599,4 +607,8 @@ export function modelUpdateOffered(
     spec.provider === bound.providerId &&
     differences.some((field) => field === 'model' || field === 'effort')
   )
+}
+
+function wireCondition(wire: CrewConfigWire): string | null {
+  return wire.when === 'settled' ? null : wire.when
 }

@@ -1,3 +1,4 @@
+import { spawnSpecProblem } from '@/shared/lib/spawn-spec.pure'
 import type {
   CreateSessionRelayInput,
   RelaySpawnSpec,
@@ -33,6 +34,14 @@ export interface ConnectionSpawnSpec {
   effort: string | null
   name: string
   providerAccountId: string | null
+  executionHost: string
+  workAddress: RelaySpawnSpec['workAddress']
+  roleCard: string | null
+  /** Draft-only text survives reporting being switched off or a host change. */
+  returnInstructionDraft?: string
+  /** New recipes alone may choose their reporting default on the first host pick. */
+  returnWireDefaultPending?: boolean
+  returnWire: RelaySpawnSpec['returnWire']
 }
 
 /** When a connection fires: on any finish, or only on a declared route. */
@@ -67,6 +76,11 @@ export const EMPTY_SPAWN_SPEC: ConnectionSpawnSpec = {
   effort: null,
   name: '',
   providerAccountId: null,
+  executionHost: 'local',
+  workAddress: null,
+  roleCard: null,
+  returnWire: { instruction: '' },
+  returnInstructionDraft: '',
 }
 
 /**
@@ -126,7 +140,11 @@ export function draftFromRelay(
         ? {
             kind: 'spawn',
             spec: relay.spawnSpec
-              ? { ...relay.spawnSpec }
+              ? {
+                  ...relay.spawnSpec,
+                  returnInstructionDraft:
+                    relay.spawnSpec.returnWire?.instruction ?? '',
+                }
               : { ...EMPTY_SPAWN_SPEC },
           }
         : { kind: 'session', sessionId: relay.targetSessionId },
@@ -184,6 +202,13 @@ export function relayInputFromDraft(
           effort: draft.recipient.spec.effort,
           name: draft.recipient.spec.name.trim() || 'Relayed session',
           providerAccountId: draft.recipient.spec.providerAccountId,
+          executionHost: draft.recipient.spec.executionHost,
+          workAddress:
+            draft.recipient.spec.executionHost === 'local'
+              ? null
+              : draft.recipient.spec.workAddress,
+          roleCard: draft.recipient.spec.roleCard,
+          returnWire: draft.recipient.spec.returnWire,
         }
       : null
 
@@ -280,7 +305,7 @@ export function connectionDraftProblem(
     if (!draft.recipient.spec.providerId) {
       return 'Pick a provider for the new session.'
     }
-    return null
+    return spawnSpecProblem(draft.recipient.spec)
   }
 
   const target = draft.recipient.sessionId
