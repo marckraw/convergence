@@ -248,8 +248,8 @@ describe('remote execution hosts, one per endpoint', () => {
   it('reads the workspace from the endpoint the session named, not the first one', async () => {
     const sessionId = createSessionOn(DAEMON_B.id, 'on daemon b')
     // Both daemons answer, and both answers look right. A panel that asked the
-    // wrong machine would render a branch and a PR with nothing to mark them
-    // as belonging to a session this one never ran.
+    // wrong machine would render a branch with nothing to mark it as belonging
+    // to a session this one never ran.
     daemonA.setSessionSnapshot(sessionId, snapshotFrom('a'))
     daemonB.setSessionSnapshot(sessionId, snapshotFrom('b'))
 
@@ -260,10 +260,6 @@ describe('remote execution hosts, one per endpoint', () => {
     ])
     expect(daemonA.snapshotRequests).toEqual([])
     expect(info.workspace?.branchName).toBe('convergence/b')
-    expect(info.pullRequest).toEqual({
-      kind: 'url',
-      url: 'https://github.com/acme/repo/pull/2',
-    })
   })
 
   it('refuses a workspace read for an endpoint that is gone rather than asking anywhere', async () => {

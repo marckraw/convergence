@@ -439,29 +439,53 @@ describe('session PR fact (MAR-2978)', () => {
     },
   )
 
+  /**
+   * One message used to cover every way a `found` reply can fail to become a
+   * fact, so a PR carrying a number gh's state this build could not classify
+   * was reported as having no number at all (MAR-2991). Each row here names the
+   * part that is actually missing.
+   *
+   * Mutation: collapse the three back into 'gh answered without a PR number'
+   * and the last two rows go red. Mutation: treat `found` as answered and every
+   * row goes red at the retained facts.
+   */
   it.each([
-    { headRefName: 'feature/local' },
-    { headRefName: 'feature/local', number: 42, state: 'OPEN' },
-    {
-      headRefName: 'feature/local',
-      number: 42,
-      url: 'https://github.com/acme/app/pull/42',
-    },
-    {
-      headRefName: 'feature/local',
-      number: 0,
-      url: 'https://github.com/acme/app/pull/42',
-      state: 'OPEN',
-    },
-    {
-      headRefName: 'feature/local',
-      number: 1.5,
-      url: 'https://github.com/acme/app/pull/42',
-      state: 'OPEN',
-    },
+    [{ headRefName: 'feature/local' }, 'gh answered without a PR number'],
+    [
+      {
+        headRefName: 'feature/local',
+        number: 0,
+        url: 'https://github.com/acme/app/pull/42',
+        state: 'OPEN',
+      },
+      'gh answered without a PR number',
+    ],
+    [
+      {
+        headRefName: 'feature/local',
+        number: 1.5,
+        url: 'https://github.com/acme/app/pull/42',
+        state: 'OPEN',
+      },
+      'gh answered without a PR number',
+    ],
+    // A number, and no URL to hang it on.
+    [
+      { headRefName: 'feature/local', number: 42, state: 'OPEN' },
+      'gh answered without a PR URL',
+    ],
+    // A number and a URL, and a state `mapGithubState` read as `unknown`.
+    [
+      {
+        headRefName: 'feature/local',
+        number: 42,
+        url: 'https://github.com/acme/app/pull/42',
+      },
+      'gh answered without a usable state',
+    ],
   ])(
-    'retains both facts for an unparseable found reply %j (mutation: treat found as answered)',
-    async (reply) => {
+    'retains both facts and names what is missing for an unparseable found reply %j',
+    async (reply, expectedMessage) => {
       const { db, service } = fixture()
       const verified = await service.refreshForSession('s')
       const workspaceBefore = service.getByWorkspaceId('w')
@@ -474,7 +498,7 @@ describe('session PR fact (MAR-2978)', () => {
       })
       expect(await service.refreshForSession('s')).toEqual({
         ...verified,
-        message: 'gh answered without a PR number',
+        message: expectedMessage,
       })
       expect(
         db.prepare("SELECT pull_request_json FROM sessions WHERE id='s'").get(),

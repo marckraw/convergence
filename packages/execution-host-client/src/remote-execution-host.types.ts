@@ -74,9 +74,8 @@ export interface RemoteExecutionHostProviderInfo {
 
 /**
  * The workspace slice of a daemon's session snapshot: where a session actually
- * runs and the pull request the daemon opened for it. Only hosts that
- * materialize their own workspace report one -- Convergence's Local Execution
- * Host runs in a directory the app already knows.
+ * runs. Only hosts that materialize their own workspace report one --
+ * Convergence's Local Execution Host runs in a directory the app already knows.
  *
  * `workspace` is the protocol's own `ExecutionSessionWorkspace` (0.14), not a
  * transcription of it: a discriminated union whose Repository arm carries the
@@ -87,25 +86,4 @@ export interface RemoteExecutionHostProviderInfo {
  */
 export interface RemoteSessionWorkspaceInfo {
   workspace: ExecutionSessionWorkspace | null
-  pullRequest: RemoteSessionPullRequest
 }
-
-/**
- * What a host's snapshot said about the pull request, as a reading rather than
- * a nullable string (MAR-2718 round 2).
- *
- * The wire door used to answer `typeof value.prUrl === 'string' ? value.prUrl :
- * null`, so a missing key, a number, `false`, a blank string and `ftp://x` all
- * became the one value the panel is allowed to render as `None yet` -- a claim
- * that the daemon looked and opened none. The daemon emits the field
- * explicitly, so its own `null` is the negative and nothing else is: decoded
- * here, never collapsed, so the negative is only available when somebody
- * actually gave it (MAR-2619).
- */
-export type RemoteSessionPullRequest =
-  /** The host answered, and it has opened none. */
-  | { kind: 'none' }
-  /** The host answered with one. */
-  | { kind: 'url'; url: string }
-  /** The field was missing or was a shape no reader can turn into a URL. */
-  | { kind: 'unreadable'; reason: string }

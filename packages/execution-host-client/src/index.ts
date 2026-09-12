@@ -105,7 +105,6 @@ export {
   type RemoteExecutionHostConnectionResolver,
   type RemoteExecutionHostErrorKind,
   type RemoteExecutionHostProviderInfo,
-  type RemoteSessionPullRequest,
   type RemoteSessionWorkspaceInfo,
 } from './remote-execution-host.types'
 

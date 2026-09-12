@@ -253,7 +253,7 @@ export class PullRequestService {
       message: !branchName
         ? 'no branch recorded for this session'
         : lookup?.lookupStatus === 'found' && !found
-          ? 'gh answered without a PR number'
+          ? describeUnusableGithubReply(lookup)
           : lookup?.lookupStatus === 'gh-unavailable'
             ? 'PR unknown — gh not found'
             : lookup?.lookupStatus === 'not-found'
@@ -440,4 +440,29 @@ export class PullRequestService {
         now,
       )
   }
+}
+
+/**
+ * Why a `found` reply from gh could not become a PR fact (MAR-2991).
+ *
+ * `parseSessionPullRequest` refuses a reading that is missing any of its parts,
+ * and the one message that stood here named only the first of them: a PR whose
+ * state `mapGithubState` could not classify — a `state` gh did not send, or one
+ * this build does not know — was reported as "gh answered without a PR number"
+ * while carrying a perfectly good number. Each cause says its own name, so the
+ * reader is told the thing that is actually wrong.
+ *
+ * Everything else the fact needs, the service supplies itself (the head branch,
+ * the check stamp, the source), so a number, a URL and a usable state are the
+ * whole list of what gh has to get right.
+ */
+function describeUnusableGithubReply(lookup: PullRequestLookupResult): string {
+  if (
+    typeof lookup.number !== 'number' ||
+    !Number.isInteger(lookup.number) ||
+    lookup.number < 1
+  )
+    return 'gh answered without a PR number'
+  if (!lookup.url) return 'gh answered without a PR URL'
+  return 'gh answered without a usable state'
 }

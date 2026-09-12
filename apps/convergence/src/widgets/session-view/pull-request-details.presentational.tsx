@@ -111,6 +111,19 @@ function getSafeHttpUrl(value: string | null): string | null {
   }
 }
 
+/**
+ * The label for a cached workspace PR row.
+ *
+ * `gh-unavailable`, `gh-auth-required`, `unsupported-remote` and `error` are
+ * legacy-row handling and stay for exactly that reason (MAR-2991). No build
+ * writes them any more: since MAR-2978 lap 3 the workspace upsert is gated on
+ * an answered lookup, so a failed one leaves the stored row alone, and
+ * `upsertForWorkspace` — the other door — has no callers. But
+ * `workspace_pull_requests` is durable, earlier builds did write those statuses
+ * into it, and those rows are still read by this drawer. Dropping the labels
+ * would not remove the rows; it would only make them render as a bare state
+ * beside a status word the reader cannot place.
+ */
 function statusLabel(pullRequest: WorkspacePullRequest): string {
   if (pullRequest.lookupStatus === 'not-found') return 'No PR found'
   if (pullRequest.lookupStatus === 'gh-unavailable') return 'gh unavailable'

@@ -19,7 +19,6 @@ import {
   RemoteExecutionHostError,
   type RemoteExecutionHostConnection,
   type RemoteExecutionHostProviderInfo,
-  type RemoteSessionPullRequest,
   type RemoteSessionWorkspaceInfo,
 } from './remote-execution-host.types'
 
@@ -325,8 +324,16 @@ export function createSseParser(): { feed: (chunk: string) => SseEvent[] } {
 }
 
 /**
- * Reads the workspace a daemon says a session actually got, and the pull
- * request it opened for it (MAR-2694).
+ * Reads the workspace a daemon says a session actually got (MAR-2694).
+ *
+ * The snapshot's pull request is no longer read here. It was decoded into a
+ * three-way reading for a surface that has since been replaced: the session's
+ * PR is now one fact with one writer, looked up with `gh` from this machine
+ * (MAR-2978), and the wire's `prUrl` survives only as the ephemeral hint that
+ * asks that writer to look again (MAR-2978 R3). A decoder whose only caller was
+ * its own test is decoration, and decoration drifts from the thing it claims to
+ * describe -- so it is gone, and the daemon may keep sending the field
+ * (MAR-2991).
  *
  * The decode is the protocol's own `decodeExecutionSessionWorkspace` and not a
  * second reading of the same bytes. This file used to carry a hand-rolled one
@@ -369,9 +376,8 @@ export function parseRemoteSessionWorkspaceInfo(
   }
   requireEchoedSessionId(value.sessionId, expectedSessionId, 'session snapshot')
 
-  const pullRequest = readEchoedPullRequest(value)
   if (value.workspace === undefined || value.workspace === null) {
-    return { workspace: null, pullRequest }
+    return { workspace: null }
   }
 
   const decoded = decodeExecutionSessionWorkspace(value.workspace)
@@ -381,64 +387,7 @@ export function parseRemoteSessionWorkspaceInfo(
       'malformed',
     )
   }
-  return { workspace: decoded.value, pullRequest }
-}
-
-/**
- * Reads the pull request out of a session snapshot, at the door that reads the
- * bytes (MAR-2718 round 2).
- *
- * `typeof value.prUrl === 'string' ? value.prUrl : null` collapsed five
- * different situations into one: the key missing, a number, `false`, a blank
- * string, a non-HTTP string -- and the daemon's own explicit `null`. Only the
- * last of those is an answer, and the panel is allowed to render it as `None
- * yet`, a claim that somebody looked. The daemon always emits the field
- * (`prUrl: session.prUrl ?? null`), so an own explicit `null` is its negative
- * and silence is not.
- *
- * Exact or refused, and refused narrowly: an unreadable pull request never
- * refuses the whole snapshot, because the workspace half is still the daemon's
- * truth and the branch has to stay visible while this field is in doubt.
- *
- * `isHttpUrl` is the protocol's own rule for this field, applied where the
- * protocol does not decode for us -- a value that is not an `http(s)` URL is
- * one no surface can offer as a link, and printing it would be the same lie in
- * a different font.
- */
-function readEchoedPullRequest(
-  value: Record<string, unknown>,
-): RemoteSessionPullRequest {
-  if (!Object.hasOwn(value, 'prUrl')) {
-    return {
-      kind: 'unreadable',
-      reason: 'the daemon sent no pull request field',
-    }
-  }
-  const raw = value.prUrl
-  if (raw === null) return { kind: 'none' }
-  if (typeof raw !== 'string') {
-    return {
-      kind: 'unreadable',
-      reason: `the daemon sent a pull request as a ${typeof raw}, not a URL`,
-    }
-  }
-  if (!isHttpUrl(raw)) {
-    return {
-      kind: 'unreadable',
-      reason: 'the daemon sent a pull request that is not an http(s) URL',
-    }
-  }
-  return { kind: 'url', url: raw }
-}
-
-/** The protocol's rule for a pull request URL (`codecs.ts`), which it does not export. */
-function isHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value)
-    return url.protocol === 'http:' || url.protocol === 'https:'
-  } catch {
-    return false
-  }
+  return { workspace: decoded.value }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
