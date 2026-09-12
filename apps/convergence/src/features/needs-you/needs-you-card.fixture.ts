@@ -45,6 +45,7 @@ const pr = {
   source: 'gh',
 } as const
 export const cardFixtures = {
+  working: cardSession({ id: 'working', status: 'running' }),
   pinned: cardSession({ id: 'pinned', pinnedAt: '2026-09-12T12:01:00Z' }),
   open: cardSession({ id: 'open', originKind: 'spawn', pullRequest: pr }),
   waiting: cardSession({ id: 'waiting', attention: 'needs-input' }),

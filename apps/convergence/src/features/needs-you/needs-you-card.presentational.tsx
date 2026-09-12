@@ -3,7 +3,15 @@ import { resolveProviderIcon } from '@/shared/ui/provider-icon.pure'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { isLocalExecutionHost } from '@/entities/execution-host'
 import { NeedsYouCardIcon } from './needs-you-card-icon.presentational'
-import { Laptop, Server, MoreHorizontal, Pin } from 'lucide-react'
+import { NeedsYouCardStatus } from './needs-you-card-status.presentational'
+import {
+  BriefcaseBusiness,
+  Infinity as InfinityIcon,
+  Laptop,
+  Server,
+  MoreHorizontal,
+  Pin,
+} from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import {
   DropdownMenu,
@@ -36,6 +44,7 @@ export function NeedsYouCard({
   const { session } = card
   const provider = resolveProviderIcon(session.providerId)
   const HostIcon = isLocalExecutionHost(session.executionHost) ? Laptop : Server
+  const KindIcon = card.kind === 'resident' ? InfinityIcon : BriefcaseBusiness
   return (
     <article
       data-pulse={pulsing ? 'true' : undefined}
@@ -67,30 +76,19 @@ export function NeedsYouCard({
             {card.projectName}
           </span>
           <span
-            className="block truncate text-[11px] text-muted-foreground"
+            className="block break-words text-[11px] text-foreground"
             title={session.model || 'Model not recorded'}
           >
             {session.model || 'Model not recorded'}
           </span>
-          {(card.prLabel || card.kind) && (
+          {card.prLabel && (
             <span className="flex flex-wrap gap-1 text-[10px] font-normal">
-              {card.prLabel && (
-                <span className="rounded bg-muted px-1.5 py-0.5 tabular-nums">
-                  {card.prLabel}
-                </span>
-              )}
-              {card.kind && (
-                <span className="rounded bg-muted px-1.5 py-0.5">
-                  {card.kind}
-                </span>
-              )}
+              <span className="rounded bg-muted px-1.5 py-0.5 tabular-nums">
+                {card.prLabel}
+              </span>
             </span>
           )}
-          {card.summary && (
-            <span className="block text-[11px] text-muted-foreground">
-              {card.summary}
-            </span>
-          )}
+          <NeedsYouCardStatus card={card} />
           <span className="block text-[10px] font-normal text-muted-foreground">
             Last moved{' '}
             <time
@@ -104,7 +102,7 @@ export function NeedsYouCard({
         </span>
       </Button>
       <TooltipProvider delayDuration={200}>
-        <div className="flex w-10 shrink-0 flex-col items-center gap-1 pb-2">
+        <div className="flex w-10 shrink-0 flex-col items-center pb-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -141,6 +139,13 @@ export function NeedsYouCard({
           <NeedsYouCardIcon label={card.host}>
             <HostIcon aria-hidden="true" className="size-4" />
           </NeedsYouCardIcon>
+          {card.kind && (
+            <NeedsYouCardIcon
+              label={card.kind === 'resident' ? 'Resident' : 'Errand'}
+            >
+              <KindIcon aria-hidden="true" className="size-4" />
+            </NeedsYouCardIcon>
+          )}
         </div>
       </TooltipProvider>
     </article>

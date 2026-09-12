@@ -10,7 +10,7 @@ const actions = () => ({
   onArchive: vi.fn(),
 })
 it.each(Object.entries(cardFixtures))(
-  'renders %s from the summary, without fetching (mutation: remove a chip)',
+  'renders %s metadata and named tooltips without fetching',
   async (_name, session) => {
     const fetch = vi.fn(() => {
       throw new Error('a card must not fetch')
@@ -46,17 +46,19 @@ it.each(Object.entries(cardFixtures))(
       ).toBeInTheDocument()
     else expect(screen.queryByText(/#42/)).toBeNull()
     if (session.originKind === null) {
-      expect(screen.queryByText('resident')).toBeNull()
-      expect(screen.queryByText('errand')).toBeNull()
-    } else
-      expect(
-        screen.getByText(
-          session.originKind === 'spawn' ||
-            session.workAddress?.mode === 'repository'
-            ? 'errand'
-            : 'resident',
-        ),
-      ).toBeInTheDocument()
+      expect(screen.queryByRole('img', { name: 'Resident' })).toBeNull()
+      expect(screen.queryByRole('img', { name: 'Errand' })).toBeNull()
+    } else {
+      const label =
+        session.originKind === 'spawn' ||
+        session.workAddress?.mode === 'repository'
+          ? 'Errand'
+          : 'Resident'
+      const kindIcon = screen.getByRole('img', { name: label })
+      fireEvent.focus(kindIcon)
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(label)
+      fireEvent.blur(kindIcon)
+    }
     expect(fetch).not.toHaveBeenCalled()
     vi.unstubAllGlobals()
   },
