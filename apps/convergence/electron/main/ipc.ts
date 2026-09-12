@@ -1,4 +1,5 @@
-import { ipcMain, dialog, BrowserWindow, shell } from 'electron'
+import { connectPullRequestRefresh } from '../backend/pull-request/pull-request-refresh.service'
+import { app, ipcMain, dialog, BrowserWindow, shell } from 'electron'
 import { ProjectService } from '../backend/project/project.service'
 import { SpaceService } from '../backend/space/space.service'
 import type { SpaceSynthesisService } from '../backend/space/space-synthesis.service'
@@ -496,7 +497,27 @@ export function registerIpcHandlers(
     await workspaceService.delete(id)
   })
 
+  // The PR observer depends on the session event interface, never vice versa.
+  connectPullRequestRefresh(
+    pullRequestService,
+    sessionService,
+    (sessionId) => {
+      const summary = sessionService.getSummaryById(sessionId)
+      if (!summary) return
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed())
+          win.webContents.send('session:summaryUpdated', summary)
+      }
+    },
+    (dispose) => {
+      app.once('will-quit', dispose)
+    },
+  )
+
   // Pull request handlers
+  ipcMain.handle('pullRequest:getForSession', (_event, sessionId: string) =>
+    pullRequestService.getForSession(sessionId),
+  )
   ipcMain.handle(
     'pullRequest:getByWorkspaceId',
     (_event, workspaceId: string) =>

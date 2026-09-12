@@ -180,6 +180,18 @@ describe('SessionView', () => {
 
     Object.defineProperty(window, 'electronAPI', {
       value: {
+        pullRequest: {
+          getForSession: vi.fn().mockResolvedValue({
+            pullRequest: null,
+            branchName: 'agent/34372e47',
+            message: 'PR unknown — gh not found',
+          }),
+          refreshForSession: vi.fn().mockResolvedValue({
+            pullRequest: null,
+            branchName: 'agent/34372e47',
+            message: 'PR unknown — gh not found',
+          }),
+        },
         session: {
           harnessFacts: vi.fn().mockResolvedValue({
             turns: [],
@@ -490,22 +502,18 @@ describe('SessionView', () => {
     // no worktree here to have a branch or a pull request on.
     expect(rows?.textContent).not.toContain('No workspace')
     expect(rows?.textContent).not.toContain('master')
-    // The daemon could not be reached, so it never said whether it had opened
-    // a pull request -- and `None yet` would be that claim (MAR-2718 round 2).
-    // The branch stays: the record already knew it.
-    expect(rows?.textContent).toContain('Could not read: daemon unreachable')
+    // The branch stays recorded; the PR row reports the Mac lookup's failure.
+    await waitFor(() =>
+      expect(rows?.textContent).toContain('PR unknown — gh not found'),
+    )
     expect(rows?.textContent).not.toContain('None yet')
   })
 
-  /**
-   * The pending half of the same law, on the rendered surface (MAR-2280): while
-   * the fetch is in flight nobody has looked yet, so the row says it is asking.
-   *
-   * Mutation: collapse `asking` (or `unavailable`) to
-   * `NO_REMOTE_PULL_REQUEST_LABEL` in `describeRemotePullRequest` and this row
-   * and the one above go red together.
-   */
-  it('says it is asking while the daemon has not answered about the pull request', async () => {
+  // The refresh is the gh-backed session lookup; the daemon snapshot is a hint.
+  it('checks the PR when Session details opens (mutation: omit details refresh)', async () => {
+    vi.mocked(window.electronAPI.pullRequest.refreshForSession).mockReturnValue(
+      new Promise(() => {}),
+    )
     // A fetch that never settles: the panel must render the honest interim
     // state rather than a negative answer nobody gave.
     ;(
@@ -553,25 +561,14 @@ describe('SessionView', () => {
 
     const panel = await screen.findByText('Works in')
     const rows = panel.closest('div')?.parentElement
-    expect(rows?.textContent).toContain('Asking')
+    expect(rows?.textContent).toContain('PR checking…')
+    expect(
+      window.electronAPI.pullRequest.refreshForSession,
+    ).toHaveBeenCalledExactlyOnceWith('session-1')
     expect(rows?.textContent).not.toContain('None yet')
   })
 
-  /**
-   * The daemon answered and the field it sent was not a pull request, on the
-   * rendered surface (MAR-2280 law, MAR-2718 round 2).
-   *
-   * This is the reading the old wire door could not produce at all: `typeof
-   * value.prUrl === 'string' ? value.prUrl : null` turned a missing key, `42`,
-   * `false`, `''` and `'ftp://x'` into the daemon's own negative, so the panel
-   * printed `None yet` about a snapshot nobody could read. A successful fetch
-   * is not the same thing as a legible answer.
-   *
-   * Mutation: map `unreadable` to `{ state: 'none' }` in
-   * `readRemotePullRequest`, or collapse it in `describeRemotePullRequest`, and
-   * this goes red.
-   */
-  it('says the read failed when the daemon sent an unreadable pull request', async () => {
+  it('reports the gh failure independently of an unreadable daemon PR hint', async () => {
     ;(
       window as unknown as {
         electronAPI: { executionHost: { getSessionWorkspace: unknown } }
@@ -627,24 +624,40 @@ describe('SessionView', () => {
     const panel = await screen.findByText('Works in')
     const rows = panel.closest('div')?.parentElement
     await waitFor(() =>
-      expect(rows?.textContent).toContain(
-        'Could not read: the daemon sent no pull request field',
-      ),
+      expect(rows?.textContent).toContain('PR unknown — gh not found'),
     )
     expect(rows?.textContent).not.toContain('None yet')
     // The workspace half of the same answer survives it.
     expect(rows?.textContent).toContain('agent/34372e47')
   })
 
-  /**
-   * And the one answer that IS a pull request, rendered as the link it is
-   * (MAR-2280 law). The `url` arm has to survive the decode that closed the
-   * others, or the row would trade one lie for a blank.
-   *
-   * Mutation: return `{ state: 'none' }` for the `url` arm of
-   * `readRemotePullRequest` and this goes red.
-   */
-  it('renders the pull request the daemon actually opened', async () => {
+  it('renders the verified session fact, not the daemon URL (mutation: use remote PR hint)', async () => {
+    const fact = {
+      number: 545,
+      url: 'https://github.com/marckraw/convergence/pull/545',
+      state: 'open' as const,
+      headBranch: 'agent/34372e47',
+      checkedAt: '2026-09-12',
+      source: 'gh' as const,
+    }
+    vi.mocked(window.electronAPI.pullRequest.getForSession).mockResolvedValue({
+      pullRequest: fact,
+      branchName: fact.headBranch,
+      message: null,
+    })
+    vi.mocked(
+      window.electronAPI.pullRequest.refreshForSession,
+    ).mockResolvedValue({
+      pullRequest: fact,
+      branchName: fact.headBranch,
+      message: null,
+    })
+    useSessionStore.setState((state) => ({
+      sessions: state.sessions.map((session) => ({
+        ...session,
+        pullRequest: fact,
+      })),
+    }))
     ;(
       window as unknown as {
         electronAPI: { executionHost: { getSessionWorkspace: unknown } }
@@ -692,11 +705,7 @@ describe('SessionView', () => {
 
     const panel = await screen.findByText('Works in')
     const rows = panel.closest('div')?.parentElement
-    await waitFor(() =>
-      expect(rows?.textContent).toContain(
-        'https://github.com/marckraw/convergence/pull/544',
-      ),
-    )
+    await waitFor(() => expect(rows?.textContent).toContain('#545 · open'))
     expect(rows?.textContent).not.toContain('None yet')
   })
 

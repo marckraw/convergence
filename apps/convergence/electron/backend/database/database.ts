@@ -2097,6 +2097,9 @@ export function getDatabase(dbPath?: string): Database.Database {
     // `execution_host` to tell a remote row from a local one.
     ensureSessionWorkAddressColumn(database)
     ensureSessionReportedWorkspaceColumn(database)
+    if (!getTableColumnNames(database, 'sessions').has('pull_request_json')) {
+      database.exec('ALTER TABLE sessions ADD COLUMN pull_request_json TEXT')
+    }
     // After the session columns, never before: the backfill rewrites
     // `execution_host`, which a database older than the remote era lacks.
     ensureExecutionHostEndpoints(database)

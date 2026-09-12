@@ -1,3 +1,4 @@
+import type { SessionPullRequest } from '@/shared/types/session-pull-request.types'
 import type { ParallelWorkCounts } from '@/shared/lib/parallel-work.pure'
 import type {
   SkillActivationConfirmation,
@@ -346,6 +347,7 @@ export interface QueuedInputPatchEvent {
 }
 
 export interface SessionSummary {
+  pullRequest?: SessionPullRequest | null
   canStopTasks?: boolean
   parallelWork?: ParallelWorkCounts
   /** Runtime fact; never persisted or inferred from attention. */

@@ -14,10 +14,7 @@ import {
 } from '@/entities/session'
 import { useDialogStore } from '@/entities/dialog'
 import { useSpaceStore } from '@/entities/space'
-import {
-  usePullRequestStore,
-  type WorkspacePullRequest,
-} from '@/entities/pull-request'
+import { useSessionPullRequest } from './pull-request-session.container'
 import { gitApi, useWorkspaceStore } from '@/entities/workspace'
 import { ComposerContainer } from '@/features/composer'
 import { ProjectOpenMenuContainer } from '@/features/project-open-menu'
@@ -52,10 +49,7 @@ import {
   TerminalSquare,
 } from 'lucide-react'
 import { formatConversationTotalDuration } from './conversation-total-duration.pure'
-import {
-  describeRemotePullRequest,
-  resolveRemoteSessionDetails,
-} from './remote-session-details.pure'
+import { resolveRemoteSessionDetails } from './remote-session-details.pure'
 import {
   SpaceContextPanel,
   type SpaceContextAttemptView,
@@ -69,19 +63,6 @@ export const SessionView: FC = () => {
   const activeProject = useProjectStore((s) => s.activeProject)
   const projects = useProjectStore((s) => s.projects)
   const workspaces = useWorkspaceStore((s) => s.globalWorkspaces)
-  const pullRequestsByWorkspaceId = usePullRequestStore((s) => s.byWorkspaceId)
-  const pullRequestLoadingByWorkspaceId = usePullRequestStore(
-    (s) => s.loadingByWorkspaceId,
-  )
-  const pullRequestErrorsByWorkspaceId = usePullRequestStore(
-    (s) => s.errorByWorkspaceId,
-  )
-  const loadPullRequestByWorkspaceId = usePullRequestStore(
-    (s) => s.loadByWorkspaceId,
-  )
-  const refreshPullRequestForSession = usePullRequestStore(
-    (s) => s.refreshForSession,
-  )
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const draftWorkspaceId = useSessionStore((s) => s.draftWorkspaceId)
   const beginSessionDraft = useSessionStore((s) => s.beginSessionDraft)
@@ -174,15 +155,18 @@ export const SessionView: FC = () => {
     ? (activeProject?.repositoryPath ?? null)
     : (sessionWorkspace?.path ?? session?.workingDirectory ?? null)
   const sessionWorktreeRemoved = !!sessionWorkspace?.worktreeRemovedAt
-  const workspacePullRequest = session?.workspaceId
-    ? (pullRequestsByWorkspaceId[session.workspaceId] ?? null)
-    : null
-  const pullRequestLoading = session?.workspaceId
-    ? (pullRequestLoadingByWorkspaceId[session.workspaceId] ?? false)
-    : false
-  const pullRequestError = session?.workspaceId
-    ? (pullRequestErrorsByWorkspaceId[session.workspaceId] ?? null)
-    : null
+  const {
+    reading: prReading,
+    loading: pullRequestLoading,
+    refresh: refreshPullRequest,
+  } = useSessionPullRequest(session?.id)
+  const sessionPullRequest = session?.pullRequest ?? null
+  const pullRequestLabel = pullRequestLoading
+    ? 'PR checking…'
+    : (prReading?.message ??
+      (sessionPullRequest
+        ? `#${sessionPullRequest.number} · ${sessionPullRequest.state}`
+        : 'PR unknown'))
   /**
    * The remote rows, or null on a local session (MAR-2718).
    *
@@ -276,21 +260,8 @@ export const SessionView: FC = () => {
   }, [session?.workingDirectory])
 
   useEffect(() => {
-    if (!session?.workspaceId) return
-    void loadPullRequestByWorkspaceId(session.workspaceId)
-  }, [loadPullRequestByWorkspaceId, session?.workspaceId])
-
-  useEffect(() => {
-    const sessionId = session?.id ?? null
-    const workspaceId = session?.workspaceId ?? null
-    if (!showPullRequestPanel || !sessionId) return
-    void refreshPullRequestForSession(sessionId, workspaceId)
-  }, [
-    refreshPullRequestForSession,
-    session?.id,
-    session?.workspaceId,
-    showPullRequestPanel,
-  ])
+    if (showPullRequestPanel) void refreshPullRequest()
+  }, [refreshPullRequest, showPullRequestPanel])
 
   // Hydrate attachment metadata for the active session so the transcript can render chips.
   const hydrateAttachments = useAttachmentStore((s) => s.hydrateForSession)
@@ -457,7 +428,11 @@ export const SessionView: FC = () => {
               />
             )}
             <SessionWiresContainer sessionId={session.id} />
-            <DropdownMenu>
+            <DropdownMenu
+              onOpenChange={(open) => {
+                if (open) void refreshPullRequest()
+              }}
+            >
               <DropdownMenuTrigger asChild>
                 <Button
                   type="button"
@@ -528,9 +503,7 @@ export const SessionView: FC = () => {
                       <SessionHeaderDetailRow
                         icon={<GitPullRequest className="h-3.5 w-3.5" />}
                         label="Pull request"
-                        value={describeRemotePullRequest(
-                          remoteDetails.pullRequest,
-                        )}
+                        value={pullRequestLabel}
                       />
                       {remoteDetails.unreadable && (
                         <SessionHeaderDetailRow
@@ -549,14 +522,7 @@ export const SessionView: FC = () => {
                       <SessionHeaderDetailRow
                         icon={<GitPullRequest className="h-3.5 w-3.5" />}
                         label="Pull request"
-                        value={
-                          session.workspaceId
-                            ? formatPullRequestHeaderLabel(
-                                workspacePullRequest,
-                                pullRequestLoading,
-                              )
-                            : 'No workspace'
-                        }
+                        value={pullRequestLabel}
                       />
                     </>
                   )}
@@ -641,7 +607,11 @@ export const SessionView: FC = () => {
                 <Square className="h-3 w-3" />
               </Button>
             )}
-            <DropdownMenu>
+            <DropdownMenu
+              onOpenChange={(open) => {
+                if (open) void refreshPullRequest()
+              }}
+            >
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
@@ -775,13 +745,14 @@ export const SessionView: FC = () => {
 
       {showPullRequestPanel && (
         <PullRequestPanel
-          pullRequest={workspacePullRequest}
-          branchName={branchName}
+          pullRequest={sessionPullRequest}
+          branchName={
+            prReading?.branchName ?? sessionPullRequest?.headBranch ?? null
+          }
           loading={pullRequestLoading}
-          error={pullRequestError}
-          hasWorkspace={session.workspaceId !== null}
+          error={prReading?.message ?? null}
           onRefresh={() => {
-            void refreshPullRequestForSession(session.id, session.workspaceId)
+            void refreshPullRequest()
           }}
           onClose={() => setShowPullRequestPanel(false)}
         />
@@ -805,21 +776,6 @@ export const SessionView: FC = () => {
       )}
     </div>
   )
-}
-
-function formatPullRequestHeaderLabel(
-  pullRequest: WorkspacePullRequest | null,
-  loading: boolean,
-): string {
-  if (loading) return 'PR checking…'
-  if (!pullRequest) return 'PR unknown'
-  if (pullRequest.lookupStatus === 'not-found') return 'No PR'
-  if (pullRequest.lookupStatus === 'gh-unavailable') return 'gh missing'
-  if (pullRequest.lookupStatus === 'gh-auth-required') return 'gh auth needed'
-  if (pullRequest.lookupStatus !== 'found') return 'PR unknown'
-  if (pullRequest.number)
-    return `PR #${pullRequest.number} ${pullRequest.state}`
-  return pullRequest.state
 }
 
 function formatSessionContextLabel(

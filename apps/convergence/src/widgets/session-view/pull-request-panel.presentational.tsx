@@ -1,16 +1,14 @@
 import type { FC, ReactNode } from 'react'
 import { GitBranch, GitPullRequest, RefreshCw, X } from 'lucide-react'
-import type { WorkspacePullRequest } from '@/entities/pull-request'
+import type { SessionPullRequest } from '@/shared/types/session-pull-request.types'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/lib/cn.pure'
-import { PullRequestDetails } from './pull-request-details.presentational'
 
 interface PullRequestPanelProps {
-  pullRequest: WorkspacePullRequest | null
+  pullRequest: SessionPullRequest | null
   branchName: string | null
   loading: boolean
   error: string | null
-  hasWorkspace: boolean
   onRefresh: () => void
   onClose: () => void
 }
@@ -20,7 +18,6 @@ export const PullRequestPanel: FC<PullRequestPanelProps> = ({
   branchName,
   loading,
   error,
-  hasWorkspace,
   onRefresh,
   onClose,
 }) => {
@@ -38,7 +35,7 @@ export const PullRequestPanel: FC<PullRequestPanelProps> = ({
             size="icon"
             className="h-7 w-7"
             onClick={onRefresh}
-            disabled={!hasWorkspace || loading}
+            disabled={loading}
             title="Refresh PR status"
             aria-label="Refresh PR status"
           >
@@ -61,16 +58,14 @@ export const PullRequestPanel: FC<PullRequestPanelProps> = ({
       </div>
 
       <div className="app-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-        {!hasWorkspace
-          ? renderEmptyState(
-              'This session is running in the project root. PR lookup is currently tracked for workspaces.',
-            )
+        {!branchName && !error && !loading
+          ? renderEmptyState('no branch recorded for this session')
           : null}
 
-        {hasWorkspace ? (
+        {branchName ? (
           <section className="rounded-lg border border-border/70 bg-card/30 p-3">
             <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-              Workspace branch
+              Session branch
             </div>
             <div className="flex min-w-0 items-center gap-2 text-sm">
               <GitBranch className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -85,13 +80,33 @@ export const PullRequestPanel: FC<PullRequestPanelProps> = ({
           </div>
         ) : null}
 
-        {hasWorkspace && !pullRequest && !loading
+        {branchName && !pullRequest && !loading && !error
           ? renderEmptyState(
               'No PR status cached yet. Refresh to ask GitHub CLI for the current branch.',
             )
           : null}
 
-        {pullRequest ? <PullRequestDetails pullRequest={pullRequest} /> : null}
+        {pullRequest ? (
+          <section className="rounded-lg border border-border p-3 text-sm">
+            <p className="font-medium">
+              #{pullRequest.number} · {pullRequest.state}
+            </p>
+            <p className="mt-2 break-all text-muted-foreground">
+              {pullRequest.url}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-3"
+              onClick={() => {
+                if (/^https:\/\//.test(pullRequest.url))
+                  window.open(pullRequest.url, '_blank')
+              }}
+            >
+              Open in browser
+            </Button>
+          </section>
+        ) : null}
       </div>
     </aside>
   )

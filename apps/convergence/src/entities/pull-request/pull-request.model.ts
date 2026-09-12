@@ -87,7 +87,8 @@ export const usePullRequestStore = create<PullRequestStore>((set) => ({
     }))
 
     try {
-      const pullRequest = await pullRequestApi.refreshForSession(sessionId)
+      await pullRequestApi.refreshForSession(sessionId)
+      const pullRequest = await pullRequestApi.getByWorkspaceId(workspaceId)
       set((state) => ({
         byWorkspaceId: pullRequest
           ? { ...state.byWorkspaceId, [workspaceId]: pullRequest }

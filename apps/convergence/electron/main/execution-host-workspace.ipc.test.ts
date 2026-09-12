@@ -1,3 +1,8 @@
+// PR observer lifecycle is exercised by pull-request-refresh.service.test.ts.
+vi.mock('../backend/pull-request/pull-request-refresh.service', () => ({
+  connectPullRequestRefresh: vi.fn(),
+}))
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'

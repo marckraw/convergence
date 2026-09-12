@@ -1,4 +1,8 @@
 import type {
+  SessionPullRequest,
+  SessionPullRequestReading,
+} from './session-pull-request.types'
+import type {
   CrewImportPlan,
   CrewImportDecisions,
   CrewImportReport,
@@ -1035,6 +1039,7 @@ type AttentionRequestKindData =
   | 'input'
 
 interface SessionSummaryData {
+  pullRequest?: SessionPullRequest | null
   canStopTasks?: boolean
   parallelWork?: ParallelWorkCounts
   /** Runtime fact; never persisted or inferred from attention. */
@@ -1719,9 +1724,8 @@ interface ElectronAPI {
       workspaceId: string,
     ) => Promise<WorkspacePullRequestData | null>
     listByProjectId: (projectId: string) => Promise<WorkspacePullRequestData[]>
-    refreshForSession: (
-      sessionId: string,
-    ) => Promise<WorkspacePullRequestData | null>
+    getForSession: (sessionId: string) => Promise<SessionPullRequestReading>
+    refreshForSession: (sessionId: string) => Promise<SessionPullRequestReading>
   }
   crew: {
     importPlan: (
