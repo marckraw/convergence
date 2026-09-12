@@ -1187,18 +1187,6 @@ export class RelayEngine {
     }
 
     try {
-      if (spec.returnWire) {
-        this.relays.create({
-          crewId: relay.crewId,
-          sourceSessionId: spawnedSessionId,
-          targetSessionId: relay.sourceSessionId,
-          action: 'hail',
-          conditionToken: null,
-          instruction: spec.returnWire.instruction,
-          armed: true,
-        })
-        this.onRelaysChanged?.()
-      }
       const dispatchId = await this.sessions.start(spawnedSessionId, {
         text: brief,
         providerAccountId: this.resolveSpawnAccountId(spec),
@@ -1212,6 +1200,30 @@ export class RelayEngine {
           error instanceof Error ? error.message : String(error)
         }`,
       })
+      return
+    }
+
+    if (spec.returnWire) {
+      try {
+        this.relays.create({
+          crewId: relay.crewId,
+          sourceSessionId: spawnedSessionId,
+          targetSessionId: relay.sourceSessionId,
+          action: 'hail',
+          conditionToken: null,
+          instruction: spec.returnWire.instruction,
+          armed: true,
+        })
+        this.onRelaysChanged?.()
+      } catch (error) {
+        record('error', {
+          spawnedSessionId,
+          payloadPreview,
+          error: `Started the errand but could not draw its return wire: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        })
+      }
     }
   }
 }

@@ -98,6 +98,7 @@ export type WorkAddressSlotView =
       label: string
       /** The branch that was asked for, when the daemon cut another one. */
       requestedBranch: string | null
+      notice?: string | null
     }
 
 /**

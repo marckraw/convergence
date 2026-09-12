@@ -1,8 +1,6 @@
 import { useAppSettingsStore } from '@/entities/app-settings'
-import {
-  resolveWorkAddressSlot,
-  type LocalRepositoryState,
-} from '@/entities/execution-host'
+import { type LocalRepositoryState } from '@/entities/execution-host'
+import { resolveConnectionWorkAddress } from '@/features/mission-control'
 import { toast } from 'sonner'
 import { projectOpenApi } from '@/entities/project-open'
 import {
@@ -254,7 +252,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const spawnAddress = spawnSpec?.workAddress
   const workAddressSlot = useMemo(
     () =>
-      resolveWorkAddressSlot({
+      resolveConnectionWorkAddress({
         host: { mode: 'choosing', hostId: spawnHost },
         hostLabel:
           endpoints.find((endpoint) => endpoint.id === spawnHost)?.label ??
@@ -280,7 +278,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
           spawnAddress?.mode === 'repository'
             ? (spawnAddress.branchName ?? '')
             : '',
-        recordedAddress: null,
+        recordedAddress: spawnAddress,
         reportedWorkspace: null,
       }),
     [
@@ -306,12 +304,12 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                 workAddress:
                   workAddressSlot.mode === 'choosing'
                     ? workAddressSlot.address
-                    : null,
+                    : (spawnAddress ?? null),
               },
             },
           }
         : draft,
-    [draft, spawnHost, workAddressSlot],
+    [draft, spawnHost, workAddressSlot, spawnAddress],
   )
 
   // Read once for the surface rather than per connection: the list is small,
@@ -405,7 +403,8 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
     (run: () => void) => {
       const dirty =
         draft !== null &&
-        (savedDraft === null || connectionDraftIsDirty(draft, savedDraft))
+        (savedDraft === null ||
+          connectionDraftIsDirty(resolvedDraft ?? draft, savedDraft))
       if (dirty) {
         setConfirmDiscard({ run })
         return false
@@ -413,7 +412,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       run()
       return true
     },
-    [draft, savedDraft],
+    [draft, resolvedDraft, savedDraft],
   )
 
   /** Moves to another panel, dropping whatever draft the last one held. */
@@ -1276,7 +1275,8 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               draft={resolvedDraft ?? draft}
               isNew={panel.relayId === null}
               dirty={
-                savedDraft === null || connectionDraftIsDirty(draft, savedDraft)
+                savedDraft === null ||
+                connectionDraftIsDirty(resolvedDraft ?? draft, savedDraft)
               }
               saveError={saveError ?? relayError}
               recipientMissing={
@@ -1311,7 +1311,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               effortOptions={effortOptions}
               spawnAccounts={spawnHost === 'local' ? spawnAccounts : []}
               hostOptions={[
-                { id: 'local', label: 'laptop' },
+                { id: 'local', label: 'Local' },
                 ...endpoints.map((endpoint) => ({
                   id: endpoint.id,
                   label: endpoint.label || 'Unnamed endpoint',
@@ -1402,6 +1402,10 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                       spec: {
                         ...current.recipient.spec,
                         ...patch,
+                        returnInstructionDraft:
+                          patch.returnWire?.instruction ??
+                          current.recipient.spec.returnInstructionDraft,
+
                         ...(patch.projectId !== undefined &&
                         patch.projectId !== current.recipient.spec.projectId
                           ? { workAddress: null }

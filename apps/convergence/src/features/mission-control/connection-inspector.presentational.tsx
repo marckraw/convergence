@@ -287,7 +287,14 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
                 workAddress: null,
                 providerAccountId: null,
                 returnWire:
-                  executionHost === 'local' ? { instruction: '' } : null,
+                  executionHost === 'local'
+                    ? {
+                        instruction:
+                          spec.returnWire?.instruction ??
+                          spec.returnInstructionDraft ??
+                          '',
+                      }
+                    : null,
               })
             }
             disabled={busy}
@@ -321,7 +328,9 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             disabled={busy}
             onChange={(enabled) =>
               onSpawnChange({
-                returnWire: enabled ? { instruction: '' } : null,
+                returnWire: enabled
+                  ? { instruction: spec.returnInstructionDraft ?? '' }
+                  : null,
               })
             }
           />

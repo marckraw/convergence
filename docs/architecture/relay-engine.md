@@ -695,16 +695,21 @@ than a guess.
 
 `normalizeRelaySpawnSpec` owns the recipe's host and work address. Older
 recipes default to `local`; local addresses normalize to null. A remote
-recipe must name a concrete repository or Project before it can be stored.
+recipe must belong to a local project and name a concrete remote repository or
+Project before it can be stored. `spawnSpecProblem` shares the birth refusals
+between the normalizer and the draft; import validation and planning use the
+normalizer. Malformed addresses retain their decoder reason, and role cards
+are limited to `MAX_ROLE_CARD_LENGTH` (8,000 characters).
 The engine passes the host and address through the existing session create
 boundary. Local create inputs retain their original shape, and local account
 ids never select an account on a remote host. A null repository branch asks
 the daemon to name the branch.
 
 `returnWire: { instruction } | null` describes an optional real connection,
-not a reporting side channel. After joining the new conversation to the crew,
+not a reporting side channel. After the new conversation joins the crew and starts successfully,
 the spawn path uses `RelayService.create` to connect it back to the source:
-`settled`, `hail`, armed, with no condition. Null creates no return connection.
+`settled`, `hail`, armed, with no condition. Null creates no return connection. A return-connection failure gets its own
+error row and does not prevent the errand from starting.
 New local recipes default reporting on; new remote recipes default it off.
 
 `composeErrandBrief` puts the role card before the compiled payload, with blank
@@ -718,7 +723,10 @@ The recipe and composer share the work-address slot in
 `entities/execution-host`. The composer adapts its execution-bar view into
 the entity's structural inputs. The recipe derives both its visible address
 and save input from that slot; pending catalog reads do not erase its saved
-draft. YAML export, validation and import use the spawn normalizer, with
+draft. A recorded address no longer offered by the endpoint remains a stated
+fact; it is never replaced with a catalog default. The inspector compares the
+resolved draft with the saved one, and retains typed return instructions in
+draft-only state across host/reporting changes. YAML export, validation and import use the spawn normalizer, with
 provided values refused when normalization would change them.
 
 ### Adding a payload transform

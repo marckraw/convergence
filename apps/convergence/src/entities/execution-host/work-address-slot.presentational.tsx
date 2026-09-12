@@ -72,6 +72,11 @@ export const WorkAddressSlot: FC<WorkAddressSlotProps> = ({
           that exists rather than instead of it (MAR-2694). Reconciling the two
           silently would make the strip claim a branch nobody cut.
         */}
+        {view.notice ? (
+          <span className={stripNoticeClass} data-testid="work-address-notice">
+            {view.notice}
+          </span>
+        ) : null}
         {view.requestedBranch ? (
           <span
             className={stripNoticeClass}

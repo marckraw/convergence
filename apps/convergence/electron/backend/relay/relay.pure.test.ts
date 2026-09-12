@@ -62,11 +62,28 @@ describe('normalizeRelayAction', () => {
 })
 
 describe('normalizeRelaySpawnSpec', () => {
+  it('refuses a remote global errand at the record door (mutation: drop remote project refusal)', () => {
+    expect(() =>
+      normalizeRelaySpawnSpec({
+        providerId: 'codex',
+        projectId: null,
+        executionHost: 'little-monster',
+        workAddress: {
+          mode: 'repository',
+          repository: 'https://github.com/marckraw/convergence',
+          branchName: null,
+          label: 'repo',
+        },
+      }),
+    ).toThrow('An errand on a remote host belongs to a project')
+  })
+
   it('refuses a remote spawn without a stated place (mutation: drop remote place guard)', () => {
     expect(() =>
       normalizeRelaySpawnSpec({
         providerId: 'codex',
         executionHost: 'little-monster',
+        projectId: 'p1',
         workAddress: null,
       }),
     ).toThrow(

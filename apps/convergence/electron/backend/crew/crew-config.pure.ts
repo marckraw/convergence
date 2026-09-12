@@ -407,7 +407,7 @@ const spawn: Check = (v, p) => {
       providerId: input.provider,
       model: input.model,
       effort: input.effort,
-      projectId: null,
+      projectId: input.project,
       providerAccountId: null,
       executionHost: input.host,
       workAddress: input.workAddress,

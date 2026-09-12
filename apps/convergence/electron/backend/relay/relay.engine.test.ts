@@ -2876,6 +2876,43 @@ describe('RelayEngine', () => {
       }
     })
 
+    it('runs the errand even when the return wire fails (mutation: wire failure blocks start)', async () => {
+      spawnWire('s1', { returnWire: { instruction: 'Report' } })
+      vi.spyOn(relays, 'create').mockImplementationOnce(() => {
+        throw new Error('wire refused')
+      })
+      const gateway = createGateway({})
+      await createEngine(gateway).handleSettle(settled('s1'))
+      expect({
+        started: gateway.started.length,
+        hops: relays
+          .listHops('c1')
+          .map((hop) => ({ outcome: hop.outcome, error: hop.error })),
+      }).toEqual({
+        started: 1,
+        hops: expect.arrayContaining([
+          { outcome: 'spawned', error: null },
+          {
+            outcome: 'error',
+            error:
+              'Started the errand but could not draw its return wire: wire refused',
+          },
+        ]),
+      })
+    })
+
+    it('does not draw a return wire when start fails (mutation: draw the wire before start)', async () => {
+      spawnWire('s1', { returnWire: { instruction: 'Report' } })
+      const createReturn = vi.spyOn(relays, 'create')
+      const gateway = createGateway({
+        start: async () => {
+          throw new Error('start refused')
+        },
+      })
+      await createEngine(gateway).handleSettle(settled('s1'))
+      expect(createReturn).not.toHaveBeenCalled()
+    })
+
     it.each([true, false])(
       'starts on the identity card and compiled payload, return=%s (mutation: bypass brief composition or use the errand name)',
       async (returning) => {
@@ -2942,6 +2979,7 @@ describe('RelayEngine', () => {
       const gateway = createGateway({})
       await createEngine(gateway).handleSettle(settled('s1'))
       expect(gateway.created[0]).toMatchObject({
+        contextKind: 'project',
         executionHost: 'little-monster',
         workAddress,
       })

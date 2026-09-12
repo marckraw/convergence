@@ -1,4 +1,4 @@
-import { namesAConcreteWorkPlace } from '@/shared/lib/work-address.pure'
+import { spawnSpecProblem } from '@/shared/lib/spawn-spec.pure'
 import type {
   CreateSessionRelayInput,
   RelaySpawnSpec,
@@ -37,6 +37,8 @@ export interface ConnectionSpawnSpec {
   executionHost: string
   workAddress: RelaySpawnSpec['workAddress']
   roleCard: string | null
+  /** Draft-only text survives reporting being switched off or a host change. */
+  returnInstructionDraft?: string
   returnWire: RelaySpawnSpec['returnWire']
 }
 
@@ -76,6 +78,7 @@ export const EMPTY_SPAWN_SPEC: ConnectionSpawnSpec = {
   workAddress: null,
   roleCard: null,
   returnWire: { instruction: '' },
+  returnInstructionDraft: '',
 }
 
 /**
@@ -135,7 +138,11 @@ export function draftFromRelay(
         ? {
             kind: 'spawn',
             spec: relay.spawnSpec
-              ? { ...relay.spawnSpec }
+              ? {
+                  ...relay.spawnSpec,
+                  returnInstructionDraft:
+                    relay.spawnSpec.returnWire?.instruction ?? '',
+                }
               : { ...EMPTY_SPAWN_SPEC },
           }
         : { kind: 'session', sessionId: relay.targetSessionId },
@@ -296,13 +303,7 @@ export function connectionDraftProblem(
     if (!draft.recipient.spec.providerId) {
       return 'Pick a provider for the new session.'
     }
-    if (
-      draft.recipient.spec.executionHost !== 'local' &&
-      !namesAConcreteWorkPlace(draft.recipient.spec.workAddress)
-    ) {
-      return 'A session on a remote execution host has to be told where it works. Pick a Project or a repository in the composer before starting it — starting it without one would run it somewhere nobody named.'
-    }
-    return null
+    return spawnSpecProblem(draft.recipient.spec)
   }
 
   const target = draft.recipient.sessionId

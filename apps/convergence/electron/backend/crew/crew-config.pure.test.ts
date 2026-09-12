@@ -801,52 +801,59 @@ it('refuses an empty stored baton without falling back to the conversation name 
   ).toThrow('A conversation needs a baton name before export')
 })
 
-it('round-trips the remote errand recipe through the record (mutation: omit spawn place on export)', () => {
-  const spec = {
-    name: 'Remote review',
-    providerId: 'codex',
-    model: null,
-    effort: null,
-    projectId: null,
-    providerAccountId: null,
-    executionHost: 'little-monster',
-    workAddress: {
-      mode: 'repository' as const,
-      repository: 'https://github.com/marckraw/convergence',
-      branchName: null,
-      label: 'marckraw/convergence',
-    },
-    roleCard: 'You are the reviewer.',
-    returnWire: { instruction: 'Report the result.' },
-  }
-  const config = crewToConfig(
-    liveCrew,
-    liveMembers,
-    liveSessions,
-    liveProjects,
-    [
-      {
-        ...liveRelays[0]!,
-        action: 'spawn',
-        targetSessionId: null,
-        spawnSpec: spec,
+it.each([null, 'root-id'])(
+  'round-trips only project-bound remote recipes: %s (mutation: drop remote project refusal or omit spawn place)',
+  (projectId) => {
+    const spec = {
+      name: 'Remote review',
+      providerId: 'codex',
+      model: null,
+      effort: null,
+      projectId,
+      providerAccountId: null,
+      executionHost: 'little-monster',
+      workAddress: {
+        mode: 'repository' as const,
+        repository: 'https://github.com/marckraw/convergence',
+        branchName: null,
+        label: 'marckraw/convergence',
       },
-    ],
-  )
-  expect(new Ajv().validate(schema, config)).toBe(true)
-  const to = config.wires[0]!.to
-  expect(to).toMatchObject({
-    spawn: {
-      host: spec.executionHost,
-      workAddress: spec.workAddress,
-      roleCard: spec.roleCard,
-      returnWire: spec.returnWire,
-    },
-  })
-  const read = readCrewConfig(renderCrewYaml(config))
-  expect(read).toEqual({ ok: true, config })
-  expect(crewImportRelayFields(config.wires[0]!, null).spawnSpec).toEqual(spec)
-})
+      roleCard: 'You are the reviewer.',
+      returnWire: { instruction: 'Report the result.' },
+    }
+    const exportRecipe = () =>
+      crewToConfig(liveCrew, liveMembers, liveSessions, liveProjects, [
+        {
+          ...liveRelays[0]!,
+          action: 'spawn',
+          targetSessionId: null,
+          spawnSpec: spec,
+        },
+      ])
+    if (projectId === null) {
+      expect(exportRecipe).toThrow(
+        'An errand on a remote host belongs to a project',
+      )
+      return
+    }
+    const config = exportRecipe()
+    expect(new Ajv().validate(schema, config)).toBe(true)
+    const to = config.wires[0]!.to
+    expect(to).toMatchObject({
+      spawn: {
+        host: spec.executionHost,
+        workAddress: spec.workAddress,
+        roleCard: spec.roleCard,
+        returnWire: spec.returnWire,
+      },
+    })
+    const read = readCrewConfig(renderCrewYaml(config))
+    expect(read).toEqual({ ok: true, config })
+    expect(
+      crewImportRelayFields(config.wires[0]!, projectId).spawnSpec,
+    ).toEqual(spec)
+  },
+)
 
 it.each([
   { host: '', workAddress: null },
@@ -883,5 +890,30 @@ it.each([
       },
     }
     expect(readCrewConfig(renderCrewYaml(config)).ok).toBe(false)
+  },
+)
+
+it.each([8000, 8001])(
+  'inherits the role-card bound at %s characters (mutation: change the one role-card cap)',
+  (length) => {
+    const config = crewToConfig(
+      liveCrew,
+      liveMembers,
+      liveSessions,
+      liveProjects,
+      liveRelays,
+    )
+    config.wires[0]!.to = {
+      spawn: {
+        name: 'Reviewer',
+        provider: 'codex',
+        model: null,
+        effort: null,
+        project: null,
+        account: 'default',
+        roleCard: 'x'.repeat(length),
+      },
+    }
+    expect(readCrewConfig(renderCrewYaml(config)).ok).toBe(length <= 8000)
   },
 )

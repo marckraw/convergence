@@ -276,3 +276,5 @@ export type {
   CanvasSpawnNode,
 } from './canvas-graph.pure'
 export type { SessionCard } from './mission-control.types'
+
+export { resolveConnectionWorkAddress } from './connection-work-address.pure'

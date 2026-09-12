@@ -219,10 +219,7 @@ export function planCrewImport(
         (other, i) =>
           i < index &&
           wireKey(other) === wireKey(wire) &&
-          sameCondition(
-            crewImportRelayFields(other, null).conditionToken,
-            crewImportRelayFields(wire, null).conditionToken,
-          ),
+          sameCondition(wireCondition(other), wireCondition(wire)),
       )
     )
       return {
@@ -247,15 +244,22 @@ export function planCrewImport(
       base.spawnProjectId = project.projectId
       if (project.state) return { ...base, ...project }
     }
+    let fields: ReturnType<typeof crewImportRelayFields>
+    try {
+      fields = crewImportRelayFields(wire, base.spawnProjectId)
+    } catch (error) {
+      return {
+        ...base,
+        state: 'choose',
+        detail: error instanceof Error ? error.message : String(error),
+      }
+    }
     const existing = crew
       ? world.relays.filter(
           (r) =>
             r.crewId === crew.id &&
             r.sourceSessionId === source.sessionId &&
-            sameCondition(
-              r.conditionToken,
-              crewImportRelayFields(wire, null).conditionToken,
-            ) &&
+            sameCondition(r.conditionToken, wireCondition(wire)) &&
             (typeof wire.to === 'string'
               ? r.action === 'hail' && r.targetSessionId === target?.sessionId
               : r.action === 'spawn' &&
@@ -282,7 +286,6 @@ export function planCrewImport(
         ],
       }
     if (!bound) return base
-    const fields = crewImportRelayFields(wire, base.spawnProjectId)
     const differences = [
       ...(bound.opener !== fields.opener ? ['opener'] : []),
       ...(bound.instruction !== fields.instruction ? ['instruction'] : []),
@@ -565,7 +568,7 @@ export function crewImportRelayFields(
   return {
     action: spawnSpec ? ('spawn' as const) : ('hail' as const),
     spawnSpec,
-    conditionToken: wire.when === 'settled' ? null : wire.when,
+    conditionToken: wireCondition(wire),
     opener:
       wire.opener === 'keep'
         ? null
@@ -604,4 +607,8 @@ export function modelUpdateOffered(
     spec.provider === bound.providerId &&
     differences.some((field) => field === 'model' || field === 'effort')
   )
+}
+
+function wireCondition(wire: CrewConfigWire): string | null {
+  return wire.when === 'settled' ? null : wire.when
 }

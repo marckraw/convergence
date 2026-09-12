@@ -515,10 +515,32 @@ it('refuses saving an unnamed remote place in the recipe (mutation: drop draft p
       ...EMPTY_SPAWN_SPEC,
       providerId: 'codex',
       executionHost: 'little-monster',
+      projectId: 'p1',
       workAddress: null,
     },
   }
   expect(connectionDraftProblem(draft, [], null, { supportsReset: true })).toBe(
     REMOTE_SPAWN_PLACE_REQUIRED,
+  )
+})
+
+it('inherits the remote project refusal (mutation: bypass draft requirements)', () => {
+  const draft = newConnectionDraft({ sourceSessionId: 'fable' })
+  draft.recipient = {
+    kind: 'spawn',
+    spec: {
+      ...EMPTY_SPAWN_SPEC,
+      providerId: 'codex',
+      executionHost: 'little-monster',
+      workAddress: {
+        mode: 'project',
+        projectId: 'remote',
+        workingDirectory: '/repo',
+        label: 'Remote',
+      },
+    },
+  }
+  expect(connectionDraftProblem(draft, [], null, { supportsReset: true })).toBe(
+    'An errand on a remote host belongs to a project',
   )
 })
