@@ -8,6 +8,6 @@ Stack provider and laptop/server icons below each sidebar card menu, with toolti
 
 Show running sessions across projects in a Working sidebar section. Keep pinned sessions in Pinned, prioritize requests for attention, and show when parallel tasks are still running after a response finishes.
 
-Apply the compact identity-rail card layout: readable model names, status icons with labels, and Resident/Errand icons with named tooltips beneath the execution host.
+Apply the compact identity-rail card layout: readable model names, status icons with labels, and Infinity for Resident / Clipboard List for Errand with named tooltips beneath the execution host.
 
 Add a subtle Whisper background tint for each supported provider, preserving the hue on hover and selection and keeping metadata readable in light and dark themes.

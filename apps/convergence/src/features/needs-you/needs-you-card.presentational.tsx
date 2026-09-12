@@ -8,7 +8,7 @@ import { providerCardTints } from './needs-you-card.styles'
 import type { CSSProperties } from 'react'
 import './needs-you-card.css'
 import {
-  BriefcaseBusiness,
+  ClipboardList,
   Infinity as InfinityIcon,
   Laptop,
   Server,
@@ -47,7 +47,7 @@ export function NeedsYouCard({
   const { session } = card
   const provider = resolveProviderIcon(session.providerId)
   const HostIcon = isLocalExecutionHost(session.executionHost) ? Laptop : Server
-  const KindIcon = card.kind === 'resident' ? InfinityIcon : BriefcaseBusiness
+  const KindIcon = card.kind === 'resident' ? InfinityIcon : ClipboardList
   return (
     <article
       data-pulse={pulsing ? 'true' : undefined}
