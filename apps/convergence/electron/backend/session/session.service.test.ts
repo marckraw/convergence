@@ -570,13 +570,57 @@ describe('SessionService', () => {
     ).toEqual([['/clear', 'queued']])
   })
 
+  it('leaves the target armed when its opener is refused as busy (MAR-2888 lap 4)', async () => {
+    // The dropped baton this ticket had not yet saved: the OLD one.
+    //
+    // Every opener carries `muteRelays: true`, and the mute is written to the
+    // session row BEFORE the send that can refuse it. So a hail arriving at a
+    // target whose provider is mid-turn wrote `relays_muted = 1`, took the
+    // busy refusal, queued its opener correctly — and left the mute standing.
+    // The turn the target was ALREADY carrying then settled quiet: every
+    // armed wire recorded `skipped-muted`, no hail fired, and the ledger said
+    // a human had asked for silence. This run saves the new baton; it must
+    // not drop the one already in flight.
+    const { service: own, sessionId, emit } = await relayTargetRefusing('busy')
+    const settles: SessionSettledEvent[] = []
+    own.onSessionSettled((event) => settles.push(event))
+    // The row must be `completed` so the DOOR passes and the provider's own
+    // refusal is the one that lands (lap 3's measurement).
+    getDatabase()
+      .prepare("UPDATE sessions SET status = 'completed' WHERE id = ?")
+      .run(sessionId)
+
+    const receipt = await own.sendMessageWithOpener(sessionId, {
+      opener: '/clear',
+      text: 'RUN100 round 1, lap 1 of 6',
+    })
+    expect(receipt.openerQueued).toBe(true)
+
+    // The turn the target was already carrying reports itself, then comes to
+    // rest. Both beats, because the record read `completed` while the
+    // provider was mid-turn -- which is the MAR-2888 condition itself.
+    emit({ kind: 'session.patch', patch: { status: 'running' } })
+    emit({ kind: 'session.patch', patch: { status: 'completed' } })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // Its settle is WORK, not quiet: the wires fire and the loop continues.
+    expect(settles.map((event) => event.relaysMuted)).toEqual([false])
+  })
+
   it('puts a queued row back in line when the drain meets a busy provider (MAR-2888 lap 3)', async () => {
-    // The third site of the same doctrine, and the one that still reproduces.
-    // The drain fires on a turn's completion — the exact moment a Codex
-    // app-server may still be reconnecting — patches the row to
-    // `dispatching`, and its send throws busy. The catch then treats the row
-    // as an attempt that FAILED, so the baton it was carrying dies one beat
-    // before it would have gone out.
+    // The third site of the same doctrine. The drain patches the row to
+    // `dispatching` and sends; a refusal there used to be read as an attempt
+    // that FAILED, so the baton it was carrying died one beat before it went
+    // out.
+    //
+    // SYNTHETIC BY CONSTRUCTION, and worth saying so. A completion cannot
+    // itself produce this refusal on Codex — `connecting` is nulled before
+    // the turn is sent, so every `completed` is processed with nothing to
+    // refuse. The live route is `redeliverQueuedInput` (Deliver now while a
+    // turn is connecting). This test drives the drain directly with a
+    // provider that refuses, because what is being pinned is the drain's
+    // ANSWER to a busy refusal, not the one path that delivers one.
     //
     // "Not yet" is not "broken": the row goes back in line and the next turn
     // boundary tries it again. `dispatchNextQueuedInput` already has this

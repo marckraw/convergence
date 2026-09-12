@@ -1764,10 +1764,12 @@ export class SessionService {
       // the opposite -- there IS a turn, and its completion will drain them.
       //
       // Since MAR-2971 the sweep only fails rows it ATTEMPTED, so a `queued`
-      // row already survives this path. What this guard protects is a row
-      // caught mid-`dispatching` by a concurrent send, and it states the
-      // rule where the rule belongs rather than relying on the sweep's
-      // narrowness to keep being narrow.
+      // row already survives this path, and the drain is synchronous end to
+      // end -- no row is `dispatching` while another send runs. So this
+      // guard has no live path on this base: it is a PIN, stating the rule
+      // where the rule belongs so that widening the sweep back out cannot
+      // quietly re-create the bug the sweep's narrowness is currently
+      // hiding.
       if (!isProviderBusyError(error)) {
         this.terminateQueueUnlessCarryingATurn(
           sessionId,
@@ -2401,22 +2403,28 @@ export class SessionService {
       ? this.getRowById(session.id)?.relays_muted
       : undefined
     this.requestRelayMute(input.session.id, input.input.muteRelays)
-    const disposition = handle.sendMessage(
-      augmentedText,
-      attachments,
-      input.input.skillSelections,
-      {
-        deliveryMode,
-        interactionResponse: input.input.interactionResponse,
-        providerAccountId: input.input.providerAccountId,
-      },
-    )
+    let disposition: void | 'queue-follow-up'
+    try {
+      disposition = handle.sendMessage(
+        augmentedText,
+        attachments,
+        input.input.skillSelections,
+        {
+          deliveryMode,
+          interactionResponse: input.input.interactionResponse,
+          providerAccountId: input.input.providerAccountId,
+        },
+      )
+    } catch (error) {
+      // The mute was borrowed for a send that never happened. Give it back
+      // before the refusal leaves, or the turn already under way settles
+      // quiet on somebody else's behalf (MAR-2888 lap 4).
+      this.restoreRelayMute(session.id, previousMute)
+      throw error
+    }
     if (disposition === 'queue-follow-up') {
       // This input belongs to the next turn, including its relay choice.
-      if (previousMute === 0)
-        this.db
-          .prepare('UPDATE sessions SET relays_muted = 0 WHERE id = ?')
-          .run(session.id)
+      this.restoreRelayMute(session.id, previousMute)
       this.queuedInputs.enqueue(
         session.id,
         { ...input.input, dispatchId: input.dispatchId },
@@ -2507,6 +2515,31 @@ export class SessionService {
    * `completed`. So the question is "is there a handle, and has its turn not
    * ended yet", plus a send already on its way, which is a turn too.
    */
+  /**
+   * Puts back the relay mute a send was about to borrow (MAR-2888 lap 4).
+   *
+   * A relay opener always asks for quiet, and the mute is written to the
+   * session row BEFORE the send that can refuse it. When the refusal is
+   * "mid-turn", the turn the target was ALREADY carrying is still running --
+   * and it would settle quiet, recording `skipped-muted` on every armed wire
+   * and raising no hail, as though a human had asked for silence. The baton
+   * this feature saves is the new one; it must not drop the one in flight.
+   *
+   * `undefined` means the send never asked for quiet, so there is nothing to
+   * put back; `1` means the session was already muted by somebody else's
+   * request, which is not this send's to undo. Only a borrowed mute is
+   * returned.
+   */
+  private restoreRelayMute(
+    sessionId: string,
+    previousMute: number | undefined,
+  ): void {
+    if (previousMute !== 0) return
+    this.db
+      .prepare('UPDATE sessions SET relays_muted = 0 WHERE id = ?')
+      .run(sessionId)
+  }
+
   private isTurnUnderWayOrArriving(session: Session): boolean {
     if (this.dispatches.isDispatching(session.id)) return true
     if (!this.activeHandles.has(session.id)) return false
@@ -3753,17 +3786,29 @@ export class SessionService {
         this.pendingTurnAccountIds.set(sessionId, item.providerAccountId)
         // The mute the user chose when they wrote this, not the composer's
         // state now -- the toggle reset the moment they pressed send.
+        const previousMute = item.relaysMuted
+          ? this.getRowById(sessionId)?.relays_muted
+          : undefined
         this.requestRelayMute(sessionId, item.relaysMuted)
-        const disposition = handle.sendMessage(
-          augmentedText,
-          attachments,
-          item.skillSelections,
-          {
-            deliveryMode: 'normal',
-            queuedInputId: item.id,
-            providerAccountId: item.providerAccountId,
-          },
-        )
+        let disposition: void | 'queue-follow-up'
+        try {
+          disposition = handle.sendMessage(
+            augmentedText,
+            attachments,
+            item.skillSelections,
+            {
+              deliveryMode: 'normal',
+              queuedInputId: item.id,
+              providerAccountId: item.providerAccountId,
+            },
+          )
+        } catch (error) {
+          // Same rule on the drain's own send: a mute borrowed for a delivery
+          // that was refused goes back, so the turn already under way is not
+          // silenced by a beat that never happened (MAR-2888 lap 4).
+          this.restoreRelayMute(sessionId, previousMute)
+          throw error
+        }
         if (disposition === 'queue-follow-up') {
           // Keep its original row and ordering; the next completion retries it.
           this.queuedInputs.patch(item.id, 'queued')
@@ -3812,13 +3857,19 @@ export class SessionService {
       this.attachDispatchToTurn(sessionId, item.dispatchId)
       this.queuedInputs.patch(item.id, 'sent')
     } catch (err) {
-      // "Not yet" is not "broken" (MAR-2888). The drain fires the instant a
-      // turn completes, which is exactly when a Codex app-server may still
-      // be reconnecting, so its send can be refused as busy. That row was
-      // attempted, but the answer is about timing: it goes back in line and
-      // the next turn boundary tries it again, the same shape this function
-      // already uses for a provider that answers `queue-follow-up`. Failing
-      // it here would kill a baton one beat before it went out.
+      // "Not yet" is not "broken" (MAR-2888). The row was attempted, but the
+      // answer is about timing: it goes back in line and the next turn
+      // boundary tries it again -- the shape this function already uses for
+      // a provider that answers `queue-follow-up`. Failing it here would
+      // kill a baton one beat before it went out.
+      //
+      // The reachable trigger is `redeliverQueuedInput` -- Deliver now while
+      // a turn is connecting -- and that turn's own completion re-drains the
+      // row. NOT a completion itself, which is what an earlier draft of this
+      // comment claimed: `setStatus` writes `currentStatus` before it emits,
+      // the emitter is synchronous, and `connecting` is nulled in a `finally`
+      // before `sendCodexTurn`, so every Codex `completed` is processed with
+      // `connecting === null` and no refusal to give.
       if (isProviderBusyError(err)) {
         this.queuedInputs.patch(item.id, 'queued')
         return
