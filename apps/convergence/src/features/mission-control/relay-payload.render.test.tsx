@@ -6,6 +6,7 @@ import { Markdown } from '@/shared/ui/markdown.container'
 // (tsconfig.node.json ships no DOM lib), and this format can only be judged
 // once rendered. So the function is imported to where a renderer lives rather
 // than a renderer dragged to where the function lives.
+import { composeErrandBrief } from '../../../electron/backend/relay/errand-brief.pure'
 import { compileRelayPayload } from '../../../electron/backend/relay/relay.pure'
 
 /**
@@ -143,5 +144,38 @@ describe('the round stamp, rendered', () => {
     const { container } = renderPayload(null, MESSAGE, 3)
 
     expect(container.textContent).toBe(MESSAGE)
+  })
+})
+
+describe('the errand identity card, rendered', () => {
+  it('keeps the delivery and payload outside the role card quote (mutation: join brief blocks with a single newline)', () => {
+    const { container } = render(
+      <Markdown
+        content={composeErrandBrief(
+          {
+            roleCard: 'Role:\n> You are the reviewer.',
+            returnWire: { instruction: '' },
+          },
+          'Fable',
+          MESSAGE,
+        )}
+      />,
+    )
+    const delivery = leafHolding(
+      container,
+      'When you finish, your last message is delivered to Fable — make it the report.',
+    )
+    expect({
+      quotedRole:
+        leafHolding(container, 'You are the reviewer.').closest(
+          'blockquote',
+        ) !== null,
+      deliveryOutsideQuote: delivery.closest('blockquote') === null,
+      separatePayload: delivery !== leafHolding(container, MESSAGE),
+    }).toEqual({
+      quotedRole: true,
+      deliveryOutsideQuote: true,
+      separatePayload: true,
+    })
   })
 })

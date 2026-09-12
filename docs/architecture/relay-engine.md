@@ -707,6 +707,13 @@ the spawn path uses `RelayService.create` to connect it back to the source:
 `settled`, `hail`, armed, with no condition. Null creates no return connection.
 New local recipes default reporting on; new remote recipes default it off.
 
+`composeErrandBrief` puts the role card before the compiled payload, with blank
+lines separating the blocks. With a return connection, one intervening line
+names where the final message is delivered; Any finish has no baton word, so
+composition generates no `BATON:` instruction. Without a return connection,
+there is no delivery line. A null role card preserves the payload byte for
+byte. The spawn ledger preview describes this composed first message.
+
 The recipe and composer share the work-address slot in
 `entities/execution-host`. The composer adapts its execution-bar view into
 the entity's structural inputs. The recipe derives both its visible address

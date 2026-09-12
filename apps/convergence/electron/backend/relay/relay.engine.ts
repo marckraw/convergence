@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import { composeErrandBrief } from './errand-brief.pure'
 import type { SessionStatus } from '../provider/provider.types'
 import type {
   CreateSessionInput,
@@ -55,6 +56,7 @@ import type {
 export interface RelaySessionGateway {
   getById(sessionId: string): {
     id: string
+    name: string
     status: SessionStatus
     providerId: string
     /** Remote sessions cannot carry a local account (PA10). */
@@ -1129,6 +1131,14 @@ export class RelayEngine {
       return
     }
 
+    const brief = composeErrandBrief(
+      spec,
+      this.sessions.getById(relay.sourceSessionId)?.name ??
+        'the source conversation',
+      payload,
+    )
+    payloadPreview = buildRelayHopPreview(null, brief)
+
     let spawnedSessionId: string
     try {
       const created = this.sessions.create({
@@ -1190,7 +1200,7 @@ export class RelayEngine {
         this.onRelaysChanged?.()
       }
       const dispatchId = await this.sessions.start(spawnedSessionId, {
-        text: payload,
+        text: brief,
         providerAccountId: this.resolveSpawnAccountId(spec),
       })
       record('spawned', { spawnedSessionId, payloadPreview, dispatchId })

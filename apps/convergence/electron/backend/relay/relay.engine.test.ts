@@ -36,6 +36,7 @@ interface FakeGateway extends RelaySessionGateway {
 }
 
 function createGateway(overrides: {
+  names?: Record<string, string>
   lastMessages?: Record<string, string | null>
   statuses?: Record<string, SessionStatus>
   missing?: string[]
@@ -75,6 +76,7 @@ function createGateway(overrides: {
         ? null
         : {
             id: sessionId,
+            name: overrides.names?.[sessionId] ?? sessionId,
             status: overrides.statuses?.[sessionId] ?? 'completed',
             providerId: overrides.providerIds?.[sessionId] ?? 'codex',
             executionHost: overrides.executionHosts?.[sessionId] ?? 'local',
@@ -2873,6 +2875,31 @@ describe('RelayEngine', () => {
         await sessions.disposeAll()
       }
     })
+
+    it.each([true, false])(
+      'starts on the identity card and compiled payload, return=%s (mutation: bypass brief composition or use the errand name)',
+      async (returning) => {
+        spawnWire('s1', {
+          roleCard: 'You are the reviewer.',
+          returnWire: returning ? { instruction: 'Return the report' } : null,
+        })
+        const gateway = createGateway({
+          names: { s1: 'Studio — Fable' },
+          lastMessages: { s1: 'Review this branch.' },
+        })
+        await createEngine(gateway).handleSettle(settled('s1'))
+        expect(gateway.started[0].text).toBe(
+          returning
+            ? 'You are the reviewer.\n\nWhen you finish, your last message is delivered to Studio — Fable — make it the report.\n\nReview this branch.'
+            : 'You are the reviewer.\n\nReview this branch.',
+        )
+        expect(relays.listHops('c1')[0].payloadPreview).toBe(
+          returning
+            ? 'You are the reviewer. When you finish, your last message is delivered to Studio — Fable — make it the report. Review this branch.'
+            : 'You are the reviewer. Review this branch.',
+        )
+      },
+    )
 
     it.each([true, false])(
       'creates a return wire only when requested: %s (mutation: omit or invent return wire)',
