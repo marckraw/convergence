@@ -1416,11 +1416,11 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                         patch.returnWire === undefined
                           ? { returnWire: null }
                           : {}),
-                        returnWireDefaultPending:
-                          patch.executionHost !== undefined ||
-                          patch.returnWire !== undefined
-                            ? false
-                            : current.recipient.spec.returnWireDefaultPending,
+                        ...(current.recipient.spec.returnWireDefaultPending &&
+                        (patch.executionHost !== undefined ||
+                          patch.returnWire !== undefined)
+                          ? { returnWireDefaultPending: false }
+                          : {}),
                         returnInstructionDraft:
                           patch.returnWire?.instruction ??
                           current.recipient.spec.returnInstructionDraft,

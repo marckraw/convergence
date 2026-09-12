@@ -23,7 +23,11 @@ export function resolveConnectionWorkAddress(
         notice:
           matching.label !== recorded.label
             ? `This recorded place was renamed to ${matching.label}.`
-            : offered.notice,
+            : recorded.mode === 'project' &&
+                matching.address.mode === 'project' &&
+                recorded.workingDirectory !== matching.address.workingDirectory
+              ? `This recorded place moved to ${matching.address.workingDirectory}.`
+              : offered.notice,
       }
   }
   const fact = resolveWorkAddressSlot({

@@ -91,3 +91,26 @@ it('keeps a renamed Project selectable by id (mutation: compare by label or work
     ]),
   })
 })
+
+it('reports a same-id Project moved to another directory (mutation: omit moved notice)', () => {
+  expect(
+    resolveConnectionWorkAddress({
+      ...input,
+      projects: {
+        status: 'landed',
+        unreachableReason: null,
+        projects: [
+          {
+            id: 'gone',
+            name: 'Recorded',
+            workingDirectory: '/new',
+            origin: null,
+          },
+        ],
+      },
+    }),
+  ).toMatchObject({
+    mode: 'choosing',
+    notice: 'This recorded place moved to /new.',
+  })
+})

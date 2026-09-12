@@ -1,4 +1,4 @@
-import { REMOTE_SPAWN_PLACE_REQUIRED } from '../../../electron/backend/relay/relay.pure'
+import { REMOTE_SPAWN_PLACE_REQUIRED } from '@/shared/lib/spawn-spec.pure'
 import {
   buildFallbackCodexDescriptor,
   buildFallbackPiDescriptor,

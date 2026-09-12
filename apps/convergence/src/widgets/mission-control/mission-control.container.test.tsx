@@ -27,6 +27,7 @@ import type {
   SessionSummary,
 } from '@/entities/session'
 import type { ComposerSessionContext } from '@/features/composer'
+import { EMPTY_SPAWN_SPEC } from '@/features/mission-control'
 import { MissionControl } from './mission-control.container'
 
 import type { ReactFlowProps, ReactFlowInstance } from '@xyflow/react'
@@ -679,6 +680,53 @@ describe('MissionControl', () => {
     async function switchToCanvas() {
       fireEvent.click(await screen.findByRole('button', { name: 'Canvas' }))
     }
+    it('a stored recipe stays clean after reporting Off then On (mutations: unconditional birth-key write; enable clean Save)', async () => {
+      seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])
+      seed([makeSession({ id: 'a', name: 'Fable' })], [CLAUDE_CODE])
+      seedRelays([
+        makeRelay({
+          id: 'stored-spawn',
+          action: 'spawn',
+          spawnSpec: {
+            ...EMPTY_SPAWN_SPEC,
+            providerId: 'claude-code',
+            name: 'Errand',
+            returnWire: { instruction: 'Report' },
+          },
+        }),
+      ])
+      render(<MissionControl />)
+      await switchToCanvas()
+      await waitFor(() =>
+        expect(
+          flow.props?.edges?.some((edge) => edge.id === 'stored-spawn'),
+        ).toBe(true),
+      )
+      // jsdom has no measured edge DOM: dispatch React Flow's public click callback.
+      act(() =>
+        flow.props!.onEdgeClick!(
+          {} as Parameters<NonNullable<ReactFlowProps['onEdgeClick']>>[0],
+          flow.props!.edges!.find((edge) => edge.id === 'stored-spawn')!,
+        ),
+      )
+      const panel = within(
+        await screen.findByRole('region', { name: 'Connection' }),
+      )
+      const report = panel.getByRole('switch', {
+        name: 'Report back to Fable when it finishes',
+      })
+      fireEvent.click(report)
+      fireEvent.click(report)
+      expect({
+        saved: panel.queryByText('Saved · on') !== null,
+        canSave: !(
+          panel.getByRole('button', {
+            name: 'Save changes',
+          }) as HTMLButtonElement
+        ).disabled,
+      }).toEqual({ saved: true, canSave: false })
+    })
+
     it.each([
       [true, false],
       [false, false],
@@ -983,13 +1031,17 @@ describe('MissionControl', () => {
           }).toEqual({
             place: 'Project Recorded',
             saved: true,
-            ready: true,
+            ready: false,
             notice:
               catalogStatus === 'landed'
                 ? 'This recorded place is no longer offered by the endpoint.'
                 : 'The recorded place is kept while the endpoint’s choices are unavailable.',
           }),
         )
+        // Make a real edit before saving the unchanged, unavailable place.
+        fireEvent.change(panel.getByLabelText('Standing instructions'), {
+          target: { value: 'Keep the recorded place.' },
+        })
         updateRelay.mockImplementation(async (id, input) =>
           makeRelay({ ...input, id }),
         )
@@ -2910,14 +2962,10 @@ describe('MissionControl', () => {
     })
 
     /**
-     * Selecting a stored connection by clicking its wire has NO test here on
-     * purpose, and this comment is the disclosure rather than a gap left
-     * quiet: React Flow renders no edge DOM under jsdom — edge geometry comes
-     * from measured handle positions the environment does not have — so there
-     * is nothing to click. What that path does once it fires IS pinned: the
-     * stored wire becomes a draft in `connection-draft.pure.test.ts`, and the
-     * draft reaches the screen in `connection-inspector.render.test.tsx`. The
-     * click itself is on Marcin's QA list.
+     * React Flow renders no edge DOM under jsdom: its geometry depends on
+     * measured handle positions. The stored-recipe test above exercises the
+     * public edge-click callback and the real draft/panel path. Clicking the
+     * actual wire remains on Marcin's QA list.
      */
 
     it('opens a session from its node, like the card body does', async () => {

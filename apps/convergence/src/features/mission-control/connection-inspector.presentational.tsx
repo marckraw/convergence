@@ -562,7 +562,7 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
             type="button"
             variant="secondary"
             size="sm"
-            disabled={busy || problem !== null}
+            disabled={busy || problem !== null || (!isNew && !dirty)}
             onClick={onSave}
             className="h-8 px-3 text-[11px]"
           >
