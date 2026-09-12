@@ -15,6 +15,7 @@ import {
   NO_MID_RUN_INPUT_CAPABILITY,
 } from '../provider/provider-descriptor.pure'
 import { ProviderRegistry } from '../provider/provider-registry'
+import { ProviderBusyError } from '../provider/provider.types'
 import { LocalExecutionHost } from '../provider/execution-host/local-execution-host'
 import { ProviderSessionEmitter } from '../provider/provider-session.emitter'
 import type {
@@ -359,6 +360,123 @@ describe('SessionService', () => {
       timestamp,
     )
   }
+
+  /**
+   * A provider that refuses the way Codex does, on its OWN state (MAR-2888).
+   * `busy` is the typed refusal the queue can answer; `broken` is every other
+   * error, which must still end the delivery loudly.
+   */
+  function providerRefusing(kind: 'busy' | 'broken'): Provider {
+    const base = createTestProvider()
+    return {
+      ...base,
+      start: (config) => {
+        const handle = base.start(config)
+        return {
+          ...handle,
+          sendMessage: (...args) => {
+            const [text] = args
+            if (text === '/clear') {
+              throw kind === 'busy'
+                ? new ProviderBusyError(
+                    'Wait for the current turn to finish before clearing the conversation.',
+                  )
+                : new Error('the provider went away')
+            }
+            return handle.sendMessage(...args)
+          },
+        }
+      },
+    }
+  }
+
+  async function relayTargetRefusing(kind: 'busy' | 'broken') {
+    const registryOwn = new ProviderRegistry()
+    registryOwn.register(providerRefusing(kind))
+    const own = new SessionService(
+      getDatabase(),
+      new LocalExecutionHost(registryOwn),
+    )
+    const session = own.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: null,
+      effort: null,
+      name: 'busy target',
+    })
+    // A live handle, and a row that does NOT say running-with-a-handle: the
+    // exact gap MAR-2888 fell through. `isCarryingATurn` says "not busy" and
+    // the provider says otherwise.
+    await own.start(session.id, { text: 'first turn' })
+    return { service: own, sessionId: session.id }
+  }
+
+  it('queues a relay opener the provider refuses as busy, instead of dropping it (R1, MAR-2888)', async () => {
+    // The 09-09 failure. `isCarryingATurn` reads Convergence's record; Codex
+    // refuses on its own `running || connecting`. A target whose row was not
+    // running-with-a-handle but whose app-server was mid-turn took the opener
+    // directly, threw, and the delivery died with a hail while nothing
+    // retried — a baton on the floor.
+    const { service: own, sessionId } = await relayTargetRefusing('busy')
+
+    const receipt = await own.sendMessageWithOpener(sessionId, {
+      opener: '/clear',
+      text: 'RUN100 round 1, lap 1 of 6',
+    })
+
+    // Not dropped: both beats are waiting, each with its receipt.
+    expect(receipt.openerQueued).toBe(true)
+    expect(
+      own.getQueuedInputs(sessionId).map((item) => [item.text, item.state]),
+    ).toEqual([
+      ['/clear', 'queued'],
+      ['RUN100 round 1, lap 1 of 6', 'queued'],
+    ])
+    expect(receipt.openerDispatchId).toBeTruthy()
+    expect(receipt.payloadDispatchId).not.toBe(receipt.openerDispatchId)
+  })
+
+  it('still fails a relay opener the provider refuses for any other reason (R1, MAR-2888)', async () => {
+    // The other half, and the one a blanket catch would eat: "the target is
+    // mid-turn" is the only failure a queue answers. Everything else means
+    // the delivery broke, and a broken delivery that waited quietly would be
+    // the silent drop this run exists to remove.
+    const { service: own, sessionId } = await relayTargetRefusing('broken')
+
+    await expect(
+      own.sendMessageWithOpener(sessionId, {
+        opener: '/clear',
+        text: 'RUN100 round 1, lap 1 of 6',
+      }),
+    ).rejects.toThrow('the provider went away')
+  })
+
+  it('queues a plain relay delivery the provider refuses as busy (R1, MAR-2888)', async () => {
+    // The no-opener path. `sendMessage` stays loud for the user — a person
+    // clearing a conversation mid-turn should be told no, not have it happen
+    // later — so the answer lives at the relay's own door.
+    const { service: own, sessionId } = await relayTargetRefusing('busy')
+
+    const delivery = await own.deliverRelayMessage(sessionId, {
+      text: '/clear',
+    })
+
+    expect(delivery.queued).toBe(true)
+    expect(
+      own.getQueuedInputs(sessionId).map((item) => [item.text, item.state]),
+    ).toEqual([['/clear', 'queued']])
+  })
+
+  it("leaves the user's own send loud when the provider is busy (R1, MAR-2888)", async () => {
+    // The door that must NOT change. Nobody is waiting on a relay's moment;
+    // a person pressing send is.
+    const { service: own, sessionId } = await relayTargetRefusing('busy')
+
+    await expect(
+      own.sendMessage(sessionId, { text: '/clear' }),
+    ).rejects.toThrow('Wait for the current turn to finish')
+  })
 
   it('RUN57 local handle broadcasts attach and release without a provider event — remove set/release notify turns red', async () => {
     registry.register({

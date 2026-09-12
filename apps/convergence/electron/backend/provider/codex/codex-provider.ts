@@ -58,6 +58,7 @@ import type {
   ProviderModelOption,
   ReasoningEffort,
 } from '../provider.types'
+import { ProviderBusyError } from '../provider.types'
 import {
   createUnavailableContextWindow,
   deriveCodexContextWindow,
@@ -2638,7 +2639,14 @@ export class CodexProvider implements Provider {
         }
         if (text === CONVERSATION_RESET_COMMAND) {
           if (currentStatus === 'running' || connecting) {
-            throw new Error(
+            // Typed, because this refusal is a FACT about timing rather than
+            // a broken delivery, and only the provider knows it: Convergence's
+            // record can read `idle` for a session whose app-server is
+            // mid-turn or still reconnecting. A relay hail that took this as a
+            // failure dropped a baton and hailed a chair about it
+            // (MAR-2888). The sentence is unchanged -- it is what the user
+            // reads -- and the type is what a caller may branch on.
+            throw new ProviderBusyError(
               'Wait for the current turn to finish before clearing the conversation.',
             )
           }

@@ -85,6 +85,39 @@ describe('the trail row, rendered', () => {
     expect(screen.getByText('round 13')).toBeInTheDocument()
   })
 
+  it('says a queued hop is waiting on a busy target (R2/R4, MAR-2888)', () => {
+    // The reason has to reach the SCREEN, not only the row: `queued` on its
+    // own reads as "sent, pending", and the whole point of MAR-2888 is that
+    // Marcin could not tell a delivery waiting politely from one that fell on
+    // the floor.
+    renderHop({
+      outcome: 'queued',
+      error: 'Waiting behind a running turn at the target.',
+    })
+
+    expect(
+      screen.getByText('Waiting behind a running turn at the target.'),
+    ).toBeInTheDocument()
+  })
+
+  it('shows a failed delivery its own error on the canvas (R4, MAR-2888)', () => {
+    // The 09-09 rows read `delivery-failed` with the provider's sentence, and
+    // that sentence is the only thing on the canvas that said what happened.
+    // It stays rendered: this run makes a busy target stop producing these,
+    // it does not make a genuinely broken delivery quieter.
+    renderHop({
+      outcome: 'error',
+      error:
+        'Wait for the current turn to finish before clearing the conversation.',
+    })
+
+    expect(
+      screen.getByText(
+        'Wait for the current turn to finish before clearing the conversation.',
+      ),
+    ).toBeInTheDocument()
+  })
+
   it('shows neither on a row written before batons existed', () => {
     // Null is the honest answer for every old row: a zero would claim it knew
     // something it never recorded.

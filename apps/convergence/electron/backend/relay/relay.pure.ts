@@ -796,6 +796,20 @@ export function roundBudgetMessage(cap: number): string {
 }
 
 /**
+ * Why a hop is waiting rather than delivered (MAR-2888).
+ *
+ * `queued` on its own reads as "sent, pending" on the canvas, which is true
+ * of a payload behind its own opener and equally true of one sitting behind
+ * somebody else's turn -- and those want different patience from a reader.
+ * It does not name the target: the hop row already renders which session the
+ * hop landed in, and reaching for the name here would widen the engine's view
+ * of a session for a word the canvas is already showing.
+ */
+export function busyTargetReason(): string {
+  return 'Waiting behind a running turn at the target.'
+}
+
+/**
  * How much of the refused line the ledger quotes back. Long enough to show a
  * declaration and its formatting, short enough to stay one readable sentence.
  */

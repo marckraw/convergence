@@ -4,6 +4,7 @@ import {
   CONTEXT_RESTARTED_NOTE_TEXT,
   SESSION_RESTARTED_EVENT_TYPE,
 } from '../session-restart.pure'
+import { ProviderBusyError } from '../provider.types'
 import { CodexProvider } from './codex-provider'
 import { CodexServerHostRegistry } from './codex-server-host'
 import {
@@ -135,11 +136,21 @@ describe('Codex conversation reset', () => {
     await vi.waitUntil(
       () => bed.statuses.at(-1) === 'running' && bed.tokens.length === 1,
     )
-    expect(() =>
+    // Typed, not just worded (MAR-2888). A relay delivery has to tell "the
+    // target is mid-turn, ask again when the turn ends" apart from "the
+    // delivery broke", and the sentence cannot carry that: it is user-facing,
+    // written in two places, and a caller that greps it starts failing
+    // silently the day it is reworded.
+    let refusal: unknown
+    try {
       bed.handle.sendMessage('/clear', undefined, undefined, {
         deliveryMode: 'steer',
-      }),
-    ).toThrow(
+      })
+    } catch (error) {
+      refusal = error
+    }
+    expect(refusal).toBeInstanceOf(ProviderBusyError)
+    expect((refusal as Error).message).toBe(
       'Wait for the current turn to finish before clearing the conversation.',
     )
     await new Promise((resolve) => setTimeout(resolve, 30))

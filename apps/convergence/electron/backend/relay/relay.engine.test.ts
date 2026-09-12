@@ -47,6 +47,10 @@ function createGateway(overrides: {
     sessionId: string,
     input: { opener: string; text: string },
   ) => Promise<void>
+  /** The opener is waiting behind a turn rather than under way (MAR-2888). */
+  openerQueued?: boolean
+  /** The plain delivery was queued because the provider said it was busy. */
+  deliveryQueued?: boolean
   create?: () => { id: string }
   start?: (sessionId: string) => Promise<void>
 }): FakeGateway {
@@ -115,7 +119,26 @@ function createGateway(overrides: {
         queuedBehindOpener: true,
         dispatchId: payloadDispatchId,
       })
-      return { openerDispatchId, payloadDispatchId }
+      return {
+        openerDispatchId,
+        payloadDispatchId,
+        openerQueued: overrides.openerQueued ?? false,
+      }
+    },
+    // The relay's delivery door: a busy target answers with the queue rather
+    // than a failure (MAR-2888).
+    deliverRelayMessage: async (sessionId, input) => {
+      if (overrides.sendMessage) {
+        await overrides.sendMessage(sessionId, input)
+      }
+      const dispatchId = mintReceipt()
+      sent.push({
+        sessionId,
+        text: input.text,
+        providerAccountId: input.providerAccountId,
+        dispatchId,
+      })
+      return { dispatchId, queued: overrides.deliveryQueued ?? false }
     },
     create: (input) => {
       created.push(input as unknown as Record<string, unknown>)
@@ -1733,6 +1756,57 @@ describe('RelayEngine', () => {
 
     expect(gateway.sent).toHaveLength(1)
     expect(relays.listHops('c1')[0].outcome).toBe('queued')
+  })
+
+  it('says the hop is waiting on a busy target, not merely queued (R2, MAR-2888)', async () => {
+    // `queued` alone reads as "sent, pending" on the canvas — true of a
+    // payload behind its own opener and equally true of one sitting behind
+    // somebody else's turn, which want different patience from a reader.
+    // This is the 09-09 shape: the row said `completed`, the provider said
+    // mid-turn, and the delivery used to die here with a hail.
+    wire()
+    const gateway = createGateway({
+      statuses: { s2: 'completed' },
+      deliveryQueued: true,
+    })
+
+    await createEngine(gateway).handleSettle(settled('s1'))
+
+    expect(relays.listHops('c1')[0]).toMatchObject({
+      outcome: 'queued',
+      error: 'Waiting behind a running turn at the target.',
+    })
+  })
+
+  it('says why an opener refused as busy is waiting (R2, MAR-2888)', async () => {
+    // The hail path. The opener itself is what the provider refused, so the
+    // payload behind it is waiting on a turn rather than on its own opener.
+    wire('s1', 's2', true, null, '/clear')
+    const gateway = createGateway({
+      statuses: { s2: 'completed' },
+      openerQueued: true,
+    })
+
+    await createEngine(gateway).handleSettle(settled('s1'))
+
+    expect(relays.listHops('c1')[0]).toMatchObject({
+      outcome: 'queued',
+      error: 'Waiting behind a running turn at the target.',
+    })
+  })
+
+  it('leaves a plain delivered hop with no reason to explain (R2, MAR-2888)', async () => {
+    // The other side of the same rule: a hop that actually went out says
+    // nothing, so the reason on the canvas always means something.
+    wire()
+    const gateway = createGateway({ statuses: { s2: 'completed' } })
+
+    await createEngine(gateway).handleSettle(settled('s1'))
+
+    expect(relays.listHops('c1')[0]).toMatchObject({
+      outcome: 'delivered',
+      error: null,
+    })
   })
 
   it('does nothing at all when no wire leaves the session', async () => {

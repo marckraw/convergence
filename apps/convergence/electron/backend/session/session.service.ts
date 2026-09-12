@@ -40,6 +40,10 @@ import type {
   ProviderContextManagementResult,
 } from '../provider/provider.types'
 import {
+  isProviderBusyError,
+  ProviderBusyError,
+} from '../provider/provider.types'
+import {
   getMidRunInputCapabilityForProviderId,
   providerSupportsConversationReset,
   parseReasoningEffort,
@@ -1732,7 +1736,15 @@ export class SessionService {
         this.activeHandles.has(sessionId) ||
         this.dispatches.isDispatching(sessionId)
       ) {
-        throw new Error(
+        // Typed for the same reason the provider's own refusal is
+        // (MAR-2888): a relay delivery must be able to tell "not now" from
+        // "broken", and this door says "not now". Note what it actually
+        // reads, though -- a handle being ATTACHED, which for a resident
+        // session outlives its turn -- so an idle resident target refuses a
+        // `/clear` with a sentence about a turn that is not running. The
+        // queue is the right answer either way; the predicate is Fable's
+        // call, and it is named in the report.
+        throw new ProviderBusyError(
           'Wait for the current turn to finish before clearing the conversation.',
         )
       }
@@ -2087,13 +2099,17 @@ export class SessionService {
   async sendMessageWithOpener(
     id: string,
     input: SendMessageInput & { opener: string },
-  ): Promise<{ openerDispatchId: string; payloadDispatchId: string }> {
+  ): Promise<{
+    openerDispatchId: string
+    payloadDispatchId: string
+    /** True when the opener is WAITING behind a turn rather than under way. */
+    openerQueued: boolean
+  }> {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
 
-    let openerDispatchId: string
-    if (this.isCarryingATurn(session)) {
-      openerDispatchId = randomUUID()
+    const queueOpener = (): string => {
+      const dispatchId = randomUUID()
       this.queuedInputs.enqueue(
         id,
         {
@@ -2101,17 +2117,41 @@ export class SessionService {
           providerAccountId: input.providerAccountId ?? null,
           skipContextInjection: true,
           muteRelays: true,
-          dispatchId: openerDispatchId,
+          dispatchId,
         },
         'follow-up',
       )
+      return dispatchId
+    }
+
+    let openerDispatchId: string
+    let openerQueued = true
+    if (this.isCarryingATurn(session)) {
+      openerDispatchId = queueOpener()
     } else {
-      openerDispatchId = await this.sendMessage(id, {
-        text: input.opener,
-        providerAccountId: input.providerAccountId,
-        skipContextInjection: true,
-        muteRelays: true,
-      })
+      // TWO parties know whether this target is busy and they can disagree
+      // (MAR-2888). `isCarryingATurn` is the record's answer and it has just
+      // said no; the provider answers from state the record cannot see -- an
+      // app-server mid-turn, or still reconnecting -- and when it says no the
+      // answer is the SAME answer: queue the opener behind the turn that is
+      // actually running. Before this, that refusal ended the delivery, fired
+      // a `delivery-failed` hail, and nothing retried: a baton on the floor.
+      //
+      // Only this refusal. Every other error still leaves here, because
+      // "the target is mid-turn" is the one failure a queue can answer, and
+      // swallowing the rest would turn a broken delivery into a silent wait.
+      try {
+        openerDispatchId = await this.sendMessage(id, {
+          text: input.opener,
+          providerAccountId: input.providerAccountId,
+          skipContextInjection: true,
+          muteRelays: true,
+        })
+        openerQueued = false
+      } catch (error) {
+        if (!isProviderBusyError(error)) throw error
+        openerDispatchId = queueOpener()
+      }
     }
 
     const payloadDispatchId = randomUUID()
@@ -2124,7 +2164,56 @@ export class SessionService {
       },
       'follow-up',
     )
-    return { openerDispatchId, payloadDispatchId }
+    // Whether the opener is WAITING rather than under way, so the ledger can
+    // say why the hop is queued instead of leaving the reason to be guessed.
+    return { openerDispatchId, payloadDispatchId, openerQueued }
+  }
+
+  /**
+   * A relay's delivery door (MAR-2888).
+   *
+   * `sendMessage` is the user's door and must stay loud: a person clearing a
+   * conversation mid-turn should be told no, not have it happen later. A
+   * relay is the other case -- nobody is watching the moment, the work is a
+   * baton being handed on, and "the target is mid-turn" is an answer the
+   * queue already knows how to give. So the catch lives here, at the caller
+   * that wants it, rather than inside `sendMessage` where it would change
+   * what the UI does.
+   *
+   * Returns whether the payload is waiting, which is what the hop reports.
+   *
+   * LOCAL ONLY, and not by choice (R5, MAR-2888). A remote handle's
+   * `sendMessage` hands the text to `enqueueCommand`, which returns `void`
+   * and posts fire-and-forget: the daemon's refusal comes back later as a
+   * note and an attention change, never as a throw at the send site. So
+   * there is no remote refusal to type or to catch here, and a remote target
+   * mid-turn is still answered by the daemon's own queue rather than by this
+   * one. Closing that needs a refusal on the wire, which is the remote
+   * parity ticket's work, not a string match invented here.
+   *
+   * The Claude provider needs nothing: it has no conversation-reset command,
+   * so it has no busy refusal of this shape to raise.
+   */
+  async deliverRelayMessage(
+    id: string,
+    input: SendMessageInput,
+  ): Promise<{ dispatchId: string; queued: boolean }> {
+    try {
+      return { dispatchId: await this.sendMessage(id, input), queued: false }
+    } catch (error) {
+      if (!isProviderBusyError(error)) throw error
+      const dispatchId = randomUUID()
+      this.queuedInputs.enqueue(
+        id,
+        {
+          text: input.text,
+          providerAccountId: input.providerAccountId ?? null,
+          dispatchId,
+        },
+        'follow-up',
+      )
+      return { dispatchId, queued: true }
+    }
   }
 
   async compactContext(
