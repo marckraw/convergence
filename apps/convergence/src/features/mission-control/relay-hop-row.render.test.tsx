@@ -100,6 +100,22 @@ describe('the trail row, rendered', () => {
     ).toBeInTheDocument()
   })
 
+  it('stops explaining the wait once the hop has settled (MAR-2888 lap 2)', () => {
+    // The reason is about a state, not an event: once the turn ran and this
+    // hop settled, "waiting behind a running turn" describes something that
+    // has ended. A canvas still saying it would be telling Marcin to be
+    // patient about work that already landed.
+    renderHop({
+      outcome: 'queued',
+      error: 'Waiting behind a running turn at the target.',
+      settledAt: new Date().toISOString(),
+    })
+
+    expect(
+      screen.queryByText('Waiting behind a running turn at the target.'),
+    ).not.toBeInTheDocument()
+  })
+
   it('shows a failed delivery its own error on the canvas (R4, MAR-2888)', () => {
     // The 09-09 rows read `delivery-failed` with the provider's sentence, and
     // that sentence is the only thing on the canvas that said what happened.

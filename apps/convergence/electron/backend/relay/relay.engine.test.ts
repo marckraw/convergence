@@ -85,19 +85,6 @@ function createGateway(overrides: {
       overrides.lastMessages && sessionId in overrides.lastMessages
         ? overrides.lastMessages[sessionId]
         : 'Done. Ready for review.',
-    sendMessage: async (sessionId, input) => {
-      if (overrides.sendMessage) {
-        await overrides.sendMessage(sessionId, input)
-      }
-      const dispatchId = mintReceipt()
-      sent.push({
-        sessionId,
-        text: input.text,
-        providerAccountId: input.providerAccountId,
-        dispatchId,
-      })
-      return dispatchId
-    },
     // `sent` stays the ordered log of everything the target received, so the
     // two beats of an opener firing are provable by index.
     sendMessageWithOpener: async (sessionId, input) => {

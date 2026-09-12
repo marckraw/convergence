@@ -412,6 +412,80 @@ describe('SessionService', () => {
     return { service: own, sessionId: session.id }
   }
 
+  it('sends a /clear to an idle resident Claude session rather than queueing it forever (MAR-2888 lap 2)', async () => {
+    // The strand, as the failing input names it: a hail wire with opener
+    // `/clear` fired at an idle Claude Code session that has completed one
+    // turn this app lifetime.
+    //
+    // A resident handle is NOT released when its turn completes, so the row
+    // reads `completed` with a handle still attached. A door that asked "is a
+    // handle attached" called that busy; the refusal became a queued opener +
+    // payload; and the only automatic drain is a handle's own `completed`,
+    // which is never coming again. On master that hail failed loudly — with
+    // the door typed but the predicate unchanged it would wait forever.
+    const ownRegistry = new ProviderRegistry()
+    const base = createTestProvider()
+    const sent: string[] = []
+    ownRegistry.register({
+      ...base,
+      // `providerSupportsConversationReset` is keyed by id, so only a real
+      // reset-capable provider reaches the door at all.
+      id: 'claude-code',
+      describe: async () => ({
+        ...(await base.describe()),
+        id: 'claude-code',
+        supportsConversationReset: true,
+      }),
+      start: (config) => {
+        const handle = base.start(config)
+        return {
+          ...handle,
+          // Resident: this handle outlives its turn (Claude Code's shape).
+          resident: true,
+          sendMessage: (...args) => {
+            sent.push(args[0])
+            return handle.sendMessage(...args)
+          },
+        }
+      },
+    })
+    const own = new SessionService(
+      getDatabase(),
+      new LocalExecutionHost(ownRegistry),
+    )
+    const session = own.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'claude-code',
+      model: null,
+      effort: null,
+      name: 'idle resident',
+    })
+    await own.start(session.id, { text: 'first turn' })
+    // The turn ends; the handle stays.
+    getDatabase()
+      .prepare("UPDATE sessions SET status = 'completed' WHERE id = ?")
+      .run(session.id)
+    expect({
+      status: own.getById(session.id)?.status,
+      hasHandle: (
+        own as unknown as { activeHandles: Map<string, unknown> }
+      ).activeHandles.has(session.id),
+    }).toEqual({ status: 'completed', hasHandle: true })
+
+    const receipt = await own.sendMessageWithOpener(session.id, {
+      opener: '/clear',
+      text: 'RUN100 round 1, lap 1 of 6',
+    })
+
+    // The opener went out as its own turn; only the payload waits behind it.
+    expect(receipt.openerQueued).toBe(false)
+    expect(sent).toContain('/clear')
+    expect(own.getQueuedInputs(session.id).map((item) => item.text)).toEqual([
+      'RUN100 round 1, lap 1 of 6',
+    ])
+  })
+
   it('queues a relay opener the provider refuses as busy, instead of dropping it (R1, MAR-2888)', async () => {
     // The 09-09 failure. `isCarryingATurn` reads Convergence's record; Codex
     // refuses on its own `running || connecting`. A target whose row was not
@@ -466,6 +540,43 @@ describe('SessionService', () => {
     expect(
       own.getQueuedInputs(sessionId).map((item) => [item.text, item.state]),
     ).toEqual([['/clear', 'queued']])
+  })
+
+  it('still fails a plain relay delivery refused for any other reason (R1, MAR-2888 lap 2)', async () => {
+    // The sibling door's own `broken` case. Deleting the type check here was
+    // green: `deliverRelayMessage` would have swallowed every error and
+    // reported a wait, turning any broken delivery into a hop that sits
+    // `queued` forever with nobody told.
+    const { service: own, sessionId } = await relayTargetRefusing('broken')
+
+    await expect(
+      own.deliverRelayMessage(sessionId, { text: '/clear' }),
+    ).rejects.toThrow('the provider went away')
+  })
+
+  it('reports the wait when the RECORD is what said busy (R2, MAR-2888 lap 2)', async () => {
+    // `openerQueued` is the only thing the engine reads to decide whether the
+    // hop explains itself, and the record-says-busy branch is the older of
+    // the two paths into the queue -- so it has to answer the same way the
+    // provider-says-busy branch does. Mutating it to `false` here left every
+    // test green: the hop silently lost its reason on the commonest path.
+    const { service: own, sessionId } = await relayTargetRefusing('busy')
+    // A turn genuinely running, with its handle: `isCarryingATurn` says busy
+    // before the provider is ever asked.
+    getDatabase()
+      .prepare("UPDATE sessions SET status = 'running' WHERE id = ?")
+      .run(sessionId)
+
+    const receipt = await own.sendMessageWithOpener(sessionId, {
+      opener: '/clear',
+      text: 'RUN100 round 1, lap 1 of 6',
+    })
+
+    expect(receipt.openerQueued).toBe(true)
+    expect(own.getQueuedInputs(sessionId).map((item) => item.text)).toEqual([
+      '/clear',
+      'RUN100 round 1, lap 1 of 6',
+    ])
   })
 
   it("leaves the user's own send loud when the provider is busy (R1, MAR-2888)", async () => {

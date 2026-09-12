@@ -1732,10 +1732,8 @@ export class SessionService {
           'A conversation reset cannot carry attachments or skill selections.',
         )
       }
-      if (
-        this.activeHandles.has(sessionId) ||
-        this.dispatches.isDispatching(sessionId)
-      ) {
+      const resetTarget = this.getById(sessionId)
+      if (resetTarget && this.isTurnUnderWayOrArriving(resetTarget)) {
         // Typed for the same reason the provider's own refusal is
         // (MAR-2888): a relay delivery must be able to tell "not now" from
         // "broken", and this door says "not now". Note what it actually
@@ -2191,8 +2189,13 @@ export class SessionService {
    * one. Closing that needs a refusal on the wire, which is the remote
    * parity ticket's work, not a string match invented here.
    *
-   * The Claude provider needs nothing: it has no conversation-reset command,
-   * so it has no busy refusal of this shape to raise.
+   * The Claude provider raises no busy refusal of its OWN -- it has no
+   * conversation-reset command to refuse -- but that does not mean the Claude
+   * path never meets one. Convergence's own reset door refuses first, and a
+   * Claude handle is resident: it outlives its turn. That door is exactly
+   * where a `/clear` hail at an idle Claude session was turned away, which is
+   * why its predicate had to become "a turn is under way or arriving" rather
+   * than "a handle is attached" (lap 2).
    */
   async deliverRelayMessage(
     id: string,
@@ -2465,6 +2468,33 @@ export class SessionService {
    * only because its failure has an owner: `withDispatchInFlight` terminates
    * the rows when the attempt fails and nothing else carries them (design P).
    */
+  /**
+   * Whether a turn is running on this session OR on its way up (MAR-2888).
+   *
+   * The reset door's question, and NOT `isCarryingATurn`'s. A reset cannot
+   * share a turn, so the door has to refuse for a window wider than "a turn
+   * is running": it must also cover the beat between `start()` returning and
+   * the provider's first status, where the row still reads `idle` while a
+   * turn is on its way up.
+   *
+   * It used to ask whether a handle was ATTACHED, which is wider still and
+   * wrong at the other end: a resident handle is not released when its turn
+   * completes, so after any finished turn an idle session looked busy. That
+   * refusal then became a queued input with nothing to drain it -- the only
+   * automatic drain is a handle's own `completed` -- so a `/clear` hail at an
+   * idle Claude session would have waited for a turn that was never coming.
+   *
+   * Measured, because the two cases are one field apart: cold start reads a
+   * handle with status `idle`, an idle resident reads a handle with status
+   * `completed`. So the question is "is there a handle, and has its turn not
+   * ended yet", plus a send already on its way, which is a turn too.
+   */
+  private isTurnUnderWayOrArriving(session: Session): boolean {
+    if (this.dispatches.isDispatching(session.id)) return true
+    if (!this.activeHandles.has(session.id)) return false
+    return session.status !== 'completed' && session.status !== 'failed'
+  }
+
   private isCarryingATurn(session: Session): boolean {
     if (this.dispatches.isDispatching(session.id)) return true
     return session.status === 'running' && this.activeHandles.has(session.id)

@@ -64,17 +64,6 @@ export interface RelaySessionGateway {
   /** The account the session's newest turn ran on, or null for ambient. */
   getLastTurnProviderAccountId(sessionId: string): string | null
   /**
-   * Returns the delivery receipt (MAR-2759): the dispatch id the session
-   * layer minted for this input. The engine records it on the hop, and the
-   * settle that consumed the input names it back -- the one causal answer to
-   * "which settle owns this delivered work", stated by the layer that owns
-   * the queue instead of guessed here from status snapshots.
-   */
-  sendMessage(
-    sessionId: string,
-    input: { text: string; providerAccountId?: string | null },
-  ): Promise<string>
-  /**
    * Sends the opener as a turn of its own and queues the payload behind it,
    * in one call so nothing can slip between the two beats (F9). An idle
    * target takes the opener now; a target carrying a turn gets the opener
@@ -659,6 +648,9 @@ export class RelayEngine {
             detail: formatCrewHailDetail('stall', {
               minutes,
               fate: stalled.fate,
+              // The ledger's own words for why it waits, so the hail and the
+              // canvas say the same thing (MAR-2888).
+              error: stalled.reason,
             }),
           })
           raised = raised || hail !== null

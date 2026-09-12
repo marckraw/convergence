@@ -182,7 +182,15 @@ export function buildRelayHopLine(
     roundLabel: hop.roundNumber === null ? null : `round ${hop.roundNumber}`,
     batonLabel: hop.baton === null ? null : `⚡ ${hop.baton}`,
     payloadPreview: hop.payloadPreview,
-    error: hop.error,
+    // A reason must not outlive the wait it explains (MAR-2888 lap 2).
+    // "Waiting behind a running turn at the target." is true of a `queued`
+    // hop only while it is still waiting; once the turn ran and the hop
+    // settled, the sentence describes a state that has ended and the canvas
+    // would keep insisting on it. Every other outcome's error is a record of
+    // something that happened and stays readable -- a refusal, a broken
+    // delivery, a spent budget -- so only `queued` forgets.
+    error:
+      hop.outcome === 'queued' && hop.settledAt !== null ? null : hop.error,
   }
 }
 

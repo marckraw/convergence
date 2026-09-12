@@ -155,6 +155,9 @@ describe('Codex reset through the composer door', () => {
     'refuses %s reset during cold start — gate on status instead of live handle turns red',
     async (door) => {
       await service.start(sessionId, { text: 'before' })
+      // Measured: the row reads `idle` with a handle attached -- a turn is on
+      // its way up and has not reported yet. That is what separates this from
+      // an idle resident, whose row reads `completed` (MAR-2888 lap 2).
       // A handle exists, but it has emitted no running status yet.
       await expect(
         service[door](sessionId, { text: '/clear' }),
