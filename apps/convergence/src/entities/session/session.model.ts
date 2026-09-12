@@ -39,6 +39,7 @@ import type {
 } from './session-fork.types'
 
 const RECENT_SESSIONS_CAP = 10
+const pendingPins = new Map<string, symbol>()
 
 interface SessionState {
   sessions: SessionSummary[]
@@ -134,6 +135,7 @@ interface SessionActions {
   ) => Promise<ForkSummary>
   forkFull: (input: ForkFullInput) => Promise<SessionSummary>
   forkSummary: (input: ForkSummaryInput) => Promise<SessionSummary>
+  setPinned: (id: string, pinned: boolean) => Promise<void>
   setPrimarySurface: (
     id: string,
     surface: 'conversation' | 'terminal',
@@ -1125,6 +1127,43 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     get().recordRecentSession(session.id)
     void get().loadActiveConversation(session.id)
     return session
+  },
+
+  setPinned: async (id, pinned) => {
+    const previous =
+      [
+        ...get().globalSessions,
+        ...get().sessions,
+        ...get().globalChatSessions,
+      ].find((s) => s.id === id)?.pinnedAt ?? null
+    const optimistic = pinned ? new Date().toISOString() : null
+    const request = Symbol(id)
+    pendingPins.set(id, request)
+    const patch = (value: string | null, expected?: string | null) =>
+      set((state) => {
+        const update = (rows: SessionSummary[]) =>
+          rows.map((row) =>
+            row.id === id &&
+            (expected === undefined || row.pinnedAt === expected)
+              ? { ...row, pinnedAt: value }
+              : row,
+          )
+        return {
+          sessions: update(state.sessions),
+          globalSessions: update(state.globalSessions),
+          globalChatSessions: update(state.globalChatSessions),
+        }
+      })
+    patch(optimistic)
+    try {
+      const updated = await sessionApi.setPinned(id, pinned)
+      if (pendingPins.get(id) === request) patch(updated.pinnedAt ?? null)
+    } catch (error) {
+      if (pendingPins.get(id) === request) patch(previous, optimistic)
+      throw error
+    } finally {
+      if (pendingPins.get(id) === request) pendingPins.delete(id)
+    }
   },
 
   setPrimarySurface: async (id, surface) => {

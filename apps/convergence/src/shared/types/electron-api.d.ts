@@ -1046,6 +1046,8 @@ type AttentionRequestKindData =
   | 'input'
 
 interface SessionSummaryData {
+  originKind?: 'spawn' | 'resident' | null
+  pinnedAt?: string | null
   pullRequest?: SessionPullRequest | null
   canStopTasks?: boolean
   parallelWork?: ParallelWorkCounts
@@ -1858,6 +1860,7 @@ interface ElectronAPI {
       id: string,
       requestId?: string,
     ) => Promise<{ updated: boolean }>
+    setPinned: (id: string, pinned: boolean) => Promise<SessionSummaryData>
     setPrimarySurface: (
       id: string,
       surface: 'conversation' | 'terminal',

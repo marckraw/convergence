@@ -1114,8 +1114,9 @@ export class RelayEngine {
 
     let spawnedSessionId: string
     try {
-      const created = this.sessions.create(
-        spec.projectId
+      const created = this.sessions.create({
+        origin: 'spawn',
+        ...(spec.projectId
           ? {
               contextKind: 'project',
               projectId: spec.projectId,
@@ -1131,8 +1132,8 @@ export class RelayEngine {
               model: spec.model,
               effort: spec.effort as CreateSessionInput['effort'],
               name: spec.name,
-            },
-      )
+            }),
+      })
       spawnedSessionId = created.id
     } catch (error) {
       record('error', {

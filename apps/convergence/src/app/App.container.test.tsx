@@ -533,7 +533,7 @@ describe('App', () => {
     expect(screen.getByText('Coordinate launch work.')).toBeInTheDocument()
   })
 
-  it('filters attention to global sessions in the chat surface', async () => {
+  it('keeps project cards on the chat surface (mutation: restore surface scope)', async () => {
     const projectSession = makeSessionSummary({
       id: 'project-session-1',
       name: 'Project Needs Review',
@@ -568,7 +568,7 @@ describe('App', () => {
 
     const sidebar = getSidebarQueries()
     expect(sidebar.getAllByText('Chat Needs Review').length).toBeGreaterThan(0)
-    expect(sidebar.queryByText('Project Needs Review')).toBeNull()
+    expect(sidebar.getByText('Project Needs Review')).toBeInTheDocument()
   })
 
   it('opens a direct chat session route', async () => {

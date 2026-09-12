@@ -31,7 +31,8 @@ import {
 import { switchToSession } from '@/features/command-center'
 import { useDialogStore } from '@/entities/dialog'
 import { NeedsYou } from './needs-you.presentational'
-import { buildNeedsYouSummary } from './needs-you.presentational'
+import { groupNeedsYou, needsYouCardModel } from '@/features/needs-you'
+import { useAppSettingsStore } from '@/entities/app-settings'
 import { TerminalIdleSection } from './terminal-idle-section.presentational'
 import { ProjectTree } from './project-tree.container'
 import { ProjectSwitcher } from './project-switcher.presentational'
@@ -78,13 +79,6 @@ interface SidebarProps {
   onExpand: () => void
   onPeek: () => void
   onPinPeek: () => void
-}
-
-interface AttentionSession {
-  session: SessionSummary
-  projectName: string
-  summary: string
-  priority: number
 }
 
 export const Sidebar: FC<SidebarProps> = ({
@@ -297,58 +291,32 @@ export const Sidebar: FC<SidebarProps> = ({
     }
   }, [activeSurface, selectedSpaceId, spaces])
 
-  const attentionSessions = globalSessions
-    .map((session) => {
-      if (session.archivedAt) {
-        return null
-      }
-
-      const summary = buildNeedsYouSummary(session)
-      if (!summary) {
-        return null
-      }
-
-      if (needsYouDismissals[session.id]?.updatedAt === session.updatedAt) {
-        return null
-      }
-
-      const projectName =
-        session.contextKind === 'global'
-          ? 'Convergence'
-          : (projects.find((project) => project.id === session.projectId)
-              ?.name ?? 'Unknown project')
-
-      return {
-        session,
-        projectName,
-        summary: summary.summary,
-        priority: summary.priority,
-      }
-    })
-    .filter((value): value is AttentionSession => value !== null)
-    .sort((left, right) => {
-      if (left.priority !== right.priority) {
-        return left.priority - right.priority
-      }
-
-      return right.session.updatedAt.localeCompare(left.session.updatedAt)
-    })
-
-  const visibleAttentionSessions = attentionSessions.filter(({ session }) =>
-    activeSurface === 'chat'
-      ? session.contextKind === 'global'
-      : session.contextKind === 'project',
+  const endpoints = useAppSettingsStore(
+    (s) => s.settings.executionHostEndpoints,
+  )
+  const setPinned = useSessionStore((s) => s.setPinned)
+  const [cardNow, setCardNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setCardNow(Date.now()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const cardGroups = groupNeedsYou(
+    globalSessions.map((session) =>
+      needsYouCardModel(session, {
+        projectName:
+          session.contextKind === 'global'
+            ? 'Convergence'
+            : (projects.find((project) => project.id === session.projectId)
+                ?.name ?? 'Unknown project'),
+        endpoints,
+        now: cardNow,
+        dismissed:
+          needsYouDismissals[session.id]?.updatedAt === session.updatedAt,
+      }),
+    ),
   )
 
-  const waitingSessions = visibleAttentionSessions.filter(
-    ({ session }) =>
-      session.attention === 'needs-approval' ||
-      session.attention === 'needs-input',
-  )
-  const reviewSessions = visibleAttentionSessions.filter(
-    ({ session }) =>
-      session.attention === 'finished' || session.attention === 'failed',
-  )
+  const feedCards = cardGroups.flatMap((group) => group.cards)
 
   const handleSelectNeedsYouSession = async (sessionId: string) => {
     const target = globalSessions.find((session) => session.id === sessionId)
@@ -768,24 +736,26 @@ export const Sidebar: FC<SidebarProps> = ({
             variant="ghost"
             size="icon"
             className="relative h-9 w-9"
-            title={`Needs You (${visibleAttentionSessions.length})`}
-            aria-label={`Needs You (${visibleAttentionSessions.length})`}
+            title={`Needs You (${feedCards.length})`}
+            aria-label={`Needs You (${feedCards.length})`}
           >
             <span
               className={cn(
                 'h-3 w-3 rounded-full border-2',
-                waitingSessions.length > 0
+                feedCards.some(
+                  (card) => card.attentionGroup === 'Waiting on you',
+                )
                   ? 'border-warning'
-                  : reviewSessions.some(
+                  : feedCards.some(
                         ({ session }) => session.attention === 'failed',
                       )
                     ? 'border-destructive'
                     : 'border-emerald-500',
               )}
             />
-            {visibleAttentionSessions.length > 0 ? (
+            {cardGroups.length > 0 ? (
               <span className="absolute -top-1 -right-1 rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-medium leading-none text-destructive-foreground">
-                {visibleAttentionSessions.length}
+                {feedCards.length}
               </span>
             ) : null}
           </Button>
@@ -979,8 +949,14 @@ export const Sidebar: FC<SidebarProps> = ({
 
       <div className="app-scrollbar flex-1 overflow-x-hidden overflow-y-auto py-3">
         <NeedsYou
-          waitingSessions={waitingSessions}
-          reviewSessions={reviewSessions}
+          groups={cardGroups}
+          onPin={(id, pinned) =>
+            void setPinned(id, pinned).catch((error) =>
+              toast.error(
+                error instanceof Error ? error.message : String(error),
+              ),
+            )
+          }
           activeSessionId={
             activeSurface === 'chat' ? activeGlobalSessionId : activeSessionId
           }
@@ -996,8 +972,7 @@ export const Sidebar: FC<SidebarProps> = ({
           onDismiss={dismissTerminalIdleNotice}
         />
 
-        {(visibleAttentionSessions.length > 0 ||
-          terminalIdleNotices.length > 0) && (
+        {(cardGroups.length > 0 || terminalIdleNotices.length > 0) && (
           <div className="mx-3 mb-3 border-t border-border/50" />
         )}
 

@@ -155,6 +155,8 @@ export type AttentionRequestKind =
   | 'input'
 
 export interface SessionSummary {
+  pinnedAt?: string | null
+  originKind?: 'spawn' | 'resident' | null
   pullRequest?: SessionPullRequest | null
   canStopTasks?: boolean
   parallelWork?: ParallelWorkCounts
@@ -212,6 +214,7 @@ function parsePrimarySurface(value: string | null | undefined): PrimarySurface {
 }
 
 interface CreateSessionBaseInput {
+  origin?: 'spawn' | 'resident'
   projectId: string
   workspaceId: string | null
   providerId: string
@@ -392,6 +395,11 @@ export function sessionSummaryFromRow(row: SessionRow): SessionSummary {
     workingDirectory: row.working_directory,
     archivedAt: row.archived_at,
     parentSessionId: row.parent_session_id,
+    pinnedAt: row.pinned_at ?? null,
+    originKind:
+      row.origin_kind === 'spawn' || row.origin_kind === 'resident'
+        ? row.origin_kind
+        : null,
     forkStrategy: parseForkStrategy(row.fork_strategy),
     primarySurface: parsePrimarySurface(row.primary_surface),
     executionHost: parseExecutionHostId(row.execution_host),

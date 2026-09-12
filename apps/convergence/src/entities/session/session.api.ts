@@ -103,6 +103,8 @@ export const sessionApi = {
   ): Promise<{ updated: boolean }> =>
     window.electronAPI.session.regenerateName(id, requestId),
 
+  setPinned: (id: string, pinned: boolean): Promise<SessionSummary> =>
+    window.electronAPI.session.setPinned(id, pinned),
   setPrimarySurface: (
     id: string,
     surface: 'conversation' | 'terminal',

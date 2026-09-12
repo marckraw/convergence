@@ -17,6 +17,8 @@ export interface AppStateRow {
 }
 
 export interface SessionRow {
+  pinned_at?: string | null
+  origin_kind?: 'spawn' | 'resident' | null
   pull_request_json?: string | null
   id: string
   context_kind: string

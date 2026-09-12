@@ -402,6 +402,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('session:rename', id, name),
     regenerateName: (id: string, requestId?: string) =>
       ipcRenderer.invoke('session:regenerateName', id, requestId),
+    setPinned: (id: string, pinned: boolean) =>
+      ipcRenderer.invoke('session:setPinned', id, pinned),
     setPrimarySurface: (id: string, surface: 'conversation' | 'terminal') =>
       ipcRenderer.invoke('session:setPrimarySurface', id, surface),
     setModelSelection: (

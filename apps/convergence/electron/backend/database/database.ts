@@ -2199,7 +2199,21 @@ export function getDatabase(dbPath?: string): Database.Database {
     migrateResidentStopReason(database)
     migrateEndedSummary(database)
     migrateTaskObserved(database)
+    if (!getTableColumnNames(database, 'sessions').has('pinned_at')) {
+      database.exec('ALTER TABLE sessions ADD COLUMN pinned_at TEXT')
+    }
     migrateCrewConfig(database)
+    database.transaction(() => {
+      if (getTableColumnNames(database, 'sessions').has('origin_kind')) return
+      database.exec(
+        "ALTER TABLE sessions ADD COLUMN origin_kind TEXT CHECK (origin_kind IN ('spawn', 'resident'))",
+      )
+      // Retained hops prove a spawn. Cleared history proves nothing; legacy
+      // sessions without that evidence remain NULL, never guessed resident.
+      database.exec(
+        "UPDATE sessions SET origin_kind = 'spawn' WHERE id IN (SELECT spawned_session_id FROM relay_hops WHERE spawned_session_id IS NOT NULL)",
+      )
+    })()
   } catch (error) {
     database.close()
     throw error
