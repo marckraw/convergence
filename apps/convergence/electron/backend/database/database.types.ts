@@ -94,6 +94,16 @@ export interface SessionQueuedInputRow {
   relays_muted: number | null
   /** The dispatch id minted when this input was handed over (MAR-2759). */
   dispatch_id: string | null
+  /**
+   * The row this one is a second attempt at (MAR-2971); null on a first.
+   *
+   * Optional, like the reader treats it: `queuedInputFromRow` resolves both
+   * of these with `?? null`, because a row selected before the migration ran
+   * carries neither key at all.
+   */
+  redelivered_from?: string | null
+  /** When this row's receipt was told an ending; null means still owed. */
+  ending_told_at?: string | null
   error: string | null
   created_at: string
   updated_at: string
@@ -275,6 +285,8 @@ export interface RelayHopRow {
   settled_status: string | null
   /** The dispatch id of the input this hop carried; null before receipts. */
   dispatch_id: string | null
+  /** The hop this one re-opens on the same flow run (MAR-2971). */
+  redelivered_from?: string | null
   error: string | null
 }
 

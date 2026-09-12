@@ -2007,8 +2007,12 @@ describe('SessionService', () => {
     expect(fresh).toMatchObject({
       state: 'queued',
       text: 'RUN100 round 1, lap 1 of 6',
-      dispatchId,
+      redeliveredFrom: row.id,
     })
+    // A NEW receipt, and the old one is what the engine is told to re-open
+    // (lap 2). The session here is `running` with a live handle, so nothing
+    // drained: the row waits its turn.
+    expect(fresh.dispatchId).not.toBe(dispatchId)
     // The failed row is the record of the first attempt and is not rewritten.
     expect(
       queueService.getQueuedInputs(sessionId).map((item) => item.state),
@@ -2016,11 +2020,11 @@ describe('SessionService', () => {
   })
 
   it('does not push a redelivered input into a running remote turn (R4, MAR-2971)', async () => {
-    // Law 13: the queue is Convergence's on every host. A remote run keeps
-    // no local handle, so the "am I mid-turn" helper the local paths use
-    // reads `idle` for it — ask that, and Deliver now fires a second turn
-    // into a daemon already carrying one. The session's own status is the
-    // fact both hosts keep, so that is what the drain asks.
+    // Law 13: the queue is Convergence's on every host, and the hosts differ
+    // in what "running with no local handle" MEANS. On a remote session it is
+    // normal — the run lives on the daemon, which keeps no handle here — so
+    // the daemon is the truth and the row waits. Reading it as a dead process
+    // would fire a second turn into one already running.
     const { service: queueService, sessionId } =
       await startRunningQueueingSession()
     await queueService.sendMessage(sessionId, {
@@ -2029,21 +2033,111 @@ describe('SessionService', () => {
     })
     const [row] = queueService.getQueuedInputs(sessionId)
     markQueuedInputFailed(row.id)
-    // The turn ahead is still running — exactly the remote shape, where no
-    // local handle exists to say so.
+    seedExecutionHostEndpoint(getDatabase())
+    getDatabase()
+      .prepare('UPDATE sessions SET execution_host = ? WHERE id = ?')
+      .run(TEST_EXECUTION_HOST_ENDPOINT_ID, sessionId)
+    // The remote shape: still `running`, and no local handle to say so.
     ;(
-      queueService as unknown as {
-        activeHandles: Map<string, unknown>
-      }
+      queueService as unknown as { activeHandles: Map<string, unknown> }
     ).activeHandles.delete(sessionId)
 
     const fresh = queueService.redeliverQueuedInput(row.id)
 
-    // Re-enqueued and waiting, NOT dispatched on top of the running turn.
+    // Re-enqueued and waiting, NOT dispatched on top of the running turn —
+    // and the session was not declared stale either.
     expect(fresh.state).toBe('queued')
+    expect(queueService.getById(sessionId)?.status).toBe('running')
     expect(
       queueService.getQueuedInputs(sessionId).map((item) => item.state),
     ).toEqual(['failed', 'queued'])
+  })
+
+  it('names a stale LOCAL run and drains into it (R3, MAR-2971 lap 2)', async () => {
+    // The other half of the same question. A local session that says
+    // `running` with no handle is a dead process, not a busy one —
+    // `isCarryingATurn` says exactly that — and the send door already treats
+    // it this way. Deliver now does what a send does: names the run stale,
+    // then drains, so the button's promise is kept instead of the row
+    // waiting on a turn that will never end.
+    const { service: queueService, sessionId } =
+      await startRunningQueueingSession()
+    await queueService.sendMessage(sessionId, {
+      text: 'RUN100 round 1, lap 1 of 6',
+      deliveryMode: 'follow-up',
+    })
+    const [row] = queueService.getQueuedInputs(sessionId)
+    markQueuedInputFailed(row.id)
+    ;(
+      queueService as unknown as { activeHandles: Map<string, unknown> }
+    ).activeHandles.delete(sessionId)
+
+    queueService.redeliverQueuedInput(row.id)
+
+    // The dead run is named as failed rather than believed.
+    expect(
+      queueService
+        .getConversation(sessionId)
+        .some(
+          (item) =>
+            item.kind === 'note' &&
+            item.text.includes('no longer has an active provider process'),
+        ),
+    ).toBe(true)
+    // And the row left the queue: nothing is still waiting behind a corpse.
+    expect(
+      queueService.getQueuedInputs(sessionId).map((item) => item.state),
+    ).not.toContain('queued')
+  })
+
+  it('tells a receipt one ending, whichever way its row failed (MAR-2971 lap 2)', async () => {
+    // Design P's invariant is EXACTLY one ending per receipt, and a failed
+    // row can reach that state two ways that differ in whether anyone was
+    // told. The drain's catch emits a terminal: the engine released the
+    // baton and stamped the hop, so dismissing the row afterwards must stay
+    // quiet. `recoverDispatching` at boot rewrites the state in SQL and
+    // announces nothing, so its rows are still owed and the dismissal is
+    // their first and only ending. Without the stamp the two are
+    // indistinguishable and the loud case speaks twice.
+    const {
+      service: queueService,
+      sessionId,
+      handle,
+      emit,
+    } = await startRunningQueueingSession()
+    const told = await queueService.sendMessage(sessionId, {
+      text: 'the drain will try this one',
+      deliveryMode: 'follow-up',
+    })
+    const untold = await queueService.sendMessage(sessionId, {
+      text: 'the boot recovery will fail this one',
+      deliveryMode: 'follow-up',
+    })
+    handle.sendMessage = () => {
+      throw new Error('the provider went away')
+    }
+    emit({ kind: 'session.patch', patch: { status: 'completed' } })
+    await Promise.resolve()
+
+    const rows = queueService.getQueuedInputs(sessionId)
+    const toldRow = rows.find((item) => item.dispatchId === told)!
+    const untoldRow = rows.find((item) => item.dispatchId === untold)!
+    expect(toldRow.state).toBe('failed')
+    expect(toldRow.endingToldAt).not.toBeNull()
+    // The row behind it was never tried, so it is still waiting and still
+    // owed (R1). Fail it the way a restart does: state only, nobody told.
+    markQueuedInputFailed(untoldRow.id)
+    expect(queueService.getQueuedInputs(sessionId)[1]?.endingToldAt).toBeNull()
+
+    const terminals: DispatchTerminalEvent[] = []
+    queueService.onDispatchTerminal((event) => terminals.push(event))
+    queueService.cancelQueuedInput(toldRow.id)
+    queueService.cancelQueuedInput(untoldRow.id)
+
+    // One ending each, and only the untold one is announced here.
+    expect(terminals.map((event) => [event.reason, event.dispatchIds])).toEqual(
+      [['abandoned', [untold]]],
+    )
   })
 
   it('raises no terminal for a cancelled input that carried no receipt', () => {
@@ -7631,7 +7725,17 @@ describe('THE SWEEP: every dispatched receipt reaches exactly one terminal (MAR-
     /** Every receipt the relay layer was handed for an opener + payload. */
     minted: string[]
     sends: Map<string, string[]>
-    hold: { listing: Promise<void> | null; refuse: boolean }
+    hold: {
+      listing: Promise<void> | null
+      refuse: boolean
+      /**
+       * Refuses the PROVIDER SEND, which is the only lever that reaches the
+       * drain: `refuse` above is checked at the send door, so it can never
+       * make a row go `dispatching` and then fail — and that shape is the
+       * only one that produces a receipt whose ending was actually told.
+       */
+      refuseSend: boolean
+    }
     createStation: (name: string) => string
     emit: (sessionId: string, delta: SessionDelta) => void
     drain: () => Promise<void>
@@ -7645,6 +7749,11 @@ describe('THE SWEEP: every dispatched receipt reaches exactly one terminal (MAR-
   function buildRig(db: Database.Database, hosts: boolean): Rig {
     const deltas = new Map<string, (delta: SessionDelta) => void>()
     const sends = new Map<string, string[]>()
+    const hold: Rig['hold'] = {
+      listing: null,
+      refuse: false,
+      refuseSend: false,
+    }
     const handleFor = (sessionId: string): SessionHandle => ({
       onDelta: (listener) => {
         deltas.set(sessionId, listener)
@@ -7655,6 +7764,7 @@ describe('THE SWEEP: every dispatched receipt reaches exactly one terminal (MAR-
       onActivityChange: () => {},
       onContinuationToken: () => {},
       sendMessage: (text) => {
+        if (hold.refuseSend) throw new Error('the provider went away')
         sends.set(sessionId, [...(sends.get(sessionId) ?? []), text])
       },
       approve: () => {},
@@ -7668,7 +7778,6 @@ describe('THE SWEEP: every dispatched receipt reaches exactly one terminal (MAR-
       supportsConversationReset: false,
       supportsOneShot: false,
     }
-    const hold: Rig['hold'] = { listing: null, refuse: false }
     const remoteHost = {
       capabilities: () => [capabilities],
       capabilitiesFor: (providerId: string) =>
@@ -7721,6 +7830,12 @@ describe('THE SWEEP: every dispatched receipt reaches exactly one terminal (MAR-
     service.onDispatchTerminal((event) => {
       terminals.push(event)
       engine.handleDispatchTerminal(event)
+    })
+    // Deliver now's half of the same wire (MAR-2971 lap 2): the engine has to
+    // learn that an errand is being carried again under a new receipt, or the
+    // second delivery's settle mints a run of its own.
+    service.onDispatchRedelivered((event) => {
+      engine.handleDispatchRedelivered(event)
     })
     const minted: string[] = []
     const sendWithOpener = service.sendMessageWithOpener.bind(service)
@@ -7982,6 +8097,194 @@ describe('THE SWEEP: every dispatched receipt reaches exactly one terminal (MAR-
     },
   ]
 
+  /**
+   * Deliver now re-opens the errand on the run it always belonged to
+   * (MAR-2971 lap 2, R2) — the critical finding of lap 1.
+   *
+   * Lap 1 reused the failed row's `dispatch_id`. By the time a row is failed
+   * through a path that ENDED it, the engine has already released that
+   * baton, so the retry's settle finds nothing and `takeFlowRunId` mints a
+   * brand new flow run: the crew's loop is orphaned mid-round and History
+   * keeps `failed` for a delivery that landed.
+   *
+   * Both halves are observed through a SETTLE, not through the copied row:
+   * the station is given an outgoing wire, so what run its next hop lands on
+   * is the engine's own answer to "whose work was that".
+   */
+  async function refusedDrainRig(which: 'opener' | 'payload'): Promise<{
+    rig: Rig
+    station: string
+    sink: string
+    failedRow: { id: string; dispatchId: string | null; relaysMuted: boolean }
+    originalRun: string
+  }> {
+    const rig = buildRig(freshWorld(`redelivered-${which}`), true)
+    const station = rig.createStation('station')
+    const sink = rig.createStation('sink')
+    // The station's own outgoing wire: without one its settles fire nothing
+    // and the engine's verdict on them is unobservable.
+    rig.relays.create({
+      crewId: 'c1',
+      sourceSessionId: station,
+      action: 'hail',
+      targetSessionId: sink,
+    })
+    await rig.service.start(station, { text: 'busy' })
+    rig.emit(station, running)
+    await fireInto(rig, station)
+
+    if (which === 'payload') {
+      // Let the opener through; it takes a turn of its own (design X).
+      rig.emit(station, completed)
+      await rig.drain()
+      rig.emit(station, running)
+    }
+    // Refuse the provider so the drain of the chosen row is what fails. The
+    // drain failing is the only shape that gets an ending TOLD: a `queued`
+    // row behind a stopped turn keeps its receipt now (R1), so only a row
+    // the drain actually tried has its baton released and its hop stamped.
+    rig.hold.refuseSend = true
+    rig.emit(station, completed)
+    await rig.drain()
+    rig.hold.refuseSend = false
+
+    const failedRow = rig.service
+      .getQueuedInputs(station)
+      .find((item) => item.state === 'failed')
+    if (!failedRow) throw new Error(`expected the ${which} row to have failed`)
+    // The run of the hop that CARRIED this receipt -- not merely the first
+    // hop in the crew's ledger, which is some other wire's.
+    const originalRun = rig.relays
+      .listHops('c1', 100)
+      .find((hop) => hop.dispatchId === failedRow.dispatchId)?.flowRunId
+    if (!originalRun) {
+      // An opener has no hop of its own; its errand's run is the payload's.
+      const anyRun = rig.relays
+        .listHops('c1', 100)
+        .find((hop) => hop.dispatchId !== null)?.flowRunId
+      if (!anyRun) throw new Error('expected the wire to have fired a hop')
+      return {
+        rig,
+        station,
+        sink,
+        failedRow: {
+          id: failedRow.id,
+          dispatchId: failedRow.dispatchId,
+          relaysMuted: failedRow.relaysMuted,
+        },
+        originalRun: anyRun,
+      }
+    }
+    return {
+      rig,
+      station,
+      sink,
+      failedRow: {
+        id: failedRow.id,
+        dispatchId: failedRow.dispatchId,
+        relaysMuted: failedRow.relaysMuted,
+      },
+      originalRun,
+    }
+  }
+
+  it('re-opens the redelivered errand on the original flow run (R2, MAR-2971)', async () => {
+    const { rig, station, sink, failedRow, originalRun } =
+      await refusedDrainRig('payload')
+    const runsBefore = new Set(
+      rig.relays.listHops('c1', 100).map((hop) => hop.flowRunId),
+    )
+    // The station has already settled its BUSY turn and fired this wire once
+    // on the way here; only the hop that appears after the redelivery is the
+    // engine's verdict on the redelivered work.
+    const sinkHopsBefore = new Set(
+      rig.relays
+        .listHops('c1', 100)
+        .filter((hop) => hop.targetSessionId === sink)
+        .map((hop) => hop.id),
+    )
+
+    const fresh = rig.service.redeliverQueuedInput(failedRow.id)
+    await rig.drain()
+    // The station takes the redelivered work and finishes it. THIS settle is
+    // the one that must continue the crew's run.
+    rig.emit(station, running)
+    rig.emit(station, completed)
+    await rig.drain()
+
+    const hops = rig.relays.listHops('c1', 100)
+    // The consequence first: the hop the station fired onward is on the run
+    // the errand always belonged to. Drop the baton re-registration and the
+    // settle finds nothing, mints a run of its own, and this reds.
+    const onward = hops.find(
+      (hop) => hop.targetSessionId === sink && !sinkHopsBefore.has(hop.id),
+    )
+    expect(onward).toBeDefined()
+    expect(onward?.flowRunId).toBe(originalRun)
+    expect(new Set(hops.map((hop) => hop.flowRunId))).toEqual(runsBefore)
+
+    // The re-opened hop records the second attempt without rewriting the
+    // first, which still reads `failed` — that remains true of attempt one.
+    const reopened = hops.find((hop) => hop.dispatchId === fresh.dispatchId)
+    expect(reopened?.flowRunId).toBe(originalRun)
+    expect(
+      hops.find((hop) => hop.dispatchId === failedRow.dispatchId)
+        ?.settledStatus,
+    ).toBe('failed')
+    // A receipt names exactly ONE hop: `markDispatchesTerminated` stamps
+    // `WHERE dispatch_id = ?`, so two hops sharing an id means a later
+    // ending stamps an attempt it was never about.
+    expect(
+      hops.filter((hop) => hop.dispatchId === fresh.dispatchId),
+    ).toHaveLength(1)
+    expect(fresh.dispatchId).not.toBe(failedRow.dispatchId)
+    expect(fresh.redeliveredFrom).toBe(failedRow.id)
+  })
+
+  it('keeps a redelivered opener plumbing, so its /clear fires no wire (R2, MAR-2971)', async () => {
+    // The opener is the half with teeth, and the half a hop lookup cannot
+    // reach: an opener's receipt has no hop of its own — the wire's hop
+    // carries the payload's id — so the plumbing claim cannot be restored
+    // behind a "did we find a hop" check. Forget it and the redelivered
+    // `/clear` settles as WORK: the engine reads the wires, counts the lap
+    // and writes a hop for a beat that was only plumbing.
+    const { rig, station, sink, failedRow } = await refusedDrainRig('opener')
+    expect(failedRow.relaysMuted).toBe(true)
+
+    const freshRow = rig.service.redeliverQueuedInput(failedRow.id)
+    expect(freshRow.relaysMuted).toBe(true)
+    await rig.drain()
+
+    // The payload was already waiting, and the redelivered opener went to
+    // the BACK of the queue, so the payload's turn comes first. Its settle
+    // is real work and fires the wire; that is not what this test is about.
+    rig.emit(station, running)
+    rig.emit(station, completed)
+    await rig.drain()
+    const afterPayload = new Set(
+      rig.relays
+        .listHops('c1', 100)
+        .filter((hop) => hop.targetSessionId === sink)
+        .map((hop) => hop.id),
+    )
+
+    // Now the redelivered opener's own turn.
+    rig.emit(station, running)
+    rig.emit(station, completed)
+    await rig.drain()
+
+    // Plumbing: the engine returns before it reads a wire, so this beat adds
+    // no hop at all.
+    expect(
+      rig.relays
+        .listHops('c1', 100)
+        .filter(
+          (hop) => hop.targetSessionId === sink && !afterPayload.has(hop.id),
+        )
+        .map((hop) => hop.outcome),
+    ).toEqual([])
+  })
+
   it('leaves no receipt without exactly one ending, no held baton, and no hop without a fate, on every exit path', async () => {
     // The invariant, not the sites (MAR-2759, design P; amended by R1,
     // MAR-2971): after each way a session can stop carrying a turn, every
@@ -8068,18 +8371,24 @@ describe('THE SWEEP: every dispatched receipt reaches exactly one terminal (MAR-
       // something to hail at 30 minutes (R1/R3, MAR-2971). Releasing the run
       // here would be the engine agreeing the errand was over.
       //
-      // One-directional on purpose: once nothing is owed the engine must
-      // hold nothing, which is the original law and still bites on every
-      // path that ends its receipts. The converse is not a law -- a run
-      // revived in a fresh process (the stale-restart exit) legitimately
-      // holds nothing for a row it has never seen, and the row is still
-      // owed and still waiting.
-      if (stillWaiting.size === 0) {
-        expect({ path, live: rig.engine.liveFlowRunIds() }).toEqual({
-          path,
-          live: [],
-        })
-      }
+      // A BOUND rather than a skip (lap 2): the engine may hold a run only
+      // for a receipt that is still owed, so it can never hold more runs
+      // than there are owed receipts. With nothing owed this collapses to
+      // the original law -- hold nothing -- and keeps biting on every path
+      // that ends its receipts; with something owed it still refuses the
+      // failure that matters, an engine holding runs for work that ended.
+      // Not an equality, because the converse is not a law: a run revived in
+      // a fresh process (the stale-restart exit) legitimately holds nothing
+      // for a row it has never seen.
+      expect({
+        path,
+        heldRuns: rig.engine.liveFlowRunIds().length,
+        withinBound: rig.engine.liveFlowRunIds().length <= stillWaiting.size,
+      }).toEqual({
+        path,
+        heldRuns: rig.engine.liveFlowRunIds().length,
+        withinBound: true,
+      })
 
       // Every budgeted hop that carried one of these receipts reads a fate.
       const hops = rig.relays

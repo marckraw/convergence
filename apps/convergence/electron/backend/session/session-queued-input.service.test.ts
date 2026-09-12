@@ -166,7 +166,7 @@ describe('SessionQueuedInputService', () => {
     )
     events = []
 
-    const fresh = service.redeliver(original.id)
+    const { input: fresh, fromDispatchId } = service.redeliver(original.id)
 
     expect(fresh.id).not.toBe(original.id)
     expect(fresh).toMatchObject({
@@ -178,11 +178,17 @@ describe('SessionQueuedInputService', () => {
       providerAccountId: 'acct-7',
       skipContextInjection: true,
       relaysMuted: true,
-      // The same errand, so the same receipt: this delivery settles the hop
-      // the first attempt left owed.
-      dispatchId: 'dispatch-9',
       error: null,
     })
+    // A NEW receipt, and the old one named as where it came from (lap 2).
+    // The same id would name a receipt the engine has already released: the
+    // next settle would find no baton and mint a whole new flow run,
+    // orphaning the crew's loop mid-round.
+    expect(fresh.dispatchId).not.toBe('dispatch-9')
+    expect(fresh.dispatchId).toBeTruthy()
+    expect(fromDispatchId).toBe('dispatch-9')
+    expect(fresh.redeliveredFrom).toBe(original.id)
+    expect(fresh.endingToldAt).toBeNull()
     // The failed row is a record, not a draft: it is never rewritten.
     const rows = service.list('session-1')
     expect(rows).toMatchObject([

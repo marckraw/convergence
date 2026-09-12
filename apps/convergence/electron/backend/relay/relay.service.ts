@@ -587,6 +587,75 @@ export class RelayService {
    * answer, and a later terminal rewrites nothing. By exact id, never by
    * session, so a sibling receipt queued into the same station stays owed.
    */
+  /**
+   * Re-opens an errand a second attempt is carrying (MAR-2971, R2).
+   *
+   * A NEW hop on the SAME flow run, copied from the one the first attempt
+   * fired. Not a stamp on the old hop and not a rewrite of it: the first hop
+   * already reads `failed`, and that stays true of the first attempt -- what
+   * changed is that the errand is being carried again. History then shows
+   * two hops on one run, which is what happened.
+   *
+   * Returns the flow run the copy joined, so the caller can re-register the
+   * baton on it, or null when no hop ever carried the old receipt -- a
+   * follow-up a person typed has no hop, and nothing here is owed for it.
+   */
+  redeliverHopForDispatch(
+    fromDispatchId: string,
+    toDispatchId: string,
+    at: string,
+  ): { hopId: string; flowRunId: string; crewId: string } | null {
+    const previous = this.db
+      .prepare(
+        `SELECT * FROM relay_hops
+         WHERE dispatch_id = ?
+         ORDER BY fired_at DESC, rowid DESC
+         LIMIT 1`,
+      )
+      .get(fromDispatchId) as RelayHopRow | undefined
+    if (!previous) return null
+
+    const id = randomUUID()
+    this.db
+      .prepare(
+        `INSERT INTO relay_hops (
+           id, relay_id, crew_id, flow_run_id, fired_at, source_session_id,
+           target_session_id, spawned_session_id, trigger_status,
+           payload_preview, baton, round_number, lap_number, dispatch_id,
+           outcome, error, settle_id, redelivered_from
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        previous.relay_id,
+        previous.crew_id,
+        previous.flow_run_id,
+        at,
+        previous.source_session_id,
+        previous.target_session_id,
+        previous.spawned_session_id,
+        previous.trigger_status,
+        previous.payload_preview,
+        previous.baton,
+        previous.round_number,
+        previous.lap_number,
+        toDispatchId,
+        // Queued, because that is the truth again: the work is waiting to be
+        // taken. Unsettled, so the stall clock owns it from here.
+        'queued',
+        null,
+        null,
+        previous.id,
+      )
+
+    return {
+      hopId: id,
+      flowRunId: previous.flow_run_id,
+      crewId: previous.crew_id,
+    }
+  }
+
   markDispatchesTerminated(
     dispatchIds: readonly string[],
     at: string,

@@ -55,6 +55,8 @@ import {
   type CreateSessionInput,
   type DispatchTerminalEvent,
   type DispatchTerminalListener,
+  type DispatchRedeliveredEvent,
+  type DispatchRedeliveredListener,
   type QueuedInputPatchEvent,
   type SessionQueuedInput,
   type SessionSettledEvent,
@@ -295,6 +297,8 @@ export class SessionService {
   private readonly sessionSettledListeners = new Set<SessionSettledListener>()
   private readonly dispatchTerminalListeners =
     new Set<DispatchTerminalListener>()
+  private readonly dispatchRedeliveredListeners =
+    new Set<DispatchRedeliveredListener>()
   private pendingSettleEvents: SessionSettledEvent[] = []
   private settleFlushScheduled = false
   /**
@@ -788,6 +792,36 @@ export class SessionService {
     }
   }
 
+  /**
+   * A receipt handed on to a second attempt (MAR-2971, R2).
+   *
+   * Beside `onDispatchTerminal` because it is the same kind of news from the
+   * same owner -- the session layer holds the rows, so only it can say that
+   * this errand is being carried again under a new id. The relay engine
+   * re-opens the hop on the ORIGINAL flow run: a terminal already told it
+   * the first attempt ended, and without this the run would be orphaned and
+   * the second delivery would start a run of its own.
+   */
+  onDispatchRedelivered(listener: DispatchRedeliveredListener): () => void {
+    this.dispatchRedeliveredListeners.add(listener)
+    return () => {
+      this.dispatchRedeliveredListeners.delete(listener)
+    }
+  }
+
+  private emitDispatchRedelivered(event: DispatchRedeliveredEvent): void {
+    for (const listener of [...this.dispatchRedeliveredListeners]) {
+      try {
+        listener(event)
+      } catch (error) {
+        console.error(
+          `[session] dispatch-redelivered listener failed for ${event.sessionId}`,
+          error,
+        )
+      }
+    }
+  }
+
   private emitDispatchTerminal(
     sessionId: string,
     reason: DispatchTerminalEvent['reason'],
@@ -838,6 +872,10 @@ export class SessionService {
    */
   private terminateQueuedInputs(sessionId: string, reason: string): void {
     const ended = this.queuedInputs.failAttemptedForSession(sessionId, reason)
+    // Stamped because it is about to be TOLD: a later dismissal of one of
+    // these rows must not announce a second ending for an id the engine has
+    // already released (MAR-2971).
+    this.queuedInputs.markEndingTold(ended.map((item) => item.id))
     this.emitDispatchTerminal(
       sessionId,
       'failed',
@@ -1445,7 +1483,14 @@ export class SessionService {
     const before = this.queuedInputs.get(id)
     const cancelled = this.queuedInputs.cancel(id)
     // That one receipt and no other: the row's siblings are still waiting.
-    if (cancelled.dispatchId) {
+    // And once only: a row that reached `failed` through a path that EMITTED
+    // a terminal has already had its ending told, the engine has released
+    // the baton and stamped the hop, and saying it again would be a second
+    // ending for one receipt -- the invariant design P is built on. A row
+    // `recoverDispatching` failed at boot was never announced, so its stamp
+    // is null and this dismissal is its first and only ending (MAR-2971).
+    if (cancelled.dispatchId && before?.endingToldAt === null) {
+      this.queuedInputs.markEndingTold([cancelled.id])
       this.emitDispatchTerminal(
         cancelled.sessionId,
         before?.state === 'failed' ? 'abandoned' : 'cancelled',
@@ -1468,15 +1513,50 @@ export class SessionService {
    * whole promise.
    */
   redeliverQueuedInput(id: string): SessionQueuedInput {
-    const fresh = this.queuedInputs.redeliver(id)
-    const session = this.getById(fresh.sessionId)
+    const { input: fresh, fromDispatchId } = this.queuedInputs.redeliver(id)
+
+    // The engine first, before anything can drain: it has to be holding a
+    // baton for the new receipt BEFORE that receipt's turn can settle, or
+    // the settle finds nothing and mints a run of its own -- the whole
+    // defect this lap exists to close (MAR-2971, R2).
+    if (fromDispatchId && fresh.dispatchId) {
+      this.emitDispatchRedelivered({
+        sessionId: fresh.sessionId,
+        fromDispatchId,
+        toDispatchId: fresh.dispatchId,
+        relaysMuted: fresh.relaysMuted,
+        at: new Date().toISOString(),
+      })
+    }
+
+    let session = this.getById(fresh.sessionId)
+    if (!session) return fresh
+
+    // A LOCAL session that says `running` with no handle is a dead process,
+    // not a busy one -- `isCarryingATurn` says so itself, and the send door
+    // above already treats it this way. Deliver now does what a send does:
+    // names the run stale, then drains. A REMOTE session says `running` and
+    // keeps no local handle by design, and there the daemon is the truth, so
+    // the row waits and the card keeps reading "waiting for the next turn"
+    // (R3/R4, MAR-2971 lap 2).
+    if (
+      session.status === 'running' &&
+      !this.activeHandles.has(session.id) &&
+      !isRemoteExecutionHost(session.executionHost)
+    ) {
+      session = this.markStaleRunningSessionFailed(
+        session,
+        'Session marked failed because Convergence no longer has an active provider process for this run.',
+        true,
+      )
+    }
+
     // Idle by the session's OWN status, not by `isCarryingATurn` (R4).
     // That helper answers "is there a local handle mid-turn", and a remote
     // run has no local handle at all -- so on a remote session it reads
     // "idle" while the daemon is mid-turn, and this would push the input
     // into a turn already running. The status is the fact both hosts keep.
     if (
-      session &&
       session.status !== 'running' &&
       !this.dispatches.isDispatching(session.id)
     ) {
@@ -3377,6 +3457,15 @@ export class SessionService {
    * without ever announcing it started would leave such a handle attached and
    * its turn row open. The daemon announces both, and the alternative --
    * trusting a sequence -- is provably wrong rather than merely dependent.
+   *
+   * Two vocabularies, and only one of them arrives here (MAR-2971 lap 2).
+   * `'stopped'` in `claude-code-provider.ts:575` is a HARNESS TASK status on
+   * a `task.changed` evidence fact, not a `SessionStatus` -- that union is
+   * `idle | running | completed | failed` -- and it only arms the idle
+   * timer. A stop the user asks for reaches the queue through `stop()` and
+   * the stale-run path, which is the route pinned by "marks a stale
+   * persisted running session failed instead of throwing on stop". So there
+   * is no third lifecycle word being dropped silently here.
    */
   private handleLifecycle(
     sessionId: string,

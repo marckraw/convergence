@@ -194,6 +194,19 @@ const SCHEMA = `
     -- the turn its input eventually starts, so the relay ledger can stamp the
     -- right hop. Null for input people typed: only the relay engine holds ids.
     dispatch_id TEXT,
+    -- The row this one is a second attempt at (MAR-2971, R2). "Deliver now"
+    -- never rewrites the failed row -- that row is the record that an attempt
+    -- happened and how it ended -- so the retry is a NEW row pointing back at
+    -- it. Null for a first attempt, which is every row anyone ever typed.
+    redelivered_from TEXT,
+    -- When this row's receipt was told an ending, if it ever was (MAR-2971).
+    -- A row can reach the failed state three ways and only two of them
+    -- announce it: terminateQueuedInputs and the drain's catch emit a
+    -- terminal, while recoverDispatching at boot rewrites the state in SQL
+    -- and tells nobody. Dismissing the row afterwards must not announce a
+    -- second ending for an id the engine has already released, and without
+    -- this column the two cases are indistinguishable. Null means still owed.
+    ending_told_at TEXT,
     error TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -393,6 +406,12 @@ const SCHEMA = `
     -- stamped. Null on rows written before receipts existed; those keep the
     -- old first-answer reading.
     dispatch_id TEXT,
+    -- The hop this one re-opens (MAR-2971, R2). A redelivered input is the
+    -- same errand carried a second time, so it gets its own hop on the SAME
+    -- flow run rather than a stamp on the first one: the first hop already
+    -- reads failed and that remains true of the first attempt. Null on
+    -- every hop that was a first attempt.
+    redelivered_from TEXT,
     error TEXT
   );
 
@@ -924,6 +943,11 @@ function ensureRelayColumns(database: Database.Database): void {
   if (!hopColumns.has('dispatch_id')) {
     database.exec('ALTER TABLE relay_hops ADD COLUMN dispatch_id TEXT')
   }
+  // The hop a redelivery re-opens (MAR-2971). Null on every older row, which
+  // is honest: nothing was ever redelivered before this.
+  if (!hopColumns.has('redelivered_from')) {
+    database.exec('ALTER TABLE relay_hops ADD COLUMN redelivered_from TEXT')
+  }
   // `settles_owed` was a target-status guess at the causal question the
   // dispatch id now answers by identity; a count nobody reads would only
   // invite a reader. Dropped rather than left dead -- nothing else indexes
@@ -1117,6 +1141,30 @@ function ensureQueuedInputColumns(database: Database.Database): void {
   ) {
     database.exec(
       'ALTER TABLE session_queued_inputs ADD COLUMN dispatch_id TEXT',
+    )
+  }
+
+  // Redelivery lineage and the told-ending stamp (MAR-2971). Both additive
+  // and nullable with no backfill: no row written before this was ever a
+  // second attempt, and for the told-ending stamp null is the honest reading
+  // too -- these rows predate the question, and treating them as "still
+  // owed" is what the old code did with them anyway.
+  if (
+    !getTableColumnNames(database, 'session_queued_inputs').has(
+      'redelivered_from',
+    )
+  ) {
+    database.exec(
+      'ALTER TABLE session_queued_inputs ADD COLUMN redelivered_from TEXT',
+    )
+  }
+  if (
+    !getTableColumnNames(database, 'session_queued_inputs').has(
+      'ending_told_at',
+    )
+  ) {
+    database.exec(
+      'ALTER TABLE session_queued_inputs ADD COLUMN ending_told_at TEXT',
     )
   }
 }

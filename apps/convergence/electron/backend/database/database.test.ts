@@ -300,6 +300,9 @@ describe('database', () => {
         'skip_context_injection',
         'relays_muted',
         'dispatch_id',
+        // Redelivery lineage and the told-ending stamp (MAR-2971).
+        'redelivered_from',
+        'ending_told_at',
         'error',
         'created_at',
         'updated_at',
@@ -1044,6 +1047,8 @@ describe('database', () => {
         'settled_at',
         'settled_status',
         'dispatch_id',
+        // The hop a redelivery re-opens on the same run (MAR-2971).
+        'redelivered_from',
         'outcome',
         'error',
       ].sort(),

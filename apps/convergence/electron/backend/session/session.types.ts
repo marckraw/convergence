@@ -279,10 +279,51 @@ export interface SessionQueuedInput {
    * carrying this id, and the relay ledger stamps the right hop.
    */
   dispatchId: string | null
+  /**
+   * The row this one is a second attempt at (MAR-2971, R2), or null on a
+   * first attempt. The failed row is never rewritten, so the retry points
+   * back at it instead.
+   */
+  redeliveredFrom: string | null
+  /**
+   * When this row's receipt was told an ending, or null while it is still
+   * owed (MAR-2971). Only the paths that actually emit a terminal stamp it;
+   * `recoverDispatching` at boot rewrites state and tells nobody, and that
+   * difference is what stops a dismissal announcing a second ending.
+   */
+  endingToldAt: string | null
   error: string | null
   createdAt: string
   updatedAt: string
 }
+
+/**
+ * A receipt handed on to a second attempt (MAR-2971, R2).
+ *
+ * "Deliver now" does not revive the failed row's id. By the time a row is
+ * failed the engine has usually already been told the `failed` ending: it
+ * released the baton and stamped the hop, so reusing the id would hand the
+ * next settle a receipt nobody holds -- it would mint a BRAND NEW flow run,
+ * orphan the crew's loop mid-round, and leave History reading `failed` for a
+ * delivery that landed. A muted opener would be worse: its settle would read
+ * as work and fire the wires on a `/clear`.
+ *
+ * So the retry gets a NEW id and says where it came from, and the engine
+ * re-opens the errand on the ORIGINAL run: a fresh hop copied from the old
+ * one, the baton re-registered, the opener's plumbing claim restored.
+ */
+export interface DispatchRedeliveredEvent {
+  sessionId: string
+  fromDispatchId: string
+  toDispatchId: string
+  /** True for a relay opener, whose settle is plumbing rather than work. */
+  relaysMuted: boolean
+  at: string
+}
+
+export type DispatchRedeliveredListener = (
+  event: DispatchRedeliveredEvent,
+) => void
 
 export interface QueuedInputPatchEvent {
   sessionId: string

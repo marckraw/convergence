@@ -105,6 +105,8 @@ export function queuedInputFromRow(
     skipContextInjection: row.skip_context_injection === 1,
     relaysMuted: row.relays_muted === 1,
     dispatchId: row.dispatch_id ?? null,
+    redeliveredFrom: row.redelivered_from ?? null,
+    endingToldAt: row.ending_told_at ?? null,
     error: row.error,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

@@ -39,6 +39,8 @@ export interface SessionQueuedInputDraft {
    * input's turn after a restart. Absent for input people typed.
    */
   dispatchId?: string | null
+  /** The row this is a second attempt at (MAR-2971, R2). */
+  redeliveredFrom?: string | null
 }
 
 export type QueuedInputDeliveryMode = Extract<
@@ -114,6 +116,8 @@ export class SessionQueuedInputService {
       skipContextInjection: input.skipContextInjection === true,
       relaysMuted: input.muteRelays === true,
       dispatchId: input.dispatchId ?? null,
+      redeliveredFrom: input.redeliveredFrom ?? null,
+      endingToldAt: null,
       error: null,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -134,10 +138,11 @@ export class SessionQueuedInputService {
            skip_context_injection,
            relays_muted,
            dispatch_id,
+           redelivered_from,
            error,
            created_at,
            updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         item.id,
@@ -152,6 +157,7 @@ export class SessionQueuedInputService {
         item.skipContextInjection ? 1 : 0,
         item.relaysMuted ? 1 : 0,
         item.dispatchId,
+        item.redeliveredFrom,
         item.error,
         item.createdAt,
         item.updatedAt,
@@ -192,11 +198,29 @@ export class SessionQueuedInputService {
    * erase the only evidence of the first try, and the ledger reads these
    * rows. The new row carries the payload exactly as the wire wrote it --
    * text, attachments, skills, the account chosen then, the injection bypass
-   * and the mute -- and the SAME `dispatchId`, because it is a second attempt
-   * at one errand, not a second errand: delivering it settles the hop the
-   * first attempt left owed.
+   * and the mute -- and points back at its predecessor.
+   *
+   * It carries a NEW receipt, not the old one. Lap 1 reused the id, reading
+   * "the same errand" as "the same receipt"; the two come apart the moment
+   * the engine has already been told the `failed` ending, which is every
+   * case but the boot recovery. A released id names a receipt nobody holds,
+   * so the next settle mints a brand new flow run and the crew's loop is
+   * orphaned mid-round -- and a muted opener's settle would read as work and
+   * fire the wires on a `/clear`. The caller tells the engine about the
+   * handover instead, and the engine re-opens the errand on the original
+   * run. A row whose first attempt carried no receipt (input a person
+   * typed) still carries none.
+   *
+   * The fresh row gets a fresh `created_at`, so it goes to the BACK of the
+   * queue rather than reclaiming its old place. Intended: the rows ahead of
+   * it have been waiting longer, and "now" means the next turn this session
+   * takes, not a jump over other people's work.
    */
-  redeliver(id: string): SessionQueuedInput {
+  redeliver(id: string): {
+    input: SessionQueuedInput
+    /** The receipt the first attempt carried, or null if it carried none. */
+    fromDispatchId: string | null
+  } {
     const row = this.getRowById(id)
     if (!row) throw new Error(`Queued input not found: ${id}`)
     if (row.state !== 'failed') {
@@ -204,7 +228,7 @@ export class SessionQueuedInputService {
     }
 
     const previous = queuedInputFromRow(row)
-    return this.enqueue(
+    const fresh = this.enqueue(
       previous.sessionId,
       {
         text: previous.text,
@@ -213,10 +237,18 @@ export class SessionQueuedInputService {
         providerAccountId: previous.providerAccountId,
         skipContextInjection: previous.skipContextInjection,
         muteRelays: previous.relaysMuted,
-        dispatchId: previous.dispatchId,
+        // A NEW receipt, never the old one (R2 as amended in lap 2). By the
+        // time a row is failed the engine has usually already been told the
+        // `failed` ending and released the baton, so the old id names a
+        // receipt nobody holds: the next settle would mint a brand new flow
+        // run and orphan the crew's loop. The engine is told about the
+        // handover separately and re-opens the errand on the original run.
+        dispatchId: previous.dispatchId === null ? null : this.idFactory(),
+        redeliveredFrom: previous.id,
       },
       previous.deliveryMode,
     )
+    return { input: fresh, fromDispatchId: previous.dispatchId }
   }
 
   /**
@@ -319,6 +351,27 @@ export class SessionQueuedInputService {
       if (item) failed.push(item)
     }
     return failed
+  }
+
+  /**
+   * Stamps that this row's receipt has been told an ending (MAR-2971).
+   *
+   * Called by the paths that actually emit a terminal, never by
+   * `recoverDispatching`: that one rewrites the state at boot and announces
+   * nothing, so its rows are still owed and a later dismissal is the first
+   * and only ending they get. Without the stamp the two kinds of `failed`
+   * row are indistinguishable and a dismissal would announce a second
+   * ending for an id the engine has already released.
+   */
+  markEndingTold(ids: readonly string[]): void {
+    if (ids.length === 0) return
+    const stamp = this.db.prepare(
+      `UPDATE session_queued_inputs
+       SET ending_told_at = ?
+       WHERE id = ? AND ending_told_at IS NULL`,
+    )
+    const timestamp = this.now()
+    for (const id of ids) stamp.run(timestamp, id)
   }
 
   private getRowById(id: string): SessionQueuedInputRow | undefined {
