@@ -1,6 +1,6 @@
 import * as markerHelpers from './parallel-work.pure'
 import { useState } from 'react'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { ConversationItem, Session } from '@/entities/session'
 import type {
@@ -142,7 +142,7 @@ it('R3′ renders the child tool in its own transcript and links rather than rel
     },
   ] as ConversationItem[]
   const { container } = render(
-    <ParallelWork {...props()} items={items} selectedId="agent" />,
+    <ParallelWork {...props()} items={items} selectedId="agent:agent" />,
   )
   expect({
     child: container.textContent?.includes('child-only.txt'),
@@ -169,7 +169,7 @@ it('R2 back restores the panel list scroll and selection — mutation reset list
     transcript,
     scroll: container.querySelector('[data-parallel-scroll]')?.scrollTop,
     selected: container
-      .querySelector('[data-work-id="agent"]')
+      .querySelector('[data-work-id="agent:agent"]')
       ?.className.includes('border-blue-500'),
   }).toEqual({ transcript: true, scroll: 132, selected: true })
 })
@@ -255,7 +255,7 @@ it('T10 cyclic ancestry finishes selection — mutation remove visited parent gu
     return originalFind(...args)
   }) as typeof rows.find
   expect(() =>
-    render(<ParallelWork {...props()} rows={rows} selectedId="agent" />),
+    render(<ParallelWork {...props()} rows={rows} selectedId="agent:agent" />),
   ).not.toThrow()
 })
 
@@ -270,7 +270,7 @@ it('H2 a missed-adoption row stops by the harness id and settles from its task w
   const linkedRun = { ...run, taskId: 'harness' }
   const input = {
     ...props(),
-    selectedId: 'agent',
+    selectedId: 'agent:agent',
     rows: buildParallelWork([linkedRun], [task], []),
   }
   const { rerender } = render(<ParallelWork {...input} />)
@@ -434,8 +434,8 @@ it('RUN64 R3 older bucket expands without changing all-time summary — mutation
   unmount()
   vi.useRealTimers()
   expect({ before, after, summary }).toEqual({
-    before: ['active', 'young'],
-    after: ['active', 'young', 'old'],
+    before: ['agent:active', 'agent:young'],
+    after: ['agent:active', 'agent:young', 'agent:old'],
     summary: true,
   })
 })
@@ -525,10 +525,16 @@ it('RUN64 round2 one root bucket keeps visible trees whole — mutation bucket e
   unmount()
   vi.useRealTimers()
   expect({ before, buttons: buttons.length, label, after }).toEqual({
-    before: ['active', 'old-child'],
+    before: ['agent:active', 'agent:old-child'],
     buttons: 1,
     label: '3 older · newest 2 h ago',
-    after: ['active', 'old-child', 'old-root', 'old-descendant', 'legacy'],
+    after: [
+      'agent:active',
+      'agent:old-child',
+      'agent:old-root',
+      'agent:old-descendant',
+      'task:legacy',
+    ],
   })
 })
 
@@ -564,3 +570,199 @@ it.each(['reopen', 'session'] as const)(
     expect({ expanded, after }).toEqual({ expanded: 'true', after: 'false' })
   },
 )
+
+/**
+ * RUN72 / MAR-2902. A row's id is the harness's own, and the two namespaces
+ * are not disjoint: a non-`local_agent` task whose id equals a run id produces
+ * an agent row and a task row that share it. Every per-row surface keys on
+ * `${kind}:${id}` so the two can be told apart.
+ *
+ * Mutation: key any one of these on the bare id and the wrong row answers —
+ * `rows.find` returns whichever came first, which is the agent.
+ */
+const sharedIdRows = () =>
+  buildParallelWork(
+    [run],
+    [
+      {
+        taskId: 'agent',
+        sessionId: 's',
+        status: 'running',
+        description: 'Watch logs',
+        startedAt: '2026-09-09T00:00:00Z',
+        endedAt: null,
+        observedAt: null,
+        toolUseId: null,
+        taskType: 'monitor',
+        outputFile: null,
+      },
+    ],
+    [],
+  )
+
+it('RUN72 an agent and a task sharing an id are separate rows on every surface — mutation key a surface on the bare id turns red', async () => {
+  vi.mocked(parallelWorkApi.stop).mockReset().mockResolvedValue(undefined)
+  const input = { ...props(), rows: sharedIdRows() }
+  const { container } = render(<ParallelWork {...input} />)
+  const taskCard = screen.getByText('Watch logs').closest('[data-work-id]')!
+  // Select: the title button reports the row it belongs to, not the id alone.
+  fireEvent.click(screen.getByRole('button', { name: 'Watch logs' }))
+  // Confirm: the dialog names the row whose Stop was pressed.
+  fireEvent.click(
+    within(taskCard as HTMLElement).getByRole('button', {
+      name: 'Stop',
+    }),
+  )
+  const confirmTitle = screen.getByRole('heading', {
+    name: /^Stop /,
+  }).textContent
+  await act(async () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Stop task' })),
+  )
+  expect({
+    keys: [...container.querySelectorAll('[data-work-id]')].map((row) =>
+      row.getAttribute('data-work-id'),
+    ),
+    selected: input.onSelect.mock.calls,
+    confirmTitle,
+    // Stop state belongs to one row: the agent row is running too, and under a
+    // bare-id key it would report a stop nobody asked it for.
+    pending: screen.getAllByText('Stop requested… awaiting confirmation')
+      .length,
+    requests: vi.mocked(parallelWorkApi.stop).mock.calls,
+  }).toEqual({
+    keys: ['agent:agent', 'task:agent'],
+    selected: [['task:agent']],
+    confirmTitle: 'Stop Watch logs?',
+    pending: 1,
+    requests: [['s', 'agent']],
+  })
+})
+
+it('RUN72 a shared id selects the row the key names, not the first match — mutation resolve selection by bare id turns red', () => {
+  // Two transcripts under one id: the agent's forwarded message and the task's
+  // tool call. Only the row the key names may show its own.
+  const items = [
+    {
+      id: 'agent-text',
+      kind: 'message',
+      actor: 'assistant',
+      agentRunId: 'agent',
+      text: 'agent-only.txt',
+      providerMeta: {},
+    },
+    {
+      id: 'task-tool',
+      kind: 'tool-call',
+      taskId: 'agent',
+      toolName: 'Read',
+      inputText: '{"file_path":"task-only.txt"}',
+      providerMeta: {},
+    },
+  ] as ConversationItem[]
+  const { container } = render(
+    <ParallelWork
+      {...props()}
+      rows={sharedIdRows()}
+      items={items}
+      selectedId="task:agent"
+    />,
+  )
+  const transcript = {
+    heading: Boolean(screen.queryByText('Task output')),
+    task: Boolean(container.textContent?.includes('task-only.txt')),
+    agent: Boolean(container.textContent?.includes('agent-only.txt')),
+  }
+  // The details sheet reads the same selection: its fields come from the row
+  // the container resolved, so a bare-id miss empties it.
+  fireEvent.click(screen.getByRole('button', { name: 'Details' }))
+  expect({
+    ...transcript,
+    details: container.querySelector('dl')?.textContent ?? null,
+  }).toEqual({
+    heading: true,
+    task: true,
+    agent: false,
+    details: expect.stringContaining('Typemonitor'),
+  })
+})
+
+it('RUN72 collapsing the agent under a shared id hides only its branch — mutation key collapse on the bare id turns red', () => {
+  const rows = buildParallelWork(
+    [
+      run,
+      {
+        ...run,
+        id: 'child',
+        spawnedByItemId: 'child-spawn',
+        description: 'Child work',
+      },
+    ],
+    [
+      {
+        taskId: 'agent',
+        sessionId: 's',
+        status: 'running',
+        description: 'Watch logs',
+        startedAt: '2026-09-09T00:00:00Z',
+        endedAt: null,
+        observedAt: null,
+        toolUseId: null,
+        taskType: 'monitor',
+        outputFile: null,
+      },
+    ],
+    [{ id: 'child-spawn', agentRunId: 'agent' }],
+  )
+  render(<ParallelWork {...props()} rows={rows} />)
+  const before = Boolean(screen.queryByText('Child work'))
+  fireEvent.click(screen.getByRole('button', { name: 'Collapse Read routes' }))
+  expect({
+    before,
+    // The branch folds…
+    child: Boolean(screen.queryByText('Child work')),
+    count: Boolean(screen.queryByText('1 descendants running')),
+    // …and the task that merely shares the agent's id is untouched.
+    task: Boolean(screen.queryByText('Watch logs')),
+  }).toEqual({ before: true, child: false, count: true, task: true })
+})
+
+it('RUN72 selecting a hidden descendant expands its ancestors by row key — mutation delete the bare parent id turns red', () => {
+  const rows = buildParallelWork(
+    [
+      run,
+      {
+        ...run,
+        id: 'child',
+        spawnedByItemId: 'child-spawn',
+        description: 'Child work',
+      },
+    ],
+    [
+      {
+        taskId: 'agent',
+        sessionId: 's',
+        status: 'running',
+        description: 'Watch logs',
+        startedAt: '2026-09-09T00:00:00Z',
+        endedAt: null,
+        observedAt: null,
+        toolUseId: null,
+        taskType: 'monitor',
+        outputFile: null,
+      },
+    ],
+    [{ id: 'child-spawn', agentRunId: 'agent' }],
+  )
+  const input = { ...props(), rows }
+  const { rerender } = render(<ParallelWork {...input} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Collapse Read routes' }))
+  const hidden = Boolean(screen.queryByText('Child work'))
+  // The branch is folded; a selection landing inside it must open the way back.
+  rerender(<ParallelWork {...input} selectedId="agent:child" />)
+  rerender(<ParallelWork {...input} selectedId={null} />)
+  expect({
+    hidden,
+    reopened: Boolean(screen.queryByText('Child work')),
+  }).toEqual({ hidden: false, reopened: true })
+})

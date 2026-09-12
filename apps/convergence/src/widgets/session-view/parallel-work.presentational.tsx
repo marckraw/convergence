@@ -13,7 +13,12 @@ import {
   type ParallelWorkRow,
 } from '@/shared/lib/parallel-work.pure'
 import { Button } from '@/shared/ui/button'
-import { descendantActivity, workStatus, workTitle } from './parallel-work.pure'
+import {
+  descendantActivity,
+  workRowKey,
+  workStatus,
+  workTitle,
+} from './parallel-work.pure'
 
 export interface ParallelWorkPanelProps {
   olderOpen?: boolean
@@ -83,14 +88,18 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
   }, [rows, ordered])
   const descendantCounts = useMemo(
     () =>
-      new Map([...collapsed].map((id) => [id, descendantActivity(rows, id)])),
+      new Map(
+        rows
+          .filter((row) => collapsed.has(workRowKey(row)))
+          .map((row) => [workRowKey(row), descendantActivity(rows, row)]),
+      ),
     [rows, collapsed],
   )
   const decisionIds = useMemo(
     () =>
       new Map(
         rows.map((row) => [
-          row.id,
+          workRowKey(row),
           parallelWorkRowState(row)
             .ids.map((id) => pendingAgentDecision(items, id))
             .find(Boolean),
@@ -106,9 +115,9 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
     ...(counts.failed ? [`${counts.failed} failed`] : []),
     ...(counts.stopped ? [`${counts.stopped} stopped`] : []),
   ].join(' · ')
-  const selected = rows.find((row) => row.id === selectedId)
+  const selected = rows.find((row) => workRowKey(row) === selectedId)
   const decision = (row: ParallelWorkRow) => {
-    const id = decisionIds.get(row.id)
+    const id = decisionIds.get(workRowKey(row))
     return id ? (
       <Button
         variant="ghost"
@@ -120,7 +129,7 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
     ) : null
   }
   const controls = (row: ParallelWorkRow) => {
-    const state = stopStates.get(row.id)
+    const state = stopStates.get(workRowKey(row))
     const running = parallelWorkRowState(row).fact?.status === 'running'
     const stopReason = !props.canStop
       ? 'Stop is not available on this Claude Code version'
@@ -149,7 +158,7 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
               variant="outline"
               size="sm"
               disabled={Boolean(stopReason) || state?.pending}
-              onClick={() => props.onStop?.(row.id)}
+              onClick={() => props.onStop?.(workRowKey(row))}
             >
               {state?.error && running ? 'Retry stop' : 'Stop'}
             </Button>
@@ -163,11 +172,11 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
               View spawn
             </Button>
           )}
-          {props.resultItems?.has(row.id) && (
+          {props.resultItems?.has(workRowKey(row)) && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => props.onResult?.(row.id)}
+              onClick={() => props.onResult?.(workRowKey(row))}
             >
               View result
             </Button>
@@ -175,7 +184,7 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => props.onDetails?.(row.id)}
+            onClick={() => props.onDetails?.(workRowKey(row))}
           >
             Details
           </Button>
@@ -200,7 +209,7 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
         <Button
           variant="ghost"
           className="h-auto justify-start rounded-none p-0 hover:bg-transparent block max-w-full truncate text-left text-[13px] font-medium hover:underline"
-          onClick={() => props.onSelect(row.id)}
+          onClick={() => props.onSelect(workRowKey(row))}
         >
           {workTitle(row)}
         </Button>
@@ -232,16 +241,16 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
     row: ParallelWorkRow,
     seen = new Set<string>(),
   ): ReactNode => {
-    const key = `${row.kind}:${row.id}`
+    const key = workRowKey(row)
     if (seen.has(key)) return null
     const next = new Set([...seen, key])
     const children = childrenById.get(row) ?? []
-    const hidden = collapsed.has(row.id)
+    const hidden = collapsed.has(key)
     return (
-      <div key={`${row.kind}:${row.id}`} className="space-y-2">
+      <div key={key} className="space-y-2">
         <div
-          className={`space-y-2 rounded-md border p-3 ${props.highlightedId === row.id ? 'border-blue-500/40 bg-blue-500/10' : 'border-border/50 bg-muted/30'}`}
-          data-work-id={row.id}
+          className={`space-y-2 rounded-md border p-3 ${props.highlightedId === key ? 'border-blue-500/40 bg-blue-500/10' : 'border-border/50 bg-muted/30'}`}
+          data-work-id={key}
         >
           {children.length > 0 && (
             <Button
@@ -249,7 +258,7 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
               className="h-auto justify-start rounded-none p-0 hover:bg-transparent flex items-center gap-1 text-[11px] text-muted-foreground"
               aria-expanded={!hidden}
               aria-label={`${hidden ? 'Expand' : 'Collapse'} ${workTitle(row)}`}
-              onClick={() => props.onToggle?.(row.id)}
+              onClick={() => props.onToggle?.(key)}
             >
               {hidden ? (
                 <ChevronRight className="size-3" />
@@ -257,7 +266,7 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
                 <ChevronDown className="size-3" />
               )}
               {hidden &&
-                `${descendantCounts.get(row.id) ?? 0} descendants running`}
+                `${descendantCounts.get(key) ?? 0} descendants running`}
             </Button>
           )}
           {content(row)}

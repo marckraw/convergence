@@ -199,7 +199,11 @@ it('L9 descendant count is collapsed-only and decorations are cached across tick
   rerender(<ParallelWorkPanel {...input} now={1000} />)
   const next = [descendants.mock.calls.length, decisions.mock.calls.length]
   rerender(
-    <ParallelWorkPanel {...input} now={2000} collapsed={new Set(['parent'])} />,
+    <ParallelWorkPanel
+      {...input}
+      now={2000}
+      collapsed={new Set(['agent:parent'])}
+    />,
   )
   expect({
     expandedCount,
@@ -239,7 +243,7 @@ it('M7 descendant scans are lazy and independent of streaming items — mutation
     const input = { rows, now: 0, onSelect: vi.fn(), onClose: vi.fn() }
     const { rerender } = render(<ParallelWorkPanel {...input} />)
     const expanded = scan.mock.calls.length
-    const collapsed = new Set(['parent'])
+    const collapsed = new Set(['agent:parent'])
     for (let i = 0; i < 20; i++)
       rerender(
         <ParallelWorkPanel
@@ -248,7 +252,10 @@ it('M7 descendant scans are lazy and independent of streaming items — mutation
           items={[{ id: 'stream', kind: 'message', actor: 'assistant' }]}
         />,
       )
-    expect({ expanded, scans: scan.mock.calls.map(([, id]) => id) }).toEqual({
+    expect({
+      expanded,
+      scans: scan.mock.calls.map(([, row]) => row.id),
+    }).toEqual({
       expanded: 0,
       scans: ['parent'],
     })

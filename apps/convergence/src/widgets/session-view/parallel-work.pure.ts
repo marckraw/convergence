@@ -1,13 +1,35 @@
 import {
+  parallelWorkParents,
   parallelWorkRowState,
   type ParallelWorkRow,
 } from '@/shared/lib/parallel-work.pure'
 import type { ConversationItem } from '@/entities/session'
 
 export interface ParallelWorkMarker {
-  agentId: string
+  /**
+   * The row the marker points at, as `${kind}:${id}` — the same key every
+   * per-row surface in the panel uses. A marker is the only other place a
+   * selection is born, and a bare id here would resolve to whichever of a
+   * same-id agent and task came first in the list (MAR-2902).
+   */
+  rowKey: string
   label: string
   replace: boolean
+}
+
+/**
+ * The identity of a row in the panel, and the only key any per-row surface may
+ * use: collapse, select, confirm, stop state, the ancestor walk and
+ * `data-work-id`.
+ *
+ * A row's `id` is the harness's own — a run id for an agent row, a task id for
+ * a task row — and the two namespaces are not disjoint: a non-`local_agent`
+ * task whose id equals a run id produces two rows that a bare-id key cannot
+ * tell apart. Collapsing one collapsed both, and a selection resolved to
+ * whichever row `find` reached first (MAR-2902).
+ */
+export function workRowKey(row: ParallelWorkRow): string {
+  return `${row.kind}:${row.id}`
 }
 
 export function parallelWorkMarkers(
@@ -31,7 +53,7 @@ export function parallelWorkMarkers(
     if (spawn && item.kind === 'tool-call') {
       const parent = spawn.parentId ? runsById.get(spawn.parentId) : null
       markers.set(item.id, {
-        agentId: spawn.id,
+        rowKey: workRowKey(spawn),
         replace: true,
         label: `Started ${spawn.run!.agentType ?? 'Subagent'} · ${workTitle(spawn)}${parent ? ` · from ${workTitle(parent)}` : ''}`,
       })
@@ -47,19 +69,19 @@ export function parallelWorkMarkers(
     const eventType = item.providerMeta.providerEventType
     if (eventType === 'tool_result.async_launched') {
       markers.set(item.id, {
-        agentId: row.id,
+        rowKey: workRowKey(row),
         replace: true,
         label: `launched · ${workTitle(row)}`,
       })
     } else if (
-      !returned.has(row.id) &&
+      !returned.has(workRowKey(row)) &&
       [
         'tool_result.completed',
         'tool_result.failed',
         'harness.task.terminal',
       ].includes(eventType ?? '')
     ) {
-      returned.add(row.id)
+      returned.add(workRowKey(row))
       const outcome =
         eventType === 'tool_result.failed'
           ? 'failed'
@@ -67,7 +89,7 @@ export function parallelWorkMarkers(
             ? 'completed'
             : parallelWorkRowState(row).fact?.status
       markers.set(item.id, {
-        agentId: row.id,
+        rowKey: workRowKey(row),
         replace: item.kind !== 'note',
         label: `Result returned · ${workTitle(row)} · ${outcome}`,
       })
@@ -108,21 +130,33 @@ export function workStatus(row: ParallelWorkRow): string {
       : 'Completed'
 }
 
+/**
+ * How many running rows hang below this one.
+ *
+ * The walk takes a ROW rather than an id, and resolves each child's `parentId`
+ * through `parallelWorkParents` — the same resolution the panel uses to build
+ * its tree, so the collapsed count and the branch it decorates cannot disagree.
+ * A bare-id walk could not tell a task row from an agent row sharing its id,
+ * and handed the task the agent's descendants (MAR-2902).
+ */
 export function descendantActivity(
   rows: ParallelWorkRow[],
-  id: string,
+  row: ParallelWorkRow,
 ): number {
-  const visited = new Set([id])
+  const parents = parallelWorkParents(rows)
+  const visited = new Set([workRowKey(row)])
   let count = 0
-  const visit = (parent: string) => {
-    for (const row of rows)
-      if (row.parentId === parent && !visited.has(row.id)) {
-        visited.add(row.id)
-        if (parallelWorkRowState(row).fact?.status === 'running') count++
-        visit(row.id)
-      }
+  const visit = (parent: ParallelWorkRow) => {
+    for (const child of rows) {
+      if (!child.parentId || parents.get(child.parentId) !== parent) continue
+      const key = workRowKey(child)
+      if (visited.has(key)) continue
+      visited.add(key)
+      if (parallelWorkRowState(child).fact?.status === 'running') count++
+      visit(child)
+    }
   }
-  visit(id)
+  visit(row)
   return count
 }
 

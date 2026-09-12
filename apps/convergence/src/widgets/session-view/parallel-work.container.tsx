@@ -25,6 +25,7 @@ import { ParallelWorkPanel } from './parallel-work.presentational'
 import { parallelWorkApi } from './parallel-work.api'
 import {
   parallelWorkMarkers,
+  workRowKey,
   workTitle,
   parallelWorkRefusal,
 } from './parallel-work.pure'
@@ -99,11 +100,17 @@ export const ParallelWork: FC<Props> = ({
     setCollapsed((current) => {
       const next = new Set(current)
       const visited = new Set<string>()
-      let parent = rows.find((row) => row.id === selectedId)?.parentId
+      // `parentId` names a run id, so each ancestor is the AGENT row with that
+      // id -- never a task row that happens to share it (MAR-2902). The keys
+      // removed from `collapsed` are row keys, which is what the panel reads.
+      const ancestor = (id: string) =>
+        rows.find((row) => row.kind === 'agent' && row.id === id)
+      let parent = rows.find((row) => workRowKey(row) === selectedId)?.parentId
       while (parent && !visited.has(parent)) {
         visited.add(parent)
-        next.delete(parent)
-        parent = rows.find((row) => row.id === parent)?.parentId
+        const row = ancestor(parent)
+        if (row) next.delete(workRowKey(row))
+        parent = row?.parentId
       }
       return next
     })
@@ -112,10 +119,10 @@ export const ParallelWork: FC<Props> = ({
     setStopStates(
       (current) =>
         new Map(
-          [...current].filter(([id, state]) =>
+          [...current].filter(([key, state]) =>
             rows.some(
               (row) =>
-                row.id === id &&
+                workRowKey(row) === key &&
                 (state.error ||
                   parallelWorkRowState(row).fact?.status === 'running'),
             ),
@@ -133,8 +140,8 @@ export const ParallelWork: FC<Props> = ({
     setDetails(false)
     onSelect(id)
   }
-  const selected = rows.find((row) => row.id === selectedId)
-  const confirm = rows.find((row) => row.id === confirmId)
+  const selected = rows.find((row) => workRowKey(row) === selectedId)
+  const confirm = rows.find((row) => workRowKey(row) === confirmId)
   const visibleItems = selected
     ? items.filter((item) =>
         selected.kind === 'agent'
@@ -187,27 +194,40 @@ export const ParallelWork: FC<Props> = ({
           ],
         ]
       : []
+  /**
+   * Where each row's result landed in the transcript, keyed by row key so the
+   * panel's "View result" reads the same identity every other per-row surface
+   * does (MAR-2902).
+   *
+   * Two sources, and the marker wins: a return marker already names its row,
+   * while a terminal task note carries only the harness's task id and has to
+   * be matched against each row's evidence ids.
+   */
   const resultItems = useMemo(() => {
-    const resultItems = new Map(
+    const byRowKey = new Map(
       [...parallelWorkMarkers(items, rows)]
         .filter(([, marker]) => marker.label.startsWith('Result returned'))
-        .map(([itemId, marker]) => [marker.agentId, itemId]),
+        .map(([itemId, marker]) => [marker.rowKey, itemId]),
     )
+    const byTaskId = new Map<string, string>()
     for (const item of items) {
       if (
         item.kind === 'note' &&
         item.taskId &&
         item.providerMeta.providerEventType === 'harness.task.terminal' &&
-        !resultItems.has(item.taskId)
+        !byTaskId.has(item.taskId)
       )
-        resultItems.set(item.taskId, item.id)
+        byTaskId.set(item.taskId, item.id)
     }
     for (const row of rows) {
-      const ids = parallelWorkRowState(row).ids
-      const itemId = ids.map((id) => resultItems.get(id)).find(Boolean)
-      if (itemId) for (const id of ids) resultItems.set(id, itemId)
+      const key = workRowKey(row)
+      if (byRowKey.has(key)) continue
+      const itemId = parallelWorkRowState(row)
+        .ids.map((id) => byTaskId.get(id))
+        .find(Boolean)
+      if (itemId) byRowKey.set(key, itemId)
     }
-    return resultItems
+    return byRowKey
   }, [items, rows])
   const panel = (
     <div

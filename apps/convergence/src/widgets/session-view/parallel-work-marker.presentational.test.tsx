@@ -49,6 +49,6 @@ it('R4 renders spawn, launch and real return in order with identity links — mu
       '↳launched · Read routes↗',
       '↳Result returned · Read routes · completed↗',
     ],
-    selected: [['agent'], ['agent'], ['agent']],
+    selected: [['agent:agent'], ['agent:agent'], ['agent:agent']],
   })
 })
