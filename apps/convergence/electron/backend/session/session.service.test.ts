@@ -452,12 +452,15 @@ describe('SessionService', () => {
       // turn this app lifetime.
       //
       // BOTH terminal words, because the strand does not care which one: a
-      // turn that failed is as over as one that completed, and a resident
-      // handle survives either. Reading only `completed` leaves the same
-      // stranding for a session whose turn broke.
+      // turn that failed is as over as one that completed. The `failed` leg is
+      // CONSTRUCTED (direct SQL with the handle retained) to pin the word set:
+      // the local lifecycle releases the handle on `failed`, so the nearest
+      // real analogue is a reattached remote handle whose replayed settle is
+      // dropped while the row already reads `failed`. Reading only
+      // `completed` leaves the same stranding for a session whose turn broke.
       //
       // A resident handle is NOT released when its turn completes, so the row
-      // reads terminal with a handle still attached. A door that asked "is a A door that asked "is a
+      // reads terminal with a handle still attached. A door that asked "is a
       // handle attached" called that busy; the refusal became a queued opener +
       // payload; and the only automatic drain is a handle's own `completed`,
       // which is never coming again. On master that hail failed loudly — with
