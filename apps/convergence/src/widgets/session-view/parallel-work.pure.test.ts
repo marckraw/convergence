@@ -9,6 +9,7 @@ import type { ConversationItem } from '@/entities/session'
 import {
   descendantActivity,
   parallelWorkMarkers,
+  workRowKey,
   workTitle,
   workStatus,
   parallelWorkRefusal,
@@ -42,7 +43,7 @@ it('R2 collapsed activity includes deep descendants and missing elapsed stays mi
     task: { status: 'running', startedAt: null } as SessionTask,
   }
   expect({
-    descendants: descendantActivity(rows, 'parent'),
+    descendants: descendantActivity(rows, rows[0]),
     elapsed: parallelWorkTime(missing, 1000).label,
   }).toEqual({ descendants: 1, elapsed: 'time not reported' })
 })
@@ -104,7 +105,7 @@ it('T10 cyclic descendants terminate and exclude the starting row — mutation r
     { id: 'a', parentId: 'b', kind: 'task', task: { status: 'running' } },
     { id: 'b', parentId: 'a', kind: 'task', task: { status: 'running' } },
   ] as ParallelWorkRow[]
-  expect(descendantActivity(rows, 'a')).toBe(1)
+  expect(descendantActivity(rows, rows[0])).toBe(1)
 })
 
 it('H2′ withheld result moments leave the terminal task fact as the return marker — mutation discard task-fact returns turns red', () => {
@@ -138,7 +139,7 @@ it('H2′ withheld result moments leave the terminal task fact as the return mar
     [
       'terminal',
       {
-        agentId: 'adopted',
+        rowKey: 'agent:adopted',
         label: 'Result returned · Read routes · completed',
         replace: false,
       },
@@ -186,5 +187,46 @@ it('H2 merged state and return marker follow the terminal task — mutations pre
     elapsed: '< 1 m ago',
     counts: { running: 0, unknown: 0, failed: 0, stopped: 0 },
     marker: 'Result returned · Read routes · completed',
+  })
+})
+
+/**
+ * RUN72 / MAR-2902. A run id and a task id can be the same string, and then one
+ * id names two rows. The row key tells them apart, and the descendant walk
+ * resolves each child's `parentId` the way the panel's tree does — so the task
+ * row is handed none of the agent's children.
+ *
+ * Mutation: walk on the bare parent id (`child.parentId === parent.id`) and the
+ * task reports the agent's descendant — red.
+ */
+it('RUN72 a task sharing a run id keys apart and inherits no descendants — mutation walk by bare parent id turns red', () => {
+  const rows = [
+    {
+      id: 'shared',
+      parentId: null,
+      kind: 'agent',
+      run: { status: 'running' },
+    },
+    {
+      id: 'child',
+      parentId: 'shared',
+      kind: 'agent',
+      run: { status: 'running' },
+    },
+    {
+      id: 'shared',
+      parentId: null,
+      kind: 'task',
+      task: { status: 'running' },
+    },
+  ] as ParallelWorkRow[]
+  expect({
+    keys: rows.map(workRowKey),
+    agent: descendantActivity(rows, rows[0]),
+    task: descendantActivity(rows, rows[2]),
+  }).toEqual({
+    keys: ['agent:shared', 'agent:child', 'task:shared'],
+    agent: 1,
+    task: 0,
   })
 })

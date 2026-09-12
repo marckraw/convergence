@@ -11,7 +11,7 @@ export function ParallelWorkMarkerView({
     <Button
       variant="ghost"
       className="h-auto justify-start whitespace-normal my-2 flex w-full items-center gap-2 rounded-md border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-left text-xs text-blue-600 dark:text-blue-400"
-      onClick={() => onSelect(marker.agentId)}
+      onClick={() => onSelect(marker.rowKey)}
     >
       <span aria-hidden>↳</span>
       {marker.label}

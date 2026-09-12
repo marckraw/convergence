@@ -743,3 +743,49 @@ it('RUN64 round2 alive statuses cross turns but failures need known current time
     stopped: 1,
   })
 })
+
+/**
+ * RUN72 / MAR-2902. The answer window is a comparison of times, and a
+ * millisecond-stamped row against a second-stamped turn used to be compared as
+ * text: `'2026-09-09T11:00:00.000Z' < '2026-09-09T11:00:00Z'` lexically, so a
+ * failure at exactly the turn's start fell out of the window for no reason but
+ * the precision its writer happened to use. Every current writer uses
+ * `toISOString()`; the turn does not have to.
+ *
+ * Mutation: compare the strings and `boundary-*` disappear from the counts —
+ * red on both. The `label-*` pair pins the other half: a row whose stamps are
+ * not timestamps at all still answers exactly as it did before.
+ */
+it('RUN72 the answer window compares times, not their spelling — mutation compare the ISO strings turns red', () => {
+  const { db, service } = bed()
+  db.prepare("UPDATE session_turns SET started_at='2026-09-09T11:00:00Z'").run()
+  for (const [id, status, start] of [
+    // Stamped at exactly the boundary, one digit-group longer than the turn.
+    ['boundary-fail', 'failed', '2026-09-09T11:00:00.000Z'],
+    ['boundary-stop', 'stopped', '2026-09-09T11:00:00.000Z'],
+    // A millisecond BELOW the boundary is still outside the window.
+    ['before-fail', 'failed', '2026-09-09T10:59:59.999Z'],
+  ])
+    db.prepare(
+      "INSERT INTO session_tasks(task_id,session_id,status,started_at) VALUES (?,'session',?,?)",
+    ).run(id, status, start)
+  const precise = service.countParallelWork(['session']).get('session')
+
+  // The same question asked of stamps that are not times: the string
+  // comparison still answers, unchanged.
+  db.prepare("DELETE FROM session_tasks WHERE session_id='session'").run()
+  db.prepare("UPDATE session_turns SET started_at='start'").run()
+  db.prepare(
+    "INSERT INTO session_tasks(task_id,session_id,status,started_at) VALUES ('label-after','session','failed','zz-after')",
+  ).run()
+  db.prepare(
+    "INSERT INTO session_tasks(task_id,session_id,status,started_at) VALUES ('label-before','session','stopped','aa-before')",
+  ).run()
+  expect({
+    precise,
+    labels: service.countParallelWork(['session']).get('session'),
+  }).toEqual({
+    precise: { running: 0, unknown: 0, failed: 1, stopped: 1 },
+    labels: { running: 0, unknown: 0, failed: 1, stopped: 0 },
+  })
+})

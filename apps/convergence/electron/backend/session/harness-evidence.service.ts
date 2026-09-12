@@ -36,17 +36,32 @@ export class HarnessEvidenceService {
     if (!sessionIds.length) return counts
     const placeholders = sessionIds.map(() => '?').join(',')
     // CC2-4c reuses this derivation: alive is current; only failed/stopped use the answer window.
+    // The latest turn's start, carried as a column rather than re-read in the
+    // WHERE, so the answer window can name it twice for the cost of once.
+    const latestTurnStart = (alias: string) =>
+      `(SELECT started_at FROM session_turns turn WHERE turn.session_id=${alias}.session_id ORDER BY turn.sequence DESC LIMIT 1) AS turn_start`
+    // The window boundary is a comparison of TIMES, and it used to be a
+    // comparison of the strings carrying them: `'…00.000Z' < '…00Z'` lexically,
+    // so a failure stamped at exactly the turn's start was counted or dropped by
+    // nothing but which writer wrote it and at which precision (MAR-2902).
+    // `julianday()` reads both as the same instant.
+    //
+    // It answers NULL for a value it cannot parse, and this column is not
+    // guaranteed to hold a timestamp -- pre-ISO rows and fixtures carry plain
+    // labels -- so the original string comparison stays as the fallback for
+    // those, leaving every non-timestamp case exactly as it was.
+    const window = `COALESCE(turn_start,window_start)`
     const query = `WITH linked AS (
       SELECT a.*, ${linkedTaskIdSql} AS linked_task_id FROM session_agent_runs a WHERE a.session_id IN (${placeholders})
     ) SELECT session_id, status, COUNT(*) AS count FROM (
-      SELECT a.session_id, CASE WHEN a.status IN ('running','unknown') AND t.status<>'running' THEN t.status ELSE a.status END AS status, a.started_at AS window_start
+      SELECT a.session_id, CASE WHEN a.status IN ('running','unknown') AND t.status<>'running' THEN t.status ELSE a.status END AS status, a.started_at AS window_start, ${latestTurnStart('a')}
       FROM linked a LEFT JOIN session_tasks t ON t.session_id=a.session_id AND t.task_id=a.linked_task_id
       UNION ALL
-      SELECT t.session_id,t.status,COALESCE(t.started_at,t.observed_at) AS window_start FROM session_tasks t WHERE t.session_id IN (${placeholders})
+      SELECT t.session_id,t.status,COALESCE(t.started_at,t.observed_at) AS window_start, ${latestTurnStart('t')} FROM session_tasks t WHERE t.session_id IN (${placeholders})
       AND NOT EXISTS (SELECT 1 FROM linked a WHERE a.session_id=t.session_id AND a.linked_task_id=t.task_id)
     ) work WHERE status IN ('running','unknown') OR (status IN ('failed','stopped')
       AND window_start IS NOT NULL
-      AND window_start >= COALESCE((SELECT started_at FROM session_turns turn WHERE turn.session_id=work.session_id ORDER BY turn.sequence DESC LIMIT 1),window_start))
+      AND COALESCE(julianday(window_start) >= julianday(${window}), window_start >= ${window}))
       GROUP BY session_id,status`
     const statement =
       sessionIds.length === 1
