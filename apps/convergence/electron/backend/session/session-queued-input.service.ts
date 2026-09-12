@@ -41,6 +41,12 @@ export interface SessionQueuedInputDraft {
   dispatchId?: string | null
   /** The row this is a second attempt at (MAR-2971, R2). */
   redeliveredFrom?: string | null
+  /**
+   * The place in line this input already had, when it has one (MAR-2971 lap
+   * 3). Only a re-attempt passes it: everything else is arriving now, and
+   * "now" is the honest answer for those.
+   */
+  createdAt?: string
 }
 
 export type QueuedInputDeliveryMode = Extract<
@@ -119,7 +125,9 @@ export class SessionQueuedInputService {
       redeliveredFrom: input.redeliveredFrom ?? null,
       endingToldAt: null,
       error: null,
-      createdAt: timestamp,
+      // A re-attempt keeps the place its first attempt had; everything else
+      // is arriving now (MAR-2971 lap 3, Finding C).
+      createdAt: input.createdAt ?? timestamp,
       updatedAt: timestamp,
     }
 
@@ -211,10 +219,12 @@ export class SessionQueuedInputService {
    * run. A row whose first attempt carried no receipt (input a person
    * typed) still carries none.
    *
-   * The fresh row gets a fresh `created_at`, so it goes to the BACK of the
-   * queue rather than reclaiming its old place. Intended: the rows ahead of
-   * it have been waiting longer, and "now" means the next turn this session
-   * takes, not a jump over other people's work.
+   * The fresh row KEEPS its predecessor's place in line -- it inherits its
+   * `created_at` (MAR-2971 lap 3, Finding C). Deliver now re-attempts an
+   * errand; it does not resubmit it, and an errand does not lose its turn by
+   * having failed. The sharp case is an opener: its payload is still queued
+   * ahead of it, so a fresh timestamp would send the payload FIRST and the
+   * `/clear` would arrive after the work it was supposed to clear for.
    */
   redeliver(id: string): {
     input: SessionQueuedInput
@@ -231,12 +241,17 @@ export class SessionQueuedInputService {
     const fresh = this.enqueue(
       previous.sessionId,
       {
+        createdAt: previous.createdAt,
         text: previous.text,
         attachmentIds: previous.attachmentIds,
         skillSelections: previous.skillSelections,
         providerAccountId: previous.providerAccountId,
         skipContextInjection: previous.skipContextInjection,
         muteRelays: previous.relaysMuted,
+        // Its predecessor's place in line, not a new one: an errand does
+        // not go to the back of the queue for having failed, and an opener
+        // that did would arrive behind its own payload.
+
         // A NEW receipt, never the old one (R2 as amended in lap 2). By the
         // time a row is failed the engine has usually already been told the
         // `failed` ending and released the baton, so the old id names a
@@ -252,9 +267,18 @@ export class SessionQueuedInputService {
   }
 
   /**
-   * The oldest waiting input. `rowid` breaks a same-millisecond tie, because
-   * an opener and its payload are enqueued in one beat and the opener must
-   * go first (MAR-2759).
+   * The oldest waiting input, and when two share a beat, the opener.
+   *
+   * An opener and its payload are enqueued in one beat, and the opener must
+   * go first (MAR-2759, design X). `rowid` used to carry that rule, which
+   * only worked because insertion order happened to agree: a redelivered
+   * opener keeps its predecessor's `created_at` but gets a NEW rowid, so it
+   * would sort behind the payload it is supposed to clear the way for, and
+   * the `/clear` would arrive after the work it was meant to precede.
+   *
+   * `relays_muted DESC` says the rule itself -- a muted row is an opener,
+   * openers lead -- and `rowid` stays underneath it as the last tie-break so
+   * the order is still total (MAR-2971 lap 3, Finding C).
    */
   nextQueued(sessionId: string): SessionQueuedInput | null {
     const row = this.db
@@ -262,7 +286,7 @@ export class SessionQueuedInputService {
         `SELECT *
          FROM session_queued_inputs
          WHERE session_id = ? AND state = 'queued'
-         ORDER BY created_at ASC, rowid ASC
+         ORDER BY created_at ASC, relays_muted DESC, rowid ASC
          LIMIT 1`,
       )
       .get(sessionId) as SessionQueuedInputRow | undefined

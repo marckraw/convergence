@@ -872,10 +872,16 @@ export class SessionService {
    */
   private terminateQueuedInputs(sessionId: string, reason: string): void {
     const ended = this.queuedInputs.failAttemptedForSession(sessionId, reason)
-    // Stamped because it is about to be TOLD: a later dismissal of one of
-    // these rows must not announce a second ending for an id the engine has
-    // already released (MAR-2971).
-    this.queuedInputs.markEndingTold(ended.map((item) => item.id))
+    // Emit, THEN stamp (MAR-2971 lap 3). The two orders fail differently and
+    // only one of them fails safely. Stamping first, a kill between the two
+    // writes leaves a row marked told that the engine never heard: its hop
+    // is owed forever and the later dismissal stays silent, because the
+    // stamp says the ending was already given. Emitting first, the same kill
+    // leaves a told ending with no stamp -- and that is idempotent at the
+    // ledger, because `markDispatchesTerminated` only stamps hops
+    // `WHERE settled_at IS NULL`, so the dismissal's second telling changes
+    // nothing. A lost stamp costs one redundant event; a lost event costs
+    // the receipt its only ending.
     this.emitDispatchTerminal(
       sessionId,
       'failed',
@@ -883,6 +889,7 @@ export class SessionService {
         .map((item) => item.dispatchId)
         .filter((dispatchId): dispatchId is string => dispatchId !== null),
     )
+    this.queuedInputs.markEndingTold(ended.map((item) => item.id))
   }
 
   /**
@@ -1513,12 +1520,29 @@ export class SessionService {
    * whole promise.
    */
   redeliverQueuedInput(id: string): SessionQueuedInput {
+    // Read before the re-attempt is enqueued: the old row is never rewritten,
+    // but its told-ending stamp decides whether its receipt still owes one.
+    const before = this.queuedInputs.get(id)
     const { input: fresh, fromDispatchId } = this.queuedInputs.redeliver(id)
 
-    // The engine first, before anything can drain: it has to be holding a
+    // The first attempt's ending, if nobody ever told it (MAR-2971 lap 3).
+    // A row `recoverDispatching` failed at boot was rewritten in SQL and
+    // announced to no one, so its hop is still unsettled. Handing the errand
+    // to a new receipt without closing the old one leaves that hop reading
+    // `Waiting · since ...` for the rest of the process's life, for an
+    // attempt that is over -- and a receipt with no ending is the one thing
+    // design P forbids. Told BEFORE the handover, so the ledger never holds
+    // two live hops for one errand.
+
+    if (before && before.dispatchId && before.endingToldAt === null) {
+      this.emitDispatchTerminal(fresh.sessionId, 'failed', [before.dispatchId])
+      this.queuedInputs.markEndingTold([before.id])
+    }
+
+    // The engine next, before anything can drain: it has to be holding a
     // baton for the new receipt BEFORE that receipt's turn can settle, or
     // the settle finds nothing and mints a run of its own -- the whole
-    // defect this lap exists to close (MAR-2971, R2).
+    // defect lap 2 exists to close (MAR-2971, R2).
     if (fromDispatchId && fresh.dispatchId) {
       this.emitDispatchRedelivered({
         sessionId: fresh.sessionId,
@@ -3459,7 +3483,8 @@ export class SessionService {
    * trusting a sequence -- is provably wrong rather than merely dependent.
    *
    * Two vocabularies, and only one of them arrives here (MAR-2971 lap 2).
-   * `'stopped'` in `claude-code-provider.ts:575` is a HARNESS TASK status on
+   * `'stopped'` in `provider/claude-code/claude-code-provider.ts:575` is a
+   * HARNESS TASK status on
    * a `task.changed` evidence fact, not a `SessionStatus` -- that union is
    * `idle | running | completed | failed` -- and it only arms the idle
    * timer. A stop the user asks for reaches the queue through `stop()` and
