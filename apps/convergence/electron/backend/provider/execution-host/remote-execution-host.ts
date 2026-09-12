@@ -1858,7 +1858,6 @@ class RemoteSessionRun {
       this.streamGap = describeSeqHole(this.lastSeq, envelope.seq)
       return false
     }
-    this.lastSeq = envelope.seq
     this.recordDebug('event', {
       direction: 'in',
       bytes: raw.length,
@@ -1871,7 +1870,23 @@ class RemoteSessionRun {
           : {}),
       },
     })
+    // The dispatch happens BEFORE either cursor moves, and that order is the
+    // whole point. A session listener that throws escapes into `readStream`'s
+    // catch: the frame is not counted toward the reconnect budget (it
+    // delivered nothing) and `notifyEventSeq` never runs, so a restart replays
+    // it. Advancing `this.lastSeq` first -- which is what this did -- left the
+    // run's in-memory resume cursor past an event the session never received,
+    // and the reconnect asked the daemon for everything AFTER it: the one
+    // frame the listener failed on was the one frame no resume could bring
+    // back (MAR-2901).
+    //
+    // Assigning it here, beside the durable write, is also what keeps the two
+    // "seen" facts from disagreeing at all: they move together or neither
+    // moves. The throw is deliberately not caught -- the reconnect budget is
+    // spent by attempts that delivered something, and a listener that keeps
+    // throwing must be allowed to fail the session out loud rather than spin.
     this.dispatchEvent(envelope.event, envelope.seq)
+    this.lastSeq = envelope.seq
     // The cursor write for every event that does not carry a session patch.
     // A `status` or `continuation-token` event has already committed this
     // sequence inside its own patch statement (`applySessionPatch`), and the
