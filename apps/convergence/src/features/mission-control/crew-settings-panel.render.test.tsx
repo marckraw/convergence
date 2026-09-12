@@ -57,14 +57,14 @@ function renderPanel(deliveryLimit: number | null) {
 }
 
 describe('the delivery limit note about the run hard ceiling (R3, MAR-2966)', () => {
-  it('tells a crew that raised its limit that the limit itself disarms', () => {
+  it('tells a crew that raised its limit that the limit itself is the ceiling', () => {
     // Mutation that reds it: drop the note from the panel -- the box goes back
     // to saying a number whose consequence is written down nowhere.
     renderPanel(60)
 
     expect(
       screen.getByText(
-        "This is also the run's hard ceiling: past it the wire is disarmed.",
+        "This is also the run's hard ceiling. Inside this crew the limit hails and the wire stays armed; a run that crosses into another crew is disarmed past it.",
       ),
     ).toBeInTheDocument()
   })
@@ -77,7 +77,7 @@ describe('the delivery limit note about the run hard ceiling (R3, MAR-2966)', ()
 
     expect(
       screen.getByText(
-        `Past ${MIN_FLOW_RUN_HOP_CEILING} deliveries in one run the wire is disarmed, whatever this says.`,
+        `The run's hard ceiling is ${MIN_FLOW_RUN_HOP_CEILING}. Inside this crew the limit hails and the wire stays armed; a run that crosses into another crew is disarmed past ${MIN_FLOW_RUN_HOP_CEILING}.`,
       ),
     ).toBeInTheDocument()
   })

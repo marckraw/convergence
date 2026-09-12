@@ -878,7 +878,10 @@ export class RelayEngine {
         sessionId: event.sessionId,
         baton: emittedBaton,
         message,
-        detail: formatCrewHailDetail('budget', { spentHops: runSpentHops }),
+        detail: formatCrewHailDetail('budget', {
+          spentHops: runSpentHops,
+          ceiling: runCeiling,
+        }),
       })
       return true
     }

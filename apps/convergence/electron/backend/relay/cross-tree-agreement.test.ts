@@ -65,7 +65,7 @@ describe('the literals that cross the tree boundary (MAR-2759)', () => {
     expect(floored).not.toContain(String(DEFAULT_CREW_ROUND_CAP))
     // And a crew at or above the floor is told its own limit is the ceiling.
     expect(flowRunCeilingNote(60)).toBe(
-      "This is also the run's hard ceiling: past it the wire is disarmed.",
+      "This is also the run's hard ceiling. Inside this crew the limit hails and the wire stays armed; a run that crosses into another crew is disarmed past it.",
     )
   })
 

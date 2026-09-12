@@ -404,13 +404,32 @@ describe('formatCrewHailDetail', () => {
   })
 
   it('says a wire was switched off when the backstop tripped', () => {
-    const detail = formatCrewHailDetail('budget', { spentHops: 20 })
+    const detail = formatCrewHailDetail('budget', {
+      spentHops: 20,
+      ceiling: 20,
+    })
 
     expect(detail).toContain('20')
     // The word the round cap's sentence must NOT contain, and this one must:
     // the backstop is the guard that disarms, and a hail that blurred the two
     // would send him hunting for a wire he would find dark with no reason.
     expect(detail).toContain('disarmed')
+  })
+
+  it('names the ceiling the runaway ran into, not just the spend', () => {
+    // Since MAR-2966 the ceiling is the firing crew's own limit rather than a
+    // constant everyone knows, so a spend alone no longer says what it hit --
+    // and because the backstop counts the whole run across crews, the spend
+    // can stand well above the limit written in the crew the reader opens.
+    // Mutation that reds it: drop the ceiling from the sentence.
+    const detail = formatCrewHailDetail('budget', {
+      spentHops: 64,
+      ceiling: 60,
+    })
+
+    expect(detail).toBe(
+      'This run ran away — 64 deliveries against a 60-delivery ceiling without reaching you — so the wire was disarmed to stop it.',
+    )
   })
 
   it('does not say a wire was disarmed when only the delivery limit tripped', () => {

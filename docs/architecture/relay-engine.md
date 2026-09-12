@@ -132,8 +132,9 @@ READABLE for old ones — the ledger is a historical record (§3). Nothing was
 merely deleted: the run still ends, but at guards that answer a human's
 question rather than a graph's. What ends a run now, in order of how often it
 should: the terminal baton reaching the chair (§2a), the crew's **cumulative**
-delivery limit (§2c), the 20-hop backstop, a delivery that failed, and the
-stall clock. All five are loud (§2b).
+delivery limit (§2c), the run's hop backstop (the crew's delivery limit,
+floored at 20), a delivery that failed, and the stall clock. All five are loud
+(§2b).
 
 **Emptying the ledger is worse under laps, not better.** The lap count and the
 crew's cumulative delivery limit both read `relay_hops`, so deleting a live
@@ -321,11 +322,11 @@ Folding it in would also make "Clear trail" dismiss alarms.
   Only on a completed, unmuted settle.
 - `round-budget`: raised inside `fire()` at the crew's cumulative delivery
   limit, below.
-- `budget`: raised inside `fire()` at the 20-hop backstop, **beside the
-  disarm** (R3). The backstop is the one guard that switches a wire off, and
-  a switch thrown behind the user's back with nobody told was the last silent
-  ending in the engine — reachable rather than theoretical now that a run may
-  lap.
+- `budget`: raised inside `fire()` at the run's hop backstop (the crew's
+  delivery limit, floored at 20), **beside the disarm** (R3). The backstop is
+  the one guard that switches a wire off, and a switch thrown behind the
+  user's back with nobody told was the last silent ending in the engine —
+  reachable rather than theoretical now that a run may lap.
 - `delivery-failed`: raised inside `record()` whenever a firing writes an
   `error` row (R3). Inside the one function every error row goes through,
   spawn's included, rather than at each of the six sites that can write one —
