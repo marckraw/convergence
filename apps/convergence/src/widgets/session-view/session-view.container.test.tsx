@@ -731,6 +731,67 @@ describe('SessionView', () => {
     expect(rows?.textContent).not.toContain('Works in')
   })
 
+  it('a newly broadcast PR fact replaces an earlier no-PR reading (mutation: prefer cached message)', async () => {
+    const absent = {
+      pullRequest: null,
+      branchName: 'agent/old',
+      message: 'No PR for this branch',
+    }
+    vi.mocked(window.electronAPI.pullRequest.getForSession).mockResolvedValue(
+      absent,
+    )
+    vi.mocked(
+      window.electronAPI.pullRequest.refreshForSession,
+    ).mockResolvedValue(absent)
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Pull request status' }))
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: 'Session details' }),
+    )
+    await waitFor(() =>
+      expect(
+        screen.getAllByText('No PR for this branch').length,
+      ).toBeGreaterThan(0),
+    )
+    act(() =>
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) => ({
+          ...session,
+          pullRequest: {
+            number: 42,
+            url: 'https://github.com/acme/app/pull/42',
+            state: 'open' as const,
+            headBranch: 'agent/fresh',
+            checkedAt: '2026-09-12',
+            source: 'gh' as const,
+          },
+        })),
+      })),
+    )
+    expect(screen.queryAllByText('No PR for this branch')).toHaveLength(0)
+    expect(screen.getAllByText('#42 · open').length).toBeGreaterThan(0)
+    expect(screen.getByText('agent/fresh')).toBeInTheDocument()
+  })
+
+  it('opening Session actions does not refresh the PR (mutation: refresh on every menu)', async () => {
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: 'Session actions' }),
+    )
+    await screen.findByText('Fork session…')
+    expect(
+      window.electronAPI.pullRequest.refreshForSession,
+    ).not.toHaveBeenCalled()
+  })
+
   it('shows the wires leaving this session in the header', async () => {
     useSessionStore.setState((state) => ({
       ...state,

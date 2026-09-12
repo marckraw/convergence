@@ -161,9 +161,12 @@ export const SessionView: FC = () => {
     refresh: refreshPullRequest,
   } = useSessionPullRequest(session?.id)
   const sessionPullRequest = session?.pullRequest ?? null
+  const pullRequestMessage = sessionPullRequest
+    ? null
+    : (prReading?.message ?? null)
   const pullRequestLabel = pullRequestLoading
     ? 'PR checking…'
-    : (prReading?.message ??
+    : (pullRequestMessage ??
       (sessionPullRequest
         ? `#${sessionPullRequest.number} · ${sessionPullRequest.state}`
         : 'PR unknown'))
@@ -607,11 +610,7 @@ export const SessionView: FC = () => {
                 <Square className="h-3 w-3" />
               </Button>
             )}
-            <DropdownMenu
-              onOpenChange={(open) => {
-                if (open) void refreshPullRequest()
-              }}
-            >
+            <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
@@ -747,10 +746,10 @@ export const SessionView: FC = () => {
         <PullRequestPanel
           pullRequest={sessionPullRequest}
           branchName={
-            prReading?.branchName ?? sessionPullRequest?.headBranch ?? null
+            sessionPullRequest?.headBranch ?? prReading?.branchName ?? null
           }
           loading={pullRequestLoading}
-          error={prReading?.message ?? null}
+          error={pullRequestMessage}
           onRefresh={() => {
             void refreshPullRequest()
           }}
