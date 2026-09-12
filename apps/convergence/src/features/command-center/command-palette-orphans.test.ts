@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { PALETTE_DIALOGS } from './command-palette-index.pure'
+import { WALK_TEST_TIMEOUT_MS } from '../../../test/walk-budget'
 
 /**
  * The Command Center offers a dialog by naming its kind. Nothing type-checks
@@ -43,18 +44,25 @@ function collectMountedDialogKinds(directory: string): Set<string> {
 }
 
 describe('the command palette offers no dialog that cannot open', () => {
-  it('mounts every dialog kind the real index lists', () => {
-    const mounted = collectMountedDialogKinds(RENDERER_ROOT)
+  // This reads the whole renderer tree, so it spends the shared walk budget
+  // rather than vitest's default: measured 11-16 ms alone, it has been recorded
+  // at 7.1 s with three gates running at once (MAR-2966, MAR-2989).
+  it(
+    'mounts every dialog kind the real index lists',
+    { timeout: WALK_TEST_TIMEOUT_MS },
+    () => {
+      const mounted = collectMountedDialogKinds(RENDERER_ROOT)
 
-    // The scan is only evidence while it still finds things. If a refactor
-    // moves dialogs off this comparison, the set empties and every kind below
-    // reads as an orphan — which is loud, and is the failure this wants.
-    expect(mounted.size).toBeGreaterThan(0)
+      // The scan is only evidence while it still finds things. If a refactor
+      // moves dialogs off this comparison, the set empties and every kind below
+      // reads as an orphan — which is loud, and is the failure this wants.
+      expect(mounted.size).toBeGreaterThan(0)
 
-    const orphaned = PALETTE_DIALOGS.filter(
-      (dialog) => !mounted.has(dialog.kind),
-    ).map((dialog) => `${dialog.title} (${dialog.kind})`)
+      const orphaned = PALETTE_DIALOGS.filter(
+        (dialog) => !mounted.has(dialog.kind),
+      ).map((dialog) => `${dialog.title} (${dialog.kind})`)
 
-    expect(orphaned).toEqual([])
-  })
+      expect(orphaned).toEqual([])
+    },
+  )
 })

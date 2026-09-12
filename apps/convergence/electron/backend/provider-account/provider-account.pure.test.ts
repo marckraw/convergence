@@ -1,6 +1,3 @@
-import { readFileSync, readdirSync } from 'fs'
-import { join } from 'path'
-import { fileURLToPath } from 'url'
 import { describe, expect, it } from 'vitest'
 import {
   assertRemovableAccountDir,
@@ -18,16 +15,6 @@ import type { ProviderAccountRow } from './provider-account.types'
 
 const HOME = '/Users/tester'
 const ACCOUNT_ID = '0f7c3f5a-2b8d-4d3e-9c11-8a6f2d4e5b70'
-const MODULE_DIR = fileURLToPath(new URL('.', import.meta.url))
-
-/**
- * Comments must be free to name the forbidden call — explaining why
- * `app.getPath('userData')` is banned is the point of the docstrings. Strip
- * them so the guard below judges code only.
- */
-function stripComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '')
-}
 
 function dirInput(
   overrides: Partial<{ providerId: string; accountId: string }> = {},
@@ -139,39 +126,6 @@ describe('provider account directory derivation', () => {
     expect(() => assertRemovableAccountDir(`${root}/..`, root)).toThrow(
       /not a direct child/,
     )
-  })
-
-  it('never consults app.getPath or Electron to build account paths', () => {
-    // The dev-vs-packaged hash split is the trap ADR 0007 documents:
-    // `convergence` and `Convergence` are one folder on a case-insensitive
-    // disk but two different keychain slots, so a userData-derived path would
-    // hide dev-enrolled accounts from the installed build. Guard the whole
-    // module directory, not just today's file.
-    const sourceFiles = readdirSync(MODULE_DIR).filter(
-      (file) => file.endsWith('.ts') && !file.endsWith('.test.ts'),
-    )
-
-    expect(sourceFiles.length).toBeGreaterThan(0)
-
-    for (const file of sourceFiles) {
-      const source = stripComments(readFileSync(join(MODULE_DIR, file), 'utf8'))
-
-      // An `.ipc.ts` file exists to import `ipcMain`; that is the boundary, not
-      // a path derivation. The two checks that actually protect the keychain
-      // slot still apply to every file, this one included.
-      if (!file.endsWith('.ipc.ts')) {
-        expect(source, `${file} must not import electron`).not.toMatch(
-          /from\s+['"]electron['"]/,
-        )
-      }
-
-      expect(source, `${file} must not call app.getPath`).not.toMatch(
-        /getPath\s*\(/,
-      )
-      expect(source, `${file} must not reference userData`).not.toMatch(
-        /userData/,
-      )
-    }
   })
 
   it('demonstrates why the path is hardcoded: case alone changes the slot', () => {

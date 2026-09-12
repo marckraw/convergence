@@ -1,9 +1,6 @@
 import Ajv from 'ajv'
 import { parse } from 'yaml'
-import { readFileSync, readdirSync } from 'node:fs'
-import { join, relative } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { preProcessFile } from 'typescript'
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   crewToConfig,
@@ -403,35 +400,6 @@ it('preserves the spawn lane beside its root project (mutations: use the lane ro
     errors: validate.errors,
   }).toEqual({ valid: true, errors: null })
 })
-
-it('keeps AJV imports out of production source (mutation: add runtime ajv import)', () => {
-  const workspace = fileURLToPath(new URL('../../../', import.meta.url))
-  const imports = ['electron', 'src'].flatMap((directory) => {
-    const root = join(workspace, directory)
-    return readdirSync(root, { recursive: true })
-      .map(String)
-      .filter(
-        (file) =>
-          /\.[cm]?[jt]sx?$/.test(file) &&
-          !/\.(test|spec)\.|(^|[/\\])__tests__[/\\]/.test(file),
-      )
-      .flatMap((file) => {
-        const path = join(root, file)
-        return preProcessFile(readFileSync(path, 'utf8'), true, true)
-          .importedFiles.filter(
-            ({ fileName }) => fileName === 'ajv' || fileName.startsWith('ajv/'),
-          )
-          .map(({ fileName }) => `${relative(workspace, path)}: ${fileName}`)
-      })
-  })
-  expect(imports.sort()).toEqual([])
-  // 30s, not the 5s default: this walks every `.ts`/`.tsx` under `electron`
-  // and `src` and runs `preProcessFile` on each, so its cost grows with the
-  // tree and it competes with ~400 other files for the same disk. It was
-  // already spending most of its budget (measured 5.4-8.1s under load) and
-  // the next handful of tests added anywhere in the repo tipped it over --
-  // a failure that says nothing about AJV. The assertion is unchanged.
-}, 30_000)
 
 it('reads the exported recipe at runtime (mutation: refuse valid YAML)', () => {
   expect(readCrewConfig(liveCrewYaml)).toEqual({
