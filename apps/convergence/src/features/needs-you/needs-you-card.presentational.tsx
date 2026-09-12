@@ -60,7 +60,7 @@ export function NeedsYouCard({
       }
       className={cn(
         'needs-you-card relative flex min-w-0 items-start rounded-lg shadow-sm ring-1 ring-border/60 transition-colors',
-        active && 'ring-2 ring-foreground/70',
+        active && 'ring-foreground/25',
       )}
     >
       <Button

@@ -10,4 +10,4 @@ Show running sessions across projects in a Working sidebar section. Keep pinned 
 
 Apply the compact identity-rail card layout: readable model names, status icons with labels, and Infinity for Resident / Clipboard List for Errand with named tooltips beneath the execution host.
 
-Add a subtle Whisper background tint for each supported provider, preserving the hue on hover and selection and keeping metadata readable in light and dark themes.
+Add a subtle Whisper background tint for each supported provider, preserving the hue on hover and selection and keeping metadata readable in light and dark themes. Use a thin, low-contrast selection outline so it complements the tint.
