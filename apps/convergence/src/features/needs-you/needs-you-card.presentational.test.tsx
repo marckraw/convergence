@@ -11,7 +11,7 @@ const actions = () => ({
 })
 it.each(Object.entries(cardFixtures))(
   'renders %s from the summary, without fetching (mutation: remove a chip)',
-  (_name, session) => {
+  async (_name, session) => {
     const fetch = vi.fn(() => {
       throw new Error('a card must not fetch')
     })
@@ -23,12 +23,22 @@ it.each(Object.entries(cardFixtures))(
     expect(screen.getByText('Horse')).toBeInTheDocument()
     expect(screen.getByText('Convergence')).toBeInTheDocument()
     expect(screen.getByText('gpt-6')).toBeInTheDocument()
-    expect(screen.getByTitle('OpenAI · gpt-6')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'OpenAI' })).toBeInTheDocument()
     expect(
-      screen.getByText(
-        session.executionHost === 'lm' ? 'little-monster' : 'laptop',
-      ),
+      screen.getByRole('img', {
+        name: session.executionHost === 'lm' ? 'little-monster' : 'laptop',
+      }),
     ).toBeInTheDocument()
+    const hostIcon = screen.getByRole('img', {
+      name: session.executionHost === 'lm' ? 'little-monster' : 'laptop',
+    })
+    fireEvent.focus(hostIcon)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(card.host)
+    fireEvent.blur(hostIcon)
+    const providerIcon = screen.getByRole('img', { name: 'OpenAI' })
+    fireEvent.focus(providerIcon)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('OpenAI')
+    fireEvent.blur(providerIcon)
     expect(screen.getByTitle(session.updatedAt)).toHaveTextContent('5 m ago')
     if (session.pullRequest)
       expect(

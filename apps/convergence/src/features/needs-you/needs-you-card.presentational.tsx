@@ -1,5 +1,9 @@
-import { ProviderModel } from '@/shared/ui/provider-model.presentational'
-import { MoreHorizontal, Pin } from 'lucide-react'
+import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
+import { resolveProviderIcon } from '@/shared/ui/provider-icon.pure'
+import { TooltipProvider } from '@/shared/ui/tooltip'
+import { isLocalExecutionHost } from '@/entities/execution-host'
+import { NeedsYouCardIcon } from './needs-you-card-icon.presentational'
+import { Laptop, Server, MoreHorizontal, Pin } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import {
   DropdownMenu,
@@ -30,6 +34,8 @@ export function NeedsYouCard({
   onArchive,
 }: NeedsYouCardProps) {
   const { session } = card
+  const provider = resolveProviderIcon(session.providerId)
+  const HostIcon = isLocalExecutionHost(session.executionHost) ? Laptop : Server
   return (
     <article
       data-pulse={pulsing ? 'true' : undefined}
@@ -60,24 +66,26 @@ export function NeedsYouCard({
           >
             {card.projectName}
           </span>
-          <ProviderModel
-            providerId={session.providerId}
-            model={session.model}
-            className="text-[11px] text-muted-foreground"
-          />
-          <span className="flex flex-wrap gap-1 text-[10px] font-normal">
-            <span className="rounded bg-muted px-1.5 py-0.5">{card.host}</span>
-            {card.prLabel && (
-              <span className="rounded bg-muted px-1.5 py-0.5 tabular-nums">
-                {card.prLabel}
-              </span>
-            )}
-            {card.kind && (
-              <span className="rounded bg-muted px-1.5 py-0.5">
-                {card.kind}
-              </span>
-            )}
+          <span
+            className="block truncate text-[11px] text-muted-foreground"
+            title={session.model || 'Model not recorded'}
+          >
+            {session.model || 'Model not recorded'}
           </span>
+          {(card.prLabel || card.kind) && (
+            <span className="flex flex-wrap gap-1 text-[10px] font-normal">
+              {card.prLabel && (
+                <span className="rounded bg-muted px-1.5 py-0.5 tabular-nums">
+                  {card.prLabel}
+                </span>
+              )}
+              {card.kind && (
+                <span className="rounded bg-muted px-1.5 py-0.5">
+                  {card.kind}
+                </span>
+              )}
+            </span>
+          )}
           {card.summary && (
             <span className="block text-[11px] text-muted-foreground">
               {card.summary}
@@ -95,36 +103,46 @@ export function NeedsYouCard({
           </span>
         </span>
       </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-10 w-10 shrink-0 rounded-lg"
-            aria-label={`Actions for ${session.name}`}
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem
-            onSelect={() => onPin(session.id, !session.pinnedAt)}
-          >
-            {session.pinnedAt ? 'Unpin' : 'Pin'}
-          </DropdownMenuItem>
-          {card.dismissLabel && !card.dismissed && (
-            <DropdownMenuItem onSelect={() => onDismiss(session.id)}>
-              {card.dismissLabel}
-            </DropdownMenuItem>
-          )}
-          {card.canArchive && (
-            <DropdownMenuItem onSelect={() => onArchive(session.id)}>
-              Archive
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <TooltipProvider delayDuration={200}>
+        <div className="flex w-10 shrink-0 flex-col items-center gap-1 pb-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 shrink-0 rounded-lg"
+                aria-label={`Actions for ${session.name}`}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onSelect={() => onPin(session.id, !session.pinnedAt)}
+              >
+                {session.pinnedAt ? 'Unpin' : 'Pin'}
+              </DropdownMenuItem>
+              {card.dismissLabel && !card.dismissed && (
+                <DropdownMenuItem onSelect={() => onDismiss(session.id)}>
+                  {card.dismissLabel}
+                </DropdownMenuItem>
+              )}
+              {card.canArchive && (
+                <DropdownMenuItem onSelect={() => onArchive(session.id)}>
+                  Archive
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <NeedsYouCardIcon label={provider.label}>
+            <ProviderIcon providerId={session.providerId} title="" />
+          </NeedsYouCardIcon>
+          <NeedsYouCardIcon label={card.host}>
+            <HostIcon aria-hidden="true" className="size-4" />
+          </NeedsYouCardIcon>
+        </div>
+      </TooltipProvider>
     </article>
   )
 }

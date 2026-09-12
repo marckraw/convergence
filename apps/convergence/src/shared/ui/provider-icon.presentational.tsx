@@ -21,6 +21,8 @@ interface ProviderIconProps {
   vendorLabel?: string | null
   name?: string | null
   className?: string
+  /** Empty when an enclosing control already supplies a tooltip. */
+  title?: string
 }
 
 export function ProviderIcon({
@@ -28,11 +30,17 @@ export function ProviderIcon({
   vendorLabel,
   name,
   className,
+  title,
 }: ProviderIconProps) {
-  const { brand, initials } = resolveProviderIcon(providerId, vendorLabel, name)
+  const { brand, initials, label } = resolveProviderIcon(
+    providerId,
+    vendorLabel,
+    name,
+  )
   return (
     <span
       aria-hidden="true"
+      title={title ?? label}
       className={cn(
         'inline-flex size-4 shrink-0 items-center justify-center text-foreground',
         className,
