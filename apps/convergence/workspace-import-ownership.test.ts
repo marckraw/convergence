@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { sweepAPlantedWorkspace } from '../../workspace-import-ownership.fixture'
 import { createWorkspaceImportOwnership } from '../../workspace-import-ownership'
+import { WALK_TEST_TIMEOUT_MS } from './test/walk-budget'
 
 /**
  * Convergence's workspace-ownership test (MAR-2737, round 4).
@@ -158,13 +159,15 @@ describe("Convergence's imports", () => {
   })
 
   // Round 7: this one assert parses and resolves the whole 1000+ file tree —
-  // ~2.5 s quiet here, 2.0-2.9 s measured across sessions — so vitest's 5 s
+  // 1.4-1.5 s quiet here, 2.0-2.9 s measured across sessions — so vitest's 5 s
   // default is headroom, not a budget, and it has already timed out twice
-  // under load. 20 s is the budget; every other test in this file keeps the
-  // default, because none of them touch the real tree.
+  // under load. MAR-2989 replaced the literal that used to sit here with the
+  // shared walk budget, so every tree-walk in the repository is patient for
+  // one stated reason; every other test in this file keeps the default,
+  // because none of them touch the real tree.
   it(
     'resolves every one of them into this workspace or a declared dependency',
-    { timeout: 20_000 },
+    { timeout: WALK_TEST_TIMEOUT_MS },
     () => {
       expect(ownership.violations()).toEqual([])
     },

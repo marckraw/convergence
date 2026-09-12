@@ -22,6 +22,8 @@
     "workspace-manifest.test.ts",
     "workspace-import-ownership.test.ts",
     "../../workspace-import-ownership.syntax.test.ts",
+    "test/walk-budget.ts",
+    "test/walk-budget.test.ts",
     "vitest.config.ts",
     "vitest.pure.config.ts",
     "vitest.unit.config.ts"

@@ -19,6 +19,8 @@ export default defineConfig({
       'workspace-import-ownership.test.ts',
       // Its parser, pinned form by form — a root file like the organ itself.
       '../../workspace-import-ownership.syntax.test.ts',
+      // And the walk budget's canary, beside the constant it pins (MAR-2989).
+      'test/walk-budget.test.ts',
     ],
     environment: 'node',
   },
