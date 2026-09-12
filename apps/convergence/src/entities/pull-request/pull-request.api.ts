@@ -1,3 +1,4 @@
+import type { SessionPullRequestReading } from '@/shared/types/session-pull-request.types'
 import type { WorkspacePullRequest } from './pull-request.types'
 
 export const pullRequestApi = {
@@ -9,8 +10,9 @@ export const pullRequestApi = {
   listByProjectId: (projectId: string): Promise<WorkspacePullRequest[]> =>
     window.electronAPI.pullRequest.listByProjectId(projectId),
 
-  refreshForSession: (
-    sessionId: string,
-  ): Promise<WorkspacePullRequest | null> =>
+  getForSession: (sessionId: string): Promise<SessionPullRequestReading> =>
+    window.electronAPI.pullRequest.getForSession(sessionId),
+
+  refreshForSession: (sessionId: string): Promise<SessionPullRequestReading> =>
     window.electronAPI.pullRequest.refreshForSession(sessionId),
 }

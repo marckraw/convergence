@@ -502,10 +502,10 @@ describe('toLocalSessionDelta', () => {
         activity: 'thinking',
         continuationToken: 'tok-1',
         updatedAt: '2026-08-22T10:00:00.000Z',
+        prUrl: 'https://github.com/example/repo/pull/1',
       },
     })
     expect(EXECUTION_HOST_UNMAPPED_WIRE_SESSION_PATCH_FIELDS).toEqual([
-      'prUrl',
       'roomId',
     ])
   })

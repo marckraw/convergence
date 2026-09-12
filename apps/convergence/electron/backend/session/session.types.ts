@@ -1,3 +1,5 @@
+import { parseSessionPullRequest } from '../pull-request/session-pull-request.pure'
+import type { SessionPullRequest } from '../../../src/shared/types/session-pull-request.types'
 import type { ParallelWorkCounts } from '../../../src/shared/lib/parallel-work.pure'
 import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
 import type { SessionRow } from '../database/database.types'
@@ -153,6 +155,7 @@ export type AttentionRequestKind =
   | 'input'
 
 export interface SessionSummary {
+  pullRequest?: SessionPullRequest | null
   canStopTasks?: boolean
   parallelWork?: ParallelWorkCounts
   /** Runtime fact; never persisted or inferred from attention. */
@@ -309,6 +312,7 @@ function parseActivity(value: string | null): ActivitySignal {
 export function sessionSummaryFromRow(row: SessionRow): SessionSummary {
   return {
     id: row.id,
+    pullRequest: parseSessionPullRequest(row.pull_request_json),
     contextKind: row.context_kind === 'global' ? 'global' : 'project',
     projectId: row.project_id,
     workspaceId: row.workspace_id,

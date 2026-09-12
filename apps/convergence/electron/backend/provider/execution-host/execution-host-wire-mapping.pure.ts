@@ -217,14 +217,8 @@ export const EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS = [
 export const EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS =
   [] as const satisfies readonly (keyof ExecutionTurnFileChange)[]
 
-/**
- * Wire `session.patch` fields with no local counterpart. The local session row
- * has neither: a remote pull request URL is read from the daemon's session
- * snapshot instead (`parseRemoteSessionWorkspaceInfo`), and Rooms are not a
- * Convergence concept yet.
- */
+/** Rooms have no local counterpart. PR URLs travel only as refresh hints. */
 export const EXECUTION_HOST_UNMAPPED_WIRE_SESSION_PATCH_FIELDS = [
-  'prUrl',
   'roomId',
 ] as const
 
@@ -240,6 +234,7 @@ const LOCAL_SESSION_PATCH_FIELDS = [
   'contextWindow',
   'continuationToken',
   'updatedAt',
+  'prUrl',
 ] as const
 
 /** The patch a local `session.patch` delta carries. */

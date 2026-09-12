@@ -293,6 +293,9 @@ export class SessionService {
   private contextInjection: SessionContextInjectionService | null = null
   private onSessionTerminated: ((sessionId: string) => void) | null = null
   private readonly sessionSettledListeners = new Set<SessionSettledListener>()
+  private readonly pullRequestHintListeners = new Set<
+    (sessionId: string) => void
+  >()
   private readonly dispatchTerminalListeners =
     new Set<DispatchTerminalListener>()
   private pendingSettleEvents: SessionSettledEvent[] = []
@@ -853,6 +856,14 @@ export class SessionService {
     const session = this.getById(sessionId)
     if (!session || this.isCarryingATurn(session)) return
     this.terminateQueuedInputs(sessionId, reason)
+  }
+
+  /** A daemon PR URL requests verification; the URL itself is never persisted. */
+  onPullRequestHint(listener: (sessionId: string) => void): () => void {
+    this.pullRequestHintListeners.add(listener)
+    return () => {
+      this.pullRequestHintListeners.delete(listener)
+    }
   }
 
   onSessionSettled(listener: SessionSettledListener): () => void {
@@ -2464,6 +2475,18 @@ export class SessionService {
           delta.executionHostSeq,
         )
         this.notifySessionChange(sessionId)
+        if (typeof delta.patch.prUrl === 'string') {
+          for (const listener of [...this.pullRequestHintListeners]) {
+            try {
+              listener(sessionId)
+            } catch (error) {
+              console.error(
+                `[session] PR hint listener failed for ${sessionId}`,
+                error,
+              )
+            }
+          }
+        }
         return
       }
 

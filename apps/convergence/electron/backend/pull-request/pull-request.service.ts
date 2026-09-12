@@ -1,3 +1,7 @@
+import { parseReportedWorkspace } from '../session/reported-workspace.pure'
+import { parseSessionWorkAddress } from '../../../src/shared/lib/work-address.pure'
+import { parseSessionPullRequest } from './session-pull-request.pure'
+import type { SessionPullRequestReading } from '../../../src/shared/types/session-pull-request.types'
 import { execFile } from 'child_process'
 import { randomUUID } from 'crypto'
 import type Database from 'better-sqlite3'
@@ -45,6 +49,102 @@ function execGh(args: string[], cwd: string): Promise<string> {
 }
 
 export class PullRequestService {
+  private readonly readings = new Map<string, SessionPullRequestReading>()
+  private readonly inFlight = new Map<
+    string,
+    Promise<SessionPullRequestReading>
+  >()
+  private onChanged: (sessionId: string) => void = () => {}
+  private timer: ReturnType<typeof setInterval> | null = null
+
+  start(onChanged: (sessionId: string) => void): void {
+    this.onChanged = onChanged
+    if (this.timer) return
+    this.timer = setInterval(() => {
+      void this.pollOpenSessions().catch((error) => {
+        console.error('[pull-request] open PR poll failed', error)
+      })
+    }, 10 * 60_000)
+    this.timer.unref()
+  }
+
+  stop(): void {
+    if (this.timer) clearInterval(this.timer)
+    this.timer = null
+  }
+
+  async pollOpenSessions(): Promise<void> {
+    const rows = this.db
+      .prepare(
+        "SELECT id FROM sessions WHERE json_valid(pull_request_json) AND json_extract(pull_request_json, '$.state') IN ('open', 'draft')",
+      )
+      .all() as { id: string }[]
+    for (const row of rows) await this.refreshForSession(row.id)
+  }
+
+  private sessionTarget(sessionId: string) {
+    const row = this.db
+      .prepare(
+        `SELECT s.*, w.branch_name, p.repository_path FROM sessions s
+      LEFT JOIN workspaces w ON w.id=s.workspace_id LEFT JOIN projects p ON p.id=s.project_id WHERE s.id=?`,
+      )
+      .get(sessionId) as
+      | {
+          id: string
+          project_id: string
+          workspace_id: string | null
+          working_directory: string
+          execution_host: string
+          reported_workspace: string | null
+          work_address: string | null
+          pull_request_json: string | null
+          branch_name: string | null
+          repository_path: string | null
+        }
+      | undefined
+    if (!row) throw new Error(`Session not found: ${sessionId}`)
+    const remote = row.execution_host !== 'local'
+    const reported = parseReportedWorkspace(row.reported_workspace)
+    const address = parseSessionWorkAddress(row.work_address)
+    const branchName = remote
+      ? (reported?.branchName ?? null)
+      : (row.branch_name ??
+        (address?.mode === 'repository' ? address.branchName : null))
+    return {
+      row,
+      branchName,
+      cwd: remote
+        ? (row.repository_path ?? process.cwd())
+        : row.working_directory,
+      repository:
+        remote && reported?.mode === 'repository' ? reported.repository : null,
+    }
+  }
+
+  evictDeletedSessions(): void {
+    const exists = this.db.prepare('SELECT 1 FROM sessions WHERE id=?')
+    for (const id of this.readings.keys()) {
+      if (!exists.get(id)) this.readings.delete(id)
+    }
+  }
+
+  getForSession(sessionId: string): SessionPullRequestReading {
+    const { row, branchName } = this.sessionTarget(sessionId)
+    if (!branchName)
+      return {
+        pullRequest: null,
+        branchName: null,
+        message: 'no branch recorded for this session',
+      }
+    return (
+      this.readings.get(sessionId) ?? {
+        pullRequest: parseSessionPullRequest(row.pull_request_json),
+        branchName,
+        message: null,
+      }
+    )
+  }
+
   constructor(
     private db: Database.Database,
     private git: GitService,
@@ -105,48 +205,76 @@ export class PullRequestService {
     }
   }
 
-  async refreshForSession(
-    sessionId: string,
-  ): Promise<WorkspacePullRequest | null> {
-    const session = this.db
-      .prepare(
-        `SELECT id, project_id, workspace_id, working_directory
-         FROM sessions
-         WHERE id = ?`,
-      )
-      .get(sessionId) as
-      | {
-          id: string
-          project_id: string
-          workspace_id: string | null
-          working_directory: string
-        }
-      | undefined
+  refreshForSession(sessionId: string): Promise<SessionPullRequestReading> {
+    const pending = this.inFlight.get(sessionId)
+    if (pending) return pending
+    const request = this.refresh(sessionId).finally(() =>
+      this.inFlight.delete(sessionId),
+    )
+    this.inFlight.set(sessionId, request)
+    return request
+  }
 
-    if (!session) {
-      throw new Error(`Session not found: ${sessionId}`)
+  private async refresh(sessionId: string): Promise<SessionPullRequestReading> {
+    const { row, branchName, cwd, repository } = this.sessionTarget(sessionId)
+    const lookup = branchName
+      ? await this.lookupGithubPullRequest(cwd, branchName, repository)
+      : null
+    if (!this.db.prepare('SELECT 1 FROM sessions WHERE id=?').get(sessionId)) {
+      this.readings.delete(sessionId)
+      return {
+        pullRequest: null,
+        branchName: null,
+        message: 'Session was deleted',
+      }
     }
-
-    if (!session.workspace_id) {
-      return null
+    const found =
+      lookup?.lookupStatus === 'found' && lookup.url
+        ? parseSessionPullRequest(
+            JSON.stringify({
+              number: lookup.number,
+              url: lookup.url,
+              state: lookup.state,
+              headBranch: branchName,
+              checkedAt: new Date().toISOString(),
+              source: 'gh',
+            }),
+          )
+        : null
+    const answered = found !== null || lookup?.lookupStatus === 'not-found'
+    const pullRequest =
+      found ??
+      (lookup && !answered
+        ? parseSessionPullRequest(row.pull_request_json)
+        : null)
+    const reading = {
+      pullRequest,
+      branchName,
+      message: !branchName
+        ? 'no branch recorded for this session'
+        : lookup?.lookupStatus === 'found' && !found
+          ? 'gh answered without a PR number'
+          : lookup?.lookupStatus === 'gh-unavailable'
+            ? 'PR unknown — gh not found'
+            : lookup?.lookupStatus === 'not-found'
+              ? 'No PR for this branch'
+              : (lookup?.error ?? null),
     }
-
-    const workspace = this.db
-      .prepare('SELECT id FROM workspaces WHERE id = ?')
-      .get(session.workspace_id) as { id: string } | undefined
-
-    if (!workspace) {
-      return null
+    // This is the sole writer of the session PR fact. No daemon hint is stored.
+    if (answered) {
+      this.db
+        .prepare('UPDATE sessions SET pull_request_json=? WHERE id=?')
+        .run(pullRequest ? JSON.stringify(pullRequest) : null, sessionId)
     }
-
-    const lookup = await this.lookupGithubPullRequest(session.working_directory)
-    this.upsertWorkspacePullRequest({
-      projectId: session.project_id,
-      workspaceId: session.workspace_id,
-      result: lookup,
-    })
-
-    return this.getByWorkspaceId(session.workspace_id)
+    if (row.workspace_id && lookup && answered)
+      this.upsertWorkspacePullRequest({
+        projectId: row.project_id,
+        workspaceId: row.workspace_id,
+        result: lookup,
+      })
+    this.readings.set(sessionId, reading)
+    this.onChanged(sessionId)
+    return reading
   }
 
   upsertForWorkspace(input: {
@@ -166,9 +294,11 @@ export class PullRequestService {
 
   private async lookupGithubPullRequest(
     workingDirectory: string,
+    branchName: string,
+    recordedRepository: string | null,
   ): Promise<PullRequestLookupResult> {
-    const branchName = await this.git.getCurrentBranch(workingDirectory)
-    const remoteUrl = await this.git.getRemoteUrl(workingDirectory)
+    const remoteUrl =
+      recordedRepository ?? (await this.git.getRemoteUrl(workingDirectory))
     const repository = parseGithubRepositoryRef(remoteUrl)
 
     if (!repository) {

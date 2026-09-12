@@ -208,7 +208,10 @@ export type SessionDelta =
           | 'continuationToken'
           | 'updatedAt'
         >
-      >
+      > & {
+        /** Ephemeral refresh hint, never a persisted session field. */
+        prUrl?: string | null
+      }
       /**
        * The execution-host event sequence this patch came from, when it came
        * from one. Metadata about the delta rather than a session field: it is

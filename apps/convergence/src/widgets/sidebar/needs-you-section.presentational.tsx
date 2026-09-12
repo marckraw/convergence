@@ -71,6 +71,12 @@ export const NeedsYouSection: FC<NeedsYouSectionProps> = ({
                     <p className="truncate font-medium">{session.name}</p>
                     <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground/85">
                       <span className="shrink-0">{summary}</span>
+                      {session.pullRequest && (
+                        <span className="shrink-0 rounded border border-border px-1">
+                          #{session.pullRequest.number} ·{' '}
+                          {session.pullRequest.state}
+                        </span>
+                      )}
                       <span className="shrink-0 text-muted-foreground/45">
                         •
                       </span>

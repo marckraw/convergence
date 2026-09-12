@@ -17,6 +17,7 @@ export interface AppStateRow {
 }
 
 export interface SessionRow {
+  pull_request_json?: string | null
   id: string
   context_kind: string
   project_id: string | null
