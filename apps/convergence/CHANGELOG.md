@@ -1,5 +1,11 @@
 # convergence
 
+## 0.58.0
+
+### Minor Changes
+
+- eca976b: Spawn recipes can select a remote execution host and work address, carry a role card in the first message, and create an optional return connection to the source conversation.
+
 ## 0.57.3
 
 ### Patch Changes
