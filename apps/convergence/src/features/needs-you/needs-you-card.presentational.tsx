@@ -4,6 +4,9 @@ import { TooltipProvider } from '@/shared/ui/tooltip'
 import { isLocalExecutionHost } from '@/entities/execution-host'
 import { NeedsYouCardIcon } from './needs-you-card-icon.presentational'
 import { NeedsYouCardStatus } from './needs-you-card-status.presentational'
+import { providerCardTints } from './needs-you-card.styles'
+import type { CSSProperties } from 'react'
+import './needs-you-card.css'
 import {
   BriefcaseBusiness,
   Infinity as InfinityIcon,
@@ -48,9 +51,16 @@ export function NeedsYouCard({
   return (
     <article
       data-pulse={pulsing ? 'true' : undefined}
+      style={
+        {
+          '--needs-you-provider-tint': provider.brand
+            ? providerCardTints[provider.brand]
+            : undefined,
+        } as CSSProperties
+      }
       className={cn(
-        'relative flex min-w-0 items-start rounded-lg bg-card shadow-sm ring-1 ring-border/60 transition-colors hover:bg-accent/50',
-        active && 'bg-accent ring-primary/40',
+        'needs-you-card relative flex min-w-0 items-start rounded-lg shadow-sm ring-1 ring-border/60 transition-colors',
+        active && 'ring-2 ring-foreground/70',
       )}
     >
       <Button
@@ -60,7 +70,7 @@ export function NeedsYouCard({
         aria-label={[session.name, card.summary, card.projectName]
           .filter(Boolean)
           .join(', ')}
-        className="h-auto min-w-0 flex-1 items-start justify-start whitespace-normal rounded-lg p-2 text-left"
+        className="h-auto min-w-0 flex-1 items-start justify-start whitespace-normal rounded-lg p-2 text-left hover:bg-transparent hover:text-foreground"
       >
         <span className="block min-w-0 w-full space-y-1">
           <span className="flex items-start gap-1 text-xs font-medium">

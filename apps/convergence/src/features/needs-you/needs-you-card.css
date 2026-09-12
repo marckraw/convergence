@@ -1,0 +1,20 @@
+@layer components {
+  .needs-you-card {
+    --needs-you-provider-tint: var(--card);
+    --needs-you-card-surface: color-mix(
+      in srgb,
+      var(--needs-you-provider-tint) 6%,
+      var(--card)
+    );
+    --muted-foreground: color-mix(in srgb, var(--foreground) 70%, var(--card));
+    background-color: var(--needs-you-card-surface);
+  }
+
+  .needs-you-card:hover {
+    background-color: color-mix(
+      in srgb,
+      var(--foreground) 4%,
+      var(--needs-you-card-surface)
+    );
+  }
+}
