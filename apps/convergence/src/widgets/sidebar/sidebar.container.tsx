@@ -58,6 +58,7 @@ import {
 } from './global-chat-session-list.presentational'
 import { SidebarToolsMenu } from './sidebar-tools-menu.presentational'
 import { toast } from 'sonner'
+import { useFeedClock } from './use-feed-clock'
 
 interface SidebarProps {
   activeSurface: AppSurface
@@ -296,10 +297,6 @@ export const Sidebar: FC<SidebarProps> = ({
   )
   const setPinned = useSessionStore((s) => s.setPinned)
   const [cardNow, setCardNow] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = window.setInterval(() => setCardNow(Date.now()), 60_000)
-    return () => window.clearInterval(timer)
-  }, [])
   const cardGroups = groupNeedsYou(
     globalSessions.map((session) =>
       needsYouCardModel(session, {
@@ -315,6 +312,10 @@ export const Sidebar: FC<SidebarProps> = ({
       }),
     ),
   )
+
+  // Keyed on presence, not on `cardGroups` itself: the array is rebuilt on
+  // every tick, so depending on it would restart the interval each minute.
+  useFeedClock(cardGroups.length > 0, setCardNow)
 
   const attentionCards = cardGroups
     .flatMap((group) => group.cards)
