@@ -979,6 +979,8 @@ interface SessionQueuedInputData {
    * the list can never claim an order the queue will not follow.
    */
   queuePosition: number
+  /** True once a re-attempt has replaced this row (MAR-2971 lap 5). */
+  redeliveredBy: boolean
   error: string | null
   createdAt: string
   updatedAt: string

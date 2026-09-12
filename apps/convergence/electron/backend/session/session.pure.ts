@@ -110,6 +110,9 @@ export function queuedInputFromRow(
     // `enqueue` sets it for every new one. A row that somehow had none
     // arrived before everything that has one, which is what 0 says.
     queuePosition: row.queue_position ?? 0,
+    // Whether something replaced this row is a fact about ANOTHER row, so a
+    // single-row read cannot know it. `list` overrides this after asking.
+    redeliveredBy: false,
     redeliveredFrom: row.redelivered_from ?? null,
     endingToldAt: row.ending_told_at ?? null,
     error: row.error,

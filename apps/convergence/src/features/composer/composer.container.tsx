@@ -1869,8 +1869,16 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
                    * Deliver now (MAR-2971, R2). Only a failed row has an
                    * attempt to repeat; a waiting one is already on its way,
                    * and offering to hurry it would be a button that lies.
+                   *
+                   * And only ONCE (lap 5). A failed row keeps its card as the
+                   * record of the first attempt, so the button would stay
+                   * clickable forever; pressed twice it would queue a second
+                   * re-attempt sharing the first's place in line. Once
+                   * something has replaced this row the errand is already
+                   * being carried again, and the honest card says so by
+                   * offering nothing to press.
                    */}
-                  {input.state === 'failed' ? (
+                  {input.state === 'failed' && !input.redeliveredBy ? (
                     <Button
                       type="button"
                       size="sm"

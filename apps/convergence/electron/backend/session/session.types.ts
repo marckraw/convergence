@@ -291,6 +291,15 @@ export interface SessionQueuedInput {
    */
   queuePosition: number
   /**
+   * Whether a re-attempt has already replaced this row (MAR-2971 lap 5).
+   *
+   * Derived per read rather than stored, because it is a fact about another
+   * row. The card uses it to stop offering Deliver now on an errand that is
+   * already being carried again -- a second press would queue a second
+   * re-attempt sharing the first's place in line.
+   */
+  redeliveredBy: boolean
+  /**
    * The row this one is a second attempt at (MAR-2971, R2), or null on a
    * first attempt. The failed row is never rewritten, so the retry points
    * back at it instead.

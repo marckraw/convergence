@@ -276,6 +276,99 @@ describe('SessionQueuedInputService', () => {
     expect(cards).toEqual(['/clear', 'payload'])
   })
 
+  it('keeps a failed row ahead of the re-attempt that shares its place (MAR-2971 lap 5)', () => {
+    // The position is the PLACE and equals exist on purpose: a failed row and
+    // its re-attempt share one. `rowid` under it is LINEAGE, not a second
+    // opinion about place -- the later attempt is the later row. Ordering by
+    // position alone leaves SQLite free to emit the pair either way, so the
+    // cards could flip across a reload.
+    const opener = service.enqueue(
+      'session-1',
+      { text: 'first attempt', dispatchId: 'd-1' },
+      'follow-up',
+    )
+    service.patch(opener.id, 'failed', 'the provider went away')
+    const { input: fresh } = service.redeliver(opener.id)
+
+    expect(fresh.queuePosition).toBe(opener.queuePosition)
+    expect(service.list('session-1').map((item) => item.id)).toEqual([
+      opener.id,
+      fresh.id,
+    ])
+
+    // And it must not depend on the query plan. Ordering by position alone
+    // happens to come back right today only because a table scan visits rows
+    // in rowid order; give the planner an index it prefers and the same SQL
+    // returns the pair REVERSED -- the re-attempt ahead of the row it
+    // replaced. Measured: with an index on `queue_position DESC`, position-
+    // only ordering emits succ,pred. The lineage key is what makes the order
+    // a property of the query rather than of the plan.
+    db.exec(
+      'CREATE INDEX idx_queued_position_desc ON session_queued_inputs(session_id, state, queue_position DESC)',
+    )
+    expect(service.list('session-1').map((item) => item.id)).toEqual([
+      opener.id,
+      fresh.id,
+    ])
+    expect(service.nextQueued('session-1')?.id).toBe(fresh.id)
+  })
+
+  it('refuses a second re-attempt at an errand already being carried (MAR-2971 lap 5)', () => {
+    // The failed row keeps its card -- it is the record of the first attempt
+    // -- so nothing stops the button being pressed twice. Two re-attempts
+    // would share one place in line, which is the one case the ordering
+    // cannot resolve by itself, and both would be delivered.
+    const opener = service.enqueue(
+      'session-1',
+      { text: 'once', dispatchId: 'd-1' },
+      'follow-up',
+    )
+    service.patch(opener.id, 'failed', 'the provider went away')
+    const { input: fresh } = service.redeliver(opener.id)
+
+    // The consequence first, because it is the consequence that matters:
+    // one waiting row at this place, not two. Swallowed so the refusal's
+    // shape cannot mask the count.
+    let refusal: unknown
+    try {
+      service.redeliver(opener.id)
+    } catch (error) {
+      refusal = error
+    }
+    const waiting = service
+      .list('session-1')
+      .filter((item) => item.state === 'queued')
+    expect(waiting.map((item) => item.id)).toEqual([fresh.id])
+    // And it said why, rather than failing silently.
+    expect(String(refusal)).toContain(`already redelivered as ${fresh.id}`)
+  })
+
+  it('stops offering Deliver now on a row something already replaced (MAR-2971 lap 5)', () => {
+    // What the card reads. It is a fact about ANOTHER row, so it is answered
+    // across every state: a successor that has already been `sent` is gone
+    // from this list, and its predecessor is still superseded.
+    const opener = service.enqueue(
+      'session-1',
+      { text: 'once', dispatchId: 'd-1' },
+      'follow-up',
+    )
+    service.patch(opener.id, 'failed', 'the provider went away')
+    const { input: fresh } = service.redeliver(opener.id)
+
+    expect(
+      service.list('session-1').map((item) => [item.id, item.redeliveredBy]),
+    ).toEqual([
+      [opener.id, true],
+      [fresh.id, false],
+    ])
+
+    // The successor goes out; the predecessor is still superseded.
+    service.patch(fresh.id, 'sent')
+    expect(
+      service.list('session-1').map((item) => [item.id, item.redeliveredBy]),
+    ).toEqual([[opener.id, true]])
+  })
+
   it('refuses to redeliver an input that did not fail', () => {
     const queued = service.enqueue(
       'session-1',

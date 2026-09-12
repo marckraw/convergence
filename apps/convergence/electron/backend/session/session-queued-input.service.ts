@@ -96,11 +96,31 @@ export class SessionQueuedInputService {
          FROM session_queued_inputs
          WHERE session_id = ?
            AND state IN ('queued', 'dispatching', 'failed')
-         ORDER BY queue_position ASC`,
+         ORDER BY queue_position ASC, rowid ASC`,
       )
       .all(sessionId) as SessionQueuedInputRow[]
 
-    return rows.map(queuedInputFromRow)
+    // Which of these rows has already been replaced by a re-attempt. Read
+    // across EVERY state, not just the visible ones: a successor that has
+    // already been `sent` is gone from this list but its predecessor is
+    // still superseded, and offering Deliver now on it again would queue a
+    // second copy of work that already went (MAR-2971 lap 5).
+    const supersededIds = new Set(
+      (
+        this.db
+          .prepare(
+            `SELECT redelivered_from
+             FROM session_queued_inputs
+             WHERE session_id = ? AND redelivered_from IS NOT NULL`,
+          )
+          .all(sessionId) as { redelivered_from: string }[]
+      ).map((row) => row.redelivered_from),
+    )
+
+    return rows.map((row) => ({
+      ...queuedInputFromRow(row),
+      redeliveredBy: supersededIds.has(row.id),
+    }))
   }
 
   enqueue(
@@ -123,6 +143,8 @@ export class SessionQueuedInputService {
       relaysMuted: input.muteRelays === true,
       dispatchId: input.dispatchId ?? null,
       redeliveredFrom: input.redeliveredFrom ?? null,
+      // Nothing can have replaced a row that is being created.
+      redeliveredBy: false,
       endingToldAt: null,
       error: null,
       // Filled from `rowid` right after the insert, or inherited by a
@@ -261,6 +283,23 @@ export class SessionQueuedInputService {
     if (row.state !== 'failed') {
       throw new Error(`Queued input cannot be redelivered from ${row.state}`)
     }
+    // Once only. A failed row keeps its card -- it is the record of the first
+    // attempt -- so the button on it stays clickable unless something says
+    // no, and a second press would queue a SECOND re-attempt sharing the
+    // first's place in line: two queued rows at one position, which is the
+    // one case the ordering cannot decide by itself. The successor is the
+    // answer: this errand is already being carried again.
+
+    const successor = this.db
+      .prepare(
+        'SELECT id FROM session_queued_inputs WHERE redelivered_from = ? LIMIT 1',
+      )
+      .get(id) as { id: string } | undefined
+    if (successor) {
+      throw new Error(
+        `Queued input ${id} was already redelivered as ${successor.id}`,
+      )
+    }
 
     const previous = queuedInputFromRow(row)
     const fresh = this.enqueue(
@@ -306,8 +345,12 @@ export class SessionQueuedInputService {
    * beat holds O1,P1,O2,P2, which that rule drains O1,O2,P1,P2, running the
    * second payload with no `/clear` in front of it.
    *
-   * `queue_position` is the fact itself, so there is nothing left to infer
-   * and no second tie-break to get wrong.
+   * `queue_position` is the fact itself, so there is nothing left to infer.
+   * `rowid` sits under it as LINEAGE, not as a second opinion about place: a
+   * failed row and the re-attempt that replaced it share a position on
+   * purpose, and between two rows at one place the later attempt is the
+   * later row. Without it SQLite's order between equals is undefined, so the
+   * pair could come back either way across a reload.
    */
   nextQueued(sessionId: string): SessionQueuedInput | null {
     const row = this.db
@@ -315,7 +358,7 @@ export class SessionQueuedInputService {
         `SELECT *
          FROM session_queued_inputs
          WHERE session_id = ? AND state = 'queued'
-         ORDER BY queue_position ASC
+         ORDER BY queue_position ASC, rowid ASC
          LIMIT 1`,
       )
       .get(sessionId) as SessionQueuedInputRow | undefined
@@ -394,7 +437,7 @@ export class SessionQueuedInputService {
          FROM session_queued_inputs
          WHERE session_id = ?
            AND state = 'dispatching'
-         ORDER BY queue_position ASC`,
+         ORDER BY queue_position ASC, rowid ASC`,
       )
       .all(sessionId) as Array<{ id: string }>
 

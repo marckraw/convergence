@@ -272,7 +272,16 @@ function upsertQueuedInput(
       // after Deliver now on an opener the list showed payload-then-clear
       // while the queue sent clear-then-payload, because a re-attempt keeps
       // its predecessor's PLACE but is created now.
-      .sort((left, right) => left.queuePosition - right.queuePosition)
+      .sort(
+        (left, right) =>
+          left.queuePosition - right.queuePosition ||
+          // Lineage under the place, mirroring the readers' `rowid`: a failed
+          // row and the re-attempt that replaced it share a position, and the
+          // later attempt is the one created later. Without this the pair's
+          // order depends on whichever arrived in the store first, which is
+          // not the same thing after a reload.
+          left.createdAt.localeCompare(right.createdAt),
+      )
   )
 }
 

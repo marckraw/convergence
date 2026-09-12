@@ -1148,6 +1148,141 @@ describe('database', () => {
     }
   })
 
+  it('gives a legacy queued input its place in line, from rowid (MAR-2971 lap 4)', () => {
+    // `queue_position` is the ONLY thing that answers what order this queue
+    // drains in, and every reader sorts by it alone. A legacy row left null
+    // would sort ahead of everything -- SQLite puts NULLs first ascending --
+    // so the backfill is not tidiness: it is what keeps an old follow-up in
+    // the place it already had. `rowid` is the honest source, because it is
+    // the insertion order these rows were already drained in.
+    const dir = mkdtempSync(join(tmpdir(), 'convergence-queue-position-'))
+    const dbPath = join(dir, 'pre-queue-position.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.exec(`
+        CREATE TABLE session_queued_inputs (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          delivery_mode TEXT NOT NULL,
+          state TEXT NOT NULL,
+          text TEXT NOT NULL,
+          attachment_ids_json TEXT NOT NULL DEFAULT '[]',
+          skill_selections_json TEXT NOT NULL DEFAULT '[]',
+          provider_request_id TEXT,
+          error TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        INSERT INTO session_queued_inputs (id, session_id, delivery_mode, state, text, created_at, updated_at)
+        VALUES
+          ('q-first', 's1', 'follow-up', 'queued', 'first', '2026-01-01', '2026-01-01'),
+          ('q-second', 's1', 'follow-up', 'queued', 'second', '2026-01-01', '2026-01-01');
+      `)
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      const rows = db
+        .prepare(
+          'SELECT id, queue_position, rowid AS rid FROM session_queued_inputs ORDER BY rowid',
+        )
+        .all() as { id: string; queue_position: number; rid: number }[]
+
+      expect(rows.map((row) => [row.id, row.queue_position])).toEqual([
+        ['q-first', rows[0].rid],
+        ['q-second', rows[1].rid],
+      ])
+      // And the order they keep is the order they had.
+      expect(rows[0].queue_position).toBeLessThan(rows[1].queue_position)
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it("still backfills a queued input's place after an interrupted migration (MAR-2971 lap 4)", () => {
+    // The column IS the flag saying whether the backfill still owes this
+    // table anything, so the ALTER must not survive an interrupt on its own:
+    // the next boot would read the column's presence as "already done" and
+    // leave every row null -- permanently at the head of the queue. One
+    // transaction is what makes the two commit or neither.
+    const dir = mkdtempSync(
+      join(tmpdir(), 'convergence-queue-position-interrupt-'),
+    )
+    const dbPath = join(dir, 'interrupted-queue-position.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.exec(`
+        CREATE TABLE session_queued_inputs (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          delivery_mode TEXT NOT NULL,
+          state TEXT NOT NULL,
+          text TEXT NOT NULL,
+          attachment_ids_json TEXT NOT NULL DEFAULT '[]',
+          skill_selections_json TEXT NOT NULL DEFAULT '[]',
+          provider_request_id TEXT,
+          error TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        INSERT INTO session_queued_inputs (id, session_id, delivery_mode, state, text, created_at, updated_at)
+        VALUES
+          ('q-first', 's1', 'follow-up', 'queued', 'first', '2026-01-01', '2026-01-01'),
+          ('q-second', 's1', 'follow-up', 'queued', 'second', '2026-01-01', '2026-01-01');
+
+        -- Fails the backfill write, which is exactly the gap between the
+        -- ALTER and the UPDATE. A process kill at the same point leaves the
+        -- same durable state: an uncommitted transaction SQLite rolls back.
+        CREATE TRIGGER interrupt_queue_position_backfill
+        BEFORE UPDATE ON session_queued_inputs
+        BEGIN
+          SELECT RAISE(ABORT, 'simulated interrupt mid-migration');
+        END;
+      `)
+      legacy.close()
+
+      expect(() => getDatabase(dbPath)).toThrow(
+        /simulated interrupt mid-migration/,
+      )
+      closeDatabase()
+      resetDatabase()
+
+      // The interrupt took the column down with it. If the ALTER had
+      // committed alone, its presence would tell the next boot the work was
+      // already done.
+      const afterInterrupt = new Database(dbPath)
+      const columnsAfterInterrupt = (
+        afterInterrupt
+          .prepare("PRAGMA table_info('session_queued_inputs')")
+          .all() as { name: string }[]
+      ).map((column) => column.name)
+      expect(columnsAfterInterrupt).not.toContain('queue_position')
+      afterInterrupt.exec('DROP TRIGGER interrupt_queue_position_backfill')
+      afterInterrupt.close()
+
+      // The interrupt is over; this boot finishes the job.
+      const db = getDatabase(dbPath)
+      const rows = db
+        .prepare(
+          'SELECT id, queue_position, rowid AS rid FROM session_queued_inputs ORDER BY rowid',
+        )
+        .all() as { id: string; queue_position: number; rid: number }[]
+      expect(rows.map((row) => [row.id, row.queue_position])).toEqual([
+        ['q-first', rows[0].rid],
+        ['q-second', rows[1].rid],
+      ])
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('carries every column it projects when it rebuilds the sessions table', () => {
     // SYNTHETIC BY CONSTRUCTION. The rebuild fires only on a database carrying
     // a legacy `transcript` column or missing the context-kind CHECK, and every

@@ -343,6 +343,8 @@ export interface SessionQueuedInput {
    * clear-then-payload. One number, one order, every reader.
    */
   queuePosition: number
+  /** True once a re-attempt has replaced this row (MAR-2971 lap 5). */
+  redeliveredBy: boolean
   error: string | null
   createdAt: string
   updatedAt: string
