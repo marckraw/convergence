@@ -374,9 +374,15 @@ describe('SessionService', () => {
         const handle = base.start(config)
         return {
           ...handle,
+          // Resident, like Codex and Claude Code: the handle outlives its
+          // turn, so the drain that fires on completion still has a provider
+          // to send through -- which is the only way it can meet a busy one.
+          resident: true,
           sendMessage: (...args) => {
             const [text] = args
-            if (text === '/clear') {
+            // Contains, not equals: the send path may prepend a project
+            // context block before the provider ever sees the command.
+            if (typeof text === 'string' && text.includes('/clear')) {
               throw kind === 'busy'
                 ? new ProviderBusyError(
                     'Wait for the current turn to finish before clearing the conversation.',
@@ -392,7 +398,21 @@ describe('SessionService', () => {
 
   async function relayTargetRefusing(kind: 'busy' | 'broken') {
     const registryOwn = new ProviderRegistry()
-    registryOwn.register(providerRefusing(kind))
+    let emitDelta: ((delta: SessionDelta) => void) | null = null
+    const refusing = providerRefusing(kind)
+    registryOwn.register({
+      ...refusing,
+      start: (config) => {
+        const handle = refusing.start(config)
+        return {
+          ...handle,
+          onDelta: (listener) => {
+            emitDelta = listener
+            handle.onDelta(listener)
+          },
+        }
+      },
+    })
     const own = new SessionService(
       getDatabase(),
       new LocalExecutionHost(registryOwn),
@@ -409,7 +429,15 @@ describe('SessionService', () => {
     // exact gap MAR-2888 fell through. `isCarryingATurn` says "not busy" and
     // the provider says otherwise.
     await own.start(session.id, { text: 'first turn' })
-    return { service: own, sessionId: session.id }
+    return {
+      service: own,
+      sessionId: session.id,
+      emit: (delta: SessionDelta) => {
+        if (!emitDelta)
+          throw new Error('no delta listener on the refusing handle')
+        emitDelta(delta)
+      },
+    }
   }
 
   it('sends a /clear to an idle resident Claude session rather than queueing it forever (MAR-2888 lap 2)', async () => {
@@ -540,6 +568,93 @@ describe('SessionService', () => {
     expect(
       own.getQueuedInputs(sessionId).map((item) => [item.text, item.state]),
     ).toEqual([['/clear', 'queued']])
+  })
+
+  it('puts a queued row back in line when the drain meets a busy provider (MAR-2888 lap 3)', async () => {
+    // The third site of the same doctrine, and the one that still reproduces.
+    // The drain fires on a turn's completion — the exact moment a Codex
+    // app-server may still be reconnecting — patches the row to
+    // `dispatching`, and its send throws busy. The catch then treats the row
+    // as an attempt that FAILED, so the baton it was carrying dies one beat
+    // before it would have gone out.
+    //
+    // "Not yet" is not "broken": the row goes back in line and the next turn
+    // boundary tries it again. `dispatchNextQueuedInput` already has this
+    // shape for a provider that answers `queue-follow-up`.
+    const { service: own, sessionId, emit } = await relayTargetRefusing('busy')
+    await own.sendMessage(sessionId, { text: 'ordinary work' })
+    const queued = await own.deliverRelayMessage(sessionId, { text: '/clear' })
+    getDatabase()
+      .prepare(
+        "UPDATE session_queued_inputs SET state = 'queued' WHERE session_id = ?",
+      )
+      .run(sessionId)
+    const terminals: DispatchTerminalEvent[] = []
+    own.onDispatchTerminal((event) => terminals.push(event))
+
+    // The turn ends, the drain runs, and the provider is still busy.
+    emit({ kind: 'session.patch', patch: { status: 'completed' } })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(
+      own.getQueuedInputs(sessionId).map((item) => [item.text, item.state]),
+    ).toEqual([['/clear', 'queued']])
+    expect(terminals).toEqual([])
+    expect(queued.dispatchId).toBeTruthy()
+  })
+
+  it("leaves an earlier hail's rows queued when a later one is refused as busy (MAR-2888 lap 3)", async () => {
+    // A fan-in crew: two wires hail the same target in succession. Hail 1
+    // queues its `/clear` and payload; hail 2's provider refusal used to run
+    // through `withDispatchInFlight`'s catch into
+    // `terminateQueueUnlessCarryingATurn`, and because the record reads
+    // `idle` — which IS the MAR-2888 condition — every row hail 1 had already
+    // queued was stamped `failed` with the busy sentence and its terminal
+    // emitted. So typing the refusal saved the new baton and dropped the one
+    // already waiting.
+    //
+    // A busy refusal proves a turn owns the queue: whatever is waiting there
+    // has an owner and a drain coming. The R1 tests all start with an empty
+    // queue, which is why none of them could see this.
+    const { service: own, sessionId } = await relayTargetRefusing('busy')
+    // The row must be `completed`, not `idle`: at `idle` the DOOR refuses
+    // (a turn is arriving) and the door sits outside `withDispatchInFlight`,
+    // so it never reaches the catch. `completed` is the idle resident whose
+    // app-server is nonetheless mid-turn or reconnecting — the only shape
+    // where the PROVIDER's refusal is the one that lands, which is the shape
+    // that terminated the queue.
+    getDatabase()
+      .prepare("UPDATE sessions SET status = 'completed' WHERE id = ?")
+      .run(sessionId)
+    const first = await own.sendMessageWithOpener(sessionId, {
+      opener: '/clear',
+      text: 'hail one',
+    })
+    expect(own.getQueuedInputs(sessionId).map((item) => item.text)).toEqual([
+      '/clear',
+      'hail one',
+    ])
+    const terminals: DispatchTerminalEvent[] = []
+    own.onDispatchTerminal((event) => terminals.push(event))
+
+    const second = await own.sendMessageWithOpener(sessionId, {
+      opener: '/clear',
+      text: 'hail two',
+    })
+
+    // Hail 1's rows are untouched, and nobody was told they ended.
+    expect(
+      own.getQueuedInputs(sessionId).map((item) => [item.text, item.state]),
+    ).toEqual([
+      ['/clear', 'queued'],
+      ['hail one', 'queued'],
+      ['/clear', 'queued'],
+      ['hail two', 'queued'],
+    ])
+    expect(terminals).toEqual([])
+    expect(second.openerQueued).toBe(true)
+    expect(second.payloadDispatchId).not.toBe(first.payloadDispatchId)
   })
 
   it('still fails a plain relay delivery refused for any other reason (R1, MAR-2888 lap 2)', async () => {

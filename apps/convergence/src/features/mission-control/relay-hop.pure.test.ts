@@ -11,6 +11,7 @@ import {
   formatHopCount,
   formatHopTime,
   formatRelayHopOutcome,
+  hopReasonToShow,
   isAlarmingHop,
   relayHopTone,
   UNKNOWN_OUTCOME_LABEL,
@@ -87,6 +88,68 @@ describe('alarming outcomes', () => {
       ]),
     ).toBe(2)
     expect(countAlarmingHops([])).toBe(0)
+  })
+})
+
+describe('hopReasonToShow', () => {
+  /**
+   * A reason must not outlive the wait it explains (MAR-2888).
+   *
+   * Two surfaces read this — the canvas row and History's event row — and
+   * they were not agreeing, so it lives in one function. The distinction is
+   * what the sentence IS: a `queued` hop's reason describes a state that can
+   * end, every other outcome's describes an event that happened.
+   */
+  const hop = (overrides: {
+    outcome: string
+    settledAt: string | null
+    error: string | null
+  }) => overrides
+
+  it('explains a wait only while the hop is still waiting', () => {
+    expect(
+      hopReasonToShow(
+        hop({
+          outcome: 'queued',
+          settledAt: null,
+          error: 'Waiting behind a running turn at the target.',
+        }),
+      ),
+    ).toBe('Waiting behind a running turn at the target.')
+
+    expect(
+      hopReasonToShow(
+        hop({
+          outcome: 'queued',
+          settledAt: '2026-09-12T10:00:00.000Z',
+          error: 'Waiting behind a running turn at the target.',
+        }),
+      ),
+    ).toBeNull()
+  })
+
+  it('keeps every other outcome its record, settled or not', () => {
+    // A refusal, a broken delivery, a spent budget: each is a thing that
+    // HAPPENED, and settling does not make it untrue.
+    for (const outcome of ['error', 'skipped-baton', 'skipped-round-budget']) {
+      expect(
+        hopReasonToShow(
+          hop({
+            outcome,
+            settledAt: '2026-09-12T10:00:00.000Z',
+            error: 'Pi is unavailable. The response was not delivered.',
+          }),
+        ),
+      ).toBe('Pi is unavailable. The response was not delivered.')
+    }
+  })
+
+  it('has nothing to show for a hop that recorded nothing', () => {
+    expect(
+      hopReasonToShow(
+        hop({ outcome: 'delivered', settledAt: null, error: null }),
+      ),
+    ).toBeNull()
   })
 })
 

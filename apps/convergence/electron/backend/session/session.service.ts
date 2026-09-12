@@ -1736,12 +1736,18 @@ export class SessionService {
       if (resetTarget && this.isTurnUnderWayOrArriving(resetTarget)) {
         // Typed for the same reason the provider's own refusal is
         // (MAR-2888): a relay delivery must be able to tell "not now" from
-        // "broken", and this door says "not now". Note what it actually
-        // reads, though -- a handle being ATTACHED, which for a resident
-        // session outlives its turn -- so an idle resident target refuses a
-        // `/clear` with a sentence about a turn that is not running. The
-        // queue is the right answer either way; the predicate is Fable's
-        // call, and it is named in the report.
+        // "broken", and this door says "not now".
+        //
+        // `isTurnUnderWayOrArriving`, which is two cases and not one. A
+        // dispatch in flight is a turn. So is a handle attached whose turn
+        // has not ended -- and that covers the beat between `start()`
+        // returning and the provider's first status, where the row still
+        // reads `idle` while a turn is coming up. What it deliberately does
+        // NOT cover is a handle attached to a session whose turn is over: a
+        // resident handle outlives its turn, so asking "is a handle
+        // attached" called an idle session busy, and the refusal became a
+        // queued row with nothing to drain it -- the only automatic drain is
+        // a handle's own `completed`, which was never coming again.
         throw new ProviderBusyError(
           'Wait for the current turn to finish before clearing the conversation.',
         )
@@ -1752,10 +1758,22 @@ export class SessionService {
       return await dispatch(inFlight)
     } catch (error) {
       this.dispatches.settle(inFlight)
-      this.terminateQueueUnlessCarryingATurn(
-        sessionId,
-        error instanceof Error ? error.message : String(error),
-      )
+      // A busy refusal proves a turn owns the queue (MAR-2888). Every other
+      // failure leaves the session idle with rows waiting on nothing, which
+      // is what this terminal is for; a refusal that says "mid-turn" says
+      // the opposite -- there IS a turn, and its completion will drain them.
+      //
+      // Since MAR-2971 the sweep only fails rows it ATTEMPTED, so a `queued`
+      // row already survives this path. What this guard protects is a row
+      // caught mid-`dispatching` by a concurrent send, and it states the
+      // rule where the rule belongs rather than relying on the sweep's
+      // narrowness to keep being narrow.
+      if (!isProviderBusyError(error)) {
+        this.terminateQueueUnlessCarryingATurn(
+          sessionId,
+          error instanceof Error ? error.message : String(error),
+        )
+      }
       throw error
     } finally {
       this.dispatches.settle(inFlight)
@@ -3794,6 +3812,17 @@ export class SessionService {
       this.attachDispatchToTurn(sessionId, item.dispatchId)
       this.queuedInputs.patch(item.id, 'sent')
     } catch (err) {
+      // "Not yet" is not "broken" (MAR-2888). The drain fires the instant a
+      // turn completes, which is exactly when a Codex app-server may still
+      // be reconnecting, so its send can be refused as busy. That row was
+      // attempted, but the answer is about timing: it goes back in line and
+      // the next turn boundary tries it again, the same shape this function
+      // already uses for a provider that answers `queue-follow-up`. Failing
+      // it here would kill a baton one beat before it went out.
+      if (isProviderBusyError(err)) {
+        this.queuedInputs.patch(item.id, 'queued')
+        return
+      }
       // The drain is itself a dispatch attempt, and it left the session idle
       // with this row and every row behind it waiting on nothing: they end
       // together, in one event (MAR-2759, design P).

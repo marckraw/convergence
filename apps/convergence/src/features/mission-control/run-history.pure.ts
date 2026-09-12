@@ -7,6 +7,7 @@ import type {
   RunHistoryOutcome,
   RunStatus,
 } from '@/entities/run-history'
+import { hopReasonToShow } from './relay-hop.pure'
 import type { ResolveSessionName } from './relay-sentence.pure'
 
 /**
@@ -398,7 +399,9 @@ export function buildHopEventRow(
     outcome,
     outcomeLabel: historyOutcomeWord(outcome),
     tone: historyOutcomeTone(outcome),
-    reason: hop.error,
+    // The same rule the canvas row uses: a settled `queued` hop stops
+    // claiming it is still waiting (MAR-2888).
+    reason: hopReasonToShow(hop),
     preview: hop.payloadPreview,
     relayId: hop.relayId,
   }
