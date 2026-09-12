@@ -445,9 +445,12 @@ describe('session PR fact (MAR-2978)', () => {
    * was reported as having no number at all (MAR-2991). Each row here names the
    * part that is actually missing.
    *
+   * The messages are keyed by the part `readSessionPullRequest` stopped at, so
+   * there is one rule and this is its translation.
+   *
    * Mutation: collapse the three back into 'gh answered without a PR number'
-   * and the last two rows go red. Mutation: treat `found` as answered and every
-   * row goes red at the retained facts.
+   * and the last three rows go red. Mutation: treat `found` as answered and
+   * every row goes red at the retained facts.
    */
   it.each([
     [{ headRefName: 'feature/local' }, 'gh answered without a PR number'],
@@ -472,6 +475,12 @@ describe('session PR fact (MAR-2978)', () => {
     // A number, and no URL to hang it on.
     [
       { headRefName: 'feature/local', number: 42, state: 'OPEN' },
+      'gh answered without a PR URL',
+    ],
+    // A URL gh sent as an empty string: the emptiness rule used to live in the
+    // service's own `found` guard, and now lives with the parser (RUN75 lap 2).
+    [
+      { headRefName: 'feature/local', number: 42, url: '', state: 'OPEN' },
       'gh answered without a PR URL',
     ],
     // A number and a URL, and a state `mapGithubState` read as `unknown`.

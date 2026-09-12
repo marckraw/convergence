@@ -598,7 +598,7 @@ describe('SessionView', () => {
     expect(rows?.textContent).not.toContain('None yet')
   })
 
-  it('reports the gh failure independently of an unreadable daemon PR hint', async () => {
+  it('reports the gh failure beside the workspace the daemon did send', async () => {
     ;(
       window as unknown as {
         electronAPI: { executionHost: { getSessionWorkspace: unknown } }
@@ -615,10 +615,6 @@ describe('SessionView', () => {
             baseRef: 'master',
             workspacePath: '/srv/worktrees/s-1',
             environment: null,
-          },
-          pullRequest: {
-            kind: 'unreadable',
-            reason: 'the daemon sent no pull request field',
           },
         },
       })
@@ -661,7 +657,7 @@ describe('SessionView', () => {
     expect(rows?.textContent).toContain('agent/34372e47')
   })
 
-  it('renders the verified session fact, not the daemon URL (mutation: use remote PR hint)', async () => {
+  it('shows a remote session with no workspace its own verified PR fact', async () => {
     const fact = {
       number: 545,
       url: 'https://github.com/marckraw/convergence/pull/545',
@@ -696,13 +692,7 @@ describe('SessionView', () => {
       .fn()
       .mockResolvedValue({
         ok: true,
-        info: {
-          workspace: null,
-          pullRequest: {
-            kind: 'url',
-            url: 'https://github.com/marckraw/convergence/pull/544',
-          },
-        },
+        info: { workspace: null },
       })
 
     useSessionStore.setState((state) => ({

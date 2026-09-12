@@ -29,4 +29,6 @@ And a `found` reply from `gh` that cannot become a fact now names the part that
 is missing. One message covered all of them, so a pull request carrying a
 perfectly good number whose state this build could not classify was reported as
 "gh answered without a PR number". A missing number, a missing URL and an
-unusable state each say their own name.
+unusable state each say their own name — read off the parser that refused the
+reply rather than derived a second time beside it, so the message and the
+refusal cannot come apart.

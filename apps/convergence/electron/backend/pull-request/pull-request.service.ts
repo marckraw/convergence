@@ -1,6 +1,10 @@
 import { parseReportedWorkspace } from '../session/reported-workspace.pure'
 import { parseSessionWorkAddress } from '../../../src/shared/lib/work-address.pure'
-import { parseSessionPullRequest } from './session-pull-request.pure'
+import {
+  parseSessionPullRequest,
+  readSessionPullRequest,
+} from './session-pull-request.pure'
+import type { SessionPullRequestPart } from './session-pull-request.pure'
 import type { SessionPullRequestReading } from '../../../src/shared/types/session-pull-request.types'
 import { execFile } from 'child_process'
 import { randomUUID } from 'crypto'
@@ -228,9 +232,11 @@ export class PullRequestService {
         message: 'Session was deleted',
       }
     }
-    const found =
-      lookup?.lookupStatus === 'found' && lookup.url
-        ? parseSessionPullRequest(
+    // The same read decides whether gh's reply becomes a fact and, when it does
+    // not, which part of it the reader is told about.
+    const reply =
+      lookup?.lookupStatus === 'found'
+        ? readSessionPullRequest(
             JSON.stringify({
               number: lookup.number,
               url: lookup.url,
@@ -241,6 +247,7 @@ export class PullRequestService {
             }),
           )
         : null
+    const found = reply?.fact ?? null
     const answered = found !== null || lookup?.lookupStatus === 'not-found'
     const pullRequest =
       found ??
@@ -252,8 +259,8 @@ export class PullRequestService {
       branchName,
       message: !branchName
         ? 'no branch recorded for this session'
-        : lookup?.lookupStatus === 'found' && !found
-          ? describeUnusableGithubReply(lookup)
+        : reply?.unreadable
+          ? unusableGithubReply[reply.unreadable]
           : lookup?.lookupStatus === 'gh-unavailable'
             ? 'PR unknown — gh not found'
             : lookup?.lookupStatus === 'not-found'
@@ -452,17 +459,21 @@ export class PullRequestService {
  * while carrying a perfectly good number. Each cause says its own name, so the
  * reader is told the thing that is actually wrong.
  *
- * Everything else the fact needs, the service supplies itself (the head branch,
- * the check stamp, the source), so a number, a URL and a usable state are the
- * whole list of what gh has to get right.
+ * The name comes from the parser, which is the only thing that decides; this is
+ * a translation, not a second copy of the rule. Keyed by the parser's own parts
+ * so tightening one — an http-only URL, say — cannot leave a bad URL reading as
+ * "without a usable state": the missing key is a type error here first.
+ *
+ * The last three parts this service supplies itself rather than reading from gh
+ * (the head branch, the check stamp, the source), so they say so instead of
+ * blaming the reply.
  */
-function describeUnusableGithubReply(lookup: PullRequestLookupResult): string {
-  if (
-    typeof lookup.number !== 'number' ||
-    !Number.isInteger(lookup.number) ||
-    lookup.number < 1
-  )
-    return 'gh answered without a PR number'
-  if (!lookup.url) return 'gh answered without a PR URL'
-  return 'gh answered without a usable state'
+const unusableGithubReply: Record<SessionPullRequestPart, string> = {
+  json: 'gh answered with a reply this build could not read',
+  number: 'gh answered without a PR number',
+  url: 'gh answered without a PR URL',
+  state: 'gh answered without a usable state',
+  headBranch: 'no branch to record this PR against',
+  checkedAt: 'this build could not stamp the lookup',
+  source: 'this build could not name the lookup’s source',
 }
