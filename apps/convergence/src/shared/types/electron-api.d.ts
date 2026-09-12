@@ -2515,22 +2515,9 @@ type RemoteSessionWorkspaceResultData =
       info: {
         /** The protocol's own union, verbatim (MAR-2694). */
         workspace: ExecutionSessionWorkspace | null
-        /** Decoded at the wire door, never collapsed (MAR-2718 round 2). */
-        pullRequest: RemoteSessionPullRequestData
       }
     }
   | { ok: false; message: string }
-
-/**
- * The three answers a daemon snapshot can give about a pull request. `none` is
- * the daemon's own explicit negative and the only one the panel may render as
- * `None yet`; a missing field or an unusable shape is `unreadable` and says so
- * (MAR-2718 round 2).
- */
-type RemoteSessionPullRequestData =
-  | { kind: 'none' }
-  | { kind: 'url'; url: string }
-  | { kind: 'unreadable'; reason: string }
 
 interface RemoteExecutionHostConnectionResultData {
   ok: boolean

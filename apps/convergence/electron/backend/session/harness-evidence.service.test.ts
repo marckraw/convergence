@@ -19,6 +19,31 @@ function bed() {
   ).run()
   return { db, service: new HarnessEvidenceService(db) }
 }
+// Recorded without a `turnId` in its payload — the shape that makes the reader
+// fall back to the stamps. This is what older builds wrote.
+function insertTurnlessHook(db: ReturnType<typeof bed>['db'], at: string) {
+  db.prepare(
+    'INSERT INTO session_harness_events(session_id,sequence,type,subtype,payload_json,created_at) VALUES(?,?,?,?,?,?)',
+  ).run(
+    'session',
+    1,
+    'system',
+    'hook_started',
+    JSON.stringify({
+      type: 'system',
+      subtype: 'hook_started',
+      hook_id: 'boundary',
+      hook_name: 'Boundary hook',
+      hook_event: 'PreToolUse',
+    }),
+    at,
+  )
+}
+function hookOwners(service: HarnessEvidenceService) {
+  return service
+    .harnessFacts('session')
+    .turns.map((turn) => [turn.turnId, turn.hooks.map((hook) => hook.id)])
+}
 
 it('R2 preserves spawn order across identity adoption — mutation order tied spawns by mutable provider id turns red', () => {
   const { service } = bed()
@@ -771,6 +796,24 @@ it('RUN72 the answer window compares times, not their spelling — mutation comp
     ).run(id, status, start)
   const precise = service.countParallelWork(['session']).get('session')
 
+  // The same boundary with the precisions swapped: the longer spelling on the
+  // turn, the shorter on the row. Lexically this one already answered
+  // correctly, which is exactly why it needs pinning — half a boundary pinned
+  // is a boundary that can be half broken again (MAR-2992).
+  db.prepare("DELETE FROM session_tasks WHERE session_id='session'").run()
+  db.prepare(
+    "UPDATE session_turns SET started_at='2026-09-09T11:00:00.000Z'",
+  ).run()
+  for (const [id, status, start] of [
+    ['reverse-fail', 'failed', '2026-09-09T11:00:00Z'],
+    ['reverse-stop', 'stopped', '2026-09-09T11:00:00Z'],
+    ['reverse-before', 'failed', '2026-09-09T10:59:59Z'],
+  ])
+    db.prepare(
+      "INSERT INTO session_tasks(task_id,session_id,status,started_at) VALUES (?,'session',?,?)",
+    ).run(id, status, start)
+  const reversed = service.countParallelWork(['session']).get('session')
+
   // The same question asked of stamps that are not times: the string
   // comparison still answers, unchanged.
   db.prepare("DELETE FROM session_tasks WHERE session_id='session'").run()
@@ -783,9 +826,139 @@ it('RUN72 the answer window compares times, not their spelling — mutation comp
   ).run()
   expect({
     precise,
+    reversed,
     labels: service.countParallelWork(['session']).get('session'),
   }).toEqual({
     precise: { running: 0, unknown: 0, failed: 1, stopped: 1 },
+    reversed: { running: 0, unknown: 0, failed: 1, stopped: 1 },
     labels: { running: 0, unknown: 0, failed: 1, stopped: 0 },
   })
+})
+
+/**
+ * RUN75 / MAR-2992. The JS half of the same seam the answer window closed
+ * (MAR-2902): which turn a harness event belongs to was decided by comparing
+ * the stamps as text, so a turn written `'2026-09-09T11:00:00Z'` and an event
+ * written `'2026-09-09T11:00:00.000Z'` — one instant, two spellings — compared
+ * as `'Z' > '.'` and the event was handed to the PREVIOUS turn. Latent, because
+ * every writer today stamps with `toISOString()`; the turn does not have to.
+ *
+ * Both orderings are pinned. The second was already right under the string
+ * comparison, which is the reason to hold it: a boundary pinned on one side is
+ * a boundary that can be half broken again.
+ *
+ * Mutation: compare the stamps with `<=` and the first case goes red — the hook
+ * lands on turn 1.
+ */
+it.each([
+  [
+    'the turn stamped shorter than the event',
+    '2026-09-09T11:00:00Z',
+    '2026-09-09T11:00:00.000Z',
+  ],
+  [
+    'the turn stamped longer than the event',
+    '2026-09-09T11:00:00.000Z',
+    '2026-09-09T11:00:00Z',
+  ],
+])(
+  'attributes an event at exactly a turn’s start to that turn — %s',
+  (_name, turnStart, eventAt) => {
+    const { db, service } = bed()
+    db.prepare(
+      "UPDATE session_turns SET started_at='2026-09-09T10:00:00.000Z',status='completed' WHERE id='turn'",
+    ).run()
+    db.prepare(
+      "INSERT INTO session_turns(id,session_id,sequence,started_at,status) VALUES ('turn2','session',2,?,'running')",
+    ).run(turnStart)
+    insertTurnlessHook(db, eventAt)
+
+    expect(hookOwners(service)).toEqual([
+      ['turn', []],
+      ['turn2', ['boundary']],
+    ])
+  },
+)
+
+/**
+ * RUN75 lap 2 / MAR-2992. What `compareInstants` treats as an instant is
+ * decided by a strict ISO gate, not by `Date.parse`, which reads far more than
+ * a time. Both cases below are values the column really can carry — labels from
+ * fixtures and pre-ISO rows, and stamps written without an offset — and both
+ * must take the text path they have always taken.
+ *
+ * Mutation: drop the gate and hand both sides straight to `Date.parse`, and
+ * both cases go red.
+ */
+it('compares as instants only what is unambiguously one — the legacy month parse', () => {
+  const { db, service } = bed()
+  // `Date.parse('10')` is October 2001 and `Date.parse('9')` September 2001, so
+  // ungated these answer 1 where the text comparison answers -1 and the hook
+  // falls back to turn 1.
+  db.prepare("UPDATE session_turns SET started_at='1' WHERE id='turn'").run()
+  db.prepare(
+    "INSERT INTO session_turns(id,session_id,sequence,started_at,status) VALUES ('turn2','session',2,'10','running')",
+  ).run()
+  insertTurnlessHook(db, '9')
+
+  expect(hookOwners(service)).toEqual([
+    ['turn', []],
+    ['turn2', ['boundary']],
+  ])
+})
+
+it('compares as instants only what is unambiguously one — a stamp with no offset', () => {
+  const zone = process.env.TZ
+  // A no-offset stamp is LOCAL time in JS and UTC in SQLite, so ungated this
+  // attribution depends on where the machine stands. Pinned from a zone that
+  // is not UTC so the disagreement is visible at all.
+  process.env.TZ = 'Europe/Warsaw'
+  try {
+    const { db, service } = bed()
+    db.prepare(
+      "UPDATE session_turns SET started_at='2026-09-09T09:30:00.000Z' WHERE id='turn'",
+    ).run()
+    db.prepare(
+      "INSERT INTO session_turns(id,session_id,sequence,started_at,status) VALUES ('turn2','session',2,'2026-09-09T11:00:00','running')",
+    ).run()
+    insertTurnlessHook(db, '2026-09-09T10:00:00.000Z')
+
+    // Ungated, `'2026-09-09T11:00:00'` is 09:00Z in Warsaw and the hook lands
+    // on turn 2; on the text path `'…T11…' > '…T10…'` and it lands on turn 1.
+    expect(hookOwners(service)).toEqual([
+      ['turn', ['boundary']],
+      ['turn2', []],
+    ])
+  } finally {
+    if (zone === undefined) delete process.env.TZ
+    else process.env.TZ = zone
+  }
+})
+
+/**
+ * RUN75 lap 3 / MAR-2992. The gate counts digits, so a calendar-invalid stamp
+ * passes it and `Date.parse` answers NaN — which is why the `Number.isNaN` arm
+ * behind the gate is reachable rather than defensive. Unguarded, the
+ * comparator returns NaN, `NaN <= 0` is false for every turn, and the event
+ * silently belongs to none of them.
+ *
+ * Mutation: drop the `Number.isNaN` guard and this goes red — the hook lands
+ * on no turn at all, not even turn 1.
+ */
+it('compares as instants only what is unambiguously one — a calendar-invalid stamp', () => {
+  const { db, service } = bed()
+  db.prepare(
+    "UPDATE session_turns SET started_at='2026-09-09T09:30:00.000Z' WHERE id='turn'",
+  ).run()
+  db.prepare(
+    "INSERT INTO session_turns(id,session_id,sequence,started_at,status) VALUES ('turn2','session',2,'2026-12-01T00:00:00.000Z','running')",
+  ).run()
+  // `'2026-13-01T00:00:00Z'` matches the gate and parses as nothing; on the
+  // text path it sorts after turn 2's start, so the hook is turn 2's.
+  insertTurnlessHook(db, '2026-13-01T00:00:00Z')
+
+  expect(hookOwners(service)).toEqual([
+    ['turn', []],
+    ['turn2', ['boundary']],
+  ])
 })

@@ -296,10 +296,6 @@ describe('parseRemoteSessionWorkspaceInfo', () => {
         workspacePath: null,
         environment: null,
       },
-      pullRequest: {
-        kind: 'url',
-        url: 'https://github.com/acme/repo/pull/7',
-      },
     })
   })
 
@@ -395,18 +391,10 @@ describe('parseRemoteSessionWorkspaceInfo', () => {
     }
   })
 
-  it('handles snapshots without workspace or pull request', () => {
+  it('handles snapshots without a workspace', () => {
     expect(
       parseRemoteSessionWorkspaceInfo({ sessionId: 's-1' }, 's-1'),
-    ).toEqual({
-      workspace: null,
-      // The snapshot said nothing about a pull request, and this used to be
-      // read as `prUrl: null` -- the same value an explicit `null` produces,
-      // which is the daemon's own negative. The panel is allowed to say `None
-      // yet` for that negative, so the collapse let silence be printed as an
-      // answer (MAR-2718 round 2).
-      pullRequest: { kind: 'unreadable', reason: expect.any(String) },
-    })
+    ).toEqual({ workspace: null })
     // An explicit `null` is the daemon saying it has not materialised one,
     // which is an answer and not a failure.
     expect(
@@ -414,72 +402,30 @@ describe('parseRemoteSessionWorkspaceInfo', () => {
         { sessionId: 's-1', workspace: null },
         's-1',
       ),
-    ).toEqual({
-      workspace: null,
-      pullRequest: { kind: 'unreadable', reason: expect.any(String) },
-    })
+    ).toEqual({ workspace: null })
     expect(() => parseRemoteSessionWorkspaceInfo('nope', 's-1')).toThrow(
       RemoteExecutionHostError,
     )
   })
 
   /**
-   * The pull request is decoded at the door that reads the bytes, into the
-   * three answers that actually exist (MAR-2718 round 2).
+   * A field this build does not read may not cost the caller the workspace
+   * (MAR-2991).
    *
-   * `typeof value.prUrl === 'string' ? value.prUrl : null` made a missing key,
-   * a number, `false`, a blank string and `ftp://x` all into the one value the
-   * renderer is now allowed to call `None yet` -- a claim that the daemon
-   * looked and opened none. The daemon always emits the field explicitly
-   * (`agents-daemon/src/sessions/session-manager.ts`, `prUrl: session.prUrl ??
-   * null`), so its own explicit `null` is the negative and nothing else is.
+   * This snapshot used to be decoded into a three-way `pullRequest` reading; it
+   * no longer is, because after MAR-2978 the session's PR is one fact with one
+   * writer looked up with `gh` from this machine, and the wire's `prUrl`
+   * survives only as the hint that asks that writer to look again (MAR-2978
+   * R3). The daemon keeps sending the field, and `42` is the shape that would
+   * once have been called out as unreadable — so it is the one to prove the
+   * reading is now simply indifferent to it. The branch is what the strip and
+   * the panel are for, and a snapshot refused whole over an unread field beside
+   * it would take the branch down with it.
    *
-   * Exact or refused, and refused *narrowly*: the snapshot is not thrown out
-   * over it, because the workspace half is still the daemon's truth and the
-   * branch has to stay visible.
-   *
-   * Mutation: restore the non-string-to-`null` fallback and every row here goes
-   * red.
+   * Mutation: decode `prUrl` again and refuse the snapshot over it, and this
+   * goes red.
    */
-  it('decodes the pull request instead of collapsing it to none', () => {
-    const read = (snapshot: Record<string, unknown>) =>
-      parseRemoteSessionWorkspaceInfo({ sessionId: 's-1', ...snapshot }, 's-1')
-        .pullRequest
-
-    // The daemon's own negative, and the only thing that may become `None yet`.
-    expect(read({ prUrl: null })).toEqual({ kind: 'none' })
-
-    expect(read({ prUrl: 'https://github.com/acme/repo/pull/7' })).toEqual({
-      kind: 'url',
-      url: 'https://github.com/acme/repo/pull/7',
-    })
-    expect(read({ prUrl: 'http://internal.test/pr/1' })).toEqual({
-      kind: 'url',
-      url: 'http://internal.test/pr/1',
-    })
-
-    // Everything that is neither: silence, and four shapes no reader can turn
-    // into a pull request. `''` and `'ftp://x'` are strings, which is exactly
-    // why a `typeof` test could not tell them from an answer.
-    for (const snapshot of [
-      {},
-      { prUrl: 42 },
-      { prUrl: false },
-      { prUrl: '' },
-      { prUrl: '   ' },
-      { prUrl: 'ftp://x' },
-      { prUrl: { url: 'https://github.com/acme/repo/pull/7' } },
-    ]) {
-      expect(read(snapshot)).toMatchObject({ kind: 'unreadable' })
-    }
-  })
-
-  /**
-   * An unreadable pull request may not cost the caller the workspace. The
-   * branch is what the strip and the panel are for, and a snapshot refused
-   * whole over the field beside it would take the branch down with it.
-   */
-  it('keeps the workspace when only the pull request is unreadable', () => {
+  it('ignores a pull request field it no longer reads, keeping the workspace', () => {
     const info = parseRemoteSessionWorkspaceInfo(
       {
         sessionId: 's-1',
@@ -494,7 +440,7 @@ describe('parseRemoteSessionWorkspaceInfo', () => {
     )
 
     expect(info.workspace).toHaveProperty('branchName', 'agent/12345678')
-    expect(info.pullRequest).toMatchObject({ kind: 'unreadable' })
+    expect(Object.keys(info)).toEqual(['workspace'])
   })
 })
 

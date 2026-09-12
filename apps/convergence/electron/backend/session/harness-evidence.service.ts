@@ -49,7 +49,11 @@ export class HarnessEvidenceService {
     // It answers NULL for a value it cannot parse, and this column is not
     // guaranteed to hold a timestamp -- pre-ISO rows and fixtures carry plain
     // labels -- so the original string comparison stays as the fallback for
-    // those, leaving every non-timestamp case exactly as it was.
+    // those. The fallback is not a perfect copy of the old behaviour: SQLite
+    // reads a bare numeric string as a Julian day number, so `'10'` against
+    // `'9'` now answers 1 where the text comparison answered 0. No writer emits
+    // such a value; a label like `start` or `zz-after` parses as nothing and
+    // falls through to the text comparison unchanged (MAR-2992).
     const window = `COALESCE(turn_start,window_start)`
     const query = `WITH linked AS (
       SELECT a.*, ${linkedTaskIdSql} AS linked_task_id FROM session_agent_runs a WHERE a.session_id IN (${placeholders})
@@ -267,7 +271,9 @@ export class HarnessEvidenceService {
       const turnId =
         typeof payload.turnId === 'string'
           ? payload.turnId
-          : (latestTurns.find((turn) => turn.startedAt <= row.at)?.id ?? null)
+          : (latestTurns.find(
+              (turn) => compareInstants(turn.startedAt, row.at) <= 0,
+            )?.id ?? null)
       return [{ sequence: row.sequence, turnId, fact }]
     })
     return foldHarnessFacts(events, turns)
@@ -298,4 +304,55 @@ export class HarnessEvidenceService {
       )
       .all(sessionId) as SessionTask[]
   }
+}
+
+/**
+ * Two timestamps as instants rather than as the text carrying them (MAR-2992).
+ *
+ * This is the JS half of the seam `countParallelWork`'s SQL window closed with
+ * `julianday()`. Attribution compared stamps with `<=`, so a turn written
+ * `'2026-09-09T11:00:00Z'` and an event written `'2026-09-09T11:00:00.000Z'` --
+ * the same instant, two spellings -- compared as `'Z' > '.'`, and the event was
+ * handed to the previous turn. Which turn an event belongs to is not something
+ * a writer's choice of precision gets to decide.
+ *
+ * Latent as things stand: every writer today stamps with `toISOString()`. This
+ * column is not guaranteed to hold a timestamp -- fixtures and pre-ISO rows
+ * carry plain labels like `start` -- so anything that is not unambiguously one
+ * instant keeps the text comparison it always had.
+ *
+ * What counts as unambiguous is decided by `isoInstant` below rather than by
+ * `Date.parse`, which reads far more than a time: `'10'` is October 2001 and
+ * `'9'` September 2001 under V8's legacy month parse, so those two would
+ * compare as 1 where the text answers -1; and a stamp carrying no offset
+ * (`'2026-09-09T11:00:00'`) is LOCAL time in JS where SQLite reads it as UTC,
+ * so the answer would depend on the machine. Only a full ISO 8601 date-time
+ * ending in `Z` or a numeric offset is compared as an instant here.
+ *
+ * Two classes of difference from the SQL window survive that gate,
+ * deliberately. A bare numeric string: `julianday('10')` is a Julian day
+ * number, so `'10'` compares as a time on the SQL side and as text on this
+ * one. And every stamp `julianday()` still reads while the gate refuses it --
+ * an offset-less stamp (UTC there, refused here), a space-separated one
+ * (`'2026-09-09 11:00:00'`), one written without seconds, a date-only value --
+ * each of those is a time on the SQL side and text on this one too. No writer
+ * emits any of them.
+ */
+const isoInstant =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
+
+function compareInstants(a: string, b: string): number {
+  if (isoInstant.test(a) && isoInstant.test(b)) {
+    const left = Date.parse(a)
+    const right = Date.parse(b)
+    // Shaped like an instant is not the same as being one: the gate counts
+    // digits, so `'2026-13-01T00:00:00Z'` passes it and parses as nothing.
+    // Not every calendar-invalid stamp does: `'2026-02-30T00:00:00Z'` parses,
+    // V8 rolling it to March 2, and `julianday()` rolls it the same way -- so
+    // the sides agree there. Only an unparseable one reaches this arm, and
+    // `julianday()` answers null for it, so the SQL window's own COALESCE
+    // falls to the text comparison exactly as the line below does.
+    if (!Number.isNaN(left) && !Number.isNaN(right)) return left - right
+  }
+  return a < b ? -1 : a > b ? 1 : 0
 }

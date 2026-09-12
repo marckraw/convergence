@@ -204,10 +204,7 @@ describe('the executionHost:getSessionWorkspace ipc handler', () => {
 
     const result = (await handler?.({}, sessionId)) as {
       ok: boolean
-      info?: {
-        workspace: { branchName: string } | null
-        pullRequest: { kind: string; url?: string; reason?: string }
-      }
+      info?: { workspace: { branchName: string } | null }
       message?: string
     }
 
@@ -219,25 +216,26 @@ describe('the executionHost:getSessionWorkspace ipc handler', () => {
     expect(daemonA.snapshotRequests).toEqual([])
     expect(result.ok).toBe(true)
     expect(result.info?.workspace?.branchName).toBe('convergence/b')
-    expect(result.info?.pullRequest).toEqual({
-      kind: 'url',
-      url: 'https://github.com/acme/repo/pull/2',
-    })
+    // This snapshot still carries `prUrl` — the daemon keeps sending it as the
+    // refresh hint (MAR-2978 R3) and nothing here decodes it any more. An
+    // ignored field is not an error, and it does not become one: the reading is
+    // the workspace and only the workspace (MAR-2991).
+    expect(Object.keys(result.info ?? {})).toEqual(['workspace'])
   })
 
   /**
-   * The decoded reading crosses the IPC boundary as a reading (MAR-2718 round
-   * 2). The renderer is the surface that may say `None yet`, so what it
-   * receives has to be able to tell the daemon's negative from silence -- and
-   * this handler is the only thing between the two.
+   * The snapshot's `pullRequest` reading is gone (MAR-2991): after MAR-2978 the
+   * session's PR is one fact with one writer, looked up with `gh` from this
+   * machine, and nothing in `src` ever read the decoded three-way answer. What
+   * has to survive its removal is the workspace half, for the daemons that do
+   * not send the field at all — an absent `prUrl` was the input the old decoder
+   * turned into `unreadable`, and the shape most likely to have been refused by
+   * accident if the deletion took the wrong lines with it.
    *
-   * A snapshot with no `prUrl` at all, which is the shape a `typeof` test
-   * turned into the negative.
-   *
-   * Mutation: restore the non-string-to-`null` fallback in
-   * `parseRemoteSessionWorkspaceInfo` and this goes red.
+   * Mutation: make `parseRemoteSessionWorkspaceInfo` refuse a snapshot without
+   * `prUrl` and this goes red.
    */
-  it('hands the renderer a reading it can tell from the daemon’s own negative', async () => {
+  it('reads the workspace out of a snapshot that carries no pull request field', async () => {
     const sessionId = createSessionOn(DAEMON_B.id, 'on daemon b')
     daemonB.setSessionSnapshot(sessionId, {
       workspace: {
@@ -252,16 +250,10 @@ describe('the executionHost:getSessionWorkspace ipc handler', () => {
       sessionId,
     )) as {
       ok: boolean
-      info?: {
-        workspace: { branchName: string } | null
-        pullRequest: { kind: string; reason?: string }
-      }
+      info?: { workspace: { branchName: string } | null }
     }
 
     expect(result.ok).toBe(true)
-    expect(result.info?.pullRequest.kind).toBe('unreadable')
-    expect(result.info?.pullRequest.reason).toBeTruthy()
-    // The workspace half of the same snapshot is untouched by it.
     expect(result.info?.workspace?.branchName).toBe('convergence/b')
   })
 
