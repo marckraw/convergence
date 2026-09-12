@@ -49,7 +49,11 @@ export class HarnessEvidenceService {
     // It answers NULL for a value it cannot parse, and this column is not
     // guaranteed to hold a timestamp -- pre-ISO rows and fixtures carry plain
     // labels -- so the original string comparison stays as the fallback for
-    // those, leaving every non-timestamp case exactly as it was.
+    // those. The fallback is not a perfect copy of the old behaviour: SQLite
+    // reads a bare numeric string as a Julian day number, so `'10'` against
+    // `'9'` now answers 1 where the text comparison answered 0. No writer emits
+    // such a value; a label like `start` or `zz-after` parses as nothing and
+    // falls through to the text comparison unchanged (MAR-2992).
     const window = `COALESCE(turn_start,window_start)`
     const query = `WITH linked AS (
       SELECT a.*, ${linkedTaskIdSql} AS linked_task_id FROM session_agent_runs a WHERE a.session_id IN (${placeholders})
@@ -267,7 +271,9 @@ export class HarnessEvidenceService {
       const turnId =
         typeof payload.turnId === 'string'
           ? payload.turnId
-          : (latestTurns.find((turn) => turn.startedAt <= row.at)?.id ?? null)
+          : (latestTurns.find(
+              (turn) => compareInstants(turn.startedAt, row.at) <= 0,
+            )?.id ?? null)
       return [{ sequence: row.sequence, turnId, fact }]
     })
     return foldHarnessFacts(events, turns)
@@ -298,4 +304,27 @@ export class HarnessEvidenceService {
       )
       .all(sessionId) as SessionTask[]
   }
+}
+
+/**
+ * Two timestamps as instants rather than as the text carrying them (MAR-2992).
+ *
+ * This is the JS half of the seam `countParallelWork`'s SQL window closed with
+ * `julianday()`. Attribution compared stamps with `<=`, so a turn written
+ * `'2026-09-09T11:00:00Z'` and an event written `'2026-09-09T11:00:00.000Z'` --
+ * the same instant, two spellings -- compared as `'Z' > '.'`, and the event was
+ * handed to the previous turn. Which turn an event belongs to is not something
+ * a writer's choice of precision gets to decide.
+ *
+ * Latent as things stand: every writer today stamps with `toISOString()`. The
+ * fallback is the one the SQL uses for the same reason -- this column is not
+ * guaranteed to hold a timestamp (fixtures and pre-ISO rows carry plain labels
+ * like `start`), and a value neither side can read as a time answers exactly as
+ * it did before.
+ */
+function compareInstants(a: string, b: string): number {
+  const left = Date.parse(a)
+  const right = Date.parse(b)
+  if (!Number.isNaN(left) && !Number.isNaN(right)) return left - right
+  return a < b ? -1 : a > b ? 1 : 0
 }

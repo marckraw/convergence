@@ -771,6 +771,24 @@ it('RUN72 the answer window compares times, not their spelling — mutation comp
     ).run(id, status, start)
   const precise = service.countParallelWork(['session']).get('session')
 
+  // The same boundary with the precisions swapped: the longer spelling on the
+  // turn, the shorter on the row. Lexically this one already answered
+  // correctly, which is exactly why it needs pinning — half a boundary pinned
+  // is a boundary that can be half broken again (MAR-2992).
+  db.prepare("DELETE FROM session_tasks WHERE session_id='session'").run()
+  db.prepare(
+    "UPDATE session_turns SET started_at='2026-09-09T11:00:00.000Z'",
+  ).run()
+  for (const [id, status, start] of [
+    ['reverse-fail', 'failed', '2026-09-09T11:00:00Z'],
+    ['reverse-stop', 'stopped', '2026-09-09T11:00:00Z'],
+    ['reverse-before', 'failed', '2026-09-09T10:59:59Z'],
+  ])
+    db.prepare(
+      "INSERT INTO session_tasks(task_id,session_id,status,started_at) VALUES (?,'session',?,?)",
+    ).run(id, status, start)
+  const reversed = service.countParallelWork(['session']).get('session')
+
   // The same question asked of stamps that are not times: the string
   // comparison still answers, unchanged.
   db.prepare("DELETE FROM session_tasks WHERE session_id='session'").run()
@@ -783,9 +801,77 @@ it('RUN72 the answer window compares times, not their spelling — mutation comp
   ).run()
   expect({
     precise,
+    reversed,
     labels: service.countParallelWork(['session']).get('session'),
   }).toEqual({
     precise: { running: 0, unknown: 0, failed: 1, stopped: 1 },
+    reversed: { running: 0, unknown: 0, failed: 1, stopped: 1 },
     labels: { running: 0, unknown: 0, failed: 1, stopped: 0 },
   })
 })
+
+/**
+ * RUN75 / MAR-2992. The JS half of the same seam the answer window closed
+ * (MAR-2902): which turn a harness event belongs to was decided by comparing
+ * the stamps as text, so a turn written `'2026-09-09T11:00:00Z'` and an event
+ * written `'2026-09-09T11:00:00.000Z'` — one instant, two spellings — compared
+ * as `'Z' > '.'` and the event was handed to the PREVIOUS turn. Latent, because
+ * every writer today stamps with `toISOString()`; the turn does not have to.
+ *
+ * Both orderings are pinned. The second was already right under the string
+ * comparison, which is the reason to hold it: a boundary pinned on one side is
+ * a boundary that can be half broken again.
+ *
+ * Mutation: compare the stamps with `<=` and the first case goes red — the hook
+ * lands on turn 1.
+ */
+it.each([
+  [
+    'the turn stamped shorter than the event',
+    '2026-09-09T11:00:00Z',
+    '2026-09-09T11:00:00.000Z',
+  ],
+  [
+    'the turn stamped longer than the event',
+    '2026-09-09T11:00:00.000Z',
+    '2026-09-09T11:00:00Z',
+  ],
+])(
+  'attributes an event at exactly a turn’s start to that turn — %s',
+  (_name, turnStart, eventAt) => {
+    const { db, service } = bed()
+    db.prepare(
+      "UPDATE session_turns SET started_at='2026-09-09T10:00:00.000Z',status='completed' WHERE id='turn'",
+    ).run()
+    db.prepare(
+      "INSERT INTO session_turns(id,session_id,sequence,started_at,status) VALUES ('turn2','session',2,?,'running')",
+    ).run(turnStart)
+    // Recorded without a `turnId` in its payload — the shape that makes the
+    // reader fall back to the stamps. This is what older builds wrote.
+    db.prepare(
+      'INSERT INTO session_harness_events(session_id,sequence,type,subtype,payload_json,created_at) VALUES(?,?,?,?,?,?)',
+    ).run(
+      'session',
+      1,
+      'system',
+      'hook_started',
+      JSON.stringify({
+        type: 'system',
+        subtype: 'hook_started',
+        hook_id: 'boundary',
+        hook_name: 'Boundary hook',
+        hook_event: 'PreToolUse',
+      }),
+      eventAt,
+    )
+
+    expect(
+      service
+        .harnessFacts('session')
+        .turns.map((turn) => [turn.turnId, turn.hooks.map((hook) => hook.id)]),
+    ).toEqual([
+      ['turn', []],
+      ['turn2', ['boundary']],
+    ])
+  },
+)
