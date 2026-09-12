@@ -329,7 +329,7 @@ describe('the connection inspector, rendered', () => {
   })
 })
 
-it('offers the errand host, identity and optional report (mutation: omit host picker)', async () => {
+it('offers the errand host without changing reporting (mutations: omit host picker; reset on host change)', async () => {
   const draft = newConnectionDraft({ sourceSessionId: 'fable' })
   draft.recipient = {
     kind: 'spawn',
@@ -342,7 +342,6 @@ it('offers the errand host, identity and optional report (mutation: omit host pi
     executionHost: 'little-monster',
     workAddress: null,
     providerAccountId: null,
-    returnWire: null,
   })
   fireEvent.change(screen.getByRole('textbox', { name: 'Role card' }), {
     target: { value: 'You are the reviewer.' },

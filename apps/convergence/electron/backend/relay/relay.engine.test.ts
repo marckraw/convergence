@@ -2965,7 +2965,7 @@ describe('RelayEngine', () => {
       },
     )
 
-    it('creates and starts the remote errand at its stated place (mutation: keep spawn local)', async () => {
+    it('creates and starts the remote errand at its stated place — project-context belt, normalizer owns the refusal proof (mutation: keep spawn local)', async () => {
       const workAddress = {
         mode: 'repository' as const,
         repository: 'https://github.com/marckraw/convergence',

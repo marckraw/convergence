@@ -59,3 +59,35 @@ it('keeps an offered recorded Project editable (mutation: settle every recorded 
     }),
   ).toMatchObject({ mode: 'choosing', address: input.recordedAddress })
 })
+
+it('keeps a renamed Project selectable by id (mutation: compare by label or working directory)', () => {
+  const view = resolveConnectionWorkAddress({
+    ...input,
+    projects: {
+      status: 'landed',
+      unreachableReason: null,
+      projects: [
+        {
+          id: 'gone',
+          name: 'Renamed',
+          workingDirectory: '/new',
+          origin: null,
+        },
+      ],
+    },
+  })
+  expect(view).toMatchObject({
+    mode: 'choosing',
+    selectedId: 'project:gone',
+    notice: 'This recorded place was renamed to Project Renamed.',
+    address: {
+      mode: 'project',
+      projectId: 'gone',
+      label: 'Project Renamed',
+      workingDirectory: '/new',
+    },
+    choices: expect.arrayContaining([
+      expect.objectContaining({ id: 'project:gone', label: 'Project Renamed' }),
+    ]),
+  })
+})

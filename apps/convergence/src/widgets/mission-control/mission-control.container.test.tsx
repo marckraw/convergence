@@ -679,133 +679,166 @@ describe('MissionControl', () => {
     async function switchToCanvas() {
       fireEvent.click(await screen.findByRole('button', { name: 'Canvas' }))
     }
-    it('saves the place the remote errand slot shows (mutations: omit recipe host wiring; discard return instruction on host change)', async () => {
-      useAppSettingsStore.setState((state) => ({
-        settings: {
-          ...state.settings,
-          executionHostEndpoints: [
-            {
-              id: 'little-monster',
-              label: 'little-monster',
-              baseUrl: 'http://localhost:3000',
-              configurationEpoch: 0,
-              position: 0,
-              createdAt: '2026-01-01',
-              updatedAt: '2026-01-01',
-            },
-          ],
-        },
-      }))
-      const getProjects = vi.fn(async () => ({
-        executionHostId: 'little-monster',
-        supported: true,
-        projects: [],
-        unreachableReason: null,
-      }))
-      const cloneable = vi.fn(
-        async () => 'https://github.com/marckraw/convergence',
-      )
-      Object.assign(window.electronAPI, {
-        executionHost: { getProjects },
-        git: { getCloneableRepositoryUrl: cloneable },
-      })
-      useSessionStore.setState({ remoteProjectCatalogs: {} })
-      seedCrews([
-        makeCrew({ id: 'crew-1', name: 'Loop', sessionIds: ['a', 'b'] }),
-      ])
-      seed(
-        [
-          makeSession({ id: 'a', name: 'Fable' }),
-          makeSession({ id: 'b', name: 'Opus' }),
-        ],
-        [CLAUDE_CODE],
-      )
-      render(<MissionControl />)
-      await switchToCanvas()
-      fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
-      fireEvent.click(await screen.findByLabelText('Connect to Fable'))
-      fireEvent.click(await screen.findByLabelText('Connect to Opus'))
-      const panel = within(
-        await screen.findByRole('region', { name: 'Connection' }),
-      )
-      fireEvent.click(panel.getByRole('combobox', { name: 'Opus' }))
-      fireEvent.click(await screen.findByText('Start a new session…'))
-      fireEvent.click(panel.getByRole('combobox', { name: 'Local' }))
-      fireEvent.click(
-        await screen.findByRole('option', { name: 'little-monster' }),
-      )
-      fireEvent.click(panel.getByRole('combobox', { name: 'Pick a provider' }))
-      fireEvent.click(
-        await screen.findByRole('option', { name: /claude-code/ }),
-      )
-      expect(
-        await panel.findByText(
-          /An errand on a remote host belongs to a project/,
-        ),
-      ).toBeInTheDocument()
-      expect(panel.getByRole('button', { name: 'Save changes' })).toBeDisabled()
-      fireEvent.click(panel.getByRole('combobox', { name: /no project/ }))
-      fireEvent.click(
-        await screen.findByRole('option', { name: 'Convergence' }),
-      )
-      expect(
-        await panel.findByRole('combobox', { name: /marckraw\/convergence/ }),
-      ).toBeInTheDocument()
-      expect(
-        panel.getByRole('switch', {
-          name: 'Report back to Fable when it finishes',
-        }),
-      ).not.toBeChecked()
-      fireEvent.click(
-        panel.getByRole('switch', {
-          name: 'Report back to Fable when it finishes',
-        }),
-      )
-      fireEvent.change(panel.getByLabelText('Return instructions'), {
-        target: { value: 'Keep this report instruction.' },
-      })
-      fireEvent.click(panel.getByRole('combobox', { name: 'little-monster' }))
-      fireEvent.click(await screen.findByRole('option', { name: 'Local' }))
-      fireEvent.click(panel.getByRole('combobox', { name: 'Local' }))
-      fireEvent.click(
-        await screen.findByRole('option', { name: 'little-monster' }),
-      )
-      fireEvent.click(panel.getByRole('combobox', { name: 'little-monster' }))
-      fireEvent.click(await screen.findByRole('option', { name: 'Local' }))
-      expect(panel.getByLabelText('Return instructions')).toHaveValue(
-        'Keep this report instruction.',
-      )
-      fireEvent.click(panel.getByRole('combobox', { name: 'Local' }))
-      fireEvent.click(
-        await screen.findByRole('option', { name: 'little-monster' }),
-      )
-      await panel.findByRole('combobox', { name: /marckraw\/convergence/ })
-      createRelay.mockImplementation(async (input) =>
-        makeRelay({
-          ...input,
-          id: 'remote-wire',
-          createdAt: 'now',
-          updatedAt: 'now',
-        }),
-      )
-      fireEvent.click(panel.getByRole('button', { name: 'Save changes' }))
-      await waitFor(() =>
-        expect(createRelay).toHaveBeenCalledWith(
-          expect.objectContaining({
-            spawnSpec: expect.objectContaining({
-              executionHost: 'little-monster',
-              workAddress: {
-                mode: 'repository',
-                repository: 'https://github.com/marckraw/convergence',
-                branchName: null,
-                label: 'marckraw/convergence',
+    it.each([
+      [true, false],
+      [false, false],
+      [true, true],
+    ])(
+      'saves the remote place and preserves reporting=%s (chosen before host=%s) across host changes (mutations: reset on host change; override explicit choice at birth; discard return instruction)',
+      async (reporting, beforeHost) => {
+        useAppSettingsStore.setState((state) => ({
+          settings: {
+            ...state.settings,
+            executionHostEndpoints: [
+              {
+                id: 'little-monster',
+                label: 'little-monster',
+                baseUrl: 'http://localhost:3000',
+                configurationEpoch: 0,
+                position: 0,
+                createdAt: '2026-01-01',
+                updatedAt: '2026-01-01',
               },
-              returnWire: null,
-            }),
+            ],
+          },
+        }))
+        const getProjects = vi.fn(async () => ({
+          executionHostId: 'little-monster',
+          supported: true,
+          projects: [],
+          unreachableReason: null,
+        }))
+        const cloneable = vi.fn(
+          async () => 'https://github.com/marckraw/convergence',
+        )
+        Object.assign(window.electronAPI, {
+          executionHost: { getProjects },
+          git: { getCloneableRepositoryUrl: cloneable },
+        })
+        useSessionStore.setState({ remoteProjectCatalogs: {} })
+        seedCrews([
+          makeCrew({ id: 'crew-1', name: 'Loop', sessionIds: ['a', 'b'] }),
+        ])
+        seed(
+          [
+            makeSession({ id: 'a', name: 'Fable' }),
+            makeSession({ id: 'b', name: 'Opus' }),
+          ],
+          [CLAUDE_CODE],
+        )
+        render(<MissionControl />)
+        await switchToCanvas()
+        fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+        fireEvent.click(await screen.findByLabelText('Connect to Fable'))
+        fireEvent.click(await screen.findByLabelText('Connect to Opus'))
+        const panel = within(
+          await screen.findByRole('region', { name: 'Connection' }),
+        )
+        fireEvent.click(panel.getByRole('combobox', { name: 'Opus' }))
+        fireEvent.click(await screen.findByText('Start a new session…'))
+        if (beforeHost) {
+          const report = panel.getByRole('switch', {
+            name: 'Report back to Fable when it finishes',
+          })
+          fireEvent.click(report)
+          fireEvent.click(report)
+        }
+        fireEvent.click(panel.getByRole('combobox', { name: 'Local' }))
+        fireEvent.click(
+          await screen.findByRole('option', { name: 'little-monster' }),
+        )
+        fireEvent.click(
+          panel.getByRole('combobox', { name: 'Pick a provider' }),
+        )
+        fireEvent.click(
+          await screen.findByRole('option', { name: /claude-code/ }),
+        )
+        expect(
+          await panel.findByText(
+            /An errand on a remote host belongs to a project/,
+          ),
+        ).toBeInTheDocument()
+        expect(
+          panel.getByRole('button', { name: 'Save changes' }),
+        ).toBeDisabled()
+        fireEvent.click(panel.getByRole('combobox', { name: /no project/ }))
+        fireEvent.click(
+          await screen.findByRole('option', { name: 'Convergence' }),
+        )
+        expect(
+          await panel.findByRole('combobox', { name: /marckraw\/convergence/ }),
+        ).toBeInTheDocument()
+        expect(
+          panel.getByRole('switch', {
+            name: 'Report back to Fable when it finishes',
           }),
-        ),
-      )
-    })
+        ).toHaveAttribute('aria-checked', String(beforeHost))
+        if (!beforeHost)
+          fireEvent.click(
+            panel.getByRole('switch', {
+              name: 'Report back to Fable when it finishes',
+            }),
+          )
+        fireEvent.change(panel.getByLabelText('Return instructions'), {
+          target: { value: 'Keep this report instruction.' },
+        })
+        if (!reporting)
+          fireEvent.click(
+            panel.getByRole('switch', {
+              name: 'Report back to Fable when it finishes',
+            }),
+          )
+        fireEvent.click(panel.getByRole('combobox', { name: 'little-monster' }))
+        fireEvent.click(await screen.findByRole('option', { name: 'Local' }))
+        fireEvent.click(panel.getByRole('combobox', { name: 'Local' }))
+        fireEvent.click(
+          await screen.findByRole('option', { name: 'little-monster' }),
+        )
+        fireEvent.click(panel.getByRole('combobox', { name: 'little-monster' }))
+        fireEvent.click(await screen.findByRole('option', { name: 'Local' }))
+        expect(
+          panel.getByRole('switch', {
+            name: 'Report back to Fable when it finishes',
+          }),
+        ).toHaveAttribute('aria-checked', String(reporting))
+        if (reporting)
+          expect(panel.getByLabelText('Return instructions')).toHaveValue(
+            'Keep this report instruction.',
+          )
+        fireEvent.click(panel.getByRole('combobox', { name: 'Local' }))
+        fireEvent.click(
+          await screen.findByRole('option', { name: 'little-monster' }),
+        )
+        await panel.findByRole('combobox', { name: /marckraw\/convergence/ })
+        createRelay.mockImplementation(async (input) =>
+          makeRelay({
+            ...input,
+            id: 'remote-wire',
+            createdAt: 'now',
+            updatedAt: 'now',
+          }),
+        )
+        fireEvent.click(panel.getByRole('button', { name: 'Save changes' }))
+        await waitFor(() =>
+          expect(createRelay).toHaveBeenCalledWith(
+            expect.objectContaining({
+              spawnSpec: expect.objectContaining({
+                executionHost: 'little-monster',
+                workAddress: {
+                  mode: 'repository',
+                  repository: 'https://github.com/marckraw/convergence',
+                  branchName: null,
+                  label: 'marckraw/convergence',
+                },
+                returnWire: reporting
+                  ? { instruction: 'Keep this report instruction.' }
+                  : null,
+              }),
+            }),
+          ),
+        )
+      },
+    )
 
     it.each(['pending', 'landed'] as const)(
       'keeps the recorded address through a %s catalog (mutation: substitute the catalog default)',

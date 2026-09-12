@@ -1380,7 +1380,13 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                 const changed = changeDraftRecipient(
                   draft,
                   optionId === SPAWN_RECIPIENT_OPTION_ID
-                    ? { kind: 'spawn', spec: { ...EMPTY_SPAWN_SPEC } }
+                    ? {
+                        kind: 'spawn',
+                        spec: {
+                          ...EMPTY_SPAWN_SPEC,
+                          returnWireDefaultPending: true,
+                        },
+                      }
                     : { kind: 'session', sessionId: optionId },
                   {
                     supportsReset: provider?.supportsConversationReset ?? false,
@@ -1402,6 +1408,19 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                       spec: {
                         ...current.recipient.spec,
                         ...patch,
+                        // Birth default only: an explicit reporting choice or the
+                        // first host pick consumes it; stored recipes have none.
+                        ...(current.recipient.spec.returnWireDefaultPending &&
+                        patch.executionHost !== undefined &&
+                        patch.executionHost !== 'local' &&
+                        patch.returnWire === undefined
+                          ? { returnWire: null }
+                          : {}),
+                        returnWireDefaultPending:
+                          patch.executionHost !== undefined ||
+                          patch.returnWire !== undefined
+                            ? false
+                            : current.recipient.spec.returnWireDefaultPending,
                         returnInstructionDraft:
                           patch.returnWire?.instruction ??
                           current.recipient.spec.returnInstructionDraft,

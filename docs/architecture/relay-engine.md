@@ -710,7 +710,9 @@ not a reporting side channel. After the new conversation joins the crew and star
 the spawn path uses `RelayService.create` to connect it back to the source:
 `settled`, `hail`, armed, with no condition. Null creates no return connection. A return-connection failure gets its own
 error row and does not prevent the errand from starting.
-New local recipes default reporting on; new remote recipes default it off.
+New local recipes default reporting on; the first host pick of a new recipe
+defaults remote reporting off unless the person already chose reporting. That
+birth default is draft-only; later host changes preserve the reporting choice.
 
 `composeErrandBrief` puts the role card before the compiled payload, with blank
 lines separating the blocks. With a return connection, one intervening line
@@ -724,7 +726,8 @@ The recipe and composer share the work-address slot in
 the entity's structural inputs. The recipe derives both its visible address
 and save input from that slot; pending catalog reads do not erase its saved
 draft. A recorded address no longer offered by the endpoint remains a stated
-fact; it is never replaced with a catalog default. The inspector compares the
+fact; it is never replaced with a catalog default. Projects match by id: a
+renamed Project remains selectable with a rename notice. The inspector compares the
 resolved draft with the saved one, and retains typed return instructions in
 draft-only state across host/reporting changes. YAML export, validation and import use the spawn normalizer, with
 provided values refused when normalization would change them.

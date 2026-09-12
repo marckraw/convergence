@@ -39,6 +39,8 @@ export interface ConnectionSpawnSpec {
   roleCard: string | null
   /** Draft-only text survives reporting being switched off or a host change. */
   returnInstructionDraft?: string
+  /** New recipes alone may choose their reporting default on the first host pick. */
+  returnWireDefaultPending?: boolean
   returnWire: RelaySpawnSpec['returnWire']
 }
 

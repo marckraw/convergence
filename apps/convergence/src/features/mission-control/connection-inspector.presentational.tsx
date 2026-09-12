@@ -286,15 +286,6 @@ export const ConnectionInspector: FC<ConnectionInspectorProps> = ({
                 executionHost,
                 workAddress: null,
                 providerAccountId: null,
-                returnWire:
-                  executionHost === 'local'
-                    ? {
-                        instruction:
-                          spec.returnWire?.instruction ??
-                          spec.returnInstructionDraft ??
-                          '',
-                      }
-                    : null,
               })
             }
             disabled={busy}

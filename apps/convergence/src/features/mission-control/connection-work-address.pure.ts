@@ -13,13 +13,19 @@ export function resolveConnectionWorkAddress(
   const recorded = input.recordedAddress
   if (!recorded || recorded.mode === 'unknown' || offered.mode === 'hidden')
     return offered
-  if (
-    offered.mode === 'choosing' &&
-    offered.choices.some(
+  if (offered.mode === 'choosing') {
+    const matching = offered.choices.find(
       (choice) => addressKey(choice.address) === addressKey(recorded),
     )
-  )
-    return offered
+    if (matching)
+      return {
+        ...offered,
+        notice:
+          matching.label !== recorded.label
+            ? `This recorded place was renamed to ${matching.label}.`
+            : offered.notice,
+      }
+  }
   const fact = resolveWorkAddressSlot({
     ...input,
     host: { ...input.host, mode: 'settled' },
@@ -38,12 +44,7 @@ export function resolveConnectionWorkAddress(
 function addressKey(address: SessionWorkAddress): string {
   return JSON.stringify(
     address.mode === 'project'
-      ? [
-          address.mode,
-          address.projectId,
-          address.workingDirectory,
-          address.label,
-        ]
+      ? [address.mode, address.projectId]
       : address.mode === 'repository'
         ? [address.mode, address.repository, address.branchName, address.label]
         : [address.mode],
