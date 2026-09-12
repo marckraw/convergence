@@ -6,10 +6,7 @@ import type { SessionSettledEvent } from '../session/session.types'
 import { RelayEngine, type RelaySessionGateway } from './relay.engine'
 import type { AutomaticTurnAccount } from '../provider-account/provider-account-automatic-turn.pure'
 import { CrewHailService } from './crew-hail.service'
-import {
-  MAX_AUTOMATIC_HOPS_PER_FLOW_RUN,
-  TERMINAL_BATON_MESSAGE,
-} from './relay.pure'
+import { MIN_FLOW_RUN_HOP_CEILING, TERMINAL_BATON_MESSAGE } from './relay.pure'
 import { RelayService } from './relay.service'
 import type { RelayHop } from './relay.types'
 
@@ -2007,7 +2004,7 @@ describe('RelayEngine', () => {
       // Burn the run's budget on the ledger, then settle into that same run.
       await engine.handleSettle(settled('s1'))
       const run = relays.listHops('c1')[0].flowRunId
-      for (let i = 0; i < MAX_AUTOMATIC_HOPS_PER_FLOW_RUN; i += 1) {
+      for (let i = 0; i < MIN_FLOW_RUN_HOP_CEILING; i += 1) {
         relays.appendHop({
           relayId: onward.id,
           crewId: 'c1',
@@ -2624,20 +2621,28 @@ describe('RelayEngine', () => {
   })
 
   /**
-   * The 20-hop backstop. These tests fill a run the way a wide crew would:
-   * with hops from wires this test is not watching, all landing in the run
-   * the engine is really using. Run ids are minted inside the engine, so the
-   * run is read off the first real hop rather than invented here. Driving a
-   * ping-pong twenty times would work now that laps exist, but it would also
-   * trip the crew's delivery limit first, which is a different guard.
+   * The backstop, whose ceiling is now the firing crew's own delivery limit
+   * floored at twenty (R1, MAR-2966).
+   *
+   * That arithmetic makes it exactly what the docs always claimed it was: the
+   * guard for the case one crew's limit cannot see. Inside a SINGLE crew it is
+   * unreachable on purpose -- the ceiling is never below that crew's cap and
+   * the round check runs first -- so the runs below are filled from ANOTHER
+   * ROOM, which is the shape a runaway chain really has. Run ids are minted
+   * inside the engine, so the run is read off the first real hop rather than
+   * invented here.
    */
-  function burnFlowRunBudget(flowRunId: string): void {
-    while (
-      relays.countBudgetedHops(flowRunId) < MAX_AUTOMATIC_HOPS_PER_FLOW_RUN
-    ) {
+  const ANOTHER_ROOM = 'a-crew-this-test-is-not-watching'
+
+  function burnFlowRunBudget(
+    flowRunId: string,
+    upTo: number,
+    crewId = ANOTHER_ROOM,
+  ): void {
+    while (relays.countBudgetedHops(flowRunId) < upTo) {
       relays.appendHop({
         relayId: 'a-wire-this-test-is-not-watching',
-        crewId: 'c1',
+        crewId,
         flowRunId,
         sourceSessionId: 's3',
         targetSessionId: 's3',
@@ -2647,59 +2652,124 @@ describe('RelayEngine', () => {
     }
   }
 
-  it('disarms loudly when a flow run burns its budget', async () => {
-    // The hop budget is the backstop BEHIND the round cap (MAR-2759), so this
-    // crew has to raise its cap above twenty for the backstop to be the guard
-    // under test. A crew on the default cap never reaches it -- which is the
-    // point of having the smaller, non-disarming guard in front.
-    loopLimits.c1 = {
-      roundCap: MAX_AUTOMATIC_HOPS_PER_FLOW_RUN + 1,
-      stallMinutes: null,
-    }
-    wire('s1', 's2')
-    const relay = wire('s2', 's1')
+  it('carries a crew that stated no limit right up to the floor, then disarms loudly', async () => {
+    // A crew with no stated limit gets the floor as its ceiling, and the count
+    // is the RUN's rather than this crew's: every hop below was spent in
+    // another room, so c1's own delivery limit is untouched and the only guard
+    // that can speak here is the backstop.
+    //
+    // Mutation that reds it: drop the floor from `flowRunCeiling` (the ceiling
+    // becomes the resolved cap of twelve) -- the nineteenth hop below is
+    // refused and the first half of this test goes red.
+    const outward = wire('s1', 's2')
+    const back = wire('s2', 's1')
     const gateway = createGateway({})
     const engine = createEngine(gateway)
 
-    // One real hop puts s2 in the run and hands it the baton; the rest of the
-    // run's budget is spent by other wires before s2 gets to answer.
     await engine.handleSettle(settled('s1'))
     const flowRunId = relays.listHops('c1')[0].flowRunId
-    burnFlowRunBudget(flowRunId)
+    burnFlowRunBudget(flowRunId, MIN_FLOW_RUN_HOP_CEILING - 1)
     const sentBefore = gateway.sent.length
 
+    // One hop short of the floor: the wire still carries.
     await engine.handleSettle(settleCarried(gateway, 's2'))
+    expect(gateway.sent).toHaveLength(sentBefore + 1)
+    expect(relays.listHops('c1')[0].outcome).toBe('delivered')
+    expect(relays.getById(back.id)!.armed).toBe(true)
 
-    expect(gateway.sent).toHaveLength(sentBefore)
+    // And at the floor the wire that tried to spend the next hop -- s1's, on
+    // its second lap -- is switched off.
+    relaysChanged = 0
+    await engine.handleSettle(settleCarried(gateway, 's1'))
+    expect(gateway.sent).toHaveLength(sentBefore + 1)
     const newest = relays.listHops('c1')[0]
     expect(newest.outcome).toBe('skipped-budget')
     expect(newest.flowRunId).toBe(flowRunId)
-    expect(newest.error).toContain(String(MAX_AUTOMATIC_HOPS_PER_FLOW_RUN))
-    expect(relays.getById(relay.id)!.armed).toBe(false)
+    expect(newest.error).toContain(`${MIN_FLOW_RUN_HOP_CEILING}-hop ceiling`)
+    expect(relays.getById(outward.id)!.armed).toBe(false)
+    expect(relays.getById(back.id)!.armed).toBe(true)
     expect(relaysChanged).toBe(1)
     // Loud, from R3: a wire switched off behind the user's back with nobody
     // told was the last silent ending in the engine, and laps make the
     // runaway this guards against reachable rather than theoretical.
     // Mutation that reds it: drop the `budget` hail beside the disarm.
     const open = hails.listOpen()
-    expect(open).toMatchObject([{ reason: 'budget', sessionId: 's2' }])
+    expect(open).toMatchObject([{ reason: 'budget', sessionId: 's1' }])
     expect(open[0].detail).toContain('disarmed')
   })
 
-  it('lets a chain of distinct wires run right up to the budget', async () => {
-    loopLimits.c1 = {
-      roundCap: MAX_AUTOMATIC_HOPS_PER_FLOW_RUN + 1,
-      stallMinutes: null,
-    }
-    // A relay chain long enough to outrun the budget on its own: n0 -> n1 ->
-    // ... Each wire fires once, so only the length of the chain can exhaust
-    // the run -- which is exactly the case the backstop still exists for.
+  it('believes a crew that states a delivery limit above the floor', async () => {
+    // The whole of MAR-2966. A fan-out of six spends twelve hops a round, so a
+    // crew that asks for sixty means it: fifty budgeted hops of its OWN, in
+    // one run, and the wire still carries.
+    //
+    // Mutation that reds it: put the constant back in `hasFlowRunBudget` (or
+    // drop the `roundCap` argument from `flowRunCeiling`) -- the fiftieth hop
+    // is refused as a runaway and this goes red.
+    loopLimits.c1 = { roundCap: 60, stallMinutes: null }
+    wire('s1', 's2')
+    const relay = wire('s2', 's1')
+    const gateway = createGateway({})
+    const engine = createEngine(gateway)
+
+    await engine.handleSettle(settled('s1'))
+    const flowRunId = relays.listHops('c1')[0].flowRunId
+    // In this crew's own room, so the delivery limit is being spent too: both
+    // guards are live, and neither may refuse below sixty.
+    burnFlowRunBudget(flowRunId, 50, 'c1')
+    const sentBefore = gateway.sent.length
+
+    await engine.handleSettle(settleCarried(gateway, 's2'))
+
+    expect(gateway.sent).toHaveLength(sentBefore + 1)
+    const newest = relays.listHops('c1')[0]
+    expect(newest.outcome).toBe('delivered')
+    expect(newest.flowRunId).toBe(flowRunId)
+    expect(
+      relays
+        .listHops('c1', 1000)
+        .some((hop) => hop.outcome === 'skipped-budget'),
+    ).toBe(false)
+    expect(relays.getById(relay.id)!.armed).toBe(true)
+    expect(hails.listOpen()).toHaveLength(0)
+  })
+
+  it('names what the run spent and the ceiling it hit, not one number twice', async () => {
+    // A run can arrive past its ceiling rather than exactly on it -- other
+    // rooms were spending while this wire waited -- and then the two numbers
+    // differ. A sentence naming only one of them cannot tell a runaway from a
+    // limit somebody set low.
+    wire('s1', 's2')
+    wire('s2', 's1')
+    const gateway = createGateway({})
+    const engine = createEngine(gateway)
+
+    await engine.handleSettle(settled('s1'))
+    const flowRunId = relays.listHops('c1')[0].flowRunId
+    burnFlowRunBudget(flowRunId, MIN_FLOW_RUN_HOP_CEILING + 5)
+
+    await engine.handleSettle(settleCarried(gateway, 's2'))
+
+    const error = relays.listHops('c1')[0].error ?? ''
+    expect(error).toContain(`${MIN_FLOW_RUN_HOP_CEILING + 5} hops`)
+    expect(error).toContain(`${MIN_FLOW_RUN_HOP_CEILING}-hop ceiling`)
+  })
+
+  it('catches a chain that outruns the loop law by changing rooms', async () => {
+    // The case no per-crew limit can see, and the reason the count stays the
+    // RUN's (R1): a chain of distinct wires alternating between two crews.
+    // Neither room spends its own twelve, so neither round cap ever speaks --
+    // and the run is a runaway all the same.
+    //
+    // Mutation that reds it: count the firing crew's hops in the backstop
+    // (`countBudgetedHopsInCrew`) -- nothing refuses and the chain runs on.
+    createCrew('c2')
     const nodes = Array.from(
-      { length: MAX_AUTOMATIC_HOPS_PER_FLOW_RUN + 2 },
+      { length: MIN_FLOW_RUN_HOP_CEILING + 2 },
       (_, index) => `n${index}`,
     )
     for (let index = 0; index < nodes.length - 1; index += 1) {
-      wire(nodes[index], nodes[index + 1])
+      crewWire(index % 2 === 0 ? 'c1' : 'c2', nodes[index], nodes[index + 1])
     }
     const gateway = createGateway({})
     const engine = createEngine(gateway)
@@ -2708,12 +2778,19 @@ describe('RelayEngine', () => {
       await engine.handleSettle(settleCarried(gateway, node))
     }
 
-    const trail = relays.listHops('c1', 1000)
+    const trail = [
+      ...relays.listHops('c1', 1000),
+      ...relays.listHops('c2', 1000),
+    ]
     const budgeted = trail.filter(
       (hop) => hop.outcome === 'delivered' || hop.outcome === 'queued',
     )
-    expect(budgeted).toHaveLength(MAX_AUTOMATIC_HOPS_PER_FLOW_RUN)
+    expect(budgeted).toHaveLength(MIN_FLOW_RUN_HOP_CEILING)
     expect(trail.some((hop) => hop.outcome === 'skipped-budget')).toBe(true)
+    // No round cap was reached on the way: each room stayed under its twelve.
+    expect(trail.some((hop) => hop.outcome === 'skipped-round-budget')).toBe(
+      false,
+    )
     expect(new Set(trail.map((hop) => hop.flowRunId)).size).toBe(1)
     // Only the wire that tried to overspend is switched off; the delivery
     // limit never disarms anything, so the rest of the chain stays live.
@@ -2844,17 +2921,18 @@ describe('RelayEngine', () => {
     })
 
     it('charges the flow run budget for a spawn', async () => {
-      loopLimits.c1 = {
-        roundCap: MAX_AUTOMATIC_HOPS_PER_FLOW_RUN + 1,
-        stallMinutes: null,
-      }
       wire('s1', 's2')
       const relay = spawnWire('s2')
       const gateway = createGateway({})
       const engine = createEngine(gateway)
 
       await engine.handleSettle(settled('s1'))
-      burnFlowRunBudget(relays.listHops('c1')[0].flowRunId)
+      // Filled from another room, so the guard that refuses below is the
+      // backstop rather than this crew's delivery limit.
+      burnFlowRunBudget(
+        relays.listHops('c1')[0].flowRunId,
+        MIN_FLOW_RUN_HOP_CEILING,
+      )
 
       await engine.handleSettle(settleCarried(gateway, 's2'))
 

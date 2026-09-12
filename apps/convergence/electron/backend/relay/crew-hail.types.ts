@@ -13,7 +13,7 @@ import type { CrewHailRow } from '../database/database.types'
  *   silent drop is its own defect, so this is loud rather than nothing.
  * - `round-budget`: the crew spent its whole delivery limit for the run
  *   without reaching a terminal.
- * - `budget`: the 20-hop backstop tripped and disarmed a wire. A switch
+ * - `budget`: the run's hop backstop tripped and disarmed a wire. A switch
  *   thrown behind the user's back with nobody told was the last silent
  *   ending in the engine (R3).
  * - `delivery-failed`: a wire could not deliver at all. An `error` row used

@@ -15,6 +15,7 @@ import {
   buildRelayHopPreview,
   compileRelayPayload,
   flowRunBudgetMessage,
+  flowRunCeiling,
   hasFlowRunBudget,
   hasRoundBudget,
   isBudgetedOutcome,
@@ -815,7 +816,7 @@ export class RelayEngine {
     // cyclic crew closed exactly one lap per run and an unattended second
     // correction cycle was not a thing this build could do. It now carries
     // again, one lap higher, and the guards below are what still end a run:
-    // the crew's cumulative delivery limit, the 20-hop backstop, and the
+    // the crew's cumulative delivery limit, the run's hop backstop, and the
     // terminal baton reaching the chair. Nothing was merely deleted -- the
     // number that refusal made unnecessary is now recorded on every row,
     // which is what lets history show the laps it was hiding.
@@ -844,16 +845,27 @@ export class RelayEngine {
 
     // Kept as a backstop behind the loop law rather than instead of it: it is
     // the only guard left if a future trigger finds a way to mint runs faster
-    // than a chain consumes them. It survives the round cap because a crew may
-    // set a cap above it, and because this one disarms -- the two guards answer
-    // "this loop needs eyes" and "this wire has run away" differently. It
-    // counts the whole RUN, across every crew, because a runaway chain is a
-    // runaway however many rooms it passes through.
+    // than a chain consumes them, and the only one that DISARMS -- the two
+    // guards answer "this loop needs eyes" and "this wire has run away"
+    // differently. It counts the whole RUN, across every crew, because a
+    // runaway chain is a runaway however many rooms it passes through, and
+    // that cross-crew count is what it still catches that the per-crew cap
+    // cannot see.
+    //
+    // Its ceiling is the firing crew's own delivery limit, floored at twenty
+    // (R1, MAR-2966) and derived from the cap resolved above, so there is one
+    // reader of `round_cap` and one derivation of the ceiling. A crew that
+    // states a limit above the floor is believed: before this, the backstop
+    // overruled every such limit and a six-horse fan-out lost a wire in round
+    // two.
+    const runCeiling = flowRunCeiling(roundCap)
     const runSpentHops = this.relays.countBudgetedHops(flowRunId)
-    if (!hasFlowRunBudget(runSpentHops)) {
+    if (!hasFlowRunBudget(runSpentHops, runCeiling)) {
       this.relays.setArmed(relay.id, false)
       this.onRelaysChanged?.()
-      record('skipped-budget', { error: flowRunBudgetMessage(runSpentHops) })
+      record('skipped-budget', {
+        error: flowRunBudgetMessage(runSpentHops, runCeiling),
+      })
       // Loud, from R3. The backstop still disarms -- that is the difference
       // between it and the round cap -- but a wire switched off behind the
       // user's back with nobody told was the last silent ending left in the

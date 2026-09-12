@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_SPAWN_NAME,
-  MAX_AUTOMATIC_HOPS_PER_FLOW_RUN,
+  MIN_FLOW_RUN_HOP_CEILING,
   MAX_RELAY_INSTRUCTION_LENGTH,
   MAX_RELAY_CONDITION_TOKEN_LENGTH,
   MAX_RELAY_OPENER_LENGTH,
@@ -25,6 +25,7 @@ import {
   buildRelayHopPreview,
   compileRelayPayload,
   flowRunBudgetMessage,
+  flowRunCeiling,
   hasFlowRunBudget,
   isBudgetedOutcome,
   normalizeRelayAction,
@@ -219,19 +220,73 @@ describe('isBudgetedOutcome', () => {
   })
 })
 
+describe('flowRunCeiling', () => {
+  it('believes a crew that states a limit above the floor (R1, MAR-2966)', () => {
+    // The whole ruling: a stated limit the backstop overruled was decoration.
+    // Mutation that reds it: return the constant -- 48 and 60 read as 20.
+    expect(flowRunCeiling(48)).toBe(48)
+    expect(flowRunCeiling(60)).toBe(60)
+    expect(flowRunCeiling(MIN_FLOW_RUN_HOP_CEILING + 1)).toBe(
+      MIN_FLOW_RUN_HOP_CEILING + 1,
+    )
+  })
+
+  it('floors a crew that states less, or nothing', () => {
+    // Mutation that reds it: drop the floor and return the cap -- the default
+    // crew's ceiling falls to twelve, and the guard that DISARMS starts firing
+    // where the guard that merely hails is supposed to.
+    expect(flowRunCeiling(DEFAULT_CREW_ROUND_CAP)).toBe(
+      MIN_FLOW_RUN_HOP_CEILING,
+    )
+    expect(flowRunCeiling(1)).toBe(MIN_FLOW_RUN_HOP_CEILING)
+    expect(flowRunCeiling(MIN_FLOW_RUN_HOP_CEILING)).toBe(
+      MIN_FLOW_RUN_HOP_CEILING,
+    )
+  })
+
+  it('reads the cap the resolver answered, not the column', () => {
+    // R2: one reader of `round_cap`. A stored cap that could not have been
+    // meant resolves to the default first, so it can never raise the ceiling.
+    expect(flowRunCeiling(resolveRoundCap(0))).toBe(MIN_FLOW_RUN_HOP_CEILING)
+    expect(flowRunCeiling(resolveRoundCap(null))).toBe(MIN_FLOW_RUN_HOP_CEILING)
+    expect(flowRunCeiling(resolveRoundCap(48))).toBe(48)
+  })
+})
+
 describe('hasFlowRunBudget', () => {
-  it('allows hops up to the budget and stops at it', () => {
-    expect(hasFlowRunBudget(0)).toBe(true)
-    expect(hasFlowRunBudget(MAX_AUTOMATIC_HOPS_PER_FLOW_RUN - 1)).toBe(true)
-    expect(hasFlowRunBudget(MAX_AUTOMATIC_HOPS_PER_FLOW_RUN)).toBe(false)
+  it('allows hops up to the ceiling it was given and stops at it', () => {
+    expect(hasFlowRunBudget(0, MIN_FLOW_RUN_HOP_CEILING)).toBe(true)
+    expect(
+      hasFlowRunBudget(MIN_FLOW_RUN_HOP_CEILING - 1, MIN_FLOW_RUN_HOP_CEILING),
+    ).toBe(true)
+    expect(
+      hasFlowRunBudget(MIN_FLOW_RUN_HOP_CEILING, MIN_FLOW_RUN_HOP_CEILING),
+    ).toBe(false)
+  })
+
+  it('carries past the floor for a crew whose ceiling is higher', () => {
+    // Mutation that reds it: compare against the constant instead of the
+    // argument -- the crew that asked for sixty is cut off at twenty.
+    expect(hasFlowRunBudget(MIN_FLOW_RUN_HOP_CEILING + 9, 60)).toBe(true)
+    expect(hasFlowRunBudget(59, 60)).toBe(true)
+    expect(hasFlowRunBudget(60, 60)).toBe(false)
   })
 })
 
 describe('flowRunBudgetMessage', () => {
-  it('names the numbers so the disarm never looks arbitrary', () => {
-    const message = flowRunBudgetMessage(MAX_AUTOMATIC_HOPS_PER_FLOW_RUN)
-    expect(message).toContain(String(MAX_AUTOMATIC_HOPS_PER_FLOW_RUN))
+  it('names both numbers so the disarm never looks arbitrary', () => {
+    // Spent and ceiling are not the same number: other crews can spend while
+    // this wire waits, so the run arrives PAST its ceiling. A sentence with
+    // one number in it cannot tell a runaway from a limit set low.
+    const message = flowRunBudgetMessage(25, MIN_FLOW_RUN_HOP_CEILING)
+    expect(message).toBe(
+      "This flow run already fired 25 hops, hitting the crew's 20-hop ceiling. The relay was disarmed to stop the loop.",
+    )
     expect(message).toContain('disarmed')
+  })
+
+  it('names the ceiling a crew raised, not the floor', () => {
+    expect(flowRunBudgetMessage(60, 60)).toContain("crew's 60-hop ceiling")
   })
 })
 

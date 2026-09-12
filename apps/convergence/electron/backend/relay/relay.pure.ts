@@ -9,13 +9,20 @@ import type {
 export const RELAY_PAYLOAD_PREVIEW_LENGTH = 500
 
 /**
- * How many hops one flow run may fire before the guard trips.
+ * The smallest hop ceiling a flow run can have: what a crew that never stated
+ * a delivery limit gets.
  *
  * Loops are legal and wanted -- A -> B -> A is our own review loop -- so the
  * guard is a budget rather than a ban. Twenty is generous enough that no
  * honest loop reaches it and small enough that a runaway costs pocket change.
+ *
+ * It is a FLOOR rather than the ceiling itself (R1, MAR-2966). A fan-out of
+ * six spends twelve hops per round, so a fixed twenty made every stated limit
+ * above it decoration: the backstop tripped in round two and disarmed a wire
+ * a crew had explicitly budgeted for. `flowRunCeiling` is what the guard
+ * reads; this is only its lower bound.
  */
-export const MAX_AUTOMATIC_HOPS_PER_FLOW_RUN = 20
+export const MIN_FLOW_RUN_HOP_CEILING = 20
 
 /** Outcomes that actually consumed a provider turn, and so consume budget. */
 export const BUDGETED_OUTCOMES: readonly RelayHopOutcome[] = [
@@ -293,18 +300,43 @@ export function buildRelayHopPreview(
 }
 
 /**
- * Whether a firing is allowed to spend another hop on this flow run.
+ * The hop ceiling this run actually has: the firing crew's delivery limit,
+ * never below the floor (R1, MAR-2966).
+ *
+ * Takes `resolveRoundCap`'s answer rather than the stored column, so a cap a
+ * bad row could not have meant cannot raise the ceiling either -- the
+ * resolver stays the only reader of `round_cap`, and this stays the only
+ * derivation of the ceiling (R2). The crew's STATED limit is the run's own
+ * ceiling, because a limit the backstop overrules is not a limit; the floor
+ * is what a crew that stated nothing gets.
  */
-export function hasFlowRunBudget(spentHops: number): boolean {
-  return spentHops < MAX_AUTOMATIC_HOPS_PER_FLOW_RUN
+export function flowRunCeiling(roundCap: number): number {
+  return Math.max(MIN_FLOW_RUN_HOP_CEILING, roundCap)
 }
 
 /**
- * The sentence the ledger shows when the guard trips. It names the number so
- * the disarm never looks arbitrary.
+ * Whether a firing is allowed to spend another hop on this flow run.
+ *
+ * Takes the ceiling rather than reading a constant, because the ceiling
+ * belongs to the firing crew while the count is the whole run's: the engine
+ * is the only place that knows both.
  */
-export function flowRunBudgetMessage(spentHops: number): string {
-  return `This flow run already fired ${spentHops} hops, hitting the ${MAX_AUTOMATIC_HOPS_PER_FLOW_RUN}-hop budget. The relay was disarmed to stop the loop.`
+export function hasFlowRunBudget(spentHops: number, ceiling: number): boolean {
+  return spentHops < ceiling
+}
+
+/**
+ * The sentence the ledger shows when the guard trips.
+ *
+ * Names BOTH numbers -- what the run spent, and the ceiling it hit -- because
+ * now that the ceiling follows the crew, a sentence naming only one of them
+ * leaves the reader unable to tell a runaway from a limit set low.
+ */
+export function flowRunBudgetMessage(
+  spentHops: number,
+  ceiling: number,
+): string {
+  return `This flow run already fired ${spentHops} hops, hitting the crew's ${ceiling}-hop ceiling. The relay was disarmed to stop the loop.`
 }
 
 /**

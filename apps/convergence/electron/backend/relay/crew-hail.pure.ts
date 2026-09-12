@@ -1,6 +1,6 @@
 import {
   DEFAULT_CREW_ROUND_CAP,
-  MAX_AUTOMATIC_HOPS_PER_FLOW_RUN,
+  MIN_FLOW_RUN_HOP_CEILING,
   isBudgetedOutcome,
 } from './relay.pure'
 import type { CrewHailReason } from './crew-hail.types'
@@ -212,7 +212,7 @@ export function formatCrewHailDetail(
       // does not: a wire was switched OFF. That is the difference between the
       // two guards, and a hail that blurred them would send Marcin looking
       // for a wire he would find dark with no explanation.
-      return `This run ran away — ${context.spentHops ?? MAX_AUTOMATIC_HOPS_PER_FLOW_RUN} deliveries without reaching you — so the wire was disarmed to stop it.`
+      return `This run ran away — ${context.spentHops ?? MIN_FLOW_RUN_HOP_CEILING} deliveries without reaching you — so the wire was disarmed to stop it.`
     case 'delivery-failed':
       // Names the failure inline, because this call exists precisely because
       // nothing else says it: the hop row is an `error` nobody watches, and a

@@ -21,6 +21,44 @@ export const DEFAULT_CREW_ROUND_CAP = 12
 export const DEFAULT_CREW_STALL_MINUTES = 30
 
 /**
+ * The floor under a run's hop ceiling (R1/R2, MAR-2966).
+ *
+ * **This number crosses the tree boundary too**, for the same reason and under
+ * the same barrier as the two above: the engine owns it in
+ * `electron/backend/relay/relay.pure.ts` (`MIN_FLOW_RUN_HOP_CEILING`), the
+ * renderer cannot import from `electron/`, and
+ * `electron/backend/relay/cross-tree-agreement.test.ts` is what makes the two
+ * halves an agreement rather than two literals.
+ *
+ * The renderer needs it because the settings panel must say what the ceiling
+ * ACTUALLY is. A crew under the floor has a delivery limit that is not its
+ * ceiling, and a note that claimed otherwise would blur the one distinction
+ * the two guards exist for: the limit hails, the ceiling disarms.
+ */
+export const MIN_FLOW_RUN_HOP_CEILING = 20
+
+/** The engine's derivation, mirrored: `Math.max` of the floor and the cap. */
+export function flowRunCeiling(roundCap: number): number {
+  return Math.max(MIN_FLOW_RUN_HOP_CEILING, roundCap)
+}
+
+/**
+ * What the delivery limit box says about the run's hard ceiling (R3).
+ *
+ * Two sentences because there are two truths. At or above the floor the crew's
+ * stated limit IS the ceiling, and saying so is the whole point of MAR-2966.
+ * Below it the ceiling is the floor, and the honest sentence names the number
+ * rather than letting the box imply that twelve deliveries switch a wire off --
+ * they do not; they hail, and the wire stays armed.
+ */
+export function flowRunCeilingNote(deliveryLimit: number): string {
+  const ceiling = flowRunCeiling(deliveryLimit)
+  return ceiling === deliveryLimit
+    ? "This is also the run's hard ceiling: past it the wire is disarmed."
+    : `Past ${ceiling} deliveries in one run the wire is disarmed, whatever this says.`
+}
+
+/**
  * The convention a wire's condition is pre-filled with.
  *
  * **This literal crosses the tree boundary.** The engine reads it in
