@@ -17,8 +17,10 @@ function hop(overrides: {
   spawnedSessionId?: string | null
   settledAt?: string | null
   settledStatus?: string | null
+  error?: string | null
 }) {
   return {
+    error: overrides.error ?? null,
     id: overrides.id ?? 'hop-1',
     flowRunId: 'run-1',
     outcome: overrides.outcome ?? 'delivered',
@@ -73,8 +75,74 @@ describe('findStalledStations', () => {
         hopId: 'hop-1',
         flowRunId: 'run-1',
         fate: 'quiet',
+        reason: null,
       },
     ])
+  })
+
+  it("carries a waiting hop's reason onward, and drops it once it came back (R3, MAR-2888)", () => {
+    // The hail is written from the same words the canvas shows, so the two
+    // cannot disagree. And only while it is still owed: a hop that came back
+    // is explained by its fate, not by the reason it was once queued for.
+    expect(
+      findStalledStations({
+        hops: [
+          hop({
+            firedAt: firedMinutesAgo(31),
+            outcome: 'queued',
+            error: 'Waiting behind a running turn at the target.',
+          }),
+        ],
+        now: NOW,
+        stallMinutes: 30,
+      })[0]?.reason,
+    ).toBe('Waiting behind a running turn at the target.')
+
+    expect(
+      findStalledStations({
+        hops: [
+          hop({
+            firedAt: firedMinutesAgo(31),
+            outcome: 'queued',
+            error: 'Waiting behind a running turn at the target.',
+            settledAt: firedMinutesAgo(1),
+            settledStatus: 'failed',
+          }),
+        ],
+        now: NOW,
+        stallMinutes: 30,
+      })[0]?.reason,
+    ).toBeNull()
+  })
+
+  it('does not accuse a station of silence while it is answering somebody else (R3, MAR-2888)', () => {
+    // The sentence this run exists to correct. "Took the loop's work and has
+    // been quiet" sends the reader looking for a hung station; the station
+    // never took the work — it is mid-turn on its own business, and the wire
+    // is waiting politely behind it.
+    expect(
+      formatCrewHailDetail('stall', {
+        minutes: 30,
+        fate: 'quiet',
+        error: 'Waiting behind a running turn at the target.',
+      }),
+    ).toBe(
+      "This station has not taken the loop's work yet — Waiting behind a running turn at the target. It has been 30 minutes, so nothing is coming next on its own.",
+    )
+    // With nothing to explain, the old sentence stands.
+    expect(formatCrewHailDetail('stall', { minutes: 30, fate: 'quiet' })).toBe(
+      "This station took the loop's work and has been quiet for 30 minutes, so nothing is coming next on its own.",
+    )
+    // A broken return is still its own sentence, reason or no reason.
+    expect(
+      formatCrewHailDetail('stall', {
+        minutes: 30,
+        fate: 'failed',
+        error: 'Waiting behind a running turn at the target.',
+      }),
+    ).toBe(
+      "This station took the loop's work and failed, so nothing is coming next on its own.",
+    )
   })
 
   it('stays quiet about an attempt the user superseded with Deliver now (MAR-2971 lap 4)', () => {
@@ -151,7 +219,13 @@ describe('findStalledStations', () => {
         stallMinutes: 30,
       }),
     ).toEqual([
-      { sessionId: 'codex', hopId: 'owed', flowRunId: 'run-1', fate: 'failed' },
+      {
+        sessionId: 'codex',
+        hopId: 'owed',
+        flowRunId: 'run-1',
+        fate: 'failed',
+        reason: null,
+      },
     ])
   })
 
@@ -172,7 +246,13 @@ describe('findStalledStations', () => {
         stallMinutes: 30,
       }),
     ).toEqual([
-      { sessionId: 'codex', hopId: 'hung', flowRunId: 'run-1', fate: 'quiet' },
+      {
+        sessionId: 'codex',
+        hopId: 'hung',
+        flowRunId: 'run-1',
+        fate: 'quiet',
+        reason: null,
+      },
     ])
   })
 
@@ -327,6 +407,7 @@ describe('findStalledStations', () => {
         hopId: 'hop-1',
         flowRunId: 'run-1',
         fate: 'failed',
+        reason: null,
       },
     ])
   })

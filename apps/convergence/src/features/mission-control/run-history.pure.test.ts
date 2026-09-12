@@ -513,6 +513,48 @@ describe('the smaller readers, on their own', () => {
     expect(runTone({ word: 'unknown', reason: null })).toBe('unknown')
   })
 
+  it('stops telling History a settled hop is still waiting (MAR-2888 lap 3)', () => {
+    // Two surfaces read a hop's reason and they were not agreeing: the canvas
+    // row learned this in lap 2, History's event row did not, so a `/clear`
+    // that waited politely and then landed kept an event row insisting it was
+    // waiting. One shared `hopReasonToShow`, so a third surface cannot get it
+    // wrong either.
+    //
+    // The ledger still holds the truth that it waited; what changes is
+    // whether a reader is told it still does.
+    const waiting = hop({
+      id: 'h-waiting',
+      outcome: 'queued',
+      settledAt: null,
+      error: 'Waiting behind a running turn at the target.',
+    })
+    const landed = hop({
+      id: 'h-landed',
+      outcome: 'queued',
+      settledAt: '2026-09-06T14:33:00.000Z',
+      error: 'Waiting behind a running turn at the target.',
+    })
+    const build = (row: RelayHop) =>
+      buildHopEventRow(row, {
+        resolveName,
+        outcomes: outcomesFor([[row.id, 'queued']]),
+      }).reason
+
+    expect(build(waiting)).toBe('Waiting behind a running turn at the target.')
+    expect(build(landed)).toBeNull()
+    // An event's own record survives settling: only a state sentence expires.
+    expect(
+      build(
+        hop({
+          id: 'h-broke',
+          outcome: 'error',
+          settledAt: '2026-09-06T14:33:00.000Z',
+          error: 'Pi is unavailable. The response was not delivered.',
+        }),
+      ),
+    ).toBe('Pi is unavailable. The response was not delivered.')
+  })
+
   it('builds one hop row and one call row on their own', () => {
     expect(
       buildHopEventRow(hop({ id: 'h1' }), {

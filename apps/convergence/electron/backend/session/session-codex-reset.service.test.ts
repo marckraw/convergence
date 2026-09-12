@@ -151,23 +151,45 @@ describe('Codex reset through the composer door', () => {
     expect(starts[0].initialMessage).toBe('/clear')
     expect(context.listForSession(sessionId)).toEqual([])
   })
-  it.each(['start', 'sendMessage', 'opener'] as const)(
+  it.each(['start', 'sendMessage'] as const)(
     'refuses %s reset during cold start — gate on status instead of live handle turns red',
     async (door) => {
       await service.start(sessionId, { text: 'before' })
+      // Measured: the row reads `idle` with a handle attached -- a turn is on
+      // its way up and has not reported yet. That is what separates this from
+      // an idle resident, whose row reads `completed` (MAR-2888 lap 2).
       // A handle exists, but it has emitted no running status yet.
-      const reset =
-        door === 'opener'
-          ? service.sendMessageWithOpener(sessionId, {
-              opener: '/clear',
-              text: 'payload',
-            })
-          : service[door](sessionId, { text: '/clear' })
-      await expect(reset).rejects.toThrow(
+      await expect(
+        service[door](sessionId, { text: '/clear' }),
+      ).rejects.toThrow(
         'Wait for the current turn to finish before clearing the conversation.',
       )
     },
   )
+
+  it('queues an opener refused during cold start instead of dropping it (MAR-2888)', async () => {
+    // The same gate fires — a handle exists with no running status yet, which
+    // is what "gate on the live handle, not the status" means — but the
+    // ANSWER differs by door, because the doors have different callers.
+    // `sendMessageWithOpener` has exactly one: the relay engine. Nobody is
+    // watching that moment, and the work is a baton being handed on, so the
+    // refusal is answered by the queue. `sendMessage` above is the user's
+    // door and stays loud, which is what keeps the gate honest.
+    await service.start(sessionId, { text: 'before' })
+
+    const receipt = await service.sendMessageWithOpener(sessionId, {
+      opener: '/clear',
+      text: 'payload',
+    })
+
+    expect(receipt.openerQueued).toBe(true)
+    expect(
+      service.getQueuedInputs(sessionId).map((item) => [item.text, item.state]),
+    ).toEqual([
+      ['/clear', 'queued'],
+      ['payload', 'queued'],
+    ])
+  })
 
   it('refuses reset while a dispatch has no handle yet — remove the in-flight check turns red', async () => {
     const starting = service.start(sessionId, { text: 'before' })

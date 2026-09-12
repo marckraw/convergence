@@ -499,3 +499,35 @@ export interface Provider {
   ) => Promise<ProviderContextManagementResult>
   oneShot?: (input: OneShotInput) => Promise<OneShotResult>
 }
+
+/**
+ * The target is mid-turn and refused this input: a fact, not a failure.
+ *
+ * Two parties know whether a session is busy and they can disagree.
+ * Convergence's record answers `isCarryingATurn` -- a dispatch in flight, or
+ * `running` with a handle attached -- and a relay delivery asks it before
+ * sending. The PROVIDER answers from its own state, which the record does not
+ * see: Codex refuses a `/clear` while `currentStatus === 'running' || connecting`,
+ * so a target whose row was not running-with-a-handle but whose app-server was
+ * mid-turn or reconnecting took the opener directly, threw, and the delivery
+ * died with a `delivery-failed` hail while nothing retried (MAR-2888; the
+ * record, 2026-09-09 09:12Z and 09:13Z).
+ *
+ * Typed rather than matched on its message, because a string is a contract
+ * nobody declared: the sentence is user-facing, it is written in two places,
+ * and a caller that greps it silently starts failing the day it is reworded.
+ * A refusal carrying this type means exactly "ask again when the turn ends",
+ * which the queue can answer; every other error still means the delivery
+ * broke and must be told loudly.
+ */
+export class ProviderBusyError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ProviderBusyError'
+  }
+}
+
+/** Whether a thrown value is the provider saying "I am mid-turn". */
+export function isProviderBusyError(error: unknown): boolean {
+  return error instanceof ProviderBusyError
+}

@@ -65,6 +65,15 @@ export interface StallCandidateHop {
   settledAt: string | null
   /** How it came back, read as a plain string (the vocabulary law). */
   settledStatus: string | null
+  /**
+   * What the ledger recorded about this hop, when it recorded anything.
+   *
+   * A `queued` hop that is waiting on the target's own turn carries the
+   * reason it is waiting (MAR-2888), and that is the difference between a
+   * station that took the loop's work and went silent and one that never
+   * took it at all. Null on every hop with nothing to say.
+   */
+  error: string | null
 }
 
 /**
@@ -79,6 +88,13 @@ export interface StalledStation {
   hopId: string
   flowRunId: string
   fate: StalledStationFate
+  /**
+   * Why the hop is still owed, when the ledger knows (MAR-2888).
+   *
+   * Carried rather than re-derived so the sentence and the ledger cannot
+   * disagree: the hail is written from the same words the canvas shows.
+   */
+  reason: string | null
 }
 
 /**
@@ -167,6 +183,9 @@ export function findStalledStations(input: {
       hopId: hop.id,
       flowRunId: hop.flowRunId,
       fate: cameBack ? 'failed' : 'quiet',
+      // Only while it is still waiting: a hop that came back is explained by
+      // its fate, not by the reason it was once queued for.
+      reason: cameBack ? null : hop.error,
     })
   }
 
@@ -229,8 +248,16 @@ export function formatCrewHailDetail(
         ? `A delivery in this run failed — ${context.error} — so nothing is coming next on its own.`
         : 'A delivery in this run failed, so nothing is coming next on its own.'
     case 'stall':
-      return context.fate === 'failed'
-        ? "This station took the loop's work and failed, so nothing is coming next on its own."
-        : `This station took the loop's work and has been quiet for ${context.minutes ?? DEFAULT_CREW_STALL_MINUTES} minutes, so nothing is coming next on its own.`
+      if (context.fate === 'failed') {
+        return "This station took the loop's work and failed, so nothing is coming next on its own."
+      }
+      // It never took the work: it is waiting behind a turn of its own
+      // (MAR-2888). Saying "took the loop's work and has been quiet" would
+      // accuse a station of silence while it is busy answering somebody else,
+      // and would send the reader looking for the wrong problem.
+      if (context.error) {
+        return `This station has not taken the loop's work yet — ${context.error} It has been ${context.minutes ?? DEFAULT_CREW_STALL_MINUTES} minutes, so nothing is coming next on its own.`
+      }
+      return `This station took the loop's work and has been quiet for ${context.minutes ?? DEFAULT_CREW_STALL_MINUTES} minutes, so nothing is coming next on its own.`
   }
 }

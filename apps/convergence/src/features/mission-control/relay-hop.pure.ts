@@ -182,8 +182,33 @@ export function buildRelayHopLine(
     roundLabel: hop.roundNumber === null ? null : `round ${hop.roundNumber}`,
     batonLabel: hop.baton === null ? null : `⚡ ${hop.baton}`,
     payloadPreview: hop.payloadPreview,
-    error: hop.error,
+    error: hopReasonToShow(hop),
   }
+}
+
+/**
+ * The reason a SURFACE should show for a hop, which is not always the reason
+ * the ledger recorded (MAR-2888).
+ *
+ * A `queued` hop's reason describes a STATE -- "Waiting behind a running turn
+ * at the target." -- and it is true only while the hop is still waiting. Once
+ * the turn ran and the hop settled, the sentence describes something that has
+ * ended, and a surface repeating it tells the reader to be patient about work
+ * that already landed. Every other outcome's error is a record of an EVENT --
+ * a refusal, a broken delivery, a spent budget -- and stays readable forever.
+ *
+ * One function because there are two surfaces and they were not agreeing: the
+ * canvas row learned this in lap 2 and History's event row did not. The
+ * ledger keeps the truth that the hop waited; what changes is whether a
+ * reader is told it still does.
+ */
+export function hopReasonToShow(hop: {
+  outcome: string
+  settledAt: string | null
+  error: string | null
+}): string | null {
+  if (hop.outcome === 'queued' && hop.settledAt !== null) return null
+  return hop.error
 }
 
 export function formatHopCount(count: number): string {

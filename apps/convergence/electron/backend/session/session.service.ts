@@ -40,6 +40,10 @@ import type {
   ProviderContextManagementResult,
 } from '../provider/provider.types'
 import {
+  isProviderBusyError,
+  ProviderBusyError,
+} from '../provider/provider.types'
+import {
   getMidRunInputCapabilityForProviderId,
   providerSupportsConversationReset,
   parseReasoningEffort,
@@ -1728,11 +1732,23 @@ export class SessionService {
           'A conversation reset cannot carry attachments or skill selections.',
         )
       }
-      if (
-        this.activeHandles.has(sessionId) ||
-        this.dispatches.isDispatching(sessionId)
-      ) {
-        throw new Error(
+      const resetTarget = this.getById(sessionId)
+      if (resetTarget && this.isTurnUnderWayOrArriving(resetTarget)) {
+        // Typed for the same reason the provider's own refusal is
+        // (MAR-2888): a relay delivery must be able to tell "not now" from
+        // "broken", and this door says "not now".
+        //
+        // `isTurnUnderWayOrArriving`, which is two cases and not one. A
+        // dispatch in flight is a turn. So is a handle attached whose turn
+        // has not ended -- and that covers the beat between `start()`
+        // returning and the provider's first status, where the row still
+        // reads `idle` while a turn is coming up. What it deliberately does
+        // NOT cover is a handle attached to a session whose turn is over: a
+        // resident handle outlives its turn, so asking "is a handle
+        // attached" called an idle session busy, and the refusal became a
+        // queued row with nothing to drain it -- the only automatic drain is
+        // a handle's own `completed`, which was never coming again.
+        throw new ProviderBusyError(
           'Wait for the current turn to finish before clearing the conversation.',
         )
       }
@@ -1742,10 +1758,24 @@ export class SessionService {
       return await dispatch(inFlight)
     } catch (error) {
       this.dispatches.settle(inFlight)
-      this.terminateQueueUnlessCarryingATurn(
-        sessionId,
-        error instanceof Error ? error.message : String(error),
-      )
+      // A busy refusal proves a turn owns the queue (MAR-2888). Every other
+      // failure leaves the session idle with rows waiting on nothing, which
+      // is what this terminal is for; a refusal that says "mid-turn" says
+      // the opposite -- there IS a turn, and its completion will drain them.
+      //
+      // Since MAR-2971 the sweep only fails rows it ATTEMPTED, so a `queued`
+      // row already survives this path, and the drain is synchronous end to
+      // end -- no row is `dispatching` while another send runs. So this
+      // guard has no live path on this base: it is a PIN, stating the rule
+      // where the rule belongs so that widening the sweep back out cannot
+      // quietly re-create the bug the sweep's narrowness is currently
+      // hiding.
+      if (!isProviderBusyError(error)) {
+        this.terminateQueueUnlessCarryingATurn(
+          sessionId,
+          error instanceof Error ? error.message : String(error),
+        )
+      }
       throw error
     } finally {
       this.dispatches.settle(inFlight)
@@ -2087,13 +2117,17 @@ export class SessionService {
   async sendMessageWithOpener(
     id: string,
     input: SendMessageInput & { opener: string },
-  ): Promise<{ openerDispatchId: string; payloadDispatchId: string }> {
+  ): Promise<{
+    openerDispatchId: string
+    payloadDispatchId: string
+    /** True when the opener is WAITING behind a turn rather than under way. */
+    openerQueued: boolean
+  }> {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
 
-    let openerDispatchId: string
-    if (this.isCarryingATurn(session)) {
-      openerDispatchId = randomUUID()
+    const queueOpener = (): string => {
+      const dispatchId = randomUUID()
       this.queuedInputs.enqueue(
         id,
         {
@@ -2101,17 +2135,41 @@ export class SessionService {
           providerAccountId: input.providerAccountId ?? null,
           skipContextInjection: true,
           muteRelays: true,
-          dispatchId: openerDispatchId,
+          dispatchId,
         },
         'follow-up',
       )
+      return dispatchId
+    }
+
+    let openerDispatchId: string
+    let openerQueued = true
+    if (this.isCarryingATurn(session)) {
+      openerDispatchId = queueOpener()
     } else {
-      openerDispatchId = await this.sendMessage(id, {
-        text: input.opener,
-        providerAccountId: input.providerAccountId,
-        skipContextInjection: true,
-        muteRelays: true,
-      })
+      // TWO parties know whether this target is busy and they can disagree
+      // (MAR-2888). `isCarryingATurn` is the record's answer and it has just
+      // said no; the provider answers from state the record cannot see -- an
+      // app-server mid-turn, or still reconnecting -- and when it says no the
+      // answer is the SAME answer: queue the opener behind the turn that is
+      // actually running. Before this, that refusal ended the delivery, fired
+      // a `delivery-failed` hail, and nothing retried: a baton on the floor.
+      //
+      // Only this refusal. Every other error still leaves here, because
+      // "the target is mid-turn" is the one failure a queue can answer, and
+      // swallowing the rest would turn a broken delivery into a silent wait.
+      try {
+        openerDispatchId = await this.sendMessage(id, {
+          text: input.opener,
+          providerAccountId: input.providerAccountId,
+          skipContextInjection: true,
+          muteRelays: true,
+        })
+        openerQueued = false
+      } catch (error) {
+        if (!isProviderBusyError(error)) throw error
+        openerDispatchId = queueOpener()
+      }
     }
 
     const payloadDispatchId = randomUUID()
@@ -2124,7 +2182,68 @@ export class SessionService {
       },
       'follow-up',
     )
-    return { openerDispatchId, payloadDispatchId }
+    // Whether the opener is WAITING rather than under way, so the ledger can
+    // say why the hop is queued instead of leaving the reason to be guessed.
+    return { openerDispatchId, payloadDispatchId, openerQueued }
+  }
+
+  /**
+   * A relay's delivery door (MAR-2888).
+   *
+   * `sendMessage` is the user's door and must stay loud: a person clearing a
+   * conversation mid-turn should be told no, not have it happen later. A
+   * relay is the other case -- nobody is watching the moment, the work is a
+   * baton being handed on, and "the target is mid-turn" is an answer the
+   * queue already knows how to give. So the catch lives here, at the caller
+   * that wants it, rather than inside `sendMessage` where it would change
+   * what the UI does.
+   *
+   * Returns whether the payload is waiting, which is what the hop reports.
+   *
+   * LOCAL ONLY, and not by choice (R5, MAR-2888). A remote handle's
+   * `sendMessage` hands the text to `enqueueCommand`, which returns `void`
+   * and posts fire-and-forget: the daemon's refusal comes back later as a
+   * note and an attention change, never as a throw at the send site. So
+   * there is no remote refusal to type or to catch here, and a remote target
+   * mid-turn is still answered by the daemon's own queue rather than by this
+   * one. Closing that needs a refusal on the wire, which is the remote
+   * parity ticket's work, not a string match invented here.
+   *
+   * The Claude provider raises no busy refusal of its OWN -- it has no
+   * conversation-reset command to refuse -- but that does not mean the Claude
+   * path never meets one. Convergence's own reset door refuses first, and a
+   * Claude handle is resident: it outlives its turn. That door is exactly
+   * where a `/clear` hail at an idle Claude session was turned away, which is
+   * why its predicate had to become "a turn is under way or arriving" rather
+   * than "a handle is attached" (lap 2).
+   */
+  async deliverRelayMessage(
+    id: string,
+    input: SendMessageInput,
+  ): Promise<{ dispatchId: string; queued: boolean }> {
+    try {
+      return { dispatchId: await this.sendMessage(id, input), queued: false }
+    } catch (error) {
+      if (!isProviderBusyError(error)) throw error
+      const dispatchId = randomUUID()
+      // The WHOLE input, the shape both enqueues in `deliverMessage` use.
+      // Naming three fields by hand was an incomplete copy: it dropped
+      // `muteRelays` and `skipContextInjection`, so a row queued here lost
+      // properties the same row keeps on every other path. Nothing changes at
+      // runtime -- the one caller passes text and account -- but the trap goes,
+      // and it had already cost a lap: a pin meant to prove a borrowed mute
+      // came back was hollow because the row it queued was never muted.
+      this.queuedInputs.enqueue(
+        id,
+        {
+          ...input,
+          providerAccountId: input.providerAccountId ?? null,
+          dispatchId,
+        },
+        'follow-up',
+      )
+      return { dispatchId, queued: true }
+    }
   }
 
   async compactContext(
@@ -2291,22 +2410,28 @@ export class SessionService {
       ? this.getRowById(session.id)?.relays_muted
       : undefined
     this.requestRelayMute(input.session.id, input.input.muteRelays)
-    const disposition = handle.sendMessage(
-      augmentedText,
-      attachments,
-      input.input.skillSelections,
-      {
-        deliveryMode,
-        interactionResponse: input.input.interactionResponse,
-        providerAccountId: input.input.providerAccountId,
-      },
-    )
+    let disposition: void | 'queue-follow-up'
+    try {
+      disposition = handle.sendMessage(
+        augmentedText,
+        attachments,
+        input.input.skillSelections,
+        {
+          deliveryMode,
+          interactionResponse: input.input.interactionResponse,
+          providerAccountId: input.input.providerAccountId,
+        },
+      )
+    } catch (error) {
+      // The mute was borrowed for a send that never happened. Give it back
+      // before the refusal leaves, or the turn already under way settles
+      // quiet on somebody else's behalf (MAR-2888 lap 4).
+      this.restoreRelayMute(session.id, previousMute)
+      throw error
+    }
     if (disposition === 'queue-follow-up') {
       // This input belongs to the next turn, including its relay choice.
-      if (previousMute === 0)
-        this.db
-          .prepare('UPDATE sessions SET relays_muted = 0 WHERE id = ?')
-          .run(session.id)
+      this.restoreRelayMute(session.id, previousMute)
       this.queuedInputs.enqueue(
         session.id,
         { ...input.input, dispatchId: input.dispatchId },
@@ -2376,6 +2501,63 @@ export class SessionService {
    * only because its failure has an owner: `withDispatchInFlight` terminates
    * the rows when the attempt fails and nothing else carries them (design P).
    */
+  /**
+   * Whether a turn is running on this session OR on its way up (MAR-2888).
+   *
+   * The reset door's question, and NOT `isCarryingATurn`'s. A reset cannot
+   * share a turn, so the door has to refuse for a window wider than "a turn
+   * is running": it must also cover the beat between `start()` returning and
+   * the provider's first status, where the row still reads `idle` while a
+   * turn is on its way up.
+   *
+   * It used to ask whether a handle was ATTACHED, which is wider still and
+   * wrong at the other end: a resident handle is not released when its turn
+   * completes, so after any finished turn an idle session looked busy. That
+   * refusal then became a queued input with nothing to drain it -- the only
+   * automatic drain is a handle's own `completed` -- so a `/clear` hail at an
+   * idle Claude session would have waited for a turn that was never coming.
+   *
+   * Measured, because the two cases are one field apart: cold start reads a
+   * handle with status `idle`, an idle resident reads a handle with status
+   * `completed`. So the question is "is there a handle, and has its turn not
+   * ended yet", plus a send already on its way, which is a turn too.
+   */
+  /**
+   * Puts back the relay mute a send was about to borrow (MAR-2888 lap 4).
+   *
+   * A relay opener always asks for quiet, and the mute is written to the
+   * session row BEFORE the send that can refuse it. When the refusal is
+   * "mid-turn", the turn the target was ALREADY carrying is still running --
+   * and it would settle quiet, recording `skipped-muted` on every armed wire
+   * and raising no hail, as though a human had asked for silence. The baton
+   * this feature saves is the new one; it must not drop the one in flight.
+   *
+   * `undefined` means the send never asked for quiet, so there is nothing to
+   * put back; `1` means the session was already muted by somebody else's
+   * request, which is not this send's to undo. Only a borrowed mute is
+   * returned.
+   */
+  private restoreRelayMute(
+    sessionId: string,
+    previousMute: number | undefined,
+  ): void {
+    if (previousMute !== 0) return
+    this.db
+      .prepare('UPDATE sessions SET relays_muted = 0 WHERE id = ?')
+      .run(sessionId)
+  }
+
+  private isTurnUnderWayOrArriving(session: Session): boolean {
+    if (this.dispatches.isDispatching(session.id)) return true
+    if (!this.activeHandles.has(session.id)) return false
+    // `isTerminalSessionStatus`, not two words written out again: that helper
+    // is what the settle path asks, and its own docblock names the hazard --
+    // a session with two ideas of "terminal" behaves differently depending on
+    // which one a reader happened to use. A third word would land here and in
+    // the settle at different times.
+    return !isTerminalSessionStatus(session.status)
+  }
+
   private isCarryingATurn(session: Session): boolean {
     if (this.dispatches.isDispatching(session.id)) return true
     return session.status === 'running' && this.activeHandles.has(session.id)
@@ -3616,18 +3798,36 @@ export class SessionService {
         this.pendingTurnAccountIds.set(sessionId, item.providerAccountId)
         // The mute the user chose when they wrote this, not the composer's
         // state now -- the toggle reset the moment they pressed send.
+        const previousMute = item.relaysMuted
+          ? this.getRowById(sessionId)?.relays_muted
+          : undefined
         this.requestRelayMute(sessionId, item.relaysMuted)
-        const disposition = handle.sendMessage(
-          augmentedText,
-          attachments,
-          item.skillSelections,
-          {
-            deliveryMode: 'normal',
-            queuedInputId: item.id,
-            providerAccountId: item.providerAccountId,
-          },
-        )
+        let disposition: void | 'queue-follow-up'
+        try {
+          disposition = handle.sendMessage(
+            augmentedText,
+            attachments,
+            item.skillSelections,
+            {
+              deliveryMode: 'normal',
+              queuedInputId: item.id,
+              providerAccountId: item.providerAccountId,
+            },
+          )
+        } catch (error) {
+          // Same rule on the drain's own send: a mute borrowed for a delivery
+          // that was refused goes back, so the turn already under way is not
+          // silenced by a beat that never happened (MAR-2888 lap 4).
+          this.restoreRelayMute(sessionId, previousMute)
+          throw error
+        }
         if (disposition === 'queue-follow-up') {
+          // The send did not land, so the mute it borrowed goes back -- the
+          // fourth site of this rule, and the twin of the direct path's
+          // (MAR-2888 lap 5). A deferral is not a refusal, but it is equally
+          // a beat that did not happen: leave the mute standing and the next
+          // turn this session takes settles quiet on the opener's behalf.
+          this.restoreRelayMute(sessionId, previousMute)
           // Keep its original row and ordering; the next completion retries it.
           this.queuedInputs.patch(item.id, 'queued')
           return
@@ -3675,6 +3875,23 @@ export class SessionService {
       this.attachDispatchToTurn(sessionId, item.dispatchId)
       this.queuedInputs.patch(item.id, 'sent')
     } catch (err) {
+      // "Not yet" is not "broken" (MAR-2888). The row was attempted, but the
+      // answer is about timing: it goes back in line and the next turn
+      // boundary tries it again -- the shape this function already uses for
+      // a provider that answers `queue-follow-up`. Failing it here would
+      // kill a baton one beat before it went out.
+      //
+      // The reachable trigger is `redeliverQueuedInput` -- Deliver now while
+      // a turn is connecting -- and that turn's own completion re-drains the
+      // row. NOT a completion itself, which is what an earlier draft of this
+      // comment claimed: `setStatus` writes `currentStatus` before it emits,
+      // the emitter is synchronous, and `connecting` is nulled in a `finally`
+      // before `sendCodexTurn`, so every Codex `completed` is processed with
+      // `connecting === null` and no refusal to give.
+      if (isProviderBusyError(err)) {
+        this.queuedInputs.patch(item.id, 'queued')
+        return
+      }
       // The drain is itself a dispatch attempt, and it left the session idle
       // with this row and every row behind it waiting on nothing: they end
       // together, in one event (MAR-2759, design P).
