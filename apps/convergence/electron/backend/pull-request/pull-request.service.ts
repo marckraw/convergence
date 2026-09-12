@@ -76,7 +76,7 @@ export class PullRequestService {
   async pollOpenSessions(): Promise<void> {
     const rows = this.db
       .prepare(
-        "SELECT id FROM sessions WHERE json_valid(pull_request_json) AND json_extract(pull_request_json, '$.state') = 'open'",
+        "SELECT id FROM sessions WHERE json_valid(pull_request_json) AND json_extract(pull_request_json, '$.state') IN ('open', 'draft')",
       )
       .all() as { id: string }[]
     for (const row of rows) await this.refreshForSession(row.id)
@@ -118,6 +118,13 @@ export class PullRequestService {
         : row.working_directory,
       repository:
         remote && reported?.mode === 'repository' ? reported.repository : null,
+    }
+  }
+
+  evictDeletedSessions(): void {
+    const exists = this.db.prepare('SELECT 1 FROM sessions WHERE id=?')
+    for (const id of this.readings.keys()) {
+      if (!exists.get(id)) this.readings.delete(id)
     }
   }
 
@@ -213,6 +220,8 @@ export class PullRequestService {
     const lookup = branchName
       ? await this.lookupGithubPullRequest(cwd, branchName, repository)
       : null
+    const answered =
+      lookup?.lookupStatus === 'found' || lookup?.lookupStatus === 'not-found'
     const pullRequest =
       lookup?.lookupStatus === 'found' &&
       lookup.number &&
@@ -229,7 +238,9 @@ export class PullRequestService {
             checkedAt: new Date().toISOString(),
             source: 'gh' as const,
           }
-        : null
+        : lookup && !answered
+          ? parseSessionPullRequest(row.pull_request_json)
+          : null
     const reading = {
       pullRequest,
       branchName,
@@ -242,9 +253,11 @@ export class PullRequestService {
             : (lookup?.error ?? null),
     }
     // This is the sole writer of the session PR fact. No daemon hint is stored.
-    this.db
-      .prepare('UPDATE sessions SET pull_request_json=? WHERE id=?')
-      .run(pullRequest ? JSON.stringify(pullRequest) : null, sessionId)
+    if (answered) {
+      this.db
+        .prepare('UPDATE sessions SET pull_request_json=? WHERE id=?')
+        .run(pullRequest ? JSON.stringify(pullRequest) : null, sessionId)
+    }
     if (row.workspace_id && lookup)
       this.upsertWorkspacePullRequest({
         projectId: row.project_id,
@@ -252,6 +265,8 @@ export class PullRequestService {
         result: lookup,
       })
     this.readings.set(sessionId, reading)
+    // A lookup may finish after a session (or its project) was deleted.
+    this.evictDeletedSessions()
     this.onChanged(sessionId)
     return reading
   }

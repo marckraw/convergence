@@ -79,3 +79,17 @@ it('logs a throwing hint listener with the session id and continues (mutation: s
   )
   expect(next).toHaveBeenCalledExactlyOnceWith('s')
 })
+
+it('a null PR hint does not request a lookup (mutation: fire on null)', () => {
+  const service = {
+    refreshForSession: vi.fn().mockResolvedValue(null),
+    start: vi.fn(),
+    stop: vi.fn(),
+  } as unknown as PullRequestService
+  const disconnect = connectPullRequestRefresh(service, sessions, vi.fn())
+  deliver(
+    toLocalSessionDelta({ kind: 'session.patch', patch: { prUrl: null } })!,
+  )
+  expect(service.refreshForSession).not.toHaveBeenCalled()
+  disconnect()
+})

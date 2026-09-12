@@ -13,13 +13,18 @@ git command in a remote filesystem path. A session without a recorded branch
 says `no branch recorded for this session`; the current checkout's HEAD is not
 a substitute.
 
-A daemon `prUrl` patch is an ephemeral hint: it triggers the same lookup, and
+A daemon `prUrl` string is an ephemeral hint (null does not trigger a lookup): it triggers the same lookup, and
 the URL itself is never persisted. Accepted patches emit the session id after
 the ownership/replay guards. Observer failures are logged with that id while
 other listeners and the session pipeline continue.
 
 Session details, the PR drawer's Refresh action and session settle request a
-refresh. One unref'd ten-minute timer refreshes only facts whose state is `open`.
+refresh. One unref'd ten-minute timer refreshes only facts whose state is `open` or `draft`.
 A merged or closed PR leaves the polling set. App shutdown removes the timer
 and settle subscription. The drawer, header and Needs Review chip read the
 same session fact. A missing GitHub CLI is shown as `PR unknown — gh not found`.
+
+Only a successful GitHub answer changes the fact: a found PR replaces it, and
+no PR clears it. Lookup failures retain the last verified fact and its check
+time, with the failure message shown beside it in the drawer. Deleted sessions
+are evicted from the reading cache, including lookups completing after deletion.

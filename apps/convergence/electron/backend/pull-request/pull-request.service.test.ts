@@ -226,7 +226,7 @@ describe('session PR fact (MAR-2978)', () => {
     resetDatabase()
   })
 
-  function fixture(remote = false) {
+  function fixture(remote = false, draft = false) {
     const db = getDatabase()
     db.prepare(
       "INSERT INTO projects (id, name, repository_path, settings) VALUES ('p', 'Project', '/mac/repo', '{}')",
@@ -267,7 +267,7 @@ describe('session PR fact (MAR-2978)', () => {
             number: 42,
             url: 'https://github.com/acme/app/pull/42',
             state,
-            isDraft: false,
+            isDraft: draft,
             headRefName: head,
           },
         ]),
@@ -279,6 +279,9 @@ describe('session PR fact (MAR-2978)', () => {
       db,
       service,
       git,
+      ready: () => {
+        draft = false
+      },
       merge: () => {
         state = 'MERGED'
       },
@@ -352,6 +355,15 @@ describe('session PR fact (MAR-2978)', () => {
     expect(refresh).toHaveBeenCalledTimes(1)
   })
 
+  it('polls a draft until it becomes ready (mutation: poll only open)', async () => {
+    const { service, ready } = fixture(false, true)
+    const draft = await service.refreshForSession('s')
+    expect(draft.pullRequest?.state).toBe('draft')
+    ready()
+    await service.pollOpenSessions()
+    expect(service.getForSession('s').pullRequest?.state).toBe('open')
+  })
+
   it('owns one ten-minute timer, unrefed and stopped (mutation: omit poll timer)', async () => {
     vi.useFakeTimers()
     const { service, merge } = fixture()
@@ -371,6 +383,108 @@ describe('session PR fact (MAR-2978)', () => {
     service.stop()
     expect(vi.getTimerCount()).toBe(0)
     intervals.mockRestore()
+  })
+
+  it.each(['missing', 'auth', 'timeout', 'unsupported'])(
+    'keeps the verified fact on %s and retries on the next poll (mutation: write on error)',
+    async (failure) => {
+      const { db, service, git } = fixture()
+      const verified = (await service.refreshForSession('s')).pullRequest
+      const before = db
+        .prepare("SELECT pull_request_json FROM sessions WHERE id='s'")
+        .get()
+      db.exec(
+        "CREATE TRIGGER reject_pr_write BEFORE UPDATE OF pull_request_json ON sessions BEGIN SELECT RAISE(ABORT, 'a lookup error must not write the fact'); END",
+      )
+      const expectedMessage =
+        failure === 'missing'
+          ? 'PR unknown — gh not found'
+          : failure === 'auth'
+            ? 'GitHub CLI is not authenticated. Run gh auth login.'
+            : failure === 'timeout'
+              ? 'GitHub CLI timed out while looking up pull request.'
+              : 'Remote is not a github.com repository.'
+      if (failure === 'unsupported')
+        vi.mocked(git.getRemoteUrl).mockResolvedValue(
+          'https://example.com/repo.git',
+        )
+      execFileMock.mockImplementation((_file, _args, _options, callback) => {
+        callback?.(
+          Object.assign(
+            new Error('lookup failed'),
+            failure === 'missing'
+              ? { code: 'ENOENT' }
+              : failure === 'timeout'
+                ? { killed: true }
+                : {},
+          ),
+          '',
+          failure === 'auth' ? 'gh auth login' : '',
+        )
+        return null as never
+      })
+      const reading = await service.refreshForSession('s')
+      expect(reading).toMatchObject({
+        pullRequest: verified,
+        message: expectedMessage,
+      })
+      expect(
+        db.prepare("SELECT pull_request_json FROM sessions WHERE id='s'").get(),
+      ).toEqual(before)
+      expect(service.getForSession('s')).toEqual(reading)
+      const refresh = vi.spyOn(service, 'refreshForSession')
+      await service.pollOpenSessions()
+      expect(refresh).toHaveBeenCalledExactlyOnceWith('s')
+    },
+  )
+
+  it('clears a verified fact when gh answers no PR (mutation: never write not-found)', async () => {
+    const { db, service } = fixture()
+    await service.refreshForSession('s')
+    execFileMock.mockImplementation((_file, _args, _options, callback) => {
+      callback?.(null, '[]', '')
+      return null as never
+    })
+    expect(await service.refreshForSession('s')).toMatchObject({
+      pullRequest: null,
+      message: 'No PR for this branch',
+    })
+    expect(
+      db.prepare("SELECT pull_request_json FROM sessions WHERE id='s'").get(),
+    ).toEqual({ pull_request_json: null })
+  })
+
+  it('evicts a deleted session reading (mutation: retain deleted readings)', async () => {
+    const { db, service } = fixture()
+    await service.refreshForSession('s')
+    db.prepare("DELETE FROM sessions WHERE id='s'").run()
+    service.evictDeletedSessions()
+    db.prepare(
+      "INSERT INTO sessions (id,project_id,workspace_id,provider_id,name,working_directory) VALUES ('s','p','w','codex','Replacement','/mac/worktree')",
+    ).run()
+    expect(service.getForSession('s')).toMatchObject({
+      pullRequest: null,
+      message: null,
+    })
+  })
+
+  it('a lookup finishing after deletion cannot restore a cached reading (mutation: cache late replies)', async () => {
+    const { db, service } = fixture()
+    let answer!: () => void
+    execFileMock.mockImplementation((_file, _args, _options, callback) => {
+      answer = () => callback?.(null, '[]', '')
+      return null as never
+    })
+    const pending = service.refreshForSession('s')
+    await vi.waitFor(() => expect(answer).toBeTypeOf('function'))
+    db.prepare("DELETE FROM sessions WHERE id='s'").run()
+    service.evictDeletedSessions()
+    answer()
+    await pending
+    db.prepare(
+      "INSERT INTO sessions (id,project_id,workspace_id,provider_id,name,working_directory) VALUES ('s','p','w','codex','Replacement','/mac/worktree')",
+    ).run()
+    expect(service.getForSession('s').message).toBeNull()
   })
 
   it('says gh not found (mutation: collapse lookup errors)', async () => {

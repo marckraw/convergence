@@ -2475,7 +2475,7 @@ export class SessionService {
           delta.executionHostSeq,
         )
         this.notifySessionChange(sessionId)
-        if (delta.patch.prUrl !== undefined) {
+        if (typeof delta.patch.prUrl === 'string') {
           for (const listener of [...this.pullRequestHintListeners]) {
             try {
               listener(sessionId)

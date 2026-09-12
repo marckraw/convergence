@@ -777,6 +777,42 @@ describe('SessionView', () => {
     expect(screen.getByText('agent/fresh')).toBeInTheDocument()
   })
 
+  it('shows a lookup error beside the last verified fact (mutation: suppress errors when a fact exists)', async () => {
+    const fact = {
+      number: 42,
+      url: 'https://github.com/acme/app/pull/42',
+      state: 'open' as const,
+      headBranch: 'agent/horse',
+      checkedAt: '2026-09-12',
+      source: 'gh' as const,
+    }
+    useSessionStore.setState((state) => ({
+      sessions: state.sessions.map((session) => ({
+        ...session,
+        pullRequest: fact,
+      })),
+    }))
+    const reading = {
+      pullRequest: fact,
+      branchName: fact.headBranch,
+      message: 'PR unknown — gh not found',
+    }
+    vi.mocked(window.electronAPI.pullRequest.getForSession).mockResolvedValue(
+      reading,
+    )
+    vi.mocked(
+      window.electronAPI.pullRequest.refreshForSession,
+    ).mockResolvedValue(reading)
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Pull request status' }))
+    await screen.findByText('PR unknown — gh not found')
+    expect(screen.getByText('#42 · open')).toBeInTheDocument()
+  })
+
   it('opening Session actions does not refresh the PR (mutation: refresh on every menu)', async () => {
     render(
       <TooltipProvider>

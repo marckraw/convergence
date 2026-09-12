@@ -161,15 +161,17 @@ export const SessionView: FC = () => {
     refresh: refreshPullRequest,
   } = useSessionPullRequest(session?.id)
   const sessionPullRequest = session?.pullRequest ?? null
-  const pullRequestMessage = sessionPullRequest
-    ? null
-    : (prReading?.message ?? null)
+  const pullRequestMessage =
+    sessionPullRequest &&
+    (prReading?.pullRequest?.checkedAt !== sessionPullRequest.checkedAt ||
+      prReading?.pullRequest?.url !== sessionPullRequest.url)
+      ? null
+      : (prReading?.message ?? null)
   const pullRequestLabel = pullRequestLoading
     ? 'PR checking…'
-    : (pullRequestMessage ??
-      (sessionPullRequest
-        ? `#${sessionPullRequest.number} · ${sessionPullRequest.state}`
-        : 'PR unknown'))
+    : sessionPullRequest
+      ? `#${sessionPullRequest.number} · ${sessionPullRequest.state}`
+      : (pullRequestMessage ?? 'PR unknown')
   /**
    * The remote rows, or null on a local session (MAR-2718).
    *
@@ -187,7 +189,6 @@ export const SessionView: FC = () => {
               ? {
                   ok: true,
                   workspace: remoteWorkspace.info.workspace,
-                  pullRequest: remoteWorkspace.info.pullRequest,
                 }
               : { ok: false, message: remoteWorkspace.message }
             : null,

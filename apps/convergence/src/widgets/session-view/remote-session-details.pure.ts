@@ -100,7 +100,7 @@ export interface RemoteSessionDetailsInput {
     | {
         ok: true
         workspace: ReportedWorkspace | null
-        pullRequest: RemoteSessionPullRequest
+        pullRequest?: RemoteSessionPullRequest
       }
     | { ok: false; message: string }
     | null
@@ -148,6 +148,7 @@ function readRemotePullRequest(
 ): RemotePullRequestReading {
   if (!fetched) return { state: 'asking' }
   if (!fetched.ok) return { state: 'unavailable', message: fetched.message }
+  if (!fetched.pullRequest) return { state: 'asking' }
   switch (fetched.pullRequest.kind) {
     case 'none':
       return { state: 'none' }
