@@ -59,5 +59,5 @@ export function groupSessionCardsByCrew(
 }
 
 export function formatCrewMemberCount(count: number): string {
-  return `${count} session${count === 1 ? '' : 's'}`
+  return `${count} conversation${count === 1 ? '' : 's'}`
 }

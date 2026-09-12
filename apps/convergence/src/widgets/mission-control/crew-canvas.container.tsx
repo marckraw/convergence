@@ -55,6 +55,7 @@ import {
   cancelConnectMode,
   connectModeHint,
   filterRuns,
+  formatCrewMemberCount,
   formatRunSummary,
   formatRunTime,
   historyOutcomeWord,
@@ -177,6 +178,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const createRelay = useSessionRelayStore((state) => state.createRelay)
   const updateRelay = useSessionRelayStore((state) => state.updateRelay)
   const deleteRelay = useSessionRelayStore((state) => state.deleteRelay)
+  const crewError = useSessionCrewStore((state) => state.error)
   const relayError = useSessionRelayStore((state) => state.error)
   const clearRelayError = useSessionRelayStore((state) => state.clearError)
   const loadCrews = useSessionCrewStore((state) => state.load)
@@ -968,7 +970,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const armedCount = relays.filter((relay) => relay.armed).length
   const summary =
     relays.length === 0
-      ? `${crew?.sessionIds.length ?? 0} conversation${(crew?.sessionIds.length ?? 0) === 1 ? '' : 's'} · 0 connections`
+      ? `${formatCrewMemberCount(crew?.sessionIds.length ?? 0)} · 0 connections`
       : `${relays.length} connection${relays.length === 1 ? '' : 's'} · ${armedCount === 0 ? 'all off' : `${armedCount} on`}`
 
   const toolbar = (
@@ -1314,6 +1316,8 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               onAccentColorChange={(accentColor) => {
                 void updateCrew(crew.id, { accentColor })
               }}
+              updateError={crewError}
+              savedName={crew.name}
               crewName={nameDraft}
               members={crew.members}
               resolveName={resolveName}

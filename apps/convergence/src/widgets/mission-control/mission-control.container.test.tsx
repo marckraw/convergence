@@ -1257,7 +1257,7 @@ describe('MissionControl', () => {
     })
 
     it.each(['name', 'emoji', 'color'] as const)(
-      'captures a refused %s update in the crew store (mutation: bypass updateCrew)',
+      'shows a refused %s update and clears it after success (mutation: drop crew error subscription)',
       async (field) => {
         const api = await openCrewSettings()
         vi.mocked(api.update).mockRejectedValueOnce(
@@ -1271,10 +1271,19 @@ describe('MissionControl', () => {
           fireEvent.click(
             screen.getByLabelText(field === 'emoji' ? 'Emoji 🐎' : 'Green'),
           )
+        expect(await screen.findByRole('alert')).toHaveTextContent(
+          'Crew update refused',
+        )
+        if (field === 'name')
+          fireEvent.change(screen.getByLabelText('Crew name'), {
+            target: { value: 'Recovered' },
+          })
+        else
+          fireEvent.click(
+            screen.getByLabelText(field === 'emoji' ? 'Emoji 🐎' : 'Green'),
+          )
         await waitFor(() =>
-          expect(useSessionCrewStore.getState().error).toBe(
-            'Crew update refused',
-          ),
+          expect(screen.queryByRole('alert')).not.toBeInTheDocument(),
         )
       },
     )
@@ -1330,6 +1339,19 @@ describe('MissionControl', () => {
       await waitFor(() =>
         expect(api.update).toHaveBeenCalledWith('crew-1', { emoji: null }),
       )
+    })
+
+    it('quotes the saved name when deleting with a blank draft (mutation: feed draft to Danger)', async () => {
+      await openCrewSettings()
+      fireEvent.change(screen.getByLabelText('Crew name'), {
+        target: { value: ' ' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
+      expect(
+        within(screen.getByRole('region', { name: 'Danger' })).getByText(
+          /Delete “Night shift” with 2 conversations/,
+        ),
+      ).toBeInTheDocument()
     })
 
     it('asks before deleting, and says the sessions survive (mutation: delete without confirm)', async () => {

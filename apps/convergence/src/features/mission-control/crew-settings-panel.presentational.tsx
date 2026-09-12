@@ -3,6 +3,7 @@ import { X, Trash2 } from 'lucide-react'
 import type { SessionCrewMember } from '@/entities/session-crew'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
+import { formatCrewMemberCount } from './session-crew-groups.pure'
 import { CrewDecorationPicker } from './crew-decoration-picker.presentational'
 
 interface CrewSettingsPanelProps {
@@ -19,6 +20,8 @@ interface CrewSettingsPanelProps {
   onRequestDelete: () => void
   onCancelDelete: () => void
   onConfirmDelete: () => void
+  updateError: string | null
+  savedName: string
   crewName: string
   members: readonly SessionCrewMember[]
   resolveName: (sessionId: string) => string | null
@@ -86,6 +89,8 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
   onRequestDelete,
   onCancelDelete,
   onConfirmDelete,
+  updateError,
+  savedName,
   crewName,
   members,
   resolveName,
@@ -139,6 +144,11 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
         onChange={(event) => onCrewNameChange(event.target.value)}
         className="h-8 text-xs"
       />
+      {updateError ? (
+        <p role="alert" className="text-xs text-destructive">
+          {updateError}
+        </p>
+      ) : null}
     </div>
 
     <section aria-label="Decoration" className="flex flex-col gap-1.5">
@@ -318,9 +328,8 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
       {confirmingDelete ? (
         <div className="flex flex-col gap-2">
           <p className="text-[11px] text-muted-foreground">
-            Delete “{crewName}” with {memberCount} conversation
-            {memberCount === 1 ? '' : 's'}? Only the crew disappears; the
-            conversations stay exactly where they are.
+            Delete “{savedName}” with {formatCrewMemberCount(memberCount)}? Only
+            the crew disappears; the conversations stay exactly where they are.
           </p>
           <div className="flex items-center gap-1.5">
             <Button
