@@ -1308,8 +1308,12 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               onRequestDelete={() => setConfirmingDelete(true)}
               onCancelDelete={() => setConfirmingDelete(false)}
               onConfirmDelete={async () => {
-                await deleteCrew(crew.id)
-                if (useSessionCrewStore.getState().error === null) closePanel()
+                setBusy(true)
+                try {
+                  if (await deleteCrew(crew.id)) closePanel()
+                } finally {
+                  setBusy(false)
+                }
               }}
               emoji={crew.emoji}
               accentColor={crew.accentColor}

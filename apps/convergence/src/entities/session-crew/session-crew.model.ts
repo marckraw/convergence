@@ -20,7 +20,7 @@ interface SessionCrewActions {
     id: string,
     patch: UpdateSessionCrewInput,
   ) => Promise<SessionCrew | null>
-  deleteCrew: (id: string) => Promise<void>
+  deleteCrew: (id: string) => Promise<boolean>
   addMember: (crewId: string, sessionId: string) => Promise<SessionCrew | null>
   removeMember: (
     crewId: string,
@@ -116,8 +116,10 @@ export const useSessionCrewStore = create<SessionCrewStore>((set, get) => ({
         crews: get().crews.filter((crew) => crew.id !== id),
         error: null,
       })
+      return true
     } catch (err) {
       set({ error: errorMessage(err, 'Failed to delete crew') })
+      return false
     }
   },
 

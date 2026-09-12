@@ -1438,6 +1438,63 @@ describe('MissionControl', () => {
       expect(api.delete).toHaveBeenCalledExactlyOnceWith('crew-1')
     })
 
+    it('keeps a refused delete open when an update clears the error before its continuation (mutation: decide from getState error)', async () => {
+      const api = await openCrewSettings()
+      const crew = useSessionCrewStore.getState().crews[0]!
+      let finishUpdate!: () => void
+      vi.mocked(api.update).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishUpdate = () => resolve({ ...crew, name: 'Owls' })
+          }),
+      )
+      fireEvent.change(screen.getByLabelText('Crew name'), {
+        target: { value: 'Owls' },
+      })
+      vi.mocked(api.delete).mockRejectedValueOnce(new Error('Delete refused'))
+      // Resolve the independent rename inside the refusal notification. Its
+      // continuation clears the global error before the delete caller resumes.
+      const unsubscribe = useSessionCrewStore.subscribe((state) => {
+        if (state.error === 'Delete refused') finishUpdate()
+      })
+      try {
+        fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
+        await waitFor(() =>
+          expect(useSessionCrewStore.getState().crews[0]?.name).toBe('Owls'),
+        )
+        expect(
+          screen.getByRole('region', { name: 'Crew settings' }),
+        ).toBeInTheDocument()
+      } finally {
+        unsubscribe()
+      }
+    })
+
+    it('sends one delete while confirmation is busy and unlocks on refusal (mutation: drop confirm disabled)', async () => {
+      const api = await openCrewSettings()
+      let refuse!: (error: Error) => void
+      vi.mocked(api.delete).mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            refuse = reject
+          }),
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
+      const confirm = screen.getByRole('button', { name: 'Delete crew' })
+      const cancel = screen.getByRole('button', { name: 'Cancel' })
+      fireEvent.click(confirm)
+      fireEvent.click(confirm)
+      expect(api.delete).toHaveBeenCalledExactlyOnceWith('crew-1')
+      expect(confirm).toBeDisabled()
+      expect(cancel).toBeDisabled()
+      await act(async () => {
+        refuse(new Error('Delete refused'))
+      })
+      expect(confirm).toBeEnabled()
+      expect(cancel).toBeEnabled()
+    })
+
     it('deletes once confirmed (mutation: omit delete)', async () => {
       const api = await openCrewSettings()
 

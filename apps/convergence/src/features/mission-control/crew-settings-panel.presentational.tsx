@@ -338,6 +338,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               variant="destructive"
               size="sm"
               className="h-7 flex-1 text-xs"
+              disabled={busy}
               onClick={onConfirmDelete}
             >
               Delete crew
@@ -347,6 +348,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               variant="ghost"
               size="sm"
               className="h-7 text-xs"
+              disabled={busy}
               onClick={onCancelDelete}
             >
               Cancel
