@@ -1,6 +1,6 @@
 # Crew configuration v1
 
-Mission Control’s crew menu exports `.convergence/crews/<crew-name>.yaml`
+Mission Control’s Canvas → Crew settings → Recipe exports `.convergence/crews/<crew-name>.yaml`
 inside the project with the most members. A tie opens a project chooser.
 Existing files require an explicit replacement choice. “Include positions”
 is off by default; positions describe only cards the user has moved.
@@ -40,8 +40,9 @@ explicit choices rather than inherited defaults.
 
 ## Import and reconciliation
 
-**Import crew…** sits beside **New crew** in Mission Control's session crew
-picker. It reads a YAML file from any path. The pure `planCrewImport(config,
+**Import crew…** sits beside **Add conversation** on the Canvas toolbar,
+including before a crew exists. In Flat mode it also remains beside **New crew**
+in the session crew picker. Applying a recipe selects its crew on the Canvas. It reads a YAML file from any path. The pure `planCrewImport(config,
 world)` compares it with an explicit local snapshot: conversation name, root
 origin (or root name), optional lane, and execution host determine candidates.
 Ambiguity always asks; missing projects can use **Choose folder…**, while

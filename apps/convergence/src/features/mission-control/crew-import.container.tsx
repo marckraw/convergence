@@ -13,8 +13,10 @@ import { CrewImportView } from './crew-import.presentational'
 
 export function CrewImport({
   trigger,
+  onApplied,
 }: {
   trigger?: (start: () => void, busy: boolean) => ReactNode
+  onApplied?: (report: CrewImportReport) => void
 }) {
   const [plan, setPlan] = useState<CrewImportPlan | null>(null)
   const [decisions, setDecisions] = useState<CrewImportDecisions>({
@@ -143,6 +145,7 @@ export function CrewImport({
                   ? [useSessionStore.getState().loadGlobalChatSessions()]
                   : []),
               ])
+              onApplied?.(result)
             })
           }
         />

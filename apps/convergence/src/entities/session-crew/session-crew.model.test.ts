@@ -126,6 +126,20 @@ describe('useSessionCrewStore', () => {
     expect(useSessionCrewStore.getState().crews).toEqual([updated])
   })
 
+  it.each([true, false])(
+    'returns its own delete outcome %s (mutation: invert delete result)',
+    async (succeeds) => {
+      installMockApi({
+        remove: succeeds
+          ? vi.fn().mockResolvedValue(undefined)
+          : vi.fn().mockRejectedValue(new Error('Delete refused')),
+      })
+      expect(await useSessionCrewStore.getState().deleteCrew('a')).toBe(
+        succeeds,
+      )
+    },
+  )
+
   it('drops a deleted crew from the roster', async () => {
     installMockApi({
       list: vi

@@ -125,9 +125,14 @@ describe('sessionCrewGroupKey', () => {
 })
 
 describe('formatCrewMemberCount', () => {
-  it('pluralises honestly', () => {
-    expect(formatCrewMemberCount(0)).toBe('0 sessions')
-    expect(formatCrewMemberCount(1)).toBe('1 session')
-    expect(formatCrewMemberCount(4)).toBe('4 sessions')
-  })
+  it.each([
+    [0, '0 conversations'],
+    [1, '1 conversation'],
+    [4, '4 conversations'],
+  ] as const)(
+    'formats %i as %s (mutation: restore sessions)',
+    (count, expected) => {
+      expect(formatCrewMemberCount(count)).toBe(expected)
+    },
+  )
 })

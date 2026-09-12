@@ -156,7 +156,9 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
             : 'app-scrollbar overflow-y-auto px-5 py-4',
         )}
       >
-        {totalCount === 0 ? (
+        {mode === 'canvas' && totalCount === 0 ? (
+          children
+        ) : totalCount === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
             <Satellite className="size-6 text-muted-foreground" />
             <p className="text-sm font-medium">No sessions yet</p>

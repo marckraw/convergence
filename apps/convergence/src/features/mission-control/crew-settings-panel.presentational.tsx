@@ -1,10 +1,27 @@
 import type { FC } from 'react'
-import { X } from 'lucide-react'
+import { X, Trash2 } from 'lucide-react'
 import type { SessionCrewMember } from '@/entities/session-crew'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
+import { formatCrewMemberCount } from './session-crew-groups.pure'
+import { CrewDecorationPicker } from './crew-decoration-picker.presentational'
 
 interface CrewSettingsPanelProps {
+  emoji: string | null
+  accentColor: string | null
+  onEmojiChange: (emoji: string | null) => void
+  onAccentColorChange: (accentColor: string | null) => void
+  memberCount: number
+  includePositions: boolean
+  exporting: boolean
+  confirmingDelete: boolean
+  onIncludePositionsChange: (include: boolean) => void
+  onExport: () => void
+  onRequestDelete: () => void
+  onCancelDelete: () => void
+  onConfirmDelete: () => void
+  updateError: string | null
+  savedName: string
   crewName: string
   members: readonly SessionCrewMember[]
   resolveName: (sessionId: string) => string | null
@@ -59,6 +76,21 @@ function readLimit(raw: string): number | null {
  * are on the panel because both were mis-readable before.
  */
 export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
+  emoji,
+  accentColor,
+  onEmojiChange,
+  onAccentColorChange,
+  memberCount,
+  includePositions,
+  exporting,
+  confirmingDelete,
+  onIncludePositionsChange,
+  onExport,
+  onRequestDelete,
+  onCancelDelete,
+  onConfirmDelete,
+  updateError,
+  savedName,
   crewName,
   members,
   resolveName,
@@ -98,6 +130,12 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
       </Button>
     </div>
 
+    {updateError ? (
+      <p role="alert" className="text-xs text-destructive">
+        {updateError}
+      </p>
+    ) : null}
+
     <div className="flex flex-col gap-1">
       <label
         htmlFor="crew-name"
@@ -113,6 +151,18 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
         className="h-8 text-xs"
       />
     </div>
+
+    <section aria-label="Decoration" className="flex flex-col gap-1.5">
+      <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
+        Decoration
+      </h4>
+      <CrewDecorationPicker
+        emoji={emoji}
+        accentColor={accentColor}
+        onEmojiChange={onEmojiChange}
+        onAccentColorChange={onAccentColorChange}
+      />
+    </section>
 
     <div className="flex flex-col gap-1.5">
       <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -243,6 +293,81 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
         limit.
       </p>
     </div>
+
+    <section
+      aria-label="Recipe"
+      className="flex flex-col gap-2 border-t border-white/10 pt-2"
+    >
+      <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
+        Recipe
+      </h4>
+      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Input
+          type="checkbox"
+          className="size-3.5 rounded-sm p-0"
+          checked={includePositions}
+          disabled={exporting}
+          onChange={(event) => onIncludePositionsChange(event.target.checked)}
+        />
+        Include positions
+      </label>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        className="h-7 text-xs"
+        disabled={exporting}
+        onClick={onExport}
+      >
+        {exporting ? 'Exporting…' : 'Export crew…'}
+      </Button>
+    </section>
+    <section aria-label="Danger" className="border-t border-white/10 pt-2">
+      <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
+        Danger
+      </h4>
+      {confirmingDelete ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-[11px] text-muted-foreground">
+            Delete “{savedName}” with {formatCrewMemberCount(memberCount)}? Only
+            the crew disappears; the conversations stay exactly where they are.
+          </p>
+          <div className="flex items-center gap-1.5">
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              className="h-7 flex-1 text-xs"
+              disabled={busy}
+              onClick={onConfirmDelete}
+            >
+              Delete crew
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs"
+              disabled={busy}
+              onClick={onCancelDelete}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 w-full justify-start gap-1.5 px-2 text-xs font-normal text-destructive hover:text-destructive"
+          onClick={onRequestDelete}
+        >
+          <Trash2 className="size-3.5" />
+          Delete crew
+        </Button>
+      )}
+    </section>
 
     <div className="flex flex-col gap-1 rounded-md border border-white/10 bg-white/[0.02] px-3 py-2">
       <p className="text-[11px] font-medium">A run can contain several laps</p>
