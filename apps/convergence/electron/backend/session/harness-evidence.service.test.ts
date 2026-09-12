@@ -934,3 +934,31 @@ it('compares as instants only what is unambiguously one — a stamp with no offs
     else process.env.TZ = zone
   }
 })
+
+/**
+ * RUN75 lap 3 / MAR-2992. The gate counts digits, so a calendar-invalid stamp
+ * passes it and `Date.parse` answers NaN — which is why the `Number.isNaN` arm
+ * behind the gate is reachable rather than defensive. Unguarded, the
+ * comparator returns NaN, `NaN <= 0` is false for every turn, and the event
+ * silently belongs to none of them.
+ *
+ * Mutation: drop the `Number.isNaN` guard and this goes red — the hook lands
+ * on no turn at all, not even turn 1.
+ */
+it('compares as instants only what is unambiguously one — a calendar-invalid stamp', () => {
+  const { db, service } = bed()
+  db.prepare(
+    "UPDATE session_turns SET started_at='2026-09-09T09:30:00.000Z' WHERE id='turn'",
+  ).run()
+  db.prepare(
+    "INSERT INTO session_turns(id,session_id,sequence,started_at,status) VALUES ('turn2','session',2,'2026-12-01T00:00:00.000Z','running')",
+  ).run()
+  // `'2026-13-01T00:00:00Z'` matches the gate and parses as nothing; on the
+  // text path it sorts after turn 2's start, so the hook is turn 2's.
+  insertTurnlessHook(db, '2026-13-01T00:00:00Z')
+
+  expect(hookOwners(service)).toEqual([
+    ['turn', []],
+    ['turn2', ['boundary']],
+  ])
+})

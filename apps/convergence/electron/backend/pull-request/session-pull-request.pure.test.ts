@@ -35,7 +35,8 @@ it.each([
  * The parser names the part it stopped at, so a caller that has to explain the
  * refusal to a person reads the answer instead of re-deriving it (MAR-2991).
  *
- * Mutation: return a constant part and every row but the first goes red.
+ * Mutation: return a constant part and every row naming a different part
+ * goes red.
  */
 it.each([
   [null, 'json'],

@@ -329,9 +329,14 @@ export class HarnessEvidenceService {
  * so the answer would depend on the machine. Only a full ISO 8601 date-time
  * ending in `Z` or a numeric offset is compared as an instant here.
  *
- * One difference from the SQL window survives that gate, deliberately:
- * `julianday('10')` is a Julian day number, so a bare numeric string compares
- * as a time on the SQL side and as text on this one. No writer emits one.
+ * Two classes of difference from the SQL window survive that gate,
+ * deliberately. A bare numeric string: `julianday('10')` is a Julian day
+ * number, so `'10'` compares as a time on the SQL side and as text on this
+ * one. And every stamp `julianday()` still reads while the gate refuses it --
+ * an offset-less stamp (UTC there, refused here), a space-separated one
+ * (`'2026-09-09 11:00:00'`), one written without seconds, a date-only value --
+ * each of those is a time on the SQL side and text on this one too. No writer
+ * emits any of them.
  */
 const isoInstant =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
@@ -342,6 +347,11 @@ function compareInstants(a: string, b: string): number {
     const right = Date.parse(b)
     // Shaped like an instant is not the same as being one: the gate counts
     // digits, so `'2026-13-01T00:00:00Z'` passes it and parses as nothing.
+    // Not every calendar-invalid stamp does: `'2026-02-30T00:00:00Z'` parses,
+    // V8 rolling it to March 2, and `julianday()` rolls it the same way -- so
+    // the sides agree there. Only an unparseable one reaches this arm, and
+    // `julianday()` answers null for it, so the SQL window's own COALESCE
+    // falls to the text comparison exactly as the line below does.
     if (!Number.isNaN(left) && !Number.isNaN(right)) return left - right
   }
   return a < b ? -1 : a > b ? 1 : 0

@@ -17,7 +17,7 @@ export type SessionPullRequestPart =
   | 'checkedAt'
   | 'source'
 
-type SessionPullRequestReading =
+type SessionPullRequestRead =
   | { fact: SessionPullRequest; unreadable: null }
   | { fact: null; unreadable: SessionPullRequestPart }
 
@@ -56,7 +56,7 @@ const parts: {
 /** Reads a stored or freshly built fact, and names what stopped it if it does not. */
 export function readSessionPullRequest(
   raw: string | null | undefined,
-): SessionPullRequestReading {
+): SessionPullRequestRead {
   if (!raw) return { fact: null, unreadable: 'json' }
   let value: unknown
   try {
