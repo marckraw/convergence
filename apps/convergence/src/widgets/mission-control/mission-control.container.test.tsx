@@ -1288,6 +1288,47 @@ describe('MissionControl', () => {
       },
     )
 
+    it('opens crew B without crew A refusal, including one arriving after close (mutation: drop clearCrewError from effect)', async () => {
+      const api = await openCrewSettings()
+      act(() =>
+        useSessionCrewStore.setState((state) => ({
+          crews: [
+            ...state.crews,
+            makeCrew({ id: 'crew-2', name: 'Day shift', sessionIds: ['b'] }),
+          ],
+        })),
+      )
+      vi.mocked(api.update).mockRejectedValueOnce(
+        new Error('Crew update refused'),
+      )
+      fireEvent.change(screen.getByLabelText('Crew name'), {
+        target: { value: 'Owls' },
+      })
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Crew update refused',
+      )
+      let refuse!: (error: Error) => void
+      vi.mocked(api.update).mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            refuse = reject
+          }),
+      )
+      fireEvent.change(screen.getByLabelText('Crew name'), {
+        target: { value: 'Late owls' },
+      })
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Close crew settings' }),
+      )
+      fireEvent.click(document.querySelector('[data-canvas-crew-id="crew-2"]')!)
+      await act(async () => {
+        refuse(new Error('Crew update refused'))
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Crew settings' }))
+      expect(screen.getByLabelText('Crew name')).toHaveValue('Day shift')
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
     it('resets the name draft when reopening settings (mutation: omit draft reset)', async () => {
       await openCrewSettings('Night')
       fireEvent.change(screen.getByLabelText('Crew name'), {
@@ -1368,6 +1409,33 @@ describe('MissionControl', () => {
         ),
       ).toBeInTheDocument()
       expect(api.delete).not.toHaveBeenCalled()
+    })
+
+    it('keeps a refused delete open with a panel-level alert (mutation: close before the await)', async () => {
+      const api = await openCrewSettings()
+      let refuse!: (error: Error) => void
+      vi.mocked(api.delete).mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            refuse = reject
+          }),
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Delete crew' }))
+      expect(
+        screen.getByRole('region', { name: 'Crew settings' }),
+      ).toBeInTheDocument()
+      await act(async () => {
+        refuse(new Error('Failed to delete crew'))
+      })
+      const panel = screen.getByRole('region', { name: 'Crew settings' })
+      const alert = within(panel).getByRole('alert')
+      expect(alert).toHaveTextContent('Failed to delete crew')
+      expect(alert.parentElement).toBe(panel)
+      expect(alert.previousElementSibling).toContainElement(
+        within(panel).getByRole('heading', { name: 'Crew settings' }),
+      )
+      expect(api.delete).toHaveBeenCalledExactlyOnceWith('crew-1')
     })
 
     it('deletes once confirmed (mutation: omit delete)', async () => {

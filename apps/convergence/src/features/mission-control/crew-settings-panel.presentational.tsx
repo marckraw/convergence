@@ -130,6 +130,12 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
       </Button>
     </div>
 
+    {updateError ? (
+      <p role="alert" className="text-xs text-destructive">
+        {updateError}
+      </p>
+    ) : null}
+
     <div className="flex flex-col gap-1">
       <label
         htmlFor="crew-name"
@@ -144,11 +150,6 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
         onChange={(event) => onCrewNameChange(event.target.value)}
         className="h-8 text-xs"
       />
-      {updateError ? (
-        <p role="alert" className="text-xs text-destructive">
-          {updateError}
-        </p>
-      ) : null}
     </div>
 
     <section aria-label="Decoration" className="flex flex-col gap-1.5">

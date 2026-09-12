@@ -179,6 +179,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const updateRelay = useSessionRelayStore((state) => state.updateRelay)
   const deleteRelay = useSessionRelayStore((state) => state.deleteRelay)
   const crewError = useSessionCrewStore((state) => state.error)
+  const clearCrewError = useSessionCrewStore((state) => state.clearError)
   const relayError = useSessionRelayStore((state) => state.error)
   const clearRelayError = useSessionRelayStore((state) => state.clearError)
   const loadCrews = useSessionCrewStore((state) => state.load)
@@ -260,7 +261,8 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
     setSaveError(null)
     setRecipientNote(null)
     clearRelayError()
-  }, [clearRelayError])
+    clearCrewError()
+  }, [clearRelayError, clearCrewError])
 
   /**
    * Leaving an unfinished draft asks first (frame 10-02).
@@ -963,9 +965,10 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const resetNameDraft = useEffectEvent(() => setNameDraft(crew?.name ?? ''))
   useEffect(() => {
     resetNameDraft()
+    clearCrewError()
     setIncludePositions(false)
     setConfirmingDelete(false)
-  }, [crew?.id, panel.kind])
+  }, [crew?.id, panel.kind, clearCrewError])
 
   const armedCount = relays.filter((relay) => relay.armed).length
   const summary =
@@ -1304,9 +1307,9 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               }}
               onRequestDelete={() => setConfirmingDelete(true)}
               onCancelDelete={() => setConfirmingDelete(false)}
-              onConfirmDelete={() => {
-                void deleteCrew(crew.id)
-                closePanel()
+              onConfirmDelete={async () => {
+                await deleteCrew(crew.id)
+                if (useSessionCrewStore.getState().error === null) closePanel()
               }}
               emoji={crew.emoji}
               accentColor={crew.accentColor}
