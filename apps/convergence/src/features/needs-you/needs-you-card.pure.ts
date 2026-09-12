@@ -49,7 +49,8 @@ export function needsYouCardModel(
       ? `#${session.pullRequest.number} · ${session.pullRequest.state}`
       : null,
     kind,
-    canArchive: kind === 'errand' && session.pullRequest?.state === 'merged',
+    canArchive:
+      review || (kind === 'errand' && session.pullRequest?.state === 'merged'),
     summary: waiting || review ? formatSessionAttentionLabel(session) : null,
     dismissLabel: waiting ? 'Snooze' : review ? 'Acknowledge' : null,
     attentionGroup: waiting ? 'Waiting on you' : review ? 'Needs review' : null,

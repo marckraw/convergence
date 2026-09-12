@@ -21,7 +21,13 @@ it('origin is durable; repository outranks resident and unknown has no kind (mut
   ).toBe('errand')
   expect(model().kind).toBe('resident')
 })
-it('only merged errands offer Archive (mutation: archive an open errand)', () => {
+it('a review item offers Archive; a merged errand offers it even outside review (mutation: drop the review half)', () => {
+  for (const attention of ['finished', 'failed'] as const) {
+    expect(model(cardSession({ attention })).canArchive).toBe(true)
+    expect(
+      model(cardSession({ ...cardFixtures.open, attention })).canArchive,
+    ).toBe(true)
+  }
   expect(model(cardFixtures.merged).canArchive).toBe(true)
   expect(model(cardFixtures.open).canArchive).toBe(false)
   expect(

@@ -533,6 +533,69 @@ describe('App', () => {
     expect(screen.getByText('Coordinate launch work.')).toBeInTheDocument()
   })
 
+  it.each([
+    ['none', 'border-emerald-500', 0],
+    ['failed', 'border-destructive', 1],
+    ['needs-input', 'border-warning', 1],
+  ] as const)(
+    'attention badge excludes dismissed and quiet cards with %s live attention (mutation: count dismissed)',
+    async (attention, color, count) => {
+      const pinned = makeSessionSummary({
+        id: 'snoozed',
+        name: 'Snoozed pinned',
+        pinnedAt: '2026-09-12',
+        attention: 'needs-input',
+      })
+      const errand = makeSessionSummary({
+        id: 'acknowledged',
+        name: 'Acknowledged errand',
+        originKind: 'spawn',
+        attention: 'failed',
+        pullRequest: {
+          number: 42,
+          state: 'open',
+          url: 'https://github.com/acme/app/pull/42',
+          headBranch: 'horse',
+          checkedAt: '2026-09-12',
+          source: 'gh',
+        },
+      })
+      const quiet = makeSessionSummary({
+        id: 'quiet',
+        name: 'Quiet pinned',
+        pinnedAt: '2026-09-12',
+        attention: 'none',
+      })
+      const live = makeSessionSummary({ id: 'live', name: 'Live', attention })
+      mockElectronAPI.session.getAllSummaries.mockResolvedValue([
+        pinned,
+        errand,
+        quiet,
+        live,
+      ])
+      mockElectronAPI.session.getNeedsYouDismissals.mockResolvedValue({
+        snoozed: { updatedAt: pinned.updatedAt, disposition: 'snoozed' },
+        acknowledged: {
+          updatedAt: errand.updatedAt,
+          disposition: 'acknowledged',
+        },
+      })
+      render(<App />)
+      await waitFor(() =>
+        expect(
+          getSidebarQueries().getByText('Snoozed pinned'),
+        ).toBeInTheDocument(),
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
+      const indicator = screen.getByRole('button', { name: /^Needs You/ })
+      expect(indicator).toHaveAccessibleName(`Needs You (${count})`)
+      expect(indicator.querySelector('span')).toHaveClass(color)
+      if (count)
+        expect(within(indicator).getByText(String(count))).toBeInTheDocument()
+      else expect(indicator.querySelectorAll('span')).toHaveLength(1)
+    },
+  )
+
   it('keeps project cards on the chat surface (mutation: restore surface scope)', async () => {
     const projectSession = makeSessionSummary({
       id: 'project-session-1',

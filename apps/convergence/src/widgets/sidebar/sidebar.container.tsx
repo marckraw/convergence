@@ -316,7 +316,9 @@ export const Sidebar: FC<SidebarProps> = ({
     ),
   )
 
-  const feedCards = cardGroups.flatMap((group) => group.cards)
+  const attentionCards = cardGroups
+    .flatMap((group) => group.cards)
+    .filter((card) => !card.dismissed && card.attentionGroup)
 
   const handleSelectNeedsYouSession = async (sessionId: string) => {
     const target = globalSessions.find((session) => session.id === sessionId)
@@ -736,26 +738,26 @@ export const Sidebar: FC<SidebarProps> = ({
             variant="ghost"
             size="icon"
             className="relative h-9 w-9"
-            title={`Needs You (${feedCards.length})`}
-            aria-label={`Needs You (${feedCards.length})`}
+            title={`Needs You (${attentionCards.length})`}
+            aria-label={`Needs You (${attentionCards.length})`}
           >
             <span
               className={cn(
                 'h-3 w-3 rounded-full border-2',
-                feedCards.some(
+                attentionCards.some(
                   (card) => card.attentionGroup === 'Waiting on you',
                 )
                   ? 'border-warning'
-                  : feedCards.some(
+                  : attentionCards.some(
                         ({ session }) => session.attention === 'failed',
                       )
                     ? 'border-destructive'
                     : 'border-emerald-500',
               )}
             />
-            {cardGroups.length > 0 ? (
+            {attentionCards.length > 0 ? (
               <span className="absolute -top-1 -right-1 rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-medium leading-none text-destructive-foreground">
-                {feedCards.length}
+                {attentionCards.length}
               </span>
             ) : null}
           </Button>
