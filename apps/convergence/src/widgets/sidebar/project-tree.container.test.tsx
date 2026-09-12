@@ -47,6 +47,110 @@ const baseSession = {
 }
 
 describe('ProjectTree', () => {
+  it('expands only the selected conversation and preserves independent actions and rename', () => {
+    const onSelectSession = vi.fn()
+    const onRenameSession = vi.fn()
+    const sessions = [
+      {
+        ...baseSession,
+        id: 'one',
+        providerId: 'codex',
+        name: 'First conversation',
+        executionHost: 'server',
+        originKind: 'resident' as const,
+        pullRequest: {
+          number: 42,
+          state: 'open' as const,
+          url: 'https://github.com/example/repo/pull/42',
+          headBranch: 'work',
+          checkedAt: baseSession.updatedAt,
+          source: 'gh' as const,
+        },
+      },
+      {
+        ...baseSession,
+        id: 'two',
+        providerId: 'claude-code',
+        name: 'Second conversation',
+      },
+      { ...baseSession, id: 'shell', providerId: 'shell', name: 'Terminal' },
+    ]
+    const props = {
+      cardContext: {
+        projectName: 'Convergence',
+        endpoints: [{ id: 'server', label: 'little-monster' }],
+        now: Date.parse('2026-01-02T00:00:00Z'),
+      },
+      baseBranchName: 'master',
+      workspaces: [],
+      sessions,
+      onSelectSession,
+      onRenameSession,
+      onArchiveSession: vi.fn(),
+      onUnarchiveSession: vi.fn(),
+      onDeleteSession: vi.fn(),
+      onRegenerateSessionName: vi.fn(),
+      onDeleteWorkspace: vi.fn(),
+      onOpenCreateWorkspace: vi.fn(),
+    }
+    const view = render(
+      <TooltipProvider>
+        <ProjectTree {...props} activeSessionId="one" />
+      </TooltipProvider>,
+    )
+    expect(
+      screen
+        .getByRole('button', { name: 'First conversation' })
+        .closest('article'),
+    ).toHaveAttribute('data-density', 'expanded')
+    expect(
+      screen
+        .getByRole('button', { name: 'Second conversation' })
+        .closest('article'),
+    ).toHaveAttribute('data-density', 'compact')
+    expect(
+      screen
+        .getByRole('button', { name: /Terminal session\s*Terminal/ })
+        .closest('article'),
+    ).toBeNull()
+    const pr = screen.getByRole('link', { name: /Pull request #42/ })
+    fireEvent.click(pr)
+    expect(onSelectSession).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Second conversation' }))
+    expect(onSelectSession).toHaveBeenCalledExactlyOnceWith('two')
+    view.rerender(
+      <TooltipProvider>
+        <ProjectTree {...props} activeSessionId="two" />
+      </TooltipProvider>,
+    )
+    expect(
+      screen
+        .getByRole('button', { name: 'First conversation' })
+        .closest('article'),
+    ).toHaveAttribute('data-density', 'compact')
+    expect(
+      screen.getByRole('button', { name: 'Second conversation' }),
+    ).toHaveAttribute('aria-current', 'true')
+    expect(screen.queryByRole('link', { name: /Pull request #42/ })).toBeNull()
+    fireEvent.doubleClick(
+      screen.getByRole('button', { name: 'First conversation' }),
+    )
+    const rename = screen.getByRole('textbox', {
+      name: 'Rename First conversation',
+    })
+    fireEvent.change(rename, { target: { value: 'Renamed conversation' } })
+    fireEvent.submit(rename.closest('form')!)
+    expect(onRenameSession).toHaveBeenCalledExactlyOnceWith(
+      'one',
+      'Renamed conversation',
+    )
+    expect(
+      screen
+        .getByRole('button', { name: 'First conversation' })
+        .closest('article'),
+    ).toHaveAttribute('data-density', 'compact')
+  })
+
   it('archives a session without selecting it', async () => {
     const onSelectSession = vi.fn()
     const onArchiveSession = vi.fn()
@@ -54,6 +158,11 @@ describe('ProjectTree', () => {
     render(
       <TooltipProvider>
         <ProjectTree
+          cardContext={{
+            projectName: 'Convergence',
+            endpoints: [],
+            now: Date.parse('2026-01-02T00:00:00Z'),
+          }}
           baseBranchName="master"
           workspaces={[]}
           sessions={[
@@ -94,6 +203,11 @@ describe('ProjectTree', () => {
     render(
       <TooltipProvider>
         <ProjectTree
+          cardContext={{
+            projectName: 'Convergence',
+            endpoints: [],
+            now: Date.parse('2026-01-02T00:00:00Z'),
+          }}
           baseBranchName="master"
           workspaces={[]}
           sessions={[
@@ -138,6 +252,11 @@ describe('ProjectTree', () => {
     render(
       <TooltipProvider>
         <ProjectTree
+          cardContext={{
+            projectName: 'Convergence',
+            endpoints: [],
+            now: Date.parse('2026-01-02T00:00:00Z'),
+          }}
           baseBranchName="master"
           workspaces={[]}
           sessions={[
@@ -179,6 +298,11 @@ describe('ProjectTree', () => {
     render(
       <TooltipProvider>
         <ProjectTree
+          cardContext={{
+            projectName: 'Convergence',
+            endpoints: [],
+            now: Date.parse('2026-01-02T00:00:00Z'),
+          }}
           baseBranchName="master"
           workspaces={[]}
           sessions={[
@@ -221,6 +345,11 @@ describe('ProjectTree', () => {
     render(
       <TooltipProvider>
         <ProjectTree
+          cardContext={{
+            projectName: 'Convergence',
+            endpoints: [],
+            now: Date.parse('2026-01-02T00:00:00Z'),
+          }}
           baseBranchName="master"
           workspaces={[]}
           sessions={[
@@ -252,6 +381,11 @@ describe('ProjectTree', () => {
     render(
       <TooltipProvider>
         <ProjectTree
+          cardContext={{
+            projectName: 'Convergence',
+            endpoints: [],
+            now: Date.parse('2026-01-02T00:00:00Z'),
+          }}
           baseBranchName="master"
           workspaces={[]}
           sessions={[
@@ -294,6 +428,11 @@ describe('ProjectTree', () => {
     render(
       <TooltipProvider>
         <ProjectTree
+          cardContext={{
+            projectName: 'Convergence',
+            endpoints: [],
+            now: Date.parse('2026-01-02T00:00:00Z'),
+          }}
           baseBranchName="staging"
           workspaces={[
             {
@@ -331,6 +470,11 @@ describe('ProjectTree', () => {
     render(
       <TooltipProvider>
         <ProjectTree
+          cardContext={{
+            projectName: 'Convergence',
+            endpoints: [],
+            now: Date.parse('2026-01-02T00:00:00Z'),
+          }}
           baseBranchName="staging"
           workspaces={[
             {
@@ -375,6 +519,11 @@ describe('ProjectTree', () => {
     render(
       <TooltipProvider>
         <ProjectTree
+          cardContext={{
+            projectName: 'Convergence',
+            endpoints: [],
+            now: Date.parse('2026-01-02T00:00:00Z'),
+          }}
           baseBranchName="staging"
           workspaces={[
             {
@@ -435,6 +584,11 @@ describe('ProjectTree', () => {
     render(
       <TooltipProvider>
         <ProjectTree
+          cardContext={{
+            projectName: 'Convergence',
+            endpoints: [],
+            now: Date.parse('2026-01-02T00:00:00Z'),
+          }}
           baseBranchName="staging"
           workspaces={[
             {
@@ -481,6 +635,11 @@ describe('ProjectTree', () => {
     render(
       <TooltipProvider>
         <ProjectTree
+          cardContext={{
+            projectName: 'Convergence',
+            endpoints: [],
+            now: Date.parse('2026-01-02T00:00:00Z'),
+          }}
           baseBranchName="staging"
           workspaces={[
             {

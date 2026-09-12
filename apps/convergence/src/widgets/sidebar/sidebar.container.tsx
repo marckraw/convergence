@@ -313,12 +313,28 @@ export const Sidebar: FC<SidebarProps> = ({
     ),
   )
 
+  const selectedProjectSession =
+    activeSurface === 'code'
+      ? sessions.find(
+          (session) =>
+            session.id === activeSessionId && session.providerId !== 'shell',
+        )
+      : undefined
+  const selectedProjectCard = selectedProjectSession
+    ? needsYouCardModel(selectedProjectSession, {
+        projectName: activeProject?.name ?? 'Unknown project',
+        endpoints,
+        now: cardNow,
+      })
+    : null
+
   // Keyed on presence, not on `cardGroups` itself: the array is rebuilt on
   // every tick, so depending on it would restart the interval each minute.
   useFeedClock(
-    cardGroups.length > 0,
+    cardGroups.length > 0 || selectedProjectCard !== null,
     setCardNow,
-    cardGroups.some((group) => group.cards.some((card) => card.timing.live)),
+    cardGroups.some((group) => group.cards.some((card) => card.timing.live)) ||
+      Boolean(selectedProjectCard?.timing.live),
   )
 
   const attentionCards = cardGroups
@@ -1019,6 +1035,11 @@ export const Sidebar: FC<SidebarProps> = ({
 
             {activeProject ? (
               <ProjectTree
+                cardContext={{
+                  projectName: activeProject.name,
+                  endpoints,
+                  now: cardNow,
+                }}
                 baseBranchName={currentBranch}
                 workspaces={workspaces}
                 sessions={sessions}

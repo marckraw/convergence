@@ -6,6 +6,11 @@ import type { Workspace } from '@/entities/workspace'
 import type { WorkspacePullRequest } from '@/entities/pull-request'
 import type { SessionSummary } from '@/entities/session'
 import { SessionCreateInline } from '@/features/session-create-inline'
+import {
+  SessionActivityCard,
+  needsYouCardModel,
+  type CardContext,
+} from '@/features/needs-you'
 import { Button } from '@/shared/ui/button'
 import {
   DropdownMenu,
@@ -36,6 +41,7 @@ import {
 import { useFormSubmitShortcut } from '@/shared/lib/use-form-submit-shortcut.pure'
 
 interface ProjectTreeProps {
+  cardContext: CardContext
   baseBranchName: string | null
   workspaces: Workspace[]
   sessions: SessionSummary[]
@@ -60,6 +66,7 @@ interface ProjectTreeProps {
 }
 
 export const ProjectTree: FC<ProjectTreeProps> = ({
+  cardContext,
   baseBranchName,
   workspaces,
   sessions,
@@ -149,7 +156,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
     }
   }, [activeArchivedSessionId])
 
-  const renderSessionActions = (session: SessionSummary) => {
+  const renderSessionActions = (session: SessionSummary, card = false) => {
     const isArchived = !!session.archivedAt
     const isRegeneratingName = regeneratingSessionIds?.has(session.id) ?? false
     const canRegenerateName = session.providerId !== 'shell'
@@ -161,7 +168,11 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/session:opacity-100 focus-visible:opacity-100"
+            className={
+              card
+                ? 'h-10 w-10 shrink-0 rounded-lg text-muted-foreground hover:text-foreground'
+                : 'h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/session:opacity-100 focus-visible:opacity-100'
+            }
             aria-label={`Session actions ${session.name}`}
             title="Session actions"
             onClick={(event) => event.stopPropagation()}
@@ -302,6 +313,27 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
     const isRenaming = renamingSessionId === session.id
     const isRegeneratingName = regeneratingSessionIds?.has(session.id) ?? false
     const pulsing = pulsingSessionIds?.[session.id] === true
+
+    if (session.providerId !== 'shell' && !isRenaming) {
+      return (
+        <div key={session.id} className="my-1.5 min-w-0">
+          <SessionActivityCard
+            card={needsYouCardModel(session, cardContext)}
+            active={activeSessionId === session.id}
+            compact={activeSessionId !== session.id}
+            pulsing={pulsing}
+            regeneratingName={isRegeneratingName}
+            selectionLabel={session.name}
+            onSelect={onSelectSession}
+            onRename={() => {
+              setRenamingSessionId(session.id)
+              setRenameDraft(session.name)
+            }}
+            actions={renderSessionActions(session, true)}
+          />
+        </div>
+      )
+    }
 
     return (
       <div
