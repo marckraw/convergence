@@ -70,6 +70,11 @@ export function parseGithubCliPullRequests(
   return {
     provider: 'github',
     lookupStatus: 'found',
+    ...(pr.reviewDecision === 'APPROVED' ||
+    pr.reviewDecision === 'CHANGES_REQUESTED' ||
+    pr.reviewDecision === 'REVIEW_REQUIRED'
+      ? { reviewDecision: pr.reviewDecision }
+      : {}),
     state: mapGithubState(pr),
     repositoryOwner: repository.owner,
     repositoryName: repository.name,

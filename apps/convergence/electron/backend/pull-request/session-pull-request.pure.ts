@@ -69,6 +69,13 @@ export function readSessionPullRequest(
   const fields = value as Record<string, unknown>
   const missing = parts.find((part) => !part.reads(fields))
   if (missing) return { fact: null, unreadable: missing.name }
+  if (typeof fields.title !== 'string') delete fields.title
+  if (
+    !['APPROVED', 'CHANGES_REQUESTED', 'REVIEW_REQUIRED'].includes(
+      fields.reviewDecision as string,
+    )
+  )
+    delete fields.reviewDecision
   return { fact: fields as unknown as SessionPullRequest, unreadable: null }
 }
 

@@ -21,6 +21,22 @@ afterEach(() => {
 })
 
 describe('the Needs You clock', () => {
+  it('ticks once per second only while a reliable live duration is visible', () => {
+    const tick = vi.fn()
+    const { rerender } = renderHook(
+      ({ live }) => useFeedClock(true, tick, live),
+      { initialProps: { live: true } },
+    )
+    tick.mockClear()
+    vi.advanceTimersByTime(3000)
+    expect(tick).toHaveBeenCalledTimes(3)
+    rerender({ live: false })
+    tick.mockClear()
+    vi.advanceTimersByTime(3000)
+    expect(tick).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(57_000)
+    expect(tick).toHaveBeenCalledTimes(1)
+  })
   it('does not tick while the feed is empty (mutation: unconditional interval)', () => {
     const onTick = vi.fn()
     renderHook(() => useFeedClock(false, onTick))

@@ -1,3 +1,4 @@
+import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import type { FC } from 'react'
 import {
   getProviderLifecycleBadge,
@@ -29,6 +30,13 @@ export const ModelSelectorRow: FC<ModelSelectorRowProps> = ({
 }) => {
   const providerItems = providers.map((provider) => ({
     id: provider.id,
+    icon: (
+      <ProviderIcon
+        providerId={provider.id}
+        vendorLabel={provider.vendorLabel}
+        name={provider.name}
+      />
+    ),
     label: provider.vendorLabel || provider.name,
     description:
       provider.vendorLabel && provider.vendorLabel !== provider.name

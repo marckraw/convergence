@@ -6,7 +6,11 @@ import {
   executionHostEndpointDisplayName,
   isLocalExecutionHost,
 } from '@/entities/execution-host'
-import { formatRelativeTime } from '@/shared/lib/parallel-work.pure'
+import {
+  formatRelativeTime,
+  parallelWorkStatus,
+} from '@/shared/lib/parallel-work.pure'
+import { needsYouTiming } from './needs-you-timing.pure'
 
 export interface CardContext {
   projectName: string
@@ -31,12 +35,18 @@ export function needsYouCardModel(
   const waiting =
     session.attention === 'needs-approval' ||
     session.attention === 'needs-input'
-  const review =
-    session.attention === 'finished' || session.attention === 'failed'
+  const parallelSummary = parallelWorkStatus(session)
+  const failed = session.attention === 'failed' || session.status === 'failed'
+  const working =
+    !waiting &&
+    !failed &&
+    (session.status === 'running' ||
+      (Boolean(parallelSummary) && Boolean(session.parallelWork?.running)))
+  const review = failed || (session.attention === 'finished' && !working)
   return {
     session,
+    timing: needsYouTiming(session, context.now),
     projectName: context.projectName,
-    providerModel: `${session.providerId} · ${session.model ?? 'Model not recorded'}`,
     host: isLocalExecutionHost(session.executionHost)
       ? 'laptop'
       : endpoint
@@ -51,7 +61,17 @@ export function needsYouCardModel(
     kind,
     canArchive:
       review || (kind === 'errand' && session.pullRequest?.state === 'merged'),
-    summary: waiting || review ? formatSessionAttentionLabel(session) : null,
+    working,
+    summary: failed
+      ? 'Failed'
+      : waiting
+        ? formatSessionAttentionLabel(session)
+        : working
+          ? session.status === 'running'
+            ? 'Working'
+            : parallelSummary
+          : (parallelSummary ??
+            (review || session.status === 'completed' ? 'Finished' : null)),
     dismissLabel: waiting ? 'Snooze' : review ? 'Acknowledge' : null,
     attentionGroup: waiting ? 'Waiting on you' : review ? 'Needs review' : null,
     dismissed: context.dismissed ?? false,
@@ -66,6 +86,7 @@ export function groupNeedsYou(
     'Pinned',
     'Waiting on you',
     'Needs review',
+    'Working',
     'Errands with a PR',
   ]
   const groups = titles.map((title) => ({
@@ -80,9 +101,11 @@ export function groupNeedsYou(
       ? 'Pinned'
       : !card.dismissed && card.attentionGroup
         ? card.attentionGroup
-        : card.kind === 'errand' && card.session.pullRequest
-          ? 'Errands with a PR'
-          : null
+        : card.working
+          ? 'Working'
+          : card.kind === 'errand' && card.session.pullRequest
+            ? 'Errands with a PR'
+            : null
     groups.find((group) => group.title === title)?.cards.push(card)
   }
   return groups

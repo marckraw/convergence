@@ -1,3 +1,4 @@
+import { ProviderModel } from '@/shared/ui/provider-model.presentational'
 import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import type { FC, ReactNode } from 'react'
 import { Cable, Loader2, Radio } from 'lucide-react'
@@ -98,13 +99,10 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
           <span className="truncate font-medium">{card.projectName}</span>
           <span aria-hidden>·</span>
-          <span className="truncate">{card.providerLabel}</span>
-          {session.model ? (
-            <>
-              <span aria-hidden>·</span>
-              <span className="truncate">{session.model}</span>
-            </>
-          ) : null}
+          <ProviderModel
+            providerId={session.providerId}
+            model={session.model}
+          />
 
           {wireHint ? (
             <span

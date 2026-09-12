@@ -4062,6 +4062,12 @@ describe('SessionService — turn capture wiring', () => {
     const turnsMid = capture.listTurns(session.id)
     expect(turnsMid).toHaveLength(1)
     expect(turnsMid[0].status).toBe('running')
+    expect(service.getById(session.id)?.turnTiming).toMatchObject({
+      turnId: turnsMid[0].id,
+      startedAt: turnsMid[0].startedAt,
+      endedAt: null,
+      status: 'running',
+    })
 
     triggerCompletion!()
     await new Promise((resolve) => setTimeout(resolve, 10))
@@ -4071,6 +4077,11 @@ describe('SessionService — turn capture wiring', () => {
     expect(turnsEnd).toHaveLength(1)
     expect(turnsEnd[0].status).toBe('completed')
     expect(turnsEnd[0].endedAt).not.toBeNull()
+    expect(service.getById(session.id)?.turnTiming).toMatchObject({
+      turnId: turnsEnd[0].id,
+      endedAt: turnsEnd[0].endedAt,
+      status: 'completed',
+    })
   })
 
   it('stamps all conversation items in a turn with a consistent turnId', async () => {
@@ -4157,7 +4168,7 @@ describe('SessionService — turn capture wiring', () => {
 
     const turns = capture.listTurns('rec1')
     expect(turns[0].status).toBe('errored')
-    expect(turns[0].endedAt).not.toBeNull()
+    expect(turns[0].endedAt).toBeNull()
   })
 })
 

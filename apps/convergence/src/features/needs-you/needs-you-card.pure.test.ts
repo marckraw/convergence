@@ -73,3 +73,91 @@ it('dismissed errands with PRs stay until archived (mutation: discard dismissed 
     groupNeedsYou(cards).flatMap((g) => g.cards.map((c) => c.session.id)),
   ).toEqual(['open'])
 })
+
+it('groups active sessions across projects and hosts once, after attention and before PR errands', () => {
+  const cards = [
+    model(cardSession({ id: 'local', status: 'running' })),
+    model(
+      cardSession({
+        id: 'remote',
+        projectId: 'other',
+        executionHost: 'lm',
+        status: 'running',
+      }),
+    ),
+    model(
+      cardSession({
+        ...cardFixtures.open,
+        id: 'running-pr',
+        status: 'running',
+      }),
+    ),
+    model(cardSession({ ...cardFixtures.pinned, status: 'running' })),
+    model(
+      cardSession({
+        id: 'archived',
+        status: 'running',
+        archivedAt: '2026-09-12',
+      }),
+    ),
+    model(cardFixtures.waiting),
+    model(cardFixtures.noPr),
+    model(cardFixtures.open),
+    model(),
+  ]
+  expect(
+    groupNeedsYou([...cards, cards[0]!]).map((g) => [
+      g.title,
+      g.cards.map((c) => c.session.id),
+    ]),
+  ).toEqual([
+    ['Pinned', ['pinned']],
+    ['Waiting on you', ['waiting']],
+    ['Needs review', ['no-pr']],
+    ['Working', ['local', 'remote', 'running-pr']],
+    ['Errands with a PR', ['open']],
+  ])
+  expect(cards[3]!.summary).toBe('Working')
+})
+
+it('moves running sessions into waiting or review and removes the empty Working section', () => {
+  for (const [attention, title] of [
+    ['needs-input', 'Waiting on you'],
+    ['needs-approval', 'Waiting on you'],
+    ['failed', 'Needs review'],
+    ['finished', 'Needs review'],
+  ] as const) {
+    const card = model(
+      cardSession({
+        attention,
+        status: attention === 'finished' ? 'idle' : 'running',
+      }),
+    )
+    expect(groupNeedsYou([card]).map((g) => g.title)).toEqual([title])
+    expect(card.working).toBe(false)
+  }
+  const snoozed = needsYouCardModel(
+    cardSession({ status: 'running', attention: 'needs-input' }),
+    { ...cardContext, dismissed: true },
+  )
+  expect(groupNeedsYou([snoozed])).toEqual([])
+})
+
+it('keeps answered sessions in Working while parallel tasks run, then returns to review', () => {
+  const session = cardSession({
+    attention: 'finished',
+    parallelWork: { running: 2, unknown: 0, failed: 0, stopped: 0 },
+  })
+  const active = needsYouCardModel(session, { ...cardContext, dismissed: true })
+  expect(groupNeedsYou([active]).map((g) => g.title)).toEqual(['Working'])
+  expect(active.summary).toBe('answered · 2 tasks running')
+  expect(active.attentionGroup).toBeNull()
+  expect(active.dismissLabel).toBeNull()
+  expect(active.canArchive).toBe(false)
+  const settled = model({
+    ...session,
+    parallelWork: { running: 0, unknown: 0, failed: 0, stopped: 0 },
+  })
+  expect(groupNeedsYou([settled]).map((g) => g.title)).toEqual(['Needs review'])
+  expect(settled.summary).toBe('Finished')
+})

@@ -15,7 +15,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/shared/ui/dialog'
-import { ProviderIcon } from '@/shared/ui/provider-icon.pure'
+import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import type {
   ModelPickerModelItem,
   ModelPickerProviderFilter,

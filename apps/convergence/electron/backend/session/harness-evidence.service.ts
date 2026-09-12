@@ -27,7 +27,7 @@ export class HarnessEvidenceService {
   private singleCounts: Database.Statement | null = null
   constructor(private readonly db: Database.Database) {}
   countParallelWork(sessionIds: string[]): Map<string, ParallelWorkCounts> {
-    const counts = new Map(
+    const counts = new Map<string, ParallelWorkCounts>(
       sessionIds.map((id) => [
         id,
         { running: 0, unknown: 0, failed: 0, stopped: 0 },
@@ -57,11 +57,12 @@ export class HarnessEvidenceService {
     const window = `COALESCE(turn_start,window_start)`
     const query = `WITH linked AS (
       SELECT a.*, ${linkedTaskIdSql} AS linked_task_id FROM session_agent_runs a WHERE a.session_id IN (${placeholders})
-    ) SELECT session_id, status, COUNT(*) AS count FROM (
-      SELECT a.session_id, CASE WHEN a.status IN ('running','unknown') AND t.status<>'running' THEN t.status ELSE a.status END AS status, a.started_at AS window_start, ${latestTurnStart('a')}
+    ) SELECT session_id, status, COUNT(*) AS count,
+      CASE WHEN COUNT(julianday(actual_start)) = COUNT(*) THEN MIN(julianday(actual_start)) END AS oldest_start FROM (
+      SELECT a.session_id, CASE WHEN a.status IN ('running','unknown') AND t.status<>'running' THEN t.status ELSE a.status END AS status, a.started_at AS window_start, COALESCE(t.started_at,a.started_at) AS actual_start, ${latestTurnStart('a')}
       FROM linked a LEFT JOIN session_tasks t ON t.session_id=a.session_id AND t.task_id=a.linked_task_id
       UNION ALL
-      SELECT t.session_id,t.status,COALESCE(t.started_at,t.observed_at) AS window_start, ${latestTurnStart('t')} FROM session_tasks t WHERE t.session_id IN (${placeholders})
+      SELECT t.session_id,t.status,COALESCE(t.started_at,t.observed_at) AS window_start, t.started_at AS actual_start, ${latestTurnStart('t')} FROM session_tasks t WHERE t.session_id IN (${placeholders})
       AND NOT EXISTS (SELECT 1 FROM linked a WHERE a.session_id=t.session_id AND a.linked_task_id=t.task_id)
     ) work WHERE status IN ('running','unknown') OR (status IN ('failed','stopped')
       AND window_start IS NOT NULL
@@ -73,10 +74,19 @@ export class HarnessEvidenceService {
         : this.db.prepare(query)
     const rows = statement.all(...sessionIds, ...sessionIds) as {
       session_id: string
-      status: keyof ParallelWorkCounts
+      status: 'running' | 'unknown' | 'failed' | 'stopped'
       count: number
+      oldest_start: number | null
     }[]
-    for (const row of rows) counts.get(row.session_id)![row.status] = row.count
+    for (const row of rows) {
+      const result = counts.get(row.session_id)!
+      result[row.status] = row.count
+      if (row.status === 'running' && row.oldest_start !== null) {
+        const timestamp = Math.round((row.oldest_start - 2440587.5) * 86400000)
+        if (timestamp > 0)
+          result.runningStartedAt = new Date(timestamp).toISOString()
+      }
+    }
     return counts
   }
   apply(

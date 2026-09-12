@@ -1,3 +1,4 @@
+import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import { RefreshCw } from 'lucide-react'
 import type {
   AnalyticsOverview,
@@ -64,6 +65,13 @@ export function AnalyticsInsights({
     ) ?? selectedProvider?.modelOptions[0]
   const providerItems = providers.map((provider) => ({
     id: provider.id,
+    icon: (
+      <ProviderIcon
+        providerId={provider.id}
+        vendorLabel={provider.vendorLabel}
+        name={provider.name}
+      />
+    ),
     label: provider.vendorLabel || provider.name,
     description:
       provider.vendorLabel && provider.vendorLabel !== provider.name

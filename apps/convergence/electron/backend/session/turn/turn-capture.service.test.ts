@@ -281,6 +281,35 @@ describe('TurnCaptureService', () => {
     expect(service.listTurns(sessionId)[0].endedAt).not.toBeNull()
   })
 
+  it('records the observed end before debounce or baseline work and publishes timing changes', async () => {
+    const sessionId = randomUUID()
+    const turnId = randomUUID()
+    seedSessionRow(db, sessionId, repoPath)
+    vi.spyOn(git, 'isGitRepository').mockResolvedValue(false)
+    const changed = vi.fn()
+    service.setTimingListener(changed)
+    await service.startTurn({ sessionId, turnId, workingDirectory: repoPath })
+    expect(changed).toHaveBeenCalledWith(sessionId)
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-09-12T12:00:00Z'))
+      service.endTurn({
+        sessionId,
+        turnId,
+        status: 'completed',
+        summarySource: null,
+      })
+      vi.setSystemTime(new Date('2026-09-12T12:10:00Z'))
+      await service.flushPendingEnd(sessionId)
+      expect(service.listTurns(sessionId)[0]?.endedAt).toBe(
+        '2026-09-12T12:00:00.000Z',
+      )
+      expect(changed).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('records added, modified and deleted files within a turn', async () => {
     const sessionId = randomUUID()
     const turnId = randomUUID()
@@ -433,7 +462,7 @@ describe('TurnCaptureService', () => {
 
     const row = service.listTurns(sessionId)[0]
     expect(row.status).toBe('errored')
-    expect(row.endedAt).not.toBeNull()
+    expect(row.endedAt).toBeNull()
   })
 
   it('coalesces repeated endTurn calls within the debounce window', async () => {

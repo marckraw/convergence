@@ -15,6 +15,7 @@ export interface SearchableSelectItem {
   id: string
   label: string
   description?: string
+  icon?: ReactNode
   badge?: {
     label: string
     title?: string
@@ -187,6 +188,7 @@ export function SearchableSelectPresentational({
                       : 'cursor-pointer items-center',
                   )}
                 >
+                  {item.icon}
                   <div className="flex min-w-0 flex-1 flex-col">
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="truncate font-medium">{item.label}</span>

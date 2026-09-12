@@ -155,6 +155,9 @@ export type AttentionRequestKind =
   | 'input'
 
 export interface SessionSummary {
+  turnTiming?:
+    | import('../../../src/shared/types/session-timing.types').SessionTurnTiming
+    | null
   pinnedAt?: string | null
   originKind?: 'spawn' | 'resident' | null
   pullRequest?: SessionPullRequest | null

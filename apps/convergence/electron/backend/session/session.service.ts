@@ -1,4 +1,5 @@
 import { SESSION_RESTARTED_EVENT_TYPE } from '../provider/session-restart.pure'
+import { readSessionTurnTimings } from './session-timing.service'
 import { CONVERSATION_RESET_COMMAND } from '../../../src/shared/lib/conversation-reset.pure'
 import { randomUUID } from 'crypto'
 import { HarnessEvidenceService } from './harness-evidence.service'
@@ -355,6 +356,9 @@ export class SessionService {
 
   setTurnCaptureService(service: TurnCaptureService): void {
     this.turnCapture = service
+    service.setTimingListener((sessionId) =>
+      this.notifySummaryUpdated(sessionId),
+    )
     service.setDeltaEmitter((sessionId, delta) => {
       this.onTurnDelta?.(sessionId, delta)
     })
@@ -1306,6 +1310,10 @@ export class SessionService {
   private buildSessionSummary(row: SessionRow): SessionSummary {
     const summary = {
       ...sessionSummaryFromRow(row),
+      turnTiming: this.summaryTurnTiming(
+        row,
+        readSessionTurnTimings(this.db, [row.id]).get(row.id),
+      ),
       hasActiveHandle: this.activeHandles.has(row.id),
       canStopTasks: this.activeHandles.get(row.id)?.canStopTasks === true,
       parallelWork: this.cachedParallelWork([row.id]).get(row.id)!,
@@ -1319,8 +1327,13 @@ export class SessionService {
 
   private buildSessionSummaries(rows: SessionRow[]): SessionSummary[] {
     const counts = this.cachedParallelWork(rows.map((row) => row.id))
+    const timings = readSessionTurnTimings(
+      this.db,
+      rows.map((row) => row.id),
+    )
     const summaries = rows.map((row) => ({
       ...sessionSummaryFromRow(row),
+      turnTiming: this.summaryTurnTiming(row, timings.get(row.id)),
       hasActiveHandle: this.activeHandles.has(row.id),
       canStopTasks: this.activeHandles.get(row.id)?.canStopTasks === true,
       parallelWork: counts.get(row.id)!,
@@ -1337,6 +1350,21 @@ export class SessionService {
         ? { ...summary, attentionRequestKind }
         : summary
     })
+  }
+
+  private summaryTurnTiming(
+    row: SessionRow,
+    timing: SessionSummary['turnTiming'],
+  ): SessionSummary['turnTiming'] {
+    // Remote sessions need host-reported lifecycle facts, not a prior local turn.
+    if (!isLocalExecutionHost(row.execution_host) || !timing) return null
+    if (
+      row.status === 'running' &&
+      (timing.status !== 'running' ||
+        this.activeTurnIds.get(row.id) !== timing.turnId)
+    )
+      return null
+    return timing
   }
 
   private readAttentionRequestRow(
