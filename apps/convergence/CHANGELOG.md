@@ -1,5 +1,12 @@
 # convergence
 
+## 0.56.0
+
+### Minor Changes
+
+- e688068: Show a session's pull request and its current state for local and remote work,
+  with refresh on session settle and periodic checks of open pull requests.
+
 ## 0.55.2
 
 ### Patch Changes
