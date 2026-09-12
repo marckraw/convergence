@@ -7,6 +7,7 @@ import type {
 } from './crew-config.types'
 import type { CrewImportWorld, CrewImportPlan } from './crew-import.types'
 import {
+  normalizeRelaySpawnSpec,
   resolveRoundCap,
   sameCondition,
   batonConditionToken,
@@ -549,14 +550,18 @@ export function crewImportRelayFields(
   const spawnSpec =
     typeof wire.to === 'string'
       ? null
-      : {
+      : normalizeRelaySpawnSpec({
           projectId,
           providerId: wire.to.spawn.provider,
           model: wire.to.spawn.model,
           effort: wire.to.spawn.effort,
           name: wire.to.spawn.name,
           providerAccountId: null,
-        }
+          executionHost: wire.to.spawn.host,
+          workAddress: wire.to.spawn.workAddress,
+          roleCard: wire.to.spawn.roleCard,
+          returnWire: wire.to.spawn.returnWire,
+        })
   return {
     action: spawnSpec ? ('spawn' as const) : ('hail' as const),
     spawnSpec,

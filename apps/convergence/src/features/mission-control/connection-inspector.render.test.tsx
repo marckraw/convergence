@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import {
+  EMPTY_SPAWN_SPEC,
   CONVERSATION_RESET_COMMAND,
   beforeDeliveryOptions,
   customOpenerNote,
@@ -99,6 +100,13 @@ function renderInspector(
       modelOptions={[]}
       effortOptions={[]}
       spawnAccounts={[]}
+      hostOptions={[
+        { id: 'local', label: 'laptop' },
+        { id: 'little-monster', label: 'little-monster' },
+      ]}
+      workAddressSlot={{ mode: 'hidden' }}
+      onWorkAddressChange={vi.fn()}
+      onBranchChange={vi.fn()}
       {...handlers}
     />,
   )
@@ -235,6 +243,7 @@ describe('the connection inspector, rendered', () => {
       recipient: {
         kind: 'spawn',
         spec: {
+          ...EMPTY_SPAWN_SPEC,
           projectId: null,
           providerId: 'codex',
           model: null,
@@ -318,4 +327,32 @@ describe('the connection inspector, rendered', () => {
       screen.queryByRole('button', { name: 'Delete connection' }),
     ).not.toBeInTheDocument()
   })
+})
+
+it('offers the errand host, identity and optional report (mutation: omit host picker)', async () => {
+  const draft = newConnectionDraft({ sourceSessionId: 'fable' })
+  draft.recipient = {
+    kind: 'spawn',
+    spec: { ...EMPTY_SPAWN_SPEC, providerId: 'codex' },
+  }
+  const handlers = renderInspector({ draft })
+  fireEvent.click(screen.getByRole('combobox', { name: 'laptop' }))
+  fireEvent.click(await screen.findByRole('option', { name: 'little-monster' }))
+  expect(handlers.onSpawnChange).toHaveBeenCalledWith({
+    executionHost: 'little-monster',
+    workAddress: null,
+    providerAccountId: null,
+    returnWire: null,
+  })
+  fireEvent.change(screen.getByRole('textbox', { name: 'Role card' }), {
+    target: { value: 'You are the reviewer.' },
+  })
+  expect(handlers.onSpawnChange).toHaveBeenCalledWith({
+    roleCard: 'You are the reviewer.',
+  })
+  expect(
+    screen.getByRole('switch', {
+      name: 'Report back to Fable when it finishes',
+    }),
+  ).toBeChecked()
 })

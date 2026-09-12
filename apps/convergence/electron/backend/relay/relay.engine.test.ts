@@ -11,7 +11,7 @@ import type { AutomaticTurnAccount } from '../provider-account/provider-account-
 import { CrewHailService } from './crew-hail.service'
 import { MIN_FLOW_RUN_HOP_CEILING, TERMINAL_BATON_MESSAGE } from './relay.pure'
 import { RelayService } from './relay.service'
-import type { RelayHop } from './relay.types'
+import type { RelayHop, RelaySpawnSpec } from './relay.types'
 
 /**
  * The engine is the one thing in the app that spends provider quota without a
@@ -373,22 +373,16 @@ describe('RelayEngine', () => {
     }
   }
 
-  function spawnWire(
-    source = 's1',
-    spec: Partial<{
-      projectId: string | null
-      providerId: string
-      model: string | null
-      effort: string | null
-      name: string
-      providerAccountId: string | null
-    }> = {},
-  ) {
+  function spawnWire(source = 's1', spec: Partial<RelaySpawnSpec> = {}) {
     return relays.create({
       crewId: 'c1',
       sourceSessionId: source,
       action: 'spawn',
       spawnSpec: {
+        executionHost: 'local',
+        workAddress: null,
+        roleCard: null,
+        returnWire: null,
         projectId: 'p1',
         providerId: 'codex',
         model: 'gpt-5.6',
@@ -2880,6 +2874,54 @@ describe('RelayEngine', () => {
       }
     })
 
+    it.each([true, false])(
+      'creates a return wire only when requested: %s (mutation: omit or invent return wire)',
+      async (enabled) => {
+        spawnWire('s1', {
+          returnWire: enabled ? { instruction: 'Review the result' } : null,
+        })
+        const createReturn = vi.spyOn(relays, 'create')
+        const gateway = createGateway({})
+        await createEngine(gateway).handleSettle(settled('s1'))
+        expect(createReturn).toHaveBeenCalledTimes(enabled ? 1 : 0)
+        expect(gateway.started).toHaveLength(1)
+        const returns = relays.listForSourceSession('spawned-1')
+        expect(returns).toHaveLength(enabled ? 1 : 0)
+        if (enabled)
+          expect(returns[0]).toMatchObject({
+            crewId: 'c1',
+            sourceSessionId: 'spawned-1',
+            targetSessionId: 's1',
+            action: 'hail',
+            trigger: 'settled',
+            conditionToken: null,
+            instruction: 'Review the result',
+            armed: true,
+          })
+      },
+    )
+
+    it('creates and starts the remote errand at its stated place (mutation: keep spawn local)', async () => {
+      const workAddress = {
+        mode: 'repository' as const,
+        repository: 'https://github.com/marckraw/convergence',
+        branchName: null,
+        label: 'marckraw/convergence',
+      }
+      accountsByProvider.codex = [
+        { id: 'local-default', isDefault: true, status: 'connected' },
+      ]
+      spawnWire('s1', { executionHost: 'little-monster', workAddress })
+      const gateway = createGateway({})
+      await createEngine(gateway).handleSettle(settled('s1'))
+      expect(gateway.created[0]).toMatchObject({
+        executionHost: 'little-monster',
+        workAddress,
+      })
+      expect(gateway.started).toHaveLength(1)
+      expect(gateway.started[0].providerAccountId).toBeNull()
+    })
+
     it('opens a session on the spec and starts it on the payload', async () => {
       const relay = spawnWire()
       const gateway = createGateway({
@@ -3058,6 +3100,10 @@ describe('RelayEngine', () => {
         action: 'spawn',
         instruction: BRIEF,
         spawnSpec: {
+          executionHost: 'local',
+          workAddress: null,
+          roleCard: null,
+          returnWire: null,
           projectId: 'p1',
           providerId: 'codex',
           model: null,

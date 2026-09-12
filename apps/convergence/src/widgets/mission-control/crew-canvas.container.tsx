@@ -1,3 +1,8 @@
+import { useAppSettingsStore } from '@/entities/app-settings'
+import {
+  resolveWorkAddressSlot,
+  type LocalRepositoryState,
+} from '@/entities/execution-host'
 import { toast } from 'sonner'
 import { projectOpenApi } from '@/entities/project-open'
 import {
@@ -20,7 +25,13 @@ import {
   resolveInitialProviderAccountSelection,
 } from '@/entities/provider-account'
 import type { ProviderAccount } from '@/entities/provider-account'
-import { selectLocalProviders, useSessionStore } from '@/entities/session'
+import {
+  selectLocalProviders,
+  useSessionStore,
+  providerCatalogSourceForHost,
+  catalogInForce,
+  repositoryOriginApi,
+} from '@/entities/session'
 import { sessionCrewApi, useSessionCrewStore } from '@/entities/session-crew'
 import {
   selectRelaysForCrew,
@@ -190,6 +201,118 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const sessions = useSessionStore((state) => state.globalSessions)
   const providers = useSessionStore(selectLocalProviders)
   const projects = useProjectStore((state) => state.projects)
+  const endpoints = useAppSettingsStore(
+    (state) => state.settings.executionHostEndpoints,
+  )
+  const remoteProjectCatalogs = useSessionStore(
+    (state) => state.remoteProjectCatalogs,
+  )
+  const loadRemoteProjectCatalog = useSessionStore(
+    (state) => state.loadRemoteProjectCatalog,
+  )
+  const spawnSpec =
+    draft?.recipient.kind === 'spawn' ? draft.recipient.spec : null
+  const spawnHost = spawnSpec?.executionHost ?? 'local'
+  const spawnCatalogSource = useMemo(
+    () => providerCatalogSourceForHost(spawnHost, endpoints),
+    [spawnHost, endpoints],
+  )
+  const spawnRepositoryPath =
+    projects.find((project) => project.id === spawnSpec?.projectId)
+      ?.repositoryPath ?? null
+  const [spawnRepository, setSpawnRepository] = useState<{
+    path: string | null
+    value: LocalRepositoryState
+  }>({ path: null, value: { status: 'known', repository: null } })
+  useEffect(() => {
+    if (spawnHost !== 'local') void loadRemoteProjectCatalog(spawnCatalogSource)
+  }, [spawnHost, spawnCatalogSource, loadRemoteProjectCatalog])
+  useEffect(() => {
+    if (spawnHost === 'local' || !spawnRepositoryPath) return
+    let cancelled = false
+    setSpawnRepository({
+      path: spawnRepositoryPath,
+      value: { status: 'asking' },
+    })
+    void (async () => {
+      let repository: string | null = null
+      try {
+        repository = await repositoryOriginApi.cloneableUrl(spawnRepositoryPath)
+      } catch {
+        /* The slot reports that no cloneable repository was read. */
+      }
+      if (!cancelled)
+        setSpawnRepository({
+          path: spawnRepositoryPath,
+          value: { status: 'known', repository },
+        })
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [spawnHost, spawnRepositoryPath])
+  const spawnAddress = spawnSpec?.workAddress
+  const workAddressSlot = useMemo(
+    () =>
+      resolveWorkAddressSlot({
+        host: { mode: 'choosing', hostId: spawnHost },
+        hostLabel:
+          endpoints.find((endpoint) => endpoint.id === spawnHost)?.label ??
+          spawnHost,
+        matchingProjectId: null,
+        projects: catalogInForce(remoteProjectCatalogs, spawnCatalogSource),
+        localRepository: spawnRepositoryPath
+          ? spawnRepository.path === spawnRepositoryPath
+            ? spawnRepository.value
+            : { status: 'asking' }
+          : {
+              status: 'known',
+              repository:
+                spawnAddress?.mode === 'repository'
+                  ? spawnAddress.repository
+                  : null,
+            },
+        selectedId:
+          spawnAddress?.mode === 'project'
+            ? `project:${spawnAddress.projectId}`
+            : 'repository',
+        branchDraft:
+          spawnAddress?.mode === 'repository'
+            ? (spawnAddress.branchName ?? '')
+            : '',
+        recordedAddress: null,
+        reportedWorkspace: null,
+      }),
+    [
+      spawnHost,
+      endpoints,
+      remoteProjectCatalogs,
+      spawnCatalogSource,
+      spawnRepositoryPath,
+      spawnRepository,
+      spawnAddress,
+    ],
+  )
+  // One derived address feeds both the visible slot and the save; a pending read never erases the stored draft.
+  const resolvedDraft = useMemo<ConnectionDraft | null>(
+    () =>
+      draft?.recipient.kind === 'spawn' && spawnHost !== 'local'
+        ? {
+            ...draft,
+            recipient: {
+              kind: 'spawn',
+              spec: {
+                ...draft.recipient.spec,
+                workAddress:
+                  workAddressSlot.mode === 'choosing'
+                    ? workAddressSlot.address
+                    : null,
+              },
+            },
+          }
+        : draft,
+    [draft, spawnHost, workAddressSlot],
+  )
 
   // Read once for the surface rather than per connection: the list is small,
   // changes rarely, and every spawn form asks the same question of it.
@@ -391,15 +514,20 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   }, [connectMode.kind])
 
   const save = useCallback(async () => {
-    if (!draft || !crew || panel.kind !== 'connection') return
-    const problem = connectionDraftProblem(draft, relays, panel.relayId, {
-      supportsReset,
-    })
+    if (!resolvedDraft || !crew || panel.kind !== 'connection') return
+    const problem = connectionDraftProblem(
+      resolvedDraft,
+      relays,
+      panel.relayId,
+      {
+        supportsReset,
+      },
+    )
     if (problem) return
 
     setBusy(true)
     clearRelayError()
-    const input = { ...relayInputFromDraft(draft), crewId: crew.id }
+    const input = { ...relayInputFromDraft(resolvedDraft), crewId: crew.id }
     const saved =
       panel.relayId === null
         ? await createRelay(input)
@@ -426,7 +554,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
     // to protect is the one that was just stored.
     setPanelState({ kind: 'connection', relayId: saved.id })
   }, [
-    draft,
+    resolvedDraft,
     crew,
     panel,
     relays,
@@ -1145,7 +1273,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                     ? resolveName(draft.recipient.sessionId)
                     : null
               }
-              draft={draft}
+              draft={resolvedDraft ?? draft}
               isNew={panel.relayId === null}
               dirty={
                 savedDraft === null || connectionDraftIsDirty(draft, savedDraft)
@@ -1168,15 +1296,74 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               })}
               customOpenerNote={customOpenerNote(draft, supportsReset)}
               recipientNote={recipientNote}
-              problem={connectionDraftProblem(draft, relays, panel.relayId, {
-                supportsReset,
-              })}
+              problem={connectionDraftProblem(
+                resolvedDraft ?? draft,
+                relays,
+                panel.relayId,
+                {
+                  supportsReset,
+                },
+              )}
               busy={busy}
               projectOptions={projectOptions}
               providerOptions={providerOptions}
               modelOptions={modelOptions}
               effortOptions={effortOptions}
-              spawnAccounts={spawnAccounts}
+              spawnAccounts={spawnHost === 'local' ? spawnAccounts : []}
+              hostOptions={[
+                { id: 'local', label: 'laptop' },
+                ...endpoints.map((endpoint) => ({
+                  id: endpoint.id,
+                  label: endpoint.label || 'Unnamed endpoint',
+                })),
+              ]}
+              workAddressSlot={workAddressSlot}
+              onWorkAddressChange={(id) => {
+                if (workAddressSlot.mode !== 'choosing') return
+                const address =
+                  workAddressSlot.choices.find((choice) => choice.id === id)
+                    ?.address ?? null
+                setDraft((current) =>
+                  current?.recipient.kind === 'spawn'
+                    ? {
+                        ...current,
+                        recipient: {
+                          kind: 'spawn',
+                          spec: {
+                            ...current.recipient.spec,
+                            workAddress: address,
+                          },
+                        },
+                      }
+                    : current,
+                )
+              }}
+              onBranchChange={(branch) =>
+                setDraft((current) => {
+                  const address =
+                    workAddressSlot.mode === 'choosing'
+                      ? workAddressSlot.address
+                      : null
+                  if (
+                    current?.recipient.kind !== 'spawn' ||
+                    address?.mode !== 'repository'
+                  )
+                    return current
+                  return {
+                    ...current,
+                    recipient: {
+                      kind: 'spawn',
+                      spec: {
+                        ...current.recipient.spec,
+                        workAddress: {
+                          ...address,
+                          branchName: branch.trim() ? branch : null,
+                        },
+                      },
+                    },
+                  }
+                })
+              }
               onRecipientChange={(optionId) => {
                 if (!draft) return
                 // R8 is re-asked here, not just the field replaced (M2): the
@@ -1215,6 +1402,10 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                       spec: {
                         ...current.recipient.spec,
                         ...patch,
+                        ...(patch.projectId !== undefined &&
+                        patch.projectId !== current.recipient.spec.projectId
+                          ? { workAddress: null }
+                          : {}),
                         // Changing provider re-asks the account question: ids
                         // belong to one provider, so carrying the old choice
                         // over would name an account that cannot serve it.

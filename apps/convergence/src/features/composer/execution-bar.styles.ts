@@ -126,30 +126,8 @@ export const stripSelectClass =
 export const stripFactClass =
   'rounded-md border border-border/60 px-1.5 py-0.5 text-[11px] font-medium text-foreground'
 
-/**
- * A sentence in the strip rather than a control: the machine being asked where
- * it can work, or the reason nothing can be offered (MAR-2689).
- *
- * The same size and tone as the label beside it, because it stands in the same
- * tier and reads as context, not as an alarm. The one loud thing on this strip
- * is still the removed-endpoint warning below, and it stays the only one.
- */
-export const stripNoticeClass = 'text-[11px] text-muted-foreground'
-
 /** A live session whose machine is gone. */
 export const stripWarningClass =
   'flex min-w-0 items-center gap-1 text-[11px] text-warning-foreground'
 
 export const stripWarningIconClass = 'h-3 w-3 shrink-0'
-
-/**
- * The branch field: a written value, not a chosen one (MAR-2694).
- *
- * Sized and toned as the chooser beside it, so the second slot reads as one
- * tier rather than a control with an accessory bolted on. Narrow on purpose —
- * a branch name is short, and the strip is quiet by ruling — with a border,
- * which the chooser does not have, because this is the one element on the
- * strip that takes typing and has to look like it does.
- */
-export const stripInputClass =
-  'h-6 w-40 border-border/60 px-1.5 text-[11px] shadow-none'

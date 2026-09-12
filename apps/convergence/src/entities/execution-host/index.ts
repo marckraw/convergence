@@ -10,3 +10,19 @@ export type {
   ExecutionHostEndpoint,
   ExecutionHostEndpointInput,
 } from './execution-host.types'
+
+export { WorkAddressSlot } from './work-address-slot.presentational'
+export {
+  resolveWorkAddressSlot,
+  branchNameFromDraft,
+  workAddressForNewSession,
+  workAddressReadyForSend,
+  REPOSITORY_WORK_ADDRESS_CHOICE_ID,
+} from './work-address-slot.pure'
+export type {
+  WorkAddressSlotInput,
+  WorkAddressSlotView,
+  LocalRepositoryState,
+  WorkAddressProject,
+  WorkAddressProjects,
+} from './work-address-slot.pure'

@@ -1,3 +1,4 @@
+import { namesAConcreteWorkPlace } from '@/shared/lib/work-address.pure'
 import type {
   CreateSessionRelayInput,
   RelaySpawnSpec,
@@ -33,6 +34,10 @@ export interface ConnectionSpawnSpec {
   effort: string | null
   name: string
   providerAccountId: string | null
+  executionHost: string
+  workAddress: RelaySpawnSpec['workAddress']
+  roleCard: string | null
+  returnWire: RelaySpawnSpec['returnWire']
 }
 
 /** When a connection fires: on any finish, or only on a declared route. */
@@ -67,6 +72,10 @@ export const EMPTY_SPAWN_SPEC: ConnectionSpawnSpec = {
   effort: null,
   name: '',
   providerAccountId: null,
+  executionHost: 'local',
+  workAddress: null,
+  roleCard: null,
+  returnWire: { instruction: '' },
 }
 
 /**
@@ -184,6 +193,13 @@ export function relayInputFromDraft(
           effort: draft.recipient.spec.effort,
           name: draft.recipient.spec.name.trim() || 'Relayed session',
           providerAccountId: draft.recipient.spec.providerAccountId,
+          executionHost: draft.recipient.spec.executionHost,
+          workAddress:
+            draft.recipient.spec.executionHost === 'local'
+              ? null
+              : draft.recipient.spec.workAddress,
+          roleCard: draft.recipient.spec.roleCard,
+          returnWire: draft.recipient.spec.returnWire,
         }
       : null
 
@@ -279,6 +295,12 @@ export function connectionDraftProblem(
   if (draft.recipient.kind === 'spawn') {
     if (!draft.recipient.spec.providerId) {
       return 'Pick a provider for the new session.'
+    }
+    if (
+      draft.recipient.spec.executionHost !== 'local' &&
+      !namesAConcreteWorkPlace(draft.recipient.spec.workAddress)
+    ) {
+      return 'A session on a remote execution host has to be told where it works. Pick a Project or a repository in the composer before starting it — starting it without one would run it somewhere nobody named.'
     }
     return null
   }

@@ -1,3 +1,9 @@
+import { remoteProjectMatchingOrigin } from '@/entities/session'
+import {
+  resolveWorkAddressSlot as resolveEntityWorkAddressSlot,
+  type WorkAddressSlotInput,
+  type WorkAddressSlotView,
+} from '@/entities/execution-host'
 import {
   executionHostEndpointDisplayName,
   isLocalExecutionHost,
@@ -218,3 +224,25 @@ export function executionHostForNewSession(
 ): string | undefined {
   return isLocalExecutionHost(view.hostId) ? undefined : view.hostId
 }
+
+/** Adapts the composer's machine view to the entity's place-picker facts. */
+export function resolveWorkAddressSlot(
+  input: Omit<WorkAddressSlotInput, 'host' | 'matchingProjectId'> & {
+    executionBar: ExecutionBarView
+  },
+): WorkAddressSlotView {
+  const { executionBar, ...facts } = input
+  return resolveEntityWorkAddressSlot({
+    ...facts,
+    host: { mode: executionBar.mode, hostId: executionBar.hostId },
+    matchingProjectId:
+      remoteProjectMatchingOrigin(
+        input.projects?.status === 'landed' ? input.projects.projects : [],
+        input.localRepository.status === 'known'
+          ? input.localRepository.repository
+          : null,
+      )?.id ?? null,
+  })
+}
+export { workAddressForNewSession } from '@/entities/execution-host'
+export type { LocalRepositoryState } from '@/entities/execution-host'

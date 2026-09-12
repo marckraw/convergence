@@ -164,6 +164,84 @@
                       },
                       "account": {
                         "const": "default"
+                      },
+                      "host": {
+                        "type": "string"
+                      },
+                      "roleCard": {
+                        "type": ["string", "null"]
+                      },
+                      "returnWire": {
+                        "anyOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "instruction": {
+                                "type": "string"
+                              }
+                            },
+                            "required": ["instruction"]
+                          }
+                        ]
+                      },
+                      "workAddress": {
+                        "anyOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "mode": {
+                                "const": "project"
+                              },
+                              "projectId": {
+                                "type": "string"
+                              },
+                              "workingDirectory": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "mode",
+                              "projectId",
+                              "workingDirectory",
+                              "label"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "mode": {
+                                "const": "repository"
+                              },
+                              "repository": {
+                                "type": "string"
+                              },
+                              "branchName": {
+                                "type": ["string", "null"]
+                              },
+                              "label": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "mode",
+                              "repository",
+                              "branchName",
+                              "label"
+                            ]
+                          }
+                        ]
                       }
                     },
                     "required": [

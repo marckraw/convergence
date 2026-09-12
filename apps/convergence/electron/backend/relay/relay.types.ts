@@ -1,3 +1,6 @@
+import type { SessionExecutionHostId } from '../session/session.types'
+import { normalizeRelaySpawnSpec } from './relay.pure'
+import type { SessionWorkAddress } from '../../../src/shared/lib/work-address.pure'
 import type { RelayHopRow, SessionRelayRow } from '../database/database.types'
 
 /**
@@ -19,6 +22,10 @@ export type RelayAction = 'hail' | 'spawn'
  * about, so every field is stated on the relay itself.
  */
 export interface RelaySpawnSpec {
+  executionHost: SessionExecutionHostId
+  workAddress: SessionWorkAddress | null
+  roleCard: string | null
+  returnWire: { instruction: string } | null
   /** Null opens a global session, not tied to any project. */
   projectId: string | null
   providerId: string
@@ -242,20 +249,7 @@ function parseSpawnSpec(json: string | null): RelaySpawnSpec | null {
     if (typeof parsed?.providerId !== 'string' || !parsed.providerId) {
       return null
     }
-    return {
-      projectId: typeof parsed.projectId === 'string' ? parsed.projectId : null,
-      providerId: parsed.providerId,
-      model: typeof parsed.model === 'string' ? parsed.model : null,
-      effort: typeof parsed.effort === 'string' ? parsed.effort : null,
-      name: typeof parsed.name === 'string' ? parsed.name : 'Relayed session',
-      // Absent in specs written before accounts rode the wires; those keep
-      // resolving to the enrolled default, which is the fix they were missing.
-      providerAccountId:
-        typeof parsed.providerAccountId === 'string' &&
-        parsed.providerAccountId.length > 0
-          ? parsed.providerAccountId
-          : null,
-    }
+    return normalizeRelaySpawnSpec(parsed)
   } catch {
     return null
   }

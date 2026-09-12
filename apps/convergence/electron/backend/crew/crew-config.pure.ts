@@ -1,7 +1,9 @@
+import { isDeepStrictEqual } from 'node:util'
 import { normalizeCrewBatonName } from './crew.pure'
 import { parse } from 'yaml'
 import { normalizeOriginKey } from '@mrck-labs/execution-host-protocol'
 import {
+  normalizeRelaySpawnSpec,
   resolveRoundCap,
   normalizeRelayConditionToken,
 } from '../relay/relay.pure'
@@ -141,8 +143,8 @@ export function crewToConfig(
     return normalizeOriginKey(root.origin) ?? root.name
   }
   function spawnTarget(relay: SessionRelay): CrewConfigWire['to'] {
-    const spec = relay.spawnSpec
-    if (!spec) throw new Error('A spawn wire has no recipe')
+    if (!relay.spawnSpec) throw new Error('A spawn wire has no recipe')
+    const spec = normalizeRelaySpawnSpec(relay.spawnSpec)
     const project =
       spec.projectId === null
         ? null
@@ -157,6 +159,10 @@ export function crewToConfig(
         project: projectReference(project),
         ...(project?.laneName ? { lane: project.laneName } : {}),
         account: 'default',
+        host: spec.executionHost,
+        workAddress: spec.workAddress,
+        roleCard: spec.roleCard,
+        returnWire: spec.returnWire,
       },
     }
   }
@@ -377,7 +383,7 @@ const customPermissions = shape({
 })
 const permissions: Check = (v, p) =>
   typeof v === 'string' ? oneOf('ask', 'yolo')(v, p) : customPermissions(v, p)
-const spawn = shape({
+const spawnShape = shape({
   name: string,
   provider: string,
   model: nullable(string),
@@ -385,7 +391,50 @@ const spawn = shape({
   project: nullable(string),
   lane: optional(string),
   account: oneOf('default'),
+  host: optional(string),
+  workAddress: optional(() => null),
+  roleCard: optional(nullable(string)),
+  returnWire: optional(nullable(shape({ instruction: string }))),
 })
+// The record owns acceptance: a provided field must survive normalization unchanged.
+const spawn: Check = (v, p) => {
+  const reason = spawnShape(v, p)
+  if (reason) return reason
+  const input = v as import('./crew-config.types').CrewConfigSpawn
+  try {
+    const normalized = normalizeRelaySpawnSpec({
+      name: input.name,
+      providerId: input.provider,
+      model: input.model,
+      effort: input.effort,
+      projectId: null,
+      providerAccountId: null,
+      executionHost: input.host,
+      workAddress: input.workAddress,
+      roleCard: input.roleCard,
+      returnWire: input.returnWire,
+    })
+    for (const [field, kept] of Object.entries({
+      name: normalized.name,
+      provider: normalized.providerId,
+      model: normalized.model,
+      effort: normalized.effort,
+      host: normalized.executionHost,
+      workAddress: normalized.workAddress,
+      roleCard: normalized.roleCard,
+      returnWire: normalized.returnWire,
+    })) {
+      if (
+        Object.hasOwn(input, field) &&
+        !isDeepStrictEqual(input[field as keyof typeof input], kept)
+      )
+        return `${p}.${field}: write the value exactly as the record stores it`
+    }
+    return null
+  } catch (error) {
+    return `${p}: ${error instanceof Error ? error.message : String(error)}`
+  }
+}
 const target: Check = (v, p) =>
   typeof v === 'string'
     ? null

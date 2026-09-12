@@ -1,3 +1,4 @@
+import { useAppSettingsStore } from '@/entities/app-settings'
 import { toast } from 'sonner'
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 import { useCrewHailStore } from '@/entities/crew-hail'
@@ -235,6 +236,9 @@ describe('MissionControl', () => {
     vi.mocked(toast.success).mockClear()
     vi.mocked(toast.error).mockClear()
     localStorage.clear()
+    useAppSettingsStore.setState((state) => ({
+      settings: { ...state.settings, executionHostEndpoints: [] },
+    }))
     sendMessageToSession = vi.fn<SendMessage>(async () => undefined)
     getAllSummaries = vi.fn(async () => [])
     listCrews = vi.fn(async () => [])
@@ -675,6 +679,108 @@ describe('MissionControl', () => {
     async function switchToCanvas() {
       fireEvent.click(await screen.findByRole('button', { name: 'Canvas' }))
     }
+    it('saves the place the remote errand slot shows (mutation: omit recipe host wiring)', async () => {
+      useAppSettingsStore.setState((state) => ({
+        settings: {
+          ...state.settings,
+          executionHostEndpoints: [
+            {
+              id: 'little-monster',
+              label: 'little-monster',
+              baseUrl: 'http://localhost:3000',
+              configurationEpoch: 0,
+              position: 0,
+              createdAt: '2026-01-01',
+              updatedAt: '2026-01-01',
+            },
+          ],
+        },
+      }))
+      const getProjects = vi.fn(async () => ({
+        projects: [],
+        unreachableReason: null,
+      }))
+      const cloneable = vi.fn(
+        async () => 'https://github.com/marckraw/convergence',
+      )
+      Object.assign(window.electronAPI, {
+        executionHost: { getProjects },
+        git: { getCloneableRepositoryUrl: cloneable },
+      })
+      useSessionStore.setState({ remoteProjectCatalogs: {} })
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Loop', sessionIds: ['a', 'b'] }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Fable' }),
+          makeSession({ id: 'b', name: 'Opus' }),
+        ],
+        [CLAUDE_CODE],
+      )
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+      fireEvent.click(await screen.findByLabelText('Connect to Fable'))
+      fireEvent.click(await screen.findByLabelText('Connect to Opus'))
+      const panel = within(
+        await screen.findByRole('region', { name: 'Connection' }),
+      )
+      fireEvent.click(panel.getByRole('combobox', { name: 'Opus' }))
+      fireEvent.click(await screen.findByText('Start a new session…'))
+      fireEvent.click(panel.getByRole('combobox', { name: 'laptop' }))
+      fireEvent.click(
+        await screen.findByRole('option', { name: 'little-monster' }),
+      )
+      fireEvent.click(panel.getByRole('combobox', { name: 'Pick a provider' }))
+      fireEvent.click(
+        await screen.findByRole('option', { name: /claude-code/ }),
+      )
+      expect(
+        await panel.findByText(
+          /A session on a remote execution host has to be told where it works/,
+        ),
+      ).toBeInTheDocument()
+      expect(panel.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+      fireEvent.click(panel.getByRole('combobox', { name: /no project/ }))
+      fireEvent.click(
+        await screen.findByRole('option', { name: 'Convergence' }),
+      )
+      expect(
+        await panel.findByRole('combobox', { name: /marckraw\/convergence/ }),
+      ).toBeInTheDocument()
+      expect(
+        panel.getByRole('switch', {
+          name: 'Report back to Fable when it finishes',
+        }),
+      ).not.toBeChecked()
+      createRelay.mockImplementation(async (input) =>
+        makeRelay({
+          ...input,
+          id: 'remote-wire',
+          createdAt: 'now',
+          updatedAt: 'now',
+        }),
+      )
+      fireEvent.click(panel.getByRole('button', { name: 'Save changes' }))
+      await waitFor(() =>
+        expect(createRelay).toHaveBeenCalledWith(
+          expect.objectContaining({
+            spawnSpec: expect.objectContaining({
+              executionHost: 'little-monster',
+              workAddress: {
+                mode: 'repository',
+                repository: 'https://github.com/marckraw/convergence',
+                branchName: null,
+                label: 'marckraw/convergence',
+              },
+              returnWire: null,
+            }),
+          }),
+        ),
+      )
+    })
+
     it.each(['keyboard', 'remove change'] as const)(
       'G1 disables %s deletion (mutation: restore the corresponding deletion path)',
       async (proof) => {
@@ -2655,6 +2761,10 @@ describe('MissionControl', () => {
           sourceSessionId: 'a',
           action: 'spawn',
           spawnSpec: {
+            executionHost: 'local',
+            workAddress: null,
+            roleCard: null,
+            returnWire: null,
             projectId: 'project-1',
             providerId: 'codex',
             model: 'gpt-5.6',
@@ -2689,6 +2799,10 @@ describe('MissionControl', () => {
           action: 'spawn',
           armed: false,
           spawnSpec: {
+            executionHost: 'local',
+            workAddress: null,
+            roleCard: null,
+            returnWire: null,
             projectId: 'project-1',
             providerId: 'codex',
             model: null,

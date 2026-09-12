@@ -1,3 +1,4 @@
+import { REMOTE_SPAWN_PLACE_REQUIRED } from '../../../electron/backend/relay/relay.pure'
 import {
   buildFallbackCodexDescriptor,
   buildFallbackPiDescriptor,
@@ -5,6 +6,7 @@ import {
 import { describe, expect, it } from 'vitest'
 import type { SessionRelay } from '@/entities/session-relay'
 import {
+  EMPTY_SPAWN_SPEC,
   CONVERSATION_RESET_COMMAND,
   beforeDeliveryOptions,
   connectionDraftIsDirty,
@@ -115,6 +117,10 @@ describe('draftFromRelay and relayInputFromDraft', () => {
       action: 'spawn',
       targetSessionId: null,
       spawnSpec: {
+        executionHost: 'local',
+        workAddress: null,
+        roleCard: null,
+        returnWire: null,
         projectId: 'p1',
         providerId: 'codex',
         model: 'gpt-6-astra',
@@ -128,6 +134,8 @@ describe('draftFromRelay and relayInputFromDraft', () => {
     expect(draft.recipient).toEqual({
       kind: 'spawn',
       spec: {
+        ...EMPTY_SPAWN_SPEC,
+        returnWire: null,
         projectId: 'p1',
         providerId: 'codex',
         model: 'gpt-6-astra',
@@ -157,6 +165,7 @@ describe('draftFromRelay and relayInputFromDraft', () => {
       recipient: {
         kind: 'spawn',
         spec: {
+          ...EMPTY_SPAWN_SPEC,
           projectId: null,
           providerId: 'codex',
           model: null,
@@ -370,6 +379,7 @@ describe('connectionDraftProblem', () => {
           recipient: {
             kind: 'spawn',
             spec: {
+              ...EMPTY_SPAWN_SPEC,
               projectId: null,
               providerId: null,
               model: null,
@@ -495,4 +505,20 @@ describe('connectionDraftIsDirty', () => {
     expect(connectionDraftIsDirty(typed, saved)).toBe(true)
     expect(connectionDraftIsDirty(saved, saved)).toBe(false)
   })
+})
+
+it('refuses saving an unnamed remote place in the recipe (mutation: drop draft place guard)', () => {
+  const draft = newConnectionDraft({ sourceSessionId: 'fable' })
+  draft.recipient = {
+    kind: 'spawn',
+    spec: {
+      ...EMPTY_SPAWN_SPEC,
+      providerId: 'codex',
+      executionHost: 'little-monster',
+      workAddress: null,
+    },
+  }
+  expect(connectionDraftProblem(draft, [], null, { supportsReset: true })).toBe(
+    REMOTE_SPAWN_PLACE_REQUIRED,
+  )
 })

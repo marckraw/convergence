@@ -62,6 +62,18 @@ describe('normalizeRelayAction', () => {
 })
 
 describe('normalizeRelaySpawnSpec', () => {
+  it('refuses a remote spawn without a stated place (mutation: drop remote place guard)', () => {
+    expect(() =>
+      normalizeRelaySpawnSpec({
+        providerId: 'codex',
+        executionHost: 'little-monster',
+        workAddress: null,
+      }),
+    ).toThrow(
+      'A session on a remote execution host has to be told where it works.',
+    )
+  })
+
   const spec = {
     projectId: ' p1 ',
     providerId: ' codex ',
@@ -73,6 +85,10 @@ describe('normalizeRelaySpawnSpec', () => {
 
   it('trims every field the user could have padded', () => {
     expect(normalizeRelaySpawnSpec(spec)).toEqual({
+      executionHost: 'local',
+      workAddress: null,
+      roleCard: null,
+      returnWire: null,
       projectId: 'p1',
       providerId: 'codex',
       model: 'gpt-5.6',
@@ -845,3 +861,18 @@ it.each(['| Status | Ready |\n|---|---|', '# Ready', '📍 **WHERE WE ARE**'])(
     expect(buildPayloadPreview(text)).toBe(text.replace(/\s+/g, ' ').trim())
   },
 )
+
+it('ignores a place on a local spawn (mutation: retain the local address)', () => {
+  expect(
+    normalizeRelaySpawnSpec({
+      providerId: 'codex',
+      executionHost: 'local',
+      workAddress: {
+        mode: 'project',
+        projectId: 'remote',
+        workingDirectory: '/srv/repo',
+        label: 'Remote',
+      },
+    }).workAddress,
+  ).toBeNull()
+})

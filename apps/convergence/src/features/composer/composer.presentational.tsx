@@ -55,7 +55,7 @@ import type { ExecutionBarView } from './execution-bar.pure'
 import {
   workAddressReadyForSend,
   type WorkAddressSlotView,
-} from './work-address-slot.pure'
+} from '@/entities/execution-host'
 import { composerCardDepthClassByMode } from './execution-bar.styles'
 import { relayMuteTitle } from './relay-mute.pure'
 import { ProviderAccountPicker } from '@/entities/provider-account'

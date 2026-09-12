@@ -1,3 +1,8 @@
+import { namesThisMachine } from '../../../src/shared/lib/execution-host-id.pure'
+import {
+  decodeSessionWorkAddress,
+  namesAConcreteWorkPlace,
+} from '../../../src/shared/lib/work-address.pure'
 import type {
   RelayAction,
   RelayHopOutcome,
@@ -84,7 +89,34 @@ export function normalizeRelaySpawnSpec(
     )
   }
 
+  const executionHost = namesThisMachine(spec.executionHost)
+    ? 'local'
+    : spec.executionHost
+  if (
+    typeof executionHost !== 'string' ||
+    !executionHost.trim() ||
+    executionHost.trim() !== executionHost
+  )
+    throw new Error('A spawn host must be an exact endpoint id')
+  const decoded =
+    executionHost === 'local'
+      ? { status: 'absent' as const }
+      : decodeSessionWorkAddress(spec.workAddress)
+  const workAddress = decoded.status === 'decoded' ? decoded.address : null
+  if (executionHost !== 'local' && !namesAConcreteWorkPlace(workAddress))
+    throw new Error(REMOTE_SPAWN_PLACE_REQUIRED)
+
   return {
+    executionHost,
+    workAddress,
+    roleCard: spec.roleCard?.trim() || null,
+    returnWire:
+      spec.returnWire == null
+        ? null
+        : {
+            instruction:
+              normalizeRelayInstruction(spec.returnWire.instruction) ?? '',
+          },
     projectId,
     providerId,
     model: spec.model?.trim() ? spec.model.trim() : null,
@@ -850,3 +882,9 @@ export function batonMismatchMessage(
       : line
   return `This wire waits for "${conditionToken}"; the message's last line was "${quoted}", which ${seen}, so it held.`
 }
+
+/** MAR-2689's refusal, shared by the recipe normalizer and import reader. */
+export const REMOTE_SPAWN_PLACE_REQUIRED =
+  'A session on a remote execution host has to be told where it works. ' +
+  'Pick a Project or a repository in the composer before starting it — ' +
+  'starting it without one would run it somewhere nobody named.'

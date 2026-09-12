@@ -691,6 +691,29 @@ refuse. Ruled 2026-08-20: **a two-arm switch is the simplest honest shape
 here.** Revisit at the third action, when the shared shape is evidence rather
 than a guess.
 
+### Spawn places and return connections (MAR-2980)
+
+`normalizeRelaySpawnSpec` owns the recipe's host and work address. Older
+recipes default to `local`; local addresses normalize to null. A remote
+recipe must name a concrete repository or Project before it can be stored.
+The engine passes the host and address through the existing session create
+boundary. Local create inputs retain their original shape, and local account
+ids never select an account on a remote host. A null repository branch asks
+the daemon to name the branch.
+
+`returnWire: { instruction } | null` describes an optional real connection,
+not a reporting side channel. After joining the new conversation to the crew,
+the spawn path uses `RelayService.create` to connect it back to the source:
+`settled`, `hail`, armed, with no condition. Null creates no return connection.
+New local recipes default reporting on; new remote recipes default it off.
+
+The recipe and composer share the work-address slot in
+`entities/execution-host`. The composer adapts its execution-bar view into
+the entity's structural inputs. The recipe derives both its visible address
+and save input from that slot; pending catalog reads do not erase its saved
+draft. YAML export, validation and import use the spawn normalizer, with
+provided values refused when normalization would change them.
+
 ### Adding a payload transform
 
 `fire()` reads the source's last assistant message and compiles the payload in

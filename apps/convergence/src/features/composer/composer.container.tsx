@@ -100,7 +100,7 @@ import {
   resolveWorkAddressSlot,
   workAddressForNewSession,
   type LocalRepositoryState,
-} from './work-address-slot.pure'
+} from './execution-bar.pure'
 import { CodexUsagePillContainer } from './codex-usage-pill.container'
 import { isCodexUsageWarmingUp } from './codex-usage-pill.pure'
 import { shouldShowCodexBillingControls } from './codex-usage-pill.pure'

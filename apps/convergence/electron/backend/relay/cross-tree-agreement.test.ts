@@ -181,3 +181,40 @@ it('RUN66 R2 all three history mirrors carry the same debt and cursor shape — 
     }),
   )
 })
+
+it('carries the errand recipe in all three mirrors (mutation: omit a spawn field)', async () => {
+  const { readFileSync } = await import('node:fs')
+  const ts = await import('typescript')
+  for (const [file, name] of [
+    ['relay.types.ts', 'RelaySpawnSpec'],
+    [
+      '../../../src/entities/session-relay/session-relay.types.ts',
+      'RelaySpawnSpec',
+    ],
+    ['../../../src/shared/types/electron-api.d.ts', 'RelaySpawnSpecData'],
+  ]) {
+    const source = ts.createSourceFile(
+      file,
+      readFileSync(new URL(file, import.meta.url), 'utf8'),
+      ts.ScriptTarget.Latest,
+      true,
+    )
+    const declaration = source.statements.find(
+      (node) => ts.isInterfaceDeclaration(node) && node.name.text === name,
+    )
+    const names =
+      declaration && ts.isInterfaceDeclaration(declaration)
+        ? declaration.members
+            .filter(ts.isPropertySignature)
+            .map((field) => field.name.getText(source))
+        : []
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'executionHost',
+        'workAddress',
+        'roleCard',
+        'returnWire',
+      ]),
+    )
+  }
+})

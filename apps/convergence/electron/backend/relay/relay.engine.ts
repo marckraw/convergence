@@ -1092,12 +1092,11 @@ export class RelayEngine {
    * no correcting a spawn that came up on the wrong account.
    */
   private resolveSpawnAccountId(spec: RelaySpawnSpec): string | null {
-    if (spec.providerAccountId) return spec.providerAccountId
+    if (spec.executionHost === 'local' && spec.providerAccountId)
+      return spec.providerAccountId
 
     return resolveAccountForAutomaticTurn({
-      // A spawn opens a local session; nothing in a spawn spec can ask for a
-      // remote host today.
-      executionHost: 'local',
+      executionHost: spec.executionHost,
       lastTurnAccountId: null,
       accounts: this.accounts.listByProvider(spec.providerId),
     })
@@ -1151,6 +1150,12 @@ export class RelayEngine {
               effort: spec.effort as CreateSessionInput['effort'],
               name: spec.name,
             }),
+        ...(spec.executionHost === 'local'
+          ? {}
+          : {
+              executionHost: spec.executionHost,
+              workAddress: spec.workAddress,
+            }),
       })
       spawnedSessionId = created.id
     } catch (error) {
@@ -1172,6 +1177,18 @@ export class RelayEngine {
     }
 
     try {
+      if (spec.returnWire) {
+        this.relays.create({
+          crewId: relay.crewId,
+          sourceSessionId: spawnedSessionId,
+          targetSessionId: relay.sourceSessionId,
+          action: 'hail',
+          conditionToken: null,
+          instruction: spec.returnWire.instruction,
+          armed: true,
+        })
+        this.onRelaysChanged?.()
+      }
       const dispatchId = await this.sessions.start(spawnedSessionId, {
         text: payload,
         providerAccountId: this.resolveSpawnAccountId(spec),
