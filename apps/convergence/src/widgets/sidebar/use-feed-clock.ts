@@ -17,10 +17,11 @@ export const NEEDS_YOU_CLOCK_INTERVAL_MS = 60_000
  * restarted tick a minute later. So arrival refreshes the clock immediately and
  * then ticks; emptying cancels it.
  *
- * Pausing is safe because `now` only reaches the card's `lastMoved` label:
+ * Pausing is safe because `now` only reaches relative labels and elapsed time:
  * `needsYouCardModel` and `groupNeedsYou` decide presence and grouping from the
  * session rows alone. No card can appear merely because time passed, so a
- * stopped clock cannot hide one.
+ * stopped clock cannot hide one. Known live durations tick once a second;
+ * feeds without a live duration retain the minute cadence.
  *
  * `onTick` is held in a ref: the timer's lifetime must follow the feed, not the
  * identity of a callback that the container may re-create on any render.
@@ -28,6 +29,7 @@ export const NEEDS_YOU_CLOCK_INTERVAL_MS = 60_000
 export function useFeedClock(
   hasCards: boolean,
   onTick: (now: number) => void,
+  live = false,
 ): void {
   const onTickRef = useRef(onTick)
   onTickRef.current = onTick
@@ -38,8 +40,8 @@ export function useFeedClock(
     onTickRef.current(Date.now())
     const timer = window.setInterval(
       () => onTickRef.current(Date.now()),
-      NEEDS_YOU_CLOCK_INTERVAL_MS,
+      live ? 1000 : NEEDS_YOU_CLOCK_INTERVAL_MS,
     )
     return () => window.clearInterval(timer)
-  }, [hasCards])
+  }, [hasCards, live])
 }

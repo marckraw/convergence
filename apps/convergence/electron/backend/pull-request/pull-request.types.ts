@@ -62,6 +62,7 @@ export interface GithubRepositoryRef {
 }
 
 export interface GithubCliPullRequestJson {
+  reviewDecision?: string
   number?: number
   title?: string
   url?: string
@@ -81,6 +82,7 @@ export interface GithubCliPullRequestViewJson extends GithubCliPullRequestJson {
 }
 
 export interface PullRequestLookupResult {
+  reviewDecision?: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED'
   provider: PullRequestProvider
   lookupStatus: PullRequestLookupStatus
   state: PullRequestState

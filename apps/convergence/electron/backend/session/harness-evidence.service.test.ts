@@ -19,6 +19,28 @@ function bed() {
   ).run()
   return { db, service: new HarnessEvidenceService(db) }
 }
+
+it('times background work only when every running task has a start, never from its observation time', () => {
+  const { db, service } = bed()
+  const insert = db.prepare(
+    "INSERT INTO session_tasks(task_id, session_id, status, started_at, observed_at) VALUES (?, 'session', 'running', ?, '2026-09-12T12:10:00Z')",
+  )
+  insert.run('a', '2026-09-12T12:01:00Z')
+  insert.run('b', '2026-09-12T12:00:00Z')
+  expect(
+    service.countParallelWork(['session']).get('session')?.runningStartedAt,
+  ).toBe('2026-09-12T12:00:00.000Z')
+  insert.run('unknown-start', null)
+  expect(
+    service.countParallelWork(['session']).get('session')?.runningStartedAt,
+  ).toBeUndefined()
+  db.prepare(
+    "UPDATE session_tasks SET status='completed' WHERE task_id='unknown-start'",
+  ).run()
+  expect(
+    service.countParallelWork(['session']).get('session')?.runningStartedAt,
+  ).toBe('2026-09-12T12:00:00.000Z')
+})
 // Recorded without a `turnId` in its payload — the shape that makes the reader
 // fall back to the stamps. This is what older builds wrote.
 function insertTurnlessHook(db: ReturnType<typeof bed>['db'], at: string) {
@@ -766,6 +788,7 @@ it('RUN64 round2 alive statuses cross turns but failures need known current time
     unknown: 1,
     failed: 1,
     stopped: 1,
+    runningStartedAt: '2026-09-09T10:00:00.000Z',
   })
 })
 

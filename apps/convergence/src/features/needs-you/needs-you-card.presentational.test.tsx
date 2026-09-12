@@ -42,7 +42,7 @@ it.each(Object.entries(cardFixtures))(
     expect(screen.getByTitle(session.updatedAt)).toHaveTextContent('5 m ago')
     if (session.pullRequest)
       expect(
-        screen.getByText(`#42 · ${session.pullRequest.state}`),
+        screen.getByRole('link', { name: /Pull request #42/ }),
       ).toBeInTheDocument()
     else expect(screen.queryByText(/#42/)).toBeNull()
     if (session.originKind === null) {
@@ -63,6 +63,22 @@ it.each(Object.entries(cardFixtures))(
     vi.unstubAllGlobals()
   },
 )
+it('opens the PR independently of selecting the conversation', () => {
+  const handlers = actions()
+  render(
+    <NeedsYouCard
+      card={needsYouCardModel(cardFixtures.open, cardContext)}
+      {...handlers}
+    />,
+  )
+  const link = screen.getByRole('link', { name: /Pull request #42/ })
+  expect(link.closest('button')).toBeNull()
+  expect(link).toHaveAttribute('href', cardFixtures.open.pullRequest!.url)
+  fireEvent.click(link)
+  expect(handlers.onSelect).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Horse, Convergence' }))
+  expect(handlers.onSelect).toHaveBeenCalledWith('open')
+})
 it.each(['open', 'merged'] as const)(
   '%s errand menu obeys archive law and pins (mutation: archive an open PR)',
   (kind) => {

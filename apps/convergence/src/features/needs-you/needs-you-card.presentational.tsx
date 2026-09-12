@@ -4,6 +4,7 @@ import { TooltipProvider } from '@/shared/ui/tooltip'
 import { isLocalExecutionHost } from '@/entities/execution-host'
 import { NeedsYouCardIcon } from './needs-you-card-icon.presentational'
 import { NeedsYouCardStatus } from './needs-you-card-status.presentational'
+import { NeedsYouPr } from './needs-you-pr.presentational'
 import { providerCardTints } from './needs-you-card.styles'
 import type { CSSProperties } from 'react'
 import './needs-you-card.css'
@@ -63,40 +64,43 @@ export function NeedsYouCard({
         active && 'ring-foreground/25',
       )}
     >
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={() => onSelect(session.id)}
-        aria-label={[session.name, card.summary, card.projectName]
-          .filter(Boolean)
-          .join(', ')}
-        className="h-auto min-w-0 flex-1 items-start justify-start whitespace-normal rounded-lg p-2 text-left hover:bg-transparent hover:text-foreground"
-      >
-        <span className="block min-w-0 w-full space-y-1">
-          <span className="flex items-start gap-1 text-xs font-medium">
-            <span className="min-w-0 break-words">{session.name}</span>
-            {session.pinnedAt && (
-              <Pin aria-label="Pinned" className="h-3 w-3 shrink-0" />
-            )}
-          </span>
-          <span
-            className="block truncate text-[11px] text-muted-foreground"
-            title={card.projectName}
-          >
-            {card.projectName}
-          </span>
-          <span
-            className="block break-words text-[11px] text-foreground"
-            title={session.model || 'Model not recorded'}
-          >
-            {session.model || 'Model not recorded'}
-          </span>
-          {card.prLabel && (
-            <span className="flex flex-wrap gap-1 text-[10px] font-normal">
-              <span className="rounded bg-muted px-1.5 py-0.5 tabular-nums">
-                {card.prLabel}
-              </span>
+      <div className="min-w-0 flex-1 p-2 text-left">
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => onSelect(session.id)}
+          title={card.timing.tooltip}
+          aria-label={[session.name, card.summary, card.projectName]
+            .filter(Boolean)
+            .join(', ')}
+          className="static h-auto min-w-0 w-full items-start justify-start whitespace-normal rounded-lg p-0 text-left after:absolute after:inset-0 after:rounded-lg hover:bg-transparent hover:text-foreground"
+        >
+          <span className="block min-w-0 w-full space-y-1">
+            <span className="flex items-start gap-1 text-xs font-medium">
+              <span className="min-w-0 break-words">{session.name}</span>
+              {session.pinnedAt && (
+                <Pin aria-label="Pinned" className="h-3 w-3 shrink-0" />
+              )}
             </span>
+            <span
+              className="block truncate text-[11px] text-muted-foreground"
+              title={card.projectName}
+            >
+              {card.projectName}
+            </span>
+            <span
+              className="block break-words text-[11px] text-foreground"
+              title={session.model || 'Model not recorded'}
+            >
+              {session.model || 'Model not recorded'}
+            </span>
+          </span>
+        </Button>
+        <div className="mt-1 space-y-1">
+          {session.pullRequest && (
+            <TooltipProvider delayDuration={200}>
+              <NeedsYouPr pr={session.pullRequest} />
+            </TooltipProvider>
           )}
           <NeedsYouCardStatus card={card} />
           <span className="block text-[10px] font-normal text-muted-foreground">
@@ -109,10 +113,10 @@ export function NeedsYouCard({
               {card.lastMoved}
             </time>
           </span>
-        </span>
-      </Button>
+        </div>
+      </div>
       <TooltipProvider delayDuration={200}>
-        <div className="flex w-10 shrink-0 flex-col items-center pb-1">
+        <div className="relative z-10 flex w-10 shrink-0 flex-col items-center pb-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

@@ -30,7 +30,7 @@ import {
 } from '@/features'
 import { switchToSession } from '@/features/command-center'
 import { useDialogStore } from '@/entities/dialog'
-import { NeedsYou } from './needs-you.presentational'
+import { NeedsYou } from './needs-you.container'
 import { groupNeedsYou, needsYouCardModel } from '@/features/needs-you'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { TerminalIdleSection } from './terminal-idle-section.presentational'
@@ -315,7 +315,11 @@ export const Sidebar: FC<SidebarProps> = ({
 
   // Keyed on presence, not on `cardGroups` itself: the array is rebuilt on
   // every tick, so depending on it would restart the interval each minute.
-  useFeedClock(cardGroups.length > 0, setCardNow)
+  useFeedClock(
+    cardGroups.length > 0,
+    setCardNow,
+    cardGroups.some((group) => group.cards.some((card) => card.timing.live)),
+  )
 
   const attentionCards = cardGroups
     .flatMap((group) => group.cards)

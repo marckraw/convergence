@@ -6,6 +6,8 @@ export interface SessionPullRequest {
   headBranch: string
   checkedAt: string
   source: 'gh' | 'daemon'
+  title?: string
+  reviewDecision?: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED'
 }
 
 export interface SessionPullRequestReading {

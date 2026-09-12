@@ -10,6 +10,7 @@ import {
   formatRelativeTime,
   parallelWorkStatus,
 } from '@/shared/lib/parallel-work.pure'
+import { needsYouTiming } from './needs-you-timing.pure'
 
 export interface CardContext {
   projectName: string
@@ -35,16 +36,16 @@ export function needsYouCardModel(
     session.attention === 'needs-approval' ||
     session.attention === 'needs-input'
   const parallelSummary = parallelWorkStatus(session)
+  const failed = session.attention === 'failed' || session.status === 'failed'
   const working =
     !waiting &&
-    session.attention !== 'failed' &&
+    !failed &&
     (session.status === 'running' ||
       (Boolean(parallelSummary) && Boolean(session.parallelWork?.running)))
-  const review =
-    session.attention === 'failed' ||
-    (session.attention === 'finished' && !working)
+  const review = failed || (session.attention === 'finished' && !working)
   return {
     session,
+    timing: needsYouTiming(session, context.now),
     projectName: context.projectName,
     host: isLocalExecutionHost(session.executionHost)
       ? 'laptop'
@@ -61,14 +62,16 @@ export function needsYouCardModel(
     canArchive:
       review || (kind === 'errand' && session.pullRequest?.state === 'merged'),
     working,
-    summary:
-      waiting || review
+    summary: failed
+      ? 'Failed'
+      : waiting
         ? formatSessionAttentionLabel(session)
         : working
           ? session.status === 'running'
             ? 'Working'
             : parallelSummary
-          : null,
+          : (parallelSummary ??
+            (review || session.status === 'completed' ? 'Finished' : null)),
     dismissLabel: waiting ? 'Snooze' : review ? 'Acknowledge' : null,
     attentionGroup: waiting ? 'Waiting on you' : review ? 'Needs review' : null,
     dismissed: context.dismissed ?? false,

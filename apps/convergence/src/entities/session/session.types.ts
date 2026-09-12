@@ -358,6 +358,9 @@ export interface QueuedInputPatchEvent {
 }
 
 export interface SessionSummary {
+  turnTiming?:
+    | import('@/shared/types/session-timing.types').SessionTurnTiming
+    | null
   pinnedAt?: string | null
   originKind?: 'spawn' | 'resident' | null
   pullRequest?: SessionPullRequest | null

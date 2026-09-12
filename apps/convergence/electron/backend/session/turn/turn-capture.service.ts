@@ -80,6 +80,7 @@ export interface StartTurnInput {
 }
 
 export interface EndTurnInput {
+  endedAt?: string
   sessionId: string
   turnId: string
   status: 'completed' | 'errored'
@@ -122,6 +123,11 @@ export interface TurnCaptureFailure {
 }
 
 export class TurnCaptureService {
+  private onTimingChanged: (sessionId: string) => void = () => {}
+
+  setTimingListener(listener: (sessionId: string) => void): void {
+    this.onTimingChanged = listener
+  }
   private baselines = new Map<string, TurnBaseline>()
   private inFlightStarts = new Map<string, Promise<void>>()
   private pendingEnds = new Map<
@@ -240,6 +246,7 @@ export class TurnCaptureService {
          )`,
       )
       .run(insertRow)
+    this.onTimingChanged(input.sessionId)
 
     const isGitRepo = await this.gitService.isGitRepository(
       input.workingDirectory,
@@ -275,6 +282,7 @@ export class TurnCaptureService {
   }
 
   endTurn(input: EndTurnInput): void {
+    input = { ...input, endedAt: new Date().toISOString() }
     const existing = this.pendingEnds.get(input.sessionId)
     if (existing) clearTimeout(existing.timer)
 
@@ -311,7 +319,7 @@ export class TurnCaptureService {
     this.db
       .prepare(
         `UPDATE session_turns
-         SET status = 'errored', ended_at = COALESCE(ended_at, datetime('now'))
+         SET status = 'errored'
          WHERE status = 'running'`,
       )
       .run()
@@ -422,7 +430,7 @@ export class TurnCaptureService {
     }
 
     const baseline = this.baselines.get(input.turnId)
-    const endedAt = new Date().toISOString()
+    const endedAt = input.endedAt ?? new Date().toISOString()
     const summary = deriveTurnSummary(input.summarySource)
 
     if (!baseline || baseline.turnId !== input.turnId) {
@@ -433,6 +441,7 @@ export class TurnCaptureService {
            WHERE id = ?`,
         )
         .run(endedAt, input.status, summary, input.turnId)
+      this.onTimingChanged(input.sessionId)
       return
     }
 
@@ -461,6 +470,7 @@ export class TurnCaptureService {
       updateTurn.run(endedAt, input.status, summary, input.turnId)
     })
     tx(changes)
+    this.onTimingChanged(input.sessionId)
 
     this.baselines.delete(input.turnId)
 

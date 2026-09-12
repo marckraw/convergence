@@ -1,6 +1,7 @@
 import {
   CircleAlert,
   CircleCheck,
+  CircleHelp,
   LoaderCircle,
   MessageCircle,
 } from 'lucide-react'
@@ -11,14 +12,17 @@ export function NeedsYouCardStatus({ card }: { card: NeedsYouCardModel }) {
   if (!card.summary) return null
 
   const waiting = card.attentionGroup === 'Waiting on you'
-  const failed = card.session.attention === 'failed'
+  const failed =
+    card.session.attention === 'failed' || card.session.status === 'failed'
   const Icon = waiting
     ? MessageCircle
     : failed
       ? CircleAlert
       : card.working
         ? LoaderCircle
-        : CircleCheck
+        : card.session.parallelWork?.unknown
+          ? CircleHelp
+          : CircleCheck
   return (
     <span
       className={cn(
@@ -27,6 +31,7 @@ export function NeedsYouCardStatus({ card }: { card: NeedsYouCardModel }) {
           ? 'text-foreground'
           : 'text-muted-foreground',
       )}
+      title={card.timing.tooltip}
     >
       <Icon
         aria-hidden="true"
@@ -37,7 +42,17 @@ export function NeedsYouCardStatus({ card }: { card: NeedsYouCardModel }) {
             card.working,
         })}
       />
-      <span>{card.summary}</span>
+      <span>
+        {card.summary}
+        {card.timing.label && (
+          <>
+            {' '}
+            <span className="tabular-nums text-muted-foreground">
+              {card.timing.label}
+            </span>
+          </>
+        )}
+      </span>
     </span>
   )
 }

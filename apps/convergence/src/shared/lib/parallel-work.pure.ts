@@ -46,6 +46,8 @@ export function pendingAgentDecision(
 }
 
 export interface ParallelWorkCounts {
+  /** Oldest active task, only when every running task has a recorded start. */
+  runningStartedAt?: string
   running: number
   unknown: number
   failed: number
