@@ -1,5 +1,11 @@
 # convergence
 
+## 0.55.1
+
+### Patch Changes
+
+- 257555f: Export, Delete and Import crew have doors in the Canvas
+
 ## 0.55.0
 
 ### Minor Changes
