@@ -366,7 +366,7 @@ describe('SessionService', () => {
    * `busy` is the typed refusal the queue can answer; `broken` is every other
    * error, which must still end the delivery loudly.
    */
-  function providerRefusing(kind: 'busy' | 'broken'): Provider {
+  function providerRefusing(kind: 'busy' | 'broken' | 'defer'): Provider {
     const base = createTestProvider()
     return {
       ...base,
@@ -383,6 +383,10 @@ describe('SessionService', () => {
             // Contains, not equals: the send path may prepend a project
             // context block before the provider ever sees the command.
             if (typeof text === 'string' && text.includes('/clear')) {
+              // `defer` is not a refusal at all: the provider accepts the
+              // input but says it belongs to the NEXT turn. It borrows the
+              // mute exactly as a send does, and gives it back nowhere.
+              if (kind === 'defer') return 'queue-follow-up'
               throw kind === 'busy'
                 ? new ProviderBusyError(
                     'Wait for the current turn to finish before clearing the conversation.',
@@ -396,7 +400,7 @@ describe('SessionService', () => {
     }
   }
 
-  async function relayTargetRefusing(kind: 'busy' | 'broken') {
+  async function relayTargetRefusing(kind: 'busy' | 'broken' | 'defer') {
     const registryOwn = new ProviderRegistry()
     let emitDelta: ((delta: SessionDelta) => void) | null = null
     const refusing = providerRefusing(kind)
@@ -568,6 +572,120 @@ describe('SessionService', () => {
     expect(
       own.getQueuedInputs(sessionId).map((item) => [item.text, item.state]),
     ).toEqual([['/clear', 'queued']])
+  })
+
+  it('gives the borrowed mute back when the drain DEFERS the opener (MAR-2888 lap 5)', async () => {
+    // The fourth site of the same class, one line below lap 4's catch. A
+    // provider can answer `queue-follow-up`: not a refusal, but "this
+    // belongs to the next turn". The drain then puts the row back in line and
+    // returns — and the mute it borrowed for a send that never landed stayed
+    // set. Its twin on the direct path restores; this one did not. The shape
+    // that bites: a Claude handle ending its connection with a recovery turn
+    // pending, so that recovery turn settles quiet on the opener's behalf.
+    const { service: own, sessionId, emit } = await relayTargetRefusing('defer')
+    const row = () =>
+      (
+        getDatabase()
+          .prepare('SELECT relays_muted FROM sessions WHERE id = ?')
+          .get(sessionId) as { relays_muted: number }
+      ).relays_muted
+    await own.sendMessage(sessionId, { text: 'ordinary work' })
+    const delivery = await own.deliverRelayMessage(sessionId, {
+      text: '/clear',
+      muteRelays: true,
+    })
+    getDatabase()
+      .prepare(
+        "UPDATE session_queued_inputs SET state = 'queued' WHERE session_id = ?",
+      )
+      .run(sessionId)
+    getDatabase()
+      .prepare('UPDATE sessions SET relays_muted = 0 WHERE id = ?')
+      .run(sessionId)
+
+    // The turn ends, the drain runs, the provider defers the row.
+    emit({ kind: 'session.patch', patch: { status: 'completed' } })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(own.getQueuedInputs(sessionId).map((item) => item.state)).toEqual([
+      'queued',
+    ])
+    expect(row()).toBe(0)
+    expect(delivery.dispatchId).toBeTruthy()
+  })
+
+  it('gives the borrowed mute back when the drain is refused as busy (MAR-2888 lap 5)', async () => {
+    // Lap 4 put a restore in the drain's catch and pinned the DIRECT path's
+    // settle; this pins the drain's own.
+    //
+    // It has to arrive by the opener's route, because that is the only thing
+    // that queues a muted row: `sendMessageWithOpener` enqueues its `/clear`
+    // with `muteRelays: true`. My first attempt used `deliverRelayMessage`,
+    // whose enqueue does not carry the flag, so the row was never muted and
+    // deleting the restore stayed green — a pin that tested nothing.
+    const { service: own, sessionId, emit } = await relayTargetRefusing('busy')
+    getDatabase()
+      .prepare("UPDATE sessions SET status = 'completed' WHERE id = ?")
+      .run(sessionId)
+    const receipt = await own.sendMessageWithOpener(sessionId, {
+      opener: '/clear',
+      text: 'payload',
+    })
+    expect(receipt.openerQueued).toBe(true)
+    // The opener is waiting and muted; the session is armed again.
+    getDatabase()
+      .prepare('UPDATE sessions SET relays_muted = 0 WHERE id = ?')
+      .run(sessionId)
+
+    // A turn boundary arrives, the drain sends the opener, the provider is
+    // still busy.
+    emit({ kind: 'session.patch', patch: { status: 'running' } })
+    emit({ kind: 'session.patch', patch: { status: 'completed' } })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // Back in line (lap 3) AND the session is still armed (lap 4).
+    expect(own.getQueuedInputs(sessionId).map((item) => item.text)).toEqual([
+      '/clear',
+      'payload',
+    ])
+    expect(
+      (
+        getDatabase()
+          .prepare('SELECT relays_muted FROM sessions WHERE id = ?')
+          .get(sessionId) as { relays_muted: number }
+      ).relays_muted,
+    ).toBe(0)
+  })
+
+  it('never clears a quiet the human asked for (MAR-2888 lap 5)', async () => {
+    // The third of the helper's three values, and the one with teeth: `1`
+    // means the session was ALREADY muted by somebody else's request. A
+    // restore that treated "not borrowed" as "clear it" would answer a
+    // refusal by switching a human's own quiet back on — so the settle after
+    // a refused hail must still be quiet.
+    const { service: own, sessionId, emit } = await relayTargetRefusing('busy')
+    const settles: SessionSettledEvent[] = []
+    own.onSessionSettled((event) => settles.push(event))
+    getDatabase()
+      .prepare(
+        "UPDATE sessions SET status = 'completed', relays_muted = 1 WHERE id = ?",
+      )
+      .run(sessionId)
+
+    const receipt = await own.sendMessageWithOpener(sessionId, {
+      opener: '/clear',
+      text: 'RUN100 round 1, lap 1 of 6',
+    })
+    expect(receipt.openerQueued).toBe(true)
+
+    emit({ kind: 'session.patch', patch: { status: 'running' } })
+    emit({ kind: 'session.patch', patch: { status: 'completed' } })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(settles.map((event) => event.relaysMuted)).toEqual([true])
   })
 
   it('leaves the target armed when its opener is refused as busy (MAR-2888 lap 4)', async () => {

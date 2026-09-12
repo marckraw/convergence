@@ -3810,6 +3810,12 @@ export class SessionService {
           throw error
         }
         if (disposition === 'queue-follow-up') {
+          // The send did not land, so the mute it borrowed goes back -- the
+          // fourth site of this rule, and the twin of the direct path's
+          // (MAR-2888 lap 5). A deferral is not a refusal, but it is equally
+          // a beat that did not happen: leave the mute standing and the next
+          // turn this session takes settles quiet on the opener's behalf.
+          this.restoreRelayMute(sessionId, previousMute)
           // Keep its original row and ordering; the next completion retries it.
           this.queuedInputs.patch(item.id, 'queued')
           return
