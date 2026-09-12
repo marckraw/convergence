@@ -445,6 +445,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('session:getQueuedInputs', sessionId),
     cancelQueuedInput: (id: string) =>
       ipcRenderer.invoke('session:cancelQueuedInput', id),
+    redeliverQueuedInput: (id: string) =>
+      ipcRenderer.invoke('session:redeliverQueuedInput', id),
     onSessionQueuedInputPatched: (callback: (event: unknown) => void) => {
       const handler = (_event: unknown, event: unknown) => callback(event)
       ipcRenderer.on('session:queuedInputPatched', handler)

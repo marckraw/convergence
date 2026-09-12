@@ -39,6 +39,14 @@ export interface SessionQueuedInputDraft {
    * input's turn after a restart. Absent for input people typed.
    */
   dispatchId?: string | null
+  /** The row this is a second attempt at (MAR-2971, R2). */
+  redeliveredFrom?: string | null
+  /**
+   * The place in line this input already had, when it has one (MAR-2971 lap
+   * 4). Only a re-attempt passes it: everything else is joining the back of
+   * the line, and its `rowid` says where that is.
+   */
+  queuePosition?: number
 }
 
 export type QueuedInputDeliveryMode = Extract<
@@ -75,6 +83,12 @@ export class SessionQueuedInputService {
     this.onPatch = listener
   }
 
+  /** One row by id, whatever its state, or null. */
+  get(id: string): SessionQueuedInput | null {
+    const row = this.getRowById(id)
+    return row ? queuedInputFromRow(row) : null
+  }
+
   list(sessionId: string): SessionQueuedInput[] {
     const rows = this.db
       .prepare(
@@ -82,11 +96,31 @@ export class SessionQueuedInputService {
          FROM session_queued_inputs
          WHERE session_id = ?
            AND state IN ('queued', 'dispatching', 'failed')
-         ORDER BY created_at ASC, rowid ASC`,
+         ORDER BY queue_position ASC, rowid ASC`,
       )
       .all(sessionId) as SessionQueuedInputRow[]
 
-    return rows.map(queuedInputFromRow)
+    // Which of these rows has already been replaced by a re-attempt. Read
+    // across EVERY state, not just the visible ones: a successor that has
+    // already been `sent` is gone from this list but its predecessor is
+    // still superseded, and offering Deliver now on it again would queue a
+    // second copy of work that already went (MAR-2971 lap 5).
+    const supersededIds = new Set(
+      (
+        this.db
+          .prepare(
+            `SELECT redelivered_from
+             FROM session_queued_inputs
+             WHERE session_id = ? AND redelivered_from IS NOT NULL`,
+          )
+          .all(sessionId) as { redelivered_from: string }[]
+      ).map((row) => row.redelivered_from),
+    )
+
+    return rows.map((row) => ({
+      ...queuedInputFromRow(row),
+      redeliveredBy: supersededIds.has(row.id),
+    }))
   }
 
   enqueue(
@@ -108,14 +142,21 @@ export class SessionQueuedInputService {
       skipContextInjection: input.skipContextInjection === true,
       relaysMuted: input.muteRelays === true,
       dispatchId: input.dispatchId ?? null,
+      redeliveredFrom: input.redeliveredFrom ?? null,
+      // Nothing can have replaced a row that is being created.
+      redeliveredBy: false,
+      endingToldAt: null,
       error: null,
+      // Filled from `rowid` right after the insert, or inherited by a
+      // re-attempt. Zero is never read: the update below runs in the same
+      // transaction as the insert.
+      queuePosition: input.queuePosition ?? 0,
       createdAt: timestamp,
       updatedAt: timestamp,
     }
 
-    this.db
-      .prepare(
-        `INSERT INTO session_queued_inputs (
+    const insert = this.db.prepare(
+      `INSERT INTO session_queued_inputs (
            id,
            session_id,
            delivery_mode,
@@ -128,12 +169,22 @@ export class SessionQueuedInputService {
            skip_context_injection,
            relays_muted,
            dispatch_id,
+           redelivered_from,
+           queue_position,
            error,
            created_at,
            updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    // Its own place in line, from `rowid`, unless it inherited one. Two
+    // statements in ONE transaction: every reader orders by `queue_position`
+    // alone, and SQLite sorts NULLs first, so a row that got its insert but
+    // not its position would jump the whole queue. `rowid` is the insertion
+    // order, which is design X's order -- an opener is inserted before its
+    // own payload, and two wires firing into one station keep each opener
+    // next to the payload it clears for.
+    this.db.transaction(() => {
+      insert.run(
         item.id,
         item.sessionId,
         item.deliveryMode,
@@ -146,20 +197,41 @@ export class SessionQueuedInputService {
         item.skipContextInjection ? 1 : 0,
         item.relaysMuted ? 1 : 0,
         item.dispatchId,
+        item.redeliveredFrom,
+        item.queuePosition === 0 ? null : item.queuePosition,
         item.error,
         item.createdAt,
         item.updatedAt,
       )
+      if (item.queuePosition === 0) {
+        this.db
+          .prepare(
+            'UPDATE session_queued_inputs SET queue_position = rowid WHERE id = ?',
+          )
+          .run(item.id)
+      }
+    })()
+    const stored = this.getRowById(item.id)
+    if (stored) item.queuePosition = stored.queue_position ?? 0
 
     this.notify(item.sessionId, 'add', item)
     return item
   }
 
-  /** Returns the cancelled row, receipt included, so its ending can be told. */
+  /**
+   * Returns the cancelled row, receipt included, so its ending can be told.
+   *
+   * From `queued` OR `failed` (R3, MAR-2971). A failed row used to be a dead
+   * end: the card rendered a DISABLED ✕, so the four rows Marcin was left
+   * with on 2026-09-11 could be neither delivered nor dismissed — the "weird
+   * indefinite state" he reported. A row on the wire (`dispatching`) still
+   * refuses, because its turn may yet answer and dismissing it would be a
+   * lie about work already in flight.
+   */
   cancel(id: string): SessionQueuedInput {
     const row = this.getRowById(id)
     if (!row) throw new Error(`Queued input not found: ${id}`)
-    if (row.state !== 'queued') {
+    if (row.state !== 'queued' && row.state !== 'failed') {
       throw new Error(`Queued input cannot be cancelled from ${row.state}`)
     }
 
@@ -169,9 +241,138 @@ export class SessionQueuedInputService {
   }
 
   /**
-   * The oldest waiting input. `rowid` breaks a same-millisecond tie, because
-   * an opener and its payload are enqueued in one beat and the opener must
-   * go first (MAR-2759).
+   * Deliver now (R2, MAR-2971): a failed row's work, queued again as a fresh
+   * row waiting for the next turn.
+   *
+   * A new row rather than a revived one, on purpose. The failed row is the
+   * record that an attempt happened and how it ended; rewriting it would
+   * erase the only evidence of the first try, and the ledger reads these
+   * rows. The new row carries the payload exactly as the wire wrote it --
+   * text, attachments, skills, the account chosen then, the injection bypass
+   * and the mute -- and points back at its predecessor.
+   *
+   * It carries a NEW receipt, not the old one. Lap 1 reused the id, reading
+   * "the same errand" as "the same receipt"; the two come apart the moment
+   * the engine has already been told the `failed` ending, which is every
+   * case but the boot recovery. A released id names a receipt nobody holds,
+   * so the next settle mints a brand new flow run and the crew's loop is
+   * orphaned mid-round -- and a muted opener's settle would read as work and
+   * fire the wires on a `/clear`. The caller tells the engine about the
+   * handover instead, and the engine re-opens the errand on the original
+   * run. A row whose first attempt carried no receipt (input a person
+   * typed) still carries none.
+   *
+   * The fresh row KEEPS its predecessor's place in line -- it inherits its
+   * `queue_position` (MAR-2971 lap 4, Finding C). Deliver now re-attempts an
+   * errand; it does not resubmit it, and an errand does not lose its turn by
+   * having failed. The sharp case is an opener: its payload is still queued
+   * ahead of it, so a row sent to the back would have the payload run FIRST
+   * and the `/clear` arrive after the work it was supposed to clear for.
+   *
+   * The two rows briefly share a position, and nothing has to break that
+   * tie: the predecessor is `failed`, so it is never in the same ordered set
+   * as the row that replaced it.
+   */
+  redeliver(id: string): {
+    input: SessionQueuedInput
+    /** The receipt the first attempt carried, or null if it carried none. */
+    fromDispatchId: string | null
+  } {
+    const row = this.getRowById(id)
+    if (!row) throw new Error(`Queued input not found: ${id}`)
+    if (row.state !== 'failed') {
+      throw new Error(`Queued input cannot be redelivered from ${row.state}`)
+    }
+    // Once only. A failed row keeps its card -- it is the record of the first
+    // attempt -- so the button on it stays clickable unless something says
+    // no, and a second press would queue a SECOND re-attempt sharing the
+    // first's place in line: two queued rows at one position, which is the
+    // one case the ordering cannot decide by itself. The successor is the
+    // answer: this errand is already being carried again.
+    // Scoped by session so it rides `idx_session_queued_inputs_session`:
+    // nothing indexes `redelivered_from`, and this runs on a button press.
+    const successor = this.db
+      .prepare(
+        `SELECT id FROM session_queued_inputs
+         WHERE session_id = ? AND redelivered_from = ?
+         LIMIT 1`,
+      )
+      .get(row.session_id, id) as { id: string } | undefined
+    if (successor) {
+      throw new Error(
+        `Queued input ${id} was already redelivered as ${successor.id}`,
+      )
+    }
+
+    const previous = queuedInputFromRow(row)
+    const fresh = this.enqueue(
+      previous.sessionId,
+      {
+        text: previous.text,
+        attachmentIds: previous.attachmentIds,
+        skillSelections: previous.skillSelections,
+        providerAccountId: previous.providerAccountId,
+        skipContextInjection: previous.skipContextInjection,
+        muteRelays: previous.relaysMuted,
+        // Its predecessor's PLACE, not its arrival time: an errand does not
+        // go to the back of the line for having failed, and an opener that
+        // did would arrive behind the payload it clears for. The new row's
+        // `created_at` is honestly now -- it really was queued now -- and
+        // the place is the column.
+        queuePosition: previous.queuePosition,
+        // A NEW receipt, never the old one (R2 as amended in lap 2). By the
+        // time a row is failed the engine has usually already been told the
+        // `failed` ending and released the baton, so the old id names a
+        // receipt nobody holds: the next settle would mint a brand new flow
+        // run and orphan the crew's loop. The engine is told about the
+        // handover separately and re-opens the errand on the original run.
+        dispatchId: previous.dispatchId === null ? null : this.idFactory(),
+        redeliveredFrom: previous.id,
+      },
+      previous.deliveryMode,
+    )
+    // The predecessor learns it has been replaced, now (MAR-2971 lap 6).
+    // `redeliveredBy` is a fact about ANOTHER row, so only a read that asks
+    // about both can carry it -- and `list()` runs on session activation.
+    // Without this the successor's card appears while the old one keeps its
+    // Deliver now button until the user switches sessions: the second press
+    // is refused at the service, so the queue stays right, but the card has
+    // been lying about what pressing it would do. Told from here, because
+    // this is the moment the fact becomes true.
+    this.notify(previous.sessionId, 'patch', {
+      ...previous,
+      redeliveredBy: true,
+    })
+    return { input: fresh, fromDispatchId: previous.dispatchId }
+  }
+
+  /**
+   * The next input this session will send: the one earliest in line.
+   *
+   * One number, and the same one every other reader uses (MAR-2971 lap 4).
+   * Two earlier attempts at this ordering were proxies for it and each broke
+   * at an input where the proxy and the question disagreed. `created_at`
+   * cannot answer it, because an opener and its payload are enqueued in one
+   * beat and share a millisecond. `relays_muted DESC` -- "a muted row is an
+   * opener, openers lead" -- was worse: the mute is a flag people set on
+   * their own follow-ups, and when two wires fire into one busy station the
+   * beat holds O1,P1,O2,P2, which that rule drains O1,O2,P1,P2, running the
+   * second payload with no `/clear` in front of it.
+   *
+   * `queue_position` is the fact itself, so there is nothing left to infer.
+   * `rowid` sits under it as LINEAGE, not as a second opinion about place: a
+   * failed row and the re-attempt that replaced it share a position on
+   * purpose, and between two rows at one place the later attempt is the
+   * later row. Without it SQLite's order between equals is undefined, so the
+   * pair could come back either way across a reload.
+   *
+   * HERE the tie is unreachable, and that is worth saying rather than
+   * testing: this reader sees only `queued` rows, an errand can be
+   * re-attempted only once (`redeliver` refuses a row that already has a
+   * successor), and the predecessor it shares a position with is `failed`.
+   * The key still belongs in this query -- it is the same ordering law as
+   * `list`'s, and a reader that agreed with it only by luck is the shape
+   * this lap removed -- but the failure it prevents is visible in `list`.
    */
   nextQueued(sessionId: string): SessionQueuedInput | null {
     const row = this.db
@@ -179,7 +380,7 @@ export class SessionQueuedInputService {
         `SELECT *
          FROM session_queued_inputs
          WHERE session_id = ? AND state = 'queued'
-         ORDER BY created_at ASC, rowid ASC
+         ORDER BY queue_position ASC, rowid ASC
          LIMIT 1`,
       )
       .get(sessionId) as SessionQueuedInputRow | undefined
@@ -232,11 +433,23 @@ export class SessionQueuedInputService {
   }
 
   /**
-   * Fails every input still waiting on this session and returns them, receipts
-   * included, so their ending can be told (MAR-2759, design P): a row that
-   * ends short of a turn owes a terminal, and the caller emits it.
+   * Fails every input this session ATTEMPTED to deliver and returns them,
+   * receipts included, so their ending can be told (MAR-2759, design P): a
+   * row that ends short of a turn owes a terminal, and the caller emits it.
+   *
+   * Attempted, and only attempted — `dispatching`, never `queued` (R1,
+   * MAR-2971). A `queued` row is one nothing has tried yet; the turn ahead of
+   * it ending is news about that turn, not about this row, and the next turn
+   * drains it in order. Four relay terminals were lost on 2026-09-11 because
+   * this swept the whole queue: the rows behind a stopped turn were marked
+   * `failed` with "The turn this input was waiting behind failed", their hops
+   * were stamped `failed`, and the loop recovered only because a human
+   * re-pasted four messages by hand.
+   *
+   * The name carries the rule: there is no method here that fails a row
+   * nobody attempted, so the old sweep cannot be written back by accident.
    */
-  failPendingForSession(
+  failAttemptedForSession(
     sessionId: string,
     reason: string,
   ): SessionQueuedInput[] {
@@ -245,8 +458,8 @@ export class SessionQueuedInputService {
         `SELECT id
          FROM session_queued_inputs
          WHERE session_id = ?
-           AND state IN ('queued', 'dispatching')
-         ORDER BY created_at ASC, rowid ASC`,
+           AND state = 'dispatching'
+         ORDER BY queue_position ASC, rowid ASC`,
       )
       .all(sessionId) as Array<{ id: string }>
 
@@ -256,6 +469,27 @@ export class SessionQueuedInputService {
       if (item) failed.push(item)
     }
     return failed
+  }
+
+  /**
+   * Stamps that this row's receipt has been told an ending (MAR-2971).
+   *
+   * Called by the paths that actually emit a terminal, never by
+   * `recoverDispatching`: that one rewrites the state at boot and announces
+   * nothing, so its rows are still owed and a later dismissal is the first
+   * and only ending they get. Without the stamp the two kinds of `failed`
+   * row are indistinguishable and a dismissal would announce a second
+   * ending for an id the engine has already released.
+   */
+  markEndingTold(ids: readonly string[]): void {
+    if (ids.length === 0) return
+    const stamp = this.db.prepare(
+      `UPDATE session_queued_inputs
+       SET ending_told_at = ?
+       WHERE id = ? AND ending_told_at IS NULL`,
+    )
+    const timestamp = this.now()
+    for (const id of ids) stamp.run(timestamp, id)
   }
 
   private getRowById(id: string): SessionQueuedInputRow | undefined {

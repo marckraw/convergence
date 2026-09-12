@@ -425,7 +425,13 @@ it('keeps AJV imports out of production source (mutation: add runtime ajv import
       })
   })
   expect(imports.sort()).toEqual([])
-})
+  // 30s, not the 5s default: this walks every `.ts`/`.tsx` under `electron`
+  // and `src` and runs `preProcessFile` on each, so its cost grows with the
+  // tree and it competes with ~400 other files for the same disk. It was
+  // already spending most of its budget (measured 5.4-8.1s under load) and
+  // the next handful of tests added anywhere in the repo tipped it over --
+  // a failure that says nothing about AJV. The assertion is unchanged.
+}, 30_000)
 
 it('reads the exported recipe at runtime (mutation: refuse valid YAML)', () => {
   expect(readCrewConfig(liveCrewYaml)).toEqual({

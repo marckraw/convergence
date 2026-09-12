@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import type { SessionStatus } from '../provider/provider.types'
 import type {
   CreateSessionInput,
+  DispatchRedeliveredEvent,
   DispatchTerminalEvent,
   SessionSettledEvent,
 } from '../session/session.types'
@@ -226,6 +227,17 @@ export class RelayEngine {
   private readonly batons = new Map<string, string>()
 
   /**
+   * Every receipt the engine is still holding a run for.
+   *
+   * A reader rather than a reach into the field: the sweep's law is about
+   * receipts -- no baton may outlive the work it names -- and a law worth
+   * asserting is worth being able to ask about (MAR-2971 lap 4).
+   */
+  heldDispatchIds(): string[] {
+    return [...this.batons.keys()]
+  }
+
+  /**
    * The dispatch ids of openers this engine has sent: the settles that
    * belong to Convergence rather than to the agent, recognised BY IDENTITY
    * when they arrive (MAR-2759).
@@ -403,6 +415,54 @@ export class RelayEngine {
     } catch (error) {
       console.error(
         `[relay] failed to handle a dispatch terminal for ${event.sessionId}`,
+        error,
+      )
+    }
+  }
+
+  /**
+   * A receipt handed on to a second attempt (MAR-2971, R2): the errand is
+   * re-opened on the run it always belonged to.
+   *
+   * `handleDispatchTerminal` has already run for the first attempt -- that
+   * is what made the row `failed` -- so by now the baton is gone, the
+   * opener's plumbing claim is gone, and the hop reads `failed`. None of
+   * that can be undone, and none of it should be: the first attempt really
+   * did end that way. What must be restored is the FUTURE: a baton for the
+   * new receipt on the original flow run, so the settle of the second
+   * delivery continues the crew's loop instead of minting a run of its own
+   * and orphaning the round mid-flight.
+   *
+   * The plumbing claim comes back only for a muted opener. That is the half
+   * with teeth: without it a redelivered `/clear` settles as WORK and fires
+   * the wires, which is a lap nobody asked for.
+   *
+   * No hop for the old receipt means no LEDGER row to re-open -- a follow-up
+   * a person typed has none, and neither does an opener, whose wire hop
+   * carries the payload's receipt instead. The opener still gets its claim
+   * back, because that claim is about the meaning of a settle rather than
+   * about a row. Never
+   * rejects, for the same reason `handleSettle` never does.
+   */
+  handleDispatchRedelivered(event: DispatchRedeliveredEvent): void {
+    try {
+      // The opener's claim FIRST, and not behind the hop lookup. An opener's
+      // receipt never has a hop of its own -- the wire's hop carries the
+      // PAYLOAD's id -- so a handler that returned early on "no hop" would
+      // never restore the claim, and the redelivered `/clear` would settle
+      // as work and fire the wires. The claim is a statement about what this
+      // settle MEANS, which does not depend on any ledger row.
+      if (event.relaysMuted) this.expectPlumbingSettle(event.toDispatchId)
+      const reopened = this.relays.redeliverHopForDispatch(
+        event.fromDispatchId,
+        event.toDispatchId,
+        event.at,
+      )
+      if (!reopened) return
+      this.batons.set(event.toDispatchId, reopened.flowRunId)
+    } catch (error) {
+      console.error(
+        `[relay] failed to handle a dispatch redelivery for ${event.sessionId}`,
         error,
       )
     }

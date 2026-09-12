@@ -143,8 +143,13 @@ const EMPTY_PROJECT_CONTEXT_ITEMS: ProjectContextItem[] = []
  */
 const NOT_LOOKED_FOR_REPOSITORY: LocalRepositoryState = { status: 'asking' }
 
+/**
+ * A waiting row says WHEN it goes, not merely that it is in a list
+ * (MAR-2971, R1). "Queued" was true and useless: the four cards Marcin was
+ * left with told him a state word and no future.
+ */
 const QUEUED_INPUT_STATE_LABELS: Record<SessionQueuedInput['state'], string> = {
-  queued: 'Queued',
+  queued: 'Waiting for the next turn',
   dispatching: 'Dispatching',
   sent: 'Sent',
   failed: 'Failed',
@@ -314,6 +319,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     (s) => s.setSessionModelSelection,
   )
   const cancelQueuedInput = useSessionStore((s) => s.cancelQueuedInput)
+  const redeliverQueuedInput = useSessionStore((s) => s.redeliverQueuedInput)
   const sessions = useSessionStore((s) => s.sessions)
   const globalChatSessions = useSessionStore((s) => s.globalChatSessions)
   const queuedInputs = useSessionStore((s) =>
@@ -1858,17 +1864,49 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
                     </div>
                   ) : null}
                 </div>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="h-6 w-6 shrink-0"
-                  aria-label="Cancel queued input"
-                  disabled={input.state !== 'queued'}
-                  onClick={() => void cancelQueuedInput(input.id)}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
+                <div className="flex shrink-0 items-center gap-1">
+                  {/*
+                   * Deliver now (MAR-2971, R2). Only a failed row has an
+                   * attempt to repeat; a waiting one is already on its way,
+                   * and offering to hurry it would be a button that lies.
+                   *
+                   * And only ONCE (lap 5). A failed row keeps its card as the
+                   * record of the first attempt, so the button would stay
+                   * clickable forever; pressed twice it would queue a second
+                   * re-attempt sharing the first's place in line. Once
+                   * something has replaced this row the errand is already
+                   * being carried again, and the honest card says so by
+                   * offering nothing to press.
+                   */}
+                  {input.state === 'failed' && !input.redeliveredBy ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-[11px]"
+                      aria-label="Deliver now"
+                      onClick={() => void redeliverQueuedInput(input.id)}
+                    >
+                      Deliver now
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-6 w-6 shrink-0"
+                    aria-label="Cancel queued input"
+                    // A failed row is dismissible too, or it is the dead end
+                    // Marcin reported: a card with a disabled ✕ and no way
+                    // out (R3). Only a row already on the wire refuses.
+                    disabled={
+                      input.state !== 'queued' && input.state !== 'failed'
+                    }
+                    onClick={() => void cancelQueuedInput(input.id)}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
             ))}
           </div>

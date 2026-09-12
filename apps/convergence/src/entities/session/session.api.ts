@@ -152,6 +152,8 @@ export const sessionApi = {
 
   cancelQueuedInput: (id: string): Promise<void> =>
     window.electronAPI.session.cancelQueuedInput(id),
+  redeliverQueuedInput: (id: string): Promise<SessionQueuedInput> =>
+    window.electronAPI.session.redeliverQueuedInput(id),
 
   onSessionQueuedInputPatched: (
     callback: (event: QueuedInputPatchEvent) => void,

@@ -105,6 +105,16 @@ export function queuedInputFromRow(
     skipContextInjection: row.skip_context_injection === 1,
     relaysMuted: row.relays_muted === 1,
     dispatchId: row.dispatch_id ?? null,
+    // Never null in practice: the migration backfills every existing row
+    // from `rowid` in the same transaction that adds the column, and
+    // `enqueue` sets it for every new one. A row that somehow had none
+    // arrived before everything that has one, which is what 0 says.
+    queuePosition: row.queue_position ?? 0,
+    // Whether something replaced this row is a fact about ANOTHER row, so a
+    // single-row read cannot know it. `list` overrides this after asking.
+    redeliveredBy: false,
+    redeliveredFrom: row.redelivered_from ?? null,
+    endingToldAt: row.ending_told_at ?? null,
     error: row.error,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

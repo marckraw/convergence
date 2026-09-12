@@ -744,6 +744,12 @@ async function startApp(): Promise<void> {
   sessionService.onDispatchTerminal((event) => {
     relayEngine.handleDispatchTerminal(event)
   })
+  // And a receipt handed on: Deliver now re-opens the errand on the run it
+  // always belonged to, rather than letting the retry start a run of its own
+  // (MAR-2971).
+  sessionService.onDispatchRedelivered((event) => {
+    relayEngine.handleDispatchRedelivered(event)
+  })
   // The stall hail's clock. A station that hangs produces no settle, so the
   // one event that would notice never arrives -- the check has to be driven by
   // time or not at all. Its own module so the timer is testable rather than an

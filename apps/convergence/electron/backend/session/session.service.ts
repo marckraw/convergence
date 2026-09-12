@@ -55,6 +55,8 @@ import {
   type CreateSessionInput,
   type DispatchTerminalEvent,
   type DispatchTerminalListener,
+  type DispatchRedeliveredEvent,
+  type DispatchRedeliveredListener,
   type QueuedInputPatchEvent,
   type SessionQueuedInput,
   type SessionSettledEvent,
@@ -298,6 +300,8 @@ export class SessionService {
   >()
   private readonly dispatchTerminalListeners =
     new Set<DispatchTerminalListener>()
+  private readonly dispatchRedeliveredListeners =
+    new Set<DispatchRedeliveredListener>()
   private pendingSettleEvents: SessionSettledEvent[] = []
   private settleFlushScheduled = false
   /**
@@ -791,6 +795,36 @@ export class SessionService {
     }
   }
 
+  /**
+   * A receipt handed on to a second attempt (MAR-2971, R2).
+   *
+   * Beside `onDispatchTerminal` because it is the same kind of news from the
+   * same owner -- the session layer holds the rows, so only it can say that
+   * this errand is being carried again under a new id. The relay engine
+   * re-opens the hop on the ORIGINAL flow run: a terminal already told it
+   * the first attempt ended, and without this the run would be orphaned and
+   * the second delivery would start a run of its own.
+   */
+  onDispatchRedelivered(listener: DispatchRedeliveredListener): () => void {
+    this.dispatchRedeliveredListeners.add(listener)
+    return () => {
+      this.dispatchRedeliveredListeners.delete(listener)
+    }
+  }
+
+  private emitDispatchRedelivered(event: DispatchRedeliveredEvent): void {
+    for (const listener of [...this.dispatchRedeliveredListeners]) {
+      try {
+        listener(event)
+      } catch (error) {
+        console.error(
+          `[session] dispatch-redelivered listener failed for ${event.sessionId}`,
+          error,
+        )
+      }
+    }
+  }
+
   private emitDispatchTerminal(
     sessionId: string,
     reason: DispatchTerminalEvent['reason'],
@@ -819,19 +853,38 @@ export class SessionService {
   }
 
   /**
-   * The loud terminal (MAR-2759, design P): fails every input still waiting
-   * on this session and emits `failed` for their receipts, in one event.
+   * The loud terminal (MAR-2759, design P): fails every input this session
+   * ATTEMPTED and emits `failed` for their receipts, in one event.
+   *
+   * Attempted only (R1, MAR-2971). A `dispatching` row was tried and its
+   * failure is its own; a `queued` row was not, so it stays queued and the
+   * next turn drains it. That distinction is also what keeps the ledger
+   * honest (R3): a never-attempted row's receipt never reaches this event,
+   * so `markDispatchesTerminated` never stamps its hop, and the hop stays
+   * unsettled and owed — `Waiting · <target> · since HH:MM` — instead of
+   * claiming a delivery that was never tried.
    *
    * Called from every transition out of carrying a turn that does not drain
    * the queue. The queue drains only on `completed`; any other way out
-   * leaves rows waiting for a settle that is not coming, and a row nobody
-   * owns is exactly the stranded work this invariant exists to remove.
+   * leaves ATTEMPTED rows waiting for a settle that is not coming, and a row
+   * nobody owns is exactly the stranded work this invariant exists to
+   * remove.
    * Termination over a retry, by ruling: the failure that got here was not
    * transient as far as this process can tell, and a quiet retry would be
    * a guess.
    */
   private terminateQueuedInputs(sessionId: string, reason: string): void {
-    const ended = this.queuedInputs.failPendingForSession(sessionId, reason)
+    const ended = this.queuedInputs.failAttemptedForSession(sessionId, reason)
+    // Emit, THEN stamp (MAR-2971 lap 3). The two orders fail differently and
+    // only one of them fails safely. Stamping first, a kill between the two
+    // writes leaves a row marked told that the engine never heard: its hop
+    // is owed forever and the later dismissal stays silent, because the
+    // stamp says the ending was already given. Emitting first, the same kill
+    // leaves a told ending with no stamp -- and that is idempotent at the
+    // ledger, because `markDispatchesTerminated` only stamps hops
+    // `WHERE settled_at IS NULL`, so the dismissal's second telling changes
+    // nothing. A lost stamp costs one redundant event; a lost event costs
+    // the receipt its only ending.
     this.emitDispatchTerminal(
       sessionId,
       'failed',
@@ -839,6 +892,7 @@ export class SessionService {
         .map((item) => item.dispatchId)
         .filter((dispatchId): dispatchId is string => dispatchId !== null),
     )
+    this.queuedInputs.markEndingTold(ended.map((item) => item.id))
   }
 
   /**
@@ -1430,14 +1484,130 @@ export class SessionService {
     return this.queuedInputs.list(sessionId)
   }
 
+  /**
+   * Dismiss (✕), from `queued` or from `failed` (R3, MAR-2971).
+   *
+   * The terminal's word is the row's own story. A `queued` row is work the
+   * user called off before anything tried it -- `cancelled`. A `failed` row
+   * is work that was tried and did not land, and the user is now letting it
+   * go rather than delivering it -- `abandoned`. Both read quiet to the
+   * stall clock, so neither raises a false alarm; the difference is
+   * observable exactly where it matters, on a row `recoverDispatching()`
+   * failed across a restart, whose hop never got a terminal and is still
+   * unsettled. That hop settles here, with the true word, instead of
+   * hanging owed forever.
+   */
   cancelQueuedInput(id: string): void {
+    const before = this.queuedInputs.get(id)
     const cancelled = this.queuedInputs.cancel(id)
     // That one receipt and no other: the row's siblings are still waiting.
-    if (cancelled.dispatchId) {
-      this.emitDispatchTerminal(cancelled.sessionId, 'cancelled', [
-        cancelled.dispatchId,
-      ])
+    // And once only: a row that reached `failed` through a path that EMITTED
+    // a terminal has already had its ending told, the engine has released
+    // the baton and stamped the hop, and saying it again would be a second
+    // ending for one receipt -- the invariant design P is built on. A row
+    // `recoverDispatching` failed at boot was never announced, so its stamp
+    // is null and this dismissal is its first and only ending (MAR-2971).
+    if (cancelled.dispatchId && before?.endingToldAt === null) {
+      this.queuedInputs.markEndingTold([cancelled.id])
+      this.emitDispatchTerminal(
+        cancelled.sessionId,
+        before?.state === 'failed' ? 'abandoned' : 'cancelled',
+        [cancelled.dispatchId],
+      )
     }
+  }
+
+  /**
+   * Deliver now (R2, MAR-2971): re-enqueue a failed input as the next thing
+   * this session sends.
+   *
+   * The NEW receipt is told nothing, because it is owed: it rides on the
+   * fresh row and it is the delivery that will settle its hop. The OLD one
+   * is a different question -- if nobody ever announced its ending it is
+   * closed here, quietly, below.
+   *
+   * The fresh row keeps its predecessor's place in line rather than joining
+   * the back, so "now" means the next turn this session takes and an opener
+   * still leads the payload it clears for (lap 4).
+   *
+   * If the session is idle, nothing would otherwise drain the row until the
+   * user sends again, so the drain is kicked here: "now" is the button's
+   * whole promise.
+   */
+  redeliverQueuedInput(id: string): SessionQueuedInput {
+    // Read before the re-attempt is enqueued: the old row is never rewritten,
+    // but its told-ending stamp decides whether its receipt still owes one.
+    const before = this.queuedInputs.get(id)
+    const { input: fresh, fromDispatchId } = this.queuedInputs.redeliver(id)
+
+    // The first attempt's ending, if nobody ever told it (MAR-2971 lap 3).
+    // A row `recoverDispatching` failed at boot was rewritten in SQL and
+    // announced to no one, so its hop is still unsettled. Handing the errand
+    // to a new receipt without closing the old one leaves that hop reading
+    // `Waiting · since ...` for the rest of the process's life, for an
+    // attempt that is over -- and a receipt with no ending is the one thing
+    // design P forbids. Told BEFORE the handover, so the ledger never holds
+    // two live hops for one errand.
+    //
+    // `abandoned`, the word dismiss uses, and not `failed` (lap 4). The
+    // user is superseding this attempt with another one they just asked
+    // for; it is quiet to the stall clock, and `failed` here would hail a
+    // chair about the very delivery being retried a line later.
+    if (before && before.dispatchId && before.endingToldAt === null) {
+      this.emitDispatchTerminal(fresh.sessionId, 'abandoned', [
+        before.dispatchId,
+      ])
+      this.queuedInputs.markEndingTold([before.id])
+    }
+
+    // The engine next, before anything can drain: it has to be holding a
+    // baton for the new receipt BEFORE that receipt's turn can settle, or
+    // the settle finds nothing and mints a run of its own -- the whole
+    // defect lap 2 exists to close (MAR-2971, R2).
+    if (fromDispatchId && fresh.dispatchId) {
+      this.emitDispatchRedelivered({
+        sessionId: fresh.sessionId,
+        fromDispatchId,
+        toDispatchId: fresh.dispatchId,
+        relaysMuted: fresh.relaysMuted,
+        at: new Date().toISOString(),
+      })
+    }
+
+    let session = this.getById(fresh.sessionId)
+    if (!session) return fresh
+
+    // A LOCAL session that says `running` with no handle is a dead process,
+    // not a busy one -- `isCarryingATurn` says so itself, and the send door
+    // above already treats it this way. Deliver now does what a send does:
+    // names the run stale, then drains. A REMOTE session says `running` and
+    // keeps no local handle by design, and there the daemon is the truth, so
+    // the row waits and the card keeps reading "waiting for the next turn"
+    // (R3/R4, MAR-2971 lap 2).
+    if (
+      session.status === 'running' &&
+      !this.activeHandles.has(session.id) &&
+      !isRemoteExecutionHost(session.executionHost)
+    ) {
+      session = this.markStaleRunningSessionFailed(
+        session,
+        'Session marked failed because Convergence no longer has an active provider process for this run.',
+        true,
+      )
+    }
+
+    // Idle by the session's OWN status, not by `isCarryingATurn` (R4).
+    // That helper answers "is there a local handle mid-turn", and a remote
+    // run has no local handle at all -- so on a remote session it reads
+    // "idle" while the daemon is mid-turn, and this would push the input
+    // into a turn already running. The status is the fact both hosts keep.
+    if (
+      session.status !== 'running' &&
+      !this.dispatches.isDispatching(session.id)
+    ) {
+      this.dispatchNextQueuedInput(fresh.sessionId)
+    }
+    return fresh
   }
 
   /**
@@ -3344,6 +3514,16 @@ export class SessionService {
    * without ever announcing it started would leave such a handle attached and
    * its turn row open. The daemon announces both, and the alternative --
    * trusting a sequence -- is provably wrong rather than merely dependent.
+   *
+   * Two vocabularies, and only one of them arrives here (MAR-2971 lap 2).
+   * `'stopped'` in `provider/claude-code/claude-code-provider.ts:575` is a
+   * HARNESS TASK status on
+   * a `task.changed` evidence fact, not a `SessionStatus` -- that union is
+   * `idle | running | completed | failed` -- and it only arms the idle
+   * timer. A stop the user asks for reaches the queue through `stop()` and
+   * the stale-run path, which is the route pinned by "marks a stale
+   * persisted running session failed instead of throwing on stop". So there
+   * is no third lifecycle word being dropped silently here.
    */
   private handleLifecycle(
     sessionId: string,

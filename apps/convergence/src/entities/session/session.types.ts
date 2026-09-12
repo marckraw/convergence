@@ -335,6 +335,17 @@ export interface SessionQueuedInput {
   attachmentIds: string[]
   skillSelections: SkillSelection[]
   providerRequestId: string | null
+  /**
+   * This input's place in line (MAR-2971 lap 4).
+   *
+   * The cards sort by it, which is the whole point: the renderer used to
+   * sort by `createdAt` and the drain by something else, so after Deliver
+   * now on an opener the list showed payload-then-clear while the queue sent
+   * clear-then-payload. One number, one order, every reader.
+   */
+  queuePosition: number
+  /** True once a re-attempt has replaced this row (MAR-2971 lap 5). */
+  redeliveredBy: boolean
   error: string | null
   createdAt: string
   updatedAt: string

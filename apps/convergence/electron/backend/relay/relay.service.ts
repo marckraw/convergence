@@ -414,18 +414,17 @@ export class RelayService {
    * The ledger is the authority rather than anything held in memory, because
    * it is the one record that survives a restart mid-run.
    *
-   * Budgeted outcomes only, and the filtering happens here rather than in SQL
-   * so `isBudgetedOutcome` stays the single place that knows which words mean
-   * "a turn was spent" -- a WHERE clause listing them would be a second copy
-   * free to drift.
+   * Budgeted outcomes only, and first attempts only: both rules live in
+   * `countBudgetedHopsWhere`, which every meter reads through, so the
+   * vocabulary of "a turn was spent" and the one-errand-one-hop rule each
+   * exist in exactly one place.
    */
   countWireHopsInFlowRun(relayId: string, flowRunId: string): number {
-    const rows = this.db
-      .prepare(
-        'SELECT outcome FROM relay_hops WHERE relay_id = ? AND flow_run_id = ?',
-      )
-      .all(relayId, flowRunId) as { outcome: string }[]
-    return rows.filter((row) => isBudgetedOutcome(row.outcome)).length
+    return this.countBudgetedHopsWhere(
+      'relay_id = ? AND flow_run_id = ?',
+      relayId,
+      flowRunId,
+    )
   }
 
   /**
@@ -471,10 +470,7 @@ export class RelayService {
    * not be able to spend each crew's limit and loop forever between them.
    */
   countBudgetedHops(flowRunId: string): number {
-    const rows = this.db
-      .prepare('SELECT outcome FROM relay_hops WHERE flow_run_id = ?')
-      .all(flowRunId) as { outcome: string }[]
-    return rows.filter((row) => isBudgetedOutcome(row.outcome)).length
+    return this.countBudgetedHopsWhere('flow_run_id = ?', flowRunId)
   }
 
   /**
@@ -485,11 +481,43 @@ export class RelayService {
    * "round 2" and spend a cap that crew never used.
    */
   countBudgetedHopsInCrew(crewId: string, flowRunId: string): number {
+    return this.countBudgetedHopsWhere(
+      'crew_id = ? AND flow_run_id = ?',
+      crewId,
+      flowRunId,
+    )
+  }
+
+  /**
+   * Every budget meter's one reading: how many provider turns were spent in
+   * some scope.
+   *
+   * ONE ERRAND, ONE BUDGETED HOP (MAR-2971 lap 3). A redelivered hop is the
+   * re-attempt of a hop that was already counted, so counting both spends
+   * the crew's budget twice for one delivery: at `round_cap = 2` a single
+   * failed-then-redelivered hop reads as two rounds, the loop's real round 2
+   * is refused as `skipped-round-budget`, and every later hop numbers itself
+   * two rounds ahead of the truth. The first attempt is the one that counts,
+   * which is also the only reading that survives a second retry.
+   *
+   * Three meters ask this -- the round cap and `roundNumber`, the wire's lap
+   * number, the run backstop -- and they ask it of different scopes, so the
+   * scope is the parameter and everything else is shared. One place knows
+   * the re-attempt rule and one place knows which outcome words mean "a turn
+   * was spent"; three call sites with their own WHERE clauses would be three
+   * copies free to drift, and two of them would drift silently because no
+   * test reads the lap number and the backstop together.
+   *
+   * The outcome filter stays in JS rather than SQL for that same reason:
+   * `isBudgetedOutcome` is the single place that knows the vocabulary.
+   */
+  private countBudgetedHopsWhere(scope: string, ...params: string[]): number {
     const rows = this.db
       .prepare(
-        'SELECT outcome FROM relay_hops WHERE crew_id = ? AND flow_run_id = ?',
+        `SELECT outcome FROM relay_hops
+         WHERE ${scope} AND redelivered_from IS NULL`,
       )
-      .all(crewId, flowRunId) as { outcome: string }[]
+      .all(...params) as { outcome: string }[]
     return rows.filter((row) => isBudgetedOutcome(row.outcome)).length
   }
 
@@ -587,6 +615,75 @@ export class RelayService {
    * answer, and a later terminal rewrites nothing. By exact id, never by
    * session, so a sibling receipt queued into the same station stays owed.
    */
+  /**
+   * Re-opens an errand a second attempt is carrying (MAR-2971, R2).
+   *
+   * A NEW hop on the SAME flow run, copied from the one the first attempt
+   * fired. Not a stamp on the old hop and not a rewrite of it: the first hop
+   * already reads `failed`, and that stays true of the first attempt -- what
+   * changed is that the errand is being carried again. History then shows
+   * two hops on one run, which is what happened.
+   *
+   * Returns the flow run the copy joined, so the caller can re-register the
+   * baton on it, or null when no hop ever carried the old receipt -- a
+   * follow-up a person typed has no hop, and nothing here is owed for it.
+   */
+  redeliverHopForDispatch(
+    fromDispatchId: string,
+    toDispatchId: string,
+    at: string,
+  ): { hopId: string; flowRunId: string; crewId: string } | null {
+    const previous = this.db
+      .prepare(
+        `SELECT * FROM relay_hops
+         WHERE dispatch_id = ?
+         ORDER BY fired_at DESC, rowid DESC
+         LIMIT 1`,
+      )
+      .get(fromDispatchId) as RelayHopRow | undefined
+    if (!previous) return null
+
+    const id = randomUUID()
+    this.db
+      .prepare(
+        `INSERT INTO relay_hops (
+           id, relay_id, crew_id, flow_run_id, fired_at, source_session_id,
+           target_session_id, spawned_session_id, trigger_status,
+           payload_preview, baton, round_number, lap_number, dispatch_id,
+           outcome, error, settle_id, redelivered_from
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        previous.relay_id,
+        previous.crew_id,
+        previous.flow_run_id,
+        at,
+        previous.source_session_id,
+        previous.target_session_id,
+        previous.spawned_session_id,
+        previous.trigger_status,
+        previous.payload_preview,
+        previous.baton,
+        previous.round_number,
+        previous.lap_number,
+        toDispatchId,
+        // Queued, because that is the truth again: the work is waiting to be
+        // taken. Unsettled, so the stall clock owns it from here.
+        'queued',
+        null,
+        null,
+        previous.id,
+      )
+
+    return {
+      hopId: id,
+      flowRunId: previous.flow_run_id,
+      crewId: previous.crew_id,
+    }
+  }
+
   markDispatchesTerminated(
     dispatchIds: readonly string[],
     at: string,

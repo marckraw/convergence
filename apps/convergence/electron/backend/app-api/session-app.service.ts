@@ -32,6 +32,7 @@ export type SessionAppBackend = Pick<
   | 'compactContext'
   | 'getQueuedInputs'
   | 'cancelQueuedInput'
+  | 'redeliverQueuedInput'
   | 'approve'
   | 'deny'
   | 'stop'
@@ -120,6 +121,10 @@ export class SessionAppService {
 
   cancelQueuedInput(queuedInputId: string): void {
     this.sessions.cancelQueuedInput(queuedInputId)
+  }
+
+  redeliverQueuedInput(queuedInputId: string): SessionQueuedInput {
+    return this.sessions.redeliverQueuedInput(queuedInputId)
   }
 
   approveAttentionRequest(

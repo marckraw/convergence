@@ -978,6 +978,13 @@ interface SessionQueuedInputData {
   attachmentIds: string[]
   skillSelections: SkillSelection[]
   providerRequestId: string | null
+  /**
+   * This input's place in line (MAR-2971 lap 4). The cards sort by it, so
+   * the list can never claim an order the queue will not follow.
+   */
+  queuePosition: number
+  /** True once a re-attempt has replaced this row (MAR-2971 lap 5). */
+  redeliveredBy: boolean
   error: string | null
   createdAt: string
   updatedAt: string
@@ -1875,6 +1882,7 @@ interface ElectronAPI {
     ) => () => void
     getQueuedInputs: (sessionId: string) => Promise<SessionQueuedInputData[]>
     cancelQueuedInput: (id: string) => Promise<void>
+    redeliverQueuedInput: (id: string) => Promise<SessionQueuedInput>
     onSessionQueuedInputPatched: (
       callback: (event: QueuedInputPatchEventData) => void,
     ) => () => void

@@ -119,6 +119,7 @@ interface SessionActions {
   loadActiveGlobalConversation: (sessionId: string) => Promise<void>
   loadQueuedInputs: (sessionId: string) => Promise<void>
   cancelQueuedInput: (id: string) => Promise<void>
+  redeliverQueuedInput: (id: string) => Promise<void>
   prepareForProject: (projectId: string | null) => void
   beginSessionDraft: (workspaceId: string | null) => void
   setActiveSession: (id: string | null) => void
@@ -263,9 +264,25 @@ function upsertQueuedInput(
     ? items.map((item) => (item.id === nextItem.id ? nextItem : item))
     : [...items, nextItem]
 
-  return nextItems
-    .filter((item) => visibleStates.has(item.state))
-    .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+  return (
+    nextItems
+      .filter((item) => visibleStates.has(item.state))
+      // The queue's own order, not a second opinion about it (MAR-2971 lap 4).
+      // Sorting by arrival time here let the cards disagree with the drain:
+      // after Deliver now on an opener the list showed payload-then-clear
+      // while the queue sent clear-then-payload, because a re-attempt keeps
+      // its predecessor's PLACE but is created now.
+      .sort(
+        (left, right) =>
+          left.queuePosition - right.queuePosition ||
+          // Lineage under the place, mirroring the readers' `rowid`: a failed
+          // row and the re-attempt that replaced it share a position, and the
+          // later attempt is the one created later. Without this the pair's
+          // order depends on whichever arrived in the store first, which is
+          // not the same thing after a reload.
+          left.createdAt.localeCompare(right.createdAt),
+      )
+  )
 }
 
 function persistRecents(ids: string[]): void {
@@ -898,6 +915,20 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       set({
         error:
           err instanceof Error ? err.message : 'Failed to cancel queued input',
+      })
+    }
+  },
+
+  redeliverQueuedInput: async (id: string) => {
+    set({ error: null })
+    try {
+      await sessionApi.redeliverQueuedInput(id)
+    } catch (err) {
+      set({
+        error:
+          err instanceof Error
+            ? err.message
+            : 'Failed to redeliver queued input',
       })
     }
   },
