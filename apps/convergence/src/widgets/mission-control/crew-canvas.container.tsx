@@ -1,6 +1,13 @@
 import { toast } from 'sonner'
 import { projectOpenApi } from '@/entities/project-open'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import type { FC } from 'react'
 import { Waypoints } from 'lucide-react'
 import { useCrewHailStore } from '@/entities/crew-hail'
@@ -127,9 +134,11 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const [savedDraft, setSavedDraft] = useState<ConnectionDraft | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
   const [includePositions, setIncludePositions] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const updateCrew = useSessionCrewStore((state) => state.updateCrew)
   const deleteCrew = useSessionCrewStore((state) => state.deleteCrew)
   /**
    * What leaving the draft would do, held until the person answers.
@@ -947,7 +956,11 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       setExporting(false)
     }
   }
+  // Snapshot the saved name only when entering a crew/panel; an update echo
+  // must not trim the draft while the person is still typing.
+  const resetNameDraft = useEffectEvent(() => setNameDraft(crew?.name ?? ''))
   useEffect(() => {
+    resetNameDraft()
     setIncludePositions(false)
     setConfirmingDelete(false)
   }, [crew?.id, panel.kind])
@@ -1296,14 +1309,12 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               emoji={crew.emoji}
               accentColor={crew.accentColor}
               onEmojiChange={(emoji) => {
-                void sessionCrewApi.update(crew.id, { emoji }).then(loadCrews)
+                void updateCrew(crew.id, { emoji })
               }}
               onAccentColorChange={(accentColor) => {
-                void sessionCrewApi
-                  .update(crew.id, { accentColor })
-                  .then(loadCrews)
+                void updateCrew(crew.id, { accentColor })
               }}
-              crewName={crew.name}
+              crewName={nameDraft}
               members={crew.members}
               resolveName={resolveName}
               deliveryLimit={crew.roundCap}
@@ -1315,8 +1326,9 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               batonNameProblem={batonNameProblem}
               batonNameDrafts={batonNameDrafts}
               onCrewNameChange={(name) => {
+                setNameDraft(name)
                 if (!isValidCrewName(name) || name.trim() === crew.name) return
-                void sessionCrewApi.update(crew.id, { name }).then(loadCrews)
+                void updateCrew(crew.id, { name })
               }}
               onBatonNameEdit={(sessionId, batonName) =>
                 setBatonNameDrafts((drafts) => ({

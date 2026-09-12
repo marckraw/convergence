@@ -3,7 +3,6 @@ import { X, Trash2 } from 'lucide-react'
 import type { SessionCrewMember } from '@/entities/session-crew'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
-import { formatCrewMemberCount } from './session-crew-groups.pure'
 import { CrewDecorationPicker } from './crew-decoration-picker.presentational'
 
 interface CrewSettingsPanelProps {
@@ -319,8 +318,9 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
       {confirmingDelete ? (
         <div className="flex flex-col gap-2">
           <p className="text-[11px] text-muted-foreground">
-            Delete “{crewName}” with {formatCrewMemberCount(memberCount)}? Only
-            the crew disappears; the conversations stay exactly where they are.
+            Delete “{crewName}” with {memberCount} conversation
+            {memberCount === 1 ? '' : 's'}? Only the crew disappears; the
+            conversations stay exactly where they are.
           </p>
           <div className="flex items-center gap-1.5">
             <Button

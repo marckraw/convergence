@@ -1211,10 +1211,10 @@ describe('MissionControl', () => {
       )
     })
 
-    async function openCrewSettings() {
+    async function openCrewSettings(crewName = 'Night shift') {
       const crew = makeCrew({
         id: 'crew-1',
-        name: 'Night shift',
+        name: crewName,
         emoji: '🌙',
         accentColor: '#7c3aed',
         sessionIds: ['a', 'b'],
@@ -1240,6 +1240,56 @@ describe('MissionControl', () => {
       await screen.findByRole('region', { name: 'Crew settings' })
       return api
     }
+
+    it('keeps a trailing space while renaming inline (mutation: control by crew.name)', async () => {
+      const api = await openCrewSettings('Night')
+      const field = screen.getByLabelText('Crew name')
+      fireEvent.change(field, { target: { value: 'Night ' } })
+      expect(field).toHaveValue('Night ')
+      expect(api.update).not.toHaveBeenCalled()
+      fireEvent.change(field, { target: { value: 'Night shift' } })
+      await waitFor(() =>
+        expect(api.update).toHaveBeenCalledExactlyOnceWith('crew-1', {
+          name: 'Night shift',
+        }),
+      )
+      expect(field).toHaveValue('Night shift')
+    })
+
+    it.each(['name', 'emoji', 'color'] as const)(
+      'captures a refused %s update in the crew store (mutation: bypass updateCrew)',
+      async (field) => {
+        const api = await openCrewSettings()
+        vi.mocked(api.update).mockRejectedValueOnce(
+          new Error('Crew update refused'),
+        )
+        if (field === 'name')
+          fireEvent.change(screen.getByLabelText('Crew name'), {
+            target: { value: 'Owls' },
+          })
+        else
+          fireEvent.click(
+            screen.getByLabelText(field === 'emoji' ? 'Emoji 🐎' : 'Green'),
+          )
+        await waitFor(() =>
+          expect(useSessionCrewStore.getState().error).toBe(
+            'Crew update refused',
+          ),
+        )
+      },
+    )
+
+    it('resets the name draft when reopening settings (mutation: omit draft reset)', async () => {
+      await openCrewSettings('Night')
+      fireEvent.change(screen.getByLabelText('Crew name'), {
+        target: { value: ' ' },
+      })
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Close crew settings' }),
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Crew settings' }))
+      expect(screen.getByLabelText('Crew name')).toHaveValue('Night')
+    })
 
     // RUN67 R1′ retires the dead menu's Save/Enter tests; inline rename stays.
     it('will not save a blank or unchanged name (mutation: update on a blank)', async () => {
@@ -1292,7 +1342,7 @@ describe('MissionControl', () => {
       ).toBeInTheDocument()
       expect(
         within(screen.getByRole('region', { name: 'Danger' })).getByText(
-          /2 sessions/,
+          /2 conversations/,
         ),
       ).toBeInTheDocument()
       expect(api.delete).not.toHaveBeenCalled()
@@ -1430,6 +1480,19 @@ describe('MissionControl', () => {
         )
         render(<MissionControl />)
         await switchToCanvas()
+        if (!existing) {
+          for (const name of [
+            'Add conversation',
+            'Connect',
+            'Crew settings',
+            'History',
+          ]) {
+            expect(screen.getByRole('button', { name })).toBeDisabled()
+          }
+          expect(
+            screen.getByText('0 conversations · 0 connections'),
+          ).toBeInTheDocument()
+        }
         fireEvent.click(
           await screen.findByRole('button', { name: 'Import crew…' }),
         )
