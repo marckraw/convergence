@@ -19,6 +19,31 @@ function bed() {
   ).run()
   return { db, service: new HarnessEvidenceService(db) }
 }
+// Recorded without a `turnId` in its payload — the shape that makes the reader
+// fall back to the stamps. This is what older builds wrote.
+function insertTurnlessHook(db: ReturnType<typeof bed>['db'], at: string) {
+  db.prepare(
+    'INSERT INTO session_harness_events(session_id,sequence,type,subtype,payload_json,created_at) VALUES(?,?,?,?,?,?)',
+  ).run(
+    'session',
+    1,
+    'system',
+    'hook_started',
+    JSON.stringify({
+      type: 'system',
+      subtype: 'hook_started',
+      hook_id: 'boundary',
+      hook_name: 'Boundary hook',
+      hook_event: 'PreToolUse',
+    }),
+    at,
+  )
+}
+function hookOwners(service: HarnessEvidenceService) {
+  return service
+    .harnessFacts('session')
+    .turns.map((turn) => [turn.turnId, turn.hooks.map((hook) => hook.id)])
+}
 
 it('R2 preserves spawn order across identity adoption — mutation order tied spawns by mutable provider id turns red', () => {
   const { service } = bed()
@@ -846,32 +871,66 @@ it.each([
     db.prepare(
       "INSERT INTO session_turns(id,session_id,sequence,started_at,status) VALUES ('turn2','session',2,?,'running')",
     ).run(turnStart)
-    // Recorded without a `turnId` in its payload — the shape that makes the
-    // reader fall back to the stamps. This is what older builds wrote.
-    db.prepare(
-      'INSERT INTO session_harness_events(session_id,sequence,type,subtype,payload_json,created_at) VALUES(?,?,?,?,?,?)',
-    ).run(
-      'session',
-      1,
-      'system',
-      'hook_started',
-      JSON.stringify({
-        type: 'system',
-        subtype: 'hook_started',
-        hook_id: 'boundary',
-        hook_name: 'Boundary hook',
-        hook_event: 'PreToolUse',
-      }),
-      eventAt,
-    )
+    insertTurnlessHook(db, eventAt)
 
-    expect(
-      service
-        .harnessFacts('session')
-        .turns.map((turn) => [turn.turnId, turn.hooks.map((hook) => hook.id)]),
-    ).toEqual([
+    expect(hookOwners(service)).toEqual([
       ['turn', []],
       ['turn2', ['boundary']],
     ])
   },
 )
+
+/**
+ * RUN75 lap 2 / MAR-2992. What `compareInstants` treats as an instant is
+ * decided by a strict ISO gate, not by `Date.parse`, which reads far more than
+ * a time. Both cases below are values the column really can carry — labels from
+ * fixtures and pre-ISO rows, and stamps written without an offset — and both
+ * must take the text path they have always taken.
+ *
+ * Mutation: drop the gate and hand both sides straight to `Date.parse`, and
+ * both cases go red.
+ */
+it('compares as instants only what is unambiguously one — the legacy month parse', () => {
+  const { db, service } = bed()
+  // `Date.parse('10')` is October 2001 and `Date.parse('9')` September 2001, so
+  // ungated these answer 1 where the text comparison answers -1 and the hook
+  // falls back to turn 1.
+  db.prepare("UPDATE session_turns SET started_at='1' WHERE id='turn'").run()
+  db.prepare(
+    "INSERT INTO session_turns(id,session_id,sequence,started_at,status) VALUES ('turn2','session',2,'10','running')",
+  ).run()
+  insertTurnlessHook(db, '9')
+
+  expect(hookOwners(service)).toEqual([
+    ['turn', []],
+    ['turn2', ['boundary']],
+  ])
+})
+
+it('compares as instants only what is unambiguously one — a stamp with no offset', () => {
+  const zone = process.env.TZ
+  // A no-offset stamp is LOCAL time in JS and UTC in SQLite, so ungated this
+  // attribution depends on where the machine stands. Pinned from a zone that
+  // is not UTC so the disagreement is visible at all.
+  process.env.TZ = 'Europe/Warsaw'
+  try {
+    const { db, service } = bed()
+    db.prepare(
+      "UPDATE session_turns SET started_at='2026-09-09T09:30:00.000Z' WHERE id='turn'",
+    ).run()
+    db.prepare(
+      "INSERT INTO session_turns(id,session_id,sequence,started_at,status) VALUES ('turn2','session',2,'2026-09-09T11:00:00','running')",
+    ).run()
+    insertTurnlessHook(db, '2026-09-09T10:00:00.000Z')
+
+    // Ungated, `'2026-09-09T11:00:00'` is 09:00Z in Warsaw and the hook lands
+    // on turn 2; on the text path `'…T11…' > '…T10…'` and it lands on turn 1.
+    expect(hookOwners(service)).toEqual([
+      ['turn', ['boundary']],
+      ['turn2', []],
+    ])
+  } finally {
+    if (zone === undefined) delete process.env.TZ
+    else process.env.TZ = zone
+  }
+})

@@ -316,15 +316,33 @@ export class HarnessEvidenceService {
  * handed to the previous turn. Which turn an event belongs to is not something
  * a writer's choice of precision gets to decide.
  *
- * Latent as things stand: every writer today stamps with `toISOString()`. The
- * fallback is the one the SQL uses for the same reason -- this column is not
- * guaranteed to hold a timestamp (fixtures and pre-ISO rows carry plain labels
- * like `start`), and a value neither side can read as a time answers exactly as
- * it did before.
+ * Latent as things stand: every writer today stamps with `toISOString()`. This
+ * column is not guaranteed to hold a timestamp -- fixtures and pre-ISO rows
+ * carry plain labels like `start` -- so anything that is not unambiguously one
+ * instant keeps the text comparison it always had.
+ *
+ * What counts as unambiguous is decided by `isoInstant` below rather than by
+ * `Date.parse`, which reads far more than a time: `'10'` is October 2001 and
+ * `'9'` September 2001 under V8's legacy month parse, so those two would
+ * compare as 1 where the text answers -1; and a stamp carrying no offset
+ * (`'2026-09-09T11:00:00'`) is LOCAL time in JS where SQLite reads it as UTC,
+ * so the answer would depend on the machine. Only a full ISO 8601 date-time
+ * ending in `Z` or a numeric offset is compared as an instant here.
+ *
+ * One difference from the SQL window survives that gate, deliberately:
+ * `julianday('10')` is a Julian day number, so a bare numeric string compares
+ * as a time on the SQL side and as text on this one. No writer emits one.
  */
+const isoInstant =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
+
 function compareInstants(a: string, b: string): number {
-  const left = Date.parse(a)
-  const right = Date.parse(b)
-  if (!Number.isNaN(left) && !Number.isNaN(right)) return left - right
+  if (isoInstant.test(a) && isoInstant.test(b)) {
+    const left = Date.parse(a)
+    const right = Date.parse(b)
+    // Shaped like an instant is not the same as being one: the gate counts
+    // digits, so `'2026-13-01T00:00:00Z'` passes it and parses as nothing.
+    if (!Number.isNaN(left) && !Number.isNaN(right)) return left - right
+  }
   return a < b ? -1 : a > b ? 1 : 0
 }
