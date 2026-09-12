@@ -1,5 +1,66 @@
 # convergence
 
+## 0.57.1
+
+### Patch Changes
+
+- 015c98e: Harness evidence attributes an event to a turn by comparing times, not the text
+  carrying them (MAR-2992).
+
+  The JS half of the seam the parallel-work answer window closed in the SQL
+  (MAR-2902). An event with no `turnId` in its payload is attributed to the latest
+  turn that started at or before it, and that comparison was made on the stamps as
+  strings. A turn written `2026-09-09T11:00:00Z` against an event written
+  `2026-09-09T11:00:00.000Z` — the same instant in two spellings — compared as
+  `'Z' > '.'`, so the event was handed to the previous turn. Which turn an event
+  belongs to is not something a writer's choice of precision gets to decide.
+
+  Both stamps are now read as instants when both are unambiguously one, and by a
+  strict ISO gate rather than by `Date.parse`, which reads far more than a time:
+  `'10'` is October 2001 under V8's legacy month parse, and a stamp carrying no
+  offset is local time in JS where SQLite reads it as UTC. Anything the gate turns
+  away — a fixture label, a pre-ISO row, a stamp without an offset — is compared
+  exactly as it was before, and the answer no longer depends on where the machine
+  stands. Latent in practice, since every writer today stamps with
+  `toISOString()`; the turn does not have to.
+
+  Neither comment overclaims any more: SQLite's `julianday()` reads a bare numeric
+  string as a day number, so one difference between the two sides survives
+  deliberately and is named where it lives. No writer emits such a value. Both
+  boundary orderings are pinned on both sides, and both halves of the gate are
+  pinned by the values the column can really carry.
+
+- ce412d9: The daemon snapshot's pull request decoder is gone, the drawer's legacy labels
+  are named, and gh's unusable replies say what is actually missing (MAR-2991).
+
+  Three leftovers from the era before the session PR became one fact with one
+  writer (MAR-2978).
+
+  The wire door decoded a session snapshot's `prUrl` into a three-way reading —
+  the daemon's own negative, a URL, or an unreadable shape — and carried it across
+  IPC into a renderer type. Nothing read it: the surface it was built for now
+  shows the `gh`-verified session fact instead, and the wire's `prUrl` survives
+  only as the ephemeral hint that asks that writer to look again. A decoder whose
+  only caller is its own test is decoration, and decoration drifts from the thing
+  it claims to describe, so it is deleted along with its types. The daemon may
+  keep sending the field; a snapshot that carries it decodes exactly as one that
+  does not, and neither is refused.
+
+  The PR details drawer's `gh unavailable` / `gh auth needed` / `unsupported
+remote` / `unknown` labels stay, and now say why: no build writes those statuses
+  any more, but `workspace_pull_requests` is durable and earlier builds did, so
+  those rows are still read by this drawer. Dropping the labels would not remove
+  the rows — it would only render them as a bare state beside a status word the
+  reader cannot place.
+
+  And a `found` reply from `gh` that cannot become a fact now names the part that
+  is missing. One message covered all of them, so a pull request carrying a
+  perfectly good number whose state this build could not classify was reported as
+  "gh answered without a PR number". A missing number, a missing URL and an
+  unusable state each say their own name — read off the parser that refused the
+  reply rather than derived a second time beside it, so the message and the
+  refusal cannot come apart.
+
 ## 0.57.0
 
 ### Minor Changes
