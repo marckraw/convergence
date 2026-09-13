@@ -120,6 +120,8 @@ export type TranscriptEntry =
 
 export interface SessionStartConfig {
   /** Local record query, after synchronous evidence persistence; never sent on the wire. */
+  /** Persisted task status before an incoming terminal fact is applied. Local evidence only. */
+  readTaskStatus?: (taskId: string) => string | undefined
   readParallelWorkCounts?: () => { running: number; unknown: number }
   sessionId: string
   workingDirectory: string
@@ -474,6 +476,8 @@ export interface SessionHandle {
     options?: {
       deliveryMode: MidRunInputMode
       queuedInputId?: string | null
+      /** Called by an async local adapter immediately before its first user-turn event. */
+      onTurnAccepted?: () => void
       expectedProviderTurnId?: string | null
       interactionResponse?: InteractionResponse
       /**
@@ -483,7 +487,7 @@ export interface SessionHandle {
        */
       providerAccountId?: string | null
     },
-  ) => void | 'queue-follow-up'
+  ) => void | 'queue-follow-up' | Promise<void | 'queue-follow-up'>
   approve: (
     providerApprovalId?: string,
     options?: { scope: 'once' | 'session' },

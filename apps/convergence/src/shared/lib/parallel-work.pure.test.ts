@@ -104,7 +104,7 @@ it('R5 parallel status respects foreground and interaction precedence and every 
     'answered · 2 tasks running · 1 unknown',
     'answered · 1 unknown · 1 failed · 2 stopped',
     'answered · 1 failed · 2 stopped',
-    'answered',
+    'answered · finishing',
   ])
 })
 
@@ -456,7 +456,7 @@ it('RUN77 reads answered from the recorded state even at zero counts — mutatio
       attention: 'none',
       parallelWork: { running: 0, unknown: 0, failed: 0, stopped: 0 },
     }),
-  ).toBe('answered')
+  ).toBe('answered · finishing')
   expect(
     parallelWorkStatus({
       status: 'completed',

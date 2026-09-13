@@ -570,27 +570,30 @@ export class ClaudeCodeProvider implements Provider {
       config.workingDirectory,
       () => currentTurnAccount?.target?.configDir ?? null,
       (fact) => {
+        const previousTaskStatus =
+          fact.kind === 'task.changed' && fact.patch.status === 'stopped'
+            ? config.readTaskStatus?.(fact.taskId)
+            : undefined
         sessionEmitter.recordEvidence(fact)
         if (answerStatus === 'answered' && fact.kind === 'process.ended') {
           config.readParallelWorkCounts?.()
           setStatus('completed')
           setAttention('finished')
         }
-        // A stop we did not issue is not a witness. Receipt and terminal fact
-        // may arrive in either order; confirmStop re-emits their joined fact.
-        if (
-          answerStatus === 'answered' &&
-          fact.kind === 'task.changed' &&
-          fact.patch.status === 'stopped' &&
-          fact.patch.stopReceiptAt
-        )
-          finishAnswer()
         if (
           fact.kind === 'task.changed' &&
           fact.patch.status &&
           ['completed', 'failed', 'stopped'].includes(fact.patch.status)
         )
           armIdleTimer()
+        return (
+          fact.kind === 'task.changed' &&
+          fact.patch.status === 'stopped' &&
+          previousTaskStatus !== 'stopped'
+        )
+      },
+      () => {
+        if (answerStatus === 'answered') finishAnswer()
       },
     )
 
@@ -615,7 +618,12 @@ export class ClaudeCodeProvider implements Provider {
             ? 'failed'
             : 'none'
       listeners.status.forEach((cb) => cb(status))
-      sessionEmitter.patchSession({ status })
+      sessionEmitter.patchSession({
+        status,
+        ...(status === 'running' && currentTurn
+          ? { turnOpenedBy: currentTurn.openedBy }
+          : {}),
+      })
       if (status === 'failed') {
         disposeTelemetrySink()
       }
@@ -1377,10 +1385,15 @@ export class ClaudeCodeProvider implements Provider {
       })
     }
 
+    function currentTurnDisposition(): 'queue-follow-up' | undefined {
+      return currentTurn?.openedBy === 'harness' ? 'queue-follow-up' : undefined
+    }
+
     async function startTurn(
       message: string,
       attachments?: Attachment[],
       options?: {
+        onTurnAccepted?: () => void
         skillSelections?: SkillSelection[]
         userMessageItemId?: string | null
         emitUserEntry?: boolean
@@ -1392,11 +1405,13 @@ export class ClaudeCodeProvider implements Provider {
          */
         continuesCurrentTurn?: boolean
       },
-    ): Promise<void> {
-      if (stopped || currentTurn) return
+    ): Promise<void | 'queue-follow-up'> {
+      if (stopped) return
+      if (currentTurn) return currentTurnDisposition()
       clearIdleTimer()
       if (connectionEnding) await connectionEnding
-      if (stopped || currentTurn) return
+      if (stopped) return
+      if (currentTurn) return currentTurnDisposition()
       if (
         child &&
         !options?.continuesCurrentTurn &&
@@ -1421,8 +1436,10 @@ export class ClaudeCodeProvider implements Provider {
         message,
         options?.skillSelections,
       )
-      if (stopped || currentTurn) return
+      if (stopped) return
+      if (currentTurn) return currentTurnDisposition()
 
+      options?.onTurnAccepted?.()
       const userMessageItemId =
         options?.emitUserEntry !== false
           ? sessionEmitter.addUserMessage({
@@ -1775,7 +1792,8 @@ export class ClaudeCodeProvider implements Provider {
           }
         }
 
-        void startTurn(text, attachments, {
+        return startTurn(text, attachments, {
+          onTurnAccepted: options?.onTurnAccepted,
           skillSelections,
           providerAccountId: options?.providerAccountId,
         })

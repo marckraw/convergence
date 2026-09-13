@@ -282,3 +282,20 @@ it('holds interaction order while applying live data, removals and arrivals', ()
   const removed = holdFeedOrder([{ title: 'Working', cards: [b] }], previous)
   expect(removed[0]!.cards.map((card) => card.session.id)).toEqual(['working'])
 })
+
+it('RUN77 lap4 zero-count answered says finishing — mutation claim Tasks running turns red', () => {
+  const card = needsYouCardModel(
+    cardSession({
+      status: 'answered',
+      attention: 'none',
+      parallelWork: { running: 0, unknown: 0, failed: 0, stopped: 0 },
+    }),
+    cardContext,
+  )
+  const view = buildFeedView(groupNeedsYou([card]), {
+    ...defaultFeedView(),
+    groupBy: 'status',
+  })
+  expect(card.summary).toBe('answered · finishing')
+  expect(view.groups[0].title).toBe('answered · finishing')
+})

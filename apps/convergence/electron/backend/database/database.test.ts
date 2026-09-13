@@ -3899,4 +3899,59 @@ it('adds the nullable last export path to an old crew and preserves it on reopen
     resetDatabase()
     rmSync(directory, { recursive: true, force: true })
   }
+it('RUN77 lap4 window and receipt survive migration and reopen — mutation drop either column or reset it turns red', () => {
+  withTempDb('answer-window', (path) => {
+    const db = getDatabase(path)
+    db.exec(
+      "INSERT INTO sessions(id,context_kind,provider_id,name,status,working_directory) VALUES ('answer','global','claude-code','answer','answered','/tmp')",
+    )
+    db.exec(
+      "INSERT INTO session_tasks(task_id,session_id,status) VALUES ('task','answer','running')",
+    )
+    for (const [table, column] of [
+      ['sessions', 'answer_window_start_sequence'],
+      ['session_tasks', 'stop_receipt_at'],
+    ])
+      if (
+        (
+          db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+        ).some((c) => c.name === column)
+      )
+        db.exec(`ALTER TABLE ${table} DROP COLUMN ${column}`)
+    closeDatabase()
+    const upgraded = getDatabase(path)
+    expect(
+      upgraded
+        .prepare(
+          "SELECT answer_window_start_sequence FROM sessions WHERE id='answer'",
+        )
+        .get(),
+    ).toEqual({ answer_window_start_sequence: null })
+    expect(
+      upgraded
+        .prepare(
+          "SELECT stop_receipt_at FROM session_tasks WHERE task_id='task'",
+        )
+        .get(),
+    ).toEqual({ stop_receipt_at: null })
+    upgraded.exec(
+      "UPDATE sessions SET answer_window_start_sequence=42 WHERE id='answer'; UPDATE session_tasks SET stop_receipt_at='2026-09-14T00:00:00Z' WHERE task_id='task'",
+    )
+    closeDatabase()
+    const reopened = getDatabase(path)
+    expect(
+      reopened
+        .prepare(
+          "SELECT status,answer_window_start_sequence FROM sessions WHERE id='answer'",
+        )
+        .get(),
+    ).toEqual({ status: 'answered', answer_window_start_sequence: 42 })
+    expect(
+      reopened
+        .prepare(
+          "SELECT stop_receipt_at FROM session_tasks WHERE task_id='task'",
+        )
+        .get(),
+    ).toEqual({ stop_receipt_at: '2026-09-14T00:00:00Z' })
+  })
 })

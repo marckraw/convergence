@@ -78,7 +78,7 @@ export function parallelWorkStatus(session: {
   return parts.length
     ? `${label} · ${parts.join(' · ')}`
     : session.status === 'answered'
-      ? 'answered'
+      ? 'answered · finishing'
       : null
 }
 

@@ -242,6 +242,7 @@ describe('execution host command envelope codec', () => {
   it('never sends the local provider account id to a host', () => {
     expect(EXECUTION_HOST_UNSENT_LOCAL_SEND_OPTION_FIELDS).toEqual([
       'providerAccountId',
+      'onTurnAccepted',
     ])
 
     // The object SessionHandle.sendMessage actually hands over — the local
@@ -251,6 +252,7 @@ describe('execution host command envelope codec', () => {
       queuedInputId: 'q-1',
       expectedProviderTurnId: 'turn-9',
       providerAccountId: 'account-1',
+      onTurnAccepted: () => {},
     })
 
     expect(command).toEqual({
@@ -444,6 +446,7 @@ describe('buildWireStartRequest', () => {
       'providerAccountId',
       'noTurnSinceBoundary',
       'readParallelWorkCounts',
+      'readTaskStatus',
     ])
 
     const request = buildWireStartRequest('claude', {
@@ -1084,3 +1087,20 @@ it('RUN77 maps answered outbound to running — mutation send answered on four-s
     patch: { status: 'running', attention: 'none' },
   })
 })
+
+it.each([
+  { kind: 'status', status: 'answered' },
+  {
+    kind: 'delta',
+    delta: { kind: 'session.patch', patch: { status: 'answered' } },
+  },
+])(
+  'RUN77 lap4 inbound wire refuses answered %j — mutation extend protocol status enum turns red',
+  (event) => {
+    expect(
+      decodeExecutionEventEnvelope(
+        JSON.stringify(eventEnvelope(event as ExecutionHostEvent)),
+      ),
+    ).toEqual({ ok: false, reason: 'invalid-payload' })
+  },
+)

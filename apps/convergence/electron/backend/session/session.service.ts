@@ -307,9 +307,11 @@ export class SessionService {
     new Set<DispatchRedeliveredListener>()
   private pendingSettleEvents: SessionSettledEvent[] = []
   private settleFlushScheduled = false
+  private quitting = false
+  private readonly retainingStoppedInputs = new Set<string>()
   /**
-   * True only while the constructor fails sessions the previous app run left
-   * running. Those settles are bookkeeping about a process that is already
+   * True only while the constructor heals running/answered sessions left by
+   * the previous app run. Those settles are bookkeeping about a process that is already
    * gone, not sessions finishing now, and must never fire relays at boot.
    */
   private recoveringStaleSessions = false
@@ -1451,17 +1453,25 @@ export class SessionService {
       .prepare(
         `SELECT payload_json FROM session_conversation_items
       WHERE session_id=? AND agent_run_id IS NULL AND kind='message' AND state='complete'
-      AND json_extract(payload_json,'$.actor')='assistant'
       AND sequence >= COALESCE((SELECT answer_window_start_sequence FROM sessions WHERE id=?),0)
       ORDER BY sequence`,
       )
       .all(sessionId, sessionId) as Array<{ payload_json: string }>
     return answerWindowResult(
       rows.flatMap((row) => {
-        const payload = JSON.parse(row.payload_json) as { text?: unknown }
-        return typeof payload.text === 'string' && payload.text.trim()
-          ? [payload.text]
-          : []
+        try {
+          const payload = JSON.parse(row.payload_json) as {
+            actor?: unknown
+            text?: unknown
+          } | null
+          return payload?.actor === 'assistant' &&
+            typeof payload.text === 'string' &&
+            payload.text.trim()
+            ? [payload.text]
+            : []
+        } catch {
+          return []
+        }
       }),
     )
   }
@@ -2032,7 +2042,7 @@ export class SessionService {
       if (session.archivedAt) {
         this.updateArchiveState(id, null)
       }
-      this.dispatchToActiveHandle({
+      await this.dispatchToActiveHandle({
         session,
         handle,
         input,
@@ -2404,14 +2414,14 @@ export class SessionService {
     }
   }
 
-  private dispatchToActiveHandle(input: {
+  private async dispatchToActiveHandle(input: {
     session: Session
     handle: SessionHandle
     input: SendMessageInput
     attachments: Attachment[] | undefined
     deliveryMode: MidRunInputMode
     dispatchId: string
-  }): void {
+  }): Promise<void> {
     const { session, handle, attachments, deliveryMode } = input
     const capability = getMidRunInputCapabilityForProviderId(session.providerId)
 
@@ -2453,22 +2463,51 @@ export class SessionService {
       accountId: input.input.providerAccountId,
     })
 
+    let accepted = false
+    const acceptTurn = () => {
+      if (accepted) return
+      accepted = true
+      const shouldStartConversationTurn =
+        deliveryMode === 'normal' || deliveryMode === 'answer'
+      if (shouldStartConversationTurn) {
+        this.pendingUserAttachmentIds.set(
+          session.id,
+          input.input.attachmentIds ?? [],
+        )
+        this.pendingUserSkillSelections.set(
+          session.id,
+          input.input.skillSelections ?? [],
+        )
+      }
+
+      this.pendingTurnAccountIds.set(
+        input.session.id,
+        input.input.providerAccountId ?? null,
+      )
+      // Whatever the mode, the input just went INTO the turn this handle is
+      // running (a native follow-up joins it; a normal send starts it), so that
+      // turn's settle is the one that consumed this dispatch (MAR-2759).
+      this.attachDispatchToTurn(session.id, input.dispatchId)
+    }
+
     const previousMute = input.input.muteRelays
       ? this.getRowById(session.id)?.relays_muted
       : undefined
     this.requestRelayMute(input.session.id, input.input.muteRelays)
     let disposition: void | 'queue-follow-up'
     try {
-      disposition = handle.sendMessage(
+      const delivery = handle.sendMessage(
         augmentedText,
         attachments,
         input.input.skillSelections,
         {
           deliveryMode,
+          onTurnAccepted: acceptTurn,
           interactionResponse: input.input.interactionResponse,
           providerAccountId: input.input.providerAccountId,
         },
       )
+      disposition = delivery instanceof Promise ? await delivery : delivery
     } catch (error) {
       // The mute was borrowed for a send that never happened. Give it back
       // before the refusal leaves, or the turn already under way settles
@@ -2512,27 +2551,7 @@ export class SessionService {
       }
       return
     }
-    const shouldStartConversationTurn =
-      deliveryMode === 'normal' || deliveryMode === 'answer'
-    if (shouldStartConversationTurn) {
-      this.pendingUserAttachmentIds.set(
-        session.id,
-        input.input.attachmentIds ?? [],
-      )
-      this.pendingUserSkillSelections.set(
-        session.id,
-        input.input.skillSelections ?? [],
-      )
-    }
-
-    this.pendingTurnAccountIds.set(
-      input.session.id,
-      input.input.providerAccountId ?? null,
-    )
-    // Whatever the mode, the input just went INTO the turn this handle is
-    // running (a native follow-up joins it; a normal send starts it), so that
-    // turn's settle is the one that consumed this dispatch (MAR-2759).
-    this.attachDispatchToTurn(session.id, input.dispatchId)
+    acceptTurn()
   }
 
   /**
@@ -2751,6 +2770,13 @@ export class SessionService {
     const handle = this.activeHandles.get(id)
     if (!handle) {
       const session = this.getById(id)
+      if (
+        session?.status === 'answered' &&
+        isLocalExecutionHost(session.executionHost)
+      ) {
+        this.completeOrphanAnswer(session)
+        return
+      }
       if (session?.status === 'running') {
         this.markStaleRunningSessionFailed(
           session,
@@ -2762,6 +2788,7 @@ export class SessionService {
       throw new Error(`Session not active: ${id}`)
     }
     if (this.getById(id)?.status === 'answered') {
+      this.retainingStoppedInputs.add(id)
       const tasks = this.listTasks(id)
       const runs = this.listAgentRuns(id)
       const ids = new Set([
@@ -2774,12 +2801,18 @@ export class SessionService {
       ])
       void Promise.allSettled(
         [...ids].map((taskId) => handle.stopTask?.(taskId)),
-      ).then(() => {
-        if (this.activeHandles.get(id) !== handle) return
-        // Conversation Stop is itself a witness if a task never confirms.
-        if (this.getById(id)?.status === 'answered') handle.stop()
-        this.releaseHandle(id)
-      })
+      )
+        .then(() => {
+          if (this.activeHandles.get(id) !== handle) return
+          // Conversation Stop is itself a witness if a task never confirms.
+          if (!isTerminalSessionStatus(this.getById(id)?.status ?? 'idle'))
+            handle.stop()
+          this.releaseHandle(id)
+        })
+        .catch((error) => {
+          console.error('[session] Could not finish conversation Stop', error)
+        })
+        .finally(() => this.retainingStoppedInputs.delete(id))
       return
     }
     if (handle.interrupt) {
@@ -2812,6 +2845,7 @@ export class SessionService {
   }
 
   async disposeAll(): Promise<void> {
+    this.quitting = true
     for (const sessionId of Array.from(this.activeHandles.keys()))
       this.releaseHandle(sessionId, 'quit')
     await Promise.all(this.pendingHandleDisposals)
@@ -3350,8 +3384,8 @@ export class SessionService {
     const nextStatus = patch.status ?? prevStatus
     if (
       nextStatus === 'running' &&
-      prevStatus !== 'running' &&
-      prevStatus !== 'answered'
+      (patch.turnOpenedBy === 'user' ||
+        (prevStatus !== 'running' && prevStatus !== 'answered'))
     ) {
       this.db
         .prepare(
@@ -3678,6 +3712,14 @@ export class SessionService {
 
     const handle = execution.host.start(execution.providerId, {
       sessionId: session.id,
+      readTaskStatus: (taskId) =>
+        (
+          this.db
+            .prepare(
+              'SELECT status FROM session_tasks WHERE session_id=? AND task_id=?',
+            )
+            .get(session.id, taskId) as { status: string } | undefined
+        )?.status,
       readParallelWorkCounts: () => {
         const counts = this.evidenceCounts
           .countParallelWork([session.id])
@@ -3835,7 +3877,10 @@ export class SessionService {
       }
       this.liveness.clear(sessionId)
       this.closeActiveTurn(sessionId, 'completed')
-      if (!source.retainQueuedInputsOnCompletion)
+      if (
+        !source.retainQueuedInputsOnCompletion &&
+        !this.retainingStoppedInputs.has(sessionId)
+      )
         this.dispatchNextQueuedInput(sessionId)
     }
   }
@@ -3865,7 +3910,8 @@ export class SessionService {
     return pending
   }
 
-  private dispatchNextQueuedInput(sessionId: string): void {
+  private async dispatchNextQueuedInput(sessionId: string): Promise<void> {
+    if (this.quitting) return
     const item = this.queuedInputs.nextQueued(sessionId)
     if (!item) return
 
@@ -3884,9 +3930,16 @@ export class SessionService {
       )
 
       if (handle) {
-        this.pendingUserAttachmentIds.set(sessionId, item.attachmentIds)
-        this.pendingUserSkillSelections.set(sessionId, item.skillSelections)
-        this.pendingTurnAccountIds.set(sessionId, item.providerAccountId)
+        let accepted = false
+        const acceptTurn = () => {
+          if (accepted) return
+          accepted = true
+          this.pendingUserAttachmentIds.set(sessionId, item.attachmentIds)
+          this.pendingUserSkillSelections.set(sessionId, item.skillSelections)
+          this.pendingTurnAccountIds.set(sessionId, item.providerAccountId)
+          this.attachDispatchToTurn(sessionId, item.dispatchId)
+          this.queuedInputs.patch(item.id, 'sent')
+        }
         // The mute the user chose when they wrote this, not the composer's
         // state now -- the toggle reset the moment they pressed send.
         const previousMute = item.relaysMuted
@@ -3895,16 +3948,18 @@ export class SessionService {
         this.requestRelayMute(sessionId, item.relaysMuted)
         let disposition: void | 'queue-follow-up'
         try {
-          disposition = handle.sendMessage(
+          const delivery = handle.sendMessage(
             augmentedText,
             attachments,
             item.skillSelections,
             {
               deliveryMode: 'normal',
+              onTurnAccepted: acceptTurn,
               queuedInputId: item.id,
               providerAccountId: item.providerAccountId,
             },
           )
+          disposition = delivery instanceof Promise ? await delivery : delivery
         } catch (error) {
           // Same rule on the drain's own send: a mute borrowed for a delivery
           // that was refused goes back, so the turn already under way is not
@@ -3923,10 +3978,7 @@ export class SessionService {
           this.queuedInputs.patch(item.id, 'queued')
           return
         }
-        // The receipt moves from the durable queue row to the turn it just
-        // started (MAR-2759): this turn's settle names it.
-        this.attachDispatchToTurn(sessionId, item.dispatchId)
-        this.queuedInputs.patch(item.id, 'sent')
+        acceptTurn()
         return
       }
 
@@ -3999,6 +4051,10 @@ export class SessionService {
       // Remote runs outlive the app process; they are reattached once the
       // remote execution host is wired via setRemoteExecutionHost.
       if (isRemoteExecutionHost(session.executionHost)) continue
+      if (session.status === 'answered') {
+        this.completeOrphanAnswer(session)
+        continue
+      }
       this.markStaleRunningSessionFailed(
         session,
         'Session marked failed because Convergence restarted before the provider process finished.',
@@ -4193,6 +4249,28 @@ export class SessionService {
         item: note,
       })
     }
+  }
+
+  private completeOrphanAnswer(session: Session): void {
+    const at = new Date().toISOString()
+    this.evidenceCounts.apply(session.id, null, {
+      kind: 'process.ended',
+      at,
+      reason: 'exit',
+      unresolvedStatus: 'unknown',
+    })
+    this.parallelWorkCounts.set(
+      session.id,
+      this.evidenceCounts.countParallelWork([session.id]).get(session.id)!,
+    )
+    this.applySessionPatch(session.id, {
+      status: 'completed',
+      attention: 'finished',
+      activity: null,
+      updatedAt: at,
+    })
+    this.closeActiveTurn(session.id, 'completed')
+    this.notifySessionChange(session.id)
   }
 
   private markStaleRunningSessionFailed(

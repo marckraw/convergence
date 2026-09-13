@@ -49,7 +49,8 @@ export class ClaudeEvidenceService {
   constructor(
     workingDirectory: string,
     private readonly configDir: () => string | null,
-    private readonly emit: (fact: HarnessEvidence) => void,
+    private readonly emit: (fact: HarnessEvidence) => void | boolean,
+    private readonly onStopWitness?: () => void,
   ) {
     this.cwd = workingDirectory
   }
@@ -68,9 +69,18 @@ export class ClaudeEvidenceService {
       at,
       patch: {
         stopReceiptAt: at,
-        ...(this.stoppedTasks.has(id) ? { status: 'stopped' } : {}),
       },
     })
+    this.witnessStop(id)
+  }
+
+  private witnessStop(id: string): void {
+    // A stop we did not issue is not a witness. The persisted transition and
+    // our receipt may arrive in either order, but can witness only once.
+    if (!this.stoppedTasks.has(id) || !this.stopReceipts.has(id)) return
+    this.stoppedTasks.delete(id)
+    this.stopReceipts.delete(id)
+    this.onStopWitness?.()
   }
 
   cancelStop(id: string): void {
@@ -164,11 +174,12 @@ export class ClaudeEvidenceService {
         )
           fact.patch.stopReason = 'stop'
         if (fact.patch.status === 'stopped') {
-          this.stoppedTasks.add(fact.taskId)
           const receipt = this.stopReceipts.get(fact.taskId)
           if (receipt) fact.patch.stopReceiptAt = receipt
         }
-        this.emit(fact)
+        const changedToStopped = this.emit(fact)
+        if (changedToStopped === true) this.stoppedTasks.add(fact.taskId)
+        this.witnessStop(fact.taskId)
         const toolId = fact.patch.toolUseId
         if (
           event.subtype === 'task_started' &&

@@ -13,7 +13,13 @@ import {
   formatSessionCardState,
 } from './session-card-state.pure'
 
-const STATUSES: SessionStatus[] = ['idle', 'running', 'completed', 'failed']
+const STATUSES: SessionStatus[] = [
+  'idle',
+  'running',
+  'answered',
+  'completed',
+  'failed',
+]
 
 it('RUN77 terminal conversation state survives background failures and unknowns — mutation infer state from task counts turns red', () => {
   const base = makeCard({
@@ -209,7 +215,7 @@ describe('classifySessionCardState', () => {
         ? 'needs-you'
         : activity === 'waiting-approval'
           ? 'needs-you'
-          : status === 'running' || activity !== null
+          : status === 'running' || status === 'answered' || activity !== null
             ? 'working'
             : attention === 'failed' || status === 'failed'
               ? 'failed'

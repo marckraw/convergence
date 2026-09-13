@@ -1,3 +1,4 @@
+import type { BatonDeclaration } from '../relay/relay.pure'
 import { parseSessionPullRequest } from '../pull-request/session-pull-request.pure'
 import type { SessionPullRequest } from '../../../src/shared/types/session-pull-request.types'
 import type { ParallelWorkCounts } from '../../../src/shared/lib/parallel-work.pure'
@@ -79,7 +80,7 @@ export type SettledSessionStatus = Extract<
  */
 export interface SessionSettledEvent {
   /** Immutable at the witness, before a queued send can open another window. */
-  answerWindow?: { message: string | null; baton: string | null }
+  answerWindow?: { message: string | null; declaration: BatonDeclaration }
   sessionId: string
   status: SettledSessionStatus
   settledAt: string

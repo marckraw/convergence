@@ -211,6 +211,8 @@ export type SessionDelta =
       > & {
         /** Ephemeral refresh hint, never a persisted session field. */
         prUrl?: string | null
+        /** Who opened this local provider turn; a user send begins a new answer window. */
+        turnOpenedBy?: 'user' | 'harness'
       }
       /**
        * The execution-host event sequence this patch came from, when it came

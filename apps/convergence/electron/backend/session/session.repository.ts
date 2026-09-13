@@ -121,7 +121,7 @@ export class SessionRepository {
       .prepare(
         `SELECT *
          FROM sessions
-         WHERE status = 'running'
+         WHERE status IN ('running', 'answered')
            AND provider_id != 'shell'`,
       )
       .all() as SessionRow[]

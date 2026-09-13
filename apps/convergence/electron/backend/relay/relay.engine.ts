@@ -351,11 +351,11 @@ export class RelayEngine {
         const message = event.answerWindow
           ? event.answerWindow.message
           : this.sessions.getLastAssistantMessageText(event.sessionId)
-        const emittedBaton = event.answerWindow
-          ? event.answerWindow.baton
-          : message
-            ? readEmittedBaton(message)
-            : null
+        const declaration =
+          event.answerWindow?.declaration ??
+          readEmittedDeclaration(message ?? '')
+        const emittedBaton =
+          declaration.kind === 'named' ? declaration.name : null
 
         // Which CREWS answered, not whether anything did. A settle can be a
         // beat in two loops at once, and one crew's wire matching says nothing
@@ -380,6 +380,7 @@ export class RelayEngine {
           emittedBaton,
           message,
           answeredCrewIds,
+          declaration,
         })
       } finally {
         this.leaveRun(flowRunId)
@@ -562,12 +563,10 @@ export class RelayEngine {
     crewIds: readonly string[]
     emittedBaton: string | null
     message: string | null
+    declaration: ReturnType<typeof readEmittedDeclaration>
     answeredCrewIds: ReadonlySet<string>
   }): void {
-    const { event, emittedBaton } = input
-    const declaration = input.message
-      ? readEmittedDeclaration(input.message)
-      : ({ kind: 'none' } as const)
+    const { event, emittedBaton, declaration } = input
     if (declaration.kind === 'none' && emittedBaton === null) return
     if (event.relaysMuted || event.status !== 'completed') return
 

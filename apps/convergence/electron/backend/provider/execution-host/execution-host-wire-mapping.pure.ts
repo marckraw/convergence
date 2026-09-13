@@ -71,6 +71,7 @@ export const EXECUTION_HOST_UNMAPPED_START_CONFIG_FIELDS = [
   'providerAccountId',
   'noTurnSinceBoundary',
   'readParallelWorkCounts',
+  'readTaskStatus',
 ] as const satisfies readonly (keyof SessionStartConfig)[]
 
 /**
@@ -338,6 +339,7 @@ export type LocalSendMessageOptions = NonNullable<
  */
 export const EXECUTION_HOST_UNSENT_LOCAL_SEND_OPTION_FIELDS = [
   'providerAccountId',
+  'onTurnAccepted',
 ] as const satisfies readonly (keyof LocalSendMessageOptions)[]
 
 /**

@@ -133,7 +133,11 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     [conversationRenderPlan, compactions],
   )
   const actionableApprovalIds = useMemo(() => {
-    if (session.status !== 'running' && session.status !== 'completed') {
+    if (
+      session.status !== 'running' &&
+      session.status !== 'answered' &&
+      session.status !== 'completed'
+    ) {
       return new Set<string>()
     }
 
@@ -160,7 +164,11 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     session.status,
   ])
   const actionableInputIds = useMemo(() => {
-    if (session.status !== 'running' && session.status !== 'completed') {
+    if (
+      session.status !== 'running' &&
+      session.status !== 'answered' &&
+      session.status !== 'completed'
+    ) {
       return new Set<string>()
     }
 
