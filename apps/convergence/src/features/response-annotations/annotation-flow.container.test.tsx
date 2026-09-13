@@ -8,6 +8,10 @@ import { useProjectContextStore } from '@/entities/project-context'
 import { ComposerContainer } from '@/features/composer'
 import { AnnotationSelectionCapture } from './annotation-selection-capture.container'
 import { AnnotationTray } from './annotation-tray.container'
+import {
+  fourteenAnnotationDrafts,
+  TODAYS_FOURTEEN_ANNOTATION_PAYLOAD,
+} from './annotation-strip-payload.fixture'
 
 /**
  * The whole slice, end to end: select text in a completed agent message,
@@ -357,6 +361,9 @@ describe('response annotations, end to end', () => {
     selectTextIn(LATEST_MESSAGE_ID, 'The migration')
     comment('First thought.')
 
+    // Pending annotations wait as compact pills; open the one to edit
+    // (MAR-3004). The claim is unchanged: what is sent is what was saved.
+    fireEvent.click(screen.getByRole('button', { name: 'The migration' }))
     const chip = screen.getByTestId('annotation-chip')
     fireEvent.click(within(chip).getByLabelText(/^Edit response to/))
     fireEvent.change(screen.getByLabelText(/^Edit response to/), {
@@ -378,8 +385,13 @@ describe('response annotations, end to end', () => {
     selectTextIn(LATEST_MESSAGE_ID, 'retries back off')
     comment('Delete this one.')
 
-    const chips = screen.getAllByTestId('annotation-chip')
-    fireEvent.click(within(chips[1]!).getByLabelText(/^Remove response to/))
+    // Open the second pill and remove it from its full chip (MAR-3004).
+    fireEvent.click(screen.getByRole('button', { name: 'retries back off' }))
+    fireEvent.click(
+      within(screen.getByTestId('annotation-chip')).getByLabelText(
+        /^Remove response to/,
+      ),
+    )
 
     sendComposer('done')
 
@@ -409,5 +421,49 @@ describe('response annotations, end to end', () => {
     sendComposer('Just a normal message.')
 
     expect(sentText()).toBe('Just a normal message.')
+  })
+  it('sends fourteen annotations byte-for-byte as the tray did before the strip (MAR-3004)', () => {
+    // The strip changes how annotations WAIT, never what they SAY. The
+    // expected bytes were captured from today's tray on v0.58.1, before the
+    // strip existed — not recompiled here, where they would move with it.
+    // Every interaction below is view state: open, move the opening, begin an
+    // edit and abandon it, close, walk the row. None of it may reach the
+    // payload.
+    for (const draft of fourteenAnnotationDrafts({
+      latest: LATEST_MESSAGE_ID,
+      earlier: EARLIER_MESSAGE_ID,
+    })) {
+      useResponseAnnotationStore.getState().addAnnotation(SESSION_ID, draft)
+    }
+    renderSurface()
+
+    fireEvent.click(screen.getByRole('button', { name: 'The migration' }))
+    fireEvent.keyDown(screen.getByTestId('annotation-chip'), { key: 'Escape' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'about a second' }))
+    fireEvent.click(screen.getByRole('button', { name: 'exponentially' }))
+    fireEvent.click(
+      within(screen.getByTestId('annotation-chip')).getByLabelText(
+        /^Edit response to/,
+      ),
+    )
+    fireEvent.change(screen.getByLabelText(/^Edit response to/), {
+      target: { value: 'An edit nobody saved.' },
+    })
+    fireEvent.keyDown(screen.getByLabelText(/^Edit response to/), {
+      key: 'Escape',
+    })
+
+    const firstPill = screen.getByRole('button', {
+      name: 'I rewrote the scheduler so retries back off exponentially.',
+    })
+    firstPill.focus()
+    fireEvent.keyDown(firstPill, { key: 'End' })
+    fireEvent.keyDown(document.activeElement!, { key: 'Home' })
+
+    expect(screen.queryByTestId('annotation-chip')).not.toBeInTheDocument()
+    sendComposer('Thanks, all of these.')
+
+    expect(sentText()).toBe(TODAYS_FOURTEEN_ANNOTATION_PAYLOAD)
   })
 })
