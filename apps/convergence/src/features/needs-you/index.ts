@@ -8,9 +8,14 @@ export {
   buildFeedView,
   defaultFeedView,
   readFeedView,
-  feedFacets,
-  workflowOrder,
+  activityViews,
+  toggleFeedChoice,
   holdFeedOrder,
   feedOrderKey,
 } from './needs-you-view.pure'
-export type { FeedView, FeedFacet, FeedGroup } from './needs-you-view.pure'
+export type {
+  FeedView,
+  FeedHost,
+  ActivityView,
+  FeedGroup,
+} from './needs-you-view.pure'
