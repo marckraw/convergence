@@ -1,5 +1,11 @@
 # convergence
 
+## 0.58.2
+
+### Patch Changes
+
+- 313b4fa: Choose where to save an exported crew and remember its last successful export path.
+
 ## 0.58.1
 
 ### Patch Changes
