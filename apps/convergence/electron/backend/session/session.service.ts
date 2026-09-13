@@ -1671,7 +1671,9 @@ export class SessionService {
       session.status !== 'running' &&
       !this.dispatches.isDispatching(session.id)
     ) {
-      this.dispatchNextQueuedInput(fresh.sessionId)
+      void this.dispatchNextQueuedInput(fresh.sessionId).catch((error) => {
+        console.error('[session] Could not dispatch queued input', error)
+      })
     }
     return fresh
   }
@@ -2741,6 +2743,14 @@ export class SessionService {
   private handleInactiveApprovalAction(id: string): void {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
+
+    if (
+      session.status === 'answered' &&
+      isLocalExecutionHost(session.executionHost)
+    ) {
+      this.completeOrphanAnswer(session)
+      return
+    }
 
     if (session.status === 'running') {
       this.markStaleRunningSessionFailed(
@@ -3881,7 +3891,9 @@ export class SessionService {
         !source.retainQueuedInputsOnCompletion &&
         !this.retainingStoppedInputs.has(sessionId)
       )
-        this.dispatchNextQueuedInput(sessionId)
+        void this.dispatchNextQueuedInput(sessionId).catch((error) => {
+          console.error('[session] Could not dispatch queued input', error)
+        })
     }
   }
 

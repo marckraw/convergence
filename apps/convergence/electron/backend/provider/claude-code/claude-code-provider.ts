@@ -1804,11 +1804,12 @@ export class ClaudeCodeProvider implements Provider {
       stop: () => {
         if (stopped) return
         const wasAnswered = answerStatus === 'answered'
+        const wasHarnessTurn = currentTurn?.openedBy === 'harness'
         sessionEmitter.addNote({ text: 'terminated by user', level: 'info' })
         disposeRuntime()
         if (!wasAnswered) {
-          setStatus('failed')
-          setAttention('failed')
+          setStatus(wasHarnessTurn ? 'completed' : 'failed')
+          setAttention(wasHarnessTurn ? 'finished' : 'failed')
         }
       },
     }

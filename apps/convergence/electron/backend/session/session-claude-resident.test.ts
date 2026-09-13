@@ -8,6 +8,7 @@ import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { ProviderRegistry } from '../provider/provider-registry'
 import { LocalExecutionHost } from '../provider/execution-host/local-execution-host'
 import { SessionService } from './session.service'
+import { SessionQueuedInputService } from './session-queued-input.service'
 import { HarnessEvidenceService } from './harness-evidence.service'
 import { TurnCaptureService } from './turn/turn-capture.service'
 import { GitService } from '../git/git.service'
@@ -1619,8 +1620,11 @@ it.each(['quit', 'stop'] as const)(
   },
 )
 
-it('RUN77 lap4 Stop stops a continuation before release — mutation stop only answered turns red', async () => {
-  const { service, session, children, send } = await answeredFixture()
+it('RUN77 lap5 Stop completes a harness continuation and retains the queue — mutation drop opener check turns red', async () => {
+  const { service, session, children, send, settles } = await answeredFixture(
+    ['task'],
+    true,
+  )
   children[0].holdStops = true
   service.stop(session.id)
   await vi.waitUntil(() => children[0].stopResponses.length === 1)
@@ -1628,11 +1632,17 @@ it('RUN77 lap4 Stop stops a continuation before release — mutation stop only a
   await vi.waitUntil(() => service.getById(session.id)?.status === 'running')
   children[0].stopResponses[0]()
   await vi.waitUntil(() => !service.getSummaryById(session.id)?.hasActiveHandle)
-  expect(service.getById(session.id)?.status).toBe('failed')
+  expect(service.getById(session.id)?.status).toBe('completed')
+  expect(
+    service
+      .getQueuedInputs(session.id)
+      .map(({ text, state }) => ({ text, state })),
+  ).toEqual([{ text: 'preserve this follow-up', state: 'queued' }])
+  expect(settles).toHaveBeenCalledTimes(1)
   expect(children[0].stdin.writableEnded).toBe(true)
 })
 
-it.each(['recover', 'stop'] as const)(
+it.each(['recover', 'stop', 'approve', 'deny'] as const)(
   'RUN77 lap4 %s heals an orphan answered row — mutation recover running only turns red',
   async (action) => {
     const { service, session, db } = await fixture()
@@ -1652,6 +1662,8 @@ it.each(['recover', 'stop'] as const)(
     const settles = vi.fn()
     target.onSessionSettled(settles)
     if (action === 'stop') target.stop(session.id)
+    if (action === 'approve') target.approve(session.id)
+    if (action === 'deny') target.deny(session.id)
     await new Promise((resolve) => setImmediate(resolve))
     expect({
       status: target.getById(session.id)?.status,
@@ -1660,6 +1672,47 @@ it.each(['recover', 'stop'] as const)(
     }).toEqual({ status: 'completed', attention: 'finished', task: 'unknown' })
     expect(settles).toHaveBeenCalledTimes(action === 'recover' ? 0 : 1)
     await target.disposeAll()
+  },
+)
+
+it.each(['redelivery', 'completion'] as const)(
+  'RUN77 lap5 %s catches a queue read rejection — mutation drop dispatch catch turns red',
+  async (trigger) => {
+    const { service, session, db, send } = await answeredFixture(['task'], true)
+    const queued = service.getQueuedInputs(session.id)[0]
+    const failure = new Error('fixture queue read refused')
+    const read = vi
+      .spyOn(SessionQueuedInputService.prototype, 'nextQueued')
+      .mockImplementationOnce(() => {
+        throw failure
+      })
+    const reported = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      if (trigger === 'redelivery') {
+        new SessionQueuedInputService(db).patch(queued.id, 'failed')
+        service.redeliverQueuedInput(queued.id)
+      } else {
+        send({
+          type: 'system',
+          subtype: 'task_notification',
+          task_id: 'task',
+          status: 'completed',
+        })
+        send({ type: 'result', subtype: 'success' })
+      }
+      await vi.waitFor(() =>
+        expect(reported).toHaveBeenCalledWith(
+          '[session] Could not dispatch queued input',
+          failure,
+        ),
+      )
+      expect(
+        service.getQueuedInputs(session.id).filter((q) => q.state === 'queued'),
+      ).toHaveLength(1)
+    } finally {
+      read.mockRestore()
+      reported.mockRestore()
+    }
   },
 )
 

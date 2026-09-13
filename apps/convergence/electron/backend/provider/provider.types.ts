@@ -119,9 +119,9 @@ export type TranscriptEntry =
   | { type: 'system'; text: string; timestamp: string }
 
 export interface SessionStartConfig {
-  /** Local record query, after synchronous evidence persistence; never sent on the wire. */
   /** Persisted task status before an incoming terminal fact is applied. Local evidence only. */
   readTaskStatus?: (taskId: string) => string | undefined
+  /** Local record query, after synchronous evidence persistence; never sent on the wire. */
   readParallelWorkCounts?: () => { running: number; unknown: number }
   sessionId: string
   workingDirectory: string
