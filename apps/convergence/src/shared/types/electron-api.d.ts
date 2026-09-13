@@ -339,6 +339,8 @@ interface SessionCrewMemberData {
 }
 
 interface SessionCrewData {
+  /** Last successful export destination; absent on older snapshots. */
+  lastExportPath?: string | null
   id: string
   name: string
   emoji: string | null
@@ -1752,8 +1754,8 @@ interface ElectronAPI {
     ) => Promise<CrewImportReport>
     export: (
       crewId: string,
-      options: { includePositions?: boolean; force?: boolean },
-    ) => Promise<{ path: string; yaml: string }>
+      options: { includePositions?: boolean },
+    ) => Promise<{ path: string; yaml: string } | null>
     list: () => Promise<SessionCrewData[]>
     create: (input: CreateSessionCrewInputData) => Promise<SessionCrewData>
     update: (

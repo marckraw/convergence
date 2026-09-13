@@ -685,7 +685,7 @@ async function startApp(): Promise<void> {
   })
   registerFeedbackIpcHandlers(feedbackService)
   registerCrewIpcHandlers({ service: crewService })
-  registerCrewExportIpc(new CrewExportService(db))
+  registerCrewExportIpc(new CrewExportService(db), crewService)
   registerCrewImportIpc(
     new CrewImportService(db, sessionService, crewService, relayService),
     crewService,

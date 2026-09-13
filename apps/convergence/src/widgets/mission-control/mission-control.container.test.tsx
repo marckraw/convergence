@@ -2055,31 +2055,45 @@ describe('MissionControl', () => {
       expect(screen.getByRole('button', { name: 'Emoji 🐎' })).toBeEnabled()
     })
 
-    it('offers replacement only after EEXIST and exports with force after the choice (mutation: omit replacement action)', async () => {
+    it('cancel keeps Recipe open without a toast or a changed last path (mutation: treat cancel as an export)', async () => {
       const api = await openCrewSettings()
-      vi.mocked(api.export).mockRejectedValueOnce(
-        new Error('EEXIST: night-shift.yaml'),
-      )
+      vi.mocked(api.export).mockResolvedValueOnce(null)
       fireEvent.click(screen.getByRole('button', { name: 'Export crew…' }))
       await waitFor(() =>
-        expect(toast.error).toHaveBeenCalledWith('Could not export crew', {
-          description: 'EEXIST: night-shift.yaml',
-          action: {
-            label: 'Replace existing file',
-            onClick: expect.any(Function),
-          },
-        }),
+        expect(
+          screen.getByRole('button', { name: 'Export crew…' }),
+        ).toBeEnabled(),
       )
-      expect(api.export).toHaveBeenCalledTimes(1)
-      const action = vi.mocked(toast.error).mock.calls[0]![1]!.action
-      if (!action || typeof action !== 'object' || !('onClick' in action))
-        throw new Error('Missing Replace action')
-      action.onClick({} as Parameters<typeof action.onClick>[0])
-      await waitFor(() =>
-        expect(api.export).toHaveBeenLastCalledWith('crew-1', {
-          includePositions: false,
-          force: true,
-        }),
+      expect({
+        success: vi.mocked(toast.success).mock.calls,
+        errors: vi.mocked(toast.error).mock.calls,
+      }).toEqual({ success: [], errors: [] })
+      expect(screen.queryByText(/Last exported to/)).not.toBeInTheDocument()
+    })
+
+    it('the crew broadcast carries the last export into Recipe (mutation: omit the path prop)', async () => {
+      const api = await openCrewSettings()
+      const path = '/Users/marc/Projects/recipes/night.yaml'
+      expect(screen.queryByText(/Last exported to/)).not.toBeInTheDocument()
+      vi.mocked(api.export).mockImplementationOnce(async () => {
+        const callback = vi.mocked(api.onUpdated).mock.calls.at(-1)?.[0]
+        if (!callback) throw new Error('Missing crew subscription')
+        callback([
+          makeCrew({
+            id: 'crew-1',
+            name: 'Night shift',
+            sessionIds: ['a', 'b'],
+            lastExportPath: path,
+          }),
+        ])
+        return { path, yaml: 'version: 1' }
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Export crew…' }))
+      await waitFor(() => expect(toast.success).toHaveBeenCalled())
+      fireEvent.click(screen.getByRole('button', { name: 'Crew settings' }))
+      expect(await screen.findByText(/Last exported to/)).toHaveAttribute(
+        'title',
+        path,
       )
     })
 

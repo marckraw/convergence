@@ -954,6 +954,7 @@ describe('database', () => {
     expect(crewColumns.map((c) => c.name).sort()).toEqual(
       [
         'id',
+        'last_export_path',
         'name',
         'emoji',
         'accent_color',
@@ -3855,5 +3856,47 @@ it('RUN66 round2 adds nullable settle provenance without backfill and reopens â€
     closeDatabase()
     resetDatabase()
     rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+it('adds the nullable last export path to an old crew and preserves it on reopen (mutations: omit column; omit PRAGMA guard)', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'crew-export-migration-'))
+  const path = join(directory, 'app.db')
+  try {
+    const original = getDatabase(path)
+    original
+      .prepare(
+        "INSERT INTO session_crews (id,name) VALUES ('crew','Night shift')",
+      )
+      .run()
+    if (
+      (original.pragma('table_info(session_crews)') as { name: string }[]).some(
+        (column) => column.name === 'last_export_path',
+      )
+    ) {
+      original.exec('ALTER TABLE session_crews DROP COLUMN last_export_path')
+    }
+    closeDatabase()
+    const migrated = getDatabase(path)
+    expect(
+      migrated
+        .prepare("SELECT last_export_path FROM session_crews WHERE id='crew'")
+        .get(),
+    ).toEqual({ last_export_path: null })
+    migrated
+      .prepare(
+        "UPDATE session_crews SET last_export_path='/saved/crew.yaml' WHERE id='crew'",
+      )
+      .run()
+    closeDatabase()
+    expect(
+      getDatabase(path)
+        .prepare("SELECT last_export_path FROM session_crews WHERE id='crew'")
+        .get(),
+    ).toEqual({ last_export_path: '/saved/crew.yaml' })
+  } finally {
+    closeDatabase()
+    resetDatabase()
+    rmSync(directory, { recursive: true, force: true })
   }
 })

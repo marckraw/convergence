@@ -14,6 +14,7 @@ interface CrewSettingsPanelProps {
   onAccentColorChange: (accentColor: string | null) => void
   memberCount: number
   includePositions: boolean
+  lastExportPath?: string | null
   exporting: boolean
   confirmingDelete: boolean
   onIncludePositionsChange: (include: boolean) => void
@@ -83,6 +84,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
   onAccentColorChange,
   memberCount,
   includePositions,
+  lastExportPath,
   exporting,
   confirmingDelete,
   onIncludePositionsChange,
@@ -325,6 +327,15 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
       >
         {exporting ? 'Exporting…' : 'Export crew…'}
       </Button>
+      {lastExportPath ? (
+        <p
+          className="truncate text-[11px] text-muted-foreground"
+          title={lastExportPath}
+        >
+          Last exported to …/
+          {lastExportPath.split('/').filter(Boolean).slice(-2).join('/')}
+        </p>
+      ) : null}
     </section>
     <section aria-label="Danger" className="border-t border-white/10 pt-2">
       <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">

@@ -200,10 +200,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ) => ipcRenderer.invoke('crew:importPlan', path, choices, updates),
     importApply: (path: string, decisions: CrewImportDecisions) =>
       ipcRenderer.invoke('crew:importApply', path, decisions),
-    export: (
-      crewId: string,
-      options: { includePositions?: boolean; force?: boolean },
-    ) => ipcRenderer.invoke('crew:export', crewId, options),
+    export: (crewId: string, options: { includePositions?: boolean }) =>
+      ipcRenderer.invoke('crew:export', crewId, options),
     list: () => ipcRenderer.invoke('crew:list'),
     create: (input: unknown) => ipcRenderer.invoke('crew:create', input),
     update: (id: string, patch: unknown) =>
