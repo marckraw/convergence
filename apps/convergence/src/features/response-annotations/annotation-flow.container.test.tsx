@@ -363,7 +363,7 @@ describe('response annotations, end to end', () => {
 
     // Pending annotations wait as compact pills; open the one to edit
     // (MAR-3004). The claim is unchanged: what is sent is what was saved.
-    fireEvent.click(screen.getByRole('button', { name: 'The migration' }))
+    fireEvent.click(screen.getByRole('button', { name: /^The migration/ }))
     const chip = screen.getByTestId('annotation-chip')
     fireEvent.click(within(chip).getByLabelText(/^Edit response to/))
     fireEvent.change(screen.getByLabelText(/^Edit response to/), {
@@ -386,7 +386,7 @@ describe('response annotations, end to end', () => {
     comment('Delete this one.')
 
     // Open the second pill and remove it from its full chip (MAR-3004).
-    fireEvent.click(screen.getByRole('button', { name: 'retries back off' }))
+    fireEvent.click(screen.getByRole('button', { name: /^retries back off/ }))
     fireEvent.click(
       within(screen.getByTestId('annotation-chip')).getByLabelText(
         /^Remove response to/,
@@ -437,11 +437,11 @@ describe('response annotations, end to end', () => {
     }
     renderSurface()
 
-    fireEvent.click(screen.getByRole('button', { name: 'The migration' }))
-    fireEvent.keyDown(screen.getByTestId('annotation-chip'), { key: 'Escape' })
+    fireEvent.click(screen.getByRole('button', { name: /^The migration Name/ }))
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
 
-    fireEvent.click(screen.getByRole('button', { name: 'about a second' }))
-    fireEvent.click(screen.getByRole('button', { name: 'exponentially' }))
+    fireEvent.click(screen.getByRole('button', { name: /^about a second/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^exponentially/ }))
     fireEvent.click(
       within(screen.getByTestId('annotation-chip')).getByLabelText(
         /^Edit response to/,
@@ -450,12 +450,16 @@ describe('response annotations, end to end', () => {
     fireEvent.change(screen.getByLabelText(/^Edit response to/), {
       target: { value: 'An edit nobody saved.' },
     })
+    // Two-stage Escape (MAR-3004 lap 2): the first discards the draft and
+    // leaves the chip open, the second closes it.
     fireEvent.keyDown(screen.getByLabelText(/^Edit response to/), {
       key: 'Escape',
     })
+    expect(screen.getByTestId('annotation-chip')).toBeInTheDocument()
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
 
     const firstPill = screen.getByRole('button', {
-      name: 'I rewrote the scheduler so retries back off exponentially.',
+      name: /^I rewrote the scheduler so/,
     })
     firstPill.focus()
     fireEvent.keyDown(firstPill, { key: 'End' })

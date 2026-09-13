@@ -1,10 +1,9 @@
 import type { FC, KeyboardEvent, ReactNode } from 'react'
 import type { ResponseAnnotation } from '@/entities/response-annotation'
 import { Button } from '@/shared/ui/button'
-import { toChipExcerpt } from './annotation-selection.pure'
 import {
   formatAnnotationCount,
-  moveAlongStrip,
+  stripNavigationTarget,
   toPillBody,
   toPillQuote,
 } from './annotation-strip.pure'
@@ -18,30 +17,56 @@ import {
  * are waiting the composer keeps its height; exactly one pill at a time opens
  * into today's full chip to be read, edited or removed.
  *
- * Render-only. Which pill is open lives in the container; this component only
- * says what each state looks like and where the arrow keys point.
+ * Render-only. Which pill is open, which holds the Tab stop and where focus
+ * goes next live in the container; this component only says what each state
+ * looks like and where the arrow keys point.
  */
 
 interface AnnotationStripProps {
   annotations: readonly ResponseAnnotation[]
   expandedId: string | null
+  /** The one pill Tab reaches; every other pill is reached by the arrows. */
+  tabStopId: string | null
   onExpand: (annotationId: string) => void
   onCollapse: () => void
+  onPillFocus: (annotationId: string) => void
   /** Today's full chip, for the one annotation that is open. */
   renderExpanded: (annotation: ResponseAnnotation) => ReactNode
+}
+
+function isTextField(target: EventTarget): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  return (
+    target.isContentEditable ||
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.tagName === 'SELECT'
+  )
 }
 
 /**
  * Arrow keys walk the row. Focus goes to the item's first control, which is
  * the pill itself or, for the open item, its first button — so the row reads
- * as one toolbar whichever item is expanded.
+ * as one toolbar whichever item is expanded. A press that began in a text
+ * field or carries a modifier is never the row's (see stripNavigationTarget).
  */
 function moveFocusAlongStrip(
   event: KeyboardEvent<HTMLElement>,
   index: number,
   length: number,
 ): void {
-  const next = moveAlongStrip(index, event.key, length)
+  const next = stripNavigationTarget(
+    index,
+    {
+      key: event.key,
+      altKey: event.altKey,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      shiftKey: event.shiftKey,
+      fromTextField: isTextField(event.target),
+    },
+    length,
+  )
   if (next === null) return
   event.preventDefault()
   const items = event.currentTarget
@@ -53,8 +78,10 @@ function moveFocusAlongStrip(
 export const AnnotationStrip: FC<AnnotationStripProps> = ({
   annotations,
   expandedId,
+  tabStopId,
   onExpand,
   onCollapse,
+  onPillFocus,
   renderExpanded,
 }) => (
   <div
@@ -71,19 +98,19 @@ export const AnnotationStrip: FC<AnnotationStripProps> = ({
     >
       {formatAnnotationCount(annotations.length)}
     </span>
+    {/* The side padding matches the fade, so no pill sits under it at rest
+        and a focused pill scrolls clear of it; the vertical padding leaves
+        room for the focus ring, which the scroll container would clip. */}
     <ul
       role="list"
       aria-label="Responding to"
-      className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-x-auto py-0.5 [mask-image:linear-gradient(to_right,transparent,black_0.75rem,black_calc(100%-0.75rem),transparent)]"
+      className="flex min-w-0 flex-1 scroll-px-3 flex-nowrap items-center gap-1.5 overflow-x-auto px-3 py-1 [mask-image:linear-gradient(to_right,transparent,black_0.75rem,black_calc(100%-0.75rem),transparent)]"
     >
       {annotations.map((annotation, index) => (
-        <li
-          key={annotation.id}
-          className="shrink-0"
-          data-annotation-id={annotation.id}
-        >
+        <li key={annotation.id} className="shrink-0">
           {annotation.id === expandedId ? (
             <div
+              data-annotation-expanded={annotation.id}
               onKeyDown={(event) => {
                 if (event.key === 'Escape') {
                   onCollapse()
@@ -95,14 +122,18 @@ export const AnnotationStrip: FC<AnnotationStripProps> = ({
               {renderExpanded(annotation)}
             </div>
           ) : (
+            // Named by what it shows — the quote and the response — so a 👍
+            // and a comment on the same words are two different buttons to a
+            // screen reader, as they are to the eye.
             <Button
               type="button"
               variant="ghost"
               size="sm"
               data-annotation-pill=""
               data-annotation-id={annotation.id}
-              aria-label={toChipExcerpt(annotation.quotedText)}
+              tabIndex={annotation.id === tabStopId ? 0 : -1}
               onClick={() => onExpand(annotation.id)}
+              onFocus={() => onPillFocus(annotation.id)}
               onKeyDown={(event) =>
                 moveFocusAlongStrip(event, index, annotations.length)
               }
@@ -110,13 +141,13 @@ export const AnnotationStrip: FC<AnnotationStripProps> = ({
             >
               <span className="min-w-0 truncate italic text-muted-foreground">
                 {toPillQuote(annotation.quotedText)}
-              </span>
+              </span>{' '}
               <span
                 aria-hidden="true"
                 className="shrink-0 text-muted-foreground"
               >
                 →
-              </span>
+              </span>{' '}
               <span className="min-w-0 truncate">
                 {toPillBody(annotation.body)}
               </span>
