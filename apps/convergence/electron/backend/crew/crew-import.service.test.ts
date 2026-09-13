@@ -626,3 +626,49 @@ it('refuses rewritten conditions before Apply and exports the accepted stored fi
   )
   expect(exported.wires.map((wire) => wire.when)).toEqual(['Settled'])
 })
+
+it('binds the baton holder end to end, creating no conversation and renaming no baton (MAR-2918)', async () => {
+  const first = await service.apply(path, decisions(await service.plan(path)))
+  const fable = sessions.getAll().find((s) => s.name === 'Fable')!
+  const before = counts()
+
+  // The local rename is the whole scenario: the member keeps baton `fable`
+  // while the file's role can no longer find its conversation by name.
+  getDatabase()
+    .prepare('UPDATE sessions SET name=? WHERE id=?')
+    .run('Fable, renamed locally', fable.id)
+
+  const offered = await service.plan(path)
+  const role = offered.roles.find((r) => r.role === 'fable')!
+  expect({
+    state: role.state,
+    option: role.options[0]?.value,
+    canApply: offered.canApply,
+  }).toEqual({ state: 'create', option: fable.id, canApply: false })
+
+  const chosen = await service.plan(path, { 'role:fable': fable.id })
+  expect(chosen.canApply).toBe(true)
+  const report = await service.apply(path, {
+    revision: chosen.revision,
+    choices: { 'role:fable': fable.id },
+    updates: {},
+    includeLayout: true,
+  })
+
+  const crew = crews.getById(first.crewId)!
+  expect({
+    counts: counts(),
+    outcome: report.entries.find((e) => e.key === 'role:fable')!.outcome,
+    member: crew.members.find((m) => m.sessionId === fable.id)?.batonName,
+    members: crew.members.length,
+    // The conversation keeps the name the user gave it; import binds, it does
+    // not rename conversations back to the file.
+    name: sessions.getAll().find((s) => s.id === fable.id)!.name,
+  }).toEqual({
+    counts: before,
+    outcome: 'bound',
+    member: 'fable',
+    members: 2,
+    name: 'Fable, renamed locally',
+  })
+})
