@@ -974,6 +974,9 @@ function ensureRelayColumns(database: Database.Database): void {
   }
 
   const crewColumns = getTableColumnNames(database, 'session_crews')
+  if (!crewColumns.has('last_export_path')) {
+    database.exec('ALTER TABLE session_crews ADD COLUMN last_export_path TEXT')
+  }
   if (!crewColumns.has('round_cap')) {
     database.exec('ALTER TABLE session_crews ADD COLUMN round_cap INTEGER')
   }

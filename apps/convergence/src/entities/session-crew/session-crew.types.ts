@@ -29,6 +29,8 @@ export interface SessionCrew {
   roundCap: number | null
   /** How long a station may hold the loop before it hails; null is default. */
   stallMinutes: number | null
+  /** Last successful export destination; absent on older snapshots. */
+  lastExportPath?: string | null
   createdAt: string
   updatedAt: string
   sessionIds: string[]

@@ -228,6 +228,7 @@ export interface SpaceAttemptRow {
 }
 
 export interface SessionCrewRow {
+  last_export_path?: string | null
   id: string
   name: string
   emoji: string | null

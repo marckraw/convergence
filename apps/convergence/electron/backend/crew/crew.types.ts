@@ -46,6 +46,8 @@ export interface SessionCrew {
    * or null to take the default.
    */
   stallMinutes: number | null
+  /** Last successful export destination; absent on older snapshots. */
+  lastExportPath?: string | null
   createdAt: string
   updatedAt: string
   /** Members whose session still exists, oldest membership first. */
@@ -84,6 +86,7 @@ export function sessionCrewFromRow(
     // some sqlite paths, and "take the default" is the honest answer for it.
     roundCap: row.round_cap ?? null,
     stallMinutes: row.stall_minutes ?? null,
+    lastExportPath: row.last_export_path ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     // Kept beside `members` rather than derived at every call site: every

@@ -1042,14 +1042,14 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
     historyOutcomes,
   ])
 
-  const exportCrew = async (force = false) => {
+  const exportCrew = async () => {
     if (!crew) return
     setExporting(true)
     try {
       const result = await sessionCrewApi.export(crew.id, {
         includePositions,
-        ...(force ? { force: true } : {}),
       })
+      if (!result) return
       toast.success('Crew exported', {
         description: result.path,
         action: {
@@ -1074,14 +1074,6 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       const message = error instanceof Error ? error.message : String(error)
       toast.error('Could not export crew', {
         description: message,
-        ...(message.includes('EEXIST')
-          ? {
-              action: {
-                label: 'Replace existing file',
-                onClick: () => void exportCrew(true),
-              },
-            }
-          : {}),
       })
     } finally {
       setExporting(false)
@@ -1514,6 +1506,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               memberCount={crew.sessionIds.length}
               includePositions={includePositions}
               exporting={exporting}
+              lastExportPath={crew.lastExportPath}
               confirmingDelete={confirmingDelete}
               onIncludePositionsChange={setIncludePositions}
               onExport={() => {

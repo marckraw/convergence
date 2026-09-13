@@ -50,6 +50,13 @@ export class CrewService {
     return sessionCrewFromRow(row, this.readMembers(row.id).get(row.id) ?? [])
   }
 
+  /** Records only a completed export; the destination is not a recipe input. */
+  recordExportPath(id: string, path: string): void {
+    this.db
+      .prepare('UPDATE session_crews SET last_export_path=? WHERE id=?')
+      .run(path, id)
+  }
+
   create(input: CreateSessionCrewInput): SessionCrew {
     const id = randomUUID()
     const name = normalizeCrewName(input.name)

@@ -1,4 +1,5 @@
 import { parse } from 'yaml'
+import * as configPure from './crew-config.pure'
 import { readGitOriginUrlAsync } from '../git/git-origin'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
@@ -22,11 +23,14 @@ const mocks = vi.hoisted(() => ({
     (
       event: unknown,
       crewId: string,
-      options: { force?: boolean; includePositions?: boolean },
+      options: { includePositions?: boolean },
     ) => Promise<{ path: string; yaml: string }>
   >(),
   choose: vi.fn(),
+  save: vi.fn(),
+  broadcast: vi.fn(),
 }))
+vi.mock('./crew.ipc', () => ({ broadcastCrews: mocks.broadcast }))
 vi.mock('../git/git-origin', () => ({
   readGitOriginUrlAsync: vi.fn(async () => null),
 }))
@@ -37,11 +41,11 @@ vi.mock('electron', () => ({
       handler: (
         event: unknown,
         crewId: string,
-        options: { force?: boolean; includePositions?: boolean },
+        options: { includePositions?: boolean },
       ) => Promise<{ path: string; yaml: string }>,
     ) => mocks.handlers.set(key, handler),
   },
-  dialog: { showMessageBox: mocks.choose },
+  dialog: { showMessageBox: mocks.choose, showSaveDialog: mocks.save },
 }))
 let root: string
 let crewId: string
@@ -60,8 +64,13 @@ beforeEach(async () => {
   }).id
   vi.mocked(readGitOriginUrlAsync).mockReset().mockResolvedValue(null)
   mocks.choose.mockReset()
+  mocks.save.mockReset().mockImplementation(async ({ defaultPath }) => ({
+    canceled: false,
+    filePath: defaultPath,
+  }))
+  mocks.broadcast.mockReset()
   mocks.handlers.clear()
-  registerCrewExportIpc(new CrewExportService(db))
+  registerCrewExportIpc(new CrewExportService(db), new CrewService(db))
 })
 afterEach(async () => {
   closeDatabase()
@@ -85,30 +94,17 @@ it('writes exactly the returned YAML at the home-project path (mutation: skip di
   })
 })
 
-it('refuses an existing file without force and preserves its contents (mutation: use w instead of wx)', async () => {
-  const handler = mocks.handlers.get('crew:export')!
-  const first = await handler({}, crewId, {})
-  new CrewService(getDatabase()).update(crewId, { emoji: '🧩' })
-  let refused = false
-  try {
-    await handler({}, crewId, {})
-  } catch (error) {
-    refused = String(error).includes('EEXIST')
-  }
-  expect({
-    refused,
-    preserved: (await readFile(first.path, 'utf8')) === first.yaml,
-  }).toEqual({ refused: true, preserved: true })
-})
-
-it('replaces only with explicit force and includes requested positions (mutation: ignore force)', async () => {
+it('replaces an existing file only after native confirmation and includes positions (mutation: ignore dialog cancellation)', async () => {
   const handler = mocks.handlers.get('crew:export')!
   const first = await handler({}, crewId, {})
   new CrewService(getDatabase()).setMemberPosition(crewId, 's', { x: 1, y: 2 })
-  const second = await handler({}, crewId, {
-    force: true,
-    includePositions: true,
+  mocks.save.mockResolvedValueOnce({ canceled: true, filePath: first.path })
+  const cancelled = await handler({}, crewId, { includePositions: true })
+  expect({ cancelled, bytes: await readFile(first.path, 'utf8') }).toEqual({
+    cancelled: null,
+    bytes: first.yaml,
   })
+  const second = await handler({}, crewId, { includePositions: true })
   expect({
     changed: second.yaml !== first.yaml,
     stored: (await readFile(second.path, 'utf8')) === second.yaml,
@@ -173,4 +169,94 @@ it('reads the root origin through the shared reader for a lane-only crew (mutati
     lane: 'studio',
     reads: [[root]],
   })
+})
+
+it('defaults to the home path then remembers the chosen destination per crew (mutation: forget the path)', async () => {
+  const chosen = join(root, 'elsewhere.yaml')
+  mocks.save.mockResolvedValueOnce({ canceled: false, filePath: chosen })
+  const handler = mocks.handlers.get('crew:export')!
+  const first = await handler({}, crewId, {})
+  const crew = new CrewService(getDatabase()).getById(crewId)
+  await rm(chosen)
+  const second = await handler({}, crewId, {})
+  expect({
+    defaults: mocks.save.mock.calls.map(([options]) => options.defaultPath),
+    paths: [first.path, second.path],
+    recorded: crew?.lastExportPath,
+    broadcasts: mocks.broadcast.mock.calls.map(
+      ([crews]) =>
+        crews.find((crew: { id: string }) => crew.id === crewId)
+          ?.lastExportPath,
+    ),
+    bytes: await readFile(chosen, 'utf8'),
+  }).toEqual({
+    defaults: [join(root, '.convergence', 'crews', 'night-shift.yaml'), chosen],
+    paths: [chosen, chosen],
+    recorded: chosen,
+    broadcasts: [chosen, chosen],
+    bytes: first.yaml,
+  })
+})
+
+it.each([false, true])(
+  'cancel changes no file, directory or crew fact (previous export: %s; mutation: write on cancel)',
+  async (previous) => {
+    const db = getDatabase()
+    const path = join(root, 'chosen.yaml')
+    if (previous) {
+      mocks.save.mockResolvedValueOnce({ canceled: false, filePath: path })
+      await mocks.handlers.get('crew:export')!({}, crewId, {})
+    }
+    const row = () =>
+      db.prepare('SELECT * FROM session_crews WHERE id=?').get(crewId)
+    const before = row()
+    const files = await readdir(root)
+    mocks.broadcast.mockClear()
+    mocks.save.mockResolvedValueOnce({
+      canceled: true,
+      filePath: join(root, 'not-written.yaml'),
+    })
+    const result = await mocks.handlers.get('crew:export')!({}, crewId, {})
+    expect({
+      result,
+      row: row(),
+      files: await readdir(root),
+      broadcasts: mocks.broadcast.mock.calls,
+    }).toEqual({ result: null, row: before, files, broadcasts: [] })
+  },
+)
+
+it('a failed write retains the last successful path and sends no broadcast (mutation: record before write)', async () => {
+  const path = join(root, 'saved.yaml')
+  mocks.save.mockResolvedValueOnce({ canceled: false, filePath: path })
+  await mocks.handlers.get('crew:export')!({}, crewId, {})
+  mocks.broadcast.mockClear()
+  mocks.save.mockResolvedValueOnce({ canceled: false, filePath: root })
+  await expect(
+    mocks.handlers.get('crew:export')!({}, crewId, {}),
+  ).rejects.toThrow()
+  expect({
+    path: new CrewService(getDatabase()).getById(crewId)?.lastExportPath,
+    broadcasts: mocks.broadcast.mock.calls,
+  }).toEqual({ path, broadcasts: [] })
+})
+
+it('writes the unchanged serializer output at the chosen destination (mutation: alter the bytes)', async () => {
+  const serialize = vi.spyOn(configPure, 'renderCrewYaml')
+  try {
+    const chosen = join(root, 'portable.yaml')
+    mocks.save.mockResolvedValueOnce({ canceled: false, filePath: chosen })
+    const result = await mocks.handlers.get('crew:export')!({}, crewId, {})
+    expect({
+      calls: serialize.mock.calls.length,
+      disk: await readFile(chosen, 'utf8'),
+      returned: result.yaml,
+    }).toEqual({
+      calls: 1,
+      disk: serialize.mock.results[0]?.value,
+      returned: serialize.mock.results[0]?.value,
+    })
+  } finally {
+    serialize.mockRestore()
+  }
 })

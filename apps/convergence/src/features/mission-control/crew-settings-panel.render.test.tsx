@@ -14,9 +14,12 @@ import {
  * sentence the user does not have, and the pure tests beside it cannot tell
  * the difference. This is the half that can.
  */
-function renderPanel(deliveryLimit: number | null) {
+function renderPanel(
+  deliveryLimit: number | null,
+  lastExportPath: string | null = null,
+) {
   const noop = vi.fn()
-  render(
+  return render(
     <CrewSettingsPanel
       emoji={null}
       accentColor={null}
@@ -25,6 +28,7 @@ function renderPanel(deliveryLimit: number | null) {
       memberCount={2}
       includePositions={false}
       exporting={false}
+      lastExportPath={lastExportPath}
       confirmingDelete={false}
       onIncludePositionsChange={noop}
       onExport={noop}
@@ -81,4 +85,15 @@ describe('the delivery limit note about the run hard ceiling (R3, MAR-2966)', ()
       ),
     ).toBeInTheDocument()
   })
+})
+
+it('shows Last exported to only for a successful export, shortened with the full path in title (mutations: omit line; render before export)', () => {
+  const before = renderPanel(null)
+  expect(screen.queryByText(/Last exported to/)).not.toBeInTheDocument()
+  before.unmount()
+  const path = '/Users/marc/Projects/crew-recipes/review.yaml'
+  renderPanel(null, path)
+  const line = screen.getByText(/Last exported to/)
+  expect(line).toHaveAttribute('title', path)
+  expect(line).toHaveTextContent('Last exported to …/crew-recipes/review.yaml')
 })

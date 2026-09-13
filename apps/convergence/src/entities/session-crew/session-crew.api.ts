@@ -23,8 +23,8 @@ export const sessionCrewApi = {
     window.electronAPI.crew.importApply(path, decisions),
   export: (
     crewId: string,
-    options: { includePositions?: boolean; force?: boolean },
-  ): Promise<{ path: string; yaml: string }> =>
+    options: { includePositions?: boolean },
+  ): Promise<{ path: string; yaml: string } | null> =>
     window.electronAPI.crew.export(crewId, options),
   list: (): Promise<SessionCrew[]> => window.electronAPI.crew.list(),
 
