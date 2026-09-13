@@ -29,6 +29,7 @@ import {
   namesAConcreteWorkPlace,
   type SessionWorkAddress,
 } from '../../../src/shared/lib/work-address.pure'
+import { REMOTE_SPAWN_PLACE_REQUIRED } from '../../../src/shared/lib/spawn-spec.pure'
 import { assertLocalAccountSelection } from '../provider-account/provider-account-resolution.pure'
 import { remoteProviderIdForLocalProvider } from '../provider/execution-host/remote-execution-host.pure'
 import type {
@@ -232,11 +233,7 @@ function requireStatedWorkAddress(
   address: SessionWorkAddress | null | undefined,
 ): SessionWorkAddress {
   if (address && namesAConcreteWorkPlace(address)) return address
-  throw new Error(
-    'A session on a remote execution host has to be told where it works. ' +
-      'Pick a Project or a repository in the composer before starting it — ' +
-      'starting it without one would run it somewhere nobody named.',
-  )
+  throw new Error(REMOTE_SPAWN_PLACE_REQUIRED)
 }
 
 /**
