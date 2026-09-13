@@ -43,6 +43,15 @@ export const AnnotationChip: FC<AnnotationChipProps> = ({
     return (
       <form
         onSubmit={handleSubmit}
+        // Escape in the edit form discards the draft and nothing more: the
+        // press stops here, so the chip stays open and a second Escape is
+        // what closes it (MAR-3004 lap 2). Held on the form, not the field,
+        // so Escape from the Save button is the same first stage.
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape') return
+          event.stopPropagation()
+          onCancelEdit()
+        }}
         className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2 py-1"
       >
         <span className="min-w-0 max-w-[16rem] truncate text-xs italic text-muted-foreground">
@@ -54,9 +63,6 @@ export const AnnotationChip: FC<AnnotationChipProps> = ({
           onChange={(event) => onEditValueChange(event.target.value)}
           aria-label={`Edit response to “${excerpt}”`}
           className="h-6 w-40 text-xs"
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') onCancelEdit()
-          }}
         />
         <Button
           type="submit"
