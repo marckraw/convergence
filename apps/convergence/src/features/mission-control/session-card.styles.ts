@@ -16,6 +16,7 @@ export const CARD_ATTENTION_STYLES: Record<AttentionState, string> = {
 export const ACTIVITY_TEXT_STYLES: Record<SessionStatus, string> = {
   running: 'text-foreground',
   idle: 'text-muted-foreground',
+  answered: 'text-muted-foreground',
   completed: 'text-muted-foreground',
   failed: 'text-red-600 dark:text-red-400',
 }
@@ -32,6 +33,7 @@ export const STATE_CHIP_STYLES: Record<SessionCardState, string> = {
 export const STATUS_DOT_STYLES: Record<SessionStatus, string> = {
   running: 'bg-emerald-500',
   idle: 'bg-muted-foreground/40',
+  answered: 'bg-emerald-500/40',
   completed: 'bg-muted-foreground/40',
   failed: 'bg-red-500',
 }

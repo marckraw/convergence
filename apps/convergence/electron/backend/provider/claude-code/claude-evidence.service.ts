@@ -33,6 +33,8 @@ export class ClaudeEvidenceService {
   private readonly tools = new Map<string, ToolIdentity>()
   private readonly tasksByTool = new Map<string, string>()
   private readonly requestedStops = new Set<string>()
+  private readonly stoppedTasks = new Set<string>()
+  private readonly stopReceipts = new Map<string, string>()
   private readonly terminalAgents = new Set<string>()
   private readonly readMetadata = new Set<string>()
   private readonly unmatchedMetadata = new Set<string>()
@@ -56,6 +58,19 @@ export class ClaudeEvidenceService {
     if (this.requestedStops.has(id))
       throw new Error('Stop already requested; awaiting confirmation')
     this.requestedStops.add(id)
+  }
+
+  confirmStop(id: string, at: string): void {
+    this.stopReceipts.set(id, at)
+    this.emit({
+      kind: 'task.changed',
+      taskId: id,
+      at,
+      patch: {
+        stopReceiptAt: at,
+        ...(this.stoppedTasks.has(id) ? { status: 'stopped' } : {}),
+      },
+    })
   }
 
   cancelStop(id: string): void {
@@ -148,6 +163,11 @@ export class ClaudeEvidenceService {
           this.requestedStops.has(fact.taskId)
         )
           fact.patch.stopReason = 'stop'
+        if (fact.patch.status === 'stopped') {
+          this.stoppedTasks.add(fact.taskId)
+          const receipt = this.stopReceipts.get(fact.taskId)
+          if (receipt) fact.patch.stopReceiptAt = receipt
+        }
         this.emit(fact)
         const toolId = fact.patch.toolUseId
         if (
@@ -351,10 +371,18 @@ export class ClaudeEvidenceService {
   processEnded(
     at: string,
     reason?: 'quit' | 'idle' | 'account' | 'stop' | 'exit',
+    unresolvedStatus?: 'unknown',
   ): void {
     this.outstandingRetries = 0
     this.requestedStops.clear()
-    this.emit({ kind: 'process.ended', at, ...(reason ? { reason } : {}) })
+    this.stopReceipts.clear()
+    this.stoppedTasks.clear()
+    this.emit({
+      kind: 'process.ended',
+      at,
+      ...(reason ? { reason } : {}),
+      ...(unresolvedStatus ? { unresolvedStatus } : {}),
+    })
   }
 
   private stopAgentForTask(taskId: string, at: string): void {

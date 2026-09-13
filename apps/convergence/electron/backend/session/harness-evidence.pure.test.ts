@@ -287,3 +287,51 @@ it('RUN64 R2′ the reducer keeps first and legacy sightings — mutation replac
   )
   expect([updated[0].observedAt, legacy[0].observedAt]).toEqual(['first', null])
 })
+
+it('RUN77 answered shutdown leaves unresolved agents and tasks unknown — mutation ignore unresolved status turns red', () => {
+  const runs = foldAgentRuns(
+    [],
+    {
+      kind: 'agent.started',
+      run: {
+        id: 'agent',
+        spawnedByItemId: 'call',
+        agentType: null,
+        description: null,
+        model: null,
+        depth: 1,
+        startedAt: 'start',
+        transcriptPath: null,
+      },
+    },
+    's',
+  )
+  const tasks = foldTasks(
+    [],
+    {
+      kind: 'task.changed',
+      taskId: 'task',
+      at: 'start',
+      patch: { status: 'running' },
+    },
+    's',
+  )
+  const ending = {
+    kind: 'process.ended',
+    reason: 'quit',
+    unresolvedStatus: 'unknown',
+    at: 'end',
+  } as const
+  expect(
+    foldAgentRuns(runs, ending, 's').map(({ status, stopReason }) => ({
+      status,
+      stopReason,
+    })),
+  ).toEqual([{ status: 'unknown', stopReason: 'quit' }])
+  expect(
+    foldTasks(tasks, ending, 's').map(({ status, stopReason }) => ({
+      status,
+      stopReason,
+    })),
+  ).toEqual([{ status: 'unknown', stopReason: 'quit' }])
+})

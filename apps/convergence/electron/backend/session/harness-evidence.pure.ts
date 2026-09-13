@@ -33,7 +33,8 @@ export function foldAgentRuns(
         ? {
             ...run,
             status:
-              fact.reason && fact.reason !== 'exit' ? 'stopped' : 'unknown',
+              fact.unresolvedStatus ??
+              (fact.reason && fact.reason !== 'exit' ? 'stopped' : 'unknown'),
             endedAt: fact.at,
             ...(fact.reason ? { stopReason: fact.reason } : {}),
           }
@@ -72,7 +73,8 @@ export function foldTasks(
         ? {
             ...task,
             status:
-              fact.reason && fact.reason !== 'exit' ? 'stopped' : 'unknown',
+              fact.unresolvedStatus ??
+              (fact.reason && fact.reason !== 'exit' ? 'stopped' : 'unknown'),
             endedAt: fact.at,
             ...(fact.reason ? { stopReason: fact.reason } : {}),
           }

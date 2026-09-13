@@ -11,7 +11,12 @@ import type {
   SessionWorkAddress,
 } from '@/shared/lib/work-address.pure'
 
-export type SessionStatus = 'idle' | 'running' | 'completed' | 'failed'
+export type SessionStatus =
+  | 'idle'
+  | 'running'
+  | 'answered'
+  | 'completed'
+  | 'failed'
 export type AttentionState =
   | 'none'
   | 'needs-input'

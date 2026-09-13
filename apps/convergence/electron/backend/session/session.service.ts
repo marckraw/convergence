@@ -2,6 +2,7 @@ import { SESSION_RESTARTED_EVENT_TYPE } from '../provider/session-restart.pure'
 import { readSessionTurnTimings } from './session-timing.service'
 import { CONVERSATION_RESET_COMMAND } from '../../../src/shared/lib/conversation-reset.pure'
 import { randomUUID } from 'crypto'
+import { answerWindowResult } from './answer-window.pure'
 import { HarnessEvidenceService } from './harness-evidence.service'
 import type { ParallelWorkCounts } from '../../../src/shared/lib/parallel-work.pure'
 import { mkdirSync } from 'fs'
@@ -1444,6 +1445,27 @@ export class SessionService {
     return row?.provider_account_id ?? null
   }
 
+  private readAnswerWindow(sessionId: string) {
+    this.flushPendingConversationPatchesForSession(sessionId)
+    const rows = this.db
+      .prepare(
+        `SELECT payload_json FROM session_conversation_items
+      WHERE session_id=? AND agent_run_id IS NULL AND kind='message' AND state='complete'
+      AND json_extract(payload_json,'$.actor')='assistant'
+      AND sequence >= COALESCE((SELECT answer_window_start_sequence FROM sessions WHERE id=?),0)
+      ORDER BY sequence`,
+      )
+      .all(sessionId, sessionId) as Array<{ payload_json: string }>
+    return answerWindowResult(
+      rows.flatMap((row) => {
+        const payload = JSON.parse(row.payload_json) as { text?: unknown }
+        return typeof payload.text === 'string' && payload.text.trim()
+          ? [payload.text]
+          : []
+      }),
+    )
+  }
+
   getLastAssistantMessageText(sessionId: string): string | null {
     this.flushPendingConversationPatchesForSession(sessionId)
 
@@ -2575,6 +2597,7 @@ export class SessionService {
   private isTurnUnderWayOrArriving(session: Session): boolean {
     if (this.dispatches.isDispatching(session.id)) return true
     if (!this.activeHandles.has(session.id)) return false
+    // `answered` deliberately refuses reset until the real settle (MAR-2896).
     // `isTerminalSessionStatus`, not two words written out again: that helper
     // is what the settle path asks, and its own docblock names the hazard --
     // a session with two ideas of "terminal" behaves differently depending on
@@ -2737,6 +2760,27 @@ export class SessionService {
         return
       }
       throw new Error(`Session not active: ${id}`)
+    }
+    if (this.getById(id)?.status === 'answered') {
+      const tasks = this.listTasks(id)
+      const runs = this.listAgentRuns(id)
+      const ids = new Set([
+        ...tasks
+          .filter((t) => t.status === 'running' || t.status === 'unknown')
+          .map((t) => t.taskId),
+        ...runs
+          .filter((r) => r.status === 'running' || r.status === 'unknown')
+          .map((r) => r.taskId ?? r.id),
+      ])
+      void Promise.allSettled(
+        [...ids].map((taskId) => handle.stopTask?.(taskId)),
+      ).then(() => {
+        if (this.activeHandles.get(id) !== handle) return
+        // Conversation Stop is itself a witness if a task never confirms.
+        if (this.getById(id)?.status === 'answered') handle.stop()
+        this.releaseHandle(id)
+      })
+      return
     }
     if (handle.interrupt) {
       const fallback = () => {
@@ -3304,6 +3348,17 @@ export class SessionService {
     const prevAttention = row.attention as AttentionState
     const prevStatus = row.status as SessionStatus
     const nextStatus = patch.status ?? prevStatus
+    if (
+      nextStatus === 'running' &&
+      prevStatus !== 'running' &&
+      prevStatus !== 'answered'
+    ) {
+      this.db
+        .prepare(
+          'UPDATE sessions SET answer_window_start_sequence=last_sequence+1 WHERE id=?',
+        )
+        .run(sessionId)
+    }
     const nextAttention = patch.attention ?? prevAttention
     const nextActivity =
       patch.activity !== undefined
@@ -3377,6 +3432,9 @@ export class SessionService {
       this.queueSettleEvent({
         sessionId,
         status: nextStatus,
+        ...(row.provider_id === 'claude-code'
+          ? { answerWindow: this.readAnswerWindow(sessionId) }
+          : {}),
         settledAt: updatedAt,
         relaysMuted,
         // Drained here, in the same beat that commits the terminal status, so
@@ -3620,6 +3678,14 @@ export class SessionService {
 
     const handle = execution.host.start(execution.providerId, {
       sessionId: session.id,
+      readParallelWorkCounts: () => {
+        const counts = this.evidenceCounts
+          .countParallelWork([session.id])
+          .get(session.id)!
+        // The witness and its status broadcast must describe the same record.
+        this.parallelWorkCounts.set(session.id, counts)
+        return counts
+      },
       // A Project-mode remote start names a directory on the *daemon's*
       // machine; every other start names this one. The wire mapping drops
       // whichever of the pair the other mode makes meaningless.
@@ -3729,13 +3795,12 @@ export class SessionService {
    *
    * Two vocabularies, and only one of them arrives here (MAR-2971 lap 2).
    * `'stopped'` in `provider/claude-code/claude-code-provider.ts:575` is a
-   * HARNESS TASK status on
-   * a `task.changed` evidence fact, not a `SessionStatus` -- that union is
-   * `idle | running | completed | failed` -- and it only arms the idle
-   * timer. A stop the user asks for reaches the queue through `stop()` and
-   * the stale-run path, which is the route pinned by "marks a stale
-   * persisted running session failed instead of throwing on stop". So there
-   * is no third lifecycle word being dropped silently here.
+   * HARNESS TASK status on a `task.changed` fact, not a `SessionStatus`.
+   * A receipt-bearing stopped fact can now witness an answered window
+   * (MAR-2896); the provider then emits `completed`, which is the lifecycle
+   * word this method handles. A stop we did not issue is not a witness.
+   * Conversation Stop and the stale-run path also emit their own lifecycle
+   * status rather than passing a task's vocabulary into the queue.
    */
   private handleLifecycle(
     sessionId: string,
@@ -3759,6 +3824,7 @@ export class SessionService {
         'The turn this input was waiting behind failed.',
       )
     } else if (status === 'completed') {
+      // `answered` keeps the window and queue open; only a witness drains it.
       const summary = this.getSummaryById(sessionId)
       if (
         !source.resident &&

@@ -70,6 +70,7 @@ export const EXECUTION_HOST_UNMAPPED_START_CONFIG_FIELDS = [
   'serviceTier',
   'providerAccountId',
   'noTurnSinceBoundary',
+  'readParallelWorkCounts',
 ] as const satisfies readonly (keyof SessionStartConfig)[]
 
 /**
@@ -276,6 +277,7 @@ export function settledAttentionForStatus(
       return 'failed'
     case 'idle':
     case 'running':
+    case 'answered':
       return null
   }
 }
@@ -546,7 +548,12 @@ export function toWireSessionDelta(
     case 'session.patch':
       return {
         kind: 'session.patch',
-        patch: pickDefined(delta.patch, LOCAL_SESSION_PATCH_FIELDS),
+        patch: {
+          ...pickDefined(delta.patch, LOCAL_SESSION_PATCH_FIELDS),
+          ...(delta.patch.status === 'answered'
+            ? { status: 'running' as const }
+            : {}),
+        },
       }
     case 'conversation.item.add':
       return {

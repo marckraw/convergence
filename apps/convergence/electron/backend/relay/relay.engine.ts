@@ -13,6 +13,7 @@ import {
   MUTED_MESSAGE,
   TERMINAL_BATON,
   TERMINAL_BATON_MESSAGE,
+  batonConditionToken,
   batonMismatchMessage,
   buildRelayHopPreview,
   compileRelayPayload,
@@ -347,10 +348,14 @@ export class RelayEngine {
         // Read once per settle rather than once per wire. Every wire asks the
         // same message the same question, and the baton it declares is a fact
         // about the settle, not about any one switch.
-        const message = this.sessions.getLastAssistantMessageText(
-          event.sessionId,
-        )
-        const emittedBaton = message ? readEmittedBaton(message) : null
+        const message = event.answerWindow
+          ? event.answerWindow.message
+          : this.sessions.getLastAssistantMessageText(event.sessionId)
+        const emittedBaton = event.answerWindow
+          ? event.answerWindow.baton
+          : message
+            ? readEmittedBaton(message)
+            : null
 
         // Which CREWS answered, not whether anything did. A settle can be a
         // beat in two loops at once, and one crew's wire matching says nothing
@@ -563,7 +568,7 @@ export class RelayEngine {
     const declaration = input.message
       ? readEmittedDeclaration(input.message)
       : ({ kind: 'none' } as const)
-    if (declaration.kind === 'none') return
+    if (declaration.kind === 'none' && emittedBaton === null) return
     if (event.relaysMuted || event.status !== 'completed') return
 
     const reason = emittedBaton === TERMINAL_BATON ? 'terminal' : 'unrouted'
@@ -868,12 +873,20 @@ export class RelayEngine {
     // A wire with no condition matches everything, exactly as every wire drawn
     // before conditions existed did.
     const conditionToken = relay.conditionToken
+    // A Claude window records its declaration separately from its last payload.
+    // Other condition tokens still match the message's last line as before.
+    const conditionMessage =
+      event.answerWindow && readEmittedBaton(conditionToken ?? '') !== null
+        ? emittedBaton === null
+          ? ''
+          : batonConditionToken(emittedBaton)
+        : (message ?? '')
     if (
       conditionToken !== null &&
-      !relayConditionMatches(conditionToken, message ?? '')
+      !relayConditionMatches(conditionToken, conditionMessage)
     ) {
       record('skipped-baton', {
-        error: batonMismatchMessage(conditionToken, message ?? ''),
+        error: batonMismatchMessage(conditionToken, conditionMessage),
       })
       return false
     }

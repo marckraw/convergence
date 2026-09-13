@@ -77,7 +77,7 @@ it('R3′ partitions work only and links the pending interaction — mutations m
 
 it('R5 parallel status respects foreground and interaction precedence and every settling boundary — mutation finish on answer or treat unknown as running turns red', () => {
   const parallelWork = { running: 2, unknown: 1, failed: 1, stopped: 2 }
-  const session = { status: 'completed', attention: 'finished', parallelWork }
+  const session = { status: 'answered', attention: 'none', parallelWork }
   expect([
     parallelWorkStatus({ ...session, status: 'running' }),
     parallelWorkStatus({ ...session, attention: 'needs-approval' }),
@@ -104,7 +104,7 @@ it('R5 parallel status respects foreground and interaction precedence and every 
     'answered · 2 tasks running · 1 unknown',
     'answered · 1 unknown · 1 failed · 2 stopped',
     'answered · 1 failed · 2 stopped',
-    null,
+    'answered',
   ])
 })
 
@@ -447,4 +447,21 @@ it('RUN64 round3 parents choose agents over colliding tasks — mutation reverse
     ['orphan', orphan],
     ['shared', agent],
   ])
+})
+
+it('RUN77 reads answered from the recorded state even at zero counts — mutation infer from counts turns red', () => {
+  expect(
+    parallelWorkStatus({
+      status: 'answered',
+      attention: 'none',
+      parallelWork: { running: 0, unknown: 0, failed: 0, stopped: 0 },
+    }),
+  ).toBe('answered')
+  expect(
+    parallelWorkStatus({
+      status: 'completed',
+      attention: 'finished',
+      parallelWork: { running: 0, unknown: 0, failed: 1, stopped: 0 },
+    }),
+  ).toBe('finished · 1 failed')
 })

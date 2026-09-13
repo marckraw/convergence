@@ -221,8 +221,8 @@ describe('ChatSurface', () => {
       globalChatSessions: [
         {
           ...globalSession,
-          status: 'completed',
-          attention: 'finished',
+          status: 'answered',
+          attention: 'none',
           parallelWork: { running: 2, unknown: 0, failed: 0, stopped: 0 },
         },
       ],

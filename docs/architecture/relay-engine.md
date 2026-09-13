@@ -855,3 +855,39 @@ pins it.
   `loadOlderHops` re-checks the crew's trail `generation` _and_ that its anchor
   is still the oldest row before applying a page. Without both, a clear landing
   mid-fetch puts the deleted rows straight back on screen.
+
+### Claude answer windows (MAR-2896)
+
+Claude's foreground result can leave the conversation `answered`, with no
+attention or settle, when the persisted parallel-work count includes running
+or unknown work. A zero count changes the evidence only. The next main-thread
+result closes the window if no work remains; a main-thread continuation first
+moves it back to `running`. The provider names each turn's opener (`user` or
+`harness`): a notification-origin result never ends an open user turn, but can
+close an answered window or a harness continuation. A result with no open window ends nothing. There is no grace-period timer.
+
+A task-scoped stop has two recorded halves: its terminal fact and our successful
+control receipt (`session_tasks.stop_receipt_at`). The receipt is persisted
+before the app's stop call returns. Either half can arrive first; their join
+can close an answered window when the remaining count reaches zero. A stop we
+did not issue is not a witness. Conversation Stop asks every live task to stop;
+it completes even if a terminal fact never arrives, leaving unresolved work
+unknown. Process end while answered also completes with unresolved work unknown.
+A failed background task is evidence, not a failed foreground conversation.
+
+The session records the answer-window start sequence. At the settle witness it
+snapshots the last main-agent message and the last declared BATON line within
+that window into the settle event, before the queue can start its next send.
+The engine uses that snapshot for payload and routing independently: a final
+answer need not repeat a declaration made earlier in the window. A continuation
+after a completed window starts a fresh window. Non-Claude providers retain
+their existing settle-message contract.
+
+`answered` is deliberately not terminal for reset or queue draining. Explicit
+user follow-ups are accepted by the resident process. Summaries and activity
+read the recorded status, including the answered interval with zero counts.
+The remote protocol still has four statuses: the outbound mapper translates
+`answered` to `running`. Old remote providers cannot originate `answered`.
+The local `readParallelWorkCounts` start callback is explicitly unsent; its
+answer belongs to this process's synchronously persisted evidence, not a remote
+host's record.

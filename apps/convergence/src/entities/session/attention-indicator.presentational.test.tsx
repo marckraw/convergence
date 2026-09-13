@@ -18,8 +18,8 @@ describe('AttentionIndicator', () => {
   it('R5 renders answered activity until evidence settles — mutation omit parallel counts from the indicator turns red', () => {
     const { rerender } = render(
       <AttentionIndicator
-        attention="finished"
-        status="completed"
+        attention="none"
+        status="answered"
         parallelWork={{ running: 2, unknown: 1, failed: 0, stopped: 0 }}
       />,
     )

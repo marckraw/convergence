@@ -78,6 +78,8 @@ export type SettledSessionStatus = Extract<
  * read the session it may already have been started again.
  */
 export interface SessionSettledEvent {
+  /** Immutable at the witness, before a queued send can open another window. */
+  answerWindow?: { message: string | null; baton: string | null }
   sessionId: string
   status: SettledSessionStatus
   settledAt: string

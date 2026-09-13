@@ -77,17 +77,13 @@ export function classifySessionCardState(card: SessionCard): SessionCardState {
   // The approval prompt is live even in the beat before attention catches up.
   if (activity === 'waiting-approval') return 'needs-you'
 
-  if (status === 'running') return 'working'
+  if (status === 'running' || status === 'answered') return 'working'
   // A live activity signal without a running status still means movement.
   if (activity) return 'working'
 
   // A failure anywhere wins over a finish: the room never hides a broken run
   // behind a stale "finished" flag.
   if (attention === 'failed' || status === 'failed') return 'failed'
-  if (card.session.parallelWork?.running) return 'working'
-  if (card.session.parallelWork?.unknown) return 'idle'
-  if (card.session.parallelWork?.failed) return 'failed'
-  if (card.session.parallelWork?.stopped) return 'idle'
   if (attention === 'finished' || status === 'completed') return 'finished'
   return 'idle'
 }

@@ -15,7 +15,12 @@ import type {
 
 export type { Attachment, ProviderAttachmentCapability }
 
-export type SessionStatus = 'idle' | 'running' | 'completed' | 'failed'
+export type SessionStatus =
+  | 'idle'
+  | 'running'
+  | 'answered'
+  | 'completed'
+  | 'failed'
 export type AttentionState =
   | 'none'
   | 'needs-input'
@@ -114,6 +119,8 @@ export type TranscriptEntry =
   | { type: 'system'; text: string; timestamp: string }
 
 export interface SessionStartConfig {
+  /** Local record query, after synchronous evidence persistence; never sent on the wire. */
+  readParallelWorkCounts?: () => { running: number; unknown: number }
   sessionId: string
   workingDirectory: string
   initialMessage: string

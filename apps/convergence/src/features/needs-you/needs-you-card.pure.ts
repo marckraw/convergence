@@ -40,8 +40,7 @@ export function needsYouCardModel(
   const working =
     !waiting &&
     !failed &&
-    (session.status === 'running' ||
-      (Boolean(parallelSummary) && Boolean(session.parallelWork?.running)))
+    (session.status === 'running' || session.status === 'answered')
   const review = failed || (session.attention === 'finished' && !working)
   return {
     session,

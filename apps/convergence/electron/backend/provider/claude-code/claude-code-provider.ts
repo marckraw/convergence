@@ -503,7 +503,9 @@ export class ClaudeCodeProvider implements Provider {
     let thinkingItemId: string | null = null
     let currentTurnHasAssistantText = false
     let currentTurnHasThinkingText = false
+    let answerStatus: SessionStatus = 'idle'
     let currentTurn: {
+      openedBy: 'user' | 'harness'
       message: string
       attachments?: Attachment[]
       skillSelections?: SkillSelection[]
@@ -569,6 +571,20 @@ export class ClaudeCodeProvider implements Provider {
       () => currentTurnAccount?.target?.configDir ?? null,
       (fact) => {
         sessionEmitter.recordEvidence(fact)
+        if (answerStatus === 'answered' && fact.kind === 'process.ended') {
+          config.readParallelWorkCounts?.()
+          setStatus('completed')
+          setAttention('finished')
+        }
+        // A stop we did not issue is not a witness. Receipt and terminal fact
+        // may arrive in either order; confirmStop re-emits their joined fact.
+        if (
+          answerStatus === 'answered' &&
+          fact.kind === 'task.changed' &&
+          fact.patch.status === 'stopped' &&
+          fact.patch.stopReceiptAt
+        )
+          finishAnswer()
         if (
           fact.kind === 'task.changed' &&
           fact.patch.status &&
@@ -578,7 +594,20 @@ export class ClaudeCodeProvider implements Provider {
       },
     )
 
+    function finishAnswer(): void {
+      const counts = config.readParallelWorkCounts?.()
+      const next =
+        counts && counts.running + counts.unknown > 0 ? 'answered' : 'completed'
+      setStatus(next)
+      setAttention(
+        permissions.pendingAttention ??
+          (next === 'completed' ? 'finished' : 'none'),
+      )
+      armIdleTimer()
+    }
+
     function setStatus(status: SessionStatus): void {
+      answerStatus = status
       settledAttention =
         status === 'completed'
           ? 'finished'
@@ -945,6 +974,33 @@ export class ClaudeCodeProvider implements Provider {
           : []
       }
       evidence.consume(data, now())
+      if (
+        raw.parent_tool_use_id == null &&
+        !currentTurn &&
+        (answerStatus === 'answered' || answerStatus === 'completed') &&
+        (raw.type === 'assistant' ||
+          raw.type === 'stream_event' ||
+          (raw.type === 'system' &&
+            raw.subtype === 'status' &&
+            raw.status === 'requesting'))
+      ) {
+        clearIdleTimer()
+        assistantTextBuffer = ''
+        assistantMessageItemId = null
+        thinkingBuffer = ''
+        thinkingItemId = null
+        currentTurnHasAssistantText = false
+        currentTurnHasThinkingText = false
+        currentTurn = {
+          openedBy: 'harness',
+          message: '',
+          userMessageItemId: null,
+          allowContinuationRecovery: false,
+          usedContinuationToken: false,
+        }
+        setStatus('running')
+        setAttention(permissions.pendingAttention ?? 'none')
+      }
       const event = data as ClaudeStreamEvent
       const previousActivity = lastActivity
       const activityDelta = deriveClaudeActivity(data, previousActivity)
@@ -1172,8 +1228,14 @@ export class ClaudeCodeProvider implements Provider {
           break
 
         case 'result':
-          // The harness's cleanup result ends no user turn (MAR-2868).
-          if (readClaudeResultOriginKind(data) === 'task-notification') {
+          if (raw.parent_tool_use_id != null) break
+          // MAR-2868: a notification result ends no USER turn. In an answered
+          // window or a harness-opened turn it IS the witness (MAR-2896).
+          if (
+            readClaudeResultOriginKind(data) === 'task-notification' &&
+            (currentTurn?.openedBy === 'user' ||
+              (!currentTurn && answerStatus !== 'answered'))
+          ) {
             if (!taskNotificationSinceResult) {
               sessionEmitter.addNote({
                 text: CLAUDE_TASK_NOTIFICATION_FALLBACK,
@@ -1185,6 +1247,7 @@ export class ClaudeCodeProvider implements Provider {
             break
           }
           taskNotificationSinceResult = false
+          if (!currentTurn && answerStatus !== 'answered') break
           evidence.accounting(data)
           if (
             raw.terminal_reason === 'aborted_streaming' &&
@@ -1225,9 +1288,7 @@ export class ClaudeCodeProvider implements Provider {
               })
             }
             currentTurn = null
-            setStatus('completed')
-            setAttention(permissions.pendingAttention ?? 'finished')
-            armIdleTimer()
+            finishAnswer()
           }
           break
       }
@@ -1409,6 +1470,7 @@ export class ClaudeCodeProvider implements Provider {
       taskNotificationSinceResult = false
       stderrBuffer = ''
       currentTurn = {
+        openedBy: 'user',
         message,
         attachments,
         skillSelections: options?.skillSelections,
@@ -1496,7 +1558,11 @@ export class ClaudeCodeProvider implements Provider {
             )
             if (versionRefusal)
               sessionEmitter.addNote({ text: versionRefusal, level: 'error' })
-            evidence.processEnded(now(), endingReason ?? 'exit')
+            evidence.processEnded(
+              now(),
+              endingReason ?? 'exit',
+              answerStatus === 'answered' ? 'unknown' : undefined,
+            )
             if (endingReason) {
               child = null
               endingReason = null
@@ -1587,7 +1653,11 @@ export class ClaudeCodeProvider implements Provider {
       if (reason === 'quit')
         sessionEmitter.addNote({ text: 'stopped by quit', level: 'info' })
       permissions.endConnection()
-      evidence.processEnded(now(), reason)
+      evidence.processEnded(
+        now(),
+        reason,
+        answerStatus === 'answered' ? 'unknown' : undefined,
+      )
       stopped = true
       clearTimeout(startTimer)
       disposeTelemetrySink()
@@ -1618,6 +1688,7 @@ export class ClaudeCodeProvider implements Provider {
         evidence.requestStop(id)
         try {
           await child.stopTask(id)
+          evidence.confirmStop(id, now())
         } catch (error) {
           evidence.cancelStop(id)
           throw error
@@ -1714,10 +1785,13 @@ export class ClaudeCodeProvider implements Provider {
       dispose: disposeRuntime,
       stop: () => {
         if (stopped) return
+        const wasAnswered = answerStatus === 'answered'
         sessionEmitter.addNote({ text: 'terminated by user', level: 'info' })
         disposeRuntime()
-        setStatus('failed')
-        setAttention('failed')
+        if (!wasAnswered) {
+          setStatus('failed')
+          setAttention('failed')
+        }
       },
     }
 

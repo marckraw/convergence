@@ -461,6 +461,23 @@ describe('RelayEngine', () => {
     ).run(crewId, sessionId)
   }
 
+  it('RUN77 delivers the witness snapshot with an earlier declaration — mutation reread latest message turns red', async () => {
+    batonWire('s1', 's2', 'BATON: fable')
+    const gateway = createGateway({
+      lastMessages: { s1: 'NEXT WINDOW\nBATON: other' },
+    })
+    await createEngine(gateway).handleSettle({
+      ...settled('s1'),
+      answerWindow: { message: 'LATE ANSWER', baton: 'fable' },
+    })
+    expect(
+      gateway.sent.map((turn) => ({
+        session: turn.sessionId,
+        text: turn.text,
+      })),
+    ).toEqual([{ session: 's2', text: 'LATE ANSWER' }])
+  })
+
   describe('the baton: a wire fires only on a declared route (MAR-2759)', () => {
     it('fires exactly the wire the message handed the baton to', async () => {
       batonWire('s1', 's2', 'BATON: codex')

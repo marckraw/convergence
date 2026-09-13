@@ -70,3 +70,8 @@ describe('formatSessionCardActivity', () => {
     ).toBe('running tool: Grep')
   })
 })
+it('RUN77 names answered — mutation omit fifth state turns red', () => {
+  expect(
+    formatSessionCardActivity({ status: 'answered', activity: null }),
+  ).toBe('answered')
+})

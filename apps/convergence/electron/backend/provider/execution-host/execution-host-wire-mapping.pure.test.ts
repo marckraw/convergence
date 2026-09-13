@@ -443,6 +443,7 @@ describe('buildWireStartRequest', () => {
       'serviceTier',
       'providerAccountId',
       'noTurnSinceBoundary',
+      'readParallelWorkCounts',
     ])
 
     const request = buildWireStartRequest('claude', {
@@ -1070,4 +1071,16 @@ it('names every local harness family remote cannot show — mutation remove an i
     'harness.rateLimit',
     'harness.init',
   ])
+})
+
+it('RUN77 maps answered outbound to running — mutation send answered on four-state wire turns red', () => {
+  expect(
+    toWireSessionDelta({
+      kind: 'session.patch',
+      patch: { status: 'answered', attention: 'none' },
+    }),
+  ).toEqual({
+    kind: 'session.patch',
+    patch: { status: 'running', attention: 'none' },
+  })
 })

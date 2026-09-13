@@ -58,6 +58,7 @@ export type AgentRunFact =
     }
   | {
       kind: 'process.ended'
+      unresolvedStatus?: 'unknown'
       at: string
       reason?: 'quit' | 'idle' | 'account' | 'stop' | 'exit'
     }

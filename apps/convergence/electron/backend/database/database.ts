@@ -2202,6 +2202,20 @@ export function getDatabase(dbPath?: string): Database.Database {
     migrateResidentStopReason(database)
     migrateEndedSummary(database)
     migrateTaskObserved(database)
+    if (
+      !getTableColumnNames(database, 'sessions').has(
+        'answer_window_start_sequence',
+      )
+    ) {
+      database.exec(
+        'ALTER TABLE sessions ADD COLUMN answer_window_start_sequence INTEGER',
+      )
+    }
+    if (
+      !getTableColumnNames(database, 'session_tasks').has('stop_receipt_at')
+    ) {
+      database.exec('ALTER TABLE session_tasks ADD COLUMN stop_receipt_at TEXT')
+    }
     if (!getTableColumnNames(database, 'sessions').has('pinned_at')) {
       database.exec('ALTER TABLE sessions ADD COLUMN pinned_at TEXT')
     }
