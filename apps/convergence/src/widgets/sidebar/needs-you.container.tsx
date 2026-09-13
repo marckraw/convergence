@@ -15,7 +15,6 @@ import { Button } from '@/shared/ui/button'
 const preferenceKey = 'convergence:sidebar-activity-view:v1'
 
 export function NeedsYou(props: ComponentProps<typeof NeedsYouFeed>) {
-  const [expanded, setExpanded] = useState(false)
   const [heldOrder, setHeldOrder] = useState<FeedGroup[] | null>(null)
   const pointerInside = useRef(false)
   const [view, setView] = useState<FeedView>(() => {
@@ -43,8 +42,6 @@ export function NeedsYou(props: ComponentProps<typeof NeedsYouFeed>) {
     <div className="space-y-3">
       <div className="px-3">
         <NeedsYouControls
-          expanded={expanded}
-          onExpandedChange={setExpanded}
           view={view}
           result={result}
           onChange={changeView}
