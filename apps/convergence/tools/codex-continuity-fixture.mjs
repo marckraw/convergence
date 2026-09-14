@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 
 /** Loopback Responses fixture: synthetic text only, never proxies a request. */
-export async function startContinuityFixture() {
+export async function startContinuityFixture({ onRequest } = {}) {
   const requests = []
   const connections = []
   const errors = []
@@ -27,6 +27,7 @@ export async function startContinuityFixture() {
         previousResponseId: body.previous_response_id ?? null,
       }
       requests.push(capture)
+      await onRequest?.(capture)
       response.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',

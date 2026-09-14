@@ -16,13 +16,15 @@ beforeEach(async () => {
   userHome = join(root, 'user')
   profiles = join(userHome, 'profiles')
   await mkdir(join(userHome, '.codex'), { recursive: true })
-  await mkdir(join(profiles, 'shared', 'sessions'), { recursive: true })
+  for (const name of ['sessions', 'archived_sessions', 'thread-writer-locks'])
+    await mkdir(join(profiles, 'shared', name), { recursive: true })
   for (const name of ['account-a', 'account-b']) {
     const home = join(profiles, name)
     await mkdir(home)
     await writeFile(join(home, 'auth.json'), '{}')
     await writeFile(join(home, 'config.toml'), '')
-    await symlink(join(profiles, 'shared', 'sessions'), join(home, 'sessions'))
+    for (const name of ['sessions', 'archived_sessions', 'thread-writer-locks'])
+      await symlink(join(profiles, 'shared', name), join(home, name))
   }
 })
 afterEach(async () => rm(root, { recursive: true, force: true }))
@@ -147,3 +149,18 @@ test('does not echo malformed credential contents in its error', async () => {
     { message: 'Test account credential file is not valid JSON' },
   )
 })
+
+for (const name of ['archived_sessions', 'thread-writer-locks']) {
+  test(`refuses ${name} linked into ambient storage`, async () => {
+    await mkdir(join(userHome, '.codex', name))
+    await rm(join(profiles, 'account-a', name))
+    await symlink(
+      join(userHome, '.codex', name),
+      join(profiles, 'account-a', name),
+    )
+    await assert.rejects(
+      assertCanaryProfileIsolation({ profiles, userHome }),
+      /ambient or enrolled/,
+    )
+  })
+}

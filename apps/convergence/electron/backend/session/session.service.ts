@@ -1,3 +1,5 @@
+import { HandoffRefusedError } from '../provider/provider-account-handoff.pure'
+import type { InitialDispatchReceipt } from '../provider/provider.types'
 import { readSessionTurnTimings } from './session-timing.service'
 import { CONVERSATION_RESET_COMMAND } from '../../../src/shared/lib/conversation-reset.pure'
 import { randomUUID } from 'crypto'
@@ -298,6 +300,7 @@ export class SessionService {
   private quitting = false
   private readonly retainingStoppedInputs = new Set<string>()
   private readonly compactingSessions = new Set<string>()
+  private readonly pendingAccountHandoffs = new Set<string>()
   /**
    * True only while the constructor heals running/answered sessions left by
    * the previous app run. Those settles are bookkeeping about a process that is already
@@ -1733,9 +1736,10 @@ export class SessionService {
    */
   async start(id: string, input: SendMessageInput): Promise<string> {
     const dispatchId = randomUUID()
-    await this.withDispatchInFlight(id, input, () =>
+    const receipt = await this.withDispatchInFlight(id, input, () =>
       this.openFirstTurn(id, input, dispatchId),
     )
+    receipt?.publish()
     return dispatchId
   }
 
@@ -1767,6 +1771,12 @@ export class SessionService {
     dispatch: (inFlight: SessionDispatch) => Promise<T>,
   ): Promise<T> {
     this.assertNotCompacting(sessionId)
+    this.assertNoPendingAccountHandoff(sessionId)
+    const handoffSession = this.getById(sessionId)
+    const handoff =
+      !!handoffSession &&
+      this.isAccountHandoff(handoffSession, input.providerAccountId)
+    if (handoff) this.assertAccountHandoffEligible(handoffSession!)
     // Read before registering this dispatch: only an earlier send counts as busy.
     // Refuse outside the try below too: a cold-start refusal must not enter
     // queue termination and end the earlier turn's queued inputs.
@@ -1802,6 +1812,7 @@ export class SessionService {
         )
       }
     }
+    if (handoff) this.pendingAccountHandoffs.add(sessionId)
     const inFlight = this.dispatches.begin(sessionId)
     try {
       return await dispatch(inFlight)
@@ -1827,6 +1838,7 @@ export class SessionService {
       }
       throw error
     } finally {
+      if (handoff) this.pendingAccountHandoffs.delete(sessionId)
       this.dispatches.settle(inFlight)
     }
   }
@@ -1835,7 +1847,7 @@ export class SessionService {
     id: string,
     input: SendMessageInput,
     dispatchId: string,
-  ): Promise<void> {
+  ): Promise<InitialDispatchReceipt | void> {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
 
@@ -1861,7 +1873,7 @@ export class SessionService {
     // the host's verdict and the writes it authorises.
     const attachments = this.resolveAttachments(input.attachmentIds)
 
-    this.startHandle(
+    const pending = this.startHandle(
       session,
       input.text,
       this.getContinuationToken(id),
@@ -1875,7 +1887,9 @@ export class SessionService {
     )
     // Attached only once the start was permitted and spawned: a refused turn
     // consumed nothing, so its receipt must never ride a later settle.
+    const receipt = pending ? await pending : undefined
     this.attachDispatchToTurn(id, dispatchId)
+    return receipt
   }
 
   /**
@@ -1940,9 +1954,10 @@ export class SessionService {
   /** Returns the input's dispatch id -- the delivery receipt (MAR-2759). */
   async sendMessage(id: string, input: SendMessageInput): Promise<string> {
     const dispatchId = randomUUID()
-    await this.withDispatchInFlight(id, input, () =>
+    const receipt = await this.withDispatchInFlight(id, input, () =>
       this.deliverMessage(id, input, dispatchId),
     )
+    receipt?.publish()
     return dispatchId
   }
 
@@ -1950,7 +1965,7 @@ export class SessionService {
     id: string,
     input: SendMessageInput,
     dispatchId: string,
-  ): Promise<void> {
+  ): Promise<InitialDispatchReceipt | void> {
     let session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
 
@@ -2095,7 +2110,7 @@ export class SessionService {
         input.text,
         input.skipContextInjection,
       )
-      this.startHandle(
+      const pending = this.startHandle(
         session,
         augmentedText,
         continuationToken,
@@ -2104,7 +2119,9 @@ export class SessionService {
         input.providerAccountId,
         { muteRelays: input.muteRelays },
       )
+      const receipt = pending ? await pending : undefined
       this.attachDispatchToTurn(id, dispatchId)
+      return receipt
       return
     }
 
@@ -2171,6 +2188,7 @@ export class SessionService {
     openerQueued: boolean
   }> {
     this.assertNotCompacting(id)
+    this.assertNoPendingAccountHandoff(id)
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
 
@@ -2412,6 +2430,51 @@ export class SessionService {
       throw error
     } finally {
       this.compactingSessions.delete(id)
+    }
+  }
+
+  private isAccountHandoff(
+    session: Session,
+    accountId: string | null | undefined,
+  ): boolean {
+    return (
+      this.turnProviderCapabilities(session)?.accountHandoff === 'settled' &&
+      this.getContinuationToken(session.id) !== null &&
+      this.getLastTurnProviderAccountId(session.id) !== (accountId ?? null)
+    )
+  }
+
+  private assertNoPendingAccountHandoff(sessionId: string): void {
+    if (this.pendingAccountHandoffs.has(sessionId)) {
+      throw new HandoffRefusedError(
+        'not-eligible',
+        'An account handoff is already being prepared. Wait for it before sending another message.',
+      )
+    }
+  }
+
+  private assertAccountHandoffEligible(
+    session: Session,
+    own: { ownDispatch?: boolean; queuedInputId?: string } = {},
+  ): void {
+    this.assertNotCompacting(session.id)
+    if (
+      !isTerminalSessionStatus(session.status) ||
+      this.activeHandles.has(session.id) ||
+      (!own.ownDispatch && this.dispatches.isDispatching(session.id)) ||
+      session.attention === 'needs-approval' ||
+      session.attention === 'needs-input' ||
+      this.queuedInputs
+        .list(session.id)
+        .some(
+          (item) =>
+            item.state === 'dispatching' && item.id !== own.queuedInputId,
+        )
+    ) {
+      throw new HandoffRefusedError(
+        'not-eligible',
+        'Wait for this conversation and its pending requests to settle before switching accounts. Your message was not sent.',
+      )
     }
   }
 
@@ -3641,10 +3704,17 @@ export class SessionService {
      * already prepared its text, which is true of both resuming callers.
      */
     turn?: {
+      queuedInputId?: string
       muteRelays?: boolean
       bootContext?: { contextItemIds?: string[] }
     },
-  ): void {
+  ): Promise<InitialDispatchReceipt> | undefined {
+    if (this.isAccountHandoff(session, providerAccountId)) {
+      this.assertAccountHandoffEligible(session, {
+        ownDispatch: true,
+        queuedInputId: turn?.queuedInputId,
+      })
+    }
     // Accounts are host-scoped (ADR 0007, PA10). Refuse before anything is
     // spawned or recorded: a remote host runs on its own credential whatever is
     // selected here, and starting anyway would file the local account id
@@ -3711,10 +3781,12 @@ export class SessionService {
       continuationToken,
       permissionConfig: session.permissionConfig,
       providerAccountId: providerAccountId ?? null,
+      previousProviderAccountId: this.getLastTurnProviderAccountId(session.id),
       initialAttachments,
       ...(place?.workspace ? { workspace: place.workspace } : {}),
     })
 
+    const previousMute = this.getRowById(session.id)?.relays_muted
     this.requestRelayMute(session.id, turn?.muteRelays)
     this.activeHandles.set(session.id, handle)
     this.notifySummaryUpdated(session.id)
@@ -3728,6 +3800,12 @@ export class SessionService {
     if (boot.noteDraft) {
       this.recordBootContextNote(session.id, boot.noteDraft)
     }
+    return handle.initialDispatch?.catch(async (error) => {
+      this.restoreRelayMute(session.id, previousMute)
+      if (this.activeHandles.get(session.id) === handle)
+        await this.releaseHandle(session.id)
+      throw error
+    })
   }
 
   /**
@@ -3885,10 +3963,17 @@ export class SessionService {
     if (!item) return
 
     this.queuedInputs.patch(item.id, 'dispatching')
+    let handoffGuard = false
 
     try {
       const session = this.getById(sessionId)
       if (!session) throw new Error(`Session not found: ${sessionId}`)
+      if (this.isAccountHandoff(session, item.providerAccountId)) {
+        this.assertNoPendingAccountHandoff(sessionId)
+        this.assertAccountHandoffEligible(session, { queuedInputId: item.id })
+        this.pendingAccountHandoffs.add(sessionId)
+        handoffGuard = true
+      }
       assertLocalAccountSelection({
         executionHost: session.executionHost,
         accountId: item.providerAccountId,
@@ -3980,7 +4065,7 @@ export class SessionService {
         throw new Error('Session is no longer resumable')
       }
 
-      this.startHandle(
+      const pending = this.startHandle(
         session,
         augmentedText,
         continuationToken,
@@ -3989,10 +4074,16 @@ export class SessionService {
         // The account chosen when this input was queued, not whatever the
         // composer shows now — it may have waited through a switch.
         item.providerAccountId,
-        { muteRelays: item.relaysMuted },
+        { muteRelays: item.relaysMuted, queuedInputId: item.id },
       )
+      const receipt = pending ? await pending : undefined
       this.attachDispatchToTurn(sessionId, item.dispatchId)
       this.queuedInputs.patch(item.id, 'sent')
+      if (handoffGuard) {
+        this.pendingAccountHandoffs.delete(sessionId)
+        handoffGuard = false
+      }
+      receipt?.publish()
     } catch (err) {
       // "Not yet" is not "broken" (MAR-2888). The row was attempted, but the
       // answer is about timing: it goes back in line and the next turn
@@ -4018,6 +4109,8 @@ export class SessionService {
         sessionId,
         err instanceof Error ? err.message : String(err),
       )
+    } finally {
+      if (handoffGuard) this.pendingAccountHandoffs.delete(sessionId)
     }
   }
 

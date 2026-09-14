@@ -71,18 +71,27 @@ export async function assertCanaryProfileIsolation({
         `Canary ${name} must stay inside its test account home`,
       )
     }
-    const sessionRoot = await realpath(join(home, 'sessions'))
-    assertNotProtected(sessionRoot)
-    assert(
-      within(sessionRoot, root),
-      'Canary history must stay inside the test profiles root',
-    )
-    sessions.push(sessionRoot)
+    const shared = []
+    for (const name of [
+      'sessions',
+      'archived_sessions',
+      'thread-writer-locks',
+    ]) {
+      const sharedRoot = await realpath(join(home, name))
+      assertNotProtected(sharedRoot)
+      assert(
+        within(sharedRoot, root) &&
+          !homes.some((accountHome) => within(sharedRoot, accountHome)),
+        'Canary history and locks must use a third directory inside the test profiles root',
+      )
+      shared.push(sharedRoot)
+    }
+    sessions.push(shared)
   }
-  assert.equal(
+  assert.deepEqual(
     sessions[0],
     sessions[1],
-    'Test homes must share their isolated conversation storage',
+    'Test homes must share their isolated conversation storage and writer locks',
   )
   return homes
 }

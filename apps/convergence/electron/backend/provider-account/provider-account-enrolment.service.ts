@@ -4,6 +4,11 @@ import { homedir } from 'os'
 import { join } from 'path'
 import { spawn } from 'child_process'
 import {
+  CodexAccountHistoryService,
+  codexHistoryFs,
+  type CodexHistoryFs,
+} from './provider-account-codex-history.service'
+import {
   reconcileAccountClaudeConfig,
   isRecord,
 } from './provider-account-claude-config.pure'
@@ -55,14 +60,18 @@ import type { ProviderAccount } from './provider-account.types'
  * the credentials behind them do not travel.
  */
 
-export interface ProviderAccountFs {
+export interface ProviderAccountFs extends CodexHistoryFs {
   mkdir: (path: string) => Promise<void>
   /** Codex writes its credential as a plaintext file; permissions are ours. */
   chmod: (path: string, mode: number) => Promise<void>
   readdir: (path: string) => Promise<string[]>
   symlink: (target: string, path: string) => Promise<void>
   readFile: (path: string) => Promise<string>
-  writeFile: (path: string, contents: string) => Promise<void>
+  writeFile: (
+    path: string,
+    contents: string,
+    options?: { flag: 'wx' },
+  ) => Promise<void>
   rm: (path: string) => Promise<void>
 }
 
@@ -77,6 +86,7 @@ export type ProviderAccountCommandRunner = (
 ) => Promise<ProviderAccountCommandResult>
 
 const defaultFs: ProviderAccountFs = {
+  ...codexHistoryFs,
   mkdir: async (path) => {
     await nodeFs.mkdir(path, { recursive: true })
   },
@@ -84,7 +94,8 @@ const defaultFs: ProviderAccountFs = {
   readdir: (path) => nodeFs.readdir(path),
   symlink: (target, path) => nodeFs.symlink(target, path),
   readFile: (path) => nodeFs.readFile(path, 'utf8'),
-  writeFile: (path, contents) => nodeFs.writeFile(path, contents, 'utf8'),
+  writeFile: (path, contents, options) =>
+    nodeFs.writeFile(path, contents, { encoding: 'utf8', ...options }),
   rm: async (path) => {
     await nodeFs.rm(path, { recursive: true, force: true })
   },
@@ -158,6 +169,7 @@ export class ProviderAccountEnrolmentService {
   private readonly newAccountId: () => string
   private readonly binaryPaths = new Map<string, string>()
   private readonly codexMaintenance: ProviderAccountEnrolmentDeps['codexMaintenance']
+  private readonly codexHistory: CodexAccountHistoryService
 
   constructor(deps: ProviderAccountEnrolmentDeps) {
     this.repository = deps.repository
@@ -167,6 +179,10 @@ export class ProviderAccountEnrolmentService {
     this.baseEnv = deps.baseEnv ?? process.env
     this.newAccountId = deps.newAccountId ?? (() => randomUUID())
     this.codexMaintenance = deps.codexMaintenance
+    this.codexHistory = new CodexAccountHistoryService({
+      homeDir: this.homeDir,
+      fs: this.fs,
+    })
     for (const [providerId, path] of Object.entries(deps.binaryPaths ?? {})) {
       if (path) this.binaryPaths.set(providerId, path)
     }
@@ -423,6 +439,7 @@ export class ProviderAccountEnrolmentService {
         status: 'connected',
         lastValidatedAt: new Date().toISOString(),
       })
+      await this.codexHistory.migrate(account.configDir)
       const reconnected = this.repository.get(account.id)
       if (!reconnected)
         throw new Error('The OpenAI account was removed while reconnecting.')
@@ -453,8 +470,8 @@ export class ProviderAccountEnrolmentService {
    *
    * Same model, same seams, same attestation net — the differences are
    * genuinely Codex's: `codex login` takes no email because it authorises
-   * whatever ChatGPT session the browser holds. This enrollment path currently
-   * creates an isolated native-history home; sharing that history is MAR-3012.
+   * whatever ChatGPT session the browser holds. Credentials and runtime state
+   * remain private; only the reviewed conversation entries join shared storage.
    * File credential storage is explicit, so the observed identity and the
    * runtime use the same store; managed-policy conflicts remain CLI failures.
    */
@@ -462,6 +479,11 @@ export class ProviderAccountEnrolmentService {
     input: EnrolProviderAccountInput,
     providerId: string,
   ): Promise<EnrolProviderAccountResult> {
+    if (input.executionHostId && input.executionHostId !== 'local') {
+      throw new Error(
+        'OpenAI account enrollment is available on this machine only.',
+      )
+    }
     const binaryPath = this.requireBinaryPath(providerId)
     const accountId = this.newAccountId()
     const configDir = deriveProviderAccountConfigDir({
@@ -474,8 +496,13 @@ export class ProviderAccountEnrolmentService {
     // MAR-2207: owner-only home, not just an owner-only credential file.
     await this.fs.chmod(configDir, CODEX_HOME_DIR_MODE)
     const configPath = join(configDir, 'config.toml')
-    await this.fs.writeFile(configPath, 'cli_auth_credentials_store = "file"\n')
+    await this.fs.writeFile(
+      configPath,
+      'cli_auth_credentials_store = "file"\n',
+      { flag: 'wx' },
+    )
     await this.fs.chmod(configPath, CODEX_AUTH_FILE_MODE)
+    const historyLayout = await this.codexHistory.migrate(configDir)
 
     const result = await this.runCommand(
       buildCodexAccountLoginCommand({
@@ -527,7 +554,14 @@ export class ProviderAccountEnrolmentService {
       lastValidatedAt: new Date().toISOString(),
     })
 
-    return { account, warnings: [] }
+    return {
+      account,
+      warnings: historyLayout.warnings.map((message) => ({
+        kind: 'native-history-layout',
+        key: 'codex.history',
+        message,
+      })),
+    }
   }
 
   async remove(accountId: string): Promise<void> {

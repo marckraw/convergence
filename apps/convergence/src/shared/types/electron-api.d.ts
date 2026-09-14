@@ -1324,7 +1324,7 @@ interface ProviderAccountData {
 }
 
 interface ProviderAccountSettingsWarningData {
-  kind: 'api-key-helper' | 'credential-env-key'
+  kind: 'api-key-helper' | 'credential-env-key' | 'native-history-layout'
   key: string
   message: string
 }
@@ -1343,6 +1343,7 @@ interface ProviderAccountAttestationResultData {
   detail: string | null
   unknownEntries: string[]
   missingLinks: string[]
+  nativeHistoryWarnings?: string[]
 }
 
 interface ProviderAccountHealthData {

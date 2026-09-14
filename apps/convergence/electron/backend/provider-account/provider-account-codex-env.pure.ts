@@ -45,6 +45,8 @@ export const CODEX_ACCOUNT_ENV_FORBIDDEN: readonly string[] = [
 export interface CodexAccountEnvTarget {
   /** `CODEX_HOME`. The `auth.json` inside it is the credential. */
   configDir: string
+  executionHostId?: string
+  label?: string
 }
 
 export interface BuildCodexAccountEnvInput {

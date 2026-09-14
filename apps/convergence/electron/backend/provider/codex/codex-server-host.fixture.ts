@@ -148,6 +148,7 @@ export class FakeCodexServer {
     params?: Record<string, unknown>
     connection: FakeCodexConnection
   }> = []
+  readonly loadedThreads = new Map<string, { type: string }>()
   private threadCounter = 0
   private threadStartCount = 0
 
@@ -233,6 +234,23 @@ export class FakeCodexServer {
     }
 
     switch (method) {
+      case 'thread/loaded/list':
+        connection.respond(id, {
+          data: [...this.loadedThreads.keys()],
+          nextCursor: null,
+        })
+        return
+      case 'thread/read': {
+        const threadId = String(params?.threadId ?? '')
+        connection.respond(id, {
+          thread: {
+            id: threadId,
+            status: this.loadedThreads.get(threadId) ?? { type: 'notLoaded' },
+            turns: [],
+          },
+        })
+        return
+      }
       case 'initialize':
         connection.respond(id, { userAgent: 'fake-codex/0.153.4' })
         return
@@ -247,6 +265,7 @@ export class FakeCodexServer {
           // BEFORE the starter's own response arrives. A session that takes
           // its id from the notification therefore takes the wrong one.
           if (threadId) {
+            this.loadedThreads.set(threadId, { type: 'idle' })
             this.broadcast('thread/started', { thread: { id: threadId } })
           }
           connection.respond(id, threadId ? { thread: { id: threadId } } : {})
@@ -272,6 +291,8 @@ export class FakeCodexServer {
           )
           return
         }
+        if (!this.loadedThreads.has(threadId))
+          this.loadedThreads.set(threadId, { type: 'idle' })
         connection.respond(id, { thread: { id: threadId } })
         return
       }
@@ -282,12 +303,14 @@ export class FakeCodexServer {
           connection.respondError(id, `thread not found: ${threadId}`)
           return
         }
+        this.loadedThreads.set(threadId, { type: 'active' })
         const turnId =
           this.options.turnId ?? this.options.turnStartedId ?? 'turn-1'
         const answer = () => {
           connection.respond(id, { turn: { id: turnId, status: 'inProgress' } })
           connection.notify('turn/started', { turn: { id: turnId } })
           if (this.options.autoCompleteTurns !== false) {
+            this.loadedThreads.set(threadId, { type: 'idle' })
             connection.notify('turn/completed', {
               turn: { id: turnId, status: 'completed' },
             })
@@ -310,6 +333,7 @@ export class FakeCodexServer {
         return
 
       case 'turn/interrupt':
+        this.loadedThreads.set(String(params?.threadId ?? ''), { type: 'idle' })
         connection.respond(id, {})
         return
 

@@ -119,6 +119,8 @@ export type TranscriptEntry =
   | { type: 'system'; text: string; timestamp: string }
 
 export interface SessionStartConfig {
+  /** Recorded serving account before this start, including an explicit ambient/unknown null. */
+  previousProviderAccountId?: string | null
   /** Persisted task status before an incoming terminal fact is applied. Local evidence only. */
   readTaskStatus?: (taskId: string) => string | undefined
   /** Local record query, after synchronous evidence persistence; never sent on the wire. */
@@ -380,6 +382,7 @@ export interface ProviderSettingsInfo {
 }
 
 export interface ProviderDescriptor {
+  accountHandoff?: 'settled'
   supportsLiveModelSelection?: boolean
   id: string
   name: string
@@ -452,7 +455,14 @@ export type SendMessageDisposition =
   | 'queue-follow-up'
   | { kind: 'refused'; reason: string }
 
+export interface InitialDispatchReceipt {
+  /** Publish accepted events after the service has attached its delivery receipt. */
+  publish(): void
+}
+
 export interface SessionHandle {
+  /** Optional asynchronous binding gate; rejection means the initial input remains unsent. */
+  initialDispatch?: Promise<InitialDispatchReceipt>
   readonly canStopTasks?: boolean
   stopTask?: (id: string) => Promise<void>
   /** A local process whose lifetime spans completed user turns. */
@@ -504,6 +514,7 @@ export interface SessionHandle {
 }
 
 export interface Provider {
+  accountHandoff?: 'settled'
   id: string
   name: string
   supportsContinuation: boolean

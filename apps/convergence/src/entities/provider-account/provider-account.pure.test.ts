@@ -550,3 +550,21 @@ describe('providerAccountsForProvider', () => {
     expect(providerAccountsForProvider([account()], '')).toEqual([])
   })
 })
+
+it('shows native-history migration warnings on the account row', () => {
+  const rows = buildProviderAccountSettingsRows(
+    [account({ providerId: 'codex' })],
+    health({
+      accounts: [
+        result({
+          nativeHistoryWarnings: [
+            'History is private; reconnect to enable switching.',
+          ],
+        }),
+      ],
+    }),
+  )
+  expect(rows[0].notes).toContain(
+    'History is private; reconnect to enable switching.',
+  )
+})

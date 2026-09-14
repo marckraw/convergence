@@ -1,3 +1,4 @@
+import { CodexAccountHistoryService } from '../backend/provider-account/provider-account-codex-history.service'
 import { CrewImportService } from '../backend/crew/crew-import.service'
 import { registerCrewImportIpc } from '../backend/crew/crew-import.ipc'
 import { CrewExportService } from '../backend/crew/crew-export.service'
@@ -356,9 +357,11 @@ async function startApp(): Promise<void> {
         ),
     },
   })
+  const codexAccountHistory = new CodexAccountHistoryService()
   const providerAccountAttestationService =
     new ProviderAccountAttestationService({
       repository: providerAccountRepository,
+      codexHistory: codexAccountHistory,
     })
   /**
    * Resolves a recorded account id to the directories that decide which
@@ -427,6 +430,7 @@ async function startApp(): Promise<void> {
             taskProgressService,
             debugSink,
             resolveCodexAccountForSession,
+            codexAccountHistory,
           ),
         )
         // The version gates the resident server: an older codex-cli is refused

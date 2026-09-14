@@ -109,7 +109,7 @@ export function buildProviderAccountSettingsRows(
   return accounts.map((account) => {
     const identity = describeProviderAccountIdentity(account)
     const verdict = verdicts.get(account.id)
-    const notes: string[] = []
+    const notes: string[] = [...(verdict?.nativeHistoryWarnings ?? [])]
 
     if (verdict?.outcome === 'unreadable') {
       notes.push(

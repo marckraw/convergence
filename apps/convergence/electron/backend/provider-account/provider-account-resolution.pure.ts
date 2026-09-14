@@ -89,7 +89,20 @@ export function resolveCodexAccountForTurn(input: {
   account: ProviderAccount | null
 }): CodexAccountEnvTarget | null {
   const resolved = resolveAccountForTurn(input)
-  return resolved ? { configDir: resolved.configDir } : null
+  if (!resolved || !input.account) return null
+  if (
+    input.account.providerId !== 'codex' ||
+    input.account.executionHostId !== 'local'
+  ) {
+    throw new Error(
+      'Select an OpenAI account enrolled on this machine. The turn was not started.',
+    )
+  }
+  return {
+    configDir: resolved.configDir,
+    executionHostId: input.account.executionHostId,
+    label: input.account.label,
+  }
 }
 
 function describeAccount(account: ProviderAccount): string {

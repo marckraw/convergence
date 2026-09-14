@@ -1,4 +1,5 @@
 import { promises as nodeFs } from 'fs'
+import type { CodexAccountHistoryService } from './provider-account-codex-history.service'
 import { homedir } from 'os'
 import { join } from 'path'
 import {
@@ -50,6 +51,7 @@ export interface ProviderAccountAttestationResult {
   unknownEntries: string[]
   /** Shared entries that never got linked in. */
   missingLinks: string[]
+  nativeHistoryWarnings?: string[]
 }
 
 export interface ProviderAccountHealthReport {
@@ -80,6 +82,7 @@ export interface ProviderAccountAttestationDeps {
   now?: () => number
   intervalMs?: number
   claudeVersion?: () => string | null
+  codexHistory?: Pick<CodexAccountHistoryService, 'inspect'>
 }
 
 export class ProviderAccountAttestationService {
@@ -94,7 +97,7 @@ export class ProviderAccountAttestationService {
   private lastVersion: string | null = null
   private report: ProviderAccountHealthReport = EMPTY_REPORT
 
-  constructor(deps: ProviderAccountAttestationDeps) {
+  constructor(private readonly deps: ProviderAccountAttestationDeps) {
     this.repository = deps.repository
     this.fs = deps.fs ?? defaultFs
     this.homeDir = deps.homeDir ?? homedir()
@@ -171,9 +174,8 @@ export class ProviderAccountAttestationService {
         this.repository.setStatus(account.id, verdict.status, checkedAt)
       }
 
-      // Drift is a property of the default-shared symlink manifest, which only
-      // Claude accounts have. A Codex home shares nothing, so there is nothing
-      // that could silently partition.
+      // Each provider has a different sharing manifest. Codex's recomputable
+      // history warning describes layout, independently of credential identity.
       const drift = isConfigHome
         ? { unknownEntries: [], missingLinks: [] }
         : detectAccountDirDrift({
@@ -190,6 +192,13 @@ export class ProviderAccountAttestationService {
         detail: verdict.detail,
         unknownEntries: drift.unknownEntries,
         missingLinks: drift.missingLinks,
+        ...(isConfigHome && this.deps.codexHistory
+          ? {
+              nativeHistoryWarnings: (
+                await this.deps.codexHistory.inspect(account.configDir)
+              ).warnings,
+            }
+          : {}),
       })
     }
 

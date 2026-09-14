@@ -15,6 +15,7 @@ import type {
  * else about how a Provider runs stays behind the host interface.
  */
 export interface ExecutionHostProviderCapabilities {
+  accountHandoff?: 'settled'
   providerId: string
   name: string
   supportsContinuation: boolean

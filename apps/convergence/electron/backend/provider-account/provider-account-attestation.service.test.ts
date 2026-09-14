@@ -66,9 +66,16 @@ describe('ProviderAccountAttestationService', () => {
     dirs?: Record<string, string[]>
     version?: string | null
     intervalMs?: number
+    historyWarnings?: string[]
   }) {
     return new ProviderAccountAttestationService({
       repository,
+      codexHistory: {
+        inspect: async () => ({
+          ready: !options.historyWarnings?.length,
+          warnings: options.historyWarnings ?? [],
+        }),
+      },
       fs: fakeFs(options.files ?? {}, options.dirs ?? {}),
       homeDir: HOME,
       now: () => clock,
@@ -311,6 +318,7 @@ describe('ProviderAccountAttestationService', () => {
     })
 
     const subject = service({
+      historyWarnings: ['History collision: reconnect after resolving it.'],
       files: {
         [`${CONFIG_DIR}/.claude.json`]: identityJson('a@example.com', 'org-a'),
         [`${CODEX_HOME}/auth.json`]: JSON.stringify({
@@ -326,9 +334,13 @@ describe('ProviderAccountAttestationService', () => {
     const codex = report.accounts.find((entry) => entry.accountId === 'acct-c')
 
     expect(codex).toMatchObject({ outcome: 'verified', status: 'connected' })
-    // A Codex home shares nothing by symlink, so drift cannot apply to it.
+    // Codex layout warnings are separate from Claude's broad manifest drift.
     expect(codex?.unknownEntries).toEqual([])
     expect(codex?.missingLinks).toEqual([])
+    expect(codex?.nativeHistoryWarnings).toEqual([
+      'History collision: reconnect after resolving it.',
+    ])
+    expect(repository.get('acct-c')?.status).toBe('connected')
   })
 
   it('disables a Codex account that has started serving somebody else', async () => {

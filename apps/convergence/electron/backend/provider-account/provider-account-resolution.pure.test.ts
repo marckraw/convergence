@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   assertLocalAccountSelection,
   resolveAccountForTurn,
+  resolveCodexAccountForTurn,
   selectTurnAccountSnapshot,
 } from './provider-account-resolution.pure'
 import type { ProviderAccount } from './provider-account.types'
@@ -157,5 +158,29 @@ describe('assertLocalAccountSelection', () => {
         accountId: 'acct-a',
       }),
     ).not.toThrow()
+  })
+})
+
+describe('Codex host identity', () => {
+  it('carries the enrolled host key and label into the resident server', () => {
+    const selected = account({ providerId: 'codex' })
+    expect(
+      resolveCodexAccountForTurn({ accountId: selected.id, account: selected }),
+    ).toEqual({
+      configDir: selected.configDir,
+      executionHostId: 'local',
+      label: selected.label,
+    })
+  })
+  it.each([
+    { providerId: 'claude-code' },
+    { providerId: 'codex', executionHostId: 'remote-one' },
+  ])('rejects incompatible selected account %o', (overrides) => {
+    expect(() =>
+      resolveCodexAccountForTurn({
+        accountId: 'acct-a',
+        account: account(overrides),
+      }),
+    ).toThrow(/OpenAI account enrolled on this machine/)
   })
 })
