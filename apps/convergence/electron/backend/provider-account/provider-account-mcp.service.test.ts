@@ -100,6 +100,40 @@ describe('ProviderAccountMcpService', () => {
     })
   }
 
+  it.each(['list', 'authorize'] as const)(
+    'refuses to %s Claude connectors for a Codex account before starting a process',
+    async (operation) => {
+      repository.create({
+        id: 'codex-a',
+        providerId: 'codex',
+        label: 'OpenAI',
+        authKind: 'subscription-oauth',
+        configDir: '/codex',
+        credentialDir: '/codex',
+        executionHostId: 'local',
+      })
+      const read = fakeRunner()
+      const write = fakeInteractiveRunner()
+      const subject = service({ run: read.run, runInteractive: write.run })
+      if (operation === 'list') {
+        const result = await subject.listConnectors('codex-a')
+        expect(result.error).toContain(
+          'only available for Claude Code accounts',
+        )
+        expect(result.connectors).toEqual([])
+      } else {
+        await expect(
+          subject.authorizeConnector({
+            accountId: 'codex-a',
+            serverName: 'linear',
+          }),
+        ).rejects.toThrow('only available for Claude Code accounts')
+      }
+      expect(read.calls).toEqual([])
+      expect(write.calls).toEqual([])
+    },
+  )
+
   describe('listConnectors', () => {
     it('asks the account about itself, not the ambient credential', async () => {
       // `mcp list` reports whichever slot the environment points at, so the

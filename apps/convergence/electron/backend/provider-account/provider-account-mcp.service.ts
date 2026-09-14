@@ -231,9 +231,15 @@ export class ProviderAccountMcpService {
    * account that cannot serve turns would write tokens nothing will ever use.
    */
   private resolveAccount(accountId: string | null) {
+    const account = accountId ? this.repository.get(accountId) : null
+    if (account && account.providerId !== 'claude-code') {
+      throw new Error(
+        'Connector management is only available for Claude Code accounts.',
+      )
+    }
     return resolveAccountForTurn({
       accountId,
-      account: accountId ? this.repository.get(accountId) : null,
+      account,
     })
   }
 }

@@ -212,12 +212,41 @@ describe('ProviderAccountsContainer', () => {
     render(<ProviderAccountsContainer />)
     await screen.findByText('a@example.com')
     fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+    expect(
+      screen.getByText(
+        'No OpenAI accounts enrolled. Convergence uses the Codex login already on this Mac. Connect an account below to manage it here.',
+      ),
+    ).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Account label (optional)'), {
+      target: { value: 'Unverified OpenAI account' },
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Connect OpenAI' }))
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Codex home reported no identity',
     )
     expect(screen.getByRole('button', { name: 'Connect OpenAI' })).toBeEnabled()
     expect(screen.queryByText(/^Enrolled/)).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Unverified OpenAI account' }),
+    ).not.toBeInTheDocument()
+    expect(providerAccounts.list).toHaveBeenCalledTimes(1)
+  })
+
+  it('explains the current Codex history ownership before removing an OpenAI account', async () => {
+    providerAccounts.list.mockResolvedValue([account({ providerId: 'codex' })])
+    render(<ProviderAccountsContainer />)
+    await screen.findByText(/No Anthropic accounts enrolled/)
+    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(
+      screen.getByText(
+        'This signs the account out of Codex and removes its local account directory, including any Codex history stored only there. Saved conversation messages remain in Convergence.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(/Conversations stay — they are shared/),
+    ).not.toBeInTheDocument()
+    expect(providerAccounts.remove).not.toHaveBeenCalled()
   })
 
   it('enrols through the surface instead of the developer console', async () => {

@@ -28,7 +28,7 @@ export interface ProviderAccountsFieldsProps {
   lastCheckedAt: string | null
   claudeVersion: string | null
   isLoading: boolean
-  /** The id of the account a slow action is running against, if any. */
+  /** The active account action; any value locks the other credential actions. */
   busyAccountId: string | null
   isEnrolling: boolean
   enrolEmail: string

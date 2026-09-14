@@ -211,6 +211,7 @@ export const ProviderAccountsContainer: FC = () => {
 
   const handleToggleConnectors = useCallback(
     async (accountId: string) => {
+      if (providerId !== 'claude-code') return
       if (expandedConnectorsAccountId === accountId) {
         setExpandedConnectorsAccountId(null)
         return
@@ -231,11 +232,12 @@ export const ProviderAccountsContainer: FC = () => {
         setIsLoadingConnectors(false)
       }
     },
-    [expandedConnectorsAccountId],
+    [providerId, expandedConnectorsAccountId],
   )
 
   const handleAuthorizeConnector = useCallback(
     async (accountId: string, serverName: string) => {
+      if (providerId !== 'claude-code') return
       setAuthorizingServerName(serverName)
       setMessage(null)
       setError(null)
@@ -255,7 +257,7 @@ export const ProviderAccountsContainer: FC = () => {
         setAuthorizingServerName(null)
       }
     },
-    [],
+    [providerId],
   )
 
   const handleCheckHealth = useCallback(async () => {
