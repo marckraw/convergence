@@ -1,3 +1,13 @@
+import type {
+  ClaudeAccountLayout,
+  ClaudeAccountLayoutEntry,
+} from '../../../src/shared/types/provider-account-layout.types'
+export type {
+  ClaudeAccountLayout,
+  ClaudeAccountLayoutEntry,
+  ClaudeAccountLinkStatus,
+} from '../../../src/shared/types/provider-account-layout.types'
+
 /**
  * The account-directory compatibility manifest (ADR 0007, amendment 1).
  *
@@ -84,6 +94,22 @@ export interface AccountDirDrift {
   unknownEntries: string[]
   /** Shared entries that exist upstream but are missing from the account dir. */
   missingLinks: string[]
+}
+
+export function summarizeClaudeAccountLayout(
+  entries: ClaudeAccountLayoutEntry[],
+): ClaudeAccountLayout {
+  return {
+    entries,
+    fullyShared:
+      entries.length > 0 && entries.every((entry) => entry.status === 'linked'),
+    privateEntries: entries
+      .filter((entry) => entry.hasPrivateContent)
+      .map((entry) => entry.name),
+    unreadableEntries: entries
+      .filter((entry) => entry.status === 'unreadable')
+      .map((entry) => entry.name),
+  }
 }
 
 /**

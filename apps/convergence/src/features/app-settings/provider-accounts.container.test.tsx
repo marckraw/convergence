@@ -45,6 +45,7 @@ const providerAccounts = {
   enrol: vi.fn(),
   reconnect: vi.fn(),
   remove: vi.fn(),
+  inspectHistory: vi.fn(),
   setDefault: vi.fn(),
   rename: vi.fn(),
   sweepOrphans: vi.fn(),
@@ -61,6 +62,12 @@ describe('ProviderAccountsContainer', () => {
     useDialogStore.getState().close()
     providerAccounts.list.mockResolvedValue([account()])
     providerAccounts.health.mockResolvedValue(health())
+    providerAccounts.inspectHistory.mockResolvedValue({
+      entries: [],
+      fullyShared: true,
+      privateEntries: [],
+      unreadableEntries: [],
+    })
     providerAccounts.listConnectors.mockResolvedValue({
       providerAccountId: 'acct-a',
       connectors: [
@@ -330,12 +337,65 @@ describe('ProviderAccountsContainer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Remove/ }))
     expect(providerAccounts.remove).not.toHaveBeenCalled()
-    expect(screen.getByText(/signs the account out/)).toBeInTheDocument()
+    expect(await screen.findByText(/signs the account out/)).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sign out and remove' }))
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Sign out and remove' }),
+    )
     await waitFor(() =>
       expect(providerAccounts.remove).toHaveBeenCalledWith('acct-a'),
     )
+  })
+
+  it('names private history and sends the deletion flag only after the explicit destructive choice', async () => {
+    providerAccounts.inspectHistory.mockResolvedValue({
+      entries: [
+        { name: 'projects', status: 'real-directory', hasPrivateContent: true },
+      ],
+      fullyShared: false,
+      privateEntries: ['projects'],
+      unreadableEntries: [],
+    })
+    providerAccounts.remove.mockResolvedValue(undefined)
+    render(<ProviderAccountsContainer />)
+    await screen.findByText('a@example.com')
+    fireEvent.click(screen.getByRole('button', { name: /Remove/ }))
+    expect(
+      await screen.findByText(/permanently delete those copies/),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(/Native conversations stay/),
+    ).not.toBeInTheDocument()
+    expect(providerAccounts.remove).not.toHaveBeenCalled()
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Sign out and delete private history',
+      }),
+    )
+    await waitFor(() =>
+      expect(providerAccounts.remove).toHaveBeenCalledWith('acct-a', {
+        deletePrivateHistory: true,
+      }),
+    )
+  })
+
+  it('refuses removal when the layout cannot be inspected', async () => {
+    providerAccounts.inspectHistory.mockResolvedValue({
+      entries: [],
+      fullyShared: false,
+      privateEntries: [],
+      unreadableEntries: ['projects'],
+    })
+    render(<ProviderAccountsContainer />)
+    await screen.findByText('a@example.com')
+    fireEvent.click(screen.getByRole('button', { name: /Remove/ }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /could not be inspected/,
+    )
+    expect(
+      screen.queryByRole('button', { name: 'Sign out and remove' }),
+    ).not.toBeInTheDocument()
+    expect(providerAccounts.remove).not.toHaveBeenCalled()
   })
 
   it('reports a refused reconnect instead of pretending it worked', async () => {
@@ -363,7 +423,9 @@ describe('ProviderAccountsContainer', () => {
     render(<ProviderAccountsContainer />)
     await screen.findByText('a@example.com')
     fireEvent.click(screen.getByRole('button', { name: /Remove/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Sign out and remove' }))
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Sign out and remove' }),
+    )
     expect(await screen.findByText('Disabled')).toBeInTheDocument()
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'sign-out failed',

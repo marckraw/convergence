@@ -22,6 +22,7 @@ export type {
   ProviderAccountSettingsRow,
 } from './provider-account.pure'
 export type {
+  ClaudeAccountLayout,
   ProviderAccount,
   ProviderAccountEnrollmentProvider,
   ProviderAccountConnector,

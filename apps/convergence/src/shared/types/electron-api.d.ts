@@ -2,6 +2,7 @@ import type {
   SessionPullRequest,
   SessionPullRequestReading,
 } from './session-pull-request.types'
+import type { ClaudeAccountLayout } from './provider-account-layout.types'
 import type {
   CrewImportPlan,
   CrewImportDecisions,
@@ -1345,6 +1346,7 @@ interface ProviderAccountAttestationResultData {
   unknownEntries: string[]
   missingLinks: string[]
   nativeHistoryWarnings?: string[]
+  claudeHistory?: ClaudeAccountLayout
 }
 
 interface ProviderAccountHealthData {
@@ -1939,7 +1941,11 @@ interface ElectronAPI {
       providerId?: 'claude-code' | 'codex'
     }) => Promise<ProviderAccountEnrolResult>
     reconnect: (accountId: string) => Promise<ProviderAccountData>
-    remove: (accountId: string) => Promise<void>
+    remove: (
+      accountId: string,
+      options?: { deletePrivateHistory?: boolean },
+    ) => Promise<void>
+    inspectHistory: (accountId: string) => Promise<ClaudeAccountLayout | null>
     setDefault: (accountId: string) => Promise<ProviderAccountData[]>
     rename: (accountId: string, label: string) => Promise<ProviderAccountData[]>
     sweepOrphans: () => Promise<string[]>

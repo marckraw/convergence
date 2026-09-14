@@ -8,6 +8,7 @@ import {
   type ProviderAccountEnrollmentProvider,
   type ProviderAccountConnectors,
   type ProviderAccountHealth,
+  type ClaudeAccountLayout,
 } from '@/entities/provider-account'
 import { useDialogStore } from '@/entities/dialog'
 import { ProviderAccountsFields } from './provider-accounts.presentational'
@@ -46,6 +47,8 @@ export const ProviderAccountsContainer: FC = () => {
   const [confirmingRemovalAccountId, setConfirmingRemovalAccountId] = useState<
     string | null
   >(null)
+  const [removalLayout, setRemovalLayout] =
+    useState<ClaudeAccountLayout | null>(null)
   const [expandedConnectorsAccountId, setExpandedConnectorsAccountId] =
     useState<string | null>(null)
   const [connectors, setConnectors] =
@@ -200,13 +203,44 @@ export const ProviderAccountsContainer: FC = () => {
     [load, runForAccount],
   )
 
+  const handleRequestRemove = useCallback(
+    async (accountId: string) => {
+      setBusyAccountId(accountId)
+      setError(null)
+      setRemovalLayout(null)
+      try {
+        const layout =
+          providerId === 'claude-code'
+            ? await providerAccountApi.inspectHistory(accountId)
+            : null
+        if (
+          providerId === 'claude-code' &&
+          (!layout || layout.unreadableEntries.length)
+        )
+          throw new Error(
+            'Account history could not be inspected. Nothing was removed. Check its files and try again.',
+          )
+        setRemovalLayout(layout)
+        setConfirmingRemovalAccountId(accountId)
+      } catch (err) {
+        setError(describeError(err, 'Account history could not be inspected.'))
+      } finally {
+        setBusyAccountId(null)
+      }
+    },
+    [providerId],
+  )
+
   const handleConfirmRemove = useCallback(
-    (accountId: string) =>
+    (accountId: string, deletePrivateHistory = false) =>
       void runForAccount(
         accountId,
         async () => {
           try {
-            await providerAccountApi.remove(accountId)
+            await providerAccountApi.remove(
+              accountId,
+              deletePrivateHistory ? { deletePrivateHistory: true } : undefined,
+            )
             setConfirmingRemovalAccountId(null)
           } finally {
             // Failed sign-out can disable the row without removing it.
@@ -303,6 +337,7 @@ export const ProviderAccountsContainer: FC = () => {
       renamingAccountId={renamingAccountId}
       renameDraft={renameDraft}
       confirmingRemovalAccountId={confirmingRemovalAccountId}
+      removalLayout={removalLayout}
       expandedConnectorsAccountId={expandedConnectorsAccountId}
       connectors={connectors}
       isLoadingConnectors={isLoadingConnectors}
@@ -336,7 +371,7 @@ export const ProviderAccountsContainer: FC = () => {
       }}
       onSetDefault={handleSetDefault}
       onReconnect={handleReconnect}
-      onRequestRemove={setConfirmingRemovalAccountId}
+      onRequestRemove={(accountId) => void handleRequestRemove(accountId)}
       onConfirmRemove={handleConfirmRemove}
       onCancelRemove={() => setConfirmingRemovalAccountId(null)}
       onCheckHealth={() => void handleCheckHealth()}

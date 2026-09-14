@@ -1,5 +1,7 @@
 import { promises as nodeFs } from 'fs'
 import type { CodexAccountHistoryService } from './provider-account-codex-history.service'
+import type { ClaudeAccountHistoryService } from './provider-account-claude-history.service'
+import type { ClaudeAccountLayout } from './provider-account-manifest.pure'
 import { homedir } from 'os'
 import { join } from 'path'
 import {
@@ -52,6 +54,7 @@ export interface ProviderAccountAttestationResult {
   /** Shared entries that never got linked in. */
   missingLinks: string[]
   nativeHistoryWarnings?: string[]
+  claudeHistory?: ClaudeAccountLayout
 }
 
 export interface ProviderAccountHealthReport {
@@ -83,6 +86,7 @@ export interface ProviderAccountAttestationDeps {
   intervalMs?: number
   claudeVersion?: () => string | null
   codexHistory?: Pick<CodexAccountHistoryService, 'inspect'>
+  claudeHistory?: Pick<ClaudeAccountHistoryService, 'inspect'>
 }
 
 export class ProviderAccountAttestationService {
@@ -192,6 +196,13 @@ export class ProviderAccountAttestationService {
         detail: verdict.detail,
         unknownEntries: drift.unknownEntries,
         missingLinks: drift.missingLinks,
+        ...(!isConfigHome && this.deps.claudeHistory
+          ? {
+              claudeHistory: await this.deps.claudeHistory.inspect(
+                account.configDir,
+              ),
+            }
+          : {}),
         ...(isConfigHome && this.deps.codexHistory
           ? {
               nativeHistoryWarnings: (
