@@ -204,3 +204,59 @@ it.each([
     expect(screen.queryByText(warning) !== null).toBe(visible)
   },
 )
+
+/**
+ * The row that used to have nothing to choose (MAR-2918).
+ *
+ * The chooser keyed off the row's state, so a `create` role could carry the
+ * offer of the member already holding its baton and still render an empty
+ * Decision cell -- which is the dead end itself, one layer up.
+ */
+it('renders the chooser on a create role that offers a baton holder (mutation: gate the select on state)', () => {
+  const choice = vi.fn()
+  render(
+    <CrewImportView
+      plan={{
+        ...plan,
+        canApply: false,
+        roles: [
+          {
+            ...plan.roles[0]!,
+            state: 'create',
+            canUpdate: false,
+            differences: [],
+            detail:
+              'will create; "-- Fable (renamed) --" already holds baton "fable" — bind it instead of creating a second member',
+            options: [
+              {
+                value: 'session-0',
+                label: 'Bind the member that holds this baton · session-0',
+              },
+              { value: 'new', label: 'Create new' },
+            ],
+          },
+        ],
+      }}
+      decisions={decisions}
+      busy={false}
+      error={null}
+      report={null}
+      onClose={() => {}}
+      onApply={() => {}}
+      onChoice={choice}
+      onUpdate={() => {}}
+      onIncludeLayout={() => {}}
+      onChooseFolder={() => {}}
+    />,
+  )
+  const select = screen.getByRole('combobox', { name: 'Choose horse' })
+  expect(
+    [...select.querySelectorAll('option')].map((o) => o.textContent),
+  ).toEqual([
+    'Choose…',
+    'Bind the member that holds this baton · session-0',
+    'Create new',
+  ])
+  fireEvent.change(select, { target: { value: 'session-0' } })
+  expect(choice).toHaveBeenCalledWith('horse', 'session-0')
+})

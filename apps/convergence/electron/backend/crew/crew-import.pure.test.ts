@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { readCrewConfig } from './crew-config.pure'
 import {
   liveCrewYaml,
@@ -748,3 +748,195 @@ it.each([null, 'github.com/marckraw/convergence'])(
     })
   },
 )
+
+const CREW_ID = liveRelays[0]!.crewId
+const FABLE_SESSION = 'session-0'
+
+function baseWorld(): CrewImportWorld {
+  return {
+    sessions: liveSessions.map((s) => ({
+      ...s,
+      contextKind: 'project' as const,
+      lastActivity: null,
+      archivedAt: null,
+    })),
+    projects: structuredClone(liveProjects),
+    endpointIds: [],
+    relays: [],
+    crews: [
+      {
+        id: CREW_ID,
+        name: config.crew,
+        emoji: config.emoji,
+        accentColor: null,
+        roundCap: 24,
+        stallMinutes: 30,
+        position: 0,
+        createdAt: '',
+        updatedAt: '',
+        members: structuredClone(liveMembers),
+        sessionIds: liveMembers.map((m) => m.sessionId),
+      },
+    ],
+  }
+}
+
+/**
+ * The member is still in the crew and still carries `fable`; only its
+ * conversation was renamed, which is exactly what moves it out of the role's
+ * candidates and leaves the file's name matching nothing.
+ */
+function worldWithRenamedFable(): CrewImportWorld {
+  const world = baseWorld()
+  world.sessions.find((s) => s.id === FABLE_SESSION)!.name =
+    '-- Fable Mastermind (renamed) --'
+  return world
+}
+
+const fableRow = (world: CrewImportWorld, choices = {}) =>
+  planCrewImport(one, world, choices)
+
+/**
+ * A `create` role whose baton a kept member already holds (MAR-2918).
+ *
+ * Before this, the reconciliation reached a room with no door: the rename hid
+ * the member from the role's candidates, the role planned a create, and the
+ * final-baton check then blocked the crew row over a collision whose only
+ * cause -- the kept member -- the dialog never named and never offered.
+ */
+describe('the create role offers the member that holds its baton (MAR-2918)', () => {
+  it('names the holder and offers binding it, without picking it', () => {
+    const plan = fableRow(worldWithRenamedFable())
+    const role = plan.roles.find((r) => r.role === 'fable')!
+
+    // Mutation: auto-pick the lone holder (bind it without a choice) -- the
+    // state would no longer be `create` and the sessionId no longer null, and
+    // MAR-2903's law says the planner binds nothing the user did not choose.
+    expect(role.state).toBe('create')
+    expect(role.sessionId).toBeNull()
+
+    expect(role.options.map((o) => o.value)).toEqual([FABLE_SESSION, 'new'])
+    expect(role.options[0]!.label).toContain(
+      'Bind the member that holds this baton',
+    )
+    expect(role.options[0]!.label).toContain('-- Fable Mastermind (renamed) --')
+    expect(role.detail).toContain('already holds baton "fable"')
+
+    // The collision is still there and still honest -- it is now actionable.
+    expect(plan.crew.state).toBe('choose')
+    expect(plan.crew.detail).toContain(
+      'Two members would share baton name "fable"',
+    )
+    expect(plan.canApply).toBe(false)
+  })
+
+  it('binds the holder when the option is chosen, with no create and no rename', () => {
+    const plan = fableRow(worldWithRenamedFable(), {
+      'role:fable': FABLE_SESSION,
+    })
+    const role = plan.roles.find((r) => r.role === 'fable')!
+
+    expect(role.state).toBe('bound')
+    expect(role.sessionId).toBe(FABLE_SESSION)
+    // No rename: the member already carries this baton, so nothing to update.
+    expect(role.differences).not.toContain('batonName')
+    expect(role.canUpdate).toBe(false)
+
+    // Choosing it is the way out of the dead end: the collision is gone.
+    expect(plan.crew.state).toBe('existing')
+    expect(plan.crew.detail).not.toContain('would share baton name')
+    expect(plan.canApply).toBe(true)
+    // And it is no longer a member the import merely keeps.
+    expect(plan.kept.map((k) => k.key)).not.toContain(`member:${FABLE_SESSION}`)
+  })
+
+  it('names both holders and asks for a rename when a crew carries the baton twice', () => {
+    const world = worldWithRenamedFable()
+    const crew = world.crews[0]!
+    world.sessions.push({
+      ...world.sessions.find((s) => s.id === FABLE_SESSION)!,
+      id: 'session-9',
+      name: '-- Second Fable --',
+    })
+    crew.members.push({
+      sessionId: 'session-9',
+      batonName: 'fable',
+      canvasX: null,
+      canvasY: null,
+    })
+    crew.sessionIds.push('session-9')
+
+    const plan = fableRow(world)
+    const role = plan.roles.find((r) => r.role === 'fable')!
+
+    // Mutation: offer the option with two holders -- binding either one leaves
+    // the other colliding, so there is nothing here the chooser can resolve.
+    expect(role.options).toEqual([])
+    expect(role.state).toBe('create')
+    expect(role.detail).toContain('-- Fable Mastermind (renamed) --')
+    expect(role.detail).toContain('-- Second Fable --')
+    expect(role.detail).toContain('rename one in the crew before importing')
+    expect(plan.canApply).toBe(false)
+  })
+
+  it('leaves a create role alone when no kept member holds the baton', () => {
+    const world = worldWithRenamedFable()
+    const crew = world.crews[0]!
+    crew.members = crew.members.filter((m) => m.sessionId !== FABLE_SESSION)
+    crew.sessionIds = crew.sessionIds.filter((id) => id !== FABLE_SESSION)
+
+    const plan = fableRow(world)
+    const role = plan.roles.find((r) => r.role === 'fable')!
+
+    expect(role.state).toBe('create')
+    expect(role.options).toEqual([])
+    expect(role.detail).toBe('will create')
+    expect(plan.canApply).toBe(true)
+  })
+
+  it('never offers an archived conversation, because import does not unarchive', () => {
+    // Mutation: drop the `archivedAt` filter from the holder lookup -- the
+    // archived-conversation row would start offering to bind the very
+    // conversation the state above exists to refuse.
+    const world = worldWithRenamedFable()
+    const holder = world.sessions.find((s) => s.id === FABLE_SESSION)!
+    holder.name = config.roles.fable!.conversation
+    holder.archivedAt = '2026-09-10'
+
+    const plan = fableRow(world)
+    const role = plan.roles.find((r) => r.role === 'fable')!
+
+    expect(role.state).toBe('create')
+    expect(role.options).toEqual([])
+    expect(role.detail).toBe(
+      'an archived conversation of this name exists; import does not unarchive',
+    )
+  })
+
+  it('does not offer a member another role in the same file already binds', () => {
+    // `horse opus` binds session-1 by name; if session-1 also carried the
+    // `fable` baton, offering it would only trade this collision for the
+    // "two roles bind the same conversation" one.
+    const world = worldWithRenamedFable()
+    const crew = world.crews[0]!
+    crew.members.find((m) => m.sessionId === 'session-1')!.batonName = 'fable'
+    crew.members = crew.members.filter((m) => m.sessionId !== FABLE_SESSION)
+    crew.sessionIds = crew.sessionIds.filter((id) => id !== FABLE_SESSION)
+
+    const plan = planCrewImport(
+      {
+        ...config,
+        roles: {
+          fable: config.roles.fable!,
+          'horse opus': config.roles['horse opus']!,
+        },
+        wires: [],
+      },
+      world,
+    )
+    const role = plan.roles.find((r) => r.role === 'fable')!
+
+    expect(role.state).toBe('create')
+    expect(role.options).toEqual([])
+  })
+})
