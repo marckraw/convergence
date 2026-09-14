@@ -1,5 +1,11 @@
 # convergence
 
+## 0.59.1
+
+### Patch Changes
+
+- b1d978d: Show Acknowledge and Archive directly on finished and failed activity cards, with a persistent labeled footer that preserves the existing action behavior.
+
 ## 0.59.0
 
 ### Minor Changes
