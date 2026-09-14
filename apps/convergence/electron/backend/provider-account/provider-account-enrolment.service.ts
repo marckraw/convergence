@@ -407,13 +407,15 @@ export class ProviderAccountEnrolmentService {
       await this.fs.chmod(authPath, CODEX_AUTH_FILE_MODE)
       const identity = readCodexIdentityFromAuth(await this.readJson(authPath))
       if (!identity?.orgId) {
+        await this.fs.rm(authPath)
         throw new Error(
-          'Login completed but the Codex home reported no ChatGPT account ID. The account remains unavailable.',
+          'Login completed but the Codex home reported no ChatGPT account ID. The unverified login was discarded; the account remains unavailable.',
         )
       }
       if (identity.orgId !== account.orgId) {
+        await this.fs.rm(authPath)
         throw new Error(
-          'Login selected a different ChatGPT account or workspace. Reconnect the originally enrolled account; its historical identity was not changed.',
+          'Login selected a different ChatGPT account or workspace. The foreign login was discarded. Reconnect the originally enrolled account; its historical identity was not changed.',
         )
       }
       this.repository.saveIdentity(account.id, {
@@ -433,10 +435,10 @@ export class ProviderAccountEnrolmentService {
    *
    * Same model, same seams, same attestation net — the differences are
    * genuinely Codex's: `codex login` takes no email because it authorises
-   * whatever ChatGPT session the browser holds, there is nothing to symlink
-   * because Codex keeps no shared skill or transcript store under this home,
-   * and the credential is a plaintext file rather than a keychain slot, so its
-   * permissions are ours to set.
+   * whatever ChatGPT session the browser holds. This enrollment path currently
+   * creates an isolated native-history home; sharing that history is MAR-3012.
+   * File credential storage is explicit, so the observed identity and the
+   * runtime use the same store; managed-policy conflicts remain CLI failures.
    */
   private async enrolCodexAccount(
     input: EnrolProviderAccountInput,
@@ -453,6 +455,9 @@ export class ProviderAccountEnrolmentService {
     await this.fs.mkdir(configDir)
     // MAR-2207: owner-only home, not just an owner-only credential file.
     await this.fs.chmod(configDir, CODEX_HOME_DIR_MODE)
+    const configPath = join(configDir, 'config.toml')
+    await this.fs.writeFile(configPath, 'cli_auth_credentials_store = "file"\n')
+    await this.fs.chmod(configPath, CODEX_AUTH_FILE_MODE)
 
     const result = await this.runCommand(
       buildCodexAccountLoginCommand({
@@ -512,7 +517,7 @@ export class ProviderAccountEnrolmentService {
     if (!account) return
 
     const layout = providerAccountCredentialLayout(account.providerId)
-    if (layout === 'config-home') {
+    if (layout === 'config-home' && account.executionHostId === 'local') {
       return this.withCodexAccountStopped(
         account,
         async () => {

@@ -839,7 +839,13 @@ export class CodexServerHostRegistry {
       // Detection may already have removed an old host from `hosts`. Its
       // credential home remains occupied until the process actually exits.
       await this.stopping.get(key)
-      return host ? await host.withStoppedServer(work, options) : await work()
+      const result = host
+        ? await host.withStoppedServer(work, options)
+        : await work()
+      if (options.retire && this.hosts.get(key) === host) {
+        this.hosts.delete(key)
+      }
+      return result
     } finally {
       this.maintainingKeys.delete(key)
     }
