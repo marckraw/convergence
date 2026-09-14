@@ -1935,6 +1935,7 @@ interface ElectronAPI {
     enrol: (input: {
       email: string
       label?: string | null
+      providerId?: 'claude-code' | 'codex'
     }) => Promise<ProviderAccountEnrolResult>
     reconnect: (accountId: string) => Promise<ProviderAccountData>
     remove: (accountId: string) => Promise<void>
