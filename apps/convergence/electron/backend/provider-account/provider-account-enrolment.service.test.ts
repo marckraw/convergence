@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import {
   ProviderAccountEnrolmentService,
+  type ProviderAccountEnrolmentDeps,
   type ProviderAccountCommandResult,
   type ProviderAccountFs,
 } from './provider-account-enrolment.service'
@@ -131,6 +132,7 @@ describe('ProviderAccountEnrolmentService', () => {
     fs: ProviderAccountFs
     run: ReturnType<typeof fakeRunner>['run']
     binaryPath?: string | null
+    codexMaintenance?: ProviderAccountEnrolmentDeps['codexMaintenance']
   }) {
     return new ProviderAccountEnrolmentService({
       repository,
@@ -145,6 +147,9 @@ describe('ProviderAccountEnrolmentService', () => {
             ? '/usr/local/bin/claude'
             : options.binaryPath,
         codex: options.binaryPath === undefined ? '/usr/local/bin/codex' : null,
+      },
+      codexMaintenance: options.codexMaintenance ?? {
+        run: async (_account, work) => work(),
       },
     })
   }
@@ -356,6 +361,84 @@ describe('ProviderAccountEnrolmentService', () => {
         subject: service({ fs, run: runner.run }),
       }
     }
+
+    it.each(['reconnect', 'remove'] as const)(
+      'refuses %s before login, logout or identity writes when the account is busy',
+      async (action) => {
+        const { subject, runner, fs, removed } = codexFixture()
+        await subject.enrol({
+          email: 'someone@example.com',
+          providerId: 'codex',
+        })
+        runner.calls.length = 0
+        const guarded = service({
+          fs,
+          run: runner.run,
+          codexMaintenance: {
+            run: async () => {
+              throw new Error('Account in use')
+            },
+          },
+        })
+        await expect(guarded[action](ACCOUNT_ID)).rejects.toThrow(
+          'Account in use',
+        )
+        expect(runner.calls).toEqual([])
+        expect(removed).toEqual([])
+        expect(repository.get(ACCOUNT_ID)).toMatchObject({
+          status: 'connected',
+          orgId: 'acc_123',
+        })
+      },
+    )
+
+    it('reconnects through Codex login in the same home, never Claude login', async () => {
+      const { subject, runner } = codexFixture()
+      await subject.enrol({ email: 'someone@example.com', providerId: 'codex' })
+      runner.calls.length = 0
+      const account = await subject.reconnect(ACCOUNT_ID)
+      expect(runner.calls).toHaveLength(1)
+      expect(runner.calls[0].args).toEqual(['login'])
+      expect(runner.calls[0].env.CODEX_HOME).toBe(CODEX_HOME)
+      expect(runner.calls[0].env.CLAUDE_CONFIG_DIR).toBeUndefined()
+      expect(account).toMatchObject({ orgId: 'acc_123', status: 'connected' })
+    })
+
+    it('disables a Codex account when reconnect selects a different workspace on the same email', async () => {
+      const { subject, runner, files } = codexFixture()
+      await subject.enrol({ email: 'someone@example.com', providerId: 'codex' })
+      runner.run.mockImplementationOnce(async () => {
+        files.set(
+          `${CODEX_HOME}/auth.json`,
+          CODEX_AUTH.replaceAll('acc_123', 'acc_other'),
+        )
+        return { code: 0, stdout: '', stderr: '' }
+      })
+      await expect(subject.reconnect(ACCOUNT_ID)).rejects.toThrow(
+        /different ChatGPT account/,
+      )
+      expect(repository.get(ACCOUNT_ID)).toMatchObject({
+        orgId: 'acc_123',
+        status: 'unavailable',
+      })
+    })
+
+    it('leaves a failed Codex reconnect unavailable without rewriting its historical identity', async () => {
+      const { subject, runner } = codexFixture()
+      await subject.enrol({ email: 'someone@example.com', providerId: 'codex' })
+      runner.run.mockResolvedValueOnce({
+        code: 1,
+        stdout: '',
+        stderr: 'login cancelled',
+      })
+      await expect(subject.reconnect(ACCOUNT_ID)).rejects.toThrow(
+        /login cancelled/,
+      )
+      expect(repository.get(ACCOUNT_ID)).toMatchObject({
+        orgId: 'acc_123',
+        status: 'unavailable',
+      })
+    })
 
     it('enrols a Codex account on the same model as a Claude one', async () => {
       const { subject } = codexFixture()

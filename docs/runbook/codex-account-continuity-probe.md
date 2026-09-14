@@ -72,3 +72,45 @@ Do not use the cold control as a product workaround: a resident account server
 can carry other live conversations. A passing synthetic probe would still need
 an authenticated A → B → A canary and concurrent-session verification before
 account switching could be considered validated.
+
+## Authenticated continuity canary
+
+`tools/canary-codex-account-switching.mjs` complements the loopback probe with
+six real model turns. It requires two explicitly prepared, isolated ChatGPT
+profiles; it does not log in or copy credentials. The user must authenticate
+both profiles first. Never point it at a production or ambient Codex home.
+
+Under `CVG_CANARY_PROFILES`, prepare `account-a` and `account-b` as owner-only
+directories. Each needs its own `auth.json`, produced by a user-run
+`codex login` with that profile's `CODEX_HOME`. Configure
+`cli_auth_credentials_store = "file"` in each profile's `config.toml`.
+Both profiles' `sessions` entries must point to the same fresh test-only
+directory. Nothing else is shared. Select two different ChatGPT accounts;
+the canary refuses identical account IDs.
+
+Run with the repository's Node version and an explicitly selected Codex binary:
+
+```sh
+CVG_CANARY_PROFILES=/absolute/path/to/isolated-test-profiles \
+CVG_CODEX_BINARY=/absolute/path/to/codex \
+fnm exec --using "$(cat .nvmrc)" -- node apps/convergence/tools/canary-codex-account-switching.mjs --run
+```
+
+The canary uses the actual `CodexServerHostRegistry` with a temporary user home
+and stripped API-key environment. It checks `account/read` against each
+profile's encoded ID-token claims and records only identity fingerprints.
+This verifies configured authentication, not a billing receipt.
+
+Random nonces are supplied only through controlled dynamic-tool responses.
+B must recall the value learned on A. After restarting only the idle,
+canary-owned A server, A must recall both values on the same native thread ID.
+A separate B turn remains blocked on a controlled tool throughout the restart,
+and an idle sibling on A must retain its earlier nonce after resuming.
+No shell, file, browser, or agent tools are approved by the canary.
+
+The temporary `result.json` records the six turn outcomes, native IDs, recall
+checks, versions, source hashes, and owned-server cleanup. Profiles remain
+signed in for further user-authorized tests; credentials are never included
+in the evidence. A successful `authenticated-continuity-controls-passed`
+verdict proves this controlled lifecycle, not the product's admission guard,
+settings flow, or dispatch attribution. Those require separate verification.

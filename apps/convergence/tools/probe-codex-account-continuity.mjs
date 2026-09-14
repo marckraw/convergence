@@ -95,7 +95,7 @@ async function fixtureTurn(connection, id, text) {
     if (method === 'turn/completed' && params.threadId === id)
       finish(params.turn)
   })
-  connection.rpc.onServerRequest((requestId) =>
+  connection.rpc.onServerRequest((_method, _params, requestId) =>
     connection.rpc.respondError(
       requestId,
       -32601,

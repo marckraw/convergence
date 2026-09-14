@@ -171,6 +171,10 @@ export class CodexServerHost {
   private spawning: ChildProcess | null = null
   private starting: Promise<RunningServer> | null = null
   private stopped = false
+  private retired = false
+  private retiring: ChildProcess | null = null
+  private connectionLeases = 0
+  private maintaining = false
   private generationCounter = 0
   private deathListeners = new Set<(obituary: CodexServerObituary) => void>()
   private readonly spawnProcess: CodexAppServerSpawn
@@ -238,32 +242,96 @@ export class CodexServerHost {
   async connect(
     options: CodexServerConnectionOptions = {},
   ): Promise<CodexServerConnection> {
-    const server = await this.ensureServer()
-    const transport = await this.connectTransport(server.url)
-    const rpc = new JsonRpcClient(transport, {
-      onTransportFailure: options.onTransportFailure,
-      isProgressNotification: options.isProgressNotification,
-    })
-
+    if (this.retired)
+      throw new Error('This Codex account server has been retired.')
+    if (this.maintaining) {
+      throw new Error(
+        'This Codex account is undergoing maintenance. Try again when it finishes.',
+      )
+    }
+    // Admission is synchronous, before startup, socket connection or initialize
+    // can yield. Helpers and warming connections count just like live turns.
+    this.connectionLeases += 1
+    let released = false
+    let rpc: JsonRpcClient | undefined
+    const release = () => {
+      if (released) return
+      released = true
+      this.connectionLeases -= 1
+    }
+    const close = () => {
+      rpc?.destroy()
+      release()
+    }
     try {
+      const server = await this.ensureServer()
+      const transport = await this.connectTransport(server.url)
+      rpc = new JsonRpcClient(transport, {
+        onTransportFailure: (error) => {
+          close()
+          options.onTransportFailure?.(error)
+        },
+        isProgressNotification: options.isProgressNotification,
+      })
       await rpc.request('initialize', {
         clientInfo: buildCodexClientInfo(this.options.appVersion),
         capabilities: { experimentalApi: true },
       })
       rpc.notify('initialized')
+      return { rpc, generation: server.generation, close }
     } catch (err) {
       // The socket is open and nobody else holds it: a handshake that rejects
       // leaves the caller with an error and the server with a live connection
       // per attempt, since the process this one belongs to is resident and
       // outlives every failure.
-      rpc.destroy()
+      close()
       throw err
     }
+  }
 
-    return {
-      rpc,
-      generation: server.generation,
-      close: () => rpc.destroy(),
+  /**
+   * @pattern Exclusive resource lease.
+   *
+   * Reconnect/removal may change credentials only after the old process exits.
+   * The gate remains closed throughout that operation, so a quota helper or
+   * connecting turn cannot enter between the idle check and credential write.
+   * The host stays stable for existing callers; its next connection starts a
+   * fresh process unless the account has been permanently retired.
+   */
+  async withStoppedServer<T>(
+    work: () => Promise<T>,
+    options: { retire?: boolean } = {},
+  ): Promise<T> {
+    if (this.stopped) throw new Error('This Codex account server is stopped.')
+    if (this.maintaining)
+      throw new Error('This Codex account is undergoing maintenance.')
+    if (this.connectionLeases > 0) {
+      throw new Error(
+        'This Codex account is in use. Wait for its active work to finish.',
+      )
+    }
+    this.maintaining = true
+    try {
+      const running = this.server
+      this.server = null
+      // No connection can still be starting: it would hold a lease above.
+      if (running) {
+        this.retiring = running.child
+        try {
+          await this.terminateChild(running.child)
+        } finally {
+          this.retiring = null
+        }
+      }
+      if (this.stopped) throw new Error('This Codex account server is stopped.')
+      const result = await work()
+      if (options.retire) {
+        this.retired = true
+        this.stopped = true
+      }
+      return result
+    } finally {
+      this.maintaining = false
     }
   }
 
@@ -290,23 +358,32 @@ export class CodexServerHost {
   }
 
   /**
-   * App quit. The one place a signal is ever sent to a server.
+   * App quit or binary replacement. Signals now; callers that mutate account
+   * storage can also await the observed exit of every owned child.
    *
    * Both children are signalled: the ready one and the one still warming up.
    * `server` is only assigned after `/readyz` answers, so a quit inside the
    * cold start used to find nothing to stop and left the process behind
    * (MAR-2823 F3).
    */
-  stop(): void {
+  stop(): Promise<void> {
     this.stopped = true
     const running = this.server
     const spawning = this.spawning
     this.server = null
     this.spawning = null
     this.starting = null
-    for (const child of new Set([running?.child, spawning])) {
-      if (child) this.signalWithEscalation(child)
+    const exits: Promise<void>[] = []
+    for (const child of new Set([running?.child, spawning, this.retiring])) {
+      if (!child) continue
+      if (child.exitCode === null && child.signalCode === null) {
+        exits.push(
+          new Promise<void>((resolve) => child.once('exit', () => resolve())),
+        )
+      }
+      this.signalWithEscalation(child)
     }
+    return Promise.all(exits).then(() => {})
   }
 
   /**
@@ -687,6 +764,8 @@ export class CodexServerHostRegistry {
   private binaryPath: string | null = null
   private version: string | null = null
   private readonly hosts = new Map<string, CodexServerHost>()
+  private readonly maintainingKeys = new Set<string>()
+  private readonly stopping = new Map<string, Promise<void>>()
 
   constructor(private readonly options: CodexServerHostRegistryOptions = {}) {}
 
@@ -716,6 +795,9 @@ export class CodexServerHostRegistry {
       executionHostId: input.executionHostId ?? 'local',
       codexHome: input.account?.configDir ?? null,
     })
+    if (this.maintainingKeys.has(key)) {
+      throw new Error('This Codex account is undergoing maintenance.')
+    }
 
     const existing = this.hosts.get(key)
     if (existing) return existing
@@ -735,6 +817,32 @@ export class CodexServerHostRegistry {
     })
     this.hosts.set(key, host)
     return host
+  }
+
+  /** Keeps account admission closed even if provider detection replaces the pool. */
+  async withStoppedServer<T>(
+    input: { executionHostId?: string | null; account: CodexAccountEnvTarget },
+    work: () => Promise<T>,
+    options: { retire?: boolean } = {},
+  ): Promise<T> {
+    const key = codexServerKey({
+      executionHostId: input.executionHostId ?? 'local',
+      codexHome: input.account.configDir,
+    })
+    if (this.maintainingKeys.has(key)) {
+      throw new Error('This Codex account is undergoing maintenance.')
+    }
+    const host =
+      this.hosts.get(key) ?? (this.binaryPath ? this.get(input) : null)
+    this.maintainingKeys.add(key)
+    try {
+      // Detection may already have removed an old host from `hosts`. Its
+      // credential home remains occupied until the process actually exits.
+      await this.stopping.get(key)
+      return host ? await host.withStoppedServer(work, options) : await work()
+    } finally {
+      this.maintainingKeys.delete(key)
+    }
   }
 
   /**
@@ -758,7 +866,15 @@ export class CodexServerHostRegistry {
   }
 
   stopAll(): void {
-    for (const host of this.hosts.values()) host.stop()
+    for (const [key, host] of this.hosts) {
+      const stopped = Promise.all([this.stopping.get(key), host.stop()]).then(
+        () => {},
+      )
+      this.stopping.set(key, stopped)
+      void stopped.then(() => {
+        if (this.stopping.get(key) === stopped) this.stopping.delete(key)
+      })
+    }
     this.hosts.clear()
   }
 }

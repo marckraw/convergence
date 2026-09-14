@@ -95,21 +95,36 @@ export function readCodexIdentityFromAuth(
   const tokens = asRecord(root?.tokens)
   if (!tokens) return null
 
-  const idToken = asRecord(tokens.id_token)
+  const idToken = readIdTokenClaims(tokens.id_token)
+  const authClaims = asRecord(idToken?.['https://api.openai.com/auth'])
   const email = readString(idToken?.email)
   const orgId =
-    readString(tokens.account_id) ?? readString(idToken?.chatgpt_account_id)
+    readString(tokens.account_id) ??
+    readString(authClaims?.chatgpt_account_id) ??
+    readString(idToken?.chatgpt_account_id)
   // The tier, where the login records one. Never inferred from a role or a
   // capability list — an absent tier is reported as absent.
   const plan =
     readString(idToken?.chatgpt_plan_type) ??
-    readString(
-      asRecord(idToken?.['https://api.openai.com/auth'])?.chatgpt_plan_type,
-    )
+    readString(authClaims?.chatgpt_plan_type)
 
   if (!email && !orgId) return null
 
   return { email, orgId, plan }
+}
+
+/** Reads display claims from the CLI's credential store, not a JWT verifier. */
+function readIdTokenClaims(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== 'string') return asRecord(value)
+  const parts = value.split('.')
+  if (parts.length !== 3 || !parts[1]) return null
+  try {
+    return asRecord(
+      JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')),
+    )
+  } catch {
+    return null
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
