@@ -2631,7 +2631,6 @@ export class CodexProvider implements Provider {
           const reason =
             'This Codex session is already running on the account it started ' +
             'with. Start a new session to use a different account.'
-          sessionEmitter.addNote({ text: reason, level: 'error' })
           return { kind: 'refused', reason }
         }
         if (text === CONVERSATION_RESET_COMMAND) {

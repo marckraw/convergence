@@ -1,4 +1,8 @@
 import { EventEmitter } from 'events'
+import { mkdtempSync, writeFileSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import type { Attachment } from '../provider.types'
 import { PassThrough } from 'stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionDelta } from '../../session/conversation-item.types'
@@ -12,7 +16,10 @@ vi.mock('child_process', () => ({
 import { CodexProvider } from './codex-provider'
 import type { CodexAccountLookup } from './codex-provider'
 import { CodexServerHostRegistry } from './codex-server-host'
-import { FakeCodexServer } from './codex-server-host.fixture'
+import {
+  FakeCodexServer,
+  type FakeCodexServerOptions,
+} from './codex-server-host.fixture'
 
 const ACCOUNT_A = { configDir: '/home/.convergence/provider-accounts/codex/a' }
 const ACCOUNT_B = { configDir: '/home/.convergence/provider-accounts/codex/b' }
@@ -45,8 +52,8 @@ class MockChildProcess extends EventEmitter {
   }
 }
 
-function createRegistry() {
-  const server = new FakeCodexServer()
+function createRegistry(options: FakeCodexServerOptions = {}) {
+  const server = new FakeCodexServer(options)
   const registry = new CodexServerHostRegistry({
     appVersion: '0.46.13',
     cwd: '/tmp',
@@ -240,18 +247,6 @@ describe('Codex account isolation', () => {
       },
     )
 
-    await waitFor(() =>
-      expect(
-        deltas.some(
-          (delta) =>
-            delta.kind === 'conversation.item.add' &&
-            delta.item.kind === 'note' &&
-            /already running on the account it started with/.test(
-              delta.item.text,
-            ),
-        ),
-      ).toBe(true),
-    )
     expect(disposition).toEqual({
       kind: 'refused',
       reason: expect.stringContaining('already running on the account'),
@@ -284,4 +279,87 @@ describe('Codex account isolation', () => {
       ),
     ).toBe(false)
   })
+})
+
+it('a steer after a refused account change carries only its own account and attachment', async () => {
+  mockSpawnedServer()
+  const { registry, server } = createRegistry({ autoCompleteTurns: false })
+  const provider = new CodexProvider(registry, null, undefined, lookup)
+  const dir = mkdtempSync(join(tmpdir(), 'codex-steer-account-'))
+  const attachment = (id: string): Attachment => {
+    const storagePath = join(dir, id + '.txt')
+    writeFileSync(storagePath, id)
+    return {
+      id,
+      sessionId: 'refuse-steer',
+      kind: 'text',
+      mimeType: 'text/plain',
+      filename: id + '.txt',
+      sizeBytes: id.length,
+      storagePath,
+      thumbnailPath: null,
+      textPreview: id,
+      createdAt: '2026-01-01',
+    }
+  }
+  const refusedAttachment = attachment('refused')
+  const steerAttachment = attachment('steer')
+  const deltas: SessionDelta[] = []
+  const handle = provider.start({
+    sessionId: 'refuse-steer',
+    workingDirectory: dir,
+    initialMessage: 'first',
+    model: 'gpt-5.4',
+    effort: null,
+    continuationToken: null,
+    providerAccountId: 'acct-a',
+  })
+  handle.onDelta((delta) => deltas.push(delta))
+  handle.onStatusChange(() => {})
+  handle.onAttentionChange(() => {})
+  handle.onContinuationToken(() => {})
+  handle.onContextWindowChange(() => {})
+  handle.onActivityChange(() => {})
+  try {
+    await waitFor(() =>
+      expect(
+        server.requests.some((request) => request.method === 'turn/start'),
+      ).toBe(true),
+    )
+    expect(
+      await handle.sendMessage('refused', [refusedAttachment], undefined, {
+        deliveryMode: 'normal',
+        providerAccountId: 'acct-b',
+      }),
+    ).toEqual({ kind: 'refused', reason: expect.any(String) })
+    handle.sendMessage('steer', [steerAttachment], undefined, {
+      deliveryMode: 'steer',
+      providerAccountId: 'acct-a',
+    })
+    await waitFor(() =>
+      expect(
+        server.requests.some((request) => request.method === 'turn/steer'),
+      ).toBe(true),
+    )
+    const users = deltas.flatMap((delta) =>
+      delta.kind === 'conversation.item.add' &&
+      delta.item.kind === 'message' &&
+      delta.item.actor === 'user'
+        ? [delta]
+        : [],
+    )
+    expect(users).toHaveLength(2)
+    expect(users[1]).toMatchObject({
+      providerAccountId: 'acct-a',
+      item: {
+        text: 'steer',
+        deliveryMode: 'steer',
+        attachmentIds: ['steer'],
+      },
+    })
+  } finally {
+    await handle.stop()
+    await registry.stopAll()
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

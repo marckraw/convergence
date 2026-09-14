@@ -24,6 +24,8 @@ const { spawnMock, preparation } = vi.hoisted(() => ({
     envCalls: 0,
     pauseAt: 0,
     envFailure: false,
+    attachmentGate: undefined as Promise<void> | undefined,
+    attachmentReads: 0,
   },
 }))
 
@@ -50,11 +52,34 @@ vi.mock(
   },
 )
 
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>()
+  return {
+    ...actual,
+    promises: {
+      ...actual.promises,
+      readFile: async (
+        ...args: Parameters<typeof actual.promises.readFile>
+      ) => {
+        if (args[0] === '/fixture/recovery-image.png') {
+          preparation.attachmentReads++
+          if (preparation.attachmentReads === 1)
+            await preparation.attachmentGate
+          return Buffer.from('fixture image')
+        }
+        return actual.promises.readFile(...args)
+      },
+    },
+  }
+})
+
 vi.mock('child_process', () => ({
   spawn: spawnMock,
 }))
 
 import { ClaudeCodeProvider } from './claude-code-provider'
+import { ClaudeCodeSkillsService } from '../../skills/claude-code-skills.service'
+import type { SkillSelection } from '../../skills/skills.types'
 import type { ClaudeAccountLookup } from './claude-code-provider'
 import type { SessionDelta } from '../../session/conversation-item.types'
 
@@ -144,6 +169,8 @@ afterEach(() => {
   preparation.envCalls = 0
   preparation.pauseAt = 0
   preparation.envFailure = false
+  preparation.attachmentGate = undefined
+  preparation.attachmentReads = 0
   spawnMock.mockReset()
   vi.restoreAllMocks()
 })
@@ -528,6 +555,143 @@ it('does not accept or emit a user turn when environment binding fails', async (
     })
     expect(accepted).not.toHaveBeenCalled()
     expect(userAccounts(deltas)).toEqual([])
+    expect(spawnMock).not.toHaveBeenCalled()
+  } finally {
+    await handle.stop()
+  }
+})
+
+it('retains recovery requested during the original attachment read', async () => {
+  let release!: () => void
+  preparation.attachmentGate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const first = new MockChildProcess()
+  const second = new MockChildProcess()
+  let written = ''
+  second.stdin.on('data', (chunk) => {
+    written += chunk.toString()
+  })
+  spawnMock.mockReturnValueOnce(first).mockReturnValueOnce(second)
+  const provider = new ClaudeCodeProvider(
+    '/fixture/claude',
+    null,
+    undefined,
+    null,
+    () => ACCOUNT_A,
+  )
+  const handle = provider.start({
+    sessionId: 'gated-attachment',
+    workingDirectory: process.cwd(),
+    initialMessage: 'read my image',
+    model: null,
+    effort: null,
+    continuationToken: 'missing-thread',
+    providerAccountId: 'acct-a',
+    initialAttachments: [
+      {
+        id: 'image-a',
+        sessionId: 'gated-attachment',
+        kind: 'image',
+        mimeType: 'image/png',
+        filename: 'image.png',
+        sizeBytes: 13,
+        storagePath: '/fixture/recovery-image.png',
+        thumbnailPath: null,
+        textPreview: null,
+        createdAt: '2026-01-01',
+      },
+    ],
+  })
+  const deltas: SessionDelta[] = []
+  handle.onDelta((delta) => deltas.push(delta))
+  attachListeners(handle)
+  await waitFor(() => expect(preparation.attachmentReads).toBe(1))
+  first.stderr.write('No conversation found with session ID\n')
+  first.emitExit(1)
+  release()
+  try {
+    await waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(written).toContain('read my image'))
+    expect(written).toContain('image')
+    expect(userAccounts(deltas)).toEqual(['acct-a'])
+    expect(spawnedEnv(1).CLAUDE_CONFIG_DIR).toBe(ACCOUNT_A.configDir)
+  } finally {
+    await handle.stop()
+  }
+})
+
+it('keeps the user message and failed skill selection after account binding', async () => {
+  vi.spyOn(ClaudeCodeSkillsService.prototype, 'list').mockRejectedValue(
+    new Error('Skill catalog unavailable'),
+  )
+  const provider = new ClaudeCodeProvider(
+    '/fixture/claude',
+    null,
+    undefined,
+    null,
+    () => ACCOUNT_A,
+  )
+  const handle = provider.start({
+    sessionId: 'skill-failure',
+    workingDirectory: process.cwd(),
+    initialMessage: 'first',
+    model: null,
+    effort: null,
+    continuationToken: null,
+    providerAccountId: 'acct-a',
+  })
+  const deltas: SessionDelta[] = []
+  const statuses: string[] = []
+  handle.onDelta((delta) => deltas.push(delta))
+  attachListeners(handle)
+  handle.onStatusChange((status) => statuses.push(status))
+  // Refuse the initial lookup at env binding so this fixture has no live child.
+  preparation.envFailure = true
+  await waitFor(() => expect(statuses).toContain('failed'))
+  preparation.envFailure = false
+  const accepted = vi.fn()
+  const selection: SkillSelection = {
+    id: 'skill-a',
+    providerId: 'claude-code',
+    providerName: 'Claude Code',
+    name: 'skill-a',
+    displayName: 'Skill A',
+    path: '/fixture/SKILL.md',
+    scope: 'project' as const,
+    rawScope: null,
+    sourceLabel: 'fixture',
+    status: 'selected' as const,
+  }
+  try {
+    const result = await handle.sendMessage(
+      'do this with my skill',
+      undefined,
+      [selection],
+      {
+        deliveryMode: 'normal',
+        providerAccountId: 'acct-a',
+        onTurnAccepted: accepted,
+      },
+    )
+    expect(result).toBeUndefined()
+    expect(accepted).toHaveBeenCalledOnce()
+    expect(userAccounts(deltas)).toEqual(['acct-a'])
+    expect(deltas).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'conversation.item.add',
+          providerAccountId: 'acct-a',
+          item: expect.objectContaining({
+            actor: 'user',
+            text: 'do this with my skill',
+            skillSelections: [
+              expect.objectContaining({ id: 'skill-a', status: 'failed' }),
+            ],
+          }),
+        }),
+      ]),
+    )
     expect(spawnMock).not.toHaveBeenCalled()
   } finally {
     await handle.stop()
