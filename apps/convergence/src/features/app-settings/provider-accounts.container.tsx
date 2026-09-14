@@ -3,7 +3,9 @@ import type { FC } from 'react'
 import {
   buildProviderAccountSettingsRows,
   providerAccountApi,
+  providerAccountsForProvider,
   type ProviderAccount,
+  type ProviderAccountEnrollmentProvider,
   type ProviderAccountConnectors,
   type ProviderAccountHealth,
 } from '@/entities/provider-account'
@@ -22,6 +24,8 @@ function describeError(error: unknown, fallback: string): string {
  * reports what happened rather than refreshing silently.
  */
 export const ProviderAccountsContainer: FC = () => {
+  const [providerId, setProviderId] =
+    useState<ProviderAccountEnrollmentProvider>('claude-code')
   const [accounts, setAccounts] = useState<ProviderAccount[]>([])
   const [health, setHealth] = useState<ProviderAccountHealth | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -72,8 +76,12 @@ export const ProviderAccountsContainer: FC = () => {
   }, [load])
 
   const rows = useMemo(
-    () => buildProviderAccountSettingsRows(accounts, health),
-    [accounts, health],
+    () =>
+      buildProviderAccountSettingsRows(
+        providerAccountsForProvider(accounts, providerId),
+        health,
+      ),
+    [accounts, health, providerId],
   )
 
   const runForAccount = useCallback(
@@ -99,14 +107,15 @@ export const ProviderAccountsContainer: FC = () => {
   )
 
   const handleEnrol = useCallback(async () => {
-    const email = enrolEmail.trim()
-    if (!email) return
+    const email = providerId === 'claude-code' ? enrolEmail.trim() : ''
+    if (providerId === 'claude-code' && !email) return
 
     setIsEnrolling(true)
     setMessage(null)
     setError(null)
     try {
       const result = await providerAccountApi.enrol({
+        providerId,
         email,
         label: enrolLabel.trim() || null,
       })
@@ -126,7 +135,7 @@ export const ProviderAccountsContainer: FC = () => {
     } finally {
       setIsEnrolling(false)
     }
-  }, [enrolEmail, enrolLabel, load])
+  }, [providerId, enrolEmail, enrolLabel, load])
 
   const handleCommitRename = useCallback(async () => {
     const accountId = renamingAccountId
@@ -258,10 +267,15 @@ export const ProviderAccountsContainer: FC = () => {
 
   return (
     <ProviderAccountsFields
+      providerId={providerId}
       rows={rows}
-      settingsWarnings={health?.settingsWarnings ?? []}
+      settingsWarnings={
+        providerId === 'claude-code' ? (health?.settingsWarnings ?? []) : []
+      }
       lastCheckedAt={health?.checkedAt ?? null}
-      claudeVersion={health?.claudeVersion ?? null}
+      claudeVersion={
+        providerId === 'claude-code' ? (health?.claudeVersion ?? null) : null
+      }
       isLoading={isLoading}
       busyAccountId={busyAccountId}
       isEnrolling={isEnrolling}
@@ -276,6 +290,18 @@ export const ProviderAccountsContainer: FC = () => {
       authorizingServerName={authorizingServerName}
       message={message}
       error={error}
+      onProviderChange={(nextProviderId) => {
+        if (nextProviderId === providerId) return
+        setProviderId(nextProviderId)
+        setEnrolEmail('')
+        setEnrolLabel('')
+        setRenamingAccountId(null)
+        setConfirmingRemovalAccountId(null)
+        setExpandedConnectorsAccountId(null)
+        setConnectors(null)
+        setMessage(null)
+        setError(null)
+      }}
       onEnrolEmailChange={setEnrolEmail}
       onEnrolLabelChange={setEnrolLabel}
       onEnrol={() => void handleEnrol()}

@@ -1,5 +1,7 @@
 export type ProviderAccountStatus = 'connected' | 'expired' | 'unavailable'
 
+export type ProviderAccountEnrollmentProvider = 'claude-code' | 'codex'
+
 export interface ProviderAccount {
   id: string
   providerId: string

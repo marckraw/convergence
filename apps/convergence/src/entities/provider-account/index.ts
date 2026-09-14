@@ -22,6 +22,7 @@ export type {
 } from './provider-account.pure'
 export type {
   ProviderAccount,
+  ProviderAccountEnrollmentProvider,
   ProviderAccountConnector,
   ProviderAccountConnectors,
   ProviderAccountAttestationOutcome,

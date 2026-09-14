@@ -2,6 +2,7 @@ import type {
   ProviderAccount,
   ProviderAccountConnectors,
   ProviderAccountEnrolResult,
+  ProviderAccountEnrollmentProvider,
   ProviderAccountHealth,
   ProviderAccountSettingsWarning,
 } from './provider-account.types'
@@ -17,6 +18,7 @@ export const providerAccountApi = {
   enrol: (input: {
     email: string
     label?: string | null
+    providerId?: ProviderAccountEnrollmentProvider
   }): Promise<ProviderAccountEnrolResult> =>
     window.electronAPI.providerAccounts.enrol(input),
   reconnect: (accountId: string): Promise<ProviderAccount> =>
