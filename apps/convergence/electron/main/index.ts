@@ -344,6 +344,17 @@ async function startApp(): Promise<void> {
   })
   const providerAccountEnrolmentService = new ProviderAccountEnrolmentService({
     repository: providerAccountRepository,
+    codexMaintenance: {
+      run: (account, work, retire) =>
+        codexServerHosts.withStoppedServer(
+          {
+            executionHostId: account.executionHostId,
+            account: { configDir: account.configDir },
+          },
+          work,
+          { retire },
+        ),
+    },
   })
   const providerAccountAttestationService =
     new ProviderAccountAttestationService({

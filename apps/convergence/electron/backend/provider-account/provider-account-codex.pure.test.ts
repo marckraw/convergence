@@ -69,6 +69,40 @@ describe('buildCodexAccountLogoutCommand', () => {
 })
 
 describe('readCodexIdentityFromAuth', () => {
+  it('reads the encoded ID token written by Codex 0.154.0', () => {
+    const claims = {
+      email: 'fixture@example.com',
+      'https://api.openai.com/auth': {
+        chatgpt_account_id: 'workspace-a',
+        chatgpt_plan_type: 'team',
+      },
+    }
+    const idToken = `header.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.signature`
+    expect(
+      readCodexIdentityFromAuth({
+        tokens: { id_token: idToken, account_id: 'workspace-a' },
+      }),
+    ).toEqual({
+      email: 'fixture@example.com',
+      orgId: 'workspace-a',
+      plan: 'team',
+    })
+  })
+
+  it('reads a workspace id from namespaced token claims when no selected account id is recorded', () => {
+    const idToken = `header.${Buffer.from(JSON.stringify({ email: 'fixture@example.com', 'https://api.openai.com/auth': { chatgpt_account_id: 'workspace-a' } })).toString('base64url')}.signature`
+    expect(
+      readCodexIdentityFromAuth({ tokens: { id_token: idToken } })?.orgId,
+    ).toBe('workspace-a')
+  })
+
+  it.each(['garbage', 'a.invalid-json.c', 'a.W10.c', 'a.bnVsbA.c'])(
+    'does not throw on a malformed encoded token: %s',
+    (id_token) => {
+      expect(readCodexIdentityFromAuth({ tokens: { id_token } })).toBeNull()
+    },
+  )
+
   it('reads identity from the auth file the home reports about itself', () => {
     expect(
       readCodexIdentityFromAuth({

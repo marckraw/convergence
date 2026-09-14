@@ -122,6 +122,172 @@ const accountB: CodexAccountEnvTarget = {
 } as CodexAccountEnvTarget
 
 describe('CodexServerHost', () => {
+  it('waits for a removed binary generation to exit before changing that account credentials', async () => {
+    const env = createEnvironment({ ignoresSigterm: true })
+    const account = { account: accountA }
+    const connection = await env.registry.get(account).connect()
+    connection.close()
+    env.registry.setBinary(null, null)
+    const change = vi.fn(async () => {})
+    const pending = env.registry.withStoppedServer(account, change)
+    await Promise.resolve()
+    expect(change).not.toHaveBeenCalled()
+    env.children[0].exit(0)
+    await pending
+    expect(change).toHaveBeenCalledOnce()
+    env.registry.stopAll()
+  })
+
+  it('provider detection cannot reopen an account during its credential operation', async () => {
+    const env = createEnvironment()
+    const account = { account: accountA }
+    const connection = await env.registry.get(account).connect()
+    connection.close()
+    await env.registry.withStoppedServer(account, async () => {
+      env.registry.setBinary('/new/codex', '0.154.0')
+      expect(() => env.registry.get(account)).toThrow(/maintenance/)
+      await expect(
+        env.registry.withStoppedServer(account, async () => {}),
+      ).rejects.toThrow(/maintenance/)
+    })
+    const next = await env.registry.get(account).connect()
+    expect(env.spawnArgs[1].binaryPath).toBe('/new/codex')
+    next.close()
+    env.registry.stopAll()
+  })
+
+  it('reopens admission after failed maintenance and releases each connection exactly once', async () => {
+    const env = createEnvironment()
+    const host = env.registry.get({ account: accountA })
+    const connection = await host.connect()
+    connection.close()
+    connection.close()
+    await expect(
+      host.withStoppedServer(async () => {
+        throw new Error('login cancelled')
+      }),
+    ).rejects.toThrow('login cancelled')
+    const next = await host.connect()
+    await expect(host.withStoppedServer(async () => {})).rejects.toThrow(
+      /in use/,
+    )
+    next.close()
+    await host.withStoppedServer(async () => {})
+    env.registry.stopAll()
+  })
+
+  it('releases the lease when the transport dies', async () => {
+    const env = createEnvironment()
+    const host = env.registry.get({ account: accountA })
+    const connection = await host.connect()
+    env.servers[0].connections[0].fail('socket closed')
+    await host.withStoppedServer(async () => {})
+    connection.close()
+    const next = await host.connect()
+    await expect(host.withStoppedServer(async () => {})).rejects.toThrow(
+      /in use/,
+    )
+    next.close()
+    env.registry.stopAll()
+  })
+  it('refuses account maintenance while a connection is still starting', async () => {
+    const env = createEnvironment()
+    const host = env.registry.get({ account: accountA })
+    const connecting = host.connect()
+    const mutateCredentials = vi.fn(async () => {})
+    await expect(host.withStoppedServer(mutateCredentials)).rejects.toThrow(
+      /in use/,
+    )
+    expect(mutateCredentials).not.toHaveBeenCalled()
+    const connection = await connecting
+    expect(env.killJournal).toEqual([])
+    connection.close()
+    env.registry.stopAll()
+  })
+
+  it('keeps admission closed until account maintenance finishes, including helper calls', async () => {
+    const env = createEnvironment()
+    const host = env.registry.get({ account: accountA })
+    const connection = await host.connect()
+    connection.close()
+    let release!: () => void
+    let entered!: () => void
+    const started = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    const maintenance = host.withStoppedServer(async () => {
+      expect(
+        env.children[0].exitCode !== null ||
+          env.children[0].signalCode !== null,
+      ).toBe(true)
+      entered()
+      await new Promise<void>((resolve) => {
+        release = resolve
+      })
+    })
+    await started
+    await expect(host.connect()).rejects.toThrow(/maintenance/)
+    await expect(
+      host.run(async (rpc) => rpc.request('model/list', {})),
+    ).rejects.toThrow(/maintenance/)
+    expect(env.children).toHaveLength(1)
+    release()
+    await maintenance
+    const next = await host.connect()
+    expect(env.children).toHaveLength(2)
+    next.close()
+    env.registry.stopAll()
+  })
+
+  it('a helper exchange holds its account lease until it finishes', async () => {
+    const env = createEnvironment()
+    const host = env.registry.get({ account: accountA })
+    let release!: () => void
+    let entered!: () => void
+    const started = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    const helper = host.run(async () => {
+      entered()
+      await new Promise<void>((resolve) => {
+        release = resolve
+      })
+    })
+    await started
+    await expect(host.withStoppedServer(async () => {})).rejects.toThrow(
+      /in use/,
+    )
+    release()
+    await helper
+    await host.withStoppedServer(async () => {})
+    expect(
+      env.children[0].exitCode !== null || env.children[0].signalCode !== null,
+    ).toBe(true)
+    env.registry.stopAll()
+  })
+
+  it('retiring one account leaves another live connection and server untouched', async () => {
+    const env = createEnvironment()
+    const a = env.registry.get({ account: accountA })
+    const aConnection = await a.connect()
+    aConnection.close()
+    const b = env.registry.get({ account: accountB })
+    const bConnection = await b.connect()
+    await env.registry.withStoppedServer(
+      { account: accountA },
+      async () => {},
+      { retire: true },
+    )
+    await expect(a.connect()).rejects.toThrow(/retired/)
+    expect(env.registry.get({ account: accountA })).not.toBe(a)
+    expect(env.children[1].exitCode).toBeNull()
+    await expect(
+      bConnection.rpc.request('model/list', {}),
+    ).resolves.toBeDefined()
+    bConnection.close()
+    env.registry.stopAll()
+  })
+
   it('spawns the WebSocket listener once, however many callers ask at once', async () => {
     const env = createEnvironment()
     const host = env.registry.get({ account: null })
@@ -367,6 +533,10 @@ describe('CodexServerHost', () => {
     // The server itself is untouched — a bad handshake is not its death.
     expect(env.children[0].exitCode).toBeNull()
     expect(env.children[0].signals).toEqual([])
+    await host.withStoppedServer(async () => {})
+    expect(
+      env.children[0].exitCode !== null || env.children[0].signalCode !== null,
+    ).toBe(true)
   })
 
   it('signals the child of a start that quit landed in the middle of', async () => {
