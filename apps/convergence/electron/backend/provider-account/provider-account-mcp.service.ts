@@ -1,4 +1,5 @@
 import { spawn } from 'child_process'
+import { ClaudeAccountMaintenance } from '../provider/claude-code/claude-account-maintenance.service'
 import { mapClaudeStatus, parseClaudeListEntries } from '../mcp/claude-mcp.pure'
 import type { McpServerStatus } from '../mcp/mcp.types'
 import {
@@ -85,6 +86,7 @@ export interface ProviderAccountMcpDeps {
    * genuinely depends on the directory.
    */
   workingDirectory?: () => string
+  accountMaintenance?: ClaudeAccountMaintenance
 }
 
 export class ProviderAccountMcpService {
@@ -94,6 +96,7 @@ export class ProviderAccountMcpService {
   private readonly baseEnv: NodeJS.ProcessEnv
   private readonly workingDirectory: () => string
   private binaryPath: string | null
+  private readonly accountMaintenance: ClaudeAccountMaintenance
 
   constructor(deps: ProviderAccountMcpDeps) {
     this.repository = deps.repository
@@ -102,6 +105,8 @@ export class ProviderAccountMcpService {
     this.baseEnv = deps.baseEnv ?? process.env
     this.binaryPath = deps.binaryPath ?? null
     this.workingDirectory = deps.workingDirectory ?? (() => process.cwd())
+    this.accountMaintenance =
+      deps.accountMaintenance ?? new ClaudeAccountMaintenance()
   }
 
   setBinaryPath(binaryPath: string | null): void {
@@ -129,7 +134,9 @@ export class ProviderAccountMcpService {
       }
     }
 
+    let release: (() => void) | undefined
     try {
+      release = await this.accountMaintenance.admit(accountId)
       const result = await this.runCommand(
         buildClaudeMcpListCommand({
           binaryPath,
@@ -162,6 +169,8 @@ export class ProviderAccountMcpService {
             ? error.message
             : 'Failed to list connectors for this account.',
       }
+    } finally {
+      release?.()
     }
   }
 
@@ -182,6 +191,30 @@ export class ProviderAccountMcpService {
     serverName: string
     canOpenBrowser?: boolean
   }): Promise<InteractiveCommandResult> {
+    const release = await this.accountMaintenance.admit(input.accountId)
+    let launched = false
+    try {
+      return await this.runConnectorAuthorization(
+        input,
+        () => {
+          launched = true
+        },
+        release,
+      )
+    } finally {
+      if (!launched) release()
+    }
+  }
+
+  private async runConnectorAuthorization(
+    input: {
+      accountId: string | null
+      serverName: string
+      canOpenBrowser?: boolean
+    },
+    launched: () => void,
+    release: () => void,
+  ): Promise<InteractiveCommandResult> {
     const binaryPath = this.binaryPath
     if (!binaryPath) {
       throw new Error(
@@ -200,7 +233,11 @@ export class ProviderAccountMcpService {
 
     let result: InteractiveCommandResult
     try {
-      result = await this.runInteractiveCommand(command)
+      launched()
+      result = await this.runInteractiveCommand(command, {
+        onExitConfirmed: release,
+      })
+      release()
     } catch (error) {
       // A terminal that never opened or a ceremony nobody finished. Either way
       // the person needs to know which connector is still unauthorized.

@@ -60,7 +60,7 @@ export type AgentRunFact =
       kind: 'process.ended'
       unresolvedStatus?: 'unknown'
       at: string
-      reason?: 'quit' | 'idle' | 'account' | 'stop' | 'exit'
+      reason?: 'quit' | 'idle' | 'account' | 'maintenance' | 'stop' | 'exit'
     }
 
 export type TaskFact = {

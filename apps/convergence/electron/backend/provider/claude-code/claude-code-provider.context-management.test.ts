@@ -35,6 +35,7 @@ import { ClaudeCodeProvider } from './claude-code-provider'
 import type { ClaudeAccountLookup } from './claude-code-provider'
 import type { ProviderDebugEntry } from '../../provider-debug/provider-debug.types'
 import type { ProviderDebugSink } from '../../provider-debug/provider-debug-sink'
+import { ClaudeAccountMaintenance } from './claude-account-maintenance.service'
 
 class MockChildProcess extends EventEmitter {
   stdin = new PassThrough()
@@ -42,7 +43,7 @@ class MockChildProcess extends EventEmitter {
   stderr = new PassThrough()
   killed = false
 
-  kill = vi.fn(() => {
+  kill = vi.fn((_signal?: NodeJS.Signals) => {
     this.killed = true
     return true
   })
@@ -50,6 +51,52 @@ class MockChildProcess extends EventEmitter {
 
 describe('ClaudeCodeProvider context management', () => {
   afterEach(() => spawnMock.mockReset())
+
+  it('bounds a timed-out compaction that ignores SIGTERM and releases its account on SIGKILL exit', async () => {
+    vi.useFakeTimers()
+    try {
+      const child = new MockChildProcess()
+      child.kill.mockImplementation((signal) => {
+        if (signal === 'SIGKILL') child.emit('exit', null)
+        return true
+      })
+      spawnMock.mockReturnValue(child)
+      const gate = new ClaudeAccountMaintenance()
+      const provider = new ClaudeCodeProvider(
+        '/bin/claude',
+        null,
+        undefined,
+        null,
+        () => null,
+        undefined,
+        true,
+        () => 0,
+        gate,
+      )
+      const pending = provider.manageContext(
+        {
+          sessionId: 'fixture',
+          workingDirectory: '/tmp',
+          initialMessage: '',
+          model: null,
+          effort: null,
+          continuationToken: 'thread',
+          providerAccountId: 'acct-a',
+        },
+        { kind: 'compact' },
+      )
+      const failure = expect(pending).rejects.toThrow(/timed out/)
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
+      await vi.advanceTimersByTimeAsync(120000)
+      await failure
+      await expect(gate.run('acct-a', async () => {})).rejects.toThrow(/active/)
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+      await expect(gate.run('acct-a', async () => {})).resolves.toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 
   it('runs /compact on the resumed headless session and verifies lifecycle events', async () => {
     const child = new MockChildProcess()

@@ -381,7 +381,7 @@ export class ClaudeEvidenceService {
   }
   processEnded(
     at: string,
-    reason?: 'quit' | 'idle' | 'account' | 'stop' | 'exit',
+    reason?: 'quit' | 'idle' | 'account' | 'maintenance' | 'stop' | 'exit',
     unresolvedStatus?: 'unknown',
   ): void {
     this.outstandingRetries = 0

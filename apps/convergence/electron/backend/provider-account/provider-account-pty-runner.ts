@@ -29,6 +29,7 @@ export interface InteractiveCommandResult {
 
 export type ProviderAccountInteractiveRunner = (
   command: ProviderAccountCommand,
+  lifecycle?: { onExitConfirmed: () => void },
 ) => Promise<InteractiveCommandResult>
 
 /**
@@ -60,7 +61,7 @@ export function createPtyCommandRunner(
 ): ProviderAccountInteractiveRunner {
   const timeoutMs = deps.timeoutMs ?? DEFAULT_INTERACTIVE_COMMAND_TIMEOUT_MS
 
-  return (command) =>
+  return (command, lifecycle) =>
     new Promise<InteractiveCommandResult>((resolve, reject) => {
       const buffer = createRingBuffer(MAX_OUTPUT_BYTES)
 
@@ -75,13 +76,18 @@ export function createPtyCommandRunner(
           rows: DEFAULT_ROWS,
         })
       } catch (error) {
+        lifecycle?.onExitConfirmed()
         reject(error instanceof Error ? error : new Error(String(error)))
         return
       }
 
       let settled = false
+      let escalation: ReturnType<typeof setTimeout> | null = null
       const dataSubscription = child.onData((chunk) => buffer.append(chunk))
       const exitSubscription = child.onExit(({ exitCode }) => {
+        if (escalation) clearTimeout(escalation)
+        lifecycle?.onExitConfirmed()
+        exitSubscription.dispose()
         if (settled) return
         settled = true
         finish()
@@ -92,8 +98,15 @@ export function createPtyCommandRunner(
         if (settled) return
         settled = true
         finish()
-        // Killing first: the answer below is only true once nothing can still
-        // be waiting on a terminal no one is reading.
+        escalation = setTimeout(() => {
+          try {
+            child.kill('SIGKILL')
+          } catch {
+            // Only onExit can release a caller's account lease.
+          }
+        }, 5000)
+        escalation.unref?.()
+        // Timeout ends the ceremony, but its account stays leased until exit.
         try {
           child.kill()
         } catch {
@@ -114,7 +127,6 @@ export function createPtyCommandRunner(
       function finish(): void {
         clearTimeout(timer)
         dataSubscription.dispose()
-        exitSubscription.dispose()
       }
     })
 }

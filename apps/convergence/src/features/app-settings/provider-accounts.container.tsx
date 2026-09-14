@@ -205,9 +205,13 @@ export const ProviderAccountsContainer: FC = () => {
       void runForAccount(
         accountId,
         async () => {
-          await providerAccountApi.remove(accountId)
-          setConfirmingRemovalAccountId(null)
-          await load()
+          try {
+            await providerAccountApi.remove(accountId)
+            setConfirmingRemovalAccountId(null)
+          } finally {
+            // Failed sign-out can disable the row without removing it.
+            await load()
+          }
         },
         'Account signed out and removed.',
         'Failed to remove the account.',

@@ -353,6 +353,27 @@ describe('ProviderAccountsContainer', () => {
     ).toBeInTheDocument()
   })
 
+  it('shows the preserved disabled account after sign-out fails', async () => {
+    providerAccounts.list
+      .mockResolvedValueOnce([account()])
+      .mockResolvedValue([account({ status: 'unavailable' })])
+    providerAccounts.remove.mockRejectedValue(
+      new Error('Claude sign-out failed. Retry reconnect or removal.'),
+    )
+    render(<ProviderAccountsContainer />)
+    await screen.findByText('a@example.com')
+    fireEvent.click(screen.getByRole('button', { name: /Remove/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out and remove' }))
+    expect(await screen.findByText('Disabled')).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'sign-out failed',
+    )
+    expect(
+      screen.queryByText('Account signed out and removed.'),
+    ).not.toBeInTheDocument()
+    expect(screen.getByText('a@example.com')).toBeInTheDocument()
+  })
+
   it.each(['connected', 'unavailable'] as const)(
     'reloads the recorded %s state after a refused OpenAI reconnect',
     async (status) => {

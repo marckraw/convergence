@@ -9,6 +9,8 @@ import {
 import type { ProviderAccountCommand } from './provider-account-enrolment.pure'
 import { ProviderAccountRepository } from './provider-account.repository'
 import { CodexAccountHistoryService } from './provider-account-codex-history.service'
+import { ClaudeAccountMaintenance } from '../provider/claude-code/claude-account-maintenance.service'
+import { resolveAccountForTurn } from './provider-account-resolution.pure'
 
 const HOME = '/Users/tester'
 const ACCOUNT_ID = 'acct-a'
@@ -99,7 +101,7 @@ function fakeFs(seed: Record<string, string> = {}) {
     }),
     readFile: vi.fn(async (path: string) => {
       const contents = files.get(path)
-      if (contents === undefined) throw new Error(`ENOENT: ${path}`)
+      if (contents === undefined) throw missing(path)
       return contents
     }),
     writeFile: vi.fn(
@@ -184,6 +186,7 @@ describe('ProviderAccountEnrolmentService', () => {
     run: ReturnType<typeof fakeRunner>['run']
     binaryPath?: string | null
     codexMaintenance?: ProviderAccountEnrolmentDeps['codexMaintenance']
+    claudeMaintenance?: ProviderAccountEnrolmentDeps['claudeMaintenance']
   }) {
     return new ProviderAccountEnrolmentService({
       repository,
@@ -199,6 +202,15 @@ describe('ProviderAccountEnrolmentService', () => {
             : options.binaryPath,
         codex: options.binaryPath === undefined ? '/usr/local/bin/codex' : null,
       },
+      claudeMaintenance:
+        options.claudeMaintenance ??
+        (() => {
+          const gate = new ClaudeAccountMaintenance()
+          return {
+            run: <T>(account: { id: string }, work: () => Promise<T>) =>
+              gate.run(account.id, work),
+          }
+        })(),
       codexMaintenance: options.codexMaintenance ?? {
         run: async (_account, work) => work(),
       },
@@ -361,7 +373,7 @@ describe('ProviderAccountEnrolmentService', () => {
         service({ fs, run: runner.run }).enrol({
           email: 'someone@example.com',
         }),
-      ).rejects.toThrow(/browser closed/)
+      ).rejects.toThrow(/sign-in did not complete/)
       expect(repository.list()).toEqual([])
     })
 
@@ -827,6 +839,84 @@ describe('ProviderAccountEnrolmentService', () => {
   })
 
   describe('reconnect', () => {
+    it('disables admission during login and refuses a simultaneous reconnect without launching it', async () => {
+      const { fs, files } = fakeFs()
+      const runner = fakeRunner({}, loginWritesIdentity(files))
+      const subject = service({ fs, run: runner.run })
+      await subject.enrol({ email: 'someone@example.com' })
+      let finish!: (result: ProviderAccountCommandResult) => void
+      runner.run.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve
+          }),
+      )
+      const pending = subject.reconnect(ACCOUNT_ID)
+      await vi.waitFor(() => expect(finish).toBeTypeOf('function'))
+      expect(repository.get(ACCOUNT_ID)?.status).toBe('unavailable')
+      expect(() =>
+        resolveAccountForTurn({
+          accountId: ACCOUNT_ID,
+          account: repository.get(ACCOUNT_ID),
+        }),
+      ).toThrow()
+      await expect(subject.reconnect(ACCOUNT_ID)).rejects.toThrow(
+        /being updated/,
+      )
+      await expect(subject.remove(ACCOUNT_ID)).rejects.toThrow(/being updated/)
+      expect(runner.run).toHaveBeenCalledTimes(2)
+      finish({ code: 0, stdout: '', stderr: '' })
+      expect((await pending).status).toBe('connected')
+    })
+
+    it('keeps a failed credential discard visible, restores cached identity and never admits another turn', async () => {
+      const { fs, files } = fakeFs()
+      const runner = fakeRunner({}, loginWritesIdentity(files))
+      const subject = service({ fs, run: runner.run })
+      await subject.enrol({ email: 'someone@example.com' })
+      const original = files.get(`${CONFIG_DIR}/.claude.json`)
+      runner.run.mockImplementation(async (command) => {
+        if (command.args[1] === 'login') {
+          loginWritesIdentity(
+            files,
+            JSON.stringify({
+              oauthAccount: {
+                emailAddress: 'wrong@example.invalid',
+                organizationUuid: 'wrong',
+              },
+            }),
+          )(command)
+          return { code: 0, stdout: '', stderr: '' }
+        }
+        return { code: 1, stdout: 'secret-fixture', stderr: 'secret-fixture' }
+      })
+      await expect(subject.reconnect(ACCOUNT_ID)).rejects.toThrow(
+        /foreign credential could NOT be removed/,
+      )
+      expect(files.get(`${CONFIG_DIR}/.claude.json`)).toBe(original)
+      expect(repository.get(ACCOUNT_ID)?.status).toBe('unavailable')
+      expect(() =>
+        resolveAccountForTurn({
+          accountId: ACCOUNT_ID,
+          account: repository.get(ACCOUNT_ID),
+        }),
+      ).toThrow()
+    })
+
+    it('does not start login when the existing config cannot be snapshotted', async () => {
+      const { fs, files } = fakeFs()
+      const runner = fakeRunner({}, loginWritesIdentity(files))
+      const subject = service({ fs, run: runner.run })
+      await subject.enrol({ email: 'someone@example.com' })
+      vi.mocked(fs.readFile).mockRejectedValueOnce(
+        Object.assign(new Error('private diagnostic'), { code: 'EACCES' }),
+      )
+      await expect(subject.reconnect(ACCOUNT_ID)).rejects.toThrow(
+        /config could not be read/,
+      )
+      expect(runner.run).toHaveBeenCalledTimes(1)
+      expect(repository.get(ACCOUNT_ID)?.status).toBe('connected')
+    })
     async function enrolledThenBroken() {
       const { fs, files } = fakeFs()
       const runner = fakeRunner({}, loginWritesIdentity(files))
@@ -878,8 +968,7 @@ describe('ProviderAccountEnrolmentService', () => {
       const runner = fakeRunner({}, loginWritesIdentity(files))
       const subject = service({ fs, run: runner.run })
       await subject.enrol({ email: 'someone@example.com' })
-      repository.setStatus(ACCOUNT_ID, 'unavailable', null)
-
+      const originalConfig = files.get(`${CONFIG_DIR}/.claude.json`)
       runner.run.mockImplementation(async (command: ProviderAccountCommand) => {
         loginWritesIdentity(
           files,
@@ -894,10 +983,20 @@ describe('ProviderAccountEnrolmentService', () => {
       })
 
       await expect(subject.reconnect(ACCOUNT_ID)).rejects.toThrow(
-        /someone-else@example.com/,
+        /originally enrolled Claude account/,
       )
       expect(repository.get(ACCOUNT_ID)?.status).toBe('unavailable')
       expect(repository.get(ACCOUNT_ID)?.email).toBe('someone@example.com')
+      expect(files.get(`${CONFIG_DIR}/.claude.json`)).toBe(originalConfig)
+      expect(runner.run).toHaveBeenLastCalledWith(
+        expect.objectContaining({ args: ['auth', 'logout'] }),
+      )
+      expect(() =>
+        resolveAccountForTurn({
+          accountId: ACCOUNT_ID,
+          account: repository.get(ACCOUNT_ID),
+        }),
+      ).toThrow()
     })
 
     it('leaves the account disabled when the login fails', async () => {
@@ -913,9 +1012,9 @@ describe('ProviderAccountEnrolmentService', () => {
       })
 
       await expect(subject.reconnect(ACCOUNT_ID)).rejects.toThrow(
-        /browser closed/,
+        /sign-in did not complete/,
       )
-      expect(repository.get(ACCOUNT_ID)?.status).toBe('expired')
+      expect(repository.get(ACCOUNT_ID)?.status).toBe('unavailable')
     })
 
     it('refuses to reconnect an account that is not enrolled', async () => {
@@ -949,6 +1048,52 @@ describe('ProviderAccountEnrolmentService', () => {
   })
 
   describe('remove', () => {
+    it('can remove a legacy non-local Claude row without a local process gate', async () => {
+      const { fs, removed } = fakeFs()
+      const runner = fakeRunner()
+      const maintenance = {
+        run: vi.fn(async () => {
+          throw new Error('No local process')
+        }),
+      }
+      const subject = service({
+        fs,
+        run: runner.run,
+        claudeMaintenance: maintenance,
+      })
+      repository.create({
+        id: ACCOUNT_ID,
+        label: 'Legacy',
+        authKind: 'subscription-oauth',
+        configDir: CONFIG_DIR,
+        credentialDir: CREDENTIAL_DIR,
+        email: 'someone@example.com',
+        providerId: 'claude-code',
+        executionHostId: 'little-monster',
+      })
+      await subject.remove(ACCOUNT_ID)
+      expect(repository.get(ACCOUNT_ID)).toBeNull()
+      expect(maintenance.run).not.toHaveBeenCalled()
+      expect(removed).toContain(CONFIG_DIR)
+      expect(removed).toContain(CREDENTIAL_DIR)
+    })
+    it('preserves the account and its directories when sign-out exits unsuccessfully', async () => {
+      const { fs, files, removed } = fakeFs()
+      const runner = fakeRunner({}, loginWritesIdentity(files))
+      const subject = service({ fs, run: runner.run })
+      await subject.enrol({ email: 'someone@example.com' })
+      runner.run.mockResolvedValue({
+        code: 1,
+        stdout: '',
+        stderr: 'secret-fixture',
+      })
+      await expect(subject.remove(ACCOUNT_ID)).rejects.toThrow(
+        /sign-out failed/,
+      )
+      expect(repository.get(ACCOUNT_ID)?.status).toBe('unavailable')
+      expect(removed).not.toContain(CONFIG_DIR)
+      expect(removed).not.toContain(CREDENTIAL_DIR)
+    })
     async function enrolled() {
       const { fs, removed, files } = fakeFs()
       const runner = fakeRunner({}, loginWritesIdentity(files))
@@ -1015,6 +1160,15 @@ describe('ProviderAccountEnrolmentService', () => {
   })
 
   describe('sweepOrphanCredentialNamespaces', () => {
+    it('does not remove an orphan namespace when its sign-out fails', async () => {
+      const orphan = `${HOME}/.convergence/provider-credentials/claude/orphan`
+      const { fs, removed } = fakeFs({ [`${orphan}/state`]: 'fixture' })
+      const runner = fakeRunner({ code: 1 })
+      await expect(
+        service({ fs, run: runner.run }).sweepOrphanCredentialNamespaces(),
+      ).rejects.toThrow(/sign-out failed/)
+      expect(removed).not.toContain(orphan)
+    })
     it('logs out namespaces no enrolled account claims', async () => {
       const { fs, removed } = fakeFs({
         [`${HOME}/.convergence/provider-credentials/claude/abandoned/x`]: '{}',

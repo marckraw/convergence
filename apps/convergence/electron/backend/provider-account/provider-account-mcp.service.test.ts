@@ -3,6 +3,7 @@ import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import { ProviderAccountMcpService } from './provider-account-mcp.service'
 import type { ProviderAccountCommand } from './provider-account-enrolment.pure'
 import { ProviderAccountRepository } from './provider-account.repository'
+import { ClaudeAccountMaintenance } from '../provider/claude-code/claude-account-maintenance.service'
 
 const HOME = '/Users/tester'
 const CONFIG_DIR = `${HOME}/.convergence/provider-accounts/claude/acct-a`
@@ -76,6 +77,41 @@ describe('ProviderAccountMcpService', () => {
   afterEach(() => {
     closeDatabase()
     resetDatabase()
+  })
+
+  it('holds account admission through connector authorization and refuses authorization during maintenance', async () => {
+    const gate = new ClaudeAccountMaintenance()
+    let complete!: () => void
+    const ceremony = new Promise<void>((resolve) => {
+      complete = resolve
+    })
+    const run = vi.fn(async () => {
+      await ceremony
+      return { code: 0, output: '' }
+    })
+    const subject = new ProviderAccountMcpService({
+      repository,
+      accountMaintenance: gate,
+      binaryPath: '/fixture/claude',
+      runInteractiveCommand: run,
+    })
+    const pending = subject.authorizeConnector({
+      accountId: 'acct-a',
+      serverName: 'linear',
+    })
+    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+    await expect(gate.run('acct-a', async () => {})).rejects.toThrow(/active/)
+    complete()
+    await pending
+    await gate.run('acct-a', async () => {
+      await expect(
+        subject.authorizeConnector({
+          accountId: 'acct-a',
+          serverName: 'linear',
+        }),
+      ).rejects.toThrow(/being updated/)
+    })
+    expect(run).toHaveBeenCalledTimes(1)
   })
 
   function service(options: {
