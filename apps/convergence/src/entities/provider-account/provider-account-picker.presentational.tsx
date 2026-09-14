@@ -16,6 +16,10 @@ interface ProviderAccountPickerProps {
   onChange: (accountId: string | null) => void
   /** Locked while a turn — including its continuations — is still in flight. */
   disabled?: boolean
+  providerName?: string
+  ambientDisabledReason?: string
+  help?: string
+  onManageAccounts?: () => void
 }
 
 /**
@@ -36,26 +40,40 @@ export const ProviderAccountPicker: FC<ProviderAccountPickerProps> = ({
   selectedAccountId,
   onChange,
   disabled = false,
+  providerName,
+  ambientDisabledReason,
+  help,
+  onManageAccounts,
 }) => {
   // No accounts, no picker. On a daemon that is not a filtered-empty list but
   // the absence of the concept: accounts are directories on this machine, and
   // the wire protocol carries no account reference (MAR-2682, "the account
   // picker is gone on a remote").
-  if (accounts.length === 0) return null
+  if (accounts.length === 0 && !onManageAccounts) return null
 
   return (
-    <SearchableSelect
-      selectedId={selectedAccountId ?? AMBIENT_DEFAULT_ACCOUNT_ID}
-      value={describeSelectedProviderAccount(selectedAccountId, accounts)}
-      items={buildProviderAccountPickerItems(accounts)}
-      onChange={(value) => onChange(providerAccountIdFromPickerValue(value))}
-      disabled={disabled}
-      icon={<KeyRound className="h-3.5 w-3.5" />}
-      searchPlaceholder="Search accounts..."
-      emptyMessage="No matching accounts."
-      triggerVariant="ghost"
-      triggerSize="sm"
-      triggerClassName="gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
-    />
+    <span title={help}>
+      <SearchableSelect
+        selectedId={selectedAccountId ?? AMBIENT_DEFAULT_ACCOUNT_ID}
+        value={describeSelectedProviderAccount(selectedAccountId, accounts)}
+        items={buildProviderAccountPickerItems(accounts, {
+          providerName,
+          ambientDisabledReason,
+        })}
+        action={
+          onManageAccounts
+            ? { label: 'Manage accounts…', onSelect: onManageAccounts }
+            : undefined
+        }
+        onChange={(value) => onChange(providerAccountIdFromPickerValue(value))}
+        disabled={disabled}
+        icon={<KeyRound className="h-3.5 w-3.5" />}
+        searchPlaceholder="Search accounts..."
+        emptyMessage="No matching accounts."
+        triggerVariant="ghost"
+        triggerSize="sm"
+        triggerClassName="gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+      />
+    </span>
   )
 }

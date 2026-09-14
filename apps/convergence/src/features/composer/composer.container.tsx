@@ -198,6 +198,14 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const [selectedProviderAccountId, setSelectedProviderAccountId] = useState<
     string | null
   >(null)
+  const [lastTurnAccount, setLastTurnAccount] = useState<{
+    sessionId: string | null
+    id: string | null
+  } | null>(null)
+  const [pendingAccountSends, setPendingAccountSends] = useState<Set<string>>(
+    () => new Set(),
+  )
+  const pendingAccountSendRef = useRef(new Set<string>())
   /**
    * What the two async hops behind "which account would this composer send
    * on" have answered, and what they answered it *for* (MAR-2826 round 2, H1).
@@ -762,6 +770,8 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const availableDeliveryModesKey = midRunPolicy.availableModes.join('|')
 
   const draftKey = activeSessionId ?? `${contextKey}:${DRAFT_KEY_NEW}`
+  const latestDraft = useRef({ key: draftKey, text: value })
+  latestDraft.current = { key: draftKey, text: value }
   const attachmentDraft = useAttachmentDraft(draftKey)
   const {
     attachments,
@@ -1120,6 +1130,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     const seed = async () => {
       if (!activeSessionId) {
         if (!cancelled) {
+          setLastTurnAccount({ sessionId: null, id: null })
           setSelectedProviderAccountId(
             resolveInitialProviderAccountSelection({
               accounts: providerAccountsForSession,
@@ -1131,6 +1142,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       }
 
       let lastTurnAccountId: string | null
+      let historyKnown = true
       try {
         const turns = await turnsApi.listForSession(activeSessionId)
         lastTurnAccountId = turns.at(-1)?.providerAccountId ?? null
@@ -1138,15 +1150,24 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         // Unreadable turns mean "no record", which resolves to the ambient
         // default — never a guess at which account was in use.
         lastTurnAccountId = null
+        historyKnown = false
       }
 
       if (cancelled) return
+      setLastTurnAccount(
+        historyKnown
+          ? { sessionId: activeSessionId, id: lastTurnAccountId }
+          : null,
+      )
       setSelectedProviderAccountId(
-        resolveInitialProviderAccountSelection({
-          accounts: providerAccountsForSession,
-          lastTurnAccountId,
-          hasActiveSession: true,
-        }),
+        lastTurnAccountId === null &&
+          selection.provider?.accountHandoff === 'settled'
+          ? null
+          : resolveInitialProviderAccountSelection({
+              accounts: providerAccountsForSession,
+              lastTurnAccountId,
+              hasActiveSession: true,
+            }),
       )
     }
 
@@ -1162,7 +1183,11 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     return () => {
       cancelled = true
     }
-  }, [activeSessionId, providerAccountsForSession])
+  }, [
+    activeSessionId,
+    providerAccountsForSession,
+    selection.provider?.accountHandoff,
+  ])
 
   /**
    * Accounts are host-scoped (ADR 0007, PA10; MAR-2682). A remote session runs
@@ -1175,11 +1200,42 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const effectiveProviderAccountId =
     providerAccountsForSession.length === 0 ? null : selectedProviderAccountId
 
-  const providerAccountSelectionLocked = isProviderAccountSelectionLocked(
-    activeSession
-      ? { status: activeSession.status, attention: activeSession.attention }
-      : null,
-  )
+  const supportsAccountHandoff =
+    selection.provider?.accountHandoff === 'settled' &&
+    isLocalExecutionHost(executionBar.hostId)
+  const handoffAccountKnown =
+    !activeSession?.continuationToken ||
+    lastTurnAccount?.sessionId === activeSession.id
+  const awaitingAccountSend = pendingAccountSends.has(draftKey)
+  const providerAccountSelectionLocked =
+    isProviderAccountSelectionLocked(
+      activeSession
+        ? { status: activeSession.status, attention: activeSession.attention }
+        : null,
+    ) ||
+    (supportsAccountHandoff &&
+      (awaitingAccountSend ||
+        !handoffAccountKnown ||
+        activeSession?.activity === 'compacting' ||
+        queuedInputs.some((input) => input.state === 'dispatching')))
+  const providerAccountPickerVisible =
+    isLocalExecutionHost(executionBar.hostId) &&
+    (selection.providerId === 'claude-code' || supportsAccountHandoff)
+  const providerAccountAmbientDisabledReason =
+    supportsAccountHandoff &&
+    activeSession?.continuationToken &&
+    lastTurnAccount?.id
+      ? 'Switching back to the default account is unavailable. Select an enrolled OpenAI account.'
+      : undefined
+  const providerAccountHelp = supportsAccountHandoff
+    ? awaitingAccountSend
+      ? 'Switching accounts… Your message stays here until it is accepted.'
+      : !handoffAccountKnown
+        ? 'Reading which account served the last turn. Reopen this conversation if its history is unavailable.'
+        : providerAccountSelectionLocked
+          ? 'Accounts can be changed after this conversation and its pending requests settle.'
+          : 'Switching accounts restarts idle servers. Running work elsewhere on either account can block a switch. Your conversation is preserved.'
+    : undefined
 
   useEffect(() => {
     if (activeSession) {
@@ -1317,11 +1373,19 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   // Nothing here can reach a stranded session's row, so the box that looks
   // like it can send does not (MAR-2550).
   const isComposerDisabled =
-    midRunPolicy.disabled || selectionLocks.mode === 'stranded'
+    midRunPolicy.disabled ||
+    selectionLocks.mode === 'stranded' ||
+    awaitingAccountSend ||
+    (supportsAccountHandoff && !handoffAccountKnown)
 
   const handleSubmit = useCallback(() => {
     const trimmed = value.trim()
     if (!selection.providerId || !selection.modelId) return
+    if (
+      pendingAccountSendRef.current.has(draftKey) ||
+      (supportsAccountHandoff && !handoffAccountKnown)
+    )
+      return
     // Submit is a control like any other (MAR-2550): a stranded session cannot
     // be continued, and the fall-through below would start a brand new session
     // on whichever provider the catalog offered instead.
@@ -1355,7 +1419,15 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       const mode = deliveryMode === 'normal' ? undefined : deliveryMode
       // One call, not four. The branching here only ever existed to skip past
       // optional positional arguments (MAR-2227); named fields omit them.
-      sendMessageToSession({
+      const handoff =
+        supportsAccountHandoff &&
+        !!activeSession.continuationToken &&
+        lastTurnAccount?.id !== effectiveProviderAccountId
+      if (handoff) {
+        pendingAccountSendRef.current.add(draftKey)
+        setPendingAccountSends(new Set(pendingAccountSendRef.current))
+      }
+      const delivery = sendMessageToSession({
         sessionId: activeSession.id,
         text,
         attachmentIds: hasAttachments ? attachmentIds : undefined,
@@ -1366,6 +1438,29 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         // byte-for-byte what it was before the quiet send existed.
         muteRelays: relaysMuted || undefined,
       })
+      if (handoff) {
+        void delivery
+          .then((accepted) => {
+            if (!accepted) return
+            if (latestDraft.current.key !== draftKey) return
+            setLastTurnAccount({
+              sessionId: activeSession.id,
+              id: effectiveProviderAccountId,
+            })
+            // Navigation or a later edit must never be erased by an older receipt.
+            if (latestDraft.current.text !== value) return
+            markAnnotationsSent()
+            setValue('')
+            setSelectedSkills([])
+            setRelaysMuted(false)
+            clearDraft()
+          })
+          .finally(() => {
+            pendingAccountSendRef.current.delete(draftKey)
+            setPendingAccountSends(new Set(pendingAccountSendRef.current))
+          })
+        return
+      }
       markAnnotationsSent()
       setValue('')
       setSelectedSkills([])
@@ -1457,6 +1552,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     // work somewhere else (MAR-2689).
     workAddressForSend,
     effectiveProviderAccountId,
+    supportsAccountHandoff,
+    handoffAccountKnown,
+    lastTurnAccount,
     // Load-bearing. Without it the toggle and the send disagree whenever
     // `attachments` happens to be stable -- which is exactly when the composer
     // holds an attachment draft, because `attachments` is otherwise a fresh
@@ -1680,6 +1778,11 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
 
   return (
     <>
+      {awaitingAccountSend ? (
+        <p role="status" className="px-3 pb-1 text-xs text-muted-foreground">
+          Switching accounts… Your message has not been accepted yet.
+        </p>
+      ) : null}
       <Composer
         value={value}
         onChange={setValue}
@@ -1693,6 +1796,20 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         selectedProviderAccountId={selectedProviderAccountId}
         onProviderAccountChange={setSelectedProviderAccountId}
         providerAccountSelectionLocked={providerAccountSelectionLocked}
+        providerAccountPickerVisible={providerAccountPickerVisible}
+        providerAccountAmbientDisabledReason={
+          providerAccountAmbientDisabledReason
+        }
+        providerAccountHelp={providerAccountHelp}
+        onManageProviderAccounts={
+          supportsAccountHandoff
+            ? () =>
+                openDialog('app-settings', {
+                  appSettingsSection: 'provider-accounts',
+                  providerAccountProviderId: 'codex',
+                })
+            : undefined
+        }
         codexFastMode={codexFastMode}
         onCodexFastModeChange={setCodexFastMode}
         codexBillingControlsAvailable={showCodexBillingControls}

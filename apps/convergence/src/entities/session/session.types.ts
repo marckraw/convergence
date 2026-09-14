@@ -532,6 +532,7 @@ export interface ProviderSettingsInfo {
 }
 
 export interface ProviderInfo {
+  accountHandoff?: 'settled'
   supportsLiveModelSelection?: boolean
   id: string
   name: string

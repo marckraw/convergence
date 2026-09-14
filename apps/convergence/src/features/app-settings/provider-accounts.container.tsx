@@ -9,6 +9,7 @@ import {
   type ProviderAccountConnectors,
   type ProviderAccountHealth,
 } from '@/entities/provider-account'
+import { useDialogStore } from '@/entities/dialog'
 import { ProviderAccountsFields } from './provider-accounts.presentational'
 
 function describeError(error: unknown, fallback: string): string {
@@ -24,8 +25,13 @@ function describeError(error: unknown, fallback: string): string {
  * reports what happened rather than refreshing silently.
  */
 export const ProviderAccountsContainer: FC = () => {
+  const dialogPayload = useDialogStore((state) => state.payload)
   const [providerId, setProviderId] =
-    useState<ProviderAccountEnrollmentProvider>('claude-code')
+    useState<ProviderAccountEnrollmentProvider>(() =>
+      dialogPayload && 'appSettingsSection' in dialogPayload
+        ? (dialogPayload.providerAccountProviderId ?? 'claude-code')
+        : 'claude-code',
+    )
   const [accounts, setAccounts] = useState<ProviderAccount[]>([])
   const [health, setHealth] = useState<ProviderAccountHealth | null>(null)
   const [isLoading, setIsLoading] = useState(true)

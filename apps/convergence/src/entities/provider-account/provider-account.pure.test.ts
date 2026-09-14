@@ -568,3 +568,14 @@ it('shows native-history migration warnings on the account row', () => {
     'History is private; reconnect to enable switching.',
   )
 })
+
+it('describes Codex ambient credentials and disables switching back to them', () => {
+  const items = buildProviderAccountPickerItems([], {
+    providerName: 'Codex',
+    ambientDisabledReason: 'Choose an enrolled account.',
+  })
+  expect(items[0]).toMatchObject({
+    disabled: true,
+    description: 'Choose an enrolled account.',
+  })
+})

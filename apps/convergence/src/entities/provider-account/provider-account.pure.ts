@@ -224,11 +224,15 @@ export function isProviderAccountSelectable(account: ProviderAccount): boolean {
 
 export function buildProviderAccountPickerItems(
   accounts: ProviderAccount[],
+  options: { providerName?: string; ambientDisabledReason?: string } = {},
 ): ProviderAccountPickerItem[] {
   const ambient: ProviderAccountPickerItem = {
     id: AMBIENT_DEFAULT_ACCOUNT_ID,
     label: AMBIENT_DEFAULT_ACCOUNT_LABEL,
-    description: 'The Claude Code login this machine already had.',
+    description:
+      options.ambientDisabledReason ??
+      `The ${options.providerName ?? 'Claude Code'} login this machine already had.`,
+    ...(options.ambientDisabledReason ? { disabled: true } : {}),
   }
 
   return [
@@ -241,7 +245,7 @@ export function buildProviderAccountPickerItems(
         id: account.id,
         label: describeProviderAccountIdentity(account),
         description: account.orgId
-          ? `Organization ${account.orgId}`
+          ? `${account.providerId === 'codex' ? 'Workspace' : 'Organization'} ${account.orgId}`
           : undefined,
         badge: selectable
           ? account.isDefault

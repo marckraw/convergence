@@ -290,7 +290,7 @@ export function ProviderAccountsFields({
                 {isConfirmingRemoval ? (
                   <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm leading-relaxed text-destructive">
                     {isCodex
-                      ? 'This signs the account out of Codex and removes its local account directory, including any Codex history stored only there. Saved conversation messages remain in Convergence.'
+                      ? 'This signs the account out of Codex and removes its local account directory. Shared native history and Convergence messages remain. Any history stored only in this account directory, including migration backups, is removed.'
                       : 'This signs the account out of Claude Code and deletes its directories. Conversations stay — they are shared — but this account has to be enrolled again to serve turns.'}
                   </p>
                 ) : null}

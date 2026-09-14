@@ -4,6 +4,7 @@ import type {
   ProviderAccount,
   ProviderAccountHealth,
 } from '@/entities/provider-account'
+import { useDialogStore } from '@/entities/dialog'
 import { ProviderAccountsContainer } from './provider-accounts.container'
 
 function account(overrides: Partial<ProviderAccount> = {}): ProviderAccount {
@@ -57,6 +58,7 @@ const providerAccounts = {
 describe('ProviderAccountsContainer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useDialogStore.getState().close()
     providerAccounts.list.mockResolvedValue([account()])
     providerAccounts.health.mockResolvedValue(health())
     providerAccounts.listConnectors.mockResolvedValue({
@@ -240,7 +242,7 @@ describe('ProviderAccountsContainer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
     expect(
       screen.getByText(
-        'This signs the account out of Codex and removes its local account directory, including any Codex history stored only there. Saved conversation messages remain in Convergence.',
+        'This signs the account out of Codex and removes its local account directory. Shared native history and Convergence messages remain. Any history stored only in this account directory, including migration backups, is removed.',
       ),
     ).toBeInTheDocument()
     expect(
@@ -544,4 +546,20 @@ describe('ProviderAccountsContainer', () => {
       ).toBeInTheDocument()
     })
   })
+})
+
+it('opens the OpenAI tab directly from the composer account action', async () => {
+  providerAccounts.list.mockResolvedValue([
+    account({ providerId: 'codex', email: 'openai@example.com' }),
+  ])
+  useDialogStore.getState().open('app-settings', {
+    appSettingsSection: 'provider-accounts',
+    providerAccountProviderId: 'codex',
+  })
+  render(<ProviderAccountsContainer />)
+  expect(await screen.findByText('openai@example.com')).toBeInTheDocument()
+  expect(
+    screen.getByRole('button', { name: 'Connect OpenAI' }),
+  ).toBeInTheDocument()
+  useDialogStore.getState().close()
 })

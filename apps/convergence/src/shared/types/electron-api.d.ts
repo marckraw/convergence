@@ -1144,6 +1144,7 @@ interface RemoteProjectCatalogData {
 }
 
 interface ProviderInfo {
+  accountHandoff?: 'settled'
   supportsLiveModelSelection?: boolean
   id: string
   name: string

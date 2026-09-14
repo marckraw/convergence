@@ -110,7 +110,7 @@ interface SessionActions {
     options?: { scope: 'once' | 'session' },
   ) => Promise<void>
   denySession: (id: string, providerApprovalId?: string) => Promise<void>
-  sendMessageToSession: (request: SendSessionMessageRequest) => Promise<void>
+  sendMessageToSession: (request: SendSessionMessageRequest) => Promise<boolean>
   compactSessionContext: (id: string, instructions?: string) => Promise<void>
   stopSession: (id: string) => Promise<void>
   archiveSession: (id: string) => Promise<void>
@@ -752,10 +752,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set({ error: null })
     try {
       await sessionApi.sendMessage(request)
+      return true
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to send message',
       })
+      return false
     }
   },
 
