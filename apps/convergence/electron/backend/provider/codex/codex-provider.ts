@@ -1,3 +1,7 @@
+import { isCodexThreadRuntimeIdle } from './codex-handoff.pure'
+import { HandoffRefusedError } from '../provider-account-handoff.pure'
+import type { InitialDispatchReceipt } from '../provider.types'
+import type { CodexAccountHistoryService } from '../../provider-account/provider-account-codex-history.service'
 import { CONVERSATION_RESET_COMMAND } from '../../../../src/shared/lib/conversation-reset.pure'
 import {
   CONTEXT_RESTARTED_NOTE_TEXT,
@@ -734,6 +738,7 @@ export type CodexAccountLookup = (
 const noCodexAccountLookup: CodexAccountLookup = () => null
 
 export class CodexProvider implements Provider {
+  readonly accountHandoff = 'settled' as const
   id = 'codex'
   name = 'Codex'
   supportsContinuation = true
@@ -753,14 +758,21 @@ export class CodexProvider implements Provider {
     private taskProgress: TaskProgressService | null = null,
     private debugSink: ProviderDebugSink = noopDebugSink,
     private accountLookup: CodexAccountLookup = noCodexAccountLookup,
+    private accountHistory?: Pick<CodexAccountHistoryService, 'inspect'>,
+    private handoffSourceLookup?: (accountId: string) => {
+      account: CodexAccountEnvTarget
+      removed: boolean
+    },
   ) {}
 
   /** The resident server for a session's account, or the ambient login. */
   private hostFor(
     providerAccountId: string | null | undefined,
   ): CodexServerHost {
+    const account = this.accountLookup(providerAccountId)
     return this.serverHosts.get({
-      account: this.accountLookup(providerAccountId),
+      account,
+      executionHostId: account?.executionHostId,
     })
   }
 
@@ -870,20 +882,32 @@ export class CodexProvider implements Provider {
 
   start(config: SessionStartConfig): SessionHandle {
     const accountLookup = this.accountLookup
+    const handoffSourceLookup = this.handoffSourceLookup
     /**
-     * The account this session's `codex app-server` runs under.
-     *
-     * A Codex session outlives its process but does not own one continuously:
-     * the app-server is spawned lazily and torn down whenever the session is
-     * released — which, since resource-release landed, is after every completed
-     * turn. What is fixed for the session's life is the *credential*, because
-     * every respawn re-reads it from the same closure. ADR 0007's "switching
-     * accounts mid-conversation needs no process lifecycle management" is a
-     * property of Claude's per-turn spawn model and does not carry over, so a
-     * mid-session change is refused out loud rather than silently served by
-     * whichever account the current process happens to hold.
+     * Each handle is bound to one credential. A settled-turn handoff receives
+     * the last turn's recorded account as a fact and releases loaded writers
+     * through the shared host gates before resuming the same native thread.
      */
     const sessionAccountId = config.providerAccountId ?? null
+    const handoff =
+      config.continuationToken !== null &&
+      config.previousProviderAccountId !== undefined &&
+      config.previousProviderAccountId !== sessionAccountId
+    const accountHistory = this.accountHistory
+    const serverHosts = this.serverHosts
+    let acceptInitial!: (receipt: InitialDispatchReceipt) => void
+    let refuseInitial!: (error: unknown) => void
+    const initialDispatch = handoff
+      ? new Promise<InitialDispatchReceipt>((resolve, reject) => {
+          acceptInitial = resolve
+          refuseInitial = reject
+        })
+      : undefined
+    void initialDispatch?.catch(() => {})
+    let fatalRelease = false
+    let activeClientUserMessageId: string | null = null
+    let lastConnectionGeneration: number | null = null
+    let unpublishedHandoff: SessionDelta[] | null = handoff ? [] : null
     const debugSink = this.debugSink
     const sessionId = config.sessionId
     const listeners = {
@@ -917,8 +941,10 @@ export class CodexProvider implements Provider {
       fireHeartbeat()
     }
 
+    const sessionAccount = accountLookup(sessionAccountId)
     const serverHost = this.serverHosts.get({
-      account: accountLookup(sessionAccountId),
+      account: sessionAccount,
+      executionHostId: sessionAccount?.executionHostId,
     })
     let connection: CodexServerConnection | null = null
     let rpc: JsonRpcClient | null = null
@@ -985,6 +1011,10 @@ export class CodexProvider implements Provider {
     const pendingUserInputs = new Map<JsonRpcId, PendingInputRequest>()
 
     function emitDelta(delta: SessionDelta): void {
+      if (unpublishedHandoff) {
+        unpublishedHandoff.push(delta)
+        return
+      }
       listeners.delta.forEach((cb) => cb(delta))
     }
 
@@ -1269,6 +1299,11 @@ export class CodexProvider implements Provider {
           throw err
         }
 
+        if (handoff)
+          throw new HandoffRefusedError(
+            'missing-thread',
+            'The selected account could not resume this conversation. Your message was not sent; no new conversation was created.',
+          )
         noteMissingThreadRecovery()
         threadId = null
         threadReady = false
@@ -1338,6 +1373,7 @@ export class CodexProvider implements Provider {
       // still carried this thread past the boundary, and claiming otherwise is
       // the one direction this flag must never fail in.
       threadUnusedSinceBoundary = false
+      activeClientUserMessageId = clientUserMessageId
       const acknowledgement = activeRpc
         .request('turn/start', {
           threadId: currentThreadId,
@@ -1438,6 +1474,9 @@ export class CodexProvider implements Provider {
         })
       }
       activeProviderTurnId = null
+      activeClientUserMessageId = null
+      if (threadId && lastConnectionGeneration !== null)
+        serverHost.observeThreadSettled(threadId, lastConnectionGeneration)
       applyActivity({ kind: 'close' })
       setStatus('completed')
       setAttention('none')
@@ -1486,6 +1525,12 @@ export class CodexProvider implements Provider {
       }
 
       if (reconciled.outcome === 'unknown') {
+        if (lastConnectionGeneration !== null)
+          serverHost.rememberPossiblyLiveThread(
+            input.threadIdAtSend,
+            lastConnectionGeneration,
+            { clientUserMessageId: input.clientUserMessageId },
+          )
         throw new Error(
           'Lost the connection while sending, and Codex could not be asked whether the message arrived. Send it again if no answer appears.',
         )
@@ -1546,6 +1591,11 @@ export class CodexProvider implements Provider {
 
         // The turn was refused, so it is not one this thread took.
         threadUnusedSinceBoundary = unusedBeforeSend
+        if (handoff)
+          throw new HandoffRefusedError(
+            'missing-thread',
+            'The selected account could not find this conversation when starting the turn. Your message was not sent; no new conversation was created.',
+          )
         noteMissingThreadRecovery()
         // Unconditional, and it may stay that way: nothing can replace
         // `threadId` while this `turn/start` is awaited on this connection.
@@ -1713,6 +1763,7 @@ export class CodexProvider implements Provider {
           'sent',
         )
       } catch (err) {
+        if (err instanceof HandoffRefusedError) throw err
         patchUserMessageSkills(
           userMessageItemId,
           skillResolution.skillSelections,
@@ -1884,6 +1935,16 @@ export class CodexProvider implements Provider {
 
       const abandoned = connection
       const abandonedGeneration = abandoned?.generation ?? null
+      if (
+        threadId &&
+        abandonedGeneration !== null &&
+        (currentStatus === 'running' || pendingTurnStart)
+      ) {
+        serverHost.rememberPossiblyLiveThread(threadId, abandonedGeneration, {
+          turnId: activeProviderTurnId,
+          clientUserMessageId: activeClientUserMessageId,
+        })
+      }
       connection = null
       rpc = null
       // A fresh connection has resumed nothing, whatever the last one did.
@@ -2012,6 +2073,7 @@ export class CodexProvider implements Provider {
           return null
         }
         connection = opened
+        lastConnectionGeneration = opened.generation
         rpc = opened.rpc
         // This connection has resumed nothing, whatever the last one had done.
         // Without the reset, a reconnect sent `turn/start` against a thread the
@@ -2176,6 +2238,12 @@ export class CodexProvider implements Provider {
           }
 
           case 'turn/completed':
+            activeClientUserMessageId = null
+            if (threadId && lastConnectionGeneration !== null)
+              serverHost.observeThreadSettled(
+                threadId,
+                lastConnectionGeneration,
+              )
             flushThinkingBuffer()
             flushAssistantBuffer()
             activeProviderTurnId = null
@@ -2223,6 +2291,12 @@ export class CodexProvider implements Provider {
             break
 
           case 'turn/interrupt':
+            if (threadId && lastConnectionGeneration !== null)
+              serverHost.observeThreadSettled(
+                threadId,
+                lastConnectionGeneration,
+              )
+            activeClientUserMessageId = null
             flushThinkingBuffer()
             flushAssistantBuffer()
             activeProviderTurnId = null
@@ -2377,7 +2451,7 @@ export class CodexProvider implements Provider {
             // everything else the server is the source of truth: if it is
             // really dying, its obituary says so.
             if (disposition === 'fatal') {
-              activeProviderTurnId = null
+              fatalRelease = true
               setStatus('failed')
               setAttention('failed')
             }
@@ -2472,13 +2546,111 @@ export class CodexProvider implements Provider {
       })
     }
 
-    // Connect after a tick so listeners can be attached
+    async function startHandoff(): Promise<void> {
+      try {
+        if (!sessionAccount || !sessionAccountId || !config.continuationToken) {
+          throw new HandoffRefusedError(
+            'not-eligible',
+            'Switching to the default account is unavailable. Select an enrolled OpenAI account; your message was not sent.',
+          )
+        }
+        if (!accountHistory)
+          throw new HandoffRefusedError(
+            'layout',
+            'Account history inspection is unavailable. Your message was not sent.',
+          )
+        const source = config.previousProviderAccountId
+          ? (handoffSourceLookup?.(config.previousProviderAccountId) ?? {
+              account: accountLookup(config.previousProviderAccountId),
+              removed: false,
+            })
+          : null
+        const sourceAccount = source?.account ?? null
+        if (config.previousProviderAccountId && !sourceAccount)
+          throw new HandoffRefusedError(
+            'not-eligible',
+            'The previous account host could not be identified. Your message was not sent.',
+          )
+        for (const target of [
+          sessionAccount,
+          source?.removed ? null : sourceAccount,
+        ]) {
+          if (!target) continue
+          const layout = await accountHistory.inspect(target.configDir)
+          if (!layout.ready)
+            throw new HandoffRefusedError(
+              'layout',
+              `${target === sessionAccount ? 'Selected' : 'Previous'} account${target.label ? ` “${target.label}”` : ''} needs attention. ${layout.warnings.join(' ')} Your message was not sent.`,
+            )
+        }
+        await serverHosts.prepareThreadHandoff({
+          account: sourceAccount,
+          executionHostId: sourceAccount?.executionHostId,
+          threadId: config.continuationToken,
+          accountLabel: sourceAccount?.label ?? 'The default account',
+          role: 'source',
+          existingOnly: true,
+        })
+        if (stopped)
+          throw new HandoffRefusedError(
+            'not-eligible',
+            'The account handoff was stopped before sending.',
+          )
+        await serverHosts.prepareThreadHandoff({
+          account: sessionAccount,
+          executionHostId: sessionAccount.executionHostId,
+          threadId: config.continuationToken,
+          accountLabel: sessionAccount.label ?? 'The selected account',
+        })
+        if (stopped)
+          throw new HandoffRefusedError(
+            'not-eligible',
+            'The account handoff was stopped before sending.',
+          )
+        const activeRpc = await openConnection()
+        if (!activeRpc || stopped)
+          throw new HandoffRefusedError(
+            'not-eligible',
+            'The destination connection closed before sending.',
+          )
+        // Resume before preparing the user item. Publication remains held until
+        // turn/start accepts too: the server can refuse a missing thread there.
+        await ensureThread(activeRpc)
+        await sendCodexTurn({
+          activeRpc,
+          text: config.initialMessage,
+          attachments: config.initialAttachments,
+          skillSelections: config.initialSkillSelections,
+        })
+        acceptInitial({
+          publish: () => {
+            const events = unpublishedHandoff
+            unpublishedHandoff = null
+            for (const delta of events ?? []) emitDelta(delta)
+          },
+        })
+      } catch (error) {
+        unpublishedHandoff = null
+        refuseInitial(
+          error instanceof HandoffRefusedError
+            ? error
+            : new HandoffRefusedError(
+                'not-eligible',
+                `${error instanceof Error ? error.message : String(error)} Your message was not sent.`,
+              ),
+        )
+      }
+    }
+
+    // Connect after the existing tick so listeners can be attached.
     const startTimer = setTimeout(() => {
-      startFirstTurn(
-        config.initialMessage,
-        config.initialAttachments,
-        config.initialSkillSelections,
-      )
+      if (handoff) void startHandoff()
+      else
+        startFirstTurn(
+          config.initialMessage,
+          config.initialAttachments,
+          config.initialSkillSelections,
+        )
     }, 10)
 
     /**
@@ -2495,6 +2667,13 @@ export class CodexProvider implements Provider {
      */
     function disposeRuntime(options?: { interruptActiveTurn?: boolean }): void {
       if (stopped) return
+      if (handoff)
+        refuseInitial(
+          new HandoffRefusedError(
+            'not-eligible',
+            'The account handoff was stopped before acceptance.',
+          ),
+        )
       stopped = true
       clearTimeout(startTimer)
       stopWatchingServer()
@@ -2519,7 +2698,21 @@ export class CodexProvider implements Provider {
       activeProviderTurnId = null
       pendingTurnStart = null
 
-      if (!releasing) return
+      if (!releasing) {
+        if (
+          options?.interruptActiveTurn &&
+          releasingThreadId &&
+          lastConnectionGeneration !== null
+        ) {
+          void stopLostTurn(
+            releasingThreadId,
+            lastConnectionGeneration,
+            activeClientUserMessageId,
+            connecting,
+          )
+        }
+        return
+      }
 
       void releaseConnection({
         releasing,
@@ -2527,6 +2720,7 @@ export class CodexProvider implements Provider {
         threadReady: releasingThreadReady,
         interruptTurnId,
         interruptPending,
+        stoppingTurn: options?.interruptActiveTurn ?? false,
       })
     }
 
@@ -2546,6 +2740,7 @@ export class CodexProvider implements Provider {
       threadReady: boolean
       interruptTurnId: string | null
       interruptPending: Promise<string | null> | null
+      stoppingTurn: boolean
     }): Promise<void> {
       try {
         // A turn whose `turn/start` has not been answered yet has no id to
@@ -2562,8 +2757,31 @@ export class CodexProvider implements Provider {
             threadId: input.threadId,
             turnId,
           })
+          serverHost.observeThreadSettled(
+            input.threadId,
+            input.releasing.generation,
+          )
+        } else if (
+          input.stoppingTurn &&
+          input.threadId &&
+          activeClientUserMessageId
+        ) {
+          await stopLostTurn(
+            input.threadId,
+            input.releasing.generation,
+            activeClientUserMessageId,
+          )
         }
       } catch {
+        if (input.threadId)
+          serverHost.rememberPossiblyLiveThread(
+            input.threadId,
+            input.releasing.generation,
+            {
+              turnId: input.interruptTurnId,
+              clientUserMessageId: activeClientUserMessageId,
+            },
+          )
         // A server that cannot be told to stop is still owed the unsubscribe
         // below; reporting here would have nowhere to go — the session is
         // already released.
@@ -2575,6 +2793,55 @@ export class CodexProvider implements Provider {
         }
       } finally {
         input.releasing.close()
+      }
+    }
+
+    /** Explicit Stop after a lost acknowledgement: read our client id, never guess a turn. */
+    async function stopLostTurn(
+      stoppingThreadId: string,
+      generation: number,
+      clientId: string | null,
+      reconnect?: Promise<JsonRpcClient | null> | null,
+    ): Promise<void> {
+      serverHost.rememberPossiblyLiveThread(stoppingThreadId, generation, {
+        clientUserMessageId: clientId,
+      })
+      let control: CodexServerConnection | null = null
+      try {
+        // A Stop during reconnect applies after that connection attempt settles.
+        // openConnection itself closes it when it sees this handle was stopped.
+        await reconnect?.catch(() => null)
+        if (!clientId || !serverHost.hasGeneration(generation)) return
+        control = await serverHost.connect({
+          isProgressNotification: () => false,
+        })
+        if (control.generation !== generation) return
+        const runtime = await control.rpc.request('thread/read', {
+          threadId: stoppingThreadId,
+          includeTurns: false,
+        })
+        if (isCodexThreadRuntimeIdle(runtime)) {
+          serverHost.observeThreadSettled(stoppingThreadId, generation)
+          return
+        }
+        const result = await reconcileTurn(
+          control.rpc,
+          stoppingThreadId,
+          clientId,
+        )
+        if (result.outcome === 'landed' && result.turn?.completed) {
+          serverHost.observeThreadSettled(stoppingThreadId, generation)
+        } else if (result.outcome === 'landed' && result.turn?.turnId) {
+          await control.rpc.request('turn/interrupt', {
+            threadId: stoppingThreadId,
+            turnId: result.turn.turnId,
+          })
+          serverHost.observeThreadSettled(stoppingThreadId, generation)
+        }
+      } catch {
+        // Unknown remains known-live. A later server read or death can clear it.
+      } finally {
+        control?.close()
       }
     }
 
@@ -2598,6 +2865,7 @@ export class CodexProvider implements Provider {
     }
 
     const handle: SessionHandle = {
+      ...(initialDispatch ? { initialDispatch } : {}),
       onDelta: (cb) => {
         listeners.delta.push(cb)
       },
@@ -2734,7 +3002,10 @@ export class CodexProvider implements Provider {
       deny: (providerApprovalId) => {
         answerApproval(providerApprovalId, 'deny')
       },
-      dispose: () => disposeRuntime(),
+      dispose: () =>
+        disposeRuntime({
+          interruptActiveTurn: fatalRelease,
+        }),
       stop: () => {
         if (stopped) return
         // Explicit Stop, unlike an ordinary release: there is a turn running on

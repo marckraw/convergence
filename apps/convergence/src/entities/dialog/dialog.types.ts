@@ -30,7 +30,10 @@ export type AppSettingsDialogSection =
   | 'debug-logging'
 
 export type DialogPayload =
-  | { appSettingsSection: AppSettingsDialogSection }
+  | {
+      appSettingsSection: AppSettingsDialogSection
+      providerAccountProviderId?: 'claude-code' | 'codex'
+    }
   | { spaceId: string }
   | { parentSessionId: string }
   | { sessionId: string }

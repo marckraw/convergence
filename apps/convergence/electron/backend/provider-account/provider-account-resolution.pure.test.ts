@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   assertLocalAccountSelection,
   resolveAccountForTurn,
+  resolveCodexAccountForTurn,
+  resolveCodexAccountHandoffSource,
   selectTurnAccountSnapshot,
 } from './provider-account-resolution.pure'
 import type { ProviderAccount } from './provider-account.types'
@@ -158,4 +160,60 @@ describe('assertLocalAccountSelection', () => {
       }),
     ).not.toThrow()
   })
+})
+
+describe('Codex host identity', () => {
+  it('carries the enrolled host key and label into the resident server', () => {
+    const selected = account({ providerId: 'codex' })
+    expect(
+      resolveCodexAccountForTurn({ accountId: selected.id, account: selected }),
+    ).toEqual({
+      configDir: selected.configDir,
+      executionHostId: 'local',
+      label: selected.label,
+    })
+  })
+  it.each([
+    { providerId: 'claude-code' },
+    { providerId: 'codex', executionHostId: 'remote-one' },
+  ])('rejects incompatible selected account %o', (overrides) => {
+    expect(() =>
+      resolveCodexAccountForTurn({
+        accountId: 'acct-a',
+        account: account(overrides),
+      }),
+    ).toThrow(/OpenAI account enrolled on this machine/)
+  })
+})
+
+it('resolves the expired source identity without relaxing the destination guard', () => {
+  const source = account({
+    providerId: 'codex',
+    status: 'unavailable',
+    configDir: '/homes/a',
+  })
+  expect(
+    resolveCodexAccountHandoffSource({
+      accountId: source.id,
+      account: source,
+      homeDir: '/home',
+    }),
+  ).toEqual({
+    account: {
+      configDir: '/homes/a',
+      executionHostId: 'local',
+      label: source.label,
+    },
+    removed: false,
+  })
+  expect(() =>
+    resolveCodexAccountForTurn({ accountId: source.id, account: source }),
+  ).toThrow(/cannot serve turns/)
+  const removed = resolveCodexAccountHandoffSource({
+    accountId: source.id,
+    account: null,
+    homeDir: '/home',
+  })
+  expect(removed.removed).toBe(true)
+  expect(removed.account.configDir).toContain('/provider-accounts/codex/acct-a')
 })

@@ -360,6 +360,19 @@ try {
     )
   ).done
   await release(a, threadId)
+  await registry.prepareThreadHandoff({
+    account: { configDir: homes[0] },
+    threadId,
+    accountLabel: 'Test A',
+    role: 'source',
+  })
+  await exits[0]
+  evidence.observations.sourceAReleasedWriter = true
+  await registry.prepareThreadHandoff({
+    account: { configDir: homes[1] },
+    threadId,
+    accountLabel: 'Test B',
+  })
   await resume(b, threadId)
   const replyB = await (
     await beginTurn(
@@ -407,11 +420,38 @@ try {
   assert(active.has(liveThread), 'Unrelated B turn is not active')
   const bPid = children[1].pid
   assert(!active.has(threadId) && !active.has(sibling), 'A is not idle')
-  hostA.stop()
-  await exits[0]
-  const newA = await connect(
-    makeRegistry().get({ account: { configDir: homes[0] } }),
+  await assert.rejects(
+    registry.prepareThreadHandoff({
+      account: { configDir: homes[1] },
+      threadId,
+      accountLabel: 'Test B',
+      role: 'source',
+    }),
+    { stage: 'source-busy' },
   )
+  evidence.observations.sourceBusyRefusedWithoutInterrupt =
+    active.has(liveThread) &&
+    children[1].pid === bPid &&
+    children[1].exitCode === null
+  assert(
+    evidence.observations.sourceBusyRefusedWithoutInterrupt,
+    'Source refusal interrupted unrelated B work',
+  )
+  releaseHold()
+  await background.done
+  await release(liveB, liveThread)
+  await registry.prepareThreadHandoff({
+    account: { configDir: homes[1] },
+    threadId,
+    accountLabel: 'Test B',
+    role: 'source',
+  })
+  await registry.prepareThreadHandoff({
+    account: { configDir: homes[0] },
+    threadId,
+    accountLabel: 'Test A',
+  })
+  const newA = await connect(hostA)
   const identityAfter = await identity(newA, 0)
   assert.equal(
     identityAfter.accountFingerprint,
@@ -431,18 +471,7 @@ try {
     'Returning A did not recall both prior tool-derived nonces',
   )
   evidence.observations.returnedARecallsBoth = true
-  evidence.observations.bStayedLiveDuringReturn =
-    active.has(liveThread) &&
-    children[1].pid === bPid &&
-    children[1].exitCode === null
-  assert(
-    evidence.observations.bStayedLiveDuringReturn,
-    'Concurrent B conversation did not survive A restart',
-  )
   await release(newA, threadId)
-  releaseHold()
-  await background.done
-  await release(liveB, liveThread)
   const siblingA = await connect(
     registries.at(-1).get({ account: { configDir: homes[0] } }),
   )

@@ -68,6 +68,10 @@ import { ComposerSkillInjectionPicker } from './composer-skill-injection-picker.
 import { ProjectContextPicker } from './project-context-picker.presentational'
 import { SkillPicker } from './skill-picker.presentational'
 import { SkillSelectionChip } from './skill-selection-chip.presentational'
+import {
+  ComposerAccountNotice,
+  type ComposerAccountNoticeState,
+} from './composer-account-notice.presentational'
 
 interface ComposerProps {
   value: string
@@ -93,6 +97,12 @@ interface ComposerProps {
   selectedProviderAccountId: string | null
   onProviderAccountChange: (accountId: string | null) => void
   providerAccountSelectionLocked: boolean
+  providerAccountPickerVisible?: boolean
+  providerAccountAmbientDisabledReason?: string
+  providerAccountAmbientIsCurrent?: boolean
+  providerAccountHelp?: string
+  accountNotice?: ComposerAccountNoticeState
+  onManageProviderAccounts?: () => void
   codexFastMode: boolean
   onCodexFastModeChange: (enabled: boolean) => void
   /**
@@ -233,6 +243,12 @@ export const Composer: FC<ComposerProps> = ({
   selectedProviderAccountId,
   onProviderAccountChange,
   providerAccountSelectionLocked,
+  providerAccountPickerVisible,
+  providerAccountAmbientDisabledReason,
+  providerAccountAmbientIsCurrent,
+  providerAccountHelp,
+  accountNotice,
+  onManageProviderAccounts,
   codexFastMode,
   onCodexFastModeChange,
   codexBillingControlsAvailable,
@@ -860,9 +876,17 @@ export const Composer: FC<ComposerProps> = ({
                       className="px-2 text-xs text-muted-foreground hover:text-foreground"
                     />
                   )}
-                  {selection.providerId === 'claude-code' && (
+                  {(providerAccountPickerVisible ??
+                    selection.providerId === 'claude-code') && (
                     <ProviderAccountPicker
                       accounts={providerAccounts}
+                      providerName={selection.provider?.name}
+                      ambientDisabledReason={
+                        providerAccountAmbientDisabledReason
+                      }
+                      help={providerAccountHelp}
+                      ambientIsCurrent={providerAccountAmbientIsCurrent}
+                      onManageAccounts={onManageProviderAccounts}
                       selectedAccountId={selectedProviderAccountId}
                       onChange={onProviderAccountChange}
                       disabled={disabled || providerAccountSelectionLocked}
@@ -1031,6 +1055,14 @@ export const Composer: FC<ComposerProps> = ({
               <ArrowUp className="h-4 w-4" />
             </Button>
           </div>
+          {accountNotice ? (
+            <div className="mt-3 border-t border-border/60 pt-3">
+              <ComposerAccountNotice
+                notice={accountNotice}
+                onManageAccounts={onManageProviderAccounts}
+              />
+            </div>
+          ) : null}
           {/*
             The panel the advanced button opens, held to the same rule as the
             button: a row with no answer from its machine shows no local control

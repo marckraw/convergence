@@ -8,6 +8,7 @@ import {
 } from './provider-account-enrolment.service'
 import type { ProviderAccountCommand } from './provider-account-enrolment.pure'
 import { ProviderAccountRepository } from './provider-account.repository'
+import { CodexAccountHistoryService } from './provider-account-codex-history.service'
 
 const HOME = '/Users/tester'
 const ACCOUNT_ID = 'acct-a'
@@ -36,7 +37,53 @@ function fakeFs(seed: Record<string, string> = {}) {
     return [...names]
   }
 
+  const missing = (path: string) =>
+    Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
   const fs: ProviderAccountFs = {
+    lstat: vi.fn(async (path: string) => {
+      const directory = dirs.has(path) || entriesOf(path).length > 0
+      if (!links.has(path) && !files.has(path) && !directory)
+        throw missing(path)
+      return {
+        isSymbolicLink: () => links.has(path),
+        isFile: () => files.has(path),
+        isDirectory: () => directory && !links.has(path),
+        size: files.get(path)?.length ?? 0,
+      }
+    }),
+    readlink: vi.fn(async (path: string) => {
+      const target = links.get(path)
+      if (target === undefined) throw missing(path)
+      return target
+    }),
+    copyFileExclusive: vi.fn(async (source: string, destination: string) => {
+      if (files.has(destination))
+        throw Object.assign(new Error('exists'), { code: 'EEXIST' })
+      const data = files.get(source)
+      if (data === undefined) throw missing(source)
+      files.set(destination, data)
+    }),
+    createEmptyFile: vi.fn(async (path: string) => {
+      if (files.has(path))
+        throw Object.assign(new Error('exists'), { code: 'EEXIST' })
+      files.set(path, '')
+    }),
+    rename: vi.fn(async (source: string, destination: string) => {
+      for (const map of [files, links]) {
+        for (const [path, value] of [...map]) {
+          if (path === source || path.startsWith(source + '/')) {
+            map.set(destination + path.slice(source.length), value)
+            map.delete(path)
+          }
+        }
+      }
+      for (const path of [...dirs]) {
+        if (path === source || path.startsWith(source + '/')) {
+          dirs.add(destination + path.slice(source.length))
+          dirs.delete(path)
+        }
+      }
+    }),
     mkdir: vi.fn(async (path: string) => {
       dirs.add(path)
     }),
@@ -55,9 +102,13 @@ function fakeFs(seed: Record<string, string> = {}) {
       if (contents === undefined) throw new Error(`ENOENT: ${path}`)
       return contents
     }),
-    writeFile: vi.fn(async (path: string, contents: string) => {
-      files.set(path, contents)
-    }),
+    writeFile: vi.fn(
+      async (path: string, contents: string, options?: { flag: 'wx' }) => {
+        if (options?.flag === 'wx' && files.has(path))
+          throw Object.assign(new Error('exists'), { code: 'EEXIST' })
+        files.set(path, contents)
+      },
+    ),
     rm: vi.fn(async (path: string) => {
       removed.push(path)
       files.delete(path)
@@ -362,6 +413,45 @@ describe('ProviderAccountEnrolmentService', () => {
       }
     }
 
+    it('prepares shared conversation storage before login while keeping auth private', async () => {
+      const { subject, runner, fs } = codexFixture()
+      const result = await subject.enrol({ email: '', providerId: 'codex' })
+      expect(result.warnings).toEqual([])
+      expect(fs.symlink).toHaveBeenCalledWith(
+        `${HOME}/.codex/sessions`,
+        `${CODEX_HOME}/sessions`,
+      )
+      expect(fs.symlink).toHaveBeenCalledWith(
+        `${HOME}/.codex/archived_sessions`,
+        `${CODEX_HOME}/archived_sessions`,
+      )
+      expect(runner.calls[0].env.CODEX_HOME).toBe(CODEX_HOME)
+    })
+
+    it('refuses remote Codex enrollment before creating files or running login', async () => {
+      const { subject, fs, runner } = codexFixture()
+      await expect(
+        subject.enrol({
+          email: '',
+          providerId: 'codex',
+          executionHostId: 'remote-host',
+        }),
+      ).rejects.toThrow(/this machine only/)
+      expect(fs.mkdir).not.toHaveBeenCalled()
+      expect(runner.calls).toEqual([])
+      expect(repository.list()).toEqual([])
+    })
+
+    it('never overwrites an existing Codex config during enrollment', async () => {
+      const { subject, files, runner } = codexFixture()
+      files.set(`${CODEX_HOME}/config.toml`, 'existing-config')
+      await expect(
+        subject.enrol({ email: '', providerId: 'codex' }),
+      ).rejects.toThrow('exists')
+      expect(files.get(`${CODEX_HOME}/config.toml`)).toBe('existing-config')
+      expect(runner.calls).toEqual([])
+    })
+
     it.each(['reconnect', 'remove'] as const)(
       'refuses %s before login, logout or identity writes when the account is busy',
       async (action) => {
@@ -402,6 +492,70 @@ describe('ProviderAccountEnrolmentService', () => {
       expect(runner.calls[0].env.CODEX_HOME).toBe(CODEX_HOME)
       expect(runner.calls[0].env.CLAUDE_CONFIG_DIR).toBeUndefined()
       expect(account).toMatchObject({ orgId: 'acc_123', status: 'connected' })
+    })
+
+    it('reconnects an older account with private turns into shared history under maintenance', async () => {
+      const rollout = 'sessions/2026/09/14/rollout-existing-thread.jsonl'
+      const { fs, files, links } = fakeFs({
+        [`${CODEX_HOME}/auth.json`]: CODEX_AUTH,
+        [`${CODEX_HOME}/${rollout}`]: 'three existing turns',
+        [`${CODEX_HOME}/thread-writer-locks/.coordination.lock`]: '',
+      })
+      repository.create({
+        id: ACCOUNT_ID,
+        providerId: 'codex',
+        label: 'Older account',
+        authKind: 'subscription-oauth',
+        email: 'someone@example.com',
+        orgId: 'acc_123',
+        configDir: CODEX_HOME,
+        credentialDir: CODEX_HOME,
+        executionHostId: 'local',
+      })
+      const history = new CodexAccountHistoryService({ homeDir: HOME, fs })
+      expect(await history.inspect(CODEX_HOME)).toEqual({
+        ready: false,
+        warnings: [
+          'Conversations on this account are stored separately. Reconnect this account in Settings → Accounts → OpenAI to enable switching. Existing conversations will be preserved.',
+        ],
+      })
+      let maintenanceOpen = false
+      const rename = fs.rename
+      fs.rename = vi.fn(async (source, destination) => {
+        expect(maintenanceOpen).toBe(true)
+        return rename(source, destination)
+      })
+      const runner = fakeRunner({}, loginWritesAuth(files))
+      await service({
+        fs,
+        run: runner.run,
+        codexMaintenance: {
+          run: async (_account, work) => {
+            maintenanceOpen = true
+            try {
+              return await work()
+            } finally {
+              maintenanceOpen = false
+            }
+          },
+        },
+      }).reconnect(ACCOUNT_ID)
+      expect(await history.inspect(CODEX_HOME)).toEqual({
+        ready: true,
+        warnings: [],
+      })
+      expect(files.get(`${HOME}/.codex/${rollout}`)).toBe(
+        'three existing turns',
+      )
+      expect(
+        [...files].some(
+          ([path, value]) =>
+            path.includes('sessions.pre-share-') &&
+            value === 'three existing turns',
+        ),
+      ).toBe(true)
+      expect(links.has(`${CODEX_HOME}/auth.json`)).toBe(false)
+      expect(files.get(`${CODEX_HOME}/auth.json`)).toBe(CODEX_AUTH)
     })
 
     it('disables a Codex account when reconnect selects a different workspace on the same email', async () => {
@@ -456,7 +610,12 @@ describe('ProviderAccountEnrolmentService', () => {
         run: runner.run,
         codexMaintenance: maintenance,
       })
-      await subject.enrol({
+      repository.create({
+        id: ACCOUNT_ID,
+        label: 'Legacy',
+        authKind: 'subscription-oauth',
+        configDir: CODEX_HOME,
+        credentialDir: CODEX_HOME,
         email: 'someone@example.com',
         providerId: 'codex',
         executionHostId: 'little-monster',

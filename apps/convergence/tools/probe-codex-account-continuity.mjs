@@ -2,7 +2,14 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtemp, mkdir, readFile, symlink, writeFile } from 'node:fs/promises'
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  symlink,
+  writeFile,
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -221,7 +228,39 @@ try {
     logLevel: 'warning',
   })
   const { CodexServerHostRegistry } = await import(pathToFileURL(bundle).href)
-  if (captureInput) fixture = await startContinuityFixture()
+  if (captureInput)
+    fixture = await startContinuityFixture({
+      onRequest: async (capture) => {
+        const locks = join(root, 'shared-codex', 'thread-writer-locks')
+        const names = await readdir(locks)
+        const locked = JSON.parse(
+          execFileSync(
+            'python3',
+            [
+              '-c',
+              [
+                'import os, sys, json, fcntl',
+                'results=[]',
+                'for name in os.listdir(sys.argv[1]):',
+                ' p=os.path.join(sys.argv[1],name)',
+                ' if not os.path.isfile(p): continue',
+                ' f=open(p,"r+")',
+                ' try:',
+                '  fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)',
+                '  busy=False',
+                ' except BlockingIOError: busy=True',
+                ' results.append({"name":name,"held":busy})',
+                ' f.close()',
+                'print(json.dumps(results))',
+              ].join('\n'),
+              locks,
+            ],
+            { encoding: 'utf8' },
+          ),
+        )
+        capture.writerLocks = { names, locked }
+      },
+    })
   const fixtureHome = join(root, 'user-home')
   await mkdir(fixtureHome)
   const homes = ['account-a', 'account-b'].map((name) => join(root, name))
@@ -235,8 +274,13 @@ try {
       `cli_auth_credentials_store = "file"\n${fixtureConfig}[analytics]\nenabled = false\n`,
     )
   }
-  await mkdir(join(homes[0], 'sessions'))
-  await symlink(join(homes[0], 'sessions'), join(homes[1], 'sessions'))
+  const shared = join(root, 'shared-codex')
+  for (const name of ['sessions', 'archived_sessions', 'thread-writer-locks']) {
+    await mkdir(join(shared, name), { recursive: true })
+    for (const home of homes)
+      await symlink(join(shared, name), join(home, name))
+  }
+  evidence.sharedLayout = shared
   const registryOptions = {
     cwd: root,
     appVersion: 'account-continuity-probe',
@@ -276,8 +320,8 @@ try {
   const [hostA, hostB] = homes.map((configDir) =>
     registry.get({ account: { configDir } }),
   )
-  const controlA = await connect(hostA)
-  const controlB = await connect(hostB)
+  let controlA = await connect(hostA)
+  let controlB = await connect(hostB)
   for (const control of [controlA, controlB]) {
     const auth = await request(control, 'account/read', { refreshToken: false })
     assert.equal(auth.account, null, 'Fixture unexpectedly has an account')
@@ -314,6 +358,14 @@ try {
     controlA,
     'thread/loaded/list',
   )
+  controlA.close()
+  await registry.prepareThreadHandoff({
+    account: { configDir: homes[0] },
+    threadId: id,
+    accountLabel: 'Source A',
+  })
+  await exits[0]
+  evidence.observations.sourceAReleasedWriter = true
   const b = await connect(hostB)
   const resumedB = await request(b, 'thread/resume', { threadId: id, ...start })
   assert.equal(resumedB.thread.id, id)
@@ -326,7 +378,17 @@ try {
     controlB,
     'thread/loaded/list',
   )
+  controlB.close()
+  await registry.prepareThreadHandoff({
+    account: { configDir: homes[1] },
+    threadId: id,
+    accountLabel: 'Source B',
+  })
+  await exits[1]
+  evidence.observations.sourceBReleasedWriter = true
   const back = await connect(hostA)
+  controlA = await connect(hostA)
+  controlB = await connect(hostB)
   const resumedA = await request(back, 'thread/resume', {
     threadId: id,
     ...start,
@@ -352,26 +414,17 @@ try {
     markerA: rollout.includes(markerA),
     markerB: rollout.includes(markerB),
   }
-  evidence.observations.bothServersSurvived =
-    children.length === 2 &&
-    children.every(
-      (child) => child.exitCode === null && child.signalCode === null,
-    )
-  assert(
-    evidence.observations.bothServersSurvived,
-    'A server unexpectedly exited before the resident return',
-  )
   assert(
     evidence.observations.loadedAAfterRelease.data.includes(id),
-    'A evicted the thread instead of retaining it',
+    'A did not retain the loaded writer after unsubscribe',
   )
   assert(
     evidence.observations.loadedBAfterRelease.data.includes(id),
-    'B evicted the thread instead of retaining it',
+    'B did not retain the loaded writer after unsubscribe',
   )
   assert(
-    evidence.observations.loadedAOnReturn.data.includes(sibling.thread.id),
-    'The synthetic sibling was unexpectedly unloaded',
+    !evidence.observations.loadedAOnReturn.data.includes(sibling.thread.id),
+    'Source restart did not unload the idle sibling',
   )
   if (fixture) {
     await append(back, id, 'SYNTHETIC_RETURN_TO_RESIDENT_A')
@@ -390,6 +443,10 @@ try {
       carriesB.user && carriesB.assistant
         ? 'fresh-outbound-context'
         : 'stale-outbound-context'
+    assert(
+      carriesB.user && carriesB.assistant,
+      'Source restart handoff lost B context',
+    )
 
     const malformed = await request(controlB, 'thread/start', start)
     assert.equal(malformed.modelProvider, 'continuity_fixture')
@@ -413,12 +470,14 @@ try {
     // Only the probe's A server stops; B and all real app servers are untouched.
     await release(back, id)
     controlA.close()
-    hostA.stop()
-    await exits[0]
-    const coldRegistry = new CodexServerHostRegistry(registryOptions)
-    registries.push(coldRegistry)
-    coldRegistry.setBinary(binary, version)
-    const coldHost = coldRegistry.get({ account: { configDir: homes[0] } })
+    await registry.prepareThreadHandoff({
+      account: { configDir: homes[0] },
+      threadId: id,
+      accountLabel: 'Fixture A',
+    })
+    await exits[2]
+    evidence.observations.restartSeam = 'prepareThreadHandoff/withStoppedServer'
+    const coldHost = hostA
     const cold = await connect(coldHost)
     const resumedCold = await request(cold, 'thread/resume', {
       threadId: id,
@@ -471,6 +530,27 @@ try {
       'Cannot judge full input when a request refers to server-side prior context',
     )
   } else {
+    await release(back, id)
+    controlA.close()
+    await registry.prepareThreadHandoff({
+      account: { configDir: homes[0] },
+      threadId: id,
+      accountLabel: 'Fixture A',
+    })
+    await exits[0]
+    const cold = await connect(hostA)
+    const resumed = await request(cold, 'thread/resume', {
+      threadId: id,
+      ...start,
+    })
+    assert.equal(resumed.thread.id, id)
+    evidence.observations.restartSeam = 'prepareThreadHandoff/withStoppedServer'
+    evidence.observations.coldRead = await inspect(cold, id, 'cold-a')
+    // Raw injected response items have no turn envelopes, so thread/read
+    // omits them. The disk check is storage evidence only.
+    assert(
+      evidence.observations.disk.markerA && evidence.observations.disk.markerB,
+    )
     evidence.verdict = 'inconclusive-model-context'
   }
   evidence.completed = true

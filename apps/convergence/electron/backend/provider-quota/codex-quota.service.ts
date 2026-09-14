@@ -77,7 +77,7 @@ export class CodexQuotaService {
     }
 
     return this.serverHosts
-      .get({ account })
+      .get({ account, executionHostId: account?.executionHostId })
       .run((rpc) => rpc.request('account/rateLimits/read', {}))
   }
 

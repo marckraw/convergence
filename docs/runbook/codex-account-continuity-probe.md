@@ -19,7 +19,8 @@ the exact binary, CLI and Node versions, repository commit, and source hashes.
 
 This command launches its own temporary Codex servers, not the Electron dev app.
 It uses fresh unauthenticated homes, strips credential environment variables, and
-shares only the synthetic `sessions` directory between those homes. Model requests
+shares synthetic `sessions`, `archived_sessions` and `thread-writer-locks`
+through a third temporary directory. Model requests
 go to an in-process loopback Responses fixture that never proxies traffic. The
 fixture refuses authorization headers, unexpected routes, and unexpected models.
 It emits synthetic text and never executes tools. Existing accounts, conversation
@@ -27,22 +28,21 @@ files, and app processes are not used or stopped.
 
 ## What it checks
 
-1. Complete a synthetic turn on server A; unsubscribe its client.
-2. Resume the same native thread on server B and complete another synthetic turn.
-3. Return to A while both servers remain resident. Compare the outbound input
-   with B's user and assistant items, alongside `thread/read` and the disk log.
+1. Complete synthetic turns on A and an idle sibling. Unsubscribe A.
+2. Read the loaded-thread list inside the source admission gate, then restart
+   the idle source with `prepareThreadHandoff` / `withStoppedServer`. This releases
+   its native writer locks; active source work refuses the handoff.
+3. Resume the same native thread on B and append a turn. Release B's idle source
+   server through the same gate, then resume A and inspect its outbound model
+   input for B's user and assistant items.
 4. Send malformed SSE on a separate fixture thread. The turn must fail explicitly.
-5. Stop only the probe-owned A server, then resume through a fresh A server. This
-   cold control must include both B items, distinguishing stale resident context
-   from a broken fixture or missing history on disk.
-6. Resume the unrelated idle sibling on the fresh server with its original native
-   ID. Its outbound input must retain its earlier user and assistant items.
+5. Restart idle A through the actual maintenance seam, resume the same native ID,
+   and repeat the outbound-input check.
+6. Resume the idle sibling with its original native ID and earlier context.
 
-A separate synthetic thread completes a turn and stays loaded on A until the
-cold-control restart. All A clients are closed before that restart.
-That is a narrow lifecycle check; it does not demonstrate real concurrent agent
-work or authenticated account isolation. The probe asserts seven loopback requests
-and no `previous_response_id` dependence before judging the full outbound input.
+The fixture records native lock filenames and advisory-flock contention while a
+request is in progress. Every live model request remains on loopback; seven
+requests are expected, with no `previous_response_id` dependence.
 
 Without `--capture-input`, the probe injects raw synthetic history without starting
 turns. That mode can inspect storage and residency, but its verdict is explicitly
@@ -58,7 +58,8 @@ retained for review. All probe-owned servers are stopped before the script exits
 Exit zero means the experiment and its controls completed. Read `verdict`:
 
 - `fresh-outbound-context`: returning A included B's user and assistant items.
-- `stale-outbound-context`: returning A omitted at least one of those items.
+- `stale-outbound-context`: returning A omitted at least one of those items;
+  the current handoff probe treats that as a failed assertion.
 - A nonzero exit with `error` means the experiment itself failed; it is not a
   continuity verdict.
 
@@ -68,10 +69,21 @@ B's user and assistant items from its next request. Restarting the isolated A
 server restored both. A readable transcript therefore does not certify that a
 resident runtime has reloaded it.
 
-Do not use the cold control as a product workaround: a resident account server
-can carry other live conversations. A passing synthetic probe would still need
-an authenticated A → B → A canary and concurrent-session verification before
-account switching could be considered validated.
+A second measurement on 0.154.0 established that `thread-writer-locks` holds an
+advisory lock for the **loaded thread's lifetime**, including after unsubscribe.
+Sharing locks made B refuse a resume while A still held the writer. An idle
+source restart releases it. Locks therefore remain shared with the rollouts;
+source and destination admission both participate in a handoff. Never substitute
+private locks or restart a server with active work.
+
+`tools/probe-codex-lost-ack-stop.mjs` checks Stop after an intentionally dropped
+acknowledgement. A loopback response is held, the only subscriber closes, and a
+new unsubscribed control connection reads the runtime. On 0.154.0 it reports
+`active`; `thread/turns/list` identifies the running turn by `items[].clientId`.
+An interrupt naming that exact turn succeeds and the runtime becomes `idle`.
+This permits reconciliation followed by an interrupt for **explicit Stop**.
+Connection failures alone retain a possibly-live marker instead of killing work.
+Run it with the same Node runtime and `CVG_CODEX_BINARY` selection as above.
 
 ## Authenticated continuity canary
 
@@ -84,8 +96,9 @@ Under `CVG_CANARY_PROFILES`, prepare `account-a` and `account-b` as owner-only
 directories. Each needs its own `auth.json`, produced by a user-run
 `codex login` with that profile's `CODEX_HOME`. Configure
 `cli_auth_credentials_store = "file"` in each profile's `config.toml`.
-Both profiles' `sessions` entries must point to the same fresh test-only
-directory. Nothing else is shared. Select two different ChatGPT accounts;
+Both profiles must link `sessions`, `archived_sessions` and `thread-writer-locks`
+into a third test-only directory within the profiles root. Credentials and
+configuration remain private. Select two different ChatGPT accounts;
 the canary refuses identical account IDs.
 
 Run with the repository's Node version and an explicitly selected Codex binary:
@@ -113,10 +126,11 @@ profile's encoded ID-token claims and records only identity fingerprints.
 This verifies configured authentication, not a billing receipt.
 
 Random nonces are supplied only through controlled dynamic-tool responses.
-B must recall the value learned on A. After restarting only the idle,
-canary-owned A server, A must recall both values on the same native thread ID.
-A separate B turn remains blocked on a controlled tool throughout the restart,
-and an idle sibling on A must retain its earlier nonce after resuming.
+B must recall the value learned on A after the source's idle restart. A separate
+B turn remains blocked on a controlled tool while a return to A is attempted:
+that attempt must refuse `source-busy` and leave B's work running. Once B settles,
+its idle source server can release the writer and A must recall both values on
+the same native thread ID. An idle A sibling retains its earlier nonce too.
 No shell, file, browser, or agent tools are approved by the canary.
 
 The temporary `result.json` records the six turn outcomes, native IDs, recall

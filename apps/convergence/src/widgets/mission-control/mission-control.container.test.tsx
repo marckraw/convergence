@@ -240,7 +240,7 @@ describe('MissionControl', () => {
     useAppSettingsStore.setState((state) => ({
       settings: { ...state.settings, executionHostEndpoints: [] },
     }))
-    sendMessageToSession = vi.fn<SendMessage>(async () => undefined)
+    sendMessageToSession = vi.fn<SendMessage>(async () => true)
     getAllSummaries = vi.fn(async () => [])
     listCrews = vi.fn(async () => [])
     listHops = vi.fn(async () => [])

@@ -6,6 +6,7 @@ export {
   buildProviderAccountPickerItems,
   buildProviderAccountSettingsRows,
   describeProviderAccountIdentity,
+  describeAccountHandoffRefusal,
   describeProviderAccountStatus,
   describeSelectedProviderAccount,
   isProviderAccountSelectable,
@@ -22,6 +23,7 @@ export type {
 } from './provider-account.pure'
 export type {
   ProviderAccount,
+  ProviderAccountEnrollmentProvider,
   ProviderAccountConnector,
   ProviderAccountConnectors,
   ProviderAccountAttestationOutcome,

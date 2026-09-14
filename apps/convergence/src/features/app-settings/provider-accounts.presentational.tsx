@@ -1,12 +1,14 @@
-import { KeyRound, Pencil, Plug, RefreshCw, Star, Trash2 } from 'lucide-react'
+import { Pencil, Plug, RefreshCw, Star, Trash2 } from 'lucide-react'
 import type {
   ProviderAccountConnectors,
+  ProviderAccountEnrollmentProvider,
   ProviderAccountSettingsRow,
   ProviderAccountSettingsWarning,
 } from '@/entities/provider-account'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
+import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 
 const STATUS_TONE: Record<
   ProviderAccountSettingsRow['status']['tone'],
@@ -20,12 +22,13 @@ const STATUS_TONE: Record<
 }
 
 export interface ProviderAccountsFieldsProps {
+  providerId: ProviderAccountEnrollmentProvider
   rows: ProviderAccountSettingsRow[]
   settingsWarnings: ProviderAccountSettingsWarning[]
   lastCheckedAt: string | null
   claudeVersion: string | null
   isLoading: boolean
-  /** The id of the account a slow action is running against, if any. */
+  /** The active account action; any value locks the other credential actions. */
   busyAccountId: string | null
   isEnrolling: boolean
   enrolEmail: string
@@ -40,6 +43,7 @@ export interface ProviderAccountsFieldsProps {
   authorizingServerName: string | null
   message: string | null
   error: string | null
+  onProviderChange: (providerId: ProviderAccountEnrollmentProvider) => void
   onEnrolEmailChange: (value: string) => void
   onEnrolLabelChange: (value: string) => void
   onEnrol: () => void
@@ -66,6 +70,7 @@ function formatCheckedAt(value: string | null): string {
 }
 
 export function ProviderAccountsFields({
+  providerId,
   rows,
   settingsWarnings,
   lastCheckedAt,
@@ -84,6 +89,7 @@ export function ProviderAccountsFields({
   authorizingServerName,
   message,
   error,
+  onProviderChange,
   onEnrolEmailChange,
   onEnrolLabelChange,
   onEnrol,
@@ -100,8 +106,36 @@ export function ProviderAccountsFields({
   onToggleConnectors,
   onAuthorizeConnector,
 }: ProviderAccountsFieldsProps) {
+  const isCodex = providerId === 'codex'
+  const providerName = isCodex ? 'OpenAI' : 'Anthropic'
+  const agentName = isCodex ? 'Codex' : 'Claude Code'
+  const actionPending =
+    isEnrolling || busyAccountId !== null || authorizingServerName !== null
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 [&_button]:min-h-10">
+      <div role="group" aria-label="Account provider" className="flex gap-2">
+        {(
+          [
+            { id: 'claude-code', label: 'Anthropic' },
+            { id: 'codex', label: 'OpenAI' },
+          ] as const
+        ).map((provider) => (
+          <Button
+            key={provider.id}
+            type="button"
+            variant={providerId === provider.id ? 'secondary' : 'ghost'}
+            className="min-h-10 flex-1 gap-2"
+            aria-pressed={providerId === provider.id}
+            disabled={actionPending || isLoadingConnectors}
+            onClick={() => onProviderChange(provider.id)}
+          >
+            <ProviderIcon providerId={provider.id} title="" />
+            {provider.label}
+          </Button>
+        ))}
+      </div>
+
       {settingsWarnings.length > 0 ? (
         <div
           role="alert"
@@ -127,14 +161,13 @@ export function ProviderAccountsFields({
         </p>
       ) : rows.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border px-4 py-5 text-sm leading-relaxed text-muted-foreground">
-          No accounts enrolled. Convergence uses the Claude Code login this
-          machine already had. Enrol another below to pick between them in the
-          composer.
+          No {providerName} accounts enrolled. Convergence uses the {agentName}{' '}
+          login already on this Mac. Connect an account below to manage it here.
         </p>
       ) : (
         <div className="space-y-3">
           {rows.map((row) => {
-            const isBusy = busyAccountId === row.id
+            const isBusy = actionPending
             const isRenaming = renamingAccountId === row.id
             const isConfirmingRemoval = confirmingRemovalAccountId === row.id
             const showsConnectors = expandedConnectorsAccountId === row.id
@@ -147,8 +180,10 @@ export function ProviderAccountsFields({
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <KeyRound className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <h4 className="text-sm font-semibold">{row.identity}</h4>
+                      <ProviderIcon providerId={providerId} />
+                      <h4 className="break-all text-sm font-semibold">
+                        {row.identity}
+                      </h4>
                       {row.isDefault ? (
                         <span className="rounded border border-border bg-muted/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none text-muted-foreground">
                           default
@@ -166,8 +201,8 @@ export function ProviderAccountsFields({
                     <p className="text-xs text-muted-foreground">
                       {row.showsLabel ? `${row.label} · ` : ''}
                       {row.organization
-                        ? `Organization ${row.organization}`
-                        : 'Organization unknown'}
+                        ? `${isCodex ? 'Workspace' : 'Organization'} ${row.organization}`
+                        : `${isCodex ? 'Workspace' : 'Organization'} unknown`}
                       {row.plan ? ` · ${row.plan}` : ''}
                     </p>
                   </div>
@@ -193,16 +228,19 @@ export function ProviderAccountsFields({
                       <Star className="mr-1.5 h-3.5 w-3.5" />
                       Set default
                     </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      aria-expanded={showsConnectors}
-                      onClick={() => onToggleConnectors(row.id)}
-                    >
-                      <Plug className="mr-1.5 h-3.5 w-3.5" />
-                      Connectors
-                    </Button>
+                    {!isCodex ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        aria-expanded={showsConnectors}
+                        disabled={isBusy || isLoadingConnectors}
+                        onClick={() => onToggleConnectors(row.id)}
+                      >
+                        <Plug className="mr-1.5 h-3.5 w-3.5" />
+                        Connectors
+                      </Button>
+                    ) : null}
                     <Button
                       type="button"
                       variant="ghost"
@@ -251,9 +289,9 @@ export function ProviderAccountsFields({
 
                 {isConfirmingRemoval ? (
                   <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm leading-relaxed text-destructive">
-                    This signs the account out of Claude Code and deletes its
-                    directories. Conversations stay — they are shared — but this
-                    account has to be enrolled again to serve turns.
+                    {isCodex
+                      ? 'This signs the account out of Codex and removes its local account directory. Shared native history and Convergence messages remain. Any history stored only in this account directory, including migration backups, is removed.'
+                      : 'This signs the account out of Claude Code and deletes its directories. Conversations stay — they are shared — but this account has to be enrolled again to serve turns.'}
                   </p>
                 ) : null}
 
@@ -288,7 +326,7 @@ export function ProviderAccountsFields({
                   </div>
                 ) : null}
 
-                {showsConnectors ? (
+                {!isCodex && showsConnectors ? (
                   <div className="space-y-2 rounded-lg border border-border/70 bg-card/40 px-3 py-3">
                     <p className="text-xs leading-relaxed text-muted-foreground">
                       MCP tokens are stored per account, so each account
@@ -363,38 +401,44 @@ export function ProviderAccountsFields({
 
       <section className="space-y-3 rounded-xl border border-border bg-card/45 px-4 py-4">
         <div className="space-y-1">
-          <h4 className="text-sm font-semibold">Enrol an account</h4>
+          <h4 className="text-sm font-semibold">
+            Connect an {providerName} account
+          </h4>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Claude Code opens a browser to sign in. The email prefills the login
-            page, which is the only way to tell which session you are about to
-            authorise when the browser holds several.
+            {isCodex
+              ? 'Codex opens a browser. Choose the OpenAI account and workspace you want to use; its signed-in identity and plan appear here after login.'
+              : 'Claude Code opens a browser to sign in. The email prefills the login page so you can identify the account you are authorising.'}
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <Input
-            aria-label="Account email"
-            type="email"
-            autoComplete="off"
-            placeholder="you@example.com"
-            value={enrolEmail}
-            disabled={isEnrolling}
-            className="min-w-0 flex-1"
-            onChange={(event) => onEnrolEmailChange(event.target.value)}
-          />
+          {!isCodex ? (
+            <Input
+              aria-label="Account email"
+              type="email"
+              autoComplete="off"
+              placeholder="you@example.com"
+              value={enrolEmail}
+              disabled={actionPending}
+              className="min-w-0 flex-1"
+              onChange={(event) => onEnrolEmailChange(event.target.value)}
+            />
+          ) : null}
           <Input
             aria-label="Account label (optional)"
             placeholder="Label (optional)"
             value={enrolLabel}
-            disabled={isEnrolling}
+            disabled={actionPending}
             className="min-w-0 flex-1"
             onChange={(event) => onEnrolLabelChange(event.target.value)}
           />
           <Button
             type="button"
-            disabled={isEnrolling || enrolEmail.trim().length === 0}
+            disabled={
+              actionPending || (!isCodex && enrolEmail.trim().length === 0)
+            }
             onClick={onEnrol}
           >
-            {isEnrolling ? 'Waiting for browser...' : 'Enrol'}
+            {isEnrolling ? 'Waiting for browser...' : `Connect ${providerName}`}
           </Button>
         </div>
       </section>
@@ -408,7 +452,7 @@ export function ProviderAccountsFields({
           type="button"
           variant="ghost"
           size="sm"
-          disabled={isLoading || busyAccountId !== null}
+          disabled={isLoading || actionPending}
           onClick={onCheckHealth}
         >
           <RefreshCw className="mr-1.5 h-3.5 w-3.5" />

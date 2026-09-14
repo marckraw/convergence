@@ -4,6 +4,7 @@ import type {
   ProviderAccount,
   ProviderAccountHealth,
 } from '@/entities/provider-account'
+import { useDialogStore } from '@/entities/dialog'
 import { ProviderAccountsContainer } from './provider-accounts.container'
 
 function account(overrides: Partial<ProviderAccount> = {}): ProviderAccount {
@@ -57,6 +58,7 @@ const providerAccounts = {
 describe('ProviderAccountsContainer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useDialogStore.getState().close()
     providerAccounts.list.mockResolvedValue([account()])
     providerAccounts.health.mockResolvedValue(health())
     providerAccounts.listConnectors.mockResolvedValue({
@@ -92,6 +94,163 @@ describe('ProviderAccountsContainer', () => {
     expect(screen.getByText(/Organization org-a/)).toBeInTheDocument()
   })
 
+  it('separates OpenAI accounts and hides Claude-only connector actions', async () => {
+    providerAccounts.list.mockResolvedValue([
+      account(),
+      account({
+        id: 'codex-a',
+        providerId: 'codex',
+        email: 'openai@example.com',
+        plan: 'team',
+      }),
+    ])
+    render(<ProviderAccountsContainer />)
+    await screen.findByText('a@example.com')
+    expect(screen.queryByText('openai@example.com')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+    expect(screen.getByText('openai@example.com')).toBeInTheDocument()
+    expect(screen.getByText(/Workspace org-a · team/)).toBeInTheDocument()
+    expect(screen.queryByText('a@example.com')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Connectors' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Account email')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'OpenAI' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Anthropic' }))
+    expect(
+      screen.getByRole('button', { name: 'Connectors' }),
+    ).toBeInTheDocument()
+  })
+
+  it('enrols OpenAI without an email hint and displays the returned identity', async () => {
+    providerAccounts.enrol.mockResolvedValue({
+      account: account({
+        id: 'codex-a',
+        providerId: 'codex',
+        email: 'signed-in@example.com',
+      }),
+      warnings: [],
+    })
+    render(<ProviderAccountsContainer />)
+    await screen.findByText('a@example.com')
+    fireEvent.change(screen.getByLabelText('Account email'), {
+      target: { value: 'claude@example.com' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+    fireEvent.change(screen.getByLabelText('Account label (optional)'), {
+      target: { value: ' Work ' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Connect OpenAI' }))
+
+    await waitFor(() =>
+      expect(providerAccounts.enrol).toHaveBeenCalledWith({
+        providerId: 'codex',
+        email: '',
+        label: 'Work',
+      }),
+    )
+    expect(
+      await screen.findByText('Enrolled signed-in@example.com.'),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps the provider and other credential actions locked during browser login', async () => {
+    let finishLogin!: (value: unknown) => void
+    providerAccounts.enrol.mockReturnValue(
+      new Promise((resolve) => {
+        finishLogin = resolve
+      }),
+    )
+    providerAccounts.list.mockResolvedValue([
+      account({ id: 'codex-a', providerId: 'codex' }),
+    ])
+    render(<ProviderAccountsContainer />)
+    await screen.findByText(/No Anthropic accounts enrolled/)
+    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Connect OpenAI' }))
+
+    expect(
+      screen.getByRole('button', { name: 'Waiting for browser...' }),
+    ).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Anthropic' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Reconnect' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled()
+    finishLogin({ account: account({ providerId: 'codex' }), warnings: [] })
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Anthropic' })).toBeEnabled(),
+    )
+  })
+
+  it('does not show Claude credential overrides as an OpenAI health warning', async () => {
+    providerAccounts.health.mockResolvedValue(
+      health({
+        settingsWarnings: [
+          {
+            kind: 'credential-env-key',
+            key: 'ANTHROPIC_API_KEY',
+            message: 'Shared settings export ANTHROPIC_API_KEY.',
+          },
+        ],
+      }),
+    )
+    render(<ProviderAccountsContainer />)
+    await screen.findByText(/Shared settings export ANTHROPIC_API_KEY/)
+    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+    expect(
+      screen.queryByText(/Shared settings export ANTHROPIC_API_KEY/),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/Claude Code 2.1.220/)).not.toBeInTheDocument()
+  })
+
+  it('shows a failed OpenAI login without claiming that an account was connected', async () => {
+    providerAccounts.enrol.mockRejectedValue(
+      new Error('Login completed but the Codex home reported no identity.'),
+    )
+    render(<ProviderAccountsContainer />)
+    await screen.findByText('a@example.com')
+    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+    expect(
+      screen.getByText(
+        'No OpenAI accounts enrolled. Convergence uses the Codex login already on this Mac. Connect an account below to manage it here.',
+      ),
+    ).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Account label (optional)'), {
+      target: { value: 'Unverified OpenAI account' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Connect OpenAI' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Codex home reported no identity',
+    )
+    expect(screen.getByRole('button', { name: 'Connect OpenAI' })).toBeEnabled()
+    expect(screen.queryByText(/^Enrolled/)).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Unverified OpenAI account' }),
+    ).not.toBeInTheDocument()
+    expect(providerAccounts.list).toHaveBeenCalledTimes(1)
+  })
+
+  it('explains the current Codex history ownership before removing an OpenAI account', async () => {
+    providerAccounts.list.mockResolvedValue([account({ providerId: 'codex' })])
+    render(<ProviderAccountsContainer />)
+    await screen.findByText(/No Anthropic accounts enrolled/)
+    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(
+      screen.getByText(
+        'This signs the account out of Codex and removes its local account directory. Shared native history and Convergence messages remain. Any history stored only in this account directory, including migration backups, is removed.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(/Conversations stay — they are shared/),
+    ).not.toBeInTheDocument()
+    expect(providerAccounts.remove).not.toHaveBeenCalled()
+  })
+
   it('enrols through the surface instead of the developer console', async () => {
     providerAccounts.enrol.mockResolvedValue({
       account: account({ id: 'acct-b', email: 'b@example.com' }),
@@ -107,10 +266,11 @@ describe('ProviderAccountsContainer', () => {
     fireEvent.change(screen.getByLabelText('Account label (optional)'), {
       target: { value: 'Work' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Enrol' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Anthropic' }))
 
     await waitFor(() =>
       expect(providerAccounts.enrol).toHaveBeenCalledWith({
+        providerId: 'claude-code',
         email: 'b@example.com',
         label: 'Work',
       }),
@@ -138,7 +298,7 @@ describe('ProviderAccountsContainer', () => {
     fireEvent.change(screen.getByLabelText('Account email'), {
       target: { value: 'b@example.com' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Enrol' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Anthropic' }))
 
     expect(
       await screen.findByText(/shared settings can still outrank it/),
@@ -192,6 +352,44 @@ describe('ProviderAccountsContainer', () => {
       await screen.findByText(/now reports b@example.com/),
     ).toBeInTheDocument()
   })
+
+  it.each(['connected', 'unavailable'] as const)(
+    'reloads the recorded %s state after a refused OpenAI reconnect',
+    async (status) => {
+      const codexAccount = account({ providerId: 'codex' })
+      providerAccounts.list
+        .mockResolvedValueOnce([codexAccount])
+        .mockResolvedValue([{ ...codexAccount, status }])
+      providerAccounts.reconnect.mockRejectedValue(
+        new Error(
+          status === 'unavailable'
+            ? 'The foreign login was discarded.'
+            : 'This account still has active work.',
+        ),
+      )
+
+      render(<ProviderAccountsContainer />)
+      await screen.findByText(/No Anthropic accounts enrolled/)
+      fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+      expect(screen.getByText('Connected')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }))
+
+      await screen.findByRole('alert')
+      await waitFor(() =>
+        expect(providerAccounts.list).toHaveBeenCalledTimes(2),
+      )
+      expect(
+        screen.getByText(status === 'unavailable' ? 'Disabled' : 'Connected'),
+      ).toBeInTheDocument()
+      if (status === 'unavailable') {
+        expect(screen.queryByText('Connected')).not.toBeInTheDocument()
+        expect(
+          screen.getByRole('button', { name: 'Set default' }),
+        ).toBeDisabled()
+      }
+      expect(screen.queryByText('Reconnected.')).not.toBeInTheDocument()
+    },
+  )
 
   it('shows the health verdicts the attestation net collects', async () => {
     providerAccounts.list.mockResolvedValue([
@@ -247,7 +445,9 @@ describe('ProviderAccountsContainer', () => {
     render(<ProviderAccountsContainer />)
 
     expect(await screen.findByText(/bridge missing/)).toBeInTheDocument()
-    expect(screen.getByText(/No accounts enrolled/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/No Anthropic accounts enrolled/),
+    ).toBeInTheDocument()
   })
 
   describe('connectors', () => {
@@ -346,4 +546,20 @@ describe('ProviderAccountsContainer', () => {
       ).toBeInTheDocument()
     })
   })
+})
+
+it('opens the OpenAI tab directly from the composer account action', async () => {
+  providerAccounts.list.mockResolvedValue([
+    account({ providerId: 'codex', email: 'openai@example.com' }),
+  ])
+  useDialogStore.getState().open('app-settings', {
+    appSettingsSection: 'provider-accounts',
+    providerAccountProviderId: 'codex',
+  })
+  render(<ProviderAccountsContainer />)
+  expect(await screen.findByText('openai@example.com')).toBeInTheDocument()
+  expect(
+    screen.getByRole('button', { name: 'Connect OpenAI' }),
+  ).toBeInTheDocument()
+  useDialogStore.getState().close()
 })

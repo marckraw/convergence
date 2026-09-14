@@ -18,6 +18,7 @@
 export type ProviderAccountSettingsWarningKind =
   | 'api-key-helper'
   | 'credential-env-key'
+  | 'native-history-layout'
 
 export interface ProviderAccountSettingsWarning {
   kind: ProviderAccountSettingsWarningKind

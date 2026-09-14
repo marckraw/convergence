@@ -5,6 +5,7 @@ import {
   buildProviderAccountPickerItems,
   buildProviderAccountSettingsRows,
   describeProviderAccountIdentity,
+  describeAccountHandoffRefusal,
   describeProviderAccountStatus,
   describeSelectedProviderAccount,
   isProviderAccountSelectable,
@@ -20,6 +21,26 @@ import type {
   ProviderAccountAttestationResult,
   ProviderAccountHealth,
 } from './provider-account.types'
+
+it.each([
+  ['source-busy', 'Source account busy'],
+  ['busy', 'Selected account busy'],
+  ['missing-thread', 'Conversation history unavailable'],
+  ['not-eligible', 'Conversation not ready to switch'],
+  ['layout', 'Account history needs attention'],
+] as const)('explains refusal stage %s', (stage, label) => {
+  expect(describeAccountHandoffRefusal(stage)).toBe(label)
+})
+
+it('marks ambient as the current source without offering it as a destination', () => {
+  expect(
+    buildProviderAccountPickerItems([], { ambientIsCurrent: true })[0],
+  ).toMatchObject({
+    label: 'Current CLI login',
+    badge: { label: 'current' },
+    disabled: true,
+  })
+})
 
 function account(overrides: Partial<ProviderAccount> = {}): ProviderAccount {
   return {
@@ -548,5 +569,34 @@ describe('providerAccountsForProvider', () => {
   it('offers nothing when no provider is chosen yet', () => {
     expect(providerAccountsForProvider([account()], null)).toEqual([])
     expect(providerAccountsForProvider([account()], '')).toEqual([])
+  })
+})
+
+it('shows native-history migration warnings on the account row', () => {
+  const rows = buildProviderAccountSettingsRows(
+    [account({ providerId: 'codex' })],
+    health({
+      accounts: [
+        result({
+          nativeHistoryWarnings: [
+            'History is private; reconnect to enable switching.',
+          ],
+        }),
+      ],
+    }),
+  )
+  expect(rows[0].notes).toContain(
+    'History is private; reconnect to enable switching.',
+  )
+})
+
+it('describes Codex ambient credentials and disables switching back to them', () => {
+  const items = buildProviderAccountPickerItems([], {
+    providerName: 'Codex',
+    ambientDisabledReason: 'Choose an enrolled account.',
+  })
+  expect(items[0]).toMatchObject({
+    disabled: true,
+    description: 'Choose an enrolled account.',
   })
 })

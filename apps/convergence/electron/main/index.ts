@@ -1,3 +1,4 @@
+import { CodexAccountHistoryService } from '../backend/provider-account/provider-account-codex-history.service'
 import { CrewImportService } from '../backend/crew/crew-import.service'
 import { registerCrewImportIpc } from '../backend/crew/crew-import.ipc'
 import { CrewExportService } from '../backend/crew/crew-export.service'
@@ -11,6 +12,8 @@ import {
   shell,
 } from 'electron'
 import { existsSync } from 'fs'
+import { homedir } from 'os'
+import { resolveCodexAccountHandoffSource } from '../backend/provider-account/provider-account-resolution.pure'
 import { join } from 'path'
 import { getDatabase } from '../backend/database/database'
 import { ProjectService } from '../backend/project/project.service'
@@ -356,9 +359,11 @@ async function startApp(): Promise<void> {
         ),
     },
   })
+  const codexAccountHistory = new CodexAccountHistoryService()
   const providerAccountAttestationService =
     new ProviderAccountAttestationService({
       repository: providerAccountRepository,
+      codexHistory: codexAccountHistory,
     })
   /**
    * Resolves a recorded account id to the directories that decide which
@@ -427,6 +432,13 @@ async function startApp(): Promise<void> {
             taskProgressService,
             debugSink,
             resolveCodexAccountForSession,
+            codexAccountHistory,
+            (accountId) =>
+              resolveCodexAccountHandoffSource({
+                accountId,
+                account: providerAccountRepository.get(accountId),
+                homeDir: homedir(),
+              }),
           ),
         )
         // The version gates the resident server: an older codex-cli is refused

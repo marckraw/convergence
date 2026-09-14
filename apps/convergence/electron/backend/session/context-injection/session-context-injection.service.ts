@@ -14,11 +14,13 @@ export interface PrepareBootContextInput {
   session: Session
   originalText: string
   contextItemIds?: string[]
+  deferAttachment?: boolean
 }
 
 export interface PreparedBootContext {
   augmentedText: string
   noteDraft: ConversationItemDraft | null
+  commit?: () => void
 }
 
 export interface PrepareUserTurnContextInput {
@@ -37,16 +39,32 @@ export class SessionContextInjectionService {
       return { augmentedText: input.originalText, noteDraft: null }
     }
 
-    if (input.contextItemIds !== undefined) {
-      this.projectContext.attachToSession(
-        input.session.id,
-        input.contextItemIds,
-      )
-    }
-
-    const items = this.projectContext.listForSession(input.session.id)
+    const contextItemIds = input.contextItemIds
+    const commit =
+      contextItemIds === undefined
+        ? undefined
+        : () => {
+            this.projectContext.attachToSession(
+              input.session.id,
+              contextItemIds,
+            )
+          }
+    if (!input.deferAttachment) commit?.()
+    const items =
+      input.deferAttachment && input.contextItemIds !== undefined
+        ? input.contextItemIds.map((id) => {
+            const item = this.projectContext.getById(id)
+            if (!item) throw new Error(`Project context item not found: ${id}`)
+            return item
+          })
+        : this.projectContext.listForSession(input.session.id)
+    const deferredCommit = input.deferAttachment ? commit : undefined
     if (items.length === 0) {
-      return { augmentedText: input.originalText, noteDraft: null }
+      return {
+        augmentedText: input.originalText,
+        noteDraft: null,
+        commit: deferredCommit,
+      }
     }
 
     const result = serializeBootBlock({
@@ -57,6 +75,7 @@ export class SessionContextInjectionService {
 
     return {
       augmentedText: result.augmentedText,
+      commit: deferredCommit,
       noteDraft: result.note ? this.createBootContextNote(result.note) : null,
     }
   }

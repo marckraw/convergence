@@ -12,6 +12,8 @@ import { GitService } from '../backend/git/git.service'
 import { PullRequestService } from '../backend/pull-request/pull-request.service'
 import { SessionAppService } from '../backend/app-api/session-app.service'
 import { SessionService } from '../backend/session/session.service'
+import { HandoffRefusedError } from '../backend/provider/provider-account-handoff.pure'
+import type { SessionSendResult } from '../../src/shared/types/session-send.types'
 import type { TurnCaptureService } from '../backend/session/turn/turn-capture.service'
 import {
   getRecentSessionIds,
@@ -980,11 +982,22 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     'session:sendMessage',
-    async (_event, id: string, input: SendSessionMessageIpcInput) => {
-      await sessionApp.sendSessionMessage(
-        id,
-        sendSessionMessageInputFromIpc(input),
-      )
+    async (
+      _event,
+      id: string,
+      input: SendSessionMessageIpcInput,
+    ): Promise<SessionSendResult> => {
+      try {
+        await sessionApp.sendSessionMessage(
+          id,
+          sendSessionMessageInputFromIpc(input),
+        )
+        return { accepted: true }
+      } catch (error) {
+        if (error instanceof HandoffRefusedError)
+          return { accepted: false, stage: error.stage, message: error.message }
+        throw error
+      }
     },
   )
 

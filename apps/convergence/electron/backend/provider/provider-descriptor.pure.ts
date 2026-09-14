@@ -475,6 +475,7 @@ const CODEX_FAMILY_CONTEXT_WINDOW_TOKENS = 272_000
  */
 export function buildFallbackCodexDescriptor(): ProviderDescriptor {
   return {
+    accountHandoff: 'settled',
     id: 'codex',
     name: 'Codex',
     vendorLabel: 'OpenAI',

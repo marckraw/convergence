@@ -781,7 +781,7 @@ interface AttachmentIngestFileInput {
   mimeType?: string
 }
 
-interface SendSessionMessageInput {
+export interface SendSessionMessageInput {
   text: string
   attachmentIds?: string[]
   skillSelections?: SkillSelection[]
@@ -1144,6 +1144,7 @@ interface RemoteProjectCatalogData {
 }
 
 interface ProviderInfo {
+  accountHandoff?: 'settled'
   supportsLiveModelSelection?: boolean
   id: string
   name: string
@@ -1324,7 +1325,7 @@ interface ProviderAccountData {
 }
 
 interface ProviderAccountSettingsWarningData {
-  kind: 'api-key-helper' | 'credential-env-key'
+  kind: 'api-key-helper' | 'credential-env-key' | 'native-history-layout'
   key: string
   message: string
 }
@@ -1343,6 +1344,7 @@ interface ProviderAccountAttestationResultData {
   detail: string | null
   unknownEntries: string[]
   missingLinks: string[]
+  nativeHistoryWarnings?: string[]
 }
 
 interface ProviderAccountHealthData {
@@ -1852,7 +1854,7 @@ interface ElectronAPI {
     sendMessage: (
       id: string,
       input: SendSessionMessageInput | string,
-    ) => Promise<void>
+    ) => Promise<import('./session-send.types').SessionSendResult>
     compactContext: (id: string, instructions?: string) => Promise<void>
     approve: (
       id: string,
@@ -1934,6 +1936,7 @@ interface ElectronAPI {
     enrol: (input: {
       email: string
       label?: string | null
+      providerId?: 'claude-code' | 'codex'
     }) => Promise<ProviderAccountEnrolResult>
     reconnect: (accountId: string) => Promise<ProviderAccountData>
     remove: (accountId: string) => Promise<void>

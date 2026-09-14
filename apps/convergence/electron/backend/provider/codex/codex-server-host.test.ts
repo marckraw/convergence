@@ -143,14 +143,19 @@ describe('CodexServerHost', () => {
     const account = { account: accountA }
     const connection = await env.registry.get(account).connect()
     connection.close()
+    let waiting:
+      | Promise<import('./codex-server-host').CodexServerConnection>
+      | undefined
     await env.registry.withStoppedServer(account, async () => {
       env.registry.setBinary('/new/codex', '0.154.0')
-      expect(() => env.registry.get(account)).toThrow(/maintenance/)
+      waiting = env.registry.get(account).connect()
+      await Promise.resolve()
+      expect(env.children).toHaveLength(1)
       await expect(
         env.registry.withStoppedServer(account, async () => {}),
       ).rejects.toThrow(/maintenance/)
     })
-    const next = await env.registry.get(account).connect()
+    const next = await waiting!
     expect(env.spawnArgs[1].binaryPath).toBe('/new/codex')
     next.close()
     env.registry.stopAll()
@@ -226,18 +231,262 @@ describe('CodexServerHost', () => {
       })
     })
     await started
-    await expect(host.connect()).rejects.toThrow(/maintenance/)
-    await expect(
-      host.run(async (rpc) => rpc.request('model/list', {})),
-    ).rejects.toThrow(/maintenance/)
+    const waiting = host.connect()
+    const helper = host.run(async (rpc) => rpc.request('model/list', {}))
+    await Promise.resolve()
     expect(env.children).toHaveLength(1)
     release()
     await maintenance
-    const next = await host.connect()
+    const next = await waiting
+    await helper
     expect(env.children).toHaveLength(2)
     next.close()
     env.registry.stopAll()
   })
+
+  it('fails an arriving connection with the same maintenance failure', async () => {
+    const env = createEnvironment()
+    const host = env.registry.get({ account: accountA })
+    let release!: () => void
+    const maintenance = host.withStoppedServer(async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve
+      })
+      throw new Error('migration failed')
+    })
+    const failed = expect(maintenance).rejects.toThrow('migration failed')
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+    const waiting = expect(host.connect()).rejects.toThrow('migration failed')
+    release()
+    await Promise.all([failed, waiting])
+    expect(env.children).toEqual([])
+    const retry = await host.connect()
+    retry.close()
+    env.registry.stopAll()
+  })
+
+  it.each(['direct', 'registry'] as const)(
+    'a refused %s handoff lets a waiting sibling send on the unchanged server',
+    async (gate) => {
+      const env = createEnvironment({
+        serverOptions: { autoCompleteTurns: false },
+      })
+      const input = { account: accountA }
+      const host = env.registry.get(input)
+      const connection = await host.connect()
+      await connection.rpc.request('thread/resume', { threadId: 'target' })
+      await connection.rpc.request('turn/start', {
+        threadId: 'target',
+        input: [],
+      })
+      const generation = connection.generation
+      connection.close()
+      const handoff =
+        gate === 'direct'
+          ? host.prepareThreadHandoff('target', 'Account A')
+          : env.registry.prepareThreadHandoff({
+              ...input,
+              threadId: 'target',
+              accountLabel: 'Account A',
+            })
+      const refused = expect(handoff).rejects.toMatchObject({ stage: 'busy' })
+      const waiting = host.connect()
+      await refused
+      const sibling = await waiting
+      expect(sibling.generation).toBe(generation)
+      await sibling.rpc.request('thread/resume', { threadId: 'sibling' })
+      await sibling.rpc.request('turn/start', {
+        threadId: 'sibling',
+        input: [],
+      })
+      expect(
+        env.servers[0].requests.filter((r) => r.method === 'turn/start'),
+      ).toHaveLength(2)
+      expect(env.killJournal).toEqual([])
+      sibling.close()
+      env.registry.stopAll()
+    },
+  )
+
+  it('rechecks admission when a second window opens before the waiter wakes', async () => {
+    let releaseFirst!: () => void
+    let releaseSecond!: () => void
+    const first = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const second = new Promise<void>((resolve) => {
+      releaseSecond = resolve
+    })
+    let gate: Promise<void> | undefined = first
+    const server = new FakeCodexServer()
+    const env = createHost({
+      waitForAdmission: () => gate,
+      onSpawn: (child) => {
+        setTimeout(() => child.announceListening('ws://127.0.0.1:5150'), 0)
+      },
+      connectTransport: async () => server.connect(),
+    })
+    const waiting = env.host.connect()
+    gate = second
+    releaseFirst()
+    await first
+    expect(env.children).toHaveLength(0)
+    gate = undefined
+    releaseSecond()
+    const connected = await waiting
+    connected.close()
+    await env.host.stop()
+  })
+
+  it.each(['connection', 'helper', 'warming'] as const)(
+    'refuses a loaded destination held by a %s lease',
+    async (kind) => {
+      const env = createEnvironment()
+      const host = env.registry.get({ account: accountA })
+      const initial = await host.connect()
+      await initial.rpc.request('thread/resume', { threadId: 'target' })
+      initial.close()
+      let release!: () => void
+      let held: import('./codex-server-host').CodexServerConnection | undefined
+      const work =
+        kind === 'helper'
+          ? host.run(async () => {
+              await new Promise<void>((resolve) => {
+                release = resolve
+              })
+            })
+          : host.connect().then((connection) => {
+              held = connection
+            })
+      if (kind === 'helper')
+        await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+      else if (kind === 'connection') await work
+      await expect(
+        host.prepareThreadHandoff('target', 'Account A'),
+      ).rejects.toMatchObject({ stage: 'busy' })
+      expect(env.killJournal).toEqual([])
+      if (kind === 'helper') release()
+      await work
+      held?.close()
+      env.registry.stopAll()
+    },
+  )
+
+  it('refuses a loaded handoff while server-side work outlives its socket', async () => {
+    const env = createEnvironment({
+      serverOptions: { autoCompleteTurns: false },
+    })
+    const host = env.registry.get({ account: accountA })
+    const connection = await host.connect()
+    await connection.rpc.request('thread/resume', { threadId: 'target' })
+    await connection.rpc.request('turn/start', {
+      threadId: 'target',
+      input: [],
+    })
+    connection.close()
+    await expect(
+      host.prepareThreadHandoff('target', 'Account A'),
+    ).rejects.toMatchObject({ stage: 'busy' })
+    expect(env.children).toHaveLength(1)
+    expect(env.killJournal).toEqual([])
+    env.registry.stopAll()
+  })
+
+  it('restarts a loaded idle destination once and lets an arriving sibling use the replacement', async () => {
+    const env = createEnvironment()
+    const host = env.registry.get({ account: accountA })
+    const connection = await host.connect()
+    await connection.rpc.request('thread/resume', { threadId: 'target' })
+    await connection.rpc.request('thread/resume', { threadId: 'sibling' })
+    const generation = connection.generation
+    connection.close()
+    const handoff = host.prepareThreadHandoff('target', 'Account A')
+    const waiting = host.connect()
+    await handoff
+    const next = await waiting
+    expect(next.generation).toBe(generation + 1)
+    expect(env.children).toHaveLength(2)
+    await next.rpc.request('thread/resume', { threadId: 'sibling' })
+    expect(env.servers[1].methodsCalled()).not.toContain('thread/start')
+    next.close()
+    env.registry.stopAll()
+  })
+
+  it('does not restart when the handoff thread is not loaded, even with another live lease', async () => {
+    const env = createEnvironment()
+    const host = env.registry.get({ account: accountA })
+    const sibling = await host.connect()
+    await sibling.rpc.request('thread/resume', { threadId: 'sibling' })
+    await host.prepareThreadHandoff('not-loaded', 'Account A')
+    expect(env.children).toHaveLength(1)
+    expect(env.killJournal).toEqual([])
+    sibling.close()
+    env.registry.stopAll()
+  })
+
+  it('reads all loaded-thread pages before deciding whether a destination is idle', async () => {
+    const env = createEnvironment({
+      serverOptions: {
+        onRequest: (message) => {
+          if (message.method === 'thread/loaded/list')
+            return message.params?.cursor
+              ? { data: ['busy-sibling'], nextCursor: null }
+              : { data: ['target'], nextCursor: 'next' }
+          if (message.method === 'thread/read')
+            return {
+              thread: {
+                status: {
+                  type:
+                    message.params?.threadId === 'busy-sibling'
+                      ? 'active'
+                      : 'idle',
+                },
+              },
+            }
+        },
+      },
+    })
+    const host = env.registry.get({ account: accountA })
+    const connection = await host.connect()
+    connection.close()
+    await expect(
+      host.prepareThreadHandoff('target', 'Account A'),
+    ).rejects.toMatchObject({ stage: 'busy' })
+    expect(
+      env.servers[0].requests.filter((r) => r.method === 'thread/loaded/list'),
+    ).toHaveLength(2)
+    expect(env.killJournal).toEqual([])
+    env.registry.stopAll()
+  })
+
+  it.each(['malformed', 'repeated-cursor', 'unknown-status'])(
+    'refuses an uncertain runtime witness (%s)',
+    async (kind) => {
+      const env = createEnvironment({
+        serverOptions: {
+          onRequest: (message) => {
+            if (message.method === 'thread/loaded/list')
+              return kind === 'malformed'
+                ? {}
+                : {
+                    data: ['target'],
+                    nextCursor: kind === 'repeated-cursor' ? 'repeat' : null,
+                  }
+            if (message.method === 'thread/read')
+              return { thread: { status: { type: 'future-status' } } }
+          },
+        },
+      })
+      const host = env.registry.get({ account: accountA })
+      const connection = await host.connect()
+      connection.close()
+      await expect(
+        host.prepareThreadHandoff('target', 'Account A'),
+      ).rejects.toThrow()
+      expect(env.killJournal).toEqual([])
+      env.registry.stopAll()
+    },
+  )
 
   it('a helper exchange holds its account lease until it finishes', async () => {
     const env = createEnvironment()
@@ -516,10 +765,12 @@ describe('CodexServerHost', () => {
     // The transport is open before `initialize` is asked and nothing else owns
     // it: a rejected handshake used to return through this door leaving a live
     // WebSocket behind, one per attempt, on a server that outlives them all.
+    let refuseHandshake = true
     const env = createEnvironment({
       serverOptions: {
         onRequest: (message) => {
-          if (message.method !== 'initialize') return undefined
+          if (message.method !== 'initialize' || !refuseHandshake)
+            return undefined
           throw new Error('initialize refused')
         },
       },
@@ -533,6 +784,7 @@ describe('CodexServerHost', () => {
     // The server itself is untouched — a bad handshake is not its death.
     expect(env.children[0].exitCode).toBeNull()
     expect(env.children[0].signals).toEqual([])
+    refuseHandshake = false
     await host.withStoppedServer(async () => {})
     expect(
       env.children[0].exitCode !== null || env.children[0].signalCode !== null,

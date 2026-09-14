@@ -1,3 +1,8 @@
+import { HandoffRefusedError } from '../provider-account-handoff.pure'
+import {
+  isCodexThreadRuntimeIdle,
+  readCodexLoadedThreadPage,
+} from './codex-handoff.pure'
 import {
   spawn,
   spawnSync,
@@ -95,6 +100,7 @@ export interface CodexServerHostOptions {
   killPid?: (pid: number, signal: NodeJS.Signals) => void
   startBudgetMs?: number
   readyPollIntervalMs?: number
+  waitForAdmission?: () => Promise<void> | undefined
 }
 
 interface RunningServer {
@@ -174,11 +180,38 @@ export class CodexServerHost {
   private retired = false
   private retiring: ChildProcess | null = null
   private connectionLeases = 0
-  private maintaining = false
+  private maintaining: Promise<void> | null = null
   private generationCounter = 0
   private deathListeners = new Set<(obituary: CodexServerObituary) => void>()
   private readonly spawnProcess: CodexAppServerSpawn
   private readonly connectTransport: (url: string) => Promise<JsonRpcTransport>
+  private readonly possiblyLiveThreads = new Map<
+    string,
+    {
+      generation: number
+      turnId?: string | null
+      clientUserMessageId?: string | null
+    }
+  >()
+
+  /** A lost transport is not evidence that its server-side turn finished. */
+  rememberPossiblyLiveThread(
+    threadId: string,
+    generation: number,
+    detail: {
+      turnId?: string | null
+      clientUserMessageId?: string | null
+    } = {},
+  ): void {
+    if (this.server?.generation !== generation) return
+    this.possiblyLiveThreads.set(threadId, { generation, ...detail })
+  }
+
+  observeThreadSettled(threadId: string, generation: number): void {
+    if (this.possiblyLiveThreads.get(threadId)?.generation === generation)
+      this.possiblyLiveThreads.delete(threadId)
+  }
+
   private readonly probeReady: (
     readyUrl: string,
     signal?: AbortSignal,
@@ -199,6 +232,10 @@ export class CodexServerHost {
     this.startBudgetMs = options.startBudgetMs ?? CODEX_SERVER_START_BUDGET_MS
     this.readyPollIntervalMs =
       options.readyPollIntervalMs ?? CODEX_READY_POLL_INTERVAL_MS
+  }
+
+  hasGeneration(generation: number): boolean {
+    return this.server?.generation === generation
   }
 
   /** True once a server is up; false while it is warming up or after a death. */
@@ -242,22 +279,32 @@ export class CodexServerHost {
   async connect(
     options: CodexServerConnectionOptions = {},
   ): Promise<CodexServerConnection> {
+    // Re-read both gates after every wake: another maintenance window may
+    // have opened before this continuation was scheduled.
+    for (;;) {
+      const admission = this.options.waitForAdmission?.() ?? this.maintaining
+      if (!admission) break
+      await admission
+    }
     if (this.retired)
       throw new Error('This Codex account server has been retired.')
-    if (this.maintaining) {
-      throw new Error(
-        'This Codex account is undergoing maintenance. Try again when it finishes.',
-      )
-    }
+    return this.connectAdmitted(options, true)
+  }
+
+  /** The maintenance witness has its own control socket, never a work lease. */
+  private async connectAdmitted(
+    options: CodexServerConnectionOptions,
+    counted: boolean,
+  ): Promise<CodexServerConnection> {
     // Admission is synchronous, before startup, socket connection or initialize
     // can yield. Helpers and warming connections count just like live turns.
-    this.connectionLeases += 1
+    if (counted) this.connectionLeases += 1
     let released = false
     let rpc: JsonRpcClient | undefined
     const release = () => {
       if (released) return
       released = true
-      this.connectionLeases -= 1
+      if (counted) this.connectionLeases -= 1
     }
     const close = () => {
       rpc?.destroy()
@@ -300,39 +347,185 @@ export class CodexServerHost {
    */
   async withStoppedServer<T>(
     work: () => Promise<T>,
-    options: { retire?: boolean } = {},
+    options: {
+      retire?: boolean
+      handoff?: {
+        threadId: string
+        accountLabel: string
+        role?: 'source' | 'destination'
+      }
+    } = {},
   ): Promise<T> {
     if (this.stopped) throw new Error('This Codex account server is stopped.')
     if (this.maintaining)
       throw new Error('This Codex account is undergoing maintenance.')
-    if (this.connectionLeases > 0) {
+    if (!options.handoff && this.connectionLeases > 0) {
       throw new Error(
         'This Codex account is in use. Wait for its active work to finish.',
       )
     }
-    this.maintaining = true
+    let release!: () => void
+    let fail!: (error: unknown) => void
+    const admission = new Promise<void>((resolve, reject) => {
+      release = resolve
+      fail = reject
+    })
+    void admission.catch(() => {})
+    // Closed before the witness's first await, including warming helpers.
+    this.maintaining = admission
+    let mutating = false
     try {
-      const running = this.server
-      this.server = null
-      // No connection can still be starting: it would hold a lease above.
-      if (running) {
-        this.retiring = running.child
-        try {
-          await this.terminateChild(running.child)
-        } finally {
-          this.retiring = null
+      let restart = true
+      let control: CodexServerConnection | null = null
+      try {
+        // A cold host has no in-memory conversation to refresh. Do not spawn
+        // merely to prove that it has no work.
+        if (this.server || this.starting) {
+          control = await this.connectAdmitted(
+            { isProgressNotification: () => false },
+            false,
+          )
+          for (const [id, marker] of this.possiblyLiveThreads) {
+            if (marker.generation !== control.generation) {
+              this.possiblyLiveThreads.delete(id)
+              continue
+            }
+            const idle = isCodexThreadRuntimeIdle(
+              await control.rpc.request('thread/read', {
+                threadId: id,
+                includeTurns: false,
+              }),
+            )
+            if (idle) this.observeThreadSettled(id, control.generation)
+            else if (
+              options.handoff?.role === 'source' &&
+              options.handoff.threadId === id
+            ) {
+              throw new HandoffRefusedError(
+                'not-eligible',
+                `This conversation's last turn may still be running on ${options.handoff.accountLabel}'s server; wait for it to settle or reconnect. Your message was not sent.`,
+              )
+            }
+          }
+          const loaded = await this.loadedThreads(control.rpc)
+          restart =
+            !options.handoff || loaded.includes(options.handoff.threadId)
+          if (restart) {
+            const busy =
+              this.connectionLeases > 0 ||
+              this.possiblyLiveThreads.size > 0 ||
+              !(await this.allThreadsIdle(control.rpc, loaded))
+            if (busy) {
+              if (options.handoff)
+                throw new HandoffRefusedError(
+                  'busy',
+                  `${options.handoff.accountLabel}'s server is busy with another conversation; try again when it settles. Your message was not sent.`,
+                )
+              throw new Error(
+                'This Codex account server still has active work. Wait for it to finish.',
+              )
+            }
+          }
+        } else if (options.handoff) restart = false
+      } finally {
+        control?.close()
+      }
+      if (restart) {
+        mutating = true
+        const running = this.server
+        this.server = null
+        this.possiblyLiveThreads.clear()
+        if (running) {
+          this.retiring = running.child
+          try {
+            await this.terminateChild(running.child)
+          } finally {
+            this.retiring = null
+          }
         }
       }
       if (this.stopped) throw new Error('This Codex account server is stopped.')
+      mutating = true
       const result = await work()
       if (options.retire) {
         this.retired = true
         this.stopped = true
       }
+      release()
       return result
+    } catch (error) {
+      // A refused witness did not disturb this server. Bystanders may enter
+      // after the window reopens; only a failed mutation belongs to them.
+      if (options.handoff && !mutating) {
+        release()
+        throw error instanceof HandoffRefusedError
+          ? error
+          : new HandoffRefusedError(
+              'not-eligible',
+              `${options.handoff.accountLabel}: ${error instanceof Error ? error.message : String(error)} Your message was not sent.`,
+            )
+      }
+      fail(error)
+      throw error
     } finally {
-      this.maintaining = false
+      this.maintaining = null
     }
+  }
+
+  async prepareThreadHandoff(
+    threadId: string,
+    accountLabel: string,
+  ): Promise<void> {
+    try {
+      await this.withStoppedServer(async () => {}, {
+        handoff: { threadId, accountLabel },
+      })
+    } catch (error) {
+      if (error instanceof HandoffRefusedError) throw error
+      throw new HandoffRefusedError(
+        'not-eligible',
+        `${accountLabel}: ${error instanceof Error ? error.message : String(error)} Your message was not sent.`,
+      )
+    }
+  }
+
+  private async loadedThreads(rpc: JsonRpcClient): Promise<string[]> {
+    const ids = new Set<string>()
+    const cursors = new Set<string>()
+    let cursor: string | null = null
+    do {
+      const page = readCodexLoadedThreadPage(
+        await rpc.request('thread/loaded/list', {
+          ...(cursor ? { cursor } : {}),
+          limit: 100,
+        }),
+      )
+      for (const id of page.ids) ids.add(id)
+      cursor = page.nextCursor
+      if (cursor) {
+        if (cursors.has(cursor))
+          throw new Error(
+            'Codex repeated its loaded-conversation cursor; account handoff was not attempted.',
+          )
+        cursors.add(cursor)
+      }
+    } while (cursor)
+    return [...ids]
+  }
+
+  private async allThreadsIdle(
+    rpc: JsonRpcClient,
+    ids: string[],
+  ): Promise<boolean> {
+    for (const threadId of ids) {
+      if (
+        !isCodexThreadRuntimeIdle(
+          await rpc.request('thread/read', { threadId, includeTurns: false }),
+        )
+      )
+        return false
+    }
+    return true
   }
 
   /**
@@ -371,6 +564,7 @@ export class CodexServerHost {
     const running = this.server
     const spawning = this.spawning
     this.server = null
+    this.possiblyLiveThreads.clear()
     this.spawning = null
     this.starting = null
     const exits: Promise<void>[] = []
@@ -723,6 +917,7 @@ export class CodexServerHost {
       (code: number | null, signal: NodeJS.Signals | null) => {
         if (this.server !== running) return
         this.server = null
+        this.possiblyLiveThreads.clear()
         const obituary: CodexServerObituary = {
           key: this.key,
           generation: running.generation,
@@ -764,7 +959,7 @@ export class CodexServerHostRegistry {
   private binaryPath: string | null = null
   private version: string | null = null
   private readonly hosts = new Map<string, CodexServerHost>()
-  private readonly maintainingKeys = new Set<string>()
+  private readonly maintainingKeys = new Map<string, Promise<void>>()
   private readonly stopping = new Map<string, Promise<void>>()
 
   constructor(private readonly options: CodexServerHostRegistryOptions = {}) {}
@@ -795,10 +990,6 @@ export class CodexServerHostRegistry {
       executionHostId: input.executionHostId ?? 'local',
       codexHome: input.account?.configDir ?? null,
     })
-    if (this.maintainingKeys.has(key)) {
-      throw new Error('This Codex account is undergoing maintenance.')
-    }
-
     const existing = this.hosts.get(key)
     if (existing) return existing
 
@@ -814,6 +1005,7 @@ export class CodexServerHostRegistry {
       probeReady: this.options.probeReady,
       listProcesses: this.options.listProcesses,
       killPid: this.options.killPid,
+      waitForAdmission: () => this.maintainingKeys.get(key),
     })
     this.hosts.set(key, host)
     return host
@@ -821,20 +1013,37 @@ export class CodexServerHostRegistry {
 
   /** Keeps account admission closed even if provider detection replaces the pool. */
   async withStoppedServer<T>(
-    input: { executionHostId?: string | null; account: CodexAccountEnvTarget },
+    input: {
+      executionHostId?: string | null
+      account: CodexAccountEnvTarget | null
+    },
     work: () => Promise<T>,
-    options: { retire?: boolean } = {},
+    options: {
+      retire?: boolean
+      handoff?: {
+        threadId: string
+        accountLabel: string
+        role?: 'source' | 'destination'
+      }
+    } = {},
   ): Promise<T> {
     const key = codexServerKey({
       executionHostId: input.executionHostId ?? 'local',
-      codexHome: input.account.configDir,
+      codexHome: input.account?.configDir ?? null,
     })
     if (this.maintainingKeys.has(key)) {
       throw new Error('This Codex account is undergoing maintenance.')
     }
     const host =
       this.hosts.get(key) ?? (this.binaryPath ? this.get(input) : null)
-    this.maintainingKeys.add(key)
+    let release!: () => void
+    let fail!: (error: unknown) => void
+    const admission = new Promise<void>((resolve, reject) => {
+      release = resolve
+      fail = reject
+    })
+    void admission.catch(() => {})
+    this.maintainingKeys.set(key, admission)
     try {
       // Detection may already have removed an old host from `hosts`. Its
       // credential home remains occupied until the process actually exits.
@@ -845,9 +1054,56 @@ export class CodexServerHostRegistry {
       if (options.retire && this.hosts.get(key) === host) {
         this.hosts.delete(key)
       }
+      release()
       return result
+    } catch (error) {
+      if (error instanceof HandoffRefusedError) release()
+      else fail(error)
+      throw error
     } finally {
       this.maintainingKeys.delete(key)
+    }
+  }
+
+  async prepareThreadHandoff(input: {
+    executionHostId?: string | null
+    account: CodexAccountEnvTarget | null
+    threadId: string
+    role?: 'source' | 'destination'
+    accountLabel: string
+    /** Source lookup must never create a server merely to release it. */
+    existingOnly?: boolean
+  }): Promise<void> {
+    try {
+      if (input.existingOnly) {
+        const key = codexServerKey({
+          executionHostId: input.executionHostId ?? 'local',
+          codexHome: input.account?.configDir ?? null,
+        })
+        await this.stopping.get(key)
+        if (!this.hosts.has(key)) return
+      }
+      await this.withStoppedServer(input, async () => {}, {
+        handoff: {
+          threadId: input.threadId,
+          accountLabel: input.accountLabel,
+          role: input.role,
+        },
+      })
+    } catch (error) {
+      if (error instanceof HandoffRefusedError) {
+        if (input.role === 'source' && error.stage === 'busy') {
+          throw new HandoffRefusedError(
+            'source-busy',
+            `${input.accountLabel}'s server still holds this conversation and is busy with other work; try again when it settles. Your message was not sent.`,
+          )
+        }
+        throw error
+      }
+      throw new HandoffRefusedError(
+        'not-eligible',
+        `${input.accountLabel}: ${error instanceof Error ? error.message : String(error)} Your message was not sent.`,
+      )
     }
   }
 

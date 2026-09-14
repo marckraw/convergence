@@ -188,10 +188,10 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
     {
       id: 'provider-accounts',
       navLabel: 'Accounts',
-      navSummary: 'Claude Code accounts you can switch between',
+      navSummary: 'Anthropic and OpenAI logins',
       title: 'Provider accounts',
       description:
-        'Enrol more than one Claude Code account on this machine and pick which one serves a turn from the composer. Conversations are shared between them; only the credential changes.',
+        'Connect Anthropic and OpenAI accounts on this Mac. Manage each login separately and choose a default for new conversations.',
     },
     {
       id: 'usage',

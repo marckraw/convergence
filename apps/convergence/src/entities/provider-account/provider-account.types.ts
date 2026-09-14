@@ -1,5 +1,7 @@
 export type ProviderAccountStatus = 'connected' | 'expired' | 'unavailable'
 
+export type ProviderAccountEnrollmentProvider = 'claude-code' | 'codex'
+
 export interface ProviderAccount {
   id: string
   providerId: string
@@ -19,7 +21,7 @@ export interface ProviderAccount {
 }
 
 export interface ProviderAccountSettingsWarning {
-  kind: 'api-key-helper' | 'credential-env-key'
+  kind: 'api-key-helper' | 'credential-env-key' | 'native-history-layout'
   key: string
   message: string
 }
@@ -44,6 +46,7 @@ export interface ProviderAccountAttestationResult {
   detail: string | null
   unknownEntries: string[]
   missingLinks: string[]
+  nativeHistoryWarnings?: string[]
 }
 
 export interface ProviderAccountHealth {
