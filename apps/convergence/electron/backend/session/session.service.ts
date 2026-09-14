@@ -297,6 +297,7 @@ export class SessionService {
   private settleFlushScheduled = false
   private quitting = false
   private readonly retainingStoppedInputs = new Set<string>()
+  private readonly compactingSessions = new Set<string>()
   /**
    * True only while the constructor heals running/answered sessions left by
    * the previous app run. Those settles are bookkeeping about a process that is already
@@ -1765,6 +1766,7 @@ export class SessionService {
     input: SendMessageInput,
     dispatch: (inFlight: SessionDispatch) => Promise<T>,
   ): Promise<T> {
+    this.assertNotCompacting(sessionId)
     // Read before registering this dispatch: only an earlier send counts as busy.
     // Refuse outside the try below too: a cold-start refusal must not enter
     // queue termination and end the earlier turn's queued inputs.
@@ -2168,6 +2170,7 @@ export class SessionService {
     /** True when the opener is WAITING behind a turn rather than under way. */
     openerQueued: boolean
   }> {
+    this.assertNotCompacting(id)
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
 
@@ -2295,6 +2298,10 @@ export class SessionService {
     id: string,
     instructions?: string,
   ): Promise<ProviderContextManagementResult> {
+    this.assertNotCompacting(id)
+    if (this.dispatches.isDispatching(id)) {
+      throw new Error('Wait for the pending send before compacting context')
+    }
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
     if (session.providerId === 'shell') {
@@ -2339,11 +2346,14 @@ export class SessionService {
       )
     }
 
-    const timestamp = new Date().toISOString()
-    this.applySessionPatch(id, { activity: 'compacting', updatedAt: timestamp })
-    this.notifySessionChange(id)
-
+    this.compactingSessions.add(id)
     try {
+      const timestamp = new Date().toISOString()
+      this.applySessionPatch(id, {
+        activity: 'compacting',
+        updatedAt: timestamp,
+      })
+      this.notifySessionChange(id)
       const result = await execution.host.manageContext(
         execution.providerId,
         {
@@ -2358,6 +2368,7 @@ export class SessionService {
           serviceTier: session.serviceTier ?? null,
           continuationToken,
           permissionConfig: session.permissionConfig,
+          providerAccountId: this.getLastTurnProviderAccountId(id),
         },
         {
           kind: 'compact',
@@ -2399,6 +2410,16 @@ export class SessionService {
       })
       this.notifySessionChange(id)
       throw error
+    } finally {
+      this.compactingSessions.delete(id)
+    }
+  }
+
+  private assertNotCompacting(sessionId: string): void {
+    if (this.compactingSessions.has(sessionId)) {
+      throw new Error(
+        'This conversation is compacting. Wait for it to finish before sending another message.',
+      )
     }
   }
 
