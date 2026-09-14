@@ -124,21 +124,43 @@ afterEach(() => {
 describe('Codex account isolation', () => {
   it('runs a session app-server under the account own CODEX_HOME', async () => {
     mockSpawnedServer()
-
-    startSession({ providerAccountId: 'acct-a' })
+    const deltas: SessionDelta[] = []
+    startSession({ providerAccountId: 'acct-a', deltas })
 
     await waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
     expect(spawnedEnv(0).CODEX_HOME).toBe(ACCOUNT_A.configDir)
+    await waitFor(() =>
+      expect(
+        deltas.some(
+          (delta) =>
+            delta.kind === 'conversation.item.add' &&
+            delta.item.kind === 'message' &&
+            delta.item.actor === 'user' &&
+            delta.providerAccountId === 'acct-a',
+        ),
+      ).toBe(true),
+    )
   })
 
   it('leaves the environment untouched when no account is selected', async () => {
     mockSpawnedServer()
-
-    startSession({})
+    const deltas: SessionDelta[] = []
+    startSession({ deltas })
 
     await waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
     // Behaviour-neutral: the ambient `~/.codex` login, byte-identical to before.
     expect(spawnedEnv(0)).toEqual({ ...process.env })
+    await waitFor(() =>
+      expect(
+        deltas.some(
+          (delta) =>
+            delta.kind === 'conversation.item.add' &&
+            delta.item.kind === 'message' &&
+            delta.item.actor === 'user' &&
+            delta.providerAccountId === null,
+        ),
+      ).toBe(true),
+    )
   })
 
   it('keeps an inherited API key out of an account session', async () => {
@@ -206,10 +228,17 @@ describe('Codex account isolation', () => {
     await waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
     const spawnsBefore = spawnMock.mock.calls.length
 
-    handle.sendMessage('next turn', undefined, undefined, {
-      deliveryMode: 'normal',
-      providerAccountId: 'acct-b',
-    })
+    const accepted = vi.fn()
+    const disposition = await handle.sendMessage(
+      'next turn',
+      undefined,
+      undefined,
+      {
+        deliveryMode: 'normal',
+        providerAccountId: 'acct-b',
+        onTurnAccepted: accepted,
+      },
+    )
 
     await waitFor(() =>
       expect(
@@ -223,6 +252,11 @@ describe('Codex account isolation', () => {
         ),
       ).toBe(true),
     )
+    expect(disposition).toEqual({
+      kind: 'refused',
+      reason: expect.stringContaining('already running on the account'),
+    })
+    expect(accepted).not.toHaveBeenCalled()
     expect(spawnMock.mock.calls).toHaveLength(spawnsBefore)
   })
 

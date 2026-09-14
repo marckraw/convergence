@@ -11,6 +11,7 @@ import type {
   Provider,
   SessionStartConfig,
   SessionHandle,
+  SendMessageDisposition,
   SessionStatus,
   AttentionState,
   SessionContextWindow,
@@ -504,6 +505,7 @@ export class ClaudeCodeProvider implements Provider {
     let currentTurnHasAssistantText = false
     let currentTurnHasThinkingText = false
     let answerStatus: SessionStatus = 'idle'
+    let preparingTurn = false
     let currentTurn: {
       openedBy: 'user' | 'harness'
       message: string
@@ -1406,251 +1408,272 @@ export class ClaudeCodeProvider implements Provider {
          */
         continuesCurrentTurn?: boolean
       },
-    ): Promise<void | 'queue-follow-up'> {
+    ): Promise<SendMessageDisposition> {
       if (stopped) return
+      if (preparingTurn) return 'queue-follow-up'
       if (currentTurn) return currentTurnDisposition()
-      clearIdleTimer()
-      if (connectionEnding) await connectionEnding
-      if (stopped) return
-      if (currentTurn) return currentTurnDisposition()
-      if (
-        child &&
-        !options?.continuesCurrentTurn &&
-        currentTurnAccount?.id !== (options?.providerAccountId ?? null)
-      ) {
-        await endConnection('account')
+      preparingTurn = true
+      let userTurnBound = false
+      try {
+        clearIdleTimer()
+        if (connectionEnding) await connectionEnding
         if (stopped) return
-      }
+        if (currentTurn) return currentTurnDisposition()
+        if (
+          child &&
+          !options?.continuesCurrentTurn &&
+          currentTurnAccount?.id !== (options?.providerAccountId ?? null)
+        ) {
+          await endConnection('account')
+          if (stopped) return
+        }
 
-      // Resolved before any await, so a selection changing mid-turn cannot
-      // land between the snapshot and the spawn that uses it.
-      currentTurnAccount = selectTurnAccountSnapshot({
-        continuesCurrentTurn: options?.continuesCurrentTurn === true,
-        currentSnapshot: currentTurnAccount,
-        resolveFresh: () => ({
-          id: options?.providerAccountId ?? null,
-          target: accountLookup(options?.providerAccountId),
-        }),
-      })
-
-      const skillResolution = await resolveSelectedSkills(
-        message,
-        options?.skillSelections,
-      )
-      if (stopped) return
-      if (currentTurn) return currentTurnDisposition()
-
-      options?.onTurnAccepted?.()
-      const userMessageItemId =
-        options?.emitUserEntry !== false
-          ? sessionEmitter.addUserMessage({
-              text: message,
-              skillSelections: skillResolution.skillSelections,
-              attachmentIds: attachments?.length
-                ? attachments.map((a) => a.id)
-                : undefined,
-            })
-          : (options?.userMessageItemId ?? null)
-      if (!skillResolution.ok) {
-        addSkillInvocationFailureNote(skillResolution)
-        setStatus('failed')
-        setAttention('failed')
-        return
-      }
-      trackSkillInvocationTarget(
-        userMessageItemId,
-        skillResolution.skillSelections,
-      )
-      // Environment belongs to the connection, including telemetry for skills
-      // selected on later turns.
-      let env: NodeJS.ProcessEnv | undefined
-      if (!child) {
-        const telemetrySink = await getTelemetrySink()
-        env = await resolveClaudeAccountEnv({
-          account: currentTurnAccount?.target ?? null,
-          workingDirectory: config.workingDirectory,
-          injections: {
-            ...(telemetrySink?.env ?? {}),
-          },
+        // Keep the preparation's binding local across awaits. A competing
+        // preparation must not change the account this artifact or spawn names.
+        const turnAccount = selectTurnAccountSnapshot({
+          continuesCurrentTurn: options?.continuesCurrentTurn === true,
+          currentSnapshot: currentTurnAccount,
+          resolveFresh: () => ({
+            id: options?.providerAccountId ?? null,
+            target: accountLookup(options?.providerAccountId),
+          }),
         })
-      }
-      if (stopped || currentTurn) return
 
-      assistantTextBuffer = ''
-      assistantMessageItemId = null
-      thinkingBuffer = ''
-      thinkingItemId = null
-      currentTurnHasAssistantText = false
-      currentTurnHasThinkingText = false
-      sawTurnOutput = false
-      sawHarnessOutput = false
-      interruptRequested = false
-      taskNotificationSinceResult = false
-      stderrBuffer = ''
-      currentTurn = {
-        openedBy: 'user',
-        message,
-        attachments,
-        skillSelections: options?.skillSelections,
-        userMessageItemId,
-        allowContinuationRecovery: options?.allowContinuationRecovery ?? true,
-        usedContinuationToken: !!claudeSessionId,
-      }
-      setStatus('running')
-      setAttention(permissions.pendingAttention ?? 'none')
-      setActivity(null)
-      setContextWindow(
-        createUnavailableContextWindow(
-          'Waiting for Claude turn usage. When available, Convergence will show an estimated context value because Claude headless mode does not expose exact live context telemetry yet.',
-        ),
-      )
+        const skillResolution = await resolveSelectedSkills(
+          message,
+          options?.skillSelections,
+        )
+        if (stopped) return
+        if (currentTurn) return currentTurnDisposition()
 
-      const args = [
-        '-p',
-        '--input-format',
-        'stream-json',
-        '--output-format',
-        'stream-json',
-        '--verbose',
-        '--permission-mode',
-        resolveClaudeCodePermissionMode(config.permissionConfig),
-        '--include-partial-messages',
-      ]
-      if (claudeSessionId) {
-        args.push('--resume', claudeSessionId)
-      }
-      if (config.model?.trim()) {
-        args.push('--model', config.model.trim())
-      }
-      if (config.effort?.trim()) {
-        args.push('--effort', config.effort.trim())
-      }
+        if (!skillResolution.ok) {
+          addSkillInvocationFailureNote(skillResolution)
+          setStatus('failed')
+          setAttention('failed')
+          return { kind: 'refused', reason: skillResolution.message }
+        }
+        // Environment belongs to the connection, including telemetry for skills
+        // selected on later turns.
+        let env: NodeJS.ProcessEnv | undefined
+        if (!child) {
+          const telemetrySink = await getTelemetrySink()
+          env = await resolveClaudeAccountEnv({
+            account: turnAccount.target,
+            workingDirectory: config.workingDirectory,
+            injections: {
+              ...(telemetrySink?.env ?? {}),
+            },
+          })
+        }
+        if (stopped || currentTurn) return
 
-      if (!child && env) {
-        capabilities = []
-        const generation = ++connectionGeneration
-        child = createClaudeTransport({
-          binaryPath,
-          args,
-          cwd: config.workingDirectory,
-          env,
-          onPermissionRequest: (request) => {
-            sawHarnessOutput = true
-            const ended =
-              stopped ||
-              !!connectionEnding ||
-              !child ||
-              generation !== connectionGeneration
-            const stopping = interruptInFlight || interruptRequested
-            if (ended || stopping)
-              return Promise.resolve({
-                behavior: 'deny',
-                toolUseID: request.toolUseID,
-                decisionClassification: 'user_reject',
-                message: ended ? 'connection ended' : 'Stopped in Convergence',
+        userTurnBound = true
+        options?.onTurnAccepted?.()
+        const userMessageItemId =
+          options?.emitUserEntry !== false
+            ? sessionEmitter.addUserMessage({
+                text: message,
+                providerAccountId: turnAccount.id,
+                skillSelections: skillResolution.skillSelections,
+                attachmentIds: attachments?.length
+                  ? attachments.map((a) => a.id)
+                  : undefined,
               })
-            return permissions.request(request)
-          },
-          onSpawn: (pid) =>
-            recordDebug('lifecycle', {
-              direction: 'in',
-              note: `spawned resident process ${pid}`,
-            }),
-          onMessage: (event) => {
-            recordDebug('event', { direction: 'in', payload: event })
-            handleEvent(event)
-          },
-          onStderr: (data) => {
-            stderrBuffer += data
-            recordDebug('stderr', { direction: 'in', bytes: data.length })
-            if (shouldRecoverFromMessage(getSignificantStderr()))
-              scheduleContinuationRecovery('missing-session')
-          },
-          onExit: ({ code, signal, error }) => {
-            interruptRequested = false
-            permissions.endConnection()
-            if (stopped) return
-            const versionRefusal = describeClaudeTransportVersionRefusal(
-              error,
-              version,
-            )
-            if (versionRefusal)
-              sessionEmitter.addNote({ text: versionRefusal, level: 'error' })
-            evidence.processEnded(
-              now(),
-              endingReason ?? 'exit',
-              answerStatus === 'answered' ? 'unknown' : undefined,
-            )
-            if (endingReason) {
+            : (options?.userMessageItemId ?? null)
+        trackSkillInvocationTarget(
+          userMessageItemId,
+          skillResolution.skillSelections,
+        )
+        assistantTextBuffer = ''
+        assistantMessageItemId = null
+        thinkingBuffer = ''
+        thinkingItemId = null
+        currentTurnHasAssistantText = false
+        currentTurnHasThinkingText = false
+        sawTurnOutput = false
+        sawHarnessOutput = false
+        interruptRequested = false
+        taskNotificationSinceResult = false
+        stderrBuffer = ''
+        currentTurn = {
+          openedBy: 'user',
+          message,
+          attachments,
+          skillSelections: options?.skillSelections,
+          userMessageItemId,
+          allowContinuationRecovery: options?.allowContinuationRecovery ?? true,
+          usedContinuationToken: !!claudeSessionId,
+        }
+        currentTurnAccount = turnAccount
+        setStatus('running')
+        setAttention(permissions.pendingAttention ?? 'none')
+        setActivity(null)
+        setContextWindow(
+          createUnavailableContextWindow(
+            'Waiting for Claude turn usage. When available, Convergence will show an estimated context value because Claude headless mode does not expose exact live context telemetry yet.',
+          ),
+        )
+
+        const args = [
+          '-p',
+          '--input-format',
+          'stream-json',
+          '--output-format',
+          'stream-json',
+          '--verbose',
+          '--permission-mode',
+          resolveClaudeCodePermissionMode(config.permissionConfig),
+          '--include-partial-messages',
+        ]
+        if (claudeSessionId) {
+          args.push('--resume', claudeSessionId)
+        }
+        if (config.model?.trim()) {
+          args.push('--model', config.model.trim())
+        }
+        if (config.effort?.trim()) {
+          args.push('--effort', config.effort.trim())
+        }
+
+        if (!child && env) {
+          capabilities = []
+          const generation = ++connectionGeneration
+          child = createClaudeTransport({
+            binaryPath,
+            args,
+            cwd: config.workingDirectory,
+            env,
+            onPermissionRequest: (request) => {
+              sawHarnessOutput = true
+              const ended =
+                stopped ||
+                !!connectionEnding ||
+                !child ||
+                generation !== connectionGeneration
+              const stopping = interruptInFlight || interruptRequested
+              if (ended || stopping)
+                return Promise.resolve({
+                  behavior: 'deny',
+                  toolUseID: request.toolUseID,
+                  decisionClassification: 'user_reject',
+                  message: ended
+                    ? 'connection ended'
+                    : 'Stopped in Convergence',
+                })
+              return permissions.request(request)
+            },
+            onSpawn: (pid) =>
+              recordDebug('lifecycle', {
+                direction: 'in',
+                note: `spawned resident process ${pid}`,
+              }),
+            onMessage: (event) => {
+              recordDebug('event', { direction: 'in', payload: event })
+              handleEvent(event)
+            },
+            onStderr: (data) => {
+              stderrBuffer += data
+              recordDebug('stderr', { direction: 'in', bytes: data.length })
+              if (shouldRecoverFromMessage(getSignificantStderr()))
+                scheduleContinuationRecovery('missing-session')
+            },
+            onExit: ({ code, signal, error }) => {
+              interruptRequested = false
+              permissions.endConnection()
+              if (stopped) return
+              const versionRefusal = describeClaudeTransportVersionRefusal(
+                error,
+                version,
+              )
+              if (versionRefusal)
+                sessionEmitter.addNote({ text: versionRefusal, level: 'error' })
+              evidence.processEnded(
+                now(),
+                endingReason ?? 'exit',
+                answerStatus === 'answered' ? 'unknown' : undefined,
+              )
+              if (endingReason) {
+                child = null
+                endingReason = null
+                connectionEnding = null
+                resolveConnectionEnd?.()
+                resolveConnectionEnd = undefined
+                return
+              }
+              recordDebug('lifecycle', {
+                direction: 'in',
+                note: `child exited with code ${code} / ${signal ?? error ?? ''}`,
+              })
+              flushThinkingBuffer()
+              flushAssistantBuffer()
+              if (
+                currentTurn &&
+                canRecoverContinuation() &&
+                !sawTurnOutput &&
+                !sawHarnessOutput
+              ) {
+                scheduleContinuationRecovery('no-output')
+              }
               child = null
-              endingReason = null
               connectionEnding = null
               resolveConnectionEnd?.()
               resolveConnectionEnd = undefined
-              return
-            }
-            recordDebug('lifecycle', {
-              direction: 'in',
-              note: `child exited with code ${code} / ${signal ?? error ?? ''}`,
-            })
-            flushThinkingBuffer()
-            flushAssistantBuffer()
-            if (
-              currentTurn &&
-              canRecoverContinuation() &&
-              !sawTurnOutput &&
-              !sawHarnessOutput
-            ) {
-              scheduleContinuationRecovery('no-output')
-            }
-            child = null
-            connectionEnding = null
-            resolveConnectionEnd?.()
-            resolveConnectionEnd = undefined
-            if (maybeRestartRecoveredTurn()) return
-            if (currentTurn) {
-              currentTurn = null
-              sessionEmitter.addNote({
-                text: `Claude Code ended mid-turn (code ${code} / ${signal ?? error ?? 'none'}); nothing was re-sent — send your message again to continue`,
-                level: 'error',
-              })
-              setStatus('failed')
-              setAttention('failed')
-            } else {
-              sessionEmitter.addNote({
-                text: `process ended (code ${code})`,
-                level: 'info',
-              })
-            }
-          },
-        })
-      }
-      const connection = child
-      if (!connection) return
-      try {
-        const parts = await loadAttachmentParts(attachments)
-        if (stopped || connection !== child) return
-        connection.write(
-          buildClaudeUserMessageLine({
-            text: skillResolution.promptText,
-            parts,
-          }),
-        )
-        if (userMessageItemId)
-          patchUserMessageSkills(
-            userMessageItemId,
-            skillResolution.skillSelections,
-            'sent',
+              if (maybeRestartRecoveredTurn()) return
+              if (currentTurn) {
+                currentTurn = null
+                sessionEmitter.addNote({
+                  text: `Claude Code ended mid-turn (code ${code} / ${signal ?? error ?? 'none'}); nothing was re-sent — send your message again to continue`,
+                  level: 'error',
+                })
+                setStatus('failed')
+                setAttention('failed')
+              } else {
+                sessionEmitter.addNote({
+                  text: `process ended (code ${code})`,
+                  level: 'info',
+                })
+              }
+            },
+          })
+        }
+        const connection = child
+        if (!connection) return
+        try {
+          const parts = await loadAttachmentParts(attachments)
+          if (stopped || connection !== child) return
+          connection.write(
+            buildClaudeUserMessageLine({
+              text: skillResolution.promptText,
+              parts,
+            }),
           )
+          if (userMessageItemId)
+            patchUserMessageSkills(
+              userMessageItemId,
+              skillResolution.skillSelections,
+              'sent',
+            )
+        } catch (error) {
+          sessionEmitter.addNote({
+            text: `Failed to send attachments: ${String(error)}`,
+            level: 'error',
+          })
+          currentTurn = null
+          interruptRequested = false
+          setStatus('failed')
+          setAttention('failed')
+        }
       } catch (error) {
-        sessionEmitter.addNote({
-          text: `Failed to send attachments: ${String(error)}`,
-          level: 'error',
-        })
+        const reason = `Failed to prepare Claude Code turn: ${String(error)}`
+        sessionEmitter.addNote({ text: reason, level: 'error' })
         currentTurn = null
-        interruptRequested = false
         setStatus('failed')
         setAttention('failed')
+        // A preparation failure has no accepted user artifact. Once bound,
+        // retain its attribution and let the turn's failed state explain it.
+        if (!userTurnBound) return { kind: 'refused', reason }
+      } finally {
+        preparingTurn = false
       }
     }
 

@@ -1176,6 +1176,7 @@ export class PiProvider implements Provider {
       if (stopped || !rpc) return
 
       const userMessageItemId = sessionEmitter.addUserMessage({
+        providerAccountId: null,
         text,
         skillSelections: skillResolution.skillSelections,
         attachmentIds: attachments?.length
@@ -1222,6 +1223,7 @@ export class PiProvider implements Provider {
       }
 
       const userMessageItemId = sessionEmitter.addUserMessage({
+        providerAccountId: null,
         text,
         skillSelections: skillResolution.skillSelections,
         attachmentIds: attachments?.length
@@ -1260,6 +1262,7 @@ export class PiProvider implements Provider {
       const userMessageItemId =
         options?.emitUserEntry !== false
           ? sessionEmitter.addUserMessage({
+              providerAccountId: null,
               text: initialMessage,
               skillSelections: skillResolution.skillSelections,
               attachmentIds: initialAttachments?.length

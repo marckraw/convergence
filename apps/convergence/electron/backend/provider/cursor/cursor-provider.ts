@@ -943,6 +943,7 @@ export class CursorProvider implements Provider {
       if (!activeRpc || !activeSessionId || stopped) {
         if (!stopped) {
           sessionEmitter.addUserMessage({
+            providerAccountId: null,
             text,
             attachmentIds: attachments?.length
               ? attachments.map((attachment) => attachment.id)
@@ -967,6 +968,7 @@ export class CursorProvider implements Provider {
       if (stopped) return
 
       const userMessageItemId = sessionEmitter.addUserMessage({
+        providerAccountId: null,
         text,
         skillSelections: skillResolution.skillSelections,
         attachmentIds: attachments?.length

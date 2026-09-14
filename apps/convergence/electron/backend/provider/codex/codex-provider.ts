@@ -1679,6 +1679,7 @@ export class CodexProvider implements Provider {
       )
       const userMessageItemId = sessionEmitter.addUserMessage({
         text: input.text,
+        providerAccountId: sessionAccountId,
         skillSelections: skillResolution.skillSelections,
         attachmentIds: input.attachments?.length
           ? input.attachments.map((a) => a.id)
@@ -1752,6 +1753,7 @@ export class CodexProvider implements Provider {
 
       sessionEmitter.addUserMessage({
         text: input.text,
+        providerAccountId: sessionAccountId,
         skillSelections: skillResolution.skillSelections,
         attachmentIds: input.attachments?.length
           ? input.attachments.map((a) => a.id)
@@ -2626,16 +2628,11 @@ export class CodexProvider implements Provider {
           options?.providerAccountId !== undefined &&
           (options.providerAccountId ?? null) !== sessionAccountId
         ) {
-          // Never silently serve the running account while the app claims
-          // otherwise: Codex's transcript records no account attribution, so
-          // nothing would contradict it later.
-          sessionEmitter.addNote({
-            text:
-              'This Codex session is already running on the account it started ' +
-              'with. Start a new session to use a different account.',
-            level: 'error',
-          })
-          return
+          const reason =
+            'This Codex session is already running on the account it started ' +
+            'with. Start a new session to use a different account.'
+          sessionEmitter.addNote({ text: reason, level: 'error' })
+          return { kind: 'refused', reason }
         }
         if (text === CONVERSATION_RESET_COMMAND) {
           if (currentStatus === 'running' || connecting) {

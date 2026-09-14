@@ -447,6 +447,11 @@ export interface OneShotResult {
   text: string
 }
 
+export type SendMessageDisposition =
+  | void
+  | 'queue-follow-up'
+  | { kind: 'refused'; reason: string }
+
 export interface SessionHandle {
   readonly canStopTasks?: boolean
   stopTask?: (id: string) => Promise<void>
@@ -468,7 +473,7 @@ export interface SessionHandle {
   onActivityChange: (callback: (activity: ActivitySignal) => void) => void
   onActivityHeartbeat?: (callback: () => void) => void
 
-  /** A local handle can return queue-follow-up when this input must wait for the current turn. */
+  /** Deferral preserves the queued input; refusal carries a delivery failure without accepting a turn. */
   sendMessage: (
     text: string,
     attachments?: Attachment[],
@@ -487,7 +492,7 @@ export interface SessionHandle {
        */
       providerAccountId?: string | null
     },
-  ) => void | 'queue-follow-up' | Promise<void | 'queue-follow-up'>
+  ) => SendMessageDisposition | Promise<SendMessageDisposition>
   approve: (
     providerApprovalId?: string,
     options?: { scope: 'once' | 'session' },

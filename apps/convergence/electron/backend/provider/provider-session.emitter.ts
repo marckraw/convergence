@@ -72,6 +72,7 @@ export class ProviderSessionEmitter {
 
   addUserMessage(input: {
     text: string
+    providerAccountId?: string | null
     attachmentIds?: string[]
     skillSelections?: SkillSelection[]
     timestamp?: string
@@ -80,6 +81,7 @@ export class ProviderSessionEmitter {
     return this.addMessage({
       actor: 'user',
       text: input.text,
+      providerAccountId: input.providerAccountId,
       attachmentIds: input.attachmentIds,
       skillSelections: input.skillSelections,
       timestamp: input.timestamp,
@@ -339,6 +341,7 @@ export class ProviderSessionEmitter {
   private addMessage(input: {
     actor: 'user' | 'assistant'
     text: string
+    providerAccountId?: string | null
     attachmentIds?: string[]
     skillSelections?: SkillSelection[]
     state?: MessageItem['state']
@@ -368,14 +371,18 @@ export class ProviderSessionEmitter {
         ...(input.deliveryMode ? { deliveryMode: input.deliveryMode } : {}),
       },
     }) as MessageItem
-    this.emitItem(item)
+    this.emitItem(item, input.providerAccountId)
     return item.id
   }
 
-  private emitItem(item: ConversationItemDraft): void {
+  private emitItem(
+    item: ConversationItemDraft,
+    providerAccountId?: string | null,
+  ): void {
     this.emitDeltaFn({
       kind: 'conversation.item.add',
       item,
+      ...(providerAccountId !== undefined ? { providerAccountId } : {}),
     })
   }
 

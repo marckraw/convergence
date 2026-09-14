@@ -723,6 +723,7 @@ export class AntigravityProvider implements Provider {
       const userMessageItemId =
         options?.emitUserEntry !== false
           ? sessionEmitter.addUserMessage({
+              providerAccountId: null,
               text,
               skillSelections: skillResolution.skillSelections,
               attachmentIds: attachments?.length
