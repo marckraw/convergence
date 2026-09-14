@@ -131,6 +131,37 @@ interface ClaudeStreamEvent {
   model?: string
 }
 
+/** A soft stop is only a request; bound helpers that ignore it, while the
+ * account registry still waits for their actual exit before allowing login. */
+function createClaudeChildTerminator(child: ChildProcess): () => void {
+  let exited = false
+  let escalation: ReturnType<typeof setTimeout> | null = null
+  const finish = () => {
+    exited = true
+    if (escalation) clearTimeout(escalation)
+  }
+  child.once('exit', finish)
+  child.once('error', () => {
+    if (!child.pid) finish()
+  })
+  return () => {
+    if (exited || escalation) return
+    escalation = setTimeout(() => {
+      try {
+        child.kill('SIGKILL')
+      } catch {
+        // No exit witness means maintenance remains blocked.
+      }
+    }, 5000)
+    escalation.unref?.()
+    try {
+      child.kill('SIGTERM')
+    } catch {
+      // Keep the escalation scheduled even if the soft signal failed.
+    }
+  }
+}
+
 async function runClaudeOneShot(
   binaryPath: string,
   input: OneShotInput,
@@ -165,6 +196,7 @@ async function runClaudeOneShot(
       env,
     })
     trackProcess(child)
+    const terminate = createClaudeChildTerminator(child)
 
     const progress = createTaskProgressEmitter(input.requestId, taskProgress)
     progress?.started()
@@ -176,7 +208,7 @@ async function runClaudeOneShot(
     const timeout = setTimeout(() => {
       if (settled) return
       settled = true
-      child.kill('SIGTERM')
+      terminate()
       progress?.settled('timeout')
       reject(new Error('claude oneShot timed out'))
     }, input.timeoutMs ?? 20000)
@@ -370,8 +402,9 @@ export class ClaudeCodeProvider implements Provider {
       env,
     })
     this.trackAccountProcess(config.providerAccountId ?? null, child)
+    const terminate = createClaudeChildTerminator(child)
     if (!child.stdin || !child.stdout) {
-      child.kill('SIGTERM')
+      terminate()
       throw new Error('Claude Code did not expose stdio pipes')
     }
 
@@ -436,7 +469,7 @@ export class ClaudeCodeProvider implements Provider {
         completion,
         new Promise<never>((_resolve, reject) => {
           timeout = setTimeout(() => {
-            child.kill('SIGTERM')
+            terminate()
             reject(new Error('Claude context compaction timed out'))
           }, 120_000)
           timeout.unref?.()
@@ -450,7 +483,7 @@ export class ClaudeCodeProvider implements Provider {
       }
     } finally {
       if (timeout) clearTimeout(timeout)
-      if (!child.killed) child.kill('SIGTERM')
+      terminate()
     }
   }
 
@@ -1611,7 +1644,7 @@ export class ClaudeCodeProvider implements Provider {
                 !!connectionEnding ||
                 !!pendingRecoveryTurn ||
                 !!permissions.pendingAttention ||
-                !!(counts && counts.running + counts.unknown > 0)
+                !!(counts && counts.running > 0)
               )
             },
             endIdle: () => endConnection('maintenance'),

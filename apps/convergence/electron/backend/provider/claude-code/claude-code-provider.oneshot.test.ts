@@ -44,6 +44,46 @@ afterEach(() => {
 })
 
 describe('ClaudeCodeProvider.oneShot progress emission', () => {
+  it('escalates an ignored timeout signal and releases maintenance only on actual exit', async () => {
+    vi.useFakeTimers()
+    try {
+      const child = new MockChildProcess()
+      child.kill.mockImplementation((signal) => {
+        if (signal === 'SIGKILL') child.emit('exit', null)
+        return true
+      })
+      spawnMock.mockReturnValue(child)
+      const gate = new ClaudeAccountMaintenance()
+      const provider = new ClaudeCodeProvider(
+        '/bin/claude',
+        null,
+        undefined,
+        null,
+        () => null,
+        undefined,
+        true,
+        () => 0,
+        gate,
+      )
+      const pending = provider.oneShot({
+        prompt: 'fixture',
+        modelId: 'sonnet',
+        workingDirectory: '/tmp',
+        providerAccountId: 'acct-a',
+        timeoutMs: 100,
+      })
+      const failure = expect(pending).rejects.toThrow(/timed out/)
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
+      await vi.advanceTimersByTimeAsync(100)
+      await failure
+      await expect(gate.run('acct-a', async () => {})).rejects.toThrow(/active/)
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+      await expect(gate.run('acct-a', async () => {})).resolves.toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
   it('keeps maintenance blocked after a timeout until the child actually exits', async () => {
     const child = new MockChildProcess()
     spawnMock.mockReturnValue(child)

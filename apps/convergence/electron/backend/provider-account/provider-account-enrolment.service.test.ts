@@ -186,6 +186,7 @@ describe('ProviderAccountEnrolmentService', () => {
     run: ReturnType<typeof fakeRunner>['run']
     binaryPath?: string | null
     codexMaintenance?: ProviderAccountEnrolmentDeps['codexMaintenance']
+    claudeMaintenance?: ProviderAccountEnrolmentDeps['claudeMaintenance']
   }) {
     return new ProviderAccountEnrolmentService({
       repository,
@@ -201,13 +202,15 @@ describe('ProviderAccountEnrolmentService', () => {
             : options.binaryPath,
         codex: options.binaryPath === undefined ? '/usr/local/bin/codex' : null,
       },
-      claudeMaintenance: (() => {
-        const gate = new ClaudeAccountMaintenance()
-        return {
-          run: <T>(account: { id: string }, work: () => Promise<T>) =>
-            gate.run(account.id, work),
-        }
-      })(),
+      claudeMaintenance:
+        options.claudeMaintenance ??
+        (() => {
+          const gate = new ClaudeAccountMaintenance()
+          return {
+            run: <T>(account: { id: string }, work: () => Promise<T>) =>
+              gate.run(account.id, work),
+          }
+        })(),
       codexMaintenance: options.codexMaintenance ?? {
         run: async (_account, work) => work(),
       },
@@ -912,7 +915,7 @@ describe('ProviderAccountEnrolmentService', () => {
         /config could not be read/,
       )
       expect(runner.run).toHaveBeenCalledTimes(1)
-      expect(repository.get(ACCOUNT_ID)?.status).toBe('unavailable')
+      expect(repository.get(ACCOUNT_ID)?.status).toBe('connected')
     })
     async function enrolledThenBroken() {
       const { fs, files } = fakeFs()
@@ -1045,6 +1048,35 @@ describe('ProviderAccountEnrolmentService', () => {
   })
 
   describe('remove', () => {
+    it('can remove a legacy non-local Claude row without a local process gate', async () => {
+      const { fs, removed } = fakeFs()
+      const runner = fakeRunner()
+      const maintenance = {
+        run: vi.fn(async () => {
+          throw new Error('No local process')
+        }),
+      }
+      const subject = service({
+        fs,
+        run: runner.run,
+        claudeMaintenance: maintenance,
+      })
+      repository.create({
+        id: ACCOUNT_ID,
+        label: 'Legacy',
+        authKind: 'subscription-oauth',
+        configDir: CONFIG_DIR,
+        credentialDir: CREDENTIAL_DIR,
+        email: 'someone@example.com',
+        providerId: 'claude-code',
+        executionHostId: 'little-monster',
+      })
+      await subject.remove(ACCOUNT_ID)
+      expect(repository.get(ACCOUNT_ID)).toBeNull()
+      expect(maintenance.run).not.toHaveBeenCalled()
+      expect(removed).toContain(CONFIG_DIR)
+      expect(removed).toContain(CREDENTIAL_DIR)
+    })
     it('preserves the account and its directories when sign-out exits unsuccessfully', async () => {
       const { fs, files, removed } = fakeFs()
       const runner = fakeRunner({}, loginWritesIdentity(files))

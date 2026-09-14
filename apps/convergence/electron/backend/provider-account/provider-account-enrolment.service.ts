@@ -330,7 +330,6 @@ export class ProviderAccountEnrolmentService {
     const binaryPath = this.requireBinaryPath(account.providerId)
 
     return this.withClaudeAccountStopped(account, async () => {
-      this.repository.setStatus(accountId, 'unavailable', null)
       const configPath = join(account.configDir, '.claude.json')
       let originalConfig: string | null
       try {
@@ -338,12 +337,13 @@ export class ProviderAccountEnrolmentService {
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
           throw new Error(
-            'The account config could not be read. Reconnect was not started; the account remains unavailable.',
+            'The account config could not be read. Reconnect was not started; no credentials were changed.',
             { cause: error },
           )
         }
         originalConfig = null
       }
+      this.repository.setStatus(accountId, 'unavailable', null)
       // Re-seeded because a shared entry added since enrolment would otherwise
       // stay unlinked, and an existing link is left alone.
       await this.seedSymlinks(account.configDir)
@@ -655,7 +655,8 @@ export class ProviderAccountEnrolmentService {
         true,
       )
     }
-    if (layout === 'config-home') return this.removeAccount(account)
+    if (layout === 'config-home' || account.executionHostId !== 'local')
+      return this.removeAccount(account)
     return this.withClaudeAccountStopped(account, async () => {
       this.repository.setStatus(account.id, 'unavailable', null)
       await this.removeAccount(account)

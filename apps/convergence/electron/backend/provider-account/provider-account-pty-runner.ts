@@ -82,8 +82,10 @@ export function createPtyCommandRunner(
       }
 
       let settled = false
+      let escalation: ReturnType<typeof setTimeout> | null = null
       const dataSubscription = child.onData((chunk) => buffer.append(chunk))
       const exitSubscription = child.onExit(({ exitCode }) => {
+        if (escalation) clearTimeout(escalation)
         lifecycle?.onExitConfirmed()
         exitSubscription.dispose()
         if (settled) return
@@ -96,8 +98,15 @@ export function createPtyCommandRunner(
         if (settled) return
         settled = true
         finish()
-        // Killing first: the answer below is only true once nothing can still
-        // be waiting on a terminal no one is reading.
+        escalation = setTimeout(() => {
+          try {
+            child.kill('SIGKILL')
+          } catch {
+            // Only onExit can release a caller's account lease.
+          }
+        }, 5000)
+        escalation.unref?.()
+        // Timeout ends the ceremony, but its account stays leased until exit.
         try {
           child.kill()
         } catch {
