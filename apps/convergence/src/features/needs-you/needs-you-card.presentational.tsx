@@ -1,4 +1,4 @@
-import { MoreHorizontal } from 'lucide-react'
+import { Archive, CheckCheck, MoreHorizontal } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import {
   DropdownMenu,
@@ -35,6 +35,38 @@ export function NeedsYouCard({
       active={active}
       pulsing={pulsing}
       onSelect={onSelect}
+      footer={
+        card.attentionGroup === 'Needs review' && (
+          <div
+            role="group"
+            aria-label={`Review actions for ${session.name}`}
+            className="flex flex-wrap gap-2 border-t border-border/60 p-2"
+          >
+            {!card.dismissed && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="flex-1 gap-1.5 border-border/60 bg-card px-2 text-[11px]"
+                onClick={() => onDismiss(session.id)}
+              >
+                <CheckCheck aria-hidden="true" className="size-3.5" />
+                Acknowledge
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="flex-1 gap-1.5 border-border/60 bg-card px-2 text-[11px]"
+              onClick={() => onArchive(session.id)}
+            >
+              <Archive aria-hidden="true" className="size-3.5" />
+              Archive
+            </Button>
+          </div>
+        )
+      }
       actions={
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

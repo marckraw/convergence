@@ -29,6 +29,7 @@ interface SessionActivityCardProps {
   regeneratingName?: boolean
   selectionLabel?: string
   actions: ReactNode
+  footer?: ReactNode
   onSelect: (id: string) => void
   onRename?: () => void
 }
@@ -42,6 +43,7 @@ export function SessionActivityCard({
   regeneratingName,
   selectionLabel,
   actions,
+  footer,
   onSelect,
   onRename,
 }: SessionActivityCardProps) {
@@ -62,7 +64,7 @@ export function SessionActivityCard({
         } as CSSProperties
       }
       className={cn(
-        'needs-you-card relative flex min-w-0 items-start rounded-lg shadow-sm ring-1 ring-border/60 transition-colors',
+        'needs-you-card relative flex min-w-0 flex-wrap items-start rounded-lg shadow-sm ring-1 ring-border/60 transition-colors',
         active && 'ring-foreground/25',
       )}
     >
@@ -216,6 +218,7 @@ export function SessionActivityCard({
           )}
         </div>
       </TooltipProvider>
+      {footer && <div className="relative z-10 w-full">{footer}</div>}
     </article>
   )
 }
