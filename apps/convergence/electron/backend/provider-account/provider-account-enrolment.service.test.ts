@@ -1055,22 +1055,25 @@ describe('ProviderAccountEnrolmentService', () => {
   })
 
   describe('remove', () => {
-    it('refuses to sign out or delete the only copy of private history until deletion is explicit', async () => {
-      const { fs, files, removed } = fakeFs()
-      const runner = fakeRunner({}, loginWritesIdentity(files))
-      const subject = service({ fs, run: runner.run })
-      await subject.enrol({ email: 'someone@example.com' })
-      files.set(`${CONFIG_DIR}/projects/only-copy.jsonl`, 'private fixture')
-      await expect(subject.remove(ACCOUNT_ID)).rejects.toThrow(
-        /private history or data.*projects/,
-      )
-      expect(repository.get(ACCOUNT_ID)?.status).toBe('connected')
-      expect(runner.run).toHaveBeenCalledTimes(1)
-      expect(removed).not.toContain(CONFIG_DIR)
-      await subject.remove(ACCOUNT_ID, { deletePrivateHistory: true })
-      expect(repository.get(ACCOUNT_ID)).toBeNull()
-      expect(removed).toContain(CONFIG_DIR)
-    })
+    it.each(['local', 'little-monster'])(
+      'protects private history on %s until deletion is explicit',
+      async (executionHostId) => {
+        const { fs, files, removed } = fakeFs()
+        const runner = fakeRunner({}, loginWritesIdentity(files))
+        const subject = service({ fs, run: runner.run })
+        await subject.enrol({ email: 'someone@example.com', executionHostId })
+        files.set(`${CONFIG_DIR}/projects/only-copy.jsonl`, 'private fixture')
+        await expect(subject.remove(ACCOUNT_ID)).rejects.toThrow(
+          /private history or data.*projects/,
+        )
+        expect(repository.get(ACCOUNT_ID)?.status).toBe('connected')
+        expect(runner.run).toHaveBeenCalledTimes(1)
+        expect(removed).not.toContain(CONFIG_DIR)
+        await subject.remove(ACCOUNT_ID, { deletePrivateHistory: true })
+        expect(repository.get(ACCOUNT_ID)).toBeNull()
+        expect(removed).toContain(CONFIG_DIR)
+      },
+    )
     it('can remove a legacy non-local Claude row without a local process gate', async () => {
       const { fs, removed } = fakeFs()
       const runner = fakeRunner()

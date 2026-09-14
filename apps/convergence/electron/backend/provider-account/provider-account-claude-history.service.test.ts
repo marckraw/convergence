@@ -79,6 +79,22 @@ describe('Claude account history layout', () => {
     expect((await service.inspect(account)).entries[0].status).toBe('dangling')
   })
 
+  it('ignores regular OS junk but still protects a directory using the same name', async () => {
+    await fs.mkdir(join(shared, 'projects'))
+    await fs.symlink(join(shared, 'projects'), join(account, 'projects'))
+    await fs.writeFile(join(account, '.DS_Store'), 'metadata')
+    expect(await service.inspect(account)).toMatchObject({
+      fullyShared: true,
+      privateEntries: [],
+    })
+    await fs.unlink(join(account, '.DS_Store'))
+    await fs.mkdir(join(account, '.DS_Store'))
+    await fs.writeFile(join(account, '.DS_Store', 'private'), 'keep')
+    await expect(service.assertRemovalSafe(account, false)).rejects.toThrow(
+      /private history/,
+    )
+  })
+
   it('fails closed for a cyclic link instead of reporting verified sharing', async () => {
     await fs.symlink(join(shared, 'projects'), join(shared, 'projects'))
     await fs.symlink(join(shared, 'projects'), join(account, 'projects'))

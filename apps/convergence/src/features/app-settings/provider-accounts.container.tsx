@@ -49,6 +49,8 @@ export const ProviderAccountsContainer: FC = () => {
   >(null)
   const [removalLayout, setRemovalLayout] =
     useState<ClaudeAccountLayout | null>(null)
+  const [privateDeletionAcknowledged, setPrivateDeletionAcknowledged] =
+    useState(false)
   const [expandedConnectorsAccountId, setExpandedConnectorsAccountId] =
     useState<string | null>(null)
   const [connectors, setConnectors] =
@@ -208,6 +210,8 @@ export const ProviderAccountsContainer: FC = () => {
       setBusyAccountId(accountId)
       setError(null)
       setRemovalLayout(null)
+      setConfirmingRemovalAccountId(null)
+      setPrivateDeletionAcknowledged(false)
       try {
         const layout =
           providerId === 'claude-code'
@@ -232,7 +236,8 @@ export const ProviderAccountsContainer: FC = () => {
   )
 
   const handleConfirmRemove = useCallback(
-    (accountId: string, deletePrivateHistory = false) =>
+    (accountId: string, deletePrivateHistory = false) => {
+      if (deletePrivateHistory && !privateDeletionAcknowledged) return
       void runForAccount(
         accountId,
         async () => {
@@ -249,8 +254,9 @@ export const ProviderAccountsContainer: FC = () => {
         },
         'Account signed out and removed.',
         'Failed to remove the account.',
-      ),
-    [load, runForAccount],
+      )
+    },
+    [load, runForAccount, privateDeletionAcknowledged],
   )
 
   const handleToggleConnectors = useCallback(
@@ -338,6 +344,8 @@ export const ProviderAccountsContainer: FC = () => {
       renameDraft={renameDraft}
       confirmingRemovalAccountId={confirmingRemovalAccountId}
       removalLayout={removalLayout}
+      privateDeletionAcknowledged={privateDeletionAcknowledged}
+      onPrivateDeletionAcknowledged={setPrivateDeletionAcknowledged}
       expandedConnectorsAccountId={expandedConnectorsAccountId}
       connectors={connectors}
       isLoadingConnectors={isLoadingConnectors}
@@ -373,7 +381,10 @@ export const ProviderAccountsContainer: FC = () => {
       onReconnect={handleReconnect}
       onRequestRemove={(accountId) => void handleRequestRemove(accountId)}
       onConfirmRemove={handleConfirmRemove}
-      onCancelRemove={() => setConfirmingRemovalAccountId(null)}
+      onCancelRemove={() => {
+        setConfirmingRemovalAccountId(null)
+        setPrivateDeletionAcknowledged(false)
+      }}
       onCheckHealth={() => void handleCheckHealth()}
       onToggleConnectors={(accountId) => void handleToggleConnectors(accountId)}
       onAuthorizeConnector={(accountId, serverName) =>

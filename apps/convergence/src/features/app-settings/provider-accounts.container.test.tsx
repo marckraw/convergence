@@ -367,6 +367,34 @@ describe('ProviderAccountsContainer', () => {
       screen.queryByText(/Native conversations stay/),
     ).not.toBeInTheDocument()
     expect(providerAccounts.remove).not.toHaveBeenCalled()
+    expect(
+      screen.getByRole('button', {
+        name: 'Sign out and delete private history',
+      }),
+    ).toBeDisabled()
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Sign out and delete private history',
+      }),
+    )
+    expect(providerAccounts.remove).not.toHaveBeenCalled()
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: /Delete the private files/ }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    await screen.findByRole('checkbox', { name: /Delete the private files/ })
+    expect(
+      screen.getByRole('checkbox', { name: /Delete the private files/ }),
+    ).not.toBeChecked()
+    expect(
+      screen.getByRole('button', {
+        name: 'Sign out and delete private history',
+      }),
+    ).toBeDisabled()
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: /Delete the private files/ }),
+    )
     fireEvent.click(
       screen.getByRole('button', {
         name: 'Sign out and delete private history',

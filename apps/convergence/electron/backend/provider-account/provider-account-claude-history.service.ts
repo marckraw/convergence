@@ -1,6 +1,7 @@
 import { promises as nodeFs } from 'fs'
 import { homedir } from 'os'
 import { dirname, join, resolve } from 'path'
+import { isAccountHistoryOsJunk } from './provider-account-history.pure'
 import {
   planAccountDirEntries,
   summarizeClaudeAccountLayout,
@@ -59,8 +60,15 @@ export class ClaudeAccountHistoryService {
       ])
     }
     const entries: ClaudeAccountLayoutEntry[] = []
-    for (const name of names)
-      entries.push(await this.inspectEntry(configDir, name))
+    for (const name of names) {
+      const entry = await this.inspectEntry(configDir, name)
+      if (
+        isAccountHistoryOsJunk(name) &&
+        ['real-file', 'missing', 'linked'].includes(entry.status)
+      )
+        continue
+      entries.push(entry)
+    }
     return summarizeClaudeAccountLayout(entries)
   }
 
@@ -69,6 +77,7 @@ export class ClaudeAccountHistoryService {
       await this.entries(this.sharedDir),
     ).shared
     for (const name of names) {
+      if (isAccountHistoryOsJunk(name)) continue
       const entry = await this.inspectEntry(configDir, name)
       if (entry.status !== 'missing' && entry.status !== 'dangling') continue
       const target = join(this.sharedDir, name)

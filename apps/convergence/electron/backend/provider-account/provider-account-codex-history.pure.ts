@@ -72,7 +72,4 @@ export function isCodexWriterLockName(name: string): boolean {
   )
 }
 
-/** These regular OS metadata files do not represent conversation content. */
-export function isCodexHistoryOsJunk(name: string): boolean {
-  return name === '.DS_Store' || name === 'Thumbs.db' || name === '.localized'
-}
+export { isAccountHistoryOsJunk as isCodexHistoryOsJunk } from './provider-account-history.pure'
