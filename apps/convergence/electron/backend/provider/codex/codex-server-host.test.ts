@@ -273,8 +273,13 @@ describe('CodexServerHost', () => {
     aConnection.close()
     const b = env.registry.get({ account: accountB })
     const bConnection = await b.connect()
-    await a.withStoppedServer(async () => {}, { retire: true })
+    await env.registry.withStoppedServer(
+      { account: accountA },
+      async () => {},
+      { retire: true },
+    )
     await expect(a.connect()).rejects.toThrow(/retired/)
+    expect(env.registry.get({ account: accountA })).not.toBe(a)
     expect(env.children[1].exitCode).toBeNull()
     await expect(
       bConnection.rpc.request('model/list', {}),

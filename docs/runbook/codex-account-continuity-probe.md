@@ -93,8 +93,19 @@ Run with the repository's Node version and an explicitly selected Codex binary:
 ```sh
 CVG_CANARY_PROFILES=/absolute/path/to/isolated-test-profiles \
 CVG_CODEX_BINARY=/absolute/path/to/codex \
+CVG_CANARY_ACCOUNT_A="<expected-account-a-fingerprint>" \
+CVG_CANARY_ACCOUNT_B="<expected-account-b-fingerprint>" \
 fnm exec --using "$(cat .nvmrc)" -- node apps/convergence/tools/canary-codex-account-switching.mjs --run
 ```
+
+The expected fingerprints are the first 16 hexadecimal characters of SHA-256
+of each intended ChatGPT `account_id`. Supply the known test identities rather
+than deriving expectations from whatever credentials happen to be present at
+run time. The preflight checks these before starting a server and checks them
+again through the identity flow before any turn. Realpath checks reject ambient
+and enrolled homes (including symlinked ones), escaped credentials/config, and
+history outside the isolated test root. Run its no-login controls with
+`node --test apps/convergence/tools/codex-account-canary-preflight.test.mjs`.
 
 The canary uses the actual `CodexServerHostRegistry` with a temporary user home
 and stripped API-key environment. It checks `account/read` against each

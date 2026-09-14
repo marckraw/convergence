@@ -54,7 +54,7 @@ function resolveBinary() {
   if (process.env.CVG_CODEX_BINARY) return process.env.CVG_CODEX_BINARY
   const output = execFileSync(
     process.env.SHELL || '/bin/zsh',
-    ['-lic', 'command -v codex'],
+    ['-lc', 'command -v codex'],
     { encoding: 'utf8' },
   )
   const binary = output

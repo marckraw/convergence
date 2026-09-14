@@ -72,7 +72,17 @@ export function planCrewImport(
       if (spec.host === 'local')
         options.push({ value: 'new', label: 'Create new' })
       const selected = choices[key]
-      if (selected === 'new' || candidates.length === 0)
+      // A member of this crew already carrying the role's baton is reachable
+      // here even though its conversation was renamed out of `candidates`
+      // (MAR-2918). The offer is attached below, once every role's binding is
+      // known; this is only the door that honours it once taken.
+      const chosenHolder =
+        selected && selected !== 'new'
+          ? batonHolderSessions(crew, batonName, world).find(
+              (s) => s.id === selected,
+            )
+          : undefined
+      if (!chosenHolder && (selected === 'new' || candidates.length === 0))
         return {
           ...base,
           state: spec.host === 'local' ? 'create' : 'remote-create-unsupported',
@@ -84,11 +94,13 @@ export function planCrewImport(
                 : 'will create'
               : 'Remote conversations can be bound, but cannot be created by import yet.',
         }
-      const bound = selected
-        ? candidates.find((s) => s.id === selected)
-        : candidates.length === 1
-          ? candidates[0]
-          : undefined
+      const bound =
+        chosenHolder ??
+        (selected
+          ? candidates.find((s) => s.id === selected)
+          : candidates.length === 1
+            ? candidates[0]
+            : undefined)
       if (!bound)
         return {
           ...base,
@@ -160,6 +172,37 @@ export function planCrewImport(
           ? [{ value: 'new', label: 'Create new' }]
           : []),
       ]
+    }
+  }
+  // A `create` role whose baton is already carried by a member this import
+  // keeps is the one dead end the reconciliation could reach (MAR-2918): the
+  // member's conversation was renamed locally, so the file's name finds no
+  // candidate, and the final-baton check then blocks the crew row over a
+  // collision the dialog offered no way to resolve. The way out is the member
+  // itself, so name it here. Offered and never taken: the planner still binds
+  // nothing the user did not choose (MAR-2903), which is why this writes
+  // `options` and leaves `state` alone.
+  for (const role of roles) {
+    if (role.state !== 'create') continue
+    const batonName = normalizeCrewBatonName(role.role)!
+    const holders = batonHolderSessions(crew, batonName, world).filter(
+      (holder) => !roles.some((other) => other.sessionId === holder.id),
+    )
+    if (holders.length === 1) {
+      const holder = holders[0]!
+      role.detail = `${role.detail}; ${describeSession(holder)} already holds baton "${batonName}" — bind it instead of creating a second member`
+      role.options = [
+        {
+          value: holder.id,
+          label: `Bind the member that holds this baton · ${describeSession(holder)} · ${candidateContext(holder)} · ${holder.id}`,
+        },
+        { value: 'new', label: 'Create new' },
+      ]
+    } else if (holders.length > 1) {
+      // Two members already sharing one baton is a crew the import cannot
+      // repair by choosing: whichever one it bound, the other would still
+      // collide. Name them and send the user to the crew.
+      role.detail = `${role.detail}; ${holders.map(describeSession).join(' and ')} both hold baton "${batonName}" — rename one in the crew before importing`
     }
   }
   const crewRow: CrewImportPlan['crew'] = {
@@ -512,6 +555,35 @@ function resolveProject(
       detail: `missing lane ${lane} in ${reference}; create it in the project's Lanes UI`,
     }
   return { projectId: lanes[0]!.id }
+}
+/**
+ * The conversations of the crew's members that carry `batonName` (MAR-2918).
+ *
+ * Read off the membership rather than off the file, because the whole point is
+ * the member the file can no longer find by name: a local rename moves a
+ * conversation out of a role's candidates while its baton stays exactly where
+ * it was. A member whose session record is missing is skipped -- there is
+ * nothing to offer binding to.
+ *
+ * Archived conversations are skipped for the same reason `candidates` drops
+ * them: import does not unarchive, so offering one would promise a binding the
+ * apply has no business making.
+ */
+function batonHolderSessions(
+  crew: CrewImportWorld['crews'][number] | undefined,
+  batonName: string,
+  world: CrewImportWorld,
+): CrewImportWorld['sessions'][number][] {
+  return (crew?.members ?? [])
+    .filter(
+      (member) => normalizedRoleReference(member.batonName ?? '') === batonName,
+    )
+    .map((member) => world.sessions.find((s) => s.id === member.sessionId))
+    .filter((session) => session !== undefined)
+    .filter((session) => session.archivedAt === null)
+}
+function describeSession(session: CrewImportWorld['sessions'][number]): string {
+  return `"${session.name}"`
 }
 function candidateContext(
   session: CrewImportWorld['sessions'][number],

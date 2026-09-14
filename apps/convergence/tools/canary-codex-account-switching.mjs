@@ -3,10 +3,15 @@ import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, realpath, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { build } from 'esbuild'
+import {
+  assertCanaryProfileIsolation,
+  assertExpectedCanaryAccounts,
+  assertCanaryAccountIdentities,
+} from './codex-account-canary-preflight.mjs'
 
 // Opt-in authenticated canary. Uses only two explicitly supplied test homes;
 // it never logs in, copies credentials, or touches an ambient Codex server.
@@ -16,23 +21,25 @@ assert(
 )
 const profiles = process.env.CVG_CANARY_PROFILES
 const binary = process.env.CVG_CODEX_BINARY
+const expectedAccounts = [
+  process.env.CVG_CANARY_ACCOUNT_A,
+  process.env.CVG_CANARY_ACCOUNT_B,
+]
+assertExpectedCanaryAccounts(expectedAccounts)
 assert(
   profiles && binary,
   'CVG_CANARY_PROFILES and CVG_CODEX_BINARY are required',
 )
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const homes = await assertCanaryProfileIsolation({
+  profiles,
+  userHome: homedir(),
+  codexHome: process.env.CODEX_HOME,
+})
+await assertCanaryAccountIdentities(homes, expectedAccounts)
 const root = await mkdtemp(join(tmpdir(), 'cvg-authenticated-canary-'))
 const userHome = join(root, 'user-home')
 await mkdir(userHome)
-const homes = await Promise.all(
-  ['account-a', 'account-b'].map((name) => realpath(join(profiles, name))),
-)
-assert.notEqual(homes[0], homes[1])
-assert.equal(
-  await realpath(join(homes[0], 'sessions')),
-  await realpath(join(homes[1], 'sessions')),
-  'Test homes must share only their conversation storage',
-)
 const evidence = {
   startedAt: new Date().toISOString(),
   root,
@@ -64,19 +71,33 @@ function deferred() {
 }
 
 async function identity(connection, index) {
-  const auth = JSON.parse(
-    await readFile(join(homes[index], 'auth.json'), 'utf8'),
-  )
+  const storedAuth = await readFile(join(homes[index], 'auth.json'), 'utf8')
+  let auth
+  try {
+    auth = JSON.parse(storedAuth)
+  } catch {
+    throw new Error('Test account credential file is not valid JSON')
+  }
   assert.equal(
     typeof auth.tokens?.account_id,
     'string',
     'Expected a ChatGPT account_id in the isolated credential store',
   )
   const jwt = auth.tokens.id_token
-  assert.equal(typeof jwt, 'string', 'Expected an encoded ID token')
-  const claims = JSON.parse(
-    Buffer.from(jwt.split('.')[1], 'base64url').toString('utf8'),
+  assert.equal(
+    hash(auth.tokens.account_id),
+    expectedAccounts[index],
+    'Test account does not match its expected fingerprint; no turns may run',
   )
+  assert.equal(typeof jwt, 'string', 'Expected an encoded ID token')
+  let claims
+  try {
+    claims = JSON.parse(
+      Buffer.from(jwt.split('.')[1], 'base64url').toString('utf8'),
+    )
+  } catch {
+    throw new Error('Test account ID-token claims are not valid JSON')
+  }
   const response = await connection.rpc.request('account/read', {
     refreshToken: false,
   })
@@ -85,9 +106,8 @@ async function identity(connection, index) {
     'chatgpt',
     'Test profile is not signed into ChatGPT',
   )
-  assert.equal(
-    response.account.email?.toLowerCase(),
-    claims.email?.toLowerCase(),
+  assert(
+    response.account.email?.toLowerCase() === claims.email?.toLowerCase(),
     'Account API and enrolled token identities disagree',
   )
   return {
@@ -238,6 +258,7 @@ try {
     await Promise.all(
       [
         fileURLToPath(import.meta.url),
+        join(appRoot, 'tools/codex-account-canary-preflight.mjs'),
         join(appRoot, 'electron/backend/provider/codex/codex-server-host.ts'),
         join(appRoot, 'electron/backend/provider/codex/jsonrpc.ts'),
       ].map(async (path) => [
