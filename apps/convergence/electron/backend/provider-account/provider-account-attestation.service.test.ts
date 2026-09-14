@@ -67,6 +67,7 @@ describe('ProviderAccountAttestationService', () => {
     version?: string | null
     intervalMs?: number
     historyWarnings?: string[]
+    claudeHistory?: import('./provider-account-manifest.pure').ClaudeAccountLayout
   }) {
     return new ProviderAccountAttestationService({
       repository,
@@ -76,6 +77,9 @@ describe('ProviderAccountAttestationService', () => {
           warnings: options.historyWarnings ?? [],
         }),
       },
+      ...(options.claudeHistory
+        ? { claudeHistory: { inspect: async () => options.claudeHistory! } }
+        : {}),
       fs: fakeFs(options.files ?? {}, options.dirs ?? {}),
       homeDir: HOME,
       now: () => clock,
@@ -83,6 +87,29 @@ describe('ProviderAccountAttestationService', () => {
       claudeVersion: () => options.version ?? '2.1.220',
     })
   }
+
+  it('reports private history independently of matching account identity', async () => {
+    const layout = {
+      entries: [
+        {
+          name: 'projects',
+          status: 'real-directory' as const,
+          hasPrivateContent: true,
+        },
+      ],
+      fullyShared: false,
+      privateEntries: ['projects'],
+      unreadableEntries: [],
+    }
+    const report = await service({
+      files: {
+        [`${CONFIG_DIR}/.claude.json`]: identityJson('a@example.com', 'org-a'),
+      },
+      claudeHistory: layout,
+    }).attestAll()
+    expect(report.accounts[0].outcome).toBe('verified')
+    expect(report.accounts[0].claudeHistory).toEqual(layout)
+  })
 
   it('keeps a matching account connected and records when it checked', async () => {
     const subject = service({

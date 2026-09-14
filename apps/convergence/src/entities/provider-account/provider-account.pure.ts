@@ -111,6 +111,19 @@ export function buildProviderAccountSettingsRows(
     const identity = describeProviderAccountIdentity(account)
     const verdict = verdicts.get(account.id)
     const notes: string[] = [...(verdict?.nativeHistoryWarnings ?? [])]
+    for (const entry of verdict?.claudeHistory?.entries ?? []) {
+      if (entry.status === 'linked') continue
+      const descriptions = {
+        'wrong-target': 'points to a different location; left unchanged',
+        dangling:
+          'has a broken link; reconnect can relink it when shared data is available',
+        'real-directory': 'is a private directory; its contents are not shared',
+        'real-file': 'is a private file; its contents are not shared',
+        missing: 'is not linked; reconnect can add the shared link',
+        unreadable: 'could not be inspected; sharing is unconfirmed',
+      }
+      notes.push(`${entry.name}: ${descriptions[entry.status]}.`)
+    }
 
     if (verdict?.outcome === 'unreadable') {
       notes.push(
@@ -124,7 +137,7 @@ export function buildProviderAccountSettingsRows(
           'Reported rather than silently partitioned.',
       )
     }
-    if (verdict?.missingLinks.length) {
+    if (verdict?.missingLinks.length && !verdict.claudeHistory) {
       notes.push(
         `Shared entries this account cannot see: ${verdict.missingLinks.join(', ')}. ` +
           'Reconnect relinks them.',

@@ -510,8 +510,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }) => ipcRenderer.invoke('providerAccounts:enrol', input),
     reconnect: (accountId: string) =>
       ipcRenderer.invoke('providerAccounts:reconnect', accountId),
-    remove: (accountId: string) =>
-      ipcRenderer.invoke('providerAccounts:remove', accountId),
+    remove: (accountId: string, options?: { deletePrivateHistory?: boolean }) =>
+      ipcRenderer.invoke('providerAccounts:remove', accountId, options),
+    inspectHistory: (accountId: string) =>
+      ipcRenderer.invoke('providerAccounts:inspectHistory', accountId),
     setDefault: (accountId: string) =>
       ipcRenderer.invoke('providerAccounts:setDefault', accountId),
     rename: (accountId: string, label: string) =>

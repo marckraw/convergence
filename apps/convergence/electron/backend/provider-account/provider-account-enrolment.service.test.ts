@@ -42,6 +42,12 @@ function fakeFs(seed: Record<string, string> = {}) {
   const missing = (path: string) =>
     Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
   const fs: ProviderAccountFs = {
+    unlink: vi.fn(async (path) => {
+      if (dirs.has(path) && !links.has(path))
+        throw new Error('Cannot unlink a directory')
+      files.delete(path)
+      links.delete(path)
+    }),
     lstat: vi.fn(async (path: string) => {
       const directory = dirs.has(path) || entriesOf(path).length > 0
       if (!links.has(path) && !files.has(path) && !directory)
@@ -92,11 +98,12 @@ function fakeFs(seed: Record<string, string> = {}) {
     chmod: vi.fn(async () => {}),
     readdir: vi.fn(async (path: string) => {
       const names = entriesOf(path)
-      if (!names.length && !dirs.has(path)) throw new Error(`ENOENT: ${path}`)
+      if (!names.length && !dirs.has(path)) throw missing(path)
       return names
     }),
     symlink: vi.fn(async (target: string, path: string) => {
-      if (links.has(path) || files.has(path)) throw new Error(`EEXIST: ${path}`)
+      if (links.has(path) || files.has(path))
+        throw Object.assign(new Error(`EEXIST: ${path}`), { code: 'EEXIST' })
       links.set(path, target)
     }),
     readFile: vi.fn(async (path: string) => {
@@ -1048,6 +1055,25 @@ describe('ProviderAccountEnrolmentService', () => {
   })
 
   describe('remove', () => {
+    it.each(['local', 'little-monster'])(
+      'protects private history on %s until deletion is explicit',
+      async (executionHostId) => {
+        const { fs, files, removed } = fakeFs()
+        const runner = fakeRunner({}, loginWritesIdentity(files))
+        const subject = service({ fs, run: runner.run })
+        await subject.enrol({ email: 'someone@example.com', executionHostId })
+        files.set(`${CONFIG_DIR}/projects/only-copy.jsonl`, 'private fixture')
+        await expect(subject.remove(ACCOUNT_ID)).rejects.toThrow(
+          /private history or data.*projects/,
+        )
+        expect(repository.get(ACCOUNT_ID)?.status).toBe('connected')
+        expect(runner.run).toHaveBeenCalledTimes(1)
+        expect(removed).not.toContain(CONFIG_DIR)
+        await subject.remove(ACCOUNT_ID, { deletePrivateHistory: true })
+        expect(repository.get(ACCOUNT_ID)).toBeNull()
+        expect(removed).toContain(CONFIG_DIR)
+      },
+    )
     it('can remove a legacy non-local Claude row without a local process gate', async () => {
       const { fs, removed } = fakeFs()
       const runner = fakeRunner()

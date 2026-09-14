@@ -1,4 +1,5 @@
 import type {
+  ClaudeAccountLayout,
   ProviderAccount,
   ProviderAccountConnectors,
   ProviderAccountEnrolResult,
@@ -23,8 +24,15 @@ export const providerAccountApi = {
     window.electronAPI.providerAccounts.enrol(input),
   reconnect: (accountId: string): Promise<ProviderAccount> =>
     window.electronAPI.providerAccounts.reconnect(accountId),
-  remove: (accountId: string): Promise<void> =>
-    window.electronAPI.providerAccounts.remove(accountId),
+  remove: (
+    accountId: string,
+    options?: { deletePrivateHistory?: boolean },
+  ): Promise<void> =>
+    options
+      ? window.electronAPI.providerAccounts.remove(accountId, options)
+      : window.electronAPI.providerAccounts.remove(accountId),
+  inspectHistory: (accountId: string): Promise<ClaudeAccountLayout | null> =>
+    window.electronAPI.providerAccounts.inspectHistory(accountId),
   setDefault: (accountId: string): Promise<ProviderAccount[]> =>
     window.electronAPI.providerAccounts.setDefault(accountId),
   rename: (accountId: string, label: string): Promise<ProviderAccount[]> =>

@@ -3,7 +3,20 @@ import {
   CLAUDE_ACCOUNT_PRIVATE_ENTRIES,
   detectAccountDirDrift,
   planAccountDirEntries,
+  summarizeClaudeAccountLayout,
 } from './provider-account-manifest.pure'
+
+it('does not promise shared history when any entry is private or unconfirmed', () => {
+  const layout = summarizeClaudeAccountLayout([
+    { name: 'projects', status: 'real-directory', hasPrivateContent: true },
+    { name: 'sessions', status: 'unreadable', hasPrivateContent: false },
+    { name: 'history.jsonl', status: 'linked', hasPrivateContent: false },
+  ])
+  expect(layout.fullyShared).toBe(false)
+  expect(layout.privateEntries).toEqual(['projects'])
+  expect(layout.unreadableEntries).toEqual(['sessions'])
+  expect(summarizeClaudeAccountLayout([]).fullyShared).toBe(false)
+})
 
 /** What PA0 actually observed in a shared profile after one turn. */
 const SHARED_ENTRIES = [

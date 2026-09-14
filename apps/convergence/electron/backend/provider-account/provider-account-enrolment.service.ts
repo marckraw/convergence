@@ -13,6 +13,8 @@ import {
   isRecord,
 } from './provider-account-claude-config.pure'
 import { attestAccountIdentity } from './provider-account-attestation.pure'
+import { ClaudeAccountHistoryService } from './provider-account-claude-history.service'
+import type { ClaudeAccountLayout } from './provider-account-manifest.pure'
 import {
   buildCodexAccountLoginCommand,
   buildCodexAccountLogoutCommand,
@@ -29,7 +31,6 @@ import {
   readClaudeIdentityFromConfig,
   type ProviderAccountCommand,
 } from './provider-account-enrolment.pure'
-import { planAccountDirEntries } from './provider-account-manifest.pure'
 import {
   scanSharedSettingsForCredentials,
   type ProviderAccountSettingsWarning,
@@ -61,6 +62,7 @@ import type { ProviderAccount } from './provider-account.types'
  */
 
 export interface ProviderAccountFs extends CodexHistoryFs {
+  unlink: (path: string) => Promise<void>
   mkdir: (path: string) => Promise<void>
   /** Codex writes its credential as a plaintext file; permissions are ours. */
   chmod: (path: string, mode: number) => Promise<void>
@@ -87,6 +89,7 @@ export type ProviderAccountCommandRunner = (
 
 const defaultFs: ProviderAccountFs = {
   ...codexHistoryFs,
+  unlink: (path) => nodeFs.unlink(path),
   mkdir: async (path) => {
     await nodeFs.mkdir(path, { recursive: true })
   },
@@ -174,6 +177,7 @@ export class ProviderAccountEnrolmentService {
   private readonly codexMaintenance: ProviderAccountEnrolmentDeps['codexMaintenance']
   private readonly claudeMaintenance: ProviderAccountEnrolmentDeps['claudeMaintenance']
   private readonly codexHistory: CodexAccountHistoryService
+  private readonly claudeHistory: ClaudeAccountHistoryService
 
   constructor(deps: ProviderAccountEnrolmentDeps) {
     this.repository = deps.repository
@@ -185,6 +189,10 @@ export class ProviderAccountEnrolmentService {
     this.codexMaintenance = deps.codexMaintenance
     this.claudeMaintenance = deps.claudeMaintenance
     this.codexHistory = new CodexAccountHistoryService({
+      homeDir: this.homeDir,
+      fs: this.fs,
+    })
+    this.claudeHistory = new ClaudeAccountHistoryService({
       homeDir: this.homeDir,
       fs: this.fs,
     })
@@ -640,7 +648,29 @@ export class ProviderAccountEnrolmentService {
     }
   }
 
-  async remove(accountId: string): Promise<void> {
+  async inspectHistory(accountId: string): Promise<ClaudeAccountLayout | null> {
+    const account = this.repository.get(accountId)
+    if (!account) throw new Error('The provider account is no longer enrolled.')
+    if (account.providerId !== 'claude-code') return null
+    this.assertClaudeAccountPaths(account)
+    return this.claudeHistory.inspect(account.configDir)
+  }
+
+  private assertClaudeAccountPaths(account: ProviderAccount): void {
+    assertRemovableAccountDir(
+      account.configDir,
+      deriveProviderAccountConfigRoot(this.homeDir, account.providerId),
+    )
+    assertRemovableAccountDir(
+      account.credentialDir,
+      deriveProviderAccountCredentialRoot(this.homeDir, account.providerId),
+    )
+  }
+
+  async remove(
+    accountId: string,
+    options: { deletePrivateHistory?: boolean } = {},
+  ): Promise<void> {
     const account = this.repository.get(accountId)
     if (!account) return
 
@@ -655,12 +685,20 @@ export class ProviderAccountEnrolmentService {
         true,
       )
     }
-    if (layout === 'config-home' || account.executionHostId !== 'local')
-      return this.removeAccount(account)
-    return this.withClaudeAccountStopped(account, async () => {
+    if (layout === 'config-home') return this.removeAccount(account)
+    const removeClaude = async () => {
+      this.assertClaudeAccountPaths(account)
+      // Our gate stops Convergence processes, not a foreign CLI using this
+      // namespace. A foreign write after inspection can still be removed.
+      await this.claudeHistory.assertRemovalSafe(
+        account.configDir,
+        options.deletePrivateHistory === true,
+      )
       this.repository.setStatus(account.id, 'unavailable', null)
       await this.removeAccount(account)
-    })
+    }
+    if (account.executionHostId !== 'local') return removeClaude()
+    return this.withClaudeAccountStopped(account, removeClaude)
   }
 
   private async removeAccount(account: ProviderAccount): Promise<void> {
@@ -783,20 +821,7 @@ export class ProviderAccountEnrolmentService {
    * must never clobber real state.
    */
   private async seedSymlinks(configDir: string): Promise<void> {
-    const sharedEntries = await this.readdirSafe(this.sharedDir)
-    const plan = planAccountDirEntries(sharedEntries)
-
-    for (const entry of plan.shared) {
-      try {
-        await this.fs.symlink(
-          join(this.sharedDir, entry),
-          join(configDir, entry),
-        )
-      } catch {
-        // Already present, or the shared entry vanished between readdir and
-        // symlink. Neither is worth failing an enrolment over.
-      }
-    }
+    await this.claudeHistory.seedMissingLinks(configDir)
   }
 
   /**

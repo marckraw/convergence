@@ -1,3 +1,5 @@
+import type { ClaudeAccountLayout } from '@/shared/types/provider-account-layout.types'
+export type { ClaudeAccountLayout } from '@/shared/types/provider-account-layout.types'
 export type ProviderAccountStatus = 'connected' | 'expired' | 'unavailable'
 
 export type ProviderAccountEnrollmentProvider = 'claude-code' | 'codex'
@@ -47,6 +49,7 @@ export interface ProviderAccountAttestationResult {
   unknownEntries: string[]
   missingLinks: string[]
   nativeHistoryWarnings?: string[]
+  claudeHistory?: ClaudeAccountLayout
 }
 
 export interface ProviderAccountHealth {

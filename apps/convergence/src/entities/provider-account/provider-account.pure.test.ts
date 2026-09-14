@@ -109,6 +109,41 @@ describe('describeProviderAccountStatus', () => {
 })
 
 describe('buildProviderAccountSettingsRows', () => {
+  it('explains private data and foreign targets without promising reconnect overwrites them', () => {
+    const [row] = buildProviderAccountSettingsRows(
+      [account()],
+      health({
+        accounts: [
+          result({
+            claudeHistory: {
+              entries: [
+                {
+                  name: 'projects',
+                  status: 'real-directory',
+                  hasPrivateContent: true,
+                },
+                {
+                  name: 'sessions',
+                  status: 'wrong-target',
+                  hasPrivateContent: false,
+                },
+              ],
+              fullyShared: false,
+              privateEntries: ['projects'],
+              unreadableEntries: [],
+            },
+          }),
+        ],
+      }),
+    )
+    expect(row.notes).toContain(
+      'projects: is a private directory; its contents are not shared.',
+    )
+    expect(row.notes).toContain(
+      'sessions: points to a different location; left unchanged.',
+    )
+    expect(row.notes.join(' ')).not.toContain('Reconnect relinks')
+  })
   it('leads with identity and keeps the label only when it adds something', () => {
     const [named, unnamed] = buildProviderAccountSettingsRows(
       [

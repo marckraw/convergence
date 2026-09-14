@@ -40,6 +40,7 @@ import { ClaudeCodeProvider } from '../backend/provider/claude-code/claude-code-
 import { CodexProvider } from '../backend/provider/codex/codex-provider'
 import { CodexServerHostRegistry } from '../backend/provider/codex/codex-server-host'
 import { ClaudeAccountMaintenance } from '../backend/provider/claude-code/claude-account-maintenance.service'
+import { ClaudeAccountHistoryService } from '../backend/provider-account/provider-account-claude-history.service'
 import { CursorProvider } from '../backend/provider/cursor/cursor-provider'
 import { PiProvider } from '../backend/provider/pi/pi-provider'
 import { AntigravityProvider } from '../backend/provider/antigravity/antigravity-provider'
@@ -369,6 +370,7 @@ async function startApp(): Promise<void> {
     new ProviderAccountAttestationService({
       repository: providerAccountRepository,
       codexHistory: codexAccountHistory,
+      claudeHistory: new ClaudeAccountHistoryService(),
     })
   /**
    * Resolves a recorded account id to the directories that decide which

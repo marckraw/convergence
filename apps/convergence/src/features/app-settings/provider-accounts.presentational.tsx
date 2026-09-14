@@ -1,5 +1,6 @@
 import { Pencil, Plug, RefreshCw, Star, Trash2 } from 'lucide-react'
 import type {
+  ClaudeAccountLayout,
   ProviderAccountConnectors,
   ProviderAccountEnrollmentProvider,
   ProviderAccountSettingsRow,
@@ -36,6 +37,9 @@ export interface ProviderAccountsFieldsProps {
   renamingAccountId: string | null
   renameDraft: string
   confirmingRemovalAccountId: string | null
+  removalLayout: ClaudeAccountLayout | null
+  privateDeletionAcknowledged: boolean
+  onPrivateDeletionAcknowledged: (value: boolean) => void
   /** The account whose connectors are open, if any. */
   expandedConnectorsAccountId: string | null
   connectors: ProviderAccountConnectors | null
@@ -54,7 +58,7 @@ export interface ProviderAccountsFieldsProps {
   onSetDefault: (accountId: string) => void
   onReconnect: (accountId: string) => void
   onRequestRemove: (accountId: string) => void
-  onConfirmRemove: (accountId: string) => void
+  onConfirmRemove: (accountId: string, deletePrivateHistory?: boolean) => void
   onCancelRemove: () => void
   onCheckHealth: () => void
   onToggleConnectors: (accountId: string) => void
@@ -83,6 +87,9 @@ export function ProviderAccountsFields({
   renamingAccountId,
   renameDraft,
   confirmingRemovalAccountId,
+  removalLayout,
+  privateDeletionAcknowledged,
+  onPrivateDeletionAcknowledged,
   expandedConnectorsAccountId,
   connectors,
   isLoadingConnectors,
@@ -266,10 +273,24 @@ export function ProviderAccountsFields({
                           type="button"
                           variant="destructive"
                           size="sm"
-                          disabled={isBusy}
-                          onClick={() => onConfirmRemove(row.id)}
+                          disabled={
+                            isBusy ||
+                            (!isCodex &&
+                              !!removalLayout?.privateEntries.length &&
+                              !privateDeletionAcknowledged)
+                          }
+                          onClick={() =>
+                            onConfirmRemove(
+                              row.id,
+                              !isCodex &&
+                                !!removalLayout?.privateEntries.length &&
+                                privateDeletionAcknowledged,
+                            )
+                          }
                         >
-                          Sign out and remove
+                          {!isCodex && removalLayout?.privateEntries.length
+                            ? 'Sign out and delete private history'
+                            : 'Sign out and remove'}
                         </Button>
                       </>
                     ) : (
@@ -288,11 +309,35 @@ export function ProviderAccountsFields({
                 </div>
 
                 {isConfirmingRemoval ? (
-                  <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm leading-relaxed text-destructive">
-                    {isCodex
-                      ? 'This signs the account out of Codex and removes its local account directory. Shared native history and Convergence messages remain. Any history stored only in this account directory, including migration backups, is removed.'
-                      : 'This signs the account out of Claude Code and deletes its directories. Conversations stay — they are shared — but this account has to be enrolled again to serve turns.'}
-                  </p>
+                  <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm leading-relaxed text-destructive">
+                    <p>
+                      {isCodex
+                        ? 'This signs the account out of Codex and removes its local account directory. Shared native history and Convergence messages remain. Any history stored only in this account directory, including migration backups, is removed.'
+                        : removalLayout?.privateEntries.length
+                          ? `This account contains private history or data in ${removalLayout.privateEntries.join(', ')}. Removing it will permanently delete those copies. Convergence messages remain. Cancel to keep the account and its files.`
+                          : removalLayout?.fullyShared
+                            ? 'This signs the account out of Claude Code and deletes its account directories. Native conversations stay in the verified shared location. Convergence messages remain.'
+                            : 'This signs the account out of Claude Code and deletes its account directories. Conversation sharing is not fully verified. Linked destinations and Convergence messages remain.'}
+                    </p>
+                    {!isCodex && !!removalLayout?.privateEntries.length ? (
+                      <label className="mt-2 flex cursor-pointer items-start gap-2">
+                        <Input
+                          type="checkbox"
+                          checked={privateDeletionAcknowledged}
+                          disabled={isBusy}
+                          onChange={(event) =>
+                            onPrivateDeletionAcknowledged(event.target.checked)
+                          }
+                          className="mt-1 h-4 w-4 shrink-0 accent-destructive"
+                        />
+                        <span>
+                          Delete the private files in{' '}
+                          {removalLayout.privateEntries.join(', ')} — this
+                          cannot be undone.
+                        </span>
+                      </label>
+                    ) : null}
+                  </div>
                 ) : null}
 
                 {isRenaming ? (

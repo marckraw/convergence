@@ -29,8 +29,15 @@ export function registerProviderAccountIpcHandlers(deps: {
     deps.enrolment.reconnect(accountId),
   )
 
-  ipcMain.handle('providerAccounts:remove', (_event, accountId: string) =>
-    deps.enrolment.remove(accountId),
+  ipcMain.handle(
+    'providerAccounts:remove',
+    (_event, accountId: string, options?: { deletePrivateHistory?: boolean }) =>
+      deps.enrolment.remove(accountId, options),
+  )
+
+  ipcMain.handle(
+    'providerAccounts:inspectHistory',
+    (_event, accountId: string) => deps.enrolment.inspectHistory(accountId),
   )
 
   ipcMain.handle('providerAccounts:setDefault', (_event, accountId: string) => {
