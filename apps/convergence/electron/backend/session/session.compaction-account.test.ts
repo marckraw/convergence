@@ -20,6 +20,7 @@ let service: SessionService
 let sessionId: string
 let homes: Array<string | undefined>
 let holdCompaction: boolean
+let disconnectedAccount: boolean
 let releaseCompaction: ((fail?: boolean) => void) | undefined
 let cleanup: (() => Promise<void>) | undefined
 
@@ -28,6 +29,7 @@ beforeEach(async () => {
   const db = getDatabase()
   homes = []
   holdCompaction = false
+  disconnectedAccount = false
   releaseCompaction = undefined
   const server = new FakeCodexServer({
     onRequest: (message, connection) => {
@@ -61,9 +63,13 @@ beforeEach(async () => {
   hosts.setBinary('/fixture/codex', '0.154.0')
   const providers = new ProviderRegistry()
   providers.register(
-    new CodexProvider(hosts, null, undefined, (id) =>
-      id === 'account-b' ? { configDir: join(dir, 'account-b') } : null,
-    ),
+    new CodexProvider(hosts, null, undefined, (id) => {
+      if (disconnectedAccount && id === 'account-b')
+        throw new Error(
+          'Account B is disconnected. Reconnect it before continuing.',
+        )
+      return id === 'account-b' ? { configDir: join(dir, 'account-b') } : null
+    }),
   )
   service = new SessionService(db, new LocalExecutionHost(providers), dir)
   const capture = new TurnCaptureService(new GitService(), db, {
@@ -88,15 +94,19 @@ beforeEach(async () => {
     await hosts.stopAll()
     rmSync(dir, { recursive: true, force: true })
   }
-  await service.start(sessionId, {
-    text: 'first',
-    providerAccountId: 'account-b',
-  })
+})
+
+async function startConversation(
+  providerAccountId: string | null = 'account-b',
+) {
+  await service.start(sessionId, { text: 'first', providerAccountId })
   await vi.waitFor(() =>
     expect(service.getById(sessionId)?.status).toBe('completed'),
   )
-  expect(service.getLastTurnProviderAccountId(sessionId)).toBe('account-b')
-})
+  expect(service.getLastTurnProviderAccountId(sessionId)).toBe(
+    providerAccountId,
+  )
+}
 
 afterEach(async () => {
   await cleanup?.()
@@ -105,6 +115,7 @@ afterEach(async () => {
 })
 
 it('compacts through the server that served the last turn', async () => {
+  await startConversation()
   const originalHome = homes[0]
   expect(originalHome).toMatch(/account-b$/)
   await service.compactContext(sessionId)
@@ -114,6 +125,7 @@ it('compacts through the server that served the last turn', async () => {
 it.each([false, true])(
   'blocks a send and duplicate compaction until compaction settles (failure=%s)',
   async (fail) => {
+    await startConversation()
     holdCompaction = true
     const compact = service.compactContext(sessionId)
     const result = compact.then(
@@ -154,6 +166,7 @@ it.each([false, true])(
 )
 
 it('refuses compaction while a send is still being prepared', async () => {
+  await startConversation()
   const send = service.sendMessage(sessionId, {
     text: 'next',
     providerAccountId: 'account-b',
@@ -165,4 +178,31 @@ it('refuses compaction while a send is still being prepared', async () => {
   await vi.waitFor(() =>
     expect(service.getById(sessionId)?.status).toBe('completed'),
   )
+})
+
+it('refuses a disconnected recorded account without falling back to ambient', async () => {
+  await startConversation()
+  const originalHomes = [...homes]
+  disconnectedAccount = true
+  await expect(service.compactContext(sessionId)).rejects.toThrow(
+    /Account B is disconnected/,
+  )
+  expect(homes).toEqual(originalHomes)
+  expect(service.getById(sessionId)?.activity).toBeNull()
+  disconnectedAccount = false
+  await service.sendMessage(sessionId, {
+    text: 'after reconnect',
+    providerAccountId: 'account-b',
+  })
+  await vi.waitFor(() =>
+    expect(service.getById(sessionId)?.status).toBe('completed'),
+  )
+  expect(homes).toEqual(originalHomes)
+})
+
+it('keeps an unassigned conversation on the ambient host during compaction', async () => {
+  await startConversation(null)
+  expect(homes).toEqual([undefined])
+  await service.compactContext(sessionId)
+  expect(homes).toEqual([undefined])
 })
