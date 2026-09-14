@@ -322,6 +322,44 @@ describe('ProviderAccountsContainer', () => {
     ).toBeInTheDocument()
   })
 
+  it.each(['connected', 'unavailable'] as const)(
+    'reloads the recorded %s state after a refused OpenAI reconnect',
+    async (status) => {
+      const codexAccount = account({ providerId: 'codex' })
+      providerAccounts.list
+        .mockResolvedValueOnce([codexAccount])
+        .mockResolvedValue([{ ...codexAccount, status }])
+      providerAccounts.reconnect.mockRejectedValue(
+        new Error(
+          status === 'unavailable'
+            ? 'The foreign login was discarded.'
+            : 'This account still has active work.',
+        ),
+      )
+
+      render(<ProviderAccountsContainer />)
+      await screen.findByText(/No Anthropic accounts enrolled/)
+      fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+      expect(screen.getByText('Connected')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }))
+
+      await screen.findByRole('alert')
+      await waitFor(() =>
+        expect(providerAccounts.list).toHaveBeenCalledTimes(2),
+      )
+      expect(
+        screen.getByText(status === 'unavailable' ? 'Disabled' : 'Connected'),
+      ).toBeInTheDocument()
+      if (status === 'unavailable') {
+        expect(screen.queryByText('Connected')).not.toBeInTheDocument()
+        expect(
+          screen.getByRole('button', { name: 'Set default' }),
+        ).toBeDisabled()
+      }
+      expect(screen.queryByText('Reconnected.')).not.toBeInTheDocument()
+    },
+  )
+
   it('shows the health verdicts the attestation net collects', async () => {
     providerAccounts.list.mockResolvedValue([
       account({ status: 'unavailable' }),

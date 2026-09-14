@@ -174,17 +174,24 @@ export const ProviderAccountsContainer: FC = () => {
       void runForAccount(
         accountId,
         async () => {
-          const account = await providerAccountApi.reconnect(accountId)
-          setAccounts((current) =>
-            current.map((candidate) =>
-              candidate.id === account.id ? account : candidate,
-            ),
-          )
+          try {
+            const account = await providerAccountApi.reconnect(accountId)
+            setAccounts((current) =>
+              current.map((candidate) =>
+                candidate.id === account.id ? account : candidate,
+              ),
+            )
+          } catch (err) {
+            // A refused identity check may disable the account, while a busy
+            // server refusal leaves it connected. Read the recorded outcome.
+            await load()
+            throw err
+          }
         },
         'Reconnected.',
         'Failed to reconnect the account.',
       ),
-    [runForAccount],
+    [load, runForAccount],
   )
 
   const handleConfirmRemove = useCallback(
