@@ -2,21 +2,11 @@ import type { ClaudeAccountIdentity } from './provider-account-enrolment.pure'
 import type { ProviderAccountStatus } from './provider-account.types'
 
 /**
- * Fail-closed identity attestation (ADR 0007, PA7).
- *
- * `CLAUDE_SECURESTORAGE_CONFIG_DIR` is absent from Anthropic's published
- * environment-variable reference. It works in 2.1.220 and an invalid
- * namespaced credential fails closed rather than falling back to the default
- * account, but neither property is guaranteed across releases — so Convergence
- * checks the served identity instead of trusting the mechanism.
- *
- * The check covers more than the undocumented variable. Every channel that can
- * make an account serve the wrong credential — a future release ignoring the
- * variable, a shared-settings `apiKeyHelper`, a credential in the settings
- * `env` block — ends in the same observable place: the account directory
- * reports an identity that is not the enrolled one. This is the only mechanism
- * that catches all of them, because it looks at the outcome rather than the
- * cause.
+ * Compare persisted identity metadata with the enrolled identity (ADR 0007).
+ * Claude's .claude.json can outlive its credential. A matching identity is
+ * not evidence that a credential exists, that namespace isolation worked, or
+ * that the server accepts it. Periodic health combines this verdict with a
+ * scoped credential check; only a completed login may restore a disabled row.
  */
 
 export type AttestationOutcome =
@@ -31,7 +21,7 @@ export type AttestationOutcome =
 
 export interface AttestationVerdict {
   outcome: AttestationOutcome
-  /** `null` leaves the stored status untouched. */
+  /** Candidate for a completed login; periodic Claude health must not promote from this alone. */
   status: ProviderAccountStatus | null
   detail: string | null
 }

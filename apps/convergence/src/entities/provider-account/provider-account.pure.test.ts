@@ -109,6 +109,23 @@ describe('describeProviderAccountStatus', () => {
 })
 
 describe('buildProviderAccountSettingsRows', () => {
+  it.each(['present', 'absent', 'unknown'] as const)(
+    'separates local %s evidence from server validity',
+    (credentialHealth) => {
+      const [row] = buildProviderAccountSettingsRows(
+        [account()],
+        health({ accounts: [result({ credentialHealth })] }),
+      )
+      expect(row.notes.join(' ')).toContain(
+        {
+          present: 'Server validity has not been checked',
+          absent: 'Reconnect this account',
+          unknown: 'not proof of sign-in',
+        }[credentialHealth],
+      )
+    },
+  )
+
   it('explains private data and foreign targets without promising reconnect overwrites them', () => {
     const [row] = buildProviderAccountSettingsRows(
       [account()],

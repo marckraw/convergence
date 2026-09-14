@@ -92,6 +92,7 @@ import { SessionForkService } from '../backend/session/fork/session-fork.service
 import { registerSessionForkIpcHandlers } from '../backend/session/fork/session-fork.ipc'
 import { ProviderAccountRepository } from '../backend/provider-account/provider-account.repository'
 import { ProviderAccountEnrolmentService } from '../backend/provider-account/provider-account-enrolment.service'
+import { ClaudeCredentialHealthService } from '../backend/provider-account/provider-account-credential-health.service'
 import { ProviderAccountAttestationService } from '../backend/provider-account/provider-account-attestation.service'
 import { ProviderAccountMcpService } from '../backend/provider-account/provider-account-mcp.service'
 import { createPtyCommandRunner } from '../backend/provider-account/provider-account-pty-runner'
@@ -348,8 +349,10 @@ async function startApp(): Promise<void> {
       }),
   })
   const claudeAccountMaintenance = new ClaudeAccountMaintenance()
+  const claudeCredentialHealth = new ClaudeCredentialHealthService()
   const providerAccountEnrolmentService = new ProviderAccountEnrolmentService({
     repository: providerAccountRepository,
+    onAccountChanged: (id) => providerAccountAttestationService.invalidate(id),
     claudeMaintenance: {
       run: (account, work) => claudeAccountMaintenance.run(account.id, work),
     },
@@ -370,6 +373,8 @@ async function startApp(): Promise<void> {
     new ProviderAccountAttestationService({
       repository: providerAccountRepository,
       codexHistory: codexAccountHistory,
+      claudeMaintenance: claudeAccountMaintenance,
+      credentialHealth: claudeCredentialHealth,
       claudeHistory: new ClaudeAccountHistoryService(),
     })
   /**
@@ -412,6 +417,10 @@ async function startApp(): Promise<void> {
     })
   async function refreshDetectedProviders() {
     const nextDetected = await detectProviders()
+    claudeCredentialHealth.setBinaryPath(
+      nextDetected.find((provider) => provider.id === 'claude-code')
+        ?.binaryPath ?? null,
+    )
 
     for (const p of nextDetected) {
       if (p.id === 'claude-code') {
@@ -710,11 +719,10 @@ async function startApp(): Promise<void> {
     attestation: providerAccountAttestationService,
     mcp: providerAccountMcpService,
   })
-  // Fire-and-forget: attestation must never delay startup, and a failure here
-  // leaves accounts exactly as they were rather than disabling them.
-  void providerAccountAttestationService.attestIfDue().catch((error) => {
-    console.warn('Provider account attestation failed:', error)
-  })
+  const stopAccountHealthMonitoring =
+    providerAccountAttestationService.startMonitoring(() => {
+      console.warn('Provider account health check failed')
+    })
   registerFeedbackIpcHandlers(feedbackService)
   registerCrewIpcHandlers({ service: crewService })
   registerCrewExportIpc(new CrewExportService(db), crewService)
@@ -887,6 +895,7 @@ async function startApp(): Promise<void> {
     event.preventDefault()
     if (sessionQuitInFlight) return
     sessionQuitInFlight = true
+    stopAccountHealthMonitoring()
     localModelTunnelService.stopMonitoring()
     localModelTunnelService.stopAllManaged()
     // Sessions release their connections; the servers themselves are stopped

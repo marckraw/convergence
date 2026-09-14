@@ -186,17 +186,11 @@ export const ProviderAccountsContainer: FC = () => {
         accountId,
         async () => {
           try {
-            const account = await providerAccountApi.reconnect(accountId)
-            setAccounts((current) =>
-              current.map((candidate) =>
-                candidate.id === account.id ? account : candidate,
-              ),
-            )
-          } catch (err) {
-            // A refused identity check may disable the account, while a busy
-            // server refusal leaves it connected. Read the recorded outcome.
+            await providerAccountApi.reconnect(accountId)
+          } finally {
+            // Reconnect invalidates cached health on both success and refusal.
+            // Reload the recorded status and drop the previous health verdict.
             await load()
-            throw err
           }
         },
         'Reconnected.',
