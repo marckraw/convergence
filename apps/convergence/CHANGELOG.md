@@ -1,5 +1,19 @@
 # convergence
 
+## 0.59.0
+
+### Minor Changes
+
+- f4da54b: Add separate Anthropic and OpenAI account controls in Settings. Connect OpenAI through Codex browser login, view its identity and plan, and manage labels, defaults and reconnects. Refused reconnects refresh the recorded account status.
+- 5dae9f5: Switch enrolled OpenAI accounts between settled turns while preserving the native conversation. Shared history and writer locks, idle server checks, and explicit refusal states protect running work and keep unsent messages available to retry.
+- 812a3ab: A conversation is finished only when its background work is.
+
+### Patch Changes
+
+- 38cd172: Fix OpenAI account identity parsing and reconnect through Codex. Reconnect discards an unexpected account login instead of leaving its credentials behind. Account reconnect and removal now wait for the account server to stop and refuse changes while its work or helper requests are active.
+- 9a40097: Record each turn's actual provider account and input metadata, queue competing Claude preparations safely, and report refused account changes without marking them delivered.
+- 6b68d59: Compact conversations using the account that served their last turn. Keep sends and other compactions from starting until the active compaction finishes or fails.
+
 ## 0.58.6
 
 ### Patch Changes
