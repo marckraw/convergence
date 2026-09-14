@@ -94,6 +94,8 @@ export class ClaudeAccountHistoryService {
     configDir: string,
     deletePrivateHistory: boolean,
   ): Promise<void> {
+    // Wrong-target links are safe only because removal never dereferences
+    // symlinks: the linked destination is not inside the deletion operation.
     const layout = await this.inspect(configDir)
     if (layout.unreadableEntries.length)
       throw new Error(

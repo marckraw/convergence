@@ -225,7 +225,7 @@ describe('per-turn account attribution', () => {
       await handle.stop()
     }
   })
-  it('refuses maintenance during a turn, closes an idle resident, then spawns fresh with the same attribution', async () => {
+  it('refuses maintenance during a turn, closes an idle resident despite stale unknown work, then spawns fresh with the same attribution', async () => {
     const first = new MockChildProcess()
     const next = new MockChildProcess()
     spawnMock.mockReturnValueOnce(first).mockReturnValueOnce(next)
@@ -243,6 +243,7 @@ describe('per-turn account attribution', () => {
     )
     const handle = provider.start({
       sessionId: 'account-maintenance',
+      readParallelWorkCounts: () => ({ running: 0, unknown: 1 }),
       workingDirectory: process.cwd(),
       initialMessage: 'first',
       model: null,
@@ -267,7 +268,7 @@ describe('per-turn account attribution', () => {
         JSON.stringify({ type: 'result', is_error: false, result: 'done' }) +
           '\n',
       )
-      await waitFor(() => expect(statuses).toContain('completed'))
+      await waitFor(() => expect(statuses).toContain('answered'))
       await maintenance.run('acct-a', mutate)
       expect(mutate).toHaveBeenCalledTimes(1)
       await handle.sendMessage('second', undefined, undefined, {

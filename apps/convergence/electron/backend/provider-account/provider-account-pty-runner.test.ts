@@ -170,4 +170,24 @@ describe('createPtyCommandRunner', () => {
 
     expect(pty.kill).not.toHaveBeenCalled()
   })
+
+  it('escalates a ceremony that ignores the first signal and confirms only its actual exit', async () => {
+    vi.useFakeTimers()
+    const pty = fakePty()
+    pty.kill.mockImplementation((signal) => {
+      if (signal === 'SIGKILL') pty.exit(1)
+    })
+    const onExitConfirmed = vi.fn()
+    const result = createPtyCommandRunner({
+      ptyFactory: pty.factory,
+      timeoutMs: 1000,
+    })(LOGIN_COMMAND, { onExitConfirmed })
+    const failure = expect(result).rejects.toThrow(/timed out/)
+    await vi.advanceTimersByTimeAsync(1000)
+    await failure
+    expect(onExitConfirmed).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(pty.kill).toHaveBeenCalledWith('SIGKILL')
+    expect(onExitConfirmed).toHaveBeenCalledTimes(1)
+  })
 })

@@ -338,7 +338,6 @@ export class ProviderAccountEnrolmentService {
     const binaryPath = this.requireBinaryPath(account.providerId)
 
     return this.withClaudeAccountStopped(account, async () => {
-      this.repository.setStatus(accountId, 'unavailable', null)
       const configPath = join(account.configDir, '.claude.json')
       let originalConfig: string | null
       try {
@@ -346,12 +345,13 @@ export class ProviderAccountEnrolmentService {
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
           throw new Error(
-            'The account config could not be read. Reconnect was not started; the account remains unavailable.',
+            'The account config could not be read. Reconnect was not started; no credentials were changed.',
             { cause: error },
           )
         }
         originalConfig = null
       }
+      this.repository.setStatus(accountId, 'unavailable', null)
       // Re-seeded because a shared entry added since enrolment would otherwise
       // stay unlinked, and an existing link is left alone.
       await this.seedSymlinks(account.configDir)
@@ -686,15 +686,19 @@ export class ProviderAccountEnrolmentService {
       )
     }
     if (layout === 'config-home') return this.removeAccount(account)
-    return this.withClaudeAccountStopped(account, async () => {
+    const removeClaude = async () => {
       this.assertClaudeAccountPaths(account)
+      // Our gate stops Convergence processes, not a foreign CLI using this
+      // namespace. A foreign write after inspection can still be removed.
       await this.claudeHistory.assertRemovalSafe(
         account.configDir,
         options.deletePrivateHistory === true,
       )
       this.repository.setStatus(account.id, 'unavailable', null)
       await this.removeAccount(account)
-    })
+    }
+    if (account.executionHostId !== 'local') return removeClaude()
+    return this.withClaudeAccountStopped(account, removeClaude)
   }
 
   private async removeAccount(account: ProviderAccount): Promise<void> {
