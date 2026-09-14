@@ -467,6 +467,42 @@ describe('ProviderAccountEnrolmentService', () => {
       expect(removed).toContain(CODEX_HOME)
     })
 
+    it.each([
+      [
+        'different workspace',
+        CODEX_AUTH.replaceAll('acc_123', 'acc_other'),
+        'different ChatGPT account',
+      ],
+      ['missing identity', '{}', 'no ChatGPT account ID'],
+    ])(
+      'keeps the %s refusal visible when credential removal fails',
+      async (_case, auth, refusal) => {
+        const { subject, runner, files, fs } = codexFixture()
+        await subject.enrol({ email: '', providerId: 'codex' })
+        runner.run.mockImplementationOnce(async () => {
+          files.set(`${CODEX_HOME}/auth.json`, auth)
+          return { code: 0, stdout: '', stderr: '' }
+        })
+        vi.mocked(fs.rm).mockRejectedValueOnce(
+          new Error('EACCES: read-only home'),
+        )
+        const error = await subject
+          .reconnect(ACCOUNT_ID)
+          .catch((err: unknown) => err)
+        expect(error).toBeInstanceOf(Error)
+        expect((error as Error).message).toContain(refusal)
+        expect((error as Error).message).toContain(
+          'credential could NOT be removed: EACCES: read-only home',
+        )
+        expect((error as Error).message).not.toContain('was discarded')
+        expect(files.has(`${CODEX_HOME}/auth.json`)).toBe(true)
+        expect(repository.get(ACCOUNT_ID)).toMatchObject({
+          orgId: 'acc_123',
+          status: 'unavailable',
+        })
+      },
+    )
+
     it('pins file credential storage before the first browser login', async () => {
       const { subject, files, runner } = codexFixture()
       const original = runner.run.getMockImplementation()!

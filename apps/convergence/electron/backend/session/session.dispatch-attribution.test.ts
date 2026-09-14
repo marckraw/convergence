@@ -115,6 +115,8 @@ it('delivers both dispatches to the controlled adapter before either user event'
 
 // Fable's ruling holds the product fix until PR #633 lands. Keep this known
 // defect explicit and remove the marker when integrating adapter-owned facts.
+// A service-side fix can flip this assertion alone; the delta-carried account
+// design also needs the account field on the fixture's addUserMessage calls.
 it.fails('attributes each emitted turn to its own account', () => {
   expect(recorded).toEqual(['account-a', 'account-b'])
 })

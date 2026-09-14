@@ -407,15 +407,15 @@ export class ProviderAccountEnrolmentService {
       await this.fs.chmod(authPath, CODEX_AUTH_FILE_MODE)
       const identity = readCodexIdentityFromAuth(await this.readJson(authPath))
       if (!identity?.orgId) {
-        await this.fs.rm(authPath)
-        throw new Error(
-          'Login completed but the Codex home reported no ChatGPT account ID. The unverified login was discarded; the account remains unavailable.',
+        return this.refuseCodexReconnect(
+          authPath,
+          'Login completed but the Codex home reported no ChatGPT account ID.',
         )
       }
       if (identity.orgId !== account.orgId) {
-        await this.fs.rm(authPath)
-        throw new Error(
-          'Login selected a different ChatGPT account or workspace. The foreign login was discarded. Reconnect the originally enrolled account; its historical identity was not changed.',
+        return this.refuseCodexReconnect(
+          authPath,
+          'Login selected a different ChatGPT account or workspace. Reconnect the originally enrolled account; its historical identity was not changed.',
         )
       }
       this.repository.saveIdentity(account.id, {
@@ -428,6 +428,24 @@ export class ProviderAccountEnrolmentService {
         throw new Error('The OpenAI account was removed while reconnecting.')
       return reconnected
     })
+  }
+
+  private async refuseCodexReconnect(
+    authPath: string,
+    reason: string,
+  ): Promise<never> {
+    try {
+      await this.fs.rm(authPath)
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      throw new Error(
+        `${reason} The foreign credential could NOT be removed: ${detail}. The account remains unavailable.`,
+        { cause: error },
+      )
+    }
+    throw new Error(
+      `${reason} The unverified login was discarded; the account remains unavailable.`,
+    )
   }
 
   /**

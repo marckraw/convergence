@@ -41,6 +41,15 @@ test('refuses a profile symlink to the ambient home', async () => {
   )
 })
 
+test('refuses a real profiles directory nested under the ambient home', async () => {
+  const nested = join(userHome, '.codex', 'profiles', 'canary')
+  await mkdir(nested, { recursive: true })
+  await assert.rejects(
+    assertCanaryProfileIsolation({ profiles: nested, userHome }),
+    /ambient or enrolled/,
+  )
+})
+
 test('refuses an enrolled home even when its enrollment path is a symlink', async () => {
   const enrolledRoot = join(
     userHome,
