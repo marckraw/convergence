@@ -1,5 +1,10 @@
 import { resolveProviderIcon } from '@/shared/ui/provider-icon.pure'
-import type { ActivityView, FeedView } from './needs-you-view.pure'
+import {
+  activityViews,
+  type ActivityView,
+  type FeedView,
+} from './needs-you-view.pure'
+import { feedOrderLabels } from './needs-you-order.pure'
 
 export const activityViewLabels: Record<ActivityView, string> = {
   all: 'All activity',
@@ -23,7 +28,16 @@ export function buildFeedFilterSummary(view: FeedView) {
         .join(' + ')
     : 'All providers'
   return {
-    activity: activityViewLabels[view.activity],
+    activity: view.activities.length
+      ? activityViews
+          .filter(
+            (activity) =>
+              activity !== 'all' && view.activities.includes(activity),
+          )
+          .map((activity) => activityViewLabels[activity])
+          .join(' + ')
+      : activityViewLabels.all,
     scope: `${hosts} · ${providers}`,
+    order: feedOrderLabels[view.order].summary,
   }
 }

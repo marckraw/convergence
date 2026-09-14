@@ -43,6 +43,7 @@ const cards = [
       projectId: 'project',
       executionHost: 'local',
       updatedAt: '2026-09-12T12:00:00Z',
+      createdAt: '2026-09-12T12:00:00Z',
       ...item,
     } as SessionSummary,
     {
@@ -72,7 +73,7 @@ const openFilters = () =>
 it('starts with a readable collapsed summary and opens the existing controls', () => {
   render(<NeedsYou {...props} />)
   const trigger = screen.getByRole('button', {
-    name: 'Edit activity filters: All activity; All hosts · All providers',
+    name: 'Edit activity filters: All activity; All hosts · All providers; Order: Created (newest first)',
   })
   expect(trigger).toHaveAttribute('aria-expanded', 'false')
   expect(
@@ -199,7 +200,8 @@ it('keeps filter selections and the collapsed preference through a remount', () 
   fireEvent.click(choice('Provider filters', 'OpenAI'))
   fireEvent.click(choice('Provider filters', 'Anthropic'))
   fireEvent.click(screen.getByRole('button', { name: 'Collapse filters' }))
-  const name = 'Edit activity filters: Working; Remote · Anthropic + OpenAI'
+  const name =
+    'Edit activity filters: Working; Remote · Anthropic + OpenAI; Order: Created (newest first)'
   expect(screen.getByRole('button', { name })).toHaveFocus()
   expect(screen.getByLabelText('1 of 4 cards shown')).toBeInTheDocument()
   first.unmount()
@@ -235,7 +237,7 @@ it('keeps empty-result recovery and hidden pinned-card information visible while
   fireEvent.click(screen.getByRole('button', { name: 'Collapse filters' }))
   expect(
     screen.getByRole('button', {
-      name: 'Edit activity filters: All activity; Remote · Anthropic',
+      name: 'Edit activity filters: All activity; Remote · Anthropic; Order: Created (newest first)',
     }),
   ).toBeInTheDocument()
   expect(screen.getByRole('status')).toHaveTextContent('No activity matches')
@@ -246,7 +248,7 @@ it('keeps empty-result recovery and hidden pinned-card information visible while
   expect(screen.getByLabelText('4 of 4 cards shown')).toBeInTheDocument()
   expect(
     screen.getByRole('button', {
-      name: 'Edit activity filters: All activity; All hosts · All providers',
+      name: 'Edit activity filters: All activity; All hosts · All providers; Order: Created (newest first)',
     }),
   ).toHaveFocus()
   expect(screen.queryByRole('group', { name: 'Activity view' })).toBeNull()
@@ -260,7 +262,7 @@ it('keeps a selected provider in the collapsed summary when its activity disappe
   view.rerender(<NeedsYou {...props} groups={[]} />)
   expect(
     screen.getByRole('button', {
-      name: 'Edit activity filters: All activity; All hosts · Anthropic',
+      name: 'Edit activity filters: All activity; All hosts · Anthropic; Order: Created (newest first)',
     }),
   ).toBeInTheDocument()
   expect(screen.getByLabelText('0 of 0 cards shown')).toBeInTheDocument()
@@ -293,8 +295,193 @@ it('supports filtering and collapsing when preference storage is unavailable', (
   fireEvent.click(screen.getByRole('button', { name: 'Collapse filters' }))
   expect(
     screen.getByRole('button', {
-      name: 'Edit activity filters: Working; All hosts · All providers',
+      name: 'Edit activity filters: Working; All hosts · All providers; Order: Created (newest first)',
     }),
   ).toBeInTheDocument()
   expect(screen.getByLabelText('2 of 4 cards shown')).toBeInTheDocument()
+})
+
+it('combines workflow choices and treats All activity like All hosts and All providers', () => {
+  render(<NeedsYou {...props} />)
+  openFilters()
+  fireEvent.click(choice('Activity view', 'Working'))
+  fireEvent.click(choice('Activity view', 'Review'))
+  expect(screen.getByLabelText('3 of 4 cards shown')).toBeInTheDocument()
+  for (const label of ['Working', 'Review']) {
+    expect(choice('Activity view', label)).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  }
+  expect(choice('Activity view', 'All activity')).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  )
+  expect(
+    screen.getByRole('button', {
+      name: /^Collapse activity filters: Working \+ Review;/,
+    }),
+  ).toBeInTheDocument()
+  fireEvent.click(choice('Activity view', 'Needs me'))
+  expect(screen.getByLabelText('4 of 4 cards shown')).toBeInTheDocument()
+  fireEvent.click(choice('Activity view', 'All activity'))
+  for (const label of ['Working', 'Review', 'Needs me']) {
+    expect(choice('Activity view', label)).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+  }
+  expect(choice('Activity view', 'All activity')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  fireEvent.click(choice('Activity view', 'Working'))
+  fireEvent.click(choice('Activity view', 'Review'))
+  fireEvent.click(choice('Activity view', 'Working'))
+  expect(screen.getByLabelText('1 of 4 cards shown')).toBeInTheDocument()
+  fireEvent.click(choice('Activity view', 'Review'))
+  expect(choice('Activity view', 'All activity')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  expect(screen.getByLabelText('4 of 4 cards shown')).toBeInTheDocument()
+})
+
+it('migrates a saved single workflow choice and remembers multiple choices and ordering', () => {
+  localStorage.setItem(
+    'convergence:sidebar-activity-view:v1',
+    JSON.stringify({
+      version: 2,
+      activity: 'working',
+      hosts: ['remote'],
+      providers: ['openai'],
+    }),
+  )
+  const first = render(<NeedsYou {...props} />)
+  openFilters()
+  expect(choice('Activity view', 'Working')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  expect(choice('Order by', 'Created')).toHaveAttribute('aria-pressed', 'true')
+  fireEvent.click(choice('Activity view', 'Review'))
+  fireEvent.click(choice('Order by', 'Name'))
+  fireEvent.click(screen.getByRole('button', { name: 'Collapse filters' }))
+  first.unmount()
+  render(<NeedsYou {...props} />)
+  expect(
+    screen.getByRole('button', {
+      name: 'Edit activity filters: Working + Review; Remote · OpenAI; Order: Name (A–Z)',
+    }),
+  ).toBeInTheDocument()
+  expect(screen.getByLabelText('2 of 4 cards shown')).toBeInTheDocument()
+  openFilters()
+  for (const label of ['Working', 'Review']) {
+    expect(choice('Activity view', label)).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  }
+  expect(choice('Order by', 'Name')).toHaveAttribute('aria-pressed', 'true')
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Clear activity filters' }),
+  )
+  expect(screen.getByLabelText('4 of 4 cards shown')).toBeInTheDocument()
+  expect(choice('Order by', 'Name')).toHaveAttribute('aria-pressed', 'true')
+  expect(
+    screen.queryByRole('button', { name: 'Clear activity filters' }),
+  ).toBeNull()
+})
+
+const orderedGroups = (alphaUpdatedAt = '2026-09-12') =>
+  groupNeedsYou(
+    [
+      {
+        id: 'alpha',
+        name: 'Alpha',
+        createdAt: '2026-09-12',
+        updatedAt: alphaUpdatedAt,
+      },
+      {
+        id: 'zulu',
+        name: 'Zulu',
+        createdAt: '2026-09-10',
+        updatedAt: '2026-09-14',
+      },
+    ].map((item) =>
+      needsYouCardModel(
+        {
+          ...cards[2]!.session,
+          ...item,
+        },
+        {
+          projectName: 'Project',
+          endpoints: [],
+          now: Date.parse('2026-09-14'),
+        },
+      ),
+    ),
+  )
+const visibleOrder = () =>
+  screen
+    .getAllByRole('button', { name: /^(Alpha|Zulu),/ })
+    .map((button) => button.getAttribute('aria-label')!.split(',')[0])
+
+it('keeps stable ordering through live updates and exposes each ordering as a single choice', () => {
+  const onSelect = vi.fn()
+  const view = render(
+    <NeedsYou {...props} groups={orderedGroups()} onSelect={onSelect} />,
+  )
+  openFilters()
+  expect(visibleOrder()).toEqual(['Alpha', 'Zulu'])
+  fireEvent.click(choice('Order by', 'Updated'))
+  expect(visibleOrder()).toEqual(['Zulu', 'Alpha'])
+  expect(choice('Order by', 'Created')).toHaveAttribute('aria-pressed', 'false')
+  view.rerender(
+    <NeedsYou
+      {...props}
+      groups={orderedGroups('2026-09-15')}
+      onSelect={onSelect}
+    />,
+  )
+  expect(visibleOrder()).toEqual(['Alpha', 'Zulu'])
+  for (const label of ['Created', 'Name']) {
+    fireEvent.click(choice('Order by', label))
+    view.rerender(
+      <NeedsYou {...props} groups={orderedGroups()} onSelect={onSelect} />,
+    )
+    expect(visibleOrder()).toEqual(['Alpha', 'Zulu'])
+    expect(choice('Order by', 'Updated')).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+  }
+  fireEvent.click(screen.getByRole('button', { name: /^Alpha,/ }))
+  expect(onSelect).toHaveBeenCalledWith('alpha')
+})
+
+it('preserves pointer order protection when Updated sorting would swap the clicked card', () => {
+  const onSelect = vi.fn()
+  const view = render(
+    <NeedsYou {...props} groups={orderedGroups()} onSelect={onSelect} />,
+  )
+  openFilters()
+  fireEvent.click(choice('Order by', 'Updated'))
+  const working = screen.getByRole('region', { name: 'Working' })
+  fireEvent.pointerEnter(working)
+  view.rerender(
+    <NeedsYou
+      {...props}
+      groups={orderedGroups('2026-09-15')}
+      onSelect={onSelect}
+    />,
+  )
+  expect(visibleOrder()).toEqual(['Zulu', 'Alpha'])
+  expect(
+    screen.getByRole('button', { name: 'Order paused · Update order' }),
+  ).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /^Zulu,/ }))
+  expect(onSelect).toHaveBeenCalledWith('zulu')
+  fireEvent.pointerLeave(working)
+  expect(visibleOrder()).toEqual(['Alpha', 'Zulu'])
 })

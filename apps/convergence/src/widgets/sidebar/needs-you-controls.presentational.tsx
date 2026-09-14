@@ -13,6 +13,8 @@ import {
   activityViews,
   activityViewLabels,
   buildFeedFilterSummary,
+  feedOrders,
+  feedOrderLabels,
   toggleFeedChoice,
   type ActivityView,
   type FeedView,
@@ -90,7 +92,7 @@ export function NeedsYouControls({
           onClick={onToggle}
           aria-expanded={expanded}
           aria-controls={controlsId}
-          aria-label={`${expanded ? 'Collapse' : 'Edit'} activity filters: ${summary.activity}; ${summary.scope}`}
+          aria-label={`${expanded ? 'Collapse' : 'Edit'} activity filters: ${summary.activity}; ${summary.scope}; Order: ${summary.order}`}
           className="h-auto min-h-14 w-full justify-start gap-2.5 whitespace-normal rounded-lg border border-foreground/25 bg-foreground/5 px-2.5 py-2 text-left text-[11px] font-normal"
         >
           <SlidersHorizontal
@@ -101,6 +103,9 @@ export function NeedsYouControls({
             <span className="font-medium">{summary.activity}</span>
             <span className="break-words text-muted-foreground">
               {summary.scope}
+            </span>
+            <span className="break-words text-muted-foreground">
+              Order: {summary.order}
             </span>
           </span>
           <ChevronDown
@@ -124,9 +129,21 @@ export function NeedsYouControls({
                 <FilterChoice
                   key={value}
                   label={label}
-                  selected={view.activity === value}
+                  selected={
+                    value === 'all'
+                      ? !view.activities.length
+                      : view.activities.includes(value)
+                  }
                   count={result.activityCounts[value]}
-                  onClick={() => onChange({ ...view, activity: value })}
+                  onClick={() =>
+                    onChange({
+                      ...view,
+                      activities:
+                        value === 'all'
+                          ? []
+                          : toggleFeedChoice(view.activities, value),
+                    })
+                  }
                   className="h-9 min-w-0 px-1"
                 >
                   {Icon && (
@@ -223,6 +240,28 @@ export function NeedsYouControls({
                     title=""
                     className="size-3.5"
                   />
+                </FilterChoice>
+              ))}
+            </div>
+          </div>
+          <div
+            role="group"
+            aria-label="Order by"
+            className="flex items-start gap-1"
+          >
+            <span className="flex h-[30px] w-11 shrink-0 items-center text-[10px] text-muted-foreground">
+              Order
+            </span>
+            <div className="flex min-w-0 flex-wrap gap-1">
+              {feedOrders.map((order) => (
+                <FilterChoice
+                  key={order}
+                  label={feedOrderLabels[order].label}
+                  tooltip={feedOrderLabels[order].tooltip}
+                  selected={view.order === order}
+                  onClick={() => onChange({ ...view, order })}
+                >
+                  {feedOrderLabels[order].label}
                 </FilterChoice>
               ))}
             </div>

@@ -85,7 +85,7 @@ export function NeedsYou(props: ComponentProps<typeof NeedsYouFeed>) {
           result={result}
           onChange={changeView}
           onReset={() => {
-            changeView(defaultFeedView())
+            changeView({ ...defaultFeedView(), order: view.order })
             controlsTrigger.current?.focus()
           }}
         />

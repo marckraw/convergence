@@ -4,6 +4,8 @@ export type { CardContext } from './needs-you-card.pure'
 export type { NeedsYouCardProps } from './needs-you-card.presentational'
 export { needsYouCardModel, groupNeedsYou } from './needs-you-card.pure'
 export type { NeedsYouCardModel } from './needs-you-card.pure'
+export { feedOrders, feedOrderLabels } from './needs-you-order.pure'
+export type { FeedOrder } from './needs-you-order.pure'
 export {
   activityViewLabels,
   buildFeedFilterSummary,
@@ -21,5 +23,6 @@ export type {
   FeedView,
   FeedHost,
   ActivityView,
+  ActivityFilter,
   FeedGroup,
 } from './needs-you-view.pure'
