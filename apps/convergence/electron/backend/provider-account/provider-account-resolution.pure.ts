@@ -1,6 +1,7 @@
 import { isLocalExecutionHost } from '../execution-host-endpoint/execution-host-endpoint.pure'
 import type { CodexAccountEnvTarget } from './provider-account-codex-env.pure'
 import type { ClaudeAccountEnvTarget } from './provider-account-env.pure'
+import { deriveProviderAccountConfigDir } from './provider-account.pure'
 import type { ProviderAccount } from './provider-account.types'
 
 /**
@@ -129,4 +130,32 @@ export function selectTurnAccountSnapshot<T>(input: {
     return input.currentSnapshot
   }
   return input.resolveFresh()
+}
+
+/** Source ownership survives expired credentials; removed rows retain their deterministic host key. */
+export function resolveCodexAccountHandoffSource(input: {
+  accountId: string
+  account: ProviderAccount | null
+  homeDir: string
+}): { account: CodexAccountEnvTarget; removed: boolean } {
+  if (
+    input.account &&
+    (input.account.providerId !== 'codex' ||
+      input.account.executionHostId !== 'local')
+  )
+    throw new Error('The previous account is not a local OpenAI account.')
+  return {
+    account: {
+      configDir:
+        input.account?.configDir ??
+        deriveProviderAccountConfigDir({
+          homeDir: input.homeDir,
+          providerId: 'codex',
+          accountId: input.accountId,
+        }),
+      executionHostId: input.account?.executionHostId ?? 'local',
+      label: input.account?.label ?? 'The removed account',
+    },
+    removed: input.account === null,
+  }
 }

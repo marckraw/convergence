@@ -4,6 +4,7 @@ import { basename, dirname, join, resolve } from 'path'
 import {
   CODEX_SHARED_HISTORY_ENTRIES,
   isCodexRolloutDirectory,
+  isCodexWriterLockName,
   planCodexHistoryMigration,
   type CodexHistoryEntry,
   type CodexHistoryObservation,
@@ -260,13 +261,23 @@ export class CodexAccountHistoryService {
         })
       } else if (local.isDirectory()) {
         const names = await this.fs.readdir(path)
+        let knownLocksOnly = entry === 'thread-writer-locks'
+        for (const name of names) {
+          if (!knownLocksOnly) break
+          const child = await this.stat(join(path, name))
+          knownLocksOnly =
+            isCodexWriterLockName(name) &&
+            !!child?.isFile() &&
+            !child.isSymbolicLink()
+        }
         observations.push({
           entry,
-          state: !names.length
-            ? 'empty'
-            : isCodexRolloutDirectory(entry)
-              ? 'rollouts'
-              : 'nonempty',
+          state:
+            !names.length || knownLocksOnly
+              ? 'empty'
+              : isCodexRolloutDirectory(entry)
+                ? 'rollouts'
+                : 'nonempty',
         })
       } else observations.push({ entry, state: 'invalid' })
     }

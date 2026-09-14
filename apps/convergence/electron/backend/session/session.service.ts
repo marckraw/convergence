@@ -1773,10 +1773,18 @@ export class SessionService {
     this.assertNotCompacting(sessionId)
     this.assertNoPendingAccountHandoff(sessionId)
     const handoffSession = this.getById(sessionId)
+    const queuesFollowUp =
+      handoffSession?.status === 'running' &&
+      this.resolveDeliveryMode(handoffSession, input.deliveryMode) ===
+        'follow-up' &&
+      getMidRunInputCapabilityForProviderId(handoffSession.providerId)
+        .supportsAppQueuedFollowUp
     const handoff =
       !!handoffSession &&
+      !queuesFollowUp &&
       this.isAccountHandoff(handoffSession, input.providerAccountId)
-    if (handoff) this.assertAccountHandoffEligible(handoffSession!)
+    if (handoff && handoffSession)
+      this.assertAccountHandoffEligible(handoffSession)
     // Read before registering this dispatch: only an earlier send counts as busy.
     // Refuse outside the try below too: a cold-start refusal must not enter
     // queue termination and end the earlier turn's queued inputs.
@@ -1905,7 +1913,12 @@ export class SessionService {
     session: Session,
     originalText: string,
     contextItemIds: string[] | undefined,
-  ): { augmentedText: string; noteDraft: ConversationItemDraft | null } {
+    deferAttachment = false,
+  ): {
+    augmentedText: string
+    noteDraft: ConversationItemDraft | null
+    commit?: () => void
+  } {
     if (!this.contextInjection) {
       return { augmentedText: originalText, noteDraft: null }
     }
@@ -1920,6 +1933,7 @@ export class SessionService {
       session,
       originalText,
       contextItemIds,
+      deferAttachment,
     })
   }
 
@@ -2122,7 +2136,6 @@ export class SessionService {
       const receipt = pending ? await pending : undefined
       this.attachDispatchToTurn(id, dispatchId)
       return receipt
-      return
     }
 
     if (capabilities?.supportsContinuation) {
@@ -3658,32 +3671,10 @@ export class SessionService {
   }
 
   /**
-   * Starts a provider run, and owns everything the record says about it having
-   * started (MAR-2682).
-   *
-   * Not async, and that is the design. Three synchronous preconditions come
-   * first -- the account (`assertLocalAccountSelection`), the host's permission
-   * (`assertTurnProviderRunnable`), the remote workspace
-   * (`requireRemoteWorkPlace`) -- and every consequence of the turn comes
-   * after: the unarchive, the boot context (whose `attachToSession` is itself a
-   * write), `host.start`, and the note that says a turn began with that
-   * context. They used to be the caller's lines, with the caller's barrier
-   * above them, so a caller could put an `await` between the verdict and the
-   * writes and no test could see it. Here there is no line to put it on.
-   *
-   * Ordering, not atomicity. Those three are the refusals this method can make
-   * before it writes; they are not every way this start can fail. Both
-   * `computeBootContext` and `host.start` run below the writes and can throw --
-   * `host.start` is specified to, for a start the host refuses at the wire --
-   * and nothing here rolls the unarchive or the context attachment back. What
-   * this shape guarantees is that the three questions above are answered before
-   * anything is recorded, not that a failed start leaves no trace.
-   *
-   * The note is last for the same reason it was last before: it must not exist
-   * until the host has been asked to begin, and it must be in the transcript
-   * ahead of anything that turn produces. Recorded here, before this method
-   * returns, it is still ahead of every delta -- a delta cannot be delivered
-   * without the loop turning, and this body never yields.
+   * Starts a provider run behind the synchronous host/account preconditions.
+   * Providers with an initial-dispatch receipt hold publication until accepted;
+   * their archive/context writes happen after that receipt and before its
+   * buffered deltas are published. Legacy synchronous starts retain their order.
    */
   private startHandle(
     session: Session,
@@ -3733,20 +3724,12 @@ export class SessionService {
       ? this.requireRemoteWorkPlace(session)
       : null
 
-    // -- Past the three synchronous preconditions. Everything below is a
-    // consequence of this turn having been permitted, and none of it can be
-    // reached without passing the lines above. Below is still fallible --
-    // `host.start` refuses at the wire -- and nothing here undoes these
-    // writes. --
-    if (session.archivedAt) {
-      this.updateArchiveState(session.id, null)
-    }
-
     const boot = turn?.bootContext
       ? this.computeBootContext(
           session,
           initialMessage,
           turn.bootContext.contextItemIds,
+          this.isAccountHandoff(session, providerAccountId),
         )
       : { augmentedText: initialMessage, noteDraft: null }
 
@@ -3797,15 +3780,51 @@ export class SessionService {
       this.liveness.bump(session.id)
     })
 
-    if (boot.noteDraft) {
-      this.recordBootContextNote(session.id, boot.noteDraft)
+    const recordAcceptedStart = () => {
+      let contextCommitFailed = false
+      try {
+        boot.commit?.()
+      } catch {
+        // The provider has accepted already. A context item removed while the
+        // handoff was pending must not turn that accepted send into a refusal.
+        contextCommitFailed = true
+      }
+      if (session.archivedAt) this.updateArchiveState(session.id, null)
+      if (boot.noteDraft) this.recordBootContextNote(session.id, boot.noteDraft)
+      if (contextCommitFailed) {
+        const timestamp = new Date().toISOString()
+        this.recordBootContextNote(session.id, {
+          id: randomUUID(),
+          kind: 'note',
+          state: 'complete',
+          level: 'warning',
+          turnId: null,
+          text: 'This turn was accepted, but its project context selection could not be saved. The context shown above was included in the message.',
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          providerMeta: {
+            providerId: 'convergence',
+            providerItemId: null,
+            providerEventType: 'context.boot.persistence-failed',
+          },
+        })
+      }
     }
-    return handle.initialDispatch?.catch(async (error) => {
-      this.restoreRelayMute(session.id, previousMute)
-      if (this.activeHandles.get(session.id) === handle)
-        await this.releaseHandle(session.id)
-      throw error
-    })
+    if (!handle.initialDispatch) {
+      recordAcceptedStart()
+      return
+    }
+    return handle.initialDispatch
+      .then((receipt) => {
+        recordAcceptedStart()
+        return receipt
+      })
+      .catch(async (error) => {
+        this.restoreRelayMute(session.id, previousMute)
+        if (this.activeHandles.get(session.id) === handle)
+          await this.releaseHandle(session.id)
+        throw error
+      })
   }
 
   /**

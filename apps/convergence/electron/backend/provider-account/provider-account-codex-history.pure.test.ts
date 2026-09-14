@@ -1,5 +1,8 @@
 import { expect, it } from 'vitest'
-import { planCodexHistoryMigration } from './provider-account-codex-history.pure'
+import {
+  planCodexHistoryMigration,
+  isCodexWriterLockName,
+} from './provider-account-codex-history.pure'
 
 it('preflights the entire layout before authorizing any writes', () => {
   const plan = planCodexHistoryMigration({
@@ -40,3 +43,16 @@ it('preserves real entries, links absent entries and leaves correct links alone'
     warnings: [],
   })
 })
+
+it.each(['.coordination.lock', '01a0a06d-5e35-7b53-83c4-6cf4abe4666e.lock'])(
+  'recognizes the measured native lock name %s',
+  (name) => expect(isCodexWriterLockName(name)).toBe(true),
+)
+it.each([
+  'custom.lock',
+  '../.coordination.lock',
+  '01a0a06d-5e35-7b53-83c4-6cf4abe4666e.json',
+  '.coordination.lock/child',
+])('does not treat %s as native coordination', (name) =>
+  expect(isCodexWriterLockName(name)).toBe(false),
+)

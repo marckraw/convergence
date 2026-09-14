@@ -3,6 +3,7 @@ import {
   assertLocalAccountSelection,
   resolveAccountForTurn,
   resolveCodexAccountForTurn,
+  resolveCodexAccountHandoffSource,
   selectTurnAccountSnapshot,
 } from './provider-account-resolution.pure'
 import type { ProviderAccount } from './provider-account.types'
@@ -183,4 +184,36 @@ describe('Codex host identity', () => {
       }),
     ).toThrow(/OpenAI account enrolled on this machine/)
   })
+})
+
+it('resolves the expired source identity without relaxing the destination guard', () => {
+  const source = account({
+    providerId: 'codex',
+    status: 'unavailable',
+    configDir: '/homes/a',
+  })
+  expect(
+    resolveCodexAccountHandoffSource({
+      accountId: source.id,
+      account: source,
+      homeDir: '/home',
+    }),
+  ).toEqual({
+    account: {
+      configDir: '/homes/a',
+      executionHostId: 'local',
+      label: source.label,
+    },
+    removed: false,
+  })
+  expect(() =>
+    resolveCodexAccountForTurn({ accountId: source.id, account: source }),
+  ).toThrow(/cannot serve turns/)
+  const removed = resolveCodexAccountHandoffSource({
+    accountId: source.id,
+    account: null,
+    homeDir: '/home',
+  })
+  expect(removed.removed).toBe(true)
+  expect(removed.account.configDir).toContain('/provider-accounts/codex/acct-a')
 })

@@ -3,6 +3,8 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
+import { ProjectContextService } from '../project-context/project-context.service'
+import { SessionContextInjectionService } from './context-injection/session-context-injection.service'
 import { GitService } from '../git/git.service'
 import { CodexProvider } from '../provider/codex/codex-provider'
 import { CodexServerHostRegistry } from '../provider/codex/codex-server-host'
@@ -37,6 +39,7 @@ let failInterrupt: boolean
 let loseAck: boolean
 let unreadableTurns: boolean
 let rejectAck: (() => void) | undefined
+let sourceState: 'connected' | 'unavailable' | 'removed'
 let settled: Array<{ dispatchIds: string[] }>
 
 beforeEach(() => {
@@ -48,6 +51,7 @@ beforeEach(() => {
   holdAcceptance = false
   accept = undefined
   settled = []
+  sourceState = 'connected'
   completeTurns = true
   failInterrupt = false
   loseAck = false
@@ -130,20 +134,31 @@ beforeEach(() => {
       registry,
       null,
       undefined,
-      (accountId) =>
-        accountId
+      (accountId) => {
+        if (accountId === 'account-a' && sourceState !== 'connected')
+          throw new Error('The source cannot serve turns')
+        return accountId
           ? {
               configDir: join(dir, accountId),
               executionHostId: 'local',
               label: accountId,
             }
-          : null,
+          : null
+      },
       {
         inspect: async () => ({
           ready: layoutReady,
           warnings: layoutReady ? [] : ['History layout needs reconnect.'],
         }),
       },
+      (accountId) => ({
+        account: {
+          configDir: join(dir, accountId),
+          executionHostId: 'local',
+          label: accountId,
+        },
+        removed: sourceState === 'removed',
+      }),
     ),
   )
   service = new SessionService(db, new LocalExecutionHost(providers), dir)
@@ -458,4 +473,156 @@ it('clears the known-live marker when the owning server generation dies', async 
   completeTurns = true
   await send()
   expect(accounts()).toEqual(['account-a', 'account-b'])
+})
+
+it.each(['unavailable', 'removed'] as const)(
+  'switches away from a %s source while witnessing its retained host',
+  async (state) => {
+    await first()
+    sourceState = state
+    hosts[0].server.loadedThreads.set('sibling', { type: 'active' })
+    await expect(send()).rejects.toMatchObject({ stage: 'source-busy' })
+    expect(hosts).toHaveLength(1)
+    hosts[0].server.loadedThreads.set('sibling', { type: 'idle' })
+    await send()
+    expect(accounts()).toEqual(['account-a', 'account-b'])
+    expect(hosts[0].child.signalCode).not.toBeNull()
+  },
+)
+
+it('a removed source with no resident key is not recreated or treated as ambient', async () => {
+  await first()
+  await registry.withStoppedServer(
+    {
+      account: { configDir: join(dir, 'account-a') },
+      executionHostId: 'local',
+    },
+    async () => {},
+    { retire: true },
+  )
+  sourceState = 'removed'
+  await send()
+  expect(accounts()).toEqual(['account-a', 'account-b'])
+  expect(hosts.map((host) => host.home)).toEqual([
+    join(dir, 'account-a'),
+    join(dir, 'account-b'),
+  ])
+})
+
+it('queues a follow-up on B while A runs and hands off its captured account at drain', async () => {
+  await running()
+  const receipt = await service.sendMessage(id, {
+    text: 'queued B from send',
+    providerAccountId: 'account-b',
+    deliveryMode: 'follow-up',
+  })
+  expect(service.getQueuedInputs(id)).toEqual([
+    expect.objectContaining({
+      text: 'queued B from send',
+      providerAccountId: 'account-b',
+      state: 'queued',
+    }),
+  ])
+  expect(hosts).toHaveLength(1)
+  completeTurns = true
+  const server = hosts[0].server
+  server.loadedThreads.set(service.getById(id)!.continuationToken!, {
+    type: 'idle',
+  })
+  server.connections
+    .at(-1)!
+    .notify('turn/completed', { turn: { id: 'turn-1', status: 'completed' } })
+  await vi.waitFor(() => expect(accounts()).toEqual(['account-a', 'account-b']))
+  await vi.waitFor(() => expect(settled.at(-1)?.dispatchIds).toContain(receipt))
+  expect(messages()).toEqual(['running A', 'queued B from send'])
+})
+
+it('a refused archived start leaves archive and transcript unchanged', async () => {
+  await first()
+  service.archive(id)
+  const archivedAt = service.getById(id)!.archivedAt
+  const before = service.getConversation(id)
+  const context = new ProjectContextService(getDatabase())
+  service.setSessionContextInjectionService(
+    new SessionContextInjectionService(getDatabase(), context),
+  )
+  const item = context.create({
+    projectId: 'p',
+    label: 'boot fixture',
+    body: 'Context for the accepted turn',
+    reinjectMode: 'boot',
+  })
+  hosts[0].server.loadedThreads.set('sibling', { type: 'active' })
+  await expect(
+    service.start(id, {
+      text: 'retry from opener',
+      providerAccountId: 'account-b',
+      contextItemIds: [item.id],
+    }),
+  ).rejects.toMatchObject({ stage: 'source-busy' })
+  expect(context.listForSession(id)).toEqual([])
+  expect(service.getById(id)!.archivedAt).toBe(archivedAt)
+  expect(service.getConversation(id)).toEqual(before)
+  hosts[0].server.loadedThreads.set('sibling', { type: 'idle' })
+  await service.start(id, {
+    text: 'accepted with context',
+    providerAccountId: 'account-b',
+    contextItemIds: [item.id],
+  })
+  expect(service.getById(id)!.archivedAt).toBeNull()
+  expect(context.listForSession(id).map((item) => item.id)).toEqual([item.id])
+  expect(
+    service
+      .getConversation(id)
+      .some(
+        (item) => item.kind === 'note' && item.text.includes('boot fixture'),
+      ),
+  ).toBe(true)
+})
+
+it('normal completion releases without interrupting or marking a known-live turn', async () => {
+  await first()
+  const marker = vi.spyOn(
+    registry.get({ account: { configDir: join(dir, 'account-a') } }),
+    'rememberPossiblyLiveThread',
+  )
+  await send('account-a', 'ordinary next turn')
+  await vi.waitFor(() => expect(service.getById(id)?.status).toBe('completed'))
+  expect(marker).not.toHaveBeenCalled()
+  expect(hosts[0].server.methodsCalled()).not.toContain('turn/interrupt')
+})
+
+it('still publishes an accepted handoff if a selected context item disappears while pending', async () => {
+  await first()
+  const context = new ProjectContextService(getDatabase())
+  service.setSessionContextInjectionService(
+    new SessionContextInjectionService(getDatabase(), context),
+  )
+  const item = context.create({
+    projectId: 'p',
+    label: 'pending context',
+    body: 'Included before deletion',
+    reinjectMode: 'boot',
+  })
+  holdAcceptance = true
+  const pending = service.start(id, {
+    text: 'accepted with disappearing context',
+    providerAccountId: 'account-b',
+    contextItemIds: [item.id],
+  })
+  await vi.waitFor(() => expect(accept).toBeTypeOf('function'))
+  context.delete(item.id)
+  accept!()
+  await expect(pending).resolves.toBeTypeOf('string')
+  expect(accounts()).toEqual(['account-a', 'account-b'])
+  expect(
+    service
+      .getConversation(id)
+      .some(
+        (item) =>
+          item.kind === 'note' &&
+          item.text.includes('was accepted, but its project context selection'),
+      ),
+  ).toBe(true)
+  expect(messages().at(-1)).toContain('accepted with disappearing context')
 })

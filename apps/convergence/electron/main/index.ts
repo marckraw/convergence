@@ -12,6 +12,8 @@ import {
   shell,
 } from 'electron'
 import { existsSync } from 'fs'
+import { homedir } from 'os'
+import { resolveCodexAccountHandoffSource } from '../backend/provider-account/provider-account-resolution.pure'
 import { join } from 'path'
 import { getDatabase } from '../backend/database/database'
 import { ProjectService } from '../backend/project/project.service'
@@ -431,6 +433,12 @@ async function startApp(): Promise<void> {
             debugSink,
             resolveCodexAccountForSession,
             codexAccountHistory,
+            (accountId) =>
+              resolveCodexAccountHandoffSource({
+                accountId,
+                account: providerAccountRepository.get(accountId),
+                homeDir: homedir(),
+              }),
           ),
         )
         // The version gates the resident server: an older codex-cli is refused

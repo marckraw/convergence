@@ -185,3 +185,48 @@ it('inspection is read-only and notices a broken shared layout', async () => {
     code: 'ENOENT',
   })
 })
+
+it('preserves the stopped server’s coordination file before sharing its locks', async () => {
+  await write(join(account, 'thread-writer-locks/.coordination.lock'), '')
+  await write(
+    join(
+      account,
+      'thread-writer-locks/01a0a06d-5e35-7b53-83c4-6cf4abe4666e.lock',
+    ),
+    '',
+  )
+  expect((await subject.migrate(account)).ready).toBe(true)
+  expect(
+    (await fs.lstat(join(account, 'thread-writer-locks'))).isSymbolicLink(),
+  ).toBe(true)
+  expect(
+    await fs.readFile(
+      join(
+        account,
+        'thread-writer-locks.pre-share-2026-09-14T10-00-00-000Z/.coordination.lock',
+      ),
+      'utf8',
+    ),
+  ).toBe('')
+})
+it.each(['unexpected', 'symlink', 'directory'])(
+  'refuses a lock directory containing %s before touching history',
+  async (kind) => {
+    await write(join(account, 'sessions/rollout-kept.jsonl'), 'keep')
+    await fs.mkdir(join(account, 'thread-writer-locks'))
+    if (kind === 'unexpected')
+      await write(join(account, 'thread-writer-locks/custom.lock'), '')
+    if (kind === 'symlink')
+      await fs.symlink(
+        join(root, 'foreign'),
+        join(account, 'thread-writer-locks/.coordination.lock'),
+      )
+    if (kind === 'directory')
+      await fs.mkdir(join(account, 'thread-writer-locks/.coordination.lock'))
+    expect((await subject.migrate(account)).ready).toBe(false)
+    expect((await fs.lstat(join(account, 'sessions'))).isSymbolicLink()).toBe(
+      false,
+    )
+    await expect(fs.lstat(shared)).rejects.toMatchObject({ code: 'ENOENT' })
+  },
+)

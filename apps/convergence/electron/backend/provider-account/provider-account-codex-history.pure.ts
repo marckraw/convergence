@@ -61,3 +61,13 @@ export function planCodexHistoryMigration(input: {
     warnings,
   }
 }
+
+/** Codex 0.154.0 coordination and per-thread lock names, measured by the continuity probe. */
+export function isCodexWriterLockName(name: string): boolean {
+  return (
+    name === '.coordination.lock' ||
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.lock$/i.test(
+      name,
+    )
+  )
+}

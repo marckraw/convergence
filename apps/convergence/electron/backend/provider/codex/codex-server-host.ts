@@ -279,9 +279,13 @@ export class CodexServerHost {
   async connect(
     options: CodexServerConnectionOptions = {},
   ): Promise<CodexServerConnection> {
-    const registryMaintenance = this.options.waitForAdmission?.()
-    if (registryMaintenance) await registryMaintenance
-    if (this.maintaining) await this.maintaining
+    // Re-read both gates after every wake: another maintenance window may
+    // have opened before this continuation was scheduled.
+    for (;;) {
+      const admission = this.options.waitForAdmission?.() ?? this.maintaining
+      if (!admission) break
+      await admission
+    }
     if (this.retired)
       throw new Error('This Codex account server has been retired.')
     return this.connectAdmitted(options, true)
@@ -369,6 +373,7 @@ export class CodexServerHost {
     void admission.catch(() => {})
     // Closed before the witness's first await, including warming helpers.
     this.maintaining = admission
+    let mutating = false
     try {
       let restart = true
       let control: CodexServerConnection | null = null
@@ -426,6 +431,7 @@ export class CodexServerHost {
         control?.close()
       }
       if (restart) {
+        mutating = true
         const running = this.server
         this.server = null
         this.possiblyLiveThreads.clear()
@@ -439,6 +445,7 @@ export class CodexServerHost {
         }
       }
       if (this.stopped) throw new Error('This Codex account server is stopped.')
+      mutating = true
       const result = await work()
       if (options.retire) {
         this.retired = true
@@ -447,6 +454,17 @@ export class CodexServerHost {
       release()
       return result
     } catch (error) {
+      // A refused witness did not disturb this server. Bystanders may enter
+      // after the window reopens; only a failed mutation belongs to them.
+      if (options.handoff && !mutating) {
+        release()
+        throw error instanceof HandoffRefusedError
+          ? error
+          : new HandoffRefusedError(
+              'not-eligible',
+              `${options.handoff.accountLabel}: ${error instanceof Error ? error.message : String(error)} Your message was not sent.`,
+            )
+      }
       fail(error)
       throw error
     } finally {
@@ -1039,7 +1057,8 @@ export class CodexServerHostRegistry {
       release()
       return result
     } catch (error) {
-      fail(error)
+      if (error instanceof HandoffRefusedError) release()
+      else fail(error)
       throw error
     } finally {
       this.maintainingKeys.delete(key)
@@ -1052,8 +1071,18 @@ export class CodexServerHostRegistry {
     threadId: string
     role?: 'source' | 'destination'
     accountLabel: string
+    /** Source lookup must never create a server merely to release it. */
+    existingOnly?: boolean
   }): Promise<void> {
     try {
+      if (input.existingOnly) {
+        const key = codexServerKey({
+          executionHostId: input.executionHostId ?? 'local',
+          codexHome: input.account?.configDir ?? null,
+        })
+        await this.stopping.get(key)
+        if (!this.hosts.has(key)) return
+      }
       await this.withStoppedServer(input, async () => {}, {
         handoff: {
           threadId: input.threadId,

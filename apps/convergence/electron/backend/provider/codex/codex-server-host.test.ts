@@ -265,6 +265,113 @@ describe('CodexServerHost', () => {
     env.registry.stopAll()
   })
 
+  it.each(['direct', 'registry'] as const)(
+    'a refused %s handoff lets a waiting sibling send on the unchanged server',
+    async (gate) => {
+      const env = createEnvironment({
+        serverOptions: { autoCompleteTurns: false },
+      })
+      const input = { account: accountA }
+      const host = env.registry.get(input)
+      const connection = await host.connect()
+      await connection.rpc.request('thread/resume', { threadId: 'target' })
+      await connection.rpc.request('turn/start', {
+        threadId: 'target',
+        input: [],
+      })
+      const generation = connection.generation
+      connection.close()
+      const handoff =
+        gate === 'direct'
+          ? host.prepareThreadHandoff('target', 'Account A')
+          : env.registry.prepareThreadHandoff({
+              ...input,
+              threadId: 'target',
+              accountLabel: 'Account A',
+            })
+      const refused = expect(handoff).rejects.toMatchObject({ stage: 'busy' })
+      const waiting = host.connect()
+      await refused
+      const sibling = await waiting
+      expect(sibling.generation).toBe(generation)
+      await sibling.rpc.request('thread/resume', { threadId: 'sibling' })
+      await sibling.rpc.request('turn/start', {
+        threadId: 'sibling',
+        input: [],
+      })
+      expect(
+        env.servers[0].requests.filter((r) => r.method === 'turn/start'),
+      ).toHaveLength(2)
+      expect(env.killJournal).toEqual([])
+      sibling.close()
+      env.registry.stopAll()
+    },
+  )
+
+  it('rechecks admission when a second window opens before the waiter wakes', async () => {
+    let releaseFirst!: () => void
+    let releaseSecond!: () => void
+    const first = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const second = new Promise<void>((resolve) => {
+      releaseSecond = resolve
+    })
+    let gate: Promise<void> | undefined = first
+    const server = new FakeCodexServer()
+    const env = createHost({
+      waitForAdmission: () => gate,
+      onSpawn: (child) => {
+        setTimeout(() => child.announceListening('ws://127.0.0.1:5150'), 0)
+      },
+      connectTransport: async () => server.connect(),
+    })
+    const waiting = env.host.connect()
+    gate = second
+    releaseFirst()
+    await Promise.resolve()
+    expect(env.children).toHaveLength(0)
+    gate = undefined
+    releaseSecond()
+    const connected = await waiting
+    connected.close()
+    await env.host.stop()
+  })
+
+  it.each(['connection', 'helper', 'warming'] as const)(
+    'refuses a loaded destination held by a %s lease',
+    async (kind) => {
+      const env = createEnvironment()
+      const host = env.registry.get({ account: accountA })
+      const initial = await host.connect()
+      await initial.rpc.request('thread/resume', { threadId: 'target' })
+      initial.close()
+      let release!: () => void
+      let held: import('./codex-server-host').CodexServerConnection | undefined
+      const work =
+        kind === 'helper'
+          ? host.run(async () => {
+              await new Promise<void>((resolve) => {
+                release = resolve
+              })
+            })
+          : host.connect().then((connection) => {
+              held = connection
+            })
+      if (kind === 'helper')
+        await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+      else if (kind === 'connection') await work
+      await expect(
+        host.prepareThreadHandoff('target', 'Account A'),
+      ).rejects.toMatchObject({ stage: 'busy' })
+      expect(env.killJournal).toEqual([])
+      if (kind === 'helper') release()
+      await work
+      held?.close()
+      env.registry.stopAll()
+    },
+  )
+
   it('refuses a loaded handoff while server-side work outlives its socket', async () => {
     const env = createEnvironment({
       serverOptions: { autoCompleteTurns: false },

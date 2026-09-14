@@ -759,6 +759,10 @@ export class CodexProvider implements Provider {
     private debugSink: ProviderDebugSink = noopDebugSink,
     private accountLookup: CodexAccountLookup = noCodexAccountLookup,
     private accountHistory?: Pick<CodexAccountHistoryService, 'inspect'>,
+    private handoffSourceLookup?: (accountId: string) => {
+      account: CodexAccountEnvTarget
+      removed: boolean
+    },
   ) {}
 
   /** The resident server for a session's account, or the ambient login. */
@@ -878,6 +882,7 @@ export class CodexProvider implements Provider {
 
   start(config: SessionStartConfig): SessionHandle {
     const accountLookup = this.accountLookup
+    const handoffSourceLookup = this.handoffSourceLookup
     /**
      * Each handle is bound to one credential. A settled-turn handoff receives
      * the last turn's recorded account as a fact and releases loaded writers
@@ -1469,6 +1474,9 @@ export class CodexProvider implements Provider {
         })
       }
       activeProviderTurnId = null
+      activeClientUserMessageId = null
+      if (threadId && lastConnectionGeneration !== null)
+        serverHost.observeThreadSettled(threadId, lastConnectionGeneration)
       applyActivity({ kind: 'close' })
       setStatus('completed')
       setAttention('none')
@@ -2230,6 +2238,7 @@ export class CodexProvider implements Provider {
           }
 
           case 'turn/completed':
+            activeClientUserMessageId = null
             if (threadId && lastConnectionGeneration !== null)
               serverHost.observeThreadSettled(
                 threadId,
@@ -2282,6 +2291,12 @@ export class CodexProvider implements Provider {
             break
 
           case 'turn/interrupt':
+            if (threadId && lastConnectionGeneration !== null)
+              serverHost.observeThreadSettled(
+                threadId,
+                lastConnectionGeneration,
+              )
+            activeClientUserMessageId = null
             flushThinkingBuffer()
             flushAssistantBuffer()
             activeProviderTurnId = null
@@ -2544,10 +2559,22 @@ export class CodexProvider implements Provider {
             'not-eligible',
             'Account history inspection is unavailable. Your message was not sent.',
           )
-        const sourceAccount = config.previousProviderAccountId
-          ? accountLookup(config.previousProviderAccountId)
+        const source = config.previousProviderAccountId
+          ? (handoffSourceLookup?.(config.previousProviderAccountId) ?? {
+              account: accountLookup(config.previousProviderAccountId),
+              removed: false,
+            })
           : null
-        for (const target of [sessionAccount, sourceAccount]) {
+        const sourceAccount = source?.account ?? null
+        if (config.previousProviderAccountId && !sourceAccount)
+          throw new HandoffRefusedError(
+            'not-eligible',
+            'The previous account host could not be identified. Your message was not sent.',
+          )
+        for (const target of [
+          sessionAccount,
+          source?.removed ? null : sourceAccount,
+        ]) {
           if (!target) continue
           const layout = await accountHistory.inspect(target.configDir)
           if (!layout.ready)
@@ -2562,6 +2589,7 @@ export class CodexProvider implements Provider {
           threadId: config.continuationToken,
           accountLabel: sourceAccount?.label ?? 'The default account',
           role: 'source',
+          existingOnly: true,
         })
         if (stopped)
           throw new HandoffRefusedError(
@@ -2801,10 +2829,7 @@ export class CodexProvider implements Provider {
           stoppingThreadId,
           clientId,
         )
-        if (
-          result.outcome === 'absent' ||
-          (result.outcome === 'landed' && result.turn?.completed)
-        ) {
+        if (result.outcome === 'landed' && result.turn?.completed) {
           serverHost.observeThreadSettled(stoppingThreadId, generation)
         } else if (result.outcome === 'landed' && result.turn?.turnId) {
           await control.rpc.request('turn/interrupt', {
@@ -2977,9 +3002,9 @@ export class CodexProvider implements Provider {
       deny: (providerApprovalId) => {
         answerApproval(providerApprovalId, 'deny')
       },
-      dispose: (reason) =>
+      dispose: () =>
         disposeRuntime({
-          interruptActiveTurn: reason === 'quit' || fatalRelease,
+          interruptActiveTurn: fatalRelease,
         }),
       stop: () => {
         if (stopped) return
