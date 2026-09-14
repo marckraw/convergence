@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ComponentProps } from 'react'
+import { useEffect, useId, useRef, useState, type ComponentProps } from 'react'
 import {
   buildFeedView,
   defaultFeedView,
@@ -13,8 +13,18 @@ import { NeedsYouControls } from './needs-you-controls.presentational'
 import { Button } from '@/shared/ui/button'
 
 const preferenceKey = 'convergence:sidebar-activity-view:v1'
+const filtersExpandedKey = 'convergence:sidebar-activity-filters-expanded:v1'
 
 export function NeedsYou(props: ComponentProps<typeof NeedsYouFeed>) {
+  const controlsId = useId()
+  const controlsTrigger = useRef<HTMLButtonElement>(null)
+  const [filtersExpanded, setFiltersExpanded] = useState(() => {
+    try {
+      return localStorage.getItem(filtersExpandedKey) === 'true'
+    } catch {
+      return false
+    }
+  })
   const [heldOrder, setHeldOrder] = useState<FeedGroup[] | null>(null)
   const pointerInside = useRef(false)
   const [view, setView] = useState<FeedView>(() => {
@@ -31,6 +41,13 @@ export function NeedsYou(props: ComponentProps<typeof NeedsYouFeed>) {
       /* Preferences remain usable for this window. */
     }
   }, [view])
+  useEffect(() => {
+    try {
+      localStorage.setItem(filtersExpandedKey, String(filtersExpanded))
+    } catch {
+      /* Preferences remain usable for this window. */
+    }
+  }, [filtersExpanded])
   const result = buildFeedView(props.groups, view)
   const displayed = holdFeedOrder(result.groups, heldOrder)
   const pendingOrder = feedOrderKey(displayed) !== feedOrderKey(result.groups)
@@ -38,14 +55,39 @@ export function NeedsYou(props: ComponentProps<typeof NeedsYouFeed>) {
     setHeldOrder(null)
     setView(next)
   }
+  const collapseFilters = () => {
+    setFiltersExpanded(false)
+    controlsTrigger.current?.focus()
+  }
   return (
     <div className="space-y-3">
-      <div className="px-3">
+      <div
+        className="px-3"
+        onKeyDown={(event) => {
+          if (
+            filtersExpanded &&
+            event.key === 'Escape' &&
+            !event.defaultPrevented
+          ) {
+            event.preventDefault()
+            event.stopPropagation()
+            collapseFilters()
+          }
+        }}
+      >
         <NeedsYouControls
+          controlsId={controlsId}
+          triggerRef={controlsTrigger}
+          expanded={filtersExpanded}
+          onToggle={() => setFiltersExpanded((expanded) => !expanded)}
+          onCollapse={collapseFilters}
           view={view}
           result={result}
           onChange={changeView}
-          onReset={() => changeView(defaultFeedView())}
+          onReset={() => {
+            changeView(defaultFeedView())
+            controlsTrigger.current?.focus()
+          }}
         />
       </div>
       {pendingOrder && (
