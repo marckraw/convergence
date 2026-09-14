@@ -2798,6 +2798,8 @@ export class SessionService {
       throw new Error(`Session not active: ${id}`)
     }
     if (this.getById(id)?.status === 'answered') {
+      // A receipt can complete inside stopTask, before provider stop() arms
+      // stoppedByUser for the separate fallback-Stop completion.
       this.retainingStoppedInputs.add(id)
       const tasks = this.listTasks(id)
       const runs = this.listAgentRuns(id)

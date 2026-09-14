@@ -543,6 +543,7 @@ export class ClaudeCodeProvider implements Provider {
     let capabilities: string[] = []
     let interruptInFlight = false
     let interruptRequested = false
+    let stoppedByUser = false
     const notifiedTaskMoments = new Set<string>()
     const taskDescriptions = new Map<string, string>()
     // The synthetic result has no task id; its preceding notification owns the note.
@@ -1665,6 +1666,7 @@ export class ClaudeCodeProvider implements Provider {
       reason: 'quit' | 'stop' = 'stop',
     ): void | Promise<void> {
       if (stopped) return
+      const wasHarnessTurn = currentTurn?.openedBy === 'harness'
       clearIdleTimer()
       resolveConnectionEnd?.()
       if (reason === 'quit')
@@ -1673,7 +1675,7 @@ export class ClaudeCodeProvider implements Provider {
       evidence.processEnded(
         now(),
         reason,
-        answerStatus === 'answered' ? 'unknown' : undefined,
+        answerStatus === 'answered' || wasHarnessTurn ? 'unknown' : undefined,
       )
       stopped = true
       clearTimeout(startTimer)
@@ -1713,7 +1715,7 @@ export class ClaudeCodeProvider implements Provider {
       },
       resident: true,
       get retainQueuedInputsOnCompletion() {
-        return interruptRequested
+        return interruptRequested || stoppedByUser
       },
       setModelSelection: async (model, effort) => {
         if (connectionEnding) await connectionEnding
@@ -1805,6 +1807,9 @@ export class ClaudeCodeProvider implements Provider {
         if (stopped) return
         const wasAnswered = answerStatus === 'answered'
         const wasHarnessTurn = currentTurn?.openedBy === 'harness'
+        // Retain at fallback-Stop completion; the service guards the earlier
+        // receipt-minted completion inside its conversation stopTask awaits.
+        stoppedByUser = true
         sessionEmitter.addNote({ text: 'terminated by user', level: 'info' })
         disposeRuntime()
         if (!wasAnswered) {

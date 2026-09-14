@@ -1640,6 +1640,52 @@ it('RUN77 lap5 Stop completes a harness continuation and retains the queue — m
   ).toEqual([{ text: 'preserve this follow-up', state: 'queued' }])
   expect(settles).toHaveBeenCalledTimes(1)
   expect(children[0].stdin.writableEnded).toBe(true)
+  expect(service.listTasks(session.id).map((task) => task.status)).toEqual([
+    'unknown',
+  ])
+})
+
+it('RUN77 lap6 normal Stop of a harness continuation retains queued input — mutation omit stoppedByUser from retention turns red', async () => {
+  const { service, session, children, send, settles } = await answeredFixture(
+    ['task'],
+    true,
+  )
+  send({ type: 'system', subtype: 'status', status: 'requesting' })
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'running')
+  service.stop(session.id)
+  await vi.waitUntil(() => !service.getSummaryById(session.id)?.hasActiveHandle)
+  expect(service.getById(session.id)?.status).toBe('completed')
+  expect(service.getQueuedInputs(session.id).map((q) => q.state)).toEqual([
+    'queued',
+  ])
+  expect(children[0].lines).toHaveLength(1)
+  expect(settles).toHaveBeenCalledTimes(1)
+})
+
+it('RUN77 lap6 conversation Stop retains input when the terminal task fact beats its receipt — mutation remove service retention before provider Stop is armed turns red', async () => {
+  const { service, session, children, send, settles, db } =
+    await answeredFixture(['task'], true)
+  children[0].holdStops = true
+  service.stop(session.id)
+  await vi.waitUntil(() => children[0].stopResponses.length === 1)
+  send({
+    type: 'system',
+    subtype: 'task_notification',
+    task_id: 'task',
+    status: 'stopped',
+  })
+  await vi.waitUntil(
+    () => service.listTasks(session.id)[0]?.status === 'stopped',
+  )
+  children[0].stopResponses[0]()
+  await vi.waitUntil(() => !service.getSummaryById(session.id)?.hasActiveHandle)
+  expect({
+    rows: db
+      .prepare('SELECT state FROM session_queued_inputs WHERE session_id=?')
+      .all(session.id),
+    userLines: children[0].lines.length,
+    settles: settles.mock.calls.length,
+  }).toEqual({ rows: [{ state: 'queued' }], userLines: 1, settles: 1 })
 })
 
 it.each(['recover', 'stop', 'approve', 'deny'] as const)(

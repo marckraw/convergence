@@ -879,6 +879,7 @@ also completes with unresolved work unknown. Quit keeps queued inputs queued and
 cannot drain them into a process being disposed. Recovery heals a persisted local
 answered row the same way, without broadcasting a settle during startup.
 A crash/quit-healed answered row keeps its input queued; the Deliver-now card offers it again (MAR-2971).
+The service retains queued input before conversation Stop's task awaits because a receipt can mint completion there; the provider retains it at fallback `stop()` because that separate path can mint completion too.
 A failed background task is evidence, not a failed foreground conversation.
 
 The session records the answer-window start sequence. At the settle witness it
