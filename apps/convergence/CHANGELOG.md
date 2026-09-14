@@ -1,5 +1,11 @@
 # convergence
 
+## 0.58.5
+
+### Patch Changes
+
+- 43d833d: Collapse Activity filters into a readable summary of the selected activity, hosts, and providers. Remember whether the controls are open, preserve selections, and keep Clear and hidden-card explanations visible.
+
 ## 0.58.4
 
 ### Patch Changes
