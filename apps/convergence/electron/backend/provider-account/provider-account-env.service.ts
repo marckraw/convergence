@@ -24,12 +24,19 @@ export interface ClaudeConfigIo {
   writeFile: (path: string, contents: string) => Promise<void>
   /** Used to land the reconciled config atomically; see `writeConfigAtomically`. */
   rename: (from: string, to: string) => Promise<void>
+  /**
+   * Best-effort cleanup of the temp file when `rename` fails. Optional so
+   * fakes written before this cleanup existed keep compiling; without it the
+   * temp file is simply left behind, which was today's behaviour.
+   */
+  rm?: (path: string) => Promise<void>
 }
 
 const defaultIo: ClaudeConfigIo = {
   readFile: (path) => nodeFs.readFile(path, 'utf8'),
   writeFile: (path, contents) => nodeFs.writeFile(path, contents, 'utf8'),
   rename: (from, to) => nodeFs.rename(from, to),
+  rm: (path) => nodeFs.rm(path, { force: true }),
 }
 
 /**
@@ -189,5 +196,15 @@ async function writeConfigAtomically(
 ): Promise<void> {
   const tempPath = join(dirname(path), `.${basename(path)}.tmp-${randomUUID()}`)
   await io.writeFile(tempPath, `${JSON.stringify(config, null, 2)}\n`)
-  await io.rename(tempPath, path)
+  try {
+    await io.rename(tempPath, path)
+  } catch (error) {
+    // The rename failed, so the temp file is a scrap, not reconciled account
+    // state — remove it so a later listing of the account directory (e.g.
+    // MAR-3031's private-history detection) never sees it. Best effort: if
+    // the cleanup itself fails too, the caller's outer catch still swallows
+    // the original rename failure exactly as before.
+    await io.rm?.(tempPath).catch(() => {})
+    throw error
+  }
 }

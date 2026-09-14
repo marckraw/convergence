@@ -404,4 +404,54 @@ describe('resolveClaudeAccountEnv — selected account', () => {
     expect(rename).toHaveBeenCalledTimes(1)
     expect(rename).toHaveBeenCalledWith(tempPath, realPath)
   })
+
+  it('removes the temp file when rename fails, leaving the original untouched', async () => {
+    const realPath = `${ACCOUNT.configDir}/.claude.json`
+    const originalBytes = JSON.stringify({
+      oauthAccount: { emailAddress: 'b@example.com' },
+    })
+    const store: Record<string, string> = { [realPath]: originalBytes }
+
+    const rm = vi.fn(async (path: string) => {
+      delete store[path]
+    })
+    const io: ClaudeConfigIo = {
+      readFile: vi.fn(async (path: string) => {
+        if (path === `${HOME}/.claude.json`) {
+          return JSON.stringify({
+            mcpServers: { linear: { command: 'npx' } },
+          })
+        }
+        if (path in store) return store[path]
+        throw enoent(path)
+      }),
+      writeFile: vi.fn(async (path: string, contents: string) => {
+        store[path] = contents
+      }),
+      rename: vi.fn(async () => {
+        throw new Error('EBUSY: rename failed')
+      }),
+      rm,
+    }
+
+    const env = await resolveClaudeAccountEnv({
+      account: ACCOUNT,
+      workingDirectory: CWD,
+      baseEnv: BASE_ENV,
+      homeDir: HOME,
+      io,
+    })
+
+    expect(rm).toHaveBeenCalledTimes(1)
+    const [tempPath] = rm.mock.calls[0]
+    expect(tempPath).not.toBe(realPath)
+    expect(store[tempPath]).toBeUndefined()
+    expect(store[realPath]).toBe(originalBytes)
+    expect(Object.keys(env).sort()).toEqual([
+      'CLAUDE_CONFIG_DIR',
+      'CLAUDE_SECURESTORAGE_CONFIG_DIR',
+      'HOME',
+      'PATH',
+    ])
+  })
 })
