@@ -1,5 +1,11 @@
 # convergence
 
+## 0.59.3
+
+### Patch Changes
+
+- 25d5136: Match the finished activity-card icon to the green finished badge used in project cards.
+
 ## 0.59.2
 
 ### Patch Changes
