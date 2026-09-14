@@ -1,3 +1,4 @@
+import type { ProviderAccountLoginAttempt } from '@/shared/types/provider-account-login.types'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
 import {
@@ -33,6 +34,9 @@ export const ProviderAccountsContainer: FC = () => {
         ? (dialogPayload.providerAccountProviderId ?? 'claude-code')
         : 'claude-code',
     )
+  const [loginAttempt, setLoginAttempt] =
+    useState<ProviderAccountLoginAttempt | null>(null)
+  const [loginCode, setLoginCode] = useState('')
   const [accounts, setAccounts] = useState<ProviderAccount[]>([])
   const [health, setHealth] = useState<ProviderAccountHealth | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -85,6 +89,64 @@ export const ProviderAccountsContainer: FC = () => {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    let live = true
+    let revision = 0
+    const apply = (attempt: ProviderAccountLoginAttempt | null) => {
+      if (!live) return
+      setLoginAttempt(attempt)
+      if (attempt?.state !== 'waiting-code') setLoginCode('')
+      if (attempt?.active) {
+        setProviderId(attempt.providerId)
+        setError(null)
+        setMessage(null)
+      }
+    }
+    const unsubscribe = providerAccountApi.onLoginChanged((attempt) => {
+      revision++
+      apply(attempt)
+      if (live && !attempt.active) void load()
+    })
+    const requestedAt = revision
+    void providerAccountApi
+      .loginAttempt()
+      .then((attempt) => {
+        if (requestedAt === revision) apply(attempt)
+      })
+      .catch(() => {
+        if (live)
+          setError(
+            'The current sign-in could not be checked. Reopen Settings before starting another.',
+          )
+      })
+    return () => {
+      live = false
+      unsubscribe()
+    }
+  }, [load])
+
+  const handleCancelLogin = useCallback(async () => {
+    if (!loginAttempt) return
+    try {
+      setLoginAttempt(await providerAccountApi.cancelLogin(loginAttempt.id))
+      setLoginCode('')
+    } catch {
+      setError('Sign-in could not be cancelled yet. Try again.')
+    }
+  }, [loginAttempt])
+  const handleSubmitLoginCode = useCallback(async () => {
+    if (!loginAttempt) return
+    const code = loginCode
+    setLoginCode('')
+    try {
+      await providerAccountApi.submitLoginCode(loginAttempt.id, code)
+    } catch {
+      setError(
+        'The code could not be submitted. Check the current sign-in and try again.',
+      )
+    }
+  }, [loginAttempt, loginCode])
 
   const rows = useMemo(
     () =>
@@ -321,6 +383,11 @@ export const ProviderAccountsContainer: FC = () => {
   return (
     <ProviderAccountsFields
       providerId={providerId}
+      loginAttempt={loginAttempt}
+      loginCode={loginCode}
+      onLoginCodeChange={setLoginCode}
+      onSubmitLoginCode={() => void handleSubmitLoginCode()}
+      onCancelLogin={() => void handleCancelLogin()}
       rows={rows}
       settingsWarnings={
         providerId === 'claude-code' ? (health?.settingsWarnings ?? []) : []
@@ -330,8 +397,13 @@ export const ProviderAccountsContainer: FC = () => {
         providerId === 'claude-code' ? (health?.claudeVersion ?? null) : null
       }
       isLoading={isLoading}
-      busyAccountId={busyAccountId}
-      isEnrolling={isEnrolling}
+      busyAccountId={
+        busyAccountId ?? (loginAttempt?.active ? loginAttempt.accountId : null)
+      }
+      isEnrolling={
+        isEnrolling ||
+        Boolean(loginAttempt?.active && loginAttempt.kind === 'enrol')
+      }
       enrolEmail={enrolEmail}
       enrolLabel={enrolLabel}
       renamingAccountId={renamingAccountId}

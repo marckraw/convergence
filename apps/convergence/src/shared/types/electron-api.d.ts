@@ -1,3 +1,4 @@
+import type { ProviderAccountLoginAttempt } from './provider-account-login.types'
 import type {
   SessionPullRequest,
   SessionPullRequestReading,
@@ -1940,6 +1941,12 @@ interface ElectronAPI {
     ) => Promise<ProviderQuotaSnapshotData[]>
   }
   providerAccounts: {
+    loginAttempt: () => Promise<ProviderAccountLoginAttempt | null>
+    cancelLogin: (id: string) => Promise<ProviderAccountLoginAttempt | null>
+    submitLoginCode: (id: string, code: string) => Promise<void>
+    onLoginChanged: (
+      callback: (attempt: ProviderAccountLoginAttempt) => void,
+    ) => () => void
     list: () => Promise<ProviderAccountData[]>
     enrol: (input: {
       email: string

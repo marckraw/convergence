@@ -1,8 +1,8 @@
 import { randomUUID } from 'crypto'
 import { promises as nodeFs } from 'fs'
 import { homedir } from 'os'
-import { join } from 'path'
-import { spawn } from 'child_process'
+import { dirname, join } from 'path'
+import { execFile } from 'child_process'
 import {
   CodexAccountHistoryService,
   codexHistoryFs,
@@ -63,7 +63,7 @@ import type { ProviderAccount } from './provider-account.types'
 
 export interface ProviderAccountFs extends CodexHistoryFs {
   unlink: (path: string) => Promise<void>
-  mkdir: (path: string) => Promise<void>
+  mkdir: (path: string, options?: { exclusive: true }) => Promise<void>
   /** Codex writes its credential as a plaintext file; permissions are ours. */
   chmod: (path: string, mode: number) => Promise<void>
   readdir: (path: string) => Promise<string[]>
@@ -90,8 +90,13 @@ export type ProviderAccountCommandRunner = (
 const defaultFs: ProviderAccountFs = {
   ...codexHistoryFs,
   unlink: (path) => nodeFs.unlink(path),
-  mkdir: async (path) => {
-    await nodeFs.mkdir(path, { recursive: true })
+  mkdir: async (path, options) => {
+    if (options?.exclusive) {
+      await nodeFs.mkdir(dirname(path), { recursive: true })
+      await nodeFs.mkdir(path)
+    } else {
+      await nodeFs.mkdir(path, { recursive: true })
+    }
   },
   chmod: (path, mode) => nodeFs.chmod(path, mode),
   readdir: (path) => nodeFs.readdir(path),
@@ -104,26 +109,30 @@ const defaultFs: ProviderAccountFs = {
   },
 }
 
+// Account commands outside the interactive ceremony (notably cleanup) are
+// bounded too. Resolve only on close, so a killed CLI cannot still write after
+// the account maintenance lease is released.
 const defaultRunCommand: ProviderAccountCommandRunner = (command) =>
-  new Promise((resolve, reject) => {
-    const child = spawn(command.command, command.args, {
-      cwd: command.cwd,
-      env: command.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-
-    let stdout = ''
-    let stderr = ''
-    child.stdout?.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString()
-    })
-    child.stderr?.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString()
-    })
-    child.once('error', reject)
-    child.once('exit', (code) => {
-      resolve({ code: code ?? 1, stdout, stderr })
-    })
+  new Promise((resolve) => {
+    execFile(
+      command.command,
+      command.args,
+      {
+        cwd: command.cwd,
+        env: command.env,
+        timeout: 20_000,
+        killSignal: 'SIGKILL',
+        maxBuffer: 64 * 1024,
+        encoding: 'utf8',
+      },
+      (error, stdout, stderr) => {
+        resolve({
+          code: error ? (typeof error.code === 'number' ? error.code : 1) : 0,
+          stdout,
+          stderr: error?.killed ? '' : stderr,
+        })
+      },
+    )
   })
 
 export interface ProviderAccountEnrolmentDeps {
@@ -131,6 +140,7 @@ export interface ProviderAccountEnrolmentDeps {
   onAccountChanged?: (accountId: string) => void
   fs?: ProviderAccountFs
   runCommand?: ProviderAccountCommandRunner
+  runLoginCommand?: ProviderAccountCommandRunner
   homeDir?: string
   baseEnv?: NodeJS.ProcessEnv
   newAccountId?: () => string
@@ -172,6 +182,7 @@ export class ProviderAccountEnrolmentService {
   private readonly onAccountChanged: (accountId: string) => void
   private readonly fs: ProviderAccountFs
   private readonly runCommand: ProviderAccountCommandRunner
+  private readonly runLoginCommand: ProviderAccountCommandRunner
   private readonly homeDir: string
   private readonly baseEnv: NodeJS.ProcessEnv
   private readonly newAccountId: () => string
@@ -186,6 +197,7 @@ export class ProviderAccountEnrolmentService {
     this.onAccountChanged = deps.onAccountChanged ?? (() => {})
     this.fs = deps.fs ?? defaultFs
     this.runCommand = deps.runCommand ?? defaultRunCommand
+    this.runLoginCommand = deps.runLoginCommand ?? this.runCommand
     this.homeDir = deps.homeDir ?? homedir()
     this.baseEnv = deps.baseEnv ?? process.env
     this.newAccountId = deps.newAccountId ?? (() => randomUUID())
@@ -259,38 +271,43 @@ export class ProviderAccountEnrolmentService {
     const configDir = deriveProviderAccountConfigDir(dirInput)
     const credentialDir = deriveProviderAccountCredentialDir(dirInput)
 
-    await this.fs.mkdir(configDir)
-    await this.fs.mkdir(credentialDir)
-    await this.seedSymlinks(configDir)
-    await this.seedAccountConfig(configDir)
+    const { identity, warnings } = await this.prepareNewAccount(
+      { accountId, binaryPath, configDir, credentialDir },
+      async () => {
+        await this.seedSymlinks(configDir)
+        await this.seedAccountConfig(configDir)
 
-    const warnings = await this.scanSharedSettings()
+        const warnings = await this.scanSharedSettings()
 
-    const result = await this.runCommand(
-      buildProviderAccountLoginCommand({
-        binaryPath,
-        configDir,
-        credentialDir,
-        email,
-        baseEnv: this.baseEnv,
-      }),
+        const result = await this.runLoginCommand(
+          buildProviderAccountLoginCommand({
+            binaryPath,
+            configDir,
+            credentialDir,
+            email,
+            baseEnv: this.baseEnv,
+          }),
+        )
+
+        if (result.code !== 0) {
+          throw new Error(
+            'Claude sign-in did not complete. Try connecting again.',
+          )
+        }
+
+        const identity = readClaudeIdentityFromConfig(
+          await this.readJson(join(configDir, '.claude.json')),
+        )
+        if (!identity) {
+          throw new Error(
+            'Login completed but the account directory reported no identity. ' +
+              'The account was not enrolled.',
+          )
+        }
+
+        return { identity, warnings }
+      },
     )
-
-    if (result.code !== 0) {
-      throw new Error('Claude sign-in did not complete. Try connecting again.')
-    }
-
-    const identity = readClaudeIdentityFromConfig(
-      await this.readJson(join(configDir, '.claude.json')),
-    )
-    if (!identity) {
-      // The directories stay behind deliberately: the sweep reclaims them, and
-      // guessing an identity here is exactly the mistake the ADR forbids.
-      throw new Error(
-        'Login completed but the account directory reported no identity. ' +
-          'The account was not enrolled.',
-      )
-    }
 
     const account = this.repository.create({
       id: accountId,
@@ -371,7 +388,7 @@ export class ProviderAccountEnrolmentService {
 
       let result: ProviderAccountCommandResult
       try {
-        result = await this.runCommand(
+        result = await this.runLoginCommand(
           buildProviderAccountLoginCommand({
             binaryPath,
             configDir: account.configDir,
@@ -504,19 +521,22 @@ export class ProviderAccountEnrolmentService {
       // relabel historical turns to that new identity, even when login succeeds.
       this.repository.setStatus(account.id, 'unavailable', null)
       await this.fs.chmod(account.configDir, CODEX_HOME_DIR_MODE)
-      const result = await this.runCommand(
-        buildCodexAccountLoginCommand({
-          binaryPath,
-          configDir: account.configDir,
-          baseEnv: this.baseEnv,
-        }),
-      )
-      if (result.code !== 0) {
-        throw new Error(
-          `codex login failed: ${result.stderr.trim() || `exit code ${result.code}`}`,
-        )
-      }
       const authPath = join(account.configDir, CODEX_AUTH_FILE_NAME)
+      let result: ProviderAccountCommandResult
+      try {
+        result = await this.runLoginCommand(
+          buildCodexAccountLoginCommand({
+            binaryPath,
+            configDir: account.configDir,
+            baseEnv: this.baseEnv,
+          }),
+        )
+      } catch {
+        return this.refuseCodexReconnect(authPath, 'Sign-in did not complete.')
+      }
+      if (result.code !== 0) {
+        return this.refuseCodexReconnect(authPath, 'Sign-in did not complete.')
+      }
       await this.fs.chmod(authPath, CODEX_AUTH_FILE_MODE)
       const identity = readCodexIdentityFromAuth(await this.readJson(authPath))
       if (!identity?.orgId) {
@@ -589,46 +609,52 @@ export class ProviderAccountEnrolmentService {
       accountId,
     })
 
-    await this.fs.mkdir(configDir)
-    // MAR-2207: owner-only home, not just an owner-only credential file.
-    await this.fs.chmod(configDir, CODEX_HOME_DIR_MODE)
-    const configPath = join(configDir, 'config.toml')
-    await this.fs.writeFile(
-      configPath,
-      'cli_auth_credentials_store = "file"\n',
-      { flag: 'wx' },
+    const { identity, historyLayout } = await this.prepareNewAccount(
+      { accountId, binaryPath, configDir, credentialDir: configDir },
+      async () => {
+        // MAR-2207: owner-only home, not just an owner-only credential file.
+        await this.fs.chmod(configDir, CODEX_HOME_DIR_MODE)
+        const configPath = join(configDir, 'config.toml')
+        await this.fs.writeFile(
+          configPath,
+          'cli_auth_credentials_store = "file"\n',
+          { flag: 'wx' },
+        )
+        await this.fs.chmod(configPath, CODEX_AUTH_FILE_MODE)
+        const historyLayout = await this.codexHistory.migrate(configDir)
+
+        const result = await this.runLoginCommand(
+          buildCodexAccountLoginCommand({
+            binaryPath,
+            configDir,
+            baseEnv: this.baseEnv,
+          }),
+        )
+
+        if (result.code !== 0) {
+          throw new Error(
+            'OpenAI sign-in did not complete. Try connecting again.',
+          )
+        }
+
+        const authPath = join(configDir, CODEX_AUTH_FILE_NAME)
+        const identity = readCodexIdentityFromAuth(
+          await this.readJson(authPath),
+        )
+        if (!identity) {
+          throw new Error(
+            'Login completed but the Codex home reported no identity. ' +
+              'The account was not enrolled.',
+          )
+        }
+
+        // The keychain does this for Claude. Here it is the filesystem's job, and
+        // a world-readable auth.json is a credential anyone on the box can copy.
+        await this.fs.chmod(authPath, CODEX_AUTH_FILE_MODE)
+
+        return { identity, historyLayout }
+      },
     )
-    await this.fs.chmod(configPath, CODEX_AUTH_FILE_MODE)
-    const historyLayout = await this.codexHistory.migrate(configDir)
-
-    const result = await this.runCommand(
-      buildCodexAccountLoginCommand({
-        binaryPath,
-        configDir,
-        baseEnv: this.baseEnv,
-      }),
-    )
-
-    if (result.code !== 0) {
-      throw new Error(
-        `codex login failed: ${result.stderr.trim() || `exit code ${result.code}`}`,
-      )
-    }
-
-    const authPath = join(configDir, CODEX_AUTH_FILE_NAME)
-    const identity = readCodexIdentityFromAuth(await this.readJson(authPath))
-    if (!identity) {
-      // Directories stay behind for the sweep to reclaim. Guessing an identity
-      // here is exactly the mistake the ADR forbids.
-      throw new Error(
-        'Login completed but the Codex home reported no identity. ' +
-          'The account was not enrolled.',
-      )
-    }
-
-    // The keychain does this for Claude. Here it is the filesystem's job, and
-    // a world-readable auth.json is a credential anyone on the box can copy.
-    await this.fs.chmod(authPath, CODEX_AUTH_FILE_MODE)
 
     const account = this.repository.create({
       id: accountId,
@@ -659,6 +685,55 @@ export class ProviderAccountEnrolmentService {
         key: 'codex.history',
         message,
       })),
+    }
+  }
+
+  /** Own only exclusively created namespaces until identity is verified. A
+   * failed ceremony discards credentials before removing its temporary home;
+   * existing account directories can never be claimed by this cleanup. */
+  private async prepareNewAccount<T>(
+    target: {
+      accountId: string
+      binaryPath: string
+      configDir: string
+      credentialDir: string
+    },
+    prepare: () => Promise<T>,
+  ): Promise<T> {
+    const created: string[] = []
+    try {
+      for (const dir of new Set([target.configDir, target.credentialDir])) {
+        await this.fs.mkdir(dir, { exclusive: true })
+        created.push(dir)
+      }
+      return await prepare()
+    } catch (error) {
+      if (
+        target.credentialDir !== target.configDir &&
+        created.includes(target.credentialDir)
+      ) {
+        try {
+          await this.runLogout(
+            target.binaryPath,
+            target.credentialDir,
+            target.accountId,
+          )
+        } catch (cleanupError) {
+          throw new Error(
+            'Incomplete Claude account cleanup failed. The credential directories were retained for orphan cleanup.',
+            { cause: cleanupError },
+          )
+        }
+      }
+      try {
+        for (const dir of created.reverse()) await this.fs.rm(dir)
+      } catch (cleanupError) {
+        throw new Error(
+          'Incomplete account directory cleanup failed. Its files need attention before retrying.',
+          { cause: cleanupError },
+        )
+      }
+      throw error
     }
   }
 

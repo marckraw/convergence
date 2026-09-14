@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { ProviderAccountLoginAttempt } from '@/shared/types/provider-account-login.types'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   ProviderAccount,
@@ -41,6 +42,10 @@ function health(
 }
 
 const providerAccounts = {
+  loginAttempt: vi.fn(),
+  onLoginChanged: vi.fn(),
+  cancelLogin: vi.fn(),
+  submitLoginCode: vi.fn(),
   list: vi.fn(),
   enrol: vi.fn(),
   reconnect: vi.fn(),
@@ -59,6 +64,8 @@ const providerAccounts = {
 describe('ProviderAccountsContainer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    providerAccounts.loginAttempt.mockResolvedValue(null)
+    providerAccounts.onLoginChanged.mockReturnValue(() => {})
     useDialogStore.getState().close()
     providerAccounts.list.mockResolvedValue([account()])
     providerAccounts.health.mockResolvedValue(health())
@@ -182,7 +189,7 @@ describe('ProviderAccountsContainer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Connect OpenAI' }))
 
     expect(
-      screen.getByRole('button', { name: 'Waiting for browser...' }),
+      screen.getByRole('button', { name: 'Sign-in in progress...' }),
     ).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Anthropic' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Reconnect' })).toBeDisabled()
@@ -424,6 +431,94 @@ describe('ProviderAccountsContainer', () => {
       screen.queryByRole('button', { name: 'Sign out and remove' }),
     ).not.toBeInTheDocument()
     expect(providerAccounts.remove).not.toHaveBeenCalled()
+  })
+
+  it('rejoins the backend login after remount, exposes fallback controls and never starts a second login', async () => {
+    const attempt: ProviderAccountLoginAttempt = {
+      id: 'login-fixture',
+      providerId: 'claude-code',
+      accountId: null,
+      kind: 'enrol',
+      state: 'waiting-code',
+      active: true,
+      authorizationUrl: 'https://claude.com/cai/oauth/authorize?state=fixture',
+      message: 'Paste the code from the browser.',
+      startedAt: '2026-09-14T10:00:00Z',
+    }
+    providerAccounts.loginAttempt.mockResolvedValue(attempt)
+    const unsubscribe = vi.fn()
+    providerAccounts.onLoginChanged.mockReturnValue(unsubscribe)
+    const first = render(<ProviderAccountsContainer />)
+    await screen.findByLabelText('Authorization code')
+    expect(
+      screen.getByRole('button', { name: 'Sign-in in progress...' }),
+    ).toBeDisabled()
+    expect(
+      screen.getByRole('link', { name: 'Open sign-in page' }),
+    ).toHaveAttribute('href', attempt.authorizationUrl)
+    first.unmount()
+    expect(unsubscribe).toHaveBeenCalled()
+    render(<ProviderAccountsContainer />)
+    fireEvent.change(await screen.findByLabelText('Authorization code'), {
+      target: { value: 'fixture-code' },
+    })
+    providerAccounts.submitLoginCode.mockResolvedValue(undefined)
+    fireEvent.click(screen.getByRole('button', { name: 'Submit code' }))
+    await waitFor(() =>
+      expect(providerAccounts.submitLoginCode).toHaveBeenCalledWith(
+        'login-fixture',
+        'fixture-code',
+      ),
+    )
+    expect(screen.getByLabelText('Authorization code')).toHaveValue('')
+    providerAccounts.cancelLogin.mockResolvedValue({
+      ...attempt,
+      state: 'cancelling',
+      authorizationUrl: null,
+      message: 'Stopping sign-in…',
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel sign-in' }))
+    await screen.findByText('Stopping sign-in…')
+    expect(
+      screen.queryByRole('link', { name: 'Open sign-in page' }),
+    ).not.toBeInTheDocument()
+    expect(providerAccounts.enrol).not.toHaveBeenCalled()
+  })
+
+  it('does not overwrite a newer login event with an older initial snapshot', async () => {
+    let snapshot!: (attempt: ProviderAccountLoginAttempt | null) => void
+    providerAccounts.loginAttempt.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          snapshot = resolve
+        }),
+    )
+    let event!: (attempt: ProviderAccountLoginAttempt) => void
+    providerAccounts.onLoginChanged.mockImplementationOnce((callback) => {
+      event = callback
+      return () => {}
+    })
+    render(<ProviderAccountsContainer />)
+    await screen.findByText('a@example.com')
+    const attempt: ProviderAccountLoginAttempt = {
+      id: 'new',
+      providerId: 'codex',
+      accountId: null,
+      kind: 'enrol',
+      state: 'waiting-browser',
+      active: true,
+      authorizationUrl: null,
+      message: 'Complete the OpenAI sign-in.',
+      startedAt: '2026-09-14T10:00:00Z',
+    }
+    await act(async () => {
+      event(attempt)
+      snapshot(null)
+    })
+    expect(screen.getByText('Complete the OpenAI sign-in.')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Sign-in in progress...' }),
+    ).toBeDisabled()
   })
 
   it('drops the old credential-health note after a successful reconnect', async () => {
