@@ -1,5 +1,6 @@
 import { ClaudePermissionsService } from './claude-permissions.service'
-import { spawn } from 'child_process'
+import { ClaudeAccountMaintenance } from './claude-account-maintenance.service'
+import { spawn, type ChildProcess } from 'child_process'
 import {
   createClaudeTransport,
   type ClaudeTransport,
@@ -130,11 +131,43 @@ interface ClaudeStreamEvent {
   model?: string
 }
 
+/** A soft stop is only a request; bound helpers that ignore it, while the
+ * account registry still waits for their actual exit before allowing login. */
+function createClaudeChildTerminator(child: ChildProcess): () => void {
+  let exited = false
+  let escalation: ReturnType<typeof setTimeout> | null = null
+  const finish = () => {
+    exited = true
+    if (escalation) clearTimeout(escalation)
+  }
+  child.once('exit', finish)
+  child.once('error', () => {
+    if (!child.pid) finish()
+  })
+  return () => {
+    if (exited || escalation) return
+    escalation = setTimeout(() => {
+      try {
+        child.kill('SIGKILL')
+      } catch {
+        // No exit witness means maintenance remains blocked.
+      }
+    }, 5000)
+    escalation.unref?.()
+    try {
+      child.kill('SIGTERM')
+    } catch {
+      // Keep the escalation scheduled even if the soft signal failed.
+    }
+  }
+}
+
 async function runClaudeOneShot(
   binaryPath: string,
   input: OneShotInput,
   taskProgress?: TaskProgressService | null,
   account: ClaudeAccountEnvTarget | null = null,
+  trackProcess: (child: ChildProcess) => void = () => {},
 ): Promise<OneShotResult> {
   // Session naming, fork summarisation, analytics, space synthesis and guided
   // review all reach Claude through here, so this one resolve scopes every
@@ -162,6 +195,8 @@ async function runClaudeOneShot(
       stdio: ['pipe', 'pipe', 'pipe'],
       env,
     })
+    trackProcess(child)
+    const terminate = createClaudeChildTerminator(child)
 
     const progress = createTaskProgressEmitter(input.requestId, taskProgress)
     progress?.started()
@@ -173,7 +208,7 @@ async function runClaudeOneShot(
     const timeout = setTimeout(() => {
       if (settled) return
       settled = true
-      child.kill('SIGTERM')
+      terminate()
       progress?.settled('timeout')
       reject(new Error('claude oneShot timed out'))
     }, input.timeoutMs ?? 20000)
@@ -273,6 +308,7 @@ export class ClaudeCodeProvider implements Provider {
      */
     private canOpenBrowser: boolean = true,
     private residentIdleMinutes: () => number = () => 30,
+    private accountMaintenance: ClaudeAccountMaintenance = new ClaudeAccountMaintenance(),
   ) {}
 
   async describe(): Promise<ProviderDescriptor> {
@@ -280,15 +316,54 @@ export class ClaudeCodeProvider implements Provider {
   }
 
   async oneShot(input: OneShotInput): Promise<OneShotResult> {
-    return runClaudeOneShot(
-      this.binaryPath,
-      input,
-      this.taskProgress,
-      this.accountLookup(input.providerAccountId),
+    const release = await this.accountMaintenance.admit(
+      input.providerAccountId ?? null,
     )
+    try {
+      return await runClaudeOneShot(
+        this.binaryPath,
+        input,
+        this.taskProgress,
+        this.accountLookup(input.providerAccountId),
+        (child) =>
+          this.trackAccountProcess(input.providerAccountId ?? null, child),
+      )
+    } finally {
+      release()
+    }
+  }
+
+  private trackAccountProcess(
+    accountId: string | null,
+    child: ChildProcess,
+  ): void {
+    // A timeout or SIGTERM request does not prove exit. Keep maintenance out
+    // until the process exits, even when its caller has already received an error.
+    const unregister = this.accountMaintenance.register(accountId, {
+      isBusy: () => true,
+      endIdle: async () => {},
+    })
+    child.once('exit', unregister)
+    child.once('error', () => {
+      if (!child.pid) unregister()
+    })
   }
 
   async manageContext(
+    config: SessionStartConfig,
+    input: ProviderContextManagementInput,
+  ): Promise<ProviderContextManagementResult> {
+    const release = await this.accountMaintenance.admit(
+      config.providerAccountId ?? null,
+    )
+    try {
+      return await this.compactContext(config, input)
+    } finally {
+      release()
+    }
+  }
+
+  private async compactContext(
     config: SessionStartConfig,
     input: ProviderContextManagementInput,
   ): Promise<ProviderContextManagementResult> {
@@ -326,8 +401,10 @@ export class ClaudeCodeProvider implements Provider {
       stdio: ['pipe', 'pipe', 'pipe'],
       env,
     })
+    this.trackAccountProcess(config.providerAccountId ?? null, child)
+    const terminate = createClaudeChildTerminator(child)
     if (!child.stdin || !child.stdout) {
-      child.kill('SIGTERM')
+      terminate()
       throw new Error('Claude Code did not expose stdio pipes')
     }
 
@@ -392,7 +469,7 @@ export class ClaudeCodeProvider implements Provider {
         completion,
         new Promise<never>((_resolve, reject) => {
           timeout = setTimeout(() => {
-            child.kill('SIGTERM')
+            terminate()
             reject(new Error('Claude context compaction timed out'))
           }, 120_000)
           timeout.unref?.()
@@ -406,7 +483,7 @@ export class ClaudeCodeProvider implements Provider {
       }
     } finally {
       if (timeout) clearTimeout(timeout)
-      if (!child.killed) child.kill('SIGTERM')
+      terminate()
     }
   }
 
@@ -419,6 +496,7 @@ export class ClaudeCodeProvider implements Provider {
     const accountLabelLookup = this.accountLabelLookup
     const canOpenBrowser = this.canOpenBrowser
     const residentIdleMinutes = this.residentIdleMinutes
+    const accountMaintenance = this.accountMaintenance
     /** Servers already reported this turn, so one broken connector says it once. */
     const mcpAuthNotedServers = new Set<string>()
     const sessionId = config.sessionId
@@ -457,14 +535,17 @@ export class ClaudeCodeProvider implements Provider {
     let connectionGeneration = 0
     let stopped = false
     let idleTimer: ReturnType<typeof setTimeout> | undefined
-    let endingReason: 'idle' | 'account' | null = null
+    let endingReason: 'idle' | 'account' | 'maintenance' | null = null
     let connectionEnding: Promise<void> | null = null
     let resolveConnectionEnd: (() => void) | undefined
+    let unregisterConnection: (() => void) | undefined
     function clearIdleTimer(): void {
       if (idleTimer) clearTimeout(idleTimer)
       idleTimer = undefined
     }
-    function endConnection(reason: 'idle' | 'account'): Promise<void> {
+    function endConnection(
+      reason: 'idle' | 'account' | 'maintenance',
+    ): Promise<void> {
       if (connectionEnding) return connectionEnding
       if (!child) return Promise.resolve()
       clearIdleTimer()
@@ -474,26 +555,36 @@ export class ClaudeCodeProvider implements Provider {
         text:
           reason === 'account'
             ? 'connection ended: account changed'
-            : `process stopped after ${residentIdleMinutes()} min idle`,
+            : reason === 'maintenance'
+              ? 'ending idle connection for account maintenance'
+              : `process stopped after ${residentIdleMinutes()} min idle`,
         level: 'info',
       })
-      connectionEnding = new Promise<void>((resolve) => {
+      let rejectClose!: (error: Error) => void
+      const completion = new Promise<void>((resolve, reject) => {
         resolveConnectionEnd = resolve
+        rejectClose = reject
       })
+      connectionEnding = completion
       void child.close().catch((error) => {
         sessionEmitter.addNote({
           text: `Claude Code close failed: ${String(error)}`,
           level: 'error',
         })
+        rejectClose(
+          new Error(
+            'Claude connection exit was not confirmed. Account credentials were not changed.',
+          ),
+        )
       })
-      return connectionEnding
+      return completion
     }
     function armIdleTimer(): void {
       clearIdleTimer()
       const minutes = residentIdleMinutes()
       if (stopped || !child || currentTurn || minutes === 0) return
       idleTimer = setTimeout(() => {
-        void endConnection('idle')
+        void endConnection('idle').catch(() => {})
       }, minutes * 60000)
       idleTimer.unref?.()
     }
@@ -1414,7 +1505,12 @@ export class ClaudeCodeProvider implements Provider {
       if (currentTurn) return currentTurnDisposition()
       preparingTurn = true
       let userTurnBound = false
+      let releaseAdmission: (() => void) | undefined
       try {
+        const accountId = options?.continuesCurrentTurn
+          ? (currentTurnAccount?.id ?? null)
+          : (options?.providerAccountId ?? null)
+        releaseAdmission = await accountMaintenance.admit(accountId)
         clearIdleTimer()
         if (connectionEnding) await connectionEnding
         if (stopped) return
@@ -1538,6 +1634,21 @@ export class ClaudeCodeProvider implements Provider {
         if (!child && env) {
           capabilities = []
           const generation = ++connectionGeneration
+          unregisterConnection = accountMaintenance.register(turnAccount.id, {
+            isBusy: () => {
+              const counts = config.readParallelWorkCounts?.()
+              return (
+                stopped ||
+                !!currentTurn ||
+                preparingTurn ||
+                !!connectionEnding ||
+                !!pendingRecoveryTurn ||
+                !!permissions.pendingAttention ||
+                !!(counts && counts.running > 0)
+              )
+            },
+            endIdle: () => endConnection('maintenance'),
+          })
           child = createClaudeTransport({
             binaryPath,
             args,
@@ -1578,9 +1689,16 @@ export class ClaudeCodeProvider implements Provider {
                 scheduleContinuationRecovery('missing-session')
             },
             onExit: ({ code, signal, error }) => {
+              unregisterConnection?.()
+              unregisterConnection = undefined
               interruptRequested = false
               permissions.endConnection()
-              if (stopped) return
+              if (stopped) {
+                connectionEnding = null
+                resolveConnectionEnd?.()
+                resolveConnectionEnd = undefined
+                return
+              }
               const versionRefusal = describeClaudeTransportVersionRefusal(
                 error,
                 version,
@@ -1664,6 +1782,10 @@ export class ClaudeCodeProvider implements Provider {
           setAttention('failed')
         }
       } catch (error) {
+        if (!child) {
+          unregisterConnection?.()
+          unregisterConnection = undefined
+        }
         const reason = `Failed to prepare Claude Code turn: ${String(error)}`
         sessionEmitter.addNote({ text: reason, level: 'error' })
         currentTurn = null
@@ -1673,6 +1795,7 @@ export class ClaudeCodeProvider implements Provider {
         // retain its attribution and let the turn's failed state explain it.
         if (!userTurnBound) return { kind: 'refused', reason }
       } finally {
+        releaseAdmission?.()
         preparingTurn = false
         // Recovery can arrive while the old preparation is reading attachments.
         // Keep its request until this guard releases; void callers cannot queue it.
@@ -1695,7 +1818,6 @@ export class ClaudeCodeProvider implements Provider {
       if (stopped) return
       const wasHarnessTurn = currentTurn?.openedBy === 'harness'
       clearIdleTimer()
-      resolveConnectionEnd?.()
       if (reason === 'quit')
         sessionEmitter.addNote({ text: 'stopped by quit', level: 'info' })
       permissions.endConnection()

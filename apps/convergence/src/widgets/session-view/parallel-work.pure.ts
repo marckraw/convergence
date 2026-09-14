@@ -116,6 +116,8 @@ export function workStatus(row: ParallelWorkRow): string {
         return 'Stopped after idle timeout'
       case 'account':
         return 'Stopped by account change'
+      case 'maintenance':
+        return 'Stopped for account maintenance'
       case 'stop':
         return 'Stopped by you'
       default:

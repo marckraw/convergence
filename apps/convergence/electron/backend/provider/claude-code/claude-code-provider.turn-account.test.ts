@@ -78,6 +78,7 @@ vi.mock('child_process', () => ({
 }))
 
 import { ClaudeCodeProvider } from './claude-code-provider'
+import { ClaudeAccountMaintenance } from './claude-account-maintenance.service'
 import { ClaudeCodeSkillsService } from '../../skills/claude-code-skills.service'
 import type { SkillSelection } from '../../skills/skills.types'
 import type { ClaudeAccountLookup } from './claude-code-provider'
@@ -176,6 +177,158 @@ afterEach(() => {
 })
 
 describe('per-turn account attribution', () => {
+  it('does not treat disposal during maintenance as proof that the process exited', async () => {
+    const child = new MockChildProcess()
+    child.kill.mockImplementation(() => true)
+    spawnMock.mockReturnValue(child)
+    const gate = new ClaudeAccountMaintenance()
+    const provider = new ClaudeCodeProvider(
+      '/fixture/claude',
+      null,
+      undefined,
+      null,
+      () => ACCOUNT_A,
+      undefined,
+      true,
+      () => 0,
+      gate,
+    )
+    const handle = provider.start({
+      sessionId: 'disposal-witness',
+      workingDirectory: process.cwd(),
+      initialMessage: 'first',
+      model: null,
+      effort: null,
+      continuationToken: null,
+      providerAccountId: 'acct-a',
+    })
+    const statuses: string[] = []
+    attachListeners(handle)
+    handle.onStatusChange((status) => statuses.push(status))
+    try {
+      await waitFor(() => expect(spawnMock).toHaveBeenCalled())
+      child.stdout.write(
+        JSON.stringify({ type: 'result', is_error: false, result: 'done' }) +
+          '\n',
+      )
+      await waitFor(() => expect(statuses).toContain('completed'))
+      const work = vi.fn(async () => {})
+      const maintenance = gate.run('acct-a', work)
+      await handle.dispose?.('quit')
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(work).not.toHaveBeenCalled()
+      child.emitExit(0)
+      await maintenance
+      expect(work).toHaveBeenCalledTimes(1)
+    } finally {
+      child.emitExit(0)
+      await handle.stop()
+    }
+  })
+  it('refuses maintenance during a turn, closes an idle resident despite stale unknown work, then spawns fresh with the same attribution', async () => {
+    const first = new MockChildProcess()
+    const next = new MockChildProcess()
+    spawnMock.mockReturnValueOnce(first).mockReturnValueOnce(next)
+    const maintenance = new ClaudeAccountMaintenance()
+    const provider = new ClaudeCodeProvider(
+      '/usr/local/bin/claude',
+      null,
+      undefined,
+      null,
+      () => ACCOUNT_A,
+      undefined,
+      true,
+      () => 0,
+      maintenance,
+    )
+    const handle = provider.start({
+      sessionId: 'account-maintenance',
+      readParallelWorkCounts: () => ({ running: 0, unknown: 1 }),
+      workingDirectory: process.cwd(),
+      initialMessage: 'first',
+      model: null,
+      effort: null,
+      continuationToken: null,
+      providerAccountId: 'acct-a',
+    })
+    const statuses: string[] = []
+    const deltas: SessionDelta[] = []
+    handle.onDelta((delta) => deltas.push(delta))
+    attachListeners(handle)
+    handle.onStatusChange((status) => statuses.push(status))
+    try {
+      await waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+      const mutate = vi.fn(async () => {
+        expect(first.killed).toBe(true)
+      })
+      await expect(maintenance.run('acct-a', mutate)).rejects.toThrow(/active/)
+      expect(first.kill).not.toHaveBeenCalled()
+      expect(mutate).not.toHaveBeenCalled()
+      first.stdout.write(
+        JSON.stringify({ type: 'result', is_error: false, result: 'done' }) +
+          '\n',
+      )
+      await waitFor(() => expect(statuses).toContain('answered'))
+      await maintenance.run('acct-a', mutate)
+      expect(mutate).toHaveBeenCalledTimes(1)
+      await handle.sendMessage('second', undefined, undefined, {
+        deliveryMode: 'answer',
+        providerAccountId: 'acct-a',
+      })
+      await waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+      expect(userAccounts(deltas)).toEqual(['acct-a', 'acct-a'])
+      expect(
+        deltas.some(
+          (delta) =>
+            delta.kind === 'conversation.item.add' &&
+            delta.item.kind === 'note' &&
+            delta.item.text.includes('account maintenance'),
+        ),
+      ).toBe(true)
+    } finally {
+      await handle.stop()
+    }
+  })
+
+  it('reserves the account before asynchronous preparation can race a reconnect', async () => {
+    let release!: () => void
+    preparation.gate = new Promise((resolve) => {
+      release = resolve
+    })
+    spawnMock.mockReturnValue(new MockChildProcess())
+    const maintenance = new ClaudeAccountMaintenance()
+    const provider = new ClaudeCodeProvider(
+      '/usr/local/bin/claude',
+      null,
+      undefined,
+      null,
+      () => ACCOUNT_A,
+      undefined,
+      true,
+      () => 0,
+      maintenance,
+    )
+    const handle = provider.start({
+      sessionId: 'preparing-maintenance',
+      workingDirectory: process.cwd(),
+      initialMessage: 'first',
+      model: null,
+      effort: null,
+      continuationToken: null,
+      providerAccountId: 'acct-a',
+    })
+    attachListeners(handle)
+    try {
+      await waitFor(() => expect(preparation.entered).toBe(true))
+      const mutate = vi.fn()
+      await expect(maintenance.run('acct-a', mutate)).rejects.toThrow(/active/)
+      expect(mutate).not.toHaveBeenCalled()
+      expect(spawnMock).not.toHaveBeenCalled()
+    } finally {
+      release()
+      await handle.stop()
+    }
+  })
   it('spawns a turn on the account the turn selected', async () => {
     const child = new MockChildProcess()
     spawnMock.mockReturnValue(child)

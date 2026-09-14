@@ -9,7 +9,14 @@ export interface SessionAgentRun {
   /** Linked local-agent task, resolved by the backend read. */
   taskId?: string | null
   endedSummary?: string | null
-  stopReason?: 'quit' | 'idle' | 'account' | 'stop' | 'exit' | null
+  stopReason?:
+    | 'quit'
+    | 'idle'
+    | 'account'
+    | 'maintenance'
+    | 'stop'
+    | 'exit'
+    | null
   id: string
   sessionId: string
   spawnedByItemId: string
@@ -33,7 +40,14 @@ export interface SessionTask {
   /** First recorded sighting; null for legacy tasks with no known time. */
   observedAt?: string | null
   endedSummary?: string | null
-  stopReason?: 'quit' | 'idle' | 'account' | 'stop' | 'exit' | null
+  stopReason?:
+    | 'quit'
+    | 'idle'
+    | 'account'
+    | 'maintenance'
+    | 'stop'
+    | 'exit'
+    | null
   taskId: string
   sessionId: string
   toolUseId: string | null
