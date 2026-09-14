@@ -91,7 +91,7 @@ export class CodexAccountHistoryService {
         warnings: plan.warnings.length
           ? plan.warnings
           : [
-              `This account keeps private conversation history (${plan.link.join(', ')}). Reconnect it in Provider accounts to join the shared history before switching an existing conversation to it.`,
+              'Conversations on this account are stored separately. Reconnect this account in Settings → Accounts → OpenAI to enable switching. Existing conversations will be preserved.',
             ],
       }
     } catch (error) {

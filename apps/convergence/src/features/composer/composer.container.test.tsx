@@ -2941,6 +2941,9 @@ describe('ComposerContainer', () => {
       const explanation =
         /Your next turn will use the selected account\. Switching accounts restarts idle servers/
       expect(screen.getByText(explanation)).toBeVisible()
+      expect(screen.getByTestId('composer-root')).toContainElement(
+        screen.getByText(explanation),
+      )
       const textbox = screen.getByPlaceholderText('Send a follow-up...')
       fireEvent.change(textbox, { target: { value: 'queued for B' } })
       fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
@@ -3028,6 +3031,9 @@ describe('ComposerContainer', () => {
         expect(
           screen.getByText(/Switching accounts… Your message has not/),
         ).toBeInTheDocument()
+        expect(screen.getByTestId('composer-root')).toContainElement(
+          screen.getByText(/Switching accounts… Your message has not/),
+        )
         expect(
           screen.getByRole('combobox', { name: 'b@example.com' }),
         ).toBeDisabled()
@@ -3190,8 +3196,20 @@ describe('ComposerContainer', () => {
         expect(refusal).toHaveAttribute('data-stage', stage)
         expect(refusal).toHaveTextContent('Not sent')
         expect(refusal).toHaveTextContent('The account cannot switch yet.')
+        expect(screen.getByTestId('composer-root')).toContainElement(refusal)
         expect(textbox).toHaveValue('keep this draft')
         expect(useSessionStore.getState().error).toBeNull()
+        if (stage === 'layout' || stage === 'missing-thread') {
+          fireEvent.click(
+            screen.getByRole('button', { name: 'Manage accounts' }),
+          )
+          expect(useDialogStore.getState().payload).toEqual({
+            appSettingsSection: 'provider-accounts',
+            providerAccountProviderId: 'codex',
+          })
+          expect(textbox).toHaveValue('keep this draft')
+          useDialogStore.getState().close()
+        }
         window.electronAPI.session.sendMessage = vi
           .fn()
           .mockResolvedValue({ accepted: true })

@@ -8,6 +8,7 @@ import {
 } from './provider-account-enrolment.service'
 import type { ProviderAccountCommand } from './provider-account-enrolment.pure'
 import { ProviderAccountRepository } from './provider-account.repository'
+import { CodexAccountHistoryService } from './provider-account-codex-history.service'
 
 const HOME = '/Users/tester'
 const ACCOUNT_ID = 'acct-a'
@@ -491,6 +492,65 @@ describe('ProviderAccountEnrolmentService', () => {
       expect(runner.calls[0].env.CODEX_HOME).toBe(CODEX_HOME)
       expect(runner.calls[0].env.CLAUDE_CONFIG_DIR).toBeUndefined()
       expect(account).toMatchObject({ orgId: 'acc_123', status: 'connected' })
+    })
+
+    it('reconnects an older account with private turns into shared history under maintenance', async () => {
+      const rollout = 'sessions/2026/09/14/rollout-existing-thread.jsonl'
+      const { fs, files, links } = fakeFs({
+        [`${CODEX_HOME}/auth.json`]: CODEX_AUTH,
+        [`${CODEX_HOME}/${rollout}`]: 'three existing turns',
+        [`${CODEX_HOME}/thread-writer-locks/.coordination.lock`]: '',
+      })
+      repository.create({
+        id: ACCOUNT_ID,
+        providerId: 'codex',
+        label: 'Older account',
+        authKind: 'subscription-oauth',
+        email: 'someone@example.com',
+        orgId: 'acc_123',
+        configDir: CODEX_HOME,
+        credentialDir: CODEX_HOME,
+        executionHostId: 'local',
+      })
+      const history = new CodexAccountHistoryService({ homeDir: HOME, fs })
+      expect((await history.inspect(CODEX_HOME)).ready).toBe(false)
+      let maintenanceOpen = false
+      const rename = fs.rename
+      fs.rename = vi.fn(async (source, destination) => {
+        expect(maintenanceOpen).toBe(true)
+        return rename(source, destination)
+      })
+      const runner = fakeRunner({}, loginWritesAuth(files))
+      await service({
+        fs,
+        run: runner.run,
+        codexMaintenance: {
+          run: async (_account, work) => {
+            maintenanceOpen = true
+            try {
+              return await work()
+            } finally {
+              maintenanceOpen = false
+            }
+          },
+        },
+      }).reconnect(ACCOUNT_ID)
+      expect(await history.inspect(CODEX_HOME)).toEqual({
+        ready: true,
+        warnings: [],
+      })
+      expect(files.get(`${HOME}/.codex/${rollout}`)).toBe(
+        'three existing turns',
+      )
+      expect(
+        [...files].some(
+          ([path, value]) =>
+            path.includes('sessions.pre-share-') &&
+            value === 'three existing turns',
+        ),
+      ).toBe(true)
+      expect(links.has(`${CODEX_HOME}/auth.json`)).toBe(false)
+      expect(files.get(`${CODEX_HOME}/auth.json`)).toBe(CODEX_AUTH)
     })
 
     it('disables a Codex account when reconnect selects a different workspace on the same email', async () => {

@@ -2580,7 +2580,7 @@ export class CodexProvider implements Provider {
           if (!layout.ready)
             throw new HandoffRefusedError(
               'layout',
-              layout.warnings.join(' ') + ' Your message was not sent.',
+              `${target === sessionAccount ? 'Selected' : 'Previous'} account${target.label ? ` “${target.label}”` : ''} needs attention. ${layout.warnings.join(' ')} Your message was not sent.`,
             )
         }
         await serverHosts.prepareThreadHandoff({

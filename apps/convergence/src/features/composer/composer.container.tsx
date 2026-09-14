@@ -45,7 +45,6 @@ import { useSessionRelayStore } from '@/entities/session-relay'
 import { useDialogStore } from '@/entities/dialog'
 import {
   isProviderAccountSelectionLocked,
-  describeAccountHandoffRefusal,
   providerAccountsForHost,
   providerAccountApi,
   resolveInitialProviderAccountSelection,
@@ -1814,28 +1813,16 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
 
   return (
     <>
-      {awaitingAccountSend ? (
-        <p role="status" className="px-3 pb-1 text-xs text-muted-foreground">
-          Switching accounts… Your message has not been accepted yet.
-        </p>
-      ) : accountHandoffRefusal ? (
-        <p
-          role="alert"
-          className="px-3 pb-1 text-xs text-destructive"
-          data-stage={accountHandoffRefusal.stage}
-        >
-          Not sent ·{' '}
-          {describeAccountHandoffRefusal(accountHandoffRefusal.stage)}.{' '}
-          {accountHandoffRefusal.message}
-        </p>
-      ) : accountHandoffStaged ? (
-        <p role="status" className="px-3 pb-1 text-xs text-muted-foreground">
-          Your next turn will use the selected account. Switching accounts
-          restarts idle servers. Running work elsewhere on either account can
-          block a switch. Your conversation is preserved.
-        </p>
-      ) : null}
       <Composer
+        accountNotice={
+          awaitingAccountSend
+            ? { kind: 'pending' }
+            : accountHandoffRefusal
+              ? { kind: 'refused', refusal: accountHandoffRefusal }
+              : accountHandoffStaged
+                ? { kind: 'staged' }
+                : undefined
+        }
         value={value}
         onChange={setValue}
         onSubmit={handleSubmit}
