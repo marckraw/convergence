@@ -513,7 +513,12 @@ describe('ProviderAccountEnrolmentService', () => {
         executionHostId: 'local',
       })
       const history = new CodexAccountHistoryService({ homeDir: HOME, fs })
-      expect((await history.inspect(CODEX_HOME)).ready).toBe(false)
+      expect(await history.inspect(CODEX_HOME)).toEqual({
+        ready: false,
+        warnings: [
+          'Conversations on this account are stored separately. Reconnect this account in Settings → Accounts → OpenAI to enable switching. Existing conversations will be preserved.',
+        ],
+      })
       let maintenanceOpen = false
       const rename = fs.rename
       fs.rename = vi.fn(async (source, destination) => {
