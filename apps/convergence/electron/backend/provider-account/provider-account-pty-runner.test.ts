@@ -133,11 +133,12 @@ describe('createPtyCommandRunner', () => {
   it('kills a ceremony nobody finished, and says what it last saw', async () => {
     vi.useFakeTimers()
     const pty = fakePty()
+    const onExitConfirmed = vi.fn()
 
     const result = createPtyCommandRunner({
       ptyFactory: pty.factory,
       timeoutMs: 1000,
-    })(LOGIN_COMMAND)
+    })(LOGIN_COMMAND, { onExitConfirmed })
     const assertion = expect(result).rejects.toThrow(
       /timed out after 1s; last output was: waiting for the browser/,
     )
@@ -146,6 +147,10 @@ describe('createPtyCommandRunner', () => {
     await assertion
 
     expect(pty.kill).toHaveBeenCalled()
+    expect(onExitConfirmed).not.toHaveBeenCalled()
+    expect(pty.disposed).toEqual(['data'])
+    pty.exit(1)
+    expect(onExitConfirmed).toHaveBeenCalledTimes(1)
     expect(pty.disposed.sort()).toEqual(['data', 'exit'])
   })
 

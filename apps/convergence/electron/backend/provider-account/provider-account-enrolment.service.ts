@@ -133,6 +133,9 @@ export interface ProviderAccountEnrolmentDeps {
   /** Provider binaries by registry id, e.g. `{ 'claude-code': '/usr/bin/claude' }`. */
   binaryPaths?: Readonly<Record<string, string | null>>
   /** Holds the account's resident-server admission gate through credential IO. */
+  claudeMaintenance?: {
+    run<T>(account: ProviderAccount, work: () => Promise<T>): Promise<T>
+  }
   codexMaintenance?: {
     run<T>(
       account: ProviderAccount,
@@ -169,6 +172,7 @@ export class ProviderAccountEnrolmentService {
   private readonly newAccountId: () => string
   private readonly binaryPaths = new Map<string, string>()
   private readonly codexMaintenance: ProviderAccountEnrolmentDeps['codexMaintenance']
+  private readonly claudeMaintenance: ProviderAccountEnrolmentDeps['claudeMaintenance']
   private readonly codexHistory: CodexAccountHistoryService
 
   constructor(deps: ProviderAccountEnrolmentDeps) {
@@ -179,6 +183,7 @@ export class ProviderAccountEnrolmentService {
     this.baseEnv = deps.baseEnv ?? process.env
     this.newAccountId = deps.newAccountId ?? (() => randomUUID())
     this.codexMaintenance = deps.codexMaintenance
+    this.claudeMaintenance = deps.claudeMaintenance
     this.codexHistory = new CodexAccountHistoryService({
       homeDir: this.homeDir,
       fs: this.fs,
@@ -261,9 +266,7 @@ export class ProviderAccountEnrolmentService {
     )
 
     if (result.code !== 0) {
-      throw new Error(
-        `claude auth login failed: ${result.stderr.trim() || `exit code ${result.code}`}`,
-      )
+      throw new Error('Claude sign-in did not complete. Try connecting again.')
     }
 
     const identity = readClaudeIdentityFromConfig(
@@ -326,53 +329,126 @@ export class ProviderAccountEnrolmentService {
 
     const binaryPath = this.requireBinaryPath(account.providerId)
 
-    // Re-seeded because a shared entry added since enrolment would otherwise
-    // stay unlinked, and an existing link is left alone.
-    await this.seedSymlinks(account.configDir)
+    return this.withClaudeAccountStopped(account, async () => {
+      this.repository.setStatus(accountId, 'unavailable', null)
+      const configPath = join(account.configDir, '.claude.json')
+      let originalConfig: string | null
+      try {
+        originalConfig = await this.fs.readFile(configPath)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw new Error(
+            'The account config could not be read. Reconnect was not started; the account remains unavailable.',
+            { cause: error },
+          )
+        }
+        originalConfig = null
+      }
+      // Re-seeded because a shared entry added since enrolment would otherwise
+      // stay unlinked, and an existing link is left alone.
+      await this.seedSymlinks(account.configDir)
 
-    const result = await this.runCommand(
-      buildProviderAccountLoginCommand({
-        binaryPath,
-        configDir: account.configDir,
-        credentialDir: account.credentialDir,
-        email,
-        baseEnv: this.baseEnv,
-      }),
-    )
+      let result: ProviderAccountCommandResult
+      try {
+        result = await this.runCommand(
+          buildProviderAccountLoginCommand({
+            binaryPath,
+            configDir: account.configDir,
+            credentialDir: account.credentialDir,
+            email,
+            baseEnv: this.baseEnv,
+          }),
+        )
+      } catch {
+        return this.refuseClaudeReconnect(
+          account,
+          binaryPath,
+          originalConfig,
+          'Claude sign-in could not complete.',
+        )
+      }
 
-    if (result.code !== 0) {
-      throw new Error(
-        `claude auth login failed: ${result.stderr.trim() || `exit code ${result.code}`}`,
+      if (result.code !== 0) {
+        return this.refuseClaudeReconnect(
+          account,
+          binaryPath,
+          originalConfig,
+          'Claude sign-in did not complete. Try reconnecting again.',
+        )
+      }
+
+      const identity = readClaudeIdentityFromConfig(
+        await this.readJson(join(account.configDir, '.claude.json')),
       )
-    }
+      const verdict = attestAccountIdentity({
+        enrolled: { email: account.email, orgId: account.orgId },
+        observed: identity,
+      })
+      if (verdict.outcome !== 'verified' || !identity) {
+        return this.refuseClaudeReconnect(
+          account,
+          binaryPath,
+          originalConfig,
+          'Login did not verify the originally enrolled Claude account. Choose that account and organization in the browser.',
+        )
+      }
 
-    const identity = readClaudeIdentityFromConfig(
-      await this.readJson(join(account.configDir, '.claude.json')),
+      this.repository.saveIdentity(accountId, {
+        email: identity.email ?? account.email,
+        orgId: identity.orgId ?? account.orgId,
+        plan: identity.plan,
+        status: 'connected',
+        lastValidatedAt: new Date().toISOString(),
+      })
+
+      const reconnected = this.repository.get(accountId)
+      if (!reconnected) {
+        throw new Error(`Failed to read back provider account ${accountId}`)
+      }
+      return reconnected
+    })
+  }
+
+  private async refuseClaudeReconnect(
+    account: ProviderAccount,
+    binaryPath: string,
+    originalConfig: string | null,
+    reason: string,
+  ): Promise<never> {
+    let discarded = false
+    let restored = false
+    try {
+      await this.runLogout(binaryPath, account.credentialDir, account.id)
+      discarded = true
+    } catch {
+      // Never surface command output: OAuth output can contain credentials.
+    }
+    try {
+      const configPath = join(account.configDir, '.claude.json')
+      if (originalConfig === null) await this.fs.rm(configPath)
+      else await this.fs.writeFile(configPath, originalConfig)
+      restored = true
+    } catch {
+      // A failed restore must not mask a failed credential discard.
+    }
+    throw new Error(
+      `${reason} ${discarded ? 'The unverified login was discarded.' : 'The foreign credential could NOT be removed; retry reconnect or removal.'} ${restored ? '' : 'The previous account config could NOT be restored. '}The account remains unavailable.`,
     )
-    const verdict = attestAccountIdentity({
-      enrolled: { email: account.email, orgId: account.orgId },
-      observed: identity,
-    })
-    if (verdict.outcome !== 'verified' || !identity) {
+  }
+
+  private async withClaudeAccountStopped<T>(
+    account: ProviderAccount,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    if (account.executionHostId !== 'local')
       throw new Error(
-        verdict.detail ??
-          'The account directory reported no identity after signing in.',
+        'Claude account management is available on this machine only.',
       )
-    }
-
-    this.repository.saveIdentity(accountId, {
-      email: identity.email ?? account.email,
-      orgId: identity.orgId ?? account.orgId,
-      plan: identity.plan,
-      status: 'connected',
-      lastValidatedAt: new Date().toISOString(),
-    })
-
-    const reconnected = this.repository.get(accountId)
-    if (!reconnected) {
-      throw new Error(`Failed to read back provider account ${accountId}`)
-    }
-    return reconnected
+    if (!this.claudeMaintenance)
+      throw new Error(
+        'Claude account maintenance is unavailable. No credentials were changed.',
+      )
+    return this.claudeMaintenance.run(account, work)
   }
 
   private async withCodexAccountStopped<T>(
@@ -579,13 +655,20 @@ export class ProviderAccountEnrolmentService {
         true,
       )
     }
-    return this.removeAccount(account)
+    if (layout === 'config-home') return this.removeAccount(account)
+    return this.withClaudeAccountStopped(account, async () => {
+      this.repository.setStatus(account.id, 'unavailable', null)
+      await this.removeAccount(account)
+    })
   }
 
   private async removeAccount(account: ProviderAccount): Promise<void> {
     const accountId = account.id
     const layout = providerAccountCredentialLayout(account.providerId)
-    const binaryPath = this.binaryPaths.get(account.providerId) ?? null
+    const binaryPath =
+      layout === 'config-home'
+        ? this.binaryPaths.get(account.providerId)
+        : this.requireBinaryPath(account.providerId)
 
     if (binaryPath) {
       if (layout === 'config-home') {
@@ -643,7 +726,9 @@ export class ProviderAccountEnrolmentService {
         .map((account) => account.credentialDir),
     })
 
-    const binaryPath = this.binaryPaths.get(providerId) ?? null
+    const binaryPath = orphans.length
+      ? this.requireBinaryPath(providerId)
+      : null
     const swept: string[] = []
     for (const orphan of orphans) {
       if (binaryPath) {
@@ -670,13 +755,21 @@ export class ProviderAccountEnrolmentService {
     await this.fs.mkdir(throwawayConfigDir)
 
     try {
-      await this.runCommand(
+      const result = await this.runCommand(
         buildProviderAccountLogoutCommand({
           binaryPath,
           throwawayConfigDir,
           credentialDir,
           baseEnv: this.baseEnv,
         }),
+      )
+      if (result.code !== 0)
+        throw new Error(
+          'Claude sign-out failed. The account remains unavailable; retry reconnect or removal.',
+        )
+    } catch {
+      throw new Error(
+        'Claude sign-out failed. The account remains unavailable; retry reconnect or removal.',
       )
     } finally {
       await this.fs.rm(throwawayConfigDir)

@@ -15,6 +15,7 @@ vi.mock('child_process', () => ({
 }))
 
 import { ClaudeCodeProvider } from './claude-code-provider'
+import { ClaudeAccountMaintenance } from './claude-account-maintenance.service'
 
 class MockChildProcess extends EventEmitter {
   stdin = new PassThrough()
@@ -43,6 +44,39 @@ afterEach(() => {
 })
 
 describe('ClaudeCodeProvider.oneShot progress emission', () => {
+  it('keeps maintenance blocked after a timeout until the child actually exits', async () => {
+    const child = new MockChildProcess()
+    spawnMock.mockReturnValue(child)
+    const maintenance = new ClaudeAccountMaintenance()
+    const provider = new ClaudeCodeProvider(
+      '/bin/claude',
+      null,
+      undefined,
+      null,
+      () => null,
+      undefined,
+      true,
+      () => 0,
+      maintenance,
+    )
+    const pending = provider.oneShot({
+      prompt: 'fixture',
+      modelId: 'sonnet',
+      workingDirectory: '/tmp',
+      providerAccountId: 'acct-a',
+      timeoutMs: 100,
+    })
+    const failure = expect(pending).rejects.toThrow(/timed out/)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
+    const work = vi.fn(async () => {})
+    await expect(maintenance.run('acct-a', work)).rejects.toThrow(/active/)
+    await failure
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM')
+    await expect(maintenance.run('acct-a', work)).rejects.toThrow(/active/)
+    child.emit('exit', 0)
+    await maintenance.run('acct-a', work)
+    expect(work).toHaveBeenCalledTimes(1)
+  })
   it('emits nothing when requestId is absent', async () => {
     const child = new MockChildProcess()
     spawnMock.mockReturnValue(child)

@@ -39,6 +39,7 @@ import { LocalExecutionHost } from '../backend/provider/execution-host/local-exe
 import { ClaudeCodeProvider } from '../backend/provider/claude-code/claude-code-provider'
 import { CodexProvider } from '../backend/provider/codex/codex-provider'
 import { CodexServerHostRegistry } from '../backend/provider/codex/codex-server-host'
+import { ClaudeAccountMaintenance } from '../backend/provider/claude-code/claude-account-maintenance.service'
 import { CursorProvider } from '../backend/provider/cursor/cursor-provider'
 import { PiProvider } from '../backend/provider/pi/pi-provider'
 import { AntigravityProvider } from '../backend/provider/antigravity/antigravity-provider'
@@ -345,8 +346,12 @@ async function startApp(): Promise<void> {
         account: accountId ? providerAccountRepository.get(accountId) : null,
       }),
   })
+  const claudeAccountMaintenance = new ClaudeAccountMaintenance()
   const providerAccountEnrolmentService = new ProviderAccountEnrolmentService({
     repository: providerAccountRepository,
+    claudeMaintenance: {
+      run: (account, work) => claudeAccountMaintenance.run(account.id, work),
+    },
     codexMaintenance: {
       run: (account, work, retire) =>
         codexServerHosts.withStoppedServer(
@@ -392,6 +397,7 @@ async function startApp(): Promise<void> {
   const ptyFactory = createNodePtyFactory()
   const providerAccountMcpService = new ProviderAccountMcpService({
     repository: providerAccountRepository,
+    accountMaintenance: claudeAccountMaintenance,
     runInteractiveCommand: createPtyCommandRunner({ ptyFactory }),
   })
   /** The same guard for Codex, whose account is a `CODEX_HOME` (PA9). */
@@ -417,6 +423,7 @@ async function startApp(): Promise<void> {
             describeClaudeAccount,
             true,
             () => appSettingsService.getClaudeResidentIdleMinutesSync(),
+            claudeAccountMaintenance,
           ),
         )
         providerAccountEnrolmentService.setBinaryPath(p.id, p.binaryPath)

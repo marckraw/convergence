@@ -29,6 +29,7 @@ export interface InteractiveCommandResult {
 
 export type ProviderAccountInteractiveRunner = (
   command: ProviderAccountCommand,
+  lifecycle?: { onExitConfirmed: () => void },
 ) => Promise<InteractiveCommandResult>
 
 /**
@@ -60,7 +61,7 @@ export function createPtyCommandRunner(
 ): ProviderAccountInteractiveRunner {
   const timeoutMs = deps.timeoutMs ?? DEFAULT_INTERACTIVE_COMMAND_TIMEOUT_MS
 
-  return (command) =>
+  return (command, lifecycle) =>
     new Promise<InteractiveCommandResult>((resolve, reject) => {
       const buffer = createRingBuffer(MAX_OUTPUT_BYTES)
 
@@ -75,6 +76,7 @@ export function createPtyCommandRunner(
           rows: DEFAULT_ROWS,
         })
       } catch (error) {
+        lifecycle?.onExitConfirmed()
         reject(error instanceof Error ? error : new Error(String(error)))
         return
       }
@@ -82,6 +84,8 @@ export function createPtyCommandRunner(
       let settled = false
       const dataSubscription = child.onData((chunk) => buffer.append(chunk))
       const exitSubscription = child.onExit(({ exitCode }) => {
+        lifecycle?.onExitConfirmed()
+        exitSubscription.dispose()
         if (settled) return
         settled = true
         finish()
@@ -114,7 +118,6 @@ export function createPtyCommandRunner(
       function finish(): void {
         clearTimeout(timer)
         dataSubscription.dispose()
-        exitSubscription.dispose()
       }
     })
 }
