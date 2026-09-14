@@ -3781,33 +3781,46 @@ export class SessionService {
     })
 
     const recordAcceptedStart = () => {
-      let contextCommitFailed = false
-      try {
-        boot.commit?.()
-      } catch {
-        // The provider has accepted already. A context item removed while the
-        // handoff was pending must not turn that accepted send into a refusal.
-        contextCommitFailed = true
+      const failedRecords: string[] = []
+      const save = (label: string, write: () => void) => {
+        try {
+          write()
+        } catch (error) {
+          // Acceptance is irreversible. Metadata failures cannot turn it into
+          // an unsent draft or prevent the provider's buffered turn publishing.
+          failedRecords.push(label)
+          console.error(
+            `[session] Accepted turn could not save ${label}`,
+            error,
+          )
+        }
       }
-      if (session.archivedAt) this.updateArchiveState(session.id, null)
-      if (boot.noteDraft) this.recordBootContextNote(session.id, boot.noteDraft)
-      if (contextCommitFailed) {
+      save('project context selection', () => boot.commit?.())
+      if (session.archivedAt)
+        save('archive state', () => this.updateArchiveState(session.id, null))
+      if (boot.noteDraft) {
+        const note = boot.noteDraft
+        save('context note', () => this.recordBootContextNote(session.id, note))
+      }
+      if (failedRecords.length > 0) {
         const timestamp = new Date().toISOString()
-        this.recordBootContextNote(session.id, {
-          id: randomUUID(),
-          kind: 'note',
-          state: 'complete',
-          level: 'warning',
-          turnId: null,
-          text: 'This turn was accepted, but its project context selection could not be saved. The context shown above was included in the message.',
-          createdAt: timestamp,
-          updatedAt: timestamp,
-          providerMeta: {
-            providerId: 'convergence',
-            providerItemId: null,
-            providerEventType: 'context.boot.persistence-failed',
-          },
-        })
+        save('persistence warning', () =>
+          this.recordBootContextNote(session.id, {
+            id: randomUUID(),
+            kind: 'note',
+            state: 'complete',
+            level: 'warning',
+            turnId: null,
+            text: `This turn was accepted, but its ${failedRecords.join(' and ')} could not be saved. The message was sent; do not resend it because of this warning.`,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            providerMeta: {
+              providerId: 'convergence',
+              providerItemId: null,
+              providerEventType: 'session.start.persistence-failed',
+            },
+          }),
+        )
       }
     }
     if (!handle.initialDispatch) {

@@ -18,6 +18,7 @@ interface ProviderAccountPickerProps {
   disabled?: boolean
   providerName?: string
   ambientDisabledReason?: string
+  ambientIsCurrent?: boolean
   help?: string
   onManageAccounts?: () => void
 }
@@ -42,6 +43,7 @@ export const ProviderAccountPicker: FC<ProviderAccountPickerProps> = ({
   disabled = false,
   providerName,
   ambientDisabledReason,
+  ambientIsCurrent,
   help,
   onManageAccounts,
 }) => {
@@ -55,10 +57,15 @@ export const ProviderAccountPicker: FC<ProviderAccountPickerProps> = ({
     <span title={help}>
       <SearchableSelect
         selectedId={selectedAccountId ?? AMBIENT_DEFAULT_ACCOUNT_ID}
-        value={describeSelectedProviderAccount(selectedAccountId, accounts)}
+        value={
+          ambientIsCurrent && selectedAccountId === null
+            ? 'Current CLI login'
+            : describeSelectedProviderAccount(selectedAccountId, accounts)
+        }
         items={buildProviderAccountPickerItems(accounts, {
           providerName,
           ambientDisabledReason,
+          ambientIsCurrent,
         })}
         action={
           onManageAccounts

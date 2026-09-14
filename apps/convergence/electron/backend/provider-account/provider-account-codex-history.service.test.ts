@@ -14,6 +14,52 @@ let shared: string
 let subject: CodexAccountHistoryService
 const now = () => new Date('2026-09-14T10:00:00.000Z')
 
+it.each(['.DS_Store', 'Thumbs.db', '.localized'])(
+  'preserves regular OS metadata %s without treating it as history',
+  async (name) => {
+    for (const entry of ['sessions', 'attachments', 'thread-writer-locks'])
+      await write(join(account, entry, name), 'OS metadata')
+    await write(join(account, 'sessions', '2026', name), 'nested metadata')
+    await write(
+      join(account, 'sessions', '2026', 'rollout-fixture.jsonl'),
+      'history',
+    )
+    expect(await subject.migrate(account)).toEqual({
+      ready: true,
+      warnings: [],
+    })
+    expect(
+      await fs.readFile(
+        join(shared, 'sessions', '2026', 'rollout-fixture.jsonl'),
+        'utf8',
+      ),
+    ).toBe('history')
+    await expect(
+      fs.lstat(join(shared, 'sessions', name)),
+    ).rejects.toMatchObject({ code: 'ENOENT' })
+    const backup = (await fs.readdir(account)).find((entry) =>
+      entry.startsWith('sessions.pre-share-'),
+    )!
+    expect(await fs.readFile(join(account, backup, name), 'utf8')).toBe(
+      'OS metadata',
+    )
+  },
+)
+
+it.each(['symlink', 'directory'] as const)(
+  'does not ignore OS metadata names used by a %s',
+  async (kind) => {
+    await fs.mkdir(join(account, 'sessions'))
+    const path = join(account, 'sessions', '.DS_Store')
+    if (kind === 'directory') await fs.mkdir(path)
+    else await fs.symlink(join(root, 'elsewhere'), path)
+    expect((await subject.migrate(account)).ready).toBe(false)
+    expect((await fs.lstat(join(account, 'sessions'))).isSymbolicLink()).toBe(
+      false,
+    )
+  },
+)
+
 async function write(path: string, text: string) {
   await fs.mkdir(dirname(path), { recursive: true })
   await fs.writeFile(path, text)

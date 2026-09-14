@@ -781,7 +781,7 @@ interface AttachmentIngestFileInput {
   mimeType?: string
 }
 
-interface SendSessionMessageInput {
+export interface SendSessionMessageInput {
   text: string
   attachmentIds?: string[]
   skillSelections?: SkillSelection[]
@@ -1854,7 +1854,7 @@ interface ElectronAPI {
     sendMessage: (
       id: string,
       input: SendSessionMessageInput | string,
-    ) => Promise<void>
+    ) => Promise<import('./session-send.types').SessionSendResult>
     compactContext: (id: string, instructions?: string) => Promise<void>
     approve: (
       id: string,

@@ -2,7 +2,16 @@ import { expect, it } from 'vitest'
 import {
   planCodexHistoryMigration,
   isCodexWriterLockName,
+  isCodexHistoryOsJunk,
 } from './provider-account-codex-history.pure'
+
+it.each(['.DS_Store', 'Thumbs.db', '.localized'])(
+  'recognizes only the explicit OS metadata name %s',
+  (name) => {
+    expect(isCodexHistoryOsJunk(name)).toBe(true)
+    expect(isCodexHistoryOsJunk(`${name}.backup`)).toBe(false)
+  },
+)
 
 it('preflights the entire layout before authorizing any writes', () => {
   const plan = planCodexHistoryMigration({

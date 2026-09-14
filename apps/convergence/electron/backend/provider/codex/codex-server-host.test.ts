@@ -329,7 +329,7 @@ describe('CodexServerHost', () => {
     const waiting = env.host.connect()
     gate = second
     releaseFirst()
-    await Promise.resolve()
+    await first
     expect(env.children).toHaveLength(0)
     gate = undefined
     releaseSecond()

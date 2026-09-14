@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { AccountHandoffRefusal } from '@/shared/types/session-send.types'
 import type {
   ConversationItem,
   ConversationPatchEvent,
@@ -80,6 +81,7 @@ interface SessionState {
    */
   remoteProjectCatalogs: RemoteProjectCatalogs
   error: string | null
+  accountHandoffRefusals: Record<string, AccountHandoffRefusal | undefined>
 }
 
 interface SessionActions {
@@ -310,6 +312,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   providerCatalogs: {},
   remoteProjectCatalogs: {},
   error: null,
+  accountHandoffRefusals: {},
 
   loadSessions: async (projectId: string) => {
     const previousProjectId = get().currentProjectId
@@ -749,9 +752,26 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   sendMessageToSession: async (request) => {
-    set({ error: null })
+    set((state) => ({
+      error: null,
+      accountHandoffRefusals: {
+        ...state.accountHandoffRefusals,
+        [request.sessionId]: undefined,
+      },
+    }))
     try {
-      await sessionApi.sendMessage(request)
+      const result = await sessionApi.sendMessage(request)
+      // An older DEV main can still return void after a renderer hot reload;
+      // it also resolves only after acceptance. Current IPC returns the union.
+      if (result?.accepted === false) {
+        set((state) => ({
+          accountHandoffRefusals: {
+            ...state.accountHandoffRefusals,
+            [request.sessionId]: result,
+          },
+        }))
+        return false
+      }
       return true
     } catch (err) {
       set({

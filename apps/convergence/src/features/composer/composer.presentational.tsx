@@ -95,6 +95,7 @@ interface ComposerProps {
   providerAccountSelectionLocked: boolean
   providerAccountPickerVisible?: boolean
   providerAccountAmbientDisabledReason?: string
+  providerAccountAmbientIsCurrent?: boolean
   providerAccountHelp?: string
   onManageProviderAccounts?: () => void
   codexFastMode: boolean
@@ -239,6 +240,7 @@ export const Composer: FC<ComposerProps> = ({
   providerAccountSelectionLocked,
   providerAccountPickerVisible,
   providerAccountAmbientDisabledReason,
+  providerAccountAmbientIsCurrent,
   providerAccountHelp,
   onManageProviderAccounts,
   codexFastMode,
@@ -877,6 +879,7 @@ export const Composer: FC<ComposerProps> = ({
                         providerAccountAmbientDisabledReason
                       }
                       help={providerAccountHelp}
+                      ambientIsCurrent={providerAccountAmbientIsCurrent}
                       onManageAccounts={onManageProviderAccounts}
                       selectedAccountId={selectedProviderAccountId}
                       onChange={onProviderAccountChange}

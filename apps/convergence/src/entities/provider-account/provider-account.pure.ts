@@ -1,4 +1,5 @@
 import { isRemoteExecutionHost } from '@/entities/execution-host'
+import type { HandoffRefusalStage } from '@/shared/types/session-send.types'
 import type {
   ProviderAccount,
   ProviderAccountAttestationResult,
@@ -224,11 +225,20 @@ export function isProviderAccountSelectable(account: ProviderAccount): boolean {
 
 export function buildProviderAccountPickerItems(
   accounts: ProviderAccount[],
-  options: { providerName?: string; ambientDisabledReason?: string } = {},
+  options: {
+    providerName?: string
+    ambientDisabledReason?: string
+    ambientIsCurrent?: boolean
+  } = {},
 ): ProviderAccountPickerItem[] {
   const ambient: ProviderAccountPickerItem = {
     id: AMBIENT_DEFAULT_ACCOUNT_ID,
-    label: AMBIENT_DEFAULT_ACCOUNT_LABEL,
+    label: options.ambientIsCurrent
+      ? 'Current CLI login'
+      : AMBIENT_DEFAULT_ACCOUNT_LABEL,
+    ...(options.ambientIsCurrent
+      ? { badge: { label: 'current' }, disabled: true }
+      : {}),
     description:
       options.ambientDisabledReason ??
       `The ${options.providerName ?? 'Claude Code'} login this machine already had.`,
@@ -262,6 +272,19 @@ export function buildProviderAccountPickerItems(
       }
     }),
   ]
+}
+
+export function describeAccountHandoffRefusal(
+  stage: HandoffRefusalStage,
+): string {
+  const labels: Record<HandoffRefusalStage, string> = {
+    'source-busy': 'Source account busy',
+    busy: 'Selected account busy',
+    'missing-thread': 'Conversation history unavailable',
+    'not-eligible': 'Conversation not ready to switch',
+    layout: 'Account history needs attention',
+  }
+  return labels[stage]
 }
 
 /** What the composer shows as the current pick. */

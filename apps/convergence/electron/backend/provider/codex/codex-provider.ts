@@ -2556,7 +2556,7 @@ export class CodexProvider implements Provider {
         }
         if (!accountHistory)
           throw new HandoffRefusedError(
-            'not-eligible',
+            'layout',
             'Account history inspection is unavailable. Your message was not sent.',
           )
         const source = config.previousProviderAccountId
@@ -2579,7 +2579,7 @@ export class CodexProvider implements Provider {
           const layout = await accountHistory.inspect(target.configDir)
           if (!layout.ready)
             throw new HandoffRefusedError(
-              'not-eligible',
+              'layout',
               layout.warnings.join(' ') + ' Your message was not sent.',
             )
         }

@@ -18,6 +18,7 @@ import { useAppSettingsStore } from '@/entities/app-settings'
 import { useSessionRelayStore } from '@/entities/session-relay'
 import { useAttachmentStore } from '@/entities/attachment'
 import { useDialogStore } from '@/entities/dialog'
+import type { TurnDelta } from '@/entities/turn'
 import { useSkillStore } from '@/entities/skill'
 import {
   useProjectContextStore,
@@ -26,6 +27,7 @@ import {
 
 let providerAccountsMock: unknown[] = []
 let sessionTurnsMock: unknown[] = []
+let turnDeltaListener: ((delta: TurnDelta) => void) | undefined
 
 function buildAccount(overrides: Record<string, unknown> = {}) {
   return {
@@ -417,12 +419,20 @@ describe('ComposerContainer', () => {
   beforeEach(() => {
     providerAccountsMock = []
     sessionTurnsMock = []
+    turnDeltaListener = undefined
+    useSessionStore.setState({ accountHandoffRefusals: {} })
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       providerAccounts: {
         list: vi.fn(() => Promise.resolve(providerAccountsMock)),
       },
       turns: {
         listForSession: vi.fn(() => Promise.resolve(sessionTurnsMock)),
+        onTurnDelta: vi.fn((listener: (delta: TurnDelta) => void) => {
+          turnDeltaListener = listener
+          return () => {
+            turnDeltaListener = undefined
+          }
+        }),
       },
       git: {
         getCloneableRepositoryUrl: vi.fn(() =>
@@ -2920,6 +2930,55 @@ describe('ComposerContainer', () => {
       activeSessionId: 'session-1',
     }
 
+    it('visibly explains a staged switch and updates its source only when a turn is recorded', async () => {
+      setupAccounts()
+      useSessionStore.setState({
+        sendMessageToSession: vi.fn().mockResolvedValue(true),
+      })
+      render(<ComposerContainer context={handoffContext} />)
+      fireEvent.click(await screen.findByText('a@example.com'))
+      fireEvent.click(screen.getByText('b@example.com'))
+      const explanation =
+        /Your next turn will use the selected account\. Switching accounts restarts idle servers/
+      expect(screen.getByText(explanation)).toBeVisible()
+      const textbox = screen.getByPlaceholderText('Send a follow-up...')
+      fireEvent.change(textbox, { target: { value: 'queued for B' } })
+      fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+      await waitFor(() => expect(textbox).toHaveValue(''))
+      // Queue acceptance is not evidence that B served a turn.
+      expect(screen.getByText(explanation)).toBeVisible()
+      const turn = {
+        id: 'turn-b',
+        sessionId: 'session-1',
+        sequence: 2,
+        startedAt: '2026-09-14T00:00:00Z',
+        endedAt: null,
+        status: 'running' as const,
+        summary: null,
+        providerAccountId: 'acct-b',
+        model: 'gpt-5.5',
+        effort: null,
+      }
+      act(() =>
+        turnDeltaListener?.({ kind: 'turn.add', sessionId: 'session-1', turn }),
+      )
+      expect(screen.queryByText(explanation)).not.toBeInTheDocument()
+      // An externally dispatched A turn becomes the source without reopening.
+      act(() =>
+        turnDeltaListener?.({
+          kind: 'turn.add',
+          sessionId: 'session-1',
+          turn: {
+            ...turn,
+            id: 'turn-a',
+            sequence: 3,
+            providerAccountId: 'acct-a',
+          },
+        }),
+      )
+      expect(screen.getByText(explanation)).toBeVisible()
+    })
+
     it.each([false, true])(
       'keeps a pending draft and selected account until acceptance (accepted=%s)',
       async (accepted) => {
@@ -3091,12 +3150,56 @@ describe('ComposerContainer', () => {
       providerAccountsMock = []
       sessionTurnsMock = []
       render(<ComposerContainer context={handoffContext} />)
-      fireEvent.click(await screen.findByText('Default account'))
+      fireEvent.click(await screen.findByText('Current CLI login'))
       expect(
-        screen.getByText('The Codex login this machine already had.'),
-      ).toBeInTheDocument()
+        screen.getByRole('option', { name: /Current CLI login/ }),
+      ).toHaveAttribute('aria-disabled', 'true')
       expect(screen.getByText('Manage accounts…')).toBeInTheDocument()
     })
+
+    it.each([
+      'source-busy',
+      'busy',
+      'missing-thread',
+      'not-eligible',
+      'layout',
+    ] as const)(
+      'renders the typed %s refusal beside the preserved draft without a generic toast',
+      async (stage) => {
+        setupAccounts()
+        window.electronAPI.session = {
+          ...window.electronAPI.session,
+          sendMessage: vi.fn().mockResolvedValue({
+            accepted: false,
+            stage,
+            message:
+              'The account cannot switch yet. Your message was not sent.',
+          }),
+        }
+        useSessionStore.setState({
+          sendMessageToSession:
+            useSessionStore.getInitialState().sendMessageToSession,
+        })
+        render(<ComposerContainer context={handoffContext} />)
+        fireEvent.click(await screen.findByText('a@example.com'))
+        fireEvent.click(screen.getByText('b@example.com'))
+        const textbox = screen.getByPlaceholderText('Send a follow-up...')
+        fireEvent.change(textbox, { target: { value: 'keep this draft' } })
+        fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+        const refusal = await screen.findByRole('alert')
+        expect(refusal).toHaveAttribute('data-stage', stage)
+        expect(refusal).toHaveTextContent('Not sent')
+        expect(refusal).toHaveTextContent('The account cannot switch yet.')
+        expect(textbox).toHaveValue('keep this draft')
+        expect(useSessionStore.getState().error).toBeNull()
+        window.electronAPI.session.sendMessage = vi
+          .fn()
+          .mockResolvedValue({ accepted: true })
+        fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+        await waitFor(() => expect(textbox).toHaveValue(''))
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      },
+    )
   })
 
   describe('the provider account selector', () => {

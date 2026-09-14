@@ -45,6 +45,7 @@ import { useSessionRelayStore } from '@/entities/session-relay'
 import { useDialogStore } from '@/entities/dialog'
 import {
   isProviderAccountSelectionLocked,
+  describeAccountHandoffRefusal,
   providerAccountsForHost,
   providerAccountApi,
   resolveInitialProviderAccountSelection,
@@ -184,6 +185,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   prepareNewSessionMessage,
 }) => {
   const activeSessionId = context.activeSessionId
+  const accountHandoffRefusal = useSessionStore((state) =>
+    activeSessionId ? state.accountHandoffRefusals[activeSessionId] : undefined,
+  )
   const projectId = context.kind === 'project' ? context.projectId : null
   const projectContextEnabled = context.kind === 'project'
   const contextKey = getComposerContextKey(context)
@@ -1126,6 +1130,28 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
    */
   useEffect(() => {
     let cancelled = false
+    let observedTurn = false
+    let initialReadFinished = false
+    const unsubscribe =
+      activeSessionId && selection.provider?.accountHandoff === 'settled'
+        ? turnsApi.onTurnDelta((delta) => {
+            if (
+              cancelled ||
+              delta.kind !== 'turn.add' ||
+              delta.sessionId !== activeSessionId
+            )
+              return
+            observedTurn = true
+            setLastTurnAccount({
+              sessionId: activeSessionId,
+              id: delta.turn.providerAccountId,
+            })
+            // A turn arriving during the initial read is newer than that read.
+            // Once seeded, preserve any account the user has staged next.
+            if (!initialReadFinished)
+              setSelectedProviderAccountId(delta.turn.providerAccountId)
+          })
+        : undefined
 
     const seed = async () => {
       if (!activeSessionId) {
@@ -1153,7 +1179,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         historyKnown = false
       }
 
-      if (cancelled) return
+      if (cancelled || observedTurn) return
       setLastTurnAccount(
         historyKnown
           ? { sessionId: activeSessionId, id: lastTurnAccountId }
@@ -1175,6 +1201,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       // The seed's completion point, which is what anything scoped to this
       // account has to wait for (MAR-2826 round 2, H1).
       if (cancelled) return
+      initialReadFinished = true
       setProviderAccountSeedAnsweredFor({
         sessionId: activeSessionId,
         accounts: providerAccountsForSession,
@@ -1182,6 +1209,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     })
     return () => {
       cancelled = true
+      unsubscribe?.()
     }
   }, [
     activeSessionId,
@@ -1222,11 +1250,16 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     isLocalExecutionHost(executionBar.hostId) &&
     (selection.providerId === 'claude-code' || supportsAccountHandoff)
   const providerAccountAmbientDisabledReason =
-    supportsAccountHandoff &&
-    activeSession?.continuationToken &&
-    lastTurnAccount?.id
-      ? 'Switching back to the default account is unavailable. Select an enrolled OpenAI account.'
+    supportsAccountHandoff && activeSession?.continuationToken
+      ? lastTurnAccount?.id
+        ? 'Switching back to the default account is unavailable. Select an enrolled OpenAI account.'
+        : 'This is the current CLI login, not a switch destination. Select an enrolled OpenAI account to switch.'
       : undefined
+  const providerAccountAmbientIsCurrent =
+    supportsAccountHandoff &&
+    !!activeSession?.continuationToken &&
+    handoffAccountKnown &&
+    lastTurnAccount?.id === null
   const providerAccountHelp = supportsAccountHandoff
     ? awaitingAccountSend
       ? 'Switching accounts… Your message stays here until it is accepted.'
@@ -1236,6 +1269,11 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
           ? 'Accounts can be changed after this conversation and its pending requests settle.'
           : 'Switching accounts restarts idle servers. Running work elsewhere on either account can block a switch. Your conversation is preserved.'
     : undefined
+  const accountHandoffStaged =
+    supportsAccountHandoff &&
+    !!activeSession?.continuationToken &&
+    handoffAccountKnown &&
+    lastTurnAccount?.id !== effectiveProviderAccountId
 
   useEffect(() => {
     if (activeSession) {
@@ -1443,10 +1481,8 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
           .then((accepted) => {
             if (!accepted) return
             if (latestDraft.current.key !== draftKey) return
-            setLastTurnAccount({
-              sessionId: activeSession.id,
-              id: effectiveProviderAccountId,
-            })
+            // A successful queue receipt does not say which account served.
+            // The durable turn.add event above updates that fact.
             // Navigation or a later edit must never be erased by an older receipt.
             if (latestDraft.current.text !== value) return
             markAnnotationsSent()
@@ -1782,6 +1818,22 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         <p role="status" className="px-3 pb-1 text-xs text-muted-foreground">
           Switching accounts… Your message has not been accepted yet.
         </p>
+      ) : accountHandoffRefusal ? (
+        <p
+          role="alert"
+          className="px-3 pb-1 text-xs text-destructive"
+          data-stage={accountHandoffRefusal.stage}
+        >
+          Not sent ·{' '}
+          {describeAccountHandoffRefusal(accountHandoffRefusal.stage)}.{' '}
+          {accountHandoffRefusal.message}
+        </p>
+      ) : accountHandoffStaged ? (
+        <p role="status" className="px-3 pb-1 text-xs text-muted-foreground">
+          Your next turn will use the selected account. Switching accounts
+          restarts idle servers. Running work elsewhere on either account can
+          block a switch. Your conversation is preserved.
+        </p>
       ) : null}
       <Composer
         value={value}
@@ -1800,6 +1852,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         providerAccountAmbientDisabledReason={
           providerAccountAmbientDisabledReason
         }
+        providerAccountAmbientIsCurrent={providerAccountAmbientIsCurrent}
         providerAccountHelp={providerAccountHelp}
         onManageProviderAccounts={
           supportsAccountHandoff

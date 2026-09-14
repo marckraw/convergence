@@ -19,6 +19,7 @@ import type {
 import type { ProviderCatalog } from './provider-catalog.pure'
 import type { RemoteProjectCatalog } from './remote-project-catalog.pure'
 import type { SessionWorkAddress } from '@/shared/lib/work-address.pure'
+import type { SessionSendResult } from '@/shared/types/session-send.types'
 
 export const sessionApi = {
   create: (input: {
@@ -68,7 +69,9 @@ export const sessionApi = {
       providerAccountId: request.providerAccountId,
     }),
 
-  sendMessage: (request: SendSessionMessageRequest): Promise<void> =>
+  sendMessage: (
+    request: SendSessionMessageRequest,
+  ): Promise<SessionSendResult> =>
     window.electronAPI.session.sendMessage(request.sessionId, {
       text: request.text,
       attachmentIds: request.attachmentIds,

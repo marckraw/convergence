@@ -5,6 +5,7 @@ import {
   CODEX_SHARED_HISTORY_ENTRIES,
   isCodexRolloutDirectory,
   isCodexWriterLockName,
+  isCodexHistoryOsJunk,
   planCodexHistoryMigration,
   type CodexHistoryEntry,
   type CodexHistoryObservation,
@@ -260,7 +261,17 @@ export class CodexAccountHistoryService {
             : 'invalid',
         })
       } else if (local.isDirectory()) {
-        const names = await this.fs.readdir(path)
+        const names: string[] = []
+        for (const name of await this.fs.readdir(path)) {
+          const child = await this.stat(join(path, name))
+          if (
+            isCodexHistoryOsJunk(name) &&
+            child?.isFile() &&
+            !child.isSymbolicLink()
+          )
+            continue
+          names.push(name)
+        }
         let knownLocksOnly = entry === 'thread-writer-locks'
         for (const name of names) {
           if (!knownLocksOnly) break
@@ -297,6 +308,10 @@ export class CodexAccountHistoryService {
         throw new Error('Conversation history changed during inspection.')
       if (child.isSymbolicLink())
         throw new Error('A rollout entry is an unexpected symlink.')
+      if (isCodexHistoryOsJunk(name)) {
+        if (child.isFile()) continue
+        throw new Error('An OS metadata entry is not a regular file.')
+      }
       if (child.isDirectory())
         result.push(...(await this.rollouts(root, relative)))
       else if (child.isFile() && /^rollout-.+\.jsonl$/.test(name))

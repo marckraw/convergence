@@ -325,7 +325,10 @@ it('uses a queued input’s captured account and drains another handoff after an
 it('refuses a malformed layout before spawning a destination and can retry after repair', async () => {
   await first()
   layoutReady = false
-  await expect(send()).rejects.toThrow(/History layout/)
+  await expect(send()).rejects.toMatchObject({
+    stage: 'layout',
+    message: expect.stringMatching(/History layout/),
+  })
   expect(hosts).toHaveLength(1)
   expect(messages()).toEqual(['first'])
   layoutReady = true
@@ -626,3 +629,58 @@ it('still publishes an accepted handoff if a selected context item disappears wh
   ).toBe(true)
   expect(messages().at(-1)).toContain('accepted with disappearing context')
 })
+
+it.each(['archive', 'boot-note', 'warning-note'] as const)(
+  'keeps acceptance and publishes the turn when post-accept %s persistence fails',
+  async (failure) => {
+    await first()
+    service.archive(id)
+    const context = new ProjectContextService(getDatabase())
+    service.setSessionContextInjectionService(
+      new SessionContextInjectionService(getDatabase(), context),
+    )
+    const item = context.create({
+      projectId: 'p',
+      label: 'accepted context',
+      body: 'Included in the accepted message',
+      reinjectMode: 'boot',
+    })
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    holdAcceptance = true
+    const pending = service.start(id, {
+      text: 'accepted despite metadata failure',
+      providerAccountId: 'account-b',
+      contextItemIds: [item.id],
+    })
+    await vi.waitFor(() => expect(accept).toBeTypeOf('function'))
+    if (failure === 'archive') {
+      getDatabase().exec(`CREATE TEMP TRIGGER refuse_unarchive
+        BEFORE UPDATE OF archived_at ON sessions
+        WHEN NEW.archived_at IS NULL
+        BEGIN SELECT RAISE(ABORT, 'fixture archive write failed'); END`)
+    } else {
+      getDatabase().exec(`CREATE TEMP TRIGGER refuse_boot_note
+        BEFORE INSERT ON session_conversation_items
+        WHEN NEW.provider_event_type IN (${failure === 'warning-note' ? "'context.boot', 'session.start.persistence-failed'" : "'context.boot'"})
+        BEGIN SELECT RAISE(ABORT, 'fixture note write failed'); END`)
+    }
+    accept!()
+    await expect(pending).resolves.toBeTypeOf('string')
+    expect(accounts()).toEqual(['account-a', 'account-b'])
+    expect(messages().at(-1)).toContain('accepted despite metadata failure')
+    expect(errors).toHaveBeenCalled()
+    if (failure !== 'warning-note') {
+      expect(
+        service
+          .getConversation(id)
+          .some(
+            (entry) =>
+              entry.kind === 'note' &&
+              entry.level === 'warning' &&
+              entry.text.includes('was accepted'),
+          ),
+      ).toBe(true)
+    }
+    errors.mockRestore()
+  },
+)
