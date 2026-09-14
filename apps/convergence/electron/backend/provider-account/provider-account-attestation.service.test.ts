@@ -1,3 +1,5 @@
+import { ClaudeAccountMaintenance } from '../provider/claude-code/claude-account-maintenance.service'
+import type { ProviderAccountAttestationDeps } from './provider-account-attestation.service'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import {
@@ -66,11 +68,15 @@ describe('ProviderAccountAttestationService', () => {
     dirs?: Record<string, string[]>
     version?: string | null
     intervalMs?: number
+    credentialHealth?: ProviderAccountAttestationDeps['credentialHealth']
+    claudeMaintenance?: ClaudeAccountMaintenance
     historyWarnings?: string[]
     claudeHistory?: import('./provider-account-manifest.pure').ClaudeAccountLayout
   }) {
     return new ProviderAccountAttestationService({
       repository,
+      credentialHealth: options.credentialHealth,
+      claudeMaintenance: options.claudeMaintenance,
       codexHistory: {
         inspect: async () => ({
           ready: !options.historyWarnings?.length,
@@ -87,6 +93,135 @@ describe('ProviderAccountAttestationService', () => {
       claudeVersion: () => options.version ?? '2.1.220',
     })
   }
+
+  it.each(['expired', 'unavailable'] as const)(
+    'never revives an %s row from matching cached identity, even with a local credential',
+    async (status) => {
+      repository.setStatus('acct-a', status, null)
+      const subject = service({
+        files: {
+          [`${CONFIG_DIR}/.claude.json`]: identityJson(
+            'a@example.com',
+            'org-a',
+          ),
+        },
+        credentialHealth: { inspect: async () => 'present' },
+      })
+      const report = await subject.attestAll()
+      expect(report.accounts[0]).toMatchObject({
+        identityOutcome: 'verified',
+        credentialHealth: 'present',
+        status,
+      })
+      expect(repository.get('acct-a')?.status).toBe(status)
+    },
+  )
+
+  it('records a missing local credential without turning command uncertainty into a logout', async () => {
+    const inspect = vi
+      .fn()
+      .mockResolvedValueOnce('unknown')
+      .mockResolvedValueOnce('absent')
+    const subject = service({
+      files: {
+        [`${CONFIG_DIR}/.claude.json`]: identityJson('a@example.com', 'org-a'),
+      },
+      credentialHealth: { inspect },
+    })
+    await subject.attestAll()
+    expect(repository.get('acct-a')?.status).toBe('connected')
+    await subject.attestAll()
+    expect(repository.get('acct-a')?.status).toBe('expired')
+  })
+
+  it('does not inspect an account during maintenance or overwrite the refused-login quarantine', async () => {
+    const gate = new ClaudeAccountMaintenance()
+    const inspect = vi.fn(async () => 'present' as const)
+    const subject = service({
+      files: {
+        [`${CONFIG_DIR}/.claude.json`]: identityJson('a@example.com', 'org-a'),
+      },
+      claudeMaintenance: gate,
+      credentialHealth: { inspect },
+    })
+    await gate.run('acct-a', async () => {
+      repository.setStatus('acct-a', 'unavailable', null)
+      const report = await subject.attestAll()
+      expect(report.accounts[0].credentialHealth).toBe('unknown')
+      expect(inspect).not.toHaveBeenCalled()
+      expect(repository.get('acct-a')?.status).toBe('unavailable')
+    })
+  })
+
+  it('holds a health lease until the status command exits, preventing reconnect races', async () => {
+    const gate = new ClaudeAccountMaintenance()
+    let finish!: () => void
+    const inspect = vi.fn(
+      () =>
+        new Promise<'present'>((resolve) => {
+          finish = () => resolve('present')
+        }),
+    )
+    const subject = service({
+      files: {
+        [`${CONFIG_DIR}/.claude.json`]: identityJson('a@example.com', 'org-a'),
+      },
+      claudeMaintenance: gate,
+      credentialHealth: { inspect },
+    })
+    const report = subject.attestAll()
+    await vi.waitFor(() => expect(inspect).toHaveBeenCalled())
+    await expect(gate.run('acct-a', async () => {})).rejects.toThrow(/active/)
+    finish()
+    await report
+    await expect(gate.run('acct-a', async () => {})).resolves.toBeUndefined()
+  })
+
+  it('clears cached health after reconnect and prevents an older collection from restoring it', async () => {
+    let finish!: () => void
+    const inspect = vi
+      .fn()
+      .mockResolvedValueOnce('present')
+      .mockImplementationOnce(
+        () =>
+          new Promise<'present'>((resolve) => {
+            finish = () => resolve('present')
+          }),
+      )
+    const subject = service({
+      files: {
+        [`${CONFIG_DIR}/.claude.json`]: identityJson('a@example.com', 'org-a'),
+      },
+      credentialHealth: { inspect },
+    })
+    await subject.attestAll()
+    const stale = subject.attestAll()
+    await vi.waitFor(() => expect(inspect).toHaveBeenCalledTimes(2))
+    subject.invalidate('acct-a')
+    expect(subject.getHealth().accounts).toEqual([])
+    finish()
+    await stale
+    expect(subject.getHealth().accounts).toEqual([])
+  })
+
+  it('wakes the existing due check hourly and stops its timer on shutdown', async () => {
+    vi.useFakeTimers()
+    try {
+      const subject = service({})
+      const check = vi
+        .spyOn(subject, 'attestIfDue')
+        .mockResolvedValue(subject.getHealth())
+      const stop = subject.startMonitoring()
+      expect(check).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+      expect(check).toHaveBeenCalledTimes(2)
+      stop()
+      await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+      expect(check).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 
   it('reports private history independently of matching account identity', async () => {
     const layout = {

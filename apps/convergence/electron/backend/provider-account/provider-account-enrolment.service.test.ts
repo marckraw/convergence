@@ -194,10 +194,12 @@ describe('ProviderAccountEnrolmentService', () => {
     binaryPath?: string | null
     codexMaintenance?: ProviderAccountEnrolmentDeps['codexMaintenance']
     claudeMaintenance?: ProviderAccountEnrolmentDeps['claudeMaintenance']
+    onAccountChanged?: (id: string) => void
   }) {
     return new ProviderAccountEnrolmentService({
       repository,
       fs: options.fs,
+      onAccountChanged: options.onAccountChanged,
       runCommand: options.run,
       homeDir: HOME,
       baseEnv: { PATH: '/usr/local/bin', HOME },
@@ -846,6 +848,43 @@ describe('ProviderAccountEnrolmentService', () => {
   })
 
   describe('reconnect', () => {
+    it.each(['reconnect', 'remove'] as const)(
+      'invalidates cached health before and after %s, including failure',
+      async (operation) => {
+        const { fs, files } = fakeFs()
+        const runner = fakeRunner({}, loginWritesIdentity(files))
+        const changed = vi.fn()
+        const subject = service({
+          fs,
+          run: runner.run,
+          onAccountChanged: changed,
+        })
+        await subject.enrol({ email: 'someone@example.com' })
+        changed.mockClear()
+        runner.run.mockImplementationOnce(async () => {
+          expect(changed).toHaveBeenCalledTimes(1)
+          return { code: 1, stdout: '', stderr: 'fixture failure' }
+        })
+        await expect(subject[operation](ACCOUNT_ID)).rejects.toThrow()
+        expect(changed.mock.calls).toEqual([[ACCOUNT_ID], [ACCOUNT_ID]])
+      },
+    )
+
+    it('invalidates cached health after a successful reconnect', async () => {
+      const { fs, files } = fakeFs()
+      const runner = fakeRunner({}, loginWritesIdentity(files))
+      const changed = vi.fn()
+      const subject = service({
+        fs,
+        run: runner.run,
+        onAccountChanged: changed,
+      })
+      await subject.enrol({ email: 'someone@example.com' })
+      changed.mockClear()
+      await subject.reconnect(ACCOUNT_ID)
+      expect(changed.mock.calls).toEqual([[ACCOUNT_ID], [ACCOUNT_ID]])
+    })
+
     it('disables admission during login and refuses a simultaneous reconnect without launching it', async () => {
       const { fs, files } = fakeFs()
       const runner = fakeRunner({}, loginWritesIdentity(files))

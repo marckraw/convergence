@@ -1,4 +1,10 @@
 import { promises as nodeFs } from 'fs'
+import type { ClaudeAccountMaintenance } from '../provider/claude-code/claude-account-maintenance.service'
+import {
+  resolveClaudeHealthStatus,
+  type ClaudeCredentialHealth,
+} from './provider-account-credential-health.pure'
+import type { ProviderAccount } from './provider-account.types'
 import type { CodexAccountHistoryService } from './provider-account-codex-history.service'
 import type { ClaudeAccountHistoryService } from './provider-account-claude-history.service'
 import type { ClaudeAccountLayout } from './provider-account-manifest.pure'
@@ -47,6 +53,8 @@ export interface ProviderAccountAttestationResult {
   label: string
   email: string | null
   outcome: AttestationOutcome
+  identityOutcome?: AttestationOutcome
+  credentialHealth?: ClaudeCredentialHealth
   status: ProviderAccountStatus
   detail: string | null
   /** Account-directory entries the manifest does not account for. */
@@ -87,6 +95,10 @@ export interface ProviderAccountAttestationDeps {
   claudeVersion?: () => string | null
   codexHistory?: Pick<CodexAccountHistoryService, 'inspect'>
   claudeHistory?: Pick<ClaudeAccountHistoryService, 'inspect'>
+  claudeMaintenance?: Pick<ClaudeAccountMaintenance, 'acquire'>
+  credentialHealth?: {
+    inspect(account: ProviderAccount): Promise<ClaudeCredentialHealth>
+  }
 }
 
 export class ProviderAccountAttestationService {
@@ -100,6 +112,8 @@ export class ProviderAccountAttestationService {
   private lastCheckedAt: number | null = null
   private lastVersion: string | null = null
   private report: ProviderAccountHealthReport = EMPTY_REPORT
+  private revision = 0
+  private inFlight: Promise<ProviderAccountHealthReport> | null = null
 
   constructor(private readonly deps: ProviderAccountAttestationDeps) {
     this.repository = deps.repository
@@ -132,96 +146,169 @@ export class ProviderAccountAttestationService {
     return due ? this.attestAll() : this.report
   }
 
-  async attestAll(): Promise<ProviderAccountHealthReport> {
+  /** Hourly wake-up; attestIfDue retains the daily/version-change policy. */
+  startMonitoring(onError: () => void = () => {}): () => void {
+    const check = () => {
+      void this.attestIfDue().catch(onError)
+    }
+    check()
+    const timer = setInterval(check, 60 * 60 * 1000)
+    timer.unref?.()
+    return () => clearInterval(timer)
+  }
+
+  invalidate(accountId: string): void {
+    this.revision++
+    this.lastCheckedAt = null
+    this.report = {
+      ...this.report,
+      accounts: this.report.accounts.filter(
+        (account) => account.accountId !== accountId,
+      ),
+    }
+  }
+
+  attestAll(): Promise<ProviderAccountHealthReport> {
+    if (this.inFlight) return this.inFlight
+    this.inFlight = this.collectReport().finally(() => {
+      this.inFlight = null
+    })
+    return this.inFlight
+  }
+
+  private async collectReport(): Promise<ProviderAccountHealthReport> {
+    const revision = this.revision
     const accounts = this.repository.list()
     const sharedEntries = await this.readdirSafe(join(this.homeDir, '.claude'))
     const checkedAtMs = this.now()
 
     const results: ProviderAccountAttestationResult[] = []
-    for (const account of accounts) {
-      // Same net, different file: each provider reports its identity in the
-      // place its own login writes. Both are read from the account's *own*
-      // directory rather than from a `status` command, which under a shared
-      // home reports whichever login happened last.
-      const isConfigHome =
-        providerAccountCredentialLayout(account.providerId) === 'config-home'
-      const observed = isConfigHome
-        ? readCodexIdentityFromAuth(
-            await this.readJson(join(account.configDir, CODEX_AUTH_FILE_NAME)),
-          )
-        : readClaudeIdentityFromConfig(
-            await this.readJson(join(account.configDir, '.claude.json')),
-          )
-      const verdict = attestAccountIdentity({
-        enrolled: { email: account.email, orgId: account.orgId },
-        observed,
-      })
-
-      const checkedAt = new Date(checkedAtMs).toISOString()
-      if (verdict.outcome === 'verified' && observed) {
-        // A verified account has just proved its identity against the file the
-        // tier is read from, so this is the honest moment to refresh it: an
-        // upgrade lands, a downgrade lands, and a tier stored wrong by an
-        // earlier enrolment heals without a migration. Email and organization
-        // only ever fill in, never overwrite — the match that produced this
-        // verdict tolerates a missing observed field.
-        this.repository.saveIdentity(account.id, {
-          email: observed.email ?? account.email,
-          orgId: observed.orgId ?? account.orgId,
-          plan: observed.plan,
-          status: verdict.status ?? account.status,
-          lastValidatedAt: checkedAt,
-        })
-      } else if (verdict.status) {
-        // A null status means "no evidence" — an unreadable file must not
-        // disable an account that is probably fine.
-        this.repository.setStatus(account.id, verdict.status, checkedAt)
+    for (const snapshot of accounts) {
+      let release = () => {}
+      if (
+        snapshot.providerId === 'claude-code' &&
+        this.deps.claudeMaintenance
+      ) {
+        try {
+          release = this.deps.claudeMaintenance.acquire(snapshot.id)
+        } catch {
+          const current = this.repository.get(snapshot.id)
+          if (current)
+            results.push({
+              accountId: current.id,
+              label: current.label,
+              email: current.email,
+              outcome: 'unreadable',
+              identityOutcome: 'unreadable',
+              credentialHealth: 'unknown',
+              status: current.status,
+              detail:
+                'Account maintenance is in progress. Health was not checked.',
+              unknownEntries: [],
+              missingLinks: [],
+            })
+          continue
+        }
       }
-
-      // Each provider has a different sharing manifest. Codex's recomputable
-      // history warning describes layout, independently of credential identity.
-      const drift = isConfigHome
-        ? { unknownEntries: [], missingLinks: [] }
-        : detectAccountDirDrift({
-            sharedEntries,
-            accountEntries: await this.readdirSafe(account.configDir),
-          })
-
-      results.push({
-        accountId: account.id,
-        label: account.label,
-        email: account.email,
-        outcome: verdict.outcome,
-        status: verdict.status ?? account.status,
-        detail: verdict.detail,
-        unknownEntries: drift.unknownEntries,
-        missingLinks: drift.missingLinks,
-        ...(!isConfigHome && this.deps.claudeHistory
-          ? {
-              claudeHistory: await this.deps.claudeHistory.inspect(
-                account.configDir,
+      try {
+        const account = this.repository.get(snapshot.id)
+        if (!account) continue
+        // Persisted identity is metadata, not proof of a live credential.
+        // Claude health below probes both selected namespaces separately.
+        const isConfigHome =
+          providerAccountCredentialLayout(account.providerId) === 'config-home'
+        const observed = isConfigHome
+          ? readCodexIdentityFromAuth(
+              await this.readJson(
+                join(account.configDir, CODEX_AUTH_FILE_NAME),
               ),
-            }
-          : {}),
-        ...(isConfigHome && this.deps.codexHistory
-          ? {
-              nativeHistoryWarnings: (
-                await this.deps.codexHistory.inspect(account.configDir)
-              ).warnings,
-            }
-          : {}),
-      })
+            )
+          : readClaudeIdentityFromConfig(
+              await this.readJson(join(account.configDir, '.claude.json')),
+            )
+        const verdict = attestAccountIdentity({
+          enrolled: { email: account.email, orgId: account.orgId },
+          observed,
+        })
+
+        const credentialHealth = !isConfigHome
+          ? await (this.deps.credentialHealth?.inspect(account) ??
+              Promise.resolve('unknown' as const))
+          : undefined
+        const latest = this.repository.get(account.id)
+        if (!latest) continue
+        const status = isConfigHome
+          ? (verdict.status ?? latest.status)
+          : resolveClaudeHealthStatus(
+              latest.status,
+              verdict.outcome,
+              credentialHealth ?? 'unknown',
+            )
+        const checkedAt = new Date(checkedAtMs).toISOString()
+        if (verdict.outcome === 'verified' && observed) {
+          this.repository.saveIdentity(account.id, {
+            email: observed.email ?? latest.email,
+            orgId: observed.orgId ?? latest.orgId,
+            plan: observed.plan,
+            status,
+            lastValidatedAt: checkedAt,
+          })
+        } else if (status !== latest.status || verdict.status) {
+          this.repository.setStatus(account.id, status, checkedAt)
+        }
+
+        // Each provider has a different sharing manifest. Codex's recomputable
+        // history warning describes layout, independently of credential identity.
+        const drift = isConfigHome
+          ? { unknownEntries: [], missingLinks: [] }
+          : detectAccountDirDrift({
+              sharedEntries,
+              accountEntries: await this.readdirSafe(account.configDir),
+            })
+
+        results.push({
+          accountId: account.id,
+          label: account.label,
+          email: account.email,
+          outcome: verdict.outcome,
+          status,
+          ...(!isConfigHome
+            ? { identityOutcome: verdict.outcome, credentialHealth }
+            : {}),
+          detail: verdict.detail,
+          unknownEntries: drift.unknownEntries,
+          missingLinks: drift.missingLinks,
+          ...(!isConfigHome && this.deps.claudeHistory
+            ? {
+                claudeHistory: await this.deps.claudeHistory.inspect(
+                  account.configDir,
+                ),
+              }
+            : {}),
+          ...(isConfigHome && this.deps.codexHistory
+            ? {
+                nativeHistoryWarnings: (
+                  await this.deps.codexHistory.inspect(account.configDir)
+                ).warnings,
+              }
+            : {}),
+        })
+      } finally {
+        release()
+      }
     }
 
+    const settingsWarnings = scanSharedSettingsForCredentials(
+      await this.readJson(join(this.homeDir, '.claude', 'settings.json')),
+    )
+    if (revision !== this.revision) return this.report
     this.lastCheckedAt = checkedAtMs
     this.lastVersion = this.claudeVersion()
     this.report = {
       checkedAt: new Date(checkedAtMs).toISOString(),
       claudeVersion: this.lastVersion,
       accounts: results,
-      settingsWarnings: scanSharedSettingsForCredentials(
-        await this.readJson(join(this.homeDir, '.claude', 'settings.json')),
-      ),
+      settingsWarnings,
     }
 
     return this.report

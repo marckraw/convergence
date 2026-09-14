@@ -44,6 +44,8 @@ export interface ProviderAccountAttestationResult {
   label: string
   email: string | null
   outcome: ProviderAccountAttestationOutcome
+  identityOutcome?: ProviderAccountAttestationOutcome
+  credentialHealth?: 'present' | 'absent' | 'unknown'
   status: ProviderAccountStatus
   detail: string | null
   unknownEntries: string[]

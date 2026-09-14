@@ -128,6 +128,7 @@ const defaultRunCommand: ProviderAccountCommandRunner = (command) =>
 
 export interface ProviderAccountEnrolmentDeps {
   repository: ProviderAccountRepository
+  onAccountChanged?: (accountId: string) => void
   fs?: ProviderAccountFs
   runCommand?: ProviderAccountCommandRunner
   homeDir?: string
@@ -168,6 +169,7 @@ const DEFAULT_PROVIDER_ID = 'claude-code'
 
 export class ProviderAccountEnrolmentService {
   private readonly repository: ProviderAccountRepository
+  private readonly onAccountChanged: (accountId: string) => void
   private readonly fs: ProviderAccountFs
   private readonly runCommand: ProviderAccountCommandRunner
   private readonly homeDir: string
@@ -181,6 +183,7 @@ export class ProviderAccountEnrolmentService {
 
   constructor(deps: ProviderAccountEnrolmentDeps) {
     this.repository = deps.repository
+    this.onAccountChanged = deps.onAccountChanged ?? (() => {})
     this.fs = deps.fs ?? defaultFs
     this.runCommand = deps.runCommand ?? defaultRunCommand
     this.homeDir = deps.homeDir ?? homedir()
@@ -304,6 +307,7 @@ export class ProviderAccountEnrolmentService {
       lastValidatedAt: new Date().toISOString(),
     })
 
+    this.onAccountChanged(account.id)
     return { account, warnings }
   }
 
@@ -319,6 +323,15 @@ export class ProviderAccountEnrolmentService {
    * attributed to this account.
    */
   async reconnect(accountId: string): Promise<ProviderAccount> {
+    this.onAccountChanged(accountId)
+    try {
+      return await this.reconnectAccount(accountId)
+    } finally {
+      this.onAccountChanged(accountId)
+    }
+  }
+
+  private async reconnectAccount(accountId: string): Promise<ProviderAccount> {
     const account = this.repository.get(accountId)
     if (!account) {
       throw new Error(`Provider account ${accountId} is not enrolled.`)
@@ -638,6 +651,7 @@ export class ProviderAccountEnrolmentService {
       lastValidatedAt: new Date().toISOString(),
     })
 
+    this.onAccountChanged(account.id)
     return {
       account,
       warnings: historyLayout.warnings.map((message) => ({
@@ -670,6 +684,18 @@ export class ProviderAccountEnrolmentService {
   async remove(
     accountId: string,
     options: { deletePrivateHistory?: boolean } = {},
+  ): Promise<void> {
+    this.onAccountChanged(accountId)
+    try {
+      return await this.removeEnrolledAccount(accountId, options)
+    } finally {
+      this.onAccountChanged(accountId)
+    }
+  }
+
+  private async removeEnrolledAccount(
+    accountId: string,
+    options: { deletePrivateHistory?: boolean },
   ): Promise<void> {
     const account = this.repository.get(accountId)
     if (!account) return

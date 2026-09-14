@@ -111,6 +111,18 @@ export function buildProviderAccountSettingsRows(
     const identity = describeProviderAccountIdentity(account)
     const verdict = verdicts.get(account.id)
     const notes: string[] = [...(verdict?.nativeHistoryWarnings ?? [])]
+    if (verdict?.credentialHealth) {
+      notes.push(
+        {
+          present:
+            'Claude reports a local sign-in. Server validity has not been checked.',
+          absent:
+            'Claude did not find a local sign-in. Reconnect this account.',
+          unknown:
+            'Local sign-in health could not be confirmed. Saved identity details are not proof of sign-in.',
+        }[verdict.credentialHealth],
+      )
+    }
     for (const entry of verdict?.claudeHistory?.entries ?? []) {
       if (entry.status === 'linked') continue
       const descriptions = {

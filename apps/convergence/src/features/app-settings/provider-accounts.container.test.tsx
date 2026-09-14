@@ -426,6 +426,36 @@ describe('ProviderAccountsContainer', () => {
     expect(providerAccounts.remove).not.toHaveBeenCalled()
   })
 
+  it('drops the old credential-health note after a successful reconnect', async () => {
+    providerAccounts.health
+      .mockResolvedValueOnce(
+        health({
+          accounts: [
+            {
+              accountId: 'acct-a',
+              label: 'Work',
+              email: 'a@example.com',
+              outcome: 'verified',
+              status: 'expired',
+              detail: null,
+              unknownEntries: [],
+              missingLinks: [],
+              credentialHealth: 'absent',
+            },
+          ],
+        }),
+      )
+      .mockResolvedValue(health())
+    providerAccounts.reconnect.mockResolvedValue(account())
+    render(<ProviderAccountsContainer />)
+    await screen.findByText(/Claude did not find a local sign-in/)
+    fireEvent.click(screen.getByRole('button', { name: /Reconnect/ }))
+    await screen.findByText('Reconnected.')
+    expect(
+      screen.queryByText(/Claude did not find a local sign-in/),
+    ).not.toBeInTheDocument()
+  })
+
   it('reports a refused reconnect instead of pretending it worked', async () => {
     providerAccounts.reconnect.mockRejectedValue(
       new Error('Enrolled as a@example.com but now reports b@example.com.'),

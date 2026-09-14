@@ -1341,6 +1341,12 @@ interface ProviderAccountAttestationResultData {
   label: string
   email: string | null
   outcome: 'verified' | 'identity-mismatch' | 'identity-unknown' | 'unreadable'
+  identityOutcome?:
+    | 'verified'
+    | 'identity-mismatch'
+    | 'identity-unknown'
+    | 'unreadable'
+  credentialHealth?: 'present' | 'absent' | 'unknown'
   status: ProviderAccountStatusData
   detail: string | null
   unknownEntries: string[]
