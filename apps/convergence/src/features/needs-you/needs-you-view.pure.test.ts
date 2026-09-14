@@ -292,10 +292,9 @@ it('RUN77 lap4 zero-count answered says finishing — mutation claim Tasks runni
     }),
     cardContext,
   )
-  const view = buildFeedView(groupNeedsYou([card]), {
-    ...defaultFeedView(),
-    groupBy: 'status',
-  })
+  // MAR-3007 (#631) removed the status facet; the label lives on the card,
+  // and a zero-count answered card is still working, not finished.
+  const view = buildFeedView(groupNeedsYou([card]), defaultFeedView())
   expect(card.summary).toBe('answered · finishing')
-  expect(view.groups[0].title).toBe('answered · finishing')
+  expect(view.groups[0].title).toBe('Working')
 })

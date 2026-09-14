@@ -3899,6 +3899,8 @@ it('adds the nullable last export path to an old crew and preserves it on reopen
     resetDatabase()
     rmSync(directory, { recursive: true, force: true })
   }
+})
+
 it('RUN77 lap4 window and receipt survive migration and reopen — mutation drop either column or reset it turns red', () => {
   withTempDb('answer-window', (path) => {
     const db = getDatabase(path)
