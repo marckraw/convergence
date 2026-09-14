@@ -146,9 +146,9 @@ export class HarnessEvidenceService {
         const previousTasks = this.listTasks(sessionId)
         const tasks = foldTasks(previousTasks, fact, sessionId)
         const upsert = this.db
-          .prepare(`INSERT INTO session_tasks(task_id,session_id,tool_use_id,task_type,description,status,started_at,ended_at,output_file,stop_reason,ended_summary,observed_at)
-          VALUES (@taskId,@sessionId,@toolUseId,@taskType,@description,@status,@startedAt,@endedAt,@outputFile,@stopReason,@endedSummary,@observedAt)
-          ON CONFLICT(session_id,task_id) DO UPDATE SET tool_use_id=excluded.tool_use_id,task_type=excluded.task_type,description=excluded.description,status=excluded.status,started_at=excluded.started_at,ended_at=excluded.ended_at,output_file=excluded.output_file,stop_reason=excluded.stop_reason,ended_summary=excluded.ended_summary`)
+          .prepare(`INSERT INTO session_tasks(task_id,session_id,tool_use_id,task_type,description,status,started_at,ended_at,output_file,stop_reason,ended_summary,observed_at,stop_receipt_at)
+          VALUES (@taskId,@sessionId,@toolUseId,@taskType,@description,@status,@startedAt,@endedAt,@outputFile,@stopReason,@endedSummary,@observedAt,@stopReceiptAt)
+          ON CONFLICT(session_id,task_id) DO UPDATE SET tool_use_id=excluded.tool_use_id,task_type=excluded.task_type,description=excluded.description,status=excluded.status,started_at=excluded.started_at,ended_at=excluded.ended_at,output_file=excluded.output_file,stop_reason=excluded.stop_reason,ended_summary=excluded.ended_summary,stop_receipt_at=excluded.stop_receipt_at`)
         for (const task of tasks)
           if (
             task !==
@@ -156,6 +156,7 @@ export class HarnessEvidenceService {
           )
             upsert.run({
               ...task,
+              stopReceiptAt: task.stopReceiptAt ?? null,
               endedSummary: task.endedSummary ?? null,
               stopReason: task.stopReason ?? null,
             })
@@ -310,7 +311,7 @@ export class HarnessEvidenceService {
   listTasks(sessionId: string): SessionTask[] {
     return this.db
       .prepare(
-        `SELECT task_id AS taskId,session_id AS sessionId,tool_use_id AS toolUseId,task_type AS taskType,description,status,started_at AS startedAt,observed_at AS observedAt,ended_at AS endedAt,output_file AS outputFile,stop_reason AS stopReason,ended_summary AS endedSummary FROM session_tasks WHERE session_id=? ORDER BY started_at,rowid`,
+        `SELECT task_id AS taskId,session_id AS sessionId,tool_use_id AS toolUseId,task_type AS taskType,description,status,started_at AS startedAt,observed_at AS observedAt,stop_receipt_at AS stopReceiptAt,ended_at AS endedAt,output_file AS outputFile,stop_reason AS stopReason,ended_summary AS endedSummary FROM session_tasks WHERE session_id=? ORDER BY started_at,rowid`,
       )
       .all(sessionId) as SessionTask[]
   }

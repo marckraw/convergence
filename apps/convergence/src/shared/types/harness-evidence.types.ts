@@ -28,6 +28,8 @@ export interface SessionAgentRun {
 }
 
 export interface SessionTask {
+  /** Our successful task-stop control receipt, never a guess from terminal status. */
+  stopReceiptAt?: string | null
   /** First recorded sighting; null for legacy tasks with no known time. */
   observedAt?: string | null
   endedSummary?: string | null

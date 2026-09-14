@@ -13,9 +13,15 @@ import {
   formatSessionCardState,
 } from './session-card-state.pure'
 
-const STATUSES: SessionStatus[] = ['idle', 'running', 'completed', 'failed']
+const STATUSES: SessionStatus[] = [
+  'idle',
+  'running',
+  'answered',
+  'completed',
+  'failed',
+]
 
-it('R5 counts background work as activity and never finishes unknown work — mutation classify only foreground status turns red', () => {
+it('RUN77 terminal conversation state survives background failures and unknowns — mutation infer state from task counts turns red', () => {
   const base = makeCard({
     status: 'completed',
     attention: 'finished',
@@ -33,7 +39,7 @@ it('R5 counts background work as activity and never finishes unknown work — mu
         session: { ...base.session, parallelWork },
       }),
     ),
-  ).toEqual(['working', 'idle', 'failed', 'idle'])
+  ).toEqual(['finished', 'finished', 'finished', 'finished'])
 })
 const ATTENTIONS: AttentionState[] = [
   'none',
@@ -209,7 +215,7 @@ describe('classifySessionCardState', () => {
         ? 'needs-you'
         : activity === 'waiting-approval'
           ? 'needs-you'
-          : status === 'running' || activity !== null
+          : status === 'running' || status === 'answered' || activity !== null
             ? 'working'
             : attention === 'failed' || status === 'failed'
               ? 'failed'
@@ -275,4 +281,18 @@ describe('formatSessionCardState', () => {
       'Failed',
     ])
   })
+})
+it('RUN77 classifies the conversation state, not task failure — mutation infer from task status turns red', () => {
+  expect(
+    classifySessionCardState(
+      makeCard({ status: 'answered', attention: 'none', activity: null }),
+    ),
+  ).toBe('working')
+  const card = makeCard({
+    status: 'completed',
+    attention: 'finished',
+    activity: null,
+  })
+  card.session.parallelWork = { running: 0, unknown: 0, failed: 1, stopped: 0 }
+  expect(classifySessionCardState(card)).toBe('finished')
 })

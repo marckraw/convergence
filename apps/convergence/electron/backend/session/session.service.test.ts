@@ -1982,7 +1982,7 @@ describe('SessionService', () => {
       'Follow up',
       undefined,
       undefined,
-      { deliveryMode: 'normal' },
+      { deliveryMode: 'normal', onTurnAccepted: expect.any(Function) },
     )
   })
 

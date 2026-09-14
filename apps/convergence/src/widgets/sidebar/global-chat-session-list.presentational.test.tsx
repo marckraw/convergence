@@ -92,6 +92,8 @@ describe('GlobalChatSessionList', () => {
     (kind) => {
       const session = {
         ...baseSession,
+        status: 'answered' as const,
+        attention: 'none' as const,
         parallelWork: { running: 2, unknown: 1, failed: 0, stopped: 0 },
       }
       renderList(
@@ -324,11 +326,20 @@ it('RUN64 round2 alive is current in header and sidebar — mutations window run
       patch: { status: 'running', startedAt: '2026-09-09T10:00:00Z' },
     })
     const running = service.countParallelWork(['window']).get('window')!
-    renderList({ sessions: [{ ...baseSession, parallelWork: running }] })
+    renderList({
+      sessions: [
+        {
+          ...baseSession,
+          status: 'answered',
+          attention: 'none',
+          parallelWork: running,
+        },
+      ],
+    })
     render(
       <AttentionIndicator
-        attention="finished"
-        status="completed"
+        attention="none"
+        status="answered"
         parallelWork={running}
       />,
     )

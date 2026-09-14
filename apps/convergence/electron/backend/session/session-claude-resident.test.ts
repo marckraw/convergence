@@ -8,6 +8,8 @@ import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { ProviderRegistry } from '../provider/provider-registry'
 import { LocalExecutionHost } from '../provider/execution-host/local-execution-host'
 import { SessionService } from './session.service'
+import { SessionQueuedInputService } from './session-queued-input.service'
+import { HarnessEvidenceService } from './harness-evidence.service'
 import { TurnCaptureService } from './turn/turn-capture.service'
 import { GitService } from '../git/git.service'
 import * as claudeTransport from '../provider/claude-code/claude-transport.service'
@@ -40,6 +42,8 @@ async function fixture(idleMinutes = 0, holdExit = false, refuseStops = 0) {
       exitCode: null,
       signalCode: null,
       killed: false,
+      holdStops: false,
+      stopResponses: [] as Array<() => void>,
       kill: vi.fn(() => true),
     })
     child.kill.mockImplementation(() => {
@@ -63,20 +67,25 @@ async function fixture(idleMinutes = 0, holdExit = false, refuseStops = 0) {
         if (event.type === 'user') lines.push(line)
         if (event.type === 'control_request') {
           controls.push(event.request)
-          child.stdout.write(
-            JSON.stringify({
-              type: 'control_response',
-              response: {
-                subtype:
-                  event.request.subtype === 'stop_task' && refuseStops-- > 0
-                    ? 'error'
-                    : 'success',
-                error: 'fixture stop refusal',
-                request_id: event.request_id,
-                response: { still_queued: [] },
-              },
-            }) + '\n',
-          )
+          const respond = () => {
+            child.stdout.write(
+              JSON.stringify({
+                type: 'control_response',
+                response: {
+                  subtype:
+                    event.request.subtype === 'stop_task' && refuseStops-- > 0
+                      ? 'error'
+                      : 'success',
+                  error: 'fixture stop refusal',
+                  request_id: event.request_id,
+                  response: { still_queued: [] },
+                },
+              }) + '\n',
+            )
+          }
+          if (event.request.subtype === 'stop_task' && child.holdStops)
+            child.stopResponses.push(respond)
+          else respond()
         }
       }
     })
@@ -566,7 +575,7 @@ it('background work spans answers without a synthetic result — close after the
     description: 'sleep',
   })
   send({ type: 'result', subtype: 'success', result: 'first answer' })
-  await vi.waitUntil(() => service.getById(session.id)?.status === 'completed')
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'answered')
   await service.sendMessage(session.id, { text: 'second' })
   await vi.waitUntil(
     () => children.reduce((n, c) => n + c.lines.length, 0) >= 2,
@@ -603,7 +612,7 @@ it('between-turn exit opens no turn and freezes old rows — emit running on idl
     description: 'sleep',
   })
   send({ type: 'result', subtype: 'success', result: 'answer' })
-  await vi.waitUntil(() => service.getById(session.id)?.status === 'completed')
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'answered')
   children[0].emit('exit', 1, null)
   children[0].stdout.end()
   await vi.waitUntil(
@@ -1191,3 +1200,824 @@ it('H1 Agent+Agent fake stream preserves the unclaimed identity and running stat
     ],
   })
 })
+
+it.each(['completed', 'failed', 'stopped'] as const)(
+  'RUN77 recorded %s tape waits for its witness — mutations settle on result/count or require result after our stop turn red',
+  async (ending) => {
+    const { service, session, children } = await fixture()
+    const settles = vi.fn()
+    service.onSessionSettled(settles)
+    await service.start(session.id, { text: 'start the background fixture' })
+    await vi.waitUntil(() => children[0]?.lines.length === 1)
+    const send = (event: unknown) =>
+      children[0].stdout.write(JSON.stringify(event) + '\n')
+    const answer = (text: string) =>
+      send({
+        type: 'assistant',
+        message: { content: [{ type: 'text', text }] },
+      })
+    send({ type: 'system', subtype: 'init', session_id: 'run77' })
+    send({
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 'task',
+      task_type: 'local_bash',
+    })
+    answer('EARLY ANSWER\nBATON: fable')
+    send({ type: 'result', subtype: 'success', terminal_reason: 'completed' })
+    await vi.waitUntil(() => service.getById(session.id)?.status !== 'running')
+    expect(service.getById(session.id)?.status).toBe('answered')
+    expect(service.getById(session.id)?.attention).toBe('none')
+    expect(settles).not.toHaveBeenCalled()
+    // Three live tapes: completed/failed need the next result; our stopped task does not produce one.
+    if (ending === 'stopped') {
+      await service.stopTask(session.id, 'task')
+      expect(service.listTasks(session.id)[0]?.stopReceiptAt).toEqual(
+        expect.any(String),
+      )
+    }
+    send({
+      type: 'system',
+      subtype: 'task_updated',
+      task_id: 'task',
+      patch: { status: ending === 'stopped' ? 'killed' : ending },
+    })
+    send({
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: 'task',
+      status: ending,
+    })
+    await vi.waitUntil(
+      () => service.listTasks(session.id)[0]?.status === ending,
+    )
+    if (ending !== 'stopped') {
+      expect(service.getById(session.id)?.status).toBe('answered')
+      expect(settles).not.toHaveBeenCalled()
+      send({ type: 'system', subtype: 'status', status: 'requesting' })
+      await vi.waitUntil(
+        () => service.getById(session.id)?.status === 'running',
+      )
+      answer('LATE ANSWER')
+      send({
+        type: 'result',
+        subtype: 'success',
+        origin: { kind: 'task-notification' },
+        terminal_reason: 'completed',
+      })
+    }
+    await vi.waitUntil(() => settles.mock.calls.length === 1)
+    expect(service.getById(session.id)?.status).toBe('completed')
+    expect(service.getById(session.id)?.attention).toBe('finished')
+    expect(settles.mock.calls[0][0].answerWindow).toEqual({
+      message:
+        ending === 'stopped' ? 'EARLY ANSWER\nBATON: fable' : 'LATE ANSWER',
+      declaration: { kind: 'named', name: 'fable' },
+    })
+    expect(service.getLastAssistantMessageText(session.id)).toBe(
+      ending === 'stopped' ? 'EARLY ANSWER\nBATON: fable' : 'LATE ANSWER',
+    )
+    send({
+      type: 'result',
+      subtype: 'success',
+      origin: { kind: 'task-notification' },
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(settles).toHaveBeenCalledTimes(1)
+  },
+)
+
+async function answeredFixture(taskIds = ['task'], queued = false) {
+  const f = await fixture()
+  await f.service.start(f.session.id, { text: 'answer then wait for tasks' })
+  await vi.waitUntil(() => f.children[0]?.lines.length === 1)
+  const send = (event: unknown) =>
+    f.children[0].stdout.write(JSON.stringify(event) + '\n')
+  send({ type: 'system', subtype: 'init', session_id: 'run77' })
+  for (const task_id of taskIds)
+    send({
+      type: 'system',
+      subtype: 'task_started',
+      task_id,
+      task_type: 'local_bash',
+    })
+  send({
+    type: 'assistant',
+    message: {
+      content: [{ type: 'text', text: 'EARLY ANSWER\nBATON: fable' }],
+    },
+  })
+  if (queued)
+    await f.service.sendMessage(f.session.id, {
+      text: 'preserve this follow-up',
+    })
+  send({ type: 'result', subtype: 'success' })
+  await vi.waitUntil(
+    () => f.service.getById(f.session.id)?.status === 'answered',
+  )
+  const settles = vi.fn()
+  f.service.onSessionSettled(settles)
+  return { ...f, send, settles }
+}
+
+it.each(['exit', 'quit', 'stop'] as const)(
+  'RUN77 %s closes answered with unknown work — mutation leave answered or mark unresolved stopped turns red',
+  async (reason) => {
+    const { service, session, children, settles } = await answeredFixture()
+    if (reason === 'exit') {
+      children[0].emit('exit', 1, null)
+      children[0].stdout.end()
+    } else if (reason === 'quit') await service.disposeAll()
+    else service.stop(session.id)
+    await vi.waitUntil(() => settles.mock.calls.length === 1)
+    expect(service.getById(session.id)?.status).toBe('completed')
+    expect(service.getById(session.id)?.attention).toBe('finished')
+    expect(service.listTasks(session.id)[0]?.status).toBe('unknown')
+    if (reason === 'stop') {
+      expect(children[0].controls.some((c) => c.subtype === 'stop_task')).toBe(
+        true,
+      )
+      expect(service.listTasks(session.id)[0]?.stopReceiptAt).toEqual(
+        expect.any(String),
+      )
+    }
+  },
+)
+
+it('RUN77 stop receipt joins an earlier terminal fact — mutation require receipt before terminal turns red', async () => {
+  const { service, session, children, send, settles } = await answeredFixture()
+  children[0].holdStops = true
+  // Terminal fact can beat the asynchronous control receipt, as on the live tape.
+  const stopping = service.stopTask(session.id, 'task')
+  send({
+    type: 'system',
+    subtype: 'task_notification',
+    task_id: 'task',
+    status: 'stopped',
+  })
+  await vi.waitUntil(
+    () => service.listTasks(session.id)[0]?.status === 'stopped',
+  )
+  expect(service.listTasks(session.id)[0]?.stopReceiptAt).toBeNull()
+  expect(service.getById(session.id)?.status).toBe('answered')
+  expect(settles).not.toHaveBeenCalled()
+  await vi.waitUntil(() => children[0].stopResponses.length === 1)
+  children[0].stopResponses[0]()
+  await stopping
+  await vi.waitUntil(() => settles.mock.calls.length === 1)
+  expect(service.listTasks(session.id)[0]?.stopReceiptAt).toEqual(
+    expect.any(String),
+  )
+})
+
+it('RUN77 an unrequested stop or one remaining task cannot settle — mutations settle any stop or ignore counts turn red', async () => {
+  const { service, session, send, settles } = await answeredFixture([
+    'task',
+    'other',
+  ])
+  await service.stopTask(session.id, 'task')
+  send({
+    type: 'system',
+    subtype: 'task_notification',
+    task_id: 'task',
+    status: 'stopped',
+  })
+  await vi.waitUntil(
+    () => service.listTasks(session.id)[0]?.status === 'stopped',
+  )
+  expect(service.getById(session.id)?.status).toBe('answered')
+  send({
+    type: 'system',
+    subtype: 'task_notification',
+    task_id: 'other',
+    status: 'stopped',
+  })
+  await vi.waitUntil(() =>
+    service.listTasks(session.id).every((t) => t.status === 'stopped'),
+  )
+  expect(service.getById(session.id)?.status).toBe('answered')
+  expect(settles).not.toHaveBeenCalled()
+  send({
+    type: 'result',
+    subtype: 'success',
+    origin: { kind: 'task-notification' },
+  })
+  await vi.waitUntil(() => settles.mock.calls.length === 1)
+  expect(service.getLastAssistantMessageText(session.id)).toBe(
+    'EARLY ANSWER\nBATON: fable',
+  )
+})
+
+it('RUN77 a continuation after our stop opens a fresh window — mutation reuse old window baton turns red', async () => {
+  const { service, session, send, settles } = await answeredFixture()
+  await service.stopTask(session.id, 'task')
+  send({
+    type: 'system',
+    subtype: 'task_notification',
+    task_id: 'task',
+    status: 'stopped',
+  })
+  await vi.waitUntil(() => settles.mock.calls.length === 1)
+  send({ type: 'system', subtype: 'status', status: 'requesting' })
+  send({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text: 'NEW WINDOW\nBATON: other' }] },
+  })
+  send({
+    type: 'result',
+    subtype: 'success',
+    origin: { kind: 'task-notification' },
+  })
+  await vi.waitUntil(() => settles.mock.calls.length === 2)
+  expect(settles.mock.calls[1][0].answerWindow).toEqual({
+    message: 'NEW WINDOW\nBATON: other',
+    declaration: { kind: 'named', name: 'other' },
+  })
+  send({ type: 'system', subtype: 'status', status: 'requesting' })
+  send({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text: 'NO DECLARATION' }] },
+  })
+  send({
+    type: 'result',
+    subtype: 'success',
+    origin: { kind: 'task-notification' },
+  })
+  await vi.waitUntil(() => settles.mock.calls.length === 3)
+  expect(settles.mock.calls[2][0].answerWindow).toEqual({
+    message: 'NO DECLARATION',
+    declaration: { kind: 'none' },
+  })
+})
+
+it('RUN77 answered refuses reset but accepts an explicit user follow-up — mutation treat answered as terminal or accept notification result during user turn turns red', async () => {
+  const { service, session, send, settles, children } = await answeredFixture()
+  await expect(
+    service.sendMessage(session.id, { text: '/clear' }),
+  ).rejects.toThrow()
+  await service.sendMessage(session.id, { text: 'explicit follow-up' })
+  await vi.waitUntil(() => children[0].lines.length === 2)
+  send({
+    type: 'result',
+    subtype: 'success',
+    origin: { kind: 'task-notification' },
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+  expect(service.getById(session.id)?.status).toBe('running')
+  expect(settles).not.toHaveBeenCalled()
+})
+
+it('RUN77 queued follow-up drains only at the real witness — mutation drain on answered turns red', async () => {
+  const { service, session, children } = await fixture()
+  const settles = vi.fn()
+  service.onSessionSettled(settles)
+  await service.start(session.id, { text: 'first' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  const send = (event: unknown) =>
+    children[0].stdout.write(JSON.stringify(event) + '\n')
+  send({ type: 'system', subtype: 'init', session_id: 'fixture' })
+  send({
+    type: 'system',
+    subtype: 'task_started',
+    task_id: 'task',
+    task_type: 'local_bash',
+  })
+  await service.sendMessage(session.id, { text: 'queued message' })
+  send({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text: 'EARLY' }] },
+  })
+  send({ type: 'result', subtype: 'success' })
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'answered')
+  expect(children[0].lines).toHaveLength(1)
+  expect(service.getQueuedInputs(session.id).map((q) => q.state)).toEqual([
+    'queued',
+  ])
+  send({
+    type: 'system',
+    subtype: 'task_notification',
+    task_id: 'task',
+    status: 'completed',
+  })
+  send({
+    type: 'result',
+    subtype: 'success',
+    origin: { kind: 'task-notification' },
+  })
+  await vi.waitUntil(() => children[0].lines.length === 2)
+  expect(settles).toHaveBeenCalledTimes(1)
+  expect(settles.mock.calls[0][0].answerWindow.message).toBe('EARLY')
+})
+
+it('RUN77 child frames cannot witness the main answer — mutation remove parent guard turns red', async () => {
+  const { service, session, send, settles } = await answeredFixture()
+  send({
+    type: 'system',
+    subtype: 'task_notification',
+    task_id: 'task',
+    status: 'completed',
+  })
+  send({ type: 'result', parent_tool_use_id: 'child', subtype: 'success' })
+  send({
+    type: 'stream_event',
+    parent_tool_use_id: 'child',
+    event: { type: 'message_start' },
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+  expect(service.getById(session.id)?.status).toBe('answered')
+  expect(settles).not.toHaveBeenCalled()
+})
+
+it('RUN77 a result with no open window settles nothing — mutation accept result after completion turns red', async () => {
+  const { service, session, send, settles } = await answeredFixture()
+  await service.stopTask(session.id, 'task')
+  send({
+    type: 'system',
+    subtype: 'task_notification',
+    task_id: 'task',
+    status: 'stopped',
+  })
+  await vi.waitUntil(() => settles.mock.calls.length === 1)
+  send({
+    type: 'system',
+    subtype: 'task_started',
+    task_id: 'out-of-window',
+    task_type: 'local_bash',
+  })
+  send({ type: 'result', subtype: 'success', result: 'late result' })
+  send({
+    type: 'system',
+    subtype: 'task_started',
+    task_id: 'barrier',
+    task_type: 'local_bash',
+  })
+  await vi.waitUntil(() =>
+    service.listTasks(session.id).some((task) => task.taskId === 'barrier'),
+  )
+  expect(service.getById(session.id)?.status).toBe('completed')
+  expect(settles).toHaveBeenCalledTimes(1)
+})
+
+it.each(['panel', 'quit'] as const)(
+  'RUN77 %s witness broadcasts the same counts it used — mutation retain stale summary counts turns red',
+  async (ending) => {
+    const { service, session, send, settles } = await answeredFixture()
+    // Seed the real summary cache before the fact changes, as a mounted sidebar does.
+    await vi.waitUntil(
+      () => service.getSummaryById(session.id)?.parallelWork?.running === 1,
+    )
+    const summaries: Array<{
+      status: string
+      running: number
+      unknown: number
+    }> = []
+    service.setSummaryUpdateListener((summary) =>
+      summaries.push({
+        status: summary.status,
+        running: summary.parallelWork!.running,
+        unknown: summary.parallelWork!.unknown,
+      }),
+    )
+    if (ending === 'quit') await service.disposeAll()
+    else {
+      await service.stopTask(session.id, 'task')
+      send({
+        type: 'system',
+        subtype: 'task_notification',
+        task_id: 'task',
+        status: 'stopped',
+      })
+    }
+    await vi.waitUntil(() => settles.mock.calls.length === 1)
+    expect(
+      summaries
+        .filter((s) => s.status === 'completed')
+        .every(
+          (s) => s.running === 0 && s.unknown === (ending === 'quit' ? 1 : 0),
+        ),
+    ).toBe(true)
+  },
+)
+
+it.each(['quit', 'stop'] as const)(
+  'RUN77 lap4 %s retains queued input — mutation drop quitting/Stop retention turns red',
+  async (ending) => {
+    const { service, session, children, settles } = await answeredFixture(
+      ['task'],
+      true,
+    )
+    if (ending === 'quit') await service.disposeAll()
+    else service.stop(session.id)
+    await vi.waitUntil(() => settles.mock.calls.length === 1)
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(
+      service
+        .getQueuedInputs(session.id)
+        .map((q) => ({ text: q.text, state: q.state })),
+    ).toEqual([{ text: 'preserve this follow-up', state: 'queued' }])
+    expect(children).toHaveLength(1)
+    expect(children[0].lines).toHaveLength(1)
+  },
+)
+
+it('RUN77 lap5 Stop completes a harness continuation and retains the queue — mutation drop opener check turns red', async () => {
+  const { service, session, children, send, settles } = await answeredFixture(
+    ['task'],
+    true,
+  )
+  children[0].holdStops = true
+  service.stop(session.id)
+  await vi.waitUntil(() => children[0].stopResponses.length === 1)
+  send({ type: 'system', subtype: 'status', status: 'requesting' })
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'running')
+  children[0].stopResponses[0]()
+  await vi.waitUntil(() => !service.getSummaryById(session.id)?.hasActiveHandle)
+  expect(service.getById(session.id)?.status).toBe('completed')
+  expect(
+    service
+      .getQueuedInputs(session.id)
+      .map(({ text, state }) => ({ text, state })),
+  ).toEqual([{ text: 'preserve this follow-up', state: 'queued' }])
+  expect(settles).toHaveBeenCalledTimes(1)
+  expect(children[0].stdin.writableEnded).toBe(true)
+  expect(service.listTasks(session.id).map((task) => task.status)).toEqual([
+    'unknown',
+  ])
+})
+
+it('RUN77 lap6 normal Stop of a harness continuation retains queued input — mutation omit stoppedByUser from retention turns red', async () => {
+  const { service, session, children, send, settles } = await answeredFixture(
+    ['task'],
+    true,
+  )
+  send({ type: 'system', subtype: 'status', status: 'requesting' })
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'running')
+  service.stop(session.id)
+  await vi.waitUntil(() => !service.getSummaryById(session.id)?.hasActiveHandle)
+  expect(service.getById(session.id)?.status).toBe('completed')
+  expect(service.getQueuedInputs(session.id).map((q) => q.state)).toEqual([
+    'queued',
+  ])
+  expect(children[0].lines).toHaveLength(1)
+  expect(settles).toHaveBeenCalledTimes(1)
+})
+
+it('RUN77 lap6 conversation Stop retains input when the terminal task fact beats its receipt — mutation remove service retention before provider Stop is armed turns red', async () => {
+  const { service, session, children, send, settles, db } =
+    await answeredFixture(['task'], true)
+  children[0].holdStops = true
+  service.stop(session.id)
+  await vi.waitUntil(() => children[0].stopResponses.length === 1)
+  send({
+    type: 'system',
+    subtype: 'task_notification',
+    task_id: 'task',
+    status: 'stopped',
+  })
+  await vi.waitUntil(
+    () => service.listTasks(session.id)[0]?.status === 'stopped',
+  )
+  children[0].stopResponses[0]()
+  await vi.waitUntil(() => !service.getSummaryById(session.id)?.hasActiveHandle)
+  expect({
+    rows: db
+      .prepare('SELECT state FROM session_queued_inputs WHERE session_id=?')
+      .all(session.id),
+    userLines: children[0].lines.length,
+    settles: settles.mock.calls.length,
+  }).toEqual({ rows: [{ state: 'queued' }], userLines: 1, settles: 1 })
+})
+
+it.each(['recover', 'stop', 'approve', 'deny'] as const)(
+  'RUN77 lap4 %s heals an orphan answered row — mutation recover running only turns red',
+  async (action) => {
+    const { service, session, db } = await fixture()
+    db.prepare("UPDATE sessions SET status='answered' WHERE id=?").run(
+      session.id,
+    )
+    new HarnessEvidenceService(db).apply(session.id, null, {
+      kind: 'task.changed',
+      at: '2026-09-13T00:00:00Z',
+      taskId: 'orphan',
+      patch: { status: 'running' },
+    })
+    const target =
+      action === 'recover'
+        ? new SessionService(db, new LocalExecutionHost(new ProviderRegistry()))
+        : service
+    const settles = vi.fn()
+    target.onSessionSettled(settles)
+    if (action === 'stop') target.stop(session.id)
+    if (action === 'approve') target.approve(session.id)
+    if (action === 'deny') target.deny(session.id)
+    await new Promise((resolve) => setImmediate(resolve))
+    expect({
+      status: target.getById(session.id)?.status,
+      attention: target.getById(session.id)?.attention,
+      task: target.listTasks(session.id)[0]?.status,
+    }).toEqual({ status: 'completed', attention: 'finished', task: 'unknown' })
+    expect(settles).toHaveBeenCalledTimes(action === 'recover' ? 0 : 1)
+    await target.disposeAll()
+  },
+)
+
+it.each(['redelivery', 'completion'] as const)(
+  'RUN77 lap5 %s catches a queue read rejection — mutation drop dispatch catch turns red',
+  async (trigger) => {
+    const { service, session, db, send } = await answeredFixture(['task'], true)
+    const queued = service.getQueuedInputs(session.id)[0]
+    const failure = new Error('fixture queue read refused')
+    const read = vi
+      .spyOn(SessionQueuedInputService.prototype, 'nextQueued')
+      .mockImplementationOnce(() => {
+        throw failure
+      })
+    const reported = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      if (trigger === 'redelivery') {
+        new SessionQueuedInputService(db).patch(queued.id, 'failed')
+        service.redeliverQueuedInput(queued.id)
+      } else {
+        send({
+          type: 'system',
+          subtype: 'task_notification',
+          task_id: 'task',
+          status: 'completed',
+        })
+        send({ type: 'result', subtype: 'success' })
+      }
+      await vi.waitFor(() =>
+        expect(reported).toHaveBeenCalledWith(
+          '[session] Could not dispatch queued input',
+          failure,
+        ),
+      )
+      expect(
+        service.getQueuedInputs(session.id).filter((q) => q.state === 'queued'),
+      ).toHaveLength(1)
+    } finally {
+      read.mockRestore()
+      reported.mockRestore()
+    }
+  },
+)
+
+it('RUN77 lap4 a harness turn during send awaits queues the input — mutation return silently turns red', async () => {
+  const { ClaudeCodeSkillsService } =
+    await import('../skills/claude-code-skills.service')
+  let resolveCatalog!: (
+    value: Awaited<
+      ReturnType<InstanceType<typeof ClaudeCodeSkillsService>['list']>
+    >,
+  ) => void
+  const pending = new Promise<
+    Awaited<ReturnType<InstanceType<typeof ClaudeCodeSkillsService>['list']>>
+  >((resolve) => {
+    resolveCatalog = resolve
+  })
+  const catalog = vi
+    .spyOn(ClaudeCodeSkillsService.prototype, 'list')
+    .mockReturnValue(pending)
+  const skill = {
+    providerId: 'claude-code' as const,
+    id: 'fixture-skill',
+    name: 'fixture-skill',
+    path: '/fixture/SKILL.md',
+    scope: 'project' as const,
+    rawScope: null,
+    providerName: 'Claude Code',
+    displayName: 'fixture-skill',
+    description: 'fixture',
+    shortDescription: null,
+    sourceLabel: 'project',
+    enabled: true,
+    dependencies: [],
+    warnings: [],
+  }
+  try {
+    const { service, session, children, send, settles } =
+      await answeredFixture()
+    const sending = service.sendMessage(session.id, {
+      text: 'keep this send',
+      skillSelections: [{ ...skill, status: 'selected' }],
+    })
+    await vi.waitUntil(() => catalog.mock.calls.length === 1)
+    send({ type: 'system', subtype: 'status', status: 'requesting' })
+    await vi.waitUntil(() => service.getById(session.id)?.status === 'running')
+    resolveCatalog({
+      providerId: 'claude-code',
+      providerName: 'Claude Code',
+      catalogSource: 'filesystem',
+      invocationSupport: 'native-command',
+      activationConfirmation: 'native-event',
+      skills: [skill],
+      error: null,
+    })
+    const dispatchId = await sending
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(service.getQueuedInputs(session.id)).toMatchObject([
+      { text: 'keep this send', state: 'queued', dispatchId },
+    ])
+    expect(children[0].lines).toHaveLength(1)
+    send({
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: 'task',
+      status: 'completed',
+    })
+    send({
+      type: 'result',
+      subtype: 'success',
+      origin: { kind: 'task-notification' },
+    })
+    await vi.waitUntil(() => children[0].lines.length === 2)
+    expect(settles.mock.calls[0][0].dispatchIds).not.toContain(dispatchId)
+    expect(children[0].lines[1]).toContain('keep this send')
+  } finally {
+    catalog.mockRestore()
+  }
+})
+
+it('RUN77 lap4 a user follow-up resets the window — mutation reset neither opener turns red', async () => {
+  const { service, session, children, send, settles } = await answeredFixture()
+  await service.sendMessage(session.id, { text: 'one more thing' })
+  await vi.waitUntil(() => children[0].lines.length === 2)
+  send({
+    type: 'system',
+    subtype: 'task_notification',
+    task_id: 'task',
+    status: 'completed',
+  })
+  send({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text: 'done.' }] },
+  })
+  send({ type: 'result', subtype: 'success' })
+  await vi.waitUntil(() => settles.mock.calls.length === 1)
+  expect(settles.mock.calls[0][0].answerWindow).toEqual({
+    message: 'done.',
+    declaration: { kind: 'none' },
+  })
+})
+
+it('RUN77 lap4 a stopped snapshot cannot reuse a receipt in window two — mutation keep the joined receipt turns red', async () => {
+  const { service, session, send, settles } = await answeredFixture(['A'])
+  await service.stopTask(session.id, 'A')
+  send({
+    type: 'system',
+    subtype: 'task_notification',
+    task_id: 'A',
+    status: 'stopped',
+  })
+  await vi.waitUntil(() => settles.mock.calls.length === 1)
+  send({ type: 'system', subtype: 'status', status: 'requesting' })
+  send({
+    type: 'system',
+    subtype: 'task_started',
+    task_id: 'B',
+    task_type: 'local_bash',
+  })
+  send({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text: 'window two' }] },
+  })
+  send({
+    type: 'result',
+    subtype: 'success',
+    origin: { kind: 'task-notification' },
+  })
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'answered')
+  send({
+    type: 'system',
+    subtype: 'task_notification',
+    task_id: 'B',
+    status: 'completed',
+  })
+  await vi.waitUntil(
+    () =>
+      service.listTasks(session.id).find((t) => t.taskId === 'B')?.status ===
+      'completed',
+  )
+  send({
+    type: 'system',
+    subtype: 'background_tasks_changed',
+    tasks: [{ task_id: 'A', status: 'killed' }],
+  })
+  send({
+    type: 'system',
+    subtype: 'task_started',
+    task_id: 'barrier',
+    task_type: 'local_bash',
+  })
+  await vi.waitUntil(() =>
+    service.listTasks(session.id).some((t) => t.taskId === 'barrier'),
+  )
+  expect(service.getById(session.id)?.status).toBe('answered')
+  expect(settles).toHaveBeenCalledTimes(1)
+})
+
+it('RUN77 lap4 a repeated persisted stopped status is not a witness — mutation ignore persisted status turns red', async () => {
+  const { service, session, db, send, settles } = await answeredFixture()
+  await service.stopTask(session.id, 'task')
+  // A replay already applied this status; receipt alone cannot make it a new transition.
+  db.prepare(
+    "UPDATE session_tasks SET status='stopped' WHERE session_id=?",
+  ).run(session.id)
+  send({
+    type: 'system',
+    subtype: 'background_tasks_changed',
+    tasks: [{ task_id: 'task', status: 'killed' }],
+  })
+  send({
+    type: 'system',
+    subtype: 'task_started',
+    task_id: 'barrier',
+    task_type: 'local_bash',
+  })
+  await vi.waitUntil(() =>
+    service.listTasks(session.id).some((t) => t.taskId === 'barrier'),
+  )
+  expect(service.getById(session.id)?.status).toBe('answered')
+  expect(settles).not.toHaveBeenCalled()
+})
+
+it('RUN77 lap4 a Stop continuation rejection is handled — mutation drop rejection handler turns red', async () => {
+  const { service, session, children } = await answeredFixture()
+  children[0].holdStops = true
+  service.stop(session.id)
+  await vi.waitUntil(() => children[0].stopResponses.length === 1)
+  const read = vi.spyOn(service, 'getById')
+  // Fail only the final Stop check, after the control acknowledgement has joined the record.
+  read.mockImplementationOnce(() => {
+    throw new Error('fixture Stop read failed')
+  })
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  try {
+    children[0].stopResponses[0]()
+    await vi.waitUntil(() =>
+      errors.mock.calls.some((c) =>
+        String(c[0]).includes('Could not finish conversation Stop'),
+      ),
+    )
+    expect(errors.mock.calls[0][1]).toEqual(
+      new Error('fixture Stop read failed'),
+    )
+  } finally {
+    read.mockRestore()
+    errors.mockRestore()
+  }
+})
+
+it('RUN77 lap4 corrupt answer JSON cannot abort a settle — mutation parse without guard turns red', async () => {
+  const { session, db, send, settles } = await answeredFixture()
+  db.prepare(
+    "UPDATE session_conversation_items SET payload_json='{' WHERE session_id=? AND kind='message'",
+  ).run(session.id)
+  send({
+    type: 'system',
+    subtype: 'task_notification',
+    task_id: 'task',
+    status: 'completed',
+  })
+  send({
+    type: 'result',
+    subtype: 'success',
+    origin: { kind: 'task-notification' },
+  })
+  await vi.waitUntil(() => settles.mock.calls.length === 1)
+  expect(settles.mock.calls[0][0].answerWindow).toEqual({
+    message: null,
+    declaration: { kind: 'none' },
+  })
+})
+
+it.each(['normal', 'queued'] as const)(
+  'RUN77 lap4 accepted %s async send records its own account — mutation accept after the user frame turns red',
+  async (mode) => {
+    const { service, session, children } = await fixture()
+    await service.start(session.id, {
+      text: 'first',
+      providerAccountId: 'account-a',
+    })
+    await vi.waitUntil(() => children[0]?.lines.length === 1)
+    if (mode === 'queued')
+      await service.sendMessage(session.id, {
+        text: 'second',
+        providerAccountId: 'account-b',
+      })
+    children[0].stdout.write(
+      JSON.stringify({ type: 'result', subtype: 'success' }) + '\n',
+    )
+    if (mode === 'normal') {
+      await vi.waitUntil(
+        () => service.getById(session.id)?.status === 'completed',
+      )
+      await service.sendMessage(session.id, {
+        text: 'second',
+        providerAccountId: 'account-b',
+      })
+    }
+    await vi.waitUntil(() => children[1]?.lines.length === 1)
+    expect(service.getLastTurnProviderAccountId(session.id)).toBe('account-b')
+  },
+)

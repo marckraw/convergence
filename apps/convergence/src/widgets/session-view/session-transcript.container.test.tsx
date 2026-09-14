@@ -776,10 +776,12 @@ it('R4 the rendered question answer carries its provider item id — omit dialog
 it.each([
   ['running', 'needs-input'],
   ['completed', 'needs-input'],
+  ['answered', 'needs-input'],
   ['running', 'needs-approval'],
   ['completed', 'needs-approval'],
+  ['answered', 'needs-approval'],
 ] as const)(
-  'M4 mixed pending cards remain actionable while %s %s — gate on attention turns red',
+  'M4/RUN77 lap4 mixed pending cards remain actionable while %s %s — omit answered or gate on attention turns red',
   async (status, attention) => {
     const { rerender } = render(
       <SessionTranscript

@@ -552,7 +552,7 @@ interface ArchiveWorkspaceInputData {
   removeWorktree?: boolean
 }
 
-type SessionStatus = 'idle' | 'running' | 'completed' | 'failed'
+type SessionStatus = 'idle' | 'running' | 'answered' | 'completed' | 'failed'
 type AttentionState =
   | 'none'
   | 'needs-input'

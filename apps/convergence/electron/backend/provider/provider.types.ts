@@ -15,7 +15,12 @@ import type {
 
 export type { Attachment, ProviderAttachmentCapability }
 
-export type SessionStatus = 'idle' | 'running' | 'completed' | 'failed'
+export type SessionStatus =
+  | 'idle'
+  | 'running'
+  | 'answered'
+  | 'completed'
+  | 'failed'
 export type AttentionState =
   | 'none'
   | 'needs-input'
@@ -114,6 +119,10 @@ export type TranscriptEntry =
   | { type: 'system'; text: string; timestamp: string }
 
 export interface SessionStartConfig {
+  /** Persisted task status before an incoming terminal fact is applied. Local evidence only. */
+  readTaskStatus?: (taskId: string) => string | undefined
+  /** Local record query, after synchronous evidence persistence; never sent on the wire. */
+  readParallelWorkCounts?: () => { running: number; unknown: number }
   sessionId: string
   workingDirectory: string
   initialMessage: string
@@ -467,6 +476,8 @@ export interface SessionHandle {
     options?: {
       deliveryMode: MidRunInputMode
       queuedInputId?: string | null
+      /** Called by an async local adapter immediately before its first user-turn event. */
+      onTurnAccepted?: () => void
       expectedProviderTurnId?: string | null
       interactionResponse?: InteractionResponse
       /**
@@ -476,7 +487,7 @@ export interface SessionHandle {
        */
       providerAccountId?: string | null
     },
-  ) => void | 'queue-follow-up'
+  ) => void | 'queue-follow-up' | Promise<void | 'queue-follow-up'>
   approve: (
     providerApprovalId?: string,
     options?: { scope: 'once' | 'session' },

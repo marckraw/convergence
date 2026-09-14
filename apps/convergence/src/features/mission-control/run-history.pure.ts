@@ -205,6 +205,7 @@ export function runStartingStation(
 
 const debtStatusLabels: Record<SessionStatus, string> = {
   running: 'running',
+  answered: 'answered',
   completed: 'finished',
   failed: 'failed',
   idle: 'idle',

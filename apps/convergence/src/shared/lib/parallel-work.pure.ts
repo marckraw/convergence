@@ -66,7 +66,7 @@ export function parallelWorkStatus(session: {
   )
     return null
   const counts = session.parallelWork
-  if (!counts) return null
+  if (!counts) return session.status === 'answered' ? 'answered' : null
   const parts: string[] = []
   if (counts.running) parts.push(`${counts.running} tasks running`)
   if (counts.unknown) parts.push(`${counts.unknown} unknown`)
@@ -74,7 +74,12 @@ export function parallelWorkStatus(session: {
     if (counts.failed) parts.push(`${counts.failed} failed`)
     if (counts.stopped) parts.push(`${counts.stopped} stopped`)
   }
-  return parts.length ? `answered · ${parts.join(' · ')}` : null
+  const label = session.status === 'answered' ? 'answered' : 'finished'
+  return parts.length
+    ? `${label} · ${parts.join(' · ')}`
+    : session.status === 'answered'
+      ? 'answered · finishing'
+      : null
 }
 
 export function parallelWorkRowState(row: ParallelWorkRow) {

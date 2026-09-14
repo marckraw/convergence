@@ -33,6 +33,8 @@ export class ClaudeEvidenceService {
   private readonly tools = new Map<string, ToolIdentity>()
   private readonly tasksByTool = new Map<string, string>()
   private readonly requestedStops = new Set<string>()
+  private readonly stoppedTasks = new Set<string>()
+  private readonly stopReceipts = new Map<string, string>()
   private readonly terminalAgents = new Set<string>()
   private readonly readMetadata = new Set<string>()
   private readonly unmatchedMetadata = new Set<string>()
@@ -47,7 +49,8 @@ export class ClaudeEvidenceService {
   constructor(
     workingDirectory: string,
     private readonly configDir: () => string | null,
-    private readonly emit: (fact: HarnessEvidence) => void,
+    private readonly emit: (fact: HarnessEvidence) => void | boolean,
+    private readonly onStopWitness?: () => void,
   ) {
     this.cwd = workingDirectory
   }
@@ -56,6 +59,28 @@ export class ClaudeEvidenceService {
     if (this.requestedStops.has(id))
       throw new Error('Stop already requested; awaiting confirmation')
     this.requestedStops.add(id)
+  }
+
+  confirmStop(id: string, at: string): void {
+    this.stopReceipts.set(id, at)
+    this.emit({
+      kind: 'task.changed',
+      taskId: id,
+      at,
+      patch: {
+        stopReceiptAt: at,
+      },
+    })
+    this.witnessStop(id)
+  }
+
+  private witnessStop(id: string): void {
+    // A stop we did not issue is not a witness. The persisted transition and
+    // our receipt may arrive in either order, but can witness only once.
+    if (!this.stoppedTasks.has(id) || !this.stopReceipts.has(id)) return
+    this.stoppedTasks.delete(id)
+    this.stopReceipts.delete(id)
+    this.onStopWitness?.()
   }
 
   cancelStop(id: string): void {
@@ -148,7 +173,13 @@ export class ClaudeEvidenceService {
           this.requestedStops.has(fact.taskId)
         )
           fact.patch.stopReason = 'stop'
-        this.emit(fact)
+        if (fact.patch.status === 'stopped') {
+          const receipt = this.stopReceipts.get(fact.taskId)
+          if (receipt) fact.patch.stopReceiptAt = receipt
+        }
+        const changedToStopped = this.emit(fact)
+        if (changedToStopped === true) this.stoppedTasks.add(fact.taskId)
+        this.witnessStop(fact.taskId)
         const toolId = fact.patch.toolUseId
         if (
           event.subtype === 'task_started' &&
@@ -351,10 +382,18 @@ export class ClaudeEvidenceService {
   processEnded(
     at: string,
     reason?: 'quit' | 'idle' | 'account' | 'stop' | 'exit',
+    unresolvedStatus?: 'unknown',
   ): void {
     this.outstandingRetries = 0
     this.requestedStops.clear()
-    this.emit({ kind: 'process.ended', at, ...(reason ? { reason } : {}) })
+    this.stopReceipts.clear()
+    this.stoppedTasks.clear()
+    this.emit({
+      kind: 'process.ended',
+      at,
+      ...(reason ? { reason } : {}),
+      ...(unresolvedStatus ? { unresolvedStatus } : {}),
+    })
   }
 
   private stopAgentForTask(taskId: string, at: string): void {

@@ -31,6 +31,8 @@ export function formatSessionCardActivity({
   switch (status) {
     case 'running':
       return 'working…'
+    case 'answered':
+      return 'answered'
     case 'idle':
       return 'idle'
     case 'completed':

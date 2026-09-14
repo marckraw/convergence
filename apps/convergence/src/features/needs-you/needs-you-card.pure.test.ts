@@ -145,7 +145,8 @@ it('moves running sessions into waiting or review and removes the empty Working 
 
 it('keeps answered sessions in Working while parallel tasks run, then returns to review', () => {
   const session = cardSession({
-    attention: 'finished',
+    status: 'answered',
+    attention: 'none',
     parallelWork: { running: 2, unknown: 0, failed: 0, stopped: 0 },
   })
   const active = needsYouCardModel(session, { ...cardContext, dismissed: true })
@@ -156,8 +157,21 @@ it('keeps answered sessions in Working while parallel tasks run, then returns to
   expect(active.canArchive).toBe(false)
   const settled = model({
     ...session,
+    status: 'completed',
+    attention: 'finished',
     parallelWork: { running: 0, unknown: 0, failed: 0, stopped: 0 },
   })
   expect(groupNeedsYou([settled]).map((g) => g.title)).toEqual(['Needs review'])
   expect(settled.summary).toBe('Finished')
+})
+it('RUN77 zero-count answered stays working and out of review — mutation infer from count turns red', () => {
+  const card = model(
+    cardSession({
+      status: 'answered',
+      attention: 'none',
+      parallelWork: { running: 0, unknown: 0, failed: 0, stopped: 0 },
+    }),
+  )
+  expect(card.working).toBe(true)
+  expect(card.canArchive).toBe(false)
 })

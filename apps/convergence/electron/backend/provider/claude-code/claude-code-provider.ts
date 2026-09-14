@@ -503,7 +503,9 @@ export class ClaudeCodeProvider implements Provider {
     let thinkingItemId: string | null = null
     let currentTurnHasAssistantText = false
     let currentTurnHasThinkingText = false
+    let answerStatus: SessionStatus = 'idle'
     let currentTurn: {
+      openedBy: 'user' | 'harness'
       message: string
       attachments?: Attachment[]
       skillSelections?: SkillSelection[]
@@ -541,6 +543,7 @@ export class ClaudeCodeProvider implements Provider {
     let capabilities: string[] = []
     let interruptInFlight = false
     let interruptRequested = false
+    let stoppedByUser = false
     const notifiedTaskMoments = new Set<string>()
     const taskDescriptions = new Map<string, string>()
     // The synthetic result has no task id; its preceding notification owns the note.
@@ -568,17 +571,47 @@ export class ClaudeCodeProvider implements Provider {
       config.workingDirectory,
       () => currentTurnAccount?.target?.configDir ?? null,
       (fact) => {
+        const previousTaskStatus =
+          fact.kind === 'task.changed' && fact.patch.status === 'stopped'
+            ? config.readTaskStatus?.(fact.taskId)
+            : undefined
         sessionEmitter.recordEvidence(fact)
+        if (answerStatus === 'answered' && fact.kind === 'process.ended') {
+          config.readParallelWorkCounts?.()
+          setStatus('completed')
+          setAttention('finished')
+        }
         if (
           fact.kind === 'task.changed' &&
           fact.patch.status &&
           ['completed', 'failed', 'stopped'].includes(fact.patch.status)
         )
           armIdleTimer()
+        return (
+          fact.kind === 'task.changed' &&
+          fact.patch.status === 'stopped' &&
+          previousTaskStatus !== 'stopped'
+        )
+      },
+      () => {
+        if (answerStatus === 'answered') finishAnswer()
       },
     )
 
+    function finishAnswer(): void {
+      const counts = config.readParallelWorkCounts?.()
+      const next =
+        counts && counts.running + counts.unknown > 0 ? 'answered' : 'completed'
+      setStatus(next)
+      setAttention(
+        permissions.pendingAttention ??
+          (next === 'completed' ? 'finished' : 'none'),
+      )
+      armIdleTimer()
+    }
+
     function setStatus(status: SessionStatus): void {
+      answerStatus = status
       settledAttention =
         status === 'completed'
           ? 'finished'
@@ -586,7 +619,12 @@ export class ClaudeCodeProvider implements Provider {
             ? 'failed'
             : 'none'
       listeners.status.forEach((cb) => cb(status))
-      sessionEmitter.patchSession({ status })
+      sessionEmitter.patchSession({
+        status,
+        ...(status === 'running' && currentTurn
+          ? { turnOpenedBy: currentTurn.openedBy }
+          : {}),
+      })
       if (status === 'failed') {
         disposeTelemetrySink()
       }
@@ -945,6 +983,33 @@ export class ClaudeCodeProvider implements Provider {
           : []
       }
       evidence.consume(data, now())
+      if (
+        raw.parent_tool_use_id == null &&
+        !currentTurn &&
+        (answerStatus === 'answered' || answerStatus === 'completed') &&
+        (raw.type === 'assistant' ||
+          raw.type === 'stream_event' ||
+          (raw.type === 'system' &&
+            raw.subtype === 'status' &&
+            raw.status === 'requesting'))
+      ) {
+        clearIdleTimer()
+        assistantTextBuffer = ''
+        assistantMessageItemId = null
+        thinkingBuffer = ''
+        thinkingItemId = null
+        currentTurnHasAssistantText = false
+        currentTurnHasThinkingText = false
+        currentTurn = {
+          openedBy: 'harness',
+          message: '',
+          userMessageItemId: null,
+          allowContinuationRecovery: false,
+          usedContinuationToken: false,
+        }
+        setStatus('running')
+        setAttention(permissions.pendingAttention ?? 'none')
+      }
       const event = data as ClaudeStreamEvent
       const previousActivity = lastActivity
       const activityDelta = deriveClaudeActivity(data, previousActivity)
@@ -1172,8 +1237,14 @@ export class ClaudeCodeProvider implements Provider {
           break
 
         case 'result':
-          // The harness's cleanup result ends no user turn (MAR-2868).
-          if (readClaudeResultOriginKind(data) === 'task-notification') {
+          if (raw.parent_tool_use_id != null) break
+          // MAR-2868: a notification result ends no USER turn. In an answered
+          // window or a harness-opened turn it IS the witness (MAR-2896).
+          if (
+            readClaudeResultOriginKind(data) === 'task-notification' &&
+            (currentTurn?.openedBy === 'user' ||
+              (!currentTurn && answerStatus !== 'answered'))
+          ) {
             if (!taskNotificationSinceResult) {
               sessionEmitter.addNote({
                 text: CLAUDE_TASK_NOTIFICATION_FALLBACK,
@@ -1185,6 +1256,7 @@ export class ClaudeCodeProvider implements Provider {
             break
           }
           taskNotificationSinceResult = false
+          if (!currentTurn && answerStatus !== 'answered') break
           evidence.accounting(data)
           if (
             raw.terminal_reason === 'aborted_streaming' &&
@@ -1225,9 +1297,7 @@ export class ClaudeCodeProvider implements Provider {
               })
             }
             currentTurn = null
-            setStatus('completed')
-            setAttention(permissions.pendingAttention ?? 'finished')
-            armIdleTimer()
+            finishAnswer()
           }
           break
       }
@@ -1316,10 +1386,15 @@ export class ClaudeCodeProvider implements Provider {
       })
     }
 
+    function currentTurnDisposition(): 'queue-follow-up' | undefined {
+      return currentTurn?.openedBy === 'harness' ? 'queue-follow-up' : undefined
+    }
+
     async function startTurn(
       message: string,
       attachments?: Attachment[],
       options?: {
+        onTurnAccepted?: () => void
         skillSelections?: SkillSelection[]
         userMessageItemId?: string | null
         emitUserEntry?: boolean
@@ -1331,11 +1406,13 @@ export class ClaudeCodeProvider implements Provider {
          */
         continuesCurrentTurn?: boolean
       },
-    ): Promise<void> {
-      if (stopped || currentTurn) return
+    ): Promise<void | 'queue-follow-up'> {
+      if (stopped) return
+      if (currentTurn) return currentTurnDisposition()
       clearIdleTimer()
       if (connectionEnding) await connectionEnding
-      if (stopped || currentTurn) return
+      if (stopped) return
+      if (currentTurn) return currentTurnDisposition()
       if (
         child &&
         !options?.continuesCurrentTurn &&
@@ -1360,8 +1437,10 @@ export class ClaudeCodeProvider implements Provider {
         message,
         options?.skillSelections,
       )
-      if (stopped || currentTurn) return
+      if (stopped) return
+      if (currentTurn) return currentTurnDisposition()
 
+      options?.onTurnAccepted?.()
       const userMessageItemId =
         options?.emitUserEntry !== false
           ? sessionEmitter.addUserMessage({
@@ -1409,6 +1488,7 @@ export class ClaudeCodeProvider implements Provider {
       taskNotificationSinceResult = false
       stderrBuffer = ''
       currentTurn = {
+        openedBy: 'user',
         message,
         attachments,
         skillSelections: options?.skillSelections,
@@ -1496,7 +1576,11 @@ export class ClaudeCodeProvider implements Provider {
             )
             if (versionRefusal)
               sessionEmitter.addNote({ text: versionRefusal, level: 'error' })
-            evidence.processEnded(now(), endingReason ?? 'exit')
+            evidence.processEnded(
+              now(),
+              endingReason ?? 'exit',
+              answerStatus === 'answered' ? 'unknown' : undefined,
+            )
             if (endingReason) {
               child = null
               endingReason = null
@@ -1582,12 +1666,17 @@ export class ClaudeCodeProvider implements Provider {
       reason: 'quit' | 'stop' = 'stop',
     ): void | Promise<void> {
       if (stopped) return
+      const wasHarnessTurn = currentTurn?.openedBy === 'harness'
       clearIdleTimer()
       resolveConnectionEnd?.()
       if (reason === 'quit')
         sessionEmitter.addNote({ text: 'stopped by quit', level: 'info' })
       permissions.endConnection()
-      evidence.processEnded(now(), reason)
+      evidence.processEnded(
+        now(),
+        reason,
+        answerStatus === 'answered' || wasHarnessTurn ? 'unknown' : undefined,
+      )
       stopped = true
       clearTimeout(startTimer)
       disposeTelemetrySink()
@@ -1618,6 +1707,7 @@ export class ClaudeCodeProvider implements Provider {
         evidence.requestStop(id)
         try {
           await child.stopTask(id)
+          evidence.confirmStop(id, now())
         } catch (error) {
           evidence.cancelStop(id)
           throw error
@@ -1625,7 +1715,7 @@ export class ClaudeCodeProvider implements Provider {
       },
       resident: true,
       get retainQueuedInputsOnCompletion() {
-        return interruptRequested
+        return interruptRequested || stoppedByUser
       },
       setModelSelection: async (model, effort) => {
         if (connectionEnding) await connectionEnding
@@ -1704,7 +1794,8 @@ export class ClaudeCodeProvider implements Provider {
           }
         }
 
-        void startTurn(text, attachments, {
+        return startTurn(text, attachments, {
+          onTurnAccepted: options?.onTurnAccepted,
           skillSelections,
           providerAccountId: options?.providerAccountId,
         })
@@ -1714,10 +1805,17 @@ export class ClaudeCodeProvider implements Provider {
       dispose: disposeRuntime,
       stop: () => {
         if (stopped) return
+        const wasAnswered = answerStatus === 'answered'
+        const wasHarnessTurn = currentTurn?.openedBy === 'harness'
+        // Retain at fallback-Stop completion; the service guards the earlier
+        // receipt-minted completion inside its conversation stopTask awaits.
+        stoppedByUser = true
         sessionEmitter.addNote({ text: 'terminated by user', level: 'info' })
         disposeRuntime()
-        setStatus('failed')
-        setAttention('failed')
+        if (!wasAnswered) {
+          setStatus(wasHarnessTurn ? 'completed' : 'failed')
+          setAttention(wasHarnessTurn ? 'finished' : 'failed')
+        }
       },
     }
 

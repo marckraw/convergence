@@ -282,3 +282,19 @@ it('holds interaction order while applying live data, removals and arrivals', ()
   const removed = holdFeedOrder([{ title: 'Working', cards: [b] }], previous)
   expect(removed[0]!.cards.map((card) => card.session.id)).toEqual(['working'])
 })
+
+it('RUN77 lap4 zero-count answered says finishing — mutation claim Tasks running turns red', () => {
+  const card = needsYouCardModel(
+    cardSession({
+      status: 'answered',
+      attention: 'none',
+      parallelWork: { running: 0, unknown: 0, failed: 0, stopped: 0 },
+    }),
+    cardContext,
+  )
+  // MAR-3007 (#631) removed the status facet; the label lives on the card,
+  // and a zero-count answered card is still working, not finished.
+  const view = buildFeedView(groupNeedsYou([card]), defaultFeedView())
+  expect(card.summary).toBe('answered · finishing')
+  expect(view.groups[0].title).toBe('Working')
+})

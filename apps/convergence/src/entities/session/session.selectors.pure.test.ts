@@ -40,8 +40,8 @@ function makeSession(overrides: Partial<Session>): Session {
 
 it('R5 global activity includes answered background work and excludes it from finished recency — mutation use foreground completion alone turns red', () => {
   const session = makeSession({
-    status: 'completed',
-    attention: 'finished',
+    status: 'answered',
+    attention: 'none',
     parallelWork: { running: 1, unknown: 0, failed: 0, stopped: 0 },
   })
   const result = selectGlobalStatus([session], {}, [])
@@ -348,4 +348,14 @@ it('L9 an answered session with only unknown work remains in last-completed — 
     running: result.running,
     completed: result.lastCompleted?.id,
   }).toEqual({ running: [], completed: session.id })
+})
+it('RUN77 answered remains activity at zero counts — mutation infer activity from counts turns red', () => {
+  const session = makeSession({
+    status: 'answered',
+    attention: 'none',
+    parallelWork: { running: 0, unknown: 0, failed: 0, stopped: 0 },
+  })
+  const status = selectGlobalStatus([session], {}, [])
+  expect(status.running).toEqual([session])
+  expect(status.lastCompleted).toBeNull()
 })
