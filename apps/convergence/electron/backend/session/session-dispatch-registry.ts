@@ -4,11 +4,9 @@ import { randomUUID } from 'crypto'
  * One send that has left its caller but has not yet reached a provider
  * (MAR-2550).
  *
- * Identity only, deliberately: it exists so that overlapping sends on one
- * session are separable at all. What a send carries — its account, its
- * attachments, its skills — is per-dispatch state that today still lives in
- * one-deep per-session slots (MAR-2539), and this is the record those fields
- * belong on when that is fixed.
+ * Identity only, deliberately: overlapping sends keep independent busy markers.
+ * Account, attachment and skill provenance comes from the adapter's user-turn
+ * event (MAR-2539), never a mutable per-session slot or this admission registry.
  */
 export interface SessionDispatch {
   readonly id: string

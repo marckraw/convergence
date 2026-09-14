@@ -184,7 +184,13 @@ function createTestProvider(): Provider {
           usedPercentage: 1,
           remainingPercentage: 99,
         })
-        sessionEmitter.addUserMessage({ text: config.initialMessage })
+        sessionEmitter.addUserMessage({
+          text: config.initialMessage,
+          attachmentIds: config.initialAttachments?.map(
+            (attachment) => attachment.id,
+          ),
+          skillSelections: config.initialSkillSelections,
+        })
 
         schedule(() => {
           sessionEmitter.addAssistantMessage({
@@ -2858,6 +2864,67 @@ describe('SessionService', () => {
     ])
   })
 
+  it('fails an explicit adapter refusal without attaching it to the live turn', async () => {
+    const {
+      service: queueService,
+      sessionId,
+      handle,
+      emit,
+    } = await startRunningQueueingSession()
+    const terminals: DispatchTerminalEvent[] = []
+    queueService.onDispatchTerminal((event) => terminals.push(event))
+    const before = queueService.getConversation(sessionId)
+    handle.sendMessage = () => ({
+      kind: 'refused',
+      reason: 'Account handoff unavailable',
+    })
+    await expect(
+      queueService.sendMessage(sessionId, {
+        text: 'refused input',
+        deliveryMode: 'normal',
+        providerAccountId: 'another-account',
+      }),
+    ).rejects.toThrow('Account handoff unavailable')
+    expect(terminals).toHaveLength(1)
+    expect(terminals[0]?.reason).toBe('failed')
+    const refusedIds = terminals[0]!.dispatchIds
+    expect(queueService.getConversation(sessionId)).toEqual(before)
+    emit({ kind: 'session.patch', patch: { status: 'completed' } })
+    expect(
+      terminals.slice(1).flatMap((event) => event.dispatchIds),
+    ).not.toEqual(expect.arrayContaining(refusedIds))
+  })
+
+  it('fails only the queued input explicitly refused by the adapter', async () => {
+    const {
+      service: queueService,
+      sessionId,
+      handle,
+      emit,
+    } = await startRunningQueueingSession()
+    const first = await queueService.sendMessage(sessionId, {
+      text: 'first',
+      deliveryMode: 'follow-up',
+    })
+    const second = await queueService.sendMessage(sessionId, {
+      text: 'second',
+      deliveryMode: 'follow-up',
+    })
+    handle.sendMessage = () => ({
+      kind: 'refused',
+      reason: 'Account handoff unavailable',
+    })
+    emit({ kind: 'session.patch', patch: { status: 'completed' } })
+    expect(queueService.getQueuedInputs(sessionId)).toMatchObject([
+      {
+        dispatchId: first,
+        state: 'failed',
+        error: 'Account handoff unavailable',
+      },
+      { dispatchId: second, state: 'queued', error: null },
+    ])
+  })
+
   it('names only the row the drain actually tried, not the ones behind it (R1, MAR-2971)', async () => {
     // The drain itself is a dispatch attempt, so the row it was SENDING is
     // `failed` -- that one was tried and its receipt ends here. The row
@@ -3642,7 +3709,13 @@ describe('SessionService attachments integration', () => {
           now,
         })
         setTimeout(() => {
-          sessionEmitter.addUserMessage({ text: config.initialMessage })
+          sessionEmitter.addUserMessage({
+            text: config.initialMessage,
+            attachmentIds: config.initialAttachments?.map(
+              (attachment) => attachment.id,
+            ),
+            skillSelections: config.initialSkillSelections,
+          })
         }, 0)
         return {
           onDelta: (cb) => {
@@ -3653,9 +3726,13 @@ describe('SessionService attachments integration', () => {
           onContinuationToken: () => {},
           onContextWindowChange: () => {},
           onActivityChange: () => {},
-          sendMessage: (text, atts) => {
+          sendMessage: (text, atts, skills) => {
             received.send = atts
-            sessionEmitter.addUserMessage({ text })
+            sessionEmitter.addUserMessage({
+              text,
+              attachmentIds: atts?.map((attachment) => attachment.id),
+              skillSelections: skills,
+            })
           },
           approve: () => {},
           deny: () => {},
@@ -3961,7 +4038,13 @@ describe('SessionService — turn capture wiring', () => {
           if (stopped) return
           listeners.status.forEach((cb) => cb('running'))
           sessionEmitter.patchSession({ status: 'running' })
-          sessionEmitter.addUserMessage({ text: config.initialMessage })
+          sessionEmitter.addUserMessage({
+            text: config.initialMessage,
+            attachmentIds: config.initialAttachments?.map(
+              (attachment) => attachment.id,
+            ),
+            skillSelections: config.initialSkillSelections,
+          })
           setTimeout(() => {
             if (stopped) return
             sessionEmitter.addAssistantMessage({
@@ -4997,6 +5080,36 @@ describe('SessionService — liveness clock', () => {
       ).rejects.toThrow(/local-only for now/)
       expect(startCalls).toHaveLength(0)
       expect(service.getById(session.id)?.status).not.toBe('running')
+    })
+
+    it('refuses a local account before enqueueing a remote follow-up', async () => {
+      const { host, emitDelta } = createFakeRemoteHost()
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({ [TEST_EXECUTION_HOST_ENDPOINT_ID]: host }),
+      )
+      service.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'remote account follow-up',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
+      })
+      await service.start(session.id, { text: 'first' })
+      emitDelta({ kind: 'session.patch', patch: { status: 'running' } })
+      await expect(
+        service.sendMessage(session.id, {
+          text: 'next',
+          deliveryMode: 'follow-up',
+          providerAccountId: 'acct-a',
+        }),
+      ).rejects.toThrow(/local-only for now/)
+      expect(service.getQueuedInputs(session.id)).toEqual([])
     })
 
     it('refuses a session whose endpoint is gone rather than running it on another one', async () => {

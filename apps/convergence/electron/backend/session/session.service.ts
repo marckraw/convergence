@@ -1,4 +1,3 @@
-import { SESSION_RESTARTED_EVENT_TYPE } from '../provider/session-restart.pure'
 import { readSessionTurnTimings } from './session-timing.service'
 import { CONVERSATION_RESET_COMMAND } from '../../../src/shared/lib/conversation-reset.pure'
 import { randomUUID } from 'crypto'
@@ -37,6 +36,7 @@ import type {
   Attachment,
   MidRunInputMode,
   SessionHandle,
+  SendMessageDisposition,
   SessionStatus,
   AttentionState,
   ActivitySignal,
@@ -108,12 +108,6 @@ import {
   SessionLivenessService,
   type SessionLivenessNoteKind,
 } from './session-liveness.service'
-
-type UserMessageDraft = Extract<
-  ConversationItem,
-  { kind: 'message'; actor: 'user' }
->
-type UserMessageDraftInput = Omit<UserMessageDraft, 'sessionId' | 'sequence'>
 
 interface AttentionRequestRow extends AttentionRequestRowLike {
   session_id: string
@@ -262,12 +256,6 @@ export class SessionService {
    */
   private handlesAwaitingTheirRun = new WeakSet<SessionHandle>()
   private activeTurnIds = new Map<string, string>()
-  /**
-   * Account chosen for the turn a provider is about to open (ADR 0007, PA4).
-   * Written when the handle starts or a message is dispatched, read when the
-   * provider emits the user message that opens the turn row.
-   */
-  private pendingTurnAccountIds = new Map<string, string | null>()
   private pendingConversationPatches = new Map<
     string,
     PendingConversationPatch
@@ -1876,7 +1864,6 @@ export class SessionService {
       input.text,
       this.getContinuationToken(id),
       attachments,
-      input.attachmentIds,
       input.skillSelections,
       input.providerAccountId,
       {
@@ -2111,7 +2098,6 @@ export class SessionService {
         augmentedText,
         continuationToken,
         attachments,
-        input.attachmentIds,
         input.skillSelections,
         input.providerAccountId,
         { muteRelays: input.muteRelays },
@@ -2443,6 +2429,11 @@ export class SessionService {
       )
     }
 
+    assertLocalAccountSelection({
+      executionHost: input.session.executionHost,
+      accountId: input.input.providerAccountId,
+    })
+
     if (deliveryMode === 'follow-up' && session.status === 'running') {
       if (!capability.supportsNativeFollowUp) {
         this.queuedInputs.enqueue(
@@ -2460,32 +2451,10 @@ export class SessionService {
       input.input.skipContextInjection,
     )
 
-    assertLocalAccountSelection({
-      executionHost: input.session.executionHost,
-      accountId: input.input.providerAccountId,
-    })
-
     let accepted = false
     const acceptTurn = () => {
       if (accepted) return
       accepted = true
-      const shouldStartConversationTurn =
-        deliveryMode === 'normal' || deliveryMode === 'answer'
-      if (shouldStartConversationTurn) {
-        this.pendingUserAttachmentIds.set(
-          session.id,
-          input.input.attachmentIds ?? [],
-        )
-        this.pendingUserSkillSelections.set(
-          session.id,
-          input.input.skillSelections ?? [],
-        )
-      }
-
-      this.pendingTurnAccountIds.set(
-        input.session.id,
-        input.input.providerAccountId ?? null,
-      )
       // Whatever the mode, the input just went INTO the turn this handle is
       // running (a native follow-up joins it; a normal send starts it), so that
       // turn's settle is the one that consumed this dispatch (MAR-2759).
@@ -2496,7 +2465,7 @@ export class SessionService {
       ? this.getRowById(session.id)?.relays_muted
       : undefined
     this.requestRelayMute(input.session.id, input.input.muteRelays)
-    let disposition: void | 'queue-follow-up'
+    let disposition: SendMessageDisposition
     try {
       const delivery = handle.sendMessage(
         augmentedText,
@@ -2510,6 +2479,14 @@ export class SessionService {
         },
       )
       disposition = delivery instanceof Promise ? await delivery : delivery
+      if (
+        disposition &&
+        disposition !== 'queue-follow-up' &&
+        disposition.kind === 'refused'
+      ) {
+        this.emitDispatchTerminal(session.id, 'failed', [input.dispatchId])
+        throw new Error(disposition.reason)
+      }
     } catch (error) {
       // The mute was borrowed for a send that never happened. Give it back
       // before the refusal leaves, or the turn already under way settles
@@ -2651,9 +2628,6 @@ export class SessionService {
     }
     return 'normal'
   }
-
-  private pendingUserAttachmentIds = new Map<string, string[]>()
-  private pendingUserSkillSelections = new Map<string, SkillSelection[]>()
 
   /**
    * The delivery receipt's in-flight half (MAR-2759): session id -> the
@@ -2963,15 +2937,12 @@ export class SessionService {
       }
 
       case 'conversation.item.add': {
-        const item = this.addConversationItem(sessionId, delta.item)
+        const item = this.addConversationItem(
+          sessionId,
+          delta.item,
+          delta.providerAccountId,
+        )
         if (!item) return
-        if (
-          item.kind === 'note' &&
-          item.providerMeta.providerEventType === SESSION_RESTARTED_EVENT_TYPE
-        ) {
-          this.pendingUserAttachmentIds.delete(sessionId)
-          this.pendingUserSkillSelections.delete(sessionId)
-        }
         this.handleAssistantNaming(sessionId, item)
         this.notifySessionChange(sessionId, {
           sessionId,
@@ -3158,6 +3129,7 @@ export class SessionService {
   private addConversationItem(
     sessionId: string,
     itemDraft: ConversationItemDraft,
+    providerAccountId?: string | null,
   ): ConversationItem | null {
     const row = this.getRowById(sessionId)
     if (!row) return null
@@ -3181,46 +3153,17 @@ export class SessionService {
       .get(sessionId) as { turn_id: string | null } | undefined
 
     const nextSequence = (row.last_sequence ?? 0) + 1
-    const pendingAttachments = this.pendingUserAttachmentIds.get(sessionId)
-    const pendingSkillSelections =
-      this.pendingUserSkillSelections.get(sessionId)
     const isUserMessage =
       itemDraft.kind === 'message' &&
       (itemDraft as { actor?: unknown }).actor === 'user'
     const turnId = isUserMessage ? randomUUID() : (latest?.turn_id ?? null)
 
-    let item: ConversationItem
-    if (isUserMessage) {
-      const userMessageDraft = itemDraft as unknown as UserMessageDraftInput
-      item = {
-        ...(userMessageDraft as unknown as ConversationItemDraft),
-        sessionId,
-        sequence: nextSequence,
-        turnId,
-        attachmentIds:
-          userMessageDraft.attachmentIds ??
-          (pendingAttachments && pendingAttachments.length > 0
-            ? pendingAttachments
-            : undefined),
-        skillSelections:
-          userMessageDraft.skillSelections ??
-          (pendingSkillSelections && pendingSkillSelections.length > 0
-            ? pendingSkillSelections
-            : undefined),
-      } as ConversationItem
-    } else {
-      item = {
-        ...itemDraft,
-        sessionId,
-        sequence: nextSequence,
-        turnId,
-      } as ConversationItem
-    }
-
-    if (item.kind === 'message' && item.actor === 'user') {
-      this.pendingUserAttachmentIds.delete(sessionId)
-      this.pendingUserSkillSelections.delete(sessionId)
-    }
+    let item = {
+      ...itemDraft,
+      sessionId,
+      sequence: nextSequence,
+      turnId,
+    } as ConversationItem
 
     const insertRow = conversationItemToInsertRow(item)
 
@@ -3270,10 +3213,12 @@ export class SessionService {
         sessionId,
         turnId,
         workingDirectory: row.working_directory,
-        providerAccountId: this.pendingTurnAccountIds.get(sessionId) ?? null,
+        // The adapter reports the account bound to the process/connection.
+        // Unknown remote provenance must never borrow a local selection.
+        providerAccountId: providerAccountId ?? null,
         // Read straight off the row rather than from a pending slot (MAR-2551,
         // deliberately not a fourth instance of MAR-2539). The account is a
-        // per-send choice and has to be carried from the dispatch site; the
+        // per-turn fact carried by the adapter's user-message event; the
         // model is standing session state, and it cannot move between dispatch
         // and this stamp because `describeModelSelectionRefusal` refuses every
         // write while a handle is attached or a send is in flight — the two
@@ -3661,7 +3606,6 @@ export class SessionService {
     initialMessage: string,
     continuationToken: string | null,
     initialAttachments?: Attachment[],
-    initialAttachmentIds?: string[],
     initialSkillSelections?: SkillSelection[],
     providerAccountId?: string | null,
     /**
@@ -3715,13 +3659,6 @@ export class SessionService {
         )
       : { augmentedText: initialMessage, noteDraft: null }
 
-    if (initialAttachmentIds && initialAttachmentIds.length > 0) {
-      this.pendingUserAttachmentIds.set(session.id, initialAttachmentIds)
-    }
-    if (initialSkillSelections && initialSkillSelections.length > 0) {
-      this.pendingUserSkillSelections.set(session.id, initialSkillSelections)
-    }
-
     const handle = execution.host.start(execution.providerId, {
       sessionId: session.id,
       readTaskStatus: (taskId) =>
@@ -3757,7 +3694,6 @@ export class SessionService {
       ...(place?.workspace ? { workspace: place.workspace } : {}),
     })
 
-    this.pendingTurnAccountIds.set(session.id, providerAccountId ?? null)
     this.requestRelayMute(session.id, turn?.muteRelays)
     this.activeHandles.set(session.id, handle)
     this.notifySummaryUpdated(session.id)
@@ -3915,8 +3851,6 @@ export class SessionService {
       // Resource cleanup is best-effort; the handle is no longer addressable.
     }
     this.liveness.clear(sessionId)
-    this.pendingUserAttachmentIds.delete(sessionId)
-    this.pendingUserSkillSelections.delete(sessionId)
     this.onSessionTerminated?.(sessionId)
     const pending = Promise.resolve(disposal).catch(() => {})
     this.pendingHandleDisposals.add(pending)
@@ -3934,6 +3868,10 @@ export class SessionService {
     try {
       const session = this.getById(sessionId)
       if (!session) throw new Error(`Session not found: ${sessionId}`)
+      assertLocalAccountSelection({
+        executionHost: session.executionHost,
+        accountId: item.providerAccountId,
+      })
       const attachments = this.resolveAttachments(item.attachmentIds)
       const handle = this.activeHandles.get(sessionId)
 
@@ -3948,9 +3886,6 @@ export class SessionService {
         const acceptTurn = () => {
           if (accepted) return
           accepted = true
-          this.pendingUserAttachmentIds.set(sessionId, item.attachmentIds)
-          this.pendingUserSkillSelections.set(sessionId, item.skillSelections)
-          this.pendingTurnAccountIds.set(sessionId, item.providerAccountId)
           this.attachDispatchToTurn(sessionId, item.dispatchId)
           this.queuedInputs.patch(item.id, 'sent')
         }
@@ -3960,7 +3895,7 @@ export class SessionService {
           ? this.getRowById(sessionId)?.relays_muted
           : undefined
         this.requestRelayMute(sessionId, item.relaysMuted)
-        let disposition: void | 'queue-follow-up'
+        let disposition: SendMessageDisposition
         try {
           const delivery = handle.sendMessage(
             augmentedText,
@@ -3974,6 +3909,13 @@ export class SessionService {
             },
           )
           disposition = delivery instanceof Promise ? await delivery : delivery
+          if (
+            disposition &&
+            disposition !== 'queue-follow-up' &&
+            disposition.kind === 'refused'
+          ) {
+            throw new Error(disposition.reason)
+          }
         } catch (error) {
           // Same rule on the drain's own send: a mute borrowed for a delivery
           // that was refused goes back, so the turn already under way is not
@@ -4022,7 +3964,6 @@ export class SessionService {
         augmentedText,
         continuationToken,
         attachments,
-        item.attachmentIds,
         item.skillSelections,
         // The account chosen when this input was queued, not whatever the
         // composer shows now — it may have waited through a switch.
@@ -4199,9 +4140,6 @@ export class SessionService {
       this.updateArchiveState(session.id, null)
     }
 
-    this.pendingUserAttachmentIds.set(session.id, input.attachmentIds ?? [])
-    this.pendingUserSkillSelections.set(session.id, input.skillSelections ?? [])
-    this.pendingTurnAccountIds.set(session.id, input.providerAccountId ?? null)
     this.requestRelayMute(session.id, input.muteRelays)
 
     // Callers reach here having found no handle, but they got here through

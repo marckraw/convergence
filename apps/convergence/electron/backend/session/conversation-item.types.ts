@@ -227,6 +227,8 @@ export type SessionDelta =
   | {
       kind: 'conversation.item.add'
       item: ConversationItemDraft
+      /** Adapter-owned account binding for a user turn: null is ambient; omitted is unknown. */
+      providerAccountId?: string | null
     }
   | {
       kind: 'conversation.item.patch'

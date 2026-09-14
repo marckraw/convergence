@@ -1730,22 +1730,26 @@ it('R2 H1 abort note failure still settles its callback — unwrap abort note tu
   })
 })
 
-it('R2 M5 a queued answer preserves all three per-send slots — write slots before disposition turns red', async () => {
+it('R2 M5 a queued answer preserves recorded user artifacts and keeps its account on the queue', async () => {
   const { service, session } = await fixture()
-  const attachments = ['previous-attachment']
-  const skills: [] = []
-  service['pendingUserAttachmentIds'].set(session.id, attachments)
-  service['pendingUserSkillSelections'].set(session.id, skills)
-  service['pendingTurnAccountIds'].set(session.id, 'previous-account')
+  const userItems = () =>
+    service
+      .getConversation(session.id)
+      .filter((item) => item.kind === 'message' && item.actor === 'user')
+  const before = userItems()
   await service.sendMessage(session.id, {
     text: 'late answer',
     deliveryMode: 'answer',
+    providerAccountId: 'next-account',
   })
-  expect([
-    service['pendingUserAttachmentIds'].get(session.id) === attachments,
-    service['pendingUserSkillSelections'].get(session.id) === skills,
-    service['pendingTurnAccountIds'].get(session.id) === 'previous-account',
-  ]).toEqual([true, true, true])
+  expect(userItems()).toEqual(before)
+  expect(service.getQueuedInputs(session.id)).toEqual([
+    expect.objectContaining({
+      text: 'late answer',
+      providerAccountId: 'next-account',
+      state: 'queued',
+    }),
+  ])
 })
 
 it('R2 L7 a failed enqueue emits no queued note — emit note before enqueue turns red', async () => {
