@@ -139,7 +139,10 @@ export function CrewImportView({
                           ))}
                       </td>
                       <td className="px-2 py-3">
-                        {r.state === 'choose' && r.options.length > 0 && (
+                        {/* Options, not the state, say whether a row has a
+                            decision to make: a `create` role can also carry one
+                            once a member already holds its baton (MAR-2918). */}
+                        {r.options.length > 0 && (
                           <select
                             aria-label={`Choose ${r.label}`}
                             className="max-w-60 rounded border border-border bg-background p-1"
