@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import {
   ProviderAccountEnrolmentService,
+  type ProviderAccountEnrolmentDeps,
   type ProviderAccountCommandResult,
   type ProviderAccountFs,
 } from './provider-account-enrolment.service'
@@ -131,6 +132,7 @@ describe('ProviderAccountEnrolmentService', () => {
     fs: ProviderAccountFs
     run: ReturnType<typeof fakeRunner>['run']
     binaryPath?: string | null
+    codexMaintenance?: ProviderAccountEnrolmentDeps['codexMaintenance']
   }) {
     return new ProviderAccountEnrolmentService({
       repository,
@@ -145,6 +147,9 @@ describe('ProviderAccountEnrolmentService', () => {
             ? '/usr/local/bin/claude'
             : options.binaryPath,
         codex: options.binaryPath === undefined ? '/usr/local/bin/codex' : null,
+      },
+      codexMaintenance: options.codexMaintenance ?? {
+        run: async (_account, work) => work(),
       },
     })
   }
@@ -356,6 +361,200 @@ describe('ProviderAccountEnrolmentService', () => {
         subject: service({ fs, run: runner.run }),
       }
     }
+
+    it.each(['reconnect', 'remove'] as const)(
+      'refuses %s before login, logout or identity writes when the account is busy',
+      async (action) => {
+        const { subject, runner, fs, removed } = codexFixture()
+        await subject.enrol({
+          email: 'someone@example.com',
+          providerId: 'codex',
+        })
+        runner.calls.length = 0
+        const guarded = service({
+          fs,
+          run: runner.run,
+          codexMaintenance: {
+            run: async () => {
+              throw new Error('Account in use')
+            },
+          },
+        })
+        await expect(guarded[action](ACCOUNT_ID)).rejects.toThrow(
+          'Account in use',
+        )
+        expect(runner.calls).toEqual([])
+        expect(removed).toEqual([])
+        expect(repository.get(ACCOUNT_ID)).toMatchObject({
+          status: 'connected',
+          orgId: 'acc_123',
+        })
+      },
+    )
+
+    it('reconnects through Codex login in the same home, never Claude login', async () => {
+      const { subject, runner } = codexFixture()
+      await subject.enrol({ email: 'someone@example.com', providerId: 'codex' })
+      runner.calls.length = 0
+      const account = await subject.reconnect(ACCOUNT_ID)
+      expect(runner.calls).toHaveLength(1)
+      expect(runner.calls[0].args).toEqual(['login'])
+      expect(runner.calls[0].env.CODEX_HOME).toBe(CODEX_HOME)
+      expect(runner.calls[0].env.CLAUDE_CONFIG_DIR).toBeUndefined()
+      expect(account).toMatchObject({ orgId: 'acc_123', status: 'connected' })
+    })
+
+    it('disables a Codex account when reconnect selects a different workspace on the same email', async () => {
+      const { subject, runner, files } = codexFixture()
+      await subject.enrol({ email: 'someone@example.com', providerId: 'codex' })
+      runner.run.mockImplementationOnce(async () => {
+        files.set(
+          `${CODEX_HOME}/auth.json`,
+          CODEX_AUTH.replaceAll('acc_123', 'acc_other'),
+        )
+        return { code: 0, stdout: '', stderr: '' }
+      })
+      await expect(subject.reconnect(ACCOUNT_ID)).rejects.toThrow(
+        /different ChatGPT account/,
+      )
+      expect(repository.get(ACCOUNT_ID)).toMatchObject({
+        orgId: 'acc_123',
+        status: 'unavailable',
+      })
+      expect(files.has(`${CODEX_HOME}/auth.json`)).toBe(false)
+    })
+
+    it('discards a reconnect credential without a verifiable account id', async () => {
+      const { subject, runner, files } = codexFixture()
+      await subject.enrol({ email: 'someone@example.com', providerId: 'codex' })
+      runner.run.mockImplementationOnce(async () => {
+        files.set(
+          `${CODEX_HOME}/auth.json`,
+          JSON.stringify({
+            tokens: { id_token: { email: 'someone@example.com' } },
+          }),
+        )
+        return { code: 0, stdout: '', stderr: '' }
+      })
+      await expect(subject.reconnect(ACCOUNT_ID)).rejects.toThrow(
+        /no ChatGPT account ID/,
+      )
+      expect(files.has(`${CODEX_HOME}/auth.json`)).toBe(false)
+      expect(repository.get(ACCOUNT_ID)?.status).toBe('unavailable')
+    })
+
+    it('can remove a legacy non-local row without a local server gate', async () => {
+      const { fs, files, removed } = fakeFs()
+      const runner = fakeRunner({}, loginWritesAuth(files))
+      const maintenance = {
+        run: vi.fn(async () => {
+          throw new Error('No local server')
+        }),
+      }
+      const subject = service({
+        fs,
+        run: runner.run,
+        codexMaintenance: maintenance,
+      })
+      await subject.enrol({
+        email: 'someone@example.com',
+        providerId: 'codex',
+        executionHostId: 'little-monster',
+      })
+      await subject.remove(ACCOUNT_ID)
+      expect(repository.get(ACCOUNT_ID)).toBeNull()
+      expect(maintenance.run).not.toHaveBeenCalled()
+      expect(removed).toContain(CODEX_HOME)
+    })
+
+    it.each([
+      [
+        'different workspace',
+        CODEX_AUTH.replaceAll('acc_123', 'acc_other'),
+        'different ChatGPT account',
+      ],
+      ['missing identity', '{}', 'no ChatGPT account ID'],
+    ])(
+      'keeps the %s refusal visible when credential removal fails',
+      async (_case, auth, refusal) => {
+        const { subject, runner, files, fs } = codexFixture()
+        await subject.enrol({ email: '', providerId: 'codex' })
+        runner.run.mockImplementationOnce(async () => {
+          files.set(`${CODEX_HOME}/auth.json`, auth)
+          return { code: 0, stdout: '', stderr: '' }
+        })
+        vi.mocked(fs.rm).mockRejectedValueOnce(
+          new Error('EACCES: read-only home'),
+        )
+        const error = await subject
+          .reconnect(ACCOUNT_ID)
+          .catch((err: unknown) => err)
+        expect(error).toBeInstanceOf(Error)
+        expect((error as Error).message).toContain(refusal)
+        expect((error as Error).message).toContain(
+          'credential could NOT be removed: EACCES: read-only home',
+        )
+        expect((error as Error).message).not.toContain('was discarded')
+        expect(files.has(`${CODEX_HOME}/auth.json`)).toBe(true)
+        expect(repository.get(ACCOUNT_ID)).toMatchObject({
+          orgId: 'acc_123',
+          status: 'unavailable',
+        })
+      },
+    )
+
+    it('pins file credential storage before the first browser login', async () => {
+      const { subject, files, runner } = codexFixture()
+      const original = runner.run.getMockImplementation()!
+      runner.run.mockImplementation(async (command) => {
+        expect(files.get(`${CODEX_HOME}/config.toml`)).toContain(
+          'cli_auth_credentials_store = "file"',
+        )
+        return original(command)
+      })
+      await subject.enrol({ email: '', providerId: 'codex' })
+    })
+
+    it.each([
+      ['reconnect', false],
+      ['remove', true],
+    ] as const)(
+      '%s requests the correct host retirement behavior',
+      async (action, retire) => {
+        const { subject: enrolling, runner, fs } = codexFixture()
+        await enrolling.enrol({ email: '', providerId: 'codex' })
+        const maintenanceCalls: Array<{ id: string; retire?: boolean }> = []
+        const subject = service({
+          fs,
+          run: runner.run,
+          codexMaintenance: {
+            run: async (account, work, shouldRetire) => {
+              maintenanceCalls.push({ id: account.id, retire: shouldRetire })
+              return work()
+            },
+          },
+        })
+        await subject[action](ACCOUNT_ID)
+        expect(maintenanceCalls).toEqual([{ id: ACCOUNT_ID, retire }])
+      },
+    )
+
+    it('leaves a failed Codex reconnect unavailable without rewriting its historical identity', async () => {
+      const { subject, runner } = codexFixture()
+      await subject.enrol({ email: 'someone@example.com', providerId: 'codex' })
+      runner.run.mockResolvedValueOnce({
+        code: 1,
+        stdout: '',
+        stderr: 'login cancelled',
+      })
+      await expect(subject.reconnect(ACCOUNT_ID)).rejects.toThrow(
+        /login cancelled/,
+      )
+      expect(repository.get(ACCOUNT_ID)).toMatchObject({
+        orgId: 'acc_123',
+        status: 'unavailable',
+      })
+    })
 
     it('enrols a Codex account on the same model as a Claude one', async () => {
       const { subject } = codexFixture()

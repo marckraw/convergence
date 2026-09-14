@@ -121,6 +121,14 @@ export interface ProviderAccountEnrolmentDeps {
   newAccountId?: () => string
   /** Provider binaries by registry id, e.g. `{ 'claude-code': '/usr/bin/claude' }`. */
   binaryPaths?: Readonly<Record<string, string | null>>
+  /** Holds the account's resident-server admission gate through credential IO. */
+  codexMaintenance?: {
+    run<T>(
+      account: ProviderAccount,
+      work: () => Promise<T>,
+      retire?: boolean,
+    ): Promise<T>
+  }
 }
 
 export interface EnrolProviderAccountInput {
@@ -149,6 +157,7 @@ export class ProviderAccountEnrolmentService {
   private readonly baseEnv: NodeJS.ProcessEnv
   private readonly newAccountId: () => string
   private readonly binaryPaths = new Map<string, string>()
+  private readonly codexMaintenance: ProviderAccountEnrolmentDeps['codexMaintenance']
 
   constructor(deps: ProviderAccountEnrolmentDeps) {
     this.repository = deps.repository
@@ -157,6 +166,7 @@ export class ProviderAccountEnrolmentService {
     this.homeDir = deps.homeDir ?? homedir()
     this.baseEnv = deps.baseEnv ?? process.env
     this.newAccountId = deps.newAccountId ?? (() => randomUUID())
+    this.codexMaintenance = deps.codexMaintenance
     for (const [providerId, path] of Object.entries(deps.binaryPaths ?? {})) {
       if (path) this.binaryPaths.set(providerId, path)
     }
@@ -287,6 +297,10 @@ export class ProviderAccountEnrolmentService {
       throw new Error(`Provider account ${accountId} is not enrolled.`)
     }
 
+    if (providerAccountCredentialLayout(account.providerId) === 'config-home') {
+      return this.reconnectCodexAccount(account)
+    }
+
     const email = account.email?.trim()
     if (!email) {
       throw new Error(
@@ -345,15 +359,104 @@ export class ProviderAccountEnrolmentService {
     return reconnected
   }
 
+  private async withCodexAccountStopped<T>(
+    account: ProviderAccount,
+    work: () => Promise<T>,
+    retire = false,
+  ): Promise<T> {
+    if (account.executionHostId !== 'local') {
+      throw new Error(
+        'OpenAI account management is available on this machine only.',
+      )
+    }
+    if (!this.codexMaintenance) {
+      throw new Error(
+        'Codex account maintenance is unavailable. No credentials were changed.',
+      )
+    }
+    return this.codexMaintenance.run(account, work, retire)
+  }
+
+  private async reconnectCodexAccount(
+    account: ProviderAccount,
+  ): Promise<ProviderAccount> {
+    const binaryPath = this.requireBinaryPath(account.providerId)
+    if (!account.orgId) {
+      throw new Error(
+        'This OpenAI account has no recorded ChatGPT account ID. Enrol it again to verify its identity.',
+      )
+    }
+    return this.withCodexAccountStopped(account, async () => {
+      // A browser can return a different workspace for the same email. Never
+      // relabel historical turns to that new identity, even when login succeeds.
+      this.repository.setStatus(account.id, 'unavailable', null)
+      await this.fs.chmod(account.configDir, CODEX_HOME_DIR_MODE)
+      const result = await this.runCommand(
+        buildCodexAccountLoginCommand({
+          binaryPath,
+          configDir: account.configDir,
+          baseEnv: this.baseEnv,
+        }),
+      )
+      if (result.code !== 0) {
+        throw new Error(
+          `codex login failed: ${result.stderr.trim() || `exit code ${result.code}`}`,
+        )
+      }
+      const authPath = join(account.configDir, CODEX_AUTH_FILE_NAME)
+      await this.fs.chmod(authPath, CODEX_AUTH_FILE_MODE)
+      const identity = readCodexIdentityFromAuth(await this.readJson(authPath))
+      if (!identity?.orgId) {
+        return this.refuseCodexReconnect(
+          authPath,
+          'Login completed but the Codex home reported no ChatGPT account ID.',
+        )
+      }
+      if (identity.orgId !== account.orgId) {
+        return this.refuseCodexReconnect(
+          authPath,
+          'Login selected a different ChatGPT account or workspace. Reconnect the originally enrolled account; its historical identity was not changed.',
+        )
+      }
+      this.repository.saveIdentity(account.id, {
+        ...identity,
+        status: 'connected',
+        lastValidatedAt: new Date().toISOString(),
+      })
+      const reconnected = this.repository.get(account.id)
+      if (!reconnected)
+        throw new Error('The OpenAI account was removed while reconnecting.')
+      return reconnected
+    })
+  }
+
+  private async refuseCodexReconnect(
+    authPath: string,
+    reason: string,
+  ): Promise<never> {
+    try {
+      await this.fs.rm(authPath)
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      throw new Error(
+        `${reason} The foreign credential could NOT be removed: ${detail}. The account remains unavailable.`,
+        { cause: error },
+      )
+    }
+    throw new Error(
+      `${reason} The unverified login was discarded; the account remains unavailable.`,
+    )
+  }
+
   /**
    * Codex enrolment (ADR 0007, PA9).
    *
    * Same model, same seams, same attestation net — the differences are
    * genuinely Codex's: `codex login` takes no email because it authorises
-   * whatever ChatGPT session the browser holds, there is nothing to symlink
-   * because Codex keeps no shared skill or transcript store under this home,
-   * and the credential is a plaintext file rather than a keychain slot, so its
-   * permissions are ours to set.
+   * whatever ChatGPT session the browser holds. This enrollment path currently
+   * creates an isolated native-history home; sharing that history is MAR-3012.
+   * File credential storage is explicit, so the observed identity and the
+   * runtime use the same store; managed-policy conflicts remain CLI failures.
    */
   private async enrolCodexAccount(
     input: EnrolProviderAccountInput,
@@ -370,6 +473,9 @@ export class ProviderAccountEnrolmentService {
     await this.fs.mkdir(configDir)
     // MAR-2207: owner-only home, not just an owner-only credential file.
     await this.fs.chmod(configDir, CODEX_HOME_DIR_MODE)
+    const configPath = join(configDir, 'config.toml')
+    await this.fs.writeFile(configPath, 'cli_auth_credentials_store = "file"\n')
+    await this.fs.chmod(configPath, CODEX_AUTH_FILE_MODE)
 
     const result = await this.runCommand(
       buildCodexAccountLoginCommand({
@@ -428,6 +534,22 @@ export class ProviderAccountEnrolmentService {
     const account = this.repository.get(accountId)
     if (!account) return
 
+    const layout = providerAccountCredentialLayout(account.providerId)
+    if (layout === 'config-home' && account.executionHostId === 'local') {
+      return this.withCodexAccountStopped(
+        account,
+        async () => {
+          this.repository.setStatus(account.id, 'unavailable', null)
+          await this.removeAccount(account)
+        },
+        true,
+      )
+    }
+    return this.removeAccount(account)
+  }
+
+  private async removeAccount(account: ProviderAccount): Promise<void> {
+    const accountId = account.id
     const layout = providerAccountCredentialLayout(account.providerId)
     const binaryPath = this.binaryPaths.get(account.providerId) ?? null
 
