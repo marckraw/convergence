@@ -15,9 +15,11 @@ Duplicate item IDs do not open another turn.
 Claude takes one immutable account snapshot per preparation and resolves its
 environment before accepting the dispatch or emitting the user item. A
 synchronous preparation guard defers competing input to the service queue.
-Recovery retains the existing snapshot. A preparation failure emits a note
-and failed status, with no user item; a failure after binding retains the
-item. Codex user events name the account bound to their app-server connection.
+Recovery retains the existing snapshot and remains pending while an earlier
+preparation is still reading attachments. Account/environment failure emits a
+note and failed status with no user item. Skills resolve after binding; a
+skill failure retains the user's message, failed selections and bound account.
+Other failures after binding likewise retain the item. Codex user events name the account bound to their app-server connection.
 Other ambient adapters explicitly emit null. One-shot helpers emit no turn
 rows; their account binding is verified at the process environment boundary.
 

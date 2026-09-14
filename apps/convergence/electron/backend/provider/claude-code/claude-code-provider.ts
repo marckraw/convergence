@@ -936,7 +936,7 @@ export class ClaudeCodeProvider implements Provider {
     }
 
     function maybeRestartRecoveredTurn(): boolean {
-      if (!pendingRecoveryTurn) {
+      if (!pendingRecoveryTurn || preparingTurn) {
         return false
       }
 
@@ -1439,19 +1439,6 @@ export class ClaudeCodeProvider implements Provider {
           }),
         })
 
-        const skillResolution = await resolveSelectedSkills(
-          message,
-          options?.skillSelections,
-        )
-        if (stopped) return
-        if (currentTurn) return currentTurnDisposition()
-
-        if (!skillResolution.ok) {
-          addSkillInvocationFailureNote(skillResolution)
-          setStatus('failed')
-          setAttention('failed')
-          return { kind: 'refused', reason: skillResolution.message }
-        }
         // Environment belongs to the connection, including telemetry for skills
         // selected on later turns.
         let env: NodeJS.ProcessEnv | undefined
@@ -1467,6 +1454,13 @@ export class ClaudeCodeProvider implements Provider {
         }
         if (stopped || currentTurn) return
 
+        const skillResolution = await resolveSelectedSkills(
+          message,
+          options?.skillSelections,
+        )
+        if (stopped) return
+        if (currentTurn) return currentTurnDisposition()
+
         userTurnBound = true
         options?.onTurnAccepted?.()
         const userMessageItemId =
@@ -1480,6 +1474,12 @@ export class ClaudeCodeProvider implements Provider {
                   : undefined,
               })
             : (options?.userMessageItemId ?? null)
+        if (!skillResolution.ok) {
+          addSkillInvocationFailureNote(skillResolution)
+          setStatus('failed')
+          setAttention('failed')
+          return
+        }
         trackSkillInvocationTarget(
           userMessageItemId,
           skillResolution.skillSelections,
@@ -1674,6 +1674,10 @@ export class ClaudeCodeProvider implements Provider {
         if (!userTurnBound) return { kind: 'refused', reason }
       } finally {
         preparingTurn = false
+        // Recovery can arrive while the old preparation is reading attachments.
+        // Keep its request until this guard releases; void callers cannot queue it.
+        if (!stopped && !child && pendingRecoveryTurn)
+          maybeRestartRecoveredTurn()
       }
     }
 
