@@ -1,10 +1,11 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { groupNeedsYou, needsYouCardModel } from '@/features/needs-you'
 import type { SessionSummary } from '@/entities/session'
 import { NeedsYou } from './needs-you.container'
 
 beforeEach(() => localStorage.clear())
+afterEach(() => vi.restoreAllMocks())
 const cards = [
   {
     id: 'pin',
@@ -63,9 +64,24 @@ const choice = (group: string, name: string) =>
   within(screen.getByRole('group', { name: group })).getByRole('button', {
     name,
   })
+const openFilters = () =>
+  fireEvent.click(
+    screen.getByRole('button', { name: /^Edit activity filters:/ }),
+  )
 
-it('shows the four views and icon rows without the old filter panel', () => {
+it('starts with a readable collapsed summary and opens the existing controls', () => {
   render(<NeedsYou {...props} />)
+  const trigger = screen.getByRole('button', {
+    name: 'Edit activity filters: All activity; All hosts · All providers',
+  })
+  expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  expect(
+    document.getElementById(trigger.getAttribute('aria-controls')!),
+  ).not.toBeVisible()
+  expect(screen.queryByRole('group', { name: 'Activity view' })).toBeNull()
+  expect(screen.getByRole('region', { name: 'Pinned' })).toBeInTheDocument()
+  openFilters()
+  expect(trigger).toHaveAttribute('aria-expanded', 'true')
   for (const name of ['All activity', 'Needs me', 'Working', 'Review'])
     expect(choice('Activity view', name)).toBeInTheDocument()
   expect(choice('Activity view', 'All activity')).toHaveAttribute(
@@ -83,6 +99,7 @@ it('shows the four views and icon rows without the old filter panel', () => {
 
 it('filters attention, explains hidden pins, and clears without selecting or unpinning a session', () => {
   render(<NeedsYou {...props} />)
+  openFilters()
   fireEvent.click(choice('Activity view', 'Needs me'))
   expect(screen.getByLabelText('1 of 4 cards shown')).toBeInTheDocument()
   expect(
@@ -103,6 +120,7 @@ it('filters attention, explains hidden pins, and clears without selecting or unp
 
 it('combines provider and all-remote toggles, retaining recoverable zero-result choices', () => {
   render(<NeedsYou {...props} />)
+  openFilters()
   fireEvent.click(choice('Host filters', 'Remote · All remote hosts'))
   expect(screen.getByLabelText('2 of 4 cards shown')).toBeInTheDocument()
   fireEvent.click(choice('Provider filters', 'Anthropic'))
@@ -137,6 +155,7 @@ it('restores only the new controls and resets legacy hidden filters', () => {
   )
   const first = render(<NeedsYou {...props} />)
   expect(screen.getByLabelText('4 of 4 cards shown')).toBeInTheDocument()
+  openFilters()
   fireEvent.click(choice('Provider filters', 'OpenAI'))
   first.unmount()
   render(<NeedsYou {...props} />)
@@ -149,6 +168,7 @@ it('restores only the new controls and resets legacy hidden filters', () => {
 
 it('keeps a selected provider visible after its cards disappear', () => {
   const view = render(<NeedsYou {...props} />)
+  openFilters()
   fireEvent.click(choice('Provider filters', 'Anthropic'))
   view.rerender(<NeedsYou {...props} groups={[]} />)
   expect(choice('Provider filters', 'Anthropic')).toHaveAttribute(
@@ -164,8 +184,117 @@ it('keeps a selected provider visible after its cards disappear', () => {
 
 it('shows provider names on keyboard focus', async () => {
   render(<NeedsYou {...props} />)
+  openFilters()
   fireEvent.focus(choice('Provider filters', 'OpenAI'))
   expect(await screen.findByRole('tooltip')).toHaveTextContent(
     'OpenAI · 3 conversations',
   )
+})
+
+it('keeps filter selections and the collapsed preference through a remount', () => {
+  const first = render(<NeedsYou {...props} />)
+  openFilters()
+  fireEvent.click(choice('Activity view', 'Working'))
+  fireEvent.click(choice('Host filters', 'Remote · All remote hosts'))
+  fireEvent.click(choice('Provider filters', 'OpenAI'))
+  fireEvent.click(choice('Provider filters', 'Anthropic'))
+  fireEvent.click(screen.getByRole('button', { name: 'Collapse filters' }))
+  const name = 'Edit activity filters: Working; Remote · Anthropic + OpenAI'
+  expect(screen.getByRole('button', { name })).toHaveFocus()
+  expect(screen.getByLabelText('1 of 4 cards shown')).toBeInTheDocument()
+  first.unmount()
+  render(<NeedsYou {...props} />)
+  expect(screen.getByRole('button', { name })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  )
+  openFilters()
+  expect(choice('Activity view', 'Working')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  expect(choice('Host filters', 'Remote · All remote hosts')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  expect(choice('Provider filters', 'OpenAI')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  expect(choice('Provider filters', 'Anthropic')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+})
+
+it('keeps empty-result recovery and hidden pinned-card information visible while collapsed', () => {
+  render(<NeedsYou {...props} />)
+  openFilters()
+  fireEvent.click(choice('Host filters', 'Remote · All remote hosts'))
+  fireEvent.click(choice('Provider filters', 'Anthropic'))
+  fireEvent.click(screen.getByRole('button', { name: 'Collapse filters' }))
+  expect(
+    screen.getByRole('button', {
+      name: 'Edit activity filters: All activity; Remote · Anthropic',
+    }),
+  ).toBeInTheDocument()
+  expect(screen.getByRole('status')).toHaveTextContent('No activity matches')
+  expect(screen.getByText('1 pinned card hidden by filters.')).toBeVisible()
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Clear activity filters' }),
+  )
+  expect(screen.getByLabelText('4 of 4 cards shown')).toBeInTheDocument()
+  expect(
+    screen.getByRole('button', {
+      name: 'Edit activity filters: All activity; All hosts · All providers',
+    }),
+  ).toHaveFocus()
+  expect(screen.queryByRole('group', { name: 'Activity view' })).toBeNull()
+})
+
+it('keeps a selected provider in the collapsed summary when its activity disappears', () => {
+  const view = render(<NeedsYou {...props} />)
+  openFilters()
+  fireEvent.click(choice('Provider filters', 'Anthropic'))
+  fireEvent.click(screen.getByRole('button', { name: 'Collapse filters' }))
+  view.rerender(<NeedsYou {...props} groups={[]} />)
+  expect(
+    screen.getByRole('button', {
+      name: 'Edit activity filters: All activity; All hosts · Anthropic',
+    }),
+  ).toBeInTheDocument()
+  expect(screen.getByLabelText('0 of 0 cards shown')).toBeInTheDocument()
+})
+
+it('collapses with Escape and returns focus to the summary', () => {
+  render(<NeedsYou {...props} />)
+  openFilters()
+  const working = choice('Activity view', 'Working')
+  working.focus()
+  fireEvent.keyDown(working, { key: 'Escape' })
+  expect(
+    screen.getByRole('button', {
+      name: /^Edit activity filters:/,
+    }),
+  ).toHaveFocus()
+  expect(screen.queryByRole('group', { name: 'Activity view' })).toBeNull()
+})
+
+it('supports filtering and collapsing when preference storage is unavailable', () => {
+  vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    throw new Error('Storage unavailable')
+  })
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new Error('Storage unavailable')
+  })
+  render(<NeedsYou {...props} />)
+  openFilters()
+  fireEvent.click(choice('Activity view', 'Working'))
+  fireEvent.click(screen.getByRole('button', { name: 'Collapse filters' }))
+  expect(
+    screen.getByRole('button', {
+      name: 'Edit activity filters: Working; All hosts · All providers',
+    }),
+  ).toBeInTheDocument()
+  expect(screen.getByLabelText('2 of 4 cards shown')).toBeInTheDocument()
 })
