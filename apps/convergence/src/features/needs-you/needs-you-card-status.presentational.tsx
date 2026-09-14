@@ -36,6 +36,7 @@ export function NeedsYouCardStatus({ card }: { card: NeedsYouCardModel }) {
       <Icon
         aria-hidden="true"
         className={cn('size-3 shrink-0', {
+          'text-emerald-500': Icon === CircleCheck,
           'text-warning-foreground': waiting,
           'text-destructive': failed,
           'animate-spin text-blue-600 dark:text-blue-400 motion-reduce:animate-none':
