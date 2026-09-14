@@ -1,3 +1,5 @@
+import type { ProviderAccountLoginAttempt } from '@/shared/types/provider-account-login.types'
+import { ProviderAccountLoginProgress } from './provider-account-login.presentational'
 import { Pencil, Plug, RefreshCw, Star, Trash2 } from 'lucide-react'
 import type {
   ClaudeAccountLayout,
@@ -23,6 +25,11 @@ const STATUS_TONE: Record<
 }
 
 export interface ProviderAccountsFieldsProps {
+  loginAttempt: ProviderAccountLoginAttempt | null
+  loginCode: string
+  onLoginCodeChange: (value: string) => void
+  onSubmitLoginCode: () => void
+  onCancelLogin: () => void
   providerId: ProviderAccountEnrollmentProvider
   rows: ProviderAccountSettingsRow[]
   settingsWarnings: ProviderAccountSettingsWarning[]
@@ -74,6 +81,11 @@ function formatCheckedAt(value: string | null): string {
 }
 
 export function ProviderAccountsFields({
+  loginAttempt,
+  loginCode,
+  onLoginCodeChange,
+  onSubmitLoginCode,
+  onCancelLogin,
   providerId,
   rows,
   settingsWarnings,
@@ -142,6 +154,16 @@ export function ProviderAccountsFields({
           </Button>
         ))}
       </div>
+
+      {loginAttempt ? (
+        <ProviderAccountLoginProgress
+          attempt={loginAttempt}
+          code={loginCode}
+          onCodeChange={onLoginCodeChange}
+          onSubmitCode={onSubmitLoginCode}
+          onCancel={onCancelLogin}
+        />
+      ) : null}
 
       {settingsWarnings.length > 0 ? (
         <div
@@ -483,7 +505,7 @@ export function ProviderAccountsFields({
             }
             onClick={onEnrol}
           >
-            {isEnrolling ? 'Waiting for browser...' : `Connect ${providerName}`}
+            {isEnrolling ? 'Sign-in in progress...' : `Connect ${providerName}`}
           </Button>
         </div>
       </section>

@@ -29,7 +29,16 @@ export interface InteractiveCommandResult {
 
 export type ProviderAccountInteractiveRunner = (
   command: ProviderAccountCommand,
-  lifecycle?: { onExitConfirmed: () => void },
+  lifecycle?: {
+    onExitConfirmed: () => void
+    signal?: AbortSignal
+    onData?: (chunk: string) => void
+    onInputReady?: (write: (value: string) => void) => void
+    /** Login cleanup must not run while its child can still write credentials. */
+    awaitExitOnTimeout?: boolean
+    /** Login output can contain OAuth state and pasted codes. Never return it. */
+    redactOutput?: boolean
+  },
 ) => Promise<InteractiveCommandResult>
 
 /**
@@ -65,6 +74,11 @@ export function createPtyCommandRunner(
     new Promise<InteractiveCommandResult>((resolve, reject) => {
       const buffer = createRingBuffer(MAX_OUTPUT_BYTES)
 
+      if (lifecycle?.signal?.aborted) {
+        lifecycle.onExitConfirmed()
+        reject(new Error('Sign-in cancelled.'))
+        return
+      }
       let child: ReturnType<PtyFactory['spawn']>
       try {
         child = deps.ptyFactory.spawn({
@@ -77,13 +91,24 @@ export function createPtyCommandRunner(
         })
       } catch (error) {
         lifecycle?.onExitConfirmed()
-        reject(error instanceof Error ? error : new Error(String(error)))
+        reject(
+          lifecycle?.redactOutput
+            ? new Error('The sign-in terminal could not be started.')
+            : error instanceof Error
+              ? error
+              : new Error(String(error)),
+        )
         return
       }
 
       let settled = false
       let escalation: ReturnType<typeof setTimeout> | null = null
-      const dataSubscription = child.onData((chunk) => buffer.append(chunk))
+      let stopped: Error | null = null
+      let dataClosed = false
+      const dataSubscription = child.onData((chunk) => {
+        if (!lifecycle?.redactOutput) buffer.append(chunk)
+        lifecycle?.onData?.(chunk)
+      })
       const exitSubscription = child.onExit(({ exitCode }) => {
         if (escalation) clearTimeout(escalation)
         lifecycle?.onExitConfirmed()
@@ -91,42 +116,62 @@ export function createPtyCommandRunner(
         if (settled) return
         settled = true
         finish()
-        resolve({ code: exitCode, output: buffer.snapshot() })
+        if (stopped) reject(stopped)
+        else
+          resolve({
+            code: exitCode,
+            output: lifecycle?.redactOutput ? '' : buffer.snapshot(),
+          })
       })
 
+      const abort = () => stop(new Error('Sign-in cancelled.'))
       const timer = setTimeout(() => {
-        if (settled) return
-        settled = true
+        const tail = lifecycle?.redactOutput
+          ? ''
+          : summarizeTerminalOutput(buffer.snapshot())
+        stop(
+          new Error(
+            `timed out after ${Math.round(timeoutMs / 1000)}s${tail ? `; last output was: ${tail}` : ''}`,
+          ),
+        )
+      }, timeoutMs)
+      timer.unref?.()
+      lifecycle?.signal?.addEventListener('abort', abort, { once: true })
+      lifecycle?.onInputReady?.((value) => {
+        if (!settled && !stopped) child.write(value)
+      })
+      if (lifecycle?.signal?.aborted) abort()
+
+      function stop(reason: Error): void {
+        if (settled || stopped) return
+        stopped = reason
         finish()
         escalation = setTimeout(() => {
           try {
             child.kill('SIGKILL')
           } catch {
-            // Only onExit can release a caller's account lease.
+            /* Only onExit releases the lease. */
           }
         }, 5000)
         escalation.unref?.()
-        // Timeout ends the ceremony, but its account stays leased until exit.
+        if (!lifecycle?.awaitExitOnTimeout) {
+          settled = true
+          reject(reason)
+        }
         try {
           child.kill()
         } catch {
-          // A process that already died cannot be killed twice, and that is
-          // the good case rather than something to report.
+          /* Await the exit witness, never guess. */
         }
-        const tail = summarizeTerminalOutput(buffer.snapshot())
-        reject(
-          new Error(
-            `timed out after ${Math.round(timeoutMs / 1000)}s${
-              tail ? `; last output was: ${tail}` : ''
-            }`,
-          ),
-        )
-      }, timeoutMs)
-      timer.unref?.()
+      }
 
       function finish(): void {
         clearTimeout(timer)
-        dataSubscription.dispose()
+        lifecycle?.signal?.removeEventListener('abort', abort)
+        if (!dataClosed) {
+          dataClosed = true
+          dataSubscription.dispose()
+        }
       }
     })
 }

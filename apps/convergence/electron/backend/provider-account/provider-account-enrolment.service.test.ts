@@ -195,12 +195,14 @@ describe('ProviderAccountEnrolmentService', () => {
     codexMaintenance?: ProviderAccountEnrolmentDeps['codexMaintenance']
     claudeMaintenance?: ProviderAccountEnrolmentDeps['claudeMaintenance']
     onAccountChanged?: (id: string) => void
+    runLoginCommand?: ProviderAccountEnrolmentDeps['runLoginCommand']
   }) {
     return new ProviderAccountEnrolmentService({
       repository,
       fs: options.fs,
       onAccountChanged: options.onAccountChanged,
       runCommand: options.run,
+      runLoginCommand: options.runLoginCommand,
       homeDir: HOME,
       baseEnv: { PATH: '/usr/local/bin', HOME },
       newAccountId: () => ACCOUNT_ID,
@@ -433,6 +435,24 @@ describe('ProviderAccountEnrolmentService', () => {
         subject: service({ fs, run: runner.run }),
       }
     }
+
+    it('routes Codex enrol and reconnect through the interactive login runner only', async () => {
+      const { fs, files } = fakeFs()
+      const login = fakeRunner({}, loginWritesAuth(files))
+      const ordinary = fakeRunner()
+      const subject = service({
+        fs,
+        run: ordinary.run,
+        runLoginCommand: login.run,
+      })
+      await subject.enrol({ email: '', providerId: 'codex' })
+      await subject.reconnect(ACCOUNT_ID)
+      expect(login.run).toHaveBeenCalledTimes(2)
+      expect(ordinary.run).not.toHaveBeenCalled()
+      expect(login.calls.every((command) => command.args[0] === 'login')).toBe(
+        true,
+      )
+    })
 
     it('prepares shared conversation storage before login while keeping auth private', async () => {
       const { subject, runner, fs } = codexFixture()
@@ -848,6 +868,23 @@ describe('ProviderAccountEnrolmentService', () => {
   })
 
   describe('reconnect', () => {
+    it('routes Claude enrol and reconnect through the login runner but keeps logout separate', async () => {
+      const { fs, files } = fakeFs()
+      const login = fakeRunner({}, loginWritesIdentity(files))
+      const ordinary = fakeRunner()
+      const subject = service({
+        fs,
+        run: ordinary.run,
+        runLoginCommand: login.run,
+      })
+      await subject.enrol({ email: 'someone@example.com' })
+      await subject.reconnect(ACCOUNT_ID)
+      expect(login.run).toHaveBeenCalledTimes(2)
+      expect(ordinary.run).not.toHaveBeenCalled()
+      await subject.remove(ACCOUNT_ID)
+      expect(ordinary.calls[0].args).toEqual(['auth', 'logout'])
+    })
+
     it.each(['reconnect', 'remove'] as const)(
       'invalidates cached health before and after %s, including failure',
       async (operation) => {

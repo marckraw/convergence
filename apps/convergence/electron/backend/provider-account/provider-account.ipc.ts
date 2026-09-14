@@ -1,3 +1,4 @@
+import type { ProviderAccountLoginService } from './provider-account-login.service'
 import { ipcMain } from 'electron'
 import type { ProviderAccountAttestationService } from './provider-account-attestation.service'
 import type { ProviderAccountMcpService } from './provider-account-mcp.service'
@@ -13,6 +14,7 @@ import type { ProviderAccountRepository } from './provider-account.repository'
  * the polished version is not shaped by a throwaway.
  */
 export function registerProviderAccountIpcHandlers(deps: {
+  login: ProviderAccountLoginService
   repository: ProviderAccountRepository
   enrolment: ProviderAccountEnrolmentService
   attestation: ProviderAccountAttestationService
@@ -22,11 +24,36 @@ export function registerProviderAccountIpcHandlers(deps: {
 
   ipcMain.handle(
     'providerAccounts:enrol',
-    (_event, input: EnrolProviderAccountInput) => deps.enrolment.enrol(input),
+    (_event, input: EnrolProviderAccountInput) => {
+      const providerId = input.providerId ?? 'claude-code'
+      if (providerId !== 'claude-code' && providerId !== 'codex')
+        throw new Error('This provider does not support account sign-in.')
+      return deps.login.run(
+        { providerId, accountId: null, kind: 'enrol' },
+        () => deps.enrolment.enrol(input),
+      )
+    },
   )
 
-  ipcMain.handle('providerAccounts:reconnect', (_event, accountId: string) =>
-    deps.enrolment.reconnect(accountId),
+  ipcMain.handle('providerAccounts:reconnect', (_event, accountId: string) => {
+    const account = deps.repository.get(accountId)
+    if (
+      !account ||
+      (account.providerId !== 'claude-code' && account.providerId !== 'codex')
+    )
+      throw new Error('This account is not available for sign-in.')
+    return deps.login.run(
+      { providerId: account.providerId, accountId, kind: 'reconnect' },
+      () => deps.enrolment.reconnect(accountId),
+    )
+  })
+  ipcMain.handle('providerAccounts:loginAttempt', () => deps.login.getAttempt())
+  ipcMain.handle('providerAccounts:cancelLogin', (_event, id: string) =>
+    deps.login.cancel(id),
+  )
+  ipcMain.handle(
+    'providerAccounts:submitLoginCode',
+    (_event, id: string, code: unknown) => deps.login.submitCode(id, code),
   )
 
   ipcMain.handle(

@@ -502,6 +502,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ) => ipcRenderer.invoke('providerQuota:list', forceRefresh, scope),
   },
   providerAccounts: {
+    loginAttempt: () => ipcRenderer.invoke('providerAccounts:loginAttempt'),
+    cancelLogin: (id: string) =>
+      ipcRenderer.invoke('providerAccounts:cancelLogin', id),
+    submitLoginCode: (id: string, code: string) =>
+      ipcRenderer.invoke('providerAccounts:submitLoginCode', id, code),
+    onLoginChanged: (
+      callback: (
+        attempt: import('../../src/shared/types/provider-account-login.types').ProviderAccountLoginAttempt,
+      ) => void,
+    ) => {
+      const handler = (
+        _event: unknown,
+        attempt: import('../../src/shared/types/provider-account-login.types').ProviderAccountLoginAttempt,
+      ) => callback(attempt)
+      ipcRenderer.on('providerAccounts:loginChanged', handler)
+      return () =>
+        ipcRenderer.removeListener('providerAccounts:loginChanged', handler)
+    },
     list: () => ipcRenderer.invoke('providerAccounts:list'),
     enrol: (input: {
       email: string

@@ -1,3 +1,4 @@
+import type { ProviderAccountLoginAttempt } from '@/shared/types/provider-account-login.types'
 import type {
   ClaudeAccountLayout,
   ProviderAccount,
@@ -14,6 +15,16 @@ import type {
  * person rather than only from the developer console.
  */
 export const providerAccountApi = {
+  loginAttempt: (): Promise<ProviderAccountLoginAttempt | null> =>
+    window.electronAPI.providerAccounts.loginAttempt(),
+  cancelLogin: (id: string): Promise<ProviderAccountLoginAttempt | null> =>
+    window.electronAPI.providerAccounts.cancelLogin(id),
+  submitLoginCode: (id: string, code: string): Promise<void> =>
+    window.electronAPI.providerAccounts.submitLoginCode(id, code),
+  onLoginChanged: (
+    callback: (attempt: ProviderAccountLoginAttempt) => void,
+  ): (() => void) =>
+    window.electronAPI.providerAccounts.onLoginChanged(callback),
   list: (): Promise<ProviderAccount[]> =>
     window.electronAPI.providerAccounts.list(),
   enrol: (input: {

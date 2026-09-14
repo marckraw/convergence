@@ -95,6 +95,7 @@ import { ProviderAccountEnrolmentService } from '../backend/provider-account/pro
 import { ClaudeCredentialHealthService } from '../backend/provider-account/provider-account-credential-health.service'
 import { ProviderAccountAttestationService } from '../backend/provider-account/provider-account-attestation.service'
 import { ProviderAccountMcpService } from '../backend/provider-account/provider-account-mcp.service'
+import { ProviderAccountLoginService } from '../backend/provider-account/provider-account-login.service'
 import { createPtyCommandRunner } from '../backend/provider-account/provider-account-pty-runner'
 import { registerProviderAccountIpcHandlers } from '../backend/provider-account/provider-account.ipc'
 import {
@@ -348,11 +349,19 @@ async function startApp(): Promise<void> {
         account: accountId ? providerAccountRepository.get(accountId) : null,
       }),
   })
+  const ptyFactory = createNodePtyFactory()
+  const providerAccountLoginService = new ProviderAccountLoginService({
+    runner: createPtyCommandRunner({ ptyFactory }),
+  })
+  providerAccountLoginService.subscribe((attempt) =>
+    broadcastToRenderers('providerAccounts:loginChanged', attempt),
+  )
   const claudeAccountMaintenance = new ClaudeAccountMaintenance()
   const claudeCredentialHealth = new ClaudeCredentialHealthService()
   const providerAccountEnrolmentService = new ProviderAccountEnrolmentService({
     repository: providerAccountRepository,
     onAccountChanged: (id) => providerAccountAttestationService.invalidate(id),
+    runLoginCommand: providerAccountLoginService.runLoginCommand,
     claudeMaintenance: {
       run: (account, work) => claudeAccountMaintenance.run(account.id, work),
     },
@@ -401,7 +410,6 @@ async function startApp(): Promise<void> {
    * ceremony both need real terminals, and node-pty is a native module worth
    * loading exactly once, at the composition root.
    */
-  const ptyFactory = createNodePtyFactory()
   const providerAccountMcpService = new ProviderAccountMcpService({
     repository: providerAccountRepository,
     accountMaintenance: claudeAccountMaintenance,
@@ -717,6 +725,7 @@ async function startApp(): Promise<void> {
     repository: providerAccountRepository,
     enrolment: providerAccountEnrolmentService,
     attestation: providerAccountAttestationService,
+    login: providerAccountLoginService,
     mcp: providerAccountMcpService,
   })
   const stopAccountHealthMonitoring =
@@ -900,7 +909,10 @@ async function startApp(): Promise<void> {
     localModelTunnelService.stopAllManaged()
     // Sessions release their connections; the servers themselves are stopped
     // here, and nowhere else (MAR-2823).
-    void sessionService.disposeAllForQuit().finally(() => {
+    void Promise.allSettled([
+      sessionService.disposeAllForQuit(),
+      providerAccountLoginService.shutdown(),
+    ]).finally(() => {
       codexServerHosts.stopAll()
       terminalService.disposeAll()
       projectScriptsRunner.disposeAll()

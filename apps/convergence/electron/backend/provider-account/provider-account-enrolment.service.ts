@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto'
 import { promises as nodeFs } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
-import { spawn } from 'child_process'
+import { execFile } from 'child_process'
 import {
   CodexAccountHistoryService,
   codexHistoryFs,
@@ -104,26 +104,30 @@ const defaultFs: ProviderAccountFs = {
   },
 }
 
+// Account commands outside the interactive ceremony (notably cleanup) are
+// bounded too. Resolve only on close, so a killed CLI cannot still write after
+// the account maintenance lease is released.
 const defaultRunCommand: ProviderAccountCommandRunner = (command) =>
-  new Promise((resolve, reject) => {
-    const child = spawn(command.command, command.args, {
-      cwd: command.cwd,
-      env: command.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-
-    let stdout = ''
-    let stderr = ''
-    child.stdout?.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString()
-    })
-    child.stderr?.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString()
-    })
-    child.once('error', reject)
-    child.once('exit', (code) => {
-      resolve({ code: code ?? 1, stdout, stderr })
-    })
+  new Promise((resolve) => {
+    execFile(
+      command.command,
+      command.args,
+      {
+        cwd: command.cwd,
+        env: command.env,
+        timeout: 20_000,
+        killSignal: 'SIGKILL',
+        maxBuffer: 64 * 1024,
+        encoding: 'utf8',
+      },
+      (error, stdout, stderr) => {
+        resolve({
+          code: error ? (typeof error.code === 'number' ? error.code : 1) : 0,
+          stdout,
+          stderr: error?.killed ? '' : stderr,
+        })
+      },
+    )
   })
 
 export interface ProviderAccountEnrolmentDeps {
@@ -131,6 +135,7 @@ export interface ProviderAccountEnrolmentDeps {
   onAccountChanged?: (accountId: string) => void
   fs?: ProviderAccountFs
   runCommand?: ProviderAccountCommandRunner
+  runLoginCommand?: ProviderAccountCommandRunner
   homeDir?: string
   baseEnv?: NodeJS.ProcessEnv
   newAccountId?: () => string
@@ -172,6 +177,7 @@ export class ProviderAccountEnrolmentService {
   private readonly onAccountChanged: (accountId: string) => void
   private readonly fs: ProviderAccountFs
   private readonly runCommand: ProviderAccountCommandRunner
+  private readonly runLoginCommand: ProviderAccountCommandRunner
   private readonly homeDir: string
   private readonly baseEnv: NodeJS.ProcessEnv
   private readonly newAccountId: () => string
@@ -186,6 +192,7 @@ export class ProviderAccountEnrolmentService {
     this.onAccountChanged = deps.onAccountChanged ?? (() => {})
     this.fs = deps.fs ?? defaultFs
     this.runCommand = deps.runCommand ?? defaultRunCommand
+    this.runLoginCommand = deps.runLoginCommand ?? this.runCommand
     this.homeDir = deps.homeDir ?? homedir()
     this.baseEnv = deps.baseEnv ?? process.env
     this.newAccountId = deps.newAccountId ?? (() => randomUUID())
@@ -266,7 +273,7 @@ export class ProviderAccountEnrolmentService {
 
     const warnings = await this.scanSharedSettings()
 
-    const result = await this.runCommand(
+    const result = await this.runLoginCommand(
       buildProviderAccountLoginCommand({
         binaryPath,
         configDir,
@@ -371,7 +378,7 @@ export class ProviderAccountEnrolmentService {
 
       let result: ProviderAccountCommandResult
       try {
-        result = await this.runCommand(
+        result = await this.runLoginCommand(
           buildProviderAccountLoginCommand({
             binaryPath,
             configDir: account.configDir,
@@ -504,7 +511,7 @@ export class ProviderAccountEnrolmentService {
       // relabel historical turns to that new identity, even when login succeeds.
       this.repository.setStatus(account.id, 'unavailable', null)
       await this.fs.chmod(account.configDir, CODEX_HOME_DIR_MODE)
-      const result = await this.runCommand(
+      const result = await this.runLoginCommand(
         buildCodexAccountLoginCommand({
           binaryPath,
           configDir: account.configDir,
@@ -601,7 +608,7 @@ export class ProviderAccountEnrolmentService {
     await this.fs.chmod(configPath, CODEX_AUTH_FILE_MODE)
     const historyLayout = await this.codexHistory.migrate(configDir)
 
-    const result = await this.runCommand(
+    const result = await this.runLoginCommand(
       buildCodexAccountLoginCommand({
         binaryPath,
         configDir,

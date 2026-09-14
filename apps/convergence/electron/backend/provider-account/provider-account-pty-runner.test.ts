@@ -15,13 +15,14 @@ function fakePty() {
   }) => void)[] = []
   const disposed: string[] = []
   const kill = vi.fn()
+  const write = vi.fn()
 
   const factory: PtyFactory = {
     spawn(options) {
       spawns.push(options)
       return {
         pid: 4242,
-        write: vi.fn(),
+        write,
         resize: vi.fn(),
         kill,
         onData(cb) {
@@ -41,6 +42,7 @@ function fakePty() {
     spawns,
     disposed,
     kill,
+    write,
     emit: (data: string) => dataHandlers.forEach((cb) => cb(data)),
     exit: (exitCode: number) =>
       exitHandlers.forEach((cb) => cb({ exitCode, signal: null })),
@@ -190,4 +192,67 @@ describe('createPtyCommandRunner', () => {
     expect(pty.kill).toHaveBeenCalledWith('SIGKILL')
     expect(onExitConfirmed).toHaveBeenCalledTimes(1)
   })
+})
+
+it('cancels a login, escalates, and waits for exit before rejecting without raw output', async () => {
+  vi.useFakeTimers()
+  const pty = fakePty()
+  const controller = new AbortController()
+  const exitConfirmed = vi.fn()
+  let write!: (value: string) => void
+  const result = createPtyCommandRunner({ ptyFactory: pty.factory })(
+    LOGIN_COMMAND,
+    {
+      onExitConfirmed: exitConfirmed,
+      signal: controller.signal,
+      awaitExitOnTimeout: true,
+      redactOutput: true,
+      onInputReady: (value) => {
+        write = value
+      },
+    },
+  )
+  let settled = false
+  const observed = result.catch((error) => {
+    settled = true
+    return error.message
+  })
+  pty.emit('token=secret-fixture')
+  write('fixture-code\r')
+  expect(pty.write).toHaveBeenCalledWith('fixture-code\r')
+  controller.abort()
+  expect(pty.kill).toHaveBeenCalledTimes(1)
+  write('ignored')
+  expect(pty.write).toHaveBeenCalledTimes(1)
+  expect(settled).toBe(false)
+  expect(exitConfirmed).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(5000)
+  expect(pty.kill).toHaveBeenCalledWith('SIGKILL')
+  expect(settled).toBe(false)
+  pty.exit(137)
+  expect(await observed).toBe('Sign-in cancelled.')
+  expect(exitConfirmed).toHaveBeenCalledTimes(1)
+  expect(pty.disposed.sort()).toEqual(['data', 'exit'])
+})
+
+it('never returns a login transcript on success and aborts before spawn', async () => {
+  const pty = fakePty()
+  const run = createPtyCommandRunner({ ptyFactory: pty.factory })
+  const result = run(LOGIN_COMMAND, {
+    onExitConfirmed: () => {},
+    redactOutput: true,
+    awaitExitOnTimeout: true,
+  })
+  pty.emit('secret-fixture')
+  pty.exit(0)
+  expect(await result).toEqual({ code: 0, output: '' })
+  const controller = new AbortController()
+  controller.abort()
+  await expect(
+    run(LOGIN_COMMAND, {
+      onExitConfirmed: () => {},
+      signal: controller.signal,
+    }),
+  ).rejects.toThrow(/cancelled/)
+  expect(pty.spawns).toHaveLength(1)
 })
