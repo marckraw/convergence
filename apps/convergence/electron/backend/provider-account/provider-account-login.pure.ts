@@ -65,6 +65,18 @@ export function classifyProviderLoginFailure(error: unknown): {
   message: string
 } {
   const message = error instanceof Error ? error.message : ''
+  if (/Incomplete Claude account cleanup failed/.test(message))
+    return {
+      kind: 'cleanup',
+      message:
+        'Sign-in did not finish and its credential could not be discarded. The incomplete login needs cleanup before connecting again.',
+    }
+  if (/Incomplete account directory cleanup failed/.test(message))
+    return {
+      kind: 'cleanup',
+      message:
+        'Sign-in did not finish and its incomplete account directory could not be removed. Its files need attention before retrying.',
+    }
   if (
     /credential could not be (?:removed|discarded)|sign-out failed|logout failed/i.test(
       message,

@@ -181,3 +181,31 @@ it('cannot cancel once the child has exited and identity verification is finishi
   verified()
   await result
 })
+
+it('bounds app shutdown without pretending stalled cleanup completed', async () => {
+  vi.useFakeTimers()
+  const f = fixture()
+  let finishCleanup!: () => void
+  const result = f.service.run(target, async () => {
+    await f.service.runLoginCommand(command)
+    await new Promise<void>((resolve) => {
+      finishCleanup = resolve
+    })
+  })
+  f.exit()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(f.service.getAttempt()?.state).toBe('finishing')
+  let stopped = false
+  const shutdown = f.service.shutdown().then(() => {
+    stopped = true
+  })
+  await vi.advanceTimersByTimeAsync(29_999)
+  expect(stopped).toBe(false)
+  await vi.advanceTimersByTimeAsync(1)
+  await shutdown
+  expect(stopped).toBe(true)
+  expect(f.service.getAttempt()?.active).toBe(true)
+  finishCleanup()
+  await result
+  expect(f.service.getAttempt()?.state).toBe('completed')
+})

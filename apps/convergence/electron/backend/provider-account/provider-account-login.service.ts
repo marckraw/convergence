@@ -175,7 +175,18 @@ export class ProviderAccountLoginService {
 
   async shutdown(): Promise<void> {
     if (this.attempt?.active) this.requestCancel(this.attempt.id, 'cancelled')
-    await this.finished
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        this.finished,
+        new Promise<void>((resolve) => {
+          deadline = setTimeout(resolve, 30_000)
+          deadline.unref?.()
+        }),
+      ])
+    } finally {
+      if (deadline) clearTimeout(deadline)
+    }
   }
 
   cancel(id: string): ProviderAccountLoginAttempt | null {

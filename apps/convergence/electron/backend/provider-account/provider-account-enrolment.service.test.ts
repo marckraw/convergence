@@ -92,7 +92,17 @@ function fakeFs(seed: Record<string, string> = {}) {
         }
       }
     }),
-    mkdir: vi.fn(async (path: string) => {
+    mkdir: vi.fn(async (path: string, options?: { exclusive: true }) => {
+      if (
+        options?.exclusive &&
+        (dirs.has(path) ||
+          files.has(path) ||
+          links.has(path) ||
+          entriesOf(path).length)
+      )
+        throw Object.assign(new Error('Account directory exists'), {
+          code: 'EEXIST',
+        })
       dirs.add(path)
     }),
     chmod: vi.fn(async () => {}),
@@ -120,9 +130,12 @@ function fakeFs(seed: Record<string, string> = {}) {
     ),
     rm: vi.fn(async (path: string) => {
       removed.push(path)
-      files.delete(path)
-      links.delete(path)
-      dirs.delete(path)
+      for (const map of [files, links]) {
+        for (const key of map.keys())
+          if (key === path || key.startsWith(path + '/')) map.delete(key)
+      }
+      for (const key of dirs)
+        if (key === path || key.startsWith(path + '/')) dirs.delete(key)
     }),
   }
 
@@ -227,6 +240,103 @@ describe('ProviderAccountEnrolmentService', () => {
       },
     })
   }
+
+  describe('interrupted new-account cleanup', () => {
+    it.each([
+      ['claude-code', 'reject'],
+      ['claude-code', 'nonzero'],
+      ['claude-code', 'missing'],
+      ['codex', 'reject'],
+      ['codex', 'nonzero'],
+      ['codex', 'missing'],
+    ] as const)(
+      'discards %s enrolment after %s without removing shared data',
+      async (providerId, failure) => {
+        const sharedPath = `${HOME}/.claude/projects/shared/turn.jsonl`
+        const { fs, files, removed } = fakeFs({
+          [sharedPath]: 'shared transcript',
+        })
+        const ordinary = fakeRunner()
+        const configDir =
+          providerId === 'codex'
+            ? `${HOME}/.convergence/provider-accounts/codex/${ACCOUNT_ID}`
+            : CONFIG_DIR
+        const credentialDir =
+          providerId === 'codex' ? configDir : CREDENTIAL_DIR
+        const credentialPath = `${credentialDir}/auth.json`
+        const login = vi.fn(async () => {
+          files.set(credentialPath, 'unverified-fixture')
+          if (failure === 'reject') throw new Error('cancelled-fixture')
+          return { code: failure === 'nonzero' ? 1 : 0, stdout: '', stderr: '' }
+        })
+        const subject = service({
+          fs,
+          run: ordinary.run,
+          runLoginCommand: login,
+        })
+        await expect(
+          subject.enrol({ providerId, email: 'fixture@example.com' }),
+        ).rejects.toThrow()
+        expect(repository.list()).toEqual([])
+        expect(removed).toContain(configDir)
+        expect(removed).toContain(credentialDir)
+        expect(files.has(credentialPath)).toBe(false)
+        expect(files.get(sharedPath)).toBe('shared transcript')
+        if (providerId === 'claude-code')
+          expect(ordinary.calls).toContainEqual(
+            expect.objectContaining({
+              args: ['auth', 'logout'],
+              env: expect.objectContaining({
+                CLAUDE_SECURESTORAGE_CONFIG_DIR: credentialDir,
+              }),
+            }),
+          )
+        else expect(ordinary.run).not.toHaveBeenCalled()
+      },
+    )
+
+    it('retains a new Claude namespace when its checked credential discard fails', async () => {
+      const { fs, dirs, removed } = fakeFs()
+      const ordinary = fakeRunner({ code: 1 })
+      const subject = service({
+        fs,
+        run: ordinary.run,
+        runLoginCommand: vi
+          .fn()
+          .mockRejectedValue(new Error('cancelled-fixture')),
+      })
+      await expect(
+        subject.enrol({ email: 'fixture@example.com' }),
+      ).rejects.toThrow(/Incomplete Claude account cleanup failed/)
+      expect(dirs.has(CONFIG_DIR)).toBe(true)
+      expect(dirs.has(CREDENTIAL_DIR)).toBe(true)
+      expect(removed).not.toContain(CONFIG_DIR)
+      expect(removed).not.toContain(CREDENTIAL_DIR)
+      expect(repository.list()).toEqual([])
+    })
+
+    it.each([CONFIG_DIR, CREDENTIAL_DIR])(
+      'never claims or deletes an existing namespace: %s',
+      async (existingDir) => {
+        const { fs, files, removed } = fakeFs({
+          [`${existingDir}/owned.txt`]: 'existing account data',
+        })
+        const ordinary = fakeRunner()
+        const login = vi.fn()
+        await expect(
+          service({ fs, run: ordinary.run, runLoginCommand: login }).enrol({
+            email: 'fixture@example.com',
+          }),
+        ).rejects.toThrow(/exists/)
+        expect(files.get(`${existingDir}/owned.txt`)).toBe(
+          'existing account data',
+        )
+        expect(removed).not.toContain(existingDir)
+        expect(login).not.toHaveBeenCalled()
+        expect(ordinary.run).not.toHaveBeenCalled()
+      },
+    )
+  })
 
   describe('enrol', () => {
     function enrolFixture(extraFiles: Record<string, string> = {}) {
@@ -375,10 +485,12 @@ describe('ProviderAccountEnrolmentService', () => {
 
     it('does not enrol an account when login fails', async () => {
       const { fs, files } = fakeFs()
-      const runner = fakeRunner(
-        { code: 1, stderr: 'browser closed' },
-        loginWritesIdentity(files),
-      )
+      const runner = fakeRunner({}, loginWritesIdentity(files))
+      runner.run.mockResolvedValueOnce({
+        code: 1,
+        stdout: '',
+        stderr: 'browser closed',
+      })
 
       await expect(
         service({ fs, run: runner.run }).enrol({
@@ -739,6 +851,24 @@ describe('ProviderAccountEnrolmentService', () => {
       },
     )
 
+    it('discards auth written before a rejected Codex reconnect and preserves its identity', async () => {
+      const { subject, runner, files, removed } = codexFixture()
+      await subject.enrol({ email: 'someone@example.com', providerId: 'codex' })
+      runner.run.mockImplementationOnce(async () => {
+        files.set(`${CODEX_HOME}/auth.json`, 'unverified-fixture')
+        throw new Error('cancelled-fixture')
+      })
+      await expect(subject.reconnect(ACCOUNT_ID)).rejects.toThrow(
+        /unverified login was discarded/,
+      )
+      expect(removed).toContain(`${CODEX_HOME}/auth.json`)
+      expect(files.has(`${CODEX_HOME}/auth.json`)).toBe(false)
+      expect(repository.get(ACCOUNT_ID)).toMatchObject({
+        orgId: 'acc_123',
+        status: 'unavailable',
+      })
+    })
+
     it('leaves a failed Codex reconnect unavailable without rewriting its historical identity', async () => {
       const { subject, runner } = codexFixture()
       await subject.enrol({ email: 'someone@example.com', providerId: 'codex' })
@@ -748,7 +878,7 @@ describe('ProviderAccountEnrolmentService', () => {
         stderr: 'login cancelled',
       })
       await expect(subject.reconnect(ACCOUNT_ID)).rejects.toThrow(
-        /login cancelled/,
+        /Sign-in did not complete/,
       )
       expect(repository.get(ACCOUNT_ID)).toMatchObject({
         orgId: 'acc_123',
@@ -834,7 +964,7 @@ describe('ProviderAccountEnrolmentService', () => {
           email: 'someone@example.com',
           providerId: 'codex',
         }),
-      ).rejects.toThrow(/browser closed/)
+      ).rejects.toThrow(/sign-in did not complete/)
       expect(repository.list()).toEqual([])
     })
 
