@@ -10,7 +10,31 @@ const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
 
 vi.mock('child_process', () => ({ spawn: spawnMock }))
 
+// A per-account `.claude.json` whose bytes are truncated mid-write — valid on
+// disk, invalid JSON — so MAR-3030's "unreadable, not absent" branch is
+// reachable without touching the real filesystem.
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>()
+  return {
+    ...actual,
+    promises: {
+      ...actual.promises,
+      readFile: async (
+        ...args: Parameters<typeof actual.promises.readFile>
+      ) => {
+        if (args[0] === '/fixture/unreadable-account/.claude.json') {
+          return '{"oauthAccount": {"emailAddress": "unreadable@example.com"'
+        }
+        return actual.promises.readFile(...args)
+      },
+    },
+  }
+})
+
 import { ClaudeCodeProvider } from './claude-code-provider'
+import type { ClaudeAccountLookup } from './claude-code-provider'
+import type { ProviderDebugEntry } from '../../provider-debug/provider-debug.types'
+import type { ProviderDebugSink } from '../../provider-debug/provider-debug-sink'
 import { ClaudeAccountMaintenance } from './claude-account-maintenance.service'
 
 class MockChildProcess extends EventEmitter {
@@ -118,5 +142,63 @@ describe('ClaudeCodeProvider context management', () => {
     )
     expect(input).toContain('/compact Keep decisions')
     expect(result?.contextWindow.availability).toBe('unavailable')
+  })
+
+  it('records a debug note when the account config cannot be read safely (MAR-3030)', async () => {
+    const child = new MockChildProcess()
+    child.stdin.on('data', () => {
+      child.stdout.write(
+        JSON.stringify({
+          type: 'system',
+          hook_event_name: 'PreCompact',
+        }) + '\n',
+      )
+      child.stdout.write(
+        JSON.stringify({
+          type: 'system',
+          hook_event_name: 'PostCompact',
+        }) + '\n',
+      )
+      child.stdout.write(
+        JSON.stringify({ type: 'result', is_error: false }) + '\n',
+      )
+      setTimeout(() => child.emit('exit', 0), 0)
+    })
+    spawnMock.mockReturnValue(child)
+
+    const account = {
+      configDir: '/fixture/unreadable-account',
+      credentialDir: '/fixture/unreadable-account-credentials',
+    }
+    const lookup: ClaudeAccountLookup = (id) =>
+      id === 'acct-unreadable' ? account : null
+    const records: ProviderDebugEntry[] = []
+    const debugSink: ProviderDebugSink = {
+      record: (entry) => records.push(entry),
+    }
+    const provider = new ClaudeCodeProvider(
+      '/usr/local/bin/claude',
+      null,
+      debugSink,
+      null,
+      lookup,
+    )
+
+    await provider.manageContext?.(
+      {
+        sessionId: 'session-unreadable',
+        workingDirectory: '/repo',
+        initialMessage: '',
+        model: 'sonnet',
+        effort: 'medium',
+        continuationToken: 'claude-session-1',
+        providerAccountId: 'acct-unreadable',
+      },
+      { kind: 'compact', instructions: 'Keep decisions' },
+    )
+
+    const note = records.find((entry) => entry.channel === 'lifecycle')
+    expect(note?.note).toContain(`${account.configDir}/.claude.json`)
+    expect(note?.sessionId).toBe('session-unreadable')
   })
 })

@@ -67,6 +67,12 @@ vi.mock('fs', async (importOriginal) => {
             await preparation.attachmentGate
           return Buffer.from('fixture image')
         }
+        // A per-account `.claude.json` whose bytes are truncated mid-write —
+        // valid on disk, invalid JSON — so MAR-3030's "unreadable, not
+        // absent" branch is reachable without touching the real filesystem.
+        if (args[0] === '/fixture/unreadable-account/.claude.json') {
+          return '{"oauthAccount": {"emailAddress": "unreadable@example.com"'
+        }
         return actual.promises.readFile(...args)
       },
     },
@@ -103,6 +109,12 @@ const ACCOUNT_A = {
 const ACCOUNT_B = {
   configDir: '/home/.convergence/provider-accounts/claude/acct-b',
   credentialDir: '/home/.convergence/provider-credentials/claude/acct-b',
+}
+/** Its `.claude.json` is the fixture truncated-JSON path mocked above. */
+const ACCOUNT_UNREADABLE = {
+  configDir: '/fixture/unreadable-account',
+  credentialDir:
+    '/home/.convergence/provider-credentials/claude/acct-unreadable',
 }
 
 class MockChildProcess extends EventEmitter {
@@ -364,6 +376,52 @@ describe('per-turn account attribution', () => {
     expect(spawnedEnv(0).CLAUDE_SECURESTORAGE_CONFIG_DIR).toBe(
       ACCOUNT_A.credentialDir,
     )
+  })
+
+  it('surfaces a note when the account config cannot be read safely (MAR-3030)', async () => {
+    const child = new MockChildProcess()
+    spawnMock.mockReturnValue(child)
+    const lookup: ClaudeAccountLookup = (id) =>
+      id === 'acct-unreadable' ? ACCOUNT_UNREADABLE : null
+
+    const provider = new ClaudeCodeProvider(
+      '/usr/local/bin/claude',
+      null,
+      undefined,
+      null,
+      lookup,
+    )
+    const handle = provider.start({
+      sessionId: 'session-unreadable',
+      workingDirectory: process.cwd(),
+      initialMessage: 'hello',
+      initialAttachments: undefined,
+      model: null,
+      effort: null,
+      continuationToken: null,
+      providerAccountId: 'acct-unreadable',
+    })
+
+    const deltas: SessionDelta[] = []
+    handle.onDelta((delta) => deltas.push(delta))
+    attachListeners(handle)
+
+    await waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+
+    // The turn still spawns — an unreadable account config costs an MCP
+    // server, never the wrong credential — but the note is visible in the
+    // transcript rather than swallowed silently.
+    expect(spawnedEnv(0).CLAUDE_CONFIG_DIR).toBe(ACCOUNT_UNREADABLE.configDir)
+    expect(
+      deltas.some(
+        (delta) =>
+          delta.kind === 'conversation.item.add' &&
+          delta.item.kind === 'note' &&
+          delta.item.text.includes(
+            `${ACCOUNT_UNREADABLE.configDir}/.claude.json`,
+          ),
+      ),
+    ).toBe(true)
   })
 
   it('resolves nothing when no account was selected', async () => {

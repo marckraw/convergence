@@ -168,6 +168,7 @@ async function runClaudeOneShot(
   taskProgress?: TaskProgressService | null,
   account: ClaudeAccountEnvTarget | null = null,
   trackProcess: (child: ChildProcess) => void = () => {},
+  onNote?: (text: string) => void,
 ): Promise<OneShotResult> {
   // Session naming, fork summarisation, analytics, space synthesis and guided
   // review all reach Claude through here, so this one resolve scopes every
@@ -175,6 +176,7 @@ async function runClaudeOneShot(
   const env = await resolveClaudeAccountEnv({
     account,
     workingDirectory: input.workingDirectory,
+    onNote,
   })
 
   return new Promise((resolve, reject) => {
@@ -327,6 +329,15 @@ export class ClaudeCodeProvider implements Provider {
         this.accountLookup(input.providerAccountId),
         (child) =>
           this.trackAccountProcess(input.providerAccountId ?? null, child),
+        (text) =>
+          this.debugSink.record({
+            sessionId: input.requestId ?? 'claude-one-shot',
+            providerId: 'claude-code',
+            at: Date.now(),
+            direction: 'in',
+            channel: 'lifecycle',
+            note: text,
+          }),
       )
     } finally {
       release()
@@ -394,6 +405,15 @@ export class ClaudeCodeProvider implements Provider {
     const env = await resolveClaudeAccountEnv({
       account: this.accountLookup(config.providerAccountId),
       workingDirectory: config.workingDirectory,
+      onNote: (text) =>
+        this.debugSink.record({
+          sessionId: config.sessionId,
+          providerId: 'claude-code',
+          at: Date.now(),
+          direction: 'in',
+          channel: 'lifecycle',
+          note: text,
+        }),
     })
 
     const child = spawn(this.binaryPath, args, {
@@ -1546,6 +1566,8 @@ export class ClaudeCodeProvider implements Provider {
             injections: {
               ...(telemetrySink?.env ?? {}),
             },
+            onNote: (text) =>
+              sessionEmitter.addNote({ text, level: 'warning' }),
           })
         }
         if (stopped || currentTurn) return

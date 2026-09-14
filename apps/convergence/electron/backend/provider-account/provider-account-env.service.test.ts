@@ -11,17 +11,33 @@ const ACCOUNT = {
   credentialDir: `${HOME}/.convergence/provider-credentials/claude/acct-a`,
 }
 
-/** In-memory `.claude.json` store — no test may reach the real one. */
+function enoent(path: string): NodeJS.ErrnoException {
+  const error = new Error(`ENOENT: ${path}`) as NodeJS.ErrnoException
+  error.code = 'ENOENT'
+  return error
+}
+
+/**
+ * In-memory `.claude.json` store — no test may reach the real one.
+ *
+ * `rename` mimics the real filesystem contract: it moves whatever the temp
+ * path holds onto the target path, so assertions can keep reading the final
+ * config by its real path exactly as before the write became atomic.
+ */
 function fakeIo(files: Record<string, unknown>) {
   const written: Record<string, string> = {}
   const io: ClaudeConfigIo = {
     readFile: vi.fn(async (path: string) => {
       if (written[path] !== undefined) return written[path]
-      if (!(path in files)) throw new Error(`ENOENT: ${path}`)
+      if (!(path in files)) throw enoent(path)
       return JSON.stringify(files[path])
     }),
     writeFile: vi.fn(async (path: string, contents: string) => {
       written[path] = contents
+    }),
+    rename: vi.fn(async (from: string, to: string) => {
+      written[to] = written[from]
+      delete written[from]
     }),
   }
   return { io, written }
@@ -33,6 +49,9 @@ function explodingIo(): ClaudeConfigIo {
       throw new Error('the filesystem must not be touched here')
     }),
     writeFile: vi.fn(async () => {
+      throw new Error('the filesystem must not be touched here')
+    }),
+    rename: vi.fn(async () => {
       throw new Error('the filesystem must not be touched here')
     }),
   }
@@ -210,6 +229,7 @@ describe('resolveClaudeAccountEnv — selected account', () => {
       writeFile: vi.fn(async () => {
         throw new Error('EACCES')
       }),
+      rename: vi.fn(async () => {}),
     }
 
     const env = await resolveClaudeAccountEnv({
@@ -229,7 +249,7 @@ describe('resolveClaudeAccountEnv — selected account', () => {
     ])
   })
 
-  it('survives an unreadable shared profile', async () => {
+  it('survives an absent shared profile', async () => {
     const { io } = fakeIo({})
 
     const env = await resolveClaudeAccountEnv({
@@ -240,6 +260,193 @@ describe('resolveClaudeAccountEnv — selected account', () => {
       io,
     })
 
+    expect(Object.keys(env).sort()).toEqual([
+      'CLAUDE_CONFIG_DIR',
+      'CLAUDE_SECURESTORAGE_CONFIG_DIR',
+      'HOME',
+      'PATH',
+    ])
+  })
+
+  it('seeds a brand-new account config file (ENOENT is absent, not unreadable)', async () => {
+    const { io, written } = fakeIo({
+      [`${HOME}/.claude.json`]: {
+        mcpServers: { linear: { command: 'npx' } },
+      },
+    })
+
+    await resolveClaudeAccountEnv({
+      account: ACCOUNT,
+      workingDirectory: CWD,
+      baseEnv: BASE_ENV,
+      homeDir: HOME,
+      io,
+    })
+
+    const config = JSON.parse(written[`${ACCOUNT.configDir}/.claude.json`])
+    expect(config).toEqual({ mcpServers: { linear: { command: 'npx' } } })
+  })
+
+  it('does not overwrite an account config that fails to parse (a partial read)', async () => {
+    const writeFile = vi.fn(async () => {
+      throw new Error('must not write when the read is untrustworthy')
+    })
+    const rename = vi.fn(async () => {
+      throw new Error('must not rename when the read is untrustworthy')
+    })
+    const io: ClaudeConfigIo = {
+      readFile: vi.fn(async (path: string) => {
+        if (path === `${HOME}/.claude.json`) {
+          return JSON.stringify({
+            mcpServers: { linear: { command: 'npx' } },
+          })
+        }
+        if (path === `${ACCOUNT.configDir}/.claude.json`) {
+          // Truncated mid-write — valid on-disk bytes, invalid JSON.
+          return '{"oauthAccount": {"emailAddress": "b@example.com"'
+        }
+        throw enoent(path)
+      }),
+      writeFile,
+      rename,
+    }
+
+    const notes: string[] = []
+    const env = await resolveClaudeAccountEnv({
+      account: ACCOUNT,
+      workingDirectory: CWD,
+      baseEnv: BASE_ENV,
+      homeDir: HOME,
+      io,
+      onNote: (text) => notes.push(text),
+    })
+
+    expect(writeFile).not.toHaveBeenCalled()
+    expect(rename).not.toHaveBeenCalled()
+    expect(notes).toHaveLength(1)
+    expect(notes[0]).toContain(`${ACCOUNT.configDir}/.claude.json`)
+    expect(Object.keys(env).sort()).toEqual([
+      'CLAUDE_CONFIG_DIR',
+      'CLAUDE_SECURESTORAGE_CONFIG_DIR',
+      'HOME',
+      'PATH',
+    ])
+  })
+
+  it.each([
+    ['a JSON array', '[]'],
+    ['a bare JSON string', '"just a string"'],
+  ])(
+    'does not overwrite an account config whose JSON parses but is not an object (%s)',
+    async (_label, raw) => {
+      const writeFile = vi.fn(async () => {
+        throw new Error('must not write a non-object document')
+      })
+      const rename = vi.fn(async () => {
+        throw new Error('must not rename a non-object document')
+      })
+      const io: ClaudeConfigIo = {
+        readFile: vi.fn(async (path: string) => {
+          if (path === `${HOME}/.claude.json`) return JSON.stringify({})
+          if (path === `${ACCOUNT.configDir}/.claude.json`) return raw
+          throw enoent(path)
+        }),
+        writeFile,
+        rename,
+      }
+
+      const notes: string[] = []
+      await resolveClaudeAccountEnv({
+        account: ACCOUNT,
+        workingDirectory: CWD,
+        baseEnv: BASE_ENV,
+        homeDir: HOME,
+        io,
+        onNote: (text) => notes.push(text),
+      })
+
+      expect(writeFile).not.toHaveBeenCalled()
+      expect(rename).not.toHaveBeenCalled()
+      expect(notes).toHaveLength(1)
+    },
+  )
+
+  it('writes the reconciled config atomically: a temp file in the same directory, then a rename onto the real path', async () => {
+    const realPath = `${ACCOUNT.configDir}/.claude.json`
+    const writeFile = vi.fn(async (_path: string, _contents: string) => {})
+    const rename = vi.fn(async (_from: string, _to: string) => {})
+    const io: ClaudeConfigIo = {
+      readFile: vi.fn(async (path: string) => {
+        if (path === `${HOME}/.claude.json`) {
+          return JSON.stringify({
+            mcpServers: { linear: { command: 'npx' } },
+          })
+        }
+        throw enoent(path)
+      }),
+      writeFile,
+      rename,
+    }
+
+    await resolveClaudeAccountEnv({
+      account: ACCOUNT,
+      workingDirectory: CWD,
+      baseEnv: BASE_ENV,
+      homeDir: HOME,
+      io,
+    })
+
+    expect(writeFile).toHaveBeenCalledTimes(1)
+    const [tempPath] = writeFile.mock.calls[0]
+    expect(tempPath).not.toBe(realPath)
+    expect(tempPath.startsWith(`${ACCOUNT.configDir}/`)).toBe(true)
+
+    expect(rename).toHaveBeenCalledTimes(1)
+    expect(rename).toHaveBeenCalledWith(tempPath, realPath)
+  })
+
+  it('removes the temp file when rename fails, leaving the original untouched', async () => {
+    const realPath = `${ACCOUNT.configDir}/.claude.json`
+    const originalBytes = JSON.stringify({
+      oauthAccount: { emailAddress: 'b@example.com' },
+    })
+    const store: Record<string, string> = { [realPath]: originalBytes }
+
+    const rm = vi.fn(async (path: string) => {
+      delete store[path]
+    })
+    const io: ClaudeConfigIo = {
+      readFile: vi.fn(async (path: string) => {
+        if (path === `${HOME}/.claude.json`) {
+          return JSON.stringify({
+            mcpServers: { linear: { command: 'npx' } },
+          })
+        }
+        if (path in store) return store[path]
+        throw enoent(path)
+      }),
+      writeFile: vi.fn(async (path: string, contents: string) => {
+        store[path] = contents
+      }),
+      rename: vi.fn(async () => {
+        throw new Error('EBUSY: rename failed')
+      }),
+      rm,
+    }
+
+    const env = await resolveClaudeAccountEnv({
+      account: ACCOUNT,
+      workingDirectory: CWD,
+      baseEnv: BASE_ENV,
+      homeDir: HOME,
+      io,
+    })
+
+    expect(rm).toHaveBeenCalledTimes(1)
+    const [tempPath] = rm.mock.calls[0]
+    expect(tempPath).not.toBe(realPath)
+    expect(store[tempPath]).toBeUndefined()
+    expect(store[realPath]).toBe(originalBytes)
     expect(Object.keys(env).sort()).toEqual([
       'CLAUDE_CONFIG_DIR',
       'CLAUDE_SECURESTORAGE_CONFIG_DIR',
