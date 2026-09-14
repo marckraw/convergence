@@ -1,5 +1,15 @@
 # convergence
 
+## 0.59.2
+
+### Patch Changes
+
+- dfeb76b: Make Claude account reconnect and removal wait for idle processes to exit, preserve accounts when sign-out fails, and keep unverified browser logins unavailable.
+- d38d98e: Verify Claude account history links, repair only missing or broken links, and require explicit confirmation before deleting private account history.
+- e5db702: Fix a Claude account config data-loss bug: a per-account `.claude.json` that could not be read safely (a parse error, a partial read, or JSON that parsed but was not an object) was previously treated the same as a brand-new account and overwritten, dropping its OAuth identity and organization caches. That file is now left untouched when it cannot be trusted, and the reconciled config is written atomically (temp file + rename) so a crash mid-write can no longer corrupt it.
+- b9c9e6c: Keep Claude account health honest by separating saved identity from local sign-in checks, preserving expired accounts until reconnect, and refreshing stale health after login changes.
+- 18777e4: Make Anthropic and OpenAI account sign-in visible and recoverable, with browser links, Claude code entry, cancellation, timeouts, and login progress that survives reopening Settings.
+
 ## 0.59.1
 
 ### Patch Changes
