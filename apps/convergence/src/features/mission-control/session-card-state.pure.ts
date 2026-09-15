@@ -74,20 +74,16 @@ export function countSessionCardStates(
  */
 export function classifySessionCardState(card: SessionCard): SessionCardState {
   const { status, attention, activity } = card.session
-  // RUN82 owns the host-unreachable AttentionState addition.
-  if (String(attention) === 'host-unreachable') return 'host-unreachable'
+  // A viewer that cannot reach its host has lost sight of a run, not ended
+  // one: the room gives it its own state, never "Failed" -- "Failed" about a
+  // remote agent that is still committing is the lie MAR-3051 was filed for.
+  if (attention === 'host-unreachable') return 'host-unreachable'
 
   if (attention === 'needs-approval' || attention === 'needs-input') {
     return 'needs-you'
   }
   // The approval prompt is live even in the beat before attention catches up.
   if (activity === 'waiting-approval') return 'needs-you'
-
-  // A viewer that cannot reach its host has lost sight of a run, not ended
-  // one: the card reads it as working and says "Host unreachable" in its own
-  // words, because "Failed" about a remote agent that is still committing is
-  // the lie MAR-3051 was filed for.
-  if (attention === 'host-unreachable') return 'working'
 
   if (status === 'running' || status === 'answered') return 'working'
   // A live activity signal without a running status still means movement.

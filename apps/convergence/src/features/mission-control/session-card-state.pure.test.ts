@@ -313,12 +313,12 @@ it('RUN77 classifies the conversation state, not task failure — mutation infer
  * and the non-running rows fall through to `idle` or `finished` -- and a
  * `failed` status would read as failed, which is the lie being removed.
  */
-it('reads a host-unreachable card as working, never as failed (MAR-3051)', () => {
+it('reads a host-unreachable card as its own state, never as failed, whatever the status says (MAR-3051, MAR-3054)', () => {
   for (const status of STATUSES) {
     const state = classifySessionCardState(
       makeCard({ status, attention: 'host-unreachable', activity: null }),
     )
-    expect(state).toBe('working')
+    expect(state).toBe('host-unreachable')
     expect(state).not.toBe('failed')
   }
 })
