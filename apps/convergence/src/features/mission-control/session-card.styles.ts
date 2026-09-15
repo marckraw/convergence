@@ -10,6 +10,8 @@ export const CARD_ATTENTION_STYLES: Record<AttentionState, string> = {
   'needs-input': 'border-blue-500/60 bg-blue-500/[0.04]',
   failed: 'border-red-500/50 bg-red-500/[0.04]',
   finished: 'border-emerald-500/50 bg-emerald-500/[0.04]',
+  // Amber, not red: the run is not broken, the view of it is (MAR-3051).
+  'host-unreachable': 'border-amber-500/60 bg-amber-500/[0.04]',
   none: 'border-white/10',
 }
 

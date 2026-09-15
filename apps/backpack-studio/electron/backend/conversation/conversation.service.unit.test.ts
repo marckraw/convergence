@@ -1343,9 +1343,17 @@ describe('the follow', () => {
       'the stream to open',
     )
     daemon.emit(status(1, 'running'))
-    // No `loseFrame`: as far as this daemon is concerned, 2 never existed, so
-    // the resume replays the same hole for as long as it is asked to.
-    daemon.emit(status(3, 'completed'))
+    // On the wire only. A hole the daemon's own log ALSO has is its pruned
+    // history, and the resume's first frame steps over it (MAR-3051 R1); the
+    // loss that still spends a budget is a frame the resume cannot answer.
+    daemon.emitUnlogged(status(3, 'completed'))
+    // The resume opens onto an empty stream the daemon holds open; dropping it
+    // is what ends that read and spends the last attempt.
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length === 2,
+      'the resume the gap asked for',
+    )
+    daemon.dropStream()
 
     await waitUntil(
       () => latest(CONVERSATION_ID)?.status === 'failed',
@@ -1436,7 +1444,14 @@ describe('the follow', () => {
       'the stream to open',
     )
     daemon.emit(status(1, 'running'))
-    daemon.emit(status(3, 'completed'))
+    // Wire-only, so the hole is a loss rather than pruned history (MAR-3051
+    // R1), and the empty resume is dropped to spend the budget on it.
+    daemon.emitUnlogged(status(3, 'completed'))
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length === 2,
+      'the resume the gap asked for',
+    )
+    daemon.dropStream()
     await waitUntil(
       () => latest(CONVERSATION_ID)?.status === 'failed',
       'the reconnect budget to run out on the hole',

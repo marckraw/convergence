@@ -287,6 +287,191 @@ it('spends its budget on replay-only streams — mutation: count duplicate envel
  * can answer.
  */
 describe('DaemonClient.followSession, when the stream skips a sequence', () => {
+  /**
+   * The daemon's pruned history, read the way Convergence reads it (MAR-3051
+   * R1). The daemon deletes superseded streaming patches from the middle of its
+   * log, so a resume can answer a cursor with a number above it and nothing in
+   * between. Studio's record is append-only, and before this reading every such
+   * resume spent the attempt budget on a hole no reconnect could fill.
+   *
+   * Mutation: drop the phase from `readEnvelopeSeq` in this client and 5 is
+   * never recorded -- red on the timeout, and the two apps disagree again.
+   */
+  it("records the first frame of a resume that sits above the daemon's pruned history", async () => {
+    const daemon = createStubDaemon()
+    const record: number[] = []
+    const dropped: string[] = []
+    const abort = new AbortController()
+    const client = new DaemonClient({
+      baseUrl: 'https://daemon.test',
+      token: 'tok-secret',
+      fetchFn: daemon.fetchFn,
+      wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
+      maxStreamAttempts: 5,
+    })
+
+    const following = client.followSession(
+      'c-1',
+      0,
+      {
+        onEnvelope: (received) => {
+          record.push(received.seq)
+          return Promise.resolve()
+        },
+        onDroppedFrame: (reason) => dropped.push(reason),
+      },
+      abort.signal,
+    )
+
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    daemon.emit(envelope(1, { kind: 'status', status: 'running' }, 'c-1'))
+    daemon.emit(envelope(2, { kind: 'heartbeat' }, 'c-1'))
+    await waitUntil(() => record.length === 2, 'the live frames')
+    // 3 and 4 were pruned; the daemon's log now jumps from 2 to 5.
+    daemon.dropStream()
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length === 2,
+      'the resume to open',
+    )
+    daemon.emit(envelope(5, { kind: 'status', status: 'completed' }, 'c-1'))
+
+    await waitUntil(() => record.length === 3, 'the resumed frame')
+    expect(record).toEqual([1, 2, 5])
+    // One reconnect -- the drop -- and none for the hole.
+    expect(daemon.eventStreamLastEventIds).toEqual([null, '2'])
+    expect(dropped).toEqual([])
+
+    abort.abort()
+    await following
+  }, 5_000)
+
+  /**
+   * The deployed daemon's replay (`414f7403`), frame for frame (MAR-3052 lap
+   * 2): every replayed envelope is written `event: replay` + `id` + `data`,
+   * the one standalone frame is `caught-up {throughSeq}`, and live frames
+   * follow. 2, 4, 6 and 7 are the daemon's pruned history, and 8 landing with
+   * no reconnect is the cursor standing at `throughSeq`.
+   *
+   * Mutation: `continue` after setting the `replay` phase (lap 1) and 3 and 5
+   * are never recorded -- red on the poll.
+   */
+  it("records the deployed daemon's named replay, then stands where caught-up says", async () => {
+    const daemon = createStubDaemon()
+    const record: number[] = []
+    const dropped: string[] = []
+    const abort = new AbortController()
+    const client = new DaemonClient({
+      baseUrl: 'https://daemon.test',
+      token: 'tok-secret',
+      fetchFn: daemon.fetchFn,
+      wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
+      maxStreamAttempts: 5,
+    })
+
+    const following = client.followSession(
+      'c-1',
+      0,
+      {
+        onEnvelope: (received) => {
+          record.push(received.seq)
+          return Promise.resolve()
+        },
+        onDroppedFrame: (reason) => dropped.push(reason),
+      },
+      abort.signal,
+    )
+
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    daemon.emit(envelope(1, { kind: 'status', status: 'running' }, 'c-1'))
+    await waitUntil(() => record.length === 1, 'the live frame')
+    daemon.dropStream()
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length === 2,
+      'the resume to open',
+    )
+    const replayed = (seq: number): void =>
+      daemon.emitNamed(
+        'replay',
+        JSON.stringify(envelope(seq, { kind: 'heartbeat' }, 'c-1')),
+        seq,
+      )
+    replayed(3)
+    replayed(5)
+    daemon.emitNamed('caught-up', JSON.stringify({ throughSeq: 7 }))
+    daemon.emit(envelope(8, { kind: 'status', status: 'completed' }, 'c-1'))
+
+    await waitUntil(() => record.length === 4, 'the replay and the live frame')
+    expect(record).toEqual([1, 3, 5, 8])
+    expect(daemon.eventStreamLastEventIds).toEqual([null, '1'])
+    expect(dropped).toEqual([])
+
+    abort.abort()
+    await following
+  }, 5_000)
+
+  /**
+   * `caught-up` moves the cursor the next resume asks from, even when the
+   * replay it closes delivered nothing (MAR-3052 lap 2).
+   *
+   * Mutation: drop `lastSeq = throughSeq` and the third open asks from 1
+   * again -- red on the headers.
+   */
+  it('resumes from the sequence a caught-up frame named', async () => {
+    const daemon = createStubDaemon()
+    const record: number[] = []
+    const abort = new AbortController()
+    const client = new DaemonClient({
+      baseUrl: 'https://daemon.test',
+      token: 'tok-secret',
+      fetchFn: daemon.fetchFn,
+      wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
+      maxStreamAttempts: 5,
+    })
+
+    const following = client.followSession(
+      'c-1',
+      0,
+      {
+        onEnvelope: (received) => {
+          record.push(received.seq)
+          return Promise.resolve()
+        },
+        onDroppedFrame: () => {},
+      },
+      abort.signal,
+    )
+
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    daemon.emit(envelope(1, { kind: 'status', status: 'running' }, 'c-1'))
+    await waitUntil(() => record.length === 1, 'the live frame')
+    daemon.dropStream()
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length === 2,
+      'the resume to open',
+    )
+    daemon.emitNamed('caught-up', JSON.stringify({ throughSeq: 4 }))
+    daemon.dropStream()
+
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length === 3,
+      'the next resume to open',
+    )
+    expect(daemon.eventStreamLastEventIds).toEqual([null, '1', '4'])
+    expect(record).toEqual([1])
+
+    abort.abort()
+    await following
+  }, 5_000)
+
   it('resumes from the last contiguous sequence, so the record has no hole', async () => {
     const daemon = createStubDaemon()
     const record: number[] = []

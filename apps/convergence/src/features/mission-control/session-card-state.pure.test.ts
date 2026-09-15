@@ -296,3 +296,26 @@ it('RUN77 classifies the conversation state, not task failure — mutation infer
   card.session.parallelWork = { running: 0, unknown: 0, failed: 1, stopped: 0 }
   expect(classifySessionCardState(card)).toBe('finished')
 })
+
+/**
+ * A viewer that cannot reach its host has lost sight of a run, not watched it
+ * fail (MAR-3051 R2). On the seat this was filed for, the card read "Failed"
+ * while the horse on the far machine committed four times and opened a PR.
+ *
+ * The status is whatever the daemon last said, which is almost always
+ * `running`; the room reads the card as working and the attention label says
+ * "Host unreachable" in its own words.
+ *
+ * Mutation: delete the `host-unreachable` branch in `classifySessionCardState`
+ * and the non-running rows fall through to `idle` or `finished` -- and a
+ * `failed` status would read as failed, which is the lie being removed.
+ */
+it('reads a host-unreachable card as working, never as failed (MAR-3051)', () => {
+  for (const status of STATUSES) {
+    const state = classifySessionCardState(
+      makeCard({ status, attention: 'host-unreachable', activity: null }),
+    )
+    expect(state).toBe('working')
+    expect(state).not.toBe('failed')
+  }
+})

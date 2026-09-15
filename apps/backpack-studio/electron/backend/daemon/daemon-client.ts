@@ -5,9 +5,14 @@ import {
   evaluateHandshake,
   parseDaemonHealth,
   parseRemoteExecutionHostStartResponse,
+  EXECUTION_HOST_CAUGHT_UP_EVENT,
+  EXECUTION_HOST_REPLAY_EVENT,
+  nextEnvelopeSeqPhase,
+  readCaughtUpThroughSeq,
   readEnvelopeSeq,
   RemoteExecutionHostError,
   type EndpointHandshakeResult,
+  type EnvelopeSeqPhase,
   type MetaProbeOutcome,
 } from '@convergence/execution-host-client'
 import {
@@ -304,6 +309,12 @@ export class DaemonClient {
     let lastSeq = fromSeq
     let envelopes = 0
     let gap = false
+    // The same phase Convergence reads, from the same organ: every open is the
+    // daemon answering a cursor (0 included), so a hole under the first frame
+    // is its pruned history rather than a lost frame (MAR-3051 R1). Two apps
+    // disagreeing about one daemon's numbers is how the gap case came to be
+    // missing from both in the first place.
+    let phase: EnvelopeSeqPhase = 'resumed'
 
     try {
       for (;;) {
@@ -314,6 +325,27 @@ export class DaemonClient {
         for (const frame of parser.feed(
           decoder.decode(value, { stream: true }),
         )) {
+          // The daemon's replay boundary, when it draws one. `replay` is the
+          // name ON a replayed envelope (`event: replay` + `id` + `data`), so it
+          // moves the phase and the frame is then decoded like any other --
+          // skipping it recorded none of the replay (MAR-3052 lap 2). The same
+          // fall-through Convergence's adapter takes.
+          if (frame.event === EXECUTION_HOST_REPLAY_EVENT) phase = 'replay'
+          // `caught-up` is the only standalone frame: no envelope, it ends the
+          // replay and may stand the cursor at the end of one whose middle the
+          // daemon no longer holds.
+          if (frame.event === EXECUTION_HOST_CAUGHT_UP_EVENT) {
+            const throughSeq = readCaughtUpThroughSeq(frame.data)
+            phase = 'live'
+            // The jump also steps over any envelope at or below `throughSeq`
+            // that THIS read dropped as unreadable or as another session's.
+            // Nothing is lost that was not already: the daemon replays nothing
+            // below a cursor, and re-asking would only re-deliver the same
+            // unreadable bytes.
+            if (throughSeq !== null && throughSeq > lastSeq)
+              lastSeq = throughSeq
+            continue
+          }
           const reading = readEnvelopeFrame(frame.data, sessionId)
           if (!reading.ok) {
             handlers.onDroppedFrame(reading.reason, { kind: 'unreadable' })
@@ -323,7 +355,11 @@ export class DaemonClient {
           // file's: Convergence reads the daemon's numbers through the same
           // organ, and two apps disagreeing about one daemon's stream is how
           // the gap case came to be missing from both (MAR-2779).
-          const seqReading = readEnvelopeSeq(lastSeq, reading.envelope.seq)
+          const seqReading = readEnvelopeSeq(
+            lastSeq,
+            reading.envelope.seq,
+            phase,
+          )
           // A replay can re-deliver what this conversation already holds; the
           // record is append-only, so anything at or below the high-water mark
           // is dropped here rather than written twice. A replay is not progress
@@ -347,6 +383,7 @@ export class DaemonClient {
           await handlers.onEnvelope(reading.envelope)
           envelopes += 1
           lastSeq = reading.envelope.seq
+          phase = nextEnvelopeSeqPhase(phase, seqReading)
         }
       }
     } catch {

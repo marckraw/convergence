@@ -34,6 +34,18 @@ export interface StubDaemon {
   /** Pushes an SSE frame the protocol decoder will reject. */
   emitRaw: (data: string) => void
   /**
+   * Pushes a NAMED frame — `event: <name>`, and `id: <id>` when given — without
+   * logging it (MAR-3051).
+   *
+   * The deployed daemon's replay is carried by name rather than by payload:
+   * every replayed envelope is written as `event: replay` + `id` + `data`, and
+   * the one standalone boundary is `event: caught-up` + `data: {"throughSeq"}`.
+   * A client that reads only `id`/`data` cannot see either. Unlogged because
+   * the test is standing in for what the daemon writes on ONE resume: a
+   * later resume must not repeat it.
+   */
+  emitNamed: (name: string, data: string, id?: number) => void
+  /**
    * Logs an envelope WITHOUT writing it to the open stream: the daemon holds
    * it, the wire lost it (MAR-2779).
    *
@@ -358,6 +370,12 @@ export function createStubDaemon(): StubDaemon {
             .map((item) => `id: ${item.seq}\ndata: ${JSON.stringify(item)}\n\n`)
             .join(''),
         ),
+      )
+    },
+    emitNamed(name, data, id) {
+      const idLine = id === undefined ? '' : `id: ${id}\n`
+      current.controller?.enqueue(
+        encoder.encode(`event: ${name}\n${idLine}data: ${data}\n\n`),
       )
     },
     emitRaw(data) {

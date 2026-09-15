@@ -238,15 +238,15 @@ describe('createSseParser', () => {
       ...parser.feed('data: {"b":2}\n\n'),
     ]
     expect(events).toEqual([
-      { id: '1', data: '{"a":1}' },
-      { id: '2', data: '{"b":2}' },
+      { id: '1', data: '{"a":1}', event: null },
+      { id: '2', data: '{"b":2}', event: null },
     ])
   })
 
   it('joins multiple data lines with newlines', () => {
     const parser = createSseParser()
     expect(parser.feed('data: one\ndata: two\n\n')).toEqual([
-      { id: null, data: 'one\ntwo' },
+      { id: null, data: 'one\ntwo', event: null },
     ])
   })
 
@@ -254,7 +254,27 @@ describe('createSseParser', () => {
     const parser = createSseParser()
     expect(
       parser.feed(': keep-alive\r\nretry: 500\r\nid: 7\r\ndata: x\r\n\r\n'),
-    ).toEqual([{ id: '7', data: 'x' }])
+    ).toEqual([{ id: '7', data: 'x', event: null }])
+  })
+
+  /**
+   * The daemon's replay boundary travels by name (MAR-3051 S1), so a parser
+   * that dropped `event:` could never see the frame that says a hole below it
+   * was a prune. The name belongs to its own frame and does not leak into the
+   * next one.
+   *
+   * Mutation: stop reading the `event` field and this is red on both frames.
+   */
+  it('keeps the event name on its own frame', () => {
+    const parser = createSseParser()
+    expect(
+      parser.feed(
+        'event: caught-up\ndata: {"throughSeq":42}\n\nid: 43\ndata: x\n\n',
+      ),
+    ).toEqual([
+      { id: null, data: '{"throughSeq":42}', event: 'caught-up' },
+      { id: '43', data: 'x', event: null },
+    ])
   })
 
   it('emits nothing for blank lines without pending data', () => {

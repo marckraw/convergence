@@ -275,6 +275,15 @@ function requireEchoedSessionId(
 export interface SseEvent {
   id: string | null
   data: string
+  /**
+   * The frame's `event:` name, or null for the default (unnamed) event.
+   *
+   * Kept because the daemon's replay boundary is carried by name rather than
+   * by payload (`caught-up`, `replay` — MAR-3051 S1): a parser that reads only
+   * `id` and `data` cannot see the one frame that says a hole below it was a
+   * prune. Unnamed frames stay unnamed; nothing else changes shape.
+   */
+  event: string | null
 }
 
 /**
@@ -287,6 +296,7 @@ export function createSseParser(): { feed: (chunk: string) => SseEvent[] } {
   let buffer = ''
   let dataLines: string[] = []
   let id: string | null = null
+  let event: string | null = null
 
   return {
     feed(chunk: string): SseEvent[] {
@@ -301,10 +311,11 @@ export function createSseParser(): { feed: (chunk: string) => SseEvent[] } {
 
         if (line === '') {
           if (dataLines.length > 0) {
-            events.push({ id, data: dataLines.join('\n') })
+            events.push({ id, data: dataLines.join('\n'), event })
           }
           dataLines = []
           id = null
+          event = null
           continue
         }
         if (line.startsWith(':')) continue
@@ -316,6 +327,7 @@ export function createSseParser(): { feed: (chunk: string) => SseEvent[] } {
 
         if (field === 'data') dataLines.push(fieldValue)
         else if (field === 'id') id = fieldValue
+        else if (field === 'event') event = fieldValue
       }
 
       return events

@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  describeConfirmedPrune,
   describeSeqGap,
   describeSeqHole,
   describeStreamEndAboveHole,
+  nextEnvelopeSeqPhase,
+  readCaughtUpThroughSeq,
   readEnvelopeSeq,
 } from './execution-host-sequence.pure'
 
@@ -74,6 +77,83 @@ describe('describeStreamEndAboveHole', () => {
     // still get a sentence rather than a fragment.
     expect(describeStreamEndAboveHole('It stopped', 'expected 3, got 4')).toBe(
       'It stopped: expected 3, got 4.',
+    )
+  })
+})
+
+describe('readEnvelopeSeq, by phase (MAR-3051)', () => {
+  /**
+   * The rule the daemon relied on: a hole its own resume repeats is history
+   * it pruned (MAR-2218a), so the first frame of a resume steps over it.
+   *
+   * Mutation: drop the phase check (`if (seq > lastSeq + 1) return 'gap'`) and
+   * this is red -- the reading the seat died of, fifteen times a turn.
+   */
+  it('accepts a hole on the first frame of a resume', () => {
+    expect(readEnvelopeSeq(15838, 15841, 'resumed')).toBe('accept')
+  })
+
+  it('accepts a hole inside a replay the daemon marked', () => {
+    expect(readEnvelopeSeq(10, 14, 'replay')).toBe('accept')
+  })
+
+  it('still reads a hole on a live frame as a gap', () => {
+    expect(readEnvelopeSeq(10, 14, 'live')).toBe('gap')
+    expect(readEnvelopeSeq(10, 14)).toBe('gap')
+  })
+
+  it('reads a duplicate as a duplicate whatever the phase', () => {
+    for (const phase of ['live', 'resumed', 'replay'] as const) {
+      expect(readEnvelopeSeq(10, 10, phase)).toBe('duplicate')
+      expect(readEnvelopeSeq(10, 3, phase)).toBe('duplicate')
+    }
+  })
+})
+
+describe('nextEnvelopeSeqPhase', () => {
+  /**
+   * The forgiveness is one frame wide: a resume answers its cursor once.
+   *
+   * Mutation: return `phase` unchanged and a second hole later in the same
+   * stream is stepped over -- red here and in the adapter canary.
+   */
+  it('turns a resume live once its first envelope is kept', () => {
+    expect(nextEnvelopeSeqPhase('resumed', 'accept')).toBe('live')
+  })
+
+  it('leaves a resume waiting while it is only reading duplicates', () => {
+    expect(nextEnvelopeSeqPhase('resumed', 'duplicate')).toBe('resumed')
+  })
+
+  it('keeps a marked replay and a live stream where they are', () => {
+    expect(nextEnvelopeSeqPhase('replay', 'accept')).toBe('replay')
+    expect(nextEnvelopeSeqPhase('live', 'accept')).toBe('live')
+  })
+})
+
+describe('readCaughtUpThroughSeq', () => {
+  it('reads the sequence a caught-up frame names', () => {
+    expect(readCaughtUpThroughSeq('{"throughSeq": 18369}')).toBe(18369)
+  })
+
+  /**
+   * Unreadable is null, never zero: a frame the client cannot read must leave
+   * the cursor where it is rather than move it to the start of the log.
+   */
+  it('reads nothing from a payload it cannot trust', () => {
+    expect(readCaughtUpThroughSeq('not json')).toBeNull()
+    expect(readCaughtUpThroughSeq('{}')).toBeNull()
+    expect(readCaughtUpThroughSeq('{"throughSeq": "12"}')).toBeNull()
+    expect(readCaughtUpThroughSeq('{"throughSeq": -1}')).toBeNull()
+    expect(readCaughtUpThroughSeq('{"throughSeq": 1.5}')).toBeNull()
+    expect(readCaughtUpThroughSeq('null')).toBeNull()
+  })
+})
+
+describe('describeConfirmedPrune', () => {
+  it('names the hole the resume stepped over, and who confirmed it', () => {
+    expect(describeConfirmedPrune(15838, 15841)).toBe(
+      "pruned history confirmed by the daemon's replay: expected 15839, got 15841",
     )
   })
 })

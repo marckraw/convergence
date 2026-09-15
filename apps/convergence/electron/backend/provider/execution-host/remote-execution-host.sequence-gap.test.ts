@@ -6,7 +6,11 @@ import {
   type StubDaemon,
 } from '@convergence/execution-host-client'
 import { RemoteExecutionHost } from './remote-execution-host'
-import type { SessionStartConfig, SessionStatus } from '../provider.types'
+import type {
+  AttentionState,
+  SessionStartConfig,
+  SessionStatus,
+} from '../provider.types'
 import type { SessionDelta } from '../../session/conversation-item.types'
 import type { ProviderDebugEntry } from '../../provider-debug/provider-debug.types'
 
@@ -31,6 +35,8 @@ describe('a remote stream that skips a sequence', () => {
   let stub: StubDaemon
   let entries: ProviderDebugEntry[]
   let kept: number[]
+  /** Every delay the reconnect loop asked for, in order. */
+  let waits: number[]
 
   /**
    * Omitting the budget leaves the shipped one (`DEFAULT_MAX_RECONNECT_ATTEMPTS`)
@@ -53,7 +59,10 @@ describe('a remote stream that skips a sequence', () => {
       fetch: stub.fetchFn,
       reconnect: {
         ...(maxAttempts === undefined ? {} : { maxAttempts }),
-        wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
+        wait: (ms) => {
+          waits.push(ms)
+          return new Promise((resolve) => setTimeout(resolve, 0))
+        },
       },
       // The reader's own report of what it kept, whatever the event kind:
       // only some kinds reach the transcript as a delta carrying a sequence,
@@ -93,6 +102,7 @@ describe('a remote stream that skips a sequence', () => {
     stub = createStubDaemon()
     entries = []
     kept = []
+    waits = []
   })
 
   /**
@@ -210,12 +220,14 @@ describe('a remote stream that skips a sequence', () => {
    * Mutation: dispatch the gapped envelope anyway and the session completes
    * instead of failing -- red.
    */
-  it('fails the session rather than carry a hole when the budget is spent', async () => {
+  it('says the host is unreachable rather than carry a hole when the budget is spent', async () => {
     const host = hostWith(1)
     await host.refreshProviders()
     const statuses: SessionStatus[] = []
+    const attentions: AttentionState[] = []
     const handle = host.start('claude', startConfig('s-1'))
     handle.onStatusChange((status) => statuses.push(status))
+    handle.onAttentionChange((attention) => attentions.push(attention))
 
     await waitUntil(
       () => stub.eventStreamLastEventIds.length === 1,
@@ -223,16 +235,27 @@ describe('a remote stream that skips a sequence', () => {
     )
     stub.emit(envelope(1, { kind: 'status', status: 'running' }))
     stub.emit(envelope(2, { kind: 'activity', activity: 'thinking' }))
-    stub.loseFrame(envelope(3, { kind: 'heartbeat' }))
-    stub.emit(envelope(4, { kind: 'status', status: 'completed' }))
+    // On the wire and nowhere in the log: the resume is answered with nothing,
+    // so the hole stays open. A hole the daemon's own replay REPEATS is its
+    // pruned history and is accepted instead (MAR-3051 R1) -- that case is the
+    // prune canary below, and this one is what remains a loss.
+    stub.emitUnlogged(envelope(4, { kind: 'status', status: 'completed' }))
 
-    await waitUntil(() => statuses.includes('failed'), 'the session to fail')
+    await waitUntil(
+      () => attentions.includes('host-unreachable'),
+      'the viewer to say it cannot reach the host',
+    )
+    // The run is somebody else's machine's business: this app went blind, and
+    // a blind viewer does not get to end a session (MAR-3051 R2).
+    expect(statuses).not.toContain('failed')
     // The skipped envelope never reached the transcript, and the mark never
     // moved past the hole: 4 is absent, and nothing claims to have seen it.
     expect(kept).not.toContain(4)
     expect(kept).toEqual([1, 2])
     expect(statuses).not.toContain('completed')
-    expect(stub.eventStreamLastEventIds).toEqual([null])
+    expect(stub.eventStreamLastEventIds[0]).toBe(null)
+
+    handle.stop()
   })
 
   /**
@@ -262,9 +285,11 @@ describe('a remote stream that skips a sequence', () => {
     const host = hostWith(3)
     await host.refreshProviders()
     const statuses: SessionStatus[] = []
+    const attentions: AttentionState[] = []
     const deltas: SessionDelta[] = []
     const handle = host.start('claude', startConfig('s-1'))
     handle.onStatusChange((status) => statuses.push(status))
+    handle.onAttentionChange((attention) => attentions.push(attention))
     handle.onDelta((delta) => deltas.push(delta))
 
     await waitUntil(
@@ -273,13 +298,37 @@ describe('a remote stream that skips a sequence', () => {
     )
     stub.emit(envelope(1, { kind: 'status', status: 'running' }))
     stub.emit(envelope(2, { kind: 'activity', activity: 'thinking' }))
-    // No `loseFrame`: as far as this daemon is concerned, 3 never existed.
-    stub.emit(envelope(4, { kind: 'status', status: 'completed' }))
+    // On the wire only. A daemon that replays the same hole is now read as a
+    // prune (MAR-3051 R1), so the case that still spends a budget is the one
+    // where the resume is answered with nothing at all.
+    stub.emitUnlogged(envelope(4, { kind: 'status', status: 'completed' }))
 
-    await waitUntil(() => statuses.includes('failed'), 'the session to fail')
+    // Each resume is answered with an empty stream, and the daemon holds it
+    // open: the drops below are what end those reads.
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 2,
+      'the resume the gap asked for',
+    )
+    stub.dropStream()
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 3,
+      'the re-open after the first empty read',
+    )
+    stub.dropStream()
+
+    await waitUntil(
+      () => attentions.includes('host-unreachable'),
+      'the viewer to say it cannot reach the host',
+    )
+    // The run is somebody else's machine's business: this app went blind, and
+    // a blind viewer does not get to end a session (MAR-3051 R2).
+    expect(statuses).not.toContain('failed')
     // Three opens, not three hundred. The first delivered 1 and 2 and renewed
     // the budget; the two that delivered nothing spent it.
-    expect(stub.eventStreamLastEventIds).toEqual([null, '2', '2'])
+    // Three opens, not three hundred: the first delivered 1 and 2 and renewed
+    // the budget; the two that delivered nothing spent it. The slow retry that
+    // follows may add more, so this reads the first three.
+    expect(stub.eventStreamLastEventIds.slice(0, 3)).toEqual([null, '2', '2'])
     expect(kept).toEqual([1, 2])
     expect(statuses).not.toContain('completed')
     // The sentence is the one this adapter already uses for a stream it could
@@ -292,6 +341,8 @@ describe('a remote stream that skips a sequence', () => {
     expect(noteText(deltas)).toBe(
       'Remote session event stream dropped and could not be re-established: expected 3, got 4.',
     )
+
+    handle.stop()
   }, 5_000)
 
   /**
@@ -316,9 +367,11 @@ describe('a remote stream that skips a sequence', () => {
     const host = hostWith(3)
     await host.refreshProviders()
     const statuses: SessionStatus[] = []
+    const attentions: AttentionState[] = []
     const deltas: SessionDelta[] = []
     const handle = host.start('claude', startConfig('s-1'))
     handle.onStatusChange((status) => statuses.push(status))
+    handle.onAttentionChange((attention) => attentions.push(attention))
     handle.onDelta((delta) => deltas.push(delta))
 
     await waitUntil(
@@ -330,12 +383,20 @@ describe('a remote stream that skips a sequence', () => {
     stub.emit(envelope(4, { kind: 'heartbeat' }))
     stub.setEventsStatus(500)
 
-    await waitUntil(() => statuses.includes('failed'), 'the session to fail')
+    await waitUntil(
+      () => attentions.includes('host-unreachable'),
+      'the viewer to say it cannot reach the host',
+    )
+    // The run is somebody else's machine's business: this app went blind, and
+    // a blind viewer does not get to end a session (MAR-3051 R2).
+    expect(statuses).not.toContain('failed')
     expect(kept).toEqual([1, 2])
     expect(noteText(deltas)).toBe(
       'Remote session event stream is unavailable: Remote execution host ' +
         'event stream failed with 500. (HTTP 500): expected 3, got 4.',
     )
+
+    handle.stop()
   }, 5_000)
 
   /**
@@ -360,9 +421,11 @@ describe('a remote stream that skips a sequence', () => {
     const host = hostWith(3)
     await host.refreshProviders()
     const statuses: SessionStatus[] = []
+    const attentions: AttentionState[] = []
     const deltas: SessionDelta[] = []
     const handle = host.start('claude', startConfig('s-1'))
     handle.onStatusChange((status) => statuses.push(status))
+    handle.onAttentionChange((attention) => attentions.push(attention))
     handle.onDelta((delta) => deltas.push(delta))
 
     await waitUntil(
@@ -385,14 +448,20 @@ describe('a remote stream that skips a sequence', () => {
     )
     stub.dropStream()
 
-    await waitUntil(() => statuses.includes('failed'), 'the budget to run out')
+    await waitUntil(
+      () => attentions.includes('host-unreachable'),
+      'the budget to run out',
+    )
+    expect(statuses).not.toContain('failed')
     // Both resumes asked from the last contiguous sequence and were answered
     // with an empty stream; neither of them saw a gap of its own.
-    expect(stub.eventStreamLastEventIds).toEqual([null, '2', '2'])
+    expect(stub.eventStreamLastEventIds.slice(0, 3)).toEqual([null, '2', '2'])
     expect(kept).toEqual([1, 2])
     expect(noteText(deltas)).toBe(
       'Remote session event stream dropped and could not be re-established: expected 3, got 4.',
     )
+
+    handle.stop()
   }, 5_000)
 
   /**
@@ -414,9 +483,11 @@ describe('a remote stream that skips a sequence', () => {
     const host = hostWith(3)
     await host.refreshProviders()
     const statuses: SessionStatus[] = []
+    const attentions: AttentionState[] = []
     const deltas: SessionDelta[] = []
     const handle = host.start('claude', startConfig('s-1'))
     handle.onStatusChange((status) => statuses.push(status))
+    handle.onAttentionChange((attention) => attentions.push(attention))
     handle.onDelta((delta) => deltas.push(delta))
 
     await waitUntil(
@@ -441,11 +512,17 @@ describe('a remote stream that skips a sequence', () => {
     )
     stub.dropStream()
 
-    await waitUntil(() => statuses.includes('failed'), 'the budget to run out')
+    await waitUntil(
+      () => attentions.includes('host-unreachable'),
+      'the budget to run out',
+    )
+    expect(statuses).not.toContain('failed')
     expect(kept).toEqual([1, 2, 3, 4])
     expect(noteText(deltas)).toBe(
       'Remote session event stream dropped and could not be re-established.',
     )
+
+    handle.stop()
   }, 5_000)
 
   /**
@@ -457,12 +534,14 @@ describe('a remote stream that skips a sequence', () => {
    *
    * Mutation: reset the budget on a successful open and this never fails -- red.
    */
-  it('gives up within the default budget rather than re-dial forever', async () => {
+  it('stops spending its budget within the default attempts rather than re-dial forever', async () => {
     const host = hostWith()
     await host.refreshProviders()
     const statuses: SessionStatus[] = []
+    const attentions: AttentionState[] = []
     const handle = host.start('claude', startConfig('s-1'))
     handle.onStatusChange((status) => statuses.push(status))
+    handle.onAttentionChange((attention) => attentions.push(attention))
 
     await waitUntil(
       () => stub.eventStreamLastEventIds.length === 1,
@@ -470,11 +549,23 @@ describe('a remote stream that skips a sequence', () => {
     )
     stub.emit(envelope(1, { kind: 'status', status: 'running' }))
     stub.emit(envelope(2, { kind: 'activity', activity: 'thinking' }))
-    stub.emit(envelope(4, { kind: 'status', status: 'completed' }))
+    // Wire-only, so the hole is a real loss (MAR-3051 R1 reads a repeated hole
+    // as the daemon's pruned history instead), and then the daemon stops
+    // answering at all: ten refused opens, and no eleventh at full speed.
+    stub.emitUnlogged(envelope(4, { kind: 'status', status: 'completed' }))
+    stub.setEventsStatus(500)
 
-    await waitUntil(() => statuses.includes('failed'), 'the session to fail')
-    expect(stub.eventStreamLastEventIds).toHaveLength(10)
+    await waitUntil(
+      () => attentions.includes('host-unreachable'),
+      'the viewer to say it cannot reach the host',
+    )
+    // The run is somebody else's machine's business: this app went blind, and
+    // a blind viewer does not get to end a session (MAR-3051 R2).
+    expect(statuses).not.toContain('failed')
+    expect(stub.eventStreamLastEventIds.length).toBeGreaterThanOrEqual(10)
     expect(kept).toEqual([1, 2])
+
+    handle.stop()
   }, 5_000)
 
   /**
@@ -497,8 +588,10 @@ describe('a remote stream that skips a sequence', () => {
     const host = hostWith(3)
     await host.refreshProviders()
     const statuses: SessionStatus[] = []
+    const attentions: AttentionState[] = []
     const handle = host.start('claude', startConfig('s-1'))
     handle.onStatusChange((status) => statuses.push(status))
+    handle.onAttentionChange((attention) => attentions.push(attention))
 
     await waitUntil(
       () => stub.eventStreamLastEventIds.length === 1,
@@ -624,4 +717,262 @@ describe('a remote stream that skips a sequence', () => {
 
     handle.stop()
   }, 5_000)
+
+  /**
+   * The rule that heals the poisoned seat (MAR-3051 R1).
+   *
+   * The daemon deletes superseded streaming patches out of the middle of its
+   * own log (MAR-2218a), so a resume answers with a number above the cursor and
+   * no frames in between: 15838 then 15841 on the real seat. Read strictly that
+   * is a gap the resume can never fill, and the session died of it every 2.5
+   * minutes forever. Read here: the resume is the only thing that CAN heal a
+   * gap, and it just said there is nothing to heal.
+   *
+   * Mutation: drop the `resumed` phase (`readEnvelopeSeq(this.lastSeq,
+   * envelope.seq)`) and this run re-opens the same hole until the budget is
+   * gone -- 5 never reaches the transcript and the poll below times out red.
+   */
+  it("accepts the first frame of a resume that sits above the daemon's pruned history", async () => {
+    const host = hostWith(5)
+    await host.refreshProviders()
+    const handle = host.start('claude', startConfig('s-1'))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    stub.emit(envelope(2, { kind: 'activity', activity: 'thinking' }))
+    await waitUntil(() => kept.length === 2, 'the live frames to land')
+    // 3 and 4 were this item's streaming patches; the daemon pruned them and
+    // its log now jumps from 2 to 5.
+    stub.dropStream()
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 2,
+      'the resume to open',
+    )
+    stub.emit(envelope(5, { kind: 'status', status: 'completed' }))
+
+    await waitUntil(() => kept.length === 3, 'the resumed frame to be kept')
+    expect(kept).toEqual([1, 2, 5])
+    // One reconnect -- the drop -- and none for the hole.
+    expect(stub.eventStreamLastEventIds).toEqual([null, '2'])
+    expect(
+      entries.some((entry) =>
+        entry.note?.includes("pruned history confirmed by the daemon's replay"),
+      ),
+    ).toBe(true)
+
+    handle.stop()
+  })
+
+  /**
+   * The forgiveness is one frame wide. A resume answers the cursor once; a
+   * second hole further down the same stream is a frame lost in transit like
+   * any other, and MAR-2779's reconnect still owns it.
+   *
+   * Mutation: keep the `resumed` phase for the whole stream (never call
+   * `nextEnvelopeSeqPhase`) and 7/8 are stepped over -- red on both the order
+   * and the third resume header.
+   */
+  it('still reconnects for a hole later in the same resumed stream', async () => {
+    const host = hostWith(5)
+    await host.refreshProviders()
+    const handle = host.start('claude', startConfig('s-1'))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    await waitUntil(() => kept.length === 1, 'the first frame to land')
+    stub.dropStream()
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 2,
+      'the resume to open',
+    )
+    // The pruned jump, forgiven, and then a genuine loss above it.
+    stub.emit(envelope(5, { kind: 'activity', activity: 'thinking' }))
+    stub.emit(envelope(6, { kind: 'activity', activity: 'thinking' }))
+    stub.loseFrame(envelope(7, { kind: 'attention', attention: 'none' }))
+    stub.emit(envelope(8, { kind: 'status', status: 'completed' }))
+
+    await waitUntil(
+      () => kept.length === 5,
+      'the second resume to replay what was lost',
+    )
+    expect(kept).toEqual([1, 5, 6, 7, 8])
+    expect(stub.eventStreamLastEventIds).toEqual([null, '1', '6'])
+
+    handle.stop()
+  })
+
+  /**
+   * R3, the seat itself: `execution_host_last_seq` is 15838 and the daemon's
+   * next frame is 15841. Every turn on that session attached at the hole and
+   * died at it; with the reading above the attach moves on.
+   *
+   * Mutation: drop the `resumed` phase and the attach never keeps a frame.
+   */
+  it('attaches at a cursor inside a pruned range and moves on', async () => {
+    const host = hostWith(5)
+    await host.refreshProviders()
+    const handle = host.attach('claude', startConfig('s-1'), 15838)
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the attach stream to open',
+    )
+    expect(stub.eventStreamLastEventIds).toEqual(['15838'])
+    // The daemon's log jumps 15838 -> 15841: 15839 and 15840 were the
+    // streaming patches of the item that completed at 15841.
+    stub.emit(envelope(15841, { kind: 'activity', activity: 'thinking' }))
+    stub.emit(envelope(15842, { kind: 'status', status: 'completed' }))
+
+    await waitUntil(() => kept.length === 2, 'the attached frames to be kept')
+    expect(kept).toEqual([15841, 15842])
+    // One stream, no reconnect: the attach did not die at the hole.
+    expect(stub.eventStreamLastEventIds).toEqual(['15838'])
+
+    handle.stop()
+  })
+
+  /**
+   * The deployed daemon's replay (`414f7403`), frame for frame (MAR-3052 lap
+   * 2): every replayed envelope is written `event: replay` + `id` + `data`,
+   * the one standalone frame is `caught-up {throughSeq}`, and live frames
+   * follow. 2, 4, 6 and 7 are the daemon's pruned history.
+   *
+   * 8 landing without a reconnect is the cursor standing at `throughSeq`: a
+   * cursor left at 5 reads 8 as a live gap and re-opens from 5.
+   *
+   * Mutation: return early on a `replay` frame instead of falling through to
+   * decode it, and 3 and 5 never reach the run -- red on the poll.
+   */
+  it("keeps the deployed daemon's named replay, then stands where caught-up says", async () => {
+    const host = hostWith(5)
+    await host.refreshProviders()
+    const handle = host.start('claude', startConfig('s-1'))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    await waitUntil(() => kept.length === 1, 'the live frame to land')
+    stub.dropStream()
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 2,
+      'the resume to open',
+    )
+    const replayed = (seq: number): void =>
+      stub.emitNamed(
+        'replay',
+        JSON.stringify(
+          envelope(seq, { kind: 'activity', activity: 'thinking' }),
+        ),
+        seq,
+      )
+    replayed(3)
+    replayed(5)
+    stub.emitNamed('caught-up', JSON.stringify({ throughSeq: 7 }))
+    stub.emit(envelope(8, { kind: 'status', status: 'completed' }))
+
+    await waitUntil(
+      () => kept.length === 4,
+      'the replay and the live frame to be kept',
+    )
+    expect(kept).toEqual([1, 3, 5, 8])
+    expect(stub.eventStreamLastEventIds).toEqual([null, '1'])
+    expect(
+      entries.some(
+        (entry) => entry.note === 'replay complete; strict sequencing resumes',
+      ),
+    ).toBe(true)
+
+    handle.stop()
+  })
+
+  /**
+   * `caught-up` moves the cursor the next resume asks from, even when the
+   * replay it closes delivered nothing (MAR-3052 lap 2).
+   *
+   * Mutation: drop `this.lastSeq = throughSeq` and the third open asks from 1
+   * again -- red on the headers.
+   */
+  it('resumes from the sequence a caught-up frame named', async () => {
+    const host = hostWith(5)
+    await host.refreshProviders()
+    const handle = host.start('claude', startConfig('s-1'))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    await waitUntil(() => kept.length === 1, 'the live frame to land')
+    stub.dropStream()
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 2,
+      'the resume to open',
+    )
+    // Everything from 2 to 4 was pruned: the replay is empty and says so.
+    stub.emitNamed('caught-up', JSON.stringify({ throughSeq: 4 }))
+    stub.dropStream()
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 3,
+      'the next resume to open',
+    )
+    expect(stub.eventStreamLastEventIds).toEqual([null, '1', '4'])
+    expect(kept).toEqual([1])
+
+    handle.stop()
+  })
+
+  /**
+   * Two holes of different kinds back to back (MAR-3052 lap 2). A live gap on
+   * the third frame of a stream, and the resume it provokes answering with a
+   * first frame that is itself above a further prune: the daemon carried 4,
+   * lost 3 on the wire, and pruned both before the resume arrived.
+   *
+   * The resume is a new stream with its own `resumed` phase; the `live` phase
+   * the gapped stream ended in must not follow it across the re-open.
+   *
+   * Mutation: set `streamPhase = 'resumed'` only for the first stream, and 5
+   * is read as a second gap -- the budget re-opens from 2 until it is spent,
+   * red on the poll.
+   */
+  it('accepts a resume that lands above a further pruned hole after a gap', async () => {
+    const host = hostWith(5)
+    await host.refreshProviders()
+    const statuses: SessionStatus[] = []
+    const handle = host.start('claude', startConfig('s-1'))
+    handle.onStatusChange((status) => statuses.push(status))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    stub.emit(envelope(2, { kind: 'activity', activity: 'thinking' }))
+    await waitUntil(() => kept.length === 2, 'the live frames to land')
+    // The daemon's log already reads 1, 2, 5; the wire still carries 4.
+    stub.loseFrame(envelope(5, { kind: 'activity', activity: 'thinking' }))
+    stub.emitUnlogged(envelope(4, { kind: 'activity', activity: 'thinking' }))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 2,
+      'the gap to resume',
+    )
+    stub.emit(envelope(6, { kind: 'status', status: 'completed' }))
+
+    await waitUntil(() => kept.length === 4, 'the resume to be kept')
+    expect(kept).toEqual([1, 2, 5, 6])
+    // One reconnect -- the gap -- and none for the prune under the resume.
+    expect(stub.eventStreamLastEventIds).toEqual([null, '2'])
+    expect(statuses).not.toContain('failed')
+
+    handle.stop()
+  })
 })

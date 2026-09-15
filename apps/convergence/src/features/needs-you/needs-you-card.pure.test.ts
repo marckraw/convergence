@@ -175,3 +175,22 @@ it('RUN77 zero-count answered stays working and out of review — mutation infer
   expect(card.working).toBe(true)
   expect(card.canArchive).toBe(false)
 })
+
+/**
+ * The needs-you row for a session whose host this app cannot reach says so,
+ * and says nothing else (MAR-3051 R2): not "Failed" (the run is alive on the
+ * far machine), not "Needs review" (there is nothing to review), and not
+ * archivable as a settled item.
+ *
+ * Mutation: drop the `hostUnreachable` branch from `summary` and the row reads
+ * "Working" -- a card that has gone blind claiming it can see.
+ */
+it('says Host unreachable for a blind viewer, and treats it as neither failed nor settled (MAR-3051)', () => {
+  const row = model(
+    cardSession({ status: 'running', attention: 'host-unreachable' }),
+  )
+  expect(row.summary).toBe('Host unreachable')
+  expect(row.attentionGroup).toBeNull()
+  expect(row.canArchive).toBe(false)
+  expect(row.working).toBe(true)
+})

@@ -40,7 +40,10 @@ function createHost(
       }),
     },
     fetch: stub.fetchFn,
-    reconnect: { maxAttempts: 2, wait: async () => {} },
+    reconnect: {
+      maxAttempts: 2,
+      wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
+    },
     ...options,
   })
 }
@@ -750,8 +753,40 @@ describe('RemoteExecutionHost', () => {
     first.stop()
   })
 
-  it('fails the session after exhausting stream reconnect attempts', async () => {
+  /**
+   * A spent budget on opens that never connect is a host this app cannot see,
+   * not a run that ended (MAR-3051 R2): the status is left alone and the
+   * attention says so.
+   *
+   * Mutation: call `failSession` at the spent budget (the behaviour before
+   * MAR-3051) and this is red on both lists.
+   */
+  it('says the host is unreachable after exhausting stream reconnect attempts', async () => {
     stub.setEventsStatus(500)
+    const statuses: SessionStatus[] = []
+    const attentions: AttentionState[] = []
+    const handle = host.start('claude', startConfig('s-1'))
+    handle.onStatusChange((status) => statuses.push(status))
+    handle.onAttentionChange((attention) => attentions.push(attention))
+
+    await waitUntil(
+      () => attentions.includes('host-unreachable'),
+      'the unreachable host to surface',
+    )
+    expect(statuses).not.toContain('failed')
+
+    handle.stop()
+  })
+
+  /**
+   * The daemon's own refusal still ends the run: a 404 says the session does
+   * not exist there, and looking again every minute would only repeat that.
+   *
+   * Mutation: treat a 404 like any other open failure and the session never
+   * fails -- red on the timeout.
+   */
+  it('fails the session when the daemon says the stream does not exist', async () => {
+    stub.setEventsStatus(404)
     const statuses: SessionStatus[] = []
     const handle = host.start('claude', startConfig('s-1'))
     handle.onStatusChange((status) => statuses.push(status))
@@ -798,7 +833,9 @@ describe('RemoteExecutionHost', () => {
    * thing standing between a user and a message that quietly evaporates.
    */
   it('reports a message sent into a run that has died instead of dropping it', async () => {
-    stub.setEventsStatus(500)
+    // A run the DAEMON ended: an unreachable host no longer kills a run
+    // (MAR-3051 R2), so the dead run this canary needs comes from a 404.
+    stub.setEventsStatus(404)
     const attentions: AttentionState[] = []
     const statuses: SessionStatus[] = []
     const deltas: SessionDelta[] = []
@@ -928,7 +965,10 @@ describe('RemoteExecutionHost', () => {
         }),
       },
       fetch: stub.fetchFn,
-      reconnect: { maxAttempts: 2, wait: async () => {} },
+      reconnect: {
+        maxAttempts: 2,
+        wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
+      },
       onEventSeq: (sessionId, seq) => seqs.push([sessionId, seq]),
     })
     await seqHost.refreshProviders()
@@ -1237,7 +1277,10 @@ describe('RemoteExecutionHost', () => {
           },
         },
         fetch: stub.fetchFn,
-        reconnect: { maxAttempts: 2, wait: async () => {} },
+        reconnect: {
+          maxAttempts: 2,
+          wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
+        },
         debugSink: { record: (entry) => entries.push(entry) },
       })
 
