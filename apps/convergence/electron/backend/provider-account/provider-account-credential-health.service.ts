@@ -1,4 +1,5 @@
 import { execFile } from 'child_process'
+import { tmpdir } from 'os'
 import { buildClaudeAccountEnv } from './provider-account-env.pure'
 import type { ProviderAccountCommand } from './provider-account-enrolment.pure'
 import type { ProviderAccount } from './provider-account.types'
@@ -10,6 +11,15 @@ import {
 type StatusRunner = (
   command: ProviderAccountCommand,
 ) => Promise<{ code: number | null; stdout: string }>
+
+/**
+ * The Claude CLI treats its cwd as a project: it reads a `.claude/` tree there
+ * and records `projects[<cwd>]` into `.claude.json`. Probing from inside an
+ * account's own config dir would make the account a project of itself, so
+ * the probe runs from a neutral directory outside every account's
+ * config/credential dir and outside any repository.
+ */
+const NEUTRAL_PROBE_CWD = tmpdir()
 
 const runStatus: StatusRunner = (command) =>
   new Promise((resolve) => {
@@ -64,7 +74,7 @@ export class ClaudeCredentialHealthService {
       const result = await (this.deps.run ?? runStatus)({
         command: this.binaryPath,
         args: ['auth', 'status'],
-        cwd: account.configDir,
+        cwd: NEUTRAL_PROBE_CWD,
         env: buildClaudeAccountEnv({
           baseEnv: this.deps.baseEnv ?? process.env,
           account: {

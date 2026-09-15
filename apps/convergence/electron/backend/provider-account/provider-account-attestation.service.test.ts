@@ -177,7 +177,7 @@ describe('ProviderAccountAttestationService', () => {
     await expect(gate.run('acct-a', async () => {})).resolves.toBeUndefined()
   })
 
-  it('clears cached health after reconnect and prevents an older collection from restoring it', async () => {
+  it('re-collects when a run is invalidated mid-flight, so the resolved report reflects the post-invalidation state', async () => {
     let finish!: () => void
     const inspect = vi
       .fn()
@@ -188,6 +188,7 @@ describe('ProviderAccountAttestationService', () => {
             finish = () => resolve('present')
           }),
       )
+      .mockResolvedValueOnce('present')
     const subject = service({
       files: {
         [`${CONFIG_DIR}/.claude.json`]: identityJson('a@example.com', 'org-a'),
@@ -200,8 +201,75 @@ describe('ProviderAccountAttestationService', () => {
     subject.invalidate('acct-a')
     expect(subject.getHealth().accounts).toEqual([])
     finish()
-    await stale
-    expect(subject.getHealth().accounts).toEqual([])
+    const report = await stale
+    // The invalidated collection is discarded, but the report does not stay
+    // empty until the next hourly tick: the run re-collects once and resolves
+    // with the post-invalidation state.
+    expect(inspect).toHaveBeenCalledTimes(3)
+    expect(report.accounts).toMatchObject([
+      { accountId: 'acct-a', credentialHealth: 'present', status: 'connected' },
+    ])
+    expect(subject.getHealth().accounts.map((a) => a.accountId)).toEqual([
+      'acct-a',
+    ])
+  })
+
+  it('coalesces any number of invalidations during one run into a single re-collect', async () => {
+    let finish!: () => void
+    const inspect = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<'present'>((resolve) => {
+            finish = () => resolve('present')
+          }),
+      )
+      .mockResolvedValue('present' as const)
+    const subject = service({
+      files: {
+        [`${CONFIG_DIR}/.claude.json`]: identityJson('a@example.com', 'org-a'),
+      },
+      credentialHealth: { inspect },
+    })
+    const run = subject.attestAll()
+    await vi.waitFor(() => expect(inspect).toHaveBeenCalledTimes(1))
+    subject.invalidate('acct-a')
+    subject.invalidate('acct-a')
+    subject.invalidate('acct-a')
+    finish()
+    const report = await run
+    // One probe per collect for this single account: exactly two collects —
+    // the invalidated one plus one coalesced re-run, not one per invalidation.
+    expect(inspect).toHaveBeenCalledTimes(2)
+    expect(report.accounts).toMatchObject([{ accountId: 'acct-a' }])
+  })
+
+  it('caps consecutive re-collects at three, then keeps the freshest report and stamps it', async () => {
+    // An invalidate storm: every collection is invalidated while it runs.
+    const storm: { invalidate: (accountId: string) => void } = {
+      invalidate: () => {},
+    }
+    const inspect = vi.fn(async () => {
+      storm.invalidate('acct-a')
+      return 'present' as const
+    })
+    const subject = service({
+      files: {
+        [`${CONFIG_DIR}/.claude.json`]: identityJson('a@example.com', 'org-a'),
+      },
+      credentialHealth: { inspect },
+    })
+    storm.invalidate = (accountId) => subject.invalidate(accountId)
+    const report = await subject.attestAll()
+    // One collect plus at most three re-runs, then the freshest is committed.
+    expect(inspect).toHaveBeenCalledTimes(4)
+    expect(report.accounts).toMatchObject([{ accountId: 'acct-a' }])
+    expect(report.checkedAt).toBe(new Date(clock).toISOString())
+    expect(subject.getHealth()).toBe(report)
+    // The stamp means the storm is over for this report: the next due check
+    // returns the committed report instead of collecting a fifth time.
+    expect(await subject.attestIfDue()).toBe(report)
+    expect(inspect).toHaveBeenCalledTimes(4)
   })
 
   it('wakes the existing due check hourly and stops its timer on shutdown', async () => {
@@ -440,6 +508,52 @@ describe('ProviderAccountAttestationService', () => {
     await subject.attestIfDue()
     expect(subject.getHealth().checkedAt).not.toBe(firstCheckedAt)
     expect(subject.getHealth().claudeVersion).toBe('2.2.0')
+  })
+
+  it('stamps the committed report and lastVersion with the version at collection start', async () => {
+    let version = '2.1.220'
+    let clockNow = clock
+    let finish!: () => void
+    const inspect = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<'present'>((resolve) => {
+            finish = () => resolve('present')
+          }),
+      )
+      .mockResolvedValue('present' as const)
+    const subject = new ProviderAccountAttestationService({
+      repository,
+      fs: fakeFs(
+        {
+          [`${CONFIG_DIR}/.claude.json`]: identityJson(
+            'a@example.com',
+            'org-a',
+          ),
+        },
+        {},
+      ),
+      homeDir: HOME,
+      now: () => clockNow,
+      claudeVersion: () => version,
+      credentialHealth: { inspect },
+    })
+    const run = subject.attestAll()
+    await vi.waitFor(() => expect(inspect).toHaveBeenCalledTimes(1))
+    // The CLI version changes while the collection is still probing: the
+    // committed report must describe the version it started under, not the
+    // one that landed mid-run.
+    version = '2.2.0'
+    finish()
+    const report = await run
+    expect(report.claudeVersion).toBe('2.1.220')
+    // lastVersion carries the same value: with the interval not elapsed, the
+    // version difference alone makes the next check due.
+    clockNow += 60_000
+    const second = await subject.attestIfDue()
+    expect(second).not.toBe(report)
+    expect(second.claudeVersion).toBe('2.2.0')
   })
 
   it('re-attests once the interval has elapsed', async () => {

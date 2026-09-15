@@ -170,14 +170,51 @@ export class ProviderAccountAttestationService {
 
   attestAll(): Promise<ProviderAccountHealthReport> {
     if (this.inFlight) return this.inFlight
-    this.inFlight = this.collectReport().finally(() => {
+    this.inFlight = this.attestWithRetry().finally(() => {
       this.inFlight = null
     })
     return this.inFlight
   }
 
-  private async collectReport(): Promise<ProviderAccountHealthReport> {
+  /**
+   * An invalidation mid-run discards that collection, but the report must not
+   * stay stale until the next hourly tick: collect once more, coalescing any
+   * number of invalidations into a single re-run. If invalidations keep
+   * arriving through three consecutive re-runs, keep the freshest collection
+   * and stamp it, so an invalidate storm cannot starve the report forever.
+   */
+  private async attestWithRetry(): Promise<ProviderAccountHealthReport> {
+    const MAX_RERUNS = 3
+    let collected = await this.collectReport()
+    let reruns = 0
+    while (collected.invalidated) {
+      if (reruns >= MAX_RERUNS) return this.commitReport(collected)
+      reruns++
+      collected = await this.collectReport()
+    }
+    return collected.report
+  }
+
+  private commitReport(collected: {
+    report: ProviderAccountHealthReport
+    checkedAtMs: number
+  }): ProviderAccountHealthReport {
+    // One version read per collection, captured when it started: the report
+    // and lastVersion must describe the probes that ran, not a version that
+    // landed while they were in flight.
+    this.lastCheckedAt = collected.checkedAtMs
+    this.lastVersion = collected.report.claudeVersion
+    this.report = collected.report
+    return collected.report
+  }
+
+  private async collectReport(): Promise<{
+    report: ProviderAccountHealthReport
+    checkedAtMs: number
+    invalidated: boolean
+  }> {
     const revision = this.revision
+    const claudeVersion = this.claudeVersion()
     const accounts = this.repository.list()
     const sharedEntries = await this.readdirSafe(join(this.homeDir, '.claude'))
     const checkedAtMs = this.now()
@@ -301,17 +338,19 @@ export class ProviderAccountAttestationService {
     const settingsWarnings = scanSharedSettingsForCredentials(
       await this.readJson(join(this.homeDir, '.claude', 'settings.json')),
     )
-    if (revision !== this.revision) return this.report
-    this.lastCheckedAt = checkedAtMs
-    this.lastVersion = this.claudeVersion()
-    this.report = {
+    const candidate: ProviderAccountHealthReport = {
       checkedAt: new Date(checkedAtMs).toISOString(),
-      claudeVersion: this.lastVersion,
+      claudeVersion,
       accounts: results,
       settingsWarnings,
     }
-
-    return this.report
+    if (revision !== this.revision)
+      return { report: candidate, checkedAtMs, invalidated: true }
+    return {
+      report: this.commitReport({ report: candidate, checkedAtMs }),
+      checkedAtMs,
+      invalidated: false,
+    }
   }
 
   private async readJson(path: string): Promise<unknown> {
