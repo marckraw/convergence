@@ -836,4 +836,143 @@ describe('a remote stream that skips a sequence', () => {
 
     handle.stop()
   })
+
+  /**
+   * The deployed daemon's replay (`414f7403`), frame for frame (MAR-3052 lap
+   * 2): every replayed envelope is written `event: replay` + `id` + `data`,
+   * the one standalone frame is `caught-up {throughSeq}`, and live frames
+   * follow. 2, 4, 6 and 7 are the daemon's pruned history.
+   *
+   * 8 landing without a reconnect is the cursor standing at `throughSeq`: a
+   * cursor left at 5 reads 8 as a live gap and re-opens from 5.
+   *
+   * Mutation: return early on a `replay` frame instead of falling through to
+   * decode it, and 3 and 5 never reach the run -- red on the poll.
+   */
+  it("keeps the deployed daemon's named replay, then stands where caught-up says", async () => {
+    const host = hostWith(5)
+    await host.refreshProviders()
+    const handle = host.start('claude', startConfig('s-1'))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    await waitUntil(() => kept.length === 1, 'the live frame to land')
+    stub.dropStream()
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 2,
+      'the resume to open',
+    )
+    const replayed = (seq: number): void =>
+      stub.emitNamed(
+        'replay',
+        JSON.stringify(
+          envelope(seq, { kind: 'activity', activity: 'thinking' }),
+        ),
+        seq,
+      )
+    replayed(3)
+    replayed(5)
+    stub.emitNamed('caught-up', JSON.stringify({ throughSeq: 7 }))
+    stub.emit(envelope(8, { kind: 'status', status: 'completed' }))
+
+    await waitUntil(
+      () => kept.length === 4,
+      'the replay and the live frame to be kept',
+    )
+    expect(kept).toEqual([1, 3, 5, 8])
+    expect(stub.eventStreamLastEventIds).toEqual([null, '1'])
+    expect(
+      entries.some(
+        (entry) => entry.note === 'replay complete; strict sequencing resumes',
+      ),
+    ).toBe(true)
+
+    handle.stop()
+  })
+
+  /**
+   * `caught-up` moves the cursor the next resume asks from, even when the
+   * replay it closes delivered nothing (MAR-3052 lap 2).
+   *
+   * Mutation: drop `this.lastSeq = throughSeq` and the third open asks from 1
+   * again -- red on the headers.
+   */
+  it('resumes from the sequence a caught-up frame named', async () => {
+    const host = hostWith(5)
+    await host.refreshProviders()
+    const handle = host.start('claude', startConfig('s-1'))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    await waitUntil(() => kept.length === 1, 'the live frame to land')
+    stub.dropStream()
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 2,
+      'the resume to open',
+    )
+    // Everything from 2 to 4 was pruned: the replay is empty and says so.
+    stub.emitNamed('caught-up', JSON.stringify({ throughSeq: 4 }))
+    stub.dropStream()
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 3,
+      'the next resume to open',
+    )
+    expect(stub.eventStreamLastEventIds).toEqual([null, '1', '4'])
+    expect(kept).toEqual([1])
+
+    handle.stop()
+  })
+
+  /**
+   * Two holes of different kinds back to back (MAR-3052 lap 2). A live gap on
+   * the third frame of a stream, and the resume it provokes answering with a
+   * first frame that is itself above a further prune: the daemon carried 4,
+   * lost 3 on the wire, and pruned both before the resume arrived.
+   *
+   * The resume is a new stream with its own `resumed` phase; the `live` phase
+   * the gapped stream ended in must not follow it across the re-open.
+   *
+   * Mutation: set `streamPhase = 'resumed'` only for the first stream, and 5
+   * is read as a second gap -- the budget re-opens from 2 until it is spent,
+   * red on the poll.
+   */
+  it('accepts a resume that lands above a further pruned hole after a gap', async () => {
+    const host = hostWith(5)
+    await host.refreshProviders()
+    const statuses: SessionStatus[] = []
+    const handle = host.start('claude', startConfig('s-1'))
+    handle.onStatusChange((status) => statuses.push(status))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    stub.emit(envelope(2, { kind: 'activity', activity: 'thinking' }))
+    await waitUntil(() => kept.length === 2, 'the live frames to land')
+    // The daemon's log already reads 1, 2, 5; the wire still carries 4.
+    stub.loseFrame(envelope(5, { kind: 'activity', activity: 'thinking' }))
+    stub.emitUnlogged(envelope(4, { kind: 'activity', activity: 'thinking' }))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 2,
+      'the gap to resume',
+    )
+    stub.emit(envelope(6, { kind: 'status', status: 'completed' }))
+
+    await waitUntil(() => kept.length === 4, 'the resume to be kept')
+    expect(kept).toEqual([1, 2, 5, 6])
+    // One reconnect -- the gap -- and none for the prune under the resume.
+    expect(stub.eventStreamLastEventIds).toEqual([null, '2'])
+    expect(statuses).not.toContain('failed')
+
+    handle.stop()
+  })
 })

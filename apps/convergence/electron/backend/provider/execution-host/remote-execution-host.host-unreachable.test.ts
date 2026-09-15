@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createStubDaemon,
   envelope,
@@ -10,11 +10,14 @@ import {
   RemoteExecutionHost,
 } from './remote-execution-host'
 import type {
+  ActivitySignal,
   AttentionState,
+  SessionHandle,
   SessionStartConfig,
   SessionStatus,
 } from '../provider.types'
 import type { SessionDelta } from '../../session/conversation-item.types'
+import type { ProviderDebugEntry } from '../../provider-debug/provider-debug.types'
 
 /**
  * A viewer that cannot reach its host has not watched a run fail (MAR-3051 S2).
@@ -39,6 +42,19 @@ import type { SessionDelta } from '../../session/conversation-item.types'
 describe('a remote session whose host stops answering', () => {
   let stub: StubDaemon
   let waits: number[]
+  let entries: ProviderDebugEntry[]
+  /**
+   * Every run a test started. A test that goes red before its own
+   * `handle.stop()` would otherwise leave a live retry loop scheduling timers
+   * into the next test -- which is how one mutation's red once showed up in a
+   * second test that had nothing to do with it.
+   */
+  let handles: SessionHandle[]
+
+  function track(handle: SessionHandle): SessionHandle {
+    handles.push(handle)
+    return handle
+  }
 
   function hostWith(maxAttempts: number): RemoteExecutionHost {
     return new RemoteExecutionHost({
@@ -53,6 +69,7 @@ describe('a remote session whose host stops answering', () => {
       // one to tell a kept sequence to, and each dispatch would end its read by
       // throwing -- the local refusal this adapter still fails a run for.
       onEventSeq: () => {},
+      debugSink: { record: (entry) => entries.push(entry) },
       reconnect: {
         maxAttempts,
         // Only the LENGTH of each wait is stubbed; the delay the loop ASKED
@@ -93,9 +110,22 @@ describe('a remote session whose host stops answering', () => {
     )
   }
 
+  function lifecycleNotes(): string[] {
+    return entries.flatMap((entry) =>
+      entry.channel === 'lifecycle' && entry.note ? [entry.note] : [],
+    )
+  }
+
   beforeEach(() => {
     stub = createStubDaemon()
     waits = []
+    entries = []
+    handles = []
+  })
+
+  afterEach(() => {
+    for (const handle of handles) handle.stop()
+    vi.useRealTimers()
   })
 
   /**
@@ -113,8 +143,7 @@ describe('a remote session whose host stops answering', () => {
     const statuses: SessionStatus[] = []
     const attentions: AttentionState[] = []
     const deltas: SessionDelta[] = []
-    const kept: number[] = []
-    const handle = host.start('claude', startConfig())
+    const handle = track(host.start('claude', startConfig()))
     handle.onStatusChange((status) => statuses.push(status))
     handle.onAttentionChange((attention) => attentions.push(attention))
     handle.onDelta((delta) => deltas.push(delta))
@@ -145,6 +174,12 @@ describe('a remote session whose host stops answering', () => {
     )
     // The budget's backoff is over; from here it is one look a minute.
     expect(waits).toContain(HOST_UNREACHABLE_RETRY_MS)
+    // The debug log is the only place the outage can be read afterwards, and
+    // it names the cadence and the cursor the looks resume from (MAR-3052 lap
+    // 2: both lines were invisible to every mutation before).
+    expect(lifecycleNotes()).toContain(
+      'host unreachable; retrying every 60s from seq 1 until this run is stopped',
+    )
     const opensWhileBlind = stub.eventStreamLastEventIds.length
 
     // The host comes back, and the daemon still has everything above the
@@ -156,7 +191,6 @@ describe('a remote session whose host stops answering', () => {
       () => statuses.includes('completed'),
       'the terminal the daemon held to reach the run',
     )
-    handle.onDelta(() => {})
     expect(statuses).not.toContain('failed')
     // The warning comes down by itself: the first kept envelope is the proof
     // that this app can see again. What follows it is the terminal's own
@@ -168,13 +202,14 @@ describe('a remote session whose host stops answering', () => {
     expect(attentionPatches(deltas).indexOf('none')).toBeGreaterThan(
       attentionPatches(deltas).indexOf('host-unreachable'),
     )
+    // Said before the terminal is dispatched, at the cursor it arrived above.
+    expect(lifecycleNotes()).toContain('host reachable again at seq 1')
     expect(stub.eventStreamLastEventIds.length).toBeGreaterThan(opensWhileBlind)
     // One settle, not two: the run was never failed, so `completed` is the
     // first terminal this session ever saw and the relay has a baton to carry.
     expect(statuses.filter((status) => status === 'completed')).toHaveLength(1)
 
     handle.stop()
-    void kept
   }, 5_000)
 
   /**
@@ -190,7 +225,7 @@ describe('a remote session whose host stops answering', () => {
     const host = hostWith(2)
     await host.refreshProviders()
     const deltas: SessionDelta[] = []
-    const handle = host.start('claude', startConfig())
+    const handle = track(host.start('claude', startConfig()))
     handle.onDelta((delta) => deltas.push(delta))
 
     await waitUntil(
@@ -219,5 +254,121 @@ describe('a remote session whose host stops answering', () => {
     ).toHaveLength(1)
 
     handle.stop()
+  }, 5_000)
+
+  /**
+   * An outage laid over a pending request must not take the request with it
+   * (MAR-3052 lap 2).
+   *
+   * The daemon raised `needs-approval` at 1, below the cursor every look
+   * resumes from, so it will never say it again: the only copy of that fact
+   * this app still holds is the one it saw. Clearing the warning to `none`
+   * left a run blocked on a person with a card that said nothing was owed.
+   *
+   * Mutation: clear to `'none'` unconditionally (lap 1) -- red on the restore.
+   */
+  it('puts back the attention the daemon last said when the host returns', async () => {
+    const host = hostWith(2)
+    await host.refreshProviders()
+    const attentions: AttentionState[] = []
+    const activities: ActivitySignal[] = []
+    const deltas: SessionDelta[] = []
+    const handle = track(host.start('claude', startConfig()))
+    handle.onAttentionChange((attention) => attentions.push(attention))
+    handle.onActivityChange((activity) => activities.push(activity))
+    handle.onDelta((delta) => deltas.push(delta))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the first stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'attention', attention: 'needs-approval' }))
+    await waitUntil(
+      () => attentions.includes('needs-approval'),
+      'the request to reach the card',
+    )
+
+    stub.setEventsStatus(503)
+    stub.dropStream()
+    await waitUntil(
+      () => attentions.includes('host-unreachable'),
+      'the viewer to say it cannot reach the host',
+    )
+
+    // The host comes back with a frame that says nothing about attention.
+    stub.setEventsStatus(200)
+    stub.emit(envelope(2, { kind: 'activity', activity: 'thinking' }))
+    await waitUntil(
+      () => activities.includes('thinking'),
+      'the first kept envelope after the outage',
+    )
+
+    expect(attentions).toEqual([
+      'needs-approval',
+      'host-unreachable',
+      'needs-approval',
+    ])
+    expect(attentionPatches(deltas)).toEqual([
+      'needs-approval',
+      'host-unreachable',
+      'needs-approval',
+    ])
+
+    handle.stop()
+  }, 5_000)
+
+  /**
+   * `stop()` during the minute-long look is noticed at once, not when the
+   * minute is over (MAR-3052 lap 2).
+   *
+   * The REAL wait, deliberately, under fake timers: an injected wait resolves
+   * at once and cannot tell an abortable wait from a fast one. The run is
+   * stopped five seconds into sixty; the loop must have ended and left no timer
+   * behind before the clock moves again.
+   *
+   * Mutations: await `policy.wait` directly with a bare `setTimeout` default
+   * (lap 1) and the loop has not ended at five seconds -- red on the trace and
+   * the timer. Keep the early resolve but a bare default and the loop ends
+   * while a sixty-second timer is still scheduled -- red on the count.
+   */
+  it('lets go of the minute-long wait the moment the run is stopped', async () => {
+    const host = new RemoteExecutionHost({
+      connection: {
+        resolveConnection: async () => ({
+          baseUrl: 'http://daemon.test',
+          token: 'test-token',
+        }),
+      },
+      fetch: stub.fetchFn,
+      onEventSeq: () => {},
+      debugSink: { record: (entry) => entries.push(entry) },
+      reconnect: { maxAttempts: 1 },
+    })
+    await host.refreshProviders()
+    stub.setEventsStatus(503)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+
+    const attentions: AttentionState[] = []
+    const handle = track(host.start('claude', startConfig()))
+    handle.onAttentionChange((attention) => attentions.push(attention))
+    for (let turn = 0; turn < 100; turn += 1) {
+      if (attentions.includes('host-unreachable')) break
+      await vi.advanceTimersByTimeAsync(0)
+    }
+    expect(attentions).toContain('host-unreachable')
+    // Precondition: the loop is inside the one-minute look, and nothing else.
+    expect(vi.getTimerCount()).toBe(1)
+
+    await vi.advanceTimersByTimeAsync(5_000)
+    handle.stop()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(
+      lifecycleNotes().some((note) =>
+        note.startsWith('event stream loop ended'),
+      ),
+    ).toBe(true)
+    expect(vi.getTimerCount()).toBe(0)
+    expect(stub.eventStreamLastEventIds).toHaveLength(1)
   }, 5_000)
 })

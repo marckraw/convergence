@@ -162,7 +162,12 @@ export interface RemoteExecutionHostDeps {
   reconnect?: {
     maxAttempts?: number
     delayMs?: (attempt: number) => number
-    wait?: (ms: number) => Promise<void>
+    /**
+     * Resolves after `ms`. Handed the run's abort signal: a wait that ignores
+     * it is still given up by the run the moment it is stopped, but only one
+     * that listens can release its timer too.
+     */
+    wait?: (ms: number, signal?: AbortSignal) => Promise<void>
   }
   /** Overridable so tests can prove the cap without waiting 15 seconds. */
   healthProbeTimeoutMs?: number
@@ -380,7 +385,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   private readonly fetchFn: FetchFn
   private readonly maxReconnectAttempts: number
   private readonly reconnectDelayMs: (attempt: number) => number
-  private readonly wait: (ms: number) => Promise<void>
+  private readonly wait: (ms: number, signal?: AbortSignal) => Promise<void>
   private readonly healthProbeTimeoutMs: number
   private readonly debugSink: ProviderDebugSink
   /**
@@ -489,9 +494,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
       deps.reconnect?.maxAttempts ?? DEFAULT_MAX_RECONNECT_ATTEMPTS
     this.reconnectDelayMs =
       deps.reconnect?.delayMs ?? remoteExecutionHostReconnectDelayMs
-    this.wait =
-      deps.reconnect?.wait ??
-      ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
+    this.wait = deps.reconnect?.wait ?? abortableDelay
     this.debugSink = deps.debugSink ?? noopDebugSink
   }
 
@@ -1390,7 +1393,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   reconnectPolicy(): {
     maxAttempts: number
     delayMs: (attempt: number) => number
-    wait: (ms: number) => Promise<void>
+    wait: (ms: number, signal?: AbortSignal) => Promise<void>
   } {
     return {
       maxAttempts: this.maxReconnectAttempts,
@@ -1458,6 +1461,17 @@ class RemoteSessionRun {
    * The note and the attention are said once per outage, not once per retry.
    */
   private hostUnreachable = false
+  /**
+   * The last attention the DAEMON said, through any of the three encodings
+   * that carry one (MAR-3052 lap 2). What `clearHostUnreachable` puts back.
+   *
+   * An outage that began at `needs-approval` used to end at `none`: the
+   * warning came down unconditionally, and the daemon does not re-announce a
+   * request it raised below the cursor, so the prompt a person still owed an
+   * answer vanished from the card. Null until the daemon has said anything,
+   * which is the one case `none` is the honest restore.
+   */
+  private daemonAttention: AttentionState | null = null
   /**
    * Whether the read in progress tried to KEEP an envelope -- one it had read
    * as the next to dispatch. A read that tried and kept nothing is not a host
@@ -1584,6 +1598,10 @@ class RemoteSessionRun {
     this.started = true
     await this.flushPendingCommands()
     await this.consumeEventStream()
+    this.recordDebug('lifecycle', {
+      direction: 'in',
+      note: `event stream loop ended at seq ${this.lastSeq}`,
+    })
   }
 
   /**
@@ -1676,10 +1694,10 @@ class RemoteSessionRun {
             return
           }
           this.noteHostUnreachable(sentence)
-          await policy.wait(HOST_UNREACHABLE_RETRY_MS)
+          await this.waitForRetry(policy.wait, HOST_UNREACHABLE_RETRY_MS)
           continue
         }
-        await policy.wait(policy.delayMs(attempt))
+        await this.waitForRetry(policy.wait, policy.delayMs(attempt))
         continue
       }
 
@@ -1736,11 +1754,37 @@ class RemoteSessionRun {
           return
         }
         this.noteHostUnreachable(sentence)
-        await policy.wait(HOST_UNREACHABLE_RETRY_MS)
+        await this.waitForRetry(policy.wait, HOST_UNREACHABLE_RETRY_MS)
         continue
       }
-      await policy.wait(policy.delayMs(attempt))
+      await this.waitForRetry(policy.wait, policy.delayMs(attempt))
     }
+  }
+
+  /**
+   * The backoff, given up the moment this run is stopped (MAR-3052 lap 2).
+   *
+   * The spent budget waits a whole minute between looks, and `stop()` during
+   * one used to be noticed only when the minute was over: the loop sat in a
+   * bare timer holding the run, its listeners and a socket's worth of state
+   * for up to sixty seconds after the person had closed it. The same shape as
+   * Studio's `waitForRetry` (`daemon-client.ts`): resolve on abort, and hand
+   * the signal on so the default wait can release its timer as well.
+   */
+  private waitForRetry(
+    wait: (ms: number, signal?: AbortSignal) => Promise<void>,
+    ms: number,
+  ): Promise<void> {
+    const signal = this.abort.signal
+    if (signal.aborted) return Promise.resolve()
+    return new Promise<void>((resolve) => {
+      const onAbort = (): void => resolve()
+      signal.addEventListener('abort', onAbort, { once: true })
+      void wait(ms, signal).then(() => {
+        signal.removeEventListener('abort', onAbort)
+        resolve()
+      })
+    })
   }
 
   /**
@@ -1877,9 +1921,10 @@ class RemoteSessionRun {
       })
       return false
     }
-    // The replay boundary, when the daemon draws one (MAR-3051 R1). Neither
-    // frame is an event of the session: they move this reader's phase and
-    // nothing else, and a daemon that sends neither is read exactly as before.
+    // The replay boundary, when the daemon draws one (MAR-3051 R1). `replay`
+    // is the name ON a replayed envelope (`event: replay` + `id` + `data`), so
+    // it moves the phase and the frame falls through to be decoded like any
+    // other. A daemon that sends neither name is read exactly as before.
     if (frame.event === EXECUTION_HOST_REPLAY_EVENT) {
       this.streamPhase = 'replay'
     }
@@ -1890,6 +1935,12 @@ class RemoteSessionRun {
       // N is history it no longer holds, so the cursor may stand there. The
       // durable cursor is left to the events themselves — this one moves only
       // what the next resume asks for.
+      //
+      // The jump also steps over any envelope at or below N that THIS read
+      // dropped as undecodable or as another session's. That is unrecoverable
+      // either way, not a loss the jump causes: the daemon replays nothing
+      // below a cursor it was given, and re-asking from below N would only
+      // re-deliver the same bytes to the same refusal (MAR-3052 lap 2).
       if (throughSeq !== null && throughSeq > this.lastSeq) {
         this.lastSeq = throughSeq
       }
@@ -2068,6 +2119,11 @@ class RemoteSessionRun {
         // existed every delta reached applyDelta and bumped liveness on the way
         // in. The heartbeat keeps that signal without inventing a local delta.
         const delta = toLocalSessionDelta(event.delta)
+        const patch =
+          delta?.kind === 'session.patch'
+            ? withSettledAttention(delta.patch)
+            : null
+        if (patch?.attention) this.daemonAttention = patch.attention
         // A session patch that arrives as a wire *delta* settles the session
         // exactly as the dedicated `status` event does -- `applyDelta` ends
         // the turn on either -- so it is treated exactly the same way here. It
@@ -2079,12 +2135,8 @@ class RemoteSessionRun {
         // and a patch with nothing to pair travels unchanged (MAR-2590).
         if (delta)
           this.notifyDelta(
-            delta.kind === 'session.patch'
-              ? {
-                  ...delta,
-                  patch: withSettledAttention(delta.patch),
-                  executionHostSeq: seq,
-                }
+            delta.kind === 'session.patch' && patch
+              ? { ...delta, patch, executionHostSeq: seq }
               : delta,
           )
         else {
@@ -2118,6 +2170,7 @@ class RemoteSessionRun {
         // The pairing itself is `withSettledAttention`, shared with the delta
         // encoding above so the two ways a settle can arrive cannot drift.
         const settled = withSettledAttention({ status: event.status })
+        if (settled.attention) this.daemonAttention = settled.attention
         for (const listener of this.statusListeners) listener(event.status)
         if (settled.attention)
           for (const listener of this.attentionListeners)
@@ -2126,6 +2179,7 @@ class RemoteSessionRun {
         break
       }
       case 'attention':
+        this.daemonAttention = event.attention
         for (const listener of this.attentionListeners)
           listener(event.attention)
         this.emitter.patchSession(
@@ -2283,12 +2337,18 @@ class RemoteSessionRun {
     })
   }
 
-  /** The host answered again: the viewer can see, so the warning comes down. */
+  /**
+   * The host answered again: the viewer can see, so the warning comes down --
+   * to what the daemon last said, not to `none`. The warning was this app's
+   * word laid over the daemon's, and taking it away must leave the daemon's
+   * standing.
+   */
   private clearHostUnreachable(): void {
     if (!this.hostUnreachable) return
     this.hostUnreachable = false
-    this.emitter.patchSession({ attention: 'none' })
-    for (const listener of this.attentionListeners) listener('none')
+    const restored = this.daemonAttention ?? 'none'
+    this.emitter.patchSession({ attention: restored })
+    for (const listener of this.attentionListeners) listener(restored)
     this.recordDebug('lifecycle', {
       direction: 'in',
       note: `host reachable again at seq ${this.lastSeq}`,
@@ -2314,6 +2374,27 @@ class RemoteSessionRun {
     }
     return this.connection
   }
+}
+
+/**
+ * The default reconnect wait: a timer that the run's abort releases
+ * (MAR-3052 lap 2). Resolving early is `waitForRetry`'s half; clearing the
+ * timer is this one's, so a stopped run leaves nothing scheduled behind it.
+ */
+function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (signal?.aborted) {
+      resolve()
+      return
+    }
+    const done = (): void => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', done)
+      resolve()
+    }
+    const timer = setTimeout(done, ms)
+    signal?.addEventListener('abort', done, { once: true })
+  })
 }
 
 /**

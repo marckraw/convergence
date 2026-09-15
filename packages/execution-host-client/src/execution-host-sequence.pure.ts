@@ -90,11 +90,14 @@ export function nextEnvelopeSeqPhase(
 /**
  * The SSE event names the daemon may put on the replay boundary (MAR-3051 S1).
  *
- * Today's daemon sends neither and the `resumed` phase above carries the whole
- * rule; a daemon that sends them lets a client accept a whole pruned stretch
- * without one reconnect per hole. Absence is not an error: a client reads the
- * names when they are there and reads the stream exactly as before when they
- * are not.
+ * The two names are not the same kind of frame. `replay` is the name ON a
+ * replayed envelope -- `event: replay`, `id`, `data` -- so a client that reads
+ * it moves its phase and then decodes the frame like any other; skipping it
+ * drops the replay itself. `caught-up` is the only standalone frame, carrying
+ * no envelope. That is the deployed daemon's shape (`414f7403`). A daemon that
+ * sends neither leaves the `resumed` phase above to carry the whole rule, and
+ * absence is not an error: a client reads the names when they are there and
+ * reads the stream exactly as before when they are not.
  */
 export const EXECUTION_HOST_REPLAY_EVENT = 'replay'
 export const EXECUTION_HOST_CAUGHT_UP_EVENT = 'caught-up'
