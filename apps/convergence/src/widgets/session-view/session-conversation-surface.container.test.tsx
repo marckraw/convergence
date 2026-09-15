@@ -240,7 +240,8 @@ describe('SessionConversationSurface', () => {
     )
 
     // No chip open — remount cleared expanded/edit view state.
-    // (Mutation named in the report: drop `key={sessionId}` → red on this assertion.)
+    // (Mutation: drop `key={sessionId}` → measured red on the edit-input
+    // assertion below — the stale `editingId` re-renders the input.)
     expect(document.querySelector('[data-annotation-expanded]')).toBeNull()
     expect(screen.queryByLabelText(/^Edit response to/)).toBeNull()
     expect(screen.queryByDisplayValue('draft that must not travel')).toBeNull()
