@@ -49,6 +49,7 @@ export interface SessionRow {
   fork_strategy: string | null
   primary_surface: string
   execution_host: string
+  execution_host_last_event_at?: string | null
   execution_host_last_seq: number
   execution_host_settled_seq: number
   /** Serialized `SessionWorkAddress`; null on a local row (MAR-2689). */

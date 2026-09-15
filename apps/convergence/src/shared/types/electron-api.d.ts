@@ -1063,6 +1063,8 @@ type AttentionRequestKindData =
   | 'input'
 
 interface SessionSummaryData {
+  executionHostLastSeq?: number
+  executionHostLastEventAt?: string | null
   originKind?: 'spawn' | 'resident' | null
   pinnedAt?: string | null
   pullRequest?: SessionPullRequest | null

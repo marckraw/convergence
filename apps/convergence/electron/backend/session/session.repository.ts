@@ -218,10 +218,10 @@ export class SessionRepository {
     this.db
       .prepare(
         `UPDATE sessions
-         SET execution_host_last_seq = ?
-         WHERE id = ? AND execution_host_last_seq < ?`,
+         SET execution_host_last_seq = ?, execution_host_last_event_at = ?
+         WHERE id = ? AND execution_host_last_seq < ? AND execution_host != 'local'`,
       )
-      .run(seq, id, seq)
+      .run(seq, new Date().toISOString(), id, seq)
   }
 
   /**

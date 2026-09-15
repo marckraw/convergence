@@ -1,3 +1,7 @@
+import {
+  classifySessionCardState,
+  formatSessionCardState,
+} from './session-card-state.pure'
 import { ProviderModel } from '@/shared/ui/provider-model.presentational'
 import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import type { FC, ReactNode } from 'react'
@@ -36,9 +40,11 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
   onHail,
 }) => {
   const { session } = card
-  const running = session.status === 'running'
+  const hostUnreachable = classifySessionCardState(card) === 'host-unreachable'
+  const running = !hostUnreachable && session.status === 'running'
   const needsYou =
-    session.attention !== 'none' || Boolean(parallelWorkStatus(session))
+    !hostUnreachable &&
+    (session.attention !== 'none' || Boolean(parallelWorkStatus(session)))
 
   return (
     <div
@@ -88,7 +94,9 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
             <span
               className={cn(
                 'mt-1 size-2 shrink-0 rounded-full',
-                STATUS_DOT_STYLES[session.status],
+                hostUnreachable
+                  ? 'bg-warning'
+                  : STATUS_DOT_STYLES[session.status],
                 running && 'animate-pulse',
               )}
               aria-hidden
@@ -99,6 +107,14 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
           <span className="truncate font-medium">{card.projectName}</span>
           <span aria-hidden>·</span>
+          {card.hostLiveness && (
+            <time
+              title={session.executionHostLastEventAt ?? undefined}
+              dateTime={session.executionHostLastEventAt ?? undefined}
+            >
+              {card.hostLiveness}
+            </time>
+          )}
           <ProviderModel
             providerId={session.providerId}
             model={session.model}
@@ -153,14 +169,18 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
         <span
           className={cn(
             'flex min-w-0 items-center gap-1.5 text-xs',
-            ACTIVITY_TEXT_STYLES[session.status],
+            hostUnreachable
+              ? 'text-warning'
+              : ACTIVITY_TEXT_STYLES[session.status],
           )}
         >
           {running ? (
             <Loader2 className="size-3 shrink-0 animate-spin" />
           ) : null}
           <span className="truncate">
-            {parallelWorkStatus(session) ?? card.activityLabel}
+            {hostUnreachable
+              ? formatSessionCardState('host-unreachable')
+              : (parallelWorkStatus(session) ?? card.activityLabel)}
           </span>
         </span>
 

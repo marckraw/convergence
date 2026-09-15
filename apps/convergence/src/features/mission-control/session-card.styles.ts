@@ -25,6 +25,7 @@ export const ACTIVITY_TEXT_STYLES: Record<SessionStatus, string> = {
 
 /** A selected state chip wears the same colour its cards wear in the room. */
 export const STATE_CHIP_STYLES: Record<SessionCardState, string> = {
+  'host-unreachable': 'border-warning/60 bg-warning/10 text-foreground',
   working: 'border-emerald-500/60 bg-emerald-500/10 text-foreground',
   'needs-you': 'border-blue-500/60 bg-blue-500/10 text-foreground',
   idle: 'border-white/25 bg-white/10 text-foreground',

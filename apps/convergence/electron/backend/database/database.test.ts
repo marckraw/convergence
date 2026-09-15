@@ -3957,3 +3957,35 @@ it('RUN77 lap4 window and receipt survive migration and reopen — mutation drop
     ).toEqual({ stop_receipt_at: '2026-09-14T00:00:00Z' })
   })
 })
+
+it('RUN84 host event time migrates as absent and survives reopen — mutation omit migration turns red', () => {
+  withTempDb('host-liveness', (path) => {
+    const db = getDatabase(path)
+    db.exec(
+      "INSERT INTO sessions(id,context_kind,provider_id,name,status,working_directory) VALUES ('host','global','codex','host','idle','/tmp')",
+    )
+    db.exec('ALTER TABLE sessions DROP COLUMN execution_host_last_event_at')
+    closeDatabase()
+    const upgraded = getDatabase(path)
+    expect(
+      upgraded
+        .prepare(
+          "SELECT execution_host_last_event_at FROM sessions WHERE id='host'",
+        )
+        .get(),
+    ).toEqual({ execution_host_last_event_at: null })
+    upgraded
+      .prepare(
+        "UPDATE sessions SET execution_host_last_event_at=? WHERE id='host'",
+      )
+      .run('2026-09-15T12:00:00.000Z')
+    closeDatabase()
+    expect(
+      getDatabase(path)
+        .prepare(
+          "SELECT execution_host_last_event_at FROM sessions WHERE id='host'",
+        )
+        .get(),
+    ).toEqual({ execution_host_last_event_at: '2026-09-15T12:00:00.000Z' })
+  })
+})

@@ -44,7 +44,10 @@ it.each(Object.entries(cardFixtures))(
     fireEvent.focus(providerIcon)
     expect(await screen.findByRole('tooltip')).toHaveTextContent('OpenAI')
     fireEvent.blur(providerIcon)
-    expect(screen.getByTitle(session.updatedAt)).toHaveTextContent('5 m ago')
+    if (session.executionHost === 'lm')
+      expect(screen.getByText('host · not recorded')).toBeInTheDocument()
+    else
+      expect(screen.getByTitle(session.updatedAt)).toHaveTextContent('5 m ago')
     if (session.pullRequest)
       expect(
         screen.getByRole('link', { name: /Pull request #42/ }),
@@ -156,26 +159,33 @@ it.each([
 )
 
 it.each([
-  cardFixtures.working,
-  cardFixtures.waiting,
-  cardFixtures.open,
-  cardFixtures.merged,
-  cardSession({ status: 'running', attention: 'finished' }),
-  cardSession({ status: 'answered', attention: 'finished' }),
-  cardSession({ attention: 'needs-approval' }),
-])('keeps non-review cards compact: $status / $attention / $id', (session) => {
-  render(
-    <NeedsYouCard
-      card={needsYouCardModel(session, cardContext)}
-      {...actions()}
-    />,
-  )
-  expect(
-    screen.queryByRole('group', { name: 'Review actions for Horse' }),
-  ).toBeNull()
-  expect(screen.queryByRole('button', { name: 'Acknowledge' })).toBeNull()
-  expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull()
-})
+  [cardFixtures.working, null],
+  [cardFixtures.waiting, 'Snooze'],
+  [cardFixtures.open, null],
+  [cardFixtures.merged, 'Archive'],
+  [cardSession({ status: 'running', attention: 'finished' }), null],
+  [cardSession({ status: 'answered', attention: 'finished' }), null],
+  [cardSession({ attention: 'needs-approval' }), 'Snooze'],
+] as const)(
+  'RUN84 lap3 non-review footer obeys the offered action — mutation gate on group turns red (%s)',
+  (session, offeredAction) => {
+    render(
+      <NeedsYouCard
+        card={needsYouCardModel(session, cardContext)}
+        {...actions()}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: 'Acknowledge' })).toBeNull()
+    if (offeredAction)
+      expect(screen.getByRole('button', { name: offeredAction })).toBeVisible()
+    else
+      expect(
+        screen.queryByRole('group', { name: 'Review actions for Horse' }),
+      ).toBeNull()
+    if (offeredAction !== 'Archive')
+      expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull()
+  },
+)
 
 it('keeps Archive available after acknowledging a pinned review card', () => {
   const session = { ...cardFixtures.noPr, pinnedAt: '2026-09-12T12:00:00Z' }
@@ -229,3 +239,84 @@ it('does not add review actions to other surfaces using the shared card', () => 
     screen.getByRole('button', { name: 'Other surface actions' }),
   ).toBeVisible()
 })
+
+it.each(['lm', 'local'])(
+  'RUN84 %s card reads host time — mutation read updatedAt turns red',
+  (executionHost) => {
+    const session = cardSession({
+      executionHost,
+      executionHostLastEventAt: '2026-09-15T11:58:30Z',
+      updatedAt: '2026-09-15T12:00:00Z',
+    })
+    render(
+      <NeedsYouCard
+        card={needsYouCardModel(session, {
+          ...cardContext,
+          now: Date.parse('2026-09-15T12:00:00Z'),
+        })}
+        {...actions()}
+      />,
+    )
+    if (executionHost === 'lm')
+      expect(screen.getByText('host · 1m ago')).toBeInTheDocument()
+    else expect(screen.queryByText(/host ·/)).toBeNull()
+  },
+)
+it('RUN84 unreachable is not Failed — mutation classify unreachable as failed turns red', () => {
+  const session = cardSession({ status: 'failed' })
+  // RUN82 adds this wire attention; do not widen its owned union here.
+  Object.assign(session, { attention: 'host-unreachable' })
+  render(
+    <NeedsYouCard
+      card={needsYouCardModel(session, cardContext)}
+      {...actions()}
+    />,
+  )
+  expect(screen.getByText('Host unreachable')).toBeInTheDocument()
+  expect(screen.queryByText('Failed')).toBeNull()
+})
+
+it('RUN84 compact remote card keeps host clock and unreachable label — mutation hide compact evidence turns red', () => {
+  const session = cardSession({
+    executionHost: 'lm',
+    status: 'failed',
+    executionHostLastEventAt: '2026-09-15T11:58:30Z',
+  })
+  Object.assign(session, { attention: 'host-unreachable' })
+  render(
+    <SessionActivityCard
+      actions={null}
+      compact
+      card={needsYouCardModel(session, {
+        ...cardContext,
+        now: Date.parse('2026-09-15T12:00:00Z'),
+      })}
+      onSelect={vi.fn()}
+    />,
+  )
+  expect(screen.getByText('host · 1m ago')).toBeInTheDocument()
+  expect(screen.getByText('Host unreachable')).toBeInTheDocument()
+})
+
+it.each(['host-unreachable', 'finished'] as const)(
+  'RUN84 lap3 footer follows flags for %s — mutation key footer on group turns red',
+  (attention) => {
+    const session = cardSession({
+      status: attention === 'finished' ? 'completed' : 'running',
+    })
+    Object.assign(session, { attention })
+    render(
+      <NeedsYouCard
+        card={needsYouCardModel(session, cardContext)}
+        {...actions()}
+      />,
+    )
+    if (attention === 'finished') {
+      expect(screen.getByRole('button', { name: 'Acknowledge' })).toBeVisible()
+      expect(screen.getByRole('button', { name: 'Archive' })).toBeVisible()
+    } else {
+      expect(screen.queryByRole('button', { name: 'Acknowledge' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull()
+    }
+  },
+)

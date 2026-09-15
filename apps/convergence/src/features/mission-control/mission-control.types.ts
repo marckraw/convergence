@@ -8,6 +8,7 @@ import type { SessionCrew } from '@/entities/session-crew'
  * is the drill-down.
  */
 export interface SessionCard {
+  hostLiveness?: string | null
   session: SessionSummary
   projectName: string
   providerLabel: string

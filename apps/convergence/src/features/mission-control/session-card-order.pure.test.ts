@@ -316,3 +316,26 @@ describe('formatSessionCardOrderPreset', () => {
     ])
   })
 })
+
+it.each(['attention-first', 'by-project'] as const)(
+  'RUN84 lap3 %s keeps unreachable in review — mutation omit unreachable review band turns red',
+  (preset) => {
+    const unreachable = makeCard('unreachable', {
+      status: 'running',
+      updatedAt: '2026-08-13T09:00:00Z',
+    })
+    Object.assign(unreachable.session, { attention: 'host-unreachable' })
+    const cards = [
+      makeCard('resting'),
+      makeCard('working', { status: 'running' }),
+      unreachable,
+      makeCard('blocked', { attention: 'needs-input' }),
+    ]
+    expect(ids(orderSessionCards(cards, preset))).toEqual([
+      'blocked',
+      'unreachable',
+      'working',
+      'resting',
+    ])
+  },
+)

@@ -44,6 +44,9 @@ export function formatSessionCardOrderPreset(
  * still working, then everything at rest.
  */
 export function getSessionCardGroup(card: SessionCard): number {
+  // A blind viewer's card sits with the outcomes: noticed, never "Failed".
+  if (card.session.attention === 'host-unreachable')
+    return SESSION_CARD_GROUP_REVIEW
   switch (card.session.attention) {
     case 'needs-approval':
     case 'needs-input':
@@ -60,6 +63,7 @@ export function getSessionCardGroup(card: SessionCard): number {
 
 /** Working on top, then whoever is blocked, then outcomes, then rest. */
 const WORKING_FIRST_RANK: Record<SessionCardState, number> = {
+  'host-unreachable': 2,
   working: 0,
   'needs-you': 1,
   failed: 2,

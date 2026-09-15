@@ -59,6 +59,7 @@ function buildSessionsTableSql(
       primary_surface TEXT NOT NULL DEFAULT 'conversation',
       execution_host TEXT NOT NULL DEFAULT 'local',
       execution_host_last_seq INTEGER NOT NULL DEFAULT 0,
+      execution_host_last_event_at TEXT,
       execution_host_settled_seq INTEGER NOT NULL DEFAULT 0,
       work_address TEXT,
       reported_workspace TEXT,
@@ -1608,6 +1609,12 @@ function ensureSessionColumns(database: Database.Database): void {
   if (!columnNames.has('execution_host')) {
     database.exec(
       "ALTER TABLE sessions ADD COLUMN execution_host TEXT NOT NULL DEFAULT 'local'",
+    )
+  }
+
+  if (!columnNames.has('execution_host_last_event_at')) {
+    database.exec(
+      'ALTER TABLE sessions ADD COLUMN execution_host_last_event_at TEXT',
     )
   }
 

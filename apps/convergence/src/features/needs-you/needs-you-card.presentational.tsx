@@ -36,13 +36,13 @@ export function NeedsYouCard({
       pulsing={pulsing}
       onSelect={onSelect}
       footer={
-        card.attentionGroup === 'Needs review' && (
+        ((card.dismissLabel && !card.dismissed) || card.canArchive) && (
           <div
             role="group"
             aria-label={`Review actions for ${session.name}`}
             className="flex flex-wrap gap-2 border-t border-border/60 p-2"
           >
-            {!card.dismissed && (
+            {card.dismissLabel && !card.dismissed && (
               <Button
                 type="button"
                 variant="outline"
@@ -51,19 +51,21 @@ export function NeedsYouCard({
                 onClick={() => onDismiss(session.id)}
               >
                 <CheckCheck aria-hidden="true" className="size-3.5" />
-                Acknowledge
+                {card.dismissLabel}
               </Button>
             )}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="flex-1 gap-1.5 border-border/60 bg-card px-2 text-[11px]"
-              onClick={() => onArchive(session.id)}
-            >
-              <Archive aria-hidden="true" className="size-3.5" />
-              Archive
-            </Button>
+            {card.canArchive && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="flex-1 gap-1.5 border-border/60 bg-card px-2 text-[11px]"
+                onClick={() => onArchive(session.id)}
+              >
+                <Archive aria-hidden="true" className="size-3.5" />
+                Archive
+              </Button>
+            )}
           </div>
         )
       }

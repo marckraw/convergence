@@ -535,6 +535,55 @@ describe('SessionService', () => {
     },
   )
 
+  it('RUN84 patch cursor and host clock form one fact on the summary — mutation omit timestamp or map turns red', () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: null,
+      effort: null,
+      name: 'host clock',
+    })
+    db.prepare("UPDATE sessions SET execution_host='lm' WHERE id=?").run(
+      session.id,
+    )
+    const summaries = vi.fn()
+    service.setSummaryUpdateListener(summaries)
+    vi.setSystemTime(new Date('2026-09-15T12:00:00Z'))
+    service['applyDelta'](
+      session.id,
+      {
+        kind: 'session.patch',
+        executionHostSeq: 10,
+        patch: { updatedAt: '1999-01-01T00:00:00Z' },
+      },
+      SYNTHETIC_HANDLE,
+    )
+    expect(service.getSummaryById(session.id)).toMatchObject({
+      executionHostLastSeq: 10,
+      executionHostLastEventAt: '2026-09-15T12:00:00.000Z',
+    })
+    expect(summaries.mock.calls.at(-1)?.[0]).toMatchObject({
+      executionHostLastSeq: 10,
+      executionHostLastEventAt: '2026-09-15T12:00:00.000Z',
+    })
+    vi.setSystemTime(new Date('2026-09-15T12:01:00Z'))
+    service['applyDelta'](
+      session.id,
+      { kind: 'session.patch', patch: { attention: 'none' } },
+      SYNTHETIC_HANDLE,
+    )
+    service['applyDelta'](
+      session.id,
+      { kind: 'session.patch', executionHostSeq: 9, patch: {} },
+      SYNTHETIC_HANDLE,
+    )
+    expect(service.getSummaryById(session.id)).toMatchObject({
+      executionHostLastSeq: 10,
+      executionHostLastEventAt: '2026-09-15T12:00:00.000Z',
+    })
+  })
+
   it('queues a relay opener the provider refuses as busy, instead of dropping it (R1, MAR-2888)', async () => {
     // The 09-09 failure. `isCarryingATurn` reads Convergence's record; Codex
     // refuses on its own `running || connecting`. A target whose row was not

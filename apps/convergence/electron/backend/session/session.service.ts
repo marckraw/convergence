@@ -3413,6 +3413,11 @@ export class SessionService {
    * Writes one session patch, and -- when the patch came from an execution
    * host event -- the stream cursor and the settle marker with it (MAR-2582).
    *
+   * The host-liveness stamp written here is this app's receipt time, not the
+   * daemon's event time: a reconnect replay that walks the cursor through old
+   * envelopes stamps each of them "now". So the label it feeds means "the host
+   * last reached me", which is the question a card asks (MAR-3054).
+   *
    * All three in one statement on purpose. The cursor used to be persisted by
    * a second write that ran after this one returned, so an interruption in the
    * gap left a session recorded as settled with a cursor still pointing at the
@@ -3468,7 +3473,7 @@ export class SessionService {
     // on disk as settled while still marked quiet, and after a restart that
     // stale marker would silence the next ordinary run.
     const relaysMuted = row.relays_muted === 1
-    const hostSeq = executionHostSeq ?? 0
+    const hostSeq = row.execution_host === 'local' ? 0 : (executionHostSeq ?? 0)
     // Read from the patch, not from the resulting status: the marker means
     // "this event settled the session", and a patch that carries no status at
     // all -- a continuation token arriving after the settle -- did not.
@@ -3485,6 +3490,7 @@ export class SessionService {
              continuation_token = ?,
              relays_muted = ?,
              archived_at = ?,
+             execution_host_last_event_at = CASE WHEN ? > execution_host_last_seq THEN ? ELSE execution_host_last_event_at END,
              execution_host_last_seq = MAX(execution_host_last_seq, ?),
              execution_host_settled_seq = MAX(execution_host_settled_seq, ?),
              updated_at = ?
@@ -3506,6 +3512,8 @@ export class SessionService {
           : row.continuation_token,
         isSettling ? 0 : row.relays_muted,
         nextArchivedAt,
+        hostSeq,
+        new Date().toISOString(),
         hostSeq,
         settledSeq,
         updatedAt,
