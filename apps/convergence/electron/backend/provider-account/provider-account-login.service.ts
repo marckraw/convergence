@@ -13,6 +13,27 @@ type LoginTarget = Pick<
   'providerId' | 'accountId' | 'kind'
 >
 
+/** A timer handle as the login ceremony needs it: clearable, unref-able. */
+export interface ProviderAccountTimer {
+  unref?: () => void
+}
+
+/** One injectable clock for every timer the ceremony owns: the attempt
+ * timeout and the shutdown deadline. Production defaults to the real timers;
+ * the wrappers defer to the ambient globals when each timer is armed, so a
+ * fake-timer test harness stays in control without injecting anything. */
+export interface ProviderAccountTimers {
+  setTimeout: (handler: () => void, timeoutMs: number) => ProviderAccountTimer
+  clearTimeout: (handle: ProviderAccountTimer | null | undefined) => void
+}
+
+const realTimers = (): ProviderAccountTimers => ({
+  setTimeout: (handler, timeoutMs) => setTimeout(handler, timeoutMs),
+  clearTimeout: (handle) => {
+    if (handle) clearTimeout(handle as Parameters<typeof clearTimeout>[0])
+  },
+})
+
 /** Mediator: one backend-owned login ceremony coordinates the CLI and every
  * Settings mount. Credential mutation and identity checks remain in enrolment. */
 export class ProviderAccountLoginService {
@@ -20,7 +41,7 @@ export class ProviderAccountLoginService {
   private controller: AbortController | null = null
   private writeCode: ((value: string) => void) | null = null
   private output = ''
-  private timeout: ReturnType<typeof setTimeout> | null = null
+  private timeout: ProviderAccountTimer | null = null
   private cancelledBy: 'cancelled' | 'timed-out' | null = null
   private finished: Promise<void> = Promise.resolve()
   private listeners = new Set<(attempt: ProviderAccountLoginAttempt) => void>()
@@ -31,8 +52,13 @@ export class ProviderAccountLoginService {
       timeoutMs?: number
       newId?: () => string
       now?: () => Date
+      timers?: ProviderAccountTimers
     },
-  ) {}
+  ) {
+    this.timers = deps.timers ?? realTimers()
+  }
+
+  private readonly timers: ProviderAccountTimers
 
   getAttempt(): ProviderAccountLoginAttempt | null {
     return this.attempt ? { ...this.attempt } : null
@@ -68,7 +94,7 @@ export class ProviderAccountLoginService {
     }
     this.publish({})
     const attemptId = this.attempt.id
-    this.timeout = setTimeout(
+    this.timeout = this.timers.setTimeout(
       () => this.requestCancel(attemptId, 'timed-out'),
       this.deps.timeoutMs ?? 5 * 60_000,
     )
@@ -107,7 +133,7 @@ export class ProviderAccountLoginService {
       })
       /* eslint-enable preserve-caught-error */
     } finally {
-      if (this.timeout) clearTimeout(this.timeout)
+      if (this.timeout) this.timers.clearTimeout(this.timeout)
       this.timeout = null
       this.controller = null
       this.writeCode = null
@@ -162,7 +188,7 @@ export class ProviderAccountLoginService {
       this.output = ''
       // The runner settles only after actual process exit. Cleanup and identity
       // checks can now proceed without racing a still-writing login child.
-      if (this.timeout) clearTimeout(this.timeout)
+      if (this.timeout) this.timers.clearTimeout(this.timeout)
       this.timeout = null
       if (!controller.signal.aborted)
         this.publish({
@@ -175,17 +201,17 @@ export class ProviderAccountLoginService {
 
   async shutdown(): Promise<void> {
     if (this.attempt?.active) this.requestCancel(this.attempt.id, 'cancelled')
-    let deadline: ReturnType<typeof setTimeout> | undefined
+    let deadline: ProviderAccountTimer | undefined
     try {
       await Promise.race([
         this.finished,
         new Promise<void>((resolve) => {
-          deadline = setTimeout(resolve, 30_000)
+          deadline = this.timers.setTimeout(resolve, 30_000)
           deadline.unref?.()
         }),
       ])
     } finally {
-      if (deadline) clearTimeout(deadline)
+      if (deadline) this.timers.clearTimeout(deadline)
     }
   }
 

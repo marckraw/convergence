@@ -1,5 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { ProviderAccountLoginService } from './provider-account-login.service'
+import {
+  ProviderAccountLoginService,
+  type ProviderAccountTimers,
+} from './provider-account-login.service'
 import type { ProviderAccountInteractiveRunner } from './provider-account-pty-runner'
 
 const target = {
@@ -8,7 +11,41 @@ const target = {
   kind: 'reconnect' as const,
 }
 const command = { command: '/fixture/claude', args: ['auth', 'login'], env: {} }
-function fixture() {
+
+/** A fully manual clock: timers fire only when `advance` says so, so no test
+ * ever waits in real time for a timeout or deadline. */
+function manualTimers() {
+  const pending = new Map<
+    object,
+    { handler: () => void; dueAt: number; unref: ReturnType<typeof vi.fn> }
+  >()
+  const armed: Array<{ unref: ReturnType<typeof vi.fn> }> = []
+  let now = 0
+  const timers: ProviderAccountTimers = {
+    setTimeout: (handler, timeoutMs) => {
+      const unref = vi.fn()
+      const handle = { unref }
+      pending.set(handle, { handler, dueAt: now + timeoutMs, unref })
+      armed.push({ unref })
+      return handle
+    },
+    clearTimeout: (handle) => {
+      if (handle) pending.delete(handle)
+    },
+  }
+  const advance = (ms: number) => {
+    now += ms
+    for (const [handle, entry] of [...pending]) {
+      if (entry.dueAt <= now) {
+        pending.delete(handle)
+        entry.handler()
+      }
+    }
+  }
+  return { timers, advance, armed }
+}
+
+function fixture(extra: { timers?: ProviderAccountTimers } = {}) {
   let lifecycle!: NonNullable<Parameters<ProviderAccountInteractiveRunner>[1]>
   let exit!: (value: { code: number; output: string }) => void
   const runner = vi.fn<ProviderAccountInteractiveRunner>(
@@ -23,6 +60,7 @@ function fixture() {
     runner,
     timeoutMs: 1000,
     newId: () => 'attempt-fixture',
+    ...extra,
   })
   return {
     service,
@@ -208,4 +246,74 @@ it('bounds app shutdown without pretending stalled cleanup completed', async () 
   finishCleanup()
   await result
   expect(f.service.getAttempt()?.state).toBe('completed')
+})
+
+it('times an attempt out through the injected timer source with no real waiting', async () => {
+  const { timers, advance } = manualTimers()
+  const f = fixture({ timers })
+  let prepared!: () => void
+  const result = f.service
+    .run(target, async () => {
+      await new Promise<void>((resolve) => {
+        prepared = resolve
+      })
+      return f.service.runLoginCommand(command)
+    })
+    .catch((error) => error.message)
+  await vi.waitFor(() => expect(prepared).toBeTypeOf('function'))
+  advance(1000)
+  expect(f.service.getAttempt()).toMatchObject({
+    state: 'cancelling',
+    active: true,
+  })
+  prepared()
+  expect(await result).toMatch(/timed out/)
+  expect(f.service.getAttempt()).toMatchObject({
+    state: 'timed-out',
+    active: false,
+  })
+})
+
+it('bounds shutdown to its 30-second deadline through the injected timer source', async () => {
+  const { timers, advance } = manualTimers()
+  const f = fixture({ timers })
+  const result = f.service
+    .run(target, () => f.service.runLoginCommand(command))
+    .catch((error) => error.message)
+  let stopped = false
+  const shutdown = f.service.shutdown().then(() => {
+    stopped = true
+  })
+  expect(stopped).toBe(false)
+  advance(30_000)
+  await shutdown
+  expect(stopped).toBe(true)
+  // The deadline expired, not the cleanup: the attempt is still finishing.
+  expect(f.service.getAttempt()?.active).toBe(true)
+  f.exit(129)
+  expect(await result).toBe('Sign-in cancelled.')
+})
+
+it('preserves unref on every timer it arms through the injected source', async () => {
+  const { timers, advance, armed } = manualTimers()
+  const f = fixture({ timers })
+  const result = f.service
+    .run(target, () => f.service.runLoginCommand(command))
+    .catch(() => {})
+  // The attempt timeout is unref'd the moment it is armed.
+  await vi.waitFor(() => expect(armed.length).toBe(1))
+  expect(armed[0].unref).toHaveBeenCalled()
+  let stopped = false
+  const shutdown = f.service.shutdown().then(() => {
+    stopped = true
+  })
+  // The shutdown deadline is armed and unref'd too.
+  await vi.waitFor(() => expect(armed.length).toBe(2))
+  expect(armed[1].unref).toHaveBeenCalled()
+  advance(30_000)
+  await shutdown
+  expect(stopped).toBe(true)
+  f.exit()
+  await result
+  expect(f.service.getAttempt()?.state).toBe('cancelled')
 })
