@@ -220,7 +220,7 @@ function renderConversationColumn({
       <AnnotationSelectionCapture sessionId={sessionId} />
 
       <div className="shrink-0 px-4 py-3">
-        <AnnotationTray sessionId={sessionId} />
+        <AnnotationTray key={sessionId} sessionId={sessionId} />
         {renderComposerArea(composerContext, composerDisabledReason)}
       </div>
     </div>
