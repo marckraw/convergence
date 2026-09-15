@@ -1,5 +1,12 @@
 # convergence
 
+## 0.59.4
+
+### Patch Changes
+
+- e2ed78c: Account health probes run from a neutral directory; an invalidated attestation re-checks; the login attempt keeps one clock.
+- e522dbd: Remote sessions survive a stream drop across the daemon's pruned history, including its named replay; a viewer that cannot reach the host no longer marks the run failed, keeps a pending approval on the card through the outage, and lets go of its retry at once when stopped.
+
 ## 0.59.3
 
 ### Patch Changes
