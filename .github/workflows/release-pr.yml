@@ -9,6 +9,14 @@ permissions:
   contents: write
   pull-requests: write
 
+# One queue per ref: two master merges in quick succession must not race
+# their changesets pushes — cancel-in-progress stays false so the older
+# run is never cancelled mid-push; runs queue and the last push reflects
+# the newest master.
+concurrency:
+  group: release-pr-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   changesets:
     runs-on: ubuntu-latest

@@ -9,6 +9,13 @@ permissions:
   contents: write
   actions: write
 
+# One queue per ref: this workflow pushes tags and triggers the publish
+# workflows, so two master merges in quick succession must serialize —
+# the newest queued run does the tagging.
+concurrency:
+  group: tag-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   tag:
     runs-on: ubuntu-latest
