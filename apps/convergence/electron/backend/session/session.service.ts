@@ -3413,6 +3413,8 @@ export class SessionService {
    * Writes one session patch, and -- when the patch came from an execution
    * host event -- the stream cursor and the settle marker with it (MAR-2582).
    *
+   * Host liveness is viewer receipt time, not daemon event time: a reconnect replay can stamp an old envelope now.
+   *
    * All three in one statement on purpose. The cursor used to be persisted by
    * a second write that ran after this one returned, so an interruption in the
    * gap left a session recorded as settled with a cursor still pointing at the

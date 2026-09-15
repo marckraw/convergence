@@ -159,26 +159,33 @@ it.each([
 )
 
 it.each([
-  cardFixtures.working,
-  cardFixtures.waiting,
-  cardFixtures.open,
-  cardFixtures.merged,
-  cardSession({ status: 'running', attention: 'finished' }),
-  cardSession({ status: 'answered', attention: 'finished' }),
-  cardSession({ attention: 'needs-approval' }),
-])('keeps non-review cards compact: $status / $attention / $id', (session) => {
-  render(
-    <NeedsYouCard
-      card={needsYouCardModel(session, cardContext)}
-      {...actions()}
-    />,
-  )
-  expect(
-    screen.queryByRole('group', { name: 'Review actions for Horse' }),
-  ).toBeNull()
-  expect(screen.queryByRole('button', { name: 'Acknowledge' })).toBeNull()
-  expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull()
-})
+  [cardFixtures.working, null],
+  [cardFixtures.waiting, 'Snooze'],
+  [cardFixtures.open, null],
+  [cardFixtures.merged, 'Archive'],
+  [cardSession({ status: 'running', attention: 'finished' }), null],
+  [cardSession({ status: 'answered', attention: 'finished' }), null],
+  [cardSession({ attention: 'needs-approval' }), 'Snooze'],
+] as const)(
+  'RUN84 lap3 non-review footer obeys the offered action — mutation gate on group turns red (%s)',
+  (session, offeredAction) => {
+    render(
+      <NeedsYouCard
+        card={needsYouCardModel(session, cardContext)}
+        {...actions()}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: 'Acknowledge' })).toBeNull()
+    if (offeredAction)
+      expect(screen.getByRole('button', { name: offeredAction })).toBeVisible()
+    else
+      expect(
+        screen.queryByRole('group', { name: 'Review actions for Horse' }),
+      ).toBeNull()
+    if (offeredAction !== 'Archive')
+      expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull()
+  },
+)
 
 it('keeps Archive available after acknowledging a pinned review card', () => {
   const session = { ...cardFixtures.noPr, pinnedAt: '2026-09-12T12:00:00Z' }
@@ -290,3 +297,26 @@ it('RUN84 compact remote card keeps host clock and unreachable label — mutatio
   expect(screen.getByText('host · 1m ago')).toBeInTheDocument()
   expect(screen.getByText('Host unreachable')).toBeInTheDocument()
 })
+
+it.each(['host-unreachable', 'finished'] as const)(
+  'RUN84 lap3 footer follows flags for %s — mutation key footer on group turns red',
+  (attention) => {
+    const session = cardSession({
+      status: attention === 'finished' ? 'completed' : 'running',
+    })
+    Object.assign(session, { attention })
+    render(
+      <NeedsYouCard
+        card={needsYouCardModel(session, cardContext)}
+        {...actions()}
+      />,
+    )
+    if (attention === 'finished') {
+      expect(screen.getByRole('button', { name: 'Acknowledge' })).toBeVisible()
+      expect(screen.getByRole('button', { name: 'Archive' })).toBeVisible()
+    } else {
+      expect(screen.queryByRole('button', { name: 'Acknowledge' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull()
+    }
+  },
+)

@@ -1,4 +1,4 @@
-/** The viewer's updates never stand in for an execution host's last envelope. */
+/** Age of the viewer receipt, not daemon event time: a reconnect replay can stamp an old envelope now. */
 export function hostLivenessLabel(
   host: string | undefined,
   at: string | null | undefined,
@@ -10,7 +10,7 @@ export function hostLivenessLabel(
   const seconds = Math.max(0, Math.floor((now - timestamp) / 1000))
   const age =
     seconds < 60
-      ? `${seconds}s`
+      ? '<1m'
       : seconds < 3600
         ? `${Math.floor(seconds / 60)}m`
         : seconds < 86400

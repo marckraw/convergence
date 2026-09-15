@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useFeedClock } from '@/shared/hooks/use-feed-clock'
 import { useProjectStore } from '@/entities/project'
 import { selectLocalProviders, useSessionStore } from '@/entities/session'
 import { useSessionCrewStore } from '@/entities/session-crew'
@@ -71,14 +72,6 @@ export function useMissionControlCards({
   }, [loadProviders])
 
   const [now, setNow] = useState(() => Date.now())
-  const hasRemote = sessions.some(
-    (s) => s.executionHost && s.executionHost !== 'local',
-  )
-  useEffect(() => {
-    if (!hasRemote) return
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [hasRemote])
 
   const allCards = useMemo(
     () => buildSessionCards({ sessions, projects, providers, crews, now }),
@@ -112,6 +105,12 @@ export function useMissionControlCards({
     () => orderSessionCards(filterSessionCards(allCards, filter), order),
     [allCards, filter, order],
   )
+
+  const hasRemote = cards.some(
+    (card) =>
+      card.session.executionHost && card.session.executionHost !== 'local',
+  )
+  useFeedClock(hasRemote, setNow)
 
   return {
     cards,

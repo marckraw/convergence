@@ -44,6 +44,9 @@ export function formatSessionCardOrderPreset(
  * still working, then everything at rest.
  */
 export function getSessionCardGroup(card: SessionCard): number {
+  // RUN82 owns the AttentionState addition; the review band already exists.
+  if (String(card.session.attention) === 'host-unreachable')
+    return SESSION_CARD_GROUP_REVIEW
   switch (card.session.attention) {
     case 'needs-approval':
     case 'needs-input':
