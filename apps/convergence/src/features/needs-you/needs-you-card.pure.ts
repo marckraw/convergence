@@ -1,3 +1,4 @@
+import { hostLivenessLabel } from '@/shared/lib/host-liveness.pure'
 import {
   formatSessionAttentionLabel,
   type SessionSummary,
@@ -36,11 +37,14 @@ export function needsYouCardModel(
     session.attention === 'needs-approval' ||
     session.attention === 'needs-input'
   const parallelSummary = parallelWorkStatus(session)
-  const failed = session.attention === 'failed' || session.status === 'failed'
   // Between the two: not waiting on Marcin, not failed, and not silently
   // "Working" either — this row is the only place that says the app has lost
-  // the wire to the machine (MAR-3051).
+  // the wire to the machine (MAR-3051). The run itself is alive on the far
+  // machine, so it is neither failed nor settled (MAR-3054 integration).
   const hostUnreachable = session.attention === 'host-unreachable'
+  const failed =
+    !hostUnreachable &&
+    (session.attention === 'failed' || session.status === 'failed')
   const working =
     !waiting &&
     !failed &&
@@ -48,6 +52,12 @@ export function needsYouCardModel(
   const review = failed || (session.attention === 'finished' && !working)
   return {
     session,
+    hostUnreachable,
+    hostLiveness: hostLivenessLabel(
+      session.executionHost,
+      session.executionHostLastEventAt,
+      context.now,
+    ),
     timing: needsYouTiming(session, context.now),
     projectName: context.projectName,
     host: isLocalExecutionHost(session.executionHost)
@@ -65,10 +75,10 @@ export function needsYouCardModel(
     canArchive:
       review || (kind === 'errand' && session.pullRequest?.state === 'merged'),
     working,
-    summary: failed
-      ? 'Failed'
-      : hostUnreachable
-        ? 'Host unreachable'
+    summary: hostUnreachable
+      ? 'Host unreachable'
+      : failed
+        ? 'Failed'
         : waiting
           ? formatSessionAttentionLabel(session)
           : working

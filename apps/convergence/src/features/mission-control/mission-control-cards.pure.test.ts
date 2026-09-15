@@ -45,6 +45,7 @@ const PROVIDERS = [
 describe('buildSessionCards', () => {
   it('resolves the project name for a project session', () => {
     const [card] = buildSessionCards({
+      now: Date.parse('2026-09-15T12:00:00Z'),
       sessions: [makeSession({ projectId: 'project-2' })],
       projects: PROJECTS,
       providers: PROVIDERS,
@@ -55,6 +56,7 @@ describe('buildSessionCards', () => {
 
   it('names the app itself as the context for a chat session', () => {
     const [card] = buildSessionCards({
+      now: Date.parse('2026-09-15T12:00:00Z'),
       sessions: [makeSession({ contextKind: 'global', projectId: null })],
       projects: PROJECTS,
       providers: PROVIDERS,
@@ -65,6 +67,7 @@ describe('buildSessionCards', () => {
 
   it('falls back honestly when the project is gone', () => {
     const [card] = buildSessionCards({
+      now: Date.parse('2026-09-15T12:00:00Z'),
       sessions: [makeSession({ projectId: 'project-vanished' })],
       projects: PROJECTS,
       providers: PROVIDERS,
@@ -75,6 +78,7 @@ describe('buildSessionCards', () => {
 
   it('prefers the vendor label, then the provider name, then the id', () => {
     const cards = buildSessionCards({
+      now: Date.parse('2026-09-15T12:00:00Z'),
       sessions: [
         makeSession({ id: 'a', providerId: 'claude-code' }),
         makeSession({ id: 'b', providerId: 'codex' }),
@@ -93,6 +97,7 @@ describe('buildSessionCards', () => {
 
   it('carries the live activity line onto the card', () => {
     const [card] = buildSessionCards({
+      now: Date.parse('2026-09-15T12:00:00Z'),
       sessions: [makeSession({ status: 'running', activity: 'tool:Bash' })],
       projects: PROJECTS,
       providers: PROVIDERS,
@@ -103,6 +108,7 @@ describe('buildSessionCards', () => {
 
   it('leaves archived sessions out of the room', () => {
     const cards = buildSessionCards({
+      now: Date.parse('2026-09-15T12:00:00Z'),
       sessions: [
         makeSession({ id: 'live' }),
         makeSession({ id: 'archived', archivedAt: '2026-08-01T00:00:00.000Z' }),
@@ -116,6 +122,7 @@ describe('buildSessionCards', () => {
 
   it('leaves shell sessions out of the room', () => {
     const cards = buildSessionCards({
+      now: Date.parse('2026-09-15T12:00:00Z'),
       sessions: [
         makeSession({ id: 'agent' }),
         makeSession({ id: 'terminal', providerId: 'shell' }),
@@ -129,6 +136,7 @@ describe('buildSessionCards', () => {
 
   it('builds a lowercase haystack from card fields only', () => {
     const [card] = buildSessionCards({
+      now: Date.parse('2026-09-15T12:00:00Z'),
       sessions: [
         makeSession({
           name: 'Wire The Room',
@@ -152,6 +160,7 @@ describe('buildSessionCards', () => {
 
   it('tolerates a session whose model is unset', () => {
     const [card] = buildSessionCards({
+      now: Date.parse('2026-09-15T12:00:00Z'),
       sessions: [makeSession({ model: null })],
       projects: PROJECTS,
       providers: PROVIDERS,

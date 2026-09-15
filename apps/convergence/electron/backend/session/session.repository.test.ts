@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type Database from 'better-sqlite3'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import {
@@ -51,6 +51,36 @@ describe('SessionRepository', () => {
   afterEach(() => {
     closeDatabase()
     resetDatabase()
+  })
+
+  it('RUN84 host cursor and time advance together — mutation omit timestamp write turns red', () => {
+    repository.create(createSessionInput({ executionHost: 'lm' }))
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-09-15T12:00:00Z'))
+      repository.setExecutionHostLastSeq('session-1', 10)
+      expect(repository.findById('session-1')).toMatchObject({
+        execution_host_last_seq: 10,
+        execution_host_last_event_at: '2026-09-15T12:00:00.000Z',
+      })
+      vi.setSystemTime(new Date('2026-09-15T12:00:30Z'))
+      repository.setExecutionHostLastSeq('session-1', 9)
+      expect(repository.findById('session-1')).toMatchObject({
+        execution_host_last_seq: 10,
+        execution_host_last_event_at: '2026-09-15T12:00:00.000Z',
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('RUN84 local sessions have no host evidence — mutation stamp local cursor turns red', () => {
+    repository.create(createSessionInput())
+    repository.setExecutionHostLastSeq('session-1', 10)
+    expect(repository.findById('session-1')).toMatchObject({
+      execution_host_last_seq: 0,
+      execution_host_last_event_at: null,
+    })
   })
 
   it('creates and finds a session row', () => {

@@ -3468,7 +3468,7 @@ export class SessionService {
     // on disk as settled while still marked quiet, and after a restart that
     // stale marker would silence the next ordinary run.
     const relaysMuted = row.relays_muted === 1
-    const hostSeq = executionHostSeq ?? 0
+    const hostSeq = row.execution_host === 'local' ? 0 : (executionHostSeq ?? 0)
     // Read from the patch, not from the resulting status: the marker means
     // "this event settled the session", and a patch that carries no status at
     // all -- a continuation token arriving after the settle -- did not.
@@ -3485,6 +3485,7 @@ export class SessionService {
              continuation_token = ?,
              relays_muted = ?,
              archived_at = ?,
+             execution_host_last_event_at = CASE WHEN ? > execution_host_last_seq THEN ? ELSE execution_host_last_event_at END,
              execution_host_last_seq = MAX(execution_host_last_seq, ?),
              execution_host_settled_seq = MAX(execution_host_settled_seq, ?),
              updated_at = ?
@@ -3506,6 +3507,8 @@ export class SessionService {
           : row.continuation_token,
         isSettling ? 0 : row.relays_muted,
         nextArchivedAt,
+        hostSeq,
+        new Date().toISOString(),
         hostSeq,
         settledSeq,
         updatedAt,

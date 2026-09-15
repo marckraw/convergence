@@ -96,7 +96,7 @@ export function SessionActivityCard({
         >
           <span className="block min-w-0 w-full space-y-1">
             <span className="flex items-start gap-1 text-xs font-medium">
-              {compact && (
+              {compact && !card.hostUnreachable && (
                 <SessionBadge
                   attention={session.attention}
                   status={session.status}
@@ -170,6 +170,16 @@ export function SessionActivityCard({
             </div>
           </TooltipProvider>
         )}
+        {compact && card.hostLiveness && (
+          <time
+            className="block text-[10px] text-muted-foreground"
+            title={session.executionHostLastEventAt ?? undefined}
+            dateTime={session.executionHostLastEventAt ?? undefined}
+          >
+            {card.hostLiveness}
+          </time>
+        )}
+        {compact && card.hostUnreachable && <NeedsYouCardStatus card={card} />}
         {!compact && (
           <div className="mt-1 space-y-1">
             {session.pullRequest && (
@@ -179,14 +189,25 @@ export function SessionActivityCard({
             )}
             <NeedsYouCardStatus card={card} />
             <span className="block text-[10px] font-normal text-muted-foreground">
-              Last moved{' '}
-              <time
-                title={session.updatedAt}
-                dateTime={session.updatedAt}
-                className="tabular-nums"
-              >
-                {card.lastMoved}
-              </time>
+              {card.hostLiveness ? (
+                <time
+                  title={session.executionHostLastEventAt ?? undefined}
+                  dateTime={session.executionHostLastEventAt ?? undefined}
+                >
+                  {card.hostLiveness}
+                </time>
+              ) : (
+                <>
+                  Last moved{' '}
+                  <time
+                    title={session.updatedAt}
+                    dateTime={session.updatedAt}
+                    className="tabular-nums"
+                  >
+                    {card.lastMoved}
+                  </time>
+                </>
+              )}
             </span>
           </div>
         )}

@@ -1,7 +1,7 @@
 import type { SessionCard } from './mission-control.types'
 
 /**
- * The five states a Session Card can be in, as the room reads them.
+ * The states a Session Card can be in, as the room reads them.
  *
  * This is the single vocabulary shared by the filter chips and the ordering
  * presets: whenever Mission Control says "working", it means this.
@@ -18,6 +18,7 @@ export type SessionCardState =
   | 'idle'
   | 'finished'
   | 'failed'
+  | 'host-unreachable'
 
 export const SESSION_CARD_STATES: readonly SessionCardState[] = [
   'working',
@@ -25,6 +26,7 @@ export const SESSION_CARD_STATES: readonly SessionCardState[] = [
   'idle',
   'finished',
   'failed',
+  'host-unreachable',
 ]
 
 const SESSION_CARD_STATE_LABELS: Record<SessionCardState, string> = {
@@ -33,6 +35,7 @@ const SESSION_CARD_STATE_LABELS: Record<SessionCardState, string> = {
   idle: 'Idle',
   finished: 'Finished',
   failed: 'Failed',
+  'host-unreachable': 'Host unreachable',
 }
 
 export function formatSessionCardState(state: SessionCardState): string {
@@ -51,6 +54,7 @@ export function countSessionCardStates(
     idle: 0,
     finished: 0,
     failed: 0,
+    'host-unreachable': 0,
   }
 
   for (const card of cards) {
@@ -70,6 +74,8 @@ export function countSessionCardStates(
  */
 export function classifySessionCardState(card: SessionCard): SessionCardState {
   const { status, attention, activity } = card.session
+  // RUN82 owns the host-unreachable AttentionState addition.
+  if (String(attention) === 'host-unreachable') return 'host-unreachable'
 
   if (attention === 'needs-approval' || attention === 'needs-input') {
     return 'needs-you'

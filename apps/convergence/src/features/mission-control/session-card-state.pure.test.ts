@@ -239,6 +239,7 @@ describe('countSessionCardStates', () => {
       idle: 0,
       finished: 0,
       failed: 0,
+      'host-unreachable': 0,
     })
   })
 
@@ -258,6 +259,7 @@ describe('countSessionCardStates', () => {
       idle: 1,
       finished: 1,
       failed: 1,
+      'host-unreachable': 0,
     })
   })
 
@@ -279,6 +281,7 @@ describe('formatSessionCardState', () => {
       'Idle',
       'Finished',
       'Failed',
+      'Host unreachable',
     ])
   })
 })

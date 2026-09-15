@@ -372,6 +372,8 @@ export interface QueuedInputPatchEvent {
 }
 
 export interface SessionSummary {
+  executionHostLastSeq?: number
+  executionHostLastEventAt?: string | null
   turnTiming?:
     | import('@/shared/types/session-timing.types').SessionTurnTiming
     | null

@@ -1,3 +1,4 @@
+import { hostLivenessLabel } from '@/shared/lib/host-liveness.pure'
 import type { ProviderInfo, SessionSummary } from '@/entities/session'
 import type { SessionCrew } from '@/entities/session-crew'
 import { formatSessionCardActivity } from './session-card-activity.pure'
@@ -14,6 +15,7 @@ export type ProviderLabelSource = Pick<
 >
 
 export interface BuildSessionCardsInput {
+  now: number
   sessions: readonly SessionSummary[]
   projects: readonly ProjectNameSource[]
   providers: readonly ProviderLabelSource[]
@@ -37,6 +39,7 @@ export function buildSessionCards({
   projects,
   providers,
   crews = [],
+  now,
 }: BuildSessionCardsInput): SessionCard[] {
   const crewsBySessionId = new Map<string, SessionCrew[]>()
   for (const crew of crews) {
@@ -77,6 +80,11 @@ export function buildSessionCards({
 
       return {
         session,
+        hostLiveness: hostLivenessLabel(
+          session.executionHost,
+          session.executionHostLastEventAt,
+          now,
+        ),
         projectName,
         providerLabel,
         activityLabel,

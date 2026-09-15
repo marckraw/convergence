@@ -60,6 +60,7 @@ export function getSessionCardGroup(card: SessionCard): number {
 
 /** Working on top, then whoever is blocked, then outcomes, then rest. */
 const WORKING_FIRST_RANK: Record<SessionCardState, number> = {
+  'host-unreachable': 2,
   working: 0,
   'needs-you': 1,
   failed: 2,

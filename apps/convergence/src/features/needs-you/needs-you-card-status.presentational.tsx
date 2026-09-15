@@ -13,16 +13,19 @@ export function NeedsYouCardStatus({ card }: { card: NeedsYouCardModel }) {
 
   const waiting = card.attentionGroup === 'Waiting on you'
   const failed =
-    card.session.attention === 'failed' || card.session.status === 'failed'
-  const Icon = waiting
-    ? MessageCircle
-    : failed
-      ? CircleAlert
-      : card.working
-        ? LoaderCircle
-        : card.session.parallelWork?.unknown
-          ? CircleHelp
-          : CircleCheck
+    !card.hostUnreachable &&
+    (card.session.attention === 'failed' || card.session.status === 'failed')
+  const Icon = card.hostUnreachable
+    ? CircleHelp
+    : waiting
+      ? MessageCircle
+      : failed
+        ? CircleAlert
+        : card.working
+          ? LoaderCircle
+          : card.session.parallelWork?.unknown
+            ? CircleHelp
+            : CircleCheck
   return (
     <span
       className={cn(

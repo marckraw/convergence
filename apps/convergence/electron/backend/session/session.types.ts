@@ -158,6 +158,8 @@ export type AttentionRequestKind =
   | 'input'
 
 export interface SessionSummary {
+  executionHostLastSeq?: number
+  executionHostLastEventAt?: string | null
   turnTiming?:
     | import('../../../src/shared/types/session-timing.types').SessionTurnTiming
     | null
@@ -409,6 +411,13 @@ export function sessionSummaryFromRow(row: SessionRow): SessionSummary {
     forkStrategy: parseForkStrategy(row.fork_strategy),
     primarySurface: parsePrimarySurface(row.primary_surface),
     executionHost: parseExecutionHostId(row.execution_host),
+    ...(row.execution_host !== 'local'
+      ? { executionHostLastSeq: row.execution_host_last_seq }
+      : {}),
+    executionHostLastEventAt:
+      row.execution_host !== 'local'
+        ? (row.execution_host_last_event_at ?? null)
+        : null,
     workAddress: parseSessionWorkAddress(row.work_address),
     reportedWorkspace: parseReportedWorkspace(row.reported_workspace),
     continuationToken: row.continuation_token,

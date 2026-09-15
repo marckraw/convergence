@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { selectLocalProviders, useSessionStore } from '@/entities/session'
 import { useSessionCrewStore } from '@/entities/session-crew'
@@ -70,9 +70,19 @@ export function useMissionControlCards({
     void loadProviders()
   }, [loadProviders])
 
+  const [now, setNow] = useState(() => Date.now())
+  const hasRemote = sessions.some(
+    (s) => s.executionHost && s.executionHost !== 'local',
+  )
+  useEffect(() => {
+    if (!hasRemote) return
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [hasRemote])
+
   const allCards = useMemo(
-    () => buildSessionCards({ sessions, projects, providers, crews }),
-    [sessions, projects, providers, crews],
+    () => buildSessionCards({ sessions, projects, providers, crews, now }),
+    [sessions, projects, providers, crews, now],
   )
 
   const stateCounts = useMemo(
