@@ -52,6 +52,8 @@ it('RUN84 lap3 clock refreshes when a remote card arrives — mutation omit imme
   const { result, rerender, unmount } = renderHook(() =>
     useMissionControlCards({ filter: EMPTY_SESSION_CARD_FILTER }),
   )
+  // No remote card, no clock: nothing on this grid is a statement about `now`.
+  expect(vi.getTimerCount()).toBe(0)
   vi.setSystemTime(START + 3_600_000)
   fixture.sessions = [remote(START + 3_600_000 - 180_000)]
   rerender()

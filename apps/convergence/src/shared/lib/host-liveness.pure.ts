@@ -1,4 +1,11 @@
-/** Age of the viewer receipt, not daemon event time: a reconnect replay can stamp an old envelope now. */
+/**
+ * How long ago the host last reached this app (MAR-3054).
+ *
+ * The stamp is the viewer's receipt time, not the daemon's event time: a
+ * reconnect replay stamps the old envelopes it walks through "now". That is the
+ * fact the label is for -- "the host last reached me" -- and never the viewer's
+ * own updates standing in for it.
+ */
 export function hostLivenessLabel(
   host: string | undefined,
   at: string | null | undefined,

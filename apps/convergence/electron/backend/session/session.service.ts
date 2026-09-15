@@ -3413,7 +3413,10 @@ export class SessionService {
    * Writes one session patch, and -- when the patch came from an execution
    * host event -- the stream cursor and the settle marker with it (MAR-2582).
    *
-   * Host liveness is viewer receipt time, not daemon event time: a reconnect replay can stamp an old envelope now.
+   * The host-liveness stamp written here is this app's receipt time, not the
+   * daemon's event time: a reconnect replay that walks the cursor through old
+   * envelopes stamps each of them "now". So the label it feeds means "the host
+   * last reached me", which is the question a card asks (MAR-3054).
    *
    * All three in one statement on purpose. The cursor used to be persisted by
    * a second write that ran after this one returned, so an interruption in the
