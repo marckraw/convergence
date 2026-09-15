@@ -248,7 +248,10 @@ describe('remote wire events reaching the session record', () => {
         }),
       },
       fetch: stub.fetchFn,
-      reconnect: { maxAttempts: 2, wait: async () => {} },
+      reconnect: {
+        maxAttempts: 2,
+        wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
+      },
       onEventSeq: (id, seq) => {
         const row = readRow()
         cursorWrites.push({

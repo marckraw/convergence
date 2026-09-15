@@ -59,6 +59,11 @@ import {
   parseRemoteExecutionHostMeta,
   parseRemoteExecutionHostStartResponse,
   parseRemoteSessionWorkspaceInfo,
+  describeConfirmedPrune,
+  EXECUTION_HOST_CAUGHT_UP_EVENT,
+  EXECUTION_HOST_REPLAY_EVENT,
+  nextEnvelopeSeqPhase,
+  readCaughtUpThroughSeq,
   readEnvelopeSeq,
   RemoteExecutionHostError,
   remoteProjectCatalogFromOutcome,
@@ -71,7 +76,9 @@ import {
   type RemoteExecutionHostConnectionResolver,
   type RemoteExecutionHostProviderInfo,
   type RemoteProjectCatalog,
+  type SseEvent,
   type RemoteProjectsCapability,
+  type EnvelopeSeqPhase,
   type RemoteProjectsOutcome,
   type RemoteSessionWorkspaceInfo,
   type RemoteStartEcho,
@@ -94,6 +101,18 @@ type FetchFn = typeof fetch
  * recoverable disconnect into a dead session.
  */
 const DEFAULT_MAX_RECONNECT_ATTEMPTS = 10
+
+/**
+ * How often a viewer that has lost its host looks again (MAR-3051 S2).
+ *
+ * The budget above exists to stop a hot reconnect loop, not to decide that a
+ * run is over: the daemon is a different machine, and "this app cannot reach
+ * it" is a fact about the wire, never about the agent. So a spent budget slows
+ * the loop to one look a minute and keeps looking until the session is stopped
+ * or disposed — the run on the far side is still running, and its terminal is
+ * still waiting on the daemon's log to be read.
+ */
+export const HOST_UNREACHABLE_RETRY_MS = 60_000
 
 /**
  * Emergence's number, and its reasoning with it
@@ -1428,6 +1447,29 @@ class RemoteSessionRun {
    * the hole rather than "the stream dropped" (MAR-2779 round 3).
    */
   private streamGap: string | null = null
+  /**
+   * Where the stream in progress is: `resumed` until its first envelope lands,
+   * `replay` while the daemon says it is replaying, `live` afterwards. It is
+   * what tells a pruned hole from a lost frame (MAR-3051 R1).
+   */
+  private streamPhase: EnvelopeSeqPhase = 'live'
+  /**
+   * Whether this run has already said out loud that it cannot reach the host.
+   * The note and the attention are said once per outage, not once per retry.
+   */
+  private hostUnreachable = false
+  /**
+   * Whether the read in progress tried to KEEP an envelope -- one it had read
+   * as the next to dispatch. A read that tried and kept nothing is not a host
+   * that stopped answering: the daemon delivered, and something on this side
+   * refused it (a listener or the record throwing, MAR-2901), so it still ends
+   * the run out loud rather than retry forever (MAR-3051 R2).
+   *
+   * Duplicates and gaps do not count. A replay that re-delivers only what the
+   * run already holds is an ordinary resume, and a stream that keeps doing
+   * that is a host problem, not this side refusing anything.
+   */
+  private streamDispatchAttempted = false
 
   constructor(private readonly params: RemoteSessionRunParams) {
     this.lastSeq = params.resume?.afterSeq ?? 0
@@ -1621,12 +1663,21 @@ class RemoteSessionRun {
           // the resume never filled is the part they can act on whichever way
           // it ended (MAR-2779 round 4).
           const unavailable = `Remote session event stream is unavailable: ${describeRemoteExecutionHostFailure(error)}`
-          this.failSession(
+          const sentence =
             unhealedGap === null
               ? unavailable
-              : describeStreamEndAboveHole(unavailable, unhealedGap),
-          )
-          return
+              : describeStreamEndAboveHole(unavailable, unhealedGap)
+          // A refusal the daemon MEANT -- the token is not accepted, or the
+          // session does not exist there -- is the run's news, not the wire's,
+          // and looking again every minute would only repeat it. Everything
+          // else is a host this app cannot reach (MAR-3051 R2).
+          if (isDaemonVerdictOnTheStream(error)) {
+            this.failSession(sentence)
+            return
+          }
+          this.noteHostUnreachable(sentence)
+          await policy.wait(HOST_UNREACHABLE_RETRY_MS)
+          continue
         }
         await policy.wait(policy.delayMs(attempt))
         continue
@@ -1663,17 +1714,30 @@ class RemoteSessionRun {
       // It renews in the other direction too: a long session that reconnects
       // now and then must not die of its own length, and the budget is for a
       // host that has stopped answering.
+      // A read that kept something is the host answering, so the budget it
+      // spent is handed back. The attention it raised comes down earlier than
+      // this, at the envelope itself: a healthy stream stays open for the life
+      // of a turn, and a warning that waited for the read to END would sit on
+      // a card for the whole of it (MAR-3051 R2).
       if (envelopes > 0) attempt = 0
       attempt += 1
       if (attempt >= policy.maxAttempts) {
         const dropped =
           'Remote session event stream dropped and could not be re-established.'
-        this.failSession(
+        const sentence =
           unhealedGap === null
             ? dropped
-            : describeStreamEndAboveHole(dropped, unhealedGap),
-        )
-        return
+            : describeStreamEndAboveHole(dropped, unhealedGap)
+        // The daemon delivered this run's frames and this side kept none of
+        // them: that is a failure here, not a lost host, and retrying forever
+        // would spin on it (MAR-2901; MAR-3051 R2).
+        if (this.streamDispatchAttempted && envelopes === 0) {
+          this.failSession(sentence)
+          return
+        }
+        this.noteHostUnreachable(sentence)
+        await policy.wait(HOST_UNREACHABLE_RETRY_MS)
+        continue
       }
       await policy.wait(policy.delayMs(attempt))
     }
@@ -1696,6 +1760,13 @@ class RemoteSessionRun {
     const decoder = new TextDecoder()
     const parser = createSseParser()
     this.streamGap = null
+    // Every open is a resume: with `Last-Event-ID: L` the daemon answers
+    // "everything above L", and without one it answers "everything above 0"
+    // from the same log, with the same pruned holes in it. So the first
+    // envelope of any stream is the daemon answering the cursor, and a hole
+    // under it is history the daemon no longer holds (MAR-3051 R1).
+    this.streamPhase = 'resumed'
+    this.streamDispatchAttempted = false
     let envelopes = 0
 
     try {
@@ -1709,7 +1780,7 @@ class RemoteSessionRun {
         // decides per event rather than the loop deciding once -- an event
         // dropped for that reason is traced like every other drop.
         for (const [index, event] of events.entries()) {
-          if (this.dispatchRawEvent(event.data)) envelopes += 1
+          if (this.dispatchRawEvent(event)) envelopes += 1
           // Everything after a gap in this batch sits above a hole, whatever
           // its own sequence says. Leaving here ends the stream and hands the
           // resume to `consumeEventStream` (MAR-2779).
@@ -1792,7 +1863,8 @@ class RemoteSessionRun {
    * for an envelope that reached the session and moved the cursor. Every
    * `false` is a drop this method has already traced with its reason.
    */
-  private dispatchRawEvent(raw: string): boolean {
+  private dispatchRawEvent(frame: SseEvent): boolean {
+    const raw = frame.data
     // A disposed run has no voice. Its listeners belong to a handle the
     // session service has already released, and an event delivered through
     // them lands on a session whose live turn is being served by a different
@@ -1802,6 +1874,34 @@ class RemoteSessionRun {
         direction: 'in',
         bytes: raw.length,
         note: 'dropped: the run is disposed',
+      })
+      return false
+    }
+    // The replay boundary, when the daemon draws one (MAR-3051 R1). Neither
+    // frame is an event of the session: they move this reader's phase and
+    // nothing else, and a daemon that sends neither is read exactly as before.
+    if (frame.event === EXECUTION_HOST_REPLAY_EVENT) {
+      this.streamPhase = 'replay'
+    }
+    if (frame.event === EXECUTION_HOST_CAUGHT_UP_EVENT) {
+      const throughSeq = readCaughtUpThroughSeq(raw)
+      this.streamPhase = 'live'
+      // The daemon has said its replay is complete through N: every hole below
+      // N is history it no longer holds, so the cursor may stand there. The
+      // durable cursor is left to the events themselves — this one moves only
+      // what the next resume asks for.
+      if (throughSeq !== null && throughSeq > this.lastSeq) {
+        this.lastSeq = throughSeq
+      }
+      this.recordDebug('event', {
+        direction: 'in',
+        bytes: raw.length,
+        method: EXECUTION_HOST_CAUGHT_UP_EVENT,
+        payload: { throughSeq, lastSeq: this.lastSeq },
+        note:
+          throughSeq === null
+            ? 'caught-up frame carried no readable throughSeq; cursor unmoved'
+            : 'replay complete; strict sequencing resumes',
       })
       return false
     }
@@ -1824,7 +1924,11 @@ class RemoteSessionRun {
       })
       return false
     }
-    const reading = readEnvelopeSeq(this.lastSeq, envelope.seq)
+    const reading = readEnvelopeSeq(
+      this.lastSeq,
+      envelope.seq,
+      this.streamPhase,
+    )
     if (reading === 'duplicate') {
       this.recordDebug('event', {
         direction: 'in',
@@ -1858,6 +1962,24 @@ class RemoteSessionRun {
       this.streamGap = describeSeqHole(this.lastSeq, envelope.seq)
       return false
     }
+    // An accepted envelope that sits above the next expected sequence is the
+    // prune the daemon's own replay just confirmed. Said out loud, because a
+    // cursor that jumped with no sentence under it is what the silent skipping
+    // before MAR-2779 looked like.
+    if (envelope.seq > this.lastSeq + 1) {
+      this.recordDebug('event', {
+        direction: 'in',
+        bytes: raw.length,
+        method: envelope.event.kind,
+        payload: {
+          seq: envelope.seq,
+          lastSeq: this.lastSeq,
+          phase: this.streamPhase,
+        },
+        note: describeConfirmedPrune(this.lastSeq, envelope.seq),
+      })
+    }
+    this.streamPhase = nextEnvelopeSeqPhase(this.streamPhase, reading)
     this.recordDebug('event', {
       direction: 'in',
       bytes: raw.length,
@@ -1885,6 +2007,13 @@ class RemoteSessionRun {
     // moves. The throw is deliberately not caught -- the reconnect budget is
     // spent by attempts that delivered something, and a listener that keeps
     // throwing must be allowed to fail the session out loud rather than spin.
+    // Seeing again is the only proof that the wire is back, and this envelope
+    // is the first moment it exists (MAR-3051 R2). Cleared BEFORE the envelope
+    // is dispatched, not after: the envelope that ends an outage is often the
+    // terminal itself, and its own attention (`finished`, `failed`) is the
+    // daemon's word -- clearing afterwards overwrote it with `none`.
+    this.clearHostUnreachable()
+    this.streamDispatchAttempted = true
     this.dispatchEvent(envelope.event, envelope.seq)
     this.lastSeq = envelope.seq
     // The cursor write for every event that does not carry a session patch.
@@ -2124,6 +2253,48 @@ class RemoteSessionRun {
     this.abort.abort()
   }
 
+  /**
+   * Says that this app cannot see the run, without saying the run is over
+   * (MAR-3051 R2).
+   *
+   * The budget above is a rate limit on reconnects, and spending it used to
+   * settle the session `failed`: a viewer's wifi blip ended a run that was
+   * still working on another machine, took its `completed` terminal with it —
+   * the relay reads a settle and records `skipped-failed` — and left the seat
+   * poisoned for every later turn. So the status is not touched: `running` is
+   * what the daemon last said and it remains the only thing that knows
+   * otherwise. The attention is the honest half — this viewer is blind — and
+   * the note keeps the hole it could not heal.
+   *
+   * Once per outage. The retry loop passes here every minute, and a note per
+   * minute would bury the transcript it is meant to explain.
+   */
+  private noteHostUnreachable(message: string): void {
+    if (this.hostUnreachable || this.dead || this.stopped) return
+    this.hostUnreachable = true
+    this.emitter.addNote({ text: message, level: 'error' })
+    this.emitter.patchSession({ attention: 'host-unreachable' })
+    for (const listener of this.attentionListeners) listener('host-unreachable')
+    this.recordDebug('lifecycle', {
+      direction: 'in',
+      note: `host unreachable; retrying every ${Math.round(
+        HOST_UNREACHABLE_RETRY_MS / 1000,
+      )}s from seq ${this.lastSeq} until this run is stopped`,
+    })
+  }
+
+  /** The host answered again: the viewer can see, so the warning comes down. */
+  private clearHostUnreachable(): void {
+    if (!this.hostUnreachable) return
+    this.hostUnreachable = false
+    this.emitter.patchSession({ attention: 'none' })
+    for (const listener of this.attentionListeners) listener('none')
+    this.recordDebug('lifecycle', {
+      direction: 'in',
+      note: `host reachable again at seq ${this.lastSeq}`,
+    })
+  }
+
   private failSession(message: string): void {
     if (this.dead || this.stopped) return
     this.dead = true
@@ -2143,6 +2314,22 @@ class RemoteSessionRun {
     }
     return this.connection
   }
+}
+
+/**
+ * Whether a refused event-stream open is the daemon's own answer about this
+ * run rather than a failure to reach it (MAR-3051 R2).
+ *
+ * The same line the Studio client draws (`daemon-client.ts`, `followSession`):
+ * an `auth` refusal and a 404 are the daemon speaking, so they end the run;
+ * every other failure -- a 5xx from a proxy, a socket that never connected --
+ * says only that this app cannot see the machine.
+ */
+function isDaemonVerdictOnTheStream(error: unknown): boolean {
+  return (
+    error instanceof RemoteExecutionHostError &&
+    (error.kind === 'auth' || error.status === 404)
+  )
 }
 
 function buildRemoteUrl(baseUrl: string, path: string): string {

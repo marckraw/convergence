@@ -94,7 +94,10 @@ describe('a remote start carries the place the session recorded', () => {
         }),
       },
       fetch: stub.fetchFn,
-      reconnect: { maxAttempts: 1, wait: async () => {} },
+      reconnect: {
+        maxAttempts: 1,
+        wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
+      },
       // The wire `main/index.ts` builds for real: the daemon's echo becomes
       // the record, in the same beat the start is accepted (MAR-2694).
       onWorkspaceReported: (sessionId, workspace) =>
@@ -450,7 +453,10 @@ describe('a remote start carries the place the session recorded', () => {
         }),
       },
       fetch: stub.fetchFn,
-      reconnect: { maxAttempts: 1, wait: async () => {} },
+      reconnect: {
+        maxAttempts: 1,
+        wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
+      },
       onWorkspaceReported: () => {
         throw new Error('record write failed')
       },
@@ -535,7 +541,10 @@ describe('a remote start carries the place the session recorded', () => {
           }),
         },
         fetch: stub.fetchFn,
-        reconnect: { maxAttempts: 1, wait: async () => {} },
+        reconnect: {
+          maxAttempts: 1,
+          wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
+        },
         debugSink,
         onWorkspaceReported: (sessionId, workspace) =>
           service.recordReportedWorkspace(sessionId, workspace),
@@ -958,7 +967,10 @@ describe('describeProjectCatalog', () => {
         }),
       },
       fetch: stub.fetchFn,
-      reconnect: { maxAttempts: 1, wait: async () => {} },
+      reconnect: {
+        maxAttempts: 1,
+        wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
+      },
     })
   }
 
@@ -1518,7 +1530,10 @@ describe('describeProjectCatalog', () => {
         resolveConnection: async () => ({ baseUrl, token: 'test-token' }),
       },
       fetch: stub.fetchFn,
-      reconnect: { maxAttempts: 1, wait: async () => {} },
+      reconnect: {
+        maxAttempts: 1,
+        wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
+      },
     })
 
     // Machine A answers, and does not do Projects.
@@ -1595,7 +1610,10 @@ describe('describeProjectCatalog', () => {
         resolveConnection: async () => ({ baseUrl, token: 'test-token' }),
       },
       fetch: stub.fetchFn,
-      reconnect: { maxAttempts: 1, wait: async () => {} },
+      reconnect: {
+        maxAttempts: 1,
+        wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
+      },
     })
 
     let releaseAnswer: () => void = () => {}

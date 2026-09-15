@@ -15,6 +15,10 @@ export function detectEvent(
       return 'agent.needs_input'
     case 'needs-approval':
       return 'agent.needs_approval'
+    // Not the agent's news: the run is unchanged and this app has lost sight
+    // of it, so there is nothing to tell the person that the card does not
+    // already show (MAR-3051).
+    case 'host-unreachable':
     case 'none':
       return null
   }

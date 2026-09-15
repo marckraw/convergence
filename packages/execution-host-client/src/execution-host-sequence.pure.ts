@@ -33,13 +33,108 @@
  */
 export type EnvelopeSeqReading = 'accept' | 'duplicate' | 'gap'
 
+/**
+ * Where in a stream's life this envelope arrived, which is what decides
+ * whether a hole under it is a loss or a prune (MAR-3051).
+ *
+ * `live` — the strict reading: the next number is the only number, and
+ * anything higher means frames went missing in transit (MAR-2779).
+ * `resumed` — the first envelope of a stream opened with `Last-Event-ID`. The
+ * daemon has just answered "everything above your cursor is this", so a hole
+ * below it is not a loss: it is the daemon's own pruned history. Nothing else
+ * can heal a gap, and this IS that something else having spoken.
+ * `replay` — inside a replay the daemon has marked as such, where the same
+ * argument holds for every frame until it says it is caught up.
+ */
+export type EnvelopeSeqPhase = 'live' | 'resumed' | 'replay'
+
+/**
+ * The daemon deletes superseded streaming patches out of the middle of its own
+ * log (`envelope-pruning.pure.ts`, MAR-2218a): "Deleting them leaves gaps in
+ * `seq`, which the resume contract already tolerates." Read strictly, every
+ * such hole was an unhealable loss — the client resumed from its cursor, the
+ * daemon replayed the same hole, and ten attempts later a live run was marked
+ * failed (MAR-3051, seat `0baa87b8`: 6,337 of 18,369 sequences pruned).
+ *
+ * So the phase is part of the reading. A hole seen on the first frame of a
+ * resume, or inside a marked replay, is the daemon confirming there is nothing
+ * to fetch; a hole on any later live frame is still a gap, and the reconnect
+ * that follows is still what tells the two apart.
+ */
 export function readEnvelopeSeq(
   lastSeq: number,
   seq: number,
+  phase: EnvelopeSeqPhase = 'live',
 ): EnvelopeSeqReading {
   if (seq <= lastSeq) return 'duplicate'
-  if (seq > lastSeq + 1) return 'gap'
+  if (seq > lastSeq + 1 && phase === 'live') return 'gap'
   return 'accept'
+}
+
+/**
+ * The phase a stream is in after it has read one envelope.
+ *
+ * Only the FIRST envelope after a resume is forgiven: the daemon answered the
+ * cursor once, and a second hole further down the same stream is a frame lost
+ * in transit like any other. A marked replay keeps its phase until the
+ * `caught-up` frame ends it, and a live stream never leaves `live`.
+ */
+export function nextEnvelopeSeqPhase(
+  phase: EnvelopeSeqPhase,
+  reading: EnvelopeSeqReading,
+): EnvelopeSeqPhase {
+  if (phase === 'resumed' && reading === 'accept') return 'live'
+  return phase
+}
+
+/**
+ * The SSE event names the daemon may put on the replay boundary (MAR-3051 S1).
+ *
+ * Today's daemon sends neither and the `resumed` phase above carries the whole
+ * rule; a daemon that sends them lets a client accept a whole pruned stretch
+ * without one reconnect per hole. Absence is not an error: a client reads the
+ * names when they are there and reads the stream exactly as before when they
+ * are not.
+ */
+export const EXECUTION_HOST_REPLAY_EVENT = 'replay'
+export const EXECUTION_HOST_CAUGHT_UP_EVENT = 'caught-up'
+
+/**
+ * `data: {"throughSeq": N}` on a `caught-up` frame, or null when the frame
+ * says something this client cannot read.
+ *
+ * Null is deliberately not zero: a frame whose payload is unreadable must
+ * leave the cursor alone rather than move it to the start of the log.
+ */
+export function readCaughtUpThroughSeq(data: string): number | null {
+  try {
+    const parsed: unknown = JSON.parse(data)
+    const value =
+      typeof parsed === 'object' && parsed !== null
+        ? (parsed as { throughSeq?: unknown }).throughSeq
+        : undefined
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0
+      ? value
+      : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * What a client writes when it steps over a hole because the daemon's own
+ * replay put the next frame there.
+ *
+ * Said out loud for the same reason `describeSeqGap` is: a remote session's
+ * debug log is the only place its wire can be inspected, and "accepted 15841
+ * after 15838" with no sentence under it is indistinguishable from the silent
+ * skipping this rule replaced (MAR-2779).
+ */
+export function describeConfirmedPrune(lastSeq: number, seq: number): string {
+  return `pruned history confirmed by the daemon's replay: ${describeSeqHole(
+    lastSeq,
+    seq,
+  )}`
 }
 
 /**

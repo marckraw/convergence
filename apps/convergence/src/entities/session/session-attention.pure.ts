@@ -25,6 +25,12 @@ export function formatSessionAttentionLabel(session: SessionSummary): string {
     return 'Session failed'
   }
 
+  // The run is somebody else's machine's business; this is about the wire
+  // between us and it (MAR-3051).
+  if (session.attention === 'host-unreachable') {
+    return 'Host unreachable'
+  }
+
   const parallel = parallelWorkStatus(session)
   if (parallel) return parallel
 

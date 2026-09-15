@@ -34,6 +34,15 @@ export interface StubDaemon {
   /** Pushes an SSE frame the protocol decoder will reject. */
   emitRaw: (data: string) => void
   /**
+   * Pushes a NAMED frame — `event: <name>` — without logging it (MAR-3051).
+   *
+   * The replay boundary the daemon will draw is carried by name rather than by
+   * payload, and a client that reads only `id`/`data` cannot see it. Unlogged
+   * because a boundary marker is not an event of the session: a resume must
+   * not replay it.
+   */
+  emitNamed: (name: string, data: string) => void
+  /**
    * Logs an envelope WITHOUT writing it to the open stream: the daemon holds
    * it, the wire lost it (MAR-2779).
    *
@@ -358,6 +367,11 @@ export function createStubDaemon(): StubDaemon {
             .map((item) => `id: ${item.seq}\ndata: ${JSON.stringify(item)}\n\n`)
             .join(''),
         ),
+      )
+    },
+    emitNamed(name, data) {
+      current.controller?.enqueue(
+        encoder.encode(`event: ${name}\ndata: ${data}\n\n`),
       )
     },
     emitRaw(data) {

@@ -27,6 +27,15 @@ export type AttentionState =
   | 'needs-approval'
   | 'finished'
   | 'failed'
+  /**
+   * This app cannot reach the machine the run is on (MAR-3051).
+   *
+   * Not a verdict about the run: a remote agent keeps working while the wire
+   * is down, so the status stays whatever the daemon last said and only this
+   * says the viewer has gone blind. It clears itself the moment the stream
+   * delivers again.
+   */
+  | 'host-unreachable'
 export type ReasoningEffort =
   | 'none'
   | 'minimal'

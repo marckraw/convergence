@@ -37,6 +37,10 @@ export function needsYouCardModel(
     session.attention === 'needs-input'
   const parallelSummary = parallelWorkStatus(session)
   const failed = session.attention === 'failed' || session.status === 'failed'
+  // Between the two: not waiting on Marcin, not failed, and not silently
+  // "Working" either — this row is the only place that says the app has lost
+  // the wire to the machine (MAR-3051).
+  const hostUnreachable = session.attention === 'host-unreachable'
   const working =
     !waiting &&
     !failed &&
@@ -63,14 +67,16 @@ export function needsYouCardModel(
     working,
     summary: failed
       ? 'Failed'
-      : waiting
-        ? formatSessionAttentionLabel(session)
-        : working
-          ? session.status === 'running'
-            ? 'Working'
-            : parallelSummary
-          : (parallelSummary ??
-            (review || session.status === 'completed' ? 'Finished' : null)),
+      : hostUnreachable
+        ? 'Host unreachable'
+        : waiting
+          ? formatSessionAttentionLabel(session)
+          : working
+            ? session.status === 'running'
+              ? 'Working'
+              : parallelSummary
+            : (parallelSummary ??
+              (review || session.status === 'completed' ? 'Finished' : null)),
     dismissLabel: waiting ? 'Snooze' : review ? 'Acknowledge' : null,
     attentionGroup: waiting ? 'Waiting on you' : review ? 'Needs review' : null,
     dismissed: context.dismissed ?? false,

@@ -37,10 +37,16 @@ export type {
 } from './execution-host-handshake.types'
 
 export {
+  describeConfirmedPrune,
   describeSeqGap,
   describeSeqHole,
   describeStreamEndAboveHole,
+  EXECUTION_HOST_CAUGHT_UP_EVENT,
+  EXECUTION_HOST_REPLAY_EVENT,
+  nextEnvelopeSeqPhase,
+  readCaughtUpThroughSeq,
   readEnvelopeSeq,
+  type EnvelopeSeqPhase,
   type EnvelopeSeqReading,
 } from './execution-host-sequence.pure'
 
