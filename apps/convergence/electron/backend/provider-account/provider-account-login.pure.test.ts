@@ -52,6 +52,14 @@ describe('provider login progress', () => {
   ])('refuses unrelated or unsafe Claude link %s', (url) => {
     expect(isProviderLoginUrl(url, 'claude-code')).toBe(false)
   })
+  it('refuses a Codex authorize URL that carries a fragment', () => {
+    expect(
+      isProviderLoginUrl(
+        'https://auth.openai.com/oauth/authorize#access_token=x',
+        'codex',
+      ),
+    ).toBe(false)
+  })
   it('accepts the vendor authorize URLs without a fragment', () => {
     expect(
       isProviderLoginUrl(

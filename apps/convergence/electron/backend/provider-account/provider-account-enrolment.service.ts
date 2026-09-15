@@ -519,23 +519,21 @@ export class ProviderAccountEnrolmentService {
     return this.withCodexAccountStopped(account, async () => {
       // A browser can return a different workspace for the same email. Never
       // relabel historical turns to that new identity, even when login succeeds.
-      this.repository.setStatus(account.id, 'unavailable', null)
-      await this.fs.chmod(account.configDir, CODEX_HOME_DIR_MODE)
       const authPath = join(account.configDir, CODEX_AUTH_FILE_NAME)
       let originalAuth: string | null
       try {
         originalAuth = await this.fs.readFile(authPath)
       } catch (error) {
-        // Absent or unreadable: reconnect may still run. Unreadable is treated
-        // as absent so a stuck file cannot block recovery; surface it once.
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-          console.error(
-            'Codex reconnect: prior auth.json could not be read; treating as absent.',
-            error instanceof Error ? error.message : error,
+          throw new Error(
+            'The account credential could not be read. Reconnect was not started; no credentials were changed.',
+            { cause: error },
           )
         }
         originalAuth = null
       }
+      this.repository.setStatus(account.id, 'unavailable', null)
+      await this.fs.chmod(account.configDir, CODEX_HOME_DIR_MODE)
       let result: ProviderAccountCommandResult
       try {
         result = await this.runLoginCommand(
@@ -601,9 +599,14 @@ export class ProviderAccountEnrolmentService {
       }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
-      const action = originalAuth !== null ? 'restored' : 'removed'
+      if (originalAuth !== null) {
+        throw new Error(
+          `${reason} The previous credential could NOT be restored: ${detail}. The unverified credential is still on disk; remove it before reconnecting. The account remains unavailable.`,
+          { cause: error },
+        )
+      }
       throw new Error(
-        `${reason} The ${originalAuth !== null ? 'previous' : 'foreign'} credential could NOT be ${action}: ${detail}. The account remains unavailable.`,
+        `${reason} The foreign credential could NOT be removed: ${detail}. The account remains unavailable.`,
         { cause: error },
       )
     }
@@ -624,6 +627,7 @@ export class ProviderAccountEnrolmentService {
       `.${basename(authPath)}.tmp-${randomUUID()}`,
     )
     await this.fs.writeFile(tempPath, contents)
+    await this.fs.chmod(tempPath, CODEX_AUTH_FILE_MODE)
     try {
       await this.fs.rename(tempPath, authPath)
     } catch (error) {

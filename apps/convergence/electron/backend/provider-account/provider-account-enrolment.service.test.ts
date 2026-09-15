@@ -712,7 +712,7 @@ describe('ProviderAccountEnrolmentService', () => {
     })
 
     it('disables a Codex account when reconnect selects a different workspace on the same email', async () => {
-      const { subject, runner, files } = codexFixture()
+      const { subject, runner, files, fs } = codexFixture()
       await subject.enrol({ email: 'someone@example.com', providerId: 'codex' })
       const originalAuth = files.get(`${CODEX_HOME}/auth.json`)
       expect(originalAuth).toBe(CODEX_AUTH)
@@ -731,6 +731,55 @@ describe('ProviderAccountEnrolmentService', () => {
         status: 'unavailable',
       })
       expect(files.get(`${CODEX_HOME}/auth.json`)).toBe(originalAuth)
+      const restoreChmod = vi
+        .mocked(fs.chmod)
+        .mock.calls.find(
+          ([path, mode]) =>
+            typeof path === 'string' &&
+            path.includes('.auth.json.tmp-') &&
+            mode === 0o600,
+        )
+      expect(restoreChmod).toBeDefined()
+      const restoreRename = vi
+        .mocked(fs.rename)
+        .mock.calls.find(
+          ([source, destination]) =>
+            typeof source === 'string' &&
+            source.includes('.auth.json.tmp-') &&
+            destination === `${CODEX_HOME}/auth.json`,
+        )
+      expect(restoreRename).toBeDefined()
+      expect(
+        vi.mocked(fs.chmod).mock.invocationCallOrder[
+          vi.mocked(fs.chmod).mock.calls.indexOf(restoreChmod!)
+        ],
+      ).toBeLessThan(
+        vi.mocked(fs.rename).mock.invocationCallOrder[
+          vi.mocked(fs.rename).mock.calls.indexOf(restoreRename!)
+        ],
+      )
+    })
+
+    it('refuses to start Codex reconnect when the prior credential is unreadable', async () => {
+      const { subject, runner, files, fs } = codexFixture()
+      await subject.enrol({ email: 'someone@example.com', providerId: 'codex' })
+      const originalAuth = files.get(`${CODEX_HOME}/auth.json`)
+      expect(repository.get(ACCOUNT_ID)?.status).toBe('connected')
+      vi.mocked(fs.readFile).mockImplementationOnce(async () => {
+        throw Object.assign(new Error('EACCES: permission denied'), {
+          code: 'EACCES',
+        })
+      })
+      const loginCallsBefore = runner.run.mock.calls.length
+      await expect(subject.reconnect(ACCOUNT_ID)).rejects.toThrow(
+        /account credential could not be read/,
+      )
+      expect(runner.run.mock.calls.length).toBe(loginCallsBefore)
+      expect(files.get(`${CODEX_HOME}/auth.json`)).toBe(originalAuth)
+      expect(repository.get(ACCOUNT_ID)).toMatchObject({
+        orgId: 'acc_123',
+        status: 'connected',
+      })
     })
 
     it('restores nothing when a refused reconnect had no prior auth.json', async () => {
@@ -830,6 +879,9 @@ describe('ProviderAccountEnrolmentService', () => {
         expect((error as Error).message).toContain(refusal)
         expect((error as Error).message).toContain(
           'credential could NOT be restored: EACCES: read-only home',
+        )
+        expect((error as Error).message).toContain(
+          'The unverified credential is still on disk; remove it before reconnecting.',
         )
         expect((error as Error).message).not.toContain('was discarded')
         expect(files.get(`${CODEX_HOME}/auth.json`)).toBe(auth)
