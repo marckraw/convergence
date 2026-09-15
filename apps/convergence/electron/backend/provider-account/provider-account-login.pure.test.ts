@@ -48,8 +48,29 @@ describe('provider login progress', () => {
     'https://claude.com:444/cai/oauth/authorize',
     'https://claude.com/download',
     'https://auth.openai.com/oauth/authorize',
+    'https://claude.com/cai/oauth/authorize#access_token=x',
   ])('refuses unrelated or unsafe Claude link %s', (url) => {
     expect(isProviderLoginUrl(url, 'claude-code')).toBe(false)
+  })
+  it('accepts the vendor authorize URLs without a fragment', () => {
+    expect(
+      isProviderLoginUrl(
+        'https://claude.com/cai/oauth/authorize?state=fixture',
+        'claude-code',
+      ),
+    ).toBe(true)
+    expect(
+      isProviderLoginUrl(
+        'https://claude.ai/oauth/authorize?state=fixture',
+        'claude-code',
+      ),
+    ).toBe(true)
+    expect(
+      isProviderLoginUrl(
+        'https://auth.openai.com/oauth/authorize?state=fixture',
+        'codex',
+      ),
+    ).toBe(true)
   })
   it('does not turn terminal errors, tokens or URL query text into display prose', () => {
     expect(

@@ -714,6 +714,8 @@ describe('ProviderAccountEnrolmentService', () => {
     it('disables a Codex account when reconnect selects a different workspace on the same email', async () => {
       const { subject, runner, files } = codexFixture()
       await subject.enrol({ email: 'someone@example.com', providerId: 'codex' })
+      const originalAuth = files.get(`${CODEX_HOME}/auth.json`)
+      expect(originalAuth).toBe(CODEX_AUTH)
       runner.run.mockImplementationOnce(async () => {
         files.set(
           `${CODEX_HOME}/auth.json`,
@@ -728,12 +730,34 @@ describe('ProviderAccountEnrolmentService', () => {
         orgId: 'acc_123',
         status: 'unavailable',
       })
+      expect(files.get(`${CODEX_HOME}/auth.json`)).toBe(originalAuth)
+    })
+
+    it('restores nothing when a refused reconnect had no prior auth.json', async () => {
+      const { subject, runner, files } = codexFixture()
+      await subject.enrol({ email: 'someone@example.com', providerId: 'codex' })
+      files.delete(`${CODEX_HOME}/auth.json`)
+      runner.run.mockImplementationOnce(async () => {
+        files.set(
+          `${CODEX_HOME}/auth.json`,
+          CODEX_AUTH.replaceAll('acc_123', 'acc_other'),
+        )
+        return { code: 0, stdout: '', stderr: '' }
+      })
+      await expect(subject.reconnect(ACCOUNT_ID)).rejects.toThrow(
+        /unverified login was discarded/,
+      )
       expect(files.has(`${CODEX_HOME}/auth.json`)).toBe(false)
+      expect(repository.get(ACCOUNT_ID)).toMatchObject({
+        orgId: 'acc_123',
+        status: 'unavailable',
+      })
     })
 
     it('discards a reconnect credential without a verifiable account id', async () => {
       const { subject, runner, files } = codexFixture()
       await subject.enrol({ email: 'someone@example.com', providerId: 'codex' })
+      const originalAuth = files.get(`${CODEX_HOME}/auth.json`)
       runner.run.mockImplementationOnce(async () => {
         files.set(
           `${CODEX_HOME}/auth.json`,
@@ -746,7 +770,7 @@ describe('ProviderAccountEnrolmentService', () => {
       await expect(subject.reconnect(ACCOUNT_ID)).rejects.toThrow(
         /no ChatGPT account ID/,
       )
-      expect(files.has(`${CODEX_HOME}/auth.json`)).toBe(false)
+      expect(files.get(`${CODEX_HOME}/auth.json`)).toBe(originalAuth)
       expect(repository.get(ACCOUNT_ID)?.status).toBe('unavailable')
     })
 
@@ -787,15 +811,16 @@ describe('ProviderAccountEnrolmentService', () => {
       ],
       ['missing identity', '{}', 'no ChatGPT account ID'],
     ])(
-      'keeps the %s refusal visible when credential removal fails',
+      'keeps the %s refusal visible when credential restore fails',
       async (_case, auth, refusal) => {
         const { subject, runner, files, fs } = codexFixture()
         await subject.enrol({ email: '', providerId: 'codex' })
+        const originalAuth = files.get(`${CODEX_HOME}/auth.json`)
         runner.run.mockImplementationOnce(async () => {
           files.set(`${CODEX_HOME}/auth.json`, auth)
           return { code: 0, stdout: '', stderr: '' }
         })
-        vi.mocked(fs.rm).mockRejectedValueOnce(
+        vi.mocked(fs.rename).mockRejectedValueOnce(
           new Error('EACCES: read-only home'),
         )
         const error = await subject
@@ -804,10 +829,11 @@ describe('ProviderAccountEnrolmentService', () => {
         expect(error).toBeInstanceOf(Error)
         expect((error as Error).message).toContain(refusal)
         expect((error as Error).message).toContain(
-          'credential could NOT be removed: EACCES: read-only home',
+          'credential could NOT be restored: EACCES: read-only home',
         )
         expect((error as Error).message).not.toContain('was discarded')
-        expect(files.has(`${CODEX_HOME}/auth.json`)).toBe(true)
+        expect(files.get(`${CODEX_HOME}/auth.json`)).toBe(auth)
+        expect(originalAuth).toBe(CODEX_AUTH)
         expect(repository.get(ACCOUNT_ID)).toMatchObject({
           orgId: 'acc_123',
           status: 'unavailable',
@@ -851,9 +877,10 @@ describe('ProviderAccountEnrolmentService', () => {
       },
     )
 
-    it('discards auth written before a rejected Codex reconnect and preserves its identity', async () => {
-      const { subject, runner, files, removed } = codexFixture()
+    it('discards auth written before a rejected Codex reconnect and restores its prior credential', async () => {
+      const { subject, runner, files } = codexFixture()
       await subject.enrol({ email: 'someone@example.com', providerId: 'codex' })
+      const originalAuth = files.get(`${CODEX_HOME}/auth.json`)
       runner.run.mockImplementationOnce(async () => {
         files.set(`${CODEX_HOME}/auth.json`, 'unverified-fixture')
         throw new Error('cancelled-fixture')
@@ -861,8 +888,7 @@ describe('ProviderAccountEnrolmentService', () => {
       await expect(subject.reconnect(ACCOUNT_ID)).rejects.toThrow(
         /unverified login was discarded/,
       )
-      expect(removed).toContain(`${CODEX_HOME}/auth.json`)
-      expect(files.has(`${CODEX_HOME}/auth.json`)).toBe(false)
+      expect(files.get(`${CODEX_HOME}/auth.json`)).toBe(originalAuth)
       expect(repository.get(ACCOUNT_ID)).toMatchObject({
         orgId: 'acc_123',
         status: 'unavailable',

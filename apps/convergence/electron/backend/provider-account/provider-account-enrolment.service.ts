@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { promises as nodeFs } from 'fs'
 import { homedir } from 'os'
-import { dirname, join } from 'path'
+import { basename, dirname, join } from 'path'
 import { execFile } from 'child_process'
 import {
   CodexAccountHistoryService,
@@ -522,6 +522,20 @@ export class ProviderAccountEnrolmentService {
       this.repository.setStatus(account.id, 'unavailable', null)
       await this.fs.chmod(account.configDir, CODEX_HOME_DIR_MODE)
       const authPath = join(account.configDir, CODEX_AUTH_FILE_NAME)
+      let originalAuth: string | null
+      try {
+        originalAuth = await this.fs.readFile(authPath)
+      } catch (error) {
+        // Absent or unreadable: reconnect may still run. Unreadable is treated
+        // as absent so a stuck file cannot block recovery; surface it once.
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          console.error(
+            'Codex reconnect: prior auth.json could not be read; treating as absent.',
+            error instanceof Error ? error.message : error,
+          )
+        }
+        originalAuth = null
+      }
       let result: ProviderAccountCommandResult
       try {
         result = await this.runLoginCommand(
@@ -532,10 +546,18 @@ export class ProviderAccountEnrolmentService {
           }),
         )
       } catch {
-        return this.refuseCodexReconnect(authPath, 'Sign-in did not complete.')
+        return this.refuseCodexReconnect(
+          authPath,
+          'Sign-in did not complete.',
+          originalAuth,
+        )
       }
       if (result.code !== 0) {
-        return this.refuseCodexReconnect(authPath, 'Sign-in did not complete.')
+        return this.refuseCodexReconnect(
+          authPath,
+          'Sign-in did not complete.',
+          originalAuth,
+        )
       }
       await this.fs.chmod(authPath, CODEX_AUTH_FILE_MODE)
       const identity = readCodexIdentityFromAuth(await this.readJson(authPath))
@@ -543,12 +565,14 @@ export class ProviderAccountEnrolmentService {
         return this.refuseCodexReconnect(
           authPath,
           'Login completed but the Codex home reported no ChatGPT account ID.',
+          originalAuth,
         )
       }
       if (identity.orgId !== account.orgId) {
         return this.refuseCodexReconnect(
           authPath,
           'Login selected a different ChatGPT account or workspace. Reconnect the originally enrolled account; its historical identity was not changed.',
+          originalAuth,
         )
       }
       this.repository.saveIdentity(account.id, {
@@ -567,19 +591,49 @@ export class ProviderAccountEnrolmentService {
   private async refuseCodexReconnect(
     authPath: string,
     reason: string,
+    originalAuth: string | null,
   ): Promise<never> {
     try {
-      await this.fs.rm(authPath)
+      if (originalAuth !== null) {
+        await this.writeAuthAtomically(authPath, originalAuth)
+      } else {
+        await this.fs.rm(authPath)
+      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
+      const action = originalAuth !== null ? 'restored' : 'removed'
       throw new Error(
-        `${reason} The foreign credential could NOT be removed: ${detail}. The account remains unavailable.`,
+        `${reason} The ${originalAuth !== null ? 'previous' : 'foreign'} credential could NOT be ${action}: ${detail}. The account remains unavailable.`,
         { cause: error },
       )
     }
     throw new Error(
-      `${reason} The unverified login was discarded; the account remains unavailable.`,
+      originalAuth !== null
+        ? `${reason} The unverified login was discarded and the previous credential was restored; the account remains unavailable.`
+        : `${reason} The unverified login was discarded; the account remains unavailable.`,
     )
+  }
+
+  /** Same-dir temp + rename so a refused reconnect never leaves a half-written auth.json. */
+  private async writeAuthAtomically(
+    authPath: string,
+    contents: string,
+  ): Promise<void> {
+    const tempPath = join(
+      dirname(authPath),
+      `.${basename(authPath)}.tmp-${randomUUID()}`,
+    )
+    await this.fs.writeFile(tempPath, contents)
+    try {
+      await this.fs.rename(tempPath, authPath)
+    } catch (error) {
+      try {
+        await this.fs.rm(tempPath)
+      } catch {
+        /* Scrap cleanup is best-effort; the caller's refuse path still fails. */
+      }
+      throw error
+    }
   }
 
   /**
