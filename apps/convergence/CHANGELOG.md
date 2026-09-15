@@ -1,5 +1,11 @@
 # convergence
 
+## 0.59.6
+
+### Patch Changes
+
+- f9ddb1d: An open annotation edit no longer follows you across sessions or steals the composer's focus.
+
 ## 0.59.5
 
 ### Patch Changes
