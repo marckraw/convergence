@@ -1,4 +1,5 @@
 import type { SessionRelay } from '../relay/relay.types'
+import { DEFAULT_CREW_MEMBER_SEAT } from './crew.types'
 import type { CrewConfigSession } from './crew-config.types'
 /** MAR-2889's hand-written crew, with synthetic instance ids. */
 export const liveCrew = {
@@ -52,6 +53,7 @@ export const liveSessions: CrewConfigSession[] = definitions.map(
   }),
 )
 export const liveMembers = definitions.map(([batonName], index) => ({
+  ...DEFAULT_CREW_MEMBER_SEAT,
   sessionId: `session-${index}`,
   batonName,
   canvasX: index === 0 ? -323 : index === 2 ? 398 : null,
@@ -106,11 +108,11 @@ crew: "convergence development"
 emoji: "🧪"
 limits: { deliveriesPerRun: 24, attentionAfterMinutes: 30 }
 roles:
-  fable: { conversation: "-- Fable Mastermind --", provider: "claude-code", model: "claude-fable-5-1", effort: "high", permissions: "yolo", project: "github.com/marckraw/convergence", host: "local" }
-  "horse astra": { conversation: "-- Horse Astra Executor --", provider: "codex", model: "gpt-6-astra", effort: "high", permissions: "yolo", project: "github.com/marckraw/convergence", host: "local" }
-  "horse opus": { conversation: "-- Horse Executor Opus --", provider: "claude-code", model: "claude-opus-5", effort: "high", permissions: "yolo", project: "github.com/marckraw/convergence", host: "local" }
-  reviewer: { conversation: "-- PI Codex Reviewer --", provider: "pi", model: "openai-codex/gpt-5.6-sol", effort: "xhigh", permissions: "yolo", project: "github.com/marckraw/convergence", host: "local" }
-  "studio horse astra": { conversation: "Lane: Studio - Horse Astra Executor --", provider: "codex", model: "gpt-6-astra", effort: "high", permissions: "yolo", project: "github.com/marckraw/convergence", lane: "studio", host: "local" }
+  fable: { conversation: "-- Fable Mastermind --", role: "horse", kind: "resident", wipLimit: 1, provider: "claude-code", model: "claude-fable-5-1", effort: "high", permissions: "yolo", project: "github.com/marckraw/convergence", host: "local" }
+  "horse astra": { conversation: "-- Horse Astra Executor --", role: "horse", kind: "resident", wipLimit: 1, provider: "codex", model: "gpt-6-astra", effort: "high", permissions: "yolo", project: "github.com/marckraw/convergence", host: "local" }
+  "horse opus": { conversation: "-- Horse Executor Opus --", role: "horse", kind: "resident", wipLimit: 1, provider: "claude-code", model: "claude-opus-5", effort: "high", permissions: "yolo", project: "github.com/marckraw/convergence", host: "local" }
+  reviewer: { conversation: "-- PI Codex Reviewer --", role: "horse", kind: "resident", wipLimit: 1, provider: "pi", model: "openai-codex/gpt-5.6-sol", effort: "xhigh", permissions: "yolo", project: "github.com/marckraw/convergence", host: "local" }
+  "studio horse astra": { conversation: "Lane: Studio - Horse Astra Executor --", role: "horse", kind: "resident", wipLimit: 1, provider: "codex", model: "gpt-6-astra", effort: "high", permissions: "yolo", project: "github.com/marckraw/convergence", lane: "studio", host: "local" }
 wires:
   - { from: "fable", to: "horse astra", when: "BATON: horse astra", opener: "keep" }
   - { from: "fable", to: "horse opus", when: "BATON: horse opus", opener: "clear" }

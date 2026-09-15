@@ -1,3 +1,4 @@
+import { DEFAULT_CREW_MEMBER_SEAT } from './crew.types'
 import { crewImportRelayFields } from './crew-import.pure'
 import Ajv from 'ajv'
 import { parse } from 'yaml'
@@ -49,6 +50,7 @@ const session: CrewConfigSession = {
   executionHost: 'local',
 }
 const member = {
+  ...DEFAULT_CREW_MEMBER_SEAT,
   sessionId: session.id,
   batonName: 'fable',
   canvasX: -323,
@@ -73,6 +75,10 @@ describe('crew config export', () => {
       roles: {
         fable: {
           conversation: session.name,
+          // Every export now says what the seat is (MAR-3083 R5).
+          role: 'horse',
+          kind: 'resident',
+          wipLimit: 1,
           provider: 'claude-code',
           model: 'claude-fable-5-1',
           effort: 'high',
@@ -109,6 +115,7 @@ it('exports a spawn recipe with the default account (mutation: retain account id
       executionHost: 'local',
       workAddress: null,
       roleCard: null,
+      member: null,
       returnWire: null,
       name: 'Reviewer · lap {lap}',
       providerId: 'codex',
@@ -380,6 +387,7 @@ it('preserves the spawn lane beside its root project (mutations: use the lane ro
       executionHost: 'local',
       workAddress: null,
       roleCard: null,
+      member: null,
       returnWire: null,
       name: 'Lane worker',
       providerId: 'codex',
@@ -819,6 +827,7 @@ it.each([null, 'root-id'])(
         label: 'marckraw/convergence',
       },
       roleCard: 'You are the reviewer.',
+      member: null,
       returnWire: { instruction: 'Report the result.' },
     }
     const exportRecipe = () =>
@@ -917,3 +926,85 @@ it.each([8000, 8001])(
     expect(readCrewConfig(renderCrewYaml(config)).ok).toBe(length <= 8000)
   },
 )
+
+describe('the seat in the recipe (MAR-3083 R5)', () => {
+  it('writes what each seat is', () => {
+    const seated = {
+      ...member,
+      role: 'mastermind' as const,
+      roleCard: 'You hold the map.',
+      wipLimit: 3,
+      lanePolicy: 'own-worktree' as const,
+    }
+
+    const config = crewToConfig(crew, [seated], [session], [project], [])
+
+    // Mutation: drop one of these from the export and the round trip loses
+    // it silently -- the crew imports elsewhere as a horse with no card.
+    expect(config.roles.fable).toMatchObject({
+      role: 'mastermind',
+      kind: 'resident',
+      roleCard: 'You hold the map.',
+      wipLimit: 3,
+      lanePolicy: 'own-worktree',
+    })
+  })
+
+  it('omits a card and a lane nobody set, so an untouched crew exports as it always did', () => {
+    const config = crewToConfig(crew, [member], [session], [project], [])
+
+    expect(config.roles.fable).toMatchObject({
+      role: 'horse',
+      kind: 'resident',
+      wipLimit: 1,
+    })
+    expect(config.roles.fable).not.toHaveProperty('roleCard')
+    expect(config.roles.fable).not.toHaveProperty('lanePolicy')
+  })
+
+  it('reads a recipe that names a seat, and refuses a role no seat could be', () => {
+    const yaml = renderCrewYaml(
+      crewToConfig(
+        crew,
+        [{ ...member, role: 'reviewer' as const, roleCard: 'You read blind.' }],
+        [session],
+        [project],
+        [],
+      ),
+    )
+
+    const read = readCrewConfig(yaml)
+    expect(read.ok).toBe(true)
+    expect(read.ok && read.config.roles.fable?.role).toBe('reviewer')
+
+    const bad = readCrewConfig(yaml.replace('"reviewer"', '"general"'))
+    expect(bad.ok).toBe(false)
+    expect(bad.ok === false && bad.reason).toContain('roles')
+  })
+
+  /**
+   * A dynamic seat is a recipe with no conversation (R3), and `roles` is a map
+   * of conversations. It is skipped rather than exported half-formed -- the
+   * one seat field this recipe cannot carry yet.
+   */
+  it('skips a seat that has no conversation instead of failing the export', () => {
+    const recipe = {
+      ...member,
+      sessionId: null,
+      batonName: 'errand',
+      kind: 'dynamic' as const,
+      providerId: 'codex',
+      model: 'gpt-6-astra',
+    }
+
+    const config = crewToConfig(
+      crew,
+      [member, recipe],
+      [session],
+      [project],
+      [],
+    )
+
+    expect(Object.keys(config.roles)).toEqual(['fable'])
+  })
+})

@@ -1,3 +1,4 @@
+import { DEFAULT_CREW_MEMBER_SEAT } from '@/entities/session-crew'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { toast } from 'sonner'
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
@@ -1139,6 +1140,7 @@ describe('MissionControl', () => {
                 ...crew,
                 members: [
                   {
+                    ...DEFAULT_CREW_MEMBER_SEAT,
                     sessionId: 'a',
                     batonName: null,
                     canvasX: 600,
@@ -1162,6 +1164,7 @@ describe('MissionControl', () => {
                   ...crew,
                   members: [
                     {
+                      ...DEFAULT_CREW_MEMBER_SEAT,
                       sessionId: 'a',
                       batonName: null,
                       canvasX: 600,
@@ -2105,6 +2108,7 @@ describe('MissionControl', () => {
           sessionIds: ['a'],
           members: [
             {
+              ...DEFAULT_CREW_MEMBER_SEAT,
               sessionId: 'a',
               batonName: 'fable',
               canvasX: null,
@@ -3259,6 +3263,7 @@ describe('MissionControl', () => {
               ...crew,
               members: [
                 {
+                  ...DEFAULT_CREW_MEMBER_SEAT,
                   sessionId,
                   batonName: null,
                   canvasX: position.x,

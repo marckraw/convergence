@@ -213,6 +213,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('crew:addMember', crewId, sessionId),
     removeMember: (crewId: string, sessionId: string) =>
       ipcRenderer.invoke('crew:removeMember', crewId, sessionId),
+    setMemberSeat: (
+      crewId: string,
+      sessionId: string,
+      patch: {
+        role?: string | null
+        kind?: string | null
+        roleCard?: string | null
+        hostPolicy?: string | null
+        lanePolicy?: string | null
+        wipLimit?: number | null
+      },
+    ) => ipcRenderer.invoke('crew:setMemberSeat', crewId, sessionId, patch),
     setMemberBatonName: (
       crewId: string,
       sessionId: string,

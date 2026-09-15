@@ -21,6 +21,24 @@ export type RelayAction = 'hail' | 'spawn'
  * project because its far end changed would be a wire nobody could reason
  * about, so every field is stated on the relay itself.
  */
+/**
+ * What a wire may read off a crew seat (MAR-3083 R3/R4).
+ *
+ * Structural on purpose: the engine asks the crew gateway for this shape and
+ * never imports the crew module, so a seat gaining a field the wire has no
+ * business with cannot reach the engine by accident.
+ */
+export interface RelaySeat {
+  batonName: string | null
+  kind: 'resident' | 'dynamic'
+  /** What this seat is told it is; the first message of a run carries it. */
+  roleCard: string | null
+  /** `local` or an endpoint id; a recipe's host. */
+  hostPolicy: string | null
+  providerId: string | null
+  model: string | null
+}
+
 export interface RelaySpawnSpec {
   executionHost: SessionExecutionHostId
   workAddress: SessionWorkAddress | null
@@ -33,6 +51,15 @@ export interface RelaySpawnSpec {
   effort: string | null
   /** Starting name; the auto-namer may replace it once the turn produces text. */
   name: string
+  /**
+   * The baton name of the crew seat this wire spawns, or null for a spec that
+   * stands alone (R3).
+   *
+   * A dynamic seat IS the recipe -- provider, model, host and card live on the
+   * member, so six wires aimed at one seat cannot drift from each other, and
+   * changing what that seat runs on is one edit rather than six.
+   */
+  member: string | null
   /**
    * The account the spawned session is born on. Null means "whatever the
    * enrolled default is when this fires", not "ambient" -- the engine resolves

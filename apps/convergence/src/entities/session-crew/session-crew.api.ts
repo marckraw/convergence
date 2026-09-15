@@ -42,6 +42,19 @@ export const sessionCrewApi = {
   removeMember: (crewId: string, sessionId: string): Promise<SessionCrew> =>
     window.electronAPI.crew.removeMember(crewId, sessionId),
 
+  setMemberSeat: (
+    crewId: string,
+    sessionId: string,
+    patch: {
+      role?: string | null
+      kind?: string | null
+      roleCard?: string | null
+      hostPolicy?: string | null
+      lanePolicy?: string | null
+      wipLimit?: number | null
+    },
+  ): Promise<SessionCrew> =>
+    window.electronAPI.crew.setMemberSeat(crewId, sessionId, patch),
   setMemberBatonName: (
     crewId: string,
     sessionId: string,

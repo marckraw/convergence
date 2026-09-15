@@ -10,6 +10,7 @@ import type { TranscriptEntry } from '../provider/provider.types'
 import { conversationItemToInsertRow } from '../session/conversation-item.pure'
 import { migrateTaskObserved } from './task-observed-migration.service'
 import { migrateCrewConfig } from './crew-config-migration.service'
+import { migrateCrewSeats } from './crew-seat-migration.service'
 import { migrateEndedSummary } from './ended-summary-migration.service'
 import { migrateHarnessEvidence } from './harness-evidence-migration.service'
 import { migrateResidentStopReason } from './resident-stop-reason-migration.service'
@@ -330,7 +331,10 @@ const SCHEMA = `
   -- session must never fail a crew read -- orphan rows are filtered on read.
   CREATE TABLE IF NOT EXISTS session_crew_members (
     crew_id TEXT NOT NULL,
-    session_id TEXT NOT NULL,
+    -- Null for a DYNAMIC seat: a recipe that becomes a session only when a
+    -- wire spawns it (MAR-3083 R3). A resident seat is its conversation, and
+    -- the unique index built by the seat migration keeps it in one crew.
+    session_id TEXT,
     -- The short name a baton addresses this member by. Membership still
     -- carries no behaviour: this is a label the wire editor reads to pre-fill
     -- a condition, never something the engine routes on.
@@ -998,6 +1002,28 @@ function ensureRelayColumns(database: Database.Database): void {
   }
   if (!memberColumns.has('canvas_y')) {
     database.exec('ALTER TABLE session_crew_members ADD COLUMN canvas_y REAL')
+  }
+  // The seat (MAR-3083 R1). Every column is nullable and null is the DEFAULT
+  // read at the door (`horse · resident · 1`), not a value written here: a
+  // member row that predates seats never chose a role, and a stored 'horse'
+  // would be indistinguishable from one somebody picked. `session_id` stays
+  // as it was declared -- SQLite cannot drop a NOT NULL that was never there,
+  // and the column has always accepted null.
+  for (const [column, type] of [
+    ['role', 'TEXT'],
+    ['kind', 'TEXT'],
+    ['role_card', 'TEXT'],
+    ['host_policy', 'TEXT'],
+    ['lane_policy', 'TEXT'],
+    ['wip_limit', 'INTEGER'],
+    ['provider_id', 'TEXT'],
+    ['model', 'TEXT'],
+  ] as const) {
+    if (!memberColumns.has(column)) {
+      database.exec(
+        `ALTER TABLE session_crew_members ADD COLUMN ${column} ${type}`,
+      )
+    }
   }
 }
 
@@ -2227,6 +2253,9 @@ export function getDatabase(dbPath?: string): Database.Database {
       database.exec('ALTER TABLE sessions ADD COLUMN pinned_at TEXT')
     }
     migrateCrewConfig(database)
+    // After the seat columns exist: one conversation may sit in one crew, and
+    // the index that says so can only be built on a deduped table (R2).
+    migrateCrewSeats(database)
     database.transaction(() => {
       if (getTableColumnNames(database, 'sessions').has('origin_kind')) return
       database.exec(

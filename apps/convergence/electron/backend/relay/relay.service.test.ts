@@ -257,6 +257,7 @@ describe('RelayService', () => {
         action: 'spawn',
         instruction: 'Start from the branch diff.',
         spawnSpec: {
+          member: null,
           executionHost: 'local',
           workAddress: null,
           roleCard: null,
@@ -358,6 +359,7 @@ describe('RelayService', () => {
         action: 'spawn',
         opener: '/clear',
         spawnSpec: {
+          member: null,
           executionHost: 'local',
           workAddress: null,
           roleCard: null,
@@ -383,6 +385,7 @@ describe('RelayService', () => {
         action: 'spawn',
         targetSessionId: null,
         spawnSpec: {
+          member: null,
           executionHost: 'local',
           workAddress: null,
           roleCard: null,
@@ -405,6 +408,7 @@ describe('RelayService', () => {
       executionHost: 'local',
       workAddress: null,
       roleCard: null,
+      member: null,
       returnWire: null,
       projectId: 'p1',
       providerId: 'codex',
@@ -466,7 +470,10 @@ describe('RelayService', () => {
           crewId: 'c1',
           sourceSessionId: 's1',
           action: 'spawn',
-          spawnSpec: { ...spec, providerId: '' },
+          spawnSpec: {
+            ...spec,
+            providerId: '',
+          },
         }),
       ).toThrow('A spawn relay needs a provider')
     })

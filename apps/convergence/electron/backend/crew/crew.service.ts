@@ -6,17 +6,53 @@ import {
   normalizeCrewAccentColor,
   normalizeCrewBatonName,
   normalizeCrewEmoji,
+  normalizeCrewHostPolicy,
   normalizeCrewLimit,
+  normalizeCrewMemberKind,
+  normalizeCrewMemberLane,
+  normalizeCrewMemberRole,
   normalizeCrewName,
+  normalizeCrewRecipeField,
+  normalizeCrewRoleCard,
   normalizeCrewSessionIds,
 } from './crew.pure'
 import {
   sessionCrewFromRow,
+  DEFAULT_CREW_MEMBER_KIND,
+  DEFAULT_CREW_MEMBER_ROLE,
+  DEFAULT_CREW_MEMBER_WIP_LIMIT,
   type CreateSessionCrewInput,
   type SessionCrew,
   type SessionCrewMember,
+  type SessionCrewMemberKind,
+  type SessionCrewMemberLane,
+  type SessionCrewMemberRole,
   type UpdateSessionCrewInput,
 } from './crew.types'
+
+/** What the form and the importer may set on a seat (MAR-3083 R1). */
+export interface UpdateCrewSeatInput {
+  role?: SessionCrewMemberRole | null
+  kind?: SessionCrewMemberKind | null
+  roleCard?: string | null
+  hostPolicy?: string | null
+  lanePolicy?: SessionCrewMemberLane | null
+  wipLimit?: number | null
+  providerId?: string | null
+  model?: string | null
+}
+
+/** A dynamic seat is a recipe, so its provider and host are required. */
+export interface CreateCrewRecipeSeatInput {
+  batonName: string
+  providerId: string
+  model: string | null
+  hostPolicy: string
+  role?: SessionCrewMemberRole | null
+  roleCard?: string | null
+  lanePolicy?: SessionCrewMemberLane | null
+  wipLimit?: number | null
+}
 
 /**
  * Repository + use-case boundary for crews. Membership rows are joined against
@@ -238,48 +274,178 @@ export class CrewService {
   }
 
   private insertMember(crewId: string, sessionId: string): void {
+    // This crew re-adding a member it already has stays the no-op it was.
+    // Spelled as a read rather than `INSERT OR IGNORE`, because that form
+    // swallows the unique index's refusal too -- with it, the index below
+    // could never refuse anything and the second half of R2 was decoration.
+    const already = this.db
+      .prepare(
+        'SELECT 1 FROM session_crew_members WHERE crew_id = ? AND session_id = ?',
+      )
+      .get(crewId, sessionId)
+    if (already) return
+    this.refuseSecondCrew(crewId, sessionId)
     this.db
       .prepare(
-        `INSERT OR IGNORE INTO session_crew_members (crew_id, session_id)
+        `INSERT INTO session_crew_members (crew_id, session_id)
          VALUES (?, ?)`,
       )
       .run(crewId, sessionId)
   }
 
+  /**
+   * One seat, one crew (R2; constitution §6.6) -- said in words.
+   *
+   * The unique index in `crew-seat-migration.service.ts` refuses the same row
+   * whatever writes it; this is the half that can NAME the crew the
+   * conversation already sits in, which is the only thing a person needs in
+   * order to act on it. Both are named because they see different inputs: the
+   * index also catches a writer that never came through this service.
+   */
+  private refuseSecondCrew(crewId: string, sessionId: string): void {
+    const existing = this.db
+      .prepare(
+        `SELECT crews.name AS name
+           FROM session_crew_members members
+           JOIN session_crews crews ON crews.id = members.crew_id
+          WHERE members.session_id = ? AND members.crew_id <> ?
+          ORDER BY members.added_at ASC, members.rowid ASC
+          LIMIT 1`,
+      )
+      .get(sessionId, crewId) as { name: string } | undefined
+    if (existing) {
+      throw new Error(
+        `This conversation is already in the crew "${existing.name}"`,
+      )
+    }
+  }
+
+  /**
+   * A dynamic seat: a recipe with no conversation until a wire spawns one.
+   *
+   * Addressed by its baton name, because that is the only name it has -- and
+   * the name a wire's spawn spec uses to find it (R3).
+   */
+  addRecipeMember(
+    crewId: string,
+    input: CreateCrewRecipeSeatInput,
+  ): SessionCrew {
+    this.requireRow(crewId)
+    const batonName = normalizeCrewBatonName(input.batonName)
+    if (!batonName) throw new Error('A dynamic seat needs a baton name')
+    if (this.findMemberByBatonName(crewId, batonName)) {
+      throw new Error(`This crew already has a seat named "${batonName}"`)
+    }
+    const providerId = normalizeCrewRecipeField(input.providerId)
+    const hostPolicy = normalizeCrewHostPolicy(input.hostPolicy)
+    if (!providerId || !hostPolicy) {
+      throw new Error('A dynamic seat needs a provider and a host')
+    }
+    this.db
+      .prepare(
+        `INSERT INTO session_crew_members
+           (crew_id, session_id, baton_name, role, kind, role_card,
+            host_policy, lane_policy, wip_limit, provider_id, model)
+         VALUES (?, NULL, ?, ?, 'dynamic', ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        crewId,
+        batonName,
+        normalizeCrewMemberRole(input.role) ?? DEFAULT_CREW_MEMBER_ROLE,
+        normalizeCrewRoleCard(input.roleCard),
+        hostPolicy,
+        normalizeCrewMemberLane(input.lanePolicy),
+        normalizeCrewLimit(input.wipLimit, 'A WIP limit'),
+        providerId,
+        normalizeCrewRecipeField(input.model),
+      )
+    return this.requireById(crewId)
+  }
+
+  /** The seat a spawn spec names, by the baton name it is addressed as. */
+  findMemberByBatonName(
+    crewId: string,
+    batonName: string,
+  ): SessionCrewMember | null {
+    const wanted = normalizeCrewBatonName(batonName)
+    if (!wanted) return null
+    const members = this.readMembers(crewId).get(crewId) ?? []
+    return members.find((member) => member.batonName === wanted) ?? null
+  }
+
+  /**
+   * Edits what a seat IS, one field at a time.
+   *
+   * Its own method for the same reason the baton name has one: it belongs to a
+   * member, not to the crew, and folding it into `update` would mean editing a
+   * colour could change what a conversation is told it is. An undefined field
+   * is untouched; an explicit null clears it back to the default.
+   */
+  setMemberSeat(
+    crewId: string,
+    sessionId: string,
+    patch: UpdateCrewSeatInput,
+  ): SessionCrew {
+    this.requireRow(crewId)
+    const assignments: string[] = []
+    const values: (string | number | null)[] = []
+    const set = (column: string, value: string | number | null): void => {
+      assignments.push(`${column} = ?`)
+      values.push(value)
+    }
+    if (patch.role !== undefined)
+      set('role', normalizeCrewMemberRole(patch.role))
+    if (patch.kind !== undefined)
+      set('kind', normalizeCrewMemberKind(patch.kind))
+    if (patch.roleCard !== undefined)
+      set('role_card', normalizeCrewRoleCard(patch.roleCard))
+    if (patch.hostPolicy !== undefined)
+      set('host_policy', normalizeCrewHostPolicy(patch.hostPolicy))
+    if (patch.lanePolicy !== undefined)
+      set('lane_policy', normalizeCrewMemberLane(patch.lanePolicy))
+    if (patch.wipLimit !== undefined)
+      set('wip_limit', normalizeCrewLimit(patch.wipLimit, 'A WIP limit'))
+    if (patch.providerId !== undefined)
+      set('provider_id', normalizeCrewRecipeField(patch.providerId))
+    if (patch.model !== undefined)
+      set('model', normalizeCrewRecipeField(patch.model))
+    if (assignments.length === 0) return this.requireById(crewId)
+    this.db
+      .prepare(
+        `UPDATE session_crew_members SET ${assignments.join(', ')}
+          WHERE crew_id = ? AND session_id = ?`,
+      )
+      .run(...values, crewId, sessionId)
+    return this.requireById(crewId)
+  }
+
   private readMembers(crewId?: string): Map<string, SessionCrewMember[]> {
     const rows = (
       crewId === undefined
-        ? this.db
-            .prepare(
-              `SELECT members.crew_id, members.session_id, members.baton_name,
-                      members.canvas_x, members.canvas_y
-               FROM session_crew_members members
-               JOIN sessions ON sessions.id = members.session_id
-               ORDER BY members.added_at ASC, members.rowid ASC`,
-            )
-            .all()
+        ? this.db.prepare(`${MEMBER_SELECT} ${MEMBER_ORDER}`).all()
         : this.db
-            .prepare(
-              `SELECT members.crew_id, members.session_id, members.baton_name,
-                      members.canvas_x, members.canvas_y
-               FROM session_crew_members members
-               JOIN sessions ON sessions.id = members.session_id
-               WHERE members.crew_id = ?
-               ORDER BY members.added_at ASC, members.rowid ASC`,
-            )
+            .prepare(`${MEMBER_SELECT} AND members.crew_id = ? ${MEMBER_ORDER}`)
             .all(crewId)
-    ) as {
-      crew_id: string
-      session_id: string
-      baton_name: string | null
-      canvas_x: number | null
-      canvas_y: number | null
-    }[]
+    ) as MemberReadRow[]
 
     const membersByCrewId = new Map<string, SessionCrewMember[]>()
     for (const row of rows) {
       const member: SessionCrewMember = {
         sessionId: row.session_id,
+        // Every seat column reads defensively and defaults at the door: a row
+        // written before seats existed chose none of them, and `horse ·
+        // resident · 1` is how it has always behaved (R1).
+        role: normalizeCrewMemberRole(row.role) ?? DEFAULT_CREW_MEMBER_ROLE,
+        kind: normalizeCrewMemberKind(row.kind) ?? DEFAULT_CREW_MEMBER_KIND,
+        roleCard: row.role_card ?? null,
+        hostPolicy: row.host_policy ?? null,
+        lanePolicy: normalizeCrewMemberLane(row.lane_policy),
+        wipLimit:
+          typeof row.wip_limit === 'number' && Number.isInteger(row.wip_limit)
+            ? row.wip_limit
+            : DEFAULT_CREW_MEMBER_WIP_LIMIT,
+        providerId: row.provider_id ?? null,
+        model: row.model ?? null,
         // Defensive read for the same reason every other added column gets
         // one: a row written before baton names existed has none.
         batonName: row.baton_name ?? null,
@@ -315,6 +481,39 @@ export class CrewService {
     }
     return crew
   }
+}
+
+/**
+ * Members with their seat, resident and dynamic alike.
+ *
+ * A LEFT JOIN rather than the inner one it was: a dynamic seat has no session
+ * to join to, and an inner join hid every recipe in the crew. The filter keeps
+ * the old behaviour for resident seats -- a member whose conversation was
+ * deleted degrades to a missing member rather than a crash.
+ */
+const MEMBER_SELECT = `SELECT members.crew_id, members.session_id, members.baton_name,
+          members.canvas_x, members.canvas_y, members.role, members.kind,
+          members.role_card, members.host_policy, members.lane_policy,
+          members.wip_limit, members.provider_id, members.model
+     FROM session_crew_members members
+     LEFT JOIN sessions ON sessions.id = members.session_id
+    WHERE (sessions.id IS NOT NULL OR members.kind = 'dynamic')`
+const MEMBER_ORDER = 'ORDER BY members.added_at ASC, members.rowid ASC'
+
+interface MemberReadRow {
+  crew_id: string
+  session_id: string | null
+  baton_name: string | null
+  canvas_x: number | null
+  canvas_y: number | null
+  role: string | null
+  kind: string | null
+  role_card: string | null
+  host_policy: string | null
+  lane_policy: string | null
+  wip_limit: number | null
+  provider_id: string | null
+  model: string | null
 }
 
 /**

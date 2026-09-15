@@ -368,7 +368,13 @@ export function planCrewImport(
   const kept = crew
     ? [
         ...crew.members
-          .filter((m) => !roles.some((r) => r.sessionId === m.sessionId))
+          // A dynamic seat (R3) has no conversation, so it is not a member
+          // this file could have named or bound; it is kept without a row.
+          .filter(
+            (m): m is typeof m & { sessionId: string } =>
+              m.sessionId !== null &&
+              !roles.some((r) => r.sessionId === m.sessionId),
+          )
           .map((m) => ({
             ...row(
               `member:${m.sessionId}`,

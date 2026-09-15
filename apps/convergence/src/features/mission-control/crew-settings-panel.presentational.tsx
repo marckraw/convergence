@@ -47,6 +47,18 @@ interface CrewSettingsPanelProps {
   batonNameDrafts: Record<string, string>
   onCrewNameChange: (name: string) => void
   onBatonNameEdit: (sessionId: string, batonName: string) => void
+  /** What a seat IS, one field at a time (MAR-3083 R6). */
+  onSeatEdit: (
+    sessionId: string,
+    patch: {
+      role?: string
+      kind?: string
+      roleCard?: string | null
+      hostPolicy?: string | null
+      lanePolicy?: string | null
+      wipLimit?: number | null
+    },
+  ) => void
   onBatonNameCommit: (sessionId: string) => void
   onDeliveryLimitChange: (limit: number | null) => void
   onAttentionMinutesChange: (minutes: number | null) => void
@@ -107,6 +119,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
   batonNameDrafts,
   onCrewNameChange,
   onBatonNameEdit,
+  onSeatEdit,
   onBatonNameCommit,
   onDeliveryLimitChange,
   onAttentionMinutesChange,
@@ -218,6 +231,96 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                   <X className="size-3" />
                 </Button>
               </div>
+              {/* The seat, under the name that addresses it (R6). Selects
+                  commit on change; the typed fields commit on blur, so this
+                  file keeps no state of its own. */}
+              <div className="flex flex-wrap items-center gap-1 pl-1">
+                <select
+                  aria-label={`Role for ${resolveName(member.sessionId) ?? member.sessionId}`}
+                  value={member.role}
+                  disabled={busy}
+                  onChange={(event) =>
+                    onSeatEdit(member.sessionId, { role: event.target.value })
+                  }
+                  className="h-6 rounded border border-border bg-transparent px-1 text-[11px]"
+                >
+                  {['mastermind', 'horse', 'reviewer', 'designer'].map(
+                    (role) => (
+                      <option key={role} value={role}>
+                        {role}
+                      </option>
+                    ),
+                  )}
+                </select>
+                <select
+                  aria-label={`Kind for ${resolveName(member.sessionId) ?? member.sessionId}`}
+                  value={member.kind}
+                  disabled={busy}
+                  onChange={(event) =>
+                    onSeatEdit(member.sessionId, { kind: event.target.value })
+                  }
+                  className="h-6 rounded border border-border bg-transparent px-1 text-[11px]"
+                >
+                  <option value="resident">resident</option>
+                  <option value="dynamic">dynamic</option>
+                </select>
+                <select
+                  aria-label={`Lane for ${resolveName(member.sessionId) ?? member.sessionId}`}
+                  value={member.lanePolicy ?? ''}
+                  disabled={busy}
+                  onChange={(event) =>
+                    onSeatEdit(member.sessionId, {
+                      lanePolicy: event.target.value || null,
+                    })
+                  }
+                  className="h-6 rounded border border-border bg-transparent px-1 text-[11px]"
+                >
+                  <option value="">lane: default</option>
+                  <option value="main">main</option>
+                  <option value="own-worktree">own-worktree</option>
+                </select>
+                <Input
+                  key={`host-${member.hostPolicy ?? ''}`}
+                  defaultValue={member.hostPolicy ?? ''}
+                  placeholder="host: local"
+                  aria-label={`Host for ${resolveName(member.sessionId) ?? member.sessionId}`}
+                  disabled={busy}
+                  onBlur={(event) =>
+                    onSeatEdit(member.sessionId, {
+                      hostPolicy: event.target.value.trim() || null,
+                    })
+                  }
+                  className="h-6 w-24 text-[11px]"
+                />
+                <Input
+                  key={`wip-${member.wipLimit}`}
+                  type="number"
+                  min={1}
+                  defaultValue={member.wipLimit}
+                  aria-label={`WIP limit for ${resolveName(member.sessionId) ?? member.sessionId}`}
+                  disabled={busy}
+                  onBlur={(event) =>
+                    onSeatEdit(member.sessionId, {
+                      wipLimit: Number(event.target.value) || null,
+                    })
+                  }
+                  className="h-6 w-14 text-[11px]"
+                />
+              </div>
+              <textarea
+                key={`card-${member.roleCard ?? ''}`}
+                defaultValue={member.roleCard ?? ''}
+                placeholder="Role card — what this seat is told it is"
+                aria-label={`Role card for ${resolveName(member.sessionId) ?? member.sessionId}`}
+                disabled={busy}
+                rows={2}
+                onBlur={(event) =>
+                  onSeatEdit(member.sessionId, {
+                    roleCard: event.target.value.trim() || null,
+                  })
+                }
+                className="ml-1 rounded border border-border bg-transparent p-1 text-[11px]"
+              />
               {batonNameProblem?.sessionId === member.sessionId ? (
                 <p className="pl-1 text-[10px] text-amber-400">
                   {batonNameProblem.message}

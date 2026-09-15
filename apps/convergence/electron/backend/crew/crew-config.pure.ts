@@ -31,6 +31,10 @@ export function crewToConfig(
   for (const member of [...members].sort((a, b) =>
     compare(roleKey(a), roleKey(b)),
   )) {
+    // A dynamic seat is a recipe with no conversation (R3), and `roles` is a
+    // map of conversations: it is skipped rather than exported half-formed.
+    // Named in the report as the one seat field this recipe cannot carry yet.
+    if (member.kind === 'dynamic') continue
     const session = sessions.find((s) => s.id === member.sessionId)
     if (!session) throw new Error('A crew member has no conversation')
     const key = roleKey(member)
@@ -45,6 +49,13 @@ export function crewToConfig(
     const permissions = session.permissionConfig ?? { preset: 'ask' as const }
     roles[key] = {
       conversation: session.name,
+      // What this seat IS travels with the recipe, so a crew imported
+      // elsewhere carries its roles rather than being re-typed (R5).
+      role: member.role,
+      kind: member.kind,
+      ...(member.roleCard === null ? {} : { roleCard: member.roleCard }),
+      ...(member.lanePolicy === null ? {} : { lanePolicy: member.lanePolicy }),
+      wipLimit: member.wipLimit,
       provider: session.providerId,
       model: session.model,
       effort: session.effort,
@@ -484,6 +495,11 @@ const validateRecipe = shape({
       project: nullable(string),
       lane: optional(string),
       host: string,
+      role: optional(oneOf('mastermind', 'horse', 'reviewer', 'designer')),
+      kind: optional(oneOf('resident', 'dynamic')),
+      roleCard: optional(string),
+      lanePolicy: optional(oneOf('main', 'own-worktree')),
+      wipLimit: optional(positiveInteger),
     }),
   ),
   wires: list(

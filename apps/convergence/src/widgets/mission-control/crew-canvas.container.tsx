@@ -639,6 +639,30 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
     [crew, batonNameDrafts, loadCrews],
   )
 
+  /**
+   * What a seat IS (MAR-3083 R6). One field at a time, straight through --
+   * the door normalizes and refuses, and its sentence lands under the member
+   * exactly where a refused baton name's does.
+   */
+  const editSeat = useCallback(
+    async (
+      sessionId: string,
+      patch: Parameters<typeof sessionCrewApi.setMemberSeat>[2],
+    ) => {
+      if (!crew) return
+      setBusy(true)
+      setBatonNameProblem(null)
+      try {
+        await sessionCrewApi.setMemberSeat(crew.id, sessionId, patch)
+        await loadCrews()
+      } catch (error) {
+        setBatonNameProblem({ sessionId, message: batonNameRefusal(error) })
+      }
+      setBusy(false)
+    },
+    [crew, loadCrews],
+  )
+
   const addConversations = useCallback(async () => {
     if (!crew || addSelection.length === 0) return
     setBusy(true)
@@ -1548,6 +1572,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                 if (!isValidCrewName(name) || name.trim() === crew.name) return
                 void updateCrew(crew.id, { name })
               }}
+              onSeatEdit={(sessionId, patch) => void editSeat(sessionId, patch)}
               onBatonNameEdit={(sessionId, batonName) =>
                 setBatonNameDrafts((drafts) => ({
                   ...drafts,

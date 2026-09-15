@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import { CrewService } from './crew.service'
+import { DEFAULT_CREW_MEMBER_SEAT } from './crew.types'
 
 describe('CrewService', () => {
   let service: CrewService
@@ -25,6 +26,135 @@ describe('CrewService', () => {
   afterEach(() => {
     closeDatabase()
     resetDatabase()
+  })
+
+  /**
+   * One seat, one crew (R2; constitution §6.6). Yesterday a conversation wired
+   * into two crews answered another mastermind's brief, and nothing in the app
+   * could see it.
+   */
+  it('refuses a conversation that already sits in another crew, and names it', () => {
+    const night = service.create({ name: 'Night shift', sessionIds: ['s1'] })
+    const day = service.create({ name: 'Day shift' })
+
+    // Mutation: drop `refuseSecondCrew` -> the throw is the index's, which
+    // cannot say WHICH crew already holds it, and this assertion is red.
+    expect(() => service.addMember(day.id, 's1')).toThrow(
+      'This conversation is already in the crew "Night shift"',
+    )
+    expect(service.getById(day.id)!.sessionIds).toEqual([])
+    expect(service.getById(night.id)!.sessionIds).toEqual(['s1'])
+  })
+
+  it('lets the same crew re-add a member it already has', () => {
+    const crew = service.create({ name: 'Night shift', sessionIds: ['s1'] })
+
+    expect(() => service.addMember(crew.id, 's1')).not.toThrow()
+    expect(service.getById(crew.id)!.sessionIds).toEqual(['s1'])
+  })
+
+  it('reads a seat nobody has described as horse · resident · 1', () => {
+    const crew = service.create({ name: 'Night shift', sessionIds: ['s1'] })
+
+    expect(crew.members[0]).toMatchObject({
+      role: 'horse',
+      kind: 'resident',
+      wipLimit: 1,
+      roleCard: null,
+      hostPolicy: null,
+      lanePolicy: null,
+      providerId: null,
+      model: null,
+    })
+  })
+
+  it('stores what a seat is, one field at a time, and leaves the rest alone', () => {
+    const crew = service.create({ name: 'Night shift', sessionIds: ['s1'] })
+
+    service.setMemberSeat(crew.id, 's1', {
+      role: 'reviewer',
+      roleCard: '  You read blind.  ',
+      wipLimit: 3,
+      lanePolicy: 'own-worktree',
+      hostPolicy: 'little-monster',
+    })
+    const seated = service.setMemberSeat(crew.id, 's1', { wipLimit: 2 })
+
+    expect(seated.members[0]).toMatchObject({
+      role: 'reviewer',
+      kind: 'resident',
+      roleCard: 'You read blind.',
+      wipLimit: 2,
+      lanePolicy: 'own-worktree',
+      hostPolicy: 'little-monster',
+    })
+  })
+
+  it('refuses a word no seat could have meant rather than defaulting it', () => {
+    const crew = service.create({ name: 'Night shift', sessionIds: ['s1'] })
+
+    expect(() =>
+      service.setMemberSeat(crew.id, 's1', { role: 'general' as never }),
+    ).toThrow('A crew member role must be one of')
+    expect(service.getById(crew.id)!.members[0]!.role).toBe('horse')
+  })
+
+  /**
+   * A dynamic seat is a recipe: no conversation until a wire spawns one (R3).
+   * It is addressed by its baton name, the only name it has.
+   */
+  it('seats a recipe with no conversation and finds it by its baton name', () => {
+    const crew = service.create({ name: 'Night shift', sessionIds: ['s1'] })
+
+    const seated = service.addRecipeMember(crew.id, {
+      batonName: 'errand',
+      providerId: 'codex',
+      model: 'gpt-6-astra',
+      hostPolicy: 'little-monster',
+      roleCard: 'You are an errand.',
+      role: 'horse',
+    })
+
+    // The recipe is a member and is NOT a conversation: every existing reader
+    // of `sessionIds` means "the conversations in this crew".
+    expect(seated.sessionIds).toEqual(['s1'])
+    expect(seated.members).toHaveLength(2)
+    const recipe = service.findMemberByBatonName(crew.id, 'errand')
+    expect(recipe).toMatchObject({
+      sessionId: null,
+      kind: 'dynamic',
+      providerId: 'codex',
+      model: 'gpt-6-astra',
+      hostPolicy: 'little-monster',
+      roleCard: 'You are an errand.',
+    })
+  })
+
+  it('refuses a recipe with no provider or host, and a name the crew already seats', () => {
+    const crew = service.create({ name: 'Night shift' })
+    service.addRecipeMember(crew.id, {
+      batonName: 'errand',
+      providerId: 'codex',
+      model: null,
+      hostPolicy: 'local',
+    })
+
+    expect(() =>
+      service.addRecipeMember(crew.id, {
+        batonName: 'second',
+        providerId: '  ',
+        model: null,
+        hostPolicy: 'local',
+      }),
+    ).toThrow('A dynamic seat needs a provider and a host')
+    expect(() =>
+      service.addRecipeMember(crew.id, {
+        batonName: 'errand',
+        providerId: 'codex',
+        model: null,
+        hostPolicy: 'local',
+      }),
+    ).toThrow('This crew already has a seat named "errand"')
   })
 
   it('creates a decorated crew and appends positions', () => {
@@ -60,16 +190,21 @@ describe('CrewService', () => {
     expect(withBoth.sessionIds).toEqual(['s1', 's2'])
   })
 
-  it('lets one session belong to many crews', () => {
+  /**
+   * Restaged by MAR-3083 R2. This test asserted the opposite until seats
+   * existed -- one session could sit in many crews -- and that is exactly the
+   * shape the constitution's "one seat, one crew" retires: a shared seat
+   * answers a second mastermind's brief with nobody able to see why.
+   */
+  it('keeps a session in the first crew that seated it', () => {
     const masterminds = service.create({ name: 'Masterminds' })
     const workers = service.create({ name: 'Workers' })
     service.addMember(masterminds.id, 's1')
-    service.addMember(workers.id, 's1')
 
-    expect(service.list().map((crew) => crew.sessionIds)).toEqual([
-      ['s1'],
-      ['s1'],
-    ])
+    expect(() => service.addMember(workers.id, 's1')).toThrow(
+      'This conversation is already in the crew "Masterminds"',
+    )
+    expect(service.list().map((crew) => crew.sessionIds)).toEqual([['s1'], []])
   })
 
   it('treats adding an existing member as a no-op', () => {
@@ -96,8 +231,20 @@ describe('CrewService', () => {
 
     // Nobody has arranged anything yet, and null is what says so.
     expect(crew.members).toEqual([
-      { sessionId: 's1', batonName: null, canvasX: null, canvasY: null },
-      { sessionId: 's2', batonName: null, canvasX: null, canvasY: null },
+      {
+        ...DEFAULT_CREW_MEMBER_SEAT,
+        sessionId: 's1',
+        batonName: null,
+        canvasX: null,
+        canvasY: null,
+      },
+      {
+        ...DEFAULT_CREW_MEMBER_SEAT,
+        sessionId: 's2',
+        batonName: null,
+        canvasX: null,
+        canvasY: null,
+      },
     ])
 
     const moved = service.setMemberPosition(crew.id, 's1', { x: 240, y: 96 })

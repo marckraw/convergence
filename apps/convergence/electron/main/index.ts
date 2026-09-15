@@ -749,6 +749,14 @@ async function startApp(): Promise<void> {
         crewService.addMember(crewId, sessionId),
       crewIdsForSession: (sessionId) =>
         crewService.crewIdsForSession(sessionId),
+      // The seat a wire is aimed at (MAR-3083): its card rides the first
+      // message of a run, and a spawn spec naming a seat reads its recipe.
+      findSeatBySession: (crewId, sessionId) =>
+        crewService
+          .getById(crewId)
+          ?.members.find((member) => member.sessionId === sessionId) ?? null,
+      findSeatByBatonName: (crewId, batonName) =>
+        crewService.findMemberByBatonName(crewId, batonName),
       // Read through the crew rather than copied onto the engine: the knobs
       // belong to the crew, and an engine holding its own copy would keep
       // firing yesterday's cap after the user changed it.

@@ -4,6 +4,7 @@ export type {
   SessionCrewMember,
   UpdateSessionCrewInput,
 } from './session-crew.types'
+export { DEFAULT_CREW_MEMBER_SEAT } from './session-crew.types'
 export { sessionCrewApi } from './session-crew.api'
 export {
   selectCrewsForSession,

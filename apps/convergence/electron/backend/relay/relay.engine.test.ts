@@ -11,7 +11,7 @@ import type { AutomaticTurnAccount } from '../provider-account/provider-account-
 import { CrewHailService } from './crew-hail.service'
 import { MIN_FLOW_RUN_HOP_CEILING, TERMINAL_BATON_MESSAGE } from './relay.pure'
 import { RelayService } from './relay.service'
-import type { RelayHop, RelaySpawnSpec } from './relay.types'
+import type { RelayHop, RelaySeat, RelaySpawnSpec } from './relay.types'
 
 /**
  * The engine is the one thing in the app that spends provider quota without a
@@ -217,9 +217,17 @@ describe('RelayEngine', () => {
   >
   /** Enrolled accounts per provider. Empty by default: ambient, as before. */
   let accountsByProvider: Record<string, AutomaticTurnAccount[]>
+  /**
+   * The seats this crew holds (MAR-3083). Empty by default, so every wire in
+   * this file behaves exactly as it did before seats existed.
+   */
+  let seatsBySession: Record<string, RelaySeat>
+  let seatsByBatonName: Record<string, RelaySeat>
 
   beforeEach(() => {
     accountsByProvider = {}
+    seatsBySession = {}
+    seatsByBatonName = {}
     db = getDatabase()
     relays = new RelayService(db)
     hails = new CrewHailService(db)
@@ -360,6 +368,10 @@ describe('RelayEngine', () => {
    */
   function crewGateway() {
     return {
+      findSeatBySession: (_crewId: string, sessionId: string) =>
+        seatsBySession[sessionId] ?? null,
+      findSeatByBatonName: (_crewId: string, batonName: string) =>
+        seatsByBatonName[batonName] ?? null,
       addMember: (crewId: string, sessionId: string) => {
         crewAdditions.push({ crewId, sessionId })
       },
@@ -384,6 +396,7 @@ describe('RelayEngine', () => {
         executionHost: 'local',
         workAddress: null,
         roleCard: null,
+        member: null,
         returnWire: null,
         projectId: 'p1',
         providerId: 'codex',
@@ -3200,6 +3213,7 @@ describe('RelayEngine', () => {
         action: 'spawn',
         instruction: BRIEF,
         spawnSpec: {
+          member: null,
           executionHost: 'local',
           workAddress: null,
           roleCard: null,
@@ -3509,5 +3523,134 @@ describe('RelayEngine', () => {
 
     consoleError.mockRestore()
     vi.restoreAllMocks()
+  })
+
+  /**
+   * The seat, read by the wire (MAR-3083 R3/R4).
+   *
+   * A crew member is not just a session id any more: it can BE a recipe, and
+   * it can carry a card that says what it is. Both were things Fable typed
+   * into every dispatch by hand.
+   */
+  describe('seats', () => {
+    it('spawns a dynamic seat on its own recipe, card included', async () => {
+      seatsByBatonName.errand = {
+        batonName: 'errand',
+        kind: 'dynamic',
+        roleCard: 'You are an errand. You never merge.',
+        hostPolicy: 'little-monster',
+        providerId: 'claude-code',
+        model: 'claude-opus-5',
+      }
+      // The wire names the seat; the recipe lives on the member.
+      spawnWire('s1', { member: 'errand', roleCard: null })
+      const gateway = createGateway({})
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      // Mutation: ignore the seat (drop `applySeatToSpawnSpec`) and the spawn
+      // comes up on the wire's own provider, host and no card -- red here.
+      expect(gateway.created[0]).toMatchObject({
+        providerId: 'claude-code',
+        model: 'claude-opus-5',
+        executionHost: 'little-monster',
+      })
+      expect(gateway.started[0]!.text).toContain(
+        'You are an errand. You never merge.',
+      )
+    })
+
+    it('leaves a spawn whose seat is resident exactly as the wire states it', async () => {
+      seatsByBatonName.fable = {
+        batonName: 'fable',
+        kind: 'resident',
+        roleCard: 'You are the mastermind.',
+        hostPolicy: 'little-monster',
+        providerId: 'claude-code',
+        model: 'claude-opus-5',
+      }
+      spawnWire('s1', { member: 'fable' })
+      const gateway = createGateway({})
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      // A resident seat is a conversation that already exists; a wire spawning
+      // beside it means what it says. A local spawn names no host at all --
+      // which is how this asserts the seat's `little-monster` never reached it.
+      expect(gateway.created[0]).toMatchObject({ providerId: 'codex' })
+      expect(gateway.created[0]).not.toHaveProperty('executionHost')
+    })
+
+    it('carries the seat card ahead of the payload once a run, not every lap', async () => {
+      seatsBySession.s2 = {
+        batonName: 'horse opus',
+        kind: 'resident',
+        roleCard: 'You are Opus. You never merge.',
+        hostPolicy: null,
+        providerId: null,
+        model: null,
+      }
+      // A loop: s1 hails s2, s2 hails s1 back, so the second delivery into s2
+      // belongs to the same flow run as the first.
+      wire('s1', 's2')
+      wire('s2', 's1')
+      const gateway = createGateway({
+        lastMessages: { s1: 'lap one', s2: 'back to you' },
+      })
+      const engine = createEngine(gateway)
+
+      await engine.handleSettle(settled('s1'))
+      const firstArrival = gateway.sent.filter((t) => t.sessionId === 's2')
+      // The card is the opener: its own turn, the payload queued behind it.
+      expect(firstArrival.map((turn) => turn.text)).toEqual([
+        'You are Opus. You never merge.',
+        'lap one',
+      ])
+
+      // s2 answers; its settle carries the receipts, so the run continues.
+      await engine.handleSettle(settleCarried(gateway, 's2'))
+      await engine.handleSettle(settleCarried(gateway, 's1'))
+
+      const secondArrival = gateway.sent
+        .filter((turn) => turn.sessionId === 's2')
+        .slice(firstArrival.length)
+      // Mutation: introduce the seat on every lap (drop the claim) and the
+      // card appears here too -- a conversation re-briefed mid-thought. The
+      // payload repeats because this fake station's last message does not
+      // change between laps; what matters is that the card does not lead it.
+      expect(secondArrival.map((turn) => turn.text)).toEqual(['lap one'])
+    })
+
+    it('leads the payload with the card when the wire already opens with a command', async () => {
+      seatsBySession.s2 = {
+        batonName: 'horse opus',
+        kind: 'resident',
+        roleCard: 'You are Opus.',
+        hostPolicy: null,
+        providerId: null,
+        model: null,
+      }
+      wire('s1', 's2', true, null, '/clear')
+      const gateway = createGateway({ lastMessages: { s1: 'the brief' } })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      // The opener stays a command -- gluing the card onto `/clear` would stop
+      // it being one -- so the card leads the payload instead.
+      expect(
+        gateway.sent.filter((t) => t.sessionId === 's2').map((t) => t.text),
+      ).toEqual(['/clear', 'You are Opus.\n\nthe brief'])
+    })
+
+    it('sends nothing extra to a seat nobody has described', async () => {
+      wire('s1', 's2')
+      const gateway = createGateway({ lastMessages: { s1: 'the brief' } })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(
+        gateway.sent.filter((t) => t.sessionId === 's2').map((t) => t.text),
+      ).toEqual(['the brief'])
+    })
   })
 })

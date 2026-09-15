@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { CrewSettingsPanel } from './crew-settings-panel.presentational'
+import {
+  DEFAULT_CREW_MEMBER_SEAT,
+  type SessionCrewMember,
+} from '@/entities/session-crew'
 import {
   DEFAULT_CREW_ROUND_CAP,
   DEFAULT_CREW_STALL_MINUTES,
@@ -17,6 +21,8 @@ import {
 function renderPanel(
   deliveryLimit: number | null,
   lastExportPath: string | null = null,
+  members: SessionCrewMember[] = [],
+  onSeatEdit = vi.fn(),
 ) {
   const noop = vi.fn()
   return render(
@@ -38,7 +44,7 @@ function renderPanel(
       updateError={null}
       savedName="Review loop"
       crewName="Review loop"
-      members={[]}
+      members={members}
       resolveName={() => null}
       deliveryLimit={deliveryLimit}
       attentionMinutes={null}
@@ -50,6 +56,7 @@ function renderPanel(
       batonNameDrafts={{}}
       onCrewNameChange={noop}
       onBatonNameEdit={noop}
+      onSeatEdit={onSeatEdit}
       onBatonNameCommit={noop}
       onDeliveryLimitChange={noop}
       onAttentionMinutesChange={noop}
@@ -96,4 +103,57 @@ it('shows Last exported to only for a successful export, shortened with the full
   const line = screen.getByText(/Last exported to/)
   expect(line).toHaveAttribute('title', path)
   expect(line).toHaveTextContent('Last exported to …/crew-recipes/review.yaml')
+})
+
+/**
+ * The seat, on the screen (MAR-3083 R6; the MAR-2280 law).
+ *
+ * A record the form cannot show is a record only a mastermind's memory holds,
+ * which is the thing this issue exists to end.
+ */
+describe('the member editor shows what the seat holds', () => {
+  const seated: SessionCrewMember = {
+    ...DEFAULT_CREW_MEMBER_SEAT,
+    sessionId: 's1',
+    batonName: 'horse opus',
+    canvasX: null,
+    canvasY: null,
+    role: 'reviewer',
+    roleCard: 'You read blind.',
+  }
+
+  it('renders the role the member holds and the card it carries', () => {
+    // Mutation: drop the select or the textarea from the panel and the seat
+    // is back to being something only a dispatch message can say.
+    renderPanel(null, null, [seated])
+
+    expect(screen.getByLabelText('Role for s1')).toHaveValue('reviewer')
+    expect(screen.getByLabelText('Role card for s1')).toHaveValue(
+      'You read blind.',
+    )
+    expect(screen.getByLabelText('WIP limit for s1')).toHaveValue(1)
+  })
+
+  it('hands a chosen role straight to the door', () => {
+    const onSeatEdit = vi.fn()
+    renderPanel(null, null, [seated], onSeatEdit)
+
+    fireEvent.change(screen.getByLabelText('Role for s1'), {
+      target: { value: 'mastermind' },
+    })
+
+    expect(onSeatEdit).toHaveBeenCalledWith('s1', { role: 'mastermind' })
+  })
+
+  it('commits a card when the writing is finished, not on every keystroke', () => {
+    const onSeatEdit = vi.fn()
+    renderPanel(null, null, [seated], onSeatEdit)
+    const card = screen.getByLabelText('Role card for s1')
+
+    fireEvent.change(card, { target: { value: 'You are Opus.' } })
+    expect(onSeatEdit).not.toHaveBeenCalled()
+
+    fireEvent.blur(card)
+    expect(onSeatEdit).toHaveBeenCalledWith('s1', { roleCard: 'You are Opus.' })
+  })
 })

@@ -8,6 +8,7 @@ import { LocalExecutionHost } from '../provider/execution-host/local-execution-h
 import { ProviderRegistry } from '../provider/provider-registry'
 import { SessionService } from '../session/session.service'
 import { CrewService } from './crew.service'
+import { DEFAULT_CREW_MEMBER_SEAT } from './crew.types'
 import { RelayService } from '../relay/relay.service'
 import { CrewImportService } from './crew-import.service'
 import { readGitOriginUrlAsync } from '../git/git-origin'
@@ -138,7 +139,14 @@ it('applies through services, stamps the hash and is idempotent (mutations: skip
     project: 'lane',
     model: 'old-model',
     permissions: { preset: 'ask' },
-    member: { sessionId: horse.id, batonName: 'horse', canvasX: 4, canvasY: 8 },
+    member: {
+      ...DEFAULT_CREW_MEMBER_SEAT,
+      hostPolicy: 'local',
+      sessionId: horse.id,
+      batonName: 'horse',
+      canvasX: 4,
+      canvasY: 8,
+    },
     wire: [['BATON: horse', '/clear', 'Ride']],
     stamp: {
       config_path: path,
@@ -506,6 +514,8 @@ it('applies normalized wire and layout references idempotently (mutation: use ra
     nothing: (await service.apply(path, decisions(next))).nothingToChange,
   }).toEqual({
     member: {
+      ...DEFAULT_CREW_MEMBER_SEAT,
+      hostPolicy: 'local',
       sessionId: horse.id,
       batonName: 'horse',
       canvasX: 17,
@@ -670,5 +680,108 @@ it('binds the baton holder end to end, creating no conversation and renaming no 
     member: 'fable',
     members: 2,
     name: 'Fable, renamed locally',
+  })
+})
+
+/**
+ * The seat travels with the recipe (MAR-3083 R5). A crew imported on another
+ * machine carries what its members ARE, instead of a mastermind re-typing six
+ * role cards into six dispatches.
+ */
+it('imports a recipe written before seats existed at horse · resident · 1', async () => {
+  const plan = await service.plan(path)
+  const report = await service.apply(path, decisions(plan))
+
+  const crew = crews.getById(report.crewId)!
+  expect(
+    crew.members.map((member) => ({
+      role: member.role,
+      kind: member.kind,
+      wipLimit: member.wipLimit,
+      roleCard: member.roleCard,
+      // A resident seat works where its conversation runs.
+      hostPolicy: member.hostPolicy,
+    })),
+  ).toEqual([
+    {
+      role: 'horse',
+      kind: 'resident',
+      wipLimit: 1,
+      roleCard: null,
+      hostPolicy: 'local',
+    },
+    {
+      role: 'horse',
+      kind: 'resident',
+      wipLimit: 1,
+      roleCard: null,
+      hostPolicy: 'local',
+    },
+  ])
+})
+
+it('seats what the recipe describes, and exports it back unchanged (mutation: drop a field from the export)', async () => {
+  config.roles.fable!.role = 'mastermind'
+  config.roles.fable!.roleCard = 'You hold the map.'
+  config.roles.fable!.wipLimit = 3
+  config.roles.fable!.lanePolicy = 'own-worktree'
+  await save()
+
+  const plan = await service.plan(path)
+  const report = await service.apply(path, decisions(plan))
+  const crew = crews.getById(report.crewId)!
+  const fable = crew.members.find((member) => member.batonName === 'fable')!
+
+  expect(fable).toMatchObject({
+    role: 'mastermind',
+    kind: 'resident',
+    roleCard: 'You hold the map.',
+    wipLimit: 3,
+    lanePolicy: 'own-worktree',
+  })
+
+  // The round trip: what the recipe said comes back out of the record.
+  const db = getDatabase()
+  const rows = db
+    .prepare(
+      `SELECT s.id,s.name,s.provider_id AS providerId,s.model,s.effort,
+              s.permission_config AS permissionConfig,s.project_id AS projectId,
+              s.execution_host AS executionHost
+         FROM sessions s
+         JOIN session_crew_members m ON m.session_id = s.id
+        WHERE m.crew_id = ?`,
+    )
+    .all(crew.id) as never[]
+  const again = crewToConfig(
+    crew,
+    crew.members,
+    (rows as unknown as { permissionConfig: string }[]).map((row) => ({
+      ...row,
+      permissionConfig: { preset: 'yolo' as const },
+    })) as never,
+    [
+      {
+        id: 'root',
+        name: 'Convergence',
+        origin: 'git@github.com:marckraw/convergence.git',
+        laneOf: null,
+        laneName: null,
+      },
+      {
+        id: 'lane',
+        name: 'Studio',
+        origin: null,
+        laneOf: 'root',
+        laneName: 'studio',
+      },
+    ],
+    [],
+  )
+  expect(again.roles.fable).toMatchObject({
+    role: 'mastermind',
+    kind: 'resident',
+    roleCard: 'You hold the map.',
+    wipLimit: 3,
+    lanePolicy: 'own-worktree',
   })
 })

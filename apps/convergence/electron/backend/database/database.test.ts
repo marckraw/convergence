@@ -976,6 +976,15 @@ describe('database', () => {
       [
         'crew_id',
         'session_id',
+        // The seat (MAR-3083 R1): what this member IS, beside who it is.
+        'role',
+        'kind',
+        'role_card',
+        'host_policy',
+        'lane_policy',
+        'wip_limit',
+        'provider_id',
+        'model',
         'baton_name',
         'canvas_x',
         'canvas_y',

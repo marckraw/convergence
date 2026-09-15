@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import type { CrewService } from './crew.service'
+import type { UpdateCrewSeatInput } from './crew.service'
 import type {
   CreateSessionCrewInput,
   SessionCrew,
@@ -51,6 +52,13 @@ export function registerCrewIpcHandlers(deps: {
   ipcMain.handle('crew:delete', (_event, id: string) => {
     mutate(() => service.delete(id))
   })
+
+  // What a seat IS (MAR-3083 R1/R6): its own door, like the baton name's.
+  ipcMain.handle(
+    'crew:setMemberSeat',
+    (_event, crewId: string, sessionId: string, patch: UpdateCrewSeatInput) =>
+      mutate(() => service.setMemberSeat(crewId, sessionId, patch)),
+  )
 
   ipcMain.handle(
     'crew:addMember',

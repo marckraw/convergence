@@ -2,6 +2,18 @@
  * A crew is a named, decorated, cross-project collection of sessions.
  * Membership is many-to-many and promises membership only — no automation.
  */
+/** What a seat reads as before anybody describes it (MAR-3083 R1). */
+export const DEFAULT_CREW_MEMBER_SEAT = {
+  role: 'horse',
+  kind: 'resident',
+  roleCard: null,
+  hostPolicy: null,
+  lanePolicy: null,
+  wipLimit: 1,
+  providerId: null,
+  model: null,
+} as const
+
 export interface SessionCrewMember {
   sessionId: string
   /**
@@ -17,6 +29,20 @@ export interface SessionCrewMember {
    */
   canvasX: number | null
   canvasY: number | null
+  /** What this seat is for; an older member reads as a horse (MAR-3083). */
+  role: 'mastermind' | 'horse' | 'reviewer' | 'designer'
+  /** A conversation, or a recipe a wire spawns. */
+  kind: 'resident' | 'dynamic'
+  /** What this seat is told it is; the first message of a run carries it. */
+  roleCard: string | null
+  /** `local` or an execution-host endpoint id. */
+  hostPolicy: string | null
+  lanePolicy: 'main' | 'own-worktree' | null
+  /** How many issues this seat may hold at once; an older member holds one. */
+  wipLimit: number
+  /** A dynamic seat's recipe; null on a resident seat. */
+  providerId: string | null
+  model: string | null
 }
 
 export interface SessionCrew {
