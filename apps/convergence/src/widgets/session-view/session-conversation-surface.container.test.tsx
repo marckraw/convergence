@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import type { ConversationItem, Session } from '@/entities/session'
+import { useResponseAnnotationStore } from '@/entities/response-annotation'
 import type { ComposerSessionContext } from '@/features/composer'
 import { SessionConversationSurface } from './session-conversation-surface.container'
 
@@ -62,6 +63,10 @@ const baseSession: Session = {
 }
 
 describe('SessionConversationSurface', () => {
+  beforeEach(() => {
+    useResponseAnnotationStore.setState({ annotationsBySessionId: {} })
+  })
+
   it('renders the reusable transcript and composer for a global session', () => {
     render(
       <SessionConversationSurface
@@ -169,6 +174,79 @@ describe('SessionConversationSurface', () => {
     fireEvent.click(screen.getByRole('button', { name: 'select message-1' }))
 
     expect(screen.getByText('First preview')).toBeInTheDocument()
+  })
+
+  it('remounts the annotation tray per session so an open edit does not follow a switch (MAR-3008)', () => {
+    const sessionA: Session = { ...baseSession, id: 'session-a', name: 'A' }
+    const sessionB: Session = { ...baseSession, id: 'session-b', name: 'B' }
+    useResponseAnnotationStore.getState().addAnnotation('session-a', {
+      messageId: 'msg-a',
+      quotedText: 'the quoted line',
+      prefix: '',
+      suffix: '',
+      body: 'original reply',
+      kind: 'comment',
+    })
+
+    const { rerender } = render(
+      <SessionConversationSurface
+        session={sessionA}
+        conversationItems={[]}
+        composerContext={{ kind: 'global', activeSessionId: 'session-a' }}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
+      />,
+    )
+
+    const strip = screen.getByRole('list', { name: 'Responding to' })
+    const pill = within(strip)
+      .getAllByRole('button')
+      .find((button) => button.hasAttribute('data-annotation-pill'))
+    expect(pill).toBeDefined()
+    fireEvent.click(pill!)
+    expect(screen.getByTestId('annotation-chip')).toBeInTheDocument()
+    fireEvent.click(
+      within(screen.getByTestId('annotation-chip')).getByLabelText(
+        /^Edit response to/,
+      ),
+    )
+    const editField = screen.getByLabelText(/^Edit response to/)
+    fireEvent.change(editField, {
+      target: { value: 'draft that must not travel' },
+    })
+    expect(editField).toHaveValue('draft that must not travel')
+    expect(document.activeElement).toBe(editField)
+
+    rerender(
+      <SessionConversationSurface
+        session={sessionB}
+        conversationItems={[]}
+        composerContext={{ kind: 'global', activeSessionId: 'session-b' }}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
+      />,
+    )
+    rerender(
+      <SessionConversationSurface
+        session={sessionA}
+        conversationItems={[]}
+        composerContext={{ kind: 'global', activeSessionId: 'session-a' }}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
+      />,
+    )
+
+    // No chip open — remount cleared expanded/edit view state.
+    // (Mutation: drop `key={sessionId}` → measured red on the edit-input
+    // assertion below — the stale `editingId` re-renders the input.)
+    expect(document.querySelector('[data-annotation-expanded]')).toBeNull()
+    expect(screen.queryByLabelText(/^Edit response to/)).toBeNull()
+    expect(screen.queryByDisplayValue('draft that must not travel')).toBeNull()
+    const tray = screen.getByTestId('annotation-tray')
+    expect(tray.contains(document.activeElement)).toBe(false)
   })
 })
 
