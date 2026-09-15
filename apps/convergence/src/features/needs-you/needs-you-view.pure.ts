@@ -1,19 +1,32 @@
 import { isLocalExecutionHost } from '@/entities/execution-host'
 import { resolveProviderIcon } from '@/shared/ui/provider-icon.pure'
 import type { NeedsYouCardModel } from './needs-you-card.pure'
+import {
+  feedOrders,
+  sortFeedCards,
+  type FeedOrder,
+} from './needs-you-order.pure'
 
 export const activityViews = ['all', 'needs-me', 'working', 'review'] as const
 export type ActivityView = (typeof activityViews)[number]
+export type ActivityFilter = Exclude<ActivityView, 'all'>
 export type FeedHost = 'local' | 'remote'
 export type FeedGroup = { title: string; cards: NeedsYouCardModel[] }
 export interface FeedView {
-  version: 2
-  activity: ActivityView
+  version: 3
+  activities: ActivityFilter[]
   hosts: FeedHost[]
   providers: string[]
+  order: FeedOrder
 }
 export function defaultFeedView(): FeedView {
-  return { version: 2, activity: 'all', hosts: [], providers: [] }
+  return {
+    version: 3,
+    activities: [],
+    hosts: [],
+    providers: [],
+    order: 'created',
+  }
 }
 
 function providerValue(card: NeedsYouCardModel): string {
@@ -24,9 +37,7 @@ function hostValue(card: NeedsYouCardModel): FeedHost {
   return isLocalExecutionHost(card.session.executionHost) ? 'local' : 'remote'
 }
 /** Interpret attention without promoting unknown or acknowledged work to an action. */
-function activityValue(
-  card: NeedsYouCardModel,
-): Exclude<ActivityView, 'all'> | null {
+function activityValue(card: NeedsYouCardModel): ActivityFilter | null {
   if (
     !card.dismissed &&
     (card.attentionGroup === 'Waiting on you' ||
@@ -43,10 +54,11 @@ function matches(
   view: FeedView,
   except?: 'activity' | 'hosts' | 'providers',
 ): boolean {
+  const activity = activityValue(card)
   return (
     (except === 'activity' ||
-      view.activity === 'all' ||
-      activityValue(card) === view.activity) &&
+      !view.activities.length ||
+      (activity !== null && view.activities.includes(activity))) &&
     (except === 'hosts' ||
       !view.hosts.length ||
       view.hosts.includes(hostValue(card))) &&
@@ -140,11 +152,7 @@ export function buildFeedView(source: FeedGroup[], view: FeedView) {
     .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b))
     .map(([title, groupCards]) => ({
       title,
-      cards: groupCards.sort(
-        (a, b) =>
-          b.session.updatedAt.localeCompare(a.session.updatedAt) ||
-          a.session.id.localeCompare(b.session.id),
-      ),
+      cards: sortFeedCards(groupCards, view.order),
     }))
   return {
     groups,
@@ -152,7 +160,7 @@ export function buildFeedView(source: FeedGroup[], view: FeedView) {
     hostCounts,
     providers,
     filtered:
-      view.activity !== 'all' ||
+      view.activities.length > 0 ||
       view.hosts.length > 0 ||
       view.providers.length > 0,
     total: cards.length,
@@ -162,7 +170,7 @@ export function buildFeedView(source: FeedGroup[], view: FeedView) {
     ).length,
   }
 }
-/** Old advanced views reset: no invisible search, project filter or custom order survives. */
+/** Migrate single workflow choices; older advanced views reset without hidden filters. */
 export function readFeedView(raw: string | null): FeedView {
   const fallback = defaultFeedView()
   if (!raw) return fallback
@@ -172,15 +180,29 @@ export function readFeedView(raw: string | null): FeedView {
       !item ||
       typeof item !== 'object' ||
       !('version' in item) ||
-      item.version !== 2
+      (item.version !== 2 && item.version !== 3)
     )
       return fallback
     const value = item as Record<string, unknown>
+    const activities = value.version === 2 ? [value.activity] : value.activities
     return {
-      version: 2,
-      activity: activityViews.includes(value.activity as ActivityView)
-        ? (value.activity as ActivityView)
-        : 'all',
+      version: 3,
+      activities: Array.isArray(activities)
+        ? [
+            ...new Set(
+              activities.filter(
+                (activity): activity is ActivityFilter =>
+                  activity === 'needs-me' ||
+                  activity === 'working' ||
+                  activity === 'review',
+              ),
+            ),
+          ]
+        : [],
+      order:
+        value.version === 3 && feedOrders.includes(value.order as FeedOrder)
+          ? (value.order as FeedOrder)
+          : fallback.order,
       hosts: Array.isArray(value.hosts)
         ? [
             ...new Set(
