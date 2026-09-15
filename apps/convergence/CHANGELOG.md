@@ -1,5 +1,12 @@
 # convergence
 
+## 0.59.5
+
+### Patch Changes
+
+- f073a05: A refused Codex reconnect restores the credential that was working before it; the sign-in URL allowlist rejects fragments.
+- 713c457: Mission Control shows when a remote host last spoke.
+
 ## 0.59.4
 
 ### Patch Changes
