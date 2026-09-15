@@ -199,12 +199,13 @@ export class ProviderAccountAttestationService {
     report: ProviderAccountHealthReport
     checkedAtMs: number
   }): ProviderAccountHealthReport {
-    const version = this.claudeVersion()
-    const stamped = { ...collected.report, claudeVersion: version }
+    // One version read per collection, captured when it started: the report
+    // and lastVersion must describe the probes that ran, not a version that
+    // landed while they were in flight.
     this.lastCheckedAt = collected.checkedAtMs
-    this.lastVersion = version
-    this.report = stamped
-    return stamped
+    this.lastVersion = collected.report.claudeVersion
+    this.report = collected.report
+    return collected.report
   }
 
   private async collectReport(): Promise<{
@@ -213,6 +214,7 @@ export class ProviderAccountAttestationService {
     invalidated: boolean
   }> {
     const revision = this.revision
+    const claudeVersion = this.claudeVersion()
     const accounts = this.repository.list()
     const sharedEntries = await this.readdirSafe(join(this.homeDir, '.claude'))
     const checkedAtMs = this.now()
@@ -338,7 +340,7 @@ export class ProviderAccountAttestationService {
     )
     const candidate: ProviderAccountHealthReport = {
       checkedAt: new Date(checkedAtMs).toISOString(),
-      claudeVersion: this.claudeVersion(),
+      claudeVersion,
       accounts: results,
       settingsWarnings,
     }

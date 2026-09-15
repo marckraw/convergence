@@ -510,6 +510,52 @@ describe('ProviderAccountAttestationService', () => {
     expect(subject.getHealth().claudeVersion).toBe('2.2.0')
   })
 
+  it('stamps the committed report and lastVersion with the version at collection start', async () => {
+    let version = '2.1.220'
+    let clockNow = clock
+    let finish!: () => void
+    const inspect = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<'present'>((resolve) => {
+            finish = () => resolve('present')
+          }),
+      )
+      .mockResolvedValue('present' as const)
+    const subject = new ProviderAccountAttestationService({
+      repository,
+      fs: fakeFs(
+        {
+          [`${CONFIG_DIR}/.claude.json`]: identityJson(
+            'a@example.com',
+            'org-a',
+          ),
+        },
+        {},
+      ),
+      homeDir: HOME,
+      now: () => clockNow,
+      claudeVersion: () => version,
+      credentialHealth: { inspect },
+    })
+    const run = subject.attestAll()
+    await vi.waitFor(() => expect(inspect).toHaveBeenCalledTimes(1))
+    // The CLI version changes while the collection is still probing: the
+    // committed report must describe the version it started under, not the
+    // one that landed mid-run.
+    version = '2.2.0'
+    finish()
+    const report = await run
+    expect(report.claudeVersion).toBe('2.1.220')
+    // lastVersion carries the same value: with the interval not elapsed, the
+    // version difference alone makes the next check due.
+    clockNow += 60_000
+    const second = await subject.attestIfDue()
+    expect(second).not.toBe(report)
+    expect(second.claudeVersion).toBe('2.2.0')
+  })
+
   it('re-attests once the interval has elapsed', async () => {
     const subject = service({
       files: {
