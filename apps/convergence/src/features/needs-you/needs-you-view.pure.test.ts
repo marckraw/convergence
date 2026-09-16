@@ -60,10 +60,14 @@ it('uses attention, known work and review facts while All retains PR errands and
   })
   expect(ids(all)).toHaveLength(7)
   expect(
-    ids(buildFeedView(source, { ...defaultFeedView(), activity: 'needs-me' })),
+    ids(
+      buildFeedView(source, { ...defaultFeedView(), activities: ['needs-me'] }),
+    ),
   ).toEqual(['approval', 'failed', 'input'])
   expect(
-    ids(buildFeedView(source, { ...defaultFeedView(), activity: 'review' })),
+    ids(
+      buildFeedView(source, { ...defaultFeedView(), activities: ['review'] }),
+    ),
   ).toEqual(['finished'])
   expect(models[0]!.session.pinnedAt).toBe('2026-09-12')
 })
@@ -71,7 +75,7 @@ it('uses attention, known work and review facts while All retains PR errands and
 it('combines icon choices, intersects categories, and counts before each category', () => {
   const result = buildFeedView(source, {
     ...defaultFeedView(),
-    activity: 'working',
+    activities: ['working'],
     hosts: ['remote'],
     providers: ['openai'],
   })
@@ -90,7 +94,7 @@ it('combines icon choices, intersects categories, and counts before each categor
   })
   const both = buildFeedView(source, {
     ...defaultFeedView(),
-    activity: 'working',
+    activities: ['working'],
     hosts: ['local', 'remote'],
     providers: ['anthropic', 'openai'],
   })
@@ -229,10 +233,11 @@ it('resets legacy advanced filters and validates persisted simple selections', (
       }),
     ),
   ).toEqual({
-    version: 2,
-    activity: 'working',
+    version: 3,
+    activities: ['working'],
     hosts: ['remote'],
     providers: ['openai'],
+    order: 'created',
   })
   expect(
     readFeedView(
@@ -241,11 +246,104 @@ it('resets legacy advanced filters and validates persisted simple selections', (
   ).toEqual(defaultFeedView())
   const view = {
     ...defaultFeedView(),
-    activity: 'review' as const,
+    activities: ['review' as const, 'working' as const],
+    order: 'name' as const,
     hosts: ['remote' as const],
     providers: ['openai'],
   }
   expect(readFeedView(JSON.stringify(view))).toEqual(view)
+})
+
+it('unions activity choices while intersecting host and provider choices', () => {
+  const result = buildFeedView(source, {
+    ...defaultFeedView(),
+    activities: ['working', 'review'],
+    hosts: ['remote'],
+    providers: ['openai'],
+  })
+  expect(ids(result)).toEqual(['working', 'finished'])
+  expect(result).toMatchObject({
+    shown: 2,
+    hiddenPins: 1,
+    activityCounts: { all: 2, 'needs-me': 0, working: 1, review: 1 },
+    hostCounts: { local: 0, remote: 2 },
+  })
+  expect(
+    ids(
+      buildFeedView(source, {
+        ...defaultFeedView(),
+        activities: ['needs-me', 'working', 'review'],
+      }),
+    ),
+  ).toHaveLength(6)
+  expect(ids(buildFeedView(source, defaultFeedView()))).toHaveLength(7)
+})
+
+it('validates saved multi-select activities and ordering without losing valid scopes', () => {
+  expect(
+    readFeedView(
+      JSON.stringify({
+        version: 3,
+        activities: ['review', 'bad', 'working', 'working', 'all', null],
+        order: 'bad',
+        hosts: ['local'],
+        providers: ['pi'],
+      }),
+    ),
+  ).toEqual({
+    ...defaultFeedView(),
+    activities: ['review', 'working'],
+    hosts: ['local'],
+    providers: ['pi'],
+  })
+  expect(
+    readFeedView(
+      JSON.stringify({ version: 3, activities: 'working', order: {} }),
+    ),
+  ).toEqual(defaultFeedView())
+  expect(readFeedView(JSON.stringify({ version: 2, activity: 'all' }))).toEqual(
+    defaultFeedView(),
+  )
+})
+
+it('applies ordering inside groups while keeping pinned cards first', () => {
+  const cards = [
+    cardSession({
+      id: 'old',
+      name: 'Zulu',
+      status: 'running',
+      createdAt: '2026-09-10',
+      updatedAt: '2026-09-14',
+    }),
+    cardSession({
+      id: 'new',
+      name: 'Alpha',
+      status: 'running',
+      createdAt: '2026-09-12',
+      updatedAt: '2026-09-13',
+    }),
+    cardSession({
+      id: 'pinned',
+      name: 'ZZ pinned',
+      status: 'running',
+      pinnedAt: '2026-09-10',
+    }),
+  ].map((session) => needsYouCardModel(session, cardContext))
+  const source = groupNeedsYou(cards)
+  expect(ids(buildFeedView(source, defaultFeedView()))).toEqual([
+    'pinned',
+    'new',
+    'old',
+  ])
+  const updated = buildFeedView(source, {
+    ...defaultFeedView(),
+    order: 'updated',
+  })
+  expect(ids(updated)).toEqual(['pinned', 'old', 'new'])
+  expect(updated.filtered).toBe(false)
+  expect(
+    ids(buildFeedView(source, { ...defaultFeedView(), order: 'name' })),
+  ).toEqual(['pinned', 'new', 'old'])
 })
 
 it('toggles a choice without mutating the previous selection', () => {
