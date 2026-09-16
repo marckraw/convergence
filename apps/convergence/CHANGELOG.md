@@ -1,5 +1,11 @@
 # convergence
 
+## 0.60.1
+
+### Patch Changes
+
+- 5d35c83: Add Created, Updated, and Name ordering to Activity cards, with stable creation order by default. Allow Needs me, Working, and Review filters to be combined, remember the selections, and include ordering in the collapsed summary.
+
 ## 0.60.0
 
 ### Minor Changes
