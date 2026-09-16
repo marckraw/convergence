@@ -23,6 +23,13 @@ import type Database from 'better-sqlite3'
  */
 export const CREW_SEAT_DEDUPE_LOG_KEY = 'crew_seat_dedupe_v1'
 export const CREW_SEAT_MEMBER_INDEX = 'idx_session_crew_members_session_unique'
+/**
+ * A recipe's name is its only key, so it gets the same two halves R2 gave a
+ * conversation (MAR-3083 lap 4, Q): the service refuses a name a recipe holds,
+ * and this index refuses the row whatever writes it. Partial on purpose --
+ * residents may share a name; their key is the session.
+ */
+export const CREW_RECIPE_NAME_INDEX = 'idx_session_crew_members_recipe_name'
 
 export interface CrewSeatDedupeLog {
   at: string
@@ -31,6 +38,13 @@ export interface CrewSeatDedupeLog {
   /** Duplicates left in place because a wire in that crew is armed on them. */
   kept: { crewId: string; sessionId: string; reason: 'armed-wire' }[]
   indexed: boolean
+  /**
+   * Recipe names held twice in one crew, which the recipe-name index cannot
+   * be built over. No door has ever allowed it; if a row set shows it anyway,
+   * it is named here and the index is skipped rather than rows deleted.
+   */
+  recipeNameConflicts?: { crewId: string; batonName: string }[]
+  recipeNameIndexed?: boolean
 }
 
 /**
@@ -152,6 +166,25 @@ export function migrateCrewSeats(db: Database.Database): CrewSeatDedupeLog {
       }
     }
 
+    const recipeNameConflicts = db
+      .prepare(
+        `SELECT crew_id AS crewId, baton_name AS batonName
+           FROM session_crew_members
+          WHERE session_id IS NULL AND baton_name IS NOT NULL
+          GROUP BY crew_id, baton_name HAVING COUNT(*) > 1`,
+      )
+      .all() as { crewId: string; batonName: string }[]
+    log.recipeNameIndexed = recipeNameConflicts.length === 0
+    if (log.recipeNameIndexed) {
+      db.exec(
+        `CREATE UNIQUE INDEX IF NOT EXISTS ${CREW_RECIPE_NAME_INDEX}
+           ON session_crew_members(crew_id, baton_name)
+          WHERE session_id IS NULL`,
+      )
+    } else {
+      log.recipeNameConflicts = recipeNameConflicts
+    }
+
     log.indexed = log.kept.length === 0
     if (log.indexed) {
       db.exec(
@@ -160,7 +193,11 @@ export function migrateCrewSeats(db: Database.Database): CrewSeatDedupeLog {
       )
     }
 
-    if (log.removed.length > 0 || log.kept.length > 0) {
+    if (
+      log.removed.length > 0 ||
+      log.kept.length > 0 ||
+      (log.recipeNameConflicts?.length ?? 0) > 0
+    ) {
       db.prepare(
         'INSERT OR REPLACE INTO app_state(key,value) VALUES (?, ?)',
       ).run(CREW_SEAT_DEDUPE_LOG_KEY, JSON.stringify(log))

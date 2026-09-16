@@ -417,9 +417,11 @@ export class CrewService {
   /**
    * Refuses a name a recipe in this crew already holds (H).
    *
-   * Every door that sets a baton name asks: a name is a recipe's only key, so
-   * handing the same one to a second row -- recipe or resident -- makes the
-   * recipe unaddressable behind it.
+   * Every door that sets a baton name asks whether a RECIPE in this crew holds
+   * it: a name is a recipe's only key, so a second row taking it would make
+   * the recipe unaddressable behind it. A recipe taking a resident's name is
+   * not refused and needs no refusal -- no route resolves a name to a
+   * resident.
    */
   private refuseRecipeNameCollision(
     crewId: string,

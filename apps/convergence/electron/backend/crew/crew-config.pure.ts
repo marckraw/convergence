@@ -32,10 +32,11 @@ export function crewToConfig(
     compare(roleKey(a), roleKey(b)),
   )) {
     // A dynamic seat is a recipe with no conversation (R3), and `roles` is a
-    // map of conversations, so it cannot be written here. It is not lost: a
-    // wire that spawns it carries the recipe INLINE in its spawn spec (see
-    // `spawnTarget`), and `renderCrewYaml` writes a comment naming it. The
-    // seat itself travels with MAR-3099.
+    // map of conversations, so it is never written here. What the file does
+    // instead is said per recipe by `uncarriedRecipeNotes`: a recipe a wire
+    // spawns rides INLINE in that wire (see `spawnTarget`); a recipe no wire
+    // spawns is not in the file, and the comment says so. The seat itself
+    // travels with MAR-3099.
     if (member.kind === 'dynamic') continue
     const session = sessions.find((s) => s.id === member.sessionId)
     if (!session) throw new Error('A crew member has no conversation')
@@ -570,45 +571,49 @@ const validateRecipe = shape({
 })
 
 /**
- * What this file had to write into a wire because it cannot carry the seat
- * (MAR-3083 lap 3, K).
+ * Every dynamic seat this file does not carry, said as a comment in the file
+ * (MAR-3083 lap 4, P).
  *
- * A recipe has no conversation, so `roles` cannot hold it; its wire carries
- * the values inline instead. The reader of the file is told, by name, rather
- * than finding a spawn that quietly stopped pointing at anything.
+ * `roles` holds conversations, so no recipe is written there. A recipe that a
+ * wire spawns is carried INLINE in that wire -- one note per wire, because
+ * whether its host travelled is a fact about the wire (a remote host needs a
+ * work address the wire states or does not). A recipe no wire spawns is not
+ * in the file at all, and the note says exactly that instead of letting it
+ * vanish.
  */
-export function inlinedRecipeNotes(
+export function uncarriedRecipeNotes(
   members: readonly SessionCrewMember[],
   relays: readonly SessionRelay[],
 ): string[] {
-  const named = new Set(
-    relays.flatMap((relay) =>
-      relay.spawnSpec?.member ? [relay.spawnSpec.member] : [],
-    ),
-  )
-  return members
-    .filter(
-      (member) =>
-        member.sessionId === null &&
-        member.batonName !== null &&
-        named.has(member.batonName),
+  const notes: string[] = []
+  for (const member of members) {
+    if (member.sessionId !== null || member.batonName === null) continue
+    const wires = relays.filter(
+      (relay) => relay.spawnSpec?.member === member.batonName,
     )
-    .map((member) => {
-      const wire = relays.find(
-        (relay) => relay.spawnSpec?.member === member.batonName,
+    if (wires.length === 0) {
+      notes.push(
+        `The dynamic seat "${member.batonName}" is not in this file: it has no ` +
+          `conversation and no wire spawns it, and this file cannot carry a ` +
+          `seat without a conversation yet (MAR-3099).`,
       )
-      const hostTravelled =
-        wire?.spawnSpec != null && canCarrySeatHost(wire.spawnSpec, member)
-      return (
-        `The dynamic seat "${member.batonName}" is written into its wire's spawn ` +
-        `recipe: this file cannot carry a seat without a conversation yet ` +
-        `(MAR-3099).` +
-        (hostTravelled
-          ? ''
-          : ` Its host "${member.hostPolicy ?? 'local'}" stayed behind — a ` +
-            `remote host needs a work address this wire does not state.`)
+      continue
+    }
+    for (const wire of wires) {
+      const hostTravelled = canCarrySeatHost(wire.spawnSpec!, member)
+      notes.push(
+        `The dynamic seat "${member.batonName}" is written into the spawn ` +
+          `recipe of the wire "${wire.conditionToken ?? 'settled'}": this file ` +
+          `cannot carry a seat without a conversation yet (MAR-3099).` +
+          (hostTravelled
+            ? ''
+            : ` Its host "${member.hostPolicy ?? 'local'}" stayed behind on ` +
+              `this wire — a remote host needs a work address the wire does ` +
+              `not state.`),
       )
-    })
+    }
+  }
+  return notes
 }
 
 /** Whether a seat's host can travel in this wire's spawn spec (K). */

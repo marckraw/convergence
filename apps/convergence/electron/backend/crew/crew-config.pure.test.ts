@@ -1,12 +1,13 @@
 import { DEFAULT_CREW_MEMBER_SEAT } from './crew.types'
 import { crewImportRelayFields } from './crew-import.pure'
+import { normalizeRelaySpawnSpec } from '../relay/relay.pure'
 import Ajv from 'ajv'
 import { parse } from 'yaml'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   crewToConfig,
-  inlinedRecipeNotes,
+  uncarriedRecipeNotes,
   readCrewConfig,
   renderCrewYaml,
   crewExportSlug,
@@ -435,6 +436,15 @@ it('reads the exported recipe at runtime (mutation: refuse valid YAML)', () => {
 })
 
 const invalidRecipes: [string, (value: ReturnType<typeof parse>) => void][] = [
+  // MAR-3083 lap 4, N: the schema and the reader agree that `roles` holds no
+  // recipe. Mutation: widen the schema's enum back to `dynamic` and this row
+  // reads schema-valid while the runtime refuses it.
+  [
+    'roles.fable.kind',
+    (c) => {
+      c.roles.fable.kind = 'dynamic'
+    },
+  ],
   [
     'version',
     (c) => {
@@ -613,10 +623,17 @@ it.each(invalidRecipes)(
   },
 )
 
-it.each(['custom permissions', 'spawn and layout', 'empty crew'])(
+it.each([
+  'custom permissions',
+  'spawn and layout',
+  'empty crew',
+  'resident kind',
+])(
   'accepts schema-valid %s at runtime (mutation: refuse valid YAML)',
   (kind) => {
     const config = parse(liveCrewYaml)
+    // A role may say what it is; the only thing it can be is a conversation.
+    if (kind === 'resident kind') config.roles.fable.kind = 'resident'
     if (kind === 'custom permissions')
       config.roles.fable.permissions = {
         preset: 'custom',
@@ -1087,9 +1104,11 @@ describe('a spawn wire that names a seat', () => {
 
     const yaml = renderCrewYaml(
       config,
-      inlinedRecipeNotes([member, recipe], [spawningCrew as never]),
+      uncarriedRecipeNotes([member, recipe], [spawningCrew as never]),
     )
-    expect(yaml).toContain('The dynamic seat "errand" is written into its wire')
+    expect(yaml).toContain(
+      'The dynamic seat "errand" is written into the spawn recipe of the wire "BATON: errand"',
+    )
     expect(yaml).toContain('MAR-3099')
     expect(yaml).toContain('stayed behind')
     const read = readCrewConfig(yaml)
@@ -1125,7 +1144,7 @@ describe('a spawn wire that names a seat', () => {
       (config.wires[0]!.to as { spawn: { host: string } }).spawn.host,
     ).toBe('little-monster')
     expect(
-      inlinedRecipeNotes([member, recipe], [addressed as never])[0],
+      uncarriedRecipeNotes([member, recipe], [addressed as never])[0],
     ).not.toContain('stayed behind')
   })
 
@@ -1150,5 +1169,166 @@ describe('a spawn wire that names a seat', () => {
         (read.config.wires[0]!.to as { spawn: { member?: string } }).spawn
           .member,
     ).toBe('errand')
+  })
+})
+
+/**
+ * One encoding for `member`, from the door on (MAR-3083 lap 4, O). Seats are
+ * stored lowercased and the engine resolves through the same normalizer; the
+ * export compared the name raw, so a spec saying "Errand" fired correctly and
+ * exported as a reference to a seat the file does not carry.
+ */
+describe('a spawn spec naming a seat in another spelling', () => {
+  it('is normalized at the door, so the export inlines the recipe it names', () => {
+    const spec = normalizeRelaySpawnSpec({
+      executionHost: 'local',
+      providerId: 'codex',
+      name: 'Errand',
+      member: '  Errand  ',
+    })
+    // Mutation: trim only (lap 3) and this reads "Errand"...
+    expect(spec.member).toBe('errand')
+
+    const recipe = {
+      ...member,
+      sessionId: null,
+      batonName: 'errand',
+      kind: 'dynamic' as const,
+      providerId: 'claude-code',
+      model: 'claude-opus-5',
+      hostPolicy: 'local',
+    }
+    const config = crewToConfig(
+      crew,
+      [member, recipe],
+      [session],
+      [project],
+      [
+        {
+          id: 'r1',
+          crewId: 'c1',
+          sourceSessionId: session.id,
+          action: 'spawn',
+          targetSessionId: null,
+          conditionToken: 'BATON: errand',
+          instruction: null,
+          opener: null,
+          armed: true,
+          createdAt: 'x',
+          updatedAt: 'y',
+          spawnSpec: { ...spec, member: 'Errand' },
+        } as never,
+      ],
+    )
+    const to = config.wires[0]!.to as {
+      spawn: { member?: string; provider: string }
+    }
+
+    // ...and here the export writes a dangling `member: "Errand"` with the
+    // wire's own provider — the far side then records F's error on every
+    // firing.
+    expect(to.spawn.member).toBeUndefined()
+    expect(to.spawn.provider).toBe('claude-code')
+  })
+
+  it('refuses a recipe file that spells the name differently from the record', () => {
+    const yaml = renderCrewYaml(
+      crewToConfig(crew, [member], [session], [project], []),
+    ).replace(
+      'wires: []',
+      [
+        'wires:',
+        '  - { from: "fable", to: { spawn: { name: "Errand", member: "Errand", provider: "codex", model: null, effort: null, project: null, account: "default" } }, when: "BATON: errand", opener: "keep" }',
+      ].join('\n'),
+    )
+
+    // The reader derived from the record: a value the record would rewrite is
+    // a value the reader refuses, loudly, rather than importing it silently.
+    const read = readCrewConfig(yaml)
+    expect(read.ok ? null : read.reason).toContain('member')
+  })
+})
+
+/**
+ * Every recipe the file does not carry is named in the file (MAR-3083 lap 4,
+ * P). A recipe no wire spawns used to vanish without a word.
+ */
+describe('recipes the file does not carry', () => {
+  const unwired = {
+    ...member,
+    sessionId: null,
+    batonName: 'scout',
+    kind: 'dynamic' as const,
+    providerId: 'codex',
+    model: null,
+    hostPolicy: 'local',
+  }
+
+  it('names a recipe no wire spawns', () => {
+    const notes = uncarriedRecipeNotes([member, unwired], [])
+
+    // Mutation: note only the recipes a wire points at (lap 3) and this is
+    // empty — the seat is gone from the file with nothing said.
+    expect(notes).toEqual([
+      'The dynamic seat "scout" is not in this file: it has no conversation and no wire spawns it, and this file cannot carry a seat without a conversation yet (MAR-3099).',
+    ])
+  })
+
+  it('decides "stayed behind" per wire, not per recipe', () => {
+    const remote = {
+      ...unwired,
+      batonName: 'errand',
+      hostPolicy: 'little-monster',
+    }
+    const base = {
+      id: 'r',
+      crewId: 'c1',
+      sourceSessionId: session.id,
+      action: 'spawn',
+      targetSessionId: null,
+      instruction: null,
+      opener: null,
+      armed: true,
+      createdAt: 'x',
+      updatedAt: 'y',
+    }
+    const spec = normalizeRelaySpawnSpec({
+      executionHost: 'local',
+      providerId: 'codex',
+      name: 'Errand',
+      member: 'errand',
+    })
+    const addressed = {
+      ...base,
+      id: 'r2',
+      conditionToken: 'BATON: addressed',
+      spawnSpec: {
+        ...spec,
+        workAddress: {
+          mode: 'repository',
+          repository: 'git@github.com:marckraw/convergence.git',
+          branchName: null,
+          label: 'convergence',
+        },
+      },
+    }
+    const bare = {
+      ...base,
+      id: 'r1',
+      conditionToken: 'BATON: bare',
+      spawnSpec: spec,
+    }
+
+    const notes = uncarriedRecipeNotes([member, remote], [
+      bare,
+      addressed,
+    ] as never)
+
+    // Mutation: decide from the first wire only and both notes agree.
+    expect(notes).toHaveLength(2)
+    expect(notes[0]).toContain('"BATON: bare"')
+    expect(notes[0]).toContain('stayed behind')
+    expect(notes[1]).toContain('"BATON: addressed"')
+    expect(notes[1]).not.toContain('stayed behind')
   })
 })

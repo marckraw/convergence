@@ -114,7 +114,7 @@
             "enum": ["mastermind", "horse", "reviewer", "designer"]
           },
           "kind": {
-            "enum": ["resident", "dynamic"]
+            "enum": ["resident"]
           },
           "roleCard": {
             "type": "string"

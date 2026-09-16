@@ -12,6 +12,7 @@ import {
   normalizeRelayOpener,
   normalizeRelaySessionId,
   normalizeRelaySpawnSpec,
+  BUDGETED_OUTCOMES,
 } from './relay.pure'
 import {
   relayHopFromRow,
@@ -482,15 +483,25 @@ export class RelayService {
    * (MAR-3108).
    */
   hasCarriedRoleCard(flowRunId: string, targetSessionId: string): boolean {
+    // "Carried work" is `BUDGETED_OUTCOMES`, bound from its one owner rather
+    // than re-spelled in SQL -- the same move `run-history.service.ts` makes,
+    // under this file's own law about the list (MAR-3083 lap 4).
+    const outcomes = BUDGETED_OUTCOMES.map((_, index) => `@outcome${index}`)
     const row = this.db
       .prepare(
         `SELECT 1 FROM relay_hops
-          WHERE flow_run_id = ? AND target_session_id = ?
+          WHERE flow_run_id = @flowRunId AND target_session_id = @targetSessionId
             AND role_card_carried = 1
-            AND outcome IN ('delivered', 'queued')
+            AND outcome IN (${outcomes.join(', ')})
           LIMIT 1`,
       )
-      .get(flowRunId, targetSessionId)
+      .get({
+        flowRunId,
+        targetSessionId,
+        ...Object.fromEntries(
+          BUDGETED_OUTCOMES.map((value, index) => ['outcome' + index, value]),
+        ),
+      })
     return row !== undefined
   }
 

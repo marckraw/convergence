@@ -323,6 +323,30 @@ describe('the seat migration', () => {
     }
   })
 
+  /**
+   * A recipe's name has both halves of a key, like a conversation does
+   * (MAR-3083 lap 4, Q): the service refuses the name, and this index refuses
+   * the row whatever writes it. Partial, so residents may still share a name.
+   */
+  it('refuses a second recipe of the same name at the table, and lets distinct recipes coexist', () => {
+    const db = getDatabase()
+    db.prepare(
+      "INSERT INTO session_crews (id, name, position) VALUES ('c1', 'Night shift', 0)",
+    ).run()
+    const recipe = db.prepare(
+      `INSERT INTO session_crew_members (crew_id, session_id, baton_name, kind)
+       VALUES ('c1', NULL, ?, 'dynamic')`,
+    )
+    recipe.run('errand')
+    // Two recipes with different names, both with a NULL session: this is the
+    // session index's NULL tolerance, pinned where it matters.
+    expect(() => recipe.run('scout')).not.toThrow()
+
+    // Mutation: drop the partial index and this second "errand" lands — after
+    // which a removal by name deletes both.
+    expect(() => recipe.run('errand')).toThrow(/UNIQUE constraint failed/)
+  })
+
   it('refuses a second crew at the table, whatever wrote the row', () => {
     const db = getDatabase()
     seedWorld(db, ['s1'])

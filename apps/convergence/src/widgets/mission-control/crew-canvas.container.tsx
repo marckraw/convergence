@@ -131,6 +131,21 @@ interface CrewCanvasProps {
  * the switch stores a switch, adding a conversation stores a membership. The
  * engine is the only thing that ever delivers.
  */
+/**
+ * What a typed seat field sends to the door. A WIP limit goes as a number so
+ * `normalizeCrewLimit` can refuse `0` in its own words; a blank clears to the
+ * default, as every other seat field does.
+ */
+function seatDraftPatch(
+  field: SeatDraftField,
+  typed: string,
+): Parameters<typeof sessionCrewApi.setMemberSeat>[2] {
+  if (field === 'wipLimit') {
+    return { wipLimit: typed.trim() === '' ? null : Number(typed) }
+  }
+  return { [field]: typed.trim() || null }
+}
+
 export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const crewGroups = useMemo(
     () => groups.filter((group) => group.crew !== null),
@@ -744,18 +759,13 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       const key = keyForRef(member)
       const typed = seatDrafts[key]?.[field]
       if (typed === undefined) return
-      if (field === 'wipLimit') {
-        // Sent as typed. Turning `0` or `abc` into null here read back as 1
-        // with nothing said; the door already owns that sentence
-        // (`normalizeCrewLimit`), and the draft stays until it is taken
-        // (MAR-3083 lap 3, M).
-        const parsed = typed.trim() === '' ? null : Number(typed)
-        const accepted = await editSeat(member, { wipLimit: parsed })
-        if (accepted) dropSeatDraft(key, field)
-        return
-      }
-      dropSeatDraft(key, field)
-      await editSeat(member, { [field]: typed.trim() || null })
+      // ONE path for every typed field (MAR-3083 lap 4, R): the value goes to
+      // the door as typed, and the draft is forgotten only once the door has
+      // taken it. Dropping it first lost the typing on any refusal -- a role
+      // card over the limit vanished with its sentence -- while the WIP field
+      // beside it already kept its draft.
+      const accepted = await editSeat(member, seatDraftPatch(field, typed))
+      if (accepted) dropSeatDraft(key, field)
     },
     [seatDrafts, editSeat, keyForRef, dropSeatDraft],
   )

@@ -5,6 +5,7 @@ export {
   REMOTE_SPAWN_PLACE_REQUIRED,
 } from '../../../src/shared/lib/spawn-spec.pure'
 import { namesThisMachine } from '../../../src/shared/lib/execution-host-id.pure'
+import { normalizeCrewBatonName } from '../crew/crew.pure'
 import { decodeSessionWorkAddress } from '../../../src/shared/lib/work-address.pure'
 import type {
   RelaySeat,
@@ -126,7 +127,12 @@ export function normalizeRelaySpawnSpec(
     model: spec.model?.trim() ? spec.model.trim() : null,
     effort: spec.effort?.trim() ? spec.effort.trim() : null,
     name,
-    member: spec.member?.trim() ? spec.member.trim() : null,
+    // Normalized ONCE, here, with the record's own baton-name rule
+    // (MAR-3083 lap 4, O): seats are stored lowercased, the engine resolves
+    // through that normalizer, and the export used to compare the trimmed
+    // spelling raw -- so `member: "Errand"` fired correctly and exported as a
+    // dangling reference. Every compare downstream is now on one encoding.
+    member: normalizeCrewBatonName(spec.member),
     // Not validated against the enrolled accounts here: a wire may name an
     // account that is later removed, and refusing to LOAD such a relay would
     // hide the wire the user needs to see in order to fix it. The engine
