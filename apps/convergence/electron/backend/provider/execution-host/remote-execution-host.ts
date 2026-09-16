@@ -2235,12 +2235,9 @@ class RemoteSessionRun {
    */
   private enqueueCommand(command: ExecutionHostCommand): void {
     if (this.stopped || this.dead) {
-      this.emitter.addNote({
-        text: 'Remote session command was not delivered: the remote run is no longer active.',
-        level: 'error',
-      })
-      this.emitter.patchSession({ attention: 'failed' })
-      for (const listener of this.attentionListeners) listener('failed')
+      this.reportUndeliveredCommand(
+        'Remote session command was not delivered: the remote run is no longer active.',
+      )
       return
     }
     if (!this.started) {
@@ -2280,24 +2277,52 @@ class RemoteSessionRun {
       )
     } catch (error) {
       if (command.kind === 'stop') return
-      // A lost command must not be silent: surface attention with a note so
-      // the user can retry, but keep the session alive — the remote run may
-      // still be healthy.
-      try {
-        this.emitter.addNote({
-          text: `Remote session command was not delivered: ${describeRemoteExecutionHostFailure(error)}`,
-          level: 'error',
-        })
-      } catch (noteError) {
-        // The note is best-effort reporting of a delivery failure, never a
-        // failure of its own: on a refusing local record the session boundary
-        // already logged and noted the recording loss (MAR-3023), and
-        // throwing from inside this catch would only turn a report into an
-        // unhandled rejection.
-        if (!(noteError instanceof RecordingError)) throw noteError
-      }
-      this.emitter.patchSession({ attention: 'failed' })
-      for (const listener of this.attentionListeners) listener('failed')
+      this.reportUndeliveredCommand(
+        `Remote session command was not delivered: ${describeRemoteExecutionHostFailure(error)}`,
+      )
+    }
+  }
+
+  /**
+   * A lost command must not be silent: surface attention with a note so the
+   * user can retry, but keep the session alive — the remote run may still be
+   * healthy.
+   *
+   * The whole report is tolerant of a refusing local record (MAR-3023 E): it
+   * runs inside `postCommand`'s catch under a `void`, and on the dead-run path
+   * inside a send, so a note or an attention write that throws would become an
+   * unhandled rejection or a failed send — a report turned into a failure of
+   * its own. Each write that cannot be recorded is logged and the rest of the
+   * report still runs.
+   *
+   * Logged, never announced as an accepted turn's loss: this path is reached
+   * only when the command was NOT delivered, so the boundary's note — "the
+   * message was sent; do not resend it" — would be false here, and would talk
+   * the user out of the one retry that is right (the rule of MAR-3023 A: the
+   * witness of acceptance is the far side's answer, and here it said no).
+   */
+  private reportUndeliveredCommand(text: string): void {
+    this.recordTolerantly('the undelivered-command note', () =>
+      this.emitter.addNote({
+        text,
+        level: 'error',
+      }),
+    )
+    this.recordTolerantly('the undelivered-command attention', () =>
+      this.emitter.patchSession({ attention: 'failed' }),
+    )
+    for (const listener of this.attentionListeners) listener('failed')
+  }
+
+  private recordTolerantly(label: string, write: () => void): void {
+    try {
+      write()
+    } catch (error) {
+      if (!(error instanceof RecordingError)) throw error
+      console.error(
+        `[remote-execution-host] A command was not delivered, and ${label} could not be recorded either (session ${this.params.config.sessionId})`,
+        error,
+      )
     }
   }
 

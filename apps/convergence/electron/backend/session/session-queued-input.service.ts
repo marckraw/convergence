@@ -66,6 +66,10 @@ interface SessionQueuedInputServiceDeps {
  * orchestration does not own SQL details for follow-up, steer, or interrupt
  * inputs.
  */
+/** What a launch can honestly say about an input a restart left `dispatching`. */
+export const RESTARTED_WHILE_DISPATCHING_ERROR =
+  "App restarted before this input's delivery was recorded. It may already have reached the provider: check the conversation before sending it again."
+
 export class SessionQueuedInputService {
   private readonly idFactory: () => string
   private readonly now: () => string
@@ -419,16 +423,19 @@ export class SessionQueuedInputService {
       .all() as SessionQueuedInputRow[]
 
     const timestamp = this.now()
+    // `dispatching` does not say which side of acceptance the restart hit: a
+    // turn can be accepted and its 'sent' mark refused by the local record
+    // (MAR-3023 G). The message claims only what the row knows.
     const stmt = this.db.prepare(
       `UPDATE session_queued_inputs
        SET state = 'failed',
-           error = 'App restarted before this input was accepted.',
+           error = ?,
            updated_at = ?
        WHERE id = ?`,
     )
 
     for (const row of rows) {
-      stmt.run(timestamp, row.id)
+      stmt.run(RESTARTED_WHILE_DISPATCHING_ERROR, timestamp, row.id)
     }
   }
 

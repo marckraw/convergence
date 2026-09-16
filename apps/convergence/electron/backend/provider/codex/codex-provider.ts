@@ -1005,6 +1005,13 @@ export class CodexProvider implements Provider {
      * turn to cancel whose id has simply not arrived yet (F1).
      */
     let pendingTurnStart: Promise<string | null> | null = null
+    /**
+     * How many `turn/start`s the server has taken on this handle (MAR-3023 A):
+     * bumped when one is acknowledged, or when reconciliation finds one landed.
+     * A send reads it before and after its turn, so its catch can tell a
+     * recording failure AFTER the provider took the turn from one before it.
+     */
+    let acknowledgedTurnStarts = 0
     let deadInteractionNoted = false
 
     // Map of pending approval request IDs (JSON-RPC id → approval response plan)
@@ -1389,6 +1396,7 @@ export class CodexProvider implements Provider {
 
       try {
         const providerTurnId = await acknowledgement
+        acknowledgedTurnStarts += 1
         if (providerTurnId) {
           activeProviderTurnId = providerTurnId
         }
@@ -1449,6 +1457,8 @@ export class CodexProvider implements Provider {
      * in the transcript.
      */
     function adoptLandedTurn(turn: CodexLandedTurn | null): void {
+      // The server says the turn landed: that is its acknowledgement.
+      acknowledgedTurnStarts += 1
       sessionEmitter.addNote({
         text: 'The connection dropped after Codex had already taken this message, so it was not sent again. Its answer continues in the next reply.',
         level: 'warning',
@@ -1747,6 +1757,7 @@ export class CodexProvider implements Provider {
       }
 
       const skillInputs: CodexSkillInput[] = skillResolution.skillInputs
+      const acknowledgedBeforeThisTurn = acknowledgedTurnStarts
 
       try {
         const parts = await loadCodexParts(input.attachments)
@@ -1765,12 +1776,18 @@ export class CodexProvider implements Provider {
         )
       } catch (err) {
         if (err instanceof HandoffRefusedError) throw err
-        if (err instanceof RecordingError) {
-          // `turn/start` above was acknowledged, so the provider is working;
-          // only the local recording failed. The session boundary already
-          // recorded that loss as the turn's own outcome (fact + note), so
-          // concluding `failed` here would report a working turn as dead —
-          // the one dishonesty this catch must never commit (MAR-3023).
+        if (
+          err instanceof RecordingError &&
+          acknowledgedTurnStarts > acknowledgedBeforeThisTurn
+        ) {
+          // The witness is the acknowledgement, not this catch's position: the
+          // try also spans `ensureThread` and the missing-thread recovery,
+          // whose writes run BEFORE `turn/start`. Only once the server took
+          // the turn is a recording failure the turn's own outcome — announced
+          // (fact + note) and never `failed`, because the provider is working.
+          // Before it, the message never left, and today's failure path below
+          // is the honest one (MAR-3023 A).
+          err.announce()
           return
         }
         patchUserMessageSkills(

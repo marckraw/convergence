@@ -840,3 +840,38 @@ it('MAR-3023 R5: a broad refusal still resolves the door and logs both failures'
   ).toHaveLength(1)
   errors.mockRestore()
 })
+
+it('MAR-3023 A: a recording refused before turn/start is acknowledged fails the send honestly — no "do not resend" note', async () => {
+  await first('account-b')
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  // The thread is gone on the server, so `turn/start` is refused and the
+  // provider writes its missing-thread recovery note BEFORE any turn is
+  // acknowledged — and the local record refuses exactly that note.
+  missing = 'turn/start'
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_recovery_note
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'note'
+         AND json_extract(NEW.payload_json, '$.text') LIKE 'Codex thread was no longer available%'
+    BEGIN SELECT RAISE(ABORT, 'fixture recovery note refused'); END`)
+
+  await send('account-b', 'never left')
+  await vi.waitFor(() =>
+    expect(
+      hosts
+        .flatMap((h) => h.server.requests)
+        .filter((r) => r.method === 'turn/start'),
+    ).toHaveLength(2),
+  )
+  await new Promise((resolve) => setTimeout(resolve, 50))
+
+  // Nothing claims the message was sent. (Mutation: let the recording branch
+  // cover the whole try → it announces the loss → a fact and a "do not
+  // resend" note appear.)
+  expect(failures).toEqual([])
+  expect(recordingFailedNotes()).toEqual([])
+  // The message never reached a turn: the send fails as it does today.
+  await vi.waitFor(() => expect(service.getById(id)?.status).toBe('failed'))
+  errors.mockRestore()
+})

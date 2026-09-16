@@ -2541,7 +2541,7 @@ describe('SessionService', () => {
     getDatabase()
       .prepare(
         `UPDATE session_queued_inputs
-         SET state = 'failed', error = 'App restarted before this input was accepted.'
+         SET state = 'failed', error = 'App restarted before this input''s delivery was recorded. It may already have reached the provider: check the conversation before sending it again.'
          WHERE id = ?`,
       )
       .run(id)
@@ -3193,7 +3193,8 @@ describe('SessionService', () => {
       {
         id: 'queued-stale',
         state: 'failed',
-        error: 'App restarted before this input was accepted.',
+        error:
+          "App restarted before this input's delivery was recorded. It may already have reached the provider: check the conversation before sending it again.",
       },
     ])
   })

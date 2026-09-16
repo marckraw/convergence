@@ -1585,9 +1585,10 @@ export class ClaudeCodeProvider implements Provider {
         // Acceptance is final (MAR-3023): the turn is bound and the
         // connection's account may already have moved for it, so a failure to
         // RECORD the user message must not kill a turn the provider is about
-        // to run. A recording failure is the boundary's outcome (fact + note
-        // already emitted by the session); the turn continues without a local
-        // item id, and every later writer already guards on the id being null.
+        // to run. This catch is where that is known, so it announces the loss
+        // as the turn's own outcome (fact + note); the turn continues without
+        // a local item id, and every later writer already guards on the id
+        // being null.
         let userMessageItemId: string | null
         try {
           userMessageItemId =
@@ -1603,6 +1604,7 @@ export class ClaudeCodeProvider implements Provider {
               : (options?.userMessageItemId ?? null)
         } catch (error) {
           if (!(error instanceof RecordingError)) throw error
+          error.announce()
           userMessageItemId = null
         }
         if (!skillResolution.ok) {

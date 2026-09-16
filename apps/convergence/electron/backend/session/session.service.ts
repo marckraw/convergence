@@ -7,7 +7,7 @@ import { answerWindowResult } from './answer-window.pure'
 import { HarnessEvidenceService } from './harness-evidence.service'
 import type { ParallelWorkCounts } from '../../../src/shared/lib/parallel-work.pure'
 import { mkdirSync } from 'fs'
-import type Database from 'better-sqlite3'
+import Database from 'better-sqlite3'
 import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
 import type {
   ConversationItemRow,
@@ -310,6 +310,20 @@ export class SessionService {
     string,
     { dispatchIds: string[]; turnId: string | null }
   >()
+  /**
+   * A turn id minted for a user message whose row could not be written
+   * (MAR-3023 F). Minted in memory before the write, so the turn's later
+   * items — and the boundary's note — carry the turn they belong to instead
+   * of inheriting the previous turn's id from the last row that did land.
+   * Held until the next user message is recorded.
+   */
+  private readonly unrecordedTurnIds = new Map<string, string>()
+  /**
+   * Queued inputs a turn accepted whose 'sent' mark could not be written
+   * (MAR-3023 G): session id -> queued input ids, re-attempted at the turn's
+   * settle, the next write this session makes to the same database.
+   */
+  private readonly unmarkedSentInputs = new Map<string, Set<string>>()
   private pendingSettleEvents: SessionSettledEvent[] = []
   private settleFlushScheduled = false
   private quitting = false
@@ -892,39 +906,39 @@ export class SessionService {
    * is its own outcome — logged, emitted as a fact, noted on the conversation
    * best-effort — and never a failed send. Wraps a door-owned write
    * (the buffered receipt publication, the drain's 'sent' marks): on a
-   * failure it returns; pre-acceptance refusals (`HandoffRefusedError`,
-   * `ProviderBusyError`) still leave, because a turn that was never accepted
-   * owes the caller its refusal.
+   * failure it announces and returns; pre-acceptance refusals
+   * (`HandoffRefusedError`, `ProviderBusyError`) still leave, because a turn
+   * that was never accepted owes the caller its refusal.
    */
   private recordAcceptedTurn(
     sessionId: string,
     dispatchId: string | null,
     label: string,
     write: () => void,
-  ): void {
+  ): boolean {
     try {
       write()
+      return true
     } catch (error) {
       if (error instanceof HandoffRefusedError || isProviderBusyError(error))
         throw error
-      this.announceAcceptedRecordingFailure(
-        sessionId,
-        error instanceof RecordingError
-          ? error
-          : new RecordingError(label, { cause: error }),
-      )
+      this.recordingErrorFor(sessionId, label, error).announce()
+      return false
     }
   }
 
   /**
-   * Tags the persistence writes of `applyDelta` (MAR-3023). Unlike
-   * `recordAcceptedTurn` this RETHROWS the tagged error: the write sits on a
-   * provider's own call stack, and the recording rules live in the catches
-   * that see it — Codex's post-ack catch branches on `instanceof`, Claude's
-   * post-accept write continues its turn, the remote delivery-failure note
-   * cannot throw out of its own failure handling. No dispatch attached means
-   * the turn was never accepted here, so nothing is announced — the throw
-   * keeps today's propagation, only typed.
+   * Tags one persistence STATEMENT of the recording funnel (MAR-3023): the
+   * INSERT/UPDATE inside `addConversationItem`, `patchConversationItem`,
+   * `applySessionPatch` and the harness evidence write — never the method
+   * around it, so a serializer, a row parser or a turn-capture prologue that
+   * throws keeps its own raw error and is never mistaken for a lost record.
+   *
+   * It only tags and rethrows. Whether the turn was accepted is known by the
+   * catch that sees the throw, not here — Codex's pre-ack writes run with a
+   * dispatch already attached — so the catch that swallows the loss as an
+   * accepted turn's outcome announces it (`RecordingError.announce`), and a
+   * tagged error that propagates is an honest failure that announces nothing.
    */
   private tagAcceptedRecording<T>(
     sessionId: string,
@@ -934,32 +948,38 @@ export class SessionService {
     try {
       return write()
     } catch (error) {
-      const recording =
-        error instanceof RecordingError
-          ? error
-          : new RecordingError(label, { cause: error })
-      if (
-        this.turnDispatchIds.get(sessionId)?.size ||
-        this.lastSettledTurn.has(sessionId)
-      ) {
-        this.announceAcceptedRecordingFailure(sessionId, recording)
-      }
-      throw recording
+      throw this.recordingErrorFor(sessionId, label, error)
     }
   }
 
+  private recordingErrorFor(
+    sessionId: string,
+    label: string,
+    error: unknown,
+  ): RecordingError {
+    if (error instanceof RecordingError) return error
+    return new RecordingError(label, {
+      cause: error,
+      report: (recording) =>
+        this.announceAcceptedRecordingFailure(sessionId, recording),
+    })
+  }
+
   /**
-   * Records one lost recording exactly once: a log with the write's label, a
-   * fact per attached dispatch, and a best-effort note. The note write is
-   * itself inside a try — a second persistence failure is logged, never
-   * thrown (MAR-3023 R5).
+   * Records one lost recording: a log with the write's label, a fact per
+   * attached dispatch, and a best-effort note. Reached once per error, through
+   * `RecordingError.announce`. The note write is itself inside a try — a
+   * second persistence failure is logged, never thrown (MAR-3023 R5).
+   *
+   * The dispatches named are the ones attached to the turn in flight, or —
+   * with none attached — the turn that settled last, for as long as its tail
+   * lasts: the next turn's user message, the next attached dispatch, or the
+   * session's deletion ends it (C).
    */
   private announceAcceptedRecordingFailure(
     sessionId: string,
     recording: RecordingError,
   ): void {
-    if (recording.announced) return
-    recording.announced = true
     console.error(
       `[session] Accepted turn could not record ${recording.label} for ${sessionId}`,
       recording.cause,
@@ -969,8 +989,20 @@ export class SessionService {
       attached.length > 0 ? null : (this.lastSettledTurn.get(sessionId) ?? null)
     const dispatchIds =
       attached.length > 0 ? attached : (settled?.dispatchIds ?? [])
-    if (dispatchIds.length === 0) return
-    const turnId = this.activeTurnIds.get(sessionId) ?? settled?.turnId ?? null
+    if (dispatchIds.length === 0) {
+      // A catch decided this loss belonged to an accepted turn, and there is
+      // no turn to name: no fact, no note. Loud, because the only way here is
+      // a door announcing outside the turn it thinks it owns.
+      console.error(
+        `[session] MAR-3023: a recording loss (${recording.label}) for ${sessionId} was announced with no accepted dispatch attached or settling — no fact and no note were written; the door that announced it is outside an accepted turn`,
+      )
+      return
+    }
+    const turnId =
+      this.unrecordedTurnIds.get(sessionId) ??
+      this.activeTurnIds.get(sessionId) ??
+      settled?.turnId ??
+      null
     const providerRunning = this.activeHandles.has(sessionId)
     const at = new Date().toISOString()
     for (const dispatchId of dispatchIds) {
@@ -1025,7 +1057,62 @@ export class SessionService {
     }
   }
 
-  /** @internal exposed for tests; do not call from production code. */
+  /**
+   * The drain's 'sent' mark for a queued input its turn accepted (MAR-3023 G).
+   * A refused mark is the turn's lost recording, and it is not left there: a
+   * row still reading `dispatching` is failed at the next launch as never
+   * accepted, which only moves the dishonesty. So the input is remembered and
+   * the mark re-attempted when the turn settles.
+   */
+  private markQueuedInputSent(
+    sessionId: string,
+    dispatchId: string | null,
+    queuedInputId: string,
+  ): void {
+    const marked = this.recordAcceptedTurn(
+      sessionId,
+      dispatchId,
+      'the queued input sent mark',
+      () => this.queuedInputs.patch(queuedInputId, 'sent'),
+    )
+    if (marked) return
+    const unmarked = this.unmarkedSentInputs.get(sessionId)
+    if (unmarked) unmarked.add(queuedInputId)
+    else this.unmarkedSentInputs.set(sessionId, new Set([queuedInputId]))
+  }
+
+  /**
+   * Re-attempts the 'sent' marks a turn could not write, at its settle — the
+   * settle itself just wrote to the same database. A mark that fails again
+   * stays remembered for the next settle, and is logged: its row reads
+   * `dispatching`, and the launch recovery says so honestly (G).
+   */
+  private retryUnmarkedSentInputs(sessionId: string): void {
+    const unmarked = this.unmarkedSentInputs.get(sessionId)
+    if (!unmarked) return
+    for (const queuedInputId of [...unmarked]) {
+      try {
+        this.queuedInputs.patch(queuedInputId, 'sent')
+        unmarked.delete(queuedInputId)
+      } catch (error) {
+        console.error(
+          `[session] The sent mark for queued input ${queuedInputId} of ${sessionId} still could not be recorded at the turn's settle`,
+          error,
+        )
+      }
+    }
+    if (unmarked.size === 0) this.unmarkedSentInputs.delete(sessionId)
+  }
+
+  /**
+   * @internal exposed for tests; do not call from production code.
+   *
+   * Composes two steps the real doors take separately: it attaches the
+   * dispatch to the turn (`attachDispatchToTurn`, which a door does at
+   * acceptance) and then runs the write through `recordAcceptedTurn` (which a
+   * door does afterwards, for its publication or its 'sent' mark). A test of
+   * the boundary alone needs both; a test of a door must not use this.
+   */
   recordAcceptedTurnForTest(
     sessionId: string,
     dispatchId: string | null,
@@ -1897,6 +1984,10 @@ export class SessionService {
       ...queuedReceipts,
       ...this.takeTurnDispatchIds(id),
     ])
+    // Nothing can be recorded against a deleted conversation (C, F, G).
+    this.lastSettledTurn.delete(id)
+    this.unrecordedTurnIds.delete(id)
+    this.unmarkedSentInputs.delete(id)
     if (this.attachments) {
       void this.attachments.deleteForSession(id)
     }
@@ -2941,15 +3032,17 @@ export class SessionService {
     if (!dispatchId) return
     const held = this.turnDispatchIds.get(sessionId)
     if (held?.has(dispatchId)) {
-      // A dispatch already attached to this turn is a re-delivery of a
-      // receipt the turn consumed (MAR-3023): attaching it again would let a
-      // later settle claim the same delivery twice, so the re-attach is a
-      // logged no-op rather than silent.
+      // Not a guard: adding an id a Set already holds was a no-op before this
+      // branch existed, and it still is. What the branch adds is the log — a
+      // receipt re-attached to the turn that consumed it is a door delivering
+      // twice, and that is worth seeing (MAR-3023).
       console.error(
         `[session] Dispatch ${dispatchId} is already attached to ${sessionId}'s turn`,
       )
       return
     }
+    // A new dispatch is a new turn's: the settled turn's tail ends here (C).
+    this.lastSettledTurn.delete(sessionId)
     if (held) held.add(dispatchId)
     else this.turnDispatchIds.set(sessionId, new Set([dispatchId]))
   }
@@ -2962,7 +3055,10 @@ export class SessionService {
     const dispatchIds = [...held]
     this.lastSettledTurn.set(sessionId, {
       dispatchIds,
-      turnId: this.activeTurnIds.get(sessionId) ?? null,
+      turnId:
+        this.unrecordedTurnIds.get(sessionId) ??
+        this.activeTurnIds.get(sessionId) ??
+        null,
     })
     return dispatchIds
   }
@@ -3170,11 +3266,28 @@ export class SessionService {
         )
           this.flushPendingConversationPatchesForSession(sessionId)
         const evidence = new HarnessEvidenceService(this.db)
-        const renamed = evidence.apply(
-          sessionId,
-          this.activeTurnIds.get(sessionId) ?? null,
-          delta.evidence,
-        )
+        let renamed: ReturnType<HarnessEvidenceService['apply']>
+        try {
+          renamed = evidence.apply(
+            sessionId,
+            this.activeTurnIds.get(sessionId) ?? null,
+            delta.evidence,
+          )
+        } catch (error) {
+          // The evidence write is one transaction in its own service, so it
+          // is tagged by the error's origin rather than by statement: only a
+          // refusal from SQLite itself is a lost recording; a fold or a parse
+          // that throws keeps its raw error (MAR-3023 B, D). Evidence arrives
+          // on a provider's event stream for a turn it is running, so the loss
+          // is announced here and never thrown into that stream.
+          if (!(error instanceof Database.SqliteError)) throw error
+          this.recordingErrorFor(
+            sessionId,
+            'the harness evidence',
+            error,
+          ).announce()
+          return
+        }
         this.scheduleEvidenceUpdate(sessionId)
         if (renamed) {
           const rows = this.db
@@ -3239,15 +3352,10 @@ export class SessionService {
       }
 
       case 'conversation.item.add': {
-        const item = this.tagAcceptedRecording(
+        const item = this.addConversationItem(
           sessionId,
-          'the conversation item',
-          () =>
-            this.addConversationItem(
-              sessionId,
-              delta.item,
-              delta.providerAccountId,
-            ),
+          delta.item,
+          delta.providerAccountId,
         )
         if (!item) return
         this.handleAssistantNaming(sessionId, item)
@@ -3272,11 +3380,7 @@ export class SessionService {
         const patch = pending
           ? this.mergeConversationPatch(pending.patch, delta.patch)
           : delta.patch
-        const item = this.tagAcceptedRecording(
-          sessionId,
-          'the conversation item patch',
-          () => this.patchConversationItem(sessionId, delta.itemId, patch),
-        )
+        const item = this.patchConversationItem(sessionId, delta.itemId, patch)
         if (!item) return
         this.notifySessionChange(sessionId, {
           sessionId,
@@ -3347,7 +3451,17 @@ export class SessionService {
 
     const timer = setTimeout(() => {
       this.pendingConversationPatchTimers.delete(key)
-      this.flushPendingConversationPatchByKey(key)
+      try {
+        this.flushPendingConversationPatchByKey(key)
+      } catch (error) {
+        // Nobody is on this stack to catch it: a timer's throw is an uncaught
+        // main-process exception. A lost recording is already announced
+        // inside the flush; anything else is logged here (MAR-3023 B).
+        console.error(
+          `[session] Deferred conversation patch flush failed for ${sessionId}`,
+          error,
+        )
+      }
     }, CONVERSATION_PATCH_FLUSH_MS)
     if (typeof timer.unref === 'function') {
       timer.unref()
@@ -3400,11 +3514,23 @@ export class SessionService {
       this.pendingConversationPatchTimers.delete(key)
     }
 
-    const item = this.patchConversationItem(
-      pending.sessionId,
-      pending.itemId,
-      pending.patch,
-    )
+    let item: ConversationItem | null
+    try {
+      item = this.patchConversationItem(
+        pending.sessionId,
+        pending.itemId,
+        pending.patch,
+      )
+    } catch (error) {
+      // A deferred flush runs from a timer, or inside a settle, for a turn the
+      // provider is streaming: a refused write is that turn's lost recording,
+      // announced here — thrown from a timer it would be an uncaught
+      // main-process exception, and thrown from a settle it would stop the
+      // status from landing (MAR-3023 B).
+      if (!(error instanceof RecordingError)) throw error
+      error.announce()
+      return
+    }
     if (!item) return
     this.notifyConversationPatch({
       sessionId: pending.sessionId,
@@ -3467,7 +3593,18 @@ export class SessionService {
     const isUserMessage =
       itemDraft.kind === 'message' &&
       (itemDraft as { actor?: unknown }).actor === 'user'
-    const turnId = isUserMessage ? randomUUID() : (latest?.turn_id ?? null)
+    // Minted in memory BEFORE the row is written (MAR-3023 F): if the write
+    // is refused, the turn still exists at the provider, and every later item
+    // of it must carry its id — not the previous turn's, read back from the
+    // last row that did land.
+    const turnId = isUserMessage
+      ? randomUUID()
+      : (this.unrecordedTurnIds.get(sessionId) ?? latest?.turn_id ?? null)
+    if (isUserMessage) {
+      this.unrecordedTurnIds.set(sessionId, turnId!)
+      // A new turn begins: the settled turn's tail ends here (C).
+      this.lastSettledTurn.delete(sessionId)
+    }
 
     let item = {
       ...itemDraft,
@@ -3478,45 +3615,51 @@ export class SessionService {
 
     const insertRow = conversationItemToInsertRow(item)
 
-    this.db
-      .prepare(
-        `INSERT INTO session_conversation_items (
-           id,
-           session_id,
-           sequence,
-           turn_id,
-           agent_run_id,
-           task_id,
-           kind,
-           state,
-           payload_json,
-           provider_item_id,
-           provider_event_type,
-           created_at,
-           updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        insertRow.id,
-        insertRow.sessionId,
-        insertRow.sequence,
-        insertRow.turnId,
-        insertRow.agentRunId,
-        insertRow.taskId,
-        insertRow.kind,
-        insertRow.state,
-        insertRow.payloadJson,
-        insertRow.providerItemId,
-        insertRow.providerEventType,
-        insertRow.createdAt,
-        insertRow.updatedAt,
-      )
+    this.tagAcceptedRecording(sessionId, 'the conversation item', () =>
+      this.db
+        .prepare(
+          `INSERT INTO session_conversation_items (
+             id,
+             session_id,
+             sequence,
+             turn_id,
+             agent_run_id,
+             task_id,
+             kind,
+             state,
+             payload_json,
+             provider_item_id,
+             provider_event_type,
+             created_at,
+             updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          insertRow.id,
+          insertRow.sessionId,
+          insertRow.sequence,
+          insertRow.turnId,
+          insertRow.agentRunId,
+          insertRow.taskId,
+          insertRow.kind,
+          insertRow.state,
+          insertRow.payloadJson,
+          insertRow.providerItemId,
+          insertRow.providerEventType,
+          insertRow.createdAt,
+          insertRow.updatedAt,
+        ),
+    )
 
-    this.db
-      .prepare(
-        'UPDATE sessions SET last_sequence = ?, conversation_version = 2, updated_at = ? WHERE id = ?',
-      )
-      .run(nextSequence, item.updatedAt, sessionId)
+    this.tagAcceptedRecording(sessionId, 'the conversation item', () =>
+      this.db
+        .prepare(
+          'UPDATE sessions SET last_sequence = ?, conversation_version = 2, updated_at = ? WHERE id = ?',
+        )
+        .run(nextSequence, item.updatedAt, sessionId),
+    )
+
+    if (isUserMessage) this.unrecordedTurnIds.delete(sessionId)
 
     if (isUserMessage && this.turnCapture && turnId) {
       this.activeTurnIds.set(sessionId, turnId)
@@ -3588,37 +3731,41 @@ export class SessionService {
     } as ConversationItem
     const row = conversationItemToInsertRow(merged)
 
-    this.db
-      .prepare(
-        `UPDATE session_conversation_items
-         SET turn_id = ?,
-             agent_run_id = ?,
-             task_id = ?,
-             kind = ?,
-             state = ?,
-             payload_json = ?,
-             provider_item_id = ?,
-             provider_event_type = ?,
-             updated_at = ?
-         WHERE session_id = ? AND id = ?`,
-      )
-      .run(
-        row.turnId,
-        row.agentRunId,
-        row.taskId,
-        row.kind,
-        row.state,
-        row.payloadJson,
-        row.providerItemId,
-        row.providerEventType,
-        row.updatedAt,
-        sessionId,
-        itemId,
-      )
+    this.tagAcceptedRecording(sessionId, 'the conversation item patch', () =>
+      this.db
+        .prepare(
+          `UPDATE session_conversation_items
+           SET turn_id = ?,
+               agent_run_id = ?,
+               task_id = ?,
+               kind = ?,
+               state = ?,
+               payload_json = ?,
+               provider_item_id = ?,
+               provider_event_type = ?,
+               updated_at = ?
+           WHERE session_id = ? AND id = ?`,
+        )
+        .run(
+          row.turnId,
+          row.agentRunId,
+          row.taskId,
+          row.kind,
+          row.state,
+          row.payloadJson,
+          row.providerItemId,
+          row.providerEventType,
+          row.updatedAt,
+          sessionId,
+          itemId,
+        ),
+    )
 
-    this.db
-      .prepare('UPDATE sessions SET updated_at = ? WHERE id = ?')
-      .run(merged.updatedAt, sessionId)
+    this.tagAcceptedRecording(sessionId, 'the conversation item patch', () =>
+      this.db
+        .prepare('UPDATE sessions SET updated_at = ? WHERE id = ?')
+        .run(merged.updatedAt, sessionId),
+    )
 
     return merged
   }
@@ -3760,6 +3907,7 @@ export class SessionService {
         // consumed which input (MAR-2759).
         dispatchIds: this.takeTurnDispatchIds(sessionId),
       })
+      this.retryUnmarkedSentInputs(sessionId)
     }
   }
 
@@ -4255,12 +4403,7 @@ export class SessionService {
           if (accepted) return
           accepted = true
           this.attachDispatchToTurn(sessionId, item.dispatchId)
-          this.recordAcceptedTurn(
-            sessionId,
-            item.dispatchId,
-            'the queued input sent mark',
-            () => this.queuedInputs.patch(item.id, 'sent'),
-          )
+          this.markQueuedInputSent(sessionId, item.dispatchId, item.id)
         }
         // The mute the user chose when they wrote this, not the composer's
         // state now -- the toggle reset the moment they pressed send.
@@ -4323,12 +4466,7 @@ export class SessionService {
           queuedInputId: item.id,
         })
         this.attachDispatchToTurn(sessionId, item.dispatchId)
-        this.recordAcceptedTurn(
-          sessionId,
-          item.dispatchId,
-          'the queued input sent mark',
-          () => this.queuedInputs.patch(item.id, 'sent'),
-        )
+        this.markQueuedInputSent(sessionId, item.dispatchId, item.id)
         return
       }
 
@@ -4350,12 +4488,7 @@ export class SessionService {
       )
       const receipt = pending ? await pending : undefined
       this.attachDispatchToTurn(sessionId, item.dispatchId)
-      this.recordAcceptedTurn(
-        sessionId,
-        item.dispatchId,
-        'the queued input sent mark',
-        () => this.queuedInputs.patch(item.id, 'sent'),
-      )
+      this.markQueuedInputSent(sessionId, item.dispatchId, item.id)
       if (handoffGuard) {
         this.pendingAccountHandoffs.delete(sessionId)
         handoffGuard = false

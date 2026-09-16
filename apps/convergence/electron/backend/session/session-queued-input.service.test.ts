@@ -481,7 +481,8 @@ describe('SessionQueuedInputService', () => {
       {
         id: item.id,
         state: 'failed',
-        error: 'App restarted before this input was accepted.',
+        error:
+          "App restarted before this input's delivery was recorded. It may already have reached the provider: check the conversation before sending it again.",
         updatedAt: '2026-04-26T12:00:00.000Z',
       },
     ])

@@ -2054,9 +2054,11 @@ it('MAR-3023 door (2): a resident Claude send resolves when only its post-accept
   // failed — and the resident process took exactly one new prompt: the turn
   // ran, nothing re-sent it.
   expect(dispatchId).toBeTypeOf('string')
-  await vi.waitUntil(
-    () => children.reduce((n, child) => n + child.lines.length, 0) === 2,
-  )
+  const prompts = () => children.reduce((n, child) => n + child.lines.length, 0)
+  await vi.waitUntil(() => prompts() === 2)
+  // A grace, so a retry that lands a beat later cannot slip under the count.
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(prompts()).toBe(2)
   expect(service.getById(session.id)?.status).not.toBe('failed')
   // The loss is the turn's own outcome: one fact for the dispatch...
   expect(failures.map((failure) => failure.dispatchId)).toEqual([dispatchId])
@@ -2071,5 +2073,85 @@ it('MAR-3023 door (2): a resident Claude send resolves when only its post-accept
     )
   expect(notes).toHaveLength(1)
   expect(notes[0].text).toContain('do not resend it')
+
+  // F: the lost user message still opened a turn of its own. Its reply and
+  // the note carry that turn's id — never the previous turn's, read back from
+  // the last row that did land.
+  send({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text: 'second answer' }] },
+  })
+  send({ type: 'result', subtype: 'success', result: 'second answer' })
+  await vi.waitUntil(() =>
+    service
+      .getConversation(session.id)
+      .some(
+        (item) =>
+          item.kind === 'message' &&
+          item.actor === 'assistant' &&
+          item.text === 'second answer',
+      ),
+  )
+  const conversation = service.getConversation(session.id)
+  const firstTurnId = conversation.find(
+    (item) => item.kind === 'message' && item.actor === 'user',
+  )?.turnId
+  const reply = conversation.find(
+    (item) =>
+      item.kind === 'message' &&
+      item.actor === 'assistant' &&
+      item.text === 'second answer',
+  )
+  expect(firstTurnId).toBeTypeOf('string')
+  expect(reply?.turnId).toBeTypeOf('string')
+  expect(reply?.turnId).not.toBe(firstTurnId)
+  expect(notes[0].turnId).toBe(reply?.turnId)
+  expect(notes[0].text).toContain(`turn ${reply?.turnId}`)
+  expect(failures[0].turnId).toBe(reply?.turnId)
+  errors.mockRestore()
+})
+
+it('MAR-3023 G: a refused sent mark is re-attempted at the turn’s settle, so the row does not stay dispatching', async () => {
+  const { service, session, children } = await fixture()
+  await service.start(session.id, { text: 'first' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  const send = (event: unknown) =>
+    children[0].stdout.write(JSON.stringify(event) + '\n')
+  send({ type: 'system', subtype: 'init', session_id: 'resident' })
+  await service.sendMessage(session.id, { text: 'queued follow-up' })
+  expect(service.getQueuedInputs(session.id).map((q) => q.state)).toEqual([
+    'queued',
+  ])
+
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  // The record refuses the drain's 'sent' mark — once.
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_sent_mark
+    BEFORE UPDATE ON session_queued_inputs
+    WHEN NEW.state = 'sent'
+    BEGIN SELECT RAISE(ABORT, 'fixture sent mark refused'); END`)
+
+  // Turn 1 settles; the drain delivers the follow-up and the resident takes it.
+  send({ type: 'result', subtype: 'success', result: 'first answer' })
+  await vi.waitUntil(() => children[0].lines.length === 2)
+  await vi.waitUntil(() => failures.length === 1)
+  expect(failures[0]).toMatchObject({ label: 'the queued input sent mark' })
+  expect(service.getQueuedInputs(session.id).map((q) => q.state)).toEqual([
+    'dispatching',
+  ])
+
+  // The record takes writes again; the follow-up's turn settles.
+  getDatabase().exec('DROP TRIGGER refuse_sent_mark')
+  send({ type: 'result', subtype: 'success', result: 'second answer' })
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'completed')
+
+  // The settle re-attempted the mark: a launch will not call it unaccepted.
+  // (Read from the table — the queue list hides rows that were sent.)
+  expect(
+    getDatabase()
+      .prepare('SELECT state FROM session_queued_inputs WHERE session_id = ?')
+      .all(session.id),
+  ).toEqual([{ state: 'sent' }])
   errors.mockRestore()
 })
