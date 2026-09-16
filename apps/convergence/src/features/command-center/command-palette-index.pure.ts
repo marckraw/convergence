@@ -162,7 +162,12 @@ export function buildPaletteIndex(
     items.push(item)
   }
 
-  for (const session of sessions) {
+  // One item per session id (MAR-2892). A global chat session sits in both
+  // store lists the palette is fed (every summary, and the global chats), so
+  // the input can name an id twice. The map keeps each id where it first
+  // appeared and the value of its last appearance — the global-chat copy, the
+  // richer summary.
+  for (const session of sessionsById.values()) {
     if (session.archivedAt) continue
     if (session.contextKind === 'project' && !session.projectId) continue
     const project = session.projectId
