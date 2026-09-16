@@ -2021,3 +2021,55 @@ it.each(['normal', 'queued'] as const)(
     expect(service.getLastTurnProviderAccountId(session.id)).toBe('account-b')
   },
 )
+
+// -- MAR-3023: an accepted turn is never a failed send when its recording fails --
+
+it('MAR-3023 door (2): a resident Claude send resolves when only its post-accept recording fails', async () => {
+  const { service, session, children } = await fixture()
+  await service.start(session.id, { text: 'first' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  const send = (event: unknown) =>
+    children[0].stdout.write(JSON.stringify(event) + '\n')
+  send({ type: 'system', subtype: 'init', session_id: 'resident' })
+  send({ type: 'result', subtype: 'success', result: 'first answer' })
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'completed')
+
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  // Refuse only the user-message insert — the write that happens after
+  // onTurnAccepted has already bound the turn (claude-code-provider.ts) —
+  // so the recording-failed note itself can still land.
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_user_message
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'message'
+         AND json_extract(NEW.payload_json, '$.actor') = 'user'
+    BEGIN SELECT RAISE(ABORT, 'fixture user message refused'); END`)
+
+  const dispatchId = await service.sendMessage(session.id, {
+    text: 'accepted turn, refused record',
+  })
+
+  // The door resolves with its receipt — the composer sees accepted, not
+  // failed — and the resident process took exactly one new prompt: the turn
+  // ran, nothing re-sent it.
+  expect(dispatchId).toBeTypeOf('string')
+  await vi.waitUntil(
+    () => children.reduce((n, child) => n + child.lines.length, 0) === 2,
+  )
+  expect(service.getById(session.id)?.status).not.toBe('failed')
+  // The loss is the turn's own outcome: one fact for the dispatch...
+  expect(failures.map((failure) => failure.dispatchId)).toEqual([dispatchId])
+  expect(failures[0]).toMatchObject({ label: 'the conversation item' })
+  // ...and one note on the conversation, honest about the recovery.
+  const notes = service
+    .getConversation(session.id)
+    .filter(
+      (item): item is Extract<typeof item, { kind: 'note' }> =>
+        item.kind === 'note' &&
+        item.providerMeta.providerEventType === 'recording-failed',
+    )
+  expect(notes).toHaveLength(1)
+  expect(notes[0].text).toContain('do not resend it')
+  errors.mockRestore()
+})

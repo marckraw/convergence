@@ -6,6 +6,7 @@ import {
   type ClaudeTransport,
 } from './claude-transport.service'
 import { describeClaudeTransportVersionRefusal } from './claude-transport-error.pure'
+import { RecordingError } from '../../session/session.pure'
 import { promises as fs } from 'fs'
 import type { SessionDelta } from '../../session/conversation-item.types'
 import type {
@@ -1581,17 +1582,29 @@ export class ClaudeCodeProvider implements Provider {
 
         userTurnBound = true
         options?.onTurnAccepted?.()
-        const userMessageItemId =
-          options?.emitUserEntry !== false
-            ? sessionEmitter.addUserMessage({
-                text: message,
-                providerAccountId: turnAccount.id,
-                skillSelections: skillResolution.skillSelections,
-                attachmentIds: attachments?.length
-                  ? attachments.map((a) => a.id)
-                  : undefined,
-              })
-            : (options?.userMessageItemId ?? null)
+        // Acceptance is final (MAR-3023): the turn is bound and the
+        // connection's account may already have moved for it, so a failure to
+        // RECORD the user message must not kill a turn the provider is about
+        // to run. A recording failure is the boundary's outcome (fact + note
+        // already emitted by the session); the turn continues without a local
+        // item id, and every later writer already guards on the id being null.
+        let userMessageItemId: string | null
+        try {
+          userMessageItemId =
+            options?.emitUserEntry !== false
+              ? sessionEmitter.addUserMessage({
+                  text: message,
+                  providerAccountId: turnAccount.id,
+                  skillSelections: skillResolution.skillSelections,
+                  attachmentIds: attachments?.length
+                    ? attachments.map((a) => a.id)
+                    : undefined,
+                })
+              : (options?.userMessageItemId ?? null)
+        } catch (error) {
+          if (!(error instanceof RecordingError)) throw error
+          userMessageItemId = null
+        }
         if (!skillResolution.ok) {
           addSkillInvocationFailureNote(skillResolution)
           setStatus('failed')

@@ -1,5 +1,6 @@
 import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
 import type { SessionDelta } from '../../session/conversation-item.types'
+import { RecordingError } from '../../session/session.pure'
 import { ProviderSessionEmitter } from '../provider-session.emitter'
 import type {
   ActivitySignal,
@@ -2282,10 +2283,19 @@ class RemoteSessionRun {
       // A lost command must not be silent: surface attention with a note so
       // the user can retry, but keep the session alive — the remote run may
       // still be healthy.
-      this.emitter.addNote({
-        text: `Remote session command was not delivered: ${describeRemoteExecutionHostFailure(error)}`,
-        level: 'error',
-      })
+      try {
+        this.emitter.addNote({
+          text: `Remote session command was not delivered: ${describeRemoteExecutionHostFailure(error)}`,
+          level: 'error',
+        })
+      } catch (noteError) {
+        // The note is best-effort reporting of a delivery failure, never a
+        // failure of its own: on a refusing local record the session boundary
+        // already logged and noted the recording loss (MAR-3023), and
+        // throwing from inside this catch would only turn a report into an
+        // unhandled rejection.
+        if (!(noteError instanceof RecordingError)) throw noteError
+      }
       this.emitter.patchSession({ attention: 'failed' })
       for (const listener of this.attentionListeners) listener('failed')
     }

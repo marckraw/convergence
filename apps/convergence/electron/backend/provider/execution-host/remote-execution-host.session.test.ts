@@ -3,7 +3,7 @@ import {
   seedExecutionHostEndpoint,
   TEST_EXECUTION_HOST_ENDPOINT_ID,
 } from '../../execution-host-endpoint/execution-host-endpoint.fixture'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -1184,5 +1184,69 @@ describe('remote wire events reaching the session record', () => {
       'the next turn to report running',
     )
     expect(stub.startRequests).toHaveLength(1)
+  })
+  // -- MAR-3023: an accepted turn is never a failed send when its recording fails --
+
+  /**
+   * Door (3), remote — proven at the delivery-failure path, per the ticket's
+   * STOP ruling: the daemon's 2xx for a posted command is invisible to the door
+   * (`enqueueCommand` is fire-and-forget, remote-execution-host.ts), so the
+   * honest-outcome control is the delivery-failure note a refused command
+   * writes. Here the daemon refuses the command AND the local record refuses
+   * that note's insert: the boundary records the loss as its own outcome, the
+   * attention change still surfaces, and nothing throws out of the door.
+   */
+  it('MAR-3023 door (3): a refused remote command whose failure note cannot be recorded still lands as the turn\u2019s own outcome', async () => {
+    const failures: import('../../session/session.types').AcceptedRecordingFailureEvent[] =
+      []
+    service.onAcceptedRecordingFailure((event) => failures.push(event))
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await service.start(sessionId, { text: 'hello' })
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the event stream to open',
+    )
+    // Refuse every item insert, so the delivery-failure note cannot land either.
+    db.exec(`CREATE TEMP TRIGGER refuse_remote_notes
+    BEFORE INSERT ON session_conversation_items
+    BEGIN SELECT RAISE(ABORT, 'fixture remote note refused'); END`)
+    stub.setCommandStatus(500)
+
+    const dispatchId = await service.sendMessage(sessionId, {
+      text: 'mid-run turn the daemon refuses',
+    })
+
+    // The door resolves with its receipt — the remote send is fire-and-forget,
+    // and that is the 2xx-invisibility the ticket's STOP names.
+    expect(dispatchId).toBeTypeOf('string')
+    await waitUntil(
+      () => failures.some((failure) => failure.dispatchId === dispatchId),
+      'the recording failure to be announced',
+    )
+    // The command went out exactly once: nothing re-sent the accepted turn.
+    expect(
+      debugEntries.filter(
+        (entry) => entry.direction === 'out' && entry.method === 'send-message',
+      ),
+    ).toHaveLength(1)
+    // The attention change still surfaces (a sessions UPDATE, not an insert).
+    await waitUntil(
+      () => service.getById(sessionId)?.attention === 'failed',
+      'attention to surface',
+    )
+    expect(service.getById(sessionId)?.status).not.toBe('failed')
+    // The first turn's dispatch is still attached to the live run (the stub
+    // daemon never settles it), so the loss is told to BOTH receipt holders —
+    // including this send's, which is the one the door owns.
+    expect(failures.map((failure) => failure.dispatchId)).toContain(dispatchId)
+    for (const failure of failures) {
+      expect(failure).toMatchObject({
+        sessionId,
+        label: 'the conversation item',
+        providerRunning: true,
+      })
+    }
+    errors.mockRestore()
   })
 })

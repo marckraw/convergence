@@ -1,5 +1,6 @@
 import { isCodexThreadRuntimeIdle } from './codex-handoff.pure'
 import { HandoffRefusedError } from '../provider-account-handoff.pure'
+import { RecordingError } from '../../session/session.pure'
 import type { InitialDispatchReceipt } from '../provider.types'
 import type { CodexAccountHistoryService } from '../../provider-account/provider-account-codex-history.service'
 import { CONVERSATION_RESET_COMMAND } from '../../../../src/shared/lib/conversation-reset.pure'
@@ -1764,6 +1765,14 @@ export class CodexProvider implements Provider {
         )
       } catch (err) {
         if (err instanceof HandoffRefusedError) throw err
+        if (err instanceof RecordingError) {
+          // `turn/start` above was acknowledged, so the provider is working;
+          // only the local recording failed. The session boundary already
+          // recorded that loss as the turn's own outcome (fact + note), so
+          // concluding `failed` here would report a working turn as dead —
+          // the one dishonesty this catch must never commit (MAR-3023).
+          return
+        }
         patchUserMessageSkills(
           userMessageItemId,
           skillResolution.skillSelections,
