@@ -274,6 +274,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
             source={source}
             host={hostLabel(hostId, hostOptions)}
             hostIsLocal={isLocalHost(hostId)}
+            refused={Object.keys(seatProblems[key] ?? {}).length > 0}
             onToggle={() => onToggleSeat(key)}
           />
         )}
@@ -360,20 +361,24 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               {members.length}
             </span>
           </h4>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-haspopup="menu"
-            aria-expanded={addMenuOpen}
-            disabled={busy}
-            onClick={onAddMenuToggle}
-            className="h-7 gap-1 px-2 text-[11px]"
-          >
-            <Plus aria-hidden className="size-3.5" />
-            Add
-            <ChevronDown aria-hidden className="size-3.5" />
-          </Button>
+          {/* An empty crew shows both add actions in its own state, so it
+              has no menu and no menu button (MAR-3118 lap 3, C2). */}
+          {members.length > 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-haspopup="menu"
+              aria-expanded={addMenuOpen}
+              disabled={busy}
+              onClick={onAddMenuToggle}
+              className="h-7 gap-1 px-2 text-[11px]"
+            >
+              <Plus aria-hidden className="size-3.5" />
+              Add
+              <ChevronDown aria-hidden className="size-3.5" />
+            </Button>
+          ) : null}
         </div>
         {/* One set of add actions (lap 2, F1): an empty crew already shows
             both in its own state, so the menu does not repeat them. */}

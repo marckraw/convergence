@@ -24,6 +24,11 @@ interface SeatRowProps {
   source: string
   host: string
   hostIsLocal: boolean
+  /**
+   * The seat holds a standing refusal (MAR-3118 lap 3, A): a refused value is
+   * not re-sent on leave, so the closed row is where it must stay visible.
+   */
+  refused: boolean
   onToggle: () => void
 }
 
@@ -39,6 +44,7 @@ export const SeatRow: FC<SeatRowProps> = ({
   source,
   host,
   hostIsLocal,
+  refused,
   onToggle,
 }) => {
   const orphan = member.conversationMissing
@@ -52,7 +58,7 @@ export const SeatRow: FC<SeatRowProps> = ({
       variant="ghost"
       size="sm"
       data-seat-row
-      aria-label={seatRowAccessibleName({ member, source, host })}
+      aria-label={seatRowAccessibleName({ member, source, host, refused })}
       onClick={onToggle}
       className={cn(
         'flex h-9 w-full min-w-0 items-center justify-start gap-2 rounded-md border bg-white/[0.02] px-2.5 text-left font-normal transition-colors hover:border-white/20',
@@ -116,6 +122,15 @@ export const SeatRow: FC<SeatRowProps> = ({
           hasCard ? 'bg-foreground/80' : 'border border-amber-400',
         )}
       />
+      {refused ? (
+        <span
+          aria-hidden
+          data-seat-refused
+          className="shrink-0 rounded bg-amber-500/15 px-1 text-[10px] font-semibold leading-4 text-amber-400"
+        >
+          !
+        </span>
+      ) : null}
       <ChevronRight
         aria-hidden
         className="size-3.5 shrink-0 text-muted-foreground"

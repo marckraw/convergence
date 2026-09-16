@@ -1817,6 +1817,154 @@ describe('MissionControl', () => {
       expect(screen.getByLabelText('Role card for opus')).toHaveValue(typed)
     })
 
+    /**
+     * The bound on the refusal seam (MAR-3118 lap 3, A): a refused value is
+     * never re-sent unchanged, and a standing refusal is visible on the closed
+     * row. Without it, leaving the refused seat re-sent the same card, was
+     * refused again, and pulled the drawer back -- the seat could not be left.
+     */
+    it('lets you leave a seat whose card was refused, marks its row, and asks the door again only once the card changes (mutations: re-send the unchanged refused draft; drop the row marker)', async () => {
+      const api = await openCrewSettings('Night shift', [
+        {
+          ...DEFAULT_CREW_MEMBER_SEAT,
+          sessionId: 'a',
+          batonName: 'opus',
+          canvasX: null,
+          canvasY: null,
+          roleCard: 'Old card.',
+        },
+        {
+          ...DEFAULT_CREW_MEMBER_SEAT,
+          sessionId: 'b',
+          batonName: 'grok',
+          canvasX: null,
+          canvasY: null,
+        },
+      ])
+      const refused = 'A role card cannot be longer than 4000 characters'
+      const setMemberSeat = vi.fn(async () => {
+        throw new Error(refused)
+      })
+      ;(api as unknown as { setMemberSeat: unknown }).setMemberSeat =
+        setMemberSeat
+      const typed = 'You are opus. '.repeat(400)
+
+      // Refused by leaving: the seat re-opens with the sentence (lap 2, B2).
+      fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
+      fireEvent.change(screen.getByLabelText('Role card for opus'), {
+        target: { value: typed },
+      })
+      fireEvent.click(screen.getByRole('button', { name: /^grok — / }))
+      expect(await screen.findByText(refused)).toBeInTheDocument()
+      expect(setMemberSeat).toHaveBeenCalledTimes(1)
+
+      // Leaving again with the same card: nothing is re-sent, B opens, A stays
+      // closed. Mutation: re-send the unchanged draft -> A re-opens, red.
+      fireEvent.click(screen.getByRole('button', { name: /^grok — / }))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(
+        screen.getByRole('region', { name: 'Seat grok' }),
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'Seat opus' })).toBeNull()
+      expect(setMemberSeat).toHaveBeenCalledTimes(1)
+      // Mutation: drop the row marker -> the refusal is invisible, red.
+      expect(
+        screen.getByRole('button', { name: /^opus — / }),
+      ).toHaveAccessibleName(/an edit was refused/)
+
+      // A changed card goes to the door once more.
+      fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
+      fireEvent.change(screen.getByLabelText('Role card for opus'), {
+        target: { value: `${typed}!` },
+      })
+      fireEvent.click(screen.getByRole('button', { name: /^grok — / }))
+      await waitFor(() => expect(setMemberSeat).toHaveBeenCalledTimes(2))
+      expect(setMemberSeat).toHaveBeenLastCalledWith(
+        'crew-1',
+        { sessionId: 'a' },
+        { roleCard: `${typed}!` },
+      )
+    })
+
+    /**
+     * A refusal does not outlive its seat (lap 3, B): remove the seat, add
+     * the conversation back, and nothing is said about the seat it was.
+     */
+    it('forgets a seat’s refusal when the seat is removed (mutation: drop the clear on remove)', async () => {
+      const seatA = {
+        ...DEFAULT_CREW_MEMBER_SEAT,
+        sessionId: 'a',
+        batonName: 'opus',
+        canvasX: null,
+        canvasY: null,
+      }
+      const seatB = { ...seatA, sessionId: 'b', batonName: 'grok' }
+      const api = await openCrewSettings('Night shift', [seatA, seatB])
+      const refused = 'WIP limit must be a whole number of at least 1'
+      ;(api as unknown as { setMemberSeat: unknown }).setMemberSeat = vi.fn(
+        async () => {
+          throw new Error(refused)
+        },
+      )
+      const withoutA = makeCrew({
+        id: 'crew-1',
+        name: 'Night shift',
+        sessionIds: ['b'],
+        members: [seatB],
+      })
+      const withA = makeCrew({
+        id: 'crew-1',
+        name: 'Night shift',
+        sessionIds: ['a', 'b'],
+        members: [seatA, seatB],
+      })
+      vi.mocked(api.removeMember).mockImplementation(async () => {
+        listCrews.mockResolvedValue([withoutA])
+        return withoutA
+      })
+      vi.mocked(api.addMember).mockImplementation(async () => {
+        listCrews.mockResolvedValue([withA])
+        return withA
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
+      const wip = screen.getByLabelText('WIP limit for opus')
+      fireEvent.change(wip, { target: { value: '0' } })
+      fireEvent.blur(wip)
+      expect(await screen.findByText(refused)).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Remove from crew' }))
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: /^opus — / })).toBeNull(),
+      )
+      expect(screen.queryByRole('region', { name: 'Seat opus' })).toBeNull()
+
+      // Back in the crew: the same key, and no sentence about the old seat.
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+      fireEvent.click(
+        screen.getByRole('menuitem', { name: 'Add conversation…' }),
+      )
+      const panel = await screen.findByRole('region', {
+        name: 'Add conversations',
+      })
+      fireEvent.click(
+        within(panel).getAllByRole('button', { pressed: false })[0]!,
+      )
+      fireEvent.click(
+        within(panel).getByRole('button', { name: 'Add 1 conversation' }),
+      )
+      await waitFor(() =>
+        expect(api.addMember).toHaveBeenCalledWith('crew-1', 'a'),
+      )
+      fireEvent.click(
+        await screen.findByRole('button', { name: /Crew settings/ }),
+      )
+      const row = await screen.findByRole('button', { name: /^opus — / })
+      expect(row).not.toHaveAccessibleName(/an edit was refused/)
+      fireEvent.click(row)
+      expect(screen.queryByText(refused)).toBeNull()
+    })
+
     it('keeps a trailing space while renaming inline (mutation: control by crew.name)', async () => {
       const api = await openCrewSettings('Night')
       const field = screen.getByLabelText('Crew name')

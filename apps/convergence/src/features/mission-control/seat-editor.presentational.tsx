@@ -372,7 +372,9 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 aria-label={`Lower the WIP limit for ${label}`}
                 disabled={busy || stepBase <= 1}
                 // Keep focus in the field: a blur here would commit the typed
-                // value as a second write racing the step.
+                // value as a second write racing the step. The keyboard path
+                // (Tab to the button, then Enter) still blurs first and then
+                // steps -- two ordered writes that end at the right value.
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onSeatEdit({ wipLimit: stepBase - 1 })}
                 className="h-7 px-2 text-muted-foreground hover:text-foreground disabled:opacity-40"

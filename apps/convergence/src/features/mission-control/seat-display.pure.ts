@@ -101,6 +101,8 @@ export function seatRowAccessibleName(input: {
   member: SessionCrewMember
   source: string
   host: string
+  /** A refused edit still stands on this closed seat (lap 3, A). */
+  refused?: boolean
 }): string {
   const { member } = input
   return [
@@ -109,6 +111,7 @@ export function seatRowAccessibleName(input: {
     `lane ${laneLabel(member.lanePolicy)}`,
     `WIP ${member.wipLimit}`,
     member.roleCard ? 'has a role card' : 'no role card',
+    ...(input.refused ? ['an edit was refused — open to see why'] : []),
   ].join(' · ')
 }
 

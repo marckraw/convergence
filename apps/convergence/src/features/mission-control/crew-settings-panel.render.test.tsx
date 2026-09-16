@@ -729,6 +729,42 @@ describe('MAR-3118 lap 2 — E: the WIP stepper steps from what the field shows'
   })
 })
 
+describe('MAR-3118 lap 3 — C1: the stepper keeps focus in the field', () => {
+  it('prevents the default of a mouse-down on both stepper buttons, so the field does not blur into a second write', () => {
+    renderPanel(null, null, [{ ...opus, wipLimit: 3 }], vi.fn(), {
+      ...seatCtx,
+      openSeatKey: 's1',
+    })
+    // `fireEvent` returns false when a handler called preventDefault.
+    // Mutation: drop the preventDefault -> true, red.
+    expect(
+      fireEvent.mouseDown(
+        screen.getByRole('button', { name: 'Raise the WIP limit for opus' }),
+      ),
+    ).toBe(false)
+    expect(
+      fireEvent.mouseDown(
+        screen.getByRole('button', { name: 'Lower the WIP limit for opus' }),
+      ),
+    ).toBe(false)
+  })
+})
+
+describe('MAR-3118 lap 3 — C2: an empty crew has no menu button', () => {
+  it('offers the Add menu button only when there are seats', () => {
+    const view = renderPanel(null, null, [], vi.fn(), seatCtx)
+    // Mutation: keep the toggle for an empty crew -> found, red.
+    expect(screen.queryByRole('button', { name: 'Add' })).toBeNull()
+    view.unmount()
+
+    renderPanel(null, null, [opus], vi.fn(), seatCtx)
+    expect(screen.getByRole('button', { name: 'Add' })).toHaveAttribute(
+      'aria-haspopup',
+      'menu',
+    )
+  })
+})
+
 describe('MAR-3118 lap 2 — F1: one set of add actions', () => {
   it('shows an empty crew one New recipe even with the menu open, and no menu item outside a menu', () => {
     renderPanel(null, null, [], vi.fn(), { ...seatCtx, addMenuOpen: true })
