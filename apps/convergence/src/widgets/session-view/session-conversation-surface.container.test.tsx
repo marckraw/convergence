@@ -26,13 +26,25 @@ vi.mock('./session-transcript.container', () => ({
     <div data-testid="transcript">
       {session.name}:{conversationItems.length}
       {conversationItems.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          onClick={() => onUiResponseArtifactSelect?.(item.id)}
-        >
-          select {item.id}
-        </button>
+        <div key={item.id}>
+          <button
+            type="button"
+            onClick={() => onUiResponseArtifactSelect?.(item.id)}
+          >
+            select {item.id}
+          </button>
+          {/*
+            Annotatable stand-in for the real transcript attribute so the
+            surface can stage a selection without importing the capture feature.
+          */}
+          {item.kind === 'message' &&
+          item.actor === 'assistant' &&
+          item.state === 'complete' ? (
+            <div data-annotation-message-id={item.id}>
+              <p>{item.text}</p>
+            </div>
+          ) : null}
+        </div>
       ))}
     </div>
   ),
@@ -248,7 +260,116 @@ describe('SessionConversationSurface', () => {
     const tray = screen.getByTestId('annotation-tray')
     expect(tray.contains(document.activeElement)).toBe(false)
   })
+
+  it('remounts the selection capture per session so a draft cannot follow or file on the wrong one (MAR-3096)', () => {
+    const sessionA: Session = { ...baseSession, id: 'session-a', name: 'A' }
+    const sessionB: Session = { ...baseSession, id: 'session-b', name: 'B' }
+    const messageA: ConversationItem = {
+      id: 'msg-a',
+      sessionId: 'session-a',
+      sequence: 1,
+      turnId: 'turn-1',
+      kind: 'message',
+      actor: 'assistant',
+      state: 'complete',
+      text: 'The scheduler retries with exponential backoff.',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      providerMeta: {
+        providerId: 'claude-code',
+        providerItemId: null,
+        providerEventType: 'assistant',
+      },
+    }
+
+    const { rerender } = render(
+      <SessionConversationSurface
+        session={sessionA}
+        conversationItems={[messageA]}
+        composerContext={{ kind: 'global', activeSessionId: 'session-a' }}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
+      />,
+    )
+
+    selectTextInMessage('msg-a', 'exponential backoff')
+    expect(
+      screen.getByTestId('annotation-selection-popover'),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('Comment on the selected text'))
+    fireEvent.change(screen.getByLabelText('Comment on the selected text'), {
+      target: { value: 'draft that must not cross' },
+    })
+    expect(screen.getByLabelText('Comment on the selected text')).toHaveValue(
+      'draft that must not cross',
+    )
+
+    rerender(
+      <SessionConversationSurface
+        session={sessionB}
+        conversationItems={[]}
+        composerContext={{ kind: 'global', activeSessionId: 'session-b' }}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
+      />,
+    )
+
+    // No popover on B — remount cleared capture/isCommenting/commentValue.
+    // (Mutation R1: drop `key={sessionId}` → measured red here.)
+    expect(screen.queryByTestId('annotation-selection-popover')).toBeNull()
+    expect(screen.queryByDisplayValue('draft that must not cross')).toBeNull()
+
+    // Nothing was committed, and with the key there is no popover left to
+    // submit on B — so a wrong-session write is impossible (no mounted
+    // capture still holds A's messageId).
+    // (Mutation R2: drop the key and submit the surviving popover on B →
+    // annotationsBySessionId['session-b'] appears with messageId msg-a → red.)
+    const store = useResponseAnnotationStore.getState().annotationsBySessionId
+    expect(store['session-a']).toBeUndefined()
+    expect(store['session-b']).toBeUndefined()
+
+    rerender(
+      <SessionConversationSurface
+        session={sessionA}
+        conversationItems={[messageA]}
+        composerContext={{ kind: 'global', activeSessionId: 'session-a' }}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
+      />,
+    )
+    expect(screen.queryByTestId('annotation-selection-popover')).toBeNull()
+    expect(screen.queryByDisplayValue('draft that must not cross')).toBeNull()
+  })
 })
+
+/** Selects a phrase inside a rendered annotatable message (jsdom Range). */
+function selectTextInMessage(messageId: string, phrase: string) {
+  const container = document.querySelector(
+    `[data-annotation-message-id="${messageId}"] p`,
+  )
+  if (!container) throw new Error(`No message ${messageId} rendered.`)
+
+  const textNode = container.firstChild
+  if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
+    throw new Error('Message has no text node to select.')
+  }
+
+  const start = (textNode.textContent ?? '').indexOf(phrase)
+  if (start < 0) throw new Error(`"${phrase}" is not in the message.`)
+
+  const range = document.createRange()
+  range.setStart(textNode, start)
+  range.setEnd(textNode, start + phrase.length)
+
+  const selection = window.getSelection()
+  selection?.removeAllRanges()
+  selection?.addRange(range)
+
+  fireEvent.mouseUp(document)
+}
 
 function assistantArtifactMessage(input: {
   id: string

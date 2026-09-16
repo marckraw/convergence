@@ -217,7 +217,7 @@ function renderConversationColumn({
         the popover belongs to the transcript and the tray belongs above the
         composer, and neither feature may import the other (RA2 layering).
       */}
-      <AnnotationSelectionCapture sessionId={sessionId} />
+      <AnnotationSelectionCapture key={sessionId} sessionId={sessionId} />
 
       <div className="shrink-0 px-4 py-3">
         <AnnotationTray key={sessionId} sessionId={sessionId} />
