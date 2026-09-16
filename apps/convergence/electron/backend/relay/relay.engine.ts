@@ -150,6 +150,8 @@ interface RecordHopExtra {
   /** The delivery receipt the session layer returned for this input. */
   dispatchId?: string | null
   error?: string | null
+  /** Whether this message led with the target seat's role card (R4). */
+  roleCardCarried?: boolean
 }
 
 /**
@@ -196,12 +198,6 @@ interface RelayEngineDeps {
  * ledger row before this returns -- deliveries, skips and errors alike. A
  * disarmed wire does not fire, and so writes nothing.
  */
-/**
- * How many runs' role-card memories the engine keeps (MAR-3083 R4). A run
- * pauses between laps, so this cannot be keyed on what is in flight.
- */
-const MAX_REMEMBERED_RUNS = 64
-
 export class RelayEngine {
   private readonly relays: RelayService
   private readonly sessions: RelaySessionGateway
@@ -695,40 +691,6 @@ export class RelayEngine {
     if (this.hails.raise(input)) this.onHailsChanged?.()
   }
 
-  /**
-   * The seats whose card has already ridden a message in this run (R4).
-   *
-   * Per flow run, because that is what a lap belongs to: the card tells a seat
-   * who it is at the start of a piece of work, and repeating it every lap
-   * would re-brief a conversation mid-thought, three messages into its own
-   * reasoning. Cleared with the run so the next one introduces it again.
-   */
-  private readonly cardsCarried = new Map<string, Set<string>>()
-
-  /**
-   * Whether this seat still owes its card in this run; claiming it is what
-   * spends it. One claim per (run, seat) -- a second wire into the same seat
-   * in the same run carries the payload alone.
-   */
-  private claimRoleCard(flowRunId: string, sessionId: string): boolean {
-    const carried = this.cardsCarried.get(flowRunId) ?? new Set<string>()
-    if (carried.has(sessionId)) return false
-    carried.add(sessionId)
-    this.cardsCarried.set(flowRunId, carried)
-    // A run pauses every time a station settles, so this cannot be cleared
-    // when the in-flight count reaches zero -- that is the gap between two
-    // laps of the SAME run, and clearing there re-introduced a seat mid-loop.
-    // A run has no end the engine is told about, so the map is bounded
-    // instead: the oldest run's memory goes once there are more than this
-    // many, which is far more than any loop alive at one time.
-    while (this.cardsCarried.size > MAX_REMEMBERED_RUNS) {
-      const oldest = this.cardsCarried.keys().next()
-      if (oldest.done) break
-      this.cardsCarried.delete(oldest.value)
-    }
-    return true
-  }
-
   private enterRun(flowRunId: string): void {
     this.runsInFlight.set(
       flowRunId,
@@ -811,6 +773,7 @@ export class RelayEngine {
         lapNumber: lapNumberForHop,
         dispatchId: extra.dispatchId ?? null,
         outcome,
+        roleCardCarried: extra.roleCardCarried ?? false,
         error: extra.error ?? null,
       })
       // A budgeted outcome is the one proof that a session actually received
@@ -1071,24 +1034,24 @@ export class RelayEngine {
     // had before seats existed.
     const seat = this.crews.findSeatBySession(relay.crewId, targetSessionId)
     const roleCard = seat?.roleCard ?? null
+    // Owed when the LEDGER has no delivered hop carrying it into this seat in
+    // this run. Asked of the record rather than of memory, so a restart
+    // mid-run does not re-brief the seat, and a send that threw leaves the
+    // card still owed for the retry.
     const carriesCard =
       relay.action === 'hail' &&
       roleCard !== null &&
-      this.claimRoleCard(flowRunId, targetSessionId)
+      !this.relays.hasCarriedRoleCard(flowRunId, targetSessionId)
 
-    // Where the card goes depends on whether this wire already opens with
-    // something. An opener is a turn of its own and is often a COMMAND
-    // (`/clear`): gluing a card onto it would stop it being one. So a wire
-    // with an opener keeps it untouched and the card leads the payload; a
-    // wire without one sends the card AS the opener, which is the same beat
-    // the mechanism was built for -- either way the card is the first thing
-    // the seat reads in this run, and the payload follows it.
-    const opener =
-      relay.action === 'hail'
-        ? (relay.opener ?? (carriesCard ? roleCard : null))
-        : null
-    const outgoing =
-      carriesCard && relay.opener ? `${roleCard}\n\n${payload}` : payload
+    // The card LEADS THE PAYLOAD, in the same message, always. It is never
+    // sent as an opener of its own: an opener is a separate, muted,
+    // context-free turn, so the seat would answer the card before the payload
+    // arrived -- a wasted turn and a reply to nobody on the transcript. A
+    // wire that already opens with something keeps that opener untouched
+    // (it is often a command, and a card glued onto `/clear` stops it being
+    // one).
+    const opener = relay.action === 'hail' ? relay.opener : null
+    const outgoing = carriesCard ? `${roleCard}\n\n${payload}` : payload
     // The ledger names what was actually sent, card included.
     payloadPreview = buildRelayHopPreview(opener, outgoing)
 
@@ -1113,6 +1076,7 @@ export class RelayEngine {
         // it, on this run or after a restart.
         record('queued', {
           payloadPreview,
+          roleCardCarried: carriesCard,
           dispatchId: receipt.payloadDispatchId,
           // Why it waits, when it is waiting on a turn (MAR-2888). `queued`
           // alone left the canvas to be read as "sent, pending" whether the
@@ -1139,6 +1103,7 @@ export class RelayEngine {
       // app-server is mid-turn, which is the whole of MAR-2888.
       record(targetWasRunning || delivery.queued ? 'queued' : 'delivered', {
         payloadPreview,
+        roleCardCarried: carriesCard,
         dispatchId: delivery.dispatchId,
         error:
           targetWasRunning || delivery.queued ? busyTargetReason() : undefined,
@@ -1221,12 +1186,20 @@ export class RelayEngine {
     // seat wins on what it is -- provider, model, host, its card -- so six
     // wires aimed at one seat cannot drift, and the spec keeps what belongs
     // to this firing.
-    const spec = applySeatToSpawnSpec(
-      stated,
-      stated.member
-        ? this.crews.findSeatByBatonName(relay.crewId, stated.member)
-        : null,
-    )
+    const named = stated.member
+      ? this.crews.findSeatByBatonName(relay.crewId, stated.member)
+      : null
+    if (stated.member && !named) {
+      // A seat that was renamed or removed is not a spec to fall back on:
+      // spawning on the wire's own leftover recipe would open a session
+      // nobody asked for, with no word anywhere about why it differs.
+      record('error', {
+        payloadPreview,
+        error: `This spawn names no seat this crew has: "${stated.member}".`,
+      })
+      return
+    }
+    const spec = applySeatToSpawnSpec(stated, named)
 
     const brief = composeErrandBrief(
       spec,

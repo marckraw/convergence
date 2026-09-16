@@ -1,4 +1,4 @@
-import { describe, expect, it, afterEach } from 'vitest'
+import { describe, expect, it, afterEach, vi } from 'vitest'
 import Database from 'better-sqlite3'
 import { mkdtempSync, rmSync } from 'fs'
 import { join } from 'path'
@@ -6,6 +6,7 @@ import { tmpdir } from 'os'
 import { closeDatabase, getDatabase, resetDatabase } from './database'
 import {
   CREW_SEAT_MEMBER_INDEX,
+  migrateCrewSeats,
   readCrewSeatDedupeLog,
 } from './crew-seat-migration.service'
 import { CrewService } from '../crew/crew.service'
@@ -157,6 +158,104 @@ describe('the seat migration', () => {
       // Mutation: drop the index and keep only the service check -> a writer
       // that never came through the service can still seat a session twice.
       expect(indexes).toContain(CREW_SEAT_MEMBER_INDEX)
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  /**
+   * The rebuild is ONE transaction (MAR-3083 lap 2, A).
+   *
+   * Interrupted between the DROP and the RENAME, the old shape left every
+   * membership in an orphan table while the next boot's `CREATE TABLE IF NOT
+   * EXISTS` made an empty one -- silent and permanent. The interrupt is driven
+   * at the real seam: the RENAME's own statement throws.
+   */
+  it('keeps the table and every membership when the rebuild is interrupted', () => {
+    const { dir, path } = legacyDatabase('interrupt', (db) => {
+      db.exec(OLD_MEMBERS_TABLE)
+      db.prepare(
+        "INSERT INTO session_crew_members (crew_id, session_id) VALUES ('c1', 's1')",
+      ).run()
+      // Boot's order: the seat columns are added before the seat migration
+      // runs, so the rebuild has them to carry.
+      for (const column of [
+        'role TEXT',
+        'kind TEXT',
+        'role_card TEXT',
+        'host_policy TEXT',
+        'lane_policy TEXT',
+        'wip_limit INTEGER',
+        'provider_id TEXT',
+        'model TEXT',
+      ]) {
+        db.exec(`ALTER TABLE session_crew_members ADD COLUMN ${column}`)
+      }
+    })
+
+    let raw: Database.Database | null = null
+    try {
+      raw = new Database(path)
+      const prepare = raw.prepare.bind(raw)
+      vi.spyOn(raw, 'prepare').mockImplementation(((sql: string) =>
+        sql.includes('RENAME TO session_crew_members')
+          ? {
+              run: () => {
+                throw new Error('interrupted mid-rebuild')
+              },
+            }
+          : prepare(sql)) as typeof raw.prepare)
+
+      expect(() => migrateCrewSeats(raw!)).toThrow('interrupted mid-rebuild')
+
+      vi.restoreAllMocks()
+      // Mutation: drop the `db.transaction` wrapper and this reads zero rows
+      // in a table that no longer exists -- the DROP stood on its own.
+      const rows = raw
+        .prepare('SELECT crew_id, session_id FROM session_crew_members')
+        .all()
+      expect(rows).toEqual([{ crew_id: 'c1', session_id: 's1' }])
+    } finally {
+      vi.restoreAllMocks()
+      raw?.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('opens a database whose earlier rebuild was interrupted, leftover table and all', () => {
+    const { dir, path } = legacyDatabase('leftover', (db) => {
+      db.exec(OLD_MEMBERS_TABLE)
+      db.prepare(
+        "INSERT INTO session_crew_members (crew_id, session_id) VALUES ('c1', 's1')",
+      ).run()
+      // What an interrupted run left behind: the copy, half-made.
+      db.exec(`CREATE TABLE session_crew_members_rebuilt (
+        crew_id TEXT NOT NULL,
+        session_id TEXT,
+        baton_name TEXT
+      )`)
+    })
+
+    try {
+      // Mutation: drop the leading `DROP TABLE IF EXISTS` and opening throws
+      // on "table session_crew_members_rebuilt already exists" -- the app
+      // cannot open its database on any later boot.
+      const db = getDatabase(path)
+      seedWorld(db, ['s1'])
+      db.prepare(
+        "INSERT INTO session_crews (id, name, position) VALUES ('c1', 'Night shift', 0)",
+      ).run()
+
+      expect(new CrewService(db).getById('c1')!.sessionIds).toEqual(['s1'])
+      const sessionColumn = (
+        db.prepare("PRAGMA table_info('session_crew_members')").all() as {
+          name: string
+          notnull: number
+        }[]
+      ).find((column) => column.name === 'session_id')
+      expect(sessionColumn?.notnull).toBe(0)
     } finally {
       closeDatabase()
       resetDatabase()

@@ -52,6 +52,12 @@ export interface CrewConfigRole {
 }
 export interface CrewConfigSpawn {
   name: string
+  /**
+   * The crew seat this wire spawns, by baton name (MAR-3083 R3). Present only
+   * when the wire names one; the seat supplies provider, model, host and card
+   * at firing time.
+   */
+  member?: string
   provider: string
   model: string | null
   effort: string | null

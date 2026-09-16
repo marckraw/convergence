@@ -1008,3 +1008,60 @@ describe('the seat in the recipe (MAR-3083 R5)', () => {
     expect(Object.keys(config.roles)).toEqual(['fable'])
   })
 })
+
+/**
+ * A wire may name the seat it spawns instead of restating the recipe
+ * (MAR-3083 R3/C), and that has to survive the recipe file: without it, an
+ * imported crew loses the link and spawns on a copy that can drift.
+ */
+describe('a spawn wire that names a seat', () => {
+  const spawningCrew = {
+    id: 'crew-1',
+    crewId: 'crew-1',
+    sourceSessionId: session.id,
+    action: 'spawn' as const,
+    targetSessionId: null,
+    conditionToken: 'BATON: errand',
+    instruction: null,
+    opener: null,
+    armed: true,
+    createdAt: '2026-01-01',
+    updatedAt: '2026-01-01',
+    spawnSpec: {
+      executionHost: 'local',
+      workAddress: null,
+      roleCard: null,
+      returnWire: null,
+      name: 'Errand',
+      member: 'errand',
+      providerId: 'codex',
+      model: 'gpt-6-astra',
+      effort: 'high',
+      projectId: 'project-private-id',
+      providerAccountId: null,
+    },
+  }
+
+  it('writes the seat it names, and reads it back', () => {
+    const config = crewToConfig(
+      crew,
+      [member],
+      [session],
+      [project],
+      [spawningCrew as never],
+    )
+
+    const to = config.wires[0]!.to as { spawn: { member?: string } }
+    // Mutation: drop `member` from the exported spawn and the wire imports as
+    // a standalone recipe -- the seat it was aimed at is lost.
+    expect(to.spawn.member).toBe('errand')
+
+    const read = readCrewConfig(renderCrewYaml(config))
+    expect(read.ok).toBe(true)
+    expect(
+      read.ok &&
+        (read.config.wires[0]!.to as { spawn: { member?: string } }).spawn
+          .member,
+    ).toBe('errand')
+  })
+})

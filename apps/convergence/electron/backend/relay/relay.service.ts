@@ -48,6 +48,13 @@ export interface AppendRelayHopInput {
   dispatchId?: string | null
   outcome: RelayHopOutcome
   error?: string | null
+  /**
+   * Whether the message this hop carried led with the target seat's role card
+   * (MAR-3083 R4). The ledger is the memory: it survives a restart, and it is
+   * written after the send, so a delivery that threw leaves the card still
+   * owed.
+   */
+  roleCardCarried?: boolean
 }
 
 /** What a cleared trail leaves behind. */
@@ -271,9 +278,9 @@ export class RelayService {
            id, relay_id, crew_id, flow_run_id, fired_at, source_session_id,
            target_session_id, spawned_session_id, trigger_status,
            payload_preview, baton, round_number, lap_number, dispatch_id,
-           outcome, error, settle_id
+           outcome, error, settle_id, role_card_carried
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -293,6 +300,7 @@ export class RelayService {
         input.outcome,
         input.error ?? null,
         input.settleId ?? null,
+        input.roleCardCarried ? 1 : 0,
       )
 
     return this.requireHopById(id)
@@ -469,6 +477,27 @@ export class RelayService {
    * became the firing crew's own (MAR-2966) -- a session in two crews must
    * not be able to spend each crew's limit and loop forever between them.
    */
+  /**
+   * Whether this run has already introduced this seat (MAR-3083 R4).
+   *
+   * The reader derived from the record: the hop that carried the card is the
+   * only proof it was carried, and it is written after the send. A card owed
+   * is therefore a card nothing in the ledger says was delivered -- true
+   * across a restart, true after a delivery that threw, and true for a second
+   * wire into the same seat in the same run.
+   */
+  hasCarriedRoleCard(flowRunId: string, targetSessionId: string): boolean {
+    const row = this.db
+      .prepare(
+        `SELECT 1 FROM relay_hops
+          WHERE flow_run_id = ? AND target_session_id = ?
+            AND role_card_carried = 1
+          LIMIT 1`,
+      )
+      .get(flowRunId, targetSessionId)
+    return row !== undefined
+  }
+
   countBudgetedHops(flowRunId: string): number {
     return this.countBudgetedHopsWhere('flow_run_id = ?', flowRunId)
   }

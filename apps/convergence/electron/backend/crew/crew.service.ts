@@ -30,6 +30,16 @@ import {
   type UpdateSessionCrewInput,
 } from './crew.types'
 
+/**
+ * How a caller names one member (MAR-3083 lap 2, C).
+ *
+ * A resident seat IS a conversation and is addressed by its session id. A
+ * dynamic seat has no conversation at all, so its baton name -- unique in the
+ * crew by the door above -- is the only name it has. Every member-scoped
+ * write takes this, or a recipe would be a row nobody could edit or remove.
+ */
+export type CrewMemberRef = { sessionId: string } | { batonName: string }
+
 /** What the form and the importer may set on a seat (MAR-3083 R1). */
 export interface UpdateCrewSeatInput {
   role?: SessionCrewMemberRole | null
@@ -124,8 +134,11 @@ export class CrewService {
   }
 
   /**
-   * Every crew this session belongs to.
+   * The crew this session belongs to, as a list of at most one (R2).
    *
+   * Still a list because that is the shape the engine reads and because the
+   * record can briefly hold more on a database whose dedupe was refused (a
+   * duplicate with an armed wire is left standing, `crew-seat-migration`).
    * The engine asks so it knows whose loop a settling session is part of: a
    * baton nobody routed has to hail the crew that was waiting on it, and that
    * crew may own no wire leaving this station at all.
@@ -178,15 +191,16 @@ export class CrewService {
 
   setMemberBatonName(
     crewId: string,
-    sessionId: string,
+    member: CrewMemberRef,
     batonName: string | null,
   ): SessionCrew {
     this.requireRow(crewId)
+    const { clause, key } = memberClause(member)
     this.db
       .prepare(
-        'UPDATE session_crew_members SET baton_name = ? WHERE crew_id = ? AND session_id = ?',
+        `UPDATE session_crew_members SET baton_name = ? WHERE crew_id = ? AND ${clause}`,
       )
-      .run(normalizeCrewBatonName(batonName), crewId, sessionId)
+      .run(normalizeCrewBatonName(batonName), crewId, key)
     return this.requireById(crewId)
   }
 
@@ -263,13 +277,14 @@ export class CrewService {
     return this.requireById(crewId)
   }
 
-  removeMember(crewId: string, sessionId: string): SessionCrew {
+  removeMember(crewId: string, member: CrewMemberRef): SessionCrew {
     this.requireRow(crewId)
+    const { clause, key } = memberClause(member)
     this.db
       .prepare(
-        'DELETE FROM session_crew_members WHERE crew_id = ? AND session_id = ?',
+        `DELETE FROM session_crew_members WHERE crew_id = ? AND ${clause}`,
       )
-      .run(crewId, sessionId)
+      .run(crewId, key)
     return this.requireById(crewId)
   }
 
@@ -383,7 +398,7 @@ export class CrewService {
    */
   setMemberSeat(
     crewId: string,
-    sessionId: string,
+    member: CrewMemberRef,
     patch: UpdateCrewSeatInput,
   ): SessionCrew {
     this.requireRow(crewId)
@@ -410,12 +425,13 @@ export class CrewService {
     if (patch.model !== undefined)
       set('model', normalizeCrewRecipeField(patch.model))
     if (assignments.length === 0) return this.requireById(crewId)
+    const { clause, key } = memberClause(member)
     this.db
       .prepare(
         `UPDATE session_crew_members SET ${assignments.join(', ')}
-          WHERE crew_id = ? AND session_id = ?`,
+          WHERE crew_id = ? AND ${clause}`,
       )
-      .run(...values, crewId, sessionId)
+      .run(...values, crewId, key)
     return this.requireById(crewId)
   }
 
@@ -435,11 +451,21 @@ export class CrewService {
         // Every seat column reads defensively and defaults at the door: a row
         // written before seats existed chose none of them, and `horse ·
         // resident · 1` is how it has always behaved (R1).
-        role: normalizeCrewMemberRole(row.role) ?? DEFAULT_CREW_MEMBER_ROLE,
-        kind: normalizeCrewMemberKind(row.kind) ?? DEFAULT_CREW_MEMBER_KIND,
+        //
+        // A word the record holds and this build does not know is READ as the
+        // default and said out loud once, never thrown on: the write door
+        // refuses an unknown word (`setMemberSeat`), but a row can arrive from
+        // a newer build, a hand edit or a foreign writer, and one such row must
+        // not take the whole crew surface down with it.
+        role:
+          readSeatWord(row, 'role', normalizeCrewMemberRole) ??
+          DEFAULT_CREW_MEMBER_ROLE,
+        kind:
+          readSeatWord(row, 'kind', normalizeCrewMemberKind) ??
+          DEFAULT_CREW_MEMBER_KIND,
         roleCard: row.role_card ?? null,
         hostPolicy: row.host_policy ?? null,
-        lanePolicy: normalizeCrewMemberLane(row.lane_policy),
+        lanePolicy: readSeatWord(row, 'lane_policy', normalizeCrewMemberLane),
         wipLimit:
           typeof row.wip_limit === 'number' && Number.isInteger(row.wip_limit)
             ? row.wip_limit
@@ -480,6 +506,56 @@ export class CrewService {
       throw new Error(`Crew not found: ${id}`)
     }
     return crew
+  }
+}
+
+/**
+ * The WHERE half that names one member (MAR-3083 lap 2, C).
+ *
+ * A session-keyed update could never reach a recipe: its `session_id` is null,
+ * and `= NULL` matches nothing, so every edit and every removal was a silent
+ * no-op on exactly the rows R3 introduced.
+ */
+function memberClause(member: CrewMemberRef): { clause: string; key: string } {
+  if ('sessionId' in member) {
+    return { clause: 'session_id = ?', key: member.sessionId }
+  }
+  const batonName = normalizeCrewBatonName(member.batonName)
+  if (!batonName) throw new Error('A crew member reference cannot be empty')
+  return { clause: 'baton_name = ?', key: batonName }
+}
+
+/**
+ * One seat word as this build reads it, or the default when the record holds
+ * something this build does not know (MAR-3083 lap 2, B).
+ *
+ * The door that WRITES still refuses an unknown word -- a silently corrected
+ * role would read back as a seat somebody chose. The door that READS cannot
+ * afford to: `list()` feeds every crew surface, and one junk row used to throw
+ * the lot. The row is named in the warning so the value can be found and
+ * fixed, rather than disappearing into a default nobody was told about.
+ */
+function readSeatWord<T>(
+  row: {
+    crew_id: string
+    session_id: string | null
+    baton_name: string | null
+  },
+  column: 'role' | 'kind' | 'lane_policy',
+  normalize: (value: string | null | undefined) => T | null,
+): T | null {
+  const value = (row as unknown as Record<string, string | null>)[column]
+  try {
+    return normalize(value)
+  } catch (error) {
+    console.warn(
+      `[crew] crew ${row.crew_id}: member ${
+        row.session_id ?? row.baton_name ?? '(unnamed)'
+      } holds an unreadable ${column} (${String(value)}); reading the default. ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    )
+    return null
   }
 }
 

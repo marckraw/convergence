@@ -328,6 +328,9 @@ export function buildCanvasGraph(
     const storedPositions = new Map<string, { x: number; y: number }>()
     for (const member of crew.members) {
       if (member.canvasX === null || member.canvasY === null) continue
+      // A dynamic seat has no conversation and so no card on this canvas
+      // (MAR-3083 R3); the graph draws conversations.
+      if (member.sessionId === null) continue
       storedPositions.set(member.sessionId, {
         x: member.canvasX,
         y: member.canvasY,

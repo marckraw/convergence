@@ -2,6 +2,22 @@
  * A crew is a named, decorated, cross-project collection of sessions.
  * Membership is many-to-many and promises membership only — no automation.
  */
+/** The seat fields a person types into, which therefore keep a draft. */
+export type SeatDraftField = 'roleCard' | 'hostPolicy' | 'wipLimit'
+
+/**
+ * The one name every reader uses for a member: its conversation when it has
+ * one, its baton name when it is a recipe (MAR-3083 R3). React keys, draft
+ * maps and the refusal slot all hang off this, so a recipe and a conversation
+ * cannot collide.
+ */
+export function memberKey(member: {
+  sessionId: string | null
+  batonName: string | null
+}): string {
+  return member.sessionId ?? `baton:${member.batonName ?? ''}`
+}
+
 /** What a seat reads as before anybody describes it (MAR-3083 R1). */
 export const DEFAULT_CREW_MEMBER_SEAT = {
   role: 'horse',
@@ -15,7 +31,12 @@ export const DEFAULT_CREW_MEMBER_SEAT = {
 } as const
 
 export interface SessionCrewMember {
-  sessionId: string
+  /**
+   * The conversation this seat is, or null for a dynamic seat — a recipe has
+   * no conversation until a wire spawns one (MAR-3083 R3). A member with no
+   * session is addressed by its baton name.
+   */
+  sessionId: string | null
   /**
    * The short name a baton addresses this member by, or null when nobody has
    * named it. A label the wire editor reads to pre-fill a condition — the

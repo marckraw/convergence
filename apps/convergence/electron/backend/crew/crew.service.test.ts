@@ -71,14 +71,22 @@ describe('CrewService', () => {
   it('stores what a seat is, one field at a time, and leaves the rest alone', () => {
     const crew = service.create({ name: 'Night shift', sessionIds: ['s1'] })
 
-    service.setMemberSeat(crew.id, 's1', {
-      role: 'reviewer',
-      roleCard: '  You read blind.  ',
-      wipLimit: 3,
-      lanePolicy: 'own-worktree',
-      hostPolicy: 'little-monster',
-    })
-    const seated = service.setMemberSeat(crew.id, 's1', { wipLimit: 2 })
+    service.setMemberSeat(
+      crew.id,
+      { sessionId: 's1' },
+      {
+        role: 'reviewer',
+        roleCard: '  You read blind.  ',
+        wipLimit: 3,
+        lanePolicy: 'own-worktree',
+        hostPolicy: 'little-monster',
+      },
+    )
+    const seated = service.setMemberSeat(
+      crew.id,
+      { sessionId: 's1' },
+      { wipLimit: 2 },
+    )
 
     expect(seated.members[0]).toMatchObject({
       role: 'reviewer',
@@ -94,7 +102,11 @@ describe('CrewService', () => {
     const crew = service.create({ name: 'Night shift', sessionIds: ['s1'] })
 
     expect(() =>
-      service.setMemberSeat(crew.id, 's1', { role: 'general' as never }),
+      service.setMemberSeat(
+        crew.id,
+        { sessionId: 's1' },
+        { role: 'general' as never },
+      ),
     ).toThrow('A crew member role must be one of')
     expect(service.getById(crew.id)!.members[0]!.role).toBe('horse')
   })
@@ -155,6 +167,69 @@ describe('CrewService', () => {
         hostPolicy: 'local',
       }),
     ).toThrow('This crew already has a seat named "errand"')
+  })
+
+  /**
+   * A word this build does not know is not a reason to lose the crew
+   * (MAR-3083 lap 2, B). It can arrive from a newer build, a hand edit or a
+   * foreign writer; the WRITE door still refuses it.
+   */
+  it('reads a junk seat word as the default instead of throwing the surface down', () => {
+    const crew = service.create({ name: 'Night shift', sessionIds: ['s1'] })
+    getDatabase()
+      .prepare(
+        "UPDATE session_crew_members SET role = 'general' WHERE session_id = 's1'",
+      )
+      .run()
+
+    // Mutation: let the read normalizer throw (lap 1) and `list()` throws --
+    // every crew surface goes down for one row.
+    expect(service.list()[0]!.members[0]).toMatchObject({
+      sessionId: 's1',
+      role: 'horse',
+    })
+    expect(() =>
+      service.setMemberSeat(
+        crew.id,
+        { sessionId: 's1' },
+        {
+          role: 'general' as never,
+        },
+      ),
+    ).toThrow('A crew member role must be one of')
+  })
+
+  /**
+   * A recipe has no conversation, so every member-scoped write has to be able
+   * to name it some other way (MAR-3083 lap 2, C). Before this, a
+   * session-keyed `WHERE` matched nothing and each edit was a silent no-op.
+   */
+  it('edits and removes a recipe by its baton name', () => {
+    const crew = service.create({ name: 'Night shift', sessionIds: ['s1'] })
+    service.addRecipeMember(crew.id, {
+      batonName: 'errand',
+      providerId: 'codex',
+      model: 'gpt-6-astra',
+      hostPolicy: 'little-monster',
+    })
+
+    const edited = service.setMemberSeat(
+      crew.id,
+      { batonName: 'errand' },
+      { roleCard: 'You are an errand.', wipLimit: 2 },
+    )
+    expect(
+      edited.members.find((member) => member.batonName === 'errand'),
+    ).toMatchObject({
+      sessionId: null,
+      roleCard: 'You are an errand.',
+      wipLimit: 2,
+    })
+
+    // Mutation: key the UPDATE on `session_id` again and the row above is
+    // unchanged; the DELETE below removes nothing.
+    const removed = service.removeMember(crew.id, { batonName: 'errand' })
+    expect(removed.members.map((member) => member.batonName)).toEqual([null])
   })
 
   it('creates a decorated crew and appends positions', () => {
@@ -218,7 +293,7 @@ describe('CrewService', () => {
   it('removes a member without touching the session', () => {
     const db = getDatabase()
     const crew = service.create({ name: 'Convoy', sessionIds: ['s1', 's2'] })
-    const after = service.removeMember(crew.id, 's1')
+    const after = service.removeMember(crew.id, { sessionId: 's1' })
 
     expect(after.sessionIds).toEqual(['s2'])
     expect(db.prepare('SELECT COUNT(*) AS count FROM sessions').get()).toEqual({
@@ -354,7 +429,7 @@ describe('CrewService', () => {
 
   it('throws when addressing a crew that does not exist', () => {
     expect(() => service.addMember('missing', 's1')).toThrow(/Crew not found/)
-    expect(() => service.removeMember('missing', 's1')).toThrow(
+    expect(() => service.removeMember('missing', { sessionId: 's1' })).toThrow(
       /Crew not found/,
     )
     expect(() => service.update('missing', { name: 'x' })).toThrow(

@@ -258,6 +258,9 @@
                             ]
                           }
                         ]
+                      },
+                      "member": {
+                        "type": "string"
                       }
                     },
                     "required": [

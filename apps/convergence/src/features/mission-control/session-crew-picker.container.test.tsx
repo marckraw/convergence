@@ -66,11 +66,14 @@ function installCrewBackend(initial: SessionCrew[] = []) {
       if (!crew.sessionIds.includes(sessionId)) crew.sessionIds.push(sessionId)
       return { ...crew }
     }),
-    removeMember: vi.fn(async (crewId: string, sessionId: string) => {
-      const crew = find(crewId)
-      crew.sessionIds = crew.sessionIds.filter((id) => id !== sessionId)
-      return { ...crew }
-    }),
+    removeMember: vi.fn(
+      async (crewId: string, member: { sessionId: string }) => {
+        const sessionId = member.sessionId
+        const crew = find(crewId)
+        crew.sessionIds = crew.sessionIds.filter((id) => id !== sessionId)
+        return { ...crew }
+      },
+    ),
     onUpdated: vi.fn(() => () => undefined),
   }
 
@@ -205,7 +208,11 @@ describe('SessionCrewPicker', () => {
 
     fireEvent.click(screen.getByRole('option', { name: /Night shift/ }))
     await waitFor(() =>
-      expect(api.removeMember).toHaveBeenCalledWith('c1', 'session-1'),
+      // A member is named by reference: a recipe has no session id
+      // (MAR-3083 R3/C).
+      expect(api.removeMember).toHaveBeenCalledWith('c1', {
+        sessionId: 'session-1',
+      }),
     )
   })
 

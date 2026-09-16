@@ -3581,7 +3581,7 @@ describe('RelayEngine', () => {
       expect(gateway.created[0]).not.toHaveProperty('executionHost')
     })
 
-    it('carries the seat card ahead of the payload once a run, not every lap', async () => {
+    it('leads the payload with the card once a run, not every lap', async () => {
       seatsBySession.s2 = {
         batonName: 'horse opus',
         kind: 'resident',
@@ -3601,10 +3601,10 @@ describe('RelayEngine', () => {
 
       await engine.handleSettle(settled('s1'))
       const firstArrival = gateway.sent.filter((t) => t.sessionId === 's2')
-      // The card is the opener: its own turn, the payload queued behind it.
+      // ONE message: the card leads the payload. Sent as an opener it would
+      // be a separate muted turn the seat answers before the work arrives.
       expect(firstArrival.map((turn) => turn.text)).toEqual([
-        'You are Opus. You never merge.',
-        'lap one',
+        'You are Opus. You never merge.\n\nlap one',
       ])
 
       // s2 answers; its settle carries the receipts, so the run continues.
@@ -3640,6 +3640,113 @@ describe('RelayEngine', () => {
       expect(
         gateway.sent.filter((t) => t.sessionId === 's2').map((t) => t.text),
       ).toEqual(['/clear', 'You are Opus.\n\nthe brief'])
+    })
+
+    it('never sends the card as an opener of its own', async () => {
+      seatsBySession.s2 = {
+        batonName: 'horse opus',
+        kind: 'resident',
+        roleCard: 'You are Opus.',
+        hostPolicy: null,
+        providerId: null,
+        model: null,
+      }
+      wire('s1', 's2')
+      const gateway = createGateway({ lastMessages: { s1: 'the brief' } })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      // Mutation: send the card through `sendMessageWithOpener` (lap 1) and
+      // there are two sends here -- a muted, context-free turn the seat
+      // answers before the payload exists.
+      const arrivals = gateway.sent.filter((turn) => turn.sessionId === 's2')
+      expect(arrivals).toHaveLength(1)
+      expect(arrivals[0]!.text).toBe('You are Opus.\n\nthe brief')
+      expect(arrivals[0]!.queuedBehindOpener).toBeUndefined()
+    })
+
+    /**
+     * The ledger is the memory (MAR-3083 lap 2, D), and the memory outlives
+     * the object that wrote it: a second engine over the same database reads
+     * the same answer, so nothing about a card depends on one process staying
+     * alive.
+     *
+     * The boundary, measured and reported: a run does NOT survive a restart
+     * either. `takeFlowRunId` continues a run from the in-memory baton map, so
+     * the settle after a restart mints a NEW run id — and a fresh run is
+     * rightly a fresh introduction. Keying the card on the run is correct; the
+     * restart case is the run's to fix, not the card's.
+     */
+    it('keeps the card fact in the record, where another engine can read it', async () => {
+      seatsBySession.s2 = {
+        batonName: 'horse opus',
+        kind: 'resident',
+        roleCard: 'You are Opus.',
+        hostPolicy: null,
+        providerId: null,
+        model: null,
+      }
+      wire('s1', 's2')
+      const gateway = createGateway({ lastMessages: { s1: 'lap one' } })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+      const carried = hops.at(-1)!
+
+      // Mutation: keep the in-memory Map (lap 1) and the fact exists nowhere
+      // a second reader could find it -- this is red on both counts.
+      expect(carried).toMatchObject({ targetSessionId: 's2' })
+      expect(
+        new RelayService(db).hasCarriedRoleCard(carried.flowRunId, 's2'),
+      ).toBe(true)
+      // And a seat nobody carried a card to is still owed one.
+      expect(
+        new RelayService(db).hasCarriedRoleCard(carried.flowRunId, 's3'),
+      ).toBe(false)
+    })
+
+    it('still owes the card when the delivery that would have carried it threw', async () => {
+      seatsBySession.s2 = {
+        batonName: 'horse opus',
+        kind: 'resident',
+        roleCard: 'You are Opus.',
+        hostPolicy: null,
+        providerId: null,
+        model: null,
+      }
+      wire('s1', 's2')
+      let refuse = true
+      const gateway = createGateway({
+        lastMessages: { s1: 'the brief' },
+        sendMessage: async () => {
+          if (!refuse) return
+          refuse = false
+          throw new Error('the session layer refused')
+        },
+      })
+      const engine = createEngine(gateway)
+
+      await engine.handleSettle(settled('s1'))
+      await engine.handleSettle(settled('s1'))
+
+      // Mutation: spend the claim before the send (lap 1) and the retry
+      // carries the payload alone -- the card was burned by a throw.
+      const arrivals = gateway.sent.filter((turn) => turn.sessionId === 's2')
+      expect(arrivals.at(-1)!.text).toBe('You are Opus.\n\nthe brief')
+    })
+
+    it('records an error rather than spawning when the seat a wire names is gone', async () => {
+      spawnWire('s1', { member: 'errand' })
+      const gateway = createGateway({})
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      // Mutation: fall back to the wire's own spec (lap 1) and a session opens
+      // on a recipe nobody asked for, with no word about why it differs.
+      expect(gateway.created).toHaveLength(0)
+      expect(hops.at(-1)).toMatchObject({
+        outcome: 'error',
+        error: 'This spawn names no seat this crew has: "errand".',
+      })
     })
 
     it('sends nothing extra to a seat nobody has described', async () => {

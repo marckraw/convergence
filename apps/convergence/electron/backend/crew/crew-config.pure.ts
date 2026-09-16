@@ -164,6 +164,7 @@ export function crewToConfig(
     return {
       spawn: {
         name: spec.name,
+        ...(spec.member === null ? {} : { member: spec.member }),
         provider: spec.providerId,
         model: spec.model,
         effort: spec.effort,
@@ -396,6 +397,7 @@ const permissions: Check = (v, p) =>
   typeof v === 'string' ? oneOf('ask', 'yolo')(v, p) : customPermissions(v, p)
 const spawnShape = shape({
   name: string,
+  member: optional(string),
   provider: string,
   model: nullable(string),
   effort: nullable(string),
@@ -415,6 +417,7 @@ const spawn: Check = (v, p) => {
   try {
     const normalized = normalizeRelaySpawnSpec({
       name: input.name,
+      member: input.member,
       providerId: input.provider,
       model: input.model,
       effort: input.effort,
@@ -427,6 +430,7 @@ const spawn: Check = (v, p) => {
     })
     for (const [field, kept] of Object.entries({
       name: normalized.name,
+      member: normalized.member,
       provider: normalized.providerId,
       model: normalized.model,
       effort: normalized.effort,

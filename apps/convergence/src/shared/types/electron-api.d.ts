@@ -332,7 +332,8 @@ interface WorkspacePullRequestData {
 }
 
 interface SessionCrewMemberData {
-  sessionId: string
+  /** Null for a dynamic seat: a recipe has no conversation until it spawns. */
+  sessionId: string | null
   /** The short name a baton addresses this member by; null when unnamed. */
   batonName: string | null
   /** What this seat is for; an older member reads as a horse (MAR-3083). */
@@ -1803,16 +1804,29 @@ interface ElectronAPI {
     addMember: (crewId: string, sessionId: string) => Promise<SessionCrewData>
     removeMember: (
       crewId: string,
-      sessionId: string,
+      member: { sessionId: string } | { batonName: string },
     ) => Promise<SessionCrewData>
     setMemberBatonName: (
       crewId: string,
-      sessionId: string,
+      member: { sessionId: string } | { batonName: string },
       batonName: string | null,
+    ) => Promise<SessionCrewData>
+    addRecipeMember: (
+      crewId: string,
+      input: {
+        batonName: string
+        providerId: string
+        model: string | null
+        hostPolicy: string
+        role?: string | null
+        roleCard?: string | null
+        lanePolicy?: string | null
+        wipLimit?: number | null
+      },
     ) => Promise<SessionCrewData>
     setMemberSeat: (
       crewId: string,
-      sessionId: string,
+      member: { sessionId: string } | { batonName: string },
       patch: {
         role?: string | null
         kind?: string | null

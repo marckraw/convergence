@@ -205,7 +205,7 @@ export class CrewImportService {
         member?.batonName !== batonName &&
         (!member || decisions.updates[role.key] !== false)
       ) {
-        this.crews.setMemberBatonName(crew.id, id, batonName)
+        this.crews.setMemberBatonName(crew.id, { sessionId: id }, batonName)
         if (member) entries.find((e) => e.key === role.key)!.outcome = 'updated'
         changed = true
       }
@@ -233,7 +233,7 @@ export class CrewImportService {
         member.wipLimit === seat.wipLimit &&
         member.hostPolicy === seat.hostPolicy
       if (!seated && (!member || decisions.updates[role.key] !== false)) {
-        this.crews.setMemberSeat(crew.id, id, seat)
+        this.crews.setMemberSeat(crew.id, { sessionId: id }, seat)
         if (member) entries.find((e) => e.key === role.key)!.outcome = 'updated'
         changed = true
       }

@@ -637,6 +637,7 @@ export function crewImportRelayFields(
           model: wire.to.spawn.model,
           effort: wire.to.spawn.effort,
           name: wire.to.spawn.name,
+          member: wire.to.spawn.member ?? null,
           providerAccountId: null,
           executionHost: wire.to.spawn.host,
           workAddress: wire.to.spawn.workAddress,

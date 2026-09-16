@@ -39,6 +39,21 @@ export interface CrewSeatDedupeLog {
  * the same move the attachments table took -- carrying every row and its
  * `added_at`, because that is what decides which membership is the earliest
  * when the dedupe below runs.
+ *
+ * **One transaction, and the app's own law about it** (`database.ts`: "SQLite's
+ * DDL is transactional"). Written as a bare `exec` script this was four
+ * autocommitted statements, and two interrupts were unrecoverable: killed
+ * between the DROP and the RENAME, every membership sat in an orphan table
+ * while the next boot's `CREATE TABLE IF NOT EXISTS` made an empty one --
+ * silent and permanent; killed between the INSERT and the DROP, the next boot
+ * rebuilt again and `CREATE TABLE ..._rebuilt` threw, so the app could not
+ * open its database at all. Both are gone: the rollback undoes the half, and
+ * the leftover of any older interrupted run is dropped inside the same
+ * transaction before the copy begins.
+ *
+ * Prepared statements rather than one script because a transaction is the
+ * unit here, not a string -- and because a test can then interrupt the real
+ * seam instead of a hand-made state.
  */
 function relaxSessionIdNullability(db: Database.Database): void {
   const column = (
@@ -49,8 +64,9 @@ function relaxSessionIdNullability(db: Database.Database): void {
   ).find((info) => info.name === 'session_id')
   if (!column || column.notnull === 0) return
 
-  db.exec(`
-    CREATE TABLE session_crew_members_rebuilt (
+  const statements = [
+    'DROP TABLE IF EXISTS session_crew_members_rebuilt',
+    `CREATE TABLE session_crew_members_rebuilt (
       crew_id TEXT NOT NULL,
       session_id TEXT,
       baton_name TEXT,
@@ -66,22 +82,27 @@ function relaxSessionIdNullability(db: Database.Database): void {
       provider_id TEXT,
       model TEXT,
       UNIQUE (crew_id, session_id)
-    );
-    INSERT INTO session_crew_members_rebuilt
+    )`,
+    `INSERT INTO session_crew_members_rebuilt
       (crew_id, session_id, baton_name, canvas_x, canvas_y, added_at,
        role, kind, role_card, host_policy, lane_policy, wip_limit,
        provider_id, model)
       SELECT crew_id, session_id, baton_name, canvas_x, canvas_y, added_at,
              role, kind, role_card, host_policy, lane_policy, wip_limit,
              provider_id, model
-        FROM session_crew_members;
-    DROP TABLE session_crew_members;
-    ALTER TABLE session_crew_members_rebuilt RENAME TO session_crew_members;
-    CREATE INDEX IF NOT EXISTS idx_session_crew_members_crew
-      ON session_crew_members(crew_id);
-    CREATE INDEX IF NOT EXISTS idx_session_crew_members_session
-      ON session_crew_members(session_id);
-  `)
+        FROM session_crew_members
+        ORDER BY added_at ASC, rowid ASC`,
+    'DROP TABLE session_crew_members',
+    'ALTER TABLE session_crew_members_rebuilt RENAME TO session_crew_members',
+    `CREATE INDEX IF NOT EXISTS idx_session_crew_members_crew
+      ON session_crew_members(crew_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_session_crew_members_session
+      ON session_crew_members(session_id)`,
+  ]
+
+  db.transaction(() => {
+    for (const statement of statements) db.prepare(statement).run()
+  })()
 }
 
 export function migrateCrewSeats(db: Database.Database): CrewSeatDedupeLog {

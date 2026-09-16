@@ -1061,6 +1061,8 @@ describe('database', () => {
         'dispatch_id',
         // The hop a redelivery re-opens on the same run (MAR-2971).
         'redelivered_from',
+        // Whether this hop's message led with the seat's card (MAR-3083 R4).
+        'role_card_carried',
         'outcome',
         'error',
       ].sort(),
