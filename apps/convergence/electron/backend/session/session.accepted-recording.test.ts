@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import { LocalExecutionHost } from '../provider/execution-host/local-execution-host'
 import { ProviderRegistry } from '../provider/provider-registry'
@@ -323,4 +323,60 @@ it('MAR-3023 K: a turn that carried no dispatch ends the previous turn’s tail 
   vi.advanceTimersByTime(CONVERSATION_PATCH_FLUSH_MS)
   expect(failures).toEqual([])
   errors.mockRestore()
+})
+
+describe('MAR-3023 lap 6, D: every Stop site stops and always releases', () => {
+  const handles = () =>
+    (service as unknown as { activeHandles: Map<string, unknown> })
+      .activeHandles
+
+  function throwingHandle(extra: Record<string, unknown> = {}) {
+    return {
+      stop: vi.fn(() => {
+        throw new Error('fixture stop refused')
+      }),
+      dispose: vi.fn(),
+      onDelta: vi.fn(),
+      ...extra,
+    }
+  }
+
+  const stopFailedLogged = (errors: { mock: { calls: unknown[][] } }) =>
+    errors.mock.calls.some((call) =>
+      String(call[0]).includes('Provider stop failed'),
+    )
+
+  it('releases on the plain branch and never throws to the caller', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    handles().set(id, throwingHandle())
+    // Mutation: stop and release without the helper -> this throws.
+    expect(() => service.stop(id)).not.toThrow()
+    expect(handles().has(id)).toBe(false)
+    expect(stopFailedLogged(errors)).toBe(true)
+    errors.mockRestore()
+  })
+
+  it('releases on the interrupt fallback', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    handles().set(
+      id,
+      throwingHandle({ interrupt: vi.fn(async () => 'not-applicable') }),
+    )
+    service.stop(id)
+    await vi.waitFor(() => expect(handles().has(id)).toBe(false))
+    expect(stopFailedLogged(errors)).toBe(true)
+    errors.mockRestore()
+  })
+
+  it('releases on the conversation-Stop branch of an answered session', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    getDatabase()
+      .prepare("UPDATE sessions SET status = 'answered' WHERE id = ?")
+      .run(id)
+    handles().set(id, throwingHandle({ stopTask: vi.fn(async () => {}) }))
+    service.stop(id)
+    await vi.waitFor(() => expect(handles().has(id)).toBe(false))
+    expect(stopFailedLogged(errors)).toBe(true)
+    errors.mockRestore()
+  })
 })

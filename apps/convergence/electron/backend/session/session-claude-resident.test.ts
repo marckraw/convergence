@@ -2459,3 +2459,84 @@ it('MAR-3023 lap 5, B: a turn that ends because its process died is no longer ac
   getDatabase().exec('DROP TRIGGER refuse_exit_report')
   errors.mockRestore()
 })
+
+it('MAR-3023 lap 6, A: a refused preparation-failure note still fails the turn — logged, no unhandled rejection, no fact', async () => {
+  const { service, session } = await fixture()
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  spawnMock.mockImplementationOnce(() => {
+    throw new Error('fixture spawn refused')
+  })
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_prepare_note
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'note'
+         AND json_extract(NEW.payload_json, '$.text') LIKE 'Failed to prepare Claude Code turn%'
+    BEGIN SELECT RAISE(ABORT, 'fixture prepare note refused'); END`)
+
+  await service.start(session.id, { text: 'first' })
+
+  // Mutation: write the note bare -> it throws out of `void startTurn`, an
+  // unhandled rejection, and the failed status below never lands.
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'failed')
+  expect(
+    errors.mock.calls.some((call) =>
+      String(call[0]).includes('Could not record the preparation failure note'),
+    ),
+  ).toBe(true)
+  expect(failures).toEqual([])
+  getDatabase().exec('DROP TRIGGER refuse_prepare_note')
+  errors.mockRestore()
+})
+
+it('MAR-3023 lap 6, B: under a refusal of every record, quit still closes the process — evidence and note logged', async () => {
+  const { service, session, children } = await settledResident()
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_every_item
+    BEFORE INSERT ON session_conversation_items
+    BEGIN SELECT RAISE(ABORT, 'fixture record closed'); END`)
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_every_harness_event
+    BEFORE INSERT ON session_harness_events
+    BEGIN SELECT RAISE(ABORT, 'fixture evidence closed'); END`)
+  const handle = (
+    service as unknown as {
+      activeHandles: Map<string, { dispose: (reason: 'quit') => unknown }>
+    }
+  ).activeHandles.get(session.id)!
+
+  // Mutation: keep the evidence write before the close.
+  expect(() => handle.dispose('quit')).not.toThrow()
+  await vi.waitUntil(() => children[0].stdin.writableEnded)
+  expect(
+    errors.mock.calls.some((call) =>
+      String(call[0]).includes('Could not record the quit note'),
+    ),
+  ).toBe(true)
+  getDatabase().exec('DROP TRIGGER refuse_every_item')
+  getDatabase().exec('DROP TRIGGER refuse_every_harness_event')
+  errors.mockRestore()
+})
+
+it('MAR-3023 lap 6, E: acceptance ends at the settle — a refused note the stream writes afterwards is not the settled turn’s loss', async () => {
+  const { service, session, children } = await settledResident()
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_compaction_note
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'note'
+         AND json_extract(NEW.payload_json, '$.text') = 'Compacting context...'
+    BEGIN SELECT RAISE(ABORT, 'fixture compaction note refused'); END`)
+
+  children[0].stdout.write(
+    JSON.stringify({ type: 'system', subtype: 'compact_boundary' }) + '\n',
+  )
+  await new Promise((resolve) => setTimeout(resolve, 50))
+
+  // Mutation: keep acceptance after the settle's closing writes -> the
+  // refusal is announced through the settled turn's dispatch: a fact, red.
+  expect(failures).toEqual([])
+  expect(recordingFailedNotesOf(service, session.id)).toEqual([])
+  getDatabase().exec('DROP TRIGGER refuse_compaction_note')
+  errors.mockRestore()
+})

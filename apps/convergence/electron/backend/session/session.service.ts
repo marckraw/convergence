@@ -3196,8 +3196,8 @@ export class SessionService {
           if (this.activeHandles.get(id) !== handle) return
           // Conversation Stop is itself a witness if a task never confirms.
           if (!isTerminalSessionStatus(this.getById(id)?.status ?? 'idle'))
-            handle.stop()
-          this.releaseHandle(id)
+            this.stopAndRelease(id, handle)
+          else this.releaseHandle(id)
         })
         .catch((error) => {
           console.error('[session] Could not finish conversation Stop', error)
@@ -3208,13 +3208,7 @@ export class SessionService {
     if (handle.interrupt) {
       const fallback = () => {
         if (this.activeHandles.get(id) !== handle) return
-        try {
-          handle.stop()
-        } finally {
-          // Released even when the provider's stop throws: a Stop that throws
-          // must not leave the handle addressable (MAR-3023 lap 5, A).
-          this.releaseHandle(id)
-        }
+        this.stopAndRelease(id, handle)
       }
       void handle
         .interrupt()
@@ -3228,8 +3222,24 @@ export class SessionService {
         })
       return
     }
-    handle.stop()
-    this.releaseHandle(id)
+    this.stopAndRelease(id, handle)
+  }
+
+  /**
+   * Stops a provider handle and always releases it (MAR-3023 lap 5, A; lap 6,
+   * D) -- the one shape for every Stop site. A provider whose `stop()` throws
+   * is logged, never left addressable, and never throws to the caller: the
+   * user asked for the process to end, and a refused record is not a reason
+   * for it not to.
+   */
+  private stopAndRelease(id: string, handle: SessionHandle): void {
+    try {
+      handle.stop()
+    } catch (error) {
+      console.error(`[session] Provider stop failed for ${id}`, error)
+    } finally {
+      this.releaseHandle(id)
+    }
   }
 
   async disposeAllForQuit(): Promise<void> {

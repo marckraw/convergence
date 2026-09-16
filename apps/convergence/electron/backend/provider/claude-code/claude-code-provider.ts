@@ -720,19 +720,24 @@ export class ClaudeCodeProvider implements Provider {
     }
 
     /**
-     * A write made while tearing the handle down (MAR-3023 lap 5, A). It runs
-     * after the process is closed and never throws: a refused local record is
-     * logged, and it cannot keep a process alive or make Stop impossible.
+     * A write that is no accepted turn's recording and must never throw
+     * (MAR-3023 lap 5, A; lap 6): a teardown record, written after the process
+     * is closed, or a report written after `endTurn()` for a turn that did
+     * not complete. A refused local record is logged -- it cannot keep a
+     * process alive, make Stop impossible, or skip the next record.
      */
     function recordTeardown(label: string, write: () => void): void {
       try {
         write()
       } catch (error) {
-        console.error(
-          `[claude-code] Could not record ${label} while tearing the session down`,
-          error,
-        )
+        console.error(`[claude-code] Could not record ${label}`, error)
       }
+    }
+
+    /** A turn that ended failed: its status and attention, each recorded. */
+    function recordFailedTurnState(): void {
+      recordTeardown('the failed status', () => setStatus('failed'))
+      recordTeardown('the failed attention', () => setAttention('failed'))
     }
 
     const sessionEmitter = new ProviderSessionEmitter({
@@ -1697,9 +1702,14 @@ export class ClaudeCodeProvider implements Provider {
           userMessageItemId = null
         }
         if (!skillResolution.ok) {
-          addSkillInvocationFailureNote(skillResolution)
-          setStatus('failed')
-          setAttention('failed')
+          // The prompt is never written: the turn ends here, un-accepted --
+          // a continuation resend carries acceptance to this point (lap 6, C)
+          // -- and its report is recorded, never thrown.
+          endTurn()
+          recordTeardown('the skill failure note', () =>
+            addSkillInvocationFailureNote(skillResolution),
+          )
+          recordFailedTurnState()
           return
         }
         // The prompt will be written: from here the stream records an
@@ -1832,12 +1842,21 @@ export class ClaudeCodeProvider implements Provider {
                 error,
                 version,
               )
+              // Inside the transport's async `finally`: recorded, never thrown
+              // (lap 6, B).
               if (versionRefusal)
-                sessionEmitter.addNote({ text: versionRefusal, level: 'error' })
-              evidence.processEnded(
-                now(),
-                endingReason ?? 'exit',
-                answerStatus === 'answered' ? 'unknown' : undefined,
+                recordTeardown('the version refusal note', () =>
+                  sessionEmitter.addNote({
+                    text: versionRefusal,
+                    level: 'error',
+                  }),
+                )
+              recordTeardown('the process-ended evidence', () =>
+                evidence.processEnded(
+                  now(),
+                  endingReason ?? 'exit',
+                  answerStatus === 'answered' ? 'unknown' : undefined,
+                ),
               )
               if (endingReason) {
                 child = null
@@ -1879,11 +1898,8 @@ export class ClaudeCodeProvider implements Provider {
                     level: 'error',
                   }),
                 )
-                // Its own recorder: a refused note must not skip the status.
-                recordTeardown('the failed status', () => {
-                  setStatus('failed')
-                  setAttention('failed')
-                })
+                // Their own recorders: a refused note must not skip the status.
+                recordFailedTurnState()
               } else {
                 recordTeardown('the process exit note', () =>
                   sessionEmitter.addNote({
@@ -1913,14 +1929,17 @@ export class ClaudeCodeProvider implements Provider {
               'sent',
             )
         } catch (error) {
-          sessionEmitter.addNote({
-            text: `Failed to send attachments: ${String(error)}`,
-            level: 'error',
-          })
+          // The prompt was not written: end the turn first, then report it
+          // (lap 6, C).
           endTurn()
           interruptRequested = false
-          setStatus('failed')
-          setAttention('failed')
+          recordTeardown('the attachment failure note', () =>
+            sessionEmitter.addNote({
+              text: `Failed to send attachments: ${String(error)}`,
+              level: 'error',
+            }),
+          )
+          recordFailedTurnState()
         }
       } catch (error) {
         if (!child) {
@@ -1929,9 +1948,13 @@ export class ClaudeCodeProvider implements Provider {
         }
         const reason = `Failed to prepare Claude Code turn: ${String(error)}`
         endTurn()
-        sessionEmitter.addNote({ text: reason, level: 'error' })
-        setStatus('failed')
-        setAttention('failed')
+        // Every write after `endTurn()` is recorded, never thrown (lap 6, A):
+        // `startTurn` is called under a `void`, so a thrown note was an
+        // unhandled rejection that also skipped the failed status.
+        recordTeardown('the preparation failure note', () =>
+          sessionEmitter.addNote({ text: reason, level: 'error' }),
+        )
+        recordFailedTurnState()
         // A preparation failure has no accepted user artifact. Once bound,
         // retain its attribution and let the turn's failed state explain it.
         if (!userTurnBound) return { kind: 'refused', reason }
@@ -1960,11 +1983,8 @@ export class ClaudeCodeProvider implements Provider {
       const wasHarnessTurn = currentTurn?.openedBy === 'harness'
       clearIdleTimer()
       permissions.endConnection()
-      evidence.processEnded(
-        now(),
-        reason,
-        answerStatus === 'answered' || wasHarnessTurn ? 'unknown' : undefined,
-      )
+      const processEndedStatus =
+        answerStatus === 'answered' || wasHarnessTurn ? 'unknown' : undefined
       stopped = true
       clearTimeout(startTimer)
       disposeTelemetrySink()
@@ -1982,7 +2002,10 @@ export class ClaudeCodeProvider implements Provider {
 
       const closing = child?.close()
       child = null
-      // After the close, and never blocking it (MAR-3023 lap 5, A).
+      // After the close, and never blocking it (MAR-3023 lap 5, A; lap 6, B).
+      recordTeardown('the process-ended evidence', () =>
+        evidence.processEnded(now(), reason, processEndedStatus),
+      )
       if (reason === 'quit')
         recordTeardown('the quit note', () =>
           sessionEmitter.addNote({ text: 'stopped by quit', level: 'info' }),
@@ -2111,10 +2134,12 @@ export class ClaudeCodeProvider implements Provider {
           sessionEmitter.addNote({ text: 'terminated by user', level: 'info' }),
         )
         if (!wasAnswered) {
-          recordTeardown('the stopped status', () => {
-            setStatus(wasHarnessTurn ? 'completed' : 'failed')
-            setAttention(wasHarnessTurn ? 'finished' : 'failed')
-          })
+          recordTeardown('the stopped status', () =>
+            setStatus(wasHarnessTurn ? 'completed' : 'failed'),
+          )
+          recordTeardown('the stopped attention', () =>
+            setAttention(wasHarnessTurn ? 'finished' : 'failed'),
+          )
         }
       },
     }

@@ -1020,7 +1020,6 @@ export class CodexProvider implements Provider {
      * before the send's continuation runs.
      */
     let sendCount = 0
-    let currentSend = 0
     let acknowledgedSend = 0
     let deadInteractionNoted = false
 
@@ -1435,6 +1434,8 @@ export class CodexProvider implements Provider {
       currentThreadId: string,
       input: CodexUserInput[],
       clientUserMessageId: string,
+      /** The send this `turn/start` belongs to, captured lexically (lap 6, E). */
+      send: number,
     ): Promise<void> {
       // Sent, not acknowledged: a turn the server took but never answered for
       // still carried this thread past the boundary, and claiming otherwise is
@@ -1460,7 +1461,7 @@ export class CodexProvider implements Provider {
             // yet an accepted turn's -- rethrown, and swallowed by the reader.
             onResult: () => {
               turnAcknowledged = true
-              acknowledgedSend = currentSend
+              acknowledgedSend = send
             },
           },
         )
@@ -1528,10 +1529,10 @@ export class CodexProvider implements Provider {
      * still reach it), and — when the model has already finished — its answer
      * in the transcript.
      */
-    function adoptLandedTurn(turn: CodexLandedTurn | null): void {
+    function adoptLandedTurn(turn: CodexLandedTurn | null, send: number): void {
       // The server says the turn landed: that is its acknowledgement.
       turnAcknowledged = true
-      acknowledgedSend = currentSend
+      acknowledgedSend = send
       sessionEmitter.addNote({
         text: 'The connection dropped after Codex had already taken this message, so it was not sent again. Its answer continues in the next reply.',
         level: 'warning',
@@ -1579,6 +1580,7 @@ export class CodexProvider implements Provider {
       threadIdAtSend: string
       clientUserMessageId: string
       turnInput: CodexUserInput[]
+      send: number
     }): Promise<void> {
       const recovered = await openConnection()
       if (!recovered || stopped) return
@@ -1592,6 +1594,7 @@ export class CodexProvider implements Provider {
           resumedThreadId,
           input.turnInput,
           input.clientUserMessageId,
+          input.send,
         )
         return
       }
@@ -1604,7 +1607,7 @@ export class CodexProvider implements Provider {
       if (stopped) return
 
       if (reconciled.outcome === 'landed') {
-        adoptLandedTurn(reconciled.turn)
+        adoptLandedTurn(reconciled.turn, input.send)
         return
       }
 
@@ -1625,12 +1628,14 @@ export class CodexProvider implements Provider {
         resumedThreadId,
         input.turnInput,
         input.clientUserMessageId,
+        input.send,
       )
     }
 
     async function startTurn(
       activeRpc: JsonRpcClient,
       input: CodexUserInput[],
+      send: number,
     ): Promise<void> {
       assistantTextBuffer = ''
       assistantMessageItemId = null
@@ -1654,6 +1659,7 @@ export class CodexProvider implements Provider {
           currentThreadId,
           input,
           clientUserMessageId,
+          send,
         )
       } catch (err) {
         // The connection this turn was sent on is gone: `abandonConnection`
@@ -1665,6 +1671,7 @@ export class CodexProvider implements Provider {
             threadIdAtSend: currentThreadId,
             clientUserMessageId,
             turnInput: input,
+            send,
           })
           return
         }
@@ -1703,6 +1710,7 @@ export class CodexProvider implements Provider {
           recoveredThreadId,
           input,
           clientUserMessageId,
+          send,
         )
       }
     }
@@ -1762,7 +1770,6 @@ export class CodexProvider implements Provider {
       // Nothing of this send is acknowledged yet (lap 3, H).
       turnAcknowledged = false
       const thisSend = ++sendCount
-      currentSend = thisSend
       if (input.text === CONVERSATION_RESET_COMMAND) {
         const oldThreadId = threadId
         setStatus('running')
@@ -1844,6 +1851,7 @@ export class CodexProvider implements Provider {
             parts,
             skills: skillInputs,
           }),
+          thisSend,
         )
         try {
           patchUserMessageSkills(
@@ -2576,8 +2584,12 @@ export class CodexProvider implements Provider {
             // really dying, its obituary says so.
             if (disposition === 'fatal') {
               fatalRelease = true
-              setStatus('failed')
-              setAttention('failed')
+              // A fatal error ends the turn, and its acceptance with it,
+              // after its closing writes (lap 6, E).
+              endAcceptedTurn(() => {
+                setStatus('failed')
+                setAttention('failed')
+              })
             }
             break
           }
@@ -3142,10 +3154,8 @@ export class CodexProvider implements Provider {
         // it (F1).
         disposeRuntime({ interruptActiveTurn: true })
         // After the release, and never throwing (MAR-3023 lap 5, A).
-        recordTeardown('the stopped status', () => {
-          setStatus('failed')
-          setAttention('failed')
-        })
+        recordTeardown('the stopped status', () => setStatus('failed'))
+        recordTeardown('the stopped attention', () => setAttention('failed'))
       },
     }
 
