@@ -28,7 +28,13 @@ export function crewToConfig(
   options: { includePositions?: boolean } = {},
 ): CrewConfig {
   const roles: CrewConfig['roles'] = Object.create(null)
-  for (const member of [...members].sort((a, b) =>
+  // A seat whose conversation was deleted is SKIPPED, never thrown on and
+  // never dropped in silence (MAR-3118 lap 2, A): the file carries
+  // conversations, this seat has none, and `orphanSeatNotes` names it in a
+  // comment. A wire still aimed at it keeps refusing (`wireRole`), because a
+  // file whose wire names a role it does not carry cannot be read back.
+  const carried = members.filter((member) => !member.conversationMissing)
+  for (const member of [...carried].sort((a, b) =>
     compare(roleKey(a), roleKey(b)),
   )) {
     // A dynamic seat is a recipe with no conversation (R3), and `roles` is a
@@ -139,7 +145,7 @@ export function crewToConfig(
   }
   if (options.includePositions)
     config.layout = Object.fromEntries(
-      [...members]
+      [...carried]
         .sort((a, b) => compare(roleKey(a), roleKey(b)))
         .filter((m) => m.canvasX !== null && m.canvasY !== null)
         .map((m) => [roleKey(m), [m.canvasX!, m.canvasY!] as [number, number]]),
@@ -222,7 +228,7 @@ export function crewToConfig(
     }
   }
   function wireRole(id: string | null, target: boolean): string {
-    const member = members.find((m) => m.sessionId === id)
+    const member = carried.find((m) => m.sessionId === id)
     if (!member) throw new Error('A wire endpoint is not in the crew')
     if (target && !member.batonName)
       throw new Error('A wire target needs a baton name before export')
@@ -569,6 +575,22 @@ const validateRecipe = shape({
   ),
   layout: optional(record(pair)),
 })
+
+/**
+ * Every seat whose conversation was deleted, said as a comment in the file
+ * (MAR-3118 lap 2, A): `crewToConfig` skips it, and the file says so instead
+ * of letting the seat vanish.
+ */
+export function orphanSeatNotes(
+  members: readonly SessionCrewMember[],
+): string[] {
+  return members
+    .filter((member) => member.conversationMissing)
+    .map(
+      (member) =>
+        `seat "${member.batonName ?? 'unnamed'}" skipped — its conversation no longer exists`,
+    )
+}
 
 /**
  * Every dynamic seat this file does not carry, said as a comment in the file

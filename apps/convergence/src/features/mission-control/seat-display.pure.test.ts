@@ -11,6 +11,7 @@ import {
   laneLabel,
   refusalKeptLine,
   seatDisplayName,
+  seatPatchField,
   seatHostId,
   seatRowAccessibleName,
   seatSourceLabel,
@@ -106,6 +107,18 @@ describe('seat display (MAR-3118)', () => {
     expect(batonNameHelper('opus-lm', true)).toMatch(
       /A recipe has no conversation/,
     )
+  })
+
+  it('knows the one field a seat edit carries', () => {
+    expect(
+      [
+        { role: 'reviewer' as const },
+        { roleCard: null },
+        { hostPolicy: 'lm' },
+        { lanePolicy: 'main' as const },
+        { wipLimit: 2 },
+      ].map(seatPatchField),
+    ).toEqual(['role', 'roleCard', 'hostPolicy', 'lanePolicy', 'wipLimit'])
   })
 
   it('names what a refusal did not change', () => {

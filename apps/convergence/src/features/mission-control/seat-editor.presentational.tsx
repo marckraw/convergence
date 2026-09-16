@@ -21,6 +21,7 @@ import {
   refusalKeptLine,
   seatDisplayName,
   type SeatHostOption,
+  type SeatPatch,
   type SeatRefusalField,
 } from './seat-display.pure'
 import { SeatFacts, type SeatFact } from './seat-facts.presentational'
@@ -41,14 +42,6 @@ const LANES: readonly { value: SeatLane; label: string }[] = [
   { value: 'own-worktree', label: 'own worktree' },
 ]
 
-export interface SeatPatch {
-  role?: string
-  roleCard?: string | null
-  hostPolicy?: string | null
-  lanePolicy?: string | null
-  wipLimit?: number | null
-}
-
 interface SeatEditorProps {
   member: SessionCrewMember
   /** What is typed in the name field (the draft, else the stored name). */
@@ -61,8 +54,8 @@ interface SeatEditorProps {
   factsHeading: string
   /** A recipe's host choices: this Mac and every execution-host endpoint. */
   hostOptions: readonly SeatHostOption[]
-  /** The door's refusal about this seat, and the field it is about. */
-  problem: { field: SeatRefusalField; message: string } | null
+  /** The door's refusals about this seat, one per field (lap 2, B). */
+  problems: Partial<Record<SeatRefusalField, string>>
   busy: boolean
   onNameChange: (value: string) => void
   onNameCommit: () => void
@@ -92,7 +85,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
   facts,
   factsHeading,
   hostOptions,
-  problem,
+  problems,
   busy,
   onNameChange,
   onNameCommit,
@@ -109,17 +102,22 @@ export const SeatEditor: FC<SeatEditorProps> = ({
   const recipe = member.sessionId === null
   const orphan = member.conversationMissing
   const KindGlyph = orphan ? Unlink : recipe ? FlaskConical : MessageSquare
-  const refusalFor = (field: SeatRefusalField) =>
-    problem?.field === field ? (
-      <SeatRefusal
-        message={problem.message}
-        kept={refusalKeptLine(field, member)}
-      />
-    ) : null
+  const refusalFor = (field: SeatRefusalField) => {
+    const message = problems[field]
+    return message === undefined ? null : (
+      <SeatRefusal message={message} kept={refusalKeptLine(field, member)} />
+    )
+  }
+  // The stepper steps from what the field SHOWS -- the draft when there is one
+  // (lap 2, E): stepping from the record sent `record + 1` after the typed
+  // value, and the last write won.
+  const shownWip = Number(wipValue)
+  const stepBase =
+    Number.isInteger(shownWip) && shownWip >= 1 ? shownWip : member.wipLimit
   const cardText = cardDraft ?? member.roleCard ?? ''
   const writingCard = cardDraft !== undefined || Boolean(member.roleCard)
   const cardOver =
-    cardText.length > ROLE_CARD_LIMIT || problem?.field === 'roleCard'
+    cardText.length > ROLE_CARD_LIMIT || problems.roleCard !== undefined
   const storedHost = member.hostPolicy ?? LOCAL_HOST_ID
   const hostChoices = hostOptions.some((option) => option.id === storedHost)
     ? hostOptions
@@ -184,7 +182,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             }}
             className={cn(
               'h-8 flex-1 text-xs',
-              problem?.field === 'batonName' && 'border-amber-500/70',
+              problems.batonName !== undefined && 'border-amber-500/70',
             )}
           />
           <Button
@@ -362,7 +360,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             <div
               className={cn(
                 'flex h-8 items-center rounded-md border',
-                problem?.field === 'wipLimit'
+                problems.wipLimit !== undefined
                   ? 'border-amber-500/70'
                   : 'border-white/15',
               )}
@@ -372,8 +370,11 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 variant="ghost"
                 size="sm"
                 aria-label={`Lower the WIP limit for ${label}`}
-                disabled={busy || member.wipLimit <= 1}
-                onClick={() => onSeatEdit({ wipLimit: member.wipLimit - 1 })}
+                disabled={busy || stepBase <= 1}
+                // Keep focus in the field: a blur here would commit the typed
+                // value as a second write racing the step.
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => onSeatEdit({ wipLimit: stepBase - 1 })}
                 className="h-7 px-2 text-muted-foreground hover:text-foreground disabled:opacity-40"
               >
                 <Minus aria-hidden className="size-3" />
@@ -393,7 +394,8 @@ export const SeatEditor: FC<SeatEditorProps> = ({
                 size="sm"
                 aria-label={`Raise the WIP limit for ${label}`}
                 disabled={busy}
-                onClick={() => onSeatEdit({ wipLimit: member.wipLimit + 1 })}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => onSeatEdit({ wipLimit: stepBase + 1 })}
                 className="h-7 px-2 text-muted-foreground hover:text-foreground disabled:opacity-40"
               >
                 <Plus aria-hidden className="size-3" />

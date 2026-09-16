@@ -331,6 +331,9 @@ export function buildCanvasGraph(
       // A dynamic seat has no conversation and so no card on this canvas
       // (MAR-3083 R3); the graph draws conversations.
       if (member.sessionId === null) continue
+      // Nor does a seat whose conversation was deleted (MAR-3118 lap 2, D):
+      // its stored position must not move a cluster for a card not drawn.
+      if (member.conversationMissing) continue
       storedPositions.set(member.sessionId, {
         x: member.canvasX,
         y: member.canvasY,

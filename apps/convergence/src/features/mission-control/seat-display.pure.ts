@@ -12,6 +12,26 @@ export type SeatRefusalField =
   | 'hostPolicy'
   | 'wipLimit'
 
+/**
+ * One seat edit carries exactly one field (MAR-3118 lap 2, F3), so the field a
+ * refusal is about is known by construction, never guessed.
+ */
+export type SeatPatch =
+  | { role: SessionCrewMember['role'] }
+  | { roleCard: string | null }
+  | { hostPolicy: string | null }
+  | { lanePolicy: SessionCrewMember['lanePolicy'] }
+  | { wipLimit: number | null }
+
+/** The field a seat edit carries — where its refusal is drawn. */
+export function seatPatchField(patch: SeatPatch): SeatRefusalField {
+  if ('role' in patch) return 'role'
+  if ('roleCard' in patch) return 'roleCard'
+  if ('hostPolicy' in patch) return 'hostPolicy'
+  if ('lanePolicy' in patch) return 'lanePolicy'
+  return 'wipLimit'
+}
+
 /** A host endpoint as the drawer names it. */
 export interface SeatHostOption {
   id: string

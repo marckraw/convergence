@@ -1,6 +1,5 @@
 import type { FC } from 'react'
 import {
-  ChevronDown,
   ChevronRight,
   FlaskConical,
   GitBranch,
@@ -25,7 +24,6 @@ interface SeatRowProps {
   source: string
   host: string
   hostIsLocal: boolean
-  open: boolean
   onToggle: () => void
 }
 
@@ -41,7 +39,6 @@ export const SeatRow: FC<SeatRowProps> = ({
   source,
   host,
   hostIsLocal,
-  open,
   onToggle,
 }) => {
   const orphan = member.conversationMissing
@@ -55,7 +52,6 @@ export const SeatRow: FC<SeatRowProps> = ({
       variant="ghost"
       size="sm"
       data-seat-row
-      aria-expanded={open}
       aria-label={seatRowAccessibleName({ member, source, host })}
       onClick={onToggle}
       className={cn(
@@ -120,17 +116,10 @@ export const SeatRow: FC<SeatRowProps> = ({
           hasCard ? 'bg-foreground/80' : 'border border-amber-400',
         )}
       />
-      {open ? (
-        <ChevronDown
-          aria-hidden
-          className="size-3.5 shrink-0 text-muted-foreground"
-        />
-      ) : (
-        <ChevronRight
-          aria-hidden
-          className="size-3.5 shrink-0 text-muted-foreground"
-        />
-      )}
+      <ChevronRight
+        aria-hidden
+        className="size-3.5 shrink-0 text-muted-foreground"
+      />
     </Button>
   )
 }

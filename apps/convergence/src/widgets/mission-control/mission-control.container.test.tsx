@@ -1744,6 +1744,79 @@ describe('MissionControl', () => {
       expect(setMemberSeat).toHaveBeenCalledTimes(1)
     })
 
+    /**
+     * One commit shape for every typed field, the name included (MAR-3118
+     * lap 2, B): a refused name keeps the typing, under a line that says so.
+     */
+    it('keeps a refused baton name in its field, with the sentence and what did not change (mutation: drop the draft before the await)', async () => {
+      const api = await openCrewSettings('Night shift', [
+        {
+          ...DEFAULT_CREW_MEMBER_SEAT,
+          sessionId: 'a',
+          batonName: 'opus',
+          canvasX: null,
+          canvasY: null,
+        },
+      ])
+      const refused = 'This crew already has a seat named "grok"'
+      vi.mocked(api.setMemberBatonName).mockRejectedValueOnce(
+        new Error(refused),
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
+      const name = screen.getByLabelText('Baton name for opus')
+      fireEvent.change(name, { target: { value: 'grok' } })
+      fireEvent.blur(name)
+
+      expect(await screen.findByText(refused)).toBeInTheDocument()
+      expect(screen.getByLabelText('Baton name for opus')).toHaveValue('grok')
+      expect(screen.getByText(/^Still named “opus”/)).toBeInTheDocument()
+    })
+
+    /**
+     * A refusal is shown where its field is (lap 2, B2): the seat left by a
+     * switch is closed, so its refusal re-opens it.
+     */
+    it('re-opens the seat whose card was refused after switching away, with the sentence and the typed card (mutation: drop the re-open)', async () => {
+      const api = await openCrewSettings('Night shift', [
+        {
+          ...DEFAULT_CREW_MEMBER_SEAT,
+          sessionId: 'a',
+          batonName: 'opus',
+          canvasX: null,
+          canvasY: null,
+          roleCard: 'Old card.',
+        },
+        {
+          ...DEFAULT_CREW_MEMBER_SEAT,
+          sessionId: 'b',
+          batonName: 'grok',
+          canvasX: null,
+          canvasY: null,
+        },
+      ])
+      const refused = 'A role card cannot be longer than 4000 characters'
+      ;(api as unknown as { setMemberSeat: unknown }).setMemberSeat = vi.fn(
+        async () => {
+          throw new Error(refused)
+        },
+      )
+      const typed = 'You are opus. '.repeat(400)
+
+      fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
+      fireEvent.change(screen.getByLabelText('Role card for opus'), {
+        target: { value: typed },
+      })
+      fireEvent.click(screen.getByRole('button', { name: /^grok — / }))
+
+      expect(await screen.findByText(refused)).toBeInTheDocument()
+      expect(
+        screen.getByRole('region', { name: 'Seat opus' }),
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'Seat grok' })).toBeNull()
+      expect(screen.getByLabelText('Role card for opus')).toHaveValue(typed)
+    })
+
     it('keeps a trailing space while renaming inline (mutation: control by crew.name)', async () => {
       const api = await openCrewSettings('Night')
       const field = screen.getByLabelText('Crew name')
@@ -3622,6 +3695,69 @@ describe('MissionControl', () => {
       } finally {
         vi.unstubAllGlobals()
       }
+    })
+
+    /**
+     * Every selected conversation is tried (MAR-3118 lap 2, C): a refusal
+     * does not stop the rest, the refused one stays selected with the door's
+     * sentence, the count says what landed, and the roster reloads.
+     */
+    it('tries every selected conversation, keeps the refused one selected and counts what landed (mutations: stop at the first refusal; skip the reload)', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Night shift', sessionIds: ['a'] }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Anchor' }),
+          makeSession({ id: 'b', name: 'Bravo' }),
+          makeSession({ id: 'c', name: 'Charlie' }),
+          makeSession({ id: 'd', name: 'Delta' }),
+        ],
+        [CLAUDE_CODE],
+      )
+      const refused = 'This conversation is already in the crew "Day shift"'
+      const addMember = vi.mocked(window.electronAPI.crew.addMember)
+      addMember.mockImplementation(async (_crewId, sessionId) => {
+        if (sessionId === 'c') throw new Error(refused)
+        return makeCrew({ id: 'crew-1' })
+      })
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(
+        await screen.findByRole('button', { name: /Add conversation/ }),
+      )
+      const panel = await screen.findByRole('region', {
+        name: 'Add conversations',
+      })
+      for (const name of ['Bravo', 'Charlie', 'Delta'])
+        fireEvent.click(
+          within(panel).getByRole('button', { name: new RegExp(name) }),
+        )
+      const listsBefore = listCrews.mock.calls.length
+
+      fireEvent.click(
+        within(panel).getByRole('button', { name: 'Add 3 conversations' }),
+      )
+
+      expect(await within(panel).findByText(refused)).toBeInTheDocument()
+      // Mutation: stop at the first refusal -> 'd' is never tried, red.
+      expect(addMember.mock.calls.map((call) => call[1])).toEqual([
+        'b',
+        'c',
+        'd',
+      ])
+      expect(
+        within(panel).getByText(
+          '2 of 3 added; the refused conversation stays selected.',
+        ),
+      ).toBeInTheDocument()
+      expect(
+        within(panel)
+          .getAllByRole('button', { pressed: true })
+          .map((button) => button.textContent),
+      ).toEqual([expect.stringContaining('Charlie')])
+      // Mutation: skip the reload after a refusal -> no new list call, red.
+      expect(listCrews.mock.calls.length).toBeGreaterThan(listsBefore)
     })
 
     it('F6 identifies repeated names by project (mutation: omit project name from detail)', async () => {

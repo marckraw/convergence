@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   crewToConfig,
+  orphanSeatNotes,
   uncarriedRecipeNotes,
   readCrewConfig,
   renderCrewYaml,
@@ -1330,5 +1331,66 @@ describe('recipes the file does not carry', () => {
     expect(notes[0]).toContain('stayed behind')
     expect(notes[1]).toContain('"BATON: addressed"')
     expect(notes[1]).not.toContain('stayed behind')
+  })
+})
+
+/**
+ * A seat whose conversation was deleted (MAR-3118 lap 2, A): the read now
+ * surfaces it, and export neither throws on it nor drops it in silence -- it
+ * skips the seat and names it in a comment.
+ */
+describe('an orphan seat at export', () => {
+  const orphan = {
+    ...DEFAULT_CREW_MEMBER_SEAT,
+    sessionId: 'session-deleted',
+    batonName: 'grok',
+    canvasX: 12,
+    canvasY: 34,
+    conversationMissing: true,
+  }
+
+  it('skips the seat, keeps the rest, and names it in a note', () => {
+    // Mutation: restore the throw ("A crew member has no conversation") -> red.
+    const config = crewToConfig(
+      liveCrew,
+      [...liveMembers, orphan],
+      liveSessions,
+      liveProjects,
+      [],
+      { includePositions: true },
+    )
+    expect(Object.keys(config.roles)).not.toContain('grok')
+    expect(Object.keys(config.roles)).toEqual(
+      Object.keys(
+        crewToConfig(liveCrew, liveMembers, liveSessions, liveProjects, [])
+          .roles,
+      ),
+    )
+    expect(Object.keys(config.layout ?? {})).not.toContain('grok')
+
+    // Mutation: drop the note -> the file says nothing and this is red.
+    const notes = orphanSeatNotes([...liveMembers, orphan])
+    expect(notes).toEqual([
+      'seat "grok" skipped — its conversation no longer exists',
+    ])
+    expect(renderCrewYaml(config, notes)).toContain(
+      '# seat "grok" skipped — its conversation no longer exists',
+    )
+  })
+
+  it('still refuses a wire aimed at the orphan seat', () => {
+    const relay = {
+      ...liveRelays[0]!,
+      targetSessionId: orphan.sessionId,
+    }
+    expect(() =>
+      crewToConfig(
+        liveCrew,
+        [...liveMembers, orphan],
+        liveSessions,
+        liveProjects,
+        [relay],
+      ),
+    ).toThrow('A wire endpoint is not in the crew')
   })
 })

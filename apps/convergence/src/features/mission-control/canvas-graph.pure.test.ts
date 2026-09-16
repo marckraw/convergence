@@ -834,6 +834,35 @@ describe('positions the crew remembers (R10)', () => {
   })
 
   /**
+   * A seat whose conversation was deleted has no card (MAR-3118 lap 2, D), so
+   * its stored position must not move the cluster it is not drawn in.
+   *
+   * Mutation that reds it: drop the `conversationMissing` skip.
+   */
+  it('ignores an orphan seat’s stored position when placing the crew', () => {
+    const live = {
+      ...DEFAULT_CREW_MEMBER_SEAT,
+      sessionId: 'a',
+      batonName: null,
+      canvasX: null,
+      canvasY: null,
+    }
+    const orphan = {
+      ...DEFAULT_CREW_MEMBER_SEAT,
+      sessionId: 'gone',
+      batonName: 'grok',
+      canvasX: 0,
+      canvasY: -400,
+      conversationMissing: true,
+    }
+    const without = buildCanvasGraph([group(['a'], [live])], [])
+    const withOrphan = buildCanvasGraph([group(['a'], [live, orphan])], [])
+
+    expect(withOrphan.clusters[0]!.originY).toBe(without.clusters[0]!.originY)
+    expect(withOrphan.nodes).toEqual(without.nodes)
+  })
+
+  /**
    * The stored coordinates are measured from the crew origin, not from the
    * frame's drawn corner. The origin absorbs upward overhang inside the slot;
    * reading a drop against the frame instead would change its stored value.

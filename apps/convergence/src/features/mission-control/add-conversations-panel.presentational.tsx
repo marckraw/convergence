@@ -34,8 +34,12 @@ interface AddConversationsPanelProps {
   /** The names already in the crew, for the reassuring line at the bottom. */
   alreadyInCrew: readonly string[]
   busy: boolean
-  /** The door's refusal of the last add, in its own words; the selection stays. */
-  refusal?: string | null
+  /**
+   * The door's refusals of the last add, in its own words, and how many of
+   * the attempt landed; the refused conversations stay selected (MAR-3118
+   * lap 2, C).
+   */
+  refusal?: { sentences: string[]; added: number; attempted: number } | null
   onAdd: () => void
   onClose: () => void
 }
@@ -166,12 +170,23 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
       </ul>
     )}
 
-    {refusal ? (
-      <SeatRefusal
-        message={refusal}
-        kept="One seat, one crew. Remove it there first — nothing was added here."
-      />
-    ) : null}
+    {refusal
+      ? refusal.sentences.map((sentence, index) => (
+          <SeatRefusal
+            key={sentence}
+            message={sentence}
+            kept={
+              index === refusal.sentences.length - 1
+                ? `${refusal.added} of ${refusal.attempted} added; the refused ${
+                    refusal.attempted - refusal.added === 1
+                      ? 'conversation stays'
+                      : 'conversations stay'
+                  } selected.`
+                : ''
+            }
+          />
+        ))
+      : null}
 
     {alreadyInCrew.length > 0 ? (
       <p className="text-[10px] text-muted-foreground/70">

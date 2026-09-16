@@ -77,7 +77,13 @@ function renderPanel(
     defaultAttentionMinutes: DEFAULT_CREW_STALL_MINUTES,
     busy: false,
     running: false,
-    batonNameProblem: seat.problem ?? null,
+    seatProblems: seat.problem
+      ? {
+          [seat.problem.memberKey]: {
+            [seat.problem.field]: seat.problem.message,
+          },
+        }
+      : {},
     batonNameDrafts: seat.batonNameDrafts ?? {},
     onCrewNameChange: noop,
     onBatonNameEdit: noop,
@@ -564,7 +570,13 @@ describe('R7 — refusals under the field, typed text kept', () => {
         onToggle={vi.fn()}
         alreadyInCrew={[]}
         busy={false}
-        refusal='This conversation is already in the crew "segmemo development"'
+        refusal={{
+          sentences: [
+            'This conversation is already in the crew "segmemo development"',
+          ],
+          added: 0,
+          attempted: 1,
+        }}
         onAdd={vi.fn()}
         onClose={vi.fn()}
       />,
@@ -578,7 +590,9 @@ describe('R7 — refusals under the field, typed text kept', () => {
     expect(refusal).toHaveTextContent(
       'This conversation is already in the crew "segmemo development"',
     )
-    expect(refusal).toHaveTextContent(/nothing was added here/)
+    expect(refusal).toHaveTextContent(
+      '0 of 1 added; the refused conversation stays selected.',
+    )
     expect(before(row, refusal)).toBe(true)
   })
 })
@@ -690,5 +704,39 @@ describe('R10 — the edge states that are real', () => {
     ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Remove seat' }))
     expect(onRemoveMember).toHaveBeenCalledWith({ sessionId: 's2' })
+  })
+})
+
+describe('MAR-3118 lap 2 — E: the WIP stepper steps from what the field shows', () => {
+  it('steps a typed WIP draft, once', () => {
+    const onSeatEdit = vi.fn()
+    renderPanel(null, null, [opus], onSeatEdit, {
+      ...seatCtx,
+      openSeatKey: 's1',
+      seatDrafts: { s1: { wipLimit: '7' } },
+    })
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Raise the WIP limit for opus' }),
+    )
+
+    // Mutation: step from the record -> { wipLimit: 2 }, red.
+    expect(onSeatEdit).toHaveBeenCalledTimes(1)
+    expect(onSeatEdit).toHaveBeenCalledWith(
+      { sessionId: 's1' },
+      { wipLimit: 8 },
+    )
+  })
+})
+
+describe('MAR-3118 lap 2 — F1: one set of add actions', () => {
+  it('shows an empty crew one New recipe even with the menu open, and no menu item outside a menu', () => {
+    renderPanel(null, null, [], vi.fn(), { ...seatCtx, addMenuOpen: true })
+
+    // Mutation: render the menu for an empty crew too -> two, red.
+    expect(screen.getAllByRole('button', { name: 'New recipe' })).toHaveLength(
+      1,
+    )
+    expect(screen.queryAllByRole('menuitem')).toEqual([])
   })
 })

@@ -25,10 +25,11 @@ import {
   seatHostId,
   seatSourceLabel,
   type SeatHostOption,
+  type SeatPatch,
   type SeatRefusalField,
 } from './seat-display.pure'
 import { groupSeats, offersSeatSearch } from './seat-groups.pure'
-import { SeatEditor, type SeatPatch } from './seat-editor.presentational'
+import { SeatEditor } from './seat-editor.presentational'
 import type { SeatFact } from './seat-facts.presentational'
 import { SeatRow } from './seat-row.presentational'
 
@@ -67,12 +68,11 @@ interface CrewSettingsPanelProps {
    */
   running: boolean
   /** The refusal a member's door gave, and which member it was about. */
-  batonNameProblem: {
-    memberKey: string
-    message: string
-    /** Which field the door refused, so the sentence sits under it (R7). */
-    field: SeatRefusalField
-  } | null
+  /**
+   * The door's refusals, per seat and per field (MAR-3118 lap 2, B): two
+   * commits from one switch -- a card and a name -- each keep their sentence.
+   */
+  seatProblems: Record<string, Partial<Record<SeatRefusalField, string>>>
   /** What is being typed, per member, until they finish. */
   batonNameDrafts: Record<string, string>
   /**
@@ -89,17 +89,7 @@ interface CrewSettingsPanelProps {
   onCrewNameChange: (name: string) => void
   onBatonNameEdit: (memberKey: string, batonName: string) => void
   /** What a seat IS, one field at a time (MAR-3083 R6). */
-  onSeatEdit: (
-    member: CrewMemberRef,
-    patch: {
-      role?: string
-      kind?: string
-      roleCard?: string | null
-      hostPolicy?: string | null
-      lanePolicy?: string | null
-      wipLimit?: number | null
-    },
-  ) => void
+  onSeatEdit: (member: CrewMemberRef, patch: SeatPatch) => void
   onSeatDraftEdit: (
     memberKey: string,
     field: SeatDraftField,
@@ -175,7 +165,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
   defaultAttentionMinutes,
   busy,
   running,
-  batonNameProblem,
+  seatProblems,
   batonNameDrafts,
   onCrewNameChange,
   onBatonNameEdit,
@@ -265,14 +255,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                 : 'Facts · from the conversation'
             }
             hostOptions={hostOptions}
-            problem={
-              batonNameProblem?.memberKey === key
-                ? {
-                    field: batonNameProblem.field,
-                    message: batonNameProblem.message,
-                  }
-                : null
-            }
+            problems={seatProblems[key] ?? {}}
             busy={busy}
             onNameChange={(value) => onBatonNameEdit(key, value)}
             onNameCommit={() => onBatonNameCommit(key)}
@@ -281,7 +264,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
             onWriteCard={() => onSeatDraftEdit(key, 'roleCard', '')}
             onWipChange={(value) => onSeatDraftEdit(key, 'wipLimit', value)}
             onWipCommit={() => onSeatDraftCommit(ref, 'wipLimit')}
-            onSeatEdit={(patch: SeatPatch) => onSeatEdit(ref, patch)}
+            onSeatEdit={(patch) => onSeatEdit(ref, patch)}
             onClose={() => onToggleSeat(key)}
             onRemove={() => onRemoveMember(ref)}
           />
@@ -291,7 +274,6 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
             source={source}
             host={hostLabel(hostId, hostOptions)}
             hostIsLocal={isLocalHost(hostId)}
-            open={false}
             onToggle={() => onToggleSeat(key)}
           />
         )}
@@ -299,13 +281,14 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
     )
   }
 
-  const addActions = (
+  // `inMenu`: only the menu's copy carries menu roles (lap 2, F1).
+  const addActions = (inMenu: boolean) => (
     <>
       <Button
         type="button"
         variant="outline"
         size="sm"
-        role={addMenuOpen ? 'menuitem' : undefined}
+        role={inMenu ? 'menuitem' : undefined}
         disabled={busy}
         onClick={onAddConversation}
         className="h-7 gap-1.5 px-2.5 text-[11px]"
@@ -319,7 +302,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
           type="button"
           variant="outline"
           size="sm"
-          role={addMenuOpen ? 'menuitem' : undefined}
+          role={inMenu ? 'menuitem' : undefined}
           disabled
           aria-description="Coming with MAR-3099"
           className="h-7 gap-1.5 px-2.5 text-[11px]"
@@ -392,13 +375,15 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
             <ChevronDown aria-hidden className="size-3.5" />
           </Button>
         </div>
-        {addMenuOpen ? (
+        {/* One set of add actions (lap 2, F1): an empty crew already shows
+            both in its own state, so the menu does not repeat them. */}
+        {addMenuOpen && members.length > 0 ? (
           <div
             role="menu"
             aria-label="Add a seat"
             className="flex flex-wrap gap-1.5 rounded-md border border-white/10 bg-white/[0.02] p-1.5"
           >
-            {addActions}
+            {addActions(true)}
           </div>
         ) : null}
 
@@ -430,7 +415,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               crew spawns when a wire reaches it. Seat the mastermind first —
               wires need somewhere to leave from.
             </p>
-            <div className="flex flex-wrap gap-1.5">{addActions}</div>
+            <div className="flex flex-wrap gap-1.5">{addActions(false)}</div>
           </div>
         ) : (
           groups.map((group) => (
