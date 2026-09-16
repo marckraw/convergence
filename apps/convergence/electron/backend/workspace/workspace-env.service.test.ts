@@ -6,14 +6,20 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { WorkspaceEnvService } from './workspace-env.service'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  type GitLsFilesRunner,
+  WORKSPACE_ENV_GIT_LS_FILES_ARGS,
+  WORKSPACE_ENV_GIT_LS_FILES_MAX_BUFFER,
+  WorkspaceEnvService,
+} from './workspace-env.service'
 
 describe('WorkspaceEnvService', () => {
   let tempDir: string
@@ -32,6 +38,7 @@ describe('WorkspaceEnvService', () => {
 
   afterEach(() => {
     rmSync(tempDir, { recursive: true, force: true })
+    vi.restoreAllMocks()
   })
 
   function makeDirs(): void {
@@ -41,14 +48,27 @@ describe('WorkspaceEnvService', () => {
     mkdirSync(workspacePath, { recursive: true })
   }
 
-  /** Fixture repo: gitignored fake env files only — never a real project .env. */
+  function git(args: string[]): void {
+    execFileSync('git', args, { cwd: sourcePath, stdio: 'ignore' })
+  }
+
+  /**
+   * Fixture repo with tracked app parents so `--directory` still lists nested
+   * env files. Every env body is fake — never a real project secret.
+   */
   function makeIgnoredEnvRepo(): void {
     makeDirs()
-    execFileSync('git', ['init'], { cwd: sourcePath, stdio: 'ignore' })
+    git(['init'])
+    git(['config', 'user.email', 'test@test.com'])
+    git(['config', 'user.name', 'Test'])
     writeFileSync(join(sourcePath, '.gitignore'), '.env*\n')
-    writeFileSync(join(sourcePath, '.env'), 'ROOT_FAKE=1\n')
     mkdirSync(join(sourcePath, 'apps', 'a'), { recursive: true })
     mkdirSync(join(sourcePath, 'apps', 'b'), { recursive: true })
+    writeFileSync(join(sourcePath, 'apps', 'a', 'README'), 'tracked\n')
+    writeFileSync(join(sourcePath, 'apps', 'b', 'README'), 'tracked\n')
+    git(['add', '.gitignore', 'apps/a/README', 'apps/b/README'])
+    git(['commit', '-m', 'track app parents'])
+    writeFileSync(join(sourcePath, '.env'), 'ROOT_FAKE=1\n')
     mkdirSync(join(sourcePath, 'node_modules', 'x'), { recursive: true })
     writeFileSync(join(sourcePath, 'apps', 'a', '.env'), 'APP_A_FAKE=1\n')
     writeFileSync(
@@ -229,5 +249,116 @@ describe('WorkspaceEnvService', () => {
       fallback: 'root-readdir',
     })
     expect(existsSync(join(workspacePath, 'apps', 'a', '.env'))).toBe(false)
+  })
+
+  it('spawns git ls-files with --directory and a large maxBuffer (MAR-2778 A)', () => {
+    makeDirs()
+    const runner = vi.fn<GitLsFilesRunner>(() => Buffer.from('.env\0'))
+    writeFileSync(join(sourcePath, '.env'), 'ROOT_FAKE=1\n')
+    const local = new WorkspaceEnvService(runner)
+
+    local.syncEnvFiles({
+      sourcePath,
+      workspacePath,
+      settings: { copyMode: 'overwrite', patterns: ['.env'] },
+    })
+
+    expect(runner).toHaveBeenCalledTimes(1)
+    const [command, args, options] = runner.mock.calls[0]!
+    expect(command).toBe('git')
+    expect([...args]).toEqual([...WORKSPACE_ENV_GIT_LS_FILES_ARGS])
+    expect(args).toContain('--directory')
+    expect(args).not.toContain('--exclude-standard')
+    expect(args).not.toContain('--ignored')
+    expect(options.maxBuffer).toBeGreaterThanOrEqual(16 * 1024 * 1024)
+    expect(options.maxBuffer).toBe(WORKSPACE_ENV_GIT_LS_FILES_MAX_BUFFER)
+  })
+
+  it('warns and falls back when the git runner throws ENOBUFS (MAR-2778 A)', () => {
+    makeDirs()
+    writeFileSync(join(sourcePath, '.env'), 'ROOT_FAKE=1\n')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const error = Object.assign(new Error('spawnSync git ENOBUFS'), {
+      code: 'ENOBUFS',
+    })
+    const runner = vi.fn<GitLsFilesRunner>(() => {
+      throw error
+    })
+    const local = new WorkspaceEnvService(runner)
+
+    const result = local.syncEnvFiles({
+      sourcePath,
+      workspacePath,
+      settings: { copyMode: 'overwrite', patterns: ['.env'] },
+    })
+
+    expect(result.fallback).toBe('root-readdir')
+    expect(result.paths).toEqual(['.env'])
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('ENOBUFS'))
+  })
+
+  it('copies untracked env files when the repo has no .gitignore (MAR-2778 B)', () => {
+    makeDirs()
+    git(['init'])
+    git(['config', 'user.email', 'test@test.com'])
+    git(['config', 'user.name', 'Test'])
+    mkdirSync(join(sourcePath, 'apps', 'a'), { recursive: true })
+    writeFileSync(join(sourcePath, 'apps', 'a', 'README'), 'tracked\n')
+    git(['add', 'apps/a/README'])
+    git(['commit', '-m', 'track'])
+    writeFileSync(join(sourcePath, '.env'), 'ROOT_FAKE=1\n')
+    writeFileSync(join(sourcePath, 'apps', 'a', '.env'), 'APP_A_FAKE=1\n')
+
+    const result = service.syncEnvFiles({
+      sourcePath,
+      workspacePath,
+      settings: { copyMode: 'overwrite', patterns: ['.env', '.env.*'] },
+    })
+
+    expect(result.fallback).toBeNull()
+    expect([...result.paths].sort()).toEqual(['.env', 'apps/a/.env'])
+  })
+
+  it('does not copy a tracked root .env — the checkout already carries it (MAR-2778 B)', () => {
+    makeDirs()
+    git(['init'])
+    git(['config', 'user.email', 'test@test.com'])
+    git(['config', 'user.name', 'Test'])
+    // Tracked deliberately — a worktree checkout already has this file.
+    writeFileSync(join(sourcePath, '.env'), 'TRACKED_FAKE=1\n')
+    git(['add', '-f', '.env'])
+    git(['commit', '-m', 'track env'])
+    writeFileSync(join(sourcePath, '.env.local'), 'LOCAL_FAKE=1\n')
+
+    const result = service.syncEnvFiles({
+      sourcePath,
+      workspacePath,
+      settings: { copyMode: 'overwrite', patterns: ['.env', '.env.*'] },
+    })
+
+    expect(result.fallback).toBeNull()
+    expect(result.paths).not.toContain('.env')
+    expect(result.paths).toEqual(['.env.local'])
+  })
+
+  it('skips a nested copy when apps is a symlink outside the workspace (MAR-2778 C)', () => {
+    makeIgnoredEnvRepo()
+    const outsideApps = join(tempDir, 'outside-apps')
+    mkdirSync(outsideApps, { recursive: true })
+    symlinkSync(outsideApps, join(workspacePath, 'apps'))
+
+    const result = service.syncEnvFiles({
+      sourcePath,
+      workspacePath,
+      settings: { copyMode: 'overwrite', patterns: ['.env', '.env.*'] },
+    })
+
+    expect(result.paths).toEqual(['.env'])
+    expect(result.skipped).toBeGreaterThanOrEqual(2)
+    expect(existsSync(join(outsideApps, 'a', '.env'))).toBe(false)
+    expect(existsSync(join(outsideApps, 'b', '.env.local'))).toBe(false)
+    expect(realpathSync(join(workspacePath, 'apps'))).toBe(
+      realpathSync(outsideApps),
+    )
   })
 })

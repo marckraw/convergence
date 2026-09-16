@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isPathInside,
   matchesWorkspaceEnvFilePattern,
   selectWorkspaceEnvPaths,
   WORKSPACE_ENV_PATH_SKIP_SEGMENTS,
@@ -77,13 +78,35 @@ describe('matchesWorkspaceEnvFilePattern', () => {
       expected: true,
     },
     {
+      name: 'glob path pattern apps/**/.env matches zero intermediate segments',
+      path: 'apps/.env',
+      patterns: ['apps/**/.env'],
+      expected: true,
+    },
+    {
       name: 'glob path pattern rejects root .env',
       path: '.env',
       patterns: ['apps/**/.env'],
       expected: false,
     },
+    {
+      name: 'question-mark path pattern matches one segment char',
+      path: 'a/x',
+      patterns: ['?/x'],
+      expected: true,
+    },
+    {
+      name: 'question-mark path pattern rejects two-char segment',
+      path: 'ab/x',
+      patterns: ['?/x'],
+      expected: false,
+    },
   ])('$name', ({ path, patterns, expected }) => {
     expect(matchesWorkspaceEnvFilePattern(path, patterns)).toBe(expected)
+  })
+
+  it('does not throw on a question-mark path pattern', () => {
+    expect(() => matchesWorkspaceEnvFilePattern('a/x', ['?/x'])).not.toThrow()
   })
 })
 
@@ -105,7 +128,7 @@ describe('selectWorkspaceEnvPaths', () => {
     ).toEqual(['.env', 'apps/a/.env', 'apps/b/.env.local'])
   })
 
-  it('drops skip-list segments even when the basename matches', () => {
+  it('drops skip-list segments by exact equality, not substring', () => {
     expect(
       selectWorkspaceEnvPaths(
         [
@@ -113,10 +136,24 @@ describe('selectWorkspaceEnvPaths', () => {
           'node_modules/x/.env',
           'apps/a/dist/.env',
           'coverage/.env.local',
+          'dist-tools/.env',
+          '.github/.env',
         ],
         defaults,
         WORKSPACE_ENV_PATH_SKIP_SEGMENTS,
-      ),
-    ).toEqual(['apps/a/.env'])
+      ).sort(),
+    ).toEqual(['.github/.env', 'apps/a/.env', 'dist-tools/.env'])
+  })
+})
+
+describe('isPathInside', () => {
+  it('accepts the same path and nested children', () => {
+    expect(isPathInside('/tmp/ws', '/tmp/ws')).toBe(true)
+    expect(isPathInside('/tmp/ws/apps/a', '/tmp/ws')).toBe(true)
+  })
+
+  it('rejects siblings and parents', () => {
+    expect(isPathInside('/tmp/outside', '/tmp/ws')).toBe(false)
+    expect(isPathInside('/tmp', '/tmp/ws')).toBe(false)
   })
 })
