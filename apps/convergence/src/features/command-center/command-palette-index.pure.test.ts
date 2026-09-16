@@ -6,6 +6,7 @@ import {
   buildPaletteIndex,
   PALETTE_DIALOGS,
 } from './command-palette-index.pure'
+import { buildCuratedSections } from './command-palette-ranking.pure'
 import type {
   SessionPaletteItem,
   DialogPaletteItem,
@@ -361,5 +362,78 @@ describe('buildPaletteIndex', () => {
       .filter((item): item is SessionPaletteItem => item.kind === 'session')
       .map((item) => item.sessionId)
     expect(sessionIds).toEqual(['s1', 's2'])
+  })
+
+  describe('a session listed twice (MAR-2892)', () => {
+    const sessionIdsOf = (items: ReturnType<typeof buildPaletteIndex>) =>
+      items
+        .filter((item): item is SessionPaletteItem => item.kind === 'session')
+        .map((item) => item.sessionId)
+
+    it('emits one item for a session in both lists, and Waiting on You shows it once', () => {
+      const chat = makeSession('chat', '', {
+        contextKind: 'global',
+        projectId: null,
+        attention: 'needs-approval',
+      })
+      const items = buildPaletteIndex({
+        projects: [],
+        workspaces: [],
+        // As the container feeds it: every summary, then the global chats.
+        sessions: [chat, chat],
+        recentSessionIds: [],
+        dismissals: {},
+      })
+
+      expect(sessionIdsOf(items)).toEqual(['chat'])
+      const waiting = buildCuratedSections(items, {}, []).find(
+        (section) => section.id === 'waiting-on-you',
+      )
+      expect(waiting?.items.map((item) => item.id)).toEqual(['session:chat'])
+    })
+
+    it('takes the later copy of a session listed twice', () => {
+      const items = buildPaletteIndex({
+        projects: [],
+        workspaces: [],
+        sessions: [
+          makeSession('chat', '', {
+            contextKind: 'global',
+            projectId: null,
+            name: 'from every summary',
+          }),
+          makeSession('chat', '', {
+            contextKind: 'global',
+            projectId: null,
+            name: 'from the global chats',
+          }),
+        ],
+        recentSessionIds: [],
+        dismissals: {},
+      })
+      const sessions = items.filter(
+        (item): item is SessionPaletteItem => item.kind === 'session',
+      )
+      expect(sessions.map((item) => item.sessionName)).toEqual([
+        'from the global chats',
+      ])
+    })
+
+    it('keeps sessions listed once in the order they were given', () => {
+      const items = buildPaletteIndex({
+        projects: [makeProject('p1', 'alpha')],
+        workspaces: [],
+        sessions: [
+          makeSession('s3', 'p1'),
+          makeSession('s1', 'p1'),
+          makeSession('dup', 'p1'),
+          makeSession('s2', 'p1'),
+          makeSession('dup', 'p1'),
+        ],
+        recentSessionIds: [],
+        dismissals: {},
+      })
+      expect(sessionIdsOf(items)).toEqual(['s3', 's1', 'dup', 's2'])
+    })
   })
 })
