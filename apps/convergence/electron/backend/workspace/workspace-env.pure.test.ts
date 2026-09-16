@@ -107,6 +107,14 @@ describe('matchesWorkspaceEnvFilePattern', () => {
       patterns: ['apps/a$b/.env*'],
       expected: true,
     },
+    {
+      // The basename branch with `?` compiles its own regex; `$` must be
+      // literal there too, or the pattern silently never matches.
+      name: 'dollar in a basename pattern with ? matches literal $',
+      path: 'apps/x/.env.a$b1',
+      patterns: ['.env.a$b?'],
+      expected: true,
+    },
   ])('$name', ({ path, patterns, expected }) => {
     expect(matchesWorkspaceEnvFilePattern(path, patterns)).toBe(expected)
   })
