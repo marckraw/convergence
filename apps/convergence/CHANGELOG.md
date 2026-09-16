@@ -1,5 +1,15 @@
 # convergence
 
+## 0.61.0
+
+### Minor Changes
+
+- 01547c4: The experimental in-app UI response artifact is gone: a `convergence-ui-html` block in a reply is shown as an ordinary code block, and nothing is rendered beside the transcript.
+
+### Patch Changes
+
+- 9689e94: The command palette no longer lists a global chat session twice.
+
 ## 0.60.1
 
 ### Patch Changes
