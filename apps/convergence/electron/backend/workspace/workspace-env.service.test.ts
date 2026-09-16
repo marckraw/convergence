@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -235,6 +236,7 @@ describe('WorkspaceEnvService', () => {
     writeFileSync(join(sourcePath, '.env'), 'ROOT_FAKE=1\n')
     mkdirSync(join(sourcePath, 'apps', 'a'), { recursive: true })
     writeFileSync(join(sourcePath, 'apps', 'a', '.env'), 'APP_A_FAKE=1\n')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const result = service.syncEnvFiles({
       sourcePath,
@@ -249,6 +251,29 @@ describe('WorkspaceEnvService', () => {
       fallback: 'root-readdir',
     })
     expect(existsSync(join(workspacePath, 'apps', 'a', '.env'))).toBe(false)
+    expect(warn).toHaveBeenCalled()
+  })
+
+  it('warns with status when the git runner throws status 128 (MAR-2778 G)', () => {
+    makeDirs()
+    writeFileSync(join(sourcePath, '.env'), 'ROOT_FAKE=1\n')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const error = Object.assign(new Error('Command failed: git'), {
+      status: 128,
+    })
+    const runner = vi.fn<GitLsFilesRunner>(() => {
+      throw error
+    })
+    const local = new WorkspaceEnvService(runner)
+
+    const result = local.syncEnvFiles({
+      sourcePath,
+      workspacePath,
+      settings: { copyMode: 'overwrite', patterns: ['.env'] },
+    })
+
+    expect(result.fallback).toBe('root-readdir')
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('128'))
   })
 
   it('spawns git ls-files with --directory and a large maxBuffer (MAR-2778 A)', () => {
@@ -341,10 +366,11 @@ describe('WorkspaceEnvService', () => {
     expect(result.paths).toEqual(['.env.local'])
   })
 
-  it('skips a nested copy when apps is a symlink outside the workspace (MAR-2778 C)', () => {
+  it('skips a nested copy when apps is a symlink outside the workspace (MAR-2778 C/F)', () => {
     makeIgnoredEnvRepo()
     const outsideApps = join(tempDir, 'outside-apps')
     mkdirSync(outsideApps, { recursive: true })
+    const outsideBefore = readdirSync(outsideApps)
     symlinkSync(outsideApps, join(workspacePath, 'apps'))
 
     const result = service.syncEnvFiles({
@@ -357,8 +383,52 @@ describe('WorkspaceEnvService', () => {
     expect(result.skipped).toBeGreaterThanOrEqual(2)
     expect(existsSync(join(outsideApps, 'a', '.env'))).toBe(false)
     expect(existsSync(join(outsideApps, 'b', '.env.local'))).toBe(false)
+    expect(readdirSync(outsideApps)).toEqual(outsideBefore)
     expect(realpathSync(join(workspacePath, 'apps'))).toBe(
       realpathSync(outsideApps),
+    )
+  })
+
+  it('walks a collapsed fully-untracked app dir and copies its env (MAR-2778 E)', () => {
+    makeDirs()
+    git(['init'])
+    git(['config', 'user.email', 'test@test.com'])
+    git(['config', 'user.name', 'Test'])
+    writeFileSync(join(sourcePath, '.gitignore'), '.env*\n')
+    // Track only apps/a — apps/c and apps/d stay fully untracked → collapsed.
+    mkdirSync(join(sourcePath, 'apps', 'a'), { recursive: true })
+    writeFileSync(join(sourcePath, 'apps', 'a', 'README'), 'tracked\n')
+    git(['add', '.gitignore', 'apps/a/README'])
+    git(['commit', '-m', 'track a only'])
+    writeFileSync(join(sourcePath, 'apps', 'a', '.env'), 'APP_A_FAKE=1\n')
+    mkdirSync(join(sourcePath, 'apps', 'c'), { recursive: true })
+    writeFileSync(join(sourcePath, 'apps', 'c', '.env'), 'APP_C_FAKE=1\n')
+    mkdirSync(join(sourcePath, 'apps', 'd', 'sub'), { recursive: true })
+    writeFileSync(
+      join(sourcePath, 'apps', 'd', 'sub', '.env'),
+      'APP_D_FAKE=1\n',
+    )
+    mkdirSync(join(sourcePath, 'node_modules', 'x'), { recursive: true })
+    writeFileSync(join(sourcePath, 'node_modules', 'x', '.env'), 'DEP_FAKE=1\n')
+
+    const result = service.syncEnvFiles({
+      sourcePath,
+      workspacePath,
+      settings: { copyMode: 'overwrite', patterns: ['.env', '.env.*'] },
+    })
+
+    expect(result.fallback).toBeNull()
+    expect([...result.paths].sort()).toEqual([
+      'apps/a/.env',
+      'apps/c/.env',
+      'apps/d/sub/.env',
+    ])
+    expect(existsSync(join(workspacePath, 'apps', 'c', '.env'))).toBe(true)
+    expect(existsSync(join(workspacePath, 'apps', 'd', 'sub', '.env'))).toBe(
+      true,
+    )
+    expect(existsSync(join(workspacePath, 'node_modules', 'x', '.env'))).toBe(
+      false,
     )
   })
 })

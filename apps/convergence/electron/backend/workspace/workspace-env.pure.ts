@@ -110,7 +110,7 @@ function matchesBasenamePattern(fileName: string, pattern: string): boolean {
 
   if (pattern.includes('?')) {
     const escaped = pattern
-      .replace(/[.+^{}()|[\]\\]/g, '\\$&')
+      .replace(/[.$+^{}()|[\]\\]/g, '\\$&')
       .replace(/\*/g, '.*')
       .replace(/\?/g, '.')
     return new RegExp(`^${escaped}$`).test(fileName)
@@ -143,7 +143,7 @@ function matchesPathGlob(relativePath: string, pattern: string): boolean {
     .replace(/\*\*/g, GLOB_STAR_BARE)
 
   const escaped = withDoubles
-    .replace(/[.+^{}()|[\]\\]/g, '\\$&')
+    .replace(/[.$+^{}()|[\]\\]/g, '\\$&')
     .replace(/\*/g, '[^/]*')
     .replace(/\?/g, '[^/]')
     .split(GLOB_STAR_AFTER_SLASH)

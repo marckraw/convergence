@@ -12,7 +12,11 @@ import {
 } from 'fs'
 import { dirname, join } from 'path'
 import type { WorkspaceEnvFileSettings } from '../project/project-settings.pure'
-import { isPathInside, selectWorkspaceEnvPaths } from './workspace-env.pure'
+import {
+  isPathInside,
+  pathHasSkipSegment,
+  selectWorkspaceEnvPaths,
+} from './workspace-env.pure'
 
 /** 64 MiB — belt under `--directory` (lap-1 ENOBUFS was Node's 1 MiB default). */
 export const WORKSPACE_ENV_GIT_LS_FILES_MAX_BUFFER = 64 * 1024 * 1024
@@ -20,8 +24,11 @@ export const WORKSPACE_ENV_GIT_LS_FILES_MAX_BUFFER = 64 * 1024 * 1024
 /**
  * Untracked files at any depth (ignored included). `--directory` collapses
  * fully-untracked trees so node_modules does not explode the buffer; parents
- * with tracked files still list nested env files. Synchronous on purpose —
- * both workspace.service callers require syncEnvFiles to stay sync (MAR-2778).
+ * with tracked files still list nested env files. Collapsed entries whose
+ * segments are not in the skip list are walked (skip list applied on the way
+ * so `node_modules/` is never entered). A tracked `.env` is the checkout's
+ * business and is not listed by `--others`. Synchronous on purpose — both
+ * workspace.service callers require syncEnvFiles to stay sync (MAR-2778).
  */
 export const WORKSPACE_ENV_GIT_LS_FILES_ARGS = [
   'ls-files',
@@ -77,6 +84,55 @@ export class WorkspaceEnvService {
     }
   }
 
+  /**
+   * Realpath the nearest existing ancestor of `dir` (inclusive). Used before
+   * mkdir so a symlinked parent cannot create directories outside the workspace.
+   */
+  private realpathNearestExisting(dir: string): string {
+    let current = dir
+    while (!existsSync(current)) {
+      const parent = dirname(current)
+      if (parent === current) {
+        throw new Error(`no existing ancestor for ${dir}`)
+      }
+      current = parent
+    }
+    return realpathSync(current)
+  }
+
+  /**
+   * Recursively list files under a collapsed `--directory` entry. Skip-list
+   * segments are never entered (so `node_modules/` stays collapsed-and-ignored).
+   */
+  private walkCollapsedTree(sourcePath: string, relativeDir: string): string[] {
+    const found: string[] = []
+
+    const visit = (relative: string): void => {
+      if (pathHasSkipSegment(relative)) return
+
+      const absolute = join(sourcePath, relative)
+      let entries
+      try {
+        entries = readdirSync(absolute, { withFileTypes: true })
+      } catch {
+        return
+      }
+
+      for (const entry of entries) {
+        const childRelative = `${relative}/${entry.name}`
+        if (pathHasSkipSegment(childRelative)) continue
+        if (entry.isDirectory()) {
+          visit(childRelative)
+        } else if (entry.isFile()) {
+          found.push(childRelative)
+        }
+      }
+    }
+
+    visit(relativeDir)
+    return found
+  }
+
   syncEnvFiles(input: {
     sourcePath: string
     workspacePath: string
@@ -120,22 +176,22 @@ export class WorkspaceEnvService {
       }
 
       const targetDir = dirname(targetFile)
-      mkdirSync(targetDir, { recursive: true })
 
-      // Refuse to write through a parent that resolves outside the workspace
-      // (e.g. a checked-out `apps` symlink pointing at a shared tree).
-      let targetDirReal: string
+      // Containment before mkdir — recursive mkdir through a symlinked parent
+      // would otherwise create directories outside the workspace.
+      let ancestorReal: string
       try {
-        targetDirReal = realpathSync(targetDir)
+        ancestorReal = this.realpathNearestExisting(targetDir)
       } catch {
         skipped += 1
         continue
       }
-      if (!isPathInside(targetDirReal, workspaceReal)) {
+      if (!isPathInside(ancestorReal, workspaceReal)) {
         skipped += 1
         continue
       }
 
+      mkdirSync(targetDir, { recursive: true })
       this.copyEnvFile(sourceFile, targetFile)
       copied += 1
       copiedPaths.push(relativePath)
@@ -160,19 +216,32 @@ export class WorkspaceEnvService {
         maxBuffer: WORKSPACE_ENV_GIT_LS_FILES_MAX_BUFFER,
         stdio: ['ignore', 'pipe', 'ignore'],
       })
-      const paths = stdout
-        .toString('utf8')
-        .split('\0')
-        .map((entry) => entry.replace(/\/$/, ''))
-        .filter((entry) => entry.length > 0)
+      const paths: string[] = []
+      for (const raw of stdout.toString('utf8').split('\0')) {
+        if (raw.length === 0) continue
+        const collapsed = raw.endsWith('/')
+        const relative = raw.replace(/\/$/, '')
+        if (relative.length === 0) continue
+        if (collapsed) {
+          if (pathHasSkipSegment(relative)) continue
+          paths.push(...this.walkCollapsedTree(sourcePath, relative))
+        } else {
+          paths.push(relative)
+        }
+      }
       return { paths, fallback: null }
     } catch (error) {
       const code =
         error && typeof error === 'object' && 'code' in error
           ? String((error as { code: unknown }).code)
-          : 'unknown'
+          : null
+      const status =
+        error && typeof error === 'object' && 'status' in error
+          ? String((error as { status: unknown }).status)
+          : null
+      const detail = code ?? status ?? 'unknown'
       console.warn(
-        `[workspace-env] git ls-files failed (${code}); falling back to root readdir`,
+        `[workspace-env] git ls-files failed (${detail}); falling back to root readdir`,
       )
       return {
         paths: readdirSync(sourcePath),

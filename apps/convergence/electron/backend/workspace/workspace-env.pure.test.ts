@@ -101,6 +101,12 @@ describe('matchesWorkspaceEnvFilePattern', () => {
       patterns: ['?/x'],
       expected: false,
     },
+    {
+      name: 'dollar in path pattern matches literal $',
+      path: 'apps/a$b/.env.local',
+      patterns: ['apps/a$b/.env*'],
+      expected: true,
+    },
   ])('$name', ({ path, patterns, expected }) => {
     expect(matchesWorkspaceEnvFilePattern(path, patterns)).toBe(expected)
   })
@@ -155,5 +161,10 @@ describe('isPathInside', () => {
   it('rejects siblings and parents', () => {
     expect(isPathInside('/tmp/outside', '/tmp/ws')).toBe(false)
     expect(isPathInside('/tmp', '/tmp/ws')).toBe(false)
+  })
+
+  it('rejects a prefix that is not a path-segment boundary (MAR-2778 G)', () => {
+    expect(isPathInside('/tmp/ws2', '/tmp/ws')).toBe(false)
+    expect(isPathInside('/tmp/ws-evil/x', '/tmp/ws')).toBe(false)
   })
 })
