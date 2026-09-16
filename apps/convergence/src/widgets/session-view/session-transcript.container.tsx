@@ -23,8 +23,6 @@ import type {
   InteractionResponse,
   Session,
 } from '@/entities/session'
-import { artifactFromConversationItem } from '@/entities/ui-response-artifact'
-import { cn } from '@/shared/lib/cn.pure'
 import { ConversationItem } from './conversation-item.container'
 import { buildConversationRenderPlan } from './session-transcript-render-plan.pure'
 import { isTranscriptNearBottom } from './session-transcript-scroll.pure'
@@ -37,8 +35,6 @@ interface SessionTranscriptProps {
   navigationTarget?: { id: string; nonce: number } | null
   session: Session
   conversationItems: ConversationItemEntry[]
-  selectedUiResponseItemId?: string | null
-  onUiResponseArtifactSelect?: (conversationItemId: string) => void
   onApprove: (
     sessionId: string,
     providerApprovalId?: string,
@@ -65,8 +61,6 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
   onParallelSelect,
   navigationTarget,
   conversationItems,
-  selectedUiResponseItemId = null,
-  onUiResponseArtifactSelect,
   onApprove,
   onDeny,
   onInputAnswer,
@@ -335,9 +329,6 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
               actionableApprovalIds.has(entry.id)
             const isActionableInput =
               entry.kind === 'input-request' && actionableInputIds.has(entry.id)
-            const hasUiResponseArtifact = hasArtifact(entry)
-            const isSelectedUiResponseArtifact =
-              hasUiResponseArtifact && entry.id === selectedUiResponseItemId
 
             return (
               <div
@@ -346,25 +337,10 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
                 data-index={virtualItem.index}
                 data-testid="session-transcript-row"
                 data-conversation-item-id={entry.id}
-                data-ui-response-artifact={
-                  hasUiResponseArtifact ? true : undefined
-                }
-                data-selected-ui-response-artifact={
-                  isSelectedUiResponseArtifact ? true : undefined
-                }
-                className={cn(
-                  'absolute top-0 left-0 w-full rounded-md transition-colors',
-                  hasUiResponseArtifact && 'cursor-pointer',
-                  isSelectedUiResponseArtifact && 'bg-muted/20',
-                )}
+                className="absolute top-0 left-0 w-full rounded-md transition-colors"
                 style={{
                   transform: `translateY(${virtualItem.start}px)`,
                 }}
-                onClick={
-                  hasUiResponseArtifact
-                    ? () => onUiResponseArtifactSelect?.(entry.id)
-                    : undefined
-                }
               >
                 {compactionPlacement.before.get(entry.id)?.map((fact) => (
                   <CompactionMarker key={fact.sequence} fact={fact} />
@@ -484,20 +460,5 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
         ))}
       </div>
     </div>
-  )
-}
-
-function hasArtifact(item: ConversationItemEntry): boolean {
-  if (item.kind !== 'message' || item.actor !== 'assistant') {
-    return false
-  }
-
-  return (
-    artifactFromConversationItem({
-      sessionId: item.sessionId,
-      conversationItemId: item.id,
-      text: item.text,
-      createdAt: item.createdAt,
-    }) !== null
   )
 }

@@ -257,7 +257,7 @@ describe('ConversationItemView', () => {
     ).toBeInTheDocument()
   })
 
-  it('renders cleaned assistant markdown when a UI response artifact is present', () => {
+  it('renders an old convergence-ui-html fence as an ordinary code block with no chip (MAR-3104)', () => {
     renderConversationItemView({
       entry: {
         id: 'message-1',
@@ -288,10 +288,8 @@ describe('ConversationItemView', () => {
     })
 
     expect(screen.getByText('This is the Markdown answer.')).toBeInTheDocument()
-    expect(screen.queryByText('<main>Generated UI</main>')).toBeNull()
-    expect(
-      screen.getByTestId('ui-response-artifact-indicator'),
-    ).toHaveAttribute('title', 'Preview panel')
+    expect(screen.getByText('<main>Generated UI</main>')).toBeInTheDocument()
+    expect(screen.queryByTestId('ui-response-artifact-indicator')).toBeNull()
   })
 
   it('renders elapsed timing metadata for assistant work', () => {

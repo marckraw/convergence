@@ -1,20 +1,12 @@
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 import { Button } from '@/shared/ui/button'
-import {
-  isSubagentWork,
-  parallelWorkRowState,
-  type ParallelWorkRow,
-} from '@/shared/lib/parallel-work.pure'
-import { useMemo, useState, type FC, type ReactNode } from 'react'
+import type { ParallelWorkRow } from '@/shared/lib/parallel-work.pure'
+import { type FC, type ReactNode } from 'react'
 import type {
   ConversationItem,
   InteractionResponse,
   Session,
 } from '@/entities/session'
-import {
-  artifactFromConversationItem,
-  type UiResponseArtifact,
-} from '@/entities/ui-response-artifact'
 import {
   ComposerContainer,
   type ComposerSessionContext,
@@ -24,7 +16,6 @@ import {
   AnnotationTray,
 } from '@/features/response-annotations'
 import { SessionTranscript } from './session-transcript.container'
-import { UiResponsePanel } from './ui-response-panel.presentational'
 
 interface SessionConversationSurfaceProps {
   compactions?: SessionHarnessFacts['compactions']
@@ -69,119 +60,6 @@ export const SessionConversationSurface: FC<
   onDeny,
   onInputAnswer,
 }) => {
-  const [selectedArtifactItemId, setSelectedArtifactItemId] = useState<
-    string | null
-  >(null)
-  const artifacts = useMemo(
-    () =>
-      findUiResponseArtifacts(
-        conversationItems,
-        parallelLoading
-          ? undefined
-          : new Set(
-              (parallelRows ?? [])
-                .filter((row) => row.kind === 'agent')
-                .flatMap((row) => parallelWorkRowState(row).ids),
-            ),
-      ),
-    [conversationItems, parallelRows, parallelLoading],
-  )
-  const artifact =
-    (selectedArtifactItemId
-      ? artifacts.find(
-          (entry) => entry.conversationItemId === selectedArtifactItemId,
-        )
-      : null) ??
-    artifacts[artifacts.length - 1] ??
-    null
-
-  const conversationColumn = renderConversationColumn({
-    sessionId: session.id,
-    session,
-    compactions,
-    parallelRows,
-    parallelLoading,
-    parallelError,
-    onParallelRetry,
-    onParallelSelect,
-    navigationTarget,
-    conversationItems,
-    composerContext,
-    composerDisabledReason,
-    selectedUiResponseItemId: artifact?.conversationItemId ?? null,
-    onUiResponseArtifactSelect: setSelectedArtifactItemId,
-    onApprove,
-    onDeny,
-    onInputAnswer,
-  })
-
-  if (!artifact) {
-    return conversationColumn
-  }
-
-  return (
-    <div
-      className="flex min-h-0 flex-1 overflow-hidden"
-      data-testid="session-ui-response-split"
-    >
-      <div className="flex min-w-0 flex-1 basis-1/2 flex-col border-r border-border">
-        {conversationColumn}
-      </div>
-      <UiResponsePanel
-        artifact={artifact}
-        className="min-w-0 flex-1 basis-1/2"
-      />
-    </div>
-  )
-}
-
-interface RenderConversationColumnInput {
-  compactions?: SessionHarnessFacts['compactions']
-  parallelRows?: ParallelWorkRow[]
-  parallelLoading?: boolean
-  parallelError?: string | null
-  onParallelRetry?: () => void
-  onParallelSelect?: (id: string) => void
-  navigationTarget?: { id: string; nonce: number } | null
-  sessionId: string
-  session: Session
-  conversationItems: ConversationItem[]
-  composerContext: ComposerSessionContext | null
-  composerDisabledReason: string | null
-  selectedUiResponseItemId: string | null
-  onUiResponseArtifactSelect: (conversationItemId: string) => void
-  onApprove: (
-    sessionId: string,
-    providerApprovalId?: string,
-    options?: { scope: 'once' | 'session' },
-  ) => void
-  onDeny: (sessionId: string, providerApprovalId?: string) => void
-  onInputAnswer: (
-    sessionId: string,
-    response: InteractionResponse,
-    displayText: string,
-  ) => void
-}
-
-function renderConversationColumn({
-  sessionId,
-  session,
-  compactions,
-  parallelRows,
-  parallelLoading,
-  parallelError,
-  onParallelRetry,
-  onParallelSelect,
-  navigationTarget,
-  conversationItems,
-  composerContext,
-  composerDisabledReason,
-  selectedUiResponseItemId,
-  onUiResponseArtifactSelect,
-  onApprove,
-  onDeny,
-  onInputAnswer,
-}: RenderConversationColumnInput): ReactNode {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {parallelError && (
@@ -205,8 +83,6 @@ function renderConversationColumn({
         onParallelSelect={onParallelSelect}
         navigationTarget={navigationTarget}
         conversationItems={conversationItems}
-        selectedUiResponseItemId={selectedUiResponseItemId}
-        onUiResponseArtifactSelect={onUiResponseArtifactSelect}
         onApprove={onApprove}
         onDeny={onDeny}
         onInputAnswer={onInputAnswer}
@@ -217,10 +93,10 @@ function renderConversationColumn({
         the popover belongs to the transcript and the tray belongs above the
         composer, and neither feature may import the other (RA2 layering).
       */}
-      <AnnotationSelectionCapture key={sessionId} sessionId={sessionId} />
+      <AnnotationSelectionCapture key={session.id} sessionId={session.id} />
 
       <div className="shrink-0 px-4 py-3">
-        <AnnotationTray key={sessionId} sessionId={sessionId} />
+        <AnnotationTray key={session.id} sessionId={session.id} />
         {renderComposerArea(composerContext, composerDisabledReason)}
       </div>
     </div>
@@ -242,28 +118,4 @@ function renderComposerArea(
   return composerContext ? (
     <ComposerContainer context={composerContext} />
   ) : null
-}
-
-function findUiResponseArtifacts(
-  items: ConversationItem[],
-  knownAgentIds: ReadonlySet<string> | undefined,
-): UiResponseArtifact[] {
-  return items.flatMap((item) => {
-    if (
-      !item ||
-      isSubagentWork(item, knownAgentIds) ||
-      item.kind !== 'message' ||
-      item.actor !== 'assistant'
-    ) {
-      return []
-    }
-
-    const artifact = artifactFromConversationItem({
-      sessionId: item.sessionId,
-      conversationItemId: item.id,
-      text: item.text,
-      createdAt: item.createdAt,
-    })
-    return artifact ? [artifact] : []
-  })
 }

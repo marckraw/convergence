@@ -13,41 +13,25 @@ vi.mock('@/features/composer', () => ({
   ),
 }))
 
-vi.mock('./session-transcript.container', () => ({
-  SessionTranscript: ({
-    session,
-    conversationItems,
-    onUiResponseArtifactSelect,
-  }: {
-    session: Session
-    conversationItems: ConversationItem[]
-    onUiResponseArtifactSelect?: (conversationItemId: string) => void
-  }) => (
-    <div data-testid="transcript">
-      {session.name}:{conversationItems.length}
-      {conversationItems.map((item) => (
-        <div key={item.id}>
-          <button
-            type="button"
-            onClick={() => onUiResponseArtifactSelect?.(item.id)}
-          >
-            select {item.id}
-          </button>
-          {/*
-            Annotatable stand-in for the real transcript attribute so the
-            surface can stage a selection without importing the capture feature.
-          */}
-          {item.kind === 'message' &&
-          item.actor === 'assistant' &&
-          item.state === 'complete' ? (
-            <div data-annotation-message-id={item.id}>
-              <p>{item.text}</p>
-            </div>
-          ) : null}
-        </div>
-      ))}
-    </div>
-  ),
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: (options: {
+    count: number
+    estimateSize: (index: number) => number
+    getItemKey?: (index: number) => string | number | bigint
+  }) => ({
+    getVirtualItems: () =>
+      Array.from({ length: options.count }, (_, index) => ({
+        index,
+        key: options.getItemKey?.(index) ?? index,
+        start: index * options.estimateSize(index),
+      })),
+    getTotalSize: () =>
+      Array.from({ length: options.count }, (_, index) =>
+        options.estimateSize(index),
+      ).reduce((total, size) => total + size, 0),
+    measureElement: vi.fn(),
+    scrollToIndex: vi.fn(),
+  }),
 }))
 
 const baseSession: Session = {
@@ -91,9 +75,10 @@ describe('SessionConversationSurface', () => {
       />,
     )
 
-    expect(screen.getByTestId('transcript')).toHaveTextContent('Global chat:0')
+    expect(
+      screen.getByTestId('session-transcript-scroll-region'),
+    ).toBeInTheDocument()
     expect(screen.getByTestId('composer')).toHaveTextContent('global:session-1')
-    expect(screen.queryByTestId('session-ui-response-split')).toBeNull()
   })
 
   it('renders a disabled composer reason instead of composer controls', () => {
@@ -113,7 +98,7 @@ describe('SessionConversationSurface', () => {
     expect(screen.queryByTestId('composer')).toBeNull()
   })
 
-  it('splits the session surface when the latest assistant response has a UI artifact', () => {
+  it('shows an old convergence-ui-html fence as an ordinary code block with no split or chip (MAR-3104)', () => {
     render(
       <SessionConversationSurface
         session={baseSession}
@@ -152,40 +137,18 @@ describe('SessionConversationSurface', () => {
       />,
     )
 
-    expect(screen.getByTestId('session-ui-response-split')).toBeInTheDocument()
-    expect(screen.getByTestId('transcript')).toHaveTextContent('Global chat:1')
-    expect(screen.getByTestId('ui-response-panel')).toBeInTheDocument()
-    expect(screen.getByText('Preview panel')).toBeInTheDocument()
-  })
+    // R2 — no panel, no chip; the fence body is visible as code.
+    // (Mutation R2: restore parseAssistantUiResponse strip → HTML absent → red.)
+    expect(screen.queryByTestId('session-ui-response-split')).toBeNull()
+    expect(screen.queryByTestId('ui-response-artifact-indicator')).toBeNull()
+    expect(screen.getByText('Markdown answer.')).toBeInTheDocument()
+    expect(screen.getByText('<main>Generated UI</main>')).toBeInTheDocument()
 
-  it('renders the selected assistant UI artifact when a transcript turn is selected', () => {
-    render(
-      <SessionConversationSurface
-        session={baseSession}
-        conversationItems={[
-          assistantArtifactMessage({
-            id: 'message-1',
-            sequence: 1,
-            title: 'First preview',
-          }),
-          assistantArtifactMessage({
-            id: 'message-2',
-            sequence: 2,
-            title: 'Second preview',
-          }),
-        ]}
-        composerContext={{ kind: 'global', activeSessionId: 'session-1' }}
-        onApprove={vi.fn()}
-        onDeny={vi.fn()}
-        onInputAnswer={vi.fn()}
-      />,
-    )
-
-    expect(screen.getByText('Second preview')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'select message-1' }))
-
-    expect(screen.getByText('First preview')).toBeInTheDocument()
+    // R3 — transcript row carries no leftover selection affordance.
+    // (Mutation R3: leave data-ui-response-artifact on the row → red.)
+    const row = screen.getByTestId('session-transcript-row')
+    expect(row).not.toHaveAttribute('data-ui-response-artifact')
+    expect(row).not.toHaveAttribute('data-selected-ui-response-artifact')
   })
 
   it('remounts the annotation tray per session so an open edit does not follow a switch (MAR-3008)', () => {
@@ -348,17 +311,25 @@ describe('SessionConversationSurface', () => {
 /** Selects a phrase inside a rendered annotatable message (jsdom Range). */
 function selectTextInMessage(messageId: string, phrase: string) {
   const container = document.querySelector(
-    `[data-annotation-message-id="${messageId}"] p`,
+    `[data-annotation-message-id="${messageId}"]`,
   )
   if (!container) throw new Error(`No message ${messageId} rendered.`)
 
-  const textNode = container.firstChild
-  if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
-    throw new Error('Message has no text node to select.')
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
+  let textNode: Text | null = null
+  let start = -1
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text
+    const index = (node.textContent ?? '').indexOf(phrase)
+    if (index >= 0) {
+      textNode = node
+      start = index
+      break
+    }
   }
-
-  const start = (textNode.textContent ?? '').indexOf(phrase)
-  if (start < 0) throw new Error(`"${phrase}" is not in the message.`)
+  if (!textNode || start < 0) {
+    throw new Error(`"${phrase}" is not in the message.`)
+  }
 
   const range = document.createRange()
   range.setStart(textNode, start)
@@ -369,37 +340,4 @@ function selectTextInMessage(messageId: string, phrase: string) {
   selection?.addRange(range)
 
   fireEvent.mouseUp(document)
-}
-
-function assistantArtifactMessage(input: {
-  id: string
-  sequence: number
-  title: string
-}): ConversationItem {
-  return {
-    id: input.id,
-    sessionId: 'session-1',
-    sequence: input.sequence,
-    turnId: `turn-${input.sequence}`,
-    kind: 'message',
-    actor: 'assistant',
-    state: 'complete',
-    text: [
-      'Markdown answer.',
-      '',
-      '```convergence-ui-html',
-      '---',
-      `title: ${input.title}`,
-      '---',
-      `<main>${input.title}</main>`,
-      '```',
-    ].join('\n'),
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-    providerMeta: {
-      providerId: 'codex',
-      providerItemId: null,
-      providerEventType: 'assistant',
-    },
-  }
 }
