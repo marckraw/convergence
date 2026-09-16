@@ -16,16 +16,25 @@ const cards = [
     createdAt: '2026-09-12',
     updatedAt: '2026-09-13',
   }),
+  // Named so that A–Z disagrees with creation order: without this card every
+  // `name` expectation below equals the `created` one, and a Name comparator
+  // that quietly sorted by createdAt would stay green.
+  cardSession({
+    id: 'zulu',
+    name: 'Zulu',
+    createdAt: '2026-09-11',
+    updatedAt: '2026-09-12',
+  }),
 ].map((session) => needsYouCardModel(session, cardContext))
 const ids = (items: typeof cards) => items.map((card) => card.session.id)
 
 it.each<[FeedOrder, string[]]>([
-  ['created', ['newer', 'older']],
-  ['updated', ['older', 'newer']],
-  ['name', ['newer', 'older']],
+  ['created', ['newer', 'zulu', 'older']],
+  ['updated', ['older', 'newer', 'zulu']],
+  ['name', ['newer', 'older', 'zulu']],
 ])('sorts by %s without mutating the input', (order, expected) => {
   expect(ids(sortFeedCards(cards, order))).toEqual(expected)
-  expect(ids(cards)).toEqual(['older', 'newer'])
+  expect(ids(cards)).toEqual(['older', 'newer', 'zulu'])
 })
 
 it('keeps created and name order during agent updates while updated order follows them', () => {
@@ -41,7 +50,11 @@ it('keeps created and name order during agent updates while updated order follow
       ids(sortFeedCards(cards, order)),
     )
   }
-  expect(ids(sortFeedCards(changed, 'updated'))).toEqual(['newer', 'older'])
+  expect(ids(sortFeedCards(changed, 'updated'))).toEqual([
+    'newer',
+    'older',
+    'zulu',
+  ])
 })
 
 it.each<FeedOrder>(['created', 'updated', 'name'])(
