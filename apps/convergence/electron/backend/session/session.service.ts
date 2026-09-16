@@ -62,6 +62,8 @@ import {
   type Session,
   type SessionSummary,
   type CreateSessionInput,
+  type AcceptedRecordingFailureEvent,
+  type AcceptedRecordingFailureListener,
   type DispatchTerminalEvent,
   type DispatchTerminalListener,
   type DispatchRedeliveredEvent,
@@ -71,6 +73,7 @@ import {
   type SessionSettledEvent,
   type SessionSettledListener,
 } from './session.types'
+import { buildRecordingFailedNoteText } from '../../../src/shared/lib/accepted-recording-note.pure'
 import type {
   ConversationItem,
   ConversationItemDraft,
@@ -95,6 +98,7 @@ import {
   isTerminalSessionStatus,
   previousAssistantMessageTexts,
   resolveAttentionRequestKind,
+  RecordingError,
   type AttentionRequestRowLike,
 } from './session.pure'
 import {
@@ -295,6 +299,17 @@ export class SessionService {
     new Set<DispatchTerminalListener>()
   private readonly dispatchRedeliveredListeners =
     new Set<DispatchRedeliveredListener>()
+  private readonly acceptedRecordingFailureListeners =
+    new Set<AcceptedRecordingFailureListener>()
+  /**
+   * The dispatch ids of the most recent settled turn, kept because a
+   * recording write can land after its settle already consumed the set — the
+   * Codex post-ack stamp is the witness (MAR-3023).
+   */
+  private readonly lastSettledTurn = new Map<
+    string,
+    { dispatchIds: string[]; turnId: string | null }
+  >()
   private pendingSettleEvents: SessionSettledEvent[] = []
   private settleFlushScheduled = false
   private quitting = false
@@ -812,6 +827,25 @@ export class SessionService {
     }
   }
 
+  /**
+   * A recording the local transcript could not hold for an accepted turn
+   * (MAR-3023).
+   *
+   * Beside the dispatch listeners because it is their kind of news — a fact
+   * about a receipt — but it ends nothing: the turn is still running and its
+   * settle still owes the real terminal. Listeners get which dispatch the
+   * loss belongs to, what was lost, and whether the provider is still
+   * working, so nobody has to guess whether a retry is safe (it is not).
+   */
+  onAcceptedRecordingFailure(
+    listener: AcceptedRecordingFailureListener,
+  ): () => void {
+    this.acceptedRecordingFailureListeners.add(listener)
+    return () => {
+      this.acceptedRecordingFailureListeners.delete(listener)
+    }
+  }
+
   private emitDispatchRedelivered(event: DispatchRedeliveredEvent): void {
     for (const listener of [...this.dispatchRedeliveredListeners]) {
       try {
@@ -850,6 +884,156 @@ export class SessionService {
         )
       }
     }
+  }
+
+  /**
+   * The accepted-turn recording boundary (MAR-3023): once a dispatch is
+   * attached to a live turn, a persistence failure while RECORDING that turn
+   * is its own outcome — logged, emitted as a fact, noted on the conversation
+   * best-effort — and never a failed send. Wraps a door-owned write
+   * (the buffered receipt publication, the drain's 'sent' marks): on a
+   * failure it returns; pre-acceptance refusals (`HandoffRefusedError`,
+   * `ProviderBusyError`) still leave, because a turn that was never accepted
+   * owes the caller its refusal.
+   */
+  private recordAcceptedTurn(
+    sessionId: string,
+    dispatchId: string | null,
+    label: string,
+    write: () => void,
+  ): void {
+    try {
+      write()
+    } catch (error) {
+      if (error instanceof HandoffRefusedError || isProviderBusyError(error))
+        throw error
+      this.announceAcceptedRecordingFailure(
+        sessionId,
+        error instanceof RecordingError
+          ? error
+          : new RecordingError(label, { cause: error }),
+      )
+    }
+  }
+
+  /**
+   * Tags the persistence writes of `applyDelta` (MAR-3023). Unlike
+   * `recordAcceptedTurn` this RETHROWS the tagged error: the write sits on a
+   * provider's own call stack, and the recording rules live in the catches
+   * that see it — Codex's post-ack catch branches on `instanceof`, Claude's
+   * post-accept write continues its turn, the remote delivery-failure note
+   * cannot throw out of its own failure handling. No dispatch attached means
+   * the turn was never accepted here, so nothing is announced — the throw
+   * keeps today's propagation, only typed.
+   */
+  private tagAcceptedRecording<T>(
+    sessionId: string,
+    label: string,
+    write: () => T,
+  ): T {
+    try {
+      return write()
+    } catch (error) {
+      const recording =
+        error instanceof RecordingError
+          ? error
+          : new RecordingError(label, { cause: error })
+      if (
+        this.turnDispatchIds.get(sessionId)?.size ||
+        this.lastSettledTurn.has(sessionId)
+      ) {
+        this.announceAcceptedRecordingFailure(sessionId, recording)
+      }
+      throw recording
+    }
+  }
+
+  /**
+   * Records one lost recording exactly once: a log with the write's label, a
+   * fact per attached dispatch, and a best-effort note. The note write is
+   * itself inside a try — a second persistence failure is logged, never
+   * thrown (MAR-3023 R5).
+   */
+  private announceAcceptedRecordingFailure(
+    sessionId: string,
+    recording: RecordingError,
+  ): void {
+    if (recording.announced) return
+    recording.announced = true
+    console.error(
+      `[session] Accepted turn could not record ${recording.label} for ${sessionId}`,
+      recording.cause,
+    )
+    const attached = [...(this.turnDispatchIds.get(sessionId) ?? [])]
+    const settled =
+      attached.length > 0 ? null : (this.lastSettledTurn.get(sessionId) ?? null)
+    const dispatchIds =
+      attached.length > 0 ? attached : (settled?.dispatchIds ?? [])
+    if (dispatchIds.length === 0) return
+    const turnId = this.activeTurnIds.get(sessionId) ?? settled?.turnId ?? null
+    const providerRunning = this.activeHandles.has(sessionId)
+    const at = new Date().toISOString()
+    for (const dispatchId of dispatchIds) {
+      const event: AcceptedRecordingFailureEvent = {
+        sessionId,
+        dispatchId,
+        turnId,
+        label: recording.label,
+        providerRunning,
+        at,
+      }
+      for (const listener of [...this.acceptedRecordingFailureListeners]) {
+        try {
+          listener(event)
+        } catch (error) {
+          console.error(
+            `[session] accepted-recording-failed listener failed for ${sessionId}`,
+            error,
+          )
+        }
+      }
+    }
+    try {
+      const timestamp = new Date().toISOString()
+      const note = this.addConversationItem(sessionId, {
+        id: randomUUID(),
+        turnId,
+        kind: 'note',
+        state: 'complete',
+        level: 'warning',
+        text: buildRecordingFailedNoteText({ turnId, label: recording.label }),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        providerMeta: {
+          providerId: 'convergence',
+          providerItemId: null,
+          providerEventType: 'recording-failed',
+        },
+      })
+      if (note) {
+        this.notifySessionChange(sessionId, {
+          sessionId,
+          op: 'add',
+          item: note,
+        })
+      }
+    } catch (error) {
+      console.error(
+        `[session] Could not record the recording-failure note (${recording.label}) for ${sessionId}`,
+        error,
+      )
+    }
+  }
+
+  /** @internal exposed for tests; do not call from production code. */
+  recordAcceptedTurnForTest(
+    sessionId: string,
+    dispatchId: string | null,
+    label: string,
+    write: () => void,
+  ): void {
+    this.attachDispatchToTurn(sessionId, dispatchId)
+    this.recordAcceptedTurn(sessionId, dispatchId, label, write)
   }
 
   /**
@@ -1739,7 +1923,10 @@ export class SessionService {
     const receipt = await this.withDispatchInFlight(id, input, () =>
       this.openFirstTurn(id, input, dispatchId),
     )
-    receipt?.publish()
+    if (receipt)
+      this.recordAcceptedTurn(id, dispatchId, 'the turn publication', () =>
+        receipt.publish(),
+      )
     return dispatchId
   }
 
@@ -1971,7 +2158,10 @@ export class SessionService {
     const receipt = await this.withDispatchInFlight(id, input, () =>
       this.deliverMessage(id, input, dispatchId),
     )
-    receipt?.publish()
+    if (receipt)
+      this.recordAcceptedTurn(id, dispatchId, 'the turn publication', () =>
+        receipt.publish(),
+      )
     return dispatchId
   }
 
@@ -2750,6 +2940,16 @@ export class SessionService {
   ): void {
     if (!dispatchId) return
     const held = this.turnDispatchIds.get(sessionId)
+    if (held?.has(dispatchId)) {
+      // A dispatch already attached to this turn is a re-delivery of a
+      // receipt the turn consumed (MAR-3023): attaching it again would let a
+      // later settle claim the same delivery twice, so the re-attach is a
+      // logged no-op rather than silent.
+      console.error(
+        `[session] Dispatch ${dispatchId} is already attached to ${sessionId}'s turn`,
+      )
+      return
+    }
     if (held) held.add(dispatchId)
     else this.turnDispatchIds.set(sessionId, new Set([dispatchId]))
   }
@@ -2759,7 +2959,12 @@ export class SessionService {
     const held = this.turnDispatchIds.get(sessionId)
     if (!held) return []
     this.turnDispatchIds.delete(sessionId)
-    return [...held]
+    const dispatchIds = [...held]
+    this.lastSettledTurn.set(sessionId, {
+      dispatchIds,
+      turnId: this.activeTurnIds.get(sessionId) ?? null,
+    })
+    return dispatchIds
   }
 
   private async rebindDraftAttachments(
@@ -3034,10 +3239,15 @@ export class SessionService {
       }
 
       case 'conversation.item.add': {
-        const item = this.addConversationItem(
+        const item = this.tagAcceptedRecording(
           sessionId,
-          delta.item,
-          delta.providerAccountId,
+          'the conversation item',
+          () =>
+            this.addConversationItem(
+              sessionId,
+              delta.item,
+              delta.providerAccountId,
+            ),
         )
         if (!item) return
         this.handleAssistantNaming(sessionId, item)
@@ -3062,7 +3272,11 @@ export class SessionService {
         const patch = pending
           ? this.mergeConversationPatch(pending.patch, delta.patch)
           : delta.patch
-        const item = this.patchConversationItem(sessionId, delta.itemId, patch)
+        const item = this.tagAcceptedRecording(
+          sessionId,
+          'the conversation item patch',
+          () => this.patchConversationItem(sessionId, delta.itemId, patch),
+        )
         if (!item) return
         this.notifySessionChange(sessionId, {
           sessionId,
@@ -3446,11 +3660,16 @@ export class SessionService {
       (patch.turnOpenedBy === 'user' ||
         (prevStatus !== 'running' && prevStatus !== 'answered'))
     ) {
-      this.db
-        .prepare(
-          'UPDATE sessions SET answer_window_start_sequence=last_sequence+1 WHERE id=?',
-        )
-        .run(sessionId)
+      // Tagged at the STATEMENT, not the method: the attention observer runs
+      // between this method's writes (MAR-2541) and its bugs must propagate
+      // raw — only the persistence itself is the boundary's to own (MAR-3023).
+      this.tagAcceptedRecording(sessionId, 'session patch', () =>
+        this.db
+          .prepare(
+            'UPDATE sessions SET answer_window_start_sequence=last_sequence+1 WHERE id=?',
+          )
+          .run(sessionId),
+      )
     }
     const nextAttention = patch.attention ?? prevAttention
     const nextActivity =
@@ -3480,45 +3699,48 @@ export class SessionService {
     const settledSeq =
       patch.status && isTerminalSessionStatus(patch.status) ? hostSeq : 0
 
-    this.db
-      .prepare(
-        `UPDATE sessions
-         SET status = ?,
-             attention = ?,
-             activity = ?,
-             context_window = ?,
-             continuation_token = ?,
-             relays_muted = ?,
-             archived_at = ?,
-             execution_host_last_event_at = CASE WHEN ? > execution_host_last_seq THEN ? ELSE execution_host_last_event_at END,
-             execution_host_last_seq = MAX(execution_host_last_seq, ?),
-             execution_host_settled_seq = MAX(execution_host_settled_seq, ?),
-             updated_at = ?
+    // Tagged at the STATEMENT, same reason as the answer-window write above.
+    this.tagAcceptedRecording(sessionId, 'session patch', () =>
+      this.db
+        .prepare(
+          `UPDATE sessions
+           SET status = ?,
+               attention = ?,
+               activity = ?,
+               context_window = ?,
+               continuation_token = ?,
+               relays_muted = ?,
+               archived_at = ?,
+               execution_host_last_event_at = CASE WHEN ? > execution_host_last_seq THEN ? ELSE execution_host_last_event_at END,
+               execution_host_last_seq = MAX(execution_host_last_seq, ?),
+               execution_host_settled_seq = MAX(execution_host_settled_seq, ?),
+               updated_at = ?
          WHERE id = ?`,
-      )
-      .run(
-        nextStatus,
-        nextAttention ?? row.attention,
-        nextActivity,
-        patch.contextWindow !== undefined
-          ? patch.contextWindow
-            ? JSON.stringify(patch.contextWindow)
-            : null
-          : row.context_window,
-        patch.continuationToken !== undefined
-          ? patch.continuationToken?.trim()
-            ? patch.continuationToken
-            : row.continuation_token
-          : row.continuation_token,
-        isSettling ? 0 : row.relays_muted,
-        nextArchivedAt,
-        hostSeq,
-        new Date().toISOString(),
-        hostSeq,
-        settledSeq,
-        updatedAt,
-        sessionId,
-      )
+        )
+        .run(
+          nextStatus,
+          nextAttention ?? row.attention,
+          nextActivity,
+          patch.contextWindow !== undefined
+            ? patch.contextWindow
+              ? JSON.stringify(patch.contextWindow)
+              : null
+            : row.context_window,
+          patch.continuationToken !== undefined
+            ? patch.continuationToken?.trim()
+              ? patch.continuationToken
+              : row.continuation_token
+            : row.continuation_token,
+          isSettling ? 0 : row.relays_muted,
+          nextArchivedAt,
+          hostSeq,
+          new Date().toISOString(),
+          hostSeq,
+          settledSeq,
+          updatedAt,
+          sessionId,
+        ),
+    )
 
     if (nextAttention !== prevAttention) {
       this.notifyAttention(sessionId, prevAttention, nextAttention)
@@ -4033,7 +4255,12 @@ export class SessionService {
           if (accepted) return
           accepted = true
           this.attachDispatchToTurn(sessionId, item.dispatchId)
-          this.queuedInputs.patch(item.id, 'sent')
+          this.recordAcceptedTurn(
+            sessionId,
+            item.dispatchId,
+            'the queued input sent mark',
+            () => this.queuedInputs.patch(item.id, 'sent'),
+          )
         }
         // The mute the user chose when they wrote this, not the composer's
         // state now -- the toggle reset the moment they pressed send.
@@ -4096,7 +4323,12 @@ export class SessionService {
           queuedInputId: item.id,
         })
         this.attachDispatchToTurn(sessionId, item.dispatchId)
-        this.queuedInputs.patch(item.id, 'sent')
+        this.recordAcceptedTurn(
+          sessionId,
+          item.dispatchId,
+          'the queued input sent mark',
+          () => this.queuedInputs.patch(item.id, 'sent'),
+        )
         return
       }
 
@@ -4118,12 +4350,23 @@ export class SessionService {
       )
       const receipt = pending ? await pending : undefined
       this.attachDispatchToTurn(sessionId, item.dispatchId)
-      this.queuedInputs.patch(item.id, 'sent')
+      this.recordAcceptedTurn(
+        sessionId,
+        item.dispatchId,
+        'the queued input sent mark',
+        () => this.queuedInputs.patch(item.id, 'sent'),
+      )
       if (handoffGuard) {
         this.pendingAccountHandoffs.delete(sessionId)
         handoffGuard = false
       }
-      receipt?.publish()
+      if (receipt)
+        this.recordAcceptedTurn(
+          sessionId,
+          item.dispatchId,
+          'the turn publication',
+          () => receipt.publish(),
+        )
     } catch (err) {
       // "Not yet" is not "broken" (MAR-2888). The row was attempted, but the
       // answer is about timing: it goes back in line and the next turn

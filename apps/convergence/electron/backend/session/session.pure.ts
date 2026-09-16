@@ -251,3 +251,30 @@ export function previousAssistantMessageTexts(
     )
     .map((item) => item.text)
 }
+
+/**
+ * A persistence failure while recording a turn the provider already accepted
+ * (MAR-3023).
+ *
+ * The tag is the witness, never the message: the recording funnel throws it
+ * from its own writes, so a catch can tell "the local record could not be
+ * written" from "the provider or the wire failed" with `instanceof` and
+ * nothing else. `announced` says whether the session boundary already
+ * recorded the loss (fact + note), so a rethrow crossing a second catch
+ * cannot record it twice.
+ */
+export class RecordingError extends Error {
+  /** Whether the accepted-turn boundary already emitted the loss. */
+  announced: boolean
+
+  constructor(
+    readonly label: string,
+    options?: { cause?: unknown; announced?: boolean },
+  ) {
+    super(`Could not record ${label} for an accepted turn`, {
+      cause: options?.cause,
+    })
+    this.name = 'RecordingError'
+    this.announced = options?.announced ?? false
+  }
+}
