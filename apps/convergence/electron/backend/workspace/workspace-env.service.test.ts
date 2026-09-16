@@ -1,3 +1,4 @@
+import { execFileSync } from 'child_process'
 import {
   existsSync,
   linkSync,
@@ -40,6 +41,27 @@ describe('WorkspaceEnvService', () => {
     mkdirSync(workspacePath, { recursive: true })
   }
 
+  /** Fixture repo: gitignored fake env files only — never a real project .env. */
+  function makeIgnoredEnvRepo(): void {
+    makeDirs()
+    execFileSync('git', ['init'], { cwd: sourcePath, stdio: 'ignore' })
+    writeFileSync(join(sourcePath, '.gitignore'), '.env*\n')
+    writeFileSync(join(sourcePath, '.env'), 'ROOT_FAKE=1\n')
+    mkdirSync(join(sourcePath, 'apps', 'a'), { recursive: true })
+    mkdirSync(join(sourcePath, 'apps', 'b'), { recursive: true })
+    mkdirSync(join(sourcePath, 'node_modules', 'x'), { recursive: true })
+    writeFileSync(join(sourcePath, 'apps', 'a', '.env'), 'APP_A_FAKE=1\n')
+    writeFileSync(
+      join(sourcePath, 'apps', 'b', '.env.local'),
+      'APP_B_FAKE=local\n',
+    )
+    writeFileSync(
+      join(sourcePath, 'apps', 'a', '.env.example'),
+      'APP_A_EXAMPLE=1\n',
+    )
+    writeFileSync(join(sourcePath, 'node_modules', 'x', '.env'), 'DEP_FAKE=1\n')
+  }
+
   it('overwrites regular env files', () => {
     makeDirs()
     writeFileSync(join(sourcePath, '.env'), 'ROOT_TOKEN=new\n')
@@ -51,7 +73,12 @@ describe('WorkspaceEnvService', () => {
       settings: { copyMode: 'overwrite', patterns: ['.env'] },
     })
 
-    expect(result).toEqual({ copied: 1, skipped: 0 })
+    expect(result).toEqual({
+      copied: 1,
+      skipped: 0,
+      paths: ['.env'],
+      fallback: 'root-readdir',
+    })
     expect(readFileSync(join(workspacePath, '.env'), 'utf8')).toBe(
       'ROOT_TOKEN=new\n',
     )
@@ -70,7 +97,12 @@ describe('WorkspaceEnvService', () => {
       settings: { copyMode: 'overwrite', patterns: ['.env'] },
     })
 
-    expect(result).toEqual({ copied: 0, skipped: 1 })
+    expect(result).toEqual({
+      copied: 0,
+      skipped: 1,
+      paths: [],
+      fallback: 'root-readdir',
+    })
     expect(readFileSync(outsideTarget, 'utf8')).toBe('outside-original\n')
     expect(lstatSync(join(workspacePath, '.env')).isSymbolicLink()).toBe(true)
   })
@@ -88,11 +120,114 @@ describe('WorkspaceEnvService', () => {
       settings: { copyMode: 'overwrite', patterns: ['.env'] },
     })
 
-    expect(result).toEqual({ copied: 1, skipped: 0 })
+    expect(result).toEqual({
+      copied: 1,
+      skipped: 0,
+      paths: ['.env'],
+      fallback: 'root-readdir',
+    })
     expect(readFileSync(outsideTarget, 'utf8')).toBe('outside-original\n')
     expect(readFileSync(join(workspacePath, '.env'), 'utf8')).toBe(
       'ROOT_TOKEN=secret\n',
     )
     expect(existsSync(join(workspacePath, '.env'))).toBe(true)
+  })
+
+  it('copies nested ignored env files into the same relative workspace paths (MAR-2778)', () => {
+    makeIgnoredEnvRepo()
+
+    const result = service.syncEnvFiles({
+      sourcePath,
+      workspacePath,
+      settings: { copyMode: 'overwrite', patterns: ['.env', '.env.*'] },
+    })
+
+    expect([...result.paths].sort()).toEqual([
+      '.env',
+      'apps/a/.env',
+      'apps/b/.env.local',
+    ])
+    expect(result.fallback).toBeNull()
+    expect(result.copied).toBe(3)
+    expect(readFileSync(join(workspacePath, '.env'), 'utf8')).toBe(
+      'ROOT_FAKE=1\n',
+    )
+    expect(readFileSync(join(workspacePath, 'apps', 'a', '.env'), 'utf8')).toBe(
+      'APP_A_FAKE=1\n',
+    )
+    expect(
+      readFileSync(join(workspacePath, 'apps', 'b', '.env.local'), 'utf8'),
+    ).toBe('APP_B_FAKE=local\n')
+    expect(existsSync(join(workspacePath, 'apps', 'a', '.env.example'))).toBe(
+      false,
+    )
+    expect(existsSync(join(workspacePath, 'node_modules', 'x', '.env'))).toBe(
+      false,
+    )
+  })
+
+  it('leaves an existing nested env file alone in copy-missing mode', () => {
+    makeIgnoredEnvRepo()
+    mkdirSync(join(workspacePath, 'apps', 'a'), { recursive: true })
+    writeFileSync(
+      join(workspacePath, 'apps', 'a', '.env'),
+      'APP_A_WORKSPACE_EDIT=keep\n',
+    )
+
+    const result = service.syncEnvFiles({
+      sourcePath,
+      workspacePath,
+      settings: { copyMode: 'copy-missing', patterns: ['.env', '.env.*'] },
+    })
+
+    expect(result.fallback).toBeNull()
+    expect(readFileSync(join(workspacePath, 'apps', 'a', '.env'), 'utf8')).toBe(
+      'APP_A_WORKSPACE_EDIT=keep\n',
+    )
+    expect(result.paths).not.toContain('apps/a/.env')
+    expect(result.paths).toEqual(
+      expect.arrayContaining(['.env', 'apps/b/.env.local']),
+    )
+  })
+
+  it('overwrites an existing nested env file when copyMode is overwrite', () => {
+    makeIgnoredEnvRepo()
+    mkdirSync(join(workspacePath, 'apps', 'a'), { recursive: true })
+    writeFileSync(
+      join(workspacePath, 'apps', 'a', '.env'),
+      'APP_A_WORKSPACE_EDIT=old\n',
+    )
+
+    const result = service.syncEnvFiles({
+      sourcePath,
+      workspacePath,
+      settings: { copyMode: 'overwrite', patterns: ['.env', '.env.*'] },
+    })
+
+    expect(result.paths).toEqual(expect.arrayContaining(['apps/a/.env']))
+    expect(readFileSync(join(workspacePath, 'apps', 'a', '.env'), 'utf8')).toBe(
+      'APP_A_FAKE=1\n',
+    )
+  })
+
+  it('falls back to root readdir when the source is not a git repository', () => {
+    makeDirs()
+    writeFileSync(join(sourcePath, '.env'), 'ROOT_FAKE=1\n')
+    mkdirSync(join(sourcePath, 'apps', 'a'), { recursive: true })
+    writeFileSync(join(sourcePath, 'apps', 'a', '.env'), 'APP_A_FAKE=1\n')
+
+    const result = service.syncEnvFiles({
+      sourcePath,
+      workspacePath,
+      settings: { copyMode: 'overwrite', patterns: ['.env', '.env.*'] },
+    })
+
+    expect(result).toEqual({
+      copied: 1,
+      skipped: 0,
+      paths: ['.env'],
+      fallback: 'root-readdir',
+    })
+    expect(existsSync(join(workspacePath, 'apps', 'a', '.env'))).toBe(false)
   })
 })
