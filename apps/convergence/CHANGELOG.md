@@ -1,5 +1,11 @@
 # convergence
 
+## 0.59.7
+
+### Patch Changes
+
+- cb55c59: A selection comment you started in one session no longer follows you to another session, and can no longer be filed on the wrong one.
+
 ## 0.59.6
 
 ### Patch Changes
