@@ -47,6 +47,8 @@ export {
   SPAWN_RECIPIENT_OPTION_ID,
 } from './connection-inspector.presentational'
 export { CrewSettingsPanel } from './crew-settings-panel.presentational'
+export { LOCAL_HOST_ID, LOCAL_HOST_LABEL } from './seat-display.pure'
+export type { SeatRefusalField } from './seat-display.pure'
 export {
   AddConversationsPanel,
   ANY_PROJECT_OPTION_ID,

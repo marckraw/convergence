@@ -1,10 +1,11 @@
 import type { FC } from 'react'
-import { X } from 'lucide-react'
+import { Users, X } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { SearchableSelect } from '@/shared/ui/searchable-select.container'
 import type { RelayEndpointOption } from './relay-sentence.pure'
+import { SeatRefusal } from './seat-refusal.presentational'
 
 /** One conversation offered to a crew, with the line that identifies it. */
 export interface AddableConversation {
@@ -12,6 +13,11 @@ export interface AddableConversation {
   name: string
   /** "Claude Code · Opus 5 · convergence", already assembled. */
   detail: string
+  /**
+   * The other crew this conversation already sits in, if any (MAR-3118 R7):
+   * one seat, one crew, said before anybody picks it.
+   */
+  inCrew?: string | null
 }
 
 interface AddConversationsPanelProps {
@@ -28,6 +34,8 @@ interface AddConversationsPanelProps {
   /** The names already in the crew, for the reassuring line at the bottom. */
   alreadyInCrew: readonly string[]
   busy: boolean
+  /** The door's refusal of the last add, in its own words; the selection stays. */
+  refusal?: string | null
   onAdd: () => void
   onClose: () => void
 }
@@ -56,6 +64,7 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
   onToggle,
   alreadyInCrew,
   busy,
+  refusal = null,
   onAdd,
   onClose,
 }) => (
@@ -141,6 +150,12 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
                 )}
               >
                 <span className="text-[12px]">{entry.name}</span>
+                {entry.inCrew ? (
+                  <span className="flex items-center gap-1 text-[10px] text-amber-400">
+                    <Users aria-hidden className="size-3" />
+                    In crew “{entry.inCrew}”
+                  </span>
+                ) : null}
                 <span className="text-[10px] text-muted-foreground">
                   {entry.detail}
                 </span>
@@ -150,6 +165,13 @@ export const AddConversationsPanel: FC<AddConversationsPanelProps> = ({
         })}
       </ul>
     )}
+
+    {refusal ? (
+      <SeatRefusal
+        message={refusal}
+        kept="One seat, one crew. Remove it there first — nothing was added here."
+      />
+    ) : null}
 
     {alreadyInCrew.length > 0 ? (
       <p className="text-[10px] text-muted-foreground/70">

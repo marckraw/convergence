@@ -539,6 +539,7 @@ export class CrewService {
             : DEFAULT_CREW_MEMBER_WIP_LIMIT,
         providerId: row.provider_id ?? null,
         model: row.model ?? null,
+        conversationMissing: row.conversation_missing === 1,
         // Defensive read for the same reason every other added column gets
         // one: a row written before baton names existed has none.
         batonName: row.baton_name ?? null,
@@ -635,17 +636,21 @@ function readSeatWord<T>(
  * Members with their seat, resident and dynamic alike.
  *
  * A LEFT JOIN rather than the inner one it was: a dynamic seat has no session
- * to join to, and an inner join hid every recipe in the crew. The filter keeps
- * the old behaviour for resident seats -- a member whose conversation was
- * deleted degrades to a missing member rather than a crash.
+ * to join to, and an inner join hid every recipe in the crew.
+ *
+ * A resident seat whose conversation was deleted is READ, not hidden
+ * (MAR-3118 R10): `conversation_missing` says so, derived from the join and
+ * never stored. Hiding it left a seat a wire still aimed at with nothing on
+ * the screen to show for it or to remove.
  */
 const MEMBER_SELECT = `SELECT members.crew_id, members.session_id, members.baton_name,
           members.canvas_x, members.canvas_y, members.role, members.kind,
           members.role_card, members.host_policy, members.lane_policy,
-          members.wip_limit, members.provider_id, members.model
+          members.wip_limit, members.provider_id, members.model,
+          (members.session_id IS NOT NULL AND sessions.id IS NULL) AS conversation_missing
      FROM session_crew_members members
      LEFT JOIN sessions ON sessions.id = members.session_id
-    WHERE (sessions.id IS NOT NULL OR members.session_id IS NULL)`
+    WHERE 1 = 1`
 const MEMBER_ORDER = 'ORDER BY members.added_at ASC, members.rowid ASC'
 
 interface MemberReadRow {
@@ -662,6 +667,7 @@ interface MemberReadRow {
   wip_limit: number | null
   provider_id: string | null
   model: string | null
+  conversation_missing: number
 }
 
 /**

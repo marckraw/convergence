@@ -1651,6 +1651,9 @@ describe('MissionControl', () => {
           throw new Error(refused)
         },
       )
+      // One seat open at a time (MAR-3118): open it first.
+      fireEvent.click(screen.getByRole('button', { name: /^horse opus — / }))
+      fireEvent.click(screen.getByRole('button', { name: 'Write a card' }))
       const card = screen.getAllByLabelText(/^Role card for /)[0]!
       const typed = 'You are Opus. '.repeat(400)
 
@@ -1659,6 +1662,86 @@ describe('MissionControl', () => {
 
       expect(await screen.findByText(refused)).toBeInTheDocument()
       expect(card).toHaveValue(typed)
+    })
+
+    /**
+     * One seat open at a time, and leaving a seat commits what was typed in
+     * it (MAR-3118 R2) -- through the same door a blur uses, before the next
+     * seat opens. No blur happens here on purpose: the switch alone must save.
+     */
+    it('commits a card typed in one seat when another seat is opened, and shows the saved card on return (mutations: two open editors; skip the commit on switch)', async () => {
+      const members: SessionCrew['members'] = [
+        {
+          ...DEFAULT_CREW_MEMBER_SEAT,
+          sessionId: 'a',
+          batonName: 'opus',
+          canvasX: null,
+          canvasY: null,
+          roleCard: 'Old card.',
+        },
+        {
+          ...DEFAULT_CREW_MEMBER_SEAT,
+          sessionId: 'b',
+          batonName: 'grok',
+          canvasX: null,
+          canvasY: null,
+        },
+      ]
+      const api = await openCrewSettings('Night shift', members)
+      let answer: () => void = () => undefined
+      const setMemberSeat = vi.fn(
+        (_crewId: string, _member: unknown, patch: { roleCard?: string }) =>
+          new Promise<unknown>((resolve) => {
+            answer = () => {
+              const saved = makeCrew({
+                id: 'crew-1',
+                name: 'Night shift',
+                sessionIds: ['a', 'b'],
+                members: members.map((member) =>
+                  member.sessionId === 'a'
+                    ? { ...member, roleCard: patch.roleCard ?? null }
+                    : member,
+                ),
+              })
+              listCrews.mockResolvedValue([saved])
+              resolve(saved)
+            }
+          }),
+      )
+      ;(api as unknown as { setMemberSeat: unknown }).setMemberSeat =
+        setMemberSeat
+
+      fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
+      fireEvent.change(screen.getByLabelText('Role card for opus'), {
+        target: { value: 'New card, typed and left.' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: /^grok — / }))
+
+      // Mutation: skip the commit on switch -> never called.
+      expect(setMemberSeat).toHaveBeenCalledWith(
+        'crew-1',
+        { sessionId: 'a' },
+        { roleCard: 'New card, typed and left.' },
+      )
+      // A closed while its save is still in flight, B open. Mutation: keep a
+      // seat with a pending draft open too -> two editors, red.
+      expect(screen.queryByRole('region', { name: 'Seat opus' })).toBeNull()
+      expect(
+        screen.getByRole('region', { name: 'Seat grok' }),
+      ).toBeInTheDocument()
+      expect(screen.getAllByRole('region', { name: /^Seat / })).toHaveLength(1)
+
+      answer()
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /^opus — / }),
+        ).toHaveAccessibleName(/has a role card/),
+      )
+      fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
+      expect(await screen.findByLabelText('Role card for opus')).toHaveValue(
+        'New card, typed and left.',
+      )
+      expect(setMemberSeat).toHaveBeenCalledTimes(1)
     })
 
     it('keeps a trailing space while renaming inline (mutation: control by crew.name)', async () => {
@@ -1852,9 +1935,12 @@ describe('MissionControl', () => {
       const alert = within(panel).getByRole('alert')
       expect(alert).toHaveTextContent('Failed to delete crew')
       expect(alert.parentElement).toBe(panel)
+      // Directly under the drawer's header -- the crew's name, then "Crew
+      // settings" beneath it since the seat editor redesign (MAR-3118 R8).
       expect(alert.previousElementSibling).toContainElement(
-        within(panel).getByRole('heading', { name: 'Crew settings' }),
+        within(panel).getByRole('heading', { name: 'Night shift' }),
       )
+      expect(alert.previousElementSibling).toHaveTextContent('Crew settings')
       expect(api.delete).toHaveBeenCalledExactlyOnceWith('crew-1')
     })
 
@@ -2169,6 +2255,8 @@ describe('MissionControl', () => {
       expect(
         await screen.findByRole('region', { name: 'Crew settings' }),
       ).toBeInTheDocument()
+      // A seat is one line until it is opened (MAR-3118 R1).
+      fireEvent.click(screen.getByRole('button', { name: /^fable — / }))
       expect(screen.getByDisplayValue('fable')).toBeInTheDocument()
       expect(
         screen.getByLabelText('Delivery limit per run for this crew'),
@@ -2180,8 +2268,9 @@ describe('MissionControl', () => {
       // From the settings panel's own button, not the toolbar's: both lead
       // to the same panel, and the settings one is the reachable path for
       // somebody already looking at the roster.
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }))
       fireEvent.click(
-        screen.getByRole('button', { name: '+ Add conversation' }),
+        screen.getByRole('menuitem', { name: 'Add conversation…' }),
       )
       expect(
         await screen.findByRole('region', { name: 'Add conversations' }),

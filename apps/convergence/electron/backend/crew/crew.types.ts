@@ -37,6 +37,7 @@ export const DEFAULT_CREW_MEMBER_SEAT = {
   wipLimit: DEFAULT_CREW_MEMBER_WIP_LIMIT,
   providerId: null,
   model: null,
+  conversationMissing: false,
 }
 
 export interface SessionCrewMember {
@@ -75,6 +76,13 @@ export interface SessionCrewMember {
   /** A dynamic seat's recipe. Null on a resident seat, which has a session. */
   providerId: string | null
   model: string | null
+  /**
+   * A resident seat whose conversation was deleted (MAR-3118 R10). DERIVED
+   * from the read's LEFT JOIN, never stored: the seat keeps its name, role and
+   * card and stays listed so a person can see it and remove it, but it is not
+   * a conversation in this crew -- it is left out of `sessionIds`.
+   */
+  conversationMissing: boolean
 }
 
 /**
@@ -151,8 +159,13 @@ export function sessionCrewFromRow(
     // That is why a recipe does not appear on the Canvas, in the member count
     // or among the endpoints a wire may be drawn between: those read the
     // conversations. Intended for now; a recipe's own surface rides MAR-3099.
+    // An orphan seat (its conversation deleted) is a member, not a
+    // conversation: it stays out of the ids exactly as it did while the read
+    // hid it (MAR-3118 R10).
     sessionIds: members.flatMap((member) =>
-      member.sessionId === null ? [] : [member.sessionId],
+      member.sessionId === null || member.conversationMissing
+        ? []
+        : [member.sessionId],
     ),
     members,
   }

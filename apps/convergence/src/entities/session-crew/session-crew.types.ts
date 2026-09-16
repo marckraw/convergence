@@ -28,6 +28,7 @@ export const DEFAULT_CREW_MEMBER_SEAT = {
   wipLimit: 1,
   providerId: null,
   model: null,
+  conversationMissing: false,
 } as const
 
 export interface SessionCrewMember {
@@ -64,6 +65,12 @@ export interface SessionCrewMember {
   /** A dynamic seat's recipe; null on a resident seat. */
   providerId: string | null
   model: string | null
+  /**
+   * A resident seat whose conversation was deleted (MAR-3118 R10). Derived by
+   * the backend's read, never stored: the row stays so it can be seen and
+   * removed, and nothing removes it automatically.
+   */
+  conversationMissing: boolean
 }
 
 export interface SessionCrew {

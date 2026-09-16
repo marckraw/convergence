@@ -54,7 +54,10 @@ import {
   DEFAULT_CREW_ROUND_CAP,
   DEFAULT_CREW_STALL_MINUTES,
   GLOBAL_PROJECT_OPTION_ID,
+  LOCAL_HOST_ID,
+  LOCAL_HOST_LABEL,
   SPAWN_RECIPIENT_OPTION_ID,
+  crewsHoldingSession,
   batonNameRefusal,
   appendRunPage,
   beforeDeliveryOptions,
@@ -90,6 +93,7 @@ import type {
   ConnectionDraft,
   ConnectionSpawnSpec,
   HistoryEventRow,
+  SeatRefusalField,
   HistoryFilter,
   SessionCard,
   SessionCrewGroup,
@@ -146,6 +150,20 @@ function seatDraftPatch(
   return { [field]: typed.trim() || null }
 }
 
+/** The one field a seat edit carries — where its refusal is drawn. */
+function seatPatchField(
+  patch: Parameters<typeof sessionCrewApi.setMemberSeat>[2],
+): SeatRefusalField {
+  const field = Object.keys(patch)[0]
+  return field === 'role' ||
+    field === 'roleCard' ||
+    field === 'hostPolicy' ||
+    field === 'lanePolicy' ||
+    field === 'wipLimit'
+    ? field
+    : 'role'
+}
+
 export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const crewGroups = useMemo(
     () => groups.filter((group) => group.crew !== null),
@@ -193,7 +211,14 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const [batonNameProblem, setBatonNameProblem] = useState<{
     memberKey: string
     message: string
+    field: SeatRefusalField
   } | null>(null)
+  /** The one seat whose editor is open (MAR-3118 R2). */
+  const [openSeatKey, setOpenSeatKey] = useState<string | null>(null)
+  const [seatQuery, setSeatQuery] = useState('')
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
+  /** The door's refusal when adding a conversation, kept with the selection. */
+  const [addProblem, setAddProblem] = useState<string | null>(null)
   /**
    * What is being typed in a seat's free-text fields (MAR-3083 lap 2, G).
    * This container reloads every crew after any seat edit and on every
@@ -217,6 +242,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const updateRelay = useSessionRelayStore((state) => state.updateRelay)
   const deleteRelay = useSessionRelayStore((state) => state.deleteRelay)
   const crewError = useSessionCrewStore((state) => state.error)
+  const allCrews = useSessionCrewStore((state) => state.crews)
   const clearCrewError = useSessionCrewStore((state) => state.clearError)
   const relayError = useSessionRelayStore((state) => state.error)
   const clearRelayError = useSessionRelayStore((state) => state.clearError)
@@ -230,6 +256,17 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const projects = useProjectStore((state) => state.projects)
   const endpoints = useAppSettingsStore(
     (state) => state.settings.executionHostEndpoints,
+  )
+  /** Where a seat can run: this Mac, then every endpoint by its label. */
+  const hostOptions = useMemo(
+    () => [
+      { id: LOCAL_HOST_ID, label: LOCAL_HOST_LABEL },
+      ...endpoints.map((endpoint) => ({
+        id: endpoint.id,
+        label: endpoint.label || endpoint.id,
+      })),
+    ],
+    [endpoints],
   )
   const remoteProjectCatalogs = useSessionStore(
     (state) => state.remoteProjectCatalogs,
@@ -686,6 +723,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         setBatonNameProblem({
           memberKey: key,
           message: 'A dynamic seat needs a baton name',
+          field: 'batonName',
         })
         return
       }
@@ -711,6 +749,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         setBatonNameProblem({
           memberKey: key,
           message: batonNameRefusal(error),
+          field: 'batonName',
         })
       }
       setBusy(false)
@@ -741,6 +780,9 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         setBatonNameProblem({
           memberKey: key,
           message: batonNameRefusal(error),
+          // The sentence is drawn under the field it refuses (MAR-3118 R7):
+          // a seat edit carries exactly one field.
+          field: seatPatchField(patch),
         })
       }
       setBusy(false)
@@ -754,20 +796,62 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
    * kept until the door has taken the value (R): a refusal leaves the typing
    * in place with the door's sentence under it.
    */
+  const committingSeatDrafts = useRef(new Set<string>())
   const commitSeatDraft = useCallback(
     async (member: CrewMemberRef, field: SeatDraftField) => {
       const key = keyForRef(member)
       const typed = seatDrafts[key]?.[field]
       if (typed === undefined) return
+      // One commit per typed value: leaving a field (blur) and leaving its
+      // seat (switch, MAR-3118 R2) can both ask in the same beat, and the
+      // draft is still there until the door answers.
+      const inFlight = `${key}\u0000${field}\u0000${typed}`
+      if (committingSeatDrafts.current.has(inFlight)) return
+      committingSeatDrafts.current.add(inFlight)
       // ONE path for every typed field (MAR-3083 lap 4, R): the value goes to
       // the door as typed, and the draft is forgotten only once the door has
       // taken it. Dropping it first lost the typing on any refusal -- a role
       // card over the limit vanished with its sentence -- while the WIP field
       // beside it already kept its draft.
-      const accepted = await editSeat(member, seatDraftPatch(field, typed))
-      if (accepted) dropSeatDraft(key, field)
+      try {
+        const accepted = await editSeat(member, seatDraftPatch(field, typed))
+        if (accepted) dropSeatDraft(key, field)
+      } finally {
+        committingSeatDrafts.current.delete(inFlight)
+      }
     },
     [seatDrafts, editSeat, keyForRef, dropSeatDraft],
+  )
+
+  /**
+   * Opens one seat and closes the other (MAR-3118 R2). Leaving a seat commits
+   * what was typed in it through the same doors a blur uses, BEFORE the next
+   * one opens: a card typed and left behind by a click elsewhere is saved,
+   * never silently dropped and never landed on the seat opened next.
+   */
+  const toggleSeat = useCallback(
+    (key: string) => {
+      const leaving = openSeatKey
+      if (leaving !== null) {
+        const ref = memberRefFor(leaving)
+        if (ref) {
+          for (const field of ['roleCard', 'wipLimit', 'hostPolicy'] as const)
+            if (seatDrafts[leaving]?.[field] !== undefined)
+              void commitSeatDraft(ref, field)
+        }
+        if (batonNameDrafts[leaving] !== undefined)
+          void commitBatonName(leaving)
+      }
+      setOpenSeatKey(leaving === key ? null : key)
+    },
+    [
+      openSeatKey,
+      memberRefFor,
+      seatDrafts,
+      batonNameDrafts,
+      commitSeatDraft,
+      commitBatonName,
+    ],
   )
 
   const addConversations = useCallback(async () => {
@@ -780,9 +864,12 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       await loadCrews()
       setAddSelection([])
       closePanel()
-    } catch {
+      setAddProblem(null)
+    } catch (error) {
       // Membership that would not store leaves the panel open with the
-      // selection intact, so the person can try again without re-picking.
+      // selection intact, so the person can try again without re-picking --
+      // and says why, in the door's own words (MAR-3118 R7).
+      setAddProblem(batonNameRefusal(error))
     }
     setBusy(false)
   }, [crew, addSelection, loadCrews, closePanel])
@@ -887,6 +974,12 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       .map((session) => ({
         sessionId: session.id,
         name: session.name,
+        // One seat, one crew: say where a conversation already sits before
+        // anybody picks it (MAR-3118 R7).
+        inCrew:
+          crewsHoldingSession(allCrews, session.id).find(
+            (holder) => holder.id !== crew.id,
+          )?.name ?? null,
         detail: [
           session.providerId,
           session.model,
@@ -896,7 +989,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
           .filter(Boolean)
           .join(' · '),
       }))
-  }, [crew, sessions, projects, addQuery, addProjectId])
+  }, [crew, allCrews, sessions, projects, addQuery, addProjectId])
 
   /**
    * Whether this crew has work in flight (R7).
@@ -1709,13 +1802,31 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               onAttentionMinutesChange={(stallMinutes) => {
                 void setLoopLimit({ stallMinutes })
               }}
-              onAddConversation={() =>
+              onAddConversation={() => {
+                setAddMenuOpen(false)
+                setAddProblem(null)
                 leavePanel({ kind: 'add-conversations' })
-              }
+              }}
               onRemoveMember={(member) => {
                 void removeMember(member)
               }}
               onClose={() => leavePanel({ kind: 'none' })}
+              openSeatKey={openSeatKey}
+              onToggleSeat={toggleSeat}
+              seatQuery={seatQuery}
+              onSeatQueryChange={setSeatQuery}
+              addMenuOpen={addMenuOpen}
+              onAddMenuToggle={() => setAddMenuOpen((open) => !open)}
+              hostOptions={hostOptions}
+              resolveProviderName={(providerId) =>
+                providersById.get(providerId)?.name ?? null
+              }
+              onOpenConversation={(sessionId) => {
+                const card = groups
+                  .flatMap((group) => group.cards)
+                  .find((entry) => entry.session.id === sessionId)
+                if (card) onOpen(card)
+              }}
             />
           </div>
         ) : null}
@@ -1843,6 +1954,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
                 .map((sessionId) => resolveName(sessionId))
                 .filter((name): name is string => name !== null)}
               busy={busy}
+              refusal={addProblem}
               onAdd={() => {
                 void addConversations()
               }}
