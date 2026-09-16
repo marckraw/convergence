@@ -16,7 +16,7 @@ import type {
   CrewConfigSession,
 } from './crew-config.types'
 import type { SessionCrewMember } from './crew.types'
-import type { SessionRelay } from '../relay/relay.types'
+import type { RelaySpawnSpec, SessionRelay } from '../relay/relay.types'
 
 /** Maps database instances into the portable crew recipe; no IO crosses this boundary. */
 export function crewToConfig(
@@ -32,8 +32,10 @@ export function crewToConfig(
     compare(roleKey(a), roleKey(b)),
   )) {
     // A dynamic seat is a recipe with no conversation (R3), and `roles` is a
-    // map of conversations: it is skipped rather than exported half-formed.
-    // Named in the report as the one seat field this recipe cannot carry yet.
+    // map of conversations, so it cannot be written here. It is not lost: a
+    // wire that spawns it carries the recipe INLINE in its spawn spec (see
+    // `spawnTarget`), and `renderCrewYaml` writes a comment naming it. The
+    // seat itself travels with MAR-3099.
     if (member.kind === 'dynamic') continue
     const session = sessions.find((s) => s.id === member.sessionId)
     if (!session) throw new Error('A crew member has no conversation')
@@ -153,6 +155,45 @@ export function crewToConfig(
       throw new Error(`Root project missing for lane ${project.laneName}`)
     return normalizeOriginKey(root.origin) ?? root.name
   }
+  /**
+   * The spawn's recipe fields, with a named seat's values written in.
+   *
+   * A recipe that is in this crew wins on what it is, exactly as the engine
+   * reads it at firing time, so the exported wire behaves the same on the far
+   * side without the seat travelling.
+   */
+  function inlineRecipe(spec: RelaySpawnSpec): {
+    member?: string
+    provider: string
+    model: string | null
+    effort: string | null
+    host: string
+    roleCard: string | null
+  } {
+    const seat = spec.member
+      ? members.find(
+          (entry) =>
+            entry.sessionId === null && entry.batonName === spec.member,
+        )
+      : undefined
+    return {
+      provider: seat?.providerId ?? spec.providerId,
+      model: seat?.model ?? spec.model,
+      effort: spec.effort,
+      // The seat's host is carried only when this wire can say where that
+      // host works: a remote host in a spawn spec needs a work address, and a
+      // seat does not hold one. Rather than write a file the reader refuses,
+      // the wire keeps its own host and `inlinedRecipeNotes` says so.
+      host: canCarrySeatHost(spec, seat)
+        ? seat!.hostPolicy!
+        : spec.executionHost,
+      roleCard: spec.roleCard ?? seat?.roleCard ?? null,
+      // Kept only when it names something this file still carries; a recipe
+      // is inlined above instead.
+      ...(spec.member && !seat ? { member: spec.member } : {}),
+    }
+  }
+
   function spawnTarget(relay: SessionRelay): CrewConfigWire['to'] {
     if (!relay.spawnSpec) throw new Error('A spawn wire has no recipe')
     const spec = normalizeRelaySpawnSpec(relay.spawnSpec)
@@ -164,16 +205,17 @@ export function crewToConfig(
     return {
       spawn: {
         name: spec.name,
-        ...(spec.member === null ? {} : { member: spec.member }),
-        provider: spec.providerId,
-        model: spec.model,
-        effort: spec.effort,
+        // The recipe this wire names is INLINED, and `member` is omitted
+        // (MAR-3083 lap 3, K): `roles` cannot carry a seat with no
+        // conversation, so a file that kept the reference imported a wire
+        // pointing at a seat the crew does not have -- and every firing then
+        // recorded "this spawn names no seat this crew has". Inlining keeps
+        // the wire working; MAR-3099 gives recipes a home of their own.
+        ...inlineRecipe(spec),
         project: projectReference(project),
         ...(project?.laneName ? { lane: project.laneName } : {}),
         account: 'default',
-        host: spec.executionHost,
         workAddress: spec.workAddress,
-        roleCard: spec.roleCard,
         returnWire: spec.returnWire,
       },
     }
@@ -200,9 +242,13 @@ export function crewToConfig(
 function compare(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0
 }
-export function renderCrewYaml(config: CrewConfig): string {
+export function renderCrewYaml(
+  config: CrewConfig,
+  notes: readonly string[] = [],
+): string {
   const lines = [
     `# yaml-language-server: $schema=https://raw.githubusercontent.com/marckraw/convergence/master/docs/crews/crew-config.schema.json`,
+    ...notes.map((note) => `# ${note}`),
   ]
   for (const [key, value] of Object.entries(config)) {
     if (key === 'roles' || key === 'layout') {
@@ -500,7 +546,11 @@ const validateRecipe = shape({
       lane: optional(string),
       host: string,
       role: optional(oneOf('mastermind', 'horse', 'reviewer', 'designer')),
-      kind: optional(oneOf('resident', 'dynamic')),
+      // `roles` is a map of CONVERSATIONS: a seat is dynamic exactly when it
+      // has none, so a role written as `dynamic` describes something this map
+      // cannot hold. Refused by name rather than imported onto a
+      // session-bound row (MAR-3083 lap 3, J). Recipes travel with MAR-3099.
+      kind: optional(oneOf('resident')),
       roleCard: optional(string),
       lanePolicy: optional(oneOf('main', 'own-worktree')),
       wipLimit: optional(positiveInteger),
@@ -518,3 +568,54 @@ const validateRecipe = shape({
   ),
   layout: optional(record(pair)),
 })
+
+/**
+ * What this file had to write into a wire because it cannot carry the seat
+ * (MAR-3083 lap 3, K).
+ *
+ * A recipe has no conversation, so `roles` cannot hold it; its wire carries
+ * the values inline instead. The reader of the file is told, by name, rather
+ * than finding a spawn that quietly stopped pointing at anything.
+ */
+export function inlinedRecipeNotes(
+  members: readonly SessionCrewMember[],
+  relays: readonly SessionRelay[],
+): string[] {
+  const named = new Set(
+    relays.flatMap((relay) =>
+      relay.spawnSpec?.member ? [relay.spawnSpec.member] : [],
+    ),
+  )
+  return members
+    .filter(
+      (member) =>
+        member.sessionId === null &&
+        member.batonName !== null &&
+        named.has(member.batonName),
+    )
+    .map((member) => {
+      const wire = relays.find(
+        (relay) => relay.spawnSpec?.member === member.batonName,
+      )
+      const hostTravelled =
+        wire?.spawnSpec != null && canCarrySeatHost(wire.spawnSpec, member)
+      return (
+        `The dynamic seat "${member.batonName}" is written into its wire's spawn ` +
+        `recipe: this file cannot carry a seat without a conversation yet ` +
+        `(MAR-3099).` +
+        (hostTravelled
+          ? ''
+          : ` Its host "${member.hostPolicy ?? 'local'}" stayed behind — a ` +
+            `remote host needs a work address this wire does not state.`)
+      )
+    })
+}
+
+/** Whether a seat's host can travel in this wire's spawn spec (K). */
+function canCarrySeatHost(
+  spec: RelaySpawnSpec,
+  seat: { hostPolicy: string | null } | undefined,
+): boolean {
+  if (!seat?.hostPolicy) return false
+  return seat.hostPolicy === 'local' || spec.workAddress !== null
+}

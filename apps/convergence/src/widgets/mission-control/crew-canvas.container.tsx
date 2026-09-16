@@ -623,6 +623,28 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
     [crew, loadCrews],
   )
 
+  /**
+   * The key a member reference belongs to — one spelling, shared by the draft
+   * maps and the refusal slot (MAR-3083 lap 3, M). Hand-rolled copies
+   * disagreed about a recipe whose name is missing.
+   */
+  const keyForRef = useCallback(
+    (member: CrewMemberRef): string =>
+      'sessionId' in member
+        ? member.sessionId
+        : memberKey({ sessionId: null, batonName: member.batonName }),
+    [],
+  )
+
+  /** Forgets a committed draft so the field falls back to the record. */
+  const dropSeatDraft = useCallback((key: string, field: SeatDraftField) => {
+    setSeatDrafts((drafts) => {
+      const next = { ...drafts, [key]: { ...drafts[key] } }
+      delete next[key]![field]
+      return next
+    })
+  }, [])
+
   /** The member a panel key names, and how the doors address it. */
   const memberRefFor = useCallback(
     (key: string): CrewMemberRef | null => {
@@ -641,6 +663,17 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       const typed = batonNameDrafts[key]
       if (typed === undefined) return
       const ref = memberRefFor(key)
+      const member = crew.members.find((entry) => memberKey(entry) === key)
+      // A recipe's name is the only way to reach it, so the form does not
+      // offer clearing it (MAR-3083 lap 3, I): the draft stays where it was
+      // typed and the door's own sentence appears under it.
+      if (member && member.sessionId === null && !typed.trim()) {
+        setBatonNameProblem({
+          memberKey: key,
+          message: 'A dynamic seat needs a baton name',
+        })
+        return
+      }
       setBatonNameDrafts((drafts) => {
         const next = { ...drafts }
         delete next[key]
@@ -679,24 +712,26 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
     async (
       member: CrewMemberRef,
       patch: Parameters<typeof sessionCrewApi.setMemberSeat>[2],
-    ) => {
-      if (!crew) return
-      const key =
-        'sessionId' in member ? member.sessionId : `baton:${member.batonName}`
+    ): Promise<boolean> => {
+      if (!crew) return false
+      const key = keyForRef(member)
       setBusy(true)
       setBatonNameProblem(null)
+      let accepted = true
       try {
         await sessionCrewApi.setMemberSeat(crew.id, member, patch)
         await loadCrews()
       } catch (error) {
+        accepted = false
         setBatonNameProblem({
           memberKey: key,
           message: batonNameRefusal(error),
         })
       }
       setBusy(false)
+      return accepted
     },
-    [crew, loadCrews],
+    [crew, loadCrews, keyForRef],
   )
 
   /**
@@ -706,25 +741,23 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
    */
   const commitSeatDraft = useCallback(
     async (member: CrewMemberRef, field: SeatDraftField) => {
-      const key =
-        'sessionId' in member ? member.sessionId : `baton:${member.batonName}`
+      const key = keyForRef(member)
       const typed = seatDrafts[key]?.[field]
       if (typed === undefined) return
-      setSeatDrafts((drafts) => {
-        const next = { ...drafts, [key]: { ...drafts[key] } }
-        delete next[key]![field]
-        return next
-      })
       if (field === 'wipLimit') {
-        const parsed = Number(typed)
-        await editSeat(member, {
-          wipLimit: Number.isInteger(parsed) && parsed >= 1 ? parsed : null,
-        })
+        // Sent as typed. Turning `0` or `abc` into null here read back as 1
+        // with nothing said; the door already owns that sentence
+        // (`normalizeCrewLimit`), and the draft stays until it is taken
+        // (MAR-3083 lap 3, M).
+        const parsed = typed.trim() === '' ? null : Number(typed)
+        const accepted = await editSeat(member, { wipLimit: parsed })
+        if (accepted) dropSeatDraft(key, field)
         return
       }
+      dropSeatDraft(key, field)
       await editSeat(member, { [field]: typed.trim() || null })
     },
-    [seatDrafts, editSeat],
+    [seatDrafts, editSeat, keyForRef, dropSeatDraft],
   )
 
   const addConversations = useCallback(async () => {

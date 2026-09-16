@@ -277,6 +277,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                   <select
                     aria-label={`Role for ${label}`}
                     value={member.role}
+                    disabled={busy}
                     onChange={(event) =>
                       onSeatEdit(ref, { role: event.target.value })
                     }
@@ -290,20 +291,19 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                       ),
                     )}
                   </select>
-                  <select
+                  {/* Not a choice: a seat is dynamic exactly when it has no
+                      conversation (MAR-3083 lap 3, J). Offering it hid a
+                      recipe from every read and freed its only name. */}
+                  <span
                     aria-label={`Kind for ${label}`}
-                    value={member.kind}
-                    onChange={(event) =>
-                      onSeatEdit(ref, { kind: event.target.value })
-                    }
-                    className="h-6 rounded border border-border bg-transparent px-1 text-[11px]"
+                    className="h-6 rounded border border-border px-1 text-[11px] leading-6 text-muted-foreground"
                   >
-                    <option value="resident">resident</option>
-                    <option value="dynamic">dynamic</option>
-                  </select>
+                    {member.kind}
+                  </span>
                   <select
                     aria-label={`Lane for ${label}`}
                     value={member.lanePolicy ?? ''}
+                    disabled={busy}
                     onChange={(event) =>
                       onSeatEdit(ref, {
                         lanePolicy: event.target.value || null,
@@ -322,7 +322,6 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                       }
                       placeholder="host: local"
                       aria-label={`Host for ${label}`}
-                      disabled={busy}
                       onChange={(event) =>
                         onSeatDraftEdit(key, 'hostPolicy', event.target.value)
                       }
@@ -347,7 +346,6 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                       seatDrafts[key]?.wipLimit ?? String(member.wipLimit ?? 1)
                     }
                     aria-label={`WIP limit for ${label}`}
-                    disabled={busy}
                     onChange={(event) =>
                       onSeatDraftEdit(key, 'wipLimit', event.target.value)
                     }
@@ -359,7 +357,6 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
                   value={seatDrafts[key]?.roleCard ?? member.roleCard ?? ''}
                   placeholder="Role card — what this seat is told it is"
                   aria-label={`Role card for ${label}`}
-                  disabled={busy}
                   rows={2}
                   onChange={(event) =>
                     onSeatDraftEdit(key, 'roleCard', event.target.value)

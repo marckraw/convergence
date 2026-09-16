@@ -1035,9 +1035,12 @@ export class RelayEngine {
     const seat = this.crews.findSeatBySession(relay.crewId, targetSessionId)
     const roleCard = seat?.roleCard ?? null
     // Owed when the LEDGER has no delivered hop carrying it into this seat in
-    // this run. Asked of the record rather than of memory, so a restart
-    // mid-run does not re-brief the seat, and a send that threw leaves the
-    // card still owed for the retry.
+    // this run. Asked of the record rather than of this process's memory: a
+    // send that threw leaves the card owed for the retry, a second wire into
+    // the same seat in the same run carries the payload alone, and nothing
+    // depends on one engine instance staying alive. A run that begins after a
+    // restart is a new run and introduces the seat again -- the run id lives
+    // in memory, which is MAR-3108, not this.
     const carriesCard =
       relay.action === 'hail' &&
       roleCard !== null &&

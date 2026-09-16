@@ -3704,7 +3704,14 @@ describe('RelayEngine', () => {
       ).toBe(false)
     })
 
-    it('still owes the card when the delivery that would have carried it threw', async () => {
+    /**
+     * The discriminating input for "the card is owed until it is carried"
+     * (MAR-3083 lap 3, L): TWO wires into the same seat in ONE settle, so both
+     * deliveries belong to the same run. The first throws; the second must
+     * still lead with the card. Two settles would have been two runs — lap
+     * 1's in-memory Map would have passed that too.
+     */
+    it('still owes the card to the next wire in the same run when a delivery throws', async () => {
       seatsBySession.s2 = {
         batonName: 'horse opus',
         kind: 'resident',
@@ -3713,6 +3720,7 @@ describe('RelayEngine', () => {
         providerId: null,
         model: null,
       }
+      wire('s1', 's2')
       wire('s1', 's2')
       let refuse = true
       const gateway = createGateway({
@@ -3723,15 +3731,14 @@ describe('RelayEngine', () => {
           throw new Error('the session layer refused')
         },
       })
-      const engine = createEngine(gateway)
 
-      await engine.handleSettle(settled('s1'))
-      await engine.handleSettle(settled('s1'))
+      await createEngine(gateway).handleSettle(settled('s1'))
 
-      // Mutation: spend the claim before the send (lap 1) and the retry
-      // carries the payload alone -- the card was burned by a throw.
+      // Mutation: spend the claim before the send (lap 1) and the survivor
+      // carries the payload alone — the card was burned by a throw.
       const arrivals = gateway.sent.filter((turn) => turn.sessionId === 's2')
-      expect(arrivals.at(-1)!.text).toBe('You are Opus.\n\nthe brief')
+      expect(arrivals).toHaveLength(1)
+      expect(arrivals[0]!.text).toBe('You are Opus.\n\nthe brief')
     })
 
     it('records an error rather than spawning when the seat a wire names is gone', async () => {

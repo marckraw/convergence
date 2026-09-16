@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   crewToConfig,
+  inlinedRecipeNotes,
   readCrewConfig,
   renderCrewYaml,
   crewExportSlug,
@@ -1041,6 +1042,92 @@ describe('a spawn wire that names a seat', () => {
       providerAccountId: null,
     },
   }
+
+  const recipe = {
+    ...member,
+    sessionId: null,
+    batonName: 'errand',
+    kind: 'dynamic' as const,
+    providerId: 'claude-code',
+    model: 'claude-opus-5',
+    hostPolicy: 'little-monster',
+    roleCard: 'You are an errand.',
+  }
+
+  it('writes the recipe into the wire rather than naming a seat the file drops', () => {
+    const config = crewToConfig(
+      crew,
+      [member, recipe],
+      [session],
+      [project],
+      [spawningCrew as never],
+    )
+    const to = config.wires[0]!.to as {
+      spawn: {
+        member?: string
+        provider: string
+        model: string | null
+        host: string
+        roleCard: string | null
+      }
+    }
+
+    // Mutation: keep `member` (lap 2) and the imported wire names a seat this
+    // file never carried — every firing then records F's error.
+    expect(to.spawn.member).toBeUndefined()
+    expect(to.spawn).toMatchObject({
+      provider: 'claude-code',
+      model: 'claude-opus-5',
+      roleCard: 'You are an errand.',
+      // The seat's own host stayed behind: a remote host in a spawn spec
+      // needs a work address, and this wire states none. Writing it anyway
+      // would produce a file the reader refuses.
+      host: 'local',
+    })
+
+    const yaml = renderCrewYaml(
+      config,
+      inlinedRecipeNotes([member, recipe], [spawningCrew as never]),
+    )
+    expect(yaml).toContain('The dynamic seat "errand" is written into its wire')
+    expect(yaml).toContain('MAR-3099')
+    expect(yaml).toContain('stayed behind')
+    const read = readCrewConfig(yaml)
+    expect(read.ok ? null : read.reason).toBeNull()
+  })
+
+  it("carries the seat's remote host when the wire says where that host works", () => {
+    const addressed = {
+      ...spawningCrew,
+      spawnSpec: {
+        ...spawningCrew.spawnSpec,
+        executionHost: 'little-monster',
+        workAddress: {
+          mode: 'repository' as const,
+          repository: 'git@github.com:marckraw/convergence.git',
+          branchName: null,
+          label: 'convergence',
+        },
+      },
+    }
+
+    const config = crewToConfig(
+      crew,
+      [member, recipe],
+      [session],
+      [project],
+      [addressed as never],
+    )
+
+    // Mutation: carry the host unconditionally and the first test's file
+    // becomes unreadable; drop it here and the seat's host never travels.
+    expect(
+      (config.wires[0]!.to as { spawn: { host: string } }).spawn.host,
+    ).toBe('little-monster')
+    expect(
+      inlinedRecipeNotes([member, recipe], [addressed as never])[0],
+    ).not.toContain('stayed behind')
+  })
 
   it('writes the seat it names, and reads it back', () => {
     const config = crewToConfig(

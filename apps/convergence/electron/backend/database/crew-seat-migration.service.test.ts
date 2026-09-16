@@ -10,6 +10,7 @@ import {
   readCrewSeatDedupeLog,
 } from './crew-seat-migration.service'
 import { CrewService } from '../crew/crew.service'
+import { RelayService } from '../relay/relay.service'
 
 /**
  * The seat, arriving in a database that predates it (MAR-3083 R1/R2).
@@ -256,6 +257,65 @@ describe('the seat migration', () => {
         }[]
       ).find((column) => column.name === 'session_id')
       expect(sessionColumn?.notnull).toBe(0)
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  /**
+   * The card's column arriving in a database that predates it (MAR-3083 lap
+   * 3, L). The fresh-schema test cannot see this: `SCHEMA` supplies the
+   * column there, so the guarded ALTER could be deleted with every gate
+   * still green.
+   */
+  it('adds the role-card column to a relay_hops table written before it', () => {
+    const { dir, path } = legacyDatabase('hops', (db) => {
+      // The shape the shipped build wrote, every column except the one under
+      // test; the boot migration is what has to add that one.
+      db.exec(`CREATE TABLE relay_hops (
+        id TEXT PRIMARY KEY,
+        relay_id TEXT NOT NULL,
+        crew_id TEXT NOT NULL,
+        flow_run_id TEXT NOT NULL,
+        fired_at TEXT NOT NULL DEFAULT (datetime('now')),
+        source_session_id TEXT NOT NULL,
+        target_session_id TEXT,
+        spawned_session_id TEXT,
+        trigger_status TEXT NOT NULL,
+        payload_preview TEXT,
+        outcome TEXT NOT NULL,
+        baton TEXT,
+        round_number INTEGER,
+        lap_number INTEGER,
+        settled_at TEXT,
+        settled_status TEXT,
+        dispatch_id TEXT,
+        redelivered_from TEXT,
+        settle_id TEXT,
+        error TEXT
+      )`)
+      db.prepare(
+        `INSERT INTO relay_hops
+           (id, relay_id, crew_id, flow_run_id, source_session_id,
+            trigger_status, outcome, target_session_id)
+         VALUES ('h1', 'r1', 'c1', 'run-1', 's1', 'completed', 'delivered', 's2')`,
+      ).run()
+    })
+
+    try {
+      const db = getDatabase(path)
+      const columns = (
+        db.prepare("PRAGMA table_info('relay_hops')").all() as {
+          name: string
+        }[]
+      ).map((column) => column.name)
+      // Mutation: delete the guarded ALTER and this is red, while every
+      // fresh-database test stays green.
+      expect(columns).toContain('role_card_carried')
+      // The rows that predate it read as "carried no card", which is true.
+      expect(new RelayService(db).hasCarriedRoleCard('run-1', 's2')).toBe(false)
     } finally {
       closeDatabase()
       resetDatabase()

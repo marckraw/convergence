@@ -147,6 +147,10 @@ export function sessionCrewFromRow(
     // the moment somebody filtered the other. A dynamic seat has no session
     // and so appears in `members` only -- every existing reader of
     // `sessionIds` means "the conversations in this crew".
+    //
+    // That is why a recipe does not appear on the Canvas, in the member count
+    // or among the endpoints a wire may be drawn between: those read the
+    // conversations. Intended for now; a recipe's own surface rides MAR-3099.
     sessionIds: members.flatMap((member) =>
       member.sessionId === null ? [] : [member.sessionId],
     ),

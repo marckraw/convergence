@@ -232,6 +232,134 @@ describe('CrewService', () => {
     expect(removed.members.map((member) => member.batonName)).toEqual([null])
   })
 
+  /**
+   * A recipe's name is a key only among rows that have no other one
+   * (MAR-3083 lap 3, H). A resident's key is its conversation, and residents
+   * have always been free to share a baton name.
+   */
+  it('addresses a recipe by name without touching a resident of the same name', () => {
+    const crew = service.create({ name: 'Night shift', sessionIds: ['s1'] })
+    service.setMemberBatonName(crew.id, { sessionId: 's1' }, 'errand')
+    service.addRecipeMember(crew.id, {
+      batonName: 'errand-seat',
+      providerId: 'codex',
+      model: null,
+      hostPolicy: 'local',
+    })
+    // The recipe takes the contested name only after the resident has it, so
+    // the row order is the one that used to resolve the resident first.
+    getDatabase()
+      .prepare(
+        "UPDATE session_crew_members SET baton_name = 'errand' WHERE session_id IS NULL",
+      )
+      .run()
+
+    const edited = service.setMemberSeat(
+      crew.id,
+      { batonName: 'errand' },
+      { roleCard: 'You are an errand.' },
+    )
+
+    // Mutation: drop `session_id IS NULL` from the clause and BOTH rows carry
+    // the card -- one edit changing a conversation nobody addressed.
+    expect(
+      edited.members.map((member) => [member.sessionId, member.roleCard]),
+    ).toEqual([
+      ['s1', null],
+      [null, 'You are an errand.'],
+    ])
+    expect(service.findMemberByBatonName(crew.id, 'errand')).toMatchObject({
+      sessionId: null,
+    })
+
+    const removed = service.removeMember(crew.id, { batonName: 'errand' })
+    expect(removed.sessionIds).toEqual(['s1'])
+  })
+
+  it('lets residents share a name, and refuses one a recipe holds', () => {
+    const crew = service.create({
+      name: 'Night shift',
+      sessionIds: ['s1', 's2'],
+    })
+    service.setMemberBatonName(crew.id, { sessionId: 's1' }, 'twin')
+    service.addRecipeMember(crew.id, {
+      batonName: 'errand',
+      providerId: 'codex',
+      model: null,
+      hostPolicy: 'local',
+    })
+
+    // Two conversations may answer to one name, as they always could.
+    expect(() =>
+      service.setMemberBatonName(crew.id, { sessionId: 's2' }, 'twin'),
+    ).not.toThrow()
+    // A recipe's name is its only key: nothing else may take it.
+    expect(() =>
+      service.setMemberBatonName(crew.id, { sessionId: 's2' }, 'errand'),
+    ).toThrow('This crew already has a seat named "errand"')
+  })
+
+  /**
+   * A recipe with no name is a row nobody can reach — un-editable and
+   * un-removable for good (MAR-3083 lap 3, I).
+   */
+  it('refuses to clear a recipe name, and the seat stays reachable', () => {
+    const crew = service.create({ name: 'Night shift' })
+    service.addRecipeMember(crew.id, {
+      batonName: 'errand',
+      providerId: 'codex',
+      model: null,
+      hostPolicy: 'local',
+    })
+
+    expect(() =>
+      service.setMemberBatonName(crew.id, { batonName: 'errand' }, '  '),
+    ).toThrow('A dynamic seat needs a baton name')
+
+    // Mutation: allow the blank and this row can never be named, edited or
+    // removed again -- the removal below is what goes red.
+    expect(service.getById(crew.id)!.members[0]!.batonName).toBe('errand')
+    expect(
+      service.removeMember(crew.id, { batonName: 'errand' }).members,
+    ).toEqual([])
+  })
+
+  /**
+   * `kind` is derived, never stored truth (MAR-3083 lap 3, J): a seat is a
+   * recipe exactly when it has no conversation. Flipping the column used to
+   * hide the row from every read and free its only name.
+   */
+  it('refuses a kind that disagrees with the row, and reads the row either way', () => {
+    const crew = service.create({ name: 'Night shift', sessionIds: ['s1'] })
+    service.addRecipeMember(crew.id, {
+      batonName: 'errand',
+      providerId: 'codex',
+      model: null,
+      hostPolicy: 'local',
+    })
+
+    expect(() =>
+      service.setMemberSeat(
+        crew.id,
+        { batonName: 'errand' },
+        {
+          kind: 'resident',
+        },
+      ),
+    ).toThrow('a seat is dynamic exactly when it has no conversation')
+
+    // Even a hand-edited column cannot hide it: the read derives the answer.
+    getDatabase()
+      .prepare(
+        "UPDATE session_crew_members SET kind = 'resident' WHERE session_id IS NULL",
+      )
+      .run()
+    // Mutation: filter the read on the column again and the recipe vanishes.
+    expect(
+      service.getById(crew.id)!.members.map((member) => member.kind),
+    ).toEqual(['resident', 'dynamic'])
+  })
+
   it('creates a decorated crew and appends positions', () => {
     const first = service.create({
       name: '  Night shift  ',

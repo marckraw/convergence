@@ -1,6 +1,5 @@
 import { normalizeCrewBatonName } from './crew.pure'
 import {
-  DEFAULT_CREW_MEMBER_KIND,
   DEFAULT_CREW_MEMBER_ROLE,
   DEFAULT_CREW_MEMBER_WIP_LIMIT,
 } from './crew.types'
@@ -215,9 +214,11 @@ export class CrewImportService {
       // old file that names none of these imports at the defaults, which is
       // what its members already read as.
       const spec = config.roles[role.role]!
+      // `kind` is derived from the row, never imported onto it (lap 3, J):
+      // every role under `roles` is a conversation, and the reader refuses a
+      // file that says otherwise.
       const seat = {
         role: spec.role ?? DEFAULT_CREW_MEMBER_ROLE,
-        kind: spec.kind ?? DEFAULT_CREW_MEMBER_KIND,
         roleCard: spec.roleCard ?? null,
         lanePolicy: spec.lanePolicy ?? null,
         wipLimit: spec.wipLimit ?? DEFAULT_CREW_MEMBER_WIP_LIMIT,
@@ -227,7 +228,6 @@ export class CrewImportService {
       const seated =
         member !== undefined &&
         member.role === seat.role &&
-        member.kind === seat.kind &&
         member.roleCard === seat.roleCard &&
         member.lanePolicy === seat.lanePolicy &&
         member.wipLimit === seat.wipLimit &&
