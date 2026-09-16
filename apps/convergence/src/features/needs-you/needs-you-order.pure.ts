@@ -22,7 +22,7 @@ export const feedOrderLabels: Record<
     label: 'Name',
     summary: 'Name (A–Z)',
     tooltip:
-      'Conversation names A–Z within each group. Agent updates keep this order.',
+      'Conversation names A–Z within each group. Agent updates keep this order; renaming a conversation moves it.',
   },
 }
 
