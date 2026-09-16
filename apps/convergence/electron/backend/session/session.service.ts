@@ -3050,7 +3050,13 @@ export class SessionService {
   /** Drains every id the settling turn consumed; the settle owns them now. */
   private takeTurnDispatchIds(sessionId: string): string[] {
     const held = this.turnDispatchIds.get(sessionId)
-    if (!held) return []
+    if (!held) {
+      // A turn that carried no dispatch still settled: the previous turn's
+      // tail ends here too (MAR-3023 lap 3, K), or a later loss would be
+      // blamed on a turn two settles back.
+      this.lastSettledTurn.delete(sessionId)
+      return []
+    }
     this.turnDispatchIds.delete(sessionId)
     const dispatchIds = [...held]
     this.lastSettledTurn.set(sessionId, {
@@ -3604,6 +3610,12 @@ export class SessionService {
       this.unrecordedTurnIds.set(sessionId, turnId!)
       // A new turn begins: the settled turn's tail ends here (C).
       this.lastSettledTurn.delete(sessionId)
+      // An unrecorded turn is still the active turn (MAR-3023 lap 3, J): set
+      // before the write, so harness evidence for its reply is attributed to
+      // it and not to the previous turn. Turn capture itself is still skipped
+      // when the write is refused -- `startTurn` below runs only after the
+      // row landed, and ending a turn with no row updates nothing.
+      if (this.turnCapture) this.activeTurnIds.set(sessionId, turnId!)
     }
 
     let item = {
@@ -3662,7 +3674,6 @@ export class SessionService {
     if (isUserMessage) this.unrecordedTurnIds.delete(sessionId)
 
     if (isUserMessage && this.turnCapture && turnId) {
-      this.activeTurnIds.set(sessionId, turnId)
       void this.turnCapture.startTurn({
         sessionId,
         turnId,

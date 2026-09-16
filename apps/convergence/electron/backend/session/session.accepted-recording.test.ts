@@ -94,25 +94,6 @@ it('records a failed post-acceptance write as its own outcome: it returns, one f
   expect(recordingFailedNotes()[0].text).toContain('do not resend it')
 })
 
-it('records the loss once even when the write already threw a RecordingError upstream', () => {
-  const write = vi.fn(() => {
-    throw new RecordingError('the conversation item', {
-      cause: new Error('fixture: sqlite refused'),
-      announced: true,
-    })
-  })
-  expect(() =>
-    service.recordAcceptedTurnForTest(
-      id,
-      'dispatch-1',
-      'the conversation item',
-      write,
-    ),
-  ).not.toThrow()
-  expect(failures).toHaveLength(0)
-  expect(recordingFailedNotes()).toHaveLength(0)
-})
-
 it('still throws the pre-acceptance refusals: HandoffRefusedError is not a recording failure', () => {
   const write = vi.fn(() => {
     throw new HandoffRefusedError(
@@ -318,4 +299,28 @@ it('MAR-3023 D: an item add that fails after its statements keeps its raw error 
   expect(thrown).not.toBeInstanceOf(RecordingError)
   expect((thrown as Error).message).toBe('fixture capture prologue')
   expect(failures).toEqual([])
+})
+
+it('MAR-3023 K: a turn that carried no dispatch ends the previous turn’s tail when it settles', () => {
+  vi.useFakeTimers()
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const emitter = providerEmitter()
+
+  // Turn 1 carries dispatch-1 and settles.
+  attachDispatch('dispatch-1')
+  emitter.patchSession({ status: 'running' })
+  emitter.patchSession({ status: 'completed' })
+
+  // A harness-opened turn with no dispatch and no user message settles too.
+  emitter.patchSession({ status: 'running' })
+  emitter.patchSession({ status: 'completed' })
+
+  // A late loss now names no turn. Mutation: keep the tail on a dispatch-less
+  // settle -> the fact names dispatch-1, red.
+  const itemId = emitter.addAssistantMessage({ text: '', state: 'streaming' })
+  refuse('refuse_item_update', 'UPDATE ON session_conversation_items')
+  emitter.patchMessage(itemId, { text: 'late', state: 'streaming' })
+  vi.advanceTimersByTime(CONVERSATION_PATCH_FLUSH_MS)
+  expect(failures).toEqual([])
+  errors.mockRestore()
 })

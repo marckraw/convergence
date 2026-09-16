@@ -276,7 +276,6 @@ export class RecordingError extends Error {
     readonly label: string,
     options?: {
       cause?: unknown
-      announced?: boolean
       /** The session boundary's announcement, bound where the write failed. */
       report?: (error: RecordingError) => void
     },
@@ -285,7 +284,7 @@ export class RecordingError extends Error {
       cause: options?.cause,
     })
     this.name = 'RecordingError'
-    this.announced = options?.announced ?? false
+    this.announced = false
     this.report = options?.report
   }
 

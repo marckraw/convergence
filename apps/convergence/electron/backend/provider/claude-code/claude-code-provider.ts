@@ -618,6 +618,14 @@ export class ClaudeCodeProvider implements Provider {
     let currentTurnHasThinkingText = false
     let answerStatus: SessionStatus = 'idle'
     let preparingTurn = false
+    /**
+     * Whether the turn on this handle is accepted (MAR-3023 lap 3, H): set
+     * once a user turn is bound and its prompt will be written (after the
+     * skill check), or when the harness opens a turn; cleared when the next
+     * turn starts preparing. Every write the stream makes while it holds is
+     * that turn's recording.
+     */
+    let turnBound = false
     let currentTurn: {
       openedBy: 'user' | 'harness'
       message: string
@@ -664,8 +672,23 @@ export class ClaudeCodeProvider implements Provider {
     let taskNotificationSinceResult = false
     let stderrBuffer = ''
 
+    /**
+     * The stream boundary that knows acceptance (MAR-3023 lap 3, H). Every
+     * write this handle makes goes through here, so a refused local write of
+     * an accepted turn is announced as that turn's lost recording (fact +
+     * note) and the handle carries on -- a lost recording is not a dead run.
+     * Thrown instead, a refused reply inside a `result` event skipped that
+     * event's settle, or reached the transport, which read it as the process
+     * failing and ended a turn Claude was still running. Before acceptance,
+     * and for any other error, the throw keeps today's path.
+     */
     function emitDelta(delta: SessionDelta): void {
-      listeners.delta.forEach((cb) => cb(delta))
+      try {
+        listeners.delta.forEach((cb) => cb(delta))
+      } catch (error) {
+        if (!(error instanceof RecordingError) || !turnBound) throw error
+        error.announce()
+      }
     }
 
     const sessionEmitter = new ProviderSessionEmitter({
@@ -1114,6 +1137,7 @@ export class ClaudeCodeProvider implements Provider {
         thinkingItemId = null
         currentTurnHasAssistantText = false
         currentTurnHasThinkingText = false
+        turnBound = true
         currentTurn = {
           openedBy: 'harness',
           message: '',
@@ -1525,6 +1549,8 @@ export class ClaudeCodeProvider implements Provider {
       if (preparingTurn) return 'queue-follow-up'
       if (currentTurn) return currentTurnDisposition()
       preparingTurn = true
+      // A new turn is not accepted until it is bound (lap 3, H).
+      turnBound = false
       let userTurnBound = false
       let releaseAdmission: (() => void) | undefined
       try {
@@ -1604,7 +1630,13 @@ export class ClaudeCodeProvider implements Provider {
               : (options?.userMessageItemId ?? null)
         } catch (error) {
           if (!(error instanceof RecordingError)) throw error
-          error.announce()
+          // Only a prompt that WILL be written is an accepted turn whose
+          // recording was lost (MAR-3023 lap 3, I). A skill that could not be
+          // resolved fails this turn just below and its prompt never reaches
+          // the process, so its lost user message is not announced -- no "the
+          // message was sent" note for a message that was not. The turn stays
+          // bound, as MAR-2539 rules for a failed skill.
+          if (skillResolution.ok) error.announce()
           userMessageItemId = null
         }
         if (!skillResolution.ok) {
@@ -1613,6 +1645,9 @@ export class ClaudeCodeProvider implements Provider {
           setAttention('failed')
           return
         }
+        // The prompt will be written: from here the stream records an
+        // accepted turn (lap 3, H).
+        turnBound = true
         trackSkillInvocationTarget(
           userMessageItemId,
           skillResolution.skillSelections,

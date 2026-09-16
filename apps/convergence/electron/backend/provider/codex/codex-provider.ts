@@ -1006,23 +1006,43 @@ export class CodexProvider implements Provider {
      */
     let pendingTurnStart: Promise<string | null> | null = null
     /**
-     * How many `turn/start`s the server has taken on this handle (MAR-3023 A):
-     * bumped when one is acknowledged, or when reconciliation finds one landed.
-     * A send reads it before and after its turn, so its catch can tell a
-     * recording failure AFTER the provider took the turn from one before it.
+     * Whether the turn this handle is running was acknowledged by the server
+     * (MAR-3023 lap 3, H): set with the ack (or reconciliation's "landed"),
+     * cleared when the next send begins -- its user message, thread
+     * resolution and recovery note all run before its own `turn/start`.
      */
-    let acknowledgedTurnStarts = 0
+    let turnAcknowledged = false
     let deadInteractionNoted = false
 
     // Map of pending approval request IDs (JSON-RPC id → approval response plan)
     const pendingApprovals = new Map<JsonRpcId, PendingApprovalRequest>()
     const pendingUserInputs = new Map<JsonRpcId, PendingInputRequest>()
 
+    /**
+     * The stream boundary that knows acceptance (MAR-3023 lap 3, H). Every
+     * write this handle makes goes through here, so a refused local write of
+     * an acknowledged turn is announced as that turn's lost recording (fact +
+     * note) and the handle carries on -- a lost recording is not a dead run.
+     * Thrown instead, a refused reply was thrown into the JSON-RPC message
+     * handling unannounced (nothing there catches a notification handler), and
+     * inside `turn/completed` it skipped the rest of the settle. Before this
+     * send's ack, and for any other error, the throw keeps today's path -- the
+     * pre-ack recovery note of lap 2's A fails the send honestly.
+     */
     function emitDelta(delta: SessionDelta): void {
       if (unpublishedHandoff) {
         unpublishedHandoff.push(delta)
         return
       }
+      try {
+        publishDelta(delta)
+      } catch (error) {
+        if (!(error instanceof RecordingError) || !turnAcknowledged) throw error
+        error.announce()
+      }
+    }
+
+    function publishDelta(delta: SessionDelta): void {
       listeners.delta.forEach((cb) => cb(delta))
     }
 
@@ -1396,7 +1416,7 @@ export class CodexProvider implements Provider {
 
       try {
         const providerTurnId = await acknowledgement
-        acknowledgedTurnStarts += 1
+        turnAcknowledged = true
         if (providerTurnId) {
           activeProviderTurnId = providerTurnId
         }
@@ -1458,7 +1478,7 @@ export class CodexProvider implements Provider {
      */
     function adoptLandedTurn(turn: CodexLandedTurn | null): void {
       // The server says the turn landed: that is its acknowledgement.
-      acknowledgedTurnStarts += 1
+      turnAcknowledged = true
       sessionEmitter.addNote({
         text: 'The connection dropped after Codex had already taken this message, so it was not sent again. Its answer continues in the next reply.',
         level: 'warning',
@@ -1686,6 +1706,8 @@ export class CodexProvider implements Provider {
       attachments?: Attachment[]
       skillSelections?: SkillSelection[]
     }): Promise<void> {
+      // Nothing of this send is acknowledged yet (lap 3, H).
+      turnAcknowledged = false
       if (input.text === CONVERSATION_RESET_COMMAND) {
         const oldThreadId = threadId
         setStatus('running')
@@ -1757,7 +1779,6 @@ export class CodexProvider implements Provider {
       }
 
       const skillInputs: CodexSkillInput[] = skillResolution.skillInputs
-      const acknowledgedBeforeThisTurn = acknowledgedTurnStarts
 
       try {
         const parts = await loadCodexParts(input.attachments)
@@ -1776,20 +1797,6 @@ export class CodexProvider implements Provider {
         )
       } catch (err) {
         if (err instanceof HandoffRefusedError) throw err
-        if (
-          err instanceof RecordingError &&
-          acknowledgedTurnStarts > acknowledgedBeforeThisTurn
-        ) {
-          // The witness is the acknowledgement, not this catch's position: the
-          // try also spans `ensureThread` and the missing-thread recovery,
-          // whose writes run BEFORE `turn/start`. Only once the server took
-          // the turn is a recording failure the turn's own outcome — announced
-          // (fact + note) and never `failed`, because the provider is working.
-          // Before it, the message never left, and today's failure path below
-          // is the honest one (MAR-3023 A).
-          err.announce()
-          return
-        }
         patchUserMessageSkills(
           userMessageItemId,
           skillResolution.skillSelections,
@@ -2652,7 +2659,10 @@ export class CodexProvider implements Provider {
           publish: () => {
             const events = unpublishedHandoff
             unpublishedHandoff = null
-            for (const delta of events ?? []) emitDelta(delta)
+            // Straight to the listeners, not through the stream boundary:
+            // the publication's recording belongs to the door that calls it
+            // (`recordAcceptedTurn`), which announces its loss once.
+            for (const delta of events ?? []) publishDelta(delta)
           },
         })
       } catch (error) {

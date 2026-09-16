@@ -59,6 +59,10 @@ interface SessionQueuedInputServiceDeps {
   now?: () => string
 }
 
+/** What a launch can honestly say about an input a restart left `dispatching`. */
+export const RESTARTED_WHILE_DISPATCHING_ERROR =
+  "App restarted before this input's delivery was recorded. It may already have reached the provider: check the conversation before sending it again."
+
 /**
  * Extracted service boundary for queued mid-run input persistence.
  *
@@ -66,10 +70,6 @@ interface SessionQueuedInputServiceDeps {
  * orchestration does not own SQL details for follow-up, steer, or interrupt
  * inputs.
  */
-/** What a launch can honestly say about an input a restart left `dispatching`. */
-export const RESTARTED_WHILE_DISPATCHING_ERROR =
-  "App restarted before this input's delivery was recorded. It may already have reached the provider: check the conversation before sending it again."
-
 export class SessionQueuedInputService {
   private readonly idFactory: () => string
   private readonly now: () => string

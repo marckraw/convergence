@@ -1188,6 +1188,38 @@ describe('remote wire events reaching the session record', () => {
   // -- MAR-3023: an accepted turn is never a failed send when its recording fails --
 
   /**
+   * Door (3)'s happy path, beside its refusal case (MAR-3023 lap 3, K): with
+   * a record that takes writes, a refused command still surfaces -- the note
+   * and `attention: 'failed'` land.
+   */
+  it('MAR-3023 door (3): a refused remote command surfaces its note and failed attention when the record takes writes', async () => {
+    await service.start(sessionId, { text: 'hello' })
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the event stream to open',
+    )
+    stub.setCommandStatus(500)
+
+    await service.sendMessage(sessionId, {
+      text: 'mid-run turn the daemon refuses',
+    })
+
+    await waitUntil(
+      () => service.getById(sessionId)?.attention === 'failed',
+      'attention to surface',
+    )
+    expect(
+      service
+        .getConversation(sessionId)
+        .some(
+          (item) =>
+            item.kind === 'note' &&
+            item.text.startsWith('Remote session command was not delivered'),
+        ),
+    ).toBe(true)
+  })
+
+  /**
    * Door (3), remote — proven at the delivery-failure path, per the ticket's
    * STOP ruling: the daemon's 2xx for a posted command is invisible to the door
    * (`enqueueCommand` is fire-and-forget, remote-execution-host.ts).

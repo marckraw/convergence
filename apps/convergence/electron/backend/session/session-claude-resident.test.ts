@@ -2155,3 +2155,168 @@ it('MAR-3023 G: a refused sent mark is re-attempted at the turn’s settle, so t
   ).toEqual([{ state: 'sent' }])
   errors.mockRestore()
 })
+
+it('MAR-3023 H: a resident Claude turn whose reply cannot be recorded announces the loss and runs on to its settle', async () => {
+  const { service, session, children } = await fixture()
+  await service.start(session.id, { text: 'first' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  const send = (event: unknown) =>
+    children[0].stdout.write(JSON.stringify(event) + '\n')
+  send({ type: 'system', subtype: 'init', session_id: 'resident' })
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  // The turn is bound and written; the record refuses the assistant reply.
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_assistant_reply
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'message'
+         AND json_extract(NEW.payload_json, '$.actor') = 'assistant'
+    BEGIN SELECT RAISE(ABORT, 'fixture reply refused'); END`)
+
+  // Claude buffers the reply until the turn's result: the write is refused
+  // inside the settle event itself.
+  send({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text: 'the answer' }] },
+  })
+  send({ type: 'result', subtype: 'success', result: 'the answer' })
+
+  // Mutation: drop the stream boundary's catch -> the transport reads the
+  // throw as the process failing, and the session ends `failed`.
+  await vi.waitUntil(() => service.getById(session.id)?.status !== 'running')
+  expect(service.getById(session.id)?.status).toBe('completed')
+  expect(failures).toHaveLength(1)
+  expect(children).toHaveLength(1)
+  const notes = service
+    .getConversation(session.id)
+    .filter(
+      (item) =>
+        item.kind === 'note' &&
+        item.providerMeta.providerEventType === 'recording-failed',
+    )
+  expect(notes).toHaveLength(1)
+  errors.mockRestore()
+})
+
+it('MAR-3023 I: a skill that cannot be resolved, with its user message refused, fails the turn without claiming the message was sent', async () => {
+  const { ClaudeCodeSkillsService } =
+    await import('../skills/claude-code-skills.service')
+  const catalog = vi
+    .spyOn(ClaudeCodeSkillsService.prototype, 'list')
+    .mockRejectedValue(new Error('Skill catalog unavailable'))
+  try {
+    const { service, session, children } = await fixture()
+    await service.start(session.id, { text: 'first' })
+    await vi.waitUntil(() => children[0]?.lines.length === 1)
+    const send = (event: unknown) =>
+      children[0].stdout.write(JSON.stringify(event) + '\n')
+    send({ type: 'system', subtype: 'init', session_id: 'resident' })
+    send({ type: 'result', subtype: 'success', result: 'first answer' })
+    await vi.waitUntil(
+      () => service.getById(session.id)?.status === 'completed',
+    )
+
+    const failures: import('./session.types').AcceptedRecordingFailureEvent[] =
+      []
+    service.onAcceptedRecordingFailure((event) => failures.push(event))
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    getDatabase().exec(`CREATE TEMP TRIGGER refuse_user_message
+      BEFORE INSERT ON session_conversation_items
+      WHEN NEW.kind = 'message'
+           AND json_extract(NEW.payload_json, '$.actor') = 'user'
+      BEGIN SELECT RAISE(ABORT, 'fixture user message refused'); END`)
+
+    await service.sendMessage(session.id, {
+      text: 'use a skill that is gone',
+      skillSelections: [
+        {
+          id: 'skill-gone',
+          providerId: 'claude-code',
+          providerName: 'Claude Code',
+          name: 'skill-gone',
+          displayName: 'Skill gone',
+          path: '/fixture/SKILL.md',
+          scope: 'project',
+          rawScope: null,
+          sourceLabel: 'fixture',
+          status: 'selected',
+        },
+      ],
+    })
+
+    await vi.waitUntil(() => service.getById(session.id)?.status === 'failed')
+    // The prompt never reached the process...
+    expect(children[0].lines).toHaveLength(1)
+    // ...so nothing says it was sent. Mutation: announce the lost user
+    // message whatever the skill resolution -> a fact and a note, red.
+    expect(failures).toEqual([])
+    expect(
+      service
+        .getConversation(session.id)
+        .filter(
+          (item) =>
+            item.kind === 'note' &&
+            item.providerMeta.providerEventType === 'recording-failed',
+        ),
+    ).toEqual([])
+    errors.mockRestore()
+  } finally {
+    catalog.mockRestore()
+  }
+})
+
+it('MAR-3023 J: harness evidence for a turn whose user message was refused is attributed to that turn', async () => {
+  const { service, session, children, db } = await fixture()
+  await service.start(session.id, { text: 'first' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  const send = (event: unknown) =>
+    children[0].stdout.write(JSON.stringify(event) + '\n')
+  send({ type: 'system', subtype: 'init', session_id: 'resident' })
+  send({ type: 'result', subtype: 'success', result: 'first answer' })
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'completed')
+
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  db.exec(`CREATE TEMP TRIGGER refuse_user_message
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'message'
+         AND json_extract(NEW.payload_json, '$.actor') = 'user'
+    BEGIN SELECT RAISE(ABORT, 'fixture user message refused'); END`)
+  await service.sendMessage(session.id, { text: 'second' })
+  await vi.waitUntil(() => failures.length === 1)
+  const turnId = failures[0]!.turnId
+  expect(turnId).toBeTypeOf('string')
+
+  send({ type: 'system', subtype: 'api_retry', attempt: 1, max_retries: 3 })
+  await vi.waitUntil(
+    () =>
+      (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS n FROM session_harness_events WHERE session_id = ? AND subtype = 'attempt'",
+          )
+          .get(session.id) as { n: number }
+      ).n > 0 ||
+      (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS n FROM session_harness_events WHERE session_id = ? AND type = 'harness.retry'",
+          )
+          .get(session.id) as { n: number }
+      ).n > 0,
+  )
+  const payload = JSON.parse(
+    (
+      db
+        .prepare(
+          "SELECT payload_json FROM session_harness_events WHERE session_id = ? AND type = 'harness.retry' ORDER BY sequence DESC LIMIT 1",
+        )
+        .get(session.id) as { payload_json: string }
+    ).payload_json,
+  ) as { turnId: string | null }
+  // Mutation: set the active turn only after the write -> the previous turn's
+  // id (or null), red.
+  expect(payload.turnId).toBe(turnId)
+  errors.mockRestore()
+})

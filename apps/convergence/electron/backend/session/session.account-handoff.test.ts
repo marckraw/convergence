@@ -875,3 +875,38 @@ it('MAR-3023 A: a recording refused before turn/start is acknowledged fails the 
   await vi.waitFor(() => expect(service.getById(id)?.status).toBe('failed'))
   errors.mockRestore()
 })
+
+it('MAR-3023 H: a Codex turn whose streamed reply cannot be recorded announces the loss and runs on to its settle', async () => {
+  await running()
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  // After turn/start was acknowledged, the record refuses the assistant reply.
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_assistant_reply
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'message'
+         AND json_extract(NEW.payload_json, '$.actor') = 'assistant'
+    BEGIN SELECT RAISE(ABORT, 'fixture reply refused'); END`)
+  const connection = hosts[0]!.server.connections.at(-1)!
+  const threadId = service.getById(id)!.continuationToken
+
+  // Mutation: drop the notification boundary's catch -> the refusal escapes
+  // the JSON-RPC reader and this throws.
+  expect(() =>
+    connection.notify('item/agentMessage/delta', {
+      threadId,
+      delta: 'the answer',
+    }),
+  ).not.toThrow()
+  expect(failures).toHaveLength(1)
+  expect(recordingFailedNotes()).toHaveLength(1)
+  expect(service.getById(id)?.status).toBe('running')
+
+  // The run goes on: its settle still lands.
+  connection.notify('turn/completed', {
+    threadId,
+    turn: { id: 'turn-1', status: 'completed' },
+  })
+  await vi.waitFor(() => expect(service.getById(id)?.status).toBe('completed'))
+  errors.mockRestore()
+})
