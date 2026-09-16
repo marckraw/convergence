@@ -751,8 +751,8 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
 
   /**
    * A typed seat field, stored when the typing is FINISHED (G). The draft is
-   * dropped first so the field falls back to the record the reload brings,
-   * exactly as the baton name's does.
+   * kept until the door has taken the value (R): a refusal leaves the typing
+   * in place with the door's sentence under it.
    */
   const commitSeatDraft = useCallback(
     async (member: CrewMemberRef, field: SeatDraftField) => {

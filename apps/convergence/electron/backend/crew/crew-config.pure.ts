@@ -184,7 +184,7 @@ export function crewToConfig(
       // The seat's host is carried only when this wire can say where that
       // host works: a remote host in a spawn spec needs a work address, and a
       // seat does not hold one. Rather than write a file the reader refuses,
-      // the wire keeps its own host and `inlinedRecipeNotes` says so.
+      // the wire keeps its own host and `uncarriedRecipeNotes` says so.
       host: canCarrySeatHost(spec, seat)
         ? seat!.hostPolicy!
         : spec.executionHost,
