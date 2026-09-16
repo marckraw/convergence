@@ -621,14 +621,12 @@ export class ClaudeCodeProvider implements Provider {
     /**
      * Whether the turn on this handle is accepted (MAR-3023 lap 3, H): set
      * once a user turn is bound and its prompt will be written (after the
-     * skill check), or when the harness opens a turn; cleared when the stream
-     * event that settles the turn has made its writes (lap 4, C), and when the
-     * next turn starts preparing. Every write the stream makes while it holds
-     * is that turn's recording.
-     *
-     * Known narrow window: between the next turn starting to prepare and its
-     * binding (a few awaits), a resident child can still stream for the
-     * previous turn; a refused write there keeps today's path.
+     * skill check), or when the harness opens a turn. It ends with the turn,
+     * on every path, through `endTurn` (lap 5, B): a settle after its closing
+     * writes; a process exit, a send or preparation failure and a teardown at
+     * once. A continuation recovery carries it across the resend: that turn's
+     * user message was written and is being sent again, not ended. Every
+     * write the stream makes while it holds is that turn's recording.
      */
     let turnBound = false
     let currentTurn: {
@@ -693,6 +691,47 @@ export class ClaudeCodeProvider implements Provider {
       } catch (error) {
         if (!(error instanceof RecordingError) || !turnBound) throw error
         error.announce()
+      }
+    }
+
+    /**
+     * Ends the turn and its acceptance together (MAR-3023 lap 5, B): every
+     * site that ends a turn goes through here, so acceptance follows the
+     * turn's lifetime on every path.
+     *
+     * With `closingWrites`, the turn's own closing record (a settle's note and
+     * status) is still that accepted turn's recording and runs before
+     * acceptance ends. Without it, acceptance ends at once -- a process that
+     * died, a prompt that was never written, a teardown: what the caller
+     * writes next is a report about a turn that did not complete, not its
+     * recording, and a refused one must never say "the message was sent".
+     */
+    function endTurn(closingWrites?: () => void): void {
+      currentTurn = null
+      if (!closingWrites) {
+        turnBound = false
+        return
+      }
+      try {
+        closingWrites()
+      } finally {
+        turnBound = false
+      }
+    }
+
+    /**
+     * A write made while tearing the handle down (MAR-3023 lap 5, A). It runs
+     * after the process is closed and never throws: a refused local record is
+     * logged, and it cannot keep a process alive or make Stop impossible.
+     */
+    function recordTeardown(label: string, write: () => void): void {
+      try {
+        write()
+      } catch (error) {
+        console.error(
+          `[claude-code] Could not record ${label} while tearing the session down`,
+          error,
+        )
       }
     }
 
@@ -992,18 +1031,13 @@ export class ClaudeCodeProvider implements Provider {
         sessionEmitter.addNote(note)
       } catch (error) {
         // Recording a note must never prevent recovery or permission
-        // settlement, so nothing is rethrown -- but a lost recording is not
-        // dropped in silence (MAR-3023 lap 4, D). While the turn is accepted
-        // the emitter has already announced it before this catch runs;
-        // otherwise it is said here.
-        if (error instanceof RecordingError) {
-          if (turnBound) error.announce()
-          else
-            console.error(
-              '[claude-code] A continuation-recovery note could not be recorded',
-              error,
-            )
-        }
+        // settlement, so nothing is rethrown -- and nothing is dropped in
+        // silence (MAR-3023 lap 4, D; lap 5, C). While the turn is accepted,
+        // a refused record never reaches here: the emitter announced it.
+        console.error(
+          '[claude-code] A continuation-recovery note could not be recorded',
+          error,
+        )
       }
     }
 
@@ -1030,6 +1064,8 @@ export class ClaudeCodeProvider implements Provider {
         timestamp: recoveryEntry.timestamp,
       })
       if (reason === 'missing-session') claudeSessionId = null
+      // Not `endTurn`: this turn is being sent again, so it stays accepted
+      // across the resend (MAR-3023 lap 5, B).
       currentTurn = null
       interruptRequested = false
       connectionGeneration++
@@ -1419,11 +1455,12 @@ export class ClaudeCodeProvider implements Provider {
           ) {
             flushThinkingBuffer()
             flushAssistantBuffer()
-            currentTurn = null
-            sessionEmitter.addNote({ text: 'interrupted', level: 'info' })
-            setStatus('completed')
-            interruptRequested = false
-            setAttention(permissions.pendingAttention ?? 'finished')
+            endTurn(() => {
+              sessionEmitter.addNote({ text: 'interrupted', level: 'info' })
+              setStatus('completed')
+              interruptRequested = false
+              setAttention(permissions.pendingAttention ?? 'finished')
+            })
             armIdleTimer()
             break
           }
@@ -1437,22 +1474,24 @@ export class ClaudeCodeProvider implements Provider {
               scheduleContinuationRecovery('missing-session')
               break
             }
-            sessionEmitter.addNote({
-              text: `Error: ${event.result ?? 'Unknown error'}`,
-              level: 'error',
-            })
-            setStatus('failed')
-            setAttention('failed')
-            currentTurn = null
-          } else {
-            if (!currentTurnHasAssistantText && event.result?.trim()) {
-              sessionEmitter.addAssistantMessage({
-                text: event.result,
-                state: 'complete',
+            endTurn(() => {
+              sessionEmitter.addNote({
+                text: `Error: ${event.result ?? 'Unknown error'}`,
+                level: 'error',
               })
-            }
-            currentTurn = null
-            finishAnswer()
+              setStatus('failed')
+              setAttention('failed')
+            })
+          } else {
+            endTurn(() => {
+              if (!currentTurnHasAssistantText && event.result?.trim()) {
+                sessionEmitter.addAssistantMessage({
+                  text: event.result,
+                  state: 'complete',
+                })
+              }
+              finishAnswer()
+            })
           }
           break
       }
@@ -1566,8 +1605,9 @@ export class ClaudeCodeProvider implements Provider {
       if (preparingTurn) return 'queue-follow-up'
       if (currentTurn) return currentTurnDisposition()
       preparingTurn = true
-      // A new turn is not accepted until it is bound (lap 3, H).
-      turnBound = false
+      // A new turn is not accepted until it is bound (lap 3, H) -- except the
+      // resend of a recovered turn, which is the same accepted turn (lap 5, B).
+      if (!options?.continuesCurrentTurn) turnBound = false
       let userTurnBound = false
       let releaseAdmission: (() => void) | undefined
       try {
@@ -1769,13 +1809,7 @@ export class ClaudeCodeProvider implements Provider {
               }),
             onMessage: (event) => {
               recordDebug('event', { direction: 'in', payload: event })
-              const turnWasOpen = currentTurn !== null
               handleEvent(event)
-              // Acceptance ends with the settle (MAR-3023 lap 4, C): the event
-              // that closed the turn has made its own writes; after it, a
-              // refused write (an idle note, a process exit, a stop) is no
-              // accepted turn's recording and keeps today's path.
-              if (turnWasOpen && currentTurn === null) turnBound = false
             },
             onStderr: (data) => {
               stderrBuffer += data
@@ -1833,18 +1867,30 @@ export class ClaudeCodeProvider implements Provider {
               resolveConnectionEnd = undefined
               if (maybeRestartRecoveredTurn()) return
               if (currentTurn) {
-                currentTurn = null
-                sessionEmitter.addNote({
-                  text: `Claude Code ended mid-turn (code ${code} / ${signal ?? error ?? 'none'}); nothing was re-sent — send your message again to continue`,
-                  level: 'error',
+                endTurn()
+                // The process died: its report is teardown, written after the
+                // turn's acceptance ended and never throwing (MAR-3023 lap 5,
+                // A/B) -- thrown here it was an unhandled rejection, and
+                // announced it would say "the message was sent" beside
+                // "nothing was re-sent".
+                recordTeardown('the mid-turn exit report', () =>
+                  sessionEmitter.addNote({
+                    text: `Claude Code ended mid-turn (code ${code} / ${signal ?? error ?? 'none'}); nothing was re-sent — send your message again to continue`,
+                    level: 'error',
+                  }),
+                )
+                // Its own recorder: a refused note must not skip the status.
+                recordTeardown('the failed status', () => {
+                  setStatus('failed')
+                  setAttention('failed')
                 })
-                setStatus('failed')
-                setAttention('failed')
               } else {
-                sessionEmitter.addNote({
-                  text: `process ended (code ${code})`,
-                  level: 'info',
-                })
+                recordTeardown('the process exit note', () =>
+                  sessionEmitter.addNote({
+                    text: `process ended (code ${code})`,
+                    level: 'info',
+                  }),
+                )
               }
             },
           })
@@ -1871,7 +1917,7 @@ export class ClaudeCodeProvider implements Provider {
             text: `Failed to send attachments: ${String(error)}`,
             level: 'error',
           })
-          currentTurn = null
+          endTurn()
           interruptRequested = false
           setStatus('failed')
           setAttention('failed')
@@ -1882,8 +1928,8 @@ export class ClaudeCodeProvider implements Provider {
           unregisterConnection = undefined
         }
         const reason = `Failed to prepare Claude Code turn: ${String(error)}`
+        endTurn()
         sessionEmitter.addNote({ text: reason, level: 'error' })
-        currentTurn = null
         setStatus('failed')
         setAttention('failed')
         // A preparation failure has no accepted user artifact. Once bound,
@@ -1913,8 +1959,6 @@ export class ClaudeCodeProvider implements Provider {
       if (stopped) return
       const wasHarnessTurn = currentTurn?.openedBy === 'harness'
       clearIdleTimer()
-      if (reason === 'quit')
-        sessionEmitter.addNote({ text: 'stopped by quit', level: 'info' })
       permissions.endConnection()
       evidence.processEnded(
         now(),
@@ -1929,7 +1973,7 @@ export class ClaudeCodeProvider implements Provider {
         clearSkillInvocationTargetTimer = null
       }
       latestSkillInvocationTarget = null
-      currentTurn = null
+      endTurn()
       interruptRequested = false
       pendingRecoveryTurn = null
       assistantTextBuffer = ''
@@ -1938,6 +1982,11 @@ export class ClaudeCodeProvider implements Provider {
 
       const closing = child?.close()
       child = null
+      // After the close, and never blocking it (MAR-3023 lap 5, A).
+      if (reason === 'quit')
+        recordTeardown('the quit note', () =>
+          sessionEmitter.addNote({ text: 'stopped by quit', level: 'info' }),
+        )
       return closing
     }
 
@@ -2054,11 +2103,18 @@ export class ClaudeCodeProvider implements Provider {
         // Retain at fallback-Stop completion; the service guards the earlier
         // receipt-minted completion inside its conversation stopTask awaits.
         stoppedByUser = true
-        sessionEmitter.addNote({ text: 'terminated by user', level: 'info' })
         disposeRuntime()
+        // Written after the process is closed, and never blocking it
+        // (MAR-3023 lap 5, A): a refused record used to throw before the
+        // close, leaking the process and making Stop impossible.
+        recordTeardown('the stop note', () =>
+          sessionEmitter.addNote({ text: 'terminated by user', level: 'info' }),
+        )
         if (!wasAnswered) {
-          setStatus(wasHarnessTurn ? 'completed' : 'failed')
-          setAttention(wasHarnessTurn ? 'finished' : 'failed')
+          recordTeardown('the stopped status', () => {
+            setStatus(wasHarnessTurn ? 'completed' : 'failed')
+            setAttention(wasHarnessTurn ? 'finished' : 'failed')
+          })
         }
       },
     }

@@ -3208,12 +3208,24 @@ export class SessionService {
     if (handle.interrupt) {
       const fallback = () => {
         if (this.activeHandles.get(id) !== handle) return
-        handle.stop()
-        this.releaseHandle(id)
+        try {
+          handle.stop()
+        } finally {
+          // Released even when the provider's stop throws: a Stop that throws
+          // must not leave the handle addressable (MAR-3023 lap 5, A).
+          this.releaseHandle(id)
+        }
       }
-      void handle.interrupt().then((result) => {
-        if (result === 'not-applicable') fallback()
-      }, fallback)
+      void handle
+        .interrupt()
+        .then((result) => {
+          if (result === 'not-applicable') fallback()
+        }, fallback)
+        .catch((error) => {
+          // Under a `void`, an uncaught throw here was an unhandled rejection
+          // in the main process (MAR-3023 lap 5, A).
+          console.error(`[session] Stop fallback failed for ${id}`, error)
+        })
       return
     }
     handle.stop()
@@ -4367,8 +4379,13 @@ export class SessionService {
     let disposal: void | Promise<void> = undefined
     try {
       disposal = handle.dispose?.(reason)
-    } catch {
+    } catch (error) {
       // Resource cleanup is best-effort; the handle is no longer addressable.
+      // Said, not swallowed (MAR-3023 lap 5, A).
+      console.error(
+        `[session] Disposing the provider handle of ${sessionId} failed`,
+        error,
+      )
     }
     this.liveness.clear(sessionId)
     this.onSessionTerminated?.(sessionId)

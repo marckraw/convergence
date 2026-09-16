@@ -1012,6 +1012,16 @@ export class CodexProvider implements Provider {
      * resolution and recovery note all run before its own `turn/start`.
      */
     let turnAcknowledged = false
+    /**
+     * Which send the server acknowledged last (lap 5, B). A send's own record
+     * after its ack -- the skill chips' `sent` stamp -- belongs to that send
+     * even when its turn has already settled: a fast turn's `turn/completed`
+     * can arrive in the same chunk as the ack, ending the turn's acceptance
+     * before the send's continuation runs.
+     */
+    let sendCount = 0
+    let currentSend = 0
+    let acknowledgedSend = 0
     let deadInteractionNoted = false
 
     // Map of pending approval request IDs (JSON-RPC id → approval response plan)
@@ -1045,6 +1055,34 @@ export class CodexProvider implements Provider {
 
     function publishDelta(delta: SessionDelta): void {
       listeners.delta.forEach((cb) => cb(delta))
+    }
+
+    /**
+     * Ends the running turn's acceptance with the turn (MAR-3023 lap 5, B):
+     * its closing record (the settle's note and status) is still that turn's
+     * recording; after it, a refused write is no accepted turn's loss.
+     */
+    function endAcceptedTurn(closingWrites: () => void): void {
+      try {
+        closingWrites()
+      } finally {
+        turnAcknowledged = false
+      }
+    }
+
+    /**
+     * A write made while tearing the handle down (MAR-3023 lap 5, A): after
+     * the release, never throwing -- a refused record is logged.
+     */
+    function recordTeardown(label: string, write: () => void): void {
+      try {
+        write()
+      } catch (error) {
+        console.error(
+          `[codex] Could not record ${label} while tearing the session down`,
+          error,
+        )
+      }
     }
 
     const sessionEmitter = new ProviderSessionEmitter({
@@ -1422,6 +1460,7 @@ export class CodexProvider implements Provider {
             // yet an accepted turn's -- rethrown, and swallowed by the reader.
             onResult: () => {
               turnAcknowledged = true
+              acknowledgedSend = currentSend
             },
           },
         )
@@ -1492,6 +1531,7 @@ export class CodexProvider implements Provider {
     function adoptLandedTurn(turn: CodexLandedTurn | null): void {
       // The server says the turn landed: that is its acknowledgement.
       turnAcknowledged = true
+      acknowledgedSend = currentSend
       sessionEmitter.addNote({
         text: 'The connection dropped after Codex had already taken this message, so it was not sent again. Its answer continues in the next reply.',
         level: 'warning',
@@ -1721,6 +1761,8 @@ export class CodexProvider implements Provider {
     }): Promise<void> {
       // Nothing of this send is acknowledged yet (lap 3, H).
       turnAcknowledged = false
+      const thisSend = ++sendCount
+      currentSend = thisSend
       if (input.text === CONVERSATION_RESET_COMMAND) {
         const oldThreadId = threadId
         setStatus('running')
@@ -1803,11 +1845,22 @@ export class CodexProvider implements Provider {
             skills: skillInputs,
           }),
         )
-        patchUserMessageSkills(
-          userMessageItemId,
-          skillResolution.skillSelections,
-          'sent',
-        )
+        try {
+          patchUserMessageSkills(
+            userMessageItemId,
+            skillResolution.skillSelections,
+            'sent',
+          )
+        } catch (error) {
+          // This send's own record after its ack (lap 5, B): still its
+          // accepted recording, whether or not its turn already settled.
+          if (
+            !(error instanceof RecordingError) ||
+            acknowledgedSend !== thisSend
+          )
+            throw error
+          error.announce()
+        }
       } catch (err) {
         if (err instanceof HandoffRefusedError) throw err
         patchUserMessageSkills(
@@ -1844,7 +1897,14 @@ export class CodexProvider implements Provider {
         input.skillSelections,
       )
       if (!skillResolution.ok) {
-        addSkillInvocationFailureNote(skillResolution)
+        // The steer's own write, withheld like its user message (lap 5, C).
+        const runningAcknowledged = turnAcknowledged
+        turnAcknowledged = false
+        try {
+          addSkillInvocationFailureNote(skillResolution)
+        } finally {
+          turnAcknowledged = runningAcknowledged
+        }
         return
       }
 
@@ -2298,56 +2358,58 @@ export class CodexProvider implements Provider {
           }
 
           case 'turn/completed':
-            activeClientUserMessageId = null
-            if (threadId && lastConnectionGeneration !== null)
-              serverHost.observeThreadSettled(
-                threadId,
-                lastConnectionGeneration,
-              )
-            flushThinkingBuffer()
-            flushAssistantBuffer()
-            activeProviderTurnId = null
-            {
-              const contextWindow = deriveCodexContextWindow(
-                (p.usage ??
-                  (typeof p.turn === 'object' && p.turn !== null
-                    ? (p.turn as { usage?: unknown }).usage
-                    : null) ??
-                  params) as {
-                  last?: {
-                    inputTokens?: unknown
-                    cachedInputTokens?: unknown
-                  }
-                  modelContextWindow?: unknown
-                },
-              )
-              if (contextWindow) {
-                setContextWindow(contextWindow)
-              }
-            }
-            if (typeof p.turn === 'object' && p.turn !== null) {
-              const turn = p.turn as {
-                status?: unknown
-                error?: { message?: unknown } | null
-              }
-              const errorMessage =
-                typeof turn.error?.message === 'string'
-                  ? turn.error.message
-                  : null
-              if (turn.status === 'failed' || errorMessage) {
-                if (errorMessage) {
-                  sessionEmitter.addNote({
-                    text: errorMessage,
-                    level: 'error',
-                  })
+            endAcceptedTurn(() => {
+              activeClientUserMessageId = null
+              if (threadId && lastConnectionGeneration !== null)
+                serverHost.observeThreadSettled(
+                  threadId,
+                  lastConnectionGeneration,
+                )
+              flushThinkingBuffer()
+              flushAssistantBuffer()
+              activeProviderTurnId = null
+              {
+                const contextWindow = deriveCodexContextWindow(
+                  (p.usage ??
+                    (typeof p.turn === 'object' && p.turn !== null
+                      ? (p.turn as { usage?: unknown }).usage
+                      : null) ??
+                    params) as {
+                    last?: {
+                      inputTokens?: unknown
+                      cachedInputTokens?: unknown
+                    }
+                    modelContextWindow?: unknown
+                  },
+                )
+                if (contextWindow) {
+                  setContextWindow(contextWindow)
                 }
-                setStatus('failed')
-                setAttention('failed')
-                break
               }
-            }
-            setStatus('completed')
-            setAttention('finished')
+              if (typeof p.turn === 'object' && p.turn !== null) {
+                const turn = p.turn as {
+                  status?: unknown
+                  error?: { message?: unknown } | null
+                }
+                const errorMessage =
+                  typeof turn.error?.message === 'string'
+                    ? turn.error.message
+                    : null
+                if (turn.status === 'failed' || errorMessage) {
+                  if (errorMessage) {
+                    sessionEmitter.addNote({
+                      text: errorMessage,
+                      level: 'error',
+                    })
+                  }
+                  setStatus('failed')
+                  setAttention('failed')
+                  return
+                }
+              }
+              setStatus('completed')
+              setAttention('finished')
+            })
             break
 
           case 'turn/interrupt':
@@ -2360,9 +2422,11 @@ export class CodexProvider implements Provider {
             flushThinkingBuffer()
             flushAssistantBuffer()
             activeProviderTurnId = null
-            sessionEmitter.addNote({
-              text: 'Turn interrupted',
-              level: 'warning',
+            endAcceptedTurn(() => {
+              sessionEmitter.addNote({
+                text: 'Turn interrupted',
+                level: 'warning',
+              })
             })
             break
 
@@ -2738,6 +2802,8 @@ export class CodexProvider implements Provider {
           ),
         )
       stopped = true
+      // Nothing is accepted on a handle being torn down (lap 5, B).
+      turnAcknowledged = false
       clearTimeout(startTimer)
       stopWatchingServer()
 
@@ -3075,8 +3141,11 @@ export class CodexProvider implements Provider {
         // a process that outlives this session, and only `turn/interrupt` ends
         // it (F1).
         disposeRuntime({ interruptActiveTurn: true })
-        setStatus('failed')
-        setAttention('failed')
+        // After the release, and never throwing (MAR-3023 lap 5, A).
+        recordTeardown('the stopped status', () => {
+          setStatus('failed')
+          setAttention('failed')
+        })
       },
     }
 
