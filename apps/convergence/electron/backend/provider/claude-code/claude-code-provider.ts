@@ -621,9 +621,14 @@ export class ClaudeCodeProvider implements Provider {
     /**
      * Whether the turn on this handle is accepted (MAR-3023 lap 3, H): set
      * once a user turn is bound and its prompt will be written (after the
-     * skill check), or when the harness opens a turn; cleared when the next
-     * turn starts preparing. Every write the stream makes while it holds is
-     * that turn's recording.
+     * skill check), or when the harness opens a turn; cleared when the stream
+     * event that settles the turn has made its writes (lap 4, C), and when the
+     * next turn starts preparing. Every write the stream makes while it holds
+     * is that turn's recording.
+     *
+     * Known narrow window: between the next turn starting to prepare and its
+     * binding (a few awaits), a resident child can still stream for the
+     * previous turn; a refused write there keeps today's path.
      */
     let turnBound = false
     let currentTurn: {
@@ -985,8 +990,20 @@ export class ClaudeCodeProvider implements Provider {
     ): void {
       try {
         sessionEmitter.addNote(note)
-      } catch {
-        // Recording a note must never prevent recovery or permission settlement.
+      } catch (error) {
+        // Recording a note must never prevent recovery or permission
+        // settlement, so nothing is rethrown -- but a lost recording is not
+        // dropped in silence (MAR-3023 lap 4, D). While the turn is accepted
+        // the emitter has already announced it before this catch runs;
+        // otherwise it is said here.
+        if (error instanceof RecordingError) {
+          if (turnBound) error.announce()
+          else
+            console.error(
+              '[claude-code] A continuation-recovery note could not be recorded',
+              error,
+            )
+        }
       }
     }
 
@@ -1752,7 +1769,13 @@ export class ClaudeCodeProvider implements Provider {
               }),
             onMessage: (event) => {
               recordDebug('event', { direction: 'in', payload: event })
+              const turnWasOpen = currentTurn !== null
               handleEvent(event)
+              // Acceptance ends with the settle (MAR-3023 lap 4, C): the event
+              // that closed the turn has made its own writes; after it, a
+              // refused write (an idle note, a process exit, a stop) is no
+              // accepted turn's recording and keeps today's path.
+              if (turnWasOpen && currentTurn === null) turnBound = false
             },
             onStderr: (data) => {
               stderrBuffer += data

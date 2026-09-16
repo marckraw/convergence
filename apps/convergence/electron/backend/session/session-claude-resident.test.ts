@@ -8,6 +8,7 @@ import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { ProviderRegistry } from '../provider/provider-registry'
 import { LocalExecutionHost } from '../provider/execution-host/local-execution-host'
 import { SessionService } from './session.service'
+import { RecordingError } from './session.pure'
 import { SessionQueuedInputService } from './session-queued-input.service'
 import { HarnessEvidenceService } from './harness-evidence.service'
 import { TurnCaptureService } from './turn/turn-capture.service'
@@ -2318,5 +2319,48 @@ it('MAR-3023 J: harness evidence for a turn whose user message was refused is at
   // Mutation: set the active turn only after the write -> the previous turn's
   // id (or null), red.
   expect(payload.turnId).toBe(turnId)
+  errors.mockRestore()
+})
+
+it('MAR-3023 lap 4, C: a refused write after the turn settled is not that turn’s loss — it keeps today’s throw, no fact, no note', async () => {
+  const { service, session, children } = await fixture()
+  await service.start(session.id, { text: 'first' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  const send = (event: unknown) =>
+    children[0].stdout.write(JSON.stringify(event) + '\n')
+  send({ type: 'system', subtype: 'init', session_id: 'resident' })
+  send({ type: 'result', subtype: 'success', result: 'first answer' })
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'completed')
+
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_quit_note
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'note'
+         AND json_extract(NEW.payload_json, '$.text') = 'stopped by quit'
+    BEGIN SELECT RAISE(ABORT, 'fixture quit note refused'); END`)
+  const handle = (
+    service as unknown as {
+      activeHandles: Map<string, { dispose: (reason: 'quit') => unknown }>
+    }
+  ).activeHandles.get(session.id)!
+
+  // An idle-time write: the quit note, written first thing, after the turn
+  // settled. Mutation: keep acceptance past the settle -> the emitter
+  // announces the refusal as the settled turn's loss and swallows it: no
+  // throw here, and a fact below.
+  expect(() => handle.dispose('quit')).toThrow(RecordingError)
+  expect(failures).toEqual([])
+  expect(
+    service
+      .getConversation(session.id)
+      .filter(
+        (item) =>
+          item.kind === 'note' &&
+          item.providerMeta.providerEventType === 'recording-failed',
+      ),
+  ).toEqual([])
+  getDatabase().exec('DROP TRIGGER refuse_quit_note')
   errors.mockRestore()
 })

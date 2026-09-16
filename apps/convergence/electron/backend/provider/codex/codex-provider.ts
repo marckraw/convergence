@@ -1023,11 +1023,12 @@ export class CodexProvider implements Provider {
      * write this handle makes goes through here, so a refused local write of
      * an acknowledged turn is announced as that turn's lost recording (fact +
      * note) and the handle carries on -- a lost recording is not a dead run.
-     * Thrown instead, a refused reply was thrown into the JSON-RPC message
-     * handling unannounced (nothing there catches a notification handler), and
-     * inside `turn/completed` it skipped the rest of the settle. Before this
-     * send's ack, and for any other error, the throw keeps today's path -- the
-     * pre-ack recovery note of lap 2's A fails the send honestly.
+     * Thrown instead, a refused reply went unannounced -- the JSON-RPC line
+     * reader (`provider/line-parser.ts`) swallows whatever a handler throws --
+     * and inside `turn/completed` it skipped the rest of the settle, leaving
+     * the session `running`. Before this send's ack, and for any other error,
+     * the throw keeps today's path -- the pre-ack recovery note of lap 2's A
+     * fails the send honestly.
      */
     function emitDelta(delta: SessionDelta): void {
       if (unpublishedHandoff) {
@@ -1403,20 +1404,32 @@ export class CodexProvider implements Provider {
       threadUnusedSinceBoundary = false
       activeClientUserMessageId = clientUserMessageId
       const acknowledgement = activeRpc
-        .request('turn/start', {
-          threadId: currentThreadId,
-          model: config.model,
-          effort: config.effort,
-          ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
-          clientUserMessageId,
-          input,
-        })
+        .request(
+          'turn/start',
+          {
+            threadId: currentThreadId,
+            model: config.model,
+            effort: config.effort,
+            ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
+            clientUserMessageId,
+            input,
+          },
+          {
+            // Accepted where the ack is PARSED (MAR-3023 lap 4, B): the reader
+            // dispatches every line of a chunk synchronously, so `turn/started`
+            // and the reply can be handled before any continuation of this
+            // await runs. Set after the await, their refused writes were not
+            // yet an accepted turn's -- rethrown, and swallowed by the reader.
+            onResult: () => {
+              turnAcknowledged = true
+            },
+          },
+        )
         .then((turnResult) => readProviderTurnId(turnResult))
       pendingTurnStart = acknowledgement
 
       try {
         const providerTurnId = await acknowledgement
-        turnAcknowledged = true
         if (providerTurnId) {
           activeProviderTurnId = providerTurnId
         }
@@ -1835,15 +1848,29 @@ export class CodexProvider implements Provider {
         return
       }
 
-      sessionEmitter.addUserMessage({
-        text: input.text,
-        providerAccountId: sessionAccountId,
-        skillSelections: skillResolution.skillSelections,
-        attachmentIds: input.attachments?.length
-          ? input.attachments.map((a) => a.id)
-          : undefined,
-        deliveryMode: 'steer',
-      })
+      // The steer owns its own acceptance (MAR-3023 lap 4, A). Its user message
+      // is written before `turn/steer` goes out, so that write is NOT the
+      // running turn's accepted recording: a refused insert must take the
+      // honest path ("Mid-run input failed"), never "the message was sent".
+      // Acceptance is withheld for exactly that synchronous write and handed
+      // back to the running turn right after it -- holding it across the
+      // steer's awaits would unaccept the running turn's own stream. The steer
+      // makes no further recording of its own, before or after its ack.
+      const runningTurnAcknowledged = turnAcknowledged
+      turnAcknowledged = false
+      try {
+        sessionEmitter.addUserMessage({
+          text: input.text,
+          providerAccountId: sessionAccountId,
+          skillSelections: skillResolution.skillSelections,
+          attachmentIds: input.attachments?.length
+            ? input.attachments.map((a) => a.id)
+            : undefined,
+          deliveryMode: 'steer',
+        })
+      } finally {
+        turnAcknowledged = runningTurnAcknowledged
+      }
 
       const currentThreadId = await ensureThread(input.activeRpc)
       const parts = await loadCodexParts(input.attachments)

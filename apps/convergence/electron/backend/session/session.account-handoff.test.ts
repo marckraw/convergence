@@ -42,6 +42,8 @@ let failInterrupt: boolean
 let loseAck: boolean
 let unreadableTurns: boolean
 let rejectAck: (() => void) | undefined
+/** Answer turn/start, stream a reply and settle, all in one synchronous beat. */
+let sameChunkReply: boolean
 let sourceState: 'connected' | 'unavailable' | 'removed'
 let settled: Array<{ dispatchIds: string[] }>
 
@@ -57,6 +59,7 @@ beforeEach(() => {
   settled = []
   sourceState = 'connected'
   completeTurns = true
+  sameChunkReply = false
   failInterrupt = false
   loseAck = false
   unreadableTurns = false
@@ -85,6 +88,29 @@ beforeEach(() => {
               ],
               nextCursor: null,
             }
+          }
+          if (message.method === 'turn/start' && sameChunkReply) {
+            // What a real socket can deliver in one chunk: the ack, the turn
+            // starting, its reply and its settle -- every line dispatched
+            // before any promise continuation of the request runs.
+            const threadId = String(message.params?.threadId)
+            server.loadedThreads.set(threadId, { type: 'idle' })
+            connection.respond(message.id!, {
+              turn: { id: 'chunk-turn', status: 'inProgress' },
+            })
+            connection.notify('turn/started', {
+              threadId,
+              turn: { id: 'chunk-turn' },
+            })
+            connection.notify('item/agentMessage/delta', {
+              threadId,
+              delta: 'the answer',
+            })
+            connection.notify('turn/completed', {
+              threadId,
+              turn: { id: 'chunk-turn', status: 'completed' },
+            })
+            return FAKE_CODEX_NO_RESPONSE
           }
           if (message.method === 'turn/start' && loseAck) {
             clientId = message.params?.clientUserMessageId
@@ -890,14 +916,14 @@ it('MAR-3023 H: a Codex turn whose streamed reply cannot be recorded announces t
   const connection = hosts[0]!.server.connections.at(-1)!
   const threadId = service.getById(id)!.continuationToken
 
-  // Mutation: drop the notification boundary's catch -> the refusal escapes
-  // the JSON-RPC reader and this throws.
-  expect(() =>
-    connection.notify('item/agentMessage/delta', {
-      threadId,
-      delta: 'the answer',
-    }),
-  ).not.toThrow()
+  // The JSON-RPC line reader swallows whatever a handler throws, so a throw
+  // assertion here could never go red (lap 4, B). What is true is the fact,
+  // the note and the settle. Mutation: drop the emitter boundary's catch ->
+  // no fact, and the settle below never lands.
+  connection.notify('item/agentMessage/delta', {
+    threadId,
+    delta: 'the answer',
+  })
   expect(failures).toHaveLength(1)
   expect(recordingFailedNotes()).toHaveLength(1)
   expect(service.getById(id)?.status).toBe('running')
@@ -908,5 +934,77 @@ it('MAR-3023 H: a Codex turn whose streamed reply cannot be recorded announces t
     turn: { id: 'turn-1', status: 'completed' },
   })
   await vi.waitFor(() => expect(service.getById(id)?.status).toBe('completed'))
+  errors.mockRestore()
+})
+
+it('MAR-3023 lap 4, B: an ack, a refused reply and the settle in one chunk are the accepted turn’s — one fact, one note, the settle lands', async () => {
+  await first()
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_assistant_reply
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'message'
+         AND json_extract(NEW.payload_json, '$.actor') = 'assistant'
+    BEGIN SELECT RAISE(ABORT, 'fixture reply refused'); END`)
+  sameChunkReply = true
+
+  await service.sendMessage(id, {
+    text: 'answered in one chunk',
+    providerAccountId: 'account-a',
+  })
+  await vi.waitFor(() =>
+    expect(
+      hosts
+        .flatMap((h) => h.server.requests)
+        .filter((r) => r.method === 'turn/start'),
+    ).toHaveLength(2),
+  )
+
+  // Mutation: set acceptance after the await -> the reply's refusal and the
+  // settle's flush are rethrown into the line reader and swallowed: the loss
+  // is never announced and the session is stuck `running`.
+  await vi.waitFor(() => expect(service.getById(id)?.status).toBe('completed'))
+  expect(failures).toHaveLength(1)
+  expect(recordingFailedNotes()).toHaveLength(1)
+  errors.mockRestore()
+})
+
+it('MAR-3023 lap 4, A: a steer whose user message cannot be recorded fails honestly — no fact, the mid-run note, the running turn untouched', async () => {
+  await running()
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_steer_message
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'message'
+         AND json_extract(NEW.payload_json, '$.actor') = 'user'
+    BEGIN SELECT RAISE(ABORT, 'fixture steer refused'); END`)
+
+  await service.sendMessage(id, {
+    text: 'steer this way',
+    providerAccountId: 'account-a',
+    deliveryMode: 'steer',
+  })
+
+  await vi.waitFor(() =>
+    expect(
+      service
+        .getConversation(id)
+        .some(
+          (item) =>
+            item.kind === 'note' &&
+            item.text.startsWith('Mid-run input failed'),
+        ),
+    ).toBe(true),
+  )
+  // Mutation: let the steer inherit the running turn's acceptance -> the
+  // refused write is announced as "sent", a fact appears, red.
+  expect(failures).toEqual([])
+  expect(recordingFailedNotes()).toEqual([])
+  expect(
+    hosts[0]!.server.requests.filter((r) => r.method === 'turn/steer'),
+  ).toHaveLength(0)
+  expect(service.getById(id)?.status).toBe('running')
   errors.mockRestore()
 })
