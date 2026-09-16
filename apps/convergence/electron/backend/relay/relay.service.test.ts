@@ -257,6 +257,7 @@ describe('RelayService', () => {
         action: 'spawn',
         instruction: 'Start from the branch diff.',
         spawnSpec: {
+          member: null,
           executionHost: 'local',
           workAddress: null,
           roleCard: null,
@@ -358,6 +359,7 @@ describe('RelayService', () => {
         action: 'spawn',
         opener: '/clear',
         spawnSpec: {
+          member: null,
           executionHost: 'local',
           workAddress: null,
           roleCard: null,
@@ -383,6 +385,7 @@ describe('RelayService', () => {
         action: 'spawn',
         targetSessionId: null,
         spawnSpec: {
+          member: null,
           executionHost: 'local',
           workAddress: null,
           roleCard: null,
@@ -405,6 +408,7 @@ describe('RelayService', () => {
       executionHost: 'local',
       workAddress: null,
       roleCard: null,
+      member: null,
       returnWire: null,
       projectId: 'p1',
       providerId: 'codex',
@@ -466,7 +470,10 @@ describe('RelayService', () => {
           crewId: 'c1',
           sourceSessionId: 's1',
           action: 'spawn',
-          spawnSpec: { ...spec, providerId: '' },
+          spawnSpec: {
+            ...spec,
+            providerId: '',
+          },
         }),
       ).toThrow('A spawn relay needs a provider')
     })
@@ -1220,5 +1227,67 @@ describe('RelayService', () => {
       const hops = service.listRecentHops('c1', '2001-01-01T00:00:00.000Z')
       expect(hops.map((hop) => hop.id)).toEqual([recent.id])
     })
+  })
+})
+
+/**
+ * The card's memory answers for hops that CARRIED work (MAR-3083 lap 3, L).
+ *
+ * The docblock said "delivered" while the query asked only for the flag, so a
+ * row that never reached the seat could have answered "already introduced".
+ * Nothing writes such a row today — which is exactly why the clause needed a
+ * test of its own rather than the engine's behaviour standing in for it.
+ */
+describe('RelayService.hasCarriedRoleCard', () => {
+  let service: RelayService
+
+  beforeEach(() => {
+    const db = getDatabase()
+    service = new RelayService(db)
+    db.prepare(
+      "INSERT INTO projects (id, name, repository_path) VALUES ('p1', 'p1', '/tmp/p1')",
+    ).run()
+    for (const id of ['s1', 's2']) {
+      db.prepare(
+        `INSERT INTO sessions (id, project_id, provider_id, name, working_directory)
+         VALUES (?, 'p1', 'codex', ?, '/tmp/p1')`,
+      ).run(id, id)
+    }
+    db.prepare(
+      "INSERT INTO session_crews (id, name) VALUES ('c1', 'Loop')",
+    ).run()
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+  })
+
+  function hop(outcome: 'delivered' | 'queued' | 'error'): void {
+    service.appendHop({
+      relayId: 'r1',
+      crewId: 'c1',
+      flowRunId: 'run-1',
+      sourceSessionId: 's1',
+      targetSessionId: 's2',
+      triggerStatus: 'completed',
+      outcome,
+      roleCardCarried: true,
+    })
+  }
+
+  it('ignores a row that carried nothing, however it is flagged', () => {
+    hop('error')
+
+    // Mutation: drop `AND outcome IN ('delivered','queued')` from the query
+    // and a hop that delivered nothing answers for the card.
+    expect(service.hasCarriedRoleCard('run-1', 's2')).toBe(false)
+  })
+
+  it('answers for a hop that reached the seat', () => {
+    hop('queued')
+
+    expect(service.hasCarriedRoleCard('run-1', 's2')).toBe(true)
+    expect(service.hasCarriedRoleCard('run-2', 's2')).toBe(false)
   })
 })

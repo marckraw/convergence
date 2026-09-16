@@ -1,6 +1,11 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import type { CrewService } from './crew.service'
 import type {
+  CreateCrewRecipeSeatInput,
+  CrewMemberRef,
+  UpdateCrewSeatInput,
+} from './crew.service'
+import type {
   CreateSessionCrewInput,
   SessionCrew,
   UpdateSessionCrewInput,
@@ -52,6 +57,26 @@ export function registerCrewIpcHandlers(deps: {
     mutate(() => service.delete(id))
   })
 
+  // What a seat IS (MAR-3083 R1/R6): its own door, like the baton name's.
+  // Every member-scoped write names the member the same way, so a recipe --
+  // which has no session id -- is editable and removable like any other seat.
+  ipcMain.handle(
+    'crew:setMemberSeat',
+    (
+      _event,
+      crewId: string,
+      member: CrewMemberRef,
+      patch: UpdateCrewSeatInput,
+    ) => mutate(() => service.setMemberSeat(crewId, member, patch)),
+  )
+
+  // A seat that is a recipe rather than a conversation (MAR-3083 R3).
+  ipcMain.handle(
+    'crew:addRecipeMember',
+    (_event, crewId: string, input: CreateCrewRecipeSeatInput) =>
+      mutate(() => service.addRecipeMember(crewId, input)),
+  )
+
   ipcMain.handle(
     'crew:addMember',
     (_event, crewId: string, sessionId: string) =>
@@ -60,14 +85,14 @@ export function registerCrewIpcHandlers(deps: {
 
   ipcMain.handle(
     'crew:removeMember',
-    (_event, crewId: string, sessionId: string) =>
-      mutate(() => service.removeMember(crewId, sessionId)),
+    (_event, crewId: string, member: CrewMemberRef) =>
+      mutate(() => service.removeMember(crewId, member)),
   )
 
   ipcMain.handle(
     'crew:setMemberBatonName',
-    (_event, crewId: string, sessionId: string, batonName: string | null) =>
-      mutate(() => service.setMemberBatonName(crewId, sessionId, batonName)),
+    (_event, crewId: string, member: CrewMemberRef, batonName: string | null) =>
+      mutate(() => service.setMemberBatonName(crewId, member, batonName)),
   )
 
   // Where a card was dropped (R10). A mutation like every other in this file,

@@ -109,6 +109,22 @@
           },
           "host": {
             "type": "string"
+          },
+          "role": {
+            "enum": ["mastermind", "horse", "reviewer", "designer"]
+          },
+          "kind": {
+            "enum": ["resident"]
+          },
+          "roleCard": {
+            "type": "string"
+          },
+          "lanePolicy": {
+            "enum": ["main", "own-worktree"]
+          },
+          "wipLimit": {
+            "type": "integer",
+            "minimum": 1
           }
         },
         "required": [
@@ -242,6 +258,9 @@
                             ]
                           }
                         ]
+                      },
+                      "member": {
+                        "type": "string"
                       }
                     },
                     "required": [

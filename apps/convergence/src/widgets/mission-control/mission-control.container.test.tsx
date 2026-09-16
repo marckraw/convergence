@@ -1,3 +1,4 @@
+import { DEFAULT_CREW_MEMBER_SEAT } from '@/entities/session-crew'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { toast } from 'sonner'
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
@@ -1139,6 +1140,7 @@ describe('MissionControl', () => {
                 ...crew,
                 members: [
                   {
+                    ...DEFAULT_CREW_MEMBER_SEAT,
                     sessionId: 'a',
                     batonName: null,
                     canvasX: 600,
@@ -1162,6 +1164,7 @@ describe('MissionControl', () => {
                   ...crew,
                   members: [
                     {
+                      ...DEFAULT_CREW_MEMBER_SEAT,
                       sessionId: 'a',
                       batonName: null,
                       canvasX: 600,
@@ -1593,13 +1596,17 @@ describe('MissionControl', () => {
       )
     })
 
-    async function openCrewSettings(crewName = 'Night shift') {
+    async function openCrewSettings(
+      crewName = 'Night shift',
+      members: SessionCrew['members'] = [],
+    ) {
       const crew = makeCrew({
         id: 'crew-1',
         name: crewName,
         emoji: '🌙',
         accentColor: '#7c3aed',
         sessionIds: ['a', 'b'],
+        members,
       })
       seedCrews([crew])
       seed([makeSession({ id: 'a' }), makeSession({ id: 'b' })], [CLAUDE_CODE])
@@ -1622,6 +1629,37 @@ describe('MissionControl', () => {
       await screen.findByRole('region', { name: 'Crew settings' })
       return api
     }
+
+    /**
+     * A refused seat field keeps what was typed (MAR-3083 lap 4, R). The card
+     * was dropped before the door answered, so a card over the limit vanished
+     * along with the sentence explaining why.
+     */
+    it('keeps an over-long role card draft and shows why it was refused (mutation: drop the draft first)', async () => {
+      const api = await openCrewSettings('Night shift', [
+        {
+          ...DEFAULT_CREW_MEMBER_SEAT,
+          sessionId: 'a',
+          batonName: 'horse opus',
+          canvasX: null,
+          canvasY: null,
+        },
+      ])
+      const refused = 'A role card cannot be longer than 4000 characters'
+      ;(api as unknown as { setMemberSeat: unknown }).setMemberSeat = vi.fn(
+        async () => {
+          throw new Error(refused)
+        },
+      )
+      const card = screen.getAllByLabelText(/^Role card for /)[0]!
+      const typed = 'You are Opus. '.repeat(400)
+
+      fireEvent.change(card, { target: { value: typed } })
+      fireEvent.blur(card)
+
+      expect(await screen.findByText(refused)).toBeInTheDocument()
+      expect(card).toHaveValue(typed)
+    })
 
     it('keeps a trailing space while renaming inline (mutation: control by crew.name)', async () => {
       const api = await openCrewSettings('Night')
@@ -2105,6 +2143,7 @@ describe('MissionControl', () => {
           sessionIds: ['a'],
           members: [
             {
+              ...DEFAULT_CREW_MEMBER_SEAT,
               sessionId: 'a',
               batonName: 'fable',
               canvasX: null,
@@ -3259,6 +3298,7 @@ describe('MissionControl', () => {
               ...crew,
               members: [
                 {
+                  ...DEFAULT_CREW_MEMBER_SEAT,
                   sessionId,
                   batonName: null,
                   canvasX: position.x,

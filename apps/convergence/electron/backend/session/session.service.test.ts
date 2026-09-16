@@ -8151,6 +8151,8 @@ describe('SessionService + RelayEngine: an opener is always its own turn (MAR-27
       sessions: revived,
       crews: {
         addMember: () => undefined,
+        findSeatBySession: () => null,
+        findSeatByBatonName: () => null,
         crewIdsForSession: (sessionId) =>
           (
             db
@@ -8551,6 +8553,8 @@ describe('THE SWEEP: every dispatched receipt reaches exactly one terminal (MAR-
       sessions: service,
       crews: {
         addMember: () => undefined,
+        findSeatBySession: () => null,
+        findSeatByBatonName: () => null,
         crewIdsForSession: (sessionId) =>
           (
             db

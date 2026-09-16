@@ -1,6 +1,11 @@
 import type { RelaySpawnSpec } from '../relay/relay.types'
 import type { SessionPermissionConfig } from '../provider/provider.types'
-import type { SessionCrew } from './crew.types'
+import type {
+  SessionCrew,
+  SessionCrewMemberKind,
+  SessionCrewMemberLane,
+  SessionCrewMemberRole,
+} from './crew.types'
 import type { SessionSummary } from '../session/session.types'
 import type { Project } from '../project/project.types'
 
@@ -26,6 +31,17 @@ export type CrewConfigCrew = Pick<
 >
 export interface CrewConfigRole {
   conversation: string
+  /**
+   * The seat this conversation holds (MAR-3083 R5). Optional so a recipe
+   * written before seats existed still reads, and imports at the defaults
+   * (`horse · resident · 1`). `host` above is the seat's host: for a resident
+   * seat the conversation's own execution host IS where that seat works.
+   */
+  role?: SessionCrewMemberRole
+  kind?: SessionCrewMemberKind
+  roleCard?: string
+  lanePolicy?: SessionCrewMemberLane
+  wipLimit?: number
   provider: string
   model: string | null
   effort: string | null
@@ -36,6 +52,12 @@ export interface CrewConfigRole {
 }
 export interface CrewConfigSpawn {
   name: string
+  /**
+   * The crew seat this wire spawns, by baton name (MAR-3083 R3). Present only
+   * when the wire names one; the seat supplies provider, model, host and card
+   * at firing time.
+   */
+  member?: string
   provider: string
   model: string | null
   effort: string | null

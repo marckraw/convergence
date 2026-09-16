@@ -51,12 +51,14 @@ describe('crew IPC', () => {
   it('registers the whole crew surface', () => {
     expect([...electronMocks.handlers.keys()].sort()).toEqual([
       'crew:addMember',
+      'crew:addRecipeMember',
       'crew:create',
       'crew:delete',
       'crew:list',
       'crew:removeMember',
       'crew:setMemberBatonName',
       'crew:setMemberPosition',
+      'crew:setMemberSeat',
       'crew:update',
     ])
   })
@@ -68,7 +70,7 @@ describe('crew IPC', () => {
 
     invoke<SessionCrew>('crew:addMember', created.id, 's1')
     invoke<SessionCrew>('crew:update', created.id, { name: 'Stable' })
-    invoke<SessionCrew>('crew:removeMember', created.id, 's1')
+    invoke<SessionCrew>('crew:removeMember', created.id, { sessionId: 's1' })
     expect(broadcast).toHaveBeenCalledTimes(4)
 
     invoke<SessionCrew[]>('crew:list')
@@ -88,5 +90,32 @@ describe('crew IPC', () => {
 
     expect(joined.emoji).toBe('🐎')
     expect(joined.sessionIds).toEqual(['s1'])
+  })
+  /**
+   * A recipe is reachable (MAR-3083 lap 2, C). Without a door it was a
+   * mechanism only tests could use -- shipped as decoration.
+   */
+  it('seats a recipe and then edits it by the only name it has', () => {
+    const crew = invoke<SessionCrew>('crew:create', { name: 'Night shift' })
+
+    const seated = invoke<SessionCrew>('crew:addRecipeMember', crew.id, {
+      batonName: 'errand',
+      providerId: 'codex',
+      model: 'gpt-6-astra',
+      hostPolicy: 'little-monster',
+    })
+    expect(seated.members).toMatchObject([
+      { sessionId: null, batonName: 'errand', kind: 'dynamic' },
+    ])
+
+    // Mutation: drop the `crew:addRecipeMember` handler and this throws "No
+    // handler registered" -- R3 is unreachable from the app again.
+    const edited = invoke<SessionCrew>(
+      'crew:setMemberSeat',
+      crew.id,
+      { batonName: 'errand' },
+      { roleCard: 'You are an errand.' },
+    )
+    expect(edited.members[0]!.roleCard).toBe('You are an errand.')
   })
 })

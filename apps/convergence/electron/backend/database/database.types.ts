@@ -245,9 +245,28 @@ export interface SessionCrewRow {
 
 export interface SessionCrewMemberRow {
   crew_id: string
-  session_id: string
+  /**
+   * The conversation this seat is, or null for a dynamic seat -- a recipe that
+   * becomes a session only when a wire spawns it (MAR-3083 R3).
+   */
+  session_id: string | null
   /** The short name a baton addresses this member by, or null if unnamed. */
   baton_name: string | null
+  /** `mastermind | horse | reviewer | designer`; null reads as `horse`. */
+  role: string | null
+  /** `resident | dynamic`; null reads as `resident`. */
+  kind: string | null
+  /** What this seat is told it is, applied by the wire's opener once a run. */
+  role_card: string | null
+  /** `local` or an execution-host endpoint id. */
+  host_policy: string | null
+  /** `main | own-worktree`. */
+  lane_policy: string | null
+  /** How many issues this seat may hold at once; null reads as 1. */
+  wip_limit: number | null
+  /** A dynamic seat's provider and model; null on a resident seat. */
+  provider_id: string | null
+  model: string | null
   added_at: string
 }
 

@@ -12,6 +12,7 @@ import {
   normalizeRelayOpener,
   normalizeRelaySessionId,
   normalizeRelaySpawnSpec,
+  BUDGETED_OUTCOMES,
 } from './relay.pure'
 import {
   relayHopFromRow,
@@ -48,6 +49,15 @@ export interface AppendRelayHopInput {
   dispatchId?: string | null
   outcome: RelayHopOutcome
   error?: string | null
+  /**
+   * Whether the message this hop carried led with the target seat's role card
+   * (MAR-3083 R4). The ledger is the memory: the FACT outlives the process
+   * that wrote it, and it is written after the send, so a delivery that threw
+   * leaves the card still owed. The run itself does not survive a restart --
+   * `takeFlowRunId` continues a run from memory, so a restart mints a new one
+   * and every per-run fact starts over (MAR-3108).
+   */
+  roleCardCarried?: boolean
 }
 
 /** What a cleared trail leaves behind. */
@@ -271,9 +281,9 @@ export class RelayService {
            id, relay_id, crew_id, flow_run_id, fired_at, source_session_id,
            target_session_id, spawned_session_id, trigger_status,
            payload_preview, baton, round_number, lap_number, dispatch_id,
-           outcome, error, settle_id
+           outcome, error, settle_id, role_card_carried
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -293,6 +303,7 @@ export class RelayService {
         input.outcome,
         input.error ?? null,
         input.settleId ?? null,
+        input.roleCardCarried ? 1 : 0,
       )
 
     return this.requireHopById(id)
@@ -458,6 +469,40 @@ export class RelayService {
       )
       .all(crewId, firedSince) as RelayHopRow[]
     return rows.map(relayHopFromRow)
+  }
+
+  /**
+   * Whether this run has already introduced this seat (MAR-3083 R4).
+   *
+   * The reader derived from the record: the hop that carried the card is the
+   * only proof it was carried, and it is written after the send. A card owed
+   * is therefore a card no delivered hop in this run claims -- true after a
+   * delivery that threw, true for a second wire into the same seat, and true
+   * in any process, because the fact is not in this one's memory. A run that
+   * begins after a restart is a NEW run and rightly introduces the seat again
+   * (MAR-3108).
+   */
+  hasCarriedRoleCard(flowRunId: string, targetSessionId: string): boolean {
+    // "Carried work" is `BUDGETED_OUTCOMES`, bound from its one owner rather
+    // than re-spelled in SQL -- the same move `run-history.service.ts` makes,
+    // under this file's own law about the list (MAR-3083 lap 4).
+    const outcomes = BUDGETED_OUTCOMES.map((_, index) => `@outcome${index}`)
+    const row = this.db
+      .prepare(
+        `SELECT 1 FROM relay_hops
+          WHERE flow_run_id = @flowRunId AND target_session_id = @targetSessionId
+            AND role_card_carried = 1
+            AND outcome IN (${outcomes.join(', ')})
+          LIMIT 1`,
+      )
+      .get({
+        flowRunId,
+        targetSessionId,
+        ...Object.fromEntries(
+          BUDGETED_OUTCOMES.map((value, index) => ['outcome' + index, value]),
+        ),
+      })
+    return row !== undefined
   }
 
   /**

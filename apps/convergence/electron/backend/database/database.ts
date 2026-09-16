@@ -10,6 +10,7 @@ import type { TranscriptEntry } from '../provider/provider.types'
 import { conversationItemToInsertRow } from '../session/conversation-item.pure'
 import { migrateTaskObserved } from './task-observed-migration.service'
 import { migrateCrewConfig } from './crew-config-migration.service'
+import { migrateCrewSeats } from './crew-seat-migration.service'
 import { migrateEndedSummary } from './ended-summary-migration.service'
 import { migrateHarnessEvidence } from './harness-evidence-migration.service'
 import { migrateResidentStopReason } from './resident-stop-reason-migration.service'
@@ -330,7 +331,10 @@ const SCHEMA = `
   -- session must never fail a crew read -- orphan rows are filtered on read.
   CREATE TABLE IF NOT EXISTS session_crew_members (
     crew_id TEXT NOT NULL,
-    session_id TEXT NOT NULL,
+    -- Null for a DYNAMIC seat: a recipe that becomes a session only when a
+    -- wire spawns it (MAR-3083 R3). A resident seat is its conversation, and
+    -- the unique index built by the seat migration keeps it in one crew.
+    session_id TEXT,
     -- The short name a baton addresses this member by. Membership still
     -- carries no behaviour: this is a label the wire editor reads to pre-fill
     -- a condition, never something the engine routes on.
@@ -410,6 +414,13 @@ const SCHEMA = `
     -- also, honestly, what every row written before this column says.
     settled_at TEXT,
     settled_status TEXT,
+    -- Whether this hop's message carried the target seat's role card
+    -- (MAR-3083 R4). The card introduces a seat once per run, and THIS is the
+    -- memory of it: a flag in the app's memory could not survive the restart
+    -- the flow run itself survives, and it was spent before the send, so a
+    -- delivery that threw burned the card. Written only on a row that
+    -- actually carried work.
+    role_card_carried INTEGER,
     -- The delivery receipt (MAR-2759): the dispatch id the session layer
     -- minted for the input this hop carried. The stamp above answers a CAUSAL
     -- question -- which settle was the settle of this hop's work -- and the
@@ -960,6 +971,11 @@ function ensureRelayColumns(database: Database.Database): void {
   if (!hopColumns.has('redelivered_from')) {
     database.exec('ALTER TABLE relay_hops ADD COLUMN redelivered_from TEXT')
   }
+  // The role card's memory (MAR-3083 R4). Null on every row written before
+  // seats existed, which reads exactly as "this hop carried no card".
+  if (!hopColumns.has('role_card_carried')) {
+    database.exec('ALTER TABLE relay_hops ADD COLUMN role_card_carried INTEGER')
+  }
   // `settles_owed` was a target-status guess at the causal question the
   // dispatch id now answers by identity; a count nobody reads would only
   // invite a reader. Dropped rather than left dead -- nothing else indexes
@@ -998,6 +1014,31 @@ function ensureRelayColumns(database: Database.Database): void {
   }
   if (!memberColumns.has('canvas_y')) {
     database.exec('ALTER TABLE session_crew_members ADD COLUMN canvas_y REAL')
+  }
+  // The seat (MAR-3083 R1). Every column is nullable and null is the DEFAULT
+  // read at the door (`horse · resident · 1`), not a value written here: a
+  // member row that predates seats never chose a role, and a stored 'horse'
+  // would be indistinguishable from one somebody picked.
+  //
+  // `session_id` is NOT relaxed here: every database written before tonight
+  // declares it `NOT NULL`, and SQLite cannot drop that in place. The seat
+  // migration rebuilds the table for those (`crew-seat-migration.service.ts`);
+  // the DDL above is what a database created from now on gets.
+  for (const [column, type] of [
+    ['role', 'TEXT'],
+    ['kind', 'TEXT'],
+    ['role_card', 'TEXT'],
+    ['host_policy', 'TEXT'],
+    ['lane_policy', 'TEXT'],
+    ['wip_limit', 'INTEGER'],
+    ['provider_id', 'TEXT'],
+    ['model', 'TEXT'],
+  ] as const) {
+    if (!memberColumns.has(column)) {
+      database.exec(
+        `ALTER TABLE session_crew_members ADD COLUMN ${column} ${type}`,
+      )
+    }
   }
 }
 
@@ -2227,6 +2268,9 @@ export function getDatabase(dbPath?: string): Database.Database {
       database.exec('ALTER TABLE sessions ADD COLUMN pinned_at TEXT')
     }
     migrateCrewConfig(database)
+    // After the seat columns exist: one conversation may sit in one crew, and
+    // the index that says so can only be built on a deduped table (R2).
+    migrateCrewSeats(database)
     database.transaction(() => {
       if (getTableColumnNames(database, 'sessions').has('origin_kind')) return
       database.exec(

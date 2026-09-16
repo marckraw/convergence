@@ -136,7 +136,9 @@ export const useSessionCrewStore = create<SessionCrewStore>((set, get) => ({
 
   removeMember: async (crewId, sessionId) => {
     try {
-      const crew = await sessionCrewApi.removeMember(crewId, sessionId)
+      const crew = await sessionCrewApi.removeMember(crewId, {
+        sessionId,
+      })
       set({ crews: upsertCrew(get().crews, crew), error: null })
       return crew
     } catch (err) {

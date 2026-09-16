@@ -2,6 +2,11 @@ import {
   hasEdgeFormattingMark,
   hasNameableCharacter,
 } from '../relay/relay.pure'
+import type {
+  SessionCrewMemberKind,
+  SessionCrewMemberLane,
+  SessionCrewMemberRole,
+} from './crew.types'
 
 const MAX_CREW_NAME_LENGTH = 64
 const MAX_CREW_EMOJI_CODEPOINTS = 8
@@ -145,4 +150,106 @@ export function normalizeCrewLimit(
     throw new Error(`${label} must be a whole number of at least 1`)
   }
   return value
+}
+
+/**
+ * A role card is the sentence a seat is told about itself, not a document: the
+ * crew mastermind's own card law caps it at 4,000 characters, and a card that
+ * cannot fit in a first message is one nobody reads.
+ */
+const MAX_CREW_ROLE_CARD_LENGTH = 4000
+
+const CREW_MEMBER_ROLES: readonly SessionCrewMemberRole[] = [
+  'mastermind',
+  'horse',
+  'reviewer',
+  'designer',
+]
+const CREW_MEMBER_KINDS: readonly SessionCrewMemberKind[] = [
+  'resident',
+  'dynamic',
+]
+const CREW_MEMBER_LANES: readonly SessionCrewMemberLane[] = [
+  'main',
+  'own-worktree',
+]
+
+/**
+ * The seat's four small vocabularies (MAR-3083 R1).
+ *
+ * Null means "unset" and reads as the default at the door; an unknown word is
+ * REFUSED rather than defaulted, because a silently corrected role would read
+ * back as a seat somebody chose. Same shape as `normalizeCrewLimit` above.
+ */
+export function normalizeCrewMemberRole(
+  value: string | null | undefined,
+): SessionCrewMemberRole | null {
+  return normalizeMemberWord(value, CREW_MEMBER_ROLES, 'A crew member role')
+}
+
+export function normalizeCrewMemberKind(
+  value: string | null | undefined,
+): SessionCrewMemberKind | null {
+  return normalizeMemberWord(value, CREW_MEMBER_KINDS, 'A crew member kind')
+}
+
+export function normalizeCrewMemberLane(
+  value: string | null | undefined,
+): SessionCrewMemberLane | null {
+  return normalizeMemberWord(value, CREW_MEMBER_LANES, 'A crew member lane')
+}
+
+function normalizeMemberWord<T extends string>(
+  value: string | null | undefined,
+  allowed: readonly T[],
+  label: string,
+): T | null {
+  if (value === undefined || value === null) return null
+  const trimmed = value.trim().toLowerCase()
+  if (trimmed.length === 0) return null
+  const found = allowed.find((word) => word === trimmed)
+  if (!found) {
+    throw new Error(`${label} must be one of: ${allowed.join(', ')}`)
+  }
+  return found
+}
+
+/** The card, trimmed; blank stores as null -- a seat nobody has described. */
+export function normalizeCrewRoleCard(
+  value: string | null | undefined,
+): string | null {
+  if (value === undefined || value === null) return null
+  const trimmed = value.trim()
+  if (trimmed.length === 0) return null
+  if (trimmed.length > MAX_CREW_ROLE_CARD_LENGTH) {
+    throw new Error(
+      `A role card cannot be longer than ${MAX_CREW_ROLE_CARD_LENGTH} characters`,
+    )
+  }
+  return trimmed
+}
+
+/**
+ * `local`, or the id of an execution host endpoint.
+ *
+ * Existence is not checked here: endpoints are rows in another table that can
+ * be added after a crew is written (an imported recipe names hosts the local
+ * app may not have yet), and a door that refused an unknown id would refuse
+ * the import the endpoint is being configured for.
+ */
+export function normalizeCrewHostPolicy(
+  value: string | null | undefined,
+): string | null {
+  if (value === undefined || value === null) return null
+  const trimmed = value.trim()
+  return trimmed.length === 0 ? null : trimmed
+}
+
+/** A dynamic seat's provider id or model; blank is null. */
+export function normalizeCrewRecipeField(
+  value: string | null | undefined,
+): string | null {
+  if (value === undefined || value === null) return null
+  const trimmed = value.trim()
+  return trimmed.length === 0 ? null : trimmed
 }

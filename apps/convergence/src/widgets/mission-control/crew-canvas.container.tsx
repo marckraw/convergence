@@ -30,7 +30,12 @@ import {
   catalogInForce,
   repositoryOriginApi,
 } from '@/entities/session'
-import { sessionCrewApi, useSessionCrewStore } from '@/entities/session-crew'
+import {
+  memberKey,
+  sessionCrewApi,
+  useSessionCrewStore,
+} from '@/entities/session-crew'
+import type { CrewMemberRef, SeatDraftField } from '@/entities/session-crew'
 import {
   selectRelaysForCrew,
   sessionRelayApi,
@@ -126,6 +131,21 @@ interface CrewCanvasProps {
  * the switch stores a switch, adding a conversation stores a membership. The
  * engine is the only thing that ever delivers.
  */
+/**
+ * What a typed seat field sends to the door. A WIP limit goes as a number so
+ * `normalizeCrewLimit` can refuse `0` in its own words; a blank clears to the
+ * default, as every other seat field does.
+ */
+function seatDraftPatch(
+  field: SeatDraftField,
+  typed: string,
+): Parameters<typeof sessionCrewApi.setMemberSeat>[2] {
+  if (field === 'wipLimit') {
+    return { wipLimit: typed.trim() === '' ? null : Number(typed) }
+  }
+  return { [field]: typed.trim() || null }
+}
+
 export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const crewGroups = useMemo(
     () => groups.filter((group) => group.crew !== null),
@@ -171,9 +191,18 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
     Record<string, string>
   >({})
   const [batonNameProblem, setBatonNameProblem] = useState<{
-    sessionId: string
+    memberKey: string
     message: string
   } | null>(null)
+  /**
+   * What is being typed in a seat's free-text fields (MAR-3083 lap 2, G).
+   * This container reloads every crew after any seat edit and on every
+   * `crew:updated` broadcast, so an uncontrolled field keyed on its own value
+   * was remounted mid-typing -- editing one member wiped another's draft.
+   */
+  const [seatDrafts, setSeatDrafts] = useState<
+    Record<string, Partial<Record<SeatDraftField, string>>>
+  >({})
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyPage, setHistoryPage] = useState<RelayRunPage | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -609,22 +638,69 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
     [crew, loadCrews],
   )
 
+  /**
+   * The key a member reference belongs to — one spelling, shared by the draft
+   * maps and the refusal slot (MAR-3083 lap 3, M). Hand-rolled copies
+   * disagreed about a recipe whose name is missing.
+   */
+  const keyForRef = useCallback(
+    (member: CrewMemberRef): string =>
+      'sessionId' in member
+        ? member.sessionId
+        : memberKey({ sessionId: null, batonName: member.batonName }),
+    [],
+  )
+
+  /** Forgets a committed draft so the field falls back to the record. */
+  const dropSeatDraft = useCallback((key: string, field: SeatDraftField) => {
+    setSeatDrafts((drafts) => {
+      const next = { ...drafts, [key]: { ...drafts[key] } }
+      delete next[key]![field]
+      return next
+    })
+  }, [])
+
+  /** The member a panel key names, and how the doors address it. */
+  const memberRefFor = useCallback(
+    (key: string): CrewMemberRef | null => {
+      const member = crew?.members.find((entry) => memberKey(entry) === key)
+      if (!member) return null
+      return member.sessionId
+        ? { sessionId: member.sessionId }
+        : { batonName: member.batonName ?? '' }
+    },
+    [crew],
+  )
+
   const commitBatonName = useCallback(
-    async (sessionId: string) => {
+    async (key: string) => {
       if (!crew) return
-      const typed = batonNameDrafts[sessionId]
+      const typed = batonNameDrafts[key]
       if (typed === undefined) return
+      const ref = memberRefFor(key)
+      const member = crew.members.find((entry) => memberKey(entry) === key)
+      // A recipe's name is the only way to reach it, so the form does not
+      // offer clearing it (MAR-3083 lap 3, I): the draft stays where it was
+      // typed and the door's own sentence appears under it.
+      if (member && member.sessionId === null && !typed.trim()) {
+        setBatonNameProblem({
+          memberKey: key,
+          message: 'A dynamic seat needs a baton name',
+        })
+        return
+      }
       setBatonNameDrafts((drafts) => {
         const next = { ...drafts }
-        delete next[sessionId]
+        delete next[key]
         return next
       })
+      if (!ref) return
       setBusy(true)
       setBatonNameProblem(null)
       try {
         await sessionCrewApi.setMemberBatonName(
           crew.id,
-          sessionId,
+          ref,
           typed.trim() ? typed : null,
         )
         await loadCrews()
@@ -632,11 +708,66 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         // The roster stays as it was and the field reverts to the stored
         // name — now with the door's own reason under it. A swallowed refusal
         // shows as nothing but the typing vanishing.
-        setBatonNameProblem({ sessionId, message: batonNameRefusal(error) })
+        setBatonNameProblem({
+          memberKey: key,
+          message: batonNameRefusal(error),
+        })
       }
       setBusy(false)
     },
-    [crew, batonNameDrafts, loadCrews],
+    [crew, batonNameDrafts, loadCrews, memberRefFor],
+  )
+
+  /**
+   * What a seat IS (MAR-3083 R6). One field at a time, straight through --
+   * the door normalizes and refuses, and its sentence lands under the member
+   * exactly where a refused baton name's does.
+   */
+  const editSeat = useCallback(
+    async (
+      member: CrewMemberRef,
+      patch: Parameters<typeof sessionCrewApi.setMemberSeat>[2],
+    ): Promise<boolean> => {
+      if (!crew) return false
+      const key = keyForRef(member)
+      setBusy(true)
+      setBatonNameProblem(null)
+      let accepted = true
+      try {
+        await sessionCrewApi.setMemberSeat(crew.id, member, patch)
+        await loadCrews()
+      } catch (error) {
+        accepted = false
+        setBatonNameProblem({
+          memberKey: key,
+          message: batonNameRefusal(error),
+        })
+      }
+      setBusy(false)
+      return accepted
+    },
+    [crew, loadCrews, keyForRef],
+  )
+
+  /**
+   * A typed seat field, stored when the typing is FINISHED (G). The draft is
+   * kept until the door has taken the value (R): a refusal leaves the typing
+   * in place with the door's sentence under it.
+   */
+  const commitSeatDraft = useCallback(
+    async (member: CrewMemberRef, field: SeatDraftField) => {
+      const key = keyForRef(member)
+      const typed = seatDrafts[key]?.[field]
+      if (typed === undefined) return
+      // ONE path for every typed field (MAR-3083 lap 4, R): the value goes to
+      // the door as typed, and the draft is forgotten only once the door has
+      // taken it. Dropping it first lost the typing on any refusal -- a role
+      // card over the limit vanished with its sentence -- while the WIP field
+      // beside it already kept its draft.
+      const accepted = await editSeat(member, seatDraftPatch(field, typed))
+      if (accepted) dropSeatDraft(key, field)
+    },
+    [seatDrafts, editSeat, keyForRef, dropSeatDraft],
   )
 
   const addConversations = useCallback(async () => {
@@ -657,11 +788,11 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   }, [crew, addSelection, loadCrews, closePanel])
 
   const removeMember = useCallback(
-    async (sessionId: string) => {
+    async (member: CrewMemberRef) => {
       if (!crew) return
       setBusy(true)
       try {
-        await sessionCrewApi.removeMember(crew.id, sessionId)
+        await sessionCrewApi.removeMember(crew.id, member)
         await loadCrews()
       } catch {
         // Same as above.
@@ -1543,11 +1674,26 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               running={crewIsRunning}
               batonNameProblem={batonNameProblem}
               batonNameDrafts={batonNameDrafts}
+              seatDrafts={seatDrafts}
+              resolveHost={(sessionId) =>
+                sessions.find((session) => session.id === sessionId)
+                  ?.executionHost ?? null
+              }
+              onSeatDraftEdit={(key, field, value) =>
+                setSeatDrafts((drafts) => ({
+                  ...drafts,
+                  [key]: { ...drafts[key], [field]: value },
+                }))
+              }
+              onSeatDraftCommit={(member, field) => {
+                void commitSeatDraft(member, field)
+              }}
               onCrewNameChange={(name) => {
                 setNameDraft(name)
                 if (!isValidCrewName(name) || name.trim() === crew.name) return
                 void updateCrew(crew.id, { name })
               }}
+              onSeatEdit={(sessionId, patch) => void editSeat(sessionId, patch)}
               onBatonNameEdit={(sessionId, batonName) =>
                 setBatonNameDrafts((drafts) => ({
                   ...drafts,
@@ -1566,8 +1712,8 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               onAddConversation={() =>
                 leavePanel({ kind: 'add-conversations' })
               }
-              onRemoveMember={(sessionId) => {
-                void removeMember(sessionId)
+              onRemoveMember={(member) => {
+                void removeMember(member)
               }}
               onClose={() => leavePanel({ kind: 'none' })}
             />

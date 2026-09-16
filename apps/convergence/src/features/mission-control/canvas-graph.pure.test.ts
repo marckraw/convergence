@@ -1,3 +1,4 @@
+import { DEFAULT_CREW_MEMBER_SEAT } from '@/entities/session-crew'
 import { describe, expect, it } from 'vitest'
 import type { SessionRelay } from '@/entities/session-relay'
 import type { SessionCrew } from '@/entities/session-crew'
@@ -254,7 +255,13 @@ describe('buildCanvasGraph', () => {
         group(
           crew('c2', {
             members: [
-              { sessionId: 'b', batonName: null, canvasX: -300, canvasY: -200 },
+              {
+                ...DEFAULT_CREW_MEMBER_SEAT,
+                sessionId: 'b',
+                batonName: null,
+                canvasX: -300,
+                canvasY: -200,
+              },
             ],
           }),
           ['b'],
@@ -685,8 +692,20 @@ describe('positions the crew remembers (R10)', () => {
         group(
           ['a', 'b'],
           [
-            { sessionId: 'a', batonName: null, canvasX: 600, canvasY: 320 },
-            { sessionId: 'b', batonName: null, canvasX: null, canvasY: null },
+            {
+              ...DEFAULT_CREW_MEMBER_SEAT,
+              sessionId: 'a',
+              batonName: null,
+              canvasX: 600,
+              canvasY: 320,
+            },
+            {
+              ...DEFAULT_CREW_MEMBER_SEAT,
+              sessionId: 'b',
+              batonName: null,
+              canvasX: null,
+              canvasY: null,
+            },
           ],
         ),
       ],
@@ -712,7 +731,15 @@ describe('positions the crew remembers (R10)', () => {
       [
         group(
           ['a'],
-          [{ sessionId: 'a', batonName: null, canvasX: 600, canvasY: null }],
+          [
+            {
+              ...DEFAULT_CREW_MEMBER_SEAT,
+              sessionId: 'a',
+              batonName: null,
+              canvasX: 600,
+              canvasY: null,
+            },
+          ],
         ),
       ],
       [],
@@ -726,7 +753,15 @@ describe('positions the crew remembers (R10)', () => {
       [
         group(
           ['a'],
-          [{ sessionId: 'a', batonName: null, canvasX: null, canvasY: null }],
+          [
+            {
+              ...DEFAULT_CREW_MEMBER_SEAT,
+              sessionId: 'a',
+              batonName: null,
+              canvasX: null,
+              canvasY: null,
+            },
+          ],
         ),
       ],
       [],
@@ -735,7 +770,15 @@ describe('positions the crew remembers (R10)', () => {
       [
         group(
           ['a'],
-          [{ sessionId: 'a', batonName: null, canvasX: 900, canvasY: 700 }],
+          [
+            {
+              ...DEFAULT_CREW_MEMBER_SEAT,
+              sessionId: 'a',
+              batonName: null,
+              canvasX: 900,
+              canvasY: 700,
+            },
+          ],
         ),
       ],
       [],
@@ -765,7 +808,15 @@ describe('positions the crew remembers (R10)', () => {
       [
         group(
           ['a'],
-          [{ sessionId: 'a', batonName: null, canvasX: -300, canvasY: -200 }],
+          [
+            {
+              ...DEFAULT_CREW_MEMBER_SEAT,
+              sessionId: 'a',
+              batonName: null,
+              canvasX: -300,
+              canvasY: -200,
+            },
+          ],
         ),
       ],
       [],
@@ -794,7 +845,15 @@ describe('positions the crew remembers (R10)', () => {
       [
         group(
           ['a'],
-          [{ sessionId: 'a', batonName: null, canvasX: -300, canvasY: -200 }],
+          [
+            {
+              ...DEFAULT_CREW_MEMBER_SEAT,
+              sessionId: 'a',
+              batonName: null,
+              canvasX: -300,
+              canvasY: -200,
+            },
+          ],
         ),
       ],
       [],

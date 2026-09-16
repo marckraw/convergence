@@ -5,8 +5,10 @@ export {
   REMOTE_SPAWN_PLACE_REQUIRED,
 } from '../../../src/shared/lib/spawn-spec.pure'
 import { namesThisMachine } from '../../../src/shared/lib/execution-host-id.pure'
+import { normalizeCrewBatonName } from '../crew/crew.pure'
 import { decodeSessionWorkAddress } from '../../../src/shared/lib/work-address.pure'
 import type {
+  RelaySeat,
   RelayAction,
   RelayHopOutcome,
   RelaySpawnSpec,
@@ -125,6 +127,12 @@ export function normalizeRelaySpawnSpec(
     model: spec.model?.trim() ? spec.model.trim() : null,
     effort: spec.effort?.trim() ? spec.effort.trim() : null,
     name,
+    // Normalized ONCE, here, with the record's own baton-name rule
+    // (MAR-3083 lap 4, O): seats are stored lowercased, the engine resolves
+    // through that normalizer, and the export used to compare the trimmed
+    // spelling raw -- so `member: "Errand"` fired correctly and exported as a
+    // dangling reference. Every compare downstream is now on one encoding.
+    member: normalizeCrewBatonName(spec.member),
     // Not validated against the enrolled accounts here: a wire may name an
     // account that is later removed, and refusing to LOAD such a relay would
     // hide the wire the user needs to see in order to fix it. The engine
@@ -884,4 +892,29 @@ export function batonMismatchMessage(
       ? `${characters.slice(0, MAX_QUOTED_BATON_LINE_LENGTH - 1).join('')}…`
       : line
   return `This wire waits for "${conditionToken}"; the message's last line was "${quoted}", which ${seen}, so it held.`
+}
+
+/**
+ * A spawn spec with its seat's recipe applied (MAR-3083 R3).
+ *
+ * Only a DYNAMIC seat overrides: a resident seat is a conversation that
+ * already exists, so a wire spawning beside it means exactly what it says. The
+ * seat wins on what it IS -- provider, model, host, the card it carries -- and
+ * the wire keeps what belongs to this firing: the name, the project, the
+ * effort, the account. The card is the one field the spec may override,
+ * because a wire that states a card is describing this errand, and a seat's
+ * card describes the seat.
+ */
+export function applySeatToSpawnSpec(
+  spec: RelaySpawnSpec,
+  seat: RelaySeat | null,
+): RelaySpawnSpec {
+  if (!seat || seat.kind !== 'dynamic') return spec
+  return {
+    ...spec,
+    providerId: seat.providerId ?? spec.providerId,
+    model: seat.model ?? spec.model,
+    executionHost: seat.hostPolicy ?? spec.executionHost,
+    roleCard: spec.roleCard ?? seat.roleCard,
+  }
 }

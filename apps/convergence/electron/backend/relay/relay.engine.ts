@@ -30,6 +30,7 @@ import {
   busyTargetReason,
   roundBudgetMessage,
   roundNumber,
+  applySeatToSpawnSpec,
 } from './relay.pure'
 import {
   CREW_LIVE_WINDOW_MS,
@@ -45,6 +46,7 @@ import type {
   RelayHopOutcome,
   RelaySpawnSpec,
   SessionRelay,
+  RelaySeat,
 } from './relay.types'
 
 /**
@@ -111,6 +113,14 @@ export interface RelaySessionGateway {
 export interface RelayCrewGateway {
   addMember(crewId: string, sessionId: string): unknown
   /**
+   * The seat a wire is aimed at, so its card can ride the first message of a
+   * run (R4), and the seat a spawn spec names, so a recipe can fill it (R3).
+   * Null for a crew or a member that is gone -- the wire then behaves exactly
+   * as it did before seats existed.
+   */
+  findSeatBySession(crewId: string, sessionId: string): RelaySeat | null
+  findSeatByBatonName(crewId: string, batonName: string): RelaySeat | null
+  /**
    * Every crew this session is in. Asked because a baton nobody routed has to
    * hail the crew that was waiting on it, and that crew may own no wire
    * leaving this station at all -- which is precisely the silent drop.
@@ -140,6 +150,8 @@ interface RecordHopExtra {
   /** The delivery receipt the session layer returned for this input. */
   dispatchId?: string | null
   error?: string | null
+  /** Whether this message led with the target seat's role card (R4). */
+  roleCardCarried?: boolean
 }
 
 /**
@@ -761,6 +773,7 @@ export class RelayEngine {
         lapNumber: lapNumberForHop,
         dispatchId: extra.dispatchId ?? null,
         outcome,
+        roleCardCarried: extra.roleCardCarried ?? false,
         error: extra.error ?? null,
       })
       // A budgeted outcome is the one proof that a session actually received
@@ -988,7 +1001,7 @@ export class RelayEngine {
     // The opener is never compiled into the payload -- it is a separate send,
     // and an instruction glued onto a `/clear` would stop it being a command.
     // It appears in the preview because the ledger must name both beats.
-    const payloadPreview = buildRelayHopPreview(relay.opener, payload)
+    let payloadPreview = buildRelayHopPreview(relay.opener, payload)
 
     if (relay.action === 'spawn') {
       await this.spawn(relay, payload, payloadPreview, record)
@@ -1015,7 +1028,35 @@ export class RelayEngine {
     // ledger should say which of the two the user is waiting on.
     const targetWasRunning = target.status === 'running'
 
+    // The seat this wire is aimed at, and the card it still owes this run
+    // (R4). A crew that is gone, a member that is not in it, or a seat nobody
+    // has described all read as "no card", which is the behaviour every wire
+    // had before seats existed.
+    const seat = this.crews.findSeatBySession(relay.crewId, targetSessionId)
+    const roleCard = seat?.roleCard ?? null
+    // Owed when the LEDGER has no delivered hop carrying it into this seat in
+    // this run. Asked of the record rather than of this process's memory: a
+    // send that threw leaves the card owed for the retry, a second wire into
+    // the same seat in the same run carries the payload alone, and nothing
+    // depends on one engine instance staying alive. A run that begins after a
+    // restart is a new run and introduces the seat again -- the run id lives
+    // in memory, which is MAR-3108, not this.
+    const carriesCard =
+      relay.action === 'hail' &&
+      roleCard !== null &&
+      !this.relays.hasCarriedRoleCard(flowRunId, targetSessionId)
+
+    // The card LEADS THE PAYLOAD, in the same message, always. It is never
+    // sent as an opener of its own: an opener is a separate, muted,
+    // context-free turn, so the seat would answer the card before the payload
+    // arrived -- a wasted turn and a reply to nobody on the transcript. A
+    // wire that already opens with something keeps that opener untouched
+    // (it is often a command, and a card glued onto `/clear` stops it being
+    // one).
     const opener = relay.action === 'hail' ? relay.opener : null
+    const outgoing = carriesCard ? `${roleCard}\n\n${payload}` : payload
+    // The ledger names what was actually sent, card included.
+    payloadPreview = buildRelayHopPreview(opener, outgoing)
 
     try {
       if (opener) {
@@ -1023,7 +1064,7 @@ export class RelayEngine {
           targetSessionId,
           {
             opener,
-            text: payload,
+            text: outgoing,
             providerAccountId: this.resolveInheritedAccountId(target),
           },
         )
@@ -1038,6 +1079,7 @@ export class RelayEngine {
         // it, on this run or after a restart.
         record('queued', {
           payloadPreview,
+          roleCardCarried: carriesCard,
           dispatchId: receipt.payloadDispatchId,
           // Why it waits, when it is waiting on a turn (MAR-2888). `queued`
           // alone left the canvas to be read as "sent, pending" whether the
@@ -1050,7 +1092,7 @@ export class RelayEngine {
       const delivery = await this.sessions.deliverRelayMessage(
         targetSessionId,
         {
-          text: payload,
+          text: outgoing,
           providerAccountId: this.resolveInheritedAccountId(target),
         },
       )
@@ -1064,6 +1106,7 @@ export class RelayEngine {
       // app-server is mid-turn, which is the whole of MAR-2888.
       record(targetWasRunning || delivery.queued ? 'queued' : 'delivered', {
         payloadPreview,
+        roleCardCarried: carriesCard,
         dispatchId: delivery.dispatchId,
         error:
           targetWasRunning || delivery.queued ? busyTargetReason() : undefined,
@@ -1134,14 +1177,32 @@ export class RelayEngine {
     payloadPreview: string | null,
     record: RecordHopFn,
   ): Promise<void> {
-    const spec = relay.spawnSpec
-    if (!spec) {
+    const stated = relay.spawnSpec
+    if (!stated) {
       record('error', {
         payloadPreview,
         error: 'This spawn relay has no session spec.',
       })
       return
     }
+    // A wire may name a crew seat instead of restating the recipe (R3). The
+    // seat wins on what it is -- provider, model, host, its card -- so six
+    // wires aimed at one seat cannot drift, and the spec keeps what belongs
+    // to this firing.
+    const named = stated.member
+      ? this.crews.findSeatByBatonName(relay.crewId, stated.member)
+      : null
+    if (stated.member && !named) {
+      // A seat that was renamed or removed is not a spec to fall back on:
+      // spawning on the wire's own leftover recipe would open a session
+      // nobody asked for, with no word anywhere about why it differs.
+      record('error', {
+        payloadPreview,
+        error: `This spawn names no seat this crew has: "${stated.member}".`,
+      })
+      return
+    }
+    const spec = applySeatToSpawnSpec(stated, named)
 
     const brief = composeErrandBrief(
       spec,

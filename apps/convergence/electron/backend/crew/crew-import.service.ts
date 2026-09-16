@@ -1,4 +1,8 @@
 import { normalizeCrewBatonName } from './crew.pure'
+import {
+  DEFAULT_CREW_MEMBER_ROLE,
+  DEFAULT_CREW_MEMBER_WIP_LIMIT,
+} from './crew.types'
 import type Database from 'better-sqlite3'
 import { readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
@@ -200,7 +204,36 @@ export class CrewImportService {
         member?.batonName !== batonName &&
         (!member || decisions.updates[role.key] !== false)
       ) {
-        this.crews.setMemberBatonName(crew.id, id, batonName)
+        this.crews.setMemberBatonName(crew.id, { sessionId: id }, batonName)
+        if (member) entries.find((e) => e.key === role.key)!.outcome = 'updated'
+        changed = true
+      }
+      // The seat the recipe describes (R5). Written after the membership
+      // exists and before the layout -- and only when it actually differs, so
+      // a second apply of the same file still reports nothing to change. An
+      // old file that names none of these imports at the defaults, which is
+      // what its members already read as.
+      const spec = config.roles[role.role]!
+      // `kind` is derived from the row, never imported onto it (lap 3, J):
+      // every role under `roles` is a conversation, and the reader refuses a
+      // file that says otherwise.
+      const seat = {
+        role: spec.role ?? DEFAULT_CREW_MEMBER_ROLE,
+        roleCard: spec.roleCard ?? null,
+        lanePolicy: spec.lanePolicy ?? null,
+        wipLimit: spec.wipLimit ?? DEFAULT_CREW_MEMBER_WIP_LIMIT,
+        // A resident seat works where its conversation runs.
+        hostPolicy: spec.host,
+      }
+      const seated =
+        member !== undefined &&
+        member.role === seat.role &&
+        member.roleCard === seat.roleCard &&
+        member.lanePolicy === seat.lanePolicy &&
+        member.wipLimit === seat.wipLimit &&
+        member.hostPolicy === seat.hostPolicy
+      if (!seated && (!member || decisions.updates[role.key] !== false)) {
+        this.crews.setMemberSeat(crew.id, { sessionId: id }, seat)
         if (member) entries.find((e) => e.key === role.key)!.outcome = 'updated'
         changed = true
       }

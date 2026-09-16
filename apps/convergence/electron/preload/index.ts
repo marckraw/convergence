@@ -211,19 +211,41 @@ contextBridge.exposeInMainWorld('electronAPI', {
     delete: (id: string) => ipcRenderer.invoke('crew:delete', id),
     addMember: (crewId: string, sessionId: string) =>
       ipcRenderer.invoke('crew:addMember', crewId, sessionId),
-    removeMember: (crewId: string, sessionId: string) =>
-      ipcRenderer.invoke('crew:removeMember', crewId, sessionId),
+    removeMember: (
+      crewId: string,
+      member: { sessionId: string } | { batonName: string },
+    ) => ipcRenderer.invoke('crew:removeMember', crewId, member),
+    addRecipeMember: (
+      crewId: string,
+      input: {
+        batonName: string
+        providerId: string
+        model: string | null
+        hostPolicy: string
+        role?: string | null
+        roleCard?: string | null
+        lanePolicy?: string | null
+        wipLimit?: number | null
+      },
+    ) => ipcRenderer.invoke('crew:addRecipeMember', crewId, input),
+    setMemberSeat: (
+      crewId: string,
+      member: { sessionId: string } | { batonName: string },
+      patch: {
+        role?: string | null
+        kind?: string | null
+        roleCard?: string | null
+        hostPolicy?: string | null
+        lanePolicy?: string | null
+        wipLimit?: number | null
+      },
+    ) => ipcRenderer.invoke('crew:setMemberSeat', crewId, member, patch),
     setMemberBatonName: (
       crewId: string,
-      sessionId: string,
+      member: { sessionId: string } | { batonName: string },
       batonName: string | null,
     ) =>
-      ipcRenderer.invoke(
-        'crew:setMemberBatonName',
-        crewId,
-        sessionId,
-        batonName,
-      ),
+      ipcRenderer.invoke('crew:setMemberBatonName', crewId, member, batonName),
     setMemberPosition: (
       crewId: string,
       sessionId: string,

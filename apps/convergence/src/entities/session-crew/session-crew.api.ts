@@ -9,6 +9,12 @@ import type {
   UpdateSessionCrewInput,
 } from './session-crew.types'
 
+/**
+ * How the renderer names one member: a conversation by its session id, a
+ * recipe by its baton name (MAR-3083 R3).
+ */
+export type CrewMemberRef = { sessionId: string } | { batonName: string }
+
 export const sessionCrewApi = {
   importPlan: (
     path?: string,
@@ -39,15 +45,47 @@ export const sessionCrewApi = {
   addMember: (crewId: string, sessionId: string): Promise<SessionCrew> =>
     window.electronAPI.crew.addMember(crewId, sessionId),
 
-  removeMember: (crewId: string, sessionId: string): Promise<SessionCrew> =>
-    window.electronAPI.crew.removeMember(crewId, sessionId),
+  removeMember: (crewId: string, member: CrewMemberRef): Promise<SessionCrew> =>
+    window.electronAPI.crew.removeMember(crewId, member),
 
+  /**
+   * A seat that is a recipe rather than a conversation (MAR-3083 R3). It has
+   * no session id, so every write below names it by its baton name.
+   */
+  addRecipeMember: (
+    crewId: string,
+    input: {
+      batonName: string
+      providerId: string
+      model: string | null
+      hostPolicy: string
+      role?: string | null
+      roleCard?: string | null
+      lanePolicy?: string | null
+      wipLimit?: number | null
+    },
+  ): Promise<SessionCrew> =>
+    window.electronAPI.crew.addRecipeMember(crewId, input),
+
+  setMemberSeat: (
+    crewId: string,
+    member: CrewMemberRef,
+    patch: {
+      role?: string | null
+      kind?: string | null
+      roleCard?: string | null
+      hostPolicy?: string | null
+      lanePolicy?: string | null
+      wipLimit?: number | null
+    },
+  ): Promise<SessionCrew> =>
+    window.electronAPI.crew.setMemberSeat(crewId, member, patch),
   setMemberBatonName: (
     crewId: string,
-    sessionId: string,
+    member: CrewMemberRef,
     batonName: string | null,
   ): Promise<SessionCrew> =>
-    window.electronAPI.crew.setMemberBatonName(crewId, sessionId, batonName),
+    window.electronAPI.crew.setMemberBatonName(crewId, member, batonName),
 
   /**
    * Remembers where a card was dropped, or puts it back under the automatic

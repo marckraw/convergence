@@ -1,3 +1,4 @@
+import { DEFAULT_CREW_MEMBER_SEAT } from './crew.types'
 import { describe, expect, it } from 'vitest'
 import { readCrewConfig } from './crew-config.pure'
 import {
@@ -171,6 +172,7 @@ it('reconciles wires and limits while listing local-only records as kept (mutati
   copy.relays = copy.relays.slice(0, -1)
   copy.crews[0]!.roundCap = 12
   copy.crews[0]!.members.push({
+    ...DEFAULT_CREW_MEMBER_SEAT,
     sessionId: 'kept',
     batonName: 'local-only',
     canvasX: null,
@@ -859,6 +861,7 @@ describe('the create role offers the member that holds its baton (MAR-2918)', ()
       name: '-- Second Fable --',
     })
     crew.members.push({
+      ...DEFAULT_CREW_MEMBER_SEAT,
       sessionId: 'session-9',
       batonName: 'fable',
       canvasX: null,

@@ -7,6 +7,7 @@ import { readGitOriginUrlAsync } from '../git/git-origin'
 import { parseSessionPermissionConfig } from '../provider/session-permissions.pure'
 import {
   crewToConfig,
+  uncarriedRecipeNotes,
   renderCrewYaml,
   crewHomeCandidates,
   crewExportSlug,
@@ -113,6 +114,7 @@ export class CrewExportService {
         relays,
         options,
       ),
+      uncarriedRecipeNotes(crew.members, relays),
     )
     // Keep the default recipe directory's symlink refusal. Other destinations
     // are explicitly selected in the native dialog; validate their parent too.

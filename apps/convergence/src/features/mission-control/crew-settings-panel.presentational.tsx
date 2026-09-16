@@ -1,6 +1,11 @@
 import type { FC } from 'react'
 import { X, Trash2 } from 'lucide-react'
-import type { SessionCrewMember } from '@/entities/session-crew'
+import {
+  memberKey,
+  type CrewMemberRef,
+  type SeatDraftField,
+  type SessionCrewMember,
+} from '@/entities/session-crew'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { flowRunCeilingNote } from './crew-loop.pure'
@@ -41,17 +46,46 @@ interface CrewSettingsPanelProps {
    * here a lock would protect. What was missing was the sentence.
    */
   running: boolean
-  /** The refusal the baton-name door gave, and which member it was about. */
-  batonNameProblem: { sessionId: string; message: string } | null
+  /** The refusal a member's door gave, and which member it was about. */
+  batonNameProblem: { memberKey: string; message: string } | null
   /** What is being typed, per member, until they finish. */
   batonNameDrafts: Record<string, string>
+  /**
+   * What is being typed in a seat's free-text fields, per member and field
+   * (MAR-3083 lap 2, G). These fields cannot be uncontrolled: the container
+   * reloads every crew after any seat edit and on every `crew:updated`
+   * broadcast, so a value-derived `key` remounted the field mid-typing and
+   * editing one member wiped another's draft. Same shape as the baton name's
+   * drafts beside them.
+   */
+  seatDrafts: Record<string, Partial<Record<SeatDraftField, string>>>
+  /** The host a resident seat's conversation actually runs on, if known. */
+  resolveHost: (sessionId: string) => string | null
   onCrewNameChange: (name: string) => void
-  onBatonNameEdit: (sessionId: string, batonName: string) => void
+  onBatonNameEdit: (memberKey: string, batonName: string) => void
+  /** What a seat IS, one field at a time (MAR-3083 R6). */
+  onSeatEdit: (
+    member: CrewMemberRef,
+    patch: {
+      role?: string
+      kind?: string
+      roleCard?: string | null
+      hostPolicy?: string | null
+      lanePolicy?: string | null
+      wipLimit?: number | null
+    },
+  ) => void
+  onSeatDraftEdit: (
+    memberKey: string,
+    field: SeatDraftField,
+    value: string,
+  ) => void
+  onSeatDraftCommit: (member: CrewMemberRef, field: SeatDraftField) => void
   onBatonNameCommit: (sessionId: string) => void
   onDeliveryLimitChange: (limit: number | null) => void
   onAttentionMinutesChange: (minutes: number | null) => void
   onAddConversation: () => void
-  onRemoveMember: (sessionId: string) => void
+  onRemoveMember: (member: CrewMemberRef) => void
   onClose: () => void
 }
 
@@ -107,6 +141,11 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
   batonNameDrafts,
   onCrewNameChange,
   onBatonNameEdit,
+  onSeatEdit,
+  onSeatDraftEdit,
+  onSeatDraftCommit,
+  seatDrafts,
+  resolveHost,
   onBatonNameCommit,
   onDeliveryLimitChange,
   onAttentionMinutesChange,
@@ -177,54 +216,162 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
         </p>
       ) : (
         <ul className="flex flex-col gap-1">
-          {members.map((member) => (
-            <li key={member.sessionId} className="flex flex-col gap-0.5">
-              <div className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-[11px]">
-                  {resolveName(member.sessionId) ?? member.sessionId}
-                </span>
-                {/* Stored when the name is FINISHED — a blur or Enter — not on
+          {members.map((member) => {
+            // A recipe has no conversation, so it is named -- and addressed --
+            // by its baton name (MAR-3083 R3/C).
+            const key = memberKey(member)
+            const ref: CrewMemberRef = member.sessionId
+              ? { sessionId: member.sessionId }
+              : { batonName: member.batonName ?? '' }
+            const label =
+              (member.sessionId ? resolveName(member.sessionId) : null) ??
+              member.batonName ??
+              member.sessionId ??
+              'unnamed seat'
+            const residentHost = member.sessionId
+              ? resolveHost(member.sessionId)
+              : null
+            return (
+              <li key={key} className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate text-[11px]">
+                    {label}
+                  </span>
+                  {/* Stored when the name is FINISHED — a blur or Enter — not on
                     every keystroke: the door refuses a name ending in a
                     formatting mark, so a field that knocked per key made
                     `my_horse` untypeable. */}
-                <Input
-                  value={
-                    batonNameDrafts[member.sessionId] ?? member.batonName ?? ''
-                  }
-                  placeholder="unnamed"
-                  aria-label={`Baton name for ${resolveName(member.sessionId) ?? member.sessionId}`}
-                  disabled={busy}
-                  onChange={(event) =>
-                    onBatonNameEdit(member.sessionId, event.target.value)
-                  }
-                  onBlur={() => onBatonNameCommit(member.sessionId)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault()
-                      onBatonNameCommit(member.sessionId)
+                  <Input
+                    value={batonNameDrafts[key] ?? member.batonName ?? ''}
+                    placeholder="unnamed"
+                    aria-label={`Baton name for ${label}`}
+                    disabled={busy}
+                    onChange={(event) =>
+                      onBatonNameEdit(key, event.target.value)
                     }
-                  }}
-                  className="h-7 w-32 text-xs"
+                    onBlur={() => onBatonNameCommit(key)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        onBatonNameCommit(key)
+                      }
+                    }}
+                    className="h-7 w-32 text-xs"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Remove ${label} from this crew`}
+                    disabled={busy}
+                    onClick={() => onRemoveMember(ref)}
+                    className="size-6 shrink-0 p-0 text-muted-foreground hover:text-red-400"
+                  >
+                    <X className="size-3" />
+                  </Button>
+                </div>
+                {/* The seat, under the name that addresses it (R6). Selects
+                  commit on change; the typed fields keep a draft and commit
+                  on blur, so a broadcast cannot wipe what is being typed. */}
+                <div className="flex flex-wrap items-center gap-1 pl-1">
+                  <select
+                    aria-label={`Role for ${label}`}
+                    value={member.role}
+                    disabled={busy}
+                    onChange={(event) =>
+                      onSeatEdit(ref, { role: event.target.value })
+                    }
+                    className="h-6 rounded border border-border bg-transparent px-1 text-[11px]"
+                  >
+                    {['mastermind', 'horse', 'reviewer', 'designer'].map(
+                      (role) => (
+                        <option key={role} value={role}>
+                          {role}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                  {/* Not a choice: a seat is dynamic exactly when it has no
+                      conversation (MAR-3083 lap 3, J). Offering it hid a
+                      recipe from every read and freed its only name. */}
+                  <span
+                    aria-label={`Kind for ${label}`}
+                    className="h-6 rounded border border-border px-1 text-[11px] leading-6 text-muted-foreground"
+                  >
+                    {member.kind}
+                  </span>
+                  <select
+                    aria-label={`Lane for ${label}`}
+                    value={member.lanePolicy ?? ''}
+                    disabled={busy}
+                    onChange={(event) =>
+                      onSeatEdit(ref, {
+                        lanePolicy: event.target.value || null,
+                      })
+                    }
+                    className="h-6 rounded border border-border bg-transparent px-1 text-[11px]"
+                  >
+                    <option value="">lane: default</option>
+                    <option value="main">main</option>
+                    <option value="own-worktree">own-worktree</option>
+                  </select>
+                  {member.kind === 'dynamic' ? (
+                    <Input
+                      value={
+                        seatDrafts[key]?.hostPolicy ?? member.hostPolicy ?? ''
+                      }
+                      placeholder="host: local"
+                      aria-label={`Host for ${label}`}
+                      onChange={(event) =>
+                        onSeatDraftEdit(key, 'hostPolicy', event.target.value)
+                      }
+                      onBlur={() => onSeatDraftCommit(ref, 'hostPolicy')}
+                      className="h-6 w-24 text-[11px]"
+                    />
+                  ) : (
+                    // A resident seat works where its conversation runs: the
+                    // host is that session's, not a second field that could
+                    // disagree with it.
+                    <span
+                      aria-label={`Host for ${label}`}
+                      className="h-6 rounded border border-border px-1 text-[11px] leading-6 text-muted-foreground"
+                    >
+                      {residentHost ?? member.hostPolicy ?? 'local'}
+                    </span>
+                  )}
+                  <Input
+                    type="number"
+                    min={1}
+                    value={
+                      seatDrafts[key]?.wipLimit ?? String(member.wipLimit ?? 1)
+                    }
+                    aria-label={`WIP limit for ${label}`}
+                    onChange={(event) =>
+                      onSeatDraftEdit(key, 'wipLimit', event.target.value)
+                    }
+                    onBlur={() => onSeatDraftCommit(ref, 'wipLimit')}
+                    className="h-6 w-14 text-[11px]"
+                  />
+                </div>
+                <textarea
+                  value={seatDrafts[key]?.roleCard ?? member.roleCard ?? ''}
+                  placeholder="Role card — what this seat is told it is"
+                  aria-label={`Role card for ${label}`}
+                  rows={2}
+                  onChange={(event) =>
+                    onSeatDraftEdit(key, 'roleCard', event.target.value)
+                  }
+                  onBlur={() => onSeatDraftCommit(ref, 'roleCard')}
+                  className="ml-1 rounded border border-border bg-transparent p-1 text-[11px]"
                 />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label={`Remove ${resolveName(member.sessionId) ?? member.sessionId} from this crew`}
-                  disabled={busy}
-                  onClick={() => onRemoveMember(member.sessionId)}
-                  className="size-6 shrink-0 p-0 text-muted-foreground hover:text-red-400"
-                >
-                  <X className="size-3" />
-                </Button>
-              </div>
-              {batonNameProblem?.sessionId === member.sessionId ? (
-                <p className="pl-1 text-[10px] text-amber-400">
-                  {batonNameProblem.message}
-                </p>
-              ) : null}
-            </li>
-          ))}
+                {batonNameProblem?.memberKey === key ? (
+                  <p className="pl-1 text-[10px] text-amber-400">
+                    {batonNameProblem.message}
+                  </p>
+                ) : null}
+              </li>
+            )
+          })}
         </ul>
       )}
       <Button

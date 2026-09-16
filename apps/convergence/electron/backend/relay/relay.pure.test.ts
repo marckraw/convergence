@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applySeatToSpawnSpec,
   DEFAULT_SPAWN_NAME,
   MIN_FLOW_RUN_HOP_CEILING,
   MAX_RELAY_INSTRUCTION_LENGTH,
@@ -111,6 +112,7 @@ describe('normalizeRelaySpawnSpec', () => {
       model: 'gpt-5.6',
       effort: 'high',
       name: 'Reviewer',
+      member: null,
       providerAccountId: 'acct-1',
     })
   })
@@ -892,4 +894,52 @@ it('ignores a place on a local spawn (mutation: retain the local address)', () =
       },
     }).workAddress,
   ).toBeNull()
+})
+
+describe('a spawn spec with its seat applied (MAR-3083 R3)', () => {
+  const spec = normalizeRelaySpawnSpec({
+    executionHost: 'local',
+    providerId: 'codex',
+    model: 'gpt-5.6',
+    name: 'Errand',
+    member: 'errand',
+  })
+  const recipe = {
+    batonName: 'errand',
+    kind: 'dynamic' as const,
+    roleCard: 'You are an errand.',
+    hostPolicy: 'little-monster',
+    providerId: 'claude-code',
+    model: 'claude-opus-5',
+  }
+
+  it('takes what the seat IS and keeps what the firing owns', () => {
+    const applied = applySeatToSpawnSpec(spec, recipe)
+
+    expect(applied).toMatchObject({
+      providerId: 'claude-code',
+      model: 'claude-opus-5',
+      executionHost: 'little-monster',
+      roleCard: 'You are an errand.',
+      // The wire still names this errand and where it runs.
+      name: 'Errand',
+      member: 'errand',
+    })
+  })
+
+  it('lets a wire that states its own card keep it', () => {
+    const applied = applySeatToSpawnSpec(
+      { ...spec, roleCard: 'This errand only.' },
+      recipe,
+    )
+
+    expect(applied.roleCard).toBe('This errand only.')
+  })
+
+  it('leaves a resident seat, or no seat at all, exactly as stated', () => {
+    expect(applySeatToSpawnSpec(spec, { ...recipe, kind: 'resident' })).toEqual(
+      spec,
+    )
+    expect(applySeatToSpawnSpec(spec, null)).toEqual(spec)
+  })
 })
