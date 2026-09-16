@@ -774,10 +774,12 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   )
 
   /**
-   * A refusal is recorded with the value it refused and shown where its field
-   * is (lap 2, B2): a seat left by a switch is closed, so the refusal re-opens
-   * it. Every refusal that reaches here is fresh -- an unchanged refused value
-   * is never sent -- so the re-open cannot bounce.
+   * A refusal is recorded with the value it refused (lap 3, A) and never
+   * steals the open editor (MAR-3118 lap 4, A -- the stricter bound): it
+   * re-opens its seat only when no seat is open. When another seat is open --
+   * the blur of A's card is still in flight when B's row is pressed -- the
+   * closed row's marker is the whole answer, and opening that row shows the
+   * sentence.
    */
   const refuseSeatField = useCallback(
     (
@@ -787,7 +789,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       value: string | null,
     ) => {
       setSeatProblem(key, field, { message, value })
-      setOpenSeatKey(key)
+      setOpenSeatKey((open) => (open === null ? key : open))
     },
     [setSeatProblem],
   )
@@ -808,6 +810,9 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       // A recipe's name is the only way to reach it, so the form does not
       // offer clearing it (MAR-3083 lap 3, I): the draft stays where it was
       // typed and the door's own sentence appears under it.
+      // Through the same skip as every send (lap 4, A): an unchanged refused
+      // name -- the empty one included -- is not refused again on every leave.
+      if (isRefusedAsTyped(key, 'batonName', typed)) return
       if (member && member.sessionId === null && !typed.trim()) {
         refuseSeatField(
           key,
@@ -818,7 +823,6 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         return
       }
       if (!ref) return
-      if (isRefusedAsTyped(key, 'batonName', typed)) return
       const inFlight = `${key}\u0000batonName\u0000${typed}`
       if (committingDrafts.current.has(inFlight)) return
       committingDrafts.current.add(inFlight)
@@ -1012,8 +1016,23 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
           delete byKey[key]
           return { crewId: current.crewId, byKey }
         })
-        // ...and is not left open for a seat that comes back under its key.
+        // ...and is not left open for a seat that comes back under its key...
         setOpenSeatKey((open) => (open === key ? null : open))
+        // ...and takes its drafts with it (lap 4, B): the key is the
+        // conversation, so a re-added seat inherited the refused text and the
+        // next leave sent it with no refusal on record to skip it.
+        setSeatDrafts((drafts) => {
+          if (!(key in drafts)) return drafts
+          const next = { ...drafts }
+          delete next[key]
+          return next
+        })
+        setBatonNameDrafts((drafts) => {
+          if (!(key in drafts)) return drafts
+          const next = { ...drafts }
+          delete next[key]
+          return next
+        })
         await loadCrews()
       } catch {
         // Same as above.

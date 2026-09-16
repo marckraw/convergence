@@ -1774,10 +1774,12 @@ describe('MissionControl', () => {
     })
 
     /**
-     * A refusal is shown where its field is (lap 2, B2): the seat left by a
-     * switch is closed, so its refusal re-opens it.
+     * A refusal never steals the open editor (MAR-3118 lap 4, A -- the
+     * stricter bound on lap 2's B2): with another seat open, the refused
+     * seat's row marker is the whole answer and opening it shows the sentence;
+     * with nothing open, the refused seat re-opens.
      */
-    it('re-opens the seat whose card was refused after switching away, with the sentence and the typed card (mutation: drop the re-open)', async () => {
+    it('keeps the open seat open when a seat left behind is refused, and re-opens the refused seat only when nothing is open (mutation: re-open unconditionally)', async () => {
       const api = await openCrewSettings('Night shift', [
         {
           ...DEFAULT_CREW_MEMBER_SEAT,
@@ -1796,25 +1798,44 @@ describe('MissionControl', () => {
         },
       ])
       const refused = 'A role card cannot be longer than 4000 characters'
-      ;(api as unknown as { setMemberSeat: unknown }).setMemberSeat = vi.fn(
-        async () => {
-          throw new Error(refused)
-        },
-      )
+      const setMemberSeat = vi.fn(async () => {
+        throw new Error(refused)
+      })
+      ;(api as unknown as { setMemberSeat: unknown }).setMemberSeat =
+        setMemberSeat
       const typed = 'You are opus. '.repeat(400)
 
+      // B already open when A's refusal lands: B stays, A's row speaks.
       fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
       fireEvent.change(screen.getByLabelText('Role card for opus'), {
         target: { value: typed },
       })
       fireEvent.click(screen.getByRole('button', { name: /^grok — / }))
-
-      expect(await screen.findByText(refused)).toBeInTheDocument()
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /^opus — / }),
+        ).toHaveAccessibleName(/an edit was refused/),
+      )
+      // Mutation: re-open unconditionally -> Seat grok is gone, red.
       expect(
-        screen.getByRole('region', { name: 'Seat opus' }),
+        screen.getByRole('region', { name: 'Seat grok' }),
       ).toBeInTheDocument()
-      expect(screen.queryByRole('region', { name: 'Seat grok' })).toBeNull()
+      expect(screen.queryByRole('region', { name: 'Seat opus' })).toBeNull()
+      // Opening the row shows the sentence and the typed card.
+      fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
+      expect(screen.getByText(refused)).toBeInTheDocument()
       expect(screen.getByLabelText('Role card for opus')).toHaveValue(typed)
+
+      // Nothing open when a refusal lands: the refused seat re-opens.
+      fireEvent.change(screen.getByLabelText('Role card for opus'), {
+        target: { value: `${typed}!` },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Close opus' }))
+      await waitFor(() => expect(setMemberSeat).toHaveBeenCalledTimes(2))
+      expect(
+        await screen.findByRole('region', { name: 'Seat opus' }),
+      ).toBeInTheDocument()
+      expect(screen.getByText(refused)).toBeInTheDocument()
     })
 
     /**
@@ -1849,17 +1870,24 @@ describe('MissionControl', () => {
         setMemberSeat
       const typed = 'You are opus. '.repeat(400)
 
-      // Refused by leaving: the seat re-opens with the sentence (lap 2, B2).
+      // Refused by leaving to B: B stays open (lap 4, A); open A again and the
+      // sentence and the typed card are there.
       fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
       fireEvent.change(screen.getByLabelText('Role card for opus'), {
         target: { value: typed },
       })
       fireEvent.click(screen.getByRole('button', { name: /^grok — / }))
+      await waitFor(() => expect(setMemberSeat).toHaveBeenCalledTimes(1))
+      fireEvent.click(
+        await screen.findByRole('button', {
+          name: /^opus — .*an edit was refused/,
+        }),
+      )
       expect(await screen.findByText(refused)).toBeInTheDocument()
-      expect(setMemberSeat).toHaveBeenCalledTimes(1)
 
       // Leaving again with the same card: nothing is re-sent, B opens, A stays
-      // closed. Mutation: re-send the unchanged draft -> A re-opens, red.
+      // closed. Mutation: re-send the unchanged draft -> refused again, red on
+      // the call count.
       fireEvent.click(screen.getByRole('button', { name: /^grok — / }))
       await new Promise((resolve) => setTimeout(resolve, 20))
       expect(
@@ -1890,7 +1918,7 @@ describe('MissionControl', () => {
      * A refusal does not outlive its seat (lap 3, B): remove the seat, add
      * the conversation back, and nothing is said about the seat it was.
      */
-    it('forgets a seat’s refusal when the seat is removed (mutation: drop the clear on remove)', async () => {
+    it('forgets a seat’s refusal and its drafts when the seat is removed (mutations: drop the clear on remove; keep the drafts)', async () => {
       const seatA = {
         ...DEFAULT_CREW_MEMBER_SEAT,
         sessionId: 'a',
@@ -1963,6 +1991,10 @@ describe('MissionControl', () => {
       expect(row).not.toHaveAccessibleName(/an edit was refused/)
       fireEvent.click(row)
       expect(screen.queryByText(refused)).toBeNull()
+      // The removed seat took its drafts too (lap 4, B): the re-added seat
+      // shows the record's WIP, not the refused 0. Mutation: keep the drafts
+      // on removal -> 0, red.
+      expect(screen.getByLabelText('WIP limit for opus')).toHaveValue(1)
     })
 
     it('keeps a trailing space while renaming inline (mutation: control by crew.name)', async () => {

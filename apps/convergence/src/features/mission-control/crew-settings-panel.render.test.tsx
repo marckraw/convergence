@@ -729,6 +729,29 @@ describe('MAR-3118 lap 2 — E: the WIP stepper steps from what the field shows'
   })
 })
 
+describe('MAR-3118 lap 4 — C: the refusal marker is drawn on the closed row', () => {
+  it('shows the amber marker on a closed seat with a standing refusal, and none without', () => {
+    const { rerender, props } = renderPanel(null, null, [opus], vi.fn(), {
+      ...seatCtx,
+      problem: {
+        memberKey: 's1',
+        message: 'A role card cannot be longer than 4000 characters',
+        field: 'roleCard',
+      },
+    })
+    const row = screen.getByRole('button', { name: /^opus — / })
+    // Mutation: drop the span -> null, red.
+    expect(row.querySelector('[data-seat-refused]')).toHaveTextContent('!')
+
+    rerender(<CrewSettingsPanel {...props} seatProblems={{}} />)
+    expect(
+      screen
+        .getByRole('button', { name: /^opus — / })
+        .querySelector('[data-seat-refused]'),
+    ).toBeNull()
+  })
+})
+
 describe('MAR-3118 lap 3 — C1: the stepper keeps focus in the field', () => {
   it('prevents the default of a mouse-down on both stepper buttons, so the field does not blur into a second write', () => {
     renderPanel(null, null, [{ ...opus, wipLimit: 3 }], vi.fn(), {
