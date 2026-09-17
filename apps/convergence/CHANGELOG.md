@@ -1,5 +1,16 @@
 # convergence
 
+## 0.62.0
+
+### Minor Changes
+
+- 8058078: Crew settings show each seat on one line — name, source, host, lane, WIP and whether it has a role card — with one editor open at a time, the role card front and centre, facts as text and policy as controls, and every refusal under the field it refuses.
+
+### Patch Changes
+
+- 48177a8: A send the provider already accepted is never reported as failed because the local record could not be written; the loss is noted on the conversation instead. After a restart, an input that was mid-delivery says it may already have reached the provider, so you can check the conversation before sending it again.
+- a8849d1: New workspaces receive the project's env files from every app folder, not only the repository root.
+
 ## 0.61.0
 
 ### Minor Changes
