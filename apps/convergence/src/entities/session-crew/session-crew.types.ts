@@ -1,3 +1,5 @@
+import type { TrackerBinding } from '@/shared/types/tracker.types'
+
 /**
  * A crew is a named, decorated, cross-project collection of sessions.
  * Membership is many-to-many and promises membership only — no automation.
@@ -85,6 +87,12 @@ export interface SessionCrew {
   stallMinutes: number | null
   /** Last successful export destination; absent on older snapshots. */
   lastExportPath?: string | null
+  /**
+   * The tracker this crew reads, or null when unbound (MAR-3084). Optional
+   * because a snapshot from before the binding existed carries none, and
+   * that reads as unbound.
+   */
+  trackerBinding?: TrackerBinding | null
   createdAt: string
   updatedAt: string
   sessionIds: string[]

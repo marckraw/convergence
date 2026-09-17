@@ -132,6 +132,15 @@ import { RelayService } from '../backend/relay/relay.service'
 import { RelayEngine } from '../backend/relay/relay.engine'
 import { CrewHailService } from '../backend/relay/crew-hail.service'
 import { startRelayStallClock } from './relay-stall-clock'
+import { WorkLedgerService } from '../backend/work-ledger/work-ledger.service'
+import {
+  broadcastWorkLedger,
+  registerWorkLedgerIpcHandlers,
+} from '../backend/work-ledger/work-ledger.ipc'
+import { TrackerCredentialsService } from '../backend/credentials/tracker-credentials.service'
+import { TrackerWatcherService } from '../backend/tracker/tracker-watcher.service'
+import { createLinearTrackerAdapter } from '../backend/tracker/linear-tracker.adapter'
+import { registerTrackerIpcHandlers } from '../backend/tracker/tracker.ipc'
 import {
   broadcastCrewHails,
   registerCrewHailIpcHandlers,
@@ -733,7 +742,13 @@ async function startApp(): Promise<void> {
       console.warn('Provider account health check failed')
     })
   registerFeedbackIpcHandlers(feedbackService)
-  registerCrewIpcHandlers({ service: crewService })
+  // Built before the crew doors: deleting a crew forgets its tracker key
+  // (MAR-3084 lap 2, C).
+  const trackerCredentials = new TrackerCredentialsService()
+  registerCrewIpcHandlers({
+    service: crewService,
+    forgetTrackerKey: (crewId) => trackerCredentials.deleteKey(crewId),
+  })
   registerCrewExportIpc(new CrewExportService(db), crewService)
   registerCrewImportIpc(
     new CrewImportService(db, sessionService, crewService, relayService),
@@ -812,6 +827,26 @@ async function startApp(): Promise<void> {
   // time or not at all. Its own module so the timer is testable rather than an
   // untested `setInterval` in the bootstrap.
   startRelayStallClock(relayEngine)
+
+  // The label watcher (MAR-3084): reads each bound crew's tracker once a
+  // minute and appends what changed to the work ledger. Read-only toward the
+  // tracker; the key stays in the Keychain and only the main process reads it.
+  const trackerWatcher = new TrackerWatcherService({
+    crews: crewService,
+    ledger: new WorkLedgerService(db),
+    resolveKey: (crewId) => trackerCredentials.resolveKey(crewId),
+    createAdapter: (input) => createLinearTrackerAdapter(input),
+    broadcast: broadcastWorkLedger,
+  })
+  registerTrackerIpcHandlers({
+    credentials: trackerCredentials,
+    probe: (crewId) => trackerWatcher.probe(crewId),
+    crewExists: (crewId) => crewService.getById(crewId) !== null,
+  })
+  registerWorkLedgerIpcHandlers({
+    snapshot: (crewId) => trackerWatcher.snapshot(crewId),
+  })
+  trackerWatcher.start()
 
   registerIpcHandlers(
     projectService,

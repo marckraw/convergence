@@ -59,8 +59,60 @@ describe('crew IPC', () => {
       'crew:setMemberBatonName',
       'crew:setMemberPosition',
       'crew:setMemberSeat',
+      'crew:setTrackerBinding',
       'crew:update',
     ])
+  })
+
+  it('MAR-3084 lap 2, C: deleting a crew forgets its tracker key once', async () => {
+    const forgetTrackerKey = vi.fn(async () => 'absent')
+    electronMocks.handlers.clear()
+    registerCrewIpcHandlers({
+      service: new CrewService(getDatabase()),
+      broadcast,
+      forgetTrackerKey,
+    })
+    const created = invoke<SessionCrew>('crew:create', { name: 'Convoy' })
+
+    await invoke<Promise<void>>('crew:delete', created.id)
+
+    // Mutation: drop the call -> never called, red.
+    expect(forgetTrackerKey).toHaveBeenCalledTimes(1)
+    expect(forgetTrackerKey).toHaveBeenCalledWith(created.id)
+  })
+
+  it('MAR-3084 lap 2, C: a Keychain failure is logged and never fails the delete', async () => {
+    const log = vi.fn()
+    const service = new CrewService(getDatabase())
+    electronMocks.handlers.clear()
+    registerCrewIpcHandlers({
+      service,
+      broadcast,
+      forgetTrackerKey: async () => {
+        throw new Error('keychain locked')
+      },
+      log,
+    })
+    const created = invoke<SessionCrew>('crew:create', { name: 'Convoy' })
+
+    await expect(
+      invoke<Promise<void>>('crew:delete', created.id),
+    ).resolves.toBeUndefined()
+    expect(service.getById(created.id)).toBeNull()
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining(created.id),
+      expect.objectContaining({ message: 'keychain locked' }),
+    )
+  })
+
+  it('MAR-3084: setting a tracker binding rides the roster broadcast', () => {
+    const created = invoke<SessionCrew>('crew:create', { name: 'Convoy' })
+    const bound = invoke<SessionCrew>('crew:setTrackerBinding', created.id, {
+      projectId: 'project-1',
+    })
+    expect(broadcast).toHaveBeenCalledTimes(2)
+    expect(broadcast.mock.calls[1]?.[0]).toEqual([bound])
+    expect(bound.trackerBinding?.projectId).toBe('project-1')
   })
 
   it('broadcasts the full roster after every mutation but not on reads', () => {

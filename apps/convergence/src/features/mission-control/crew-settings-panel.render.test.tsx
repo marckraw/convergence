@@ -799,3 +799,18 @@ describe('MAR-3118 lap 2 — F1: one set of add actions', () => {
     expect(screen.queryAllByRole('menuitem')).toEqual([])
   })
 })
+
+describe('MAR-3084: the tracker lives inside the crew details, never above the seats', () => {
+  it('renders the tracker section inside the details disclosure', () => {
+    const { rerender, props } = renderPanel(null)
+    rerender(
+      <CrewSettingsPanel
+        {...props}
+        trackerSection={<section aria-label="Tracker">tracker form</section>}
+      />,
+    )
+    const details = document.querySelector('details[data-crew-details]')
+    const tracker = screen.getByRole('region', { name: 'Tracker' })
+    expect(details?.contains(tracker)).toBe(true)
+  })
+})

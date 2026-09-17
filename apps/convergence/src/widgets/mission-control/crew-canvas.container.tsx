@@ -51,6 +51,7 @@ import {
   isValidCrewName,
   ConnectionInspector,
   CrewSettingsPanel,
+  TrackerBindingFormContainer,
   DEFAULT_CREW_ROUND_CAP,
   DEFAULT_CREW_STALL_MINUTES,
   GLOBAL_PROJECT_OPTION_ID,
@@ -1880,6 +1881,9 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         {panel.kind === 'crew-settings' ? (
           <div className="w-[340px] shrink-0">
             <CrewSettingsPanel
+              trackerSection={
+                <TrackerBindingFormContainer key={crew.id} crew={crew} />
+              }
               memberCount={crew.sessionIds.length}
               includePositions={includePositions}
               exporting={exporting}

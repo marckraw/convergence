@@ -5,6 +5,7 @@ import type {
   CrewMemberRef,
   UpdateCrewSeatInput,
 } from './crew.service'
+import type { TrackerBindingInput } from '../tracker/tracker-binding.pure'
 import type {
   CreateSessionCrewInput,
   SessionCrew,
@@ -31,6 +32,13 @@ export const broadcastCrews: CrewBroadcastFn = (crews) => {
 export function registerCrewIpcHandlers(deps: {
   service: CrewService
   broadcast?: CrewBroadcastFn
+  /**
+   * Forgets a deleted crew's tracker key (MAR-3084 lap 2, C). A secret must
+   * not outlive its owner, and the deleted crew's form was the only surface
+   * that could remove it.
+   */
+  forgetTrackerKey?: (crewId: string) => Promise<unknown>
+  log?: (message: string, error: unknown) => void
 }): void {
   const { service } = deps
   const broadcast = deps.broadcast ?? broadcastCrews
@@ -53,9 +61,29 @@ export function registerCrewIpcHandlers(deps: {
       mutate(() => service.update(id, patch)),
   )
 
-  ipcMain.handle('crew:delete', (_event, id: string) => {
+  // Deleting a crew forgets its tracker key, best-effort: a Keychain failure
+  // is logged and never fails the delete, which has already happened. The
+  // crew's work-ledger rows stay -- they are append-only history.
+  ipcMain.handle('crew:delete', async (_event, id: string) => {
     mutate(() => service.delete(id))
+    if (!deps.forgetTrackerKey) return
+    try {
+      await deps.forgetTrackerKey(id)
+    } catch (error) {
+      ;(deps.log ?? ((message, cause) => console.error(message, cause)))(
+        `[crew] Could not forget the tracker key of deleted crew ${id}`,
+        error,
+      )
+    }
   })
+
+  // The tracker this crew reads (MAR-3084 R3). A mutation like every other
+  // here, so a second window never holds a stale binding.
+  ipcMain.handle(
+    'crew:setTrackerBinding',
+    (_event, crewId: string, binding: TrackerBindingInput | null) =>
+      mutate(() => service.setTrackerBinding(crewId, binding)),
+  )
 
   // What a seat IS (MAR-3083 R1/R6): its own door, like the baton name's.
   // Every member-scoped write names the member the same way, so a recipe --

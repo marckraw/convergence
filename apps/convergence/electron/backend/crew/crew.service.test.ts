@@ -601,3 +601,45 @@ describe('CrewService', () => {
     expect(service.list().map((entry) => entry.id)).toEqual([crew.id])
   })
 })
+
+describe('MAR-3084 R3: a crew carries its tracker binding and nothing secret', () => {
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+  })
+
+  it('binds with defaults, round-trips, and unbinds with null', () => {
+    const service = new CrewService(getDatabase())
+    const crew = service.create({ name: 'Loom' })
+    expect(crew.trackerBinding).toBeNull()
+
+    const bound = service.setTrackerBinding(crew.id, {
+      projectId: 'project-1',
+      wavePrefix: 'batch:',
+      statusMap: { Doing: 'in-progress' },
+    })
+    expect(bound.trackerBinding).toEqual({
+      kind: 'linear',
+      projectId: 'project-1',
+      labelPrefix: 'horse:',
+      wavePrefix: 'batch:',
+      statusMap: { Doing: 'in-progress' },
+    })
+    expect(service.getById(crew.id)!.trackerBinding).toEqual(
+      bound.trackerBinding,
+    )
+    expect(service.setTrackerBinding(crew.id, null).trackerBinding).toBeNull()
+  })
+
+  it('refuses a binding without a project and leaves the crew as it was', () => {
+    const service = new CrewService(getDatabase())
+    const crew = service.create({ name: 'Loom' })
+    service.setTrackerBinding(crew.id, { projectId: 'project-1' })
+    expect(() => service.setTrackerBinding(crew.id, { projectId: '' })).toThrow(
+      'project id',
+    )
+    expect(service.getById(crew.id)!.trackerBinding?.projectId).toBe(
+      'project-1',
+    )
+  })
+})

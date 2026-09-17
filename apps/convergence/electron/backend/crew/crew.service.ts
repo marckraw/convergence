@@ -28,6 +28,10 @@ import {
   type SessionCrewMemberRole,
   type UpdateSessionCrewInput,
 } from './crew.types'
+import {
+  normalizeTrackerBinding,
+  type TrackerBindingInput,
+} from '../tracker/tracker-binding.pure'
 
 /**
  * How a caller names one member (MAR-3083 lap 2, C).
@@ -264,6 +268,40 @@ export class CrewService {
       .run(name, emoji, accentColor, position, roundCap, stallMinutes, id)
 
     return this.requireById(id)
+  }
+
+  /**
+   * Binds this crew to a tracker, or unbinds it with null (MAR-3084 R3). The
+   * binding carries no secret; the key is set through the tracker credentials
+   * door, filed under this crew's id.
+   */
+  setTrackerBinding(
+    crewId: string,
+    binding: TrackerBindingInput | null,
+  ): SessionCrew {
+    this.requireRow(crewId)
+    const normalized =
+      binding === null ? null : normalizeTrackerBinding(binding)
+    this.db
+      .prepare(
+        `UPDATE session_crews
+         SET tracker_kind = ?,
+             tracker_project_id = ?,
+             tracker_label_prefix = ?,
+             tracker_wave_prefix = ?,
+             tracker_status_map_json = ?,
+             updated_at = datetime('now')
+         WHERE id = ?`,
+      )
+      .run(
+        normalized?.kind ?? null,
+        normalized?.projectId ?? null,
+        normalized?.labelPrefix ?? null,
+        normalized?.wavePrefix ?? null,
+        normalized ? JSON.stringify(normalized.statusMap) : null,
+        crewId,
+      )
+    return this.requireById(crewId)
   }
 
   /** The stamp records an applied recipe hash, not success of later guarded model changes. */
