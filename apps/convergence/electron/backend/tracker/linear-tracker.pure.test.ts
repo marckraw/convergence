@@ -4,6 +4,7 @@ import {
   classifyLinearReply,
   LINEAR_LABELED_ISSUES_QUERY,
   linearLabeledIssuesRequest,
+  linearRetryAt,
   parseLinearIssuesPage,
 } from './linear-tracker.pure'
 import { DEFAULT_TRACKER_STATUS_MAP } from './tracker-binding.pure'
@@ -195,6 +196,53 @@ describe('MAR-3084 R2: a reply is a page or a typed refusal', () => {
         body: RECORDED_TWO_ISSUE_PAGE,
         now,
       }),
+    ).toBeNull()
+  })
+})
+
+describe('MAR-3084 lap 2, D: when a rate-limited reply says requests resume', () => {
+  // Fable's integration tests: `linearRetryAt` had no direct test, and the
+  // watcher's default backoff depends on its `null`.
+  const NOW = new Date('2026-09-17T08:00:00.000Z')
+  const headers = (values: Record<string, string>) => ({
+    get: (name: string) => values[name] ?? null,
+  })
+
+  it('answers null when the reply carries no reset at all', () => {
+    expect(linearRetryAt(headers({}), NOW)).toBeNull()
+  })
+
+  it('reads Retry-After as seconds from now', () => {
+    expect(linearRetryAt(headers({ 'retry-after': '30' }), NOW)).toBe(
+      '2026-09-17T08:00:30.000Z',
+    )
+  })
+
+  it('reads a future X-RateLimit-Requests-Reset as an epoch in milliseconds', () => {
+    const at = NOW.getTime() + 90_000
+    expect(
+      linearRetryAt(headers({ 'x-ratelimit-requests-reset': String(at) }), NOW),
+    ).toBe('2026-09-17T08:01:30.000Z')
+  })
+
+  it('drops a reset that is already past, so the default backoff applies', () => {
+    // Mutation: trust a past reset -> a time before now, and the next tick
+    // polls straight through the limit.
+    const past = NOW.getTime() - 60_000
+    expect(
+      linearRetryAt(
+        headers({ 'x-ratelimit-requests-reset': String(past) }),
+        NOW,
+      ),
+    ).toBeNull()
+  })
+
+  it('ignores a Retry-After that is not a number of seconds', () => {
+    expect(
+      linearRetryAt(
+        headers({ 'retry-after': 'Wed, 17 Sep 2026 09:00:00 GMT' }),
+        NOW,
+      ),
     ).toBeNull()
   })
 })

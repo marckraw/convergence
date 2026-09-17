@@ -152,6 +152,33 @@ describe('MAR-3084 R5: state comes from the record', () => {
     ).toEqual([])
   })
 
+  it('lap 2, E: an issue let go for an unmapped status comes back as one working row', () => {
+    // Fable's integration test. Canceled, then re-opened: the `unassigned` row
+    // is not the end of the issue -- the next mapped status appends one row,
+    // and the lap it carried is kept (only a return turns a lap over).
+    const working = recorded(issue('in-progress'))
+    const [letGo] = diffTrackerSnapshot({
+      crewId: 'crew-1',
+      current: [working],
+      issues: [issue('other', { status: 'Canceled' })],
+      seenAt: SEEN,
+    })
+
+    // Mutation: skip an issue whose current row is `unassigned` -> zero rows.
+    const rows = diffTrackerSnapshot({
+      crewId: 'crew-1',
+      current: [{ id: 'row-2', ...letGo! }],
+      issues: [issue('in-progress')],
+      seenAt: '2026-09-17T08:05:00.000Z',
+    })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      state: 'working',
+      seat: 'opus',
+      lap: working.lap,
+    })
+  })
+
   it.each([
     ['no prior row', () => [] as WorkLedgerRecord[]],
     ['a done row', () => [recorded(issue('done'))]],
