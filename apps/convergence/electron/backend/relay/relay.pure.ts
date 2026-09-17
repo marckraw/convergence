@@ -622,6 +622,8 @@ export type VerdictDeclaration =
       lap: number
       /** The issue the line named, or null to be inferred from the seat. */
       issueIdentifier: string | null
+      /** The line as written, so a hail can quote it (lap 2, D). */
+      line: string
     }
   | { kind: 'malformed'; line: string }
 
@@ -679,6 +681,7 @@ export function readEmittedVerdict(message: string): VerdictDeclaration {
       ruling: match[1].toUpperCase() as 'PASS' | 'RETURN' | 'STOP',
       lap: Number(match[2]),
       issueIdentifier: match[4] ? match[4].toUpperCase() : null,
+      line,
     }
   }
   return /^VERDICT/i.test(line) ? { kind: 'malformed', line } : { kind: 'none' }

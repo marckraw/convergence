@@ -310,17 +310,6 @@ export class RelayService {
   }
 
   /**
-   * Newest first, because a trail is read from the top.
-   *
-   * `beforeHopId` names the oldest row the caller already holds and asks for
-   * what comes after it. The cursor is a hop id rather than an offset because
-   * a trail grows at the head while it is being read: paging by offset would
-   * show the same row twice the moment a wire fires mid-read. The order is
-   * `(fired_at, rowid)` descending -- the clock alone is not total, since a
-   * settle fires every wire leaving a session inside the same millisecond, and
-   * the ledger's own insertion order is the only tie-break that reads right.
-   */
-  /**
    * Which station a dispatch landed in, and whose crew's wire carried it
    * (MAR-3085 R2): the trail from the settle's consumed receipts back to the
    * seat that is answering. A read, like every other question here.
@@ -351,6 +340,17 @@ export class RelayService {
     )
   }
 
+  /**
+   * Newest first, because a trail is read from the top.
+   *
+   * `beforeHopId` names the oldest row the caller already holds and asks for
+   * what comes after it. The cursor is a hop id rather than an offset because
+   * a trail grows at the head while it is being read: paging by offset would
+   * show the same row twice the moment a wire fires mid-read. The order is
+   * `(fired_at, rowid)` descending -- the clock alone is not total, since a
+   * settle fires every wire leaving a session inside the same millisecond, and
+   * the ledger's own insertion order is the only tie-break that reads right.
+   */
   listHops(
     crewId: string,
     limit = 50,

@@ -55,16 +55,12 @@ export function useWaveBoard(): WaveBoard {
     () => (boundKey ? boundKey.split('\n') : []),
     [boundKey],
   )
-  // Name and cap together (MAR-3085 R7): a row says `lap 2 of 6`, and the
-  // cap is the crew's own knob rather than anything on the ledger row.
+  // The crew's name, and no cap (MAR-3085 lap 2, E): `roundCap` is a HOP
+  // budget for one crew's flow run, while a lap is per issue across runs.
+  // Showing it as `lap 3 of 12` would put a bound on screen that the machine
+  // does not enforce in that unit. A true lap cap rides MAR-3149.
   const crewFacts = useMemo(
-    () =>
-      new Map(
-        crews.map((crew) => [
-          crew.id,
-          { name: crew.name, cap: crew.roundCap ?? null },
-        ]),
-      ),
+    () => new Map(crews.map((crew) => [crew.id, { name: crew.name }])),
     [crews],
   )
 
@@ -94,7 +90,7 @@ export function useWaveBoard(): WaveBoard {
     () =>
       sectionWaveRows(rows, now, (crewId) => ({
         name: several ? (crewFacts.get(crewId)?.name ?? crewId) : null,
-        cap: crewFacts.get(crewId)?.cap ?? null,
+        cap: null,
       })),
     [rows, now, several, crewFacts],
   )

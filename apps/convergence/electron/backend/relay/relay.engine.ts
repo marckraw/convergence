@@ -43,7 +43,7 @@ import type { CrewHail, RaiseCrewHailInput } from './crew-hail.types'
 import type {
   WorkLedgerRecord,
   WorkLedgerVerdict,
-} from '../work-ledger/work-ledger.types'
+} from '../../../src/shared/types/tracker.types'
 import type { RelayService } from './relay.service'
 import type {
   RelayHop,
@@ -573,6 +573,31 @@ export class RelayEngine {
     message: string | null,
     settleId: string,
   ): void {
+    try {
+      this.readVerdict(event, message, settleId)
+    } catch (error) {
+      // The verdict is its own act (lap 2, B): a refused ledger write or a
+      // refused hail must not cost the baton its delivery. The wire loop runs
+      // after this, and a settle that could not record a ruling still carries
+      // the work on.
+      console.error(
+        `[relay] verdict not recorded for ${event.sessionId}`,
+        error,
+      )
+    }
+  }
+
+  private readVerdict(
+    event: SessionSettledEvent,
+    message: string | null,
+    settleId: string,
+  ): void {
+    // Only a settle the wires would carry declares anything (lap 2, C): a
+    // failed or muted turn leaves the session's last COMPLETED assistant
+    // message in place, and reading that would record yesterday's ruling
+    // again -- a duplicate row on the identifier path, a false hail on the
+    // seat path, once per failed turn.
+    if (event.status !== 'completed' || event.relaysMuted) return
     const declaration = readEmittedVerdict(message ?? '')
     if (declaration.kind === 'none') return
     const crewIds = this.crews.crewIdsForSession(event.sessionId)
@@ -585,9 +610,10 @@ export class RelayEngine {
     if (!this.ledger) return
 
     const bound = this.bindVerdict(event, crewIds, declaration.issueIdentifier)
-    const line = `VERDICT: ${declaration.ruling} · lap ${declaration.lap}`
     if (bound.kind !== 'bound') {
-      this.hailVerdict(event, crewIds, line, bound.problem)
+      // The source line, never a reconstruction (lap 2, D): a hail that quotes
+      // a line the mastermind did not write sends them looking for it.
+      this.hailVerdict(event, crewIds, declaration.line, bound.problem)
       return
     }
     this.ledger.appendVerdict({

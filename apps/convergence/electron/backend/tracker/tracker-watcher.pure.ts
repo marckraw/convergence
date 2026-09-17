@@ -68,12 +68,20 @@ function nextLap(
 
 /**
  * Whether the tracker still reports the status a ruling superseded
- * (MAR-3085 R4): the hold.
+ * (MAR-3085 R4, amended lap 2): the hold, and only while the lag lasts.
  *
  * A verdict row is a fact the app wrote AHEAD of the tracker -- the
  * mastermind moves the status by hand, and until it does, the tracker keeps
  * saying what it said before the ruling. Reading that lag as a change is how
  * a PASS would be reverted to `returned` within the minute.
+ *
+ * The hold ENDS the moment the tracker moves, and the move writes its own
+ * confirmation row (same state, no verdict, the tracker's new word). Holding
+ * silently instead -- treating the catch-up as "no change" -- left the verdict
+ * row current with a stale `trackerStatus` forever, so the next real return
+ * to that status read as the same lag and was held too: a RETURN worked
+ * exactly once per issue. A fact the ledger does not record is a fact it
+ * cannot use later.
  */
 function verdictHoldsAgainst(
   previous: WorkLedgerRecord,
@@ -90,12 +98,7 @@ function sameObservation(
     previous.state === next.state &&
     previous.seat === next.seat &&
     previous.wave === next.wave &&
-    // A verdict row carries the status the tracker reported BEFORE the
-    // ruling, so once the tracker catches up the two disagree about the word
-    // while agreeing about the state: the confirmation is not a change
-    // (MAR-3085 R4).
-    (previous.verdict !== null ||
-      previous.trackerStatus === next.trackerStatus) &&
+    previous.trackerStatus === next.trackerStatus &&
     previous.issueIdentifier === next.issueIdentifier &&
     previous.issueTitle === next.issueTitle &&
     previous.issueUrl === next.issueUrl &&

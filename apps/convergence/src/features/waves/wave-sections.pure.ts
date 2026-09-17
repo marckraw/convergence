@@ -78,19 +78,20 @@ export function waveRowHostMarker(
   return age === null ? 'host unreachable' : `host unreachable since ${age}`
 }
 
-/**
- * The rows into the four sections (R1): a pure function of the rows.
- *
- * *Waiting on you* is `reviewed` (`blocked` rides MAR-3138); *In the wave* is
- * `working` and `returned`; *Waiting to start* is `assigned`; *Waves* groups
- * every row by its wave, unwaved rows last. `done` and `unassigned` appear in
- * *Waves* only.
- */
 /** How a row says which lap it is on (MAR-3085 R7). */
 export function waveLapLabel(lap: number, cap: number | null): string {
   return cap === null ? `lap ${lap}` : `lap ${lap} of ${cap}`
 }
 
+/**
+ * The rows into the four sections (R1): a pure function of the rows.
+ *
+ * *Waiting on you* is `reviewed` (`blocked` rides MAR-3138); *In the wave* is
+ * `working`, `returned` and `stopped` (MAR-3085: a parked lap is still work
+ * somebody picks up); *Waiting to start* is `assigned`; *Waves* groups every
+ * row by its wave, unwaved rows last. `done` and `unassigned` appear in
+ * *Waves* only.
+ */
 export function sectionWaveRows(
   rows: readonly WorkLedgerEntry[],
   now: number,

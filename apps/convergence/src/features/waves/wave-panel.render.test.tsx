@@ -416,6 +416,35 @@ describe('MAR-3097: through the containers and the real stores', () => {
     ).toBeGreaterThan(0)
     expect(screen.getByText('2 issues · 0 waiting on you')).toBeTruthy()
   })
+
+  it('lap 2, E: the board passes no cap, so a row reads the lap alone', async () => {
+    // Through the container and the crew store: `roundCap` is a hop budget
+    // for a flow run, not a lap cap, so it must not reach the row (MAR-3149).
+    crews = [{ ...boundCrew('crew-1', 'Loom'), roundCap: 12 }]
+    snapshots = {
+      'crew-1': {
+        crewId: 'crew-1',
+        entries: [
+          ledgerEntry({
+            issueIdentifier: 'EX-9',
+            state: 'working',
+            lap: 3,
+            verdict: 'return',
+          }),
+        ],
+        trackerHealth: health('ok'),
+      },
+    }
+
+    await act(async () => {
+      render(<WavesTab />)
+    })
+    await screen.findByLabelText('Waves')
+
+    // Mutation: pass the crew's `roundCap` -> "lap 3 of 12", red.
+    expect(rowOf('crew-1:EX-9').getByText(/lap 3 ·/)).toBeTruthy()
+    expect(document.body.textContent).not.toContain('of 12')
+  })
 })
 
 describe('MAR-3085 R7: the row reads the lap, the cap and the ruling', () => {

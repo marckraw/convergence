@@ -4029,6 +4029,92 @@ describe('RelayEngine', () => {
       expect(gateway.sent.map((turn) => turn.sessionId)).toEqual(['s2'])
     })
 
+    it('lap 2, B: a refused ledger write costs the ruling, never the baton', async () => {
+      returnedRow('MAR-1')
+      const dispatchId = opusAnswered()
+      wire('s1', 's2')
+      const gateway = createGateway({
+        lastMessages: { s1: 'VERDICT: RETURN · lap 2\n\nBATON: opus' },
+      })
+      const logged: unknown[] = []
+      const spy = vi
+        .spyOn(console, 'error')
+        .mockImplementation((...args: unknown[]) => {
+          logged.push(args.map((arg) => String(arg)).join(' '))
+        })
+
+      const engine = new RelayEngine({
+        relays,
+        sessions: gateway,
+        crews: crewGateway(),
+        hails,
+        ledger: {
+          currentView: (crewId) => ledger.currentView(crewId),
+          appendVerdict: () => {
+            throw new Error('ledger refused')
+          },
+        },
+        accounts: {
+          listByProvider: (providerId) => accountsByProvider[providerId] ?? [],
+        },
+        onHopAppended: (hop) => hops.push(hop),
+      })
+      await engine.handleSettle(settled('s1', 'completed', false, [dispatchId]))
+      spy.mockRestore()
+
+      // Mutation: drop the catch in `recordVerdict` -> the settle's own catch
+      // swallows the throw above the wire loop and nothing is delivered, red.
+      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual(['s2'])
+      expect(relays.listHops('c1')[0]!.outcome).toBe('delivered')
+      expect(rows()).toMatchObject([{ state: 'returned', verdict: null }])
+      expect(logged.join(' ')).toContain('verdict not recorded for s1')
+    })
+
+    it.each([
+      ['failed', 'failed' as const, false],
+      ['muted', 'completed' as const, true],
+    ])(
+      'lap 2, C: a %s settle re-reads the last reply and records nothing',
+      async (_case, status, muted) => {
+        returnedRow('MAR-1')
+        const dispatchId = opusAnswered()
+        const gateway = createGateway({
+          lastMessages: { s1: 'VERDICT: PASS · lap 3 · MAR-1' },
+        })
+        const engine = verdictEngine(gateway)
+
+        await engine.handleSettle(
+          settled('s1', 'completed', false, [dispatchId]),
+        )
+        expect(rows()).toMatchObject([{ state: 'reviewed', lap: 3 }])
+
+        // The same session finishes a later turn badly: its last COMPLETED
+        // assistant message is still my ruling.
+        await engine.handleSettle(settled('s1', status, muted, []))
+
+        // Mutation: drop the guard -> a second identical verdict row, red.
+        expect(
+          db.prepare('SELECT COUNT(*) AS n FROM work_ledger').get() as {
+            n: number
+          },
+        ).toEqual({ n: 2 })
+        expect(detailOf()).toEqual([])
+      },
+    )
+
+    it('lap 2, D: an unbound ruling is quoted as it was written, identifier and all', async () => {
+      const gateway = createGateway({
+        lastMessages: { s1: 'VERDICT: PASS · lap 3 · MAR-9' },
+      })
+
+      await verdictEngine(gateway).handleSettle(settled('s1'))
+
+      // Mutation: rebuild the line from the parts -> `MAR-9` is dropped, red.
+      expect(detailOf()[0]).toContain('VERDICT: PASS · lap 3 · MAR-9')
+      expect(detailOf()[0]).toContain('no ledger row for MAR-9')
+      expect(rows()).toEqual([])
+    })
+
     it('R3: a STOP carries the reply, capped', async () => {
       returnedRow('MAR-1')
       const dispatchId = opusAnswered()

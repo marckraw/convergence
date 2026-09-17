@@ -986,6 +986,9 @@ describe('MAR-3085 R1: the verdict line', () => {
     expect(readEmittedVerdict(withBaton(line))).toEqual({
       kind: 'verdict',
       ...expected,
+      // The line as written, so a hail can quote it (lap 2, D). The wrapper
+      // marks come off; nothing else is rewritten.
+      line: line.replace(/^\*\*(.*)\*\*$/, '$1'),
     })
   })
 
@@ -1007,6 +1010,7 @@ describe('MAR-3085 R1: the verdict line', () => {
       ruling: 'RETURN',
       lap: 2,
       issueIdentifier: null,
+      line: 'VERDICT: RETURN · lap 2',
     })
   })
 
@@ -1016,6 +1020,7 @@ describe('MAR-3085 R1: the verdict line', () => {
       ruling: 'PASS',
       lap: 5,
       issueIdentifier: null,
+      line: 'VERDICT: PASS · lap 5',
     })
   })
 
