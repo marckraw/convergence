@@ -53,6 +53,11 @@ describe('parseMissionControlView', () => {
     expect(readStoredViewMode('crews')).toBe('canvas')
   })
 
+  it('MAR-3097 R6: reads a stored Waves tab as Waves', () => {
+    expect(readStoredViewMode('waves')).toBe('waves')
+    expect(parseMissionControlView('{"mode":"waves"}').mode).toBe('waves')
+  })
+
   it('falls back to the flat room for a view mode it does not know', () => {
     expect(parseMissionControlView('{"mode":"constellations"}').mode).toBe(
       'flat',

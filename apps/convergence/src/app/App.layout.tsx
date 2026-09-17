@@ -6,6 +6,7 @@ import { GlobalStatusBar } from '@/widgets/global-status-bar'
 import { MissionControl } from '@/widgets/mission-control'
 import { WorkspaceLayout } from '@/widgets/workspace-layout'
 import { NotificationsOnboardingContainer } from '@/features/notifications-onboarding'
+import { isWaveColumnHidden, WavePanel } from '@/features/waves'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import type { SessionSummary } from '@/entities/session'
 import { cn } from '@/shared/lib/cn.pure'
@@ -77,6 +78,11 @@ export const AppShell: FC<AppShellProps> = ({
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sidebarPeekOpen, setSidebarPeekOpen] = useState(false)
+  // Which view Mission Control last showed; the wave column steps aside for
+  // its Waves tab (MAR-3097 lap 2, B).
+  const [missionControlMode, setMissionControlMode] = useState<string | null>(
+    null,
+  )
   const [fallbackSelectedChatSpaceId, setFallbackSelectedChatSpaceId] =
     useState<string | null>(null)
   const [fallbackDraftChatSpaceId, setFallbackDraftChatSpaceId] = useState<
@@ -295,6 +301,18 @@ export const AppShell: FC<AppShellProps> = ({
           />
         )}
 
+        {/* The wave column (MAR-3097): the ledger beside the conversation,
+            open or collapsed to its rail. Absent when no crew reads a tracker,
+            and while Mission Control shows its own Waves tab. */}
+        <WavePanel
+          onOpenSession={onSelectAnySession}
+          hidden={isWaveColumnHidden({
+            missionControlActive,
+            missionControlMode,
+          })}
+          reservedWidth={sidebarCollapsed ? COLLAPSED_SIDEBAR : sidebarWidth}
+        />
+
         <div className="app-main-panel flex min-w-0 flex-1 flex-col">
           {routeFallback ? (
             <RouteFallbackView
@@ -302,7 +320,10 @@ export const AppShell: FC<AppShellProps> = ({
               onAction={onRouteFallbackAction ?? (() => undefined)}
             />
           ) : missionControlActive ? (
-            <MissionControl onOpenSession={onSelectAnySession} />
+            <MissionControl
+              onOpenSession={onSelectAnySession}
+              onModeChange={setMissionControlMode}
+            />
           ) : activeSurface === 'chat' ? (
             <ChatSurface
               selectedSpaceId={effectiveSelectedChatSpaceId}

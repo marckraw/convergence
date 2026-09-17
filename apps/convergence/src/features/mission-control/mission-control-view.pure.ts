@@ -7,13 +7,14 @@ import {
   type SessionCardState,
 } from './session-card-state.pure'
 
-export const MISSION_CONTROL_VIEW_MODES = ['flat', 'canvas'] as const
+export const MISSION_CONTROL_VIEW_MODES = ['flat', 'canvas', 'waves'] as const
 
 /**
  * Flat lays every card in one grid; Canvas draws the crews as wired diagrams
- * you can author. Two ways of reading one room.
+ * you can author; Waves (MAR-3097) reads the tracker's ledger -- what waits on
+ * you, what is riding, what is queued. Three ways of reading one room.
  *
- * `crews` was the third, and it retired with R13 (RUN45): every capability it
+ * `crews` was a fourth, and it retired with R13 (RUN45): every capability it
  * had — membership, wire authoring, baton names, limits, history and the
  * chair — now has a home on the Canvas, and a separate list of the same crews
  * was a second place to keep in step. A stored `crews` reads as `canvas`

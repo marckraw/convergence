@@ -6,7 +6,6 @@ import type {
 import type {
   TrackerCredentialStatus,
   TrackerProbeReading,
-  WorkLedgerSnapshot,
 } from '@/shared/types/tracker.types'
 import type {
   CreateSessionCrewInput,
@@ -138,12 +137,4 @@ export const trackerApi = {
     window.electronAPI.tracker.setCredential(crewId, apiKey),
   deleteCredential: (crewId: string): Promise<TrackerCredentialStatus> =>
     window.electronAPI.tracker.deleteCredential(crewId),
-}
-
-/** The work ledger, read-only (MAR-3084). */
-export const workLedgerApi = {
-  list: (crewId: string): Promise<WorkLedgerSnapshot> =>
-    window.electronAPI.workLedger.list(crewId),
-  onUpdated: (callback: (snapshot: WorkLedgerSnapshot) => void): (() => void) =>
-    window.electronAPI.workLedger.onUpdated(callback),
 }
