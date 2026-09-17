@@ -563,6 +563,19 @@ export class CursorProvider implements Provider {
       }
     }
 
+    /**
+     * A local write that must not decide whether Cursor is answered or a
+     * pending approval is registered (MAR-3143 lap 2, A). Inside acceptance
+     * `emitDelta` announces; outside it, the recorder logs and never throws.
+     */
+    function recordTurnWrite(label: string, write: () => void): void {
+      if (turnAccepted) {
+        write()
+        return
+      }
+      recordTeardown(label, write)
+    }
+
     function recordFailedTurnState(): void {
       recordTeardown('the failed status', () => setStatus('failed'))
       recordTeardown('the failed attention', () => setAttention('failed'))
@@ -800,27 +813,40 @@ export class CursorProvider implements Provider {
         const permissionRequest = buildCursorAcpPermissionRequest(params)
         if (shouldAutoApproveCursorPermissions(config.permissionConfig)) {
           activeRpc.respond(id, permissionRequest.approveResult)
-          sessionEmitter.addNote({
-            text: `Auto-approved Cursor permission request:\n\n${permissionRequest.description}`,
-            level: 'info',
-            providerItemId: String(id),
-            providerEventType: method,
-          })
+          recordTurnWrite('the auto-approved permission note', () =>
+            sessionEmitter.addNote({
+              text: `Auto-approved Cursor permission request:\n\n${permissionRequest.description}`,
+              level: 'info',
+              providerItemId: String(id),
+              providerEventType: method,
+            }),
+          )
           return
         }
 
-        flushAssistantBuffer()
-        flushThinkingBuffer()
-        const providerApprovalItemId = sessionEmitter.addApprovalRequest({
-          description: permissionRequest.description,
-          providerItemId: String(id),
-          providerEventType: method,
-        })
-        pendingApprovals.set(id, {
+        // Register first so a refused local write cannot leave Cursor blocked
+        // with no pending approval to approve or deny (MAR-3143 lap 2, A).
+        recordTurnWrite('the flushed assistant buffer', () =>
+          flushAssistantBuffer(),
+        )
+        recordTurnWrite('the flushed thinking buffer', () =>
+          flushThinkingBuffer(),
+        )
+        const pending: PendingCursorApproval = {
           ...permissionRequest,
-          providerApprovalItemId,
+          providerApprovalItemId: String(id),
+        }
+        pendingApprovals.set(id, pending)
+        recordTurnWrite('the approval attention', () =>
+          setAttention('needs-approval'),
+        )
+        recordTurnWrite('the approval request', () => {
+          pending.providerApprovalItemId = sessionEmitter.addApprovalRequest({
+            description: permissionRequest.description,
+            providerItemId: String(id),
+            providerEventType: method,
+          })
         })
-        setAttention('needs-approval')
         return
       }
 
@@ -833,29 +859,40 @@ export class CursorProvider implements Provider {
               reason: 'Malformed Cursor ask-question request',
             },
           })
-          sessionEmitter.addNote({
-            text: 'Skipped malformed Cursor ask-question request',
-            level: 'warning',
-            providerItemId: String(id),
-            providerEventType: method,
-          })
+          recordTurnWrite('the malformed ask-question note', () =>
+            sessionEmitter.addNote({
+              text: 'Skipped malformed Cursor ask-question request',
+              level: 'warning',
+              providerItemId: String(id),
+              providerEventType: method,
+            }),
+          )
           return
         }
 
-        flushAssistantBuffer()
-        flushThinkingBuffer()
-        const providerInputItemId = sessionEmitter.addInputRequest({
-          prompt: request.prompt,
-          request: request.request,
-          providerItemId: String(id),
-          providerEventType: method,
-        })
-        pendingInteractions.set(id, {
+        recordTurnWrite('the flushed assistant buffer', () =>
+          flushAssistantBuffer(),
+        )
+        recordTurnWrite('the flushed thinking buffer', () =>
+          flushThinkingBuffer(),
+        )
+        const pending: PendingCursorInteraction = {
           ...request,
-          providerInputItemId,
+          providerInputItemId: String(id),
+        }
+        pendingInteractions.set(id, pending)
+        recordTurnWrite('the input attention', () =>
+          setAttention('needs-input'),
+        )
+        recordTurnWrite('the cleared activity', () => setActivity(null))
+        recordTurnWrite('the ask-question request', () => {
+          pending.providerInputItemId = sessionEmitter.addInputRequest({
+            prompt: request.prompt,
+            request: request.request,
+            providerItemId: String(id),
+            providerEventType: method,
+          })
         })
-        setAttention('needs-input')
-        setActivity(null)
         return
       }
 
@@ -868,45 +905,64 @@ export class CursorProvider implements Provider {
               reason: 'Malformed Cursor create-plan request',
             },
           })
-          sessionEmitter.addNote({
-            text: 'Rejected malformed Cursor create-plan request',
-            level: 'warning',
-            providerItemId: String(id),
-            providerEventType: method,
-          })
+          recordTurnWrite('the malformed create-plan note', () =>
+            sessionEmitter.addNote({
+              text: 'Rejected malformed Cursor create-plan request',
+              level: 'warning',
+              providerItemId: String(id),
+              providerEventType: method,
+            }),
+          )
           return
         }
 
-        flushAssistantBuffer()
-        flushThinkingBuffer()
-        const providerInputItemId = sessionEmitter.addInputRequest({
-          prompt: request.prompt,
-          request: request.request,
-          providerItemId: String(id),
-          providerEventType: method,
-        })
-        pendingInteractions.set(id, {
+        recordTurnWrite('the flushed assistant buffer', () =>
+          flushAssistantBuffer(),
+        )
+        recordTurnWrite('the flushed thinking buffer', () =>
+          flushThinkingBuffer(),
+        )
+        const pending: PendingCursorInteraction = {
           ...request,
-          providerInputItemId,
+          providerInputItemId: String(id),
+        }
+        pendingInteractions.set(id, pending)
+        recordTurnWrite('the input attention', () =>
+          setAttention('needs-input'),
+        )
+        recordTurnWrite('the cleared activity', () => setActivity(null))
+        recordTurnWrite('the create-plan request', () => {
+          pending.providerInputItemId = sessionEmitter.addInputRequest({
+            prompt: request.prompt,
+            request: request.request,
+            providerItemId: String(id),
+            providerEventType: method,
+          })
         })
-        setAttention('needs-input')
-        setActivity(null)
         return
       }
 
       const passiveNote = buildCursorAcpPassiveUpdateNote(method, params)
       if (passiveNote) {
-        flushAssistantBuffer()
-        flushThinkingBuffer()
-        sessionEmitter.addNote({
-          text: passiveNote.text,
-          level: passiveNote.level,
-          providerItemId: passiveNote.providerItemId ?? String(id),
-          providerEventType: method,
-        })
+        // Answer first — a refused note must not leave Cursor waiting
+        // (MAR-3143 lap 2, A).
         activeRpc.respond(
           id,
           buildCursorAcpPassiveUpdateAcknowledgement(method, params),
+        )
+        recordTurnWrite('the flushed assistant buffer', () =>
+          flushAssistantBuffer(),
+        )
+        recordTurnWrite('the flushed thinking buffer', () =>
+          flushThinkingBuffer(),
+        )
+        recordTurnWrite('the passive update note', () =>
+          sessionEmitter.addNote({
+            text: passiveNote.text,
+            level: passiveNote.level,
+            providerItemId: passiveNote.providerItemId ?? String(id),
+            providerEventType: method,
+          }),
         )
         return
       }
@@ -916,11 +972,13 @@ export class CursorProvider implements Provider {
         -32601,
         `Convergence does not support Cursor ACP server request "${method}" yet`,
       )
-      sessionEmitter.addNote({
-        text: `Unsupported Cursor ACP server request: ${method}`,
-        level: 'error',
-        providerEventType: method,
-      })
+      recordTurnWrite('the unsupported request note', () =>
+        sessionEmitter.addNote({
+          text: `Unsupported Cursor ACP server request: ${method}`,
+          level: 'error',
+          providerEventType: method,
+        }),
+      )
     }
 
     async function resolveSelectedSkills(
@@ -1392,7 +1450,7 @@ export class CursorProvider implements Provider {
           )
           pendingInteractions.delete(id)
           if (pendingInteractions.size === 0 && pendingApprovals.size === 0) {
-            setAttention('none')
+            recordTeardown('the cleared attention', () => setAttention('none'))
           }
           return
         }
@@ -1408,7 +1466,9 @@ export class CursorProvider implements Provider {
         const [id, approval] = pending
         rpc.respond(id, approval.approveResult)
         pendingApprovals.delete(id)
-        if (pendingApprovals.size === 0) setAttention('none')
+        if (pendingApprovals.size === 0) {
+          recordTeardown('the cleared attention', () => setAttention('none'))
+        }
       },
       deny: (providerApprovalId) => {
         if (!rpc) return
@@ -1420,7 +1480,9 @@ export class CursorProvider implements Provider {
         const [id, approval] = pending
         rpc.respond(id, approval.denyResult)
         pendingApprovals.delete(id)
-        if (pendingApprovals.size === 0) setAttention('none')
+        if (pendingApprovals.size === 0) {
+          recordTeardown('the cleared attention', () => setAttention('none'))
+        }
       },
       dispose: disposeRuntime,
       stop: () => {
@@ -1433,14 +1495,16 @@ export class CursorProvider implements Provider {
           rpc?.respond(id, interaction.cancelResult)
         }
         pendingInteractions.clear()
-        // Kill first (R4), then record — a refused status must not skip SIGTERM.
-        disposeRuntime()
+        // End acceptance first so a refused flush is a teardown record, not an
+        // announced mid-turn loss that emitDelta swallows (MAR-3143 lap 2, B).
+        endTurn()
         recordTeardown('the flushed thinking buffer', () =>
           flushThinkingBuffer(),
         )
         recordTeardown('the flushed assistant buffer', () =>
           flushAssistantBuffer(),
         )
+        disposeRuntime()
         recordFailedTurnState()
         recordTeardown('the cleared activity', () => setActivity(null))
       },

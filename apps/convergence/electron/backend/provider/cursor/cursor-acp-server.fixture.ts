@@ -26,6 +26,8 @@ export class MockCursorAcpChild extends EventEmitter {
 
 export interface MockCursorAcpOptions {
   holdPrompt?: boolean
+  /** Hold `initialize` so tests can inject server requests before any prompt. */
+  holdInitialize?: boolean
   availableCommands?: string[]
 }
 
@@ -34,6 +36,7 @@ export interface MockCursorAcpServer {
   responses: Array<{ id: string | number; result?: unknown }>
   send: (message: unknown) => void
   resolveHeldPrompt: (result: unknown) => void
+  resolveHeldInitialize: () => void
 }
 
 export function createMockCursorAcp(
@@ -44,6 +47,7 @@ export function createMockCursorAcp(
     []
   const responses: Array<{ id: string | number; result?: unknown }> = []
   let heldPromptId: string | number | null = null
+  let heldInitializeId: string | number | null = null
   let buffer = ''
 
   function send(message: unknown): void {
@@ -84,6 +88,10 @@ export function createMockCursorAcp(
         requests.push({ method: message.method, params: message.params })
         switch (message.method) {
           case 'initialize':
+            if (options.holdInitialize) {
+              heldInitializeId = message.id
+              break
+            }
             respond(message.id, { protocolVersion: 1 })
             break
           case 'authenticate':
@@ -183,6 +191,13 @@ export function createMockCursorAcp(
       }
       respond(heldPromptId, result)
       heldPromptId = null
+    },
+    resolveHeldInitialize(): void {
+      if (heldInitializeId === null) {
+        throw new Error('No held Cursor initialize request')
+      }
+      respond(heldInitializeId, { protocolVersion: 1 })
+      heldInitializeId = null
     },
   }
 }
