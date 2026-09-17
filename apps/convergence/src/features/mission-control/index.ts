@@ -48,6 +48,12 @@ export {
 } from './connection-inspector.presentational'
 export { CrewSettingsPanel } from './crew-settings-panel.presentational'
 export {
+  LOCAL_HOST_ID,
+  LOCAL_HOST_LABEL,
+  seatPatchField,
+} from './seat-display.pure'
+export type { SeatPatch, SeatRefusalField } from './seat-display.pure'
+export {
   AddConversationsPanel,
   ANY_PROJECT_OPTION_ID,
 } from './add-conversations-panel.presentational'

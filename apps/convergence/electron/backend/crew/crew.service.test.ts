@@ -545,6 +545,35 @@ describe('CrewService', () => {
     expect(service.getById(crew.id)?.sessionIds).toEqual(['s2'])
   })
 
+  /**
+   * An orphan seat is shown, not hidden (MAR-3118 R10): the conversation is
+   * gone, a wire may still aim at the seat, and the drawer needs a row to
+   * say so and a way to remove it. Derived from the join, never stored.
+   */
+  it('lists a seat whose conversation was deleted, marked as missing, and removes it on request', () => {
+    const db = getDatabase()
+    const crew = service.create({ name: 'Convoy', sessionIds: ['s1', 's2'] })
+    service.setMemberBatonName(crew.id, { sessionId: 's1' }, 'grok')
+    db.prepare("DELETE FROM sessions WHERE id = 's1'").run()
+
+    // Mutation: filter it out of the read again -> the member is gone.
+    expect(
+      service.list()[0]?.members.map((member) => ({
+        sessionId: member.sessionId,
+        batonName: member.batonName,
+        conversationMissing: member.conversationMissing,
+      })),
+    ).toEqual([
+      { sessionId: 's1', batonName: 'grok', conversationMissing: true },
+      { sessionId: 's2', batonName: null, conversationMissing: false },
+    ])
+    // Nothing is removed automatically; removing it is the person's call.
+    service.removeMember(crew.id, { sessionId: 's1' })
+    expect(service.getById(crew.id)?.members.map((m) => m.sessionId)).toEqual([
+      's2',
+    ])
+  })
+
   it('keeps archived sessions as valid members', () => {
     const db = getDatabase()
     const crew = service.create({ name: 'Convoy', sessionIds: ['s1'] })

@@ -1651,6 +1651,9 @@ describe('MissionControl', () => {
           throw new Error(refused)
         },
       )
+      // One seat open at a time (MAR-3118): open it first.
+      fireEvent.click(screen.getByRole('button', { name: /^horse opus — / }))
+      fireEvent.click(screen.getByRole('button', { name: 'Write a card' }))
       const card = screen.getAllByLabelText(/^Role card for /)[0]!
       const typed = 'You are Opus. '.repeat(400)
 
@@ -1659,6 +1662,339 @@ describe('MissionControl', () => {
 
       expect(await screen.findByText(refused)).toBeInTheDocument()
       expect(card).toHaveValue(typed)
+    })
+
+    /**
+     * One seat open at a time, and leaving a seat commits what was typed in
+     * it (MAR-3118 R2) -- through the same door a blur uses, before the next
+     * seat opens. No blur happens here on purpose: the switch alone must save.
+     */
+    it('commits a card typed in one seat when another seat is opened, and shows the saved card on return (mutations: two open editors; skip the commit on switch)', async () => {
+      const members: SessionCrew['members'] = [
+        {
+          ...DEFAULT_CREW_MEMBER_SEAT,
+          sessionId: 'a',
+          batonName: 'opus',
+          canvasX: null,
+          canvasY: null,
+          roleCard: 'Old card.',
+        },
+        {
+          ...DEFAULT_CREW_MEMBER_SEAT,
+          sessionId: 'b',
+          batonName: 'grok',
+          canvasX: null,
+          canvasY: null,
+        },
+      ]
+      const api = await openCrewSettings('Night shift', members)
+      let answer: () => void = () => undefined
+      const setMemberSeat = vi.fn(
+        (_crewId: string, _member: unknown, patch: { roleCard?: string }) =>
+          new Promise<unknown>((resolve) => {
+            answer = () => {
+              const saved = makeCrew({
+                id: 'crew-1',
+                name: 'Night shift',
+                sessionIds: ['a', 'b'],
+                members: members.map((member) =>
+                  member.sessionId === 'a'
+                    ? { ...member, roleCard: patch.roleCard ?? null }
+                    : member,
+                ),
+              })
+              listCrews.mockResolvedValue([saved])
+              resolve(saved)
+            }
+          }),
+      )
+      ;(api as unknown as { setMemberSeat: unknown }).setMemberSeat =
+        setMemberSeat
+
+      fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
+      fireEvent.change(screen.getByLabelText('Role card for opus'), {
+        target: { value: 'New card, typed and left.' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: /^grok — / }))
+
+      // Mutation: skip the commit on switch -> never called.
+      expect(setMemberSeat).toHaveBeenCalledWith(
+        'crew-1',
+        { sessionId: 'a' },
+        { roleCard: 'New card, typed and left.' },
+      )
+      // A closed while its save is still in flight, B open. Mutation: keep a
+      // seat with a pending draft open too -> two editors, red.
+      expect(screen.queryByRole('region', { name: 'Seat opus' })).toBeNull()
+      expect(
+        screen.getByRole('region', { name: 'Seat grok' }),
+      ).toBeInTheDocument()
+      expect(screen.getAllByRole('region', { name: /^Seat / })).toHaveLength(1)
+
+      answer()
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /^opus — / }),
+        ).toHaveAccessibleName(/has a role card/),
+      )
+      fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
+      expect(await screen.findByLabelText('Role card for opus')).toHaveValue(
+        'New card, typed and left.',
+      )
+      expect(setMemberSeat).toHaveBeenCalledTimes(1)
+    })
+
+    /**
+     * One commit shape for every typed field, the name included (MAR-3118
+     * lap 2, B): a refused name keeps the typing, under a line that says so.
+     */
+    it('keeps a refused baton name in its field, with the sentence and what did not change (mutation: drop the draft before the await)', async () => {
+      const api = await openCrewSettings('Night shift', [
+        {
+          ...DEFAULT_CREW_MEMBER_SEAT,
+          sessionId: 'a',
+          batonName: 'opus',
+          canvasX: null,
+          canvasY: null,
+        },
+      ])
+      const refused = 'This crew already has a seat named "grok"'
+      vi.mocked(api.setMemberBatonName).mockRejectedValueOnce(
+        new Error(refused),
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
+      const name = screen.getByLabelText('Baton name for opus')
+      fireEvent.change(name, { target: { value: 'grok' } })
+      fireEvent.blur(name)
+
+      expect(await screen.findByText(refused)).toBeInTheDocument()
+      expect(screen.getByLabelText('Baton name for opus')).toHaveValue('grok')
+      expect(screen.getByText(/^Still named “opus”/)).toBeInTheDocument()
+    })
+
+    /**
+     * A refusal never steals the open editor (MAR-3118 lap 4, A -- the
+     * stricter bound on lap 2's B2): with another seat open, the refused
+     * seat's row marker is the whole answer and opening it shows the sentence;
+     * with nothing open, the refused seat re-opens.
+     */
+    it('keeps the open seat open when a seat left behind is refused, and re-opens the refused seat only when nothing is open (mutation: re-open unconditionally)', async () => {
+      const api = await openCrewSettings('Night shift', [
+        {
+          ...DEFAULT_CREW_MEMBER_SEAT,
+          sessionId: 'a',
+          batonName: 'opus',
+          canvasX: null,
+          canvasY: null,
+          roleCard: 'Old card.',
+        },
+        {
+          ...DEFAULT_CREW_MEMBER_SEAT,
+          sessionId: 'b',
+          batonName: 'grok',
+          canvasX: null,
+          canvasY: null,
+        },
+      ])
+      const refused = 'A role card cannot be longer than 4000 characters'
+      const setMemberSeat = vi.fn(async () => {
+        throw new Error(refused)
+      })
+      ;(api as unknown as { setMemberSeat: unknown }).setMemberSeat =
+        setMemberSeat
+      const typed = 'You are opus. '.repeat(400)
+
+      // B already open when A's refusal lands: B stays, A's row speaks.
+      fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
+      fireEvent.change(screen.getByLabelText('Role card for opus'), {
+        target: { value: typed },
+      })
+      fireEvent.click(screen.getByRole('button', { name: /^grok — / }))
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /^opus — / }),
+        ).toHaveAccessibleName(/an edit was refused/),
+      )
+      // Mutation: re-open unconditionally -> Seat grok is gone, red.
+      expect(
+        screen.getByRole('region', { name: 'Seat grok' }),
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'Seat opus' })).toBeNull()
+      // Opening the row shows the sentence and the typed card.
+      fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
+      expect(screen.getByText(refused)).toBeInTheDocument()
+      expect(screen.getByLabelText('Role card for opus')).toHaveValue(typed)
+
+      // Nothing open when a refusal lands: the refused seat re-opens.
+      fireEvent.change(screen.getByLabelText('Role card for opus'), {
+        target: { value: `${typed}!` },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Close opus' }))
+      await waitFor(() => expect(setMemberSeat).toHaveBeenCalledTimes(2))
+      expect(
+        await screen.findByRole('region', { name: 'Seat opus' }),
+      ).toBeInTheDocument()
+      expect(screen.getByText(refused)).toBeInTheDocument()
+    })
+
+    /**
+     * The bound on the refusal seam (MAR-3118 lap 3, A): a refused value is
+     * never re-sent unchanged, and a standing refusal is visible on the closed
+     * row. Without it, leaving the refused seat re-sent the same card, was
+     * refused again, and pulled the drawer back -- the seat could not be left.
+     */
+    it('lets you leave a seat whose card was refused, marks its row, and asks the door again only once the card changes (mutations: re-send the unchanged refused draft; drop the row marker)', async () => {
+      const api = await openCrewSettings('Night shift', [
+        {
+          ...DEFAULT_CREW_MEMBER_SEAT,
+          sessionId: 'a',
+          batonName: 'opus',
+          canvasX: null,
+          canvasY: null,
+          roleCard: 'Old card.',
+        },
+        {
+          ...DEFAULT_CREW_MEMBER_SEAT,
+          sessionId: 'b',
+          batonName: 'grok',
+          canvasX: null,
+          canvasY: null,
+        },
+      ])
+      const refused = 'A role card cannot be longer than 4000 characters'
+      const setMemberSeat = vi.fn(async () => {
+        throw new Error(refused)
+      })
+      ;(api as unknown as { setMemberSeat: unknown }).setMemberSeat =
+        setMemberSeat
+      const typed = 'You are opus. '.repeat(400)
+
+      // Refused by leaving to B: B stays open (lap 4, A); open A again and the
+      // sentence and the typed card are there.
+      fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
+      fireEvent.change(screen.getByLabelText('Role card for opus'), {
+        target: { value: typed },
+      })
+      fireEvent.click(screen.getByRole('button', { name: /^grok — / }))
+      await waitFor(() => expect(setMemberSeat).toHaveBeenCalledTimes(1))
+      fireEvent.click(
+        await screen.findByRole('button', {
+          name: /^opus — .*an edit was refused/,
+        }),
+      )
+      expect(await screen.findByText(refused)).toBeInTheDocument()
+
+      // Leaving again with the same card: nothing is re-sent, B opens, A stays
+      // closed. Mutation: re-send the unchanged draft -> refused again, red on
+      // the call count.
+      fireEvent.click(screen.getByRole('button', { name: /^grok — / }))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(
+        screen.getByRole('region', { name: 'Seat grok' }),
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'Seat opus' })).toBeNull()
+      expect(setMemberSeat).toHaveBeenCalledTimes(1)
+      // Mutation: drop the row marker -> the refusal is invisible, red.
+      expect(
+        screen.getByRole('button', { name: /^opus — / }),
+      ).toHaveAccessibleName(/an edit was refused/)
+
+      // A changed card goes to the door once more.
+      fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
+      fireEvent.change(screen.getByLabelText('Role card for opus'), {
+        target: { value: `${typed}!` },
+      })
+      fireEvent.click(screen.getByRole('button', { name: /^grok — / }))
+      await waitFor(() => expect(setMemberSeat).toHaveBeenCalledTimes(2))
+      expect(setMemberSeat).toHaveBeenLastCalledWith(
+        'crew-1',
+        { sessionId: 'a' },
+        { roleCard: `${typed}!` },
+      )
+    })
+
+    /**
+     * A refusal does not outlive its seat (lap 3, B): remove the seat, add
+     * the conversation back, and nothing is said about the seat it was.
+     */
+    it('forgets a seat’s refusal and its drafts when the seat is removed (mutations: drop the clear on remove; keep the drafts)', async () => {
+      const seatA = {
+        ...DEFAULT_CREW_MEMBER_SEAT,
+        sessionId: 'a',
+        batonName: 'opus',
+        canvasX: null,
+        canvasY: null,
+      }
+      const seatB = { ...seatA, sessionId: 'b', batonName: 'grok' }
+      const api = await openCrewSettings('Night shift', [seatA, seatB])
+      const refused = 'WIP limit must be a whole number of at least 1'
+      ;(api as unknown as { setMemberSeat: unknown }).setMemberSeat = vi.fn(
+        async () => {
+          throw new Error(refused)
+        },
+      )
+      const withoutA = makeCrew({
+        id: 'crew-1',
+        name: 'Night shift',
+        sessionIds: ['b'],
+        members: [seatB],
+      })
+      const withA = makeCrew({
+        id: 'crew-1',
+        name: 'Night shift',
+        sessionIds: ['a', 'b'],
+        members: [seatA, seatB],
+      })
+      vi.mocked(api.removeMember).mockImplementation(async () => {
+        listCrews.mockResolvedValue([withoutA])
+        return withoutA
+      })
+      vi.mocked(api.addMember).mockImplementation(async () => {
+        listCrews.mockResolvedValue([withA])
+        return withA
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
+      const wip = screen.getByLabelText('WIP limit for opus')
+      fireEvent.change(wip, { target: { value: '0' } })
+      fireEvent.blur(wip)
+      expect(await screen.findByText(refused)).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Remove from crew' }))
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: /^opus — / })).toBeNull(),
+      )
+      expect(screen.queryByRole('region', { name: 'Seat opus' })).toBeNull()
+
+      // Back in the crew: the same key, and no sentence about the old seat.
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+      fireEvent.click(
+        screen.getByRole('menuitem', { name: 'Add conversation…' }),
+      )
+      const panel = await screen.findByRole('region', {
+        name: 'Add conversations',
+      })
+      fireEvent.click(
+        within(panel).getAllByRole('button', { pressed: false })[0]!,
+      )
+      fireEvent.click(
+        within(panel).getByRole('button', { name: 'Add 1 conversation' }),
+      )
+      await waitFor(() =>
+        expect(api.addMember).toHaveBeenCalledWith('crew-1', 'a'),
+      )
+      fireEvent.click(
+        await screen.findByRole('button', { name: /Crew settings/ }),
+      )
+      const row = await screen.findByRole('button', { name: /^opus — / })
+      expect(row).not.toHaveAccessibleName(/an edit was refused/)
+      fireEvent.click(row)
+      expect(screen.queryByText(refused)).toBeNull()
+      // The removed seat took its drafts too (lap 4, B): the re-added seat
+      // shows the record's WIP, not the refused 0. Mutation: keep the drafts
+      // on removal -> 0, red.
+      expect(screen.getByLabelText('WIP limit for opus')).toHaveValue(1)
     })
 
     it('keeps a trailing space while renaming inline (mutation: control by crew.name)', async () => {
@@ -1852,9 +2188,12 @@ describe('MissionControl', () => {
       const alert = within(panel).getByRole('alert')
       expect(alert).toHaveTextContent('Failed to delete crew')
       expect(alert.parentElement).toBe(panel)
+      // Directly under the drawer's header -- the crew's name, then "Crew
+      // settings" beneath it since the seat editor redesign (MAR-3118 R8).
       expect(alert.previousElementSibling).toContainElement(
-        within(panel).getByRole('heading', { name: 'Crew settings' }),
+        within(panel).getByRole('heading', { name: 'Night shift' }),
       )
+      expect(alert.previousElementSibling).toHaveTextContent('Crew settings')
       expect(api.delete).toHaveBeenCalledExactlyOnceWith('crew-1')
     })
 
@@ -2169,6 +2508,8 @@ describe('MissionControl', () => {
       expect(
         await screen.findByRole('region', { name: 'Crew settings' }),
       ).toBeInTheDocument()
+      // A seat is one line until it is opened (MAR-3118 R1).
+      fireEvent.click(screen.getByRole('button', { name: /^fable — / }))
       expect(screen.getByDisplayValue('fable')).toBeInTheDocument()
       expect(
         screen.getByLabelText('Delivery limit per run for this crew'),
@@ -2180,8 +2521,9 @@ describe('MissionControl', () => {
       // From the settings panel's own button, not the toolbar's: both lead
       // to the same panel, and the settings one is the reachable path for
       // somebody already looking at the roster.
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }))
       fireEvent.click(
-        screen.getByRole('button', { name: '+ Add conversation' }),
+        screen.getByRole('menuitem', { name: 'Add conversation…' }),
       )
       expect(
         await screen.findByRole('region', { name: 'Add conversations' }),
@@ -3533,6 +3875,69 @@ describe('MissionControl', () => {
       } finally {
         vi.unstubAllGlobals()
       }
+    })
+
+    /**
+     * Every selected conversation is tried (MAR-3118 lap 2, C): a refusal
+     * does not stop the rest, the refused one stays selected with the door's
+     * sentence, the count says what landed, and the roster reloads.
+     */
+    it('tries every selected conversation, keeps the refused one selected and counts what landed (mutations: stop at the first refusal; skip the reload)', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Night shift', sessionIds: ['a'] }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Anchor' }),
+          makeSession({ id: 'b', name: 'Bravo' }),
+          makeSession({ id: 'c', name: 'Charlie' }),
+          makeSession({ id: 'd', name: 'Delta' }),
+        ],
+        [CLAUDE_CODE],
+      )
+      const refused = 'This conversation is already in the crew "Day shift"'
+      const addMember = vi.mocked(window.electronAPI.crew.addMember)
+      addMember.mockImplementation(async (_crewId, sessionId) => {
+        if (sessionId === 'c') throw new Error(refused)
+        return makeCrew({ id: 'crew-1' })
+      })
+      render(<MissionControl />)
+      await switchToCanvas()
+      fireEvent.click(
+        await screen.findByRole('button', { name: /Add conversation/ }),
+      )
+      const panel = await screen.findByRole('region', {
+        name: 'Add conversations',
+      })
+      for (const name of ['Bravo', 'Charlie', 'Delta'])
+        fireEvent.click(
+          within(panel).getByRole('button', { name: new RegExp(name) }),
+        )
+      const listsBefore = listCrews.mock.calls.length
+
+      fireEvent.click(
+        within(panel).getByRole('button', { name: 'Add 3 conversations' }),
+      )
+
+      expect(await within(panel).findByText(refused)).toBeInTheDocument()
+      // Mutation: stop at the first refusal -> 'd' is never tried, red.
+      expect(addMember.mock.calls.map((call) => call[1])).toEqual([
+        'b',
+        'c',
+        'd',
+      ])
+      expect(
+        within(panel).getByText(
+          '2 of 3 added; the refused conversation stays selected.',
+        ),
+      ).toBeInTheDocument()
+      expect(
+        within(panel)
+          .getAllByRole('button', { pressed: true })
+          .map((button) => button.textContent),
+      ).toEqual([expect.stringContaining('Charlie')])
+      // Mutation: skip the reload after a refusal -> no new list call, red.
+      expect(listCrews.mock.calls.length).toBeGreaterThan(listsBefore)
     })
 
     it('F6 identifies repeated names by project (mutation: omit project name from detail)', async () => {

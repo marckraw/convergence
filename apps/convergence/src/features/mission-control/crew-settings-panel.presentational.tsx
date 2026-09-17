@@ -1,5 +1,13 @@
 import type { FC } from 'react'
-import { X, Trash2 } from 'lucide-react'
+import {
+  ChevronDown,
+  FlaskConical,
+  MessageSquare,
+  Plus,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react'
 import {
   memberKey,
   type CrewMemberRef,
@@ -11,6 +19,19 @@ import { Input } from '@/shared/ui/input'
 import { flowRunCeilingNote } from './crew-loop.pure'
 import { formatCrewMemberCount } from './session-crew-groups.pure'
 import { CrewDecorationPicker } from './crew-decoration-picker.presentational'
+import {
+  hostLabel,
+  isLocalHost,
+  seatHostId,
+  seatSourceLabel,
+  type SeatHostOption,
+  type SeatPatch,
+  type SeatRefusalField,
+} from './seat-display.pure'
+import { groupSeats, offersSeatSearch } from './seat-groups.pure'
+import { SeatEditor } from './seat-editor.presentational'
+import type { SeatFact } from './seat-facts.presentational'
+import { SeatRow } from './seat-row.presentational'
 
 interface CrewSettingsPanelProps {
   emoji: string | null
@@ -47,7 +68,11 @@ interface CrewSettingsPanelProps {
    */
   running: boolean
   /** The refusal a member's door gave, and which member it was about. */
-  batonNameProblem: { memberKey: string; message: string } | null
+  /**
+   * The door's refusals, per seat and per field (MAR-3118 lap 2, B): two
+   * commits from one switch -- a card and a name -- each keep their sentence.
+   */
+  seatProblems: Record<string, Partial<Record<SeatRefusalField, string>>>
   /** What is being typed, per member, until they finish. */
   batonNameDrafts: Record<string, string>
   /**
@@ -64,17 +89,7 @@ interface CrewSettingsPanelProps {
   onCrewNameChange: (name: string) => void
   onBatonNameEdit: (memberKey: string, batonName: string) => void
   /** What a seat IS, one field at a time (MAR-3083 R6). */
-  onSeatEdit: (
-    member: CrewMemberRef,
-    patch: {
-      role?: string
-      kind?: string
-      roleCard?: string | null
-      hostPolicy?: string | null
-      lanePolicy?: string | null
-      wipLimit?: number | null
-    },
-  ) => void
+  onSeatEdit: (member: CrewMemberRef, patch: SeatPatch) => void
   onSeatDraftEdit: (
     memberKey: string,
     field: SeatDraftField,
@@ -87,6 +102,19 @@ interface CrewSettingsPanelProps {
   onAddConversation: () => void
   onRemoveMember: (member: CrewMemberRef) => void
   onClose: () => void
+  /** The one seat whose editor is open, by member key (R2). */
+  openSeatKey: string | null
+  onToggleSeat: (key: string) => void
+  /** What is typed in "Find a seat", shown at 8+ seats (R6). */
+  seatQuery: string
+  onSeatQueryChange: (query: string) => void
+  /** Whether "Add ▾" is showing its two entries (R9). */
+  addMenuOpen: boolean
+  onAddMenuToggle: () => void
+  /** This Mac and every execution-host endpoint, by id and label. */
+  hostOptions: readonly SeatHostOption[]
+  resolveProviderName: (providerId: string) => string | null
+  onOpenConversation: (sessionId: string) => void
 }
 
 /**
@@ -137,7 +165,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
   defaultAttentionMinutes,
   busy,
   running,
-  batonNameProblem,
+  seatProblems,
   batonNameDrafts,
   onCrewNameChange,
   onBatonNameEdit,
@@ -152,400 +180,474 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
   onAddConversation,
   onRemoveMember,
   onClose,
-}) => (
-  <section
-    data-crew-settings-panel
-    aria-label="Crew settings"
-    className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto border-l border-white/10 px-4 py-3"
-  >
-    <div className="flex items-start justify-between gap-2">
-      <h3 className="text-sm font-medium">Crew settings</h3>
+  openSeatKey,
+  onToggleSeat,
+  seatQuery,
+  onSeatQueryChange,
+  addMenuOpen,
+  onAddMenuToggle,
+  hostOptions,
+  resolveProviderName,
+  onOpenConversation,
+}) => {
+  const hostIdOf = (member: SessionCrewMember) =>
+    seatHostId(member, member.sessionId ? resolveHost(member.sessionId) : null)
+  const groups = groupSeats(members, {
+    query: seatQuery,
+    hostLabel: (member) => hostLabel(hostIdOf(member), hostOptions),
+  })
+
+  const factsFor = (member: SessionCrewMember): SeatFact[] => {
+    if (member.sessionId === null) {
+      const provider = member.providerId
+        ? (resolveProviderName(member.providerId) ?? member.providerId)
+        : 'No provider'
+      return [
+        { term: 'Kind', value: 'Recipe — spawned on demand' },
+        {
+          term: 'Provider',
+          value: member.model ? `${provider} · ${member.model}` : provider,
+        },
+        { term: 'Conversation', value: 'None — one is spawned per run' },
+      ]
+    }
+    const sessionId = member.sessionId
+    const title = resolveName(sessionId) ?? 'a conversation'
+    return [
+      { term: 'Kind', value: 'Resident — a conversation' },
+      {
+        term: 'Conversation',
+        value: title,
+        open: {
+          label: `Open ${title}`,
+          onOpen: () => onOpenConversation(sessionId),
+        },
+      },
+      { term: 'Host', value: hostLabel(hostIdOf(member), hostOptions) },
+    ]
+  }
+
+  const renderSeat = (member: SessionCrewMember) => {
+    const key = memberKey(member)
+    // A recipe has no conversation, so it is named -- and addressed -- by its
+    // baton name (MAR-3083 R3/C).
+    const ref: CrewMemberRef = member.sessionId
+      ? { sessionId: member.sessionId }
+      : { batonName: member.batonName ?? '' }
+    const hostId = hostIdOf(member)
+    const source = seatSourceLabel(
+      member,
+      member.sessionId ? resolveName(member.sessionId) : null,
+    )
+    const open = openSeatKey === key
+    return (
+      <li key={key} className="flex flex-col">
+        {open ? (
+          <SeatEditor
+            member={member}
+            nameValue={batonNameDrafts[key] ?? member.batonName ?? ''}
+            cardDraft={seatDrafts[key]?.roleCard}
+            wipValue={seatDrafts[key]?.wipLimit ?? String(member.wipLimit)}
+            facts={factsFor(member)}
+            factsHeading={
+              member.sessionId === null
+                ? 'Facts · the recipe'
+                : 'Facts · from the conversation'
+            }
+            hostOptions={hostOptions}
+            problems={seatProblems[key] ?? {}}
+            busy={busy}
+            onNameChange={(value) => onBatonNameEdit(key, value)}
+            onNameCommit={() => onBatonNameCommit(key)}
+            onCardChange={(value) => onSeatDraftEdit(key, 'roleCard', value)}
+            onCardCommit={() => onSeatDraftCommit(ref, 'roleCard')}
+            onWriteCard={() => onSeatDraftEdit(key, 'roleCard', '')}
+            onWipChange={(value) => onSeatDraftEdit(key, 'wipLimit', value)}
+            onWipCommit={() => onSeatDraftCommit(ref, 'wipLimit')}
+            onSeatEdit={(patch) => onSeatEdit(ref, patch)}
+            onClose={() => onToggleSeat(key)}
+            onRemove={() => onRemoveMember(ref)}
+          />
+        ) : (
+          <SeatRow
+            member={member}
+            source={source}
+            host={hostLabel(hostId, hostOptions)}
+            hostIsLocal={isLocalHost(hostId)}
+            refused={Object.keys(seatProblems[key] ?? {}).length > 0}
+            onToggle={() => onToggleSeat(key)}
+          />
+        )}
+      </li>
+    )
+  }
+
+  // `inMenu`: only the menu's copy carries menu roles (lap 2, F1).
+  const addActions = (inMenu: boolean) => (
+    <>
       <Button
         type="button"
-        variant="ghost"
+        variant="outline"
         size="sm"
-        aria-label="Close crew settings"
-        onClick={onClose}
-        className="size-7 shrink-0 p-0 text-muted-foreground hover:text-foreground"
-      >
-        <X className="size-3.5" />
-      </Button>
-    </div>
-
-    {updateError ? (
-      <p role="alert" className="text-xs text-destructive">
-        {updateError}
-      </p>
-    ) : null}
-
-    <div className="flex flex-col gap-1">
-      <label
-        htmlFor="crew-name"
-        className="text-[11px] uppercase tracking-wide text-muted-foreground"
-      >
-        Crew name
-      </label>
-      <Input
-        id="crew-name"
-        value={crewName}
-        disabled={busy}
-        onChange={(event) => onCrewNameChange(event.target.value)}
-        className="h-8 text-xs"
-      />
-    </div>
-
-    <section aria-label="Decoration" className="flex flex-col gap-1.5">
-      <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
-        Decoration
-      </h4>
-      <CrewDecorationPicker
-        emoji={emoji}
-        accentColor={accentColor}
-        onEmojiChange={onEmojiChange}
-        onAccentColorChange={onAccentColorChange}
-      />
-    </section>
-
-    <div className="flex flex-col gap-1.5">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-        Conversations &amp; baton names
-      </p>
-      {members.length === 0 ? (
-        <p className="text-[11px] text-muted-foreground">
-          Add a conversation to this crew to give it a baton name.
-        </p>
-      ) : (
-        <ul className="flex flex-col gap-1">
-          {members.map((member) => {
-            // A recipe has no conversation, so it is named -- and addressed --
-            // by its baton name (MAR-3083 R3/C).
-            const key = memberKey(member)
-            const ref: CrewMemberRef = member.sessionId
-              ? { sessionId: member.sessionId }
-              : { batonName: member.batonName ?? '' }
-            const label =
-              (member.sessionId ? resolveName(member.sessionId) : null) ??
-              member.batonName ??
-              member.sessionId ??
-              'unnamed seat'
-            const residentHost = member.sessionId
-              ? resolveHost(member.sessionId)
-              : null
-            return (
-              <li key={key} className="flex flex-col gap-0.5">
-                <div className="flex items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate text-[11px]">
-                    {label}
-                  </span>
-                  {/* Stored when the name is FINISHED — a blur or Enter — not on
-                    every keystroke: the door refuses a name ending in a
-                    formatting mark, so a field that knocked per key made
-                    `my_horse` untypeable. */}
-                  <Input
-                    value={batonNameDrafts[key] ?? member.batonName ?? ''}
-                    placeholder="unnamed"
-                    aria-label={`Baton name for ${label}`}
-                    disabled={busy}
-                    onChange={(event) =>
-                      onBatonNameEdit(key, event.target.value)
-                    }
-                    onBlur={() => onBatonNameCommit(key)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault()
-                        onBatonNameCommit(key)
-                      }
-                    }}
-                    className="h-7 w-32 text-xs"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`Remove ${label} from this crew`}
-                    disabled={busy}
-                    onClick={() => onRemoveMember(ref)}
-                    className="size-6 shrink-0 p-0 text-muted-foreground hover:text-red-400"
-                  >
-                    <X className="size-3" />
-                  </Button>
-                </div>
-                {/* The seat, under the name that addresses it (R6). Selects
-                  commit on change; the typed fields keep a draft and commit
-                  on blur, so a broadcast cannot wipe what is being typed. */}
-                <div className="flex flex-wrap items-center gap-1 pl-1">
-                  <select
-                    aria-label={`Role for ${label}`}
-                    value={member.role}
-                    disabled={busy}
-                    onChange={(event) =>
-                      onSeatEdit(ref, { role: event.target.value })
-                    }
-                    className="h-6 rounded border border-border bg-transparent px-1 text-[11px]"
-                  >
-                    {['mastermind', 'horse', 'reviewer', 'designer'].map(
-                      (role) => (
-                        <option key={role} value={role}>
-                          {role}
-                        </option>
-                      ),
-                    )}
-                  </select>
-                  {/* Not a choice: a seat is dynamic exactly when it has no
-                      conversation (MAR-3083 lap 3, J). Offering it hid a
-                      recipe from every read and freed its only name. */}
-                  <span
-                    aria-label={`Kind for ${label}`}
-                    className="h-6 rounded border border-border px-1 text-[11px] leading-6 text-muted-foreground"
-                  >
-                    {member.kind}
-                  </span>
-                  <select
-                    aria-label={`Lane for ${label}`}
-                    value={member.lanePolicy ?? ''}
-                    disabled={busy}
-                    onChange={(event) =>
-                      onSeatEdit(ref, {
-                        lanePolicy: event.target.value || null,
-                      })
-                    }
-                    className="h-6 rounded border border-border bg-transparent px-1 text-[11px]"
-                  >
-                    <option value="">lane: default</option>
-                    <option value="main">main</option>
-                    <option value="own-worktree">own-worktree</option>
-                  </select>
-                  {member.kind === 'dynamic' ? (
-                    <Input
-                      value={
-                        seatDrafts[key]?.hostPolicy ?? member.hostPolicy ?? ''
-                      }
-                      placeholder="host: local"
-                      aria-label={`Host for ${label}`}
-                      onChange={(event) =>
-                        onSeatDraftEdit(key, 'hostPolicy', event.target.value)
-                      }
-                      onBlur={() => onSeatDraftCommit(ref, 'hostPolicy')}
-                      className="h-6 w-24 text-[11px]"
-                    />
-                  ) : (
-                    // A resident seat works where its conversation runs: the
-                    // host is that session's, not a second field that could
-                    // disagree with it.
-                    <span
-                      aria-label={`Host for ${label}`}
-                      className="h-6 rounded border border-border px-1 text-[11px] leading-6 text-muted-foreground"
-                    >
-                      {residentHost ?? member.hostPolicy ?? 'local'}
-                    </span>
-                  )}
-                  <Input
-                    type="number"
-                    min={1}
-                    value={
-                      seatDrafts[key]?.wipLimit ?? String(member.wipLimit ?? 1)
-                    }
-                    aria-label={`WIP limit for ${label}`}
-                    onChange={(event) =>
-                      onSeatDraftEdit(key, 'wipLimit', event.target.value)
-                    }
-                    onBlur={() => onSeatDraftCommit(ref, 'wipLimit')}
-                    className="h-6 w-14 text-[11px]"
-                  />
-                </div>
-                <textarea
-                  value={seatDrafts[key]?.roleCard ?? member.roleCard ?? ''}
-                  placeholder="Role card — what this seat is told it is"
-                  aria-label={`Role card for ${label}`}
-                  rows={2}
-                  onChange={(event) =>
-                    onSeatDraftEdit(key, 'roleCard', event.target.value)
-                  }
-                  onBlur={() => onSeatDraftCommit(ref, 'roleCard')}
-                  className="ml-1 rounded border border-border bg-transparent p-1 text-[11px]"
-                />
-                {batonNameProblem?.memberKey === key ? (
-                  <p className="pl-1 text-[10px] text-amber-400">
-                    {batonNameProblem.message}
-                  </p>
-                ) : null}
-              </li>
-            )
-          })}
-        </ul>
-      )}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
+        role={inMenu ? 'menuitem' : undefined}
         disabled={busy}
         onClick={onAddConversation}
-        className="h-7 self-start px-2 text-[11px]"
+        className="h-7 gap-1.5 px-2.5 text-[11px]"
       >
-        + Add conversation
+        <MessageSquare aria-hidden className="size-3.5" />
+        Add conversation…
       </Button>
-      <p className="text-[10px] text-muted-foreground/70">
-        Removing a conversation from the crew does not delete it — it stays
-        available in Flat.
-      </p>
-    </div>
-
-    <div className="flex flex-col gap-1.5">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-        Loop limits
-      </p>
-      <div className="flex items-center gap-2">
-        <label
-          htmlFor="crew-delivery-limit"
-          className="flex-1 text-[11px] text-muted-foreground"
+      {/* R9: present, and honest that it is not built yet. */}
+      <span title="Coming with MAR-3099" className="inline-flex">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          role={inMenu ? 'menuitem' : undefined}
+          disabled
+          aria-description="Coming with MAR-3099"
+          className="h-7 gap-1.5 px-2.5 text-[11px]"
         >
-          Delivery limit
-        </label>
-        <Input
-          id="crew-delivery-limit"
-          type="number"
-          min={1}
-          value={deliveryLimit ?? ''}
-          placeholder={String(defaultDeliveryLimit)}
-          aria-label="Delivery limit per run for this crew"
-          disabled={busy}
-          onChange={(event) =>
-            onDeliveryLimitChange(readLimit(event.target.value))
-          }
-          className="h-7 w-16 text-xs"
-        />
-        <span className="text-[11px] text-muted-foreground">per run</span>
-      </div>
-      <p className="text-[10px] text-muted-foreground/70">
-        {flowRunCeilingNote(deliveryLimit ?? defaultDeliveryLimit)}
-      </p>
-      <div className="flex items-center gap-2">
-        <label
-          htmlFor="crew-attention-minutes"
-          className="flex-1 text-[11px] text-muted-foreground"
-        >
-          Ask for attention after
-        </label>
-        <Input
-          id="crew-attention-minutes"
-          type="number"
-          min={1}
-          value={attentionMinutes ?? ''}
-          placeholder={String(defaultAttentionMinutes)}
-          aria-label="Minutes without a reply before this crew asks for attention"
-          disabled={busy}
-          onChange={(event) =>
-            onAttentionMinutesChange(readLimit(event.target.value))
-          }
-          className="h-7 w-16 text-xs"
-        />
-        <span className="text-[11px] text-muted-foreground">minutes</span>
-      </div>
-      <p className="text-[10px] text-muted-foreground/70">
-        The timer watches for a reply still owed. It is not a total run-duration
-        limit.
-      </p>
-    </div>
+          <FlaskConical aria-hidden className="size-3.5" />
+          New recipe
+        </Button>
+      </span>
+    </>
+  )
 
+  return (
     <section
-      aria-label="Recipe"
-      className="flex flex-col gap-2 border-t border-white/10 pt-2"
+      data-crew-settings-panel
+      aria-label="Crew settings"
+      className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto border-l border-white/10 px-4 py-3"
     >
-      <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
-        Recipe
-      </h4>
-      <label className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Input
-          type="checkbox"
-          className="size-3.5 rounded-sm p-0"
-          checked={includePositions}
-          disabled={exporting}
-          onChange={(event) => onIncludePositionsChange(event.target.checked)}
+      <header data-crew-settings-header className="flex items-start gap-2">
+        <span
+          aria-hidden
+          className="mt-1 size-3 shrink-0 rounded-sm"
+          style={{ backgroundColor: accentColor ?? 'rgb(148 163 184)' }}
         />
-        Include positions
-      </label>
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        className="h-7 text-xs"
-        disabled={exporting}
-        onClick={onExport}
-      >
-        {exporting ? 'Exporting…' : 'Export crew…'}
-      </Button>
-      {lastExportPath ? (
-        <p
-          className="truncate text-[11px] text-muted-foreground"
-          title={lastExportPath}
-        >
-          Last exported to …/
-          {lastExportPath.split('/').filter(Boolean).slice(-2).join('/')}
-        </p>
-      ) : null}
-    </section>
-    <section aria-label="Danger" className="border-t border-white/10 pt-2">
-      <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
-        Danger
-      </h4>
-      {confirmingDelete ? (
-        <div className="flex flex-col gap-2">
-          <p className="text-[11px] text-muted-foreground">
-            Delete “{savedName}” with {formatCrewMemberCount(memberCount)}? Only
-            the crew disappears; the conversations stay exactly where they are.
-          </p>
-          <div className="flex items-center gap-1.5">
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              className="h-7 flex-1 text-xs"
-              disabled={busy}
-              onClick={onConfirmDelete}
-            >
-              Delete crew
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs"
-              disabled={busy}
-              onClick={onCancelDelete}
-            >
-              Cancel
-            </Button>
-          </div>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <h3 className="truncate text-sm font-medium">{savedName}</h3>
+          <p className="text-[11px] text-muted-foreground">Crew settings</p>
         </div>
-      ) : (
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          className="h-7 w-full justify-start gap-1.5 px-2 text-xs font-normal text-destructive hover:text-destructive"
-          onClick={onRequestDelete}
+          aria-label="Close crew settings"
+          onClick={onClose}
+          className="size-7 shrink-0 p-0 text-muted-foreground hover:text-foreground"
         >
-          <Trash2 className="size-3.5" />
-          Delete crew
+          <X className="size-3.5" />
         </Button>
-      )}
-    </section>
+      </header>
 
-    <div className="flex flex-col gap-1 rounded-md border border-white/10 bg-white/[0.02] px-3 py-2">
-      <p className="text-[11px] font-medium">A run can contain several laps</p>
-      <p className="text-[10px] text-muted-foreground">
-        Correction laps stay in the same run until a human handoff. The delivery
-        limit spans all laps.
+      {updateError ? (
+        <p role="alert" className="text-xs text-destructive">
+          {updateError}
+        </p>
+      ) : null}
+
+      <section
+        aria-label="Seats"
+        data-crew-seats
+        className="flex flex-col gap-2"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="text-xs font-medium">
+            Seats{' '}
+            <span className="font-normal text-muted-foreground">
+              {members.length}
+            </span>
+          </h4>
+          {/* An empty crew shows both add actions in its own state, so it
+              has no menu and no menu button (MAR-3118 lap 3, C2). */}
+          {members.length > 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-haspopup="menu"
+              aria-expanded={addMenuOpen}
+              disabled={busy}
+              onClick={onAddMenuToggle}
+              className="h-7 gap-1 px-2 text-[11px]"
+            >
+              <Plus aria-hidden className="size-3.5" />
+              Add
+              <ChevronDown aria-hidden className="size-3.5" />
+            </Button>
+          ) : null}
+        </div>
+        {/* One set of add actions (lap 2, F1): an empty crew already shows
+            both in its own state, so the menu does not repeat them. */}
+        {addMenuOpen && members.length > 0 ? (
+          <div
+            role="menu"
+            aria-label="Add a seat"
+            className="flex flex-wrap gap-1.5 rounded-md border border-white/10 bg-white/[0.02] p-1.5"
+          >
+            {addActions(true)}
+          </div>
+        ) : null}
+
+        {offersSeatSearch(members.length) ? (
+          <div className="relative">
+            <Search
+              aria-hidden
+              className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              type="search"
+              value={seatQuery}
+              placeholder="Find a seat by name, role or host"
+              aria-label="Find a seat by name, role or host"
+              onChange={(event) => onSeatQueryChange(event.target.value)}
+              className="h-8 pl-7 text-xs"
+            />
+          </div>
+        ) : null}
+
+        {members.length === 0 ? (
+          <div
+            data-crew-no-seats
+            className="flex flex-col gap-2 rounded-md border border-dashed border-white/15 p-3"
+          >
+            <p className="text-xs font-medium">No seats yet</p>
+            <p className="text-[11px] text-muted-foreground">
+              A seat is a conversation that lives in this crew, or a recipe the
+              crew spawns when a wire reaches it. Seat the mastermind first —
+              wires need somewhere to leave from.
+            </p>
+            <div className="flex flex-wrap gap-1.5">{addActions(false)}</div>
+          </div>
+        ) : (
+          groups.map((group) => (
+            <section
+              key={group.role}
+              aria-label={`${group.title} ${group.count}`}
+              data-seat-group={group.role}
+              className="flex flex-col gap-1"
+            >
+              <h5 className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                {group.title} {group.count}
+              </h5>
+              <ul className="flex flex-col gap-1">
+                {group.members.map(renderSeat)}
+              </ul>
+            </section>
+          ))
+        )}
+      </section>
+
+      <details
+        data-crew-details
+        className="group border-t border-white/10 pt-2"
+      >
+        <summary className="cursor-pointer list-none text-[11px] text-muted-foreground hover:text-foreground">
+          Crew details — name, decoration, loop limits, export
+        </summary>
+        <div className="mt-3 flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="crew-name"
+              className="text-[11px] uppercase tracking-wide text-muted-foreground"
+            >
+              Crew name
+            </label>
+            <Input
+              id="crew-name"
+              value={crewName}
+              disabled={busy}
+              onChange={(event) => onCrewNameChange(event.target.value)}
+              className="h-8 text-xs"
+            />
+          </div>
+
+          <section aria-label="Decoration" className="flex flex-col gap-1.5">
+            <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Decoration
+            </h4>
+            <CrewDecorationPicker
+              emoji={emoji}
+              accentColor={accentColor}
+              onEmojiChange={onEmojiChange}
+              onAccentColorChange={onAccentColorChange}
+            />
+          </section>
+
+          <div className="flex flex-col gap-1.5">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Loop limits
+            </p>
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="crew-delivery-limit"
+                className="flex-1 text-[11px] text-muted-foreground"
+              >
+                Delivery limit
+              </label>
+              <Input
+                id="crew-delivery-limit"
+                type="number"
+                min={1}
+                value={deliveryLimit ?? ''}
+                placeholder={String(defaultDeliveryLimit)}
+                aria-label="Delivery limit per run for this crew"
+                disabled={busy}
+                onChange={(event) =>
+                  onDeliveryLimitChange(readLimit(event.target.value))
+                }
+                className="h-7 w-16 text-xs"
+              />
+              <span className="text-[11px] text-muted-foreground">per run</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground/70">
+              {flowRunCeilingNote(deliveryLimit ?? defaultDeliveryLimit)}
+            </p>
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="crew-attention-minutes"
+                className="flex-1 text-[11px] text-muted-foreground"
+              >
+                Ask for attention after
+              </label>
+              <Input
+                id="crew-attention-minutes"
+                type="number"
+                min={1}
+                value={attentionMinutes ?? ''}
+                placeholder={String(defaultAttentionMinutes)}
+                aria-label="Minutes without a reply before this crew asks for attention"
+                disabled={busy}
+                onChange={(event) =>
+                  onAttentionMinutesChange(readLimit(event.target.value))
+                }
+                className="h-7 w-16 text-xs"
+              />
+              <span className="text-[11px] text-muted-foreground">minutes</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground/70">
+              The timer watches for a reply still owed. It is not a total
+              run-duration limit.
+            </p>
+          </div>
+
+          <section
+            aria-label="Recipe"
+            className="flex flex-col gap-2 border-t border-white/10 pt-2"
+          >
+            <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Recipe
+            </h4>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Input
+                type="checkbox"
+                className="size-3.5 rounded-sm p-0"
+                checked={includePositions}
+                disabled={exporting}
+                onChange={(event) =>
+                  onIncludePositionsChange(event.target.checked)
+                }
+              />
+              Include positions
+            </label>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-7 text-xs"
+              disabled={exporting}
+              onClick={onExport}
+            >
+              {exporting ? 'Exporting…' : 'Export crew…'}
+            </Button>
+            {lastExportPath ? (
+              <p
+                className="truncate text-[11px] text-muted-foreground"
+                title={lastExportPath}
+              >
+                Last exported to …/
+                {lastExportPath.split('/').filter(Boolean).slice(-2).join('/')}
+              </p>
+            ) : null}
+          </section>
+          <section
+            aria-label="Danger"
+            className="border-t border-white/10 pt-2"
+          >
+            <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Danger
+            </h4>
+            {confirmingDelete ? (
+              <div className="flex flex-col gap-2">
+                <p className="text-[11px] text-muted-foreground">
+                  Delete “{savedName}” with {formatCrewMemberCount(memberCount)}
+                  ? Only the crew disappears; the conversations stay exactly
+                  where they are.
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    className="h-7 flex-1 text-xs"
+                    disabled={busy}
+                    onClick={onConfirmDelete}
+                  >
+                    Delete crew
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    disabled={busy}
+                    onClick={onCancelDelete}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 w-full justify-start gap-1.5 px-2 text-xs font-normal text-destructive hover:text-destructive"
+                onClick={onRequestDelete}
+              >
+                <Trash2 className="size-3.5" />
+                Delete crew
+              </Button>
+            )}
+          </section>
+
+          <div className="flex flex-col gap-1 rounded-md border border-white/10 bg-white/[0.02] px-3 py-2">
+            <p className="text-[11px] font-medium">
+              A run can contain several laps
+            </p>
+            <p className="text-[10px] text-muted-foreground">
+              Correction laps stay in the same run until a human handoff. The
+              delivery limit spans all laps.
+            </p>
+          </div>
+
+          {/* R7: says everything, enforces nothing. The engine reads a source's
+            wires at settle time, so an edit saved now applies from the next
+            delivery and cannot rewrite a hop already recorded. */}
+          <p className="text-[10px] text-muted-foreground/70">
+            {running
+              ? 'Crew is running — changes apply from the next delivery.'
+              : 'Crew is idle · settings can be edited.'}
+          </p>
+        </div>
+      </details>
+
+      <p className="text-[10px] text-muted-foreground/70">
+        Removing a seat never deletes its conversation — it stays in Flat.
       </p>
-    </div>
-
-    {/* R7: says everything, enforces nothing. The engine reads a source's
-        wires at settle time, so an edit saved now applies from the next
-        delivery and cannot rewrite a hop already recorded. */}
-    <p className="text-[10px] text-muted-foreground/70">
-      {running
-        ? 'Crew is running — changes apply from the next delivery.'
-        : 'Crew is idle · settings can be edited.'}
-    </p>
-  </section>
-)
+    </section>
+  )
+}

@@ -350,6 +350,11 @@ interface SessionCrewMemberData {
   /** A dynamic seat's recipe; null on a resident seat. */
   providerId: string | null
   model: string | null
+  /**
+   * A resident seat whose conversation was deleted (MAR-3118 R10); derived by
+   * the read, never stored.
+   */
+  conversationMissing: boolean
 
   /** Where the card sits on the Canvas; null means "lay it out" (R10). */
   canvasX: number | null
