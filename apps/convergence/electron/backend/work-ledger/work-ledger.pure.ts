@@ -89,9 +89,17 @@ export function pullRequestForIssue(
 ): SessionPullRequest | null {
   const pr = parseSessionPullRequest(pullRequestJson)
   if (!pr || !issueIdentifier) return null
-  return pr.headBranch.toLowerCase().includes(issueIdentifier.toLowerCase())
-    ? pr
-    : null
+  return branchNamesIssue(pr.headBranch, issueIdentifier) ? pr : null
+}
+
+/**
+ * The branch names the issue as a token (lap 2, B): case-insensitive, not
+ * preceded by a letter or digit, not followed by a digit. `MAR-300` is not in
+ * `agent/mar-3008-tray-key`; `MAR-3008` is.
+ */
+export function branchNamesIssue(branch: string, identifier: string): boolean {
+  const escaped = identifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(?<![A-Za-z0-9])${escaped}(?![0-9])`, 'i').test(branch)
 }
 
 export function workLedgerEntryFromJoinedRow(

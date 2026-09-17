@@ -13,6 +13,17 @@ import type {
 export const TRACKER_WATCH_INTERVAL_MS = 60_000
 
 /**
+ * How long a rate-limited tracker is left alone when its reply names no
+ * reset time (lap 2, D). A rate limit always backs off.
+ */
+export const TRACKER_RATE_LIMIT_DEFAULT_BACKOFF_MS = 5 * 60_000
+
+/** A row whose issue the loop has let go of: nothing more to say about it. */
+function isTerminal(state: WorkLedgerState): boolean {
+  return state === 'done' || state === 'unassigned'
+}
+
+/**
  * The ledger state a logical status IS (MAR-3084 R5), or null for a status
  * the binding does not map. An unmapped status writes no row: the ledger has
  * no word for it, and naming it any of the six would be a guess.
@@ -93,8 +104,25 @@ export function diffTrackerSnapshot(input: {
   for (const issue of input.issues) {
     seen.add(issue.id)
     const state = workLedgerStateFor(issue.logicalStatus)
-    if (state === null) continue
     const previous = currentByIssue.get(issue.id)
+    if (state === null) {
+      // An unmapped status (lap 2, E). The ledger has no word for it, so a
+      // current row that still says the issue is in the loop is let go of
+      // with the tracker's own word; with no row, or one already let go of,
+      // nothing is written. Map the status in the binding to read it as done.
+      if (previous && !isTerminal(previous.state)) {
+        rows.push({
+          ...carriedFrom(previous, input.seenAt),
+          trackerStatus: issue.status,
+          fact: {
+            logicalStatus: issue.logicalStatus,
+            branchName: issue.branchName,
+            updatedAt: issue.updatedAt,
+          },
+        })
+      }
+      continue
+    }
     const next: NewWorkLedgerRecord = {
       crewId: input.crewId,
       issueId: issue.id,
@@ -120,24 +148,31 @@ export function diffTrackerSnapshot(input: {
 
   for (const previous of input.current) {
     if (seen.has(previous.issueId) || previous.state === 'unassigned') continue
-    // A new row, carried from the last one; its `id` is the service's to mint.
-    rows.push({
-      crewId: previous.crewId,
-      issueId: previous.issueId,
-      issueIdentifier: previous.issueIdentifier,
-      issueTitle: previous.issueTitle,
-      issueUrl: previous.issueUrl,
-      seat: null,
-      wave: previous.wave,
-      lap: previous.lap,
-      state: 'unassigned',
-      trackerStatus: previous.trackerStatus,
-      groundedAt: previous.groundedAt,
-      seenAt: input.seenAt,
-      fact: { ...previous.fact },
-    })
+    rows.push(carriedFrom(previous, input.seenAt))
   }
   return rows
+}
+
+/** An `unassigned` row carried from the last one; the service mints its id. */
+function carriedFrom(
+  previous: WorkLedgerRecord,
+  seenAt: string,
+): NewWorkLedgerRecord {
+  return {
+    crewId: previous.crewId,
+    issueId: previous.issueId,
+    issueIdentifier: previous.issueIdentifier,
+    issueTitle: previous.issueTitle,
+    issueUrl: previous.issueUrl,
+    seat: null,
+    wave: previous.wave,
+    lap: previous.lap,
+    state: 'unassigned',
+    trackerStatus: previous.trackerStatus,
+    groundedAt: previous.groundedAt,
+    seenAt,
+    fact: { ...previous.fact },
+  }
 }
 
 /** Whether a crew's tracker may be asked now (MAR-3084 R7). */
@@ -173,6 +208,26 @@ export function trackerHealthAfter(input: {
     since: input.previous?.state === state ? input.previous.since : nowIso,
     lastOkAt,
     backoffUntil:
-      state === 'rate-limited' ? input.outcome.refusal.retryAt : null,
+      state === 'rate-limited'
+        ? (input.outcome.refusal.retryAt ??
+          new Date(
+            input.now.getTime() + TRACKER_RATE_LIMIT_DEFAULT_BACKOFF_MS,
+          ).toISOString())
+        : null,
   }
+}
+
+/**
+ * Whether a health change is worth telling the windows about (lap 2, F):
+ * a new state or a new backoff. A quiet successful read is not news.
+ */
+export function trackerHealthChanged(
+  previous: TrackerHealth | null,
+  next: TrackerHealth,
+): boolean {
+  return (
+    previous === null ||
+    previous.state !== next.state ||
+    previous.backoffUntil !== next.backoffUntil
+  )
 }

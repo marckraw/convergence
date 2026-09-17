@@ -82,3 +82,23 @@ describe('reading a ledger row', () => {
     })
   })
 })
+
+describe('MAR-3084 lap 2, B: the identifier matches as a token', () => {
+  it.each([
+    ['MAR-300', 'agent/mar-3008-tray-key', false],
+    ['MAR-30', 'agent/mar-3008-tray-key', false],
+    ['MAR-3008', 'agent/mar-3008-tray-key', true],
+    ['mar-3008', 'feature/MAR-3008', true],
+    ['MAR-3008', 'agent/XMAR-3008-tray', false],
+    ['MAR-3008', 'agent/mar-30080-other', false],
+    ['MAR-3008', 'mar-3008', true],
+    ['MAR-3008', 'fix-mar-3008b', true],
+  ])('%s in %s -> %s', (identifier, headBranch, carries) => {
+    // Mutation: a bare case-insensitive `includes` -> MAR-300 / MAR-30 /
+    // XMAR-3008 / mar-30080 carry the PR, red.
+    expect(
+      pullRequestForIssue(JSON.stringify({ ...PR, headBranch }), identifier) !==
+        null,
+    ).toBe(carries)
+  })
+})

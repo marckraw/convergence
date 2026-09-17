@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   diffTrackerSnapshot,
   isTrackerTickDue,
+  TRACKER_RATE_LIMIT_DEFAULT_BACKOFF_MS,
   trackerHealthAfter,
+  trackerHealthChanged,
 } from './tracker-watcher.pure'
 import type { TrackerIssue, TrackerLogicalStatus } from './tracker.types'
 import type {
@@ -119,16 +121,53 @@ describe('MAR-3084 R5: state comes from the record', () => {
     for (const row of appended) expect(row).not.toHaveProperty('id')
   })
 
-  it('an unmapped status writes no row and does not unassign the issue', () => {
+  it('lap 2, E: an unmapped status lets a working issue go once, with the tracker’s own word', () => {
+    const working = recorded(issue('in-progress'))
+    const canceled = issue('other', { status: 'Canceled' })
+
+    // Mutation: skip an unmapped status -> zero rows, red.
+    const rows = diffTrackerSnapshot({
+      crewId: 'crew-1',
+      current: [working],
+      issues: [canceled],
+      seenAt: SEEN,
+    })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      state: 'unassigned',
+      trackerStatus: 'Canceled',
+      seat: null,
+      lap: working.lap,
+      seenAt: SEEN,
+    })
+
+    // The next tick, still Canceled -> nothing more.
     expect(
       diffTrackerSnapshot({
         crewId: 'crew-1',
-        current: [recorded(issue('in-progress'))],
-        issues: [issue('other', { status: 'Canceled' })],
-        seenAt: SEEN,
+        current: [{ id: 'row-2', ...rows[0]! }],
+        issues: [canceled],
+        seenAt: '2026-09-17T08:01:00.000Z',
       }),
     ).toEqual([])
   })
+
+  it.each([
+    ['no prior row', () => [] as WorkLedgerRecord[]],
+    ['a done row', () => [recorded(issue('done'))]],
+  ])(
+    'lap 2, E: an unmapped status with %s writes nothing',
+    (_case, current) => {
+      expect(
+        diffTrackerSnapshot({
+          crewId: 'crew-1',
+          current: current(),
+          issues: [issue('other', { status: 'Canceled' })],
+          seenAt: SEEN,
+        }),
+      ).toEqual([])
+    },
+  )
 })
 
 describe('MAR-3084 R7: due and backoff are pure', () => {
@@ -161,6 +200,42 @@ describe('MAR-3084 R7: due and backoff are pure', () => {
         now,
       }),
     ).toBe(false)
+  })
+
+  it('lap 2, D: a rate limit with no reset time still backs off, by the default', () => {
+    const health = trackerHealthAfter({
+      previous: null,
+      outcome: {
+        ok: false,
+        refusal: { kind: 'rate-limited', message: 'x', retryAt: null },
+      },
+      now,
+    })
+    // Mutation: a null backoff -> `backoffUntil: null`, red.
+    expect(health.backoffUntil).toBe(
+      new Date(
+        now.getTime() + TRACKER_RATE_LIMIT_DEFAULT_BACKOFF_MS,
+      ).toISOString(),
+    )
+    expect(TRACKER_RATE_LIMIT_DEFAULT_BACKOFF_MS).toBe(5 * 60_000)
+  })
+
+  it('lap 2, F: only a new state or a new backoff is news', () => {
+    const ok = trackerHealthAfter({
+      previous: null,
+      outcome: { ok: true },
+      now,
+    })
+    const okAgain = trackerHealthAfter({
+      previous: ok,
+      outcome: { ok: true },
+      now: new Date('2026-09-17T08:01:00.000Z'),
+    })
+    expect(trackerHealthChanged(null, ok)).toBe(true)
+    expect(trackerHealthChanged(ok, okAgain)).toBe(false)
+    expect(trackerHealthChanged(ok, { ...okAgain, state: 'unreachable' })).toBe(
+      true,
+    )
   })
 
   it('keeps `since` across one outage and remembers the last ok', () => {

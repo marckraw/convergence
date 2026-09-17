@@ -742,7 +742,13 @@ async function startApp(): Promise<void> {
       console.warn('Provider account health check failed')
     })
   registerFeedbackIpcHandlers(feedbackService)
-  registerCrewIpcHandlers({ service: crewService })
+  // Built before the crew doors: deleting a crew forgets its tracker key
+  // (MAR-3084 lap 2, C).
+  const trackerCredentials = new TrackerCredentialsService()
+  registerCrewIpcHandlers({
+    service: crewService,
+    forgetTrackerKey: (crewId) => trackerCredentials.deleteKey(crewId),
+  })
   registerCrewExportIpc(new CrewExportService(db), crewService)
   registerCrewImportIpc(
     new CrewImportService(db, sessionService, crewService, relayService),
@@ -825,7 +831,6 @@ async function startApp(): Promise<void> {
   // The label watcher (MAR-3084): reads each bound crew's tracker once a
   // minute and appends what changed to the work ledger. Read-only toward the
   // tracker; the key stays in the Keychain and only the main process reads it.
-  const trackerCredentials = new TrackerCredentialsService()
   const trackerWatcher = new TrackerWatcherService({
     crews: crewService,
     ledger: new WorkLedgerService(db),
@@ -836,6 +841,7 @@ async function startApp(): Promise<void> {
   registerTrackerIpcHandlers({
     credentials: trackerCredentials,
     probe: (crewId) => trackerWatcher.probe(crewId),
+    crewExists: (crewId) => crewService.getById(crewId) !== null,
   })
   registerWorkLedgerIpcHandlers({
     snapshot: (crewId) => trackerWatcher.snapshot(crewId),

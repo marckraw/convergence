@@ -6,6 +6,13 @@ import { WorkLedgerService } from '../work-ledger/work-ledger.service'
 import type { WorkLedgerSnapshot } from '../work-ledger/work-ledger.types'
 import { TRACKER_WATCH_INTERVAL_MS } from './tracker-watcher.pure'
 import { TrackerWatcherService } from './tracker-watcher.service'
+import { createLinearTrackerAdapter } from './linear-tracker.adapter'
+import {
+  linearIssueNode,
+  linearIssuesBody,
+  linearLabel,
+  recordedReply,
+} from './linear-tracker.fixture'
 import {
   TrackerRefusalError,
   type TrackerAdapter,
@@ -195,6 +202,113 @@ describe('MAR-3084 R7: the tick is a house-rules timer', () => {
         lastOkAt: '2026-09-17T08:00:00.000Z',
       },
     })
+  })
+
+  it('lap 2, A: a truncated read (more pages, no cursor) appends nothing and keeps the rows', async () => {
+    // Through the real Linear adapter and parse: page one of a two-issue
+    // project, then a first page that claims more but gives no cursor.
+    const node = (id: string, identifier: string) =>
+      linearIssueNode({
+        id,
+        identifier,
+        state: 'In Progress',
+        labels: [linearLabel('opus', 'horse')],
+      })
+    const replies = [
+      linearIssuesBody([node('issue-1', 'EX-1'), node('issue-2', 'EX-2')]),
+      linearIssuesBody([node('issue-1', 'EX-1')], {
+        hasNextPage: true,
+        endCursor: null,
+      }),
+    ]
+    const service = new TrackerWatcherService({
+      crews: new CrewService(db),
+      ledger,
+      resolveKey: async () => 'lin_api_fixture',
+      createAdapter: ({ apiKey, binding }) =>
+        createLinearTrackerAdapter({
+          apiKey,
+          binding,
+          now: () => clock,
+          fetch: async () => recordedReply(200, replies.shift()),
+        }),
+      broadcast: () => {},
+      now: () => clock,
+      log: vi.fn(),
+    })
+
+    await service.tick()
+    const before = ledger.currentView(crewId)
+    expect(before).toHaveLength(2)
+    clock = new Date('2026-09-17T08:01:00.000Z')
+    await service.tick()
+
+    // Mutation: read `hasNextPage` without a cursor as the last page -> EX-2
+    // gets a permanent `unassigned` row, red.
+    expect(ledger.currentView(crewId)).toEqual(before)
+    expect(service.trackerHealth(crewId)).toMatchObject({
+      state: 'bad-response',
+      lastOkAt: '2026-09-17T08:00:00.000Z',
+    })
+  })
+
+  it('lap 2, D: a rate limit with no reset header waits the default, not one interval', async () => {
+    const list = vi
+      .fn<TrackerAdapter['listLabeledIssues']>()
+      .mockRejectedValueOnce(refusal('rate-limited', null))
+      .mockResolvedValue([ISSUE])
+    const { service } = watcher(list)
+
+    await service.tick()
+    clock = new Date('2026-09-17T08:01:00.000Z')
+    await service.tick()
+    // Mutation: a null backoff -> the second tick reads, red.
+    expect(list).toHaveBeenCalledTimes(1)
+
+    clock = new Date('2026-09-17T08:05:00.000Z')
+    await service.tick()
+    expect(list).toHaveBeenCalledTimes(2)
+  })
+
+  it('lap 2, F: a read with nothing new broadcasts nothing', async () => {
+    const list = vi.fn(async () => [ISSUE])
+    const { service } = watcher(list)
+
+    await service.tick()
+    expect(broadcasts).toHaveLength(1)
+    clock = new Date('2026-09-17T08:01:00.000Z')
+    await service.tick()
+    // Mutation: broadcast after every read -> two, red.
+    expect(broadcasts).toHaveLength(1)
+
+    list.mockResolvedValue([
+      { ...ISSUE, logicalStatus: 'in-review', status: 'In Review' },
+    ])
+    clock = new Date('2026-09-17T08:02:00.000Z')
+    await service.tick()
+    expect(broadcasts).toHaveLength(2)
+  })
+
+  it('lap 2, F: a tick still awaiting its read when the next fires reads once', async () => {
+    let release: (issues: TrackerIssue[]) => void = () => {}
+    const list = vi.fn(
+      () =>
+        new Promise<TrackerIssue[]>((resolve) => {
+          release = resolve
+        }),
+    )
+    const { service } = watcher(list)
+
+    const handle = service.start()
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(TRACKER_WATCH_INTERVAL_MS * 2)
+    // Mutation: drop the `ticking` guard -> three reads, red.
+    expect(list).toHaveBeenCalledTimes(1)
+    release([ISSUE])
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(TRACKER_WATCH_INTERVAL_MS)
+    expect(list).toHaveBeenCalledTimes(2)
+    handle.stop()
   })
 
   it('a crew with no key or no binding is never read', async () => {

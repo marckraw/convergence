@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
+  TrackerInputTooLongError,
   DEFAULT_TRACKER_STATUS_MAP,
   normalizeTrackerBinding,
   trackerLabelGroupName,
@@ -53,5 +54,23 @@ describe('the binding door', () => {
   it('names the group a prefix spells', () => {
     expect(trackerLabelGroupName('horse:')).toBe('horse')
     expect(trackerLabelGroupName(' seat ')).toBe('seat')
+  })
+})
+
+describe('MAR-3084 lap 2, F: bounded strings', () => {
+  it('refuses a project id or a prefix over 128 characters, typed', () => {
+    const long = 'x'.repeat(129)
+    for (const input of [
+      { projectId: long },
+      { projectId: 'p', labelPrefix: long },
+      { projectId: 'p', wavePrefix: long },
+    ]) {
+      expect(() => normalizeTrackerBinding(input)).toThrow(
+        TrackerInputTooLongError,
+      )
+    }
+    expect(
+      normalizeTrackerBinding({ projectId: 'x'.repeat(128) }).projectId,
+    ).toHaveLength(128)
   })
 })

@@ -1,6 +1,10 @@
 import { execFile } from 'child_process'
 import { describeSecurityFailure } from './execution-host-daemon-credentials.pure'
 import {
+  requireTrackerInputLength,
+  TRACKER_API_KEY_MAX_LENGTH,
+} from '../tracker/tracker-binding.pure'
+import {
   addTrackerKeyCommand,
   deleteTrackerKeyArgs,
   findTrackerKeyArgs,
@@ -108,6 +112,11 @@ export class TrackerCredentialsService {
     this.requireDarwin()
     const key = apiKey.trim()
     if (!key) throw new Error('A tracker API key cannot be empty.')
+    requireTrackerInputLength(
+      'A tracker API key',
+      key,
+      TRACKER_API_KEY_MAX_LENGTH,
+    )
     const command = addTrackerKeyCommand({ crewId, apiKey: key })
     await this.run({
       args: ['-i'],

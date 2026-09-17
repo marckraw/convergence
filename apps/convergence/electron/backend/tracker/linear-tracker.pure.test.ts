@@ -101,6 +101,24 @@ describe('MAR-3084 R1: the seat is a label child, read as group/child', () => {
     ])
   })
 
+  it('lap 2, A: a page that says there is more but gives no cursor is bad-response, never the last page', () => {
+    for (const endCursor of [null, '', 42]) {
+      const body = {
+        data: {
+          issues: {
+            nodes: RECORDED_TWO_ISSUE_PAGE.data.issues.nodes,
+            pageInfo: { hasNextPage: true, endCursor },
+          },
+        },
+      }
+      // Mutation: read it as the last page -> `ok: true`, red.
+      expect(parseLinearIssuesPage(body, READ)).toMatchObject({
+        ok: false,
+        refusal: { kind: 'bad-response' },
+      })
+    }
+  })
+
   it('refuses a body without an issue list as bad-response', () => {
     expect(parseLinearIssuesPage({ data: {} }, READ)).toMatchObject({
       ok: false,

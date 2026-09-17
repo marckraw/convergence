@@ -175,14 +175,22 @@ export function parseLinearIssuesPage(
     })
   }
 
+  const hasNextPage = pageInfo.hasNextPage === true
+  const endCursor =
+    typeof pageInfo.endCursor === 'string' && pageInfo.endCursor
+      ? pageInfo.endCursor
+      : null
+  // A complete read is the only licence to unassign (lap 2, A): a page that
+  // says there is more but gives no way to ask for it would otherwise end the
+  // walk and read as the whole project, and every issue on the unread pages
+  // would get a permanent `unassigned` row.
+  if (hasNextPage && endCursor === null) {
+    return badResponse('Linear said there is another page but gave no cursor.')
+  }
+
   return {
     ok: true,
-    page: {
-      issues: parsed,
-      hasNextPage: pageInfo.hasNextPage === true,
-      endCursor:
-        typeof pageInfo.endCursor === 'string' ? pageInfo.endCursor : null,
-    },
+    page: { issues: parsed, hasNextPage, endCursor },
   }
 }
 

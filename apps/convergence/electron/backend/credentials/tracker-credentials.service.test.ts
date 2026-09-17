@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { TrackerInputTooLongError } from '../tracker/tracker-binding.pure'
 import {
   SecurityCommandError,
   TrackerCredentialsService,
@@ -71,5 +72,20 @@ describe('MAR-3084 R3: the key is a Keychain fact', () => {
     await expect(
       new TrackerCredentialsService({ run, platform: 'darwin' }).deleteKey('c'),
     ).rejects.toThrow('locked')
+  })
+})
+
+describe('MAR-3084 lap 2, F: a key is bounded', () => {
+  it('refuses a key over 512 characters without calling security or echoing it', async () => {
+    const { run } = keychain()
+    const service = new TrackerCredentialsService({ run, platform: 'darwin' })
+    const long = `lin_api_${'x'.repeat(600)}`
+    const error = await service.setKey('crew-1', long).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(TrackerInputTooLongError)
+    expect(String((error as Error).message)).not.toContain(long)
+    expect(run).not.toHaveBeenCalled()
+    await expect(service.setKey('crew-1', 'k'.repeat(512))).resolves.toBe(
+      'present',
+    )
   })
 })

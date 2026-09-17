@@ -65,6 +65,7 @@ describe('MAR-3084 R8: the app never writes to the tracker', () => {
         deleteKey: async () => 'absent',
       },
       probe: async () => ({ ok: true, issues: 0 }),
+      crewExists: () => true,
     })
     registerWorkLedgerIpcHandlers({
       snapshot: (crewId) => ({ crewId, entries: [], trackerHealth: null }),

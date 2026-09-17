@@ -5,6 +5,35 @@ import {
 } from './tracker.types'
 
 export const DEFAULT_TRACKER_LABEL_PREFIX = 'horse:'
+
+/** How long a binding field may be (lap 2, F). */
+export const TRACKER_BINDING_FIELD_MAX_LENGTH = 128
+/** How long a tracker API key may be (lap 2, F). */
+export const TRACKER_API_KEY_MAX_LENGTH = 512
+
+/**
+ * A value refused for its length, as a typed refusal: the door names the
+ * field and the limit, and never echoes the value (it may be a key).
+ */
+export class TrackerInputTooLongError extends Error {
+  constructor(
+    readonly field: string,
+    readonly limit: number,
+  ) {
+    super(`${field} must be at most ${limit} characters.`)
+    this.name = 'TrackerInputTooLongError'
+  }
+}
+
+/** Refuses a value longer than `limit`, typed. */
+export function requireTrackerInputLength(
+  field: string,
+  value: string,
+  limit: number,
+): string {
+  if (value.length > limit) throw new TrackerInputTooLongError(field, limit)
+  return value
+}
 export const DEFAULT_TRACKER_WAVE_PREFIX = 'wave:'
 
 /**
@@ -58,10 +87,19 @@ export function normalizeTrackerBinding(
   const projectId =
     typeof input.projectId === 'string' ? input.projectId.trim() : ''
   if (!projectId) throw new Error('A tracker binding needs a project id.')
+  requireTrackerInputLength(
+    'The project id',
+    projectId,
+    TRACKER_BINDING_FIELD_MAX_LENGTH,
+  )
 
   const prefix = (value: unknown, fallback: string, what: string) => {
     const text = typeof value === 'string' ? value.trim() : ''
-    const chosen = text || fallback
+    const chosen = requireTrackerInputLength(
+      what,
+      text || fallback,
+      TRACKER_BINDING_FIELD_MAX_LENGTH,
+    )
     if (!trackerLabelGroupName(chosen)) {
       throw new Error(`${what} must name a label group.`)
     }

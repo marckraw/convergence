@@ -102,6 +102,32 @@ describe('MAR-3084 R2: the adapter agrees with the far side', () => {
     expect((error as TrackerRefusalError).refusal.kind).toBe('unauthorized')
   })
 
+  it('lap 2, A: a truncated walk (more pages, no cursor) rejects, never returns the pages so far', async () => {
+    const error = await adapterAnswering(async () =>
+      recordedReply(
+        200,
+        linearIssuesBody(
+          [
+            linearIssueNode({
+              id: 'a',
+              identifier: 'EX-1',
+              labels: [linearLabel('opus', 'horse')],
+            }),
+          ],
+          { hasNextPage: true, endCursor: null },
+        ),
+      ),
+    )
+      .listLabeledIssues({
+        projectId: 'project-1',
+        labelPrefix: 'horse:',
+        wavePrefix: 'wave:',
+      })
+      .catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(TrackerRefusalError)
+    expect((error as TrackerRefusalError).refusal.kind).toBe('bad-response')
+  })
+
   it('follows the cursor to the last page', async () => {
     const pages = [
       linearIssuesBody(

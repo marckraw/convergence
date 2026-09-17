@@ -10,6 +10,8 @@ export interface TrackerIpcDeps {
     deleteKey(crewId: string): Promise<TrackerCredentialStatus>
   }
   probe: (crewId: string) => Promise<TrackerProbe>
+  /** A key is only ever filed under a crew that exists (lap 2, F). */
+  crewExists: (crewId: string) => boolean
   now?: () => Date
 }
 
@@ -35,8 +37,14 @@ export function registerTrackerIpcHandlers(deps: TrackerIpcDeps): void {
   // Answers the presence bit only: the key goes in and never comes back out.
   ipcMain.handle(
     'tracker:setCredential',
-    (_event, crewId: string, apiKey: string) =>
-      deps.credentials.setKey(crewId, apiKey),
+    async (_event, crewId: string, apiKey: string) => {
+      if (typeof crewId !== 'string' || !deps.crewExists(crewId)) {
+        throw new Error(
+          'A tracker key can only be stored for an existing crew.',
+        )
+      }
+      return deps.credentials.setKey(crewId, apiKey)
+    },
   )
 
   ipcMain.handle('tracker:deleteCredential', (_event, crewId: string) =>

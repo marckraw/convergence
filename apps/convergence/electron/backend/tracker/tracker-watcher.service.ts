@@ -9,6 +9,7 @@ import {
   isTrackerTickDue,
   TRACKER_WATCH_INTERVAL_MS,
   trackerHealthAfter,
+  trackerHealthChanged,
 } from './tracker-watcher.pure'
 import {
   TrackerRefusalError,
@@ -141,6 +142,9 @@ export class TrackerWatcherService {
     if (!apiKey) return
 
     const adapter = this.deps.createAdapter({ apiKey, binding })
+    const previous = this.trackerHealth(crewId)
+    let appended = 0
+    let next: TrackerHealth
     try {
       const issues = await adapter.listLabeledIssues({
         projectId: binding.projectId,
@@ -148,33 +152,28 @@ export class TrackerWatcherService {
         wavePrefix: binding.wavePrefix,
       })
       const now = this.now()
-      this.deps.ledger.append(
-        diffTrackerSnapshot({
-          crewId,
-          current: this.deps.ledger.currentView(crewId),
-          issues,
-          seenAt: now.toISOString(),
-        }),
-      )
-      this.health.set(
+      const rows = diffTrackerSnapshot({
         crewId,
-        trackerHealthAfter({
-          previous: this.trackerHealth(crewId),
-          outcome: { ok: true },
-          now,
-        }),
-      )
+        current: this.deps.ledger.currentView(crewId),
+        issues,
+        seenAt: now.toISOString(),
+      })
+      this.deps.ledger.append(rows)
+      appended = rows.length
+      next = trackerHealthAfter({ previous, outcome: { ok: true }, now })
     } catch (error) {
       if (!(error instanceof TrackerRefusalError)) throw error
-      this.health.set(
-        crewId,
-        trackerHealthAfter({
-          previous: this.trackerHealth(crewId),
-          outcome: { ok: false, refusal: error.refusal },
-          now: this.now(),
-        }),
-      )
+      next = trackerHealthAfter({
+        previous,
+        outcome: { ok: false, refusal: error.refusal },
+        now: this.now(),
+      })
     }
-    this.deps.broadcast(this.snapshot(crewId))
+    this.health.set(crewId, next)
+    // Only news goes to the windows (lap 2, F): rows appended, or a health
+    // that changed state or backoff. `workLedger:list` always answers fresh.
+    if (appended > 0 || trackerHealthChanged(previous, next)) {
+      this.deps.broadcast(this.snapshot(crewId))
+    }
   }
 }
