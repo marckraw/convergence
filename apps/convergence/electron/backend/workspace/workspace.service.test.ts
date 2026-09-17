@@ -77,6 +77,7 @@ describe(
     })
 
     it('copies root env files into a new workspace by default', async () => {
+      writeFileSync(join(repoPath, '.gitignore'), '.env*\n')
       writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=secret\n')
       writeFileSync(join(repoPath, '.env.local'), 'LOCAL_TOKEN=secret\n')
       writeFileSync(join(repoPath, '.env.example'), 'EXAMPLE=1\n')
@@ -107,6 +108,7 @@ describe(
           }),
           projectId,
         )
+      writeFileSync(join(repoPath, '.gitignore'), '.env*\n')
       writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=secret\n')
 
       const ws = await service.create({
@@ -118,6 +120,7 @@ describe(
     })
 
     it('syncs env files to an existing workspace without overwriting by default', async () => {
+      writeFileSync(join(repoPath, '.gitignore'), '.env*\n')
       writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=old\n')
       const ws = await service.create({
         projectId,
@@ -151,6 +154,7 @@ describe(
           }),
           projectId,
         )
+      writeFileSync(join(repoPath, '.gitignore'), '.env*\n')
       writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=old\n')
       const ws = await service.create({
         projectId,
