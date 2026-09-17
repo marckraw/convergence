@@ -21,8 +21,13 @@ export interface WaveRow {
   /** The row's crew, named only when more than one crew is bound (lap 2, E). */
   crewName: string | null
   /**
-   * Which lap this is, against the crew's cap (MAR-3085 R7): `lap 2 of 6`,
-   * or `lap 2` when the crew takes the default rather than a cap of its own.
+   * Which lap this is (MAR-3085 R7): `lap 2`.
+   *
+   * `waveLapLabel` can also say `lap 2 of 6`, but that branch is INERT on
+   * screen: the board passes no cap (lap 2, E), because the only number a
+   * crew carries today is `roundCap` -- a hop budget for one flow run, not a
+   * bound on an issue's laps. A true lap cap rides MAR-3149, and this is the
+   * one place it will arrive.
    */
   lapLabel: string
 }
@@ -30,7 +35,11 @@ export interface WaveRow {
 /** A row's crew, as the board reads it (MAR-3085 R7). */
 export interface WaveRowCrew {
   name: string | null
-  /** The crew's round cap, or null when it takes the app's default. */
+  /**
+   * A cap on this issue's laps, or null for none -- which is what the board
+   * passes today (lap 2, E; MAR-3149). Never `roundCap`: that is a hop
+   * budget for a crew's flow run, in a different unit from a lap.
+   */
   cap: number | null
 }
 

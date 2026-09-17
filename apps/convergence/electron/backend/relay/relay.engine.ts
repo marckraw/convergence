@@ -548,19 +548,6 @@ export class RelayEngine {
   }
 
   /**
-   * The crews whose loop this settling session is part of.
-   *
-   * Two answers unioned, because they answer different halves of the same
-   * question. The crews of its outgoing wires are the ones it can hand work
-   * to. The crews it merely belongs to that own wires are the ones that may be
-   * WAITING on it -- a station wired only as a target has no outgoing wire at
-   * all, and a baton it declares would be the silent drop this feature exists
-   * to remove.
-   *
-   * A crew with no wires anywhere is a label, not a flow: putting a chair in
-   * that room would be inventing a loop nobody drew.
-   */
-  /**
    * Records the ruling a settled reply declared (MAR-3085 R2, R3, R6).
    *
    * Never throws into the settle: a ledger this crew does not have, a line
@@ -592,11 +579,15 @@ export class RelayEngine {
     message: string | null,
     settleId: string,
   ): void {
-    // Only a settle the wires would carry declares anything (lap 2, C): a
-    // failed or muted turn leaves the session's last COMPLETED assistant
-    // message in place, and reading that would record yesterday's ruling
-    // again -- a duplicate row on the identifier path, a false hail on the
-    // seat path, once per failed turn.
+    // A settle that carries no baton carries no ruling either (lap 2, C).
+    // The two are acts of one reply, and a failed or muted turn made neither:
+    // `fire()` refuses to deliver from one, and this refuses to read one --
+    // on BOTH message paths, the answer window's and the fallback's. The
+    // fallback is what makes it load-bearing: with no answer window the
+    // message is the session's last COMPLETED assistant message, so a failed
+    // follow-up turn would re-read the previous ruling and record it again --
+    // a duplicate row on the identifier path, a false hail on the seat path,
+    // once per failed turn.
     if (event.status !== 'completed' || event.relaysMuted) return
     const declaration = readEmittedVerdict(message ?? '')
     if (declaration.kind === 'none') return
@@ -711,6 +702,19 @@ export class RelayEngine {
     if (raised) this.onHailsChanged?.()
   }
 
+  /**
+   * The crews whose loop this settling session is part of.
+   *
+   * Two answers unioned, because they answer different halves of the same
+   * question. The crews of its outgoing wires are the ones it can hand work
+   * to. The crews it merely belongs to that own wires are the ones that may be
+   * WAITING on it -- a station wired only as a target has no outgoing wire at
+   * all, and a baton it declares would be the silent drop this feature exists
+   * to remove.
+   *
+   * A crew with no wires anywhere is a label, not a flow: putting a chair in
+   * that room would be inventing a loop nobody drew.
+   */
   private flowCrewIds(
     sessionId: string,
     relays: readonly SessionRelay[],

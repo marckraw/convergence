@@ -448,7 +448,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
 })
 
 describe('MAR-3085 R7: the row reads the lap, the cap and the ruling', () => {
-  it('a stopped lap: "lap 3 of 6", the verdict word, and "re-groom (Fable)"', () => {
+  it('a stopped lap reads its lap, the verdict word, and "re-groom (Fable)"', () => {
     render(
       <WavePanelView
         layout="column"
@@ -464,7 +464,6 @@ describe('MAR-3085 R7: the row reads the lap, the cap and the ruling', () => {
             }),
           ],
           NOW,
-          () => ({ name: null, cap: 6 }),
         )}
         header={waveHeader({ crews: ANSWERED, rowCount: 1, now: NOW })}
         inertReason={() => null}
@@ -474,7 +473,7 @@ describe('MAR-3085 R7: the row reads the lap, the cap and the ruling', () => {
 
     // Mutation: drop the lap label from the row -> red.
     expect(
-      rowOf('crew-1:EX-1').getByText('opus · stopped · lap 3 of 6 · stop'),
+      rowOf('crew-1:EX-1').getByText('opus · stopped · lap 3 · stop'),
     ).toBeTruthy()
     expect(rowOf('crew-1:EX-1').getByText('re-groom (Fable)')).toBeTruthy()
     expect(

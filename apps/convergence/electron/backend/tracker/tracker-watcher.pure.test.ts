@@ -417,12 +417,38 @@ describe('MAR-3085 R4 (lap 2): the hold ends when the tracker moves', () => {
 
   it('A: a STOP holds, then takes the tracker’s move without turning the lap over', () => {
     const verdict = ruled(returnedRow(1), 'stop', 4)
+    expect(verdict).toMatchObject({
+      verdict: 'stop',
+      verdictSettleId: 'settle-1',
+      verdictNote: 'the reply',
+    })
     expect(tick([verdict], 'In Review', 'in-review')).toEqual([])
 
     const moved = tick([verdict], 'In Progress', 'in-progress')
     expect(moved).toHaveLength(1)
-    // A STOP is not a return: the lap does not turn over.
-    expect(moved[0]).toMatchObject({ state: 'working', lap: 4, verdict: null })
+    // A STOP is not a return: the lap does not turn over. And the row the
+    // WATCHER writes carries no ruling of its own -- the note and the settle
+    // belong to the mastermind's row, not to the tracker's observation.
+    // Mutation: carry `verdictNote: previous.verdictNote` -> red here.
+    expect(moved[0]).toMatchObject({
+      state: 'working',
+      lap: 4,
+      verdict: null,
+      verdictSettleId: null,
+      verdictNote: null,
+    })
+  })
+
+  it('A: a STOP met by Todo is queued again, at the same lap', () => {
+    const verdict = ruled(returnedRow(1), 'stop', 4)
+    const queued = tick([verdict], 'Todo', 'todo')
+    expect(queued).toHaveLength(1)
+    expect(queued[0]).toMatchObject({
+      state: 'assigned',
+      lap: 4,
+      verdict: null,
+      verdictNote: null,
+    })
   })
 
   it('A: the mastermind mis-flips — a RETURN row met by Reviewed says so at once', () => {

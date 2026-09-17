@@ -82,6 +82,11 @@ function nextLap(
  * to that status read as the same lag and was held too: a RETURN worked
  * exactly once per issue. A fact the ledger does not record is a fact it
  * cannot use later.
+ *
+ * The hold is the whole issue, not only its status: while it lasts, a title,
+ * wave or seat change on the tracker writes no row either, and lands on the
+ * first row after the status moves. Accepted -- a ruling is about the lap,
+ * and the alternative is a row per edit during the lag.
  */
 function verdictHoldsAgainst(
   previous: WorkLedgerRecord,
