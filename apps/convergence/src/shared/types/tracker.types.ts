@@ -91,12 +91,21 @@ export type WorkLedgerState =
   | 'reviewed'
   | 'done'
   | 'unassigned'
+  /** A mastermind's STOP: the lap is parked until somebody re-grooms it. */
+  | 'stopped'
+
+/** What a mastermind ruled at a settle (MAR-3085). */
+export type WorkLedgerVerdict = 'pass' | 'return' | 'stop'
 
 /** What else the tick saw, kept verbatim for a later reader. */
 export interface WorkLedgerFact {
   logicalStatus: TrackerLogicalStatus | null
   branchName: string | null
   updatedAt: string | null
+  /** The lap the ledger held when a verdict row was written (MAR-3085 R3). */
+  ledgerLapBefore?: number | null
+  /** The verdict's lap was not the ledger's lap + 1; the ruling still wins. */
+  lapDisagreed?: boolean
 }
 
 /** One observation, as appended. */
@@ -115,6 +124,16 @@ export interface WorkLedgerRecord {
   groundedAt: string | null
   seenAt: string
   fact: WorkLedgerFact
+  /**
+   * The ruling this row records, or null for a row the tracker watcher wrote
+   * (MAR-3085 R3). A verdict row is a fact the app wrote AHEAD of the
+   * tracker, which is why the watcher holds off it (R4).
+   */
+  verdict: WorkLedgerVerdict | null
+  /** The settle the ruling was read from. */
+  verdictSettleId: string | null
+  /** A STOP carries the mastermind's reply; capped where it is written. */
+  verdictNote: string | null
 }
 
 export type NewWorkLedgerRecord = Omit<WorkLedgerRecord, 'id'>

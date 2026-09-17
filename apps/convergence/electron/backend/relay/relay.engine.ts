@@ -25,6 +25,7 @@ import {
   lapNumber,
   readEmittedBaton,
   readEmittedDeclaration,
+  readEmittedVerdict,
   relayConditionMatches,
   resolveRoundCap,
   busyTargetReason,
@@ -39,6 +40,10 @@ import {
   resolveStallMinutes,
 } from './crew-hail.pure'
 import type { CrewHail, RaiseCrewHailInput } from './crew-hail.types'
+import type {
+  WorkLedgerRecord,
+  WorkLedgerVerdict,
+} from '../../../src/shared/types/tracker.types'
 import type { RelayService } from './relay.service'
 import type {
   RelayHop,
@@ -143,6 +148,25 @@ export interface RelayHailGateway {
   raise(input: RaiseCrewHailInput): CrewHail | null
 }
 
+/**
+ * The work ledger, as the engine is allowed to use it (MAR-3085 R2/R3).
+ *
+ * An interface here rather than the service's own type, so `relay` and
+ * `work-ledger` never import each other: the engine reads the current view
+ * and appends a ruling, and there is no third thing it can do to the ledger.
+ */
+export interface VerdictLedgerGateway {
+  currentView(crewId: string): WorkLedgerRecord[]
+  appendVerdict(input: {
+    bound: WorkLedgerRecord
+    verdict: WorkLedgerVerdict
+    lap: number
+    settleId: string
+    note?: string | null
+    seenAt: string
+  }): unknown
+}
+
 interface RecordHopExtra {
   targetSessionId?: string | null
   spawnedSessionId?: string | null
@@ -177,6 +201,12 @@ interface RelayEngineDeps {
   crews: RelayCrewGateway
   accounts: AutomaticTurnAccountSource
   hails: RelayHailGateway
+  /**
+   * The work ledger a `VERDICT:` line lands on (MAR-3085). Optional because
+   * every existing test builds this engine without one, and a crew with no
+   * tracker binding has no ledger rows to rule on.
+   */
+  ledger?: VerdictLedgerGateway
   /** Called for every ledger row, so windows can watch the trail live. */
   onHopSettled?: (event: RelayHopSettled) => void
   onHopAppended?: (hop: RelayHop) => void
@@ -204,6 +234,7 @@ export class RelayEngine {
   private readonly crews: RelayCrewGateway
   private readonly accounts: AutomaticTurnAccountSource
   private readonly hails: RelayHailGateway
+  private readonly ledger?: VerdictLedgerGateway
   private readonly onHopSettled?: (event: RelayHopSettled) => void
   private readonly onHopAppended?: (hop: RelayHop) => void
   private readonly onHailsChanged?: () => void
@@ -309,6 +340,7 @@ export class RelayEngine {
     this.crews = deps.crews
     this.accounts = deps.accounts
     this.hails = deps.hails
+    this.ledger = deps.ledger
     this.onHopSettled = deps.onHopSettled
     this.onHopAppended = deps.onHopAppended
     this.onHailsChanged = deps.onHailsChanged
@@ -351,12 +383,6 @@ export class RelayEngine {
 
       this.enterRun(flowRunId)
       try {
-        const relays = this.relays.listForSourceSession(event.sessionId)
-        const crewIds = this.flowCrewIds(event.sessionId, relays)
-        // Not in anybody's flow: no wires leaving it and no crew that has any.
-        // Nothing to carry and nobody waiting, so nothing to say.
-        if (crewIds.length === 0) return
-
         // Read once per settle rather than once per wire. Every wire asks the
         // same message the same question, and the baton it declares is a fact
         // about the settle, not about any one switch.
@@ -368,6 +394,18 @@ export class RelayEngine {
           readEmittedDeclaration(message ?? '')
         const emittedBaton =
           declaration.kind === 'named' ? declaration.name : null
+
+        // The ruling, once per settle and ABOVE the wire guard: a verdict is
+        // an act of the reply, not of a switch. A crew whose wires are all
+        // dark still has laps, and a PASS that hands nothing on must reach
+        // the ledger (MAR-3085 R3/R5).
+        this.recordVerdict(event, message, settleId)
+
+        const relays = this.relays.listForSourceSession(event.sessionId)
+        const crewIds = this.flowCrewIds(event.sessionId, relays)
+        // Not in anybody's flow: no wires leaving it and no crew that has any.
+        // Nothing to carry and nobody waiting, so nothing to say.
+        if (crewIds.length === 0) return
 
         // Which CREWS answered, not whether anything did. A settle can be a
         // beat in two loops at once, and one crew's wire matching says nothing
@@ -507,6 +545,161 @@ export class RelayEngine {
       continued ??= flowRunId
     }
     return continued ?? randomUUID()
+  }
+
+  /**
+   * Records the ruling a settled reply declared (MAR-3085 R2, R3, R6).
+   *
+   * Never throws into the settle: a ledger this crew does not have, a line
+   * that binds to nothing and a malformed line are all answers, and two of
+   * them are hails. The hop is untouched either way (R5) -- the verdict and
+   * the baton are independent acts of one settle.
+   */
+  private recordVerdict(
+    event: SessionSettledEvent,
+    message: string | null,
+    settleId: string,
+  ): void {
+    try {
+      this.readVerdict(event, message, settleId)
+    } catch (error) {
+      // The verdict is its own act (lap 2, B): a refused ledger write or a
+      // refused hail must not cost the baton its delivery. The wire loop runs
+      // after this, and a settle that could not record a ruling still carries
+      // the work on.
+      console.error(
+        `[relay] verdict not recorded for ${event.sessionId}`,
+        error,
+      )
+    }
+  }
+
+  private readVerdict(
+    event: SessionSettledEvent,
+    message: string | null,
+    settleId: string,
+  ): void {
+    // A settle that carries no baton carries no ruling either (lap 2, C).
+    // The two are acts of one reply, and a failed or muted turn made neither:
+    // `fire()` refuses to deliver from one, and this refuses to read one --
+    // on BOTH message paths, the answer window's and the fallback's. The
+    // fallback is what makes it load-bearing: with no answer window the
+    // message is the session's last COMPLETED assistant message, so a failed
+    // follow-up turn would re-read the previous ruling and record it again --
+    // a duplicate row on the identifier path, a false hail on the seat path,
+    // once per failed turn.
+    if (event.status !== 'completed' || event.relaysMuted) return
+    const declaration = readEmittedVerdict(message ?? '')
+    if (declaration.kind === 'none') return
+    const crewIds = this.crews.crewIdsForSession(event.sessionId)
+    if (crewIds.length === 0) return
+
+    if (declaration.kind === 'malformed') {
+      this.hailVerdict(event, crewIds, declaration.line, 'malformed')
+      return
+    }
+    if (!this.ledger) return
+
+    const bound = this.bindVerdict(event, crewIds, declaration.issueIdentifier)
+    if (bound.kind !== 'bound') {
+      // The source line, never a reconstruction (lap 2, D): a hail that quotes
+      // a line the mastermind did not write sends them looking for it.
+      this.hailVerdict(event, crewIds, declaration.line, bound.problem)
+      return
+    }
+    this.ledger.appendVerdict({
+      bound: bound.row,
+      verdict: declaration.ruling.toLowerCase() as WorkLedgerVerdict,
+      lap: declaration.lap,
+      settleId,
+      note: declaration.ruling === 'STOP' ? message : null,
+      seenAt: new Date().toISOString(),
+    })
+  }
+
+  /**
+   * The one issue a verdict rules on (MAR-3085 R2): the identifier the line
+   * named, else the returned issue of the seat this settle is answering.
+   * Never "the first one" -- two candidates is a question for a human.
+   */
+  private bindVerdict(
+    event: SessionSettledEvent,
+    crewIds: readonly string[],
+    issueIdentifier: string | null,
+  ):
+    | { kind: 'bound'; row: WorkLedgerRecord }
+    | { kind: 'unbound'; problem: string } {
+    const ledger = this.ledger
+    if (!ledger) return { kind: 'unbound', problem: 'no work ledger' }
+    const rows = crewIds.flatMap((crewId) => ledger.currentView(crewId))
+
+    if (issueIdentifier !== null) {
+      const named = rows.filter(
+        (row) => row.issueIdentifier.toUpperCase() === issueIdentifier,
+      )
+      if (named.length === 1) return { kind: 'bound', row: named[0] }
+      return {
+        kind: 'unbound',
+        problem:
+          named.length === 0
+            ? `no ledger row for ${issueIdentifier}`
+            : `${named.length} ledger rows for ${issueIdentifier} — one crew at a time`,
+      }
+    }
+
+    const seats = new Set(
+      this.relays.findHopsByDispatchIds(event.dispatchIds).flatMap((hop) => {
+        const seat = this.crews.findSeatBySession(
+          hop.crewId,
+          hop.sourceSessionId,
+        )
+        return seat?.batonName ? [seat.batonName] : []
+      }),
+    )
+    if (seats.size === 0) {
+      return {
+        kind: 'unbound',
+        problem: 'no seat answered by this settle — name the issue on the line',
+      }
+    }
+    const returned = rows.filter(
+      (row) =>
+        row.state === 'returned' && row.seat !== null && seats.has(row.seat),
+    )
+    if (returned.length === 1) return { kind: 'bound', row: returned[0] }
+    const seatNames = [...seats].join(', ')
+    return {
+      kind: 'unbound',
+      problem:
+        returned.length === 0
+          ? `no returned issue for seat ${seatNames}`
+          : `${returned.length} returned issues for seat ${seatNames}: ${returned
+              .map((row) => row.issueIdentifier)
+              .join(', ')} — name one`,
+    }
+  }
+
+  /** A ruling nobody could record reaches a human, never a log (R6). */
+  private hailVerdict(
+    event: SessionSettledEvent,
+    crewIds: readonly string[],
+    line: string,
+    problem: string,
+  ): void {
+    let raised = false
+    for (const crewId of crewIds) {
+      const hail = this.hails.raise({
+        crewId,
+        reason: 'unrouted',
+        sessionId: event.sessionId,
+        detail: formatCrewHailDetail('unrouted', {
+          verdictLine: line,
+          verdictProblem: problem,
+        }),
+      })
+      if (hail) raised = true
+    }
+    if (raised) this.onHailsChanged?.()
   }
 
   /**

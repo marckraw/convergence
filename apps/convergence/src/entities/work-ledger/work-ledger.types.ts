@@ -9,4 +9,5 @@ export type {
   WorkLedgerEntry,
   WorkLedgerSnapshot,
   WorkLedgerState,
+  WorkLedgerVerdict,
 } from '@/shared/types/tracker.types'

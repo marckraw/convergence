@@ -11,6 +11,7 @@ import type {
   NewWorkLedgerRecord,
   WorkLedgerRecord,
 } from '../work-ledger/work-ledger.types'
+import { verdictLedgerRecord } from '../work-ledger/work-ledger.pure'
 
 const SEEN = '2026-09-17T08:00:00.000Z'
 
@@ -293,5 +294,179 @@ describe('MAR-3084 R7: due and backoff are pure', () => {
       lastOkAt: '2026-09-17T08:00:00.000Z',
       backoffUntil: null,
     })
+  })
+})
+
+describe('MAR-3085 R4 (lap 2): the hold ends when the tracker moves', () => {
+  /**
+   * The production sequence, never a hand-set row: the ledger's own rows all
+   * the way down, so a row the app cannot actually produce cannot pass.
+   */
+  function tick(
+    current: WorkLedgerRecord[],
+    status: string,
+    logicalStatus: Parameters<typeof issue>[0],
+    seenAt = SEEN,
+  ): NewWorkLedgerRecord[] {
+    return diffTrackerSnapshot({
+      crewId: 'crew-1',
+      current,
+      issues: [issue(logicalStatus, { status })],
+      seenAt,
+    })
+  }
+
+  const asCurrent = (row: NewWorkLedgerRecord, id: string): WorkLedgerRecord =>
+    ({ id, ...row }) as WorkLedgerRecord
+
+  /** What `appendVerdict` writes, built by the ledger's own builder. */
+  function ruled(
+    previous: WorkLedgerRecord,
+    verdict: 'return' | 'pass' | 'stop',
+    lap: number,
+  ): WorkLedgerRecord {
+    return asCurrent(
+      verdictLedgerRecord({
+        bound: previous,
+        verdict,
+        lap,
+        settleId: 'settle-1',
+        note: verdict === 'stop' ? 'the reply' : null,
+        seenAt: SEEN,
+      }),
+      `verdict-${verdict}-${lap}`,
+    )
+  }
+
+  /** The `returned` row the watcher writes when Linear says In Review. */
+  const returnedRow = (lap = 1): WorkLedgerRecord =>
+    asCurrent(
+      {
+        ...(tick([], 'In Review', 'in-review')[0] as NewWorkLedgerRecord),
+        lap,
+      },
+      'row-returned',
+    )
+
+  it('A: the whole cycle — RETURN, the tracker catches up, and the next return lands', () => {
+    const returned = returnedRow(1)
+    expect(returned).toMatchObject({ state: 'returned', verdict: null })
+
+    const verdict = ruled(returned, 'return', 2)
+    expect(verdict).toMatchObject({
+      state: 'working',
+      lap: 2,
+      trackerStatus: 'In Review',
+    })
+
+    // Still In Review: the tracker has not moved, so the ruling stands alone.
+    expect(tick([verdict], 'In Review', 'in-review')).toEqual([])
+
+    // The tracker catches up: ONE confirmation row, no verdict, the new word.
+    const confirmed = tick([verdict], 'In Progress', 'in-progress')
+    expect(confirmed).toHaveLength(1)
+    expect(confirmed[0]).toMatchObject({
+      state: 'working',
+      lap: 2,
+      verdict: null,
+      verdictSettleId: null,
+      trackerStatus: 'In Progress',
+    })
+    // Unchanged after that.
+    expect(
+      tick(
+        [asCurrent(confirmed[0]!, 'row-confirm')],
+        'In Progress',
+        'in-progress',
+      ),
+    ).toEqual([])
+
+    // Lap 2 comes back: the `returned` row lands, and the loop can rule again.
+    // Mutation: restore the `previous.verdict !== null ||` disjunct -> the
+    // confirmation row is never written, the hold never clears, and this is
+    // red (`expected [] to have a length of 1`).
+    const backAgain = tick(
+      [asCurrent(confirmed[0]!, 'row-confirm')],
+      'In Review',
+      'in-review',
+    )
+    expect(backAgain).toHaveLength(1)
+    expect(backAgain[0]).toMatchObject({
+      state: 'returned',
+      lap: 2,
+      verdict: null,
+    })
+  })
+
+  it('A: a PASS is confirmed once and then quiet', () => {
+    const verdict = ruled(returnedRow(1), 'pass', 3)
+    expect(tick([verdict], 'In Review', 'in-review')).toEqual([])
+
+    const confirmed = tick([verdict], 'Reviewed', 'reviewed')
+    expect(confirmed).toHaveLength(1)
+    expect(confirmed[0]).toMatchObject({
+      state: 'reviewed',
+      lap: 3,
+      verdict: null,
+      trackerStatus: 'Reviewed',
+    })
+    expect(
+      tick([asCurrent(confirmed[0]!, 'row-confirm')], 'Reviewed', 'reviewed'),
+    ).toEqual([])
+  })
+
+  it('A: a STOP holds, then takes the tracker’s move without turning the lap over', () => {
+    const verdict = ruled(returnedRow(1), 'stop', 4)
+    expect(verdict).toMatchObject({
+      verdict: 'stop',
+      verdictSettleId: 'settle-1',
+      verdictNote: 'the reply',
+    })
+    expect(tick([verdict], 'In Review', 'in-review')).toEqual([])
+
+    const moved = tick([verdict], 'In Progress', 'in-progress')
+    expect(moved).toHaveLength(1)
+    // A STOP is not a return: the lap does not turn over. And the row the
+    // WATCHER writes carries no ruling of its own -- the note and the settle
+    // belong to the mastermind's row, not to the tracker's observation.
+    // Mutation: carry `verdictNote: previous.verdictNote` -> red here.
+    expect(moved[0]).toMatchObject({
+      state: 'working',
+      lap: 4,
+      verdict: null,
+      verdictSettleId: null,
+      verdictNote: null,
+    })
+  })
+
+  it('A: a STOP met by Todo is queued again, at the same lap', () => {
+    const verdict = ruled(returnedRow(1), 'stop', 4)
+    const queued = tick([verdict], 'Todo', 'todo')
+    expect(queued).toHaveLength(1)
+    expect(queued[0]).toMatchObject({
+      state: 'assigned',
+      lap: 4,
+      verdict: null,
+      verdictNote: null,
+    })
+  })
+
+  it('A: the mastermind mis-flips — a RETURN row met by Reviewed says so at once', () => {
+    const verdict = ruled(returnedRow(1), 'return', 2)
+    expect(tick([verdict], 'Reviewed', 'reviewed')[0]).toMatchObject({
+      state: 'reviewed',
+      verdict: null,
+    })
+  })
+
+  it('a stopped row whose label is gone is still unassigned', () => {
+    expect(
+      diffTrackerSnapshot({
+        crewId: 'crew-1',
+        current: [ruled(returnedRow(1), 'stop', 3)],
+        issues: [],
+        seenAt: SEEN,
+      })[0],
+    ).toMatchObject({ state: 'unassigned', seat: null })
   })
 })

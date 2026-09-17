@@ -66,6 +66,35 @@ function nextLap(
   return previous.lap
 }
 
+/**
+ * Whether the tracker still reports the status a ruling superseded
+ * (MAR-3085 R4, amended lap 2): the hold, and only while the lag lasts.
+ *
+ * A verdict row is a fact the app wrote AHEAD of the tracker -- the
+ * mastermind moves the status by hand, and until it does, the tracker keeps
+ * saying what it said before the ruling. Reading that lag as a change is how
+ * a PASS would be reverted to `returned` within the minute.
+ *
+ * The hold ENDS the moment the tracker moves, and the move writes its own
+ * confirmation row (same state, no verdict, the tracker's new word). Holding
+ * silently instead -- treating the catch-up as "no change" -- left the verdict
+ * row current with a stale `trackerStatus` forever, so the next real return
+ * to that status read as the same lag and was held too: a RETURN worked
+ * exactly once per issue. A fact the ledger does not record is a fact it
+ * cannot use later.
+ *
+ * The hold is the whole issue, not only its status: while it lasts, a title,
+ * wave or seat change on the tracker writes no row either, and lands on the
+ * first row after the status moves. Accepted -- a ruling is about the lap,
+ * and the alternative is a row per edit during the lag.
+ */
+function verdictHoldsAgainst(
+  previous: WorkLedgerRecord,
+  issue: TrackerIssue,
+): boolean {
+  return previous.verdict !== null && previous.trackerStatus === issue.status
+}
+
 function sameObservation(
   previous: WorkLedgerRecord,
   next: NewWorkLedgerRecord,
@@ -105,6 +134,9 @@ export function diffTrackerSnapshot(input: {
     seen.add(issue.id)
     const state = workLedgerStateFor(issue.logicalStatus)
     const previous = currentByIssue.get(issue.id)
+    // The hold (MAR-3085 R4): the tracker has not moved yet, so it has
+    // nothing to say about the lap the mastermind just ruled.
+    if (previous && verdictHoldsAgainst(previous, issue)) continue
     if (state === null) {
       // An unmapped status (lap 2, E). The ledger has no word for it, so a
       // current row that still says the issue is in the loop is let go of
@@ -141,6 +173,11 @@ export function diffTrackerSnapshot(input: {
         branchName: issue.branchName,
         updatedAt: issue.updatedAt,
       },
+      // The watcher records what the tracker said; a ruling is the
+      // mastermind's act and only `appendVerdict` writes one (MAR-3085).
+      verdict: null,
+      verdictSettleId: null,
+      verdictNote: null,
     }
     if (previous && sameObservation(previous, next)) continue
     rows.push(next)
@@ -172,6 +209,9 @@ function carriedFrom(
     groundedAt: previous.groundedAt,
     seenAt,
     fact: { ...previous.fact },
+    verdict: null,
+    verdictSettleId: null,
+    verdictNote: null,
   }
 }
 

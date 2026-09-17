@@ -28,7 +28,7 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
   inertReason,
   onOpen,
 }) => {
-  const { entry, action, hostMarker, crewName } = row
+  const { entry, action, hostMarker, crewName, lapLabel } = row
   const key = waveRowKey(entry)
   const body = (
     <>
@@ -43,6 +43,10 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
           crewName,
           entry.seat ?? 'no seat',
           entry.state,
+          // Which lap, against the crew's cap, and the ruling that set it
+          // (MAR-3085 R7).
+          lapLabel,
+          entry.verdict,
           entry.pr ? `PR #${entry.pr.number} ${entry.pr.state}` : null,
         ]
           .filter(Boolean)

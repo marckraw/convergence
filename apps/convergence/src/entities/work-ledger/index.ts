@@ -7,4 +7,5 @@ export type {
   WorkLedgerEntry,
   WorkLedgerSnapshot,
   WorkLedgerState,
+  WorkLedgerVerdict,
 } from './work-ledger.types'

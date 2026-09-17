@@ -34,6 +34,9 @@ function record(
     groundedAt: null,
     seenAt: '2026-09-17T08:00:00.000Z',
     fact: { logicalStatus: 'todo', branchName: null, updatedAt: null },
+    verdict: null,
+    verdictSettleId: null,
+    verdictNote: null,
     ...overrides,
   }
 }
@@ -286,5 +289,106 @@ describe('MAR-3084 R6: the facts join at read time from the app’s own records'
     expect(ledger.list(crew.id)).toMatchObject([
       { seat: 'grok', sessionId: null, pr: null, hostLiveness: null },
     ])
+  })
+})
+
+describe('MAR-3085 R3: the row is the ruling', () => {
+  let db: Database.Database
+  let ledger: WorkLedgerService
+
+  beforeEach(() => {
+    db = getDatabase()
+    ledger = new WorkLedgerService(db)
+    ledger.append([
+      record({ state: 'returned', lap: 1, trackerStatus: 'In Review' }),
+    ])
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+  })
+
+  const bound = () => ledger.currentView('crew-1')[0]!
+
+  it('RETURN, PASS and STOP write the state, the mastermind’s lap and the settle', () => {
+    const returned = ledger.appendVerdict({
+      bound: bound(),
+      verdict: 'return',
+      lap: 2,
+      settleId: 'settle-1',
+      seenAt: '2026-09-18T08:00:00.000Z',
+    })
+    expect(returned).toMatchObject({
+      state: 'working',
+      lap: 2,
+      verdict: 'return',
+      verdictSettleId: 'settle-1',
+      // The tracker has not moved: the row still carries what it last said.
+      trackerStatus: 'In Review',
+      seat: 'opus',
+      issueIdentifier: 'EX-1',
+    })
+    expect(returned.fact).toMatchObject({
+      ledgerLapBefore: 1,
+      lapDisagreed: false,
+    })
+
+    const passed = ledger.appendVerdict({
+      bound: bound(),
+      verdict: 'pass',
+      lap: 3,
+      settleId: 'settle-2',
+      seenAt: '2026-09-18T08:01:00.000Z',
+    })
+    expect(passed).toMatchObject({ state: 'reviewed', lap: 3, verdict: 'pass' })
+
+    const stopped = ledger.appendVerdict({
+      bound: bound(),
+      verdict: 'stop',
+      lap: 4,
+      settleId: 'settle-3',
+      note: 'x'.repeat(5_000),
+      seenAt: '2026-09-18T08:02:00.000Z',
+    })
+    expect(stopped.state).toBe('stopped')
+    expect(stopped.verdictNote).toHaveLength(4_000)
+
+    // Three rulings, three rows, the newest current: append-only holds.
+    expect(
+      (
+        db.prepare('SELECT COUNT(*) AS n FROM work_ledger').get() as {
+          n: number
+        }
+      ).n,
+    ).toBe(4)
+    expect(ledger.currentView('crew-1')).toHaveLength(1)
+    expect(bound()).toMatchObject({ state: 'stopped', lap: 4, verdict: 'stop' })
+  })
+
+  it('takes the mastermind’s lap even when the ledger disagrees, and says so', () => {
+    // Mutation: write the ledger's lap + 1 instead of N -> lap 5 here, red.
+    const row = ledger.appendVerdict({
+      bound: bound(),
+      verdict: 'return',
+      lap: 9,
+      settleId: 'settle-1',
+      seenAt: '2026-09-18T08:00:00.000Z',
+    })
+    expect(row.lap).toBe(9)
+    expect(row.fact.lapDisagreed).toBe(true)
+  })
+
+  it('a PASS carries no note, whatever the reply said', () => {
+    expect(
+      ledger.appendVerdict({
+        bound: bound(),
+        verdict: 'pass',
+        lap: 2,
+        settleId: 'settle-1',
+        note: 'the whole reply',
+        seenAt: '2026-09-18T08:00:00.000Z',
+      }).verdictNote,
+    ).toBeNull()
   })
 })

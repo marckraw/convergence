@@ -55,8 +55,12 @@ export function useWaveBoard(): WaveBoard {
     () => (boundKey ? boundKey.split('\n') : []),
     [boundKey],
   )
-  const crewNames = useMemo(
-    () => new Map(crews.map((crew) => [crew.id, crew.name])),
+  // The crew's name, and no cap (MAR-3085 lap 2, E): `roundCap` is a HOP
+  // budget for one crew's flow run, while a lap is per issue across runs.
+  // Showing it as `lap 3 of 12` would put a bound on screen that the machine
+  // does not enforce in that unit. A true lap cap rides MAR-3149.
+  const crewFacts = useMemo(
+    () => new Map(crews.map((crew) => [crew.id, { name: crew.name }])),
     [crews],
   )
 
@@ -71,10 +75,10 @@ export function useWaveBoard(): WaveBoard {
   const headerCrews = useMemo(
     () =>
       boundCrewIds.map((id) => ({
-        name: crewNames.get(id) ?? id,
+        name: crewFacts.get(id)?.name ?? id,
         health: snapshots[id]?.trackerHealth ?? null,
       })),
-    [snapshots, boundCrewIds, crewNames],
+    [snapshots, boundCrewIds, crewFacts],
   )
 
   // Ages ("since 4m") are statements about now; tick while anything on
@@ -84,10 +88,11 @@ export function useWaveBoard(): WaveBoard {
   const several = boundCrewIds.length > 1
   const sections = useMemo(
     () =>
-      sectionWaveRows(rows, now, (crewId) =>
-        several ? (crewNames.get(crewId) ?? crewId) : null,
-      ),
-    [rows, now, several, crewNames],
+      sectionWaveRows(rows, now, (crewId) => ({
+        name: several ? (crewFacts.get(crewId)?.name ?? crewId) : null,
+        cap: null,
+      })),
+    [rows, now, several, crewFacts],
   )
   const header = useMemo(
     () => waveHeader({ crews: headerCrews, rowCount: rows.length, now }),

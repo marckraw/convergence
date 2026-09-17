@@ -34,6 +34,9 @@ function joined(
     seen_at: '2026-09-17T08:00:00.000Z',
     fact_json:
       '{"logicalStatus":"in-progress","branchName":null,"updatedAt":null}',
+    verdict: null,
+    verdict_settle_id: null,
+    verdict_note: null,
     member_session_id: 's1',
     session_exists: 1,
     pull_request_json: JSON.stringify(PR),

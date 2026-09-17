@@ -152,7 +152,7 @@ describe('MAR-3097 R2 + lap 2, F1: a row shows the ledger’s facts', () => {
     expect(rowOf('crew-1:EX-1').getByText('QA and say done')).toBeTruthy()
     expect(rowOf('crew-1:EX-1').getByText('Work EX-1')).toBeTruthy()
     expect(
-      rowOf('crew-1:EX-1').getByText('opus · reviewed · PR #678 open'),
+      rowOf('crew-1:EX-1').getByText('opus · reviewed · lap 1 · PR #678 open'),
     ).toBeTruthy()
     // Mutation: "QA and say done" for returned -> red here.
     expect(rowOf('crew-1:EX-2').getByText('verdict (Fable)')).toBeTruthy()
@@ -415,5 +415,88 @@ describe('MAR-3097: through the containers and the real stores', () => {
       rowOf('crew-2:EX-1').getAllByText(/^Night shift · opus · working/).length,
     ).toBeGreaterThan(0)
     expect(screen.getByText('2 issues · 0 waiting on you')).toBeTruthy()
+  })
+
+  it('lap 2, E: the board passes no cap, so a row reads the lap alone', async () => {
+    // Through the container and the crew store: `roundCap` is a hop budget
+    // for a flow run, not a lap cap, so it must not reach the row (MAR-3149).
+    crews = [{ ...boundCrew('crew-1', 'Loom'), roundCap: 12 }]
+    snapshots = {
+      'crew-1': {
+        crewId: 'crew-1',
+        entries: [
+          ledgerEntry({
+            issueIdentifier: 'EX-9',
+            state: 'working',
+            lap: 3,
+            verdict: 'return',
+          }),
+        ],
+        trackerHealth: health('ok'),
+      },
+    }
+
+    await act(async () => {
+      render(<WavesTab />)
+    })
+    await screen.findByLabelText('Waves')
+
+    // Mutation: pass the crew's `roundCap` -> "lap 3 of 12", red.
+    expect(rowOf('crew-1:EX-9').getByText(/lap 3 ·/)).toBeTruthy()
+    expect(document.body.textContent).not.toContain('of 12')
+  })
+})
+
+describe('MAR-3085 R7: the row reads the lap, the cap and the ruling', () => {
+  it('a stopped lap reads its lap, the verdict word, and "re-groom (Fable)"', () => {
+    render(
+      <WavePanelView
+        layout="column"
+        sections={sectionWaveRows(
+          [
+            ledgerEntry({
+              issueIdentifier: 'EX-1',
+              state: 'stopped',
+              lap: 3,
+              verdict: 'stop',
+              verdictSettleId: 'settle-1',
+              verdictNote: 'the reply',
+            }),
+          ],
+          NOW,
+        )}
+        header={waveHeader({ crews: ANSWERED, rowCount: 1, now: NOW })}
+        inertReason={() => null}
+        onOpen={vi.fn()}
+      />,
+    )
+
+    // Mutation: drop the lap label from the row -> red.
+    expect(
+      rowOf('crew-1:EX-1').getByText('opus · stopped · lap 3 · stop'),
+    ).toBeTruthy()
+    expect(rowOf('crew-1:EX-1').getByText('re-groom (Fable)')).toBeTruthy()
+    expect(
+      screen.getByRole('region', { name: 'In the wave' }).textContent,
+    ).toContain('EX-1')
+  })
+
+  it('a crew with no cap reads the lap alone', () => {
+    render(
+      <WavePanelView
+        layout="column"
+        sections={sectionWaveRows(
+          [ledgerEntry({ issueIdentifier: 'EX-2', state: 'working', lap: 3 })],
+          NOW,
+        )}
+        header={waveHeader({ crews: ANSWERED, rowCount: 1, now: NOW })}
+        inertReason={() => null}
+        onOpen={vi.fn()}
+      />,
+    )
+    expect(
+      rowOf('crew-1:EX-2').getByText('opus · working · lap 3'),
+    ).toBeTruthy()
+    expect(document.body.textContent).not.toContain('lap 3 of')
   })
 })

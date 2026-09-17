@@ -310,6 +310,37 @@ export class RelayService {
   }
 
   /**
+   * Which station a dispatch landed in, and whose crew's wire carried it
+   * (MAR-3085 R2): the trail from the settle's consumed receipts back to the
+   * seat that is answering. A read, like every other question here.
+   */
+  findHopsByDispatchIds(dispatchIds: readonly string[]): {
+    crewId: string
+    sourceSessionId: string
+    targetSessionId: string | null
+  }[] {
+    if (dispatchIds.length === 0) return []
+    const select = this.db.prepare(
+      `SELECT crew_id, source_session_id, target_session_id
+         FROM relay_hops WHERE dispatch_id = ?
+         ORDER BY rowid ASC`,
+    )
+    return dispatchIds.flatMap((dispatchId) =>
+      (
+        select.all(dispatchId) as {
+          crew_id: string
+          source_session_id: string
+          target_session_id: string | null
+        }[]
+      ).map((row) => ({
+        crewId: row.crew_id,
+        sourceSessionId: row.source_session_id,
+        targetSessionId: row.target_session_id,
+      })),
+    )
+  }
+
+  /**
    * Newest first, because a trail is read from the top.
    *
    * `beforeHopId` names the oldest row the caller already holds and asks for

@@ -35,6 +35,7 @@ import {
   normalizeRelayOpener,
   normalizeRelaySessionId,
   normalizeRelayTrigger,
+  readEmittedVerdict,
 } from './relay.pure'
 
 describe('normalizeRelayTrigger', () => {
@@ -941,5 +942,110 @@ describe('a spawn spec with its seat applied (MAR-3083 R3)', () => {
       spec,
     )
     expect(applySeatToSpawnSpec(spec, null)).toEqual(spec)
+  })
+})
+
+/**
+ * The verdict line, read where the baton is read (MAR-3085 R1). The shapes
+ * are this crew's own replies.
+ */
+describe('MAR-3085 R1: the verdict line', () => {
+  const withBaton = (verdict: string) =>
+    `Some prose about the lap.\n\n${verdict}\n\nBATON: horse opus`
+
+  it.each([
+    [
+      'VERDICT: PASS · lap 3',
+      { ruling: 'PASS', lap: 3, issueIdentifier: null },
+    ],
+    [
+      'VERDICT: RETURN · lap 1',
+      { ruling: 'RETURN', lap: 1, issueIdentifier: null },
+    ],
+    [
+      'VERDICT: STOP · lap 7',
+      { ruling: 'STOP', lap: 7, issueIdentifier: null },
+    ],
+    [
+      'VERDICT: RETURN · lap 2 · MAR-3097',
+      { ruling: 'RETURN', lap: 2, issueIdentifier: 'MAR-3097' },
+    ],
+    [
+      '**VERDICT: PASS · lap 2**',
+      { ruling: 'PASS', lap: 2, issueIdentifier: null },
+    ],
+    [
+      'verdict: pass - lap 4',
+      { ruling: 'PASS', lap: 4, issueIdentifier: null },
+    ],
+    [
+      'VERDICT: STOP — lap 2 — MAR-1',
+      { ruling: 'STOP', lap: 2, issueIdentifier: 'MAR-1' },
+    ],
+  ])('%s -> %o', (line, expected) => {
+    expect(readEmittedVerdict(withBaton(line))).toEqual({
+      kind: 'verdict',
+      ...expected,
+      // The line as written, so a hail can quote it (lap 2, D). The wrapper
+      // marks come off; nothing else is rewritten.
+      line: line.replace(/^\*\*(.*)\*\*$/, '$1'),
+    })
+  })
+
+  it('reads the verdict above the baton, never a verdict quoted in the body', () => {
+    const message = [
+      'Last lap I wrote:',
+      '',
+      'VERDICT: PASS · lap 1',
+      '',
+      'and this lap the answer is different.',
+      '',
+      'VERDICT: RETURN · lap 2',
+      '',
+      'BATON: horse opus',
+    ].join('\n')
+    // Mutation: parse from any line -> the quoted PASS wins, red.
+    expect(readEmittedVerdict(message)).toEqual({
+      kind: 'verdict',
+      ruling: 'RETURN',
+      lap: 2,
+      issueIdentifier: null,
+      line: 'VERDICT: RETURN · lap 2',
+    })
+  })
+
+  it('reads the last line when the reply hands nothing on', () => {
+    expect(readEmittedVerdict('All done.\n\nVERDICT: PASS · lap 5')).toEqual({
+      kind: 'verdict',
+      ruling: 'PASS',
+      lap: 5,
+      issueIdentifier: null,
+      line: 'VERDICT: PASS · lap 5',
+    })
+  })
+
+  it.each([
+    ['VERDICT: RETURN · lap 2 (half B)'],
+    ['VERDICT: PASSED lap 2'],
+    ['VERDICT: RETURN · lap two'],
+    ['VERDICT: RETURN'],
+    ['VERDICT:'],
+  ])('%s is malformed, never a guess', (line) => {
+    // Mutation: fall back to a loose parse -> the parenthetical shape reads as
+    // a verdict, red.
+    expect(readEmittedVerdict(withBaton(line))).toEqual({
+      kind: 'malformed',
+      line,
+    })
+  })
+
+  it('a reply that rules nothing declares nothing', () => {
+    expect(
+      readEmittedVerdict('Reviewed the lap.\n\nBATON: horse opus'),
+    ).toEqual({ kind: 'none' })
+    expect(readEmittedVerdict('')).toEqual({ kind: 'none' })
+    expect(
+      readEmittedVerdict('I mention VERDICT: PASS · lap 1 mid-sentence here.'),
+    ).toEqual({ kind: 'none' })
   })
 })

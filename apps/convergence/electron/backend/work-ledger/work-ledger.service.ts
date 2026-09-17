@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto'
 import type Database from 'better-sqlite3'
 import {
+  verdictLedgerRecord,
   workLedgerEntryFromJoinedRow,
   workLedgerRecordFromRow,
   type WorkLedgerJoinedRow,
@@ -10,6 +11,7 @@ import type {
   NewWorkLedgerRecord,
   WorkLedgerEntry,
   WorkLedgerRecord,
+  WorkLedgerVerdict,
 } from './work-ledger.types'
 
 /**
@@ -48,8 +50,9 @@ export class WorkLedgerService {
     const insert = this.db.prepare(
       `INSERT INTO work_ledger (
         id, crew_id, issue_id, issue_identifier, issue_title, issue_url,
-        seat, wave, lap, state, tracker_status, grounded_at, seen_at, fact_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        seat, wave, lap, state, tracker_status, grounded_at, seen_at, fact_json,
+        verdict, verdict_settle_id, verdict_note
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     this.db.transaction(() => {
       for (const record of records) {
@@ -68,9 +71,32 @@ export class WorkLedgerService {
           record.groundedAt,
           record.seenAt,
           JSON.stringify(record.fact),
+          record.verdict,
+          record.verdictSettleId,
+          record.verdictNote,
         )
       }
     })()
+  }
+
+  /**
+   * Records one ruling against the row it binds to (MAR-3085 R3).
+   *
+   * Its own door rather than a caller assembling the row, so a verdict row's
+   * shape has one definition -- and still an append: a ruling is a new fact
+   * about the issue, never an edit of the last one.
+   */
+  appendVerdict(input: {
+    bound: WorkLedgerRecord
+    verdict: WorkLedgerVerdict
+    lap: number
+    settleId: string
+    note?: string | null
+    seenAt: string
+  }): NewWorkLedgerRecord {
+    const record = verdictLedgerRecord(input)
+    this.append([record])
+    return record
   }
 
   currentView(crewId: string): WorkLedgerRecord[] {

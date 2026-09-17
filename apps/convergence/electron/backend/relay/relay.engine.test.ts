@@ -12,6 +12,7 @@ import { CrewHailService } from './crew-hail.service'
 import { MIN_FLOW_RUN_HOP_CEILING, TERMINAL_BATON_MESSAGE } from './relay.pure'
 import { RelayService } from './relay.service'
 import type { RelayHop, RelaySeat, RelaySpawnSpec } from './relay.types'
+import { WorkLedgerService } from '../work-ledger/work-ledger.service'
 
 /**
  * The engine is the one thing in the app that spends provider quota without a
@@ -3765,6 +3766,368 @@ describe('RelayEngine', () => {
       expect(
         gateway.sent.filter((t) => t.sessionId === 's2').map((t) => t.text),
       ).toEqual(['the brief'])
+    })
+  })
+
+  describe('MAR-3085: the verdict is an act of the settle', () => {
+    let ledger: WorkLedgerService
+
+    function verdictEngine(gateway: RelaySessionGateway): RelayEngine {
+      return new RelayEngine({
+        relays,
+        sessions: gateway,
+        crews: crewGateway(),
+        hails,
+        ledger,
+        accounts: {
+          listByProvider: (providerId) => accountsByProvider[providerId] ?? [],
+        },
+        onHopAppended: (hop) => hops.push(hop),
+        onHailsChanged: () => {
+          hailsChanged += 1
+        },
+      })
+    }
+
+    /** One returned issue for a seat, as the tracker watcher left it. */
+    function returnedRow(identifier: string, seat = 'opus', lap = 1) {
+      ledger.append([
+        {
+          crewId: 'c1',
+          issueId: `issue-${identifier}`,
+          issueIdentifier: identifier,
+          issueTitle: `Work ${identifier}`,
+          issueUrl: `https://linear.app/example/issue/${identifier}`,
+          seat,
+          wave: 'loom-p3',
+          lap,
+          state: 'returned',
+          trackerStatus: 'In Review',
+          groundedAt: null,
+          seenAt: '2026-01-01T00:00:00.000Z',
+          fact: {
+            logicalStatus: 'in-review',
+            branchName: null,
+            updatedAt: null,
+          },
+          verdict: null,
+          verdictSettleId: null,
+          verdictNote: null,
+        },
+      ])
+    }
+
+    /** The mastermind's settle answers opus's delivered hop. */
+    function opusAnswered(): string {
+      seatsBySession.s2 = {
+        batonName: 'opus',
+        kind: 'resident',
+        roleCard: null,
+        hostPolicy: null,
+        providerId: null,
+        model: null,
+      }
+      relays.appendHop({
+        relayId: 'wire-in',
+        crewId: 'c1',
+        flowRunId: 'run-1',
+        sourceSessionId: 's2',
+        triggerStatus: 'completed',
+        targetSessionId: 's1',
+        spawnedSessionId: null,
+        payloadPreview: null,
+        baton: 'fable',
+        roundNumber: 1,
+        lapNumber: 1,
+        dispatchId: 'd1',
+        outcome: 'delivered',
+        roleCardCarried: false,
+        error: null,
+      })
+      return 'd1'
+    }
+
+    const rows = () => ledger.currentView('c1')
+    const detailOf = () =>
+      hails
+        .listOpen()
+        .filter((hail) => hail.crewId === 'c1')
+        .map((hail) => hail.detail)
+
+    beforeEach(() => {
+      ledger = new WorkLedgerService(db)
+      db.prepare(
+        'INSERT INTO session_crew_members (crew_id, session_id, baton_name) VALUES (?, ?, ?)',
+      ).run('c1', 's1', 'fable')
+      db.prepare(
+        'INSERT INTO session_crew_members (crew_id, session_id, baton_name) VALUES (?, ?, ?)',
+      ).run('c1', 's2', 'opus')
+    })
+
+    it('R2: binds to the returned issue of the seat this settle answers', async () => {
+      returnedRow('MAR-1')
+      const dispatchId = opusAnswered()
+      wire('s1', 's2')
+      const gateway = createGateway({
+        lastMessages: {
+          s1: 'The lap is back.\n\nVERDICT: RETURN · lap 2\n\nBATON: opus',
+        },
+      })
+
+      await verdictEngine(gateway).handleSettle(
+        settled('s1', 'completed', false, [dispatchId]),
+      )
+
+      expect(rows()).toMatchObject([
+        {
+          issueIdentifier: 'MAR-1',
+          state: 'working',
+          lap: 2,
+          verdict: 'return',
+          seat: 'opus',
+        },
+      ])
+      expect(detailOf()).toEqual([])
+    })
+
+    it('R2: the identifier on the line binds without any hop', async () => {
+      returnedRow('MAR-1')
+      returnedRow('MAR-2')
+      const gateway = createGateway({
+        lastMessages: { s1: 'VERDICT: PASS · lap 3 · MAR-2' },
+      })
+
+      await verdictEngine(gateway).handleSettle(settled('s1'))
+
+      expect(
+        rows()
+          .filter((row) => row.verdict !== null)
+          .map((row) => [row.issueIdentifier, row.state, row.lap]),
+      ).toEqual([['MAR-2', 'reviewed', 3]])
+    })
+
+    it('R2: two returned issues for the seat -> a hail naming both, and no row', async () => {
+      returnedRow('MAR-1')
+      returnedRow('MAR-2')
+      const dispatchId = opusAnswered()
+      const gateway = createGateway({
+        lastMessages: { s1: 'VERDICT: RETURN · lap 2' },
+      })
+
+      await verdictEngine(gateway).handleSettle(
+        settled('s1', 'completed', false, [dispatchId]),
+      )
+
+      // Mutation: bind to the first returned row -> a row appears, red.
+      expect(rows().filter((row) => row.verdict !== null)).toEqual([])
+      expect(detailOf()[0]).toContain('2 returned issues for seat opus')
+      expect(detailOf()[0]).toContain('MAR-1')
+      expect(detailOf()[0]).toContain('MAR-2')
+    })
+
+    it('R2: no returned issue for the seat -> a hail, and no row', async () => {
+      const dispatchId = opusAnswered()
+      const gateway = createGateway({
+        lastMessages: { s1: 'VERDICT: RETURN · lap 2' },
+      })
+
+      await verdictEngine(gateway).handleSettle(
+        settled('s1', 'completed', false, [dispatchId]),
+      )
+
+      expect(rows()).toEqual([])
+      expect(detailOf()[0]).toContain('no returned issue for seat opus')
+    })
+
+    it('R5: RETURN with a baton fires the wire and writes the lap', async () => {
+      returnedRow('MAR-1')
+      const dispatchId = opusAnswered()
+      wire('s1', 's2')
+      const gateway = createGateway({
+        lastMessages: {
+          s1: 'Back to you.\n\nVERDICT: RETURN · lap 2\n\nBATON: opus',
+        },
+      })
+
+      await verdictEngine(gateway).handleSettle(
+        settled('s1', 'completed', false, [dispatchId]),
+      )
+
+      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual(['s2'])
+      expect(rows()[0]).toMatchObject({ state: 'working', lap: 2 })
+    })
+
+    it('R5: PASS with a baton fires the wire too — two acts of one settle', async () => {
+      returnedRow('MAR-1')
+      const dispatchId = opusAnswered()
+      wire('s1', 's2')
+      const gateway = createGateway({
+        lastMessages: { s1: 'VERDICT: PASS · lap 3\n\nBATON: opus' },
+      })
+
+      await verdictEngine(gateway).handleSettle(
+        settled('s1', 'completed', false, [dispatchId]),
+      )
+
+      // Mutation: suppress the hop on PASS -> red.
+      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual(['s2'])
+      expect(rows()[0]).toMatchObject({ state: 'reviewed', lap: 3 })
+    })
+
+    it('R5: PASS with no baton writes the row and delivers nothing', async () => {
+      returnedRow('MAR-1')
+      const dispatchId = opusAnswered()
+      // No wire drawn: nothing to fire, and the ruling still lands. An
+      // unconditional wire answers every settle by its own rule, which is
+      // today's shape and no business of the verdict's.
+      const gateway = createGateway({
+        lastMessages: { s1: 'VERDICT: PASS · lap 3' },
+      })
+
+      await verdictEngine(gateway).handleSettle(
+        settled('s1', 'completed', false, [dispatchId]),
+      )
+
+      expect(gateway.sent).toEqual([])
+      expect(rows()[0]).toMatchObject({ state: 'reviewed', lap: 3 })
+    })
+
+    it('R5: a baton with no verdict leaves the ledger alone', async () => {
+      returnedRow('MAR-1')
+      const dispatchId = opusAnswered()
+      wire('s1', 's2')
+      const gateway = createGateway({
+        lastMessages: { s1: 'Carry on.\n\nBATON: opus' },
+      })
+
+      await verdictEngine(gateway).handleSettle(
+        settled('s1', 'completed', false, [dispatchId]),
+      )
+
+      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual(['s2'])
+      expect(rows()).toMatchObject([{ state: 'returned', verdict: null }])
+    })
+
+    it('R6: a malformed line hails with the line quoted, and the baton still delivers', async () => {
+      returnedRow('MAR-1')
+      const dispatchId = opusAnswered()
+      wire('s1', 's2')
+      const gateway = createGateway({
+        lastMessages: {
+          s1: 'VERDICT: RETURN · lap 2 (half B)\n\nBATON: opus',
+        },
+      })
+
+      await verdictEngine(gateway).handleSettle(
+        settled('s1', 'completed', false, [dispatchId]),
+      )
+
+      // Mutation: swallow the malformed line -> no hail, red.
+      expect(detailOf()[0]).toContain('VERDICT: RETURN · lap 2 (half B)')
+      expect(detailOf()[0]).toContain('not the verdict grammar')
+      expect(rows()).toMatchObject([{ state: 'returned', verdict: null }])
+      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual(['s2'])
+    })
+
+    it('lap 2, B: a refused ledger write costs the ruling, never the baton', async () => {
+      returnedRow('MAR-1')
+      const dispatchId = opusAnswered()
+      wire('s1', 's2')
+      const gateway = createGateway({
+        lastMessages: { s1: 'VERDICT: RETURN · lap 2\n\nBATON: opus' },
+      })
+      const logged: unknown[] = []
+      const spy = vi
+        .spyOn(console, 'error')
+        .mockImplementation((...args: unknown[]) => {
+          logged.push(args.map((arg) => String(arg)).join(' '))
+        })
+
+      const engine = new RelayEngine({
+        relays,
+        sessions: gateway,
+        crews: crewGateway(),
+        hails,
+        ledger: {
+          currentView: (crewId) => ledger.currentView(crewId),
+          appendVerdict: () => {
+            throw new Error('ledger refused')
+          },
+        },
+        accounts: {
+          listByProvider: (providerId) => accountsByProvider[providerId] ?? [],
+        },
+        onHopAppended: (hop) => hops.push(hop),
+      })
+      await engine.handleSettle(settled('s1', 'completed', false, [dispatchId]))
+      spy.mockRestore()
+
+      // Mutation: drop the catch in `recordVerdict` -> the settle's own catch
+      // swallows the throw above the wire loop and nothing is delivered, red.
+      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual(['s2'])
+      expect(relays.listHops('c1')[0]!.outcome).toBe('delivered')
+      expect(rows()).toMatchObject([{ state: 'returned', verdict: null }])
+      expect(logged.join(' ')).toContain('verdict not recorded for s1')
+    })
+
+    it.each([
+      ['failed', 'failed' as const, false],
+      ['muted', 'completed' as const, true],
+    ])(
+      'lap 2, C: a %s settle re-reads the last reply and records nothing',
+      async (_case, status, muted) => {
+        returnedRow('MAR-1')
+        const dispatchId = opusAnswered()
+        const gateway = createGateway({
+          lastMessages: { s1: 'VERDICT: PASS · lap 3 · MAR-1' },
+        })
+        const engine = verdictEngine(gateway)
+
+        await engine.handleSettle(
+          settled('s1', 'completed', false, [dispatchId]),
+        )
+        expect(rows()).toMatchObject([{ state: 'reviewed', lap: 3 }])
+
+        // The same session finishes a later turn badly: its last COMPLETED
+        // assistant message is still my ruling.
+        await engine.handleSettle(settled('s1', status, muted, []))
+
+        // Mutation: drop the guard -> a second identical verdict row, red.
+        expect(
+          db.prepare('SELECT COUNT(*) AS n FROM work_ledger').get() as {
+            n: number
+          },
+        ).toEqual({ n: 2 })
+        expect(detailOf()).toEqual([])
+      },
+    )
+
+    it('lap 2, D: an unbound ruling is quoted as it was written, identifier and all', async () => {
+      const gateway = createGateway({
+        lastMessages: { s1: 'VERDICT: PASS · lap 3 · MAR-9' },
+      })
+
+      await verdictEngine(gateway).handleSettle(settled('s1'))
+
+      // Mutation: rebuild the line from the parts -> `MAR-9` is dropped, red.
+      expect(detailOf()[0]).toContain('VERDICT: PASS · lap 3 · MAR-9')
+      expect(detailOf()[0]).toContain('no ledger row for MAR-9')
+      expect(rows()).toEqual([])
+    })
+
+    it('R3: a STOP carries the reply, capped', async () => {
+      returnedRow('MAR-1')
+      const dispatchId = opusAnswered()
+      const reply = `${'x'.repeat(5_000)}\n\nVERDICT: STOP · lap 4`
+      const gateway = createGateway({ lastMessages: { s1: reply } })
+
+      await verdictEngine(gateway).handleSettle(
+        settled('s1', 'completed', false, [dispatchId]),
+      )
+
+      const row = rows()[0]!
+      expect(row).toMatchObject({ state: 'stopped', lap: 4, verdict: 'stop' })
+      expect(row.verdictNote).toHaveLength(4_000)
     })
   })
 })

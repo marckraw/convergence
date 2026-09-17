@@ -1,5 +1,6 @@
 export type {
   WorkLedgerState,
+  WorkLedgerVerdict,
   WorkLedgerFact,
   WorkLedgerRecord,
   NewWorkLedgerRecord,

@@ -613,6 +613,80 @@ export function readEmittedBaton(message: string): string | null {
   return declaration.kind === 'named' ? declaration.name : null
 }
 
+/** What a mastermind's settled reply ruled (MAR-3085 R1). */
+export type VerdictDeclaration =
+  | { kind: 'none' }
+  | {
+      kind: 'verdict'
+      ruling: 'PASS' | 'RETURN' | 'STOP'
+      lap: number
+      /** The issue the line named, or null to be inferred from the seat. */
+      issueIdentifier: string | null
+      /** The line as written, so a hail can quote it (lap 2, D). */
+      line: string
+    }
+  | { kind: 'malformed'; line: string }
+
+/**
+ * The verdict line's grammar, exactly as the constitution writes it
+ * (MAR-3085 R1) plus the 2026-09-18 amendment's optional trailing
+ * identifier. The middle dot, a hyphen and an em dash are all accepted as
+ * separators, because a keyboard and a renderer disagree about which one a
+ * person typed.
+ */
+const VERDICT_LINE =
+  /^VERDICT:\s*(PASS|RETURN|STOP)\s*[·\-—]\s*lap\s*(\d+)(\s*[·\-—]\s*([A-Z][A-Z0-9]*-\d+))?\s*$/i
+
+/**
+ * The line a verdict is read from: the last non-empty line ABOVE the baton
+ * line, or the last non-empty line when the reply hands nothing on.
+ *
+ * One line and no other, for the reason the baton is one line: a reply that
+ * quotes an old ruling in its body has not ruled again, and a parser that
+ * swept the message would act on the quotation.
+ */
+function verdictLineOf(message: string): string | null {
+  const lines = message.split('\n').map((line) => line.trim())
+  const nonEmpty: number[] = []
+  for (let index = 0; index < lines.length; index += 1) {
+    if (lines[index].length > 0) nonEmpty.push(index)
+  }
+  if (nonEmpty.length === 0) return null
+  const last = nonEmpty[nonEmpty.length - 1]
+  const declaresBaton =
+    readBatonDeclaration(normalizeBatonLine(lines[last])).kind !== 'none'
+  if (!declaresBaton) return lines[last]
+  return nonEmpty.length > 1 ? lines[nonEmpty[nonEmpty.length - 2]] : null
+}
+
+/**
+ * The ruling a finished message declares, read where the baton is read
+ * (MAR-3085 R1).
+ *
+ * The same wrapper marks come off as on a baton line -- a mastermind whose
+ * every reply is markdown bolds a closing line by reflex (MAR-2815) -- and a
+ * line that starts with the keyword and does not match the grammar is
+ * `malformed` rather than silence: a ruling nobody recorded is the failure
+ * this slice exists to end, and guessing at `lap 2 (half B)` would record a
+ * ruling the mastermind did not write.
+ */
+export function readEmittedVerdict(message: string): VerdictDeclaration {
+  const raw = verdictLineOf(message)
+  if (raw === null) return { kind: 'none' }
+  const line = stripSymmetricWrapper(raw.trim()).trim()
+  const match = VERDICT_LINE.exec(line)
+  if (match) {
+    return {
+      kind: 'verdict',
+      ruling: match[1].toUpperCase() as 'PASS' | 'RETURN' | 'STOP',
+      lap: Number(match[2]),
+      issueIdentifier: match[4] ? match[4].toUpperCase() : null,
+      line,
+    }
+  }
+  return /^VERDICT/i.test(line) ? { kind: 'malformed', line } : { kind: 'none' }
+}
+
 /** The convention a wire's condition field is pre-filled with. */
 export function batonConditionToken(batonName: string): string {
   return `${BATON_KEYWORD.toUpperCase()}: ${batonName.trim()}`

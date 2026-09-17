@@ -20,6 +20,27 @@ export interface WaveRow {
   hostMarker: string | null
   /** The row's crew, named only when more than one crew is bound (lap 2, E). */
   crewName: string | null
+  /**
+   * Which lap this is (MAR-3085 R7): `lap 2`.
+   *
+   * `waveLapLabel` can also say `lap 2 of 6`, but that branch is INERT on
+   * screen: the board passes no cap (lap 2, E), because the only number a
+   * crew carries today is `roundCap` -- a hop budget for one flow run, not a
+   * bound on an issue's laps. A true lap cap rides MAR-3149, and this is the
+   * one place it will arrive.
+   */
+  lapLabel: string
+}
+
+/** A row's crew, as the board reads it (MAR-3085 R7). */
+export interface WaveRowCrew {
+  name: string | null
+  /**
+   * A cap on this issue's laps, or null for none -- which is what the board
+   * passes today (lap 2, E; MAR-3149). Never `roundCap`: that is a hop
+   * budget for a crew's flow run, in a different unit from a lap.
+   */
+  cap: number | null
 }
 
 export interface WaveGroup {
@@ -43,6 +64,8 @@ export interface WaveSections {
 export function waveRowAction(entry: WorkLedgerEntry): string | null {
   if (entry.state === 'reviewed') return 'QA and say done'
   if (entry.state === 'returned') return 'verdict (Fable)'
+  // A STOP parks the lap until somebody grooms the issue again (MAR-3085 R7).
+  if (entry.state === 'stopped') return 're-groom (Fable)'
   if (entry.state === 'working' && entry.sessionId === null) {
     return 'seat not in crew'
   }
@@ -64,18 +87,24 @@ export function waveRowHostMarker(
   return age === null ? 'host unreachable' : `host unreachable since ${age}`
 }
 
+/** How a row says which lap it is on (MAR-3085 R7). */
+export function waveLapLabel(lap: number, cap: number | null): string {
+  return cap === null ? `lap ${lap}` : `lap ${lap} of ${cap}`
+}
+
 /**
  * The rows into the four sections (R1): a pure function of the rows.
  *
  * *Waiting on you* is `reviewed` (`blocked` rides MAR-3138); *In the wave* is
- * `working` and `returned`; *Waiting to start* is `assigned`; *Waves* groups
- * every row by its wave, unwaved rows last. `done` and `unassigned` appear in
+ * `working`, `returned` and `stopped` (MAR-3085: a parked lap is still work
+ * somebody picks up); *Waiting to start* is `assigned`; *Waves* groups every
+ * row by its wave, unwaved rows last. `done` and `unassigned` appear in
  * *Waves* only.
  */
 export function sectionWaveRows(
   rows: readonly WorkLedgerEntry[],
   now: number,
-  crewName: (crewId: string) => string | null = () => null,
+  crewOf: (crewId: string) => WaveRowCrew = () => ({ name: null, cap: null }),
 ): WaveSections {
   const sections: WaveSections = {
     waitingOnYou: [],
@@ -86,14 +115,22 @@ export function sectionWaveRows(
   const groups = new Map<string, WaveRow[]>()
 
   for (const entry of rows) {
+    const crew = crewOf(entry.crewId)
     const row: WaveRow = {
       entry,
       action: waveRowAction(entry),
       hostMarker: waveRowHostMarker(entry, now),
-      crewName: crewName(entry.crewId),
+      crewName: crew.name,
+      lapLabel: waveLapLabel(entry.lap, crew.cap),
     }
     if (entry.state === 'reviewed') sections.waitingOnYou.push(row)
-    else if (entry.state === 'working' || entry.state === 'returned') {
+    else if (
+      entry.state === 'working' ||
+      entry.state === 'returned' ||
+      // A stopped lap is still in the wave: it is work somebody has to pick
+      // up again, not work waiting on Marcin (MAR-3085 R7).
+      entry.state === 'stopped'
+    ) {
       sections.inTheWave.push(row)
     } else if (entry.state === 'assigned') sections.waitingToStart.push(row)
 

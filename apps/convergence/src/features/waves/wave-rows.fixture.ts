@@ -21,6 +21,9 @@ export function ledgerEntry(
     fact: { logicalStatus: 'in-progress', branchName: null, updatedAt: null },
     sessionId: 'session-opus',
     pr: null,
+    verdict: null,
+    verdictSettleId: null,
+    verdictNote: null,
     hostLiveness: {
       executionHost: 'local',
       lastEventAt: null,

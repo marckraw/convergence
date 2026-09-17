@@ -214,12 +214,25 @@ export function formatCrewHailDetail(
     ceiling?: number
     /** What actually broke, for the delivery-failed sentence. */
     error?: string | null
+    /** The `VERDICT:` line a ruling could not be recorded from (MAR-3085). */
+    verdictLine?: string
+    /** Why it could not: malformed, or bound to no single issue. */
+    verdictProblem?: string
   } = {},
 ): string {
   switch (reason) {
     case 'terminal':
       return 'This station handed the work to you, so the loop parked here and no wire fired.'
     case 'unrouted':
+      // A ruling is the other thing a settle can declare (MAR-3085 R6): a
+      // verdict line nobody could record is quoted here, with what stopped
+      // it, because the alternative is a lap that nothing on the ledger ever
+      // heard about.
+      if (context.verdictLine) {
+        return context.verdictProblem === 'malformed'
+          ? `This station ruled "${context.verdictLine}", which is not the verdict grammar, so no lap was recorded. Write it as "VERDICT: RETURN · lap 2".`
+          : `This station ruled "${context.verdictLine}", and the ruling reached no single issue (${context.verdictProblem ?? 'unbound'}), so no lap was recorded.`
+      }
       // A hand-off with no name is still a hand-off: `BATON:` with nobody
       // after it named nobody, and there is nothing to quote. Saying "handed
       // on a baton" there would describe a name the line never wrote.
