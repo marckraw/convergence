@@ -3,7 +3,7 @@ import {
   seedExecutionHostEndpoint,
   TEST_EXECUTION_HOST_ENDPOINT_ID,
 } from '../../execution-host-endpoint/execution-host-endpoint.fixture'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -1184,5 +1184,117 @@ describe('remote wire events reaching the session record', () => {
       'the next turn to report running',
     )
     expect(stub.startRequests).toHaveLength(1)
+  })
+  // -- MAR-3023: an accepted turn is never a failed send when its recording fails --
+
+  /**
+   * Door (3)'s happy path, beside its refusal case (MAR-3023 lap 3, K): with
+   * a record that takes writes, a refused command still surfaces -- the note
+   * and `attention: 'failed'` land.
+   */
+  it('MAR-3023 door (3): a refused remote command surfaces its note and failed attention when the record takes writes', async () => {
+    await service.start(sessionId, { text: 'hello' })
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the event stream to open',
+    )
+    stub.setCommandStatus(500)
+
+    await service.sendMessage(sessionId, {
+      text: 'mid-run turn the daemon refuses',
+    })
+
+    await waitUntil(
+      () => service.getById(sessionId)?.attention === 'failed',
+      'attention to surface',
+    )
+    expect(
+      service
+        .getConversation(sessionId)
+        .some(
+          (item) =>
+            item.kind === 'note' &&
+            item.text.startsWith('Remote session command was not delivered'),
+        ),
+    ).toBe(true)
+  })
+
+  /**
+   * Door (3), remote — proven at the delivery-failure path, per the ticket's
+   * STOP ruling: the daemon's 2xx for a posted command is invisible to the door
+   * (`enqueueCommand` is fire-and-forget, remote-execution-host.ts).
+   *
+   * Here the daemon refuses the command AND the local record refuses both
+   * writes of the report — the note and the attention change (E). The report
+   * must throw nowhere (it runs under a `void`, so a throw is an unhandled
+   * rejection), and it must not claim the message was sent: the command was
+   * refused, so the boundary's "do not resend" note would talk the user out of
+   * the one retry that is right (the rule of A — the witness of acceptance is
+   * the far side's answer, and here it said no).
+   */
+  it('MAR-3023 door (3), E: a refused remote command whose report cannot be recorded throws nowhere and claims no delivery', async () => {
+    const failures: import('../../session/session.types').AcceptedRecordingFailureEvent[] =
+      []
+    service.onAcceptedRecordingFailure((event) => failures.push(event))
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const rejections: unknown[] = []
+    const onRejection = (reason: unknown) => rejections.push(reason)
+    process.on('unhandledRejection', onRejection)
+
+    await service.start(sessionId, { text: 'hello' })
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the event stream to open',
+    )
+    db.exec(`CREATE TEMP TRIGGER refuse_undelivered_note
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'note'
+         AND json_extract(NEW.payload_json, '$.text') LIKE 'Remote session command was not delivered%'
+    BEGIN SELECT RAISE(ABORT, 'fixture remote note refused'); END`)
+    db.exec(`CREATE TEMP TRIGGER refuse_failed_attention
+    BEFORE UPDATE ON sessions
+    WHEN NEW.attention = 'failed' AND OLD.attention IS NOT 'failed'
+    BEGIN SELECT RAISE(ABORT, 'fixture attention refused'); END`)
+    stub.setCommandStatus(500)
+
+    const dispatchId = await service.sendMessage(sessionId, {
+      text: 'mid-run turn the daemon refuses',
+    })
+    expect(dispatchId).toBeTypeOf('string')
+
+    // Both writes of the report were attempted and logged, in order — the
+    // attention write is reached only if the note's refusal did not escape.
+    const reported = (label: string) =>
+      errors.mock.calls.some((call) =>
+        String(call[0]).includes(`${label} could not be recorded either`),
+      )
+    await waitUntil(
+      () => reported('the undelivered-command attention'),
+      'the attention write to be refused and logged',
+    )
+    expect(reported('the undelivered-command note')).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(rejections).toEqual([])
+    process.off('unhandledRejection', onRejection)
+
+    // The command went out exactly once: nothing re-sent it.
+    expect(
+      debugEntries.filter(
+        (entry) => entry.direction === 'out' && entry.method === 'send-message',
+      ),
+    ).toHaveLength(1)
+    // And nothing says it was delivered: no accepted-turn fact, no note.
+    expect(failures).toEqual([])
+    expect(
+      service
+        .getConversation(sessionId)
+        .filter(
+          (item) =>
+            item.kind === 'note' &&
+            item.providerMeta.providerEventType === 'recording-failed',
+        ),
+    ).toEqual([])
+    expect(service.getById(sessionId)?.status).not.toBe('failed')
+    errors.mockRestore()
   })
 })

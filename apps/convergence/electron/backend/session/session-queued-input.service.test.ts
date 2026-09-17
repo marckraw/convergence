@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type Database from 'better-sqlite3'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
-import { SessionQueuedInputService } from './session-queued-input.service'
+import {
+  RESTARTED_WHILE_DISPATCHING_ERROR,
+  SessionQueuedInputService,
+} from './session-queued-input.service'
 import type { QueuedInputPatchEvent } from './session.types'
 
 describe('SessionQueuedInputService', () => {
@@ -481,7 +484,7 @@ describe('SessionQueuedInputService', () => {
       {
         id: item.id,
         state: 'failed',
-        error: 'App restarted before this input was accepted.',
+        error: RESTARTED_WHILE_DISPATCHING_ERROR,
         updatedAt: '2026-04-26T12:00:00.000Z',
       },
     ])

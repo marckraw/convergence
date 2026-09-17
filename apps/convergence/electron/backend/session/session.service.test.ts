@@ -32,7 +32,10 @@ import { AttachmentsService } from '../attachments/attachments.service'
 import { DRAFT_SESSION_ID } from '../attachments/attachments.constants'
 import { ProjectContextService } from '../project-context/project-context.service'
 import { SessionContextInjectionService } from './context-injection/session-context-injection.service'
-import { SessionQueuedInputService } from './session-queued-input.service'
+import {
+  RESTARTED_WHILE_DISPATCHING_ERROR,
+  SessionQueuedInputService,
+} from './session-queued-input.service'
 import type {
   ConversationPatchEvent,
   SessionDelta,
@@ -2541,10 +2544,10 @@ describe('SessionService', () => {
     getDatabase()
       .prepare(
         `UPDATE session_queued_inputs
-         SET state = 'failed', error = 'App restarted before this input was accepted.'
+         SET state = 'failed', error = ?
          WHERE id = ?`,
       )
-      .run(id)
+      .run(RESTARTED_WHILE_DISPATCHING_ERROR, id)
   }
 
   it('abandons the hop of a failed row the user dismisses, and cancels a waiting one (R3, MAR-2971)', async () => {
@@ -3193,7 +3196,7 @@ describe('SessionService', () => {
       {
         id: 'queued-stale',
         state: 'failed',
-        error: 'App restarted before this input was accepted.',
+        error: RESTARTED_WHILE_DISPATCHING_ERROR,
       },
     ])
   })

@@ -149,6 +149,32 @@ export interface DispatchTerminalEvent {
 
 export type DispatchTerminalListener = (event: DispatchTerminalEvent) => void
 
+/**
+ * A recording the local transcript could not hold for a turn the provider
+ * already accepted (MAR-3023).
+ *
+ * Dispatch-terminal-shaped but deliberately NOT a `DispatchTerminalEvent`:
+ * the turn is still running and its settle still owes the real terminal, so
+ * this fact informs (which dispatch, what was lost, whether the provider is
+ * still working) rather than ending anything — and it must not reach the
+ * relay engine's terminal handling, which stamps hops by reason.
+ */
+export interface AcceptedRecordingFailureEvent {
+  sessionId: string
+  dispatchId: string
+  /** The turn whose recording was lost, when it is known. */
+  turnId: string | null
+  /** What Convergence could not save, in the write's own words. */
+  label: string
+  /** Whether a provider handle is still live for the session. */
+  providerRunning: boolean
+  at: string
+}
+
+export type AcceptedRecordingFailureListener = (
+  event: AcceptedRecordingFailureEvent,
+) => void
+
 export type AttentionRequestKind =
   | 'approval'
   | 'question'

@@ -251,3 +251,55 @@ export function previousAssistantMessageTexts(
     )
     .map((item) => item.text)
 }
+
+/**
+ * A persistence failure while recording a turn (MAR-3023).
+ *
+ * The tag is the witness, never the message: the recording funnel throws it
+ * from its own INSERT/UPDATE statements, so a catch can tell "the local record
+ * could not be written" from "the provider or the wire failed" with
+ * `instanceof` and nothing else.
+ *
+ * The tag does not decide that the turn was accepted -- only the catch that
+ * sees it can (Codex knows whether `turn/start` was acknowledged; the service
+ * does not). So the loss is announced (fact + note) by the catch that swallows
+ * it as an accepted turn's outcome, through `announce()`; a tagged error that
+ * propagates instead is an honest failure and announces nothing. `announced`
+ * makes a second catch on the same error a no-op.
+ */
+export class RecordingError extends Error {
+  /** Whether the loss was already announced as an accepted turn's outcome. */
+  announced: boolean
+  private readonly report: ((error: RecordingError) => void) | undefined
+
+  constructor(
+    readonly label: string,
+    options?: {
+      cause?: unknown
+      /** The session boundary's announcement, bound where the write failed. */
+      report?: (error: RecordingError) => void
+    },
+  ) {
+    super(`Could not record ${label}: ${describeCause(options?.cause)}`, {
+      cause: options?.cause,
+    })
+    this.name = 'RecordingError'
+    this.announced = false
+    this.report = options?.report
+  }
+
+  /**
+   * Records this loss as the outcome of an accepted turn, once. Called only
+   * by a catch that has decided the turn WAS accepted and swallows the throw.
+   */
+  announce(): void {
+    if (this.announced) return
+    this.announced = true
+    this.report?.(this)
+  }
+}
+
+function describeCause(cause: unknown): string {
+  if (cause instanceof Error) return cause.message
+  return String(cause)
+}

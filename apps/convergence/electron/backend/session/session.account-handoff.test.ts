@@ -13,6 +13,7 @@ import {
   FakeCodexServer,
   FAKE_CODEX_NO_RESPONSE,
 } from '../provider/codex/codex-server-host.fixture'
+import { buildSkillCatalogId } from '../skills/skill-catalog.pure'
 import { LocalExecutionHost } from '../provider/execution-host/local-execution-host'
 import { ProviderRegistry } from '../provider/provider-registry'
 import { SessionService } from './session.service'
@@ -33,12 +34,16 @@ let hosts: Array<{
 let missing: 'thread/resume' | 'turn/start' | null
 let layoutReady: boolean
 let holdAcceptance: boolean
+/** The daemon's skills/list answer, so a test can arm a selected skill. */
+let skillsCatalog: unknown
 let accept: (() => void) | undefined
 let completeTurns: boolean
 let failInterrupt: boolean
 let loseAck: boolean
 let unreadableTurns: boolean
 let rejectAck: (() => void) | undefined
+/** Answer turn/start, stream a reply and settle, all in one synchronous beat. */
+let sameChunkReply: boolean
 let sourceState: 'connected' | 'unavailable' | 'removed'
 let settled: Array<{ dispatchIds: string[] }>
 
@@ -49,10 +54,12 @@ beforeEach(() => {
   missing = null
   layoutReady = true
   holdAcceptance = false
+  skillsCatalog = undefined
   accept = undefined
   settled = []
   sourceState = 'connected'
   completeTurns = true
+  sameChunkReply = false
   failInterrupt = false
   loseAck = false
   unreadableTurns = false
@@ -65,6 +72,7 @@ beforeEach(() => {
       let clientId: unknown
       const server = new FakeCodexServer({
         autoCompleteTurns: completeTurns,
+        skillsResponse: skillsCatalog,
         onRequest: (message, connection) => {
           if (message.method === 'turn/interrupt' && failInterrupt)
             throw new Error('Interrupt transport failed')
@@ -80,6 +88,29 @@ beforeEach(() => {
               ],
               nextCursor: null,
             }
+          }
+          if (message.method === 'turn/start' && sameChunkReply) {
+            // What a real socket can deliver in one chunk: the ack, the turn
+            // starting, its reply and its settle -- every line dispatched
+            // before any promise continuation of the request runs.
+            const threadId = String(message.params?.threadId)
+            server.loadedThreads.set(threadId, { type: 'idle' })
+            connection.respond(message.id!, {
+              turn: { id: 'chunk-turn', status: 'inProgress' },
+            })
+            connection.notify('turn/started', {
+              threadId,
+              turn: { id: 'chunk-turn' },
+            })
+            connection.notify('item/agentMessage/delta', {
+              threadId,
+              delta: 'the answer',
+            })
+            connection.notify('turn/completed', {
+              threadId,
+              turn: { id: 'chunk-turn', status: 'completed' },
+            })
+            return FAKE_CODEX_NO_RESPONSE
           }
           if (message.method === 'turn/start' && loseAck) {
             clientId = message.params?.clientUserMessageId
@@ -684,3 +715,296 @@ it.each(['archive', 'boot-note', 'warning-note'] as const)(
     errors.mockRestore()
   },
 )
+
+// -- MAR-3023: an accepted turn is never a failed send when its recording fails --
+
+const recordingFailedNotes = () =>
+  service
+    .getConversation(id)
+    .filter(
+      (item) =>
+        item.kind === 'note' &&
+        item.providerMeta.providerEventType === 'recording-failed',
+    )
+
+it('MAR-3023 door (1): an accepted handoff send resolves when the turn publication cannot be recorded', async () => {
+  await first()
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  // The buffered handoff deltas replay at receipt publication; refusing the
+  // item inserts makes exactly that publication fail — after turn/start.
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_publication
+    BEFORE INSERT ON session_conversation_items
+    BEGIN SELECT RAISE(ABORT, 'fixture publication refused'); END`)
+
+  const dispatchId = await send('account-b', 'accepted turn, refused record')
+
+  // The door resolves with its receipt: the composer sees accepted, not failed.
+  expect(dispatchId).toBeTypeOf('string')
+  expect(service.getById(id)?.status).not.toBe('failed')
+  // The loss is the turn's own outcome: one fact for the one dispatch...
+  expect(failures.map((failure) => failure.dispatchId)).toEqual([dispatchId])
+  expect(failures[0]).toMatchObject({
+    sessionId: id,
+    label: 'the conversation item',
+    providerRunning: true,
+  })
+  // ...and the provider took exactly one turn — nothing re-sent the message.
+  // The count is taken after a short grace, so a silent retry that reuses
+  // the receipt cannot slip under the assertion. (The turn's own settle is
+  // part of the lost recording here — the buffered settle never replays
+  // past the first refused write — which is exactly what the note names.)
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(
+    hosts[1]!.server.requests.filter((r) => r.method === 'turn/start'),
+  ).toHaveLength(1)
+  errors.mockRestore()
+})
+
+it('MAR-3023 R2: a codex turn stays honest when only its local recording fails after turn/start', async () => {
+  // The daemon's catalog has to be armed before the first turn: the second
+  // send reuses its app-server, and the fixture captures `skillsResponse` at
+  // spawn time.
+  const skillPath = '/catalog/skills/planning/SKILL.md'
+  skillsCatalog = {
+    skills: [
+      {
+        name: 'planning',
+        path: skillPath,
+        scope: 'global',
+        description: 'Plan implementation work.',
+        enabled: true,
+      },
+    ],
+  }
+  await first()
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  // A selected skill is the one post-ack write on this path: after turn/start
+  // acknowledged, the user message's skill chips are patched to `sent` —
+  // an item UPDATE. Refusing only that UPDATE makes the failure land after
+  // acceptance — the exact case the post-ack catch must not conclude `failed`
+  // for. (The pre-ack writes are an item INSERT and session UPDATEs, both
+  // still allowed.)
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_item_update
+    BEFORE UPDATE ON session_conversation_items
+    BEGIN SELECT RAISE(ABORT, 'fixture item update refused'); END`)
+
+  const dispatchId = await service.sendMessage(id, {
+    text: 'accepted, record would not take it',
+    providerAccountId: 'account-a',
+    skillSelections: [
+      {
+        id: buildSkillCatalogId({
+          providerId: 'codex',
+          name: 'planning',
+          path: skillPath,
+          scope: 'global',
+          rawScope: 'global',
+        }),
+        providerId: 'codex',
+        providerName: 'Codex',
+        name: 'planning',
+        displayName: 'Planning',
+        path: '/renderer/stale/SKILL.md',
+        scope: 'global',
+        rawScope: 'global',
+        sourceLabel: 'Global',
+        status: 'selected',
+      },
+    ],
+  })
+
+  expect(dispatchId).toBeTypeOf('string')
+  // The continuation send is fire-and-forget: wait for the turn the daemon
+  // took, then for its post-ack recording failure to land.
+  await vi.waitFor(() =>
+    expect(
+      hosts
+        .flatMap((h) => h.server.requests)
+        .filter((r) => r.method === 'turn/start'),
+    ).toHaveLength(2),
+  )
+  await vi.waitFor(() => expect(failures).toHaveLength(1))
+  expect(service.getById(id)?.status).not.toBe('failed')
+  expect(service.getById(id)?.attention).not.toBe('failed')
+  // One recording-failed note (an INSERT, still allowed by the trigger) and
+  // one fact for the dispatch.
+  expect(recordingFailedNotes()).toHaveLength(1)
+  expect(failures.map((failure) => failure.dispatchId)).toEqual([dispatchId])
+  errors.mockRestore()
+})
+
+it('MAR-3023 R5: a broad refusal still resolves the door and logs both failures', async () => {
+  await first()
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  // Refuse EVERY item insert: the turn publication and the recording-failure
+  // note both fail — the note's failure must be logged, never thrown.
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_every_insert
+    BEFORE INSERT ON session_conversation_items
+    BEGIN SELECT RAISE(ABORT, 'fixture record closed'); END`)
+
+  const dispatchId = await send('account-b', 'accepted turn, closed record')
+
+  expect(dispatchId).toBeTypeOf('string')
+  expect(service.getById(id)?.status).not.toBe('failed')
+  expect(failures.map((failure) => failure.dispatchId)).toEqual([dispatchId])
+  expect(recordingFailedNotes()).toHaveLength(0)
+  // Both failures are in the log: the lost write and the lost note.
+  const logged = errors.mock.calls.map((call) => JSON.stringify(call))
+  expect(
+    logged.filter((entry) =>
+      entry.includes('could not record the conversation item'),
+    ),
+  ).toHaveLength(1)
+  expect(
+    logged.filter((entry) => entry.includes('recording-failure note')),
+  ).toHaveLength(1)
+  errors.mockRestore()
+})
+
+it('MAR-3023 A: a recording refused before turn/start is acknowledged fails the send honestly — no "do not resend" note', async () => {
+  await first('account-b')
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  // The thread is gone on the server, so `turn/start` is refused and the
+  // provider writes its missing-thread recovery note BEFORE any turn is
+  // acknowledged — and the local record refuses exactly that note.
+  missing = 'turn/start'
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_recovery_note
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'note'
+         AND json_extract(NEW.payload_json, '$.text') LIKE 'Codex thread was no longer available%'
+    BEGIN SELECT RAISE(ABORT, 'fixture recovery note refused'); END`)
+
+  await send('account-b', 'never left')
+  await vi.waitFor(() =>
+    expect(
+      hosts
+        .flatMap((h) => h.server.requests)
+        .filter((r) => r.method === 'turn/start'),
+    ).toHaveLength(2),
+  )
+  await new Promise((resolve) => setTimeout(resolve, 50))
+
+  // Nothing claims the message was sent. (Mutation: let the recording branch
+  // cover the whole try → it announces the loss → a fact and a "do not
+  // resend" note appear.)
+  expect(failures).toEqual([])
+  expect(recordingFailedNotes()).toEqual([])
+  // The message never reached a turn: the send fails as it does today.
+  await vi.waitFor(() => expect(service.getById(id)?.status).toBe('failed'))
+  errors.mockRestore()
+})
+
+it('MAR-3023 H: a Codex turn whose streamed reply cannot be recorded announces the loss and runs on to its settle', async () => {
+  await running()
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  // After turn/start was acknowledged, the record refuses the assistant reply.
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_assistant_reply
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'message'
+         AND json_extract(NEW.payload_json, '$.actor') = 'assistant'
+    BEGIN SELECT RAISE(ABORT, 'fixture reply refused'); END`)
+  const connection = hosts[0]!.server.connections.at(-1)!
+  const threadId = service.getById(id)!.continuationToken
+
+  // The JSON-RPC line reader swallows whatever a handler throws, so a throw
+  // assertion here could never go red (lap 4, B). What is true is the fact,
+  // the note and the settle. Mutation: drop the emitter boundary's catch ->
+  // no fact, and the settle below never lands.
+  connection.notify('item/agentMessage/delta', {
+    threadId,
+    delta: 'the answer',
+  })
+  expect(failures).toHaveLength(1)
+  expect(recordingFailedNotes()).toHaveLength(1)
+  expect(service.getById(id)?.status).toBe('running')
+
+  // The run goes on: its settle still lands.
+  connection.notify('turn/completed', {
+    threadId,
+    turn: { id: 'turn-1', status: 'completed' },
+  })
+  await vi.waitFor(() => expect(service.getById(id)?.status).toBe('completed'))
+  errors.mockRestore()
+})
+
+it('MAR-3023 lap 4, B: an ack, a refused reply and the settle in one chunk are the accepted turn’s — one fact, one note, the settle lands', async () => {
+  await first()
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_assistant_reply
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'message'
+         AND json_extract(NEW.payload_json, '$.actor') = 'assistant'
+    BEGIN SELECT RAISE(ABORT, 'fixture reply refused'); END`)
+  sameChunkReply = true
+
+  await service.sendMessage(id, {
+    text: 'answered in one chunk',
+    providerAccountId: 'account-a',
+  })
+  await vi.waitFor(() =>
+    expect(
+      hosts
+        .flatMap((h) => h.server.requests)
+        .filter((r) => r.method === 'turn/start'),
+    ).toHaveLength(2),
+  )
+
+  // Mutation: set acceptance after the await -> the reply's refusal and the
+  // settle's flush are rethrown into the line reader and swallowed: the loss
+  // is never announced and the session is stuck `running`.
+  await vi.waitFor(() => expect(service.getById(id)?.status).toBe('completed'))
+  expect(failures).toHaveLength(1)
+  expect(recordingFailedNotes()).toHaveLength(1)
+  errors.mockRestore()
+})
+
+it('MAR-3023 lap 4, A: a steer whose user message cannot be recorded fails honestly — no fact, the mid-run note, the running turn untouched', async () => {
+  await running()
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_steer_message
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'message'
+         AND json_extract(NEW.payload_json, '$.actor') = 'user'
+    BEGIN SELECT RAISE(ABORT, 'fixture steer refused'); END`)
+
+  await service.sendMessage(id, {
+    text: 'steer this way',
+    providerAccountId: 'account-a',
+    deliveryMode: 'steer',
+  })
+
+  await vi.waitFor(() =>
+    expect(
+      service
+        .getConversation(id)
+        .some(
+          (item) =>
+            item.kind === 'note' &&
+            item.text.startsWith('Mid-run input failed'),
+        ),
+    ).toBe(true),
+  )
+  // Mutation: let the steer inherit the running turn's acceptance -> the
+  // refused write is announced as "sent", a fact appears, red.
+  expect(failures).toEqual([])
+  expect(recordingFailedNotes()).toEqual([])
+  expect(
+    hosts[0]!.server.requests.filter((r) => r.method === 'turn/steer'),
+  ).toHaveLength(0)
+  expect(service.getById(id)?.status).toBe('running')
+  errors.mockRestore()
+})

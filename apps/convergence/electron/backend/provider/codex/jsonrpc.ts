@@ -105,6 +105,13 @@ export interface JsonRpcClientOptions {
 
 interface PendingRequest {
   resolve: (value: unknown) => void
+  /**
+   * Runs synchronously where the response is parsed, before any later line of
+   * the same chunk is handled (MAR-3023 lap 4, B). A `.then` on the returned
+   * promise runs a microtask later -- after every line the reader dispatched
+   * from that chunk.
+   */
+  onResult?: (result: unknown) => void
   reject: (err: Error) => void
   method: string
   budgetMs: number
@@ -150,7 +157,11 @@ export class JsonRpcClient {
     transport.onError((err) => this.reportTransportFailure(err))
   }
 
-  request(method: string, params?: unknown): Promise<unknown> {
+  request(
+    method: string,
+    params?: unknown,
+    options?: { onResult?: (result: unknown) => void },
+  ): Promise<unknown> {
     const id = this.nextId++
     const msg: JsonRpcRequest = { jsonrpc: '2.0', id, method, params }
 
@@ -158,6 +169,7 @@ export class JsonRpcClient {
       const budgetMs = this.budgets[method] ?? this.defaultBudgetMs
       this.pending.set(id, {
         resolve,
+        onResult: options?.onResult,
         reject,
         method,
         budgetMs,
@@ -320,6 +332,7 @@ export class JsonRpcClient {
         if (response.error) {
           pending.reject(new Error(response.error.message))
         } else {
+          pending.onResult?.(response.result)
           pending.resolve(response.result)
         }
       }

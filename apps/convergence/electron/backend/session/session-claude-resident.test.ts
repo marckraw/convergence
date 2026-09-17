@@ -2021,3 +2021,522 @@ it.each(['normal', 'queued'] as const)(
     expect(service.getLastTurnProviderAccountId(session.id)).toBe('account-b')
   },
 )
+
+// -- MAR-3023: an accepted turn is never a failed send when its recording fails --
+
+it('MAR-3023 door (2): a resident Claude send resolves when only its post-accept recording fails', async () => {
+  const { service, session, children } = await fixture()
+  await service.start(session.id, { text: 'first' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  const send = (event: unknown) =>
+    children[0].stdout.write(JSON.stringify(event) + '\n')
+  send({ type: 'system', subtype: 'init', session_id: 'resident' })
+  send({ type: 'result', subtype: 'success', result: 'first answer' })
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'completed')
+
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  // Refuse only the user-message insert — the write that happens after
+  // onTurnAccepted has already bound the turn (claude-code-provider.ts) —
+  // so the recording-failed note itself can still land.
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_user_message
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'message'
+         AND json_extract(NEW.payload_json, '$.actor') = 'user'
+    BEGIN SELECT RAISE(ABORT, 'fixture user message refused'); END`)
+
+  const dispatchId = await service.sendMessage(session.id, {
+    text: 'accepted turn, refused record',
+  })
+
+  // The door resolves with its receipt — the composer sees accepted, not
+  // failed — and the resident process took exactly one new prompt: the turn
+  // ran, nothing re-sent it.
+  expect(dispatchId).toBeTypeOf('string')
+  const prompts = () => children.reduce((n, child) => n + child.lines.length, 0)
+  await vi.waitUntil(() => prompts() === 2)
+  // A grace, so a retry that lands a beat later cannot slip under the count.
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(prompts()).toBe(2)
+  expect(service.getById(session.id)?.status).not.toBe('failed')
+  // The loss is the turn's own outcome: one fact for the dispatch...
+  expect(failures.map((failure) => failure.dispatchId)).toEqual([dispatchId])
+  expect(failures[0]).toMatchObject({ label: 'the conversation item' })
+  // ...and one note on the conversation, honest about the recovery.
+  const notes = service
+    .getConversation(session.id)
+    .filter(
+      (item): item is Extract<typeof item, { kind: 'note' }> =>
+        item.kind === 'note' &&
+        item.providerMeta.providerEventType === 'recording-failed',
+    )
+  expect(notes).toHaveLength(1)
+  expect(notes[0].text).toContain('do not resend it')
+
+  // F: the lost user message still opened a turn of its own. Its reply and
+  // the note carry that turn's id — never the previous turn's, read back from
+  // the last row that did land.
+  send({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text: 'second answer' }] },
+  })
+  send({ type: 'result', subtype: 'success', result: 'second answer' })
+  await vi.waitUntil(() =>
+    service
+      .getConversation(session.id)
+      .some(
+        (item) =>
+          item.kind === 'message' &&
+          item.actor === 'assistant' &&
+          item.text === 'second answer',
+      ),
+  )
+  const conversation = service.getConversation(session.id)
+  const firstTurnId = conversation.find(
+    (item) => item.kind === 'message' && item.actor === 'user',
+  )?.turnId
+  const reply = conversation.find(
+    (item) =>
+      item.kind === 'message' &&
+      item.actor === 'assistant' &&
+      item.text === 'second answer',
+  )
+  expect(firstTurnId).toBeTypeOf('string')
+  expect(reply?.turnId).toBeTypeOf('string')
+  expect(reply?.turnId).not.toBe(firstTurnId)
+  expect(notes[0].turnId).toBe(reply?.turnId)
+  expect(notes[0].text).toContain(`turn ${reply?.turnId}`)
+  expect(failures[0].turnId).toBe(reply?.turnId)
+  errors.mockRestore()
+})
+
+it('MAR-3023 G: a refused sent mark is re-attempted at the turn’s settle, so the row does not stay dispatching', async () => {
+  const { service, session, children } = await fixture()
+  await service.start(session.id, { text: 'first' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  const send = (event: unknown) =>
+    children[0].stdout.write(JSON.stringify(event) + '\n')
+  send({ type: 'system', subtype: 'init', session_id: 'resident' })
+  await service.sendMessage(session.id, { text: 'queued follow-up' })
+  expect(service.getQueuedInputs(session.id).map((q) => q.state)).toEqual([
+    'queued',
+  ])
+
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  // The record refuses the drain's 'sent' mark — once.
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_sent_mark
+    BEFORE UPDATE ON session_queued_inputs
+    WHEN NEW.state = 'sent'
+    BEGIN SELECT RAISE(ABORT, 'fixture sent mark refused'); END`)
+
+  // Turn 1 settles; the drain delivers the follow-up and the resident takes it.
+  send({ type: 'result', subtype: 'success', result: 'first answer' })
+  await vi.waitUntil(() => children[0].lines.length === 2)
+  await vi.waitUntil(() => failures.length === 1)
+  expect(failures[0]).toMatchObject({ label: 'the queued input sent mark' })
+  expect(service.getQueuedInputs(session.id).map((q) => q.state)).toEqual([
+    'dispatching',
+  ])
+
+  // The record takes writes again; the follow-up's turn settles.
+  getDatabase().exec('DROP TRIGGER refuse_sent_mark')
+  send({ type: 'result', subtype: 'success', result: 'second answer' })
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'completed')
+
+  // The settle re-attempted the mark: a launch will not call it unaccepted.
+  // (Read from the table — the queue list hides rows that were sent.)
+  expect(
+    getDatabase()
+      .prepare('SELECT state FROM session_queued_inputs WHERE session_id = ?')
+      .all(session.id),
+  ).toEqual([{ state: 'sent' }])
+  errors.mockRestore()
+})
+
+it('MAR-3023 H: a resident Claude turn whose reply cannot be recorded announces the loss and runs on to its settle', async () => {
+  const { service, session, children } = await fixture()
+  await service.start(session.id, { text: 'first' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  const send = (event: unknown) =>
+    children[0].stdout.write(JSON.stringify(event) + '\n')
+  send({ type: 'system', subtype: 'init', session_id: 'resident' })
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  // The turn is bound and written; the record refuses the assistant reply.
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_assistant_reply
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'message'
+         AND json_extract(NEW.payload_json, '$.actor') = 'assistant'
+    BEGIN SELECT RAISE(ABORT, 'fixture reply refused'); END`)
+
+  // Claude buffers the reply until the turn's result: the write is refused
+  // inside the settle event itself.
+  send({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text: 'the answer' }] },
+  })
+  send({ type: 'result', subtype: 'success', result: 'the answer' })
+
+  // Mutation: drop the stream boundary's catch -> the transport reads the
+  // throw as the process failing, and the session ends `failed`.
+  await vi.waitUntil(() => service.getById(session.id)?.status !== 'running')
+  expect(service.getById(session.id)?.status).toBe('completed')
+  expect(failures).toHaveLength(1)
+  expect(children).toHaveLength(1)
+  const notes = service
+    .getConversation(session.id)
+    .filter(
+      (item) =>
+        item.kind === 'note' &&
+        item.providerMeta.providerEventType === 'recording-failed',
+    )
+  expect(notes).toHaveLength(1)
+  errors.mockRestore()
+})
+
+it('MAR-3023 I: a skill that cannot be resolved, with its user message refused, fails the turn without claiming the message was sent', async () => {
+  const { ClaudeCodeSkillsService } =
+    await import('../skills/claude-code-skills.service')
+  const catalog = vi
+    .spyOn(ClaudeCodeSkillsService.prototype, 'list')
+    .mockRejectedValue(new Error('Skill catalog unavailable'))
+  try {
+    const { service, session, children } = await fixture()
+    await service.start(session.id, { text: 'first' })
+    await vi.waitUntil(() => children[0]?.lines.length === 1)
+    const send = (event: unknown) =>
+      children[0].stdout.write(JSON.stringify(event) + '\n')
+    send({ type: 'system', subtype: 'init', session_id: 'resident' })
+    send({ type: 'result', subtype: 'success', result: 'first answer' })
+    await vi.waitUntil(
+      () => service.getById(session.id)?.status === 'completed',
+    )
+
+    const failures: import('./session.types').AcceptedRecordingFailureEvent[] =
+      []
+    service.onAcceptedRecordingFailure((event) => failures.push(event))
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    getDatabase().exec(`CREATE TEMP TRIGGER refuse_user_message
+      BEFORE INSERT ON session_conversation_items
+      WHEN NEW.kind = 'message'
+           AND json_extract(NEW.payload_json, '$.actor') = 'user'
+      BEGIN SELECT RAISE(ABORT, 'fixture user message refused'); END`)
+
+    await service.sendMessage(session.id, {
+      text: 'use a skill that is gone',
+      skillSelections: [
+        {
+          id: 'skill-gone',
+          providerId: 'claude-code',
+          providerName: 'Claude Code',
+          name: 'skill-gone',
+          displayName: 'Skill gone',
+          path: '/fixture/SKILL.md',
+          scope: 'project',
+          rawScope: null,
+          sourceLabel: 'fixture',
+          status: 'selected',
+        },
+      ],
+    })
+
+    await vi.waitUntil(() => service.getById(session.id)?.status === 'failed')
+    // The prompt never reached the process...
+    expect(children[0].lines).toHaveLength(1)
+    // ...so nothing says it was sent. Mutation: announce the lost user
+    // message whatever the skill resolution -> a fact and a note, red.
+    expect(failures).toEqual([])
+    expect(
+      service
+        .getConversation(session.id)
+        .filter(
+          (item) =>
+            item.kind === 'note' &&
+            item.providerMeta.providerEventType === 'recording-failed',
+        ),
+    ).toEqual([])
+    errors.mockRestore()
+  } finally {
+    catalog.mockRestore()
+  }
+})
+
+it('MAR-3023 J: harness evidence for a turn whose user message was refused is attributed to that turn', async () => {
+  const { service, session, children, db } = await fixture()
+  await service.start(session.id, { text: 'first' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  const send = (event: unknown) =>
+    children[0].stdout.write(JSON.stringify(event) + '\n')
+  send({ type: 'system', subtype: 'init', session_id: 'resident' })
+  send({ type: 'result', subtype: 'success', result: 'first answer' })
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'completed')
+
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  db.exec(`CREATE TEMP TRIGGER refuse_user_message
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'message'
+         AND json_extract(NEW.payload_json, '$.actor') = 'user'
+    BEGIN SELECT RAISE(ABORT, 'fixture user message refused'); END`)
+  await service.sendMessage(session.id, { text: 'second' })
+  await vi.waitUntil(() => failures.length === 1)
+  const turnId = failures[0]!.turnId
+  expect(turnId).toBeTypeOf('string')
+
+  send({ type: 'system', subtype: 'api_retry', attempt: 1, max_retries: 3 })
+  await vi.waitUntil(
+    () =>
+      (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS n FROM session_harness_events WHERE session_id = ? AND subtype = 'attempt'",
+          )
+          .get(session.id) as { n: number }
+      ).n > 0 ||
+      (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS n FROM session_harness_events WHERE session_id = ? AND type = 'harness.retry'",
+          )
+          .get(session.id) as { n: number }
+      ).n > 0,
+  )
+  const payload = JSON.parse(
+    (
+      db
+        .prepare(
+          "SELECT payload_json FROM session_harness_events WHERE session_id = ? AND type = 'harness.retry' ORDER BY sequence DESC LIMIT 1",
+        )
+        .get(session.id) as { payload_json: string }
+    ).payload_json,
+  ) as { turnId: string | null }
+  // Mutation: set the active turn only after the write -> the previous turn's
+  // id (or null), red.
+  expect(payload.turnId).toBe(turnId)
+  errors.mockRestore()
+})
+
+const recordingFailedNotesOf = (service: SessionService, sessionId: string) =>
+  service
+    .getConversation(sessionId)
+    .filter(
+      (item) =>
+        item.kind === 'note' &&
+        item.providerMeta.providerEventType === 'recording-failed',
+    )
+
+async function settledResident() {
+  const env = await fixture()
+  const { service, session, children } = env
+  await service.start(session.id, { text: 'first' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  children[0].stdout.write(
+    JSON.stringify({
+      type: 'system',
+      subtype: 'init',
+      session_id: 'resident',
+    }) + '\n',
+  )
+  children[0].stdout.write(
+    JSON.stringify({ type: 'result', subtype: 'success', result: 'first' }) +
+      '\n',
+  )
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'completed')
+  return env
+}
+
+it.each([
+  ['quit', 'stopped by quit', 'the quit note'],
+  ['stop', 'terminated by user', 'the stop note'],
+] as const)(
+  'MAR-3023 lap 5, A: a refused %s note never blocks the kill — the process is closed and the refusal logged, no fact, no note',
+  async (reason, noteText, label) => {
+    const { service, session, children } = await settledResident()
+    const failures: import('./session.types').AcceptedRecordingFailureEvent[] =
+      []
+    service.onAcceptedRecordingFailure((event) => failures.push(event))
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    getDatabase().exec(`CREATE TEMP TRIGGER refuse_teardown_note
+      BEFORE INSERT ON session_conversation_items
+      WHEN NEW.kind = 'note'
+           AND json_extract(NEW.payload_json, '$.text') = '${noteText}'
+      BEGIN SELECT RAISE(ABORT, 'fixture teardown note refused'); END`)
+    const handle = (
+      service as unknown as {
+        activeHandles: Map<
+          string,
+          { dispose: (reason: 'quit') => unknown; stop: () => void }
+        >
+      }
+    ).activeHandles.get(session.id)!
+
+    // Mutation: write the note before the close -> the refusal throws past
+    // `child.close()`: this throws, and the process stays open.
+    expect(() =>
+      reason === 'quit' ? handle.dispose('quit') : handle.stop(),
+    ).not.toThrow()
+    await vi.waitUntil(() => children[0].stdin.writableEnded)
+    expect(
+      errors.mock.calls.some((call) =>
+        String(call[0]).includes(`Could not record ${label}`),
+      ),
+    ).toBe(true)
+    expect(failures).toEqual([])
+    expect(recordingFailedNotesOf(service, session.id)).toEqual([])
+    getDatabase().exec('DROP TRIGGER refuse_teardown_note')
+    errors.mockRestore()
+  },
+)
+
+it('MAR-3023 lap 5, A: Stop on a settled session with a refused stop note releases the handle and leaves no unhandled rejection', async () => {
+  const { service, session, children } = await settledResident()
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_stop_note
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'note'
+         AND json_extract(NEW.payload_json, '$.text') = 'terminated by user'
+    BEGIN SELECT RAISE(ABORT, 'fixture stop note refused'); END`)
+  const handles = (
+    service as unknown as { activeHandles: Map<string, unknown> }
+  ).activeHandles
+
+  service.stop(session.id)
+
+  // Mutation: let the stop fallback go uncaught with the note written before
+  // the close -> an unhandled rejection fails this file, and the handle stays.
+  await vi.waitUntil(() => !handles.has(session.id))
+  expect(children[0].stdin.writableEnded).toBe(true)
+  getDatabase().exec('DROP TRIGGER refuse_stop_note')
+  errors.mockRestore()
+})
+
+it('MAR-3023 lap 5, B: a turn that ends because its process died is no longer accepted — a refused exit report is logged, no fact, no note', async () => {
+  const { service, session, children } = await fixture()
+  await service.start(session.id, { text: 'first' })
+  await vi.waitUntil(() => children[0]?.lines.length === 1)
+  children[0].stdout.write(
+    JSON.stringify({
+      type: 'system',
+      subtype: 'init',
+      session_id: 'resident',
+    }) + '\n',
+  )
+  children[0].stdout.write(
+    JSON.stringify({
+      type: 'assistant',
+      message: { content: [{ type: 'text', text: 'working' }] },
+    }) + '\n',
+  )
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_exit_report
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'note'
+         AND json_extract(NEW.payload_json, '$.text') LIKE 'Claude Code ended mid-turn%'
+    BEGIN SELECT RAISE(ABORT, 'fixture exit report refused'); END`)
+
+  Object.assign(children[0], { exitCode: 1 })
+  children[0].emit('exit', 1, null)
+  children[0].stdout.end()
+
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'failed')
+  // Mutation: keep the dead turn accepted through its exit report -> the
+  // emitter announces the refusal as that turn's loss: a fact, red.
+  expect(failures).toEqual([])
+  expect(recordingFailedNotesOf(service, session.id)).toEqual([])
+  // Logged instead, never thrown out of the exit handler.
+  expect(
+    errors.mock.calls.some((call) =>
+      String(call[0]).includes('Could not record the mid-turn exit report'),
+    ),
+  ).toBe(true)
+  getDatabase().exec('DROP TRIGGER refuse_exit_report')
+  errors.mockRestore()
+})
+
+it('MAR-3023 lap 6, A: a refused preparation-failure note still fails the turn — logged, no unhandled rejection, no fact', async () => {
+  const { service, session } = await fixture()
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  spawnMock.mockImplementationOnce(() => {
+    throw new Error('fixture spawn refused')
+  })
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_prepare_note
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'note'
+         AND json_extract(NEW.payload_json, '$.text') LIKE 'Failed to prepare Claude Code turn%'
+    BEGIN SELECT RAISE(ABORT, 'fixture prepare note refused'); END`)
+
+  await service.start(session.id, { text: 'first' })
+
+  // Mutation: write the note bare -> it throws out of `void startTurn`, an
+  // unhandled rejection, and the failed status below never lands.
+  await vi.waitUntil(() => service.getById(session.id)?.status === 'failed')
+  expect(
+    errors.mock.calls.some((call) =>
+      String(call[0]).includes('Could not record the preparation failure note'),
+    ),
+  ).toBe(true)
+  expect(failures).toEqual([])
+  getDatabase().exec('DROP TRIGGER refuse_prepare_note')
+  errors.mockRestore()
+})
+
+it('MAR-3023 lap 6, B: under a refusal of every record, quit still closes the process — evidence and note logged', async () => {
+  const { service, session, children } = await settledResident()
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_every_item
+    BEFORE INSERT ON session_conversation_items
+    BEGIN SELECT RAISE(ABORT, 'fixture record closed'); END`)
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_every_harness_event
+    BEFORE INSERT ON session_harness_events
+    BEGIN SELECT RAISE(ABORT, 'fixture evidence closed'); END`)
+  const handle = (
+    service as unknown as {
+      activeHandles: Map<string, { dispose: (reason: 'quit') => unknown }>
+    }
+  ).activeHandles.get(session.id)!
+
+  // Mutation: keep the evidence write before the close.
+  expect(() => handle.dispose('quit')).not.toThrow()
+  await vi.waitUntil(() => children[0].stdin.writableEnded)
+  expect(
+    errors.mock.calls.some((call) =>
+      String(call[0]).includes('Could not record the quit note'),
+    ),
+  ).toBe(true)
+  getDatabase().exec('DROP TRIGGER refuse_every_item')
+  getDatabase().exec('DROP TRIGGER refuse_every_harness_event')
+  errors.mockRestore()
+})
+
+it('MAR-3023 lap 6, E: acceptance ends at the settle — a refused note the stream writes afterwards is not the settled turn’s loss', async () => {
+  const { service, session, children } = await settledResident()
+  const failures: import('./session.types').AcceptedRecordingFailureEvent[] = []
+  service.onAcceptedRecordingFailure((event) => failures.push(event))
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  getDatabase().exec(`CREATE TEMP TRIGGER refuse_compaction_note
+    BEFORE INSERT ON session_conversation_items
+    WHEN NEW.kind = 'note'
+         AND json_extract(NEW.payload_json, '$.text') = 'Compacting context...'
+    BEGIN SELECT RAISE(ABORT, 'fixture compaction note refused'); END`)
+
+  children[0].stdout.write(
+    JSON.stringify({ type: 'system', subtype: 'compact_boundary' }) + '\n',
+  )
+  await new Promise((resolve) => setTimeout(resolve, 50))
+
+  // Mutation: keep acceptance after the settle's closing writes -> the
+  // refusal is announced through the settled turn's dispatch: a fact, red.
+  expect(failures).toEqual([])
+  expect(recordingFailedNotesOf(service, session.id)).toEqual([])
+  getDatabase().exec('DROP TRIGGER refuse_compaction_note')
+  errors.mockRestore()
+})
