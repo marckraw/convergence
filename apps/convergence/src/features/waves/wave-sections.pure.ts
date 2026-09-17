@@ -20,6 +20,18 @@ export interface WaveRow {
   hostMarker: string | null
   /** The row's crew, named only when more than one crew is bound (lap 2, E). */
   crewName: string | null
+  /**
+   * Which lap this is, against the crew's cap (MAR-3085 R7): `lap 2 of 6`,
+   * or `lap 2` when the crew takes the default rather than a cap of its own.
+   */
+  lapLabel: string
+}
+
+/** A row's crew, as the board reads it (MAR-3085 R7). */
+export interface WaveRowCrew {
+  name: string | null
+  /** The crew's round cap, or null when it takes the app's default. */
+  cap: number | null
 }
 
 export interface WaveGroup {
@@ -43,6 +55,8 @@ export interface WaveSections {
 export function waveRowAction(entry: WorkLedgerEntry): string | null {
   if (entry.state === 'reviewed') return 'QA and say done'
   if (entry.state === 'returned') return 'verdict (Fable)'
+  // A STOP parks the lap until somebody grooms the issue again (MAR-3085 R7).
+  if (entry.state === 'stopped') return 're-groom (Fable)'
   if (entry.state === 'working' && entry.sessionId === null) {
     return 'seat not in crew'
   }
@@ -72,10 +86,15 @@ export function waveRowHostMarker(
  * every row by its wave, unwaved rows last. `done` and `unassigned` appear in
  * *Waves* only.
  */
+/** How a row says which lap it is on (MAR-3085 R7). */
+export function waveLapLabel(lap: number, cap: number | null): string {
+  return cap === null ? `lap ${lap}` : `lap ${lap} of ${cap}`
+}
+
 export function sectionWaveRows(
   rows: readonly WorkLedgerEntry[],
   now: number,
-  crewName: (crewId: string) => string | null = () => null,
+  crewOf: (crewId: string) => WaveRowCrew = () => ({ name: null, cap: null }),
 ): WaveSections {
   const sections: WaveSections = {
     waitingOnYou: [],
@@ -86,14 +105,22 @@ export function sectionWaveRows(
   const groups = new Map<string, WaveRow[]>()
 
   for (const entry of rows) {
+    const crew = crewOf(entry.crewId)
     const row: WaveRow = {
       entry,
       action: waveRowAction(entry),
       hostMarker: waveRowHostMarker(entry, now),
-      crewName: crewName(entry.crewId),
+      crewName: crew.name,
+      lapLabel: waveLapLabel(entry.lap, crew.cap),
     }
     if (entry.state === 'reviewed') sections.waitingOnYou.push(row)
-    else if (entry.state === 'working' || entry.state === 'returned') {
+    else if (
+      entry.state === 'working' ||
+      entry.state === 'returned' ||
+      // A stopped lap is still in the wave: it is work somebody has to pick
+      // up again, not work waiting on Marcin (MAR-3085 R7).
+      entry.state === 'stopped'
+    ) {
       sections.inTheWave.push(row)
     } else if (entry.state === 'assigned') sections.waitingToStart.push(row)
 

@@ -66,6 +66,22 @@ function nextLap(
   return previous.lap
 }
 
+/**
+ * Whether the tracker still reports the status a ruling superseded
+ * (MAR-3085 R4): the hold.
+ *
+ * A verdict row is a fact the app wrote AHEAD of the tracker -- the
+ * mastermind moves the status by hand, and until it does, the tracker keeps
+ * saying what it said before the ruling. Reading that lag as a change is how
+ * a PASS would be reverted to `returned` within the minute.
+ */
+function verdictHoldsAgainst(
+  previous: WorkLedgerRecord,
+  issue: TrackerIssue,
+): boolean {
+  return previous.verdict !== null && previous.trackerStatus === issue.status
+}
+
 function sameObservation(
   previous: WorkLedgerRecord,
   next: NewWorkLedgerRecord,
@@ -74,7 +90,12 @@ function sameObservation(
     previous.state === next.state &&
     previous.seat === next.seat &&
     previous.wave === next.wave &&
-    previous.trackerStatus === next.trackerStatus &&
+    // A verdict row carries the status the tracker reported BEFORE the
+    // ruling, so once the tracker catches up the two disagree about the word
+    // while agreeing about the state: the confirmation is not a change
+    // (MAR-3085 R4).
+    (previous.verdict !== null ||
+      previous.trackerStatus === next.trackerStatus) &&
     previous.issueIdentifier === next.issueIdentifier &&
     previous.issueTitle === next.issueTitle &&
     previous.issueUrl === next.issueUrl &&
@@ -105,6 +126,9 @@ export function diffTrackerSnapshot(input: {
     seen.add(issue.id)
     const state = workLedgerStateFor(issue.logicalStatus)
     const previous = currentByIssue.get(issue.id)
+    // The hold (MAR-3085 R4): the tracker has not moved yet, so it has
+    // nothing to say about the lap the mastermind just ruled.
+    if (previous && verdictHoldsAgainst(previous, issue)) continue
     if (state === null) {
       // An unmapped status (lap 2, E). The ledger has no word for it, so a
       // current row that still says the issue is in the loop is let go of
@@ -141,6 +165,11 @@ export function diffTrackerSnapshot(input: {
         branchName: issue.branchName,
         updatedAt: issue.updatedAt,
       },
+      // The watcher records what the tracker said; a ruling is the
+      // mastermind's act and only `appendVerdict` writes one (MAR-3085).
+      verdict: null,
+      verdictSettleId: null,
+      verdictNote: null,
     }
     if (previous && sameObservation(previous, next)) continue
     rows.push(next)
@@ -172,6 +201,9 @@ function carriedFrom(
     groundedAt: previous.groundedAt,
     seenAt,
     fact: { ...previous.fact },
+    verdict: null,
+    verdictSettleId: null,
+    verdictNote: null,
   }
 }
 

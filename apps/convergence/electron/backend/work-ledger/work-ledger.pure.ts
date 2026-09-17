@@ -1,10 +1,12 @@
 import { parseSessionPullRequest } from '../pull-request/session-pull-request.pure'
 import type { SessionPullRequest } from '../../../src/shared/types/session-pull-request.types'
 import type {
+  NewWorkLedgerRecord,
   WorkLedgerEntry,
   WorkLedgerFact,
   WorkLedgerRecord,
   WorkLedgerState,
+  WorkLedgerVerdict,
 } from './work-ledger.types'
 
 export const WORK_LEDGER_STATES: readonly WorkLedgerState[] = [
@@ -14,7 +16,64 @@ export const WORK_LEDGER_STATES: readonly WorkLedgerState[] = [
   'reviewed',
   'done',
   'unassigned',
+  'stopped',
 ]
+
+/** How much of a mastermind's reply a STOP row carries (MAR-3085 R3). */
+export const VERDICT_NOTE_MAX_LENGTH = 4_000
+
+/** What each ruling means for the row that records it (MAR-3085 R3). */
+const VERDICT_STATES: Record<WorkLedgerVerdict, WorkLedgerState> = {
+  return: 'working',
+  pass: 'reviewed',
+  stop: 'stopped',
+}
+
+/**
+ * The row a ruling writes (MAR-3085 R3), carried from the returned row it
+ * binds to: same issue, same seat, same wave, and the tracker status it still
+ * reports -- the mastermind moves the tracker by hand, and until it does the
+ * row says what the tracker last said.
+ *
+ * The lap is the mastermind's count, never the ledger's: when the two
+ * disagree the row takes N and says so in `fact.lapDisagreed`, because the
+ * ruling is the act and the ledger is its record.
+ */
+export function verdictLedgerRecord(input: {
+  bound: WorkLedgerRecord
+  verdict: WorkLedgerVerdict
+  lap: number
+  settleId: string
+  note?: string | null
+  seenAt: string
+}): NewWorkLedgerRecord {
+  const { bound } = input
+  return {
+    crewId: bound.crewId,
+    issueId: bound.issueId,
+    issueIdentifier: bound.issueIdentifier,
+    issueTitle: bound.issueTitle,
+    issueUrl: bound.issueUrl,
+    seat: bound.seat,
+    wave: bound.wave,
+    lap: input.lap,
+    state: VERDICT_STATES[input.verdict],
+    trackerStatus: bound.trackerStatus,
+    groundedAt: bound.groundedAt,
+    seenAt: input.seenAt,
+    fact: {
+      ...bound.fact,
+      ledgerLapBefore: bound.lap,
+      lapDisagreed: input.lap !== bound.lap + 1,
+    },
+    verdict: input.verdict,
+    verdictSettleId: input.settleId,
+    verdictNote:
+      input.verdict === 'stop' && input.note
+        ? input.note.slice(0, VERDICT_NOTE_MAX_LENGTH)
+        : null,
+  }
+}
 
 /** A `work_ledger` row as SQLite returns it. */
 export interface WorkLedgerRow {
@@ -32,6 +91,10 @@ export interface WorkLedgerRow {
   grounded_at: string | null
   seen_at: string
   fact_json: string
+  /** Null on every row the tracker watcher wrote (MAR-3085). */
+  verdict: string | null
+  verdict_settle_id: string | null
+  verdict_note: string | null
 }
 
 /** The row plus the facts joined in the same SELECT. */
@@ -51,10 +114,19 @@ function readFact(raw: string): WorkLedgerFact {
       logicalStatus: value?.logicalStatus ?? null,
       branchName: value?.branchName ?? null,
       updatedAt: value?.updatedAt ?? null,
+      ledgerLapBefore: value?.ledgerLapBefore ?? null,
+      lapDisagreed: value?.lapDisagreed ?? false,
     }
   } catch {
     return { logicalStatus: null, branchName: null, updatedAt: null }
   }
+}
+
+/** A stored verdict word, or null for anything this build cannot read. */
+function readVerdict(value: string | null): WorkLedgerVerdict | null {
+  return value === 'pass' || value === 'return' || value === 'stop'
+    ? value
+    : null
 }
 
 export function workLedgerRecordFromRow(row: WorkLedgerRow): WorkLedgerRecord {
@@ -75,6 +147,11 @@ export function workLedgerRecordFromRow(row: WorkLedgerRow): WorkLedgerRecord {
     groundedAt: row.grounded_at,
     seenAt: row.seen_at,
     fact: readFact(row.fact_json),
+    // A word this build does not know reads as no verdict rather than
+    // throwing: the column is written by a newer build's vocabulary too.
+    verdict: readVerdict(row.verdict),
+    verdictSettleId: row.verdict_settle_id,
+    verdictNote: row.verdict_note,
   }
 }
 

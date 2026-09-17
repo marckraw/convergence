@@ -13,6 +13,7 @@ import {
   waveRowHostMarker,
   waveRowKey,
   waveRowsFromSnapshots,
+  waveLapLabel,
   type WaveRow,
 } from './wave-sections.pure'
 import { ledgerEntry } from './wave-rows.fixture'
@@ -223,7 +224,10 @@ describe('MAR-3097 lap 2, E: crews on rows', () => {
       ledgerEntry({ issueIdentifier: 'EX-1', crewId: 'a' }),
       ledgerEntry({ issueIdentifier: 'EX-1', crewId: 'b' }),
     ]
-    const named = sectionWaveRows(rows, NOW, (crewId) => `crew ${crewId}`)
+    const named = sectionWaveRows(rows, NOW, (crewId) => ({
+      name: `crew ${crewId}`,
+      cap: null,
+    }))
     expect(named.inTheWave.map((row) => row.crewName)).toEqual([
       'crew a',
       'crew b',
@@ -277,5 +281,36 @@ describe('MAR-3097 lap 2, B: the column keeps the main panel at its floor', () =
         reservedWidth: 0,
       }),
     ).toBe('rail')
+  })
+})
+
+describe('MAR-3085 R7: the lap, the cap and the ruling on the row', () => {
+  it('a stopped lap rides In the wave with "re-groom (Fable)", counted there', () => {
+    const rows = [
+      ledgerEntry({
+        issueIdentifier: 'EX-1',
+        state: 'stopped',
+        lap: 3,
+        verdict: 'stop',
+      }),
+    ]
+    const sections = sectionWaveRows(rows, NOW, () => ({ name: null, cap: 6 }))
+
+    // Mutation: put `stopped` under Waiting on you -> red.
+    expect(sections.waitingOnYou).toEqual([])
+    expect(sections.inTheWave.map((row) => row.action)).toEqual([
+      're-groom (Fable)',
+    ])
+    expect(waveRailCounts(sections).inTheWave).toBe(1)
+    expect(sections.inTheWave[0]!.lapLabel).toBe('lap 3 of 6')
+  })
+
+  it('a crew with no cap of its own says the lap alone', () => {
+    expect(waveLapLabel(3, null)).toBe('lap 3')
+    expect(waveLapLabel(1, 24)).toBe('lap 1 of 24')
+    expect(
+      sectionWaveRows([ledgerEntry({ issueIdentifier: 'EX-1', lap: 2 })], NOW)
+        .inTheWave[0]!.lapLabel,
+    ).toBe('lap 2')
   })
 })

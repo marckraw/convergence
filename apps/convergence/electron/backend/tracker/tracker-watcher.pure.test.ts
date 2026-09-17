@@ -295,3 +295,127 @@ describe('MAR-3084 R7: due and backoff are pure', () => {
     })
   })
 })
+
+describe('MAR-3085 R4: the watcher confirms a verdict, never undoes it', () => {
+  /** A verdict row as `appendVerdict` writes it, then read back. */
+  function verdictRow(
+    verdict: 'return' | 'pass' | 'stop',
+    state: WorkLedgerRecord['state'],
+    lap: number,
+  ): WorkLedgerRecord {
+    return {
+      ...recorded(issue('in-review')),
+      state,
+      lap,
+      // The status the tracker still reported when the ruling was made.
+      trackerStatus: 'In Review',
+      verdict,
+      verdictSettleId: 'settle-1',
+      verdictNote: verdict === 'stop' ? 'the reply' : null,
+    }
+  }
+
+  const tick = (
+    current: WorkLedgerRecord,
+    status: string,
+    logicalStatus: Parameters<typeof issue>[0],
+  ) =>
+    diffTrackerSnapshot({
+      crewId: 'crew-1',
+      current: [current],
+      issues: [issue(logicalStatus, { status })],
+      seenAt: SEEN,
+    })
+
+  it.each([
+    [
+      'RETURN then the tracker still says In Review',
+      'return',
+      'working',
+      'In Review',
+      'in-review',
+      0,
+      null,
+    ],
+    [
+      'RETURN then In Progress',
+      'return',
+      'working',
+      'In Progress',
+      'in-progress',
+      0,
+      null,
+    ],
+    [
+      'RETURN then Reviewed (mis-flipped)',
+      'return',
+      'working',
+      'Reviewed',
+      'reviewed',
+      1,
+      'reviewed',
+    ],
+    [
+      'PASS then still In Review',
+      'pass',
+      'reviewed',
+      'In Review',
+      'in-review',
+      0,
+      null,
+    ],
+    ['PASS then Reviewed', 'pass', 'reviewed', 'Reviewed', 'reviewed', 0, null],
+    [
+      'STOP then still In Review',
+      'stop',
+      'stopped',
+      'In Review',
+      'in-review',
+      0,
+      null,
+    ],
+    ['STOP then Todo', 'stop', 'stopped', 'Todo', 'todo', 1, 'assigned'],
+  ] as const)(
+    '%s -> %s row(s)',
+    (_case, verdict, state, status, logicalStatus, rows, nextState) => {
+      // Mutation: drop the hold -> the "still In Review" cases append a
+      // `returned` row over the ruling, red.
+      const appended = tick(
+        verdictRow(verdict, state, 2),
+        status,
+        logicalStatus,
+      )
+      expect(appended).toHaveLength(rows)
+      if (nextState) expect(appended[0]).toMatchObject({ state: nextState })
+    },
+  )
+
+  it('does not turn the lap over again when the tracker confirms a RETURN', () => {
+    expect(
+      tick(verdictRow('return', 'working', 2), 'In Progress', 'in-progress'),
+    ).toEqual([])
+    // And a genuine new return after the verdict lap still turns over.
+    expect(
+      tick(
+        {
+          ...verdictRow('return', 'working', 2),
+          verdict: null,
+          trackerStatus: 'In Progress',
+        },
+        'In Review',
+        'in-review',
+      )[0],
+    ).toMatchObject({ state: 'returned', lap: 2 })
+  })
+
+  it('a stopped row whose label is gone is still unassigned', () => {
+    expect(
+      diffTrackerSnapshot({
+        crewId: 'crew-1',
+        current: [verdictRow('stop', 'stopped', 3)],
+        issues: [],
+        seenAt: SEEN,
+      })[0],
+    ).toMatchObject({ state: 'unassigned', seat: null })
+  })
+})

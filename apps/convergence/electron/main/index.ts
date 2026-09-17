@@ -756,8 +756,14 @@ async function startApp(): Promise<void> {
     relayService,
   )
   const crewHailService = new CrewHailService(db)
+  // One ledger for the whole process (MAR-3085): the engine writes a lap the
+  // moment a verdict settles and the watcher reads the same rows a minute
+  // later. Two instances would be two readers of one table with no shared
+  // view of what was just written.
+  const workLedgerService = new WorkLedgerService(db)
   const relayEngine = new RelayEngine({
     relays: relayService,
+    ledger: workLedgerService,
     sessions: sessionService,
     crews: {
       addMember: (crewId, sessionId) =>
@@ -833,7 +839,7 @@ async function startApp(): Promise<void> {
   // tracker; the key stays in the Keychain and only the main process reads it.
   const trackerWatcher = new TrackerWatcherService({
     crews: crewService,
-    ledger: new WorkLedgerService(db),
+    ledger: workLedgerService,
     resolveKey: (crewId) => trackerCredentials.resolveKey(crewId),
     createAdapter: (input) => createLinearTrackerAdapter(input),
     broadcast: broadcastWorkLedger,
