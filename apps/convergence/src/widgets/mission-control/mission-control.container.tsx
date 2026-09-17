@@ -13,7 +13,10 @@ import {
   useMissionControlCards,
   useMissionControlView,
 } from '@/features/mission-control'
-import type { SessionCard } from '@/features/mission-control'
+import type {
+  MissionControlViewMode,
+  SessionCard,
+} from '@/features/mission-control'
 import { WavesTab } from '@/features/waves'
 import { CrewCanvas } from './crew-canvas.container'
 import { MissionControlView } from './mission-control.presentational'
@@ -21,9 +24,17 @@ import { SessionCardGrid } from './session-card-grid.container'
 
 interface MissionControlProps {
   onOpenSession?: (session: SessionSummary) => void
+  /**
+   * Tells the shell which view is showing (MAR-3097 lap 2, B): the docked
+   * wave column steps aside while this room shows its own Waves tab.
+   */
+  onModeChange?: (mode: MissionControlViewMode) => void
 }
 
-export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
+export const MissionControl: FC<MissionControlProps> = ({
+  onOpenSession,
+  onModeChange,
+}) => {
   const {
     filter,
     order,
@@ -42,6 +53,10 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
     clearFilter,
   } = useMissionControlView()
   const [hailSessionId, setHailSessionId] = useState<string | null>(null)
+
+  useEffect(() => {
+    onModeChange?.(mode)
+  }, [mode, onModeChange])
 
   const crews = useSessionCrewStore((state) => state.crews)
   const loadCrews = useSessionCrewStore((state) => state.load)

@@ -8,11 +8,18 @@ import { livenessAge } from '@/shared/lib/host-liveness.pure'
 /** The group rows without a wave fall into, shown last. */
 export const UNWAVED_GROUP = '—'
 
-/** One row as the panel draws it: the ledger's facts plus a derived action. */
+/** One row as the panel draws it: the ledger's facts plus derived words. */
 export interface WaveRow {
   entry: WorkLedgerEntry
-  /** What a person does next, derived from the row (R2); null when nothing. */
+  /** What a person does next, derived from the row's state (R2). */
   action: string | null
+  /**
+   * The seat's host is not answering (lap 2, F1): a second marker beside the
+   * action, never in its place, and only on work that has started.
+   */
+  hostMarker: string | null
+  /** The row's crew, named only when more than one crew is bound (lap 2, E). */
+  crewName: string | null
 }
 
 export interface WaveGroup {
@@ -29,25 +36,32 @@ export interface WaveSections {
 }
 
 /**
- * The human action on a row (R2), from the ledger's facts alone: a reviewed
- * issue waits on Marcin's QA, a returned one on Fable's verdict, a working
- * one whose seat has no conversation in the crew cannot be reached, and a
- * reachable-host fact that says otherwise is named with its age.
+ * The human action on a row (R2), from its state alone: a reviewed issue
+ * waits on Marcin's QA, a returned one on Fable's verdict, and a working one
+ * whose seat has no conversation in the crew cannot be reached.
  */
-export function waveRowAction(
-  entry: WorkLedgerEntry,
-  now: number,
-): string | null {
+export function waveRowAction(entry: WorkLedgerEntry): string | null {
   if (entry.state === 'reviewed') return 'QA and say done'
   if (entry.state === 'returned') return 'verdict (Fable)'
   if (entry.state === 'working' && entry.sessionId === null) {
     return 'seat not in crew'
   }
-  if (entry.hostLiveness && !entry.hostLiveness.hostReachable) {
-    const age = livenessAge(entry.hostLiveness.lastEventAt, now)
-    return age === null ? 'host unreachable' : `host unreachable since ${age}`
-  }
   return null
+}
+
+/**
+ * The host outage on a row (lap 2, F1): only on `working` and `returned` --
+ * work that is on a host. An `assigned` issue has not started anywhere, so a
+ * host that is down says nothing about it.
+ */
+export function waveRowHostMarker(
+  entry: WorkLedgerEntry,
+  now: number,
+): string | null {
+  if (entry.state !== 'working' && entry.state !== 'returned') return null
+  if (!entry.hostLiveness || entry.hostLiveness.hostReachable) return null
+  const age = livenessAge(entry.hostLiveness.lastEventAt, now)
+  return age === null ? 'host unreachable' : `host unreachable since ${age}`
 }
 
 /**
@@ -61,6 +75,7 @@ export function waveRowAction(
 export function sectionWaveRows(
   rows: readonly WorkLedgerEntry[],
   now: number,
+  crewName: (crewId: string) => string | null = () => null,
 ): WaveSections {
   const sections: WaveSections = {
     waitingOnYou: [],
@@ -71,7 +86,12 @@ export function sectionWaveRows(
   const groups = new Map<string, WaveRow[]>()
 
   for (const entry of rows) {
-    const row: WaveRow = { entry, action: waveRowAction(entry, now) }
+    const row: WaveRow = {
+      entry,
+      action: waveRowAction(entry),
+      hostMarker: waveRowHostMarker(entry, now),
+      crewName: crewName(entry.crewId),
+    }
     if (entry.state === 'reviewed') sections.waitingOnYou.push(row)
     else if (entry.state === 'working' || entry.state === 'returned') {
       sections.inTheWave.push(row)
@@ -112,6 +132,15 @@ export function waveRailCounts(sections: WaveSections): WaveRailCounts {
   }
 }
 
+/** The board's own line for the Waves tab (lap 2, D), from the same sections. */
+export function waveBoardLine(sections: WaveSections): string {
+  const issues = sections.waves.reduce(
+    (count, group) => count + group.rows.length,
+    0,
+  )
+  return `${issues} issue${issues === 1 ? '' : 's'} · ${sections.waitingOnYou.length} waiting on you`
+}
+
 /** The rows of every bound crew's last snapshot, in crew order. */
 export function waveRowsFromSnapshots(
   snapshots: Readonly<Record<string, WorkLedgerSnapshot>>,
@@ -130,47 +159,97 @@ const OUTAGE_LABELS: Record<Exclude<TrackerHealth['state'], 'ok'>, string> = {
 export type WaveHeader =
   | { kind: 'connect'; text: string }
   | { kind: 'outage'; text: string }
+  | { kind: 'reading'; text: string }
   | { kind: 'quiet'; text: string }
   | { kind: 'live'; text: null }
 
+/** One bound crew, as the header reads it. */
+export interface WaveHeaderCrew {
+  name: string
+  health: TrackerHealth | null
+}
+
 /**
- * What the panel's header says (R3). An outage is an age, never a zero: it
- * names the state the snapshot carries with the age of `since`, and the rows
- * stay as last read. No binding at all asks to connect one; a binding with no
- * rows is a quiet project.
+ * What the panel's header says (R3).
+ *
+ * An outage is an age, never a zero, and it names each crew whose tracker is
+ * not answering when more than one is bound (lap 2, E). "Quiet" is a claim
+ * about a tracker that answered (lap 2, A): while any bound crew has not been
+ * heard from, the header reads "reading the tracker…" and the rows already
+ * held still render. No binding at all asks to connect one.
  */
 export function waveHeader(input: {
-  boundCrewCount: number
-  healths: readonly (TrackerHealth | null)[]
+  crews: readonly WaveHeaderCrew[]
   rowCount: number
   now: number
 }): WaveHeader {
-  if (input.boundCrewCount === 0) {
+  if (input.crews.length === 0) {
     return { kind: 'connect', text: 'Connect a tracker' }
   }
-  const outage = input.healths.find(
-    (health): health is TrackerHealth =>
-      health !== null && health.state !== 'ok',
-  )
-  if (outage && outage.state !== 'ok') {
-    const age = livenessAge(outage.since, input.now)
-    const label = OUTAGE_LABELS[outage.state]
-    return { kind: 'outage', text: age === null ? label : `${label} · ${age}` }
+  const several = input.crews.length > 1
+  const outages = input.crews.flatMap((crew) => {
+    const health = crew.health
+    if (health === null || health.state === 'ok') return []
+    const age = livenessAge(health.since, input.now)
+    return [
+      [OUTAGE_LABELS[health.state], several ? crew.name : null, age]
+        .filter((part): part is string => part !== null)
+        .join(' · '),
+    ]
+  })
+  if (outages.length > 0) return { kind: 'outage', text: outages.join('; ') }
+  if (input.crews.some((crew) => crew.health === null)) {
+    return { kind: 'reading', text: 'reading the tracker…' }
   }
   if (input.rowCount === 0) return { kind: 'quiet', text: 'Quiet project' }
   return { kind: 'live', text: null }
 }
 
+/** Whether a row can open its seat, from one session lookup (lap 2, F4). */
+export type WaveRowOpening<T> =
+  | { openable: true; session: T }
+  | { openable: false; reason: string }
+
 /**
- * Why a row cannot open its seat, or null when it can (R5): a row without a
- * session has no conversation to open, and one whose session this window has
- * not loaded is named rather than silently dead.
+ * A row's seat, resolved once (R5): the conversation to open, or why there is
+ * none -- no session on the row, or one this window has not loaded.
  */
-export function waveRowInertReason(
+export function resolveWaveRow<T>(
   entry: Pick<WorkLedgerEntry, 'sessionId'>,
-  hasSession: (sessionId: string) => boolean,
-): string | null {
-  if (entry.sessionId === null) return 'no conversation for this seat'
-  if (!hasSession(entry.sessionId)) return 'conversation not loaded'
-  return null
+  findSession: (sessionId: string) => T | null,
+): WaveRowOpening<T> {
+  if (entry.sessionId === null) {
+    return { openable: false, reason: 'no conversation for this seat' }
+  }
+  const session = findSession(entry.sessionId)
+  return session === null
+    ? { openable: false, reason: 'conversation not loaded' }
+    : { openable: true, session }
+}
+
+/** The row's key on the page: unique across crews (lap 2, E). */
+export function waveRowKey(
+  entry: Pick<WorkLedgerEntry, 'crewId' | 'issueIdentifier'>,
+): string {
+  return `${entry.crewId}:${entry.issueIdentifier}`
+}
+
+/** The narrowest main panel the docked column leaves (lap 2, B). */
+export const WAVE_PANEL_MIN_MAIN_WIDTH = 480
+/** The open column's width, in pixels. */
+export const WAVE_PANEL_COLUMN_WIDTH = 280
+
+/**
+ * The mode the column renders in (lap 2, B): the stored one, unless the
+ * window is too narrow to keep the main panel at its floor, in which case the
+ * rail -- without touching what is stored.
+ */
+export function effectiveWavePanelMode(input: {
+  stored: 'open' | 'rail'
+  windowWidth: number
+  reservedWidth: number
+}): 'open' | 'rail' {
+  if (input.stored === 'rail') return 'rail'
+  const main = input.windowWidth - input.reservedWidth - WAVE_PANEL_COLUMN_WIDTH
+  return main < WAVE_PANEL_MIN_MAIN_WIDTH ? 'rail' : 'open'
 }

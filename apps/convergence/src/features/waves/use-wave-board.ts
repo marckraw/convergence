@@ -7,19 +7,23 @@ import {
 } from '@/entities/work-ledger'
 import { useFeedClock } from '@/shared/hooks/use-feed-clock'
 import {
+  resolveWaveRow,
   sectionWaveRows,
+  waveBoardLine,
   waveHeader,
-  waveRowInertReason,
   waveRowsFromSnapshots,
   type WaveHeader,
+  type WaveRowOpening,
   type WaveSections,
 } from './wave-sections.pure'
 
 export interface WaveBoard {
+  /** How many crews read a tracker; zero means the column is not mounted. */
+  boundCrewCount: number
   sections: WaveSections
   header: WaveHeader
-  inertReason: (entry: WorkLedgerEntry) => string | null
-  resolveSession: (entry: WorkLedgerEntry) => SessionSummary | null
+  boardLine: string
+  resolveRow: (entry: WorkLedgerEntry) => WaveRowOpening<SessionSummary>
 }
 
 /**
@@ -51,6 +55,10 @@ export function useWaveBoard(): WaveBoard {
     () => (boundKey ? boundKey.split('\n') : []),
     [boundKey],
   )
+  const crewNames = useMemo(
+    () => new Map(crews.map((crew) => [crew.id, crew.name])),
+    [crews],
+  )
 
   useEffect(() => {
     if (boundCrewIds.length > 0) void loadLedger(boundCrewIds)
@@ -60,46 +68,47 @@ export function useWaveBoard(): WaveBoard {
     () => waveRowsFromSnapshots(snapshots, boundCrewIds),
     [snapshots, boundCrewIds],
   )
-  const healths = useMemo(
-    () => boundCrewIds.map((id) => snapshots[id]?.trackerHealth ?? null),
-    [snapshots, boundCrewIds],
-  )
-
-  // Ages ("since 4m") are statements about now; tick while there is anything
-  // on screen that carries one.
-  useFeedClock(
-    rows.length > 0 || healths.some((h) => h && h.state !== 'ok'),
-    setNow,
-  )
-
-  const sections = useMemo(() => sectionWaveRows(rows, now), [rows, now])
-  const header = useMemo(
+  const headerCrews = useMemo(
     () =>
-      waveHeader({
-        boundCrewCount: boundCrewIds.length,
-        healths,
-        rowCount: rows.length,
-        now,
-      }),
-    [boundCrewIds.length, healths, rows.length, now],
+      boundCrewIds.map((id) => ({
+        name: crewNames.get(id) ?? id,
+        health: snapshots[id]?.trackerHealth ?? null,
+      })),
+    [snapshots, boundCrewIds, crewNames],
+  )
+
+  // Ages ("since 4m") are statements about now; tick while anything on
+  // screen could carry one.
+  useFeedClock(boundCrewIds.length > 0, setNow)
+
+  const several = boundCrewIds.length > 1
+  const sections = useMemo(
+    () =>
+      sectionWaveRows(rows, now, (crewId) =>
+        several ? (crewNames.get(crewId) ?? crewId) : null,
+      ),
+    [rows, now, several, crewNames],
+  )
+  const header = useMemo(
+    () => waveHeader({ crews: headerCrews, rowCount: rows.length, now }),
+    [headerCrews, rows.length, now],
   )
 
   const sessionsById = useMemo(
     () => new Map(sessions.map((session) => [session.id, session])),
     [sessions],
   )
-  const inertReason = useCallback(
+  const resolveRow = useCallback(
     (entry: WorkLedgerEntry) =>
-      waveRowInertReason(entry, (id) => sessionsById.has(id)),
-    [sessionsById],
-  )
-  const resolveSession = useCallback(
-    (entry: WorkLedgerEntry) =>
-      entry.sessionId === null
-        ? null
-        : (sessionsById.get(entry.sessionId) ?? null),
+      resolveWaveRow(entry, (id) => sessionsById.get(id) ?? null),
     [sessionsById],
   )
 
-  return { sections, header, inertReason, resolveSession }
+  return {
+    boundCrewCount: boundCrewIds.length,
+    sections,
+    header,
+    boardLine: waveBoardLine(sections),
+    resolveRow,
+  }
 }

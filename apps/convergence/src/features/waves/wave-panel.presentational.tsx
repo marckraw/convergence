@@ -15,6 +15,8 @@ interface WavePanelViewProps {
   header: WaveHeader
   /** `column` beside the conversation; `full` as Mission Control's tab. */
   layout: 'column' | 'full'
+  /** The board's own line ("N issues · M waiting on you"), full layout. */
+  boardLine?: string
   inertReason: (entry: WorkLedgerEntry) => string | null
   onOpen: (entry: WorkLedgerEntry) => void
   onConnectTracker?: () => void
@@ -24,12 +26,15 @@ interface WavePanelViewProps {
 /**
  * The ledger on screen (MAR-3097): four sections from one pure result, with a
  * header that says an outage by its age and never as a zero (R3). The same
- * view is the column and Mission Control's Waves tab (R6).
+ * view is the column and Mission Control's Waves tab (R6). The column scrolls
+ * itself; the full tab lives inside Mission Control's scroller and does not
+ * add a second one.
  */
 export const WavePanelView: FC<WavePanelViewProps> = ({
   sections,
   header,
   layout,
+  boardLine,
   inertReason,
   onOpen,
   onConnectTracker,
@@ -44,12 +49,24 @@ export const WavePanelView: FC<WavePanelViewProps> = ({
   >
     <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2">
       <h2 className="text-xs font-semibold tracking-tight">Waves</h2>
-      {header.kind === 'outage' ? (
+      {boardLine ? (
+        <p data-wave-board-line className="text-[11px] text-muted-foreground">
+          {boardLine}
+        </p>
+      ) : null}
+      {header.kind === 'outage' || header.kind === 'reading' ? (
         <span
           role="status"
-          className="flex items-center gap-1.5 text-[11px] text-amber-300/90"
+          className={cn(
+            'flex items-center gap-1.5 text-[11px]',
+            header.kind === 'outage'
+              ? 'text-amber-300/90'
+              : 'text-muted-foreground',
+          )}
         >
-          <span className={WAVE_OUTAGE_DOT_CLASS} />
+          {header.kind === 'outage' ? (
+            <span className={WAVE_OUTAGE_DOT_CLASS} />
+          ) : null}
           {header.text}
         </span>
       ) : null}
@@ -82,13 +99,18 @@ export const WavePanelView: FC<WavePanelViewProps> = ({
             Connect a tracker
           </Button>
         ) : (
-          <p>Connect a tracker</p>
+          <p>Connect a tracker in a crew’s settings on the Canvas.</p>
         )}
       </div>
     ) : header.kind === 'quiet' ? (
       <p className="px-3 py-4 text-xs text-muted-foreground">Quiet project</p>
     ) : (
-      <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto pb-3">
+      <div
+        className={cn(
+          'pb-3',
+          layout === 'column' && 'app-scrollbar min-h-0 flex-1 overflow-y-auto',
+        )}
+      >
         <WaveSectionView
           title="Waiting on you"
           rows={sections.waitingOnYou}
@@ -116,6 +138,7 @@ export const WavePanelView: FC<WavePanelViewProps> = ({
                 rows={group.rows}
                 inertReason={inertReason}
                 onOpen={onOpen}
+                disclosure={layout === 'column' ? 'closed' : 'open'}
               />
             ))}
           </section>

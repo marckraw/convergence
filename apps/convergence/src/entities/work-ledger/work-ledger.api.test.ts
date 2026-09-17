@@ -17,6 +17,7 @@ describe('the ledger store', () => {
   afterEach(() => {
     useWorkLedgerStore.setState({
       snapshots: {},
+      broadcastCount: {},
       error: null,
       unsubscribeBroadcast: null,
     })
@@ -60,5 +61,59 @@ describe('the ledger store', () => {
     expect(
       useWorkLedgerStore.getState().snapshots.a?.trackerHealth?.state,
     ).toBe('unreachable')
+  })
+
+  it('lap 2, C: a list answer never replaces a broadcast that landed after it was asked for', async () => {
+    let push: (snapshot: WorkLedgerSnapshot) => void = () => {}
+    let answer: (snapshot: WorkLedgerSnapshot) => void = () => {}
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      workLedger: {
+        list: vi.fn(
+          () =>
+            new Promise<WorkLedgerSnapshot>((resolve) => {
+              answer = resolve
+            }),
+        ),
+        onUpdated: vi.fn((callback: (s: WorkLedgerSnapshot) => void) => {
+          push = callback
+          return () => {}
+        }),
+      },
+    }
+    const snapshot = (since: string): WorkLedgerSnapshot => ({
+      crewId: 'a',
+      entries: [],
+      trackerHealth: {
+        state: 'ok',
+        since,
+        lastOkAt: since,
+        backoffUntil: null,
+      },
+    })
+
+    const loading = useWorkLedgerStore.getState().load(['a'])
+    push(snapshot('newer-broadcast'))
+    answer(snapshot('older-list'))
+    await loading
+
+    // Mutation: write the list answer blindly -> 'older-list', red.
+    expect(
+      useWorkLedgerStore.getState().snapshots.a?.trackerHealth?.since,
+    ).toBe('newer-broadcast')
+  })
+
+  it('lap 2, C: with no broadcast in between, the list answer is taken', async () => {
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      workLedger: {
+        list: vi.fn(async (crewId: string) => ({
+          crewId,
+          entries: [],
+          trackerHealth: null,
+        })),
+        onUpdated: vi.fn(() => () => {}),
+      },
+    }
+    await useWorkLedgerStore.getState().load(['a'])
+    expect(useWorkLedgerStore.getState().snapshots.a).toBeDefined()
   })
 })

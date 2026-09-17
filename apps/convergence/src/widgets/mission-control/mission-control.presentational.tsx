@@ -61,9 +61,10 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
   fillsContent = false,
   children,
 }) => {
-  // Two, from R13: Crews retired into the Canvas, which now holds every
-  // capability it had. A third button that only regrouped the same cards was
-  // a second place to keep in step with the first.
+  // Crews retired into the Canvas (R13), which holds every capability it had.
+  // Waves (MAR-3097) is not a regrouping of the session cards: it reads the
+  // tracker's ledger, so in that mode the session counters, search, order and
+  // filters are not shown -- they would govern nothing beneath them.
   const modes: { value: MissionControlViewMode; label: string }[] = [
     { value: 'flat', label: 'Flat' },
     { value: 'canvas', label: 'Canvas' },
@@ -79,11 +80,13 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
             <Satellite className="size-4" />
             Mission Control
           </h1>
-          <p className="text-xs text-muted-foreground">
-            {totalCount === 0
-              ? 'no sessions'
-              : `${totalCount} session${totalCount === 1 ? '' : 's'} · ${attentionCount} need${attentionCount === 1 ? 's' : ''} you · ${runningCount} running`}
-          </p>
+          {mode === 'waves' ? null : (
+            <p className="text-xs text-muted-foreground">
+              {totalCount === 0
+                ? 'no sessions'
+                : `${totalCount} session${totalCount === 1 ? '' : 's'} · ${attentionCount} need${attentionCount === 1 ? 's' : ''} you · ${runningCount} running`}
+            </p>
+          )}
         </div>
 
         <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
@@ -112,42 +115,48 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
             ))}
           </div>
 
-          <Input
-            type="search"
-            value={query}
-            placeholder="Search cards by name, project, provider, model, status…"
-            aria-label="Search session cards"
-            className="h-8 w-full max-w-xs text-xs"
-            onChange={(event) => onQueryChange(event.target.value)}
-          />
+          {mode === 'waves' ? null : (
+            <>
+              <Input
+                type="search"
+                value={query}
+                placeholder="Search cards by name, project, provider, model, status…"
+                aria-label="Search session cards"
+                className="h-8 w-full max-w-xs text-xs"
+                onChange={(event) => onQueryChange(event.target.value)}
+              />
 
-          <Select
-            value={order}
-            onValueChange={(value) =>
-              onOrderChange(value as SessionCardOrderPreset)
-            }
-          >
-            <SelectTrigger
-              size="sm"
-              aria-label="Order session cards"
-              className="h-8 gap-1.5 text-xs"
-            >
-              <ArrowDownWideNarrow className="size-3.5" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent align="end">
-              {SESSION_CARD_ORDER_PRESETS.map((preset) => (
-                <SelectItem key={preset} value={preset} className="text-xs">
-                  {formatSessionCardOrderPreset(preset)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              <Select
+                value={order}
+                onValueChange={(value) =>
+                  onOrderChange(value as SessionCardOrderPreset)
+                }
+              >
+                <SelectTrigger
+                  size="sm"
+                  aria-label="Order session cards"
+                  className="h-8 gap-1.5 text-xs"
+                >
+                  <ArrowDownWideNarrow className="size-3.5" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {SESSION_CARD_ORDER_PRESETS.map((preset) => (
+                    <SelectItem key={preset} value={preset} className="text-xs">
+                      {formatSessionCardOrderPreset(preset)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          )}
         </div>
 
-        <div className="flex w-full flex-wrap items-center gap-1.5">
-          {filters}
-        </div>
+        {mode === 'waves' ? null : (
+          <div className="flex w-full flex-wrap items-center gap-1.5">
+            {filters}
+          </div>
+        )}
       </div>
 
       <div

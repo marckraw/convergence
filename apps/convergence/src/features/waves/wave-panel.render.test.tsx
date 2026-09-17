@@ -13,11 +13,16 @@ import {
   useWorkLedgerStore,
   type TrackerHealth,
   type WorkLedgerEntry,
+  type WorkLedgerSnapshot,
 } from '@/entities/work-ledger'
 import { WavePanel, WavesTab } from './wave-panel.container'
 import { WavePanelView } from './wave-panel.presentational'
 import { WaveRailView } from './wave-rail.presentational'
-import { sectionWaveRows, waveHeader } from './wave-sections.pure'
+import {
+  sectionWaveRows,
+  waveHeader,
+  type WaveHeaderCrew,
+} from './wave-sections.pure'
 import { ledgerEntry } from './wave-rows.fixture'
 
 /**
@@ -28,26 +33,38 @@ import { ledgerEntry } from './wave-rows.fixture'
 const NOW = Date.parse('2026-09-17T12:10:00.000Z')
 const AT = '2026-09-17T12:00:00.000Z'
 
-const BOUND_CREW = {
-  id: 'crew-1',
-  name: 'Loom',
-  emoji: null,
-  accentColor: null,
-  position: 0,
-  roundCap: null,
-  stallMinutes: null,
-  createdAt: AT,
-  updatedAt: AT,
-  sessionIds: ['session-opus'],
-  members: [],
-  trackerBinding: {
-    kind: 'linear',
-    projectId: 'project-1',
-    labelPrefix: 'horse:',
-    wavePrefix: 'wave:',
-    statusMap: {},
-  },
-} satisfies SessionCrew
+const health = (state: TrackerHealth['state']): TrackerHealth => ({
+  state,
+  since: AT,
+  lastOkAt: AT,
+  backoffUntil: null,
+})
+
+/** One bound crew that has answered: the honest default (lap 2, A). */
+const ANSWERED: WaveHeaderCrew[] = [{ name: 'Loom', health: health('ok') }]
+
+function boundCrew(id: string, name: string): SessionCrew {
+  return {
+    id,
+    name,
+    emoji: null,
+    accentColor: null,
+    position: 0,
+    roundCap: null,
+    stallMinutes: null,
+    createdAt: AT,
+    updatedAt: AT,
+    sessionIds: ['session-opus'],
+    members: [],
+    trackerBinding: {
+      kind: 'linear',
+      projectId: `project-${id}`,
+      labelPrefix: 'horse:',
+      wavePrefix: 'wave:',
+      statusMap: {},
+    },
+  }
+}
 
 const SESSION = {
   id: 'session-opus',
@@ -57,34 +74,46 @@ const SESSION = {
   updatedAt: AT,
 } as SessionSummary
 
+const rowOf = (key: string) =>
+  within(document.querySelector(`[data-wave-row="${key}"]`) as HTMLElement)
+
 function renderView(
   rows: WorkLedgerEntry[],
-  header = waveHeader({
-    boundCrewCount: 1,
-    healths: [null],
-    rowCount: rows.length,
-    now: NOW,
-  }),
+  crews: WaveHeaderCrew[] = ANSWERED,
+  layout: 'column' | 'full' = 'column',
 ) {
   return render(
     <WavePanelView
-      layout="column"
+      layout={layout}
       sections={sectionWaveRows(rows, NOW)}
-      header={header}
+      header={waveHeader({ crews, rowCount: rows.length, now: NOW })}
       inertReason={() => null}
       onOpen={vi.fn()}
     />,
   )
 }
 
+function setWindowWidth(width: number) {
+  Object.defineProperty(window, 'innerWidth', {
+    configurable: true,
+    value: width,
+  })
+}
+
 afterEach(() => {
   cleanup()
   delete (window as unknown as { electronAPI?: unknown }).electronAPI
   localStorage.clear()
+  setWindowWidth(1024)
 })
 
-describe('MAR-3097 R2: a row shows the ledger’s facts and the human action', () => {
-  it('one row per action, with identifier, title, seat, state and PR', () => {
+describe('MAR-3097 R2 + lap 2, F1: a row shows the ledger’s facts', () => {
+  it('one row per action, the host marker beside the action, never on unstarted work', () => {
+    const down = {
+      executionHost: 'lm',
+      lastEventAt: '2026-09-17T12:06:00.000Z',
+      hostReachable: false,
+    }
     renderView([
       ledgerEntry({
         issueIdentifier: 'EX-1',
@@ -98,7 +127,11 @@ describe('MAR-3097 R2: a row shows the ledger’s facts and the human action', (
           source: 'gh',
         },
       }),
-      ledgerEntry({ issueIdentifier: 'EX-2', state: 'returned' }),
+      ledgerEntry({
+        issueIdentifier: 'EX-2',
+        state: 'returned',
+        hostLiveness: down,
+      }),
       ledgerEntry({
         issueIdentifier: 'EX-3',
         state: 'working',
@@ -107,99 +140,86 @@ describe('MAR-3097 R2: a row shows the ledger’s facts and the human action', (
       ledgerEntry({
         issueIdentifier: 'EX-4',
         state: 'working',
-        hostLiveness: {
-          executionHost: 'lm',
-          lastEventAt: '2026-09-17T12:06:00.000Z',
-          hostReachable: false,
-        },
+        hostLiveness: down,
+      }),
+      ledgerEntry({
+        issueIdentifier: 'EX-5',
+        state: 'assigned',
+        hostLiveness: down,
       }),
     ])
 
-    const row = (identifier: string) =>
-      within(
-        document.querySelector(
-          `[data-wave-row="${identifier}"]`,
-        ) as HTMLElement,
-      )
-    expect(row('EX-1').getByText('QA and say done')).toBeTruthy()
-    expect(row('EX-1').getByText('Work EX-1')).toBeTruthy()
-    expect(row('EX-1').getByText('opus · reviewed · PR #678 open')).toBeTruthy()
+    expect(rowOf('crew-1:EX-1').getByText('QA and say done')).toBeTruthy()
+    expect(rowOf('crew-1:EX-1').getByText('Work EX-1')).toBeTruthy()
+    expect(
+      rowOf('crew-1:EX-1').getByText('opus · reviewed · PR #678 open'),
+    ).toBeTruthy()
     // Mutation: "QA and say done" for returned -> red here.
-    expect(row('EX-2').getByText('verdict (Fable)')).toBeTruthy()
-    expect(row('EX-2').queryByText('QA and say done')).toBeNull()
-    expect(row('EX-3').getByText('seat not in crew')).toBeTruthy()
-    expect(row('EX-4').getByText('host unreachable since 4m')).toBeTruthy()
+    expect(rowOf('crew-1:EX-2').getByText('verdict (Fable)')).toBeTruthy()
+    expect(rowOf('crew-1:EX-2').queryByText('QA and say done')).toBeNull()
+    expect(
+      rowOf('crew-1:EX-2').getByText('host unreachable since 4m'),
+    ).toBeTruthy()
+    expect(rowOf('crew-1:EX-3').getByText('seat not in crew')).toBeTruthy()
+    expect(
+      rowOf('crew-1:EX-4').getByText('host unreachable since 4m'),
+    ).toBeTruthy()
+    expect(rowOf('crew-1:EX-5').queryByText(/host unreachable/)).toBeNull()
   })
 })
 
-describe('MAR-3097 R3: an outage is an age, never a zero', () => {
-  const unreachable: TrackerHealth = {
-    state: 'unreachable',
-    since: AT,
-    lastOkAt: AT,
-    backoffUntil: null,
-  }
-
+describe('MAR-3097 R3 + lap 2, A: the header never says a zero it did not read', () => {
   it('unreachable: the header reads the age and the last rows stay', () => {
-    const rows = [ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' })]
     renderView(
-      rows,
-      waveHeader({
-        boundCrewCount: 1,
-        healths: [unreachable],
-        rowCount: rows.length,
-        now: NOW,
-      }),
+      [ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' })],
+      [{ name: 'Loom', health: health('unreachable') }],
     )
     expect(screen.getByRole('status').textContent).toBe(
       'tracker unreachable · 10m',
     )
-    expect(document.querySelector('[data-wave-row="EX-1"]')).not.toBeNull()
+    expect(
+      document.querySelector('[data-wave-row="crew-1:EX-1"]'),
+    ).not.toBeNull()
     // Mutation: render "0 in wave" on unreachable -> red.
     expect(document.body.textContent).not.toMatch(/\b0 in wave\b/)
   })
 
-  it('unreachable with nothing read yet shows the age, not zero or quiet', () => {
-    renderView(
-      [],
-      waveHeader({
-        boundCrewCount: 1,
-        healths: [unreachable],
-        rowCount: 0,
-        now: NOW,
-      }),
-    )
-    expect(screen.getByRole('status').textContent).toBe(
-      'tracker unreachable · 10m',
-    )
+  it('A: a bound crew not yet heard from reads "reading the tracker…", never "Quiet project"', () => {
+    renderView([], [{ name: 'Loom', health: null }])
+    // Mutation: drop the null branch -> "Quiet project", red.
+    expect(screen.getByRole('status').textContent).toBe('reading the tracker…')
     expect(screen.queryByText('Quiet project')).toBeNull()
-    expect(document.body.textContent).not.toMatch(/\b0\b/)
   })
 
-  it('no binding -> Connect a tracker, which leads to where crews are bound', () => {
-    const onConnectTracker = vi.fn()
-    render(
-      <WavePanelView
-        layout="column"
-        sections={sectionWaveRows([], NOW)}
-        header={waveHeader({
-          boundCrewCount: 0,
-          healths: [],
-          rowCount: 0,
-          now: NOW,
-        })}
-        inertReason={() => null}
-        onOpen={vi.fn()}
-        onConnectTracker={onConnectTracker}
-      />,
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Connect a tracker' }))
-    expect(onConnectTracker).toHaveBeenCalledTimes(1)
-  })
-
-  it('a binding with zero rows -> Quiet project', () => {
+  it('A: a tracker that answered with zero rows -> Quiet project', () => {
     renderView([])
     expect(screen.getByText('Quiet project')).toBeTruthy()
+  })
+
+  it('the tab with no binding says where to connect one', () => {
+    renderView([], [], 'full')
+    expect(screen.getByText('No crew reads a tracker yet.')).toBeTruthy()
+    expect(
+      screen.getByText('Connect a tracker in a crew’s settings on the Canvas.'),
+    ).toBeTruthy()
+  })
+})
+
+describe('MAR-3097 lap 2, F2: wave groups are disclosures', () => {
+  it('closed in the column, open in the full tab', () => {
+    const rows = [ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' })]
+    renderView(rows)
+    const column = document.querySelector('details[data-wave-group]')
+    // Mutation: open by default in the column -> red.
+    expect(column?.hasAttribute('open')).toBe(false)
+    expect(column?.querySelector('summary')?.textContent).toBe(
+      'Wave loom-p2 · 1',
+    )
+    cleanup()
+    renderView(rows, ANSWERED, 'full')
+    expect(
+      document.querySelector('details[data-wave-group]')?.hasAttribute('open'),
+    ).toBe(true)
   })
 })
 
@@ -232,7 +252,10 @@ describe('MAR-3097 R4: the rail is the same model', () => {
   })
 })
 
-describe('MAR-3097 R5/R6: through the containers and the real stores', () => {
+describe('MAR-3097: through the containers and the real stores', () => {
+  let snapshots: Record<string, WorkLedgerSnapshot>
+  let crews: SessionCrew[]
+
   const rows = [
     ledgerEntry({ issueIdentifier: 'EX-1', state: 'reviewed' }),
     ledgerEntry({ issueIdentifier: 'EX-2', state: 'working' }),
@@ -249,38 +272,72 @@ describe('MAR-3097 R5/R6: through the containers and the real stores', () => {
   ]
 
   beforeEach(() => {
+    crews = [boundCrew('crew-1', 'Loom')]
+    snapshots = {
+      'crew-1': {
+        crewId: 'crew-1',
+        entries: rows,
+        trackerHealth: health('ok'),
+      },
+    }
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       crew: {
-        list: vi.fn(async () => [BOUND_CREW]),
+        list: vi.fn(async () => crews),
         onUpdated: vi.fn(() => () => {}),
       },
       workLedger: {
-        list: vi.fn(async (crewId: string) => ({
-          crewId,
-          entries: rows,
-          trackerHealth: null,
-        })),
+        list: vi.fn(async (crewId: string) => snapshots[crewId]),
         onUpdated: vi.fn(() => () => {}),
       },
     }
     useSessionStore.setState({ globalSessions: [SESSION] })
     useWorkLedgerStore.setState({
       snapshots: {},
+      broadcastCount: {},
       error: null,
       unsubscribeBroadcast: null,
     })
     useSessionCrewStore.setState({ crews: [] })
   })
 
+  async function mount(ui: React.ReactElement) {
+    await act(async () => {
+      render(ui)
+    })
+  }
+
+  it('B: no bound crew -> no column at all', async () => {
+    crews = [{ ...boundCrew('crew-1', 'Loom'), trackerBinding: null }]
+    await mount(<WavePanel />)
+    // Mutation: mount the column unconditionally -> red.
+    expect(screen.queryByLabelText('Waves')).toBeNull()
+    expect(screen.queryByLabelText('Waves rail')).toBeNull()
+  })
+
+  it('B: a bound crew -> the column; hidden (the Waves tab showing) -> nothing', async () => {
+    await mount(<WavePanel />)
+    expect(await screen.findByLabelText('Waves')).toBeTruthy()
+    cleanup()
+    await mount(<WavePanel hidden />)
+    expect(screen.queryByLabelText('Waves')).toBeNull()
+  })
+
+  it('B: too narrow -> the rail, and the stored mode is untouched', async () => {
+    setWindowWidth(260 + 280 + 479)
+    await mount(<WavePanel reservedWidth={260} />)
+    // Mutation: ignore the width -> the open column, red.
+    expect(await screen.findByLabelText('Waves rail')).toBeTruthy()
+    expect(localStorage.getItem('convergence-wave-panel-mode')).toBeNull()
+  })
+
   it('R5: clicking a row opens the seat’s conversation; rows that cannot, say why', async () => {
     const onOpenSession = vi.fn()
     const windowOpen = vi.spyOn(window, 'open').mockImplementation(() => null)
-    await act(async () => {
-      render(<WavePanel onOpenSession={onOpenSession} />)
-    })
-    const openable = (
-      await screen.findAllByRole('button', { name: /EX-2/ })
-    )[0]!
+    await mount(<WavePanel onOpenSession={onOpenSession} />)
+    await screen.findByLabelText('Waves')
+    const openable = document.querySelector(
+      '[data-wave-row="crew-1:EX-2"]',
+    ) as HTMLElement
 
     fireEvent.click(openable)
 
@@ -289,54 +346,74 @@ describe('MAR-3097 R5/R6: through the containers and the real stores', () => {
     expect(onOpenSession.mock.calls[0]![0].id).toBe('session-opus')
     expect(windowOpen).not.toHaveBeenCalled()
     expect(
-      document
-        .querySelector('[data-wave-row="EX-3"]')
-        ?.getAttribute('aria-disabled'),
-    ).toBe('true')
+      rowOf('crew-1:EX-3').getByText('no conversation for this seat'),
+    ).toBeTruthy()
     expect(
-      screen.getAllByText('no conversation for this seat').length,
-    ).toBeGreaterThan(0)
-    expect(
-      screen.getAllByText('conversation not loaded').length,
-    ).toBeGreaterThan(0)
+      rowOf('crew-1:EX-4').getByText('conversation not loaded'),
+    ).toBeTruthy()
     windowOpen.mockRestore()
   })
 
   it('R4: collapsing to the rail persists, and a remount reads it back', async () => {
-    await act(async () => {
-      render(<WavePanel />)
-    })
-    await screen.findAllByRole('button', { name: /EX-2/ })
+    await mount(<WavePanel />)
     fireEvent.click(
-      screen.getByRole('button', { name: 'Collapse the wave panel' }),
+      await screen.findByRole('button', { name: 'Collapse the wave panel' }),
     )
     expect(screen.getByLabelText('Waves rail')).toBeTruthy()
     cleanup()
-    await act(async () => {
-      render(<WavePanel />)
-    })
-    expect(screen.getByLabelText('Waves rail')).toBeTruthy()
+    await mount(<WavePanel />)
+    expect(await screen.findByLabelText('Waves rail')).toBeTruthy()
   })
 
-  it('R6: the Waves tab shows the same identifiers as the panel', async () => {
-    const identifiers = () =>
+  it('R6: the Waves tab shows the same row keys as the panel', async () => {
+    const keys = () =>
       [...document.querySelectorAll('[data-wave-row]')]
         .map((node) => node.getAttribute('data-wave-row'))
         .sort()
 
-    await act(async () => {
-      render(<WavePanel />)
-    })
-    await screen.findAllByRole('button', { name: /EX-2/ })
-    const panel = identifiers()
+    await mount(<WavesTab />)
+    await screen.findByLabelText('Waves')
+    const tab = keys()
     cleanup()
 
-    await act(async () => {
-      render(<WavesTab />)
-    })
-    await screen.findAllByRole('button', { name: /EX-2/ })
+    await mount(<WavePanel />)
+    await screen.findByLabelText('Waves')
+    // The column's wave groups start closed but stay in the DOM.
     // Mutation: filter the tab by a different predicate -> red.
-    expect(identifiers()).toEqual(panel)
-    expect(panel.length).toBeGreaterThan(0)
+    expect(keys()).toEqual(tab)
+    expect(tab.length).toBeGreaterThan(0)
+  })
+
+  it('E: two crews, one unreachable -> the header names it; every row names its crew', async () => {
+    crews = [boundCrew('crew-1', 'Loom'), boundCrew('crew-2', 'Night shift')]
+    snapshots = {
+      'crew-1': {
+        crewId: 'crew-1',
+        entries: [ledgerEntry({ issueIdentifier: 'EX-1', crewId: 'crew-1' })],
+        trackerHealth: health('ok'),
+      },
+      'crew-2': {
+        crewId: 'crew-2',
+        entries: [ledgerEntry({ issueIdentifier: 'EX-1', crewId: 'crew-2' })],
+        trackerHealth: {
+          ...health('unreachable'),
+          since: new Date(Date.now() - 10 * 60_000).toISOString(),
+        },
+      },
+    }
+    await mount(<WavesTab />)
+    await screen.findByLabelText('Waves')
+
+    // Mutation: the first non-ok health for all, unnamed -> red.
+    expect(screen.getByRole('status').textContent).toBe(
+      'tracker unreachable · Night shift · 10m',
+    )
+    expect(
+      rowOf('crew-1:EX-1').getAllByText(/^Loom · opus · working/).length,
+    ).toBeGreaterThan(0)
+    expect(
+      rowOf('crew-2:EX-1').getAllByText(/^Night shift · opus · working/).length,
+    ).toBeGreaterThan(0)
+    expect(screen.getByText('2 issues · 0 waiting on you')).toBeTruthy()
   })
 })
