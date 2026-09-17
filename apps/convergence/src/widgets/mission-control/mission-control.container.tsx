@@ -14,6 +14,7 @@ import {
   useMissionControlView,
 } from '@/features/mission-control'
 import type { SessionCard } from '@/features/mission-control'
+import { WavesTab } from '@/features/waves'
 import { CrewCanvas } from './crew-canvas.container'
 import { MissionControlView } from './mission-control.presentational'
 import { SessionCardGrid } from './session-card-grid.container'
@@ -141,7 +142,9 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
         </>
       }
     >
-      {mode === 'canvas' ? (
+      {mode === 'waves' ? (
+        <WavesTab onOpenSession={onOpenSession} />
+      ) : mode === 'canvas' ? (
         <CrewCanvas groups={crewGroups} onOpen={handleOpen} />
       ) : (
         <SessionCardGrid

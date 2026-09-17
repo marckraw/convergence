@@ -7,7 +7,7 @@ import {
   type SessionCardState,
 } from './session-card-state.pure'
 
-export const MISSION_CONTROL_VIEW_MODES = ['flat', 'canvas'] as const
+export const MISSION_CONTROL_VIEW_MODES = ['flat', 'canvas', 'waves'] as const
 
 /**
  * Flat lays every card in one grid; Canvas draws the crews as wired diagrams

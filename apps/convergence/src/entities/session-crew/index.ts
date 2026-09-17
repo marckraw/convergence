@@ -7,7 +7,7 @@ export type {
 export { DEFAULT_CREW_MEMBER_SEAT, memberKey } from './session-crew.types'
 export type { SeatDraftField } from './session-crew.types'
 export type { CrewMemberRef } from './session-crew.api'
-export { sessionCrewApi, trackerApi, workLedgerApi } from './session-crew.api'
+export { sessionCrewApi, trackerApi } from './session-crew.api'
 export {
   selectCrewsForSession,
   useSessionCrewStore,

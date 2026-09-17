@@ -6,6 +6,7 @@ import { GlobalStatusBar } from '@/widgets/global-status-bar'
 import { MissionControl } from '@/widgets/mission-control'
 import { WorkspaceLayout } from '@/widgets/workspace-layout'
 import { NotificationsOnboardingContainer } from '@/features/notifications-onboarding'
+import { WavePanel } from '@/features/waves'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import type { SessionSummary } from '@/entities/session'
 import { cn } from '@/shared/lib/cn.pure'
@@ -294,6 +295,13 @@ export const AppShell: FC<AppShellProps> = ({
             )}
           />
         )}
+
+        {/* The wave column (MAR-3097): the ledger beside the conversation,
+            open or collapsed to its rail. */}
+        <WavePanel
+          onOpenSession={onSelectAnySession}
+          onConnectTracker={onShowMissionControl}
+        />
 
         <div className="app-main-panel flex min-w-0 flex-1 flex-col">
           {routeFallback ? (

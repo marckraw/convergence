@@ -67,6 +67,8 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
   const modes: { value: MissionControlViewMode; label: string }[] = [
     { value: 'flat', label: 'Flat' },
     { value: 'canvas', label: 'Canvas' },
+    // The ledger's rows, the same sections as the wave column (MAR-3097).
+    { value: 'waves', label: 'Waves' },
   ]
 
   return (
@@ -156,7 +158,7 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
             : 'app-scrollbar overflow-y-auto px-5 py-4',
         )}
       >
-        {mode === 'canvas' && totalCount === 0 ? (
+        {mode === 'waves' || (mode === 'canvas' && totalCount === 0) ? (
           children
         ) : totalCount === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">

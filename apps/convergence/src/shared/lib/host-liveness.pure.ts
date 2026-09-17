@@ -12,16 +12,27 @@ export function hostLivenessLabel(
   now: number,
 ): string | null {
   if (!host || host === 'local') return null
+  const age = livenessAge(at, now)
+  return age === null ? 'host · not recorded' : `host · ${age} ago`
+}
+
+/**
+ * The age band every liveness label uses: `<1m`, `4m`, `3h`, `2d`, or null
+ * when the stamp is absent or unreadable. Shared so the wave panel's tracker
+ * outage (MAR-3097) reads its age in the same bands as a host's.
+ */
+export function livenessAge(
+  at: string | null | undefined,
+  now: number,
+): string | null {
   const timestamp = at ? Date.parse(at) : NaN
-  if (!Number.isFinite(timestamp)) return 'host · not recorded'
+  if (!Number.isFinite(timestamp)) return null
   const seconds = Math.max(0, Math.floor((now - timestamp) / 1000))
-  const age =
-    seconds < 60
-      ? '<1m'
-      : seconds < 3600
-        ? `${Math.floor(seconds / 60)}m`
-        : seconds < 86400
-          ? `${Math.floor(seconds / 3600)}h`
-          : `${Math.floor(seconds / 86400)}d`
-  return `host · ${age} ago`
+  return seconds < 60
+    ? '<1m'
+    : seconds < 3600
+      ? `${Math.floor(seconds / 60)}m`
+      : seconds < 86400
+        ? `${Math.floor(seconds / 3600)}h`
+        : `${Math.floor(seconds / 86400)}d`
 }
