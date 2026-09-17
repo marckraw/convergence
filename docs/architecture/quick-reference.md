@@ -205,6 +205,9 @@ Avoid the Divergence failure mode where the transcript competes with telemetry, 
 
 ### 4. Provider-neutral session model
 
+Cursor ACP live surface (measured CP0): `docs/architecture/cursor-acp-surface.md`
+and `apps/convergence/electron/backend/provider/cursor/cursor-acp.recorded.fixture.ts`.
+
 Session state should be provider-neutral and capable of representing:
 
 - user messages
