@@ -1,5 +1,11 @@
 # convergence
 
+## 0.64.0
+
+### Minor Changes
+
+- 774356d: A wave panel beside the conversation and a Waves tab in Mission Control show what is waiting on you, what is riding and what is queued, straight from the tracker.
+
 ## 0.63.0
 
 ### Minor Changes
