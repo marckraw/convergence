@@ -1,4 +1,10 @@
 import type { SessionCrewRow } from '../database/database.types'
+import {
+  DEFAULT_TRACKER_LABEL_PREFIX,
+  DEFAULT_TRACKER_WAVE_PREFIX,
+  readTrackerStatusMap,
+} from '../tracker/tracker-binding.pure'
+import type { TrackerBinding } from '../tracker/tracker.types'
 
 /**
  * One member of a crew, and the short name a baton addresses it by.
@@ -109,6 +115,11 @@ export interface SessionCrew {
   stallMinutes: number | null
   /** Last successful export destination; absent on older snapshots. */
   lastExportPath?: string | null
+  /**
+   * The tracker this crew reads, or null when unbound (MAR-3084). Carries no
+   * key: the key is a Keychain fact filed under the crew id.
+   */
+  trackerBinding: TrackerBinding | null
   createdAt: string
   updatedAt: string
   /** Members whose session still exists, oldest membership first. */
@@ -148,6 +159,7 @@ export function sessionCrewFromRow(
     roundCap: row.round_cap ?? null,
     stallMinutes: row.stall_minutes ?? null,
     lastExportPath: row.last_export_path ?? null,
+    trackerBinding: trackerBindingFromRow(row),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     // Kept beside `members` rather than derived at every call site: every
@@ -168,5 +180,19 @@ export function sessionCrewFromRow(
         : [member.sessionId],
     ),
     members,
+  }
+}
+
+/** A binding is bound exactly when both its kind and its project are set. */
+export function trackerBindingFromRow(
+  row: SessionCrewRow,
+): TrackerBinding | null {
+  if (row.tracker_kind !== 'linear' || !row.tracker_project_id) return null
+  return {
+    kind: 'linear',
+    projectId: row.tracker_project_id,
+    labelPrefix: row.tracker_label_prefix || DEFAULT_TRACKER_LABEL_PREFIX,
+    wavePrefix: row.tracker_wave_prefix || DEFAULT_TRACKER_WAVE_PREFIX,
+    statusMap: readTrackerStatusMap(row.tracker_status_map_json),
   }
 }

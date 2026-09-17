@@ -49,6 +49,26 @@ describe('database', () => {
     expect(tableNames).toContain('session_context_attachments')
     expect(tableNames).toContain('analytics_profile_snapshots')
     expect(tableNames).toContain('skill_catalog_cache')
+    expect(tableNames).toContain('work_ledger')
+
+    // MAR-3084 R3: a crew's tracker binding is five columns and nothing
+    // secret. The API key is a Keychain fact under the crew id.
+    // Mutation: add an `tracker_api_key` column -> both assertions are red.
+    const crewColumns = (
+      db.prepare("PRAGMA table_info('session_crews')").all() as Array<{
+        name: string
+      }>
+    ).map((column) => column.name)
+    expect(crewColumns.filter((name) => name.startsWith('tracker_'))).toEqual([
+      'tracker_kind',
+      'tracker_project_id',
+      'tracker_label_prefix',
+      'tracker_wave_prefix',
+      'tracker_status_map_json',
+    ])
+    expect(
+      crewColumns.filter((name) => /key|token|secret|password/i.test(name)),
+    ).toEqual([])
 
     // MAR-2609 excised code review, and RULED that these two survive it: code
     // is cheap to reverse and Marcin's generated guides and review notes are
@@ -964,6 +984,11 @@ describe('database', () => {
         'config_path',
         'config_sha256',
         'config_applied_at',
+        'tracker_kind',
+        'tracker_project_id',
+        'tracker_label_prefix',
+        'tracker_wave_prefix',
+        'tracker_status_map_json',
         'created_at',
         'updated_at',
       ].sort(),

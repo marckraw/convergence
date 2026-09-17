@@ -1,3 +1,9 @@
+import type {
+  TrackerBinding,
+  TrackerCredentialStatus,
+  TrackerProbeReading,
+  WorkLedgerSnapshot,
+} from './tracker.types'
 import type { ProviderAccountLoginAttempt } from './provider-account-login.types'
 import type {
   SessionPullRequest,
@@ -373,6 +379,8 @@ interface SessionCrewData {
   roundCap: number | null
   /** How long a station may hold the loop before it hails; null is default. */
   stallMinutes: number | null
+  /** The tracker this crew reads (MAR-3084); carries no key. */
+  trackerBinding?: TrackerBinding | null
   createdAt: string
   updatedAt: string
   sessionIds: string[]
@@ -1846,7 +1854,30 @@ interface ElectronAPI {
       sessionId: string,
       position: { x: number; y: number } | null,
     ) => Promise<SessionCrewData>
+    setTrackerBinding: (
+      crewId: string,
+      binding: {
+        kind?: 'linear'
+        projectId: string
+        labelPrefix?: string
+        wavePrefix?: string
+      } | null,
+    ) => Promise<SessionCrewData>
     onUpdated: (callback: (crews: SessionCrewData[]) => void) => () => void
+  }
+  /** Read-only toward the tracker; no door returns the key (MAR-3084 R8). */
+  tracker: {
+    probe: (crewId: string) => Promise<TrackerProbeReading>
+    credentialStatus: (crewId: string) => Promise<TrackerCredentialStatus>
+    setCredential: (
+      crewId: string,
+      apiKey: string,
+    ) => Promise<TrackerCredentialStatus>
+    deleteCredential: (crewId: string) => Promise<TrackerCredentialStatus>
+  }
+  workLedger: {
+    list: (crewId: string) => Promise<WorkLedgerSnapshot>
+    onUpdated: (callback: (snapshot: WorkLedgerSnapshot) => void) => () => void
   }
   relay: {
     list: () => Promise<SessionRelayData[]>

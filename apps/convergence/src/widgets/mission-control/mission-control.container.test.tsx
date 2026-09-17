@@ -271,6 +271,14 @@ describe('MissionControl', () => {
     )
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       session: { getAllSummaries },
+      // The crew details host the tracker form (MAR-3084), which asks
+      // whether a key is stored as soon as it mounts.
+      tracker: {
+        credentialStatus: vi.fn(async () => 'absent'),
+        setCredential: vi.fn(async () => 'present'),
+        deleteCredential: vi.fn(async () => 'absent'),
+        probe: vi.fn(),
+      },
       crew: {
         list: listCrews,
         create: createCrew,

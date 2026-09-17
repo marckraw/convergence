@@ -239,6 +239,12 @@ export interface SessionCrewRow {
   round_cap: number | null
   /** How long a station may hold the loop before it hails; null is default. */
   stall_minutes: number | null
+  /** The tracker binding (MAR-3084 R3); all null on an unbound crew. */
+  tracker_kind?: string | null
+  tracker_project_id?: string | null
+  tracker_label_prefix?: string | null
+  tracker_wave_prefix?: string | null
+  tracker_status_map_json?: string | null
   created_at: string
   updated_at: string
 }

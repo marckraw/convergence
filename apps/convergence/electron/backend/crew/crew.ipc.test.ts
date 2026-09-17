@@ -59,8 +59,19 @@ describe('crew IPC', () => {
       'crew:setMemberBatonName',
       'crew:setMemberPosition',
       'crew:setMemberSeat',
+      'crew:setTrackerBinding',
       'crew:update',
     ])
+  })
+
+  it('MAR-3084: setting a tracker binding rides the roster broadcast', () => {
+    const created = invoke<SessionCrew>('crew:create', { name: 'Convoy' })
+    const bound = invoke<SessionCrew>('crew:setTrackerBinding', created.id, {
+      projectId: 'project-1',
+    })
+    expect(broadcast).toHaveBeenCalledTimes(2)
+    expect(broadcast.mock.calls[1]?.[0]).toEqual([bound])
+    expect(bound.trackerBinding?.projectId).toBe('project-1')
   })
 
   it('broadcasts the full roster after every mutation but not on reads', () => {

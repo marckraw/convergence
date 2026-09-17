@@ -1,4 +1,4 @@
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 import {
   ChevronDown,
   FlaskConical,
@@ -34,6 +34,8 @@ import type { SeatFact } from './seat-facts.presentational'
 import { SeatRow } from './seat-row.presentational'
 
 interface CrewSettingsPanelProps {
+  /** The tracker binding form, placed inside the crew details (MAR-3084). */
+  trackerSection?: ReactNode
   emoji: string | null
   accentColor: string | null
   onEmojiChange: (emoji: string | null) => void
@@ -140,6 +142,7 @@ function readLimit(raw: string): number | null {
  * are on the panel because both were mis-readable before.
  */
 export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
+  trackerSection,
   emoji,
   accentColor,
   onEmojiChange,
@@ -446,7 +449,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
         className="group border-t border-white/10 pt-2"
       >
         <summary className="cursor-pointer list-none text-[11px] text-muted-foreground hover:text-foreground">
-          Crew details — name, decoration, loop limits, export
+          Crew details — name, decoration, loop limits, tracker, export
         </summary>
         <div className="mt-3 flex flex-col gap-3">
           <div className="flex flex-col gap-1">
@@ -533,6 +536,8 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
               run-duration limit.
             </p>
           </div>
+
+          {trackerSection}
 
           <section
             aria-label="Recipe"

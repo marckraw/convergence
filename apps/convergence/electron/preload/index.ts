@@ -194,6 +194,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
     refreshForSession: (sessionId: string) =>
       ipcRenderer.invoke('pullRequest:refreshForSession', sessionId),
   },
+  tracker: {
+    probe: (crewId: string) => ipcRenderer.invoke('tracker:probe', crewId),
+    credentialStatus: (crewId: string) =>
+      ipcRenderer.invoke('tracker:credentialStatus', crewId),
+    setCredential: (crewId: string, apiKey: string) =>
+      ipcRenderer.invoke('tracker:setCredential', crewId, apiKey),
+    deleteCredential: (crewId: string) =>
+      ipcRenderer.invoke('tracker:deleteCredential', crewId),
+  },
+  workLedger: {
+    list: (crewId: string) => ipcRenderer.invoke('workLedger:list', crewId),
+    onUpdated: (callback: (snapshot: unknown) => void) => {
+      const handler = (_: unknown, snapshot: unknown) => callback(snapshot)
+      ipcRenderer.on('workLedger:updated', handler)
+      return () => {
+        ipcRenderer.removeListener('workLedger:updated', handler)
+      }
+    },
+  },
   crew: {
     importPlan: (
       path?: string,
@@ -252,6 +271,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       position: { x: number; y: number } | null,
     ) =>
       ipcRenderer.invoke('crew:setMemberPosition', crewId, sessionId, position),
+    setTrackerBinding: (crewId: string, binding: unknown) =>
+      ipcRenderer.invoke('crew:setTrackerBinding', crewId, binding),
     onUpdated: (callback: (crews: unknown) => void) => {
       const handler = (_: unknown, crews: unknown) => callback(crews)
       ipcRenderer.on('crew:updated', handler)

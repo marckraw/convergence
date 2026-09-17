@@ -4,6 +4,11 @@ import type {
   CrewImportReport,
 } from '@/shared/types/crew-import.types'
 import type {
+  TrackerCredentialStatus,
+  TrackerProbeReading,
+  WorkLedgerSnapshot,
+} from '@/shared/types/tracker.types'
+import type {
   CreateSessionCrewInput,
   SessionCrew,
   UpdateSessionCrewInput,
@@ -101,4 +106,44 @@ export const sessionCrewApi = {
 
   onUpdated: (callback: (crews: SessionCrew[]) => void): (() => void) =>
     window.electronAPI.crew.onUpdated(callback),
+
+  /** Binds the crew to a tracker project, or unbinds it (MAR-3084). */
+  setTrackerBinding: (
+    crewId: string,
+    binding: {
+      projectId: string
+      labelPrefix?: string
+      wavePrefix?: string
+    } | null,
+  ): Promise<SessionCrew> =>
+    window.electronAPI.crew.setTrackerBinding(
+      crewId,
+      binding === null ? null : { kind: 'linear', ...binding },
+    ),
+}
+
+/**
+ * The tracker's doors (MAR-3084). A key goes in and the answer is only ever
+ * `present` or `absent`; nothing here can read a key back.
+ */
+export const trackerApi = {
+  probe: (crewId: string): Promise<TrackerProbeReading> =>
+    window.electronAPI.tracker.probe(crewId),
+  credentialStatus: (crewId: string): Promise<TrackerCredentialStatus> =>
+    window.electronAPI.tracker.credentialStatus(crewId),
+  setCredential: (
+    crewId: string,
+    apiKey: string,
+  ): Promise<TrackerCredentialStatus> =>
+    window.electronAPI.tracker.setCredential(crewId, apiKey),
+  deleteCredential: (crewId: string): Promise<TrackerCredentialStatus> =>
+    window.electronAPI.tracker.deleteCredential(crewId),
+}
+
+/** The work ledger, read-only (MAR-3084). */
+export const workLedgerApi = {
+  list: (crewId: string): Promise<WorkLedgerSnapshot> =>
+    window.electronAPI.workLedger.list(crewId),
+  onUpdated: (callback: (snapshot: WorkLedgerSnapshot) => void): (() => void) =>
+    window.electronAPI.workLedger.onUpdated(callback),
 }

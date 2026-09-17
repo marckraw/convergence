@@ -5,6 +5,7 @@ import type {
   CrewMemberRef,
   UpdateCrewSeatInput,
 } from './crew.service'
+import type { TrackerBindingInput } from '../tracker/tracker-binding.pure'
 import type {
   CreateSessionCrewInput,
   SessionCrew,
@@ -56,6 +57,14 @@ export function registerCrewIpcHandlers(deps: {
   ipcMain.handle('crew:delete', (_event, id: string) => {
     mutate(() => service.delete(id))
   })
+
+  // The tracker this crew reads (MAR-3084 R3). A mutation like every other
+  // here, so a second window never holds a stale binding.
+  ipcMain.handle(
+    'crew:setTrackerBinding',
+    (_event, crewId: string, binding: TrackerBindingInput | null) =>
+      mutate(() => service.setTrackerBinding(crewId, binding)),
+  )
 
   // What a seat IS (MAR-3083 R1/R6): its own door, like the baton name's.
   // Every member-scoped write names the member the same way, so a recipe --

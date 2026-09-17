@@ -9,6 +9,8 @@ import {
 import type { TranscriptEntry } from '../provider/provider.types'
 import { conversationItemToInsertRow } from '../session/conversation-item.pure'
 import { migrateTaskObserved } from './task-observed-migration.service'
+import { migrateCrewTrackerBinding } from './crew-tracker-binding-migration.service'
+import { migrateWorkLedger } from './work-ledger-migration.service'
 import { migrateCrewConfig } from './crew-config-migration.service'
 import { migrateCrewSeats } from './crew-seat-migration.service'
 import { migrateEndedSummary } from './ended-summary-migration.service'
@@ -2271,6 +2273,11 @@ export function getDatabase(dbPath?: string): Database.Database {
     // After the seat columns exist: one conversation may sit in one crew, and
     // the index that says so can only be built on a deduped table (R2).
     migrateCrewSeats(database)
+    // After the seat migration: the binding lives on the crew row, and the
+    // ledger's read joins seats by baton name (MAR-3084). Both after the
+    // `pull_request_json` column above, which the ledger's fact join reads.
+    migrateCrewTrackerBinding(database)
+    migrateWorkLedger(database)
     database.transaction(() => {
       if (getTableColumnNames(database, 'sessions').has('origin_kind')) return
       database.exec(

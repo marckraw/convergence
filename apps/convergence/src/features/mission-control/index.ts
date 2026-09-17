@@ -284,3 +284,5 @@ export type {
 export type { SessionCard } from './mission-control.types'
 
 export { resolveConnectionWorkAddress } from './connection-work-address.pure'
+
+export { TrackerBindingFormContainer } from './tracker-binding-form.container'
