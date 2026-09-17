@@ -17,6 +17,7 @@ import type {
   InteractionResponse,
   SessionDelta,
 } from '../../session/conversation-item.types'
+import { RecordingError } from '../../session/session.pure'
 import type { ProviderDebugChannel } from '../../provider-debug/provider-debug.types'
 import {
   noopDebugSink,
@@ -512,8 +513,59 @@ export class CursorProvider implements Provider {
       }
     >()
 
+    /**
+     * Acceptance is a property of the turn (MAR-3143 / MAR-3023): true from the
+     * moment `session/prompt` has been issued until `endTurn` — never from the
+     * user-message write that precedes the send.
+     */
+    let turnAccepted = false
+
+    /**
+     * The stream boundary that knows acceptance. A refused local write of an
+     * accepted turn is announced and the run continues; before acceptance the
+     * throw is the honest failed send.
+     */
     function emitDelta(delta: SessionDelta): void {
-      listeners.delta.forEach((cb) => cb(delta))
+      try {
+        listeners.delta.forEach((cb) => cb(delta))
+      } catch (error) {
+        if (!(error instanceof RecordingError) || !turnAccepted) throw error
+        error.announce()
+      }
+    }
+
+    /**
+     * Ends the turn and its acceptance together. With `closingWrites`, the
+     * turn's own closing record still runs inside acceptance; without it,
+     * acceptance ends at once and later writes are teardown reports.
+     */
+    function endTurn(closingWrites?: () => void): void {
+      if (!closingWrites) {
+        turnAccepted = false
+        return
+      }
+      try {
+        closingWrites()
+      } finally {
+        turnAccepted = false
+      }
+    }
+
+    /**
+     * A write that is no accepted turn's recording and must never throw: a
+     * teardown record or a report about a turn that did not complete.
+     */
+    function recordTeardown(label: string, write: () => void): void {
+      try {
+        write()
+      } catch (error) {
+        console.error(`[cursor] Could not record ${label}`, error)
+      }
+    }
+
+    function recordFailedTurnState(): void {
+      recordTeardown('the failed status', () => setStatus('failed'))
+      recordTeardown('the failed attention', () => setAttention('failed'))
     }
 
     function fireHeartbeat(): void {
@@ -942,24 +994,27 @@ export class CursorProvider implements Provider {
       const activeSessionId = cursorSessionId
       if (!activeRpc || !activeSessionId || stopped) {
         if (!stopped) {
-          sessionEmitter.addUserMessage({
-            providerAccountId: null,
-            text,
-            attachmentIds: attachments?.length
-              ? attachments.map((attachment) => attachment.id)
-              : undefined,
-            deliveryMode:
-              deliveryMode === 'follow-up' || deliveryMode === 'steer'
-                ? deliveryMode
+          recordTeardown('the disconnected user message', () =>
+            sessionEmitter.addUserMessage({
+              providerAccountId: null,
+              text,
+              attachmentIds: attachments?.length
+                ? attachments.map((attachment) => attachment.id)
                 : undefined,
-          })
-          sessionEmitter.addNote({
-            text: 'Cursor is no longer connected, so this message was not sent.',
-            level: 'error',
-          })
-          setStatus('failed')
-          setAttention('failed')
-          setActivity(null)
+              deliveryMode:
+                deliveryMode === 'follow-up' || deliveryMode === 'steer'
+                  ? deliveryMode
+                  : undefined,
+            }),
+          )
+          recordTeardown('the disconnected note', () =>
+            sessionEmitter.addNote({
+              text: 'Cursor is no longer connected, so this message was not sent.',
+              level: 'error',
+            }),
+          )
+          recordFailedTurnState()
+          recordTeardown('the cleared activity', () => setActivity(null))
         }
         return
       }
@@ -984,16 +1039,17 @@ export class CursorProvider implements Provider {
       setActivity('streaming')
 
       if (!skillResolution.ok) {
-        addSkillInvocationFailureNote(skillResolution)
-        setStatus('failed')
-        setAttention('failed')
-        setActivity(null)
+        recordTeardown('the skill failure note', () =>
+          addSkillInvocationFailureNote(skillResolution),
+        )
+        recordFailedTurnState()
+        recordTeardown('the cleared activity', () => setActivity(null))
         return
       }
 
       try {
         const parts = await loadCursorParts(attachments)
-        const result = (await activeRpc.request(
+        const promptPromise = activeRpc.request(
           'session/prompt',
           {
             sessionId: activeSessionId,
@@ -1003,7 +1059,13 @@ export class CursorProvider implements Provider {
             }),
           },
           { timeoutMs: 0 },
-        )) as { stopReason?: unknown } | null
+        )
+        // Acceptance begins where the CLI takes the send (R1), not at the
+        // user-message write above.
+        turnAccepted = true
+        const result = (await promptPromise) as {
+          stopReason?: unknown
+        } | null
 
         patchUserMessageSkills(
           userMessageItemId,
@@ -1018,14 +1080,16 @@ export class CursorProvider implements Provider {
           result && typeof result.stopReason === 'string'
             ? result.stopReason
             : 'end_turn'
-        setActivity(null)
-        if (stopReason === 'cancelled') {
+        endTurn(() => {
+          setActivity(null)
+          if (stopReason === 'cancelled') {
+            setStatus('completed')
+            setAttention('finished')
+            return
+          }
           setStatus('completed')
           setAttention('finished')
-          return
-        }
-        setStatus('completed')
-        setAttention('finished')
+        })
       } catch (error) {
         patchUserMessageSkills(
           userMessageItemId,
@@ -1048,17 +1112,23 @@ export class CursorProvider implements Provider {
         )
         .catch((error) => {
           if (stopped) return
-          flushAssistantBuffer()
-          flushThinkingBuffer()
-          sessionEmitter.addNote({
-            text: `Cursor prompt failed: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            level: 'error',
-          })
-          setStatus('failed')
-          setAttention('failed')
-          setActivity(null)
+          endTurn()
+          recordTeardown('the flushed assistant buffer', () =>
+            flushAssistantBuffer(),
+          )
+          recordTeardown('the flushed thinking buffer', () =>
+            flushThinkingBuffer(),
+          )
+          recordTeardown('the prompt failure note', () =>
+            sessionEmitter.addNote({
+              text: `Cursor prompt failed: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              level: 'error',
+            }),
+          )
+          recordFailedTurnState()
+          recordTeardown('the cleared activity', () => setActivity(null))
         })
     }
 
@@ -1138,15 +1208,16 @@ export class CursorProvider implements Provider {
         if (stopped) return
         suppressReplayUpdates = false
         resolveReady?.()
-        sessionEmitter.addNote({
-          text: `Cursor initialization failed: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-          level: 'error',
-        })
-        setStatus('failed')
-        setAttention('failed')
-        setActivity(null)
+        recordTeardown('the initialization failure note', () =>
+          sessionEmitter.addNote({
+            text: `Cursor initialization failed: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            level: 'error',
+          }),
+        )
+        recordFailedTurnState()
+        recordTeardown('the cleared activity', () => setActivity(null))
         rpc?.destroy()
         rpc = null
         if (child && !child.killed) {
@@ -1167,12 +1238,13 @@ export class CursorProvider implements Provider {
 
       if (!child.stdin || !child.stdout) {
         resolveReady?.()
-        sessionEmitter.addNote({
-          text: 'Failed to open Cursor ACP stdio',
-          level: 'error',
-        })
-        setStatus('failed')
-        setAttention('failed')
+        recordTeardown('the stdio failure note', () =>
+          sessionEmitter.addNote({
+            text: 'Failed to open Cursor ACP stdio',
+            level: 'error',
+          }),
+        )
+        recordFailedTurnState()
         child.kill('SIGTERM')
         return
       }
@@ -1215,13 +1287,15 @@ export class CursorProvider implements Provider {
       child.once('error', (error) => {
         if (stopped) return
         resolveReady?.()
-        sessionEmitter.addNote({
-          text: `Cursor ACP failed: ${error.message}`,
-          level: 'error',
-        })
-        setStatus('failed')
-        setAttention('failed')
-        setActivity(null)
+        endTurn()
+        recordTeardown('the ACP error note', () =>
+          sessionEmitter.addNote({
+            text: `Cursor ACP failed: ${error.message}`,
+            level: 'error',
+          }),
+        )
+        recordFailedTurnState()
+        recordTeardown('the cleared activity', () => setActivity(null))
       })
       child.once('exit', (code, signal) => {
         if (stopped) return
@@ -1230,15 +1304,17 @@ export class CursorProvider implements Provider {
         rpc = null
         child = null
         if (status === 'completed' || attention === 'finished') return
-        sessionEmitter.addNote({
-          text: `Cursor ACP exited before the session finished: code=${
-            code ?? 'null'
-          } signal=${signal ?? 'null'}`,
-          level: 'error',
-        })
-        setStatus('failed')
-        setAttention('failed')
-        setActivity(null)
+        endTurn()
+        recordTeardown('the exit note', () =>
+          sessionEmitter.addNote({
+            text: `Cursor ACP exited before the session finished: code=${
+              code ?? 'null'
+            } signal=${signal ?? 'null'}`,
+            level: 'error',
+          }),
+        )
+        recordFailedTurnState()
+        recordTeardown('the cleared activity', () => setActivity(null))
       })
 
       void initializeAndStart()
@@ -1250,6 +1326,7 @@ export class CursorProvider implements Provider {
 
     function disposeRuntime(): void {
       if (stopped) return
+      endTurn()
       stopped = true
       resolveReady?.()
       clearTimeout(startTimer)
@@ -1356,12 +1433,16 @@ export class CursorProvider implements Provider {
           rpc?.respond(id, interaction.cancelResult)
         }
         pendingInteractions.clear()
-        flushThinkingBuffer()
-        flushAssistantBuffer()
+        // Kill first (R4), then record — a refused status must not skip SIGTERM.
         disposeRuntime()
-        setStatus('failed')
-        setAttention('failed')
-        setActivity(null)
+        recordTeardown('the flushed thinking buffer', () =>
+          flushThinkingBuffer(),
+        )
+        recordTeardown('the flushed assistant buffer', () =>
+          flushAssistantBuffer(),
+        )
+        recordFailedTurnState()
+        recordTeardown('the cleared activity', () => setActivity(null))
       },
     }
   }

@@ -1,5 +1,3 @@
-import { EventEmitter } from 'events'
-import { PassThrough } from 'stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionDelta } from '../../session/conversation-item.types'
 import {
@@ -12,6 +10,10 @@ import type {
   SkillCatalogEntry,
   SkillSelection,
 } from '../../skills/skills.types'
+import {
+  createMockCursorAcp,
+  MockCursorAcpChild,
+} from './cursor-acp-server.fixture'
 
 const { spawnMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -22,19 +24,6 @@ vi.mock('child_process', () => ({
 }))
 
 import { CursorProvider } from './cursor-provider'
-
-class MockChildProcess extends EventEmitter {
-  stdin = new PassThrough()
-  stdout = new PassThrough()
-  stderr = new PassThrough()
-  killed = false
-
-  kill = vi.fn((signal?: NodeJS.Signals) => {
-    this.killed = true
-    this.emit('exit', signal === 'SIGKILL' ? 137 : 0, signal ?? null)
-    return true
-  })
-}
 
 function waitFor(
   assertion: () => void,
@@ -60,157 +49,6 @@ function waitFor(
   })
 }
 
-function createMockCursorAcp(
-  child: MockChildProcess,
-  options: { holdPrompt?: boolean; availableCommands?: string[] } = {},
-) {
-  const requests: Array<{ method: string; params?: Record<string, unknown> }> =
-    []
-  const responses: Array<{ id: string | number; result?: unknown }> = []
-  let heldPromptId: string | number | null = null
-  let buffer = ''
-
-  function send(message: unknown): void {
-    child.stdout.write(JSON.stringify(message) + '\n')
-  }
-
-  function respond(id: string | number, result: unknown): void {
-    setTimeout(() => {
-      send({ jsonrpc: '2.0', id, result })
-    }, 0)
-  }
-
-  child.stdin.on('data', (chunk) => {
-    buffer += chunk.toString()
-    let newlineIndex = buffer.indexOf('\n')
-    while (newlineIndex >= 0) {
-      const line = buffer.slice(0, newlineIndex).trim()
-      buffer = buffer.slice(newlineIndex + 1)
-      newlineIndex = buffer.indexOf('\n')
-      if (!line) continue
-
-      const message = JSON.parse(line) as {
-        id?: string | number
-        method?: string
-        params?: Record<string, unknown>
-        result?: unknown
-      }
-
-      if ('id' in message && !message.method) {
-        responses.push({
-          id: message.id as string | number,
-          result: message.result,
-        })
-        continue
-      }
-
-      if (message.id !== undefined && message.method) {
-        requests.push({ method: message.method, params: message.params })
-        switch (message.method) {
-          case 'initialize':
-            respond(message.id, { protocolVersion: 1 })
-            break
-          case 'authenticate':
-            respond(message.id, {})
-            break
-          case 'session/new':
-            respond(message.id, {
-              sessionId: 'cursor-session-1',
-              configOptions: [
-                {
-                  id: 'model',
-                  currentValue: 'default[]',
-                  options: [
-                    { value: 'default[]', label: 'Auto' },
-                    {
-                      value: 'composer-2.5[context=300k,fast=true]',
-                      label: 'Composer 2.5 Fast',
-                    },
-                  ],
-                },
-              ],
-            })
-            break
-          case 'session/load':
-            send({
-              jsonrpc: '2.0',
-              method: 'session/update',
-              params: {
-                sessionId: message.params?.sessionId,
-                update: {
-                  sessionUpdate: 'agent_message_chunk',
-                  content: { type: 'text', text: 'old transcript' },
-                },
-              },
-            })
-            if (options.availableCommands) {
-              send({
-                jsonrpc: '2.0',
-                method: 'session/update',
-                params: {
-                  sessionId: message.params?.sessionId,
-                  update: {
-                    sessionUpdate: 'available_commands_update',
-                    availableCommands: options.availableCommands.map(
-                      (name) => ({ name, description: `${name} command` }),
-                    ),
-                  },
-                },
-              })
-            }
-            respond(message.id, null)
-            break
-          case 'session/prompt':
-            if (options.holdPrompt) {
-              heldPromptId = message.id
-              break
-            }
-            send({
-              jsonrpc: '2.0',
-              method: 'session/update',
-              params: {
-                sessionId: message.params?.sessionId,
-                update: {
-                  sessionUpdate: 'agent_message_chunk',
-                  content: { type: 'text', text: 'hello ' },
-                },
-              },
-            })
-            send({
-              jsonrpc: '2.0',
-              method: 'session/update',
-              params: {
-                sessionId: message.params?.sessionId,
-                update: {
-                  sessionUpdate: 'agent_message_chunk',
-                  content: { type: 'text', text: 'world' },
-                },
-              },
-            })
-            respond(message.id, { stopReason: 'end_turn' })
-            break
-          case 'session/set_config_option':
-            respond(message.id, {})
-            break
-        }
-      }
-    }
-  })
-
-  return {
-    requests,
-    responses,
-    send,
-    resolveHeldPrompt(result: unknown): void {
-      if (heldPromptId === null) {
-        throw new Error('No held Cursor prompt request')
-      }
-      respond(heldPromptId, result)
-      heldPromptId = null
-    },
-  }
-}
-
 function startProvider(
   config?: Partial<Parameters<CursorProvider['start']>[0]>,
   options?: {
@@ -220,7 +58,7 @@ function startProvider(
     requestTimeoutMs?: number
   },
 ) {
-  const child = new MockChildProcess()
+  const child = new MockCursorAcpChild()
   spawnMock.mockReturnValue(child)
   const server = createMockCursorAcp(child, {
     holdPrompt: options?.holdPrompt,
@@ -335,7 +173,7 @@ afterEach(() => {
 
 describe('CursorProvider', () => {
   it('compresses a loaded session only when ACP advertises /compress', async () => {
-    const child = new MockChildProcess()
+    const child = new MockCursorAcpChild()
     spawnMock.mockReturnValue(child)
     const server = createMockCursorAcp(child, {
       availableCommands: ['/compress'],
@@ -370,7 +208,7 @@ describe('CursorProvider', () => {
   })
 
   it('runs one-shot prompts through Cursor ACP and terminates the process', async () => {
-    const child = new MockChildProcess()
+    const child = new MockCursorAcpChild()
     spawnMock.mockReturnValue(child)
     const server = createMockCursorAcp(child)
     const provider = new CursorProvider('agent')

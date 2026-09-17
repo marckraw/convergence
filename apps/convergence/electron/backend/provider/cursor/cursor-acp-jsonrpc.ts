@@ -1,4 +1,5 @@
 import type { Readable, Writable } from 'stream'
+import { RecordingError } from '../../session/session.pure'
 import { redactCursorAcpPayload } from './cursor-acp-contract.pure'
 
 export type CursorAcpJsonRpcId = string | number
@@ -360,6 +361,13 @@ export class CursorAcpJsonRpcClient {
       void Promise.resolve(
         this.requestHandler(request.method, request.params, request.id, this),
       ).catch((error) => {
+        if (error instanceof RecordingError) {
+          console.error(
+            `[cursor-acp] recording lost on server request ${request.method}`,
+            error,
+          )
+          return
+        }
         this.respondError(
           request.id,
           -32603,
@@ -367,6 +375,13 @@ export class CursorAcpJsonRpcClient {
         )
       })
     } catch (error) {
+      if (error instanceof RecordingError) {
+        console.error(
+          `[cursor-acp] recording lost on server request ${request.method}`,
+          error,
+        )
+        return
+      }
       this.respondError(
         request.id,
         -32603,
@@ -382,7 +397,18 @@ export class CursorAcpJsonRpcClient {
       method: notification.method,
       payload: notification.params,
     })
-    this.notificationHandler?.(notification.method, notification.params)
+    try {
+      this.notificationHandler?.(notification.method, notification.params)
+    } catch (error) {
+      if (error instanceof RecordingError) {
+        console.error(
+          `[cursor-acp] recording lost on notification ${notification.method}`,
+          error,
+        )
+        return
+      }
+      throw error
+    }
   }
 
   private rejectPending(error: Error): void {

@@ -1,0 +1,264 @@
+import { mkdtempSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  closeDatabase,
+  getDatabase,
+  resetDatabase,
+} from '../../database/database'
+import { LocalExecutionHost } from '../execution-host/local-execution-host'
+import { ProviderRegistry } from '../provider-registry'
+import { SessionService } from '../../session/session.service'
+import type { AcceptedRecordingFailureEvent } from '../../session/session.types'
+import { CursorProvider } from './cursor-provider'
+import {
+  createMockCursorAcp,
+  MockCursorAcpChild,
+} from './cursor-acp-server.fixture'
+
+/**
+ * Cursor accepted-recording boundary through SessionService (MAR-3143 / CP2).
+ * TEMP TRIGGER shape matches MAR-3023's Claude door tests.
+ */
+
+const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
+vi.mock('child_process', async (original) => ({
+  ...(await original<typeof import('child_process')>()),
+  spawn: spawnMock,
+}))
+
+let cleanup: (() => void) | undefined
+
+afterEach(() => {
+  cleanup?.()
+  cleanup = undefined
+  spawnMock.mockReset()
+  closeDatabase()
+  resetDatabase()
+})
+
+async function fixture(
+  options: {
+    holdPrompt?: boolean
+    permissionConfig?: { preset: 'yolo' | 'ask' | 'custom' }
+  } = {},
+) {
+  const dir = mkdtempSync(join(tmpdir(), 'cursor-recording-'))
+  const child = new MockCursorAcpChild()
+  spawnMock.mockReturnValue(child)
+  const server = createMockCursorAcp(child, { holdPrompt: options.holdPrompt })
+  const db = getDatabase()
+  const registry = new ProviderRegistry()
+  registry.register(new CursorProvider('agent'))
+  const service = new SessionService(db, new LocalExecutionHost(registry), dir)
+  db.prepare(
+    "INSERT INTO projects(id,name,repository_path) VALUES ('p','fixture',?)",
+  ).run(dir)
+  const session = service.create({
+    projectId: 'p',
+    workspaceId: null,
+    providerId: 'cursor',
+    model: null,
+    effort: null,
+    name: 'cursor-recording',
+    ...(options.permissionConfig
+      ? { permissionConfig: options.permissionConfig }
+      : {}),
+  })
+  cleanup = () => {
+    try {
+      const handles = (
+        service as unknown as {
+          activeHandles: Map<string, { dispose: () => void }>
+        }
+      ).activeHandles
+      handles.get(session.id)?.dispose()
+    } catch {
+      /* ignore */
+    }
+    rmSync(dir, { recursive: true, force: true })
+  }
+  return { service, session, child, server, dir }
+}
+
+function recordingFailedNotes(service: SessionService, sessionId: string) {
+  return service
+    .getConversation(sessionId)
+    .filter(
+      (item): item is Extract<typeof item, { kind: 'note' }> =>
+        item.kind === 'note' &&
+        item.providerMeta.providerEventType === 'recording-failed',
+    )
+}
+
+describe('Cursor accepted-recording boundary (MAR-3143)', () => {
+  it('door: a refused assistant insert mid-turn is announced and the run completes', async () => {
+    const { service, session, server } = await fixture({ holdPrompt: true })
+    const failures: AcceptedRecordingFailureEvent[] = []
+    service.onAcceptedRecordingFailure((event) => failures.push(event))
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await service.start(session.id, { text: 'hi' })
+    await vi.waitUntil(() =>
+      server.requests.some((request) => request.method === 'session/prompt'),
+    )
+
+    getDatabase().exec(`CREATE TEMP TRIGGER refuse_assistant_reply
+      BEFORE INSERT ON session_conversation_items
+      WHEN NEW.kind = 'message'
+           AND json_extract(NEW.payload_json, '$.actor') = 'assistant'
+      BEGIN SELECT RAISE(ABORT, 'fixture reply refused'); END`)
+
+    server.send({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'cursor-session-1',
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'hello' },
+        },
+      },
+    })
+    server.resolveHeldPrompt({ stopReason: 'end_turn' })
+
+    await vi.waitUntil(() => service.getById(session.id)?.status !== 'running')
+    expect(service.getById(session.id)?.status).toBe('completed')
+    expect(failures).toHaveLength(1)
+    expect(recordingFailedNotes(service, session.id)).toHaveLength(1)
+    expect(recordingFailedNotes(service, session.id)[0].text).toContain(
+      'do not resend it',
+    )
+    getDatabase().exec('DROP TRIGGER refuse_assistant_reply')
+    errors.mockRestore()
+  })
+
+  it('a refused user-message write before session/prompt is an honest failed send', async () => {
+    const { service, session, server } = await fixture({ holdPrompt: true })
+    const failures: AcceptedRecordingFailureEvent[] = []
+    service.onAcceptedRecordingFailure((event) => failures.push(event))
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    getDatabase().exec(`CREATE TEMP TRIGGER refuse_user_message
+      BEFORE INSERT ON session_conversation_items
+      WHEN NEW.kind = 'message'
+           AND json_extract(NEW.payload_json, '$.actor') = 'user'
+      BEGIN SELECT RAISE(ABORT, 'fixture user message refused'); END`)
+
+    await service.start(session.id, { text: 'never accepted' })
+
+    await vi.waitUntil(() => service.getById(session.id)?.status === 'failed')
+    expect(server.requests.some((r) => r.method === 'session/prompt')).toBe(
+      false,
+    )
+    expect(failures).toEqual([])
+    expect(recordingFailedNotes(service, session.id)).toEqual([])
+    getDatabase().exec('DROP TRIGGER refuse_user_message')
+    errors.mockRestore()
+  })
+
+  it('auto-approve permission with a refused note still answers Cursor (no -32603)', async () => {
+    const { service, session, server } = await fixture({
+      holdPrompt: true,
+      permissionConfig: { preset: 'yolo' },
+    })
+    const failures: AcceptedRecordingFailureEvent[] = []
+    service.onAcceptedRecordingFailure((event) => failures.push(event))
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await service.start(session.id, { text: 'hi' })
+    await vi.waitUntil(() =>
+      server.requests.some((request) => request.method === 'session/prompt'),
+    )
+
+    getDatabase().exec(`CREATE TEMP TRIGGER refuse_permission_note
+      BEFORE INSERT ON session_conversation_items
+      WHEN NEW.kind = 'note'
+           AND NEW.provider_event_type = 'session/request_permission'
+      BEGIN SELECT RAISE(ABORT, 'fixture permission note refused'); END`)
+
+    server.send({
+      jsonrpc: '2.0',
+      id: 77,
+      method: 'session/request_permission',
+      params: {
+        sessionId: 'cursor-session-1',
+        toolCall: { title: 'Run tests', kind: 'execute' },
+        options: [{ optionId: 'allow-once', name: 'Allow once' }],
+      },
+    })
+
+    await vi.waitUntil(() =>
+      server.responses.some(
+        (response) =>
+          response.id === 77 &&
+          (response.result as { outcome?: { optionId?: string } })?.outcome
+            ?.optionId === 'allow-once',
+      ),
+    )
+    expect(
+      server.responses.find((response) => response.id === 77),
+    ).not.toMatchObject({ error: expect.anything() })
+    expect(
+      failures.length + recordingFailedNotes(service, session.id).length,
+    ).toBeGreaterThanOrEqual(1)
+
+    server.resolveHeldPrompt({ stopReason: 'end_turn' })
+    getDatabase().exec('DROP TRIGGER refuse_permission_note')
+    errors.mockRestore()
+  })
+
+  it('a refused exit note still leaves the session failed', async () => {
+    const { service, session, child, server } = await fixture({
+      holdPrompt: true,
+    })
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await service.start(session.id, { text: 'hi' })
+    await vi.waitUntil(() =>
+      server.requests.some((request) => request.method === 'session/prompt'),
+    )
+
+    getDatabase().exec(`CREATE TEMP TRIGGER refuse_exit_note
+      BEFORE INSERT ON session_conversation_items
+      WHEN NEW.kind = 'note'
+           AND json_extract(NEW.payload_json, '$.text') LIKE 'Cursor ACP exited%'
+      BEGIN SELECT RAISE(ABORT, 'fixture exit note refused'); END`)
+
+    child.emit('exit', 1, null)
+
+    await vi.waitUntil(() => service.getById(session.id)?.status === 'failed')
+    expect(
+      errors.mock.calls.some((call) =>
+        String(call[0]).includes('Could not record the exit note'),
+      ),
+    ).toBe(true)
+    getDatabase().exec('DROP TRIGGER refuse_exit_note')
+    errors.mockRestore()
+  })
+
+  it('Stop with a refused status write still SIGTERMs the child', async () => {
+    const { service, session, child, server } = await fixture({
+      holdPrompt: true,
+    })
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await service.start(session.id, { text: 'hi' })
+    await vi.waitUntil(() =>
+      server.requests.some((request) => request.method === 'session/prompt'),
+    )
+
+    getDatabase().exec(`CREATE TEMP TRIGGER refuse_status_patch
+      BEFORE UPDATE ON sessions
+      WHEN NEW.status = 'failed'
+      BEGIN SELECT RAISE(ABORT, 'fixture status refused'); END`)
+
+    service.stop(session.id)
+
+    await vi.waitUntil(() => child.kill.mock.calls.length > 0)
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM')
+    getDatabase().exec('DROP TRIGGER refuse_status_patch')
+    errors.mockRestore()
+  })
+})
