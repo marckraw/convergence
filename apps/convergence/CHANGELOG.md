@@ -1,5 +1,11 @@
 # convergence
 
+## 0.70.0
+
+### Minor Changes
+
+- 55318fa: The Waves panel becomes Loom: four sheets — Before, Now, Next, Plan — one open at a time, compact in the rail (280–400 px) or expanded across the content area, remembering your sheet, width and scroll.
+
 ## 0.69.0
 
 ### Minor Changes
