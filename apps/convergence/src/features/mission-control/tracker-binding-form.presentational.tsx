@@ -26,6 +26,12 @@ interface TrackerBindingFormProps {
   /** What is typed into the key field right now; cleared once stored. */
   keyDraft: string
   lastProbe: TrackerProbeReading | null
+  /**
+   * The project the last bind RESOLVED to, or null (MAR-3156 lap 2, C).
+   * After a URL or a name the field holds a UUID, and this is the only thing
+   * on screen that says which project that is.
+   */
+  boundProjectName?: string | null
   busy: boolean
   error: string | null
   onDraftChange: (patch: Partial<TrackerBindingDraft>) => void
@@ -51,6 +57,7 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
   credential,
   keyDraft,
   lastProbe,
+  boundProjectName = null,
   busy,
   error,
   onDraftChange,
@@ -87,6 +94,11 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
           onChange={(event) => onDraftChange({ projectId: event.target.value })}
           className="h-7 text-xs"
         />
+        {boundProjectName === null ? null : (
+          <span className={LABEL} data-tracker-bound-project>
+            Bound to “{boundProjectName}”
+          </span>
+        )}
       </label>
       <div className="flex gap-2">
         <label className="flex flex-1 flex-col gap-1">

@@ -16,6 +16,7 @@ import {
 import {
   TrackerRefusalError,
   type TrackerAdapter,
+  type TrackerBinding,
   type TrackerIssue,
   type TrackerRefusal,
 } from './tracker.types'
@@ -347,5 +348,113 @@ describe('MAR-3084 R7: the tick is a house-rules timer', () => {
       ok: false,
       refusal: { kind: 'unauthorized' },
     })
+  })
+})
+
+describe('MAR-3156 A: the lookup door is where the key is fetched', () => {
+  let db: Database.Database
+  let crews: CrewService
+  let boundCrewId: string
+  let unboundCrewId: string
+
+  const KEY = 'lin_api_fixture_not_a_real_key'
+  const RESOLVED = {
+    kind: 'resolved' as const,
+    project: {
+      id: '4f6d2a1e-8b3c-4d5e-9f01-2a3b4c5d6e7f',
+      name: 'convergence',
+      url: 'https://linear.app/marckraw/project/convergence-f66c7ae332ee',
+    },
+  }
+
+  beforeEach(() => {
+    db = getDatabase()
+    crews = new CrewService(db)
+    boundCrewId = crews.create({ name: 'Loom' }).id
+    crews.setTrackerBinding(boundCrewId, { projectId: 'project-1' })
+    unboundCrewId = crews.create({ name: 'Unbound' }).id
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+  })
+
+  /** The service under test, with the adapter factory watched. */
+  function bench(input: { key: string | null }) {
+    const resolveProject = vi.fn(async () => RESOLVED)
+    const createAdapter = vi.fn(
+      (built: { apiKey: string; binding: TrackerBinding }): TrackerAdapter => {
+        void built
+        return {
+          probe: async () => ({
+            ok: true,
+            issues: 0,
+            projectName: 'convergence',
+          }),
+          listLabeledIssues: async () => [],
+          resolveProject,
+        }
+      },
+    )
+    const service = new TrackerWatcherService({
+      crews: new CrewService(db),
+      ledger: new WorkLedgerService(db),
+      resolveKey: async () => input.key,
+      createAdapter,
+      broadcast: () => {},
+    })
+    return { service, createAdapter, resolveProject }
+  }
+
+  it('no key stored: a typed refusal, and no adapter is ever built', async () => {
+    const { service, createAdapter, resolveProject } = bench({ key: null })
+
+    // Mutation: drop the no-key branch -> an adapter is built with `null` as
+    // its key and Linear is asked with no authorization, red here.
+    await expect(
+      service.resolveProject(boundCrewId, 'convergence'),
+    ).resolves.toEqual({
+      kind: 'refused',
+      refusal: {
+        kind: 'unauthorized',
+        message: 'No API key is stored for this crew.',
+        retryAt: null,
+      },
+    })
+    expect(createAdapter).not.toHaveBeenCalled()
+    expect(resolveProject).not.toHaveBeenCalled()
+  })
+
+  it('a crew with no binding yet: the lookup-only binding, and the answer passes through', async () => {
+    const { service, createAdapter, resolveProject } = bench({ key: KEY })
+
+    // The case this door exists for: finding the id is how the binding gets
+    // made, so it has to work before there is one.
+    await expect(
+      service.resolveProject(unboundCrewId, 'convergence'),
+    ).resolves.toEqual(RESOLVED)
+    expect(resolveProject).toHaveBeenCalledWith('convergence')
+    const built = createAdapter.mock.calls[0]![0]
+    expect(built.apiKey).toBe(KEY)
+    expect(built.binding.projectId).toBe('')
+    expect(built.binding.labelPrefix).toBe('horse:')
+  })
+
+  it('a bound crew: the adapter is built with the crew’s own binding', async () => {
+    const { service, createAdapter } = bench({ key: KEY })
+
+    await service.resolveProject(boundCrewId, 'convergence')
+    expect(createAdapter.mock.calls[0]![0].binding.projectId).toBe('project-1')
+  })
+
+  it('the answer carries the resolution and nothing else', async () => {
+    const { service } = bench({ key: KEY })
+
+    const answer = await service.resolveProject(boundCrewId, 'convergence')
+    // The key is read on this side of the seam and stays here (R5).
+    expect(JSON.stringify(answer)).not.toContain(KEY)
+    expect(JSON.stringify(answer)).not.toContain('lin_api')
+    expect(Object.keys(answer)).toEqual(['kind', 'project'])
   })
 })

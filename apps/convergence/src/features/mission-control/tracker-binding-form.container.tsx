@@ -43,6 +43,8 @@ export const TrackerBindingFormContainer: FC<{ crew: SessionCrew }> = ({
   )
   const [keyDraft, setKeyDraft] = useState('')
   const [lastProbe, setLastProbe] = useState<TrackerProbeReading | null>(null)
+  /** The project a URL or a name resolved to, for the line under the field. */
+  const [boundProjectName, setBoundProjectName] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -72,14 +74,27 @@ export const TrackerBindingFormContainer: FC<{ crew: SessionCrew }> = ({
    * refusals are sentences a person can act on, thrown so `run` shows them
    * and nothing is saved.
    */
-  const resolveProjectId = async (typed: string): Promise<string> => {
+  const resolveProjectId = async (
+    typed: string,
+  ): Promise<{ projectId: string; projectName: string | null }> => {
     const reference = parseLinearProjectReference(typed)
-    if (reference === null || reference.kind === 'id') return typed
-    if (credential !== 'present') {
+    if (reference === null || reference.kind === 'id') {
+      return { projectId: typed, projectName: null }
+    }
+    // Only when the form KNOWS there is no key (lap 2, C). `null` is "the
+    // status read has not come back", and refusing on it told a person who
+    // has a key to go and store one. The door answers a missing key with a
+    // typed refusal of its own, so asking is safe and honest.
+    if (credential === 'absent') {
       throw new Error(TRACKER_PROJECT_NEEDS_KEY_SENTENCE)
     }
     const resolution = await trackerApi.resolveProject(crew.id, typed)
-    if (resolution.kind === 'resolved') return resolution.project.id
+    if (resolution.kind === 'resolved') {
+      return {
+        projectId: resolution.project.id,
+        projectName: resolution.project.name,
+      }
+    }
     throw new Error(trackerProjectProblem(resolution))
   }
 
@@ -102,6 +117,7 @@ export const TrackerBindingFormContainer: FC<{ crew: SessionCrew }> = ({
       credential={credential}
       keyDraft={keyDraft}
       lastProbe={lastProbe}
+      boundProjectName={boundProjectName}
       busy={busy}
       error={error}
       onDraftChange={(patch) =>
@@ -109,12 +125,17 @@ export const TrackerBindingFormContainer: FC<{ crew: SessionCrew }> = ({
       }
       onSaveBinding={() =>
         void run(async () => {
-          const projectId = await resolveProjectId(draft.projectId)
+          const found = await resolveProjectId(draft.projectId)
           const saved = await sessionCrewApi.setTrackerBinding(crew.id, {
             ...draft,
-            projectId,
+            projectId: found.projectId,
           })
           setDraft(draftFrom(saved))
+          // After a URL or a name the field flips to a UUID, and without
+          // this nothing on screen says which project that is until Test is
+          // pressed (lap 2, C). A UUID bind resolved nothing, so it says
+          // nothing.
+          setBoundProjectName(found.projectName)
         })
       }
       onUnbind={() =>
@@ -122,6 +143,7 @@ export const TrackerBindingFormContainer: FC<{ crew: SessionCrew }> = ({
           const saved = await sessionCrewApi.setTrackerBinding(crew.id, null)
           setDraft(draftFrom(saved))
           setLastProbe(null)
+          setBoundProjectName(null)
         })
       }
       onKeyDraftChange={setKeyDraft}

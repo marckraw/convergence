@@ -31,6 +31,21 @@ describe('MAR-3156 R1: three ways into one project', () => {
       'https://linear.app/marckraw/project/the-loom-era-9f8e7d6c5b4a',
       { kind: 'slugId', value: '9f8e7d6c5b4a' },
     ],
+    [
+      'a URL the address bar handed over without its scheme',
+      'linear.app/marckraw/project/convergence-f66c7ae332ee',
+      { kind: 'slugId', value: 'f66c7ae332ee' },
+    ],
+    [
+      'the same with www',
+      'www.linear.app/marckraw/project/convergence-f66c7ae332ee',
+      { kind: 'slugId', value: 'f66c7ae332ee' },
+    ],
+    [
+      'a project segment that is the slug id alone',
+      'https://linear.app/marckraw/project/f66c7ae332ee',
+      { kind: 'slugId', value: 'f66c7ae332ee' },
+    ],
     ['a name', 'convergence', { kind: 'name', value: 'convergence' }],
     [
       'a padded name',
@@ -58,18 +73,55 @@ describe('MAR-3156 R1: three ways into one project', () => {
   })
 
   it('a URL with no slug id at all is a name, not half a lookup', () => {
+    const asName = (raw: string) =>
+      expect(parseLinearProjectReference(raw)).toEqual({
+        kind: 'name',
+        value: raw,
+      })
+
+    asName('https://linear.app/marckraw/project/')
+    // Half a copied URL: nothing after the last hyphen is not an id, and
+    // asking Linear about "" comes back empty and reads as "no such project".
+    // Mutation: return the empty tail as a slug id -> a lookup for nothing.
+    asName('https://linear.app/marckraw/project/convergence-')
+  })
+
+  it('lap 2, B: a slug id only ever comes from Linear’s own host', () => {
+    // Mutation: drop the host check -> somebody else's site with Linear's
+    // path shape sends a slug-id lookup to Linear, red here.
     expect(
-      parseLinearProjectReference('https://linear.app/marckraw/project/'),
+      parseLinearProjectReference('https://example.com/project/foo-deadbeef'),
     ).toEqual({
       kind: 'name',
-      value: 'https://linear.app/marckraw/project/',
+      value: 'https://example.com/project/foo-deadbeef',
     })
-    // A segment with no hyphen carries no id: the slug IS the whole segment.
+    // A subdomain of Linear's is still Linear's.
     expect(
-      parseLinearProjectReference('https://linear.app/marckraw/project/loom'),
-    ).toEqual({
-      kind: 'name',
-      value: 'https://linear.app/marckraw/project/loom',
-    })
+      parseLinearProjectReference(
+        'https://eu.linear.app/marckraw/project/convergence-f66c7ae332ee',
+      ),
+    ).toEqual({ kind: 'slugId', value: 'f66c7ae332ee' })
+  })
+
+  it('lap 2, B: only an http(s) link is a link to a project', () => {
+    // The input where the protocol check is the ONLY thing standing: these
+    // carry Linear's own host, so the host check waves them through and a
+    // `file:` URL (whose host is empty) would not tell the two guards apart.
+    // Mutation: drop the protocol check -> both read as a slug id, red.
+    for (const raw of [
+      'ftp://linear.app/marckraw/project/convergence-f66c7ae332ee',
+      'ws://linear.app/marckraw/project/convergence-f66c7ae332ee',
+    ]) {
+      expect(parseLinearProjectReference(raw)).toEqual({
+        kind: 'name',
+        value: raw,
+      })
+    }
+    // And one with no host at all, which the host check catches instead.
+    expect(
+      parseLinearProjectReference(
+        'file:///linear.app/marckraw/project/convergence-f66c7ae332ee',
+      ),
+    ).toMatchObject({ kind: 'name' })
   })
 })

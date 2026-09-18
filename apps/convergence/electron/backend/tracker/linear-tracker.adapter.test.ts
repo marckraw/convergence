@@ -3,6 +3,7 @@ import {
   createLinearTrackerAdapter,
   type TrackerFetch,
 } from './linear-tracker.adapter'
+import { parseLinearProjectReference } from '../../../src/shared/lib/linear-project-reference.pure'
 import { normalizeTrackerBinding } from './tracker-binding.pure'
 import { TrackerRefusalError } from './tracker.types'
 import {
@@ -19,6 +20,8 @@ import {
 } from './linear-tracker.fixture'
 
 const KEY = 'lin_api_fixture_not_a_real_key'
+/** The id the fixture's project carries: a UUID, as Linear's ids are. */
+const PROJECT_UUID = '4f6d2a1e-8b3c-4d5e-9f01-2a3b4c5d6e7f'
 const binding = normalizeTrackerBinding({ projectId: 'project-1' })
 const now = () => new Date('2026-09-17T08:00:00.000Z')
 
@@ -102,16 +105,24 @@ describe('MAR-3084 R2: the adapter agrees with the far side', () => {
     })
 
     it('one project resolves; several ask the person; none is not-found', async () => {
-      await expect(
-        adapterAnswering(answering({})).resolveProject('convergence'),
-      ).resolves.toEqual({
+      const one = await adapterAnswering(answering({})).resolveProject(
+        'convergence',
+      )
+      expect(one).toEqual({
         kind: 'resolved',
         project: {
-          id: '0a1b2c3d4e5f',
+          id: PROJECT_UUID,
           name: 'convergence',
-          url: 'https://linear.app/example/project/convergence-0a1b2c3d4e5f',
+          url: `https://linear.app/example/project/convergence-${PROJECT_UUID}`,
         },
       })
+      // The round trip the whole feature turns on (lap 2, D): what a name
+      // resolves to is an id, and an id is what binds with no further read.
+      expect(
+        parseLinearProjectReference(
+          one.kind === 'resolved' ? one.project.id : '',
+        ),
+      ).toEqual({ kind: 'id', value: PROJECT_UUID })
 
       // Mutation: take `nodes[0]` -> this binds the first of two, red.
       const several = await adapterAnswering(
@@ -120,9 +131,9 @@ describe('MAR-3084 R2: the adapter agrees with the far side', () => {
       expect(several.kind).toBe('ambiguous')
       expect(
         several.kind === 'ambiguous'
-          ? several.candidates.map((project) => project.id)
+          ? several.candidates.map((project) => project.name)
           : [],
-      ).toEqual(['0a1b2c3d4e5f', 'aabbccddeeff'])
+      ).toEqual(['convergence', 'Convergence'])
 
       await expect(
         adapterAnswering(
@@ -190,21 +201,36 @@ describe('MAR-3084 R2: the adapter agrees with the far side', () => {
     })
   })
 
-  it('200 carrying errors[] -> bad-response, never success', async () => {
-    // Mutation: treat a 200 with errors[] as success -> the page beside the
-    // errors parses, the probe reads `{ ok: true, issues: 1 }`, and this is red.
+  const ANSWERED_WITH_ERRORS = {
+    ok: false,
+    refusal: {
+      kind: 'bad-response',
+      message: 'Linear answered with errors.',
+      retryAt: null,
+    },
+  }
+
+  it('200 carrying errors[] on the PROJECT read -> bad-response, never success', async () => {
+    // The first read the probe makes (MAR-3156): a 200 with errors[] beside a
+    // readable body is Linear telling you a field failed.
+    // Mutation: treat a 200 with errors[] as success -> the project parses
+    // from the body beside the errors and the probe reads ok, red.
     await expect(
       adapterAnswering(async () =>
         recordedReply(200, RECORDED_200_WITH_ERRORS_BODY),
       ).probe(),
-    ).resolves.toEqual({
-      ok: false,
-      refusal: {
-        kind: 'bad-response',
-        message: 'Linear answered with errors.',
-        retryAt: null,
-      },
-    })
+    ).resolves.toEqual(ANSWERED_WITH_ERRORS)
+  })
+
+  it('200 carrying errors[] on the ISSUES read -> bad-response, never a count', async () => {
+    // Lap 2, D: the project read succeeds and the issue page comes back with
+    // errors beside it. Without this case the issues query's own path lost
+    // its only witness when the probe gained a first read.
+    const fetch = answering({ issues: RECORDED_200_WITH_ERRORS_BODY })
+    await expect(adapterAnswering(fetch).probe()).resolves.toEqual(
+      ANSWERED_WITH_ERRORS,
+    )
+    expect(fetch).toHaveBeenCalledTimes(2)
   })
 
   it('a network refusal -> unreachable', async () => {

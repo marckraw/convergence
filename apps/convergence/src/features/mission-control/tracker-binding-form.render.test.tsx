@@ -200,17 +200,29 @@ describe('MAR-3156 R3: what happens when Bind is pressed', () => {
   }
 
   function bench(input: {
-    credential: TrackerCredentialStatus
+    credential: TrackerCredentialStatus | null
     resolution?: TrackerProjectResolution
+    /** What the door answers a save with: the crew as it now stands. */
+    savedProjectId?: string
   }) {
     const crew = crewFor('')
-    const setTrackerBinding = vi.fn(async () => crew)
+    // The door answers with the crew it saved (lap 2, C), so the field's
+    // content after a bind is a fact the test can read.
+    const setTrackerBinding = vi.fn(async () =>
+      crewFor(input.savedProjectId ?? ''),
+    )
     const resolveProject = vi.fn(
       async () => input.resolution ?? { kind: 'not-found' as const },
     )
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       tracker: {
-        credentialStatus: vi.fn(async () => input.credential),
+        credentialStatus: vi.fn(async () => {
+          if (input.credential === null) {
+            // The mount's status read never answers: the form does not know.
+            return await new Promise<TrackerCredentialStatus>(() => {})
+          }
+          return input.credential
+        }),
         setCredential: vi.fn(async () => 'present' as const),
         deleteCredential: vi.fn(async () => 'absent' as const),
         probe: vi.fn(),
@@ -266,19 +278,57 @@ describe('MAR-3156 R3: what happens when Bind is pressed', () => {
     ).toBeTruthy()
   })
 
-  it('a name the key can resolve binds the ID it found', async () => {
+  it('a name the key can resolve binds the ID it found, and says which project that is', async () => {
     const doors = bench({
       credential: 'present',
       resolution: {
         kind: 'resolved',
         project: { id: 'project-9', name: 'convergence', url: URL },
       },
+      savedProjectId: 'project-9',
     })
     await bindWith('convergence', doors, doors.crew)
 
     expect(doors.resolveProject).toHaveBeenCalledWith('crew-1', 'convergence')
     // The id is what gets stored, exactly as before this issue: the binding
     // shape did not change.
+    expect(doors.setTrackerBinding).toHaveBeenCalledWith(
+      'crew-1',
+      expect.objectContaining({ projectId: 'project-9' }),
+    )
+    // And the field now holds that id, which says nothing to a person...
+    expect(screen.getByLabelText('Tracker project')).toHaveProperty(
+      'value',
+      'project-9',
+    )
+    // ...so this line does (lap 2, C).
+    // Mutation: drop the bound-project line -> red.
+    expect(screen.getByText('Bound to “convergence”')).toBeTruthy()
+  })
+
+  it('lap 2, C: a UUID bind resolved nothing, so it claims nothing', async () => {
+    const doors = bench({ credential: 'present', savedProjectId: UUID })
+    await bindWith(UUID, doors, doors.crew)
+
+    expect(doors.resolveProject).not.toHaveBeenCalled()
+    expect(document.querySelector('[data-tracker-bound-project]')).toBeNull()
+  })
+
+  it('lap 2, C: a form that does not yet know about the key asks the door', async () => {
+    // `null` is "the status read has not come back", not "there is no key".
+    // Mutation: refuse on anything but `present` -> a person who HAS a key is
+    // told to store one, and the lookup never happens, red.
+    const doors = bench({
+      credential: null,
+      resolution: {
+        kind: 'resolved',
+        project: { id: 'project-9', name: 'convergence', url: URL },
+      },
+      savedProjectId: 'project-9',
+    })
+    await bindWith('convergence', doors, doors.crew)
+
+    expect(doors.resolveProject).toHaveBeenCalledWith('crew-1', 'convergence')
     expect(doors.setTrackerBinding).toHaveBeenCalledWith(
       'crew-1',
       expect.objectContaining({ projectId: 'project-9' }),

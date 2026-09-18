@@ -131,13 +131,20 @@ export const LINEAR_PROJECT_MATCH_LIMIT = 5
 /**
  * One project, by the three fields a person needs to recognise it.
  *
- * Schema read against Linear's published SDK schema, the same way the issue
- * query above was: `Query.projects(filter: ProjectFilter, first: Int):
- * ProjectConnection`, `Project { id: String!, name: String!, url: String! }`,
- * and the comparators the filter below uses --
- * `ProjectFilter { id: IDComparator, slugId: StringComparator, name:
- * StringComparator }` with `IDComparator.eq`, `StringComparator.eq` and
- * `StringComparator.eqIgnoreCase`.
+ * Schema read against Linear's published SDK schema
+ * (`linear/linear` → `packages/sdk/src/schema.graphql`), the same way the
+ * issue query above was, and confirmed against the live workspace:
+ *
+ * - `Query.projects(filter: ProjectFilter, first: Int): ProjectConnection`
+ * - `type Project { id: ID!, name: String!, slugId: String!, url: String! }`
+ * - `input ProjectFilter { id: EntityIdentifierIDComparator, name:
+ *   StringComparator, slugId: StringComparator, … }`
+ * - `EntityIdentifierIDComparator.eq: ID`, `StringComparator.eq` and
+ *   `StringComparator.eqIgnoreCase`
+ *
+ * The live half: the trailing hex of a project URL (`…/project/convergence-
+ * f66c7ae332ee`) IS that project's `slugId` — asked of the workspace, not
+ * inferred from the shape.
  *
  * One query text for all three ways in: the filter is the variable, so the
  * lookup by id, by the URL's slug id and by name are one read with three

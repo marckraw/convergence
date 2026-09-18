@@ -87,7 +87,8 @@ export const RECORDED_BLOCKED_LABEL_PAGE = linearIssuesBody([
 /**
  * A projects lookup reply (MAR-3156), in the shape
  * `{ data: { projects: { nodes: [...] } } }` the query asks for. Synthetic
- * ids and a synthetic workspace, as everything here is.
+ * ids and a synthetic workspace, as everything here is -- and the ids are
+ * UUIDs, as Linear's are, so a resolved id re-reads as an id (lap 2, D).
  */
 export function linearProjectNode(input: {
   id: string
@@ -109,14 +110,20 @@ export function linearProjectsBody(
 
 /** The one project a right reference reaches. */
 export const RECORDED_ONE_PROJECT_BODY = linearProjectsBody([
-  linearProjectNode({ id: '0a1b2c3d4e5f', name: 'convergence' }),
+  linearProjectNode({
+    id: '4f6d2a1e-8b3c-4d5e-9f01-2a3b4c5d6e7f',
+    name: 'convergence',
+  }),
 ])
 
 /** Two projects a person's NAME can reach: the question only they can settle. */
 export const RECORDED_TWO_PROJECT_BODY = linearProjectsBody([
-  linearProjectNode({ id: '0a1b2c3d4e5f', name: 'convergence' }),
   linearProjectNode({
-    id: 'aabbccddeeff',
+    id: '4f6d2a1e-8b3c-4d5e-9f01-2a3b4c5d6e7f',
+    name: 'convergence',
+  }),
+  linearProjectNode({
+    id: '7c1b9e04-2f5a-4c8d-b3e6-1d0a9f8e7c6b',
     name: 'Convergence',
     slug: 'convergence-old',
   }),
