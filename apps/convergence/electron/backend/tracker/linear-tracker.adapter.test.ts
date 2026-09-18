@@ -213,8 +213,10 @@ describe('MAR-3084 R2: the adapter agrees with the far side', () => {
   it('200 carrying errors[] on the PROJECT read -> bad-response, never success', async () => {
     // The first read the probe makes (MAR-3156): a 200 with errors[] beside a
     // readable body is Linear telling you a field failed.
-    // Mutation: treat a 200 with errors[] as success -> the project parses
-    // from the body beside the errors and the probe reads ok, red.
+    // Mutation: treat a 200 with errors[] as success -> still red here, but
+    // by a DIFFERENT refusal: the recorded body is issue-shaped, so the
+    // project read ends in "without a project list". The witness for "never
+    // a count" is the issues-read case below, which does reach a success.
     await expect(
       adapterAnswering(async () =>
         recordedReply(200, RECORDED_200_WITH_ERRORS_BODY),

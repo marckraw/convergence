@@ -22,10 +22,12 @@ const LINEAR_HOST = 'linear.app'
 /**
  * The URL a person actually pasted, or null when it is not one.
  *
- * A browser's address bar hands out `linear.app/marckraw/project/...` without
- * the scheme, and a paste of that is the commonest shape there is. Read as a
- * name it earned the sentence "paste the project's URL from Linear" -- said
- * to somebody who had just done exactly that (lap 2, B).
+ * The address bar SHOWS `linear.app/marckraw/project/...` without the scheme,
+ * and that is what arrives when somebody types what they see or pastes from
+ * an app that strips it. Read as a name it earned the sentence "paste the
+ * project's URL from Linear" -- said to somebody who had just done exactly
+ * that (lap 2, B). Only the lower-case spelling is rescued here; with a
+ * scheme, `URL` lowercases the host itself.
  */
 function linearProjectUrl(raw: string): URL | null {
   const candidate =

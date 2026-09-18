@@ -397,14 +397,20 @@ describe('MAR-3156 A: the lookup door is where the key is fetched', () => {
         }
       },
     )
+    // Watched, not only stubbed (integration pin, Fable): keys are per crew,
+    // so WHOSE key is fetched is a fact a test has to be able to see.
+    const resolveKey = vi.fn(async (crewId: string) => {
+      void crewId
+      return input.key
+    })
     const service = new TrackerWatcherService({
       crews: new CrewService(db),
       ledger: new WorkLedgerService(db),
-      resolveKey: async () => input.key,
+      resolveKey,
       createAdapter,
       broadcast: () => {},
     })
-    return { service, createAdapter, resolveProject }
+    return { service, createAdapter, resolveProject, resolveKey }
   }
 
   it('no key stored: a typed refusal, and no adapter is ever built', async () => {
@@ -446,6 +452,16 @@ describe('MAR-3156 A: the lookup door is where the key is fetched', () => {
 
     await service.resolveProject(boundCrewId, 'convergence')
     expect(createAdapter.mock.calls[0]![0].binding.projectId).toBe('project-1')
+  })
+
+  it('the key fetched is THIS crew’s, never another’s', async () => {
+    const { service, resolveKey } = bench({ key: KEY })
+
+    await service.resolveProject(boundCrewId, 'convergence')
+    // Mutation: fetch the key by anything but the crew id the door was given
+    // -> crew A's lookup runs on crew B's Linear key, and this is red.
+    expect(resolveKey).toHaveBeenCalledTimes(1)
+    expect(resolveKey).toHaveBeenCalledWith(boundCrewId)
   })
 
   it('the answer carries the resolution and nothing else', async () => {

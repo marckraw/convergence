@@ -117,7 +117,8 @@ describe('MAR-3156 R1: three ways into one project', () => {
         value: raw,
       })
     }
-    // And one with no host at all, which the host check catches instead.
+    // And one with no host at all: the protocol check meets it first, so it
+    // is a witness for neither guard alone.
     expect(
       parseLinearProjectReference(
         'file:///linear.app/marckraw/project/convergence-f66c7ae332ee',
