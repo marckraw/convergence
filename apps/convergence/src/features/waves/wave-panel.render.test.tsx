@@ -245,6 +245,22 @@ describe('MAR-3097 R3 + lap 2, A: the header never says a zero it did not read',
     expect(document.body.textContent).not.toMatch(/\b0 in wave\b/)
   })
 
+  it('MAR-3169 R4: a project the key cannot see reads its age, and the last rows stay', () => {
+    renderView(
+      [ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' })],
+      [{ name: 'Loom', health: health('project-not-visible') }],
+    )
+    // Never "Quiet project": the empty page this state comes from is exactly
+    // what used to read as a calm day.
+    expect(screen.getByRole('status').textContent).toBe(
+      'tracker project not visible to this key · 10m',
+    )
+    expect(
+      document.querySelector('[data-wave-row="crew-1:EX-1"]'),
+    ).not.toBeNull()
+    expect(document.body.textContent).not.toContain('Quiet project')
+  })
+
   it('A: a bound crew not yet heard from reads "reading the tracker…", never "Quiet project"', () => {
     renderView([], [{ name: 'Loom', health: null }])
     // Mutation: drop the null branch -> "Quiet project", red.

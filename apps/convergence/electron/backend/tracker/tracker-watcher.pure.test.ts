@@ -230,6 +230,45 @@ describe('MAR-3084 R5: state comes from the record', () => {
 describe('MAR-3084 R7: due and backoff are pure', () => {
   const now = new Date('2026-09-17T08:00:00.000Z')
 
+  it('MAR-3169 R3: a project the key cannot see is asked about again every tick, and heals to ok', () => {
+    const notVisible = trackerHealthAfter({
+      previous: null,
+      outcome: {
+        ok: false,
+        refusal: {
+          kind: 'project-not-visible',
+          message: 'The key cannot see the bound project.',
+          retryAt: null,
+        },
+      },
+      now,
+    })
+    // No backoff: like a refused key, the answer can change the moment the
+    // person fixes the binding, and waiting would hide the fix.
+    // Mutation: give the state a backoff -> it is not due at once, red.
+    expect(notVisible).toEqual({
+      state: 'project-not-visible',
+      since: now.toISOString(),
+      lastOkAt: null,
+      backoffUntil: null,
+    })
+    expect(isTrackerTickDue({ health: notVisible, now })).toBe(true)
+
+    const later = new Date('2026-09-17T08:01:00.000Z')
+    const healed = trackerHealthAfter({
+      previous: notVisible,
+      outcome: { ok: true },
+      now: later,
+    })
+    // `since` restarts at the change, and the change is news for the windows.
+    expect(healed).toMatchObject({
+      state: 'ok',
+      since: later.toISOString(),
+      lastOkAt: later.toISOString(),
+    })
+    expect(trackerHealthChanged(notVisible, healed)).toBe(true)
+  })
+
   it('is due with no health, and after a backoff has passed', () => {
     expect(isTrackerTickDue({ health: null, now })).toBe(true)
     expect(
