@@ -1,9 +1,12 @@
 import {
   classifyLinearReply,
+  LINEAR_BODY_PAGE_SIZE,
   LINEAR_GRAPHQL_URL,
   LINEAR_MAX_PAGES,
+  linearIssueBodiesRequest,
   linearLabeledIssuesRequest,
   linearProjectLookupRequest,
+  parseLinearIssueBodiesReply,
   parseLinearIssuesPage,
   parseLinearProjectsReply,
   type LinearProject,
@@ -109,6 +112,7 @@ export function createLinearTrackerAdapter(deps: {
       linearLabeledIssuesRequest({
         projectId: input.projectId,
         labelPrefix: input.labelPrefix,
+        wavePrefix: input.wavePrefix,
         after,
       }),
     )
@@ -142,6 +146,41 @@ export function createLinearTrackerAdapter(deps: {
       message: `Linear kept paging past ${LINEAR_MAX_PAGES} pages.`,
       retryAt: null,
     })
+  }
+
+  /**
+   * The bodies of the named issues (MAR-3190 R4), in pages of
+   * `LINEAR_BODY_PAGE_SIZE` ids.
+   *
+   * Paged for the same reason the issue list is: a query that names every id
+   * at once is one request whose size the caller controls and Linear does
+   * not. A refusal leaves as a throw, so a partial map can never reach the
+   * diff and read as issues whose summaries vanished.
+   */
+  async function readIssueBodies(
+    ids: readonly string[],
+  ): Promise<Map<string, string | null>> {
+    const bodies = new Map<string, string | null>()
+    for (let at = 0; at < ids.length; at += LINEAR_BODY_PAGE_SIZE) {
+      const page = ids.slice(at, at + LINEAR_BODY_PAGE_SIZE)
+      const body = await ask(linearIssueBodiesRequest(page))
+      const read = parseLinearIssueBodiesReply(body)
+      if (!read.ok) throw new TrackerRefusalError(read.refusal)
+      // Every id asked for must come back (lap 2, C). A short reply read as
+      // an answer writes `summary: null` over a summary the ledger already
+      // holds -- a deletion nobody asked for, which the next tick then
+      // believes, because `updatedAt` never moved.
+      const missing = page.filter((id) => !read.bodies.has(id))
+      if (missing.length > 0) {
+        throw new TrackerRefusalError({
+          kind: 'bad-response',
+          message: 'Linear answered fewer bodies than asked.',
+          retryAt: null,
+        })
+      }
+      for (const [id, description] of read.bodies) bodies.set(id, description)
+    }
+    return bodies
   }
 
   /** The projects answering to one reference; a refusal leaves as a throw. */
@@ -195,6 +234,7 @@ export function createLinearTrackerAdapter(deps: {
 
   return {
     listLabeledIssues,
+    readIssueBodies,
     resolveProject,
     async probe(): Promise<TrackerProbe> {
       try {

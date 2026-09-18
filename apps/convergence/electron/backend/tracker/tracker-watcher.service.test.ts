@@ -8,10 +8,12 @@ import { TRACKER_WATCH_INTERVAL_MS } from './tracker-watcher.pure'
 import { TrackerWatcherService } from './tracker-watcher.service'
 import { createLinearTrackerAdapter } from './linear-tracker.adapter'
 import {
+  linearIssueBodiesBody,
   linearIssueNode,
   linearIssuesBody,
   linearLabel,
   recordedReply,
+  trackerIssue,
 } from './linear-tracker.fixture'
 import {
   TrackerRefusalError,
@@ -22,20 +24,7 @@ import {
   type TrackerRefusal,
 } from './tracker.types'
 
-const ISSUE: TrackerIssue = {
-  id: 'issue-1',
-  identifier: 'EX-1',
-  title: 'The work',
-  url: 'https://linear.app/example/issue/ex-1',
-  status: 'In Progress',
-  logicalStatus: 'in-progress',
-  seat: 'opus',
-  blocked: false,
-  wave: null,
-  groundedAt: null,
-  branchName: null,
-  updatedAt: '2026-09-17T08:00:00.000Z',
-}
+const ISSUE: TrackerIssue = trackerIssue({ id: 'issue-1' })
 
 function refusal(kind: TrackerRefusal['kind'], retryAt: string | null = null) {
   return new TrackerRefusalError({ kind, message: kind, retryAt })
@@ -79,6 +68,7 @@ describe('MAR-3084 R7: the tick is a house-rules timer', () => {
         }),
         resolveProject: async () => ({ kind: 'not-found' as const }),
         listLabeledIssues,
+        readIssueBodies: async () => new Map<string, string | null>(),
       }),
       broadcast: (snapshot) => broadcasts.push(snapshot),
       now: () => clock,
@@ -132,6 +122,7 @@ describe('MAR-3084 R7: the tick is a house-rules timer', () => {
         }),
         resolveProject: async () => ({ kind: 'not-found' as const }),
         listLabeledIssues: list,
+        readIssueBodies: async () => new Map<string, string | null>(),
       }),
       broadcast: () => {},
       now: () => clock,
@@ -243,7 +234,18 @@ describe('MAR-3084 R7: the tick is a house-rules timer', () => {
           apiKey,
           binding,
           now: () => clock,
-          fetch: async () => recordedReply(200, replies.shift()),
+          // The bodies read is its own query (MAR-3190 R4), so the fake
+          // answers it as one -- otherwise it would eat the next PAGE reply
+          // and this case would measure the wrong thing.
+          fetch: async (_url, init) => {
+            const sent = JSON.parse(init.body) as { query: string }
+            return sent.query.includes('ConvergenceTrackerIssueBodies')
+              ? recordedReply(
+                  200,
+                  linearIssueBodiesBody([{ id: 'issue-1' }, { id: 'issue-2' }]),
+                )
+              : recordedReply(200, replies.shift())
+          },
         }),
       broadcast: () => {},
       now: () => clock,
@@ -338,6 +340,7 @@ describe('MAR-3084 R7: the tick is a house-rules timer', () => {
         }),
         resolveProject: async () => ({ kind: 'not-found' as const }),
         listLabeledIssues: list,
+        readIssueBodies: async () => new Map<string, string | null>(),
       }),
       broadcast: () => {},
       now: () => clock,
@@ -394,6 +397,7 @@ describe('MAR-3156 A: the lookup door is where the key is fetched', () => {
             projectName: 'convergence',
           }),
           listLabeledIssues: async () => [],
+          readIssueBodies: async () => new Map<string, string | null>(),
           resolveProject,
         }
       },
@@ -521,6 +525,7 @@ describe('MAR-3169: an empty page is verified before it is believed', () => {
           projectName: 'convergence',
         }),
         listLabeledIssues,
+        readIssueBodies: async () => new Map<string, string | null>(),
         resolveProject,
       }),
       broadcast: (snapshot) => broadcasts.push(snapshot),
@@ -708,5 +713,296 @@ describe('MAR-3169: an empty page is verified before it is believed', () => {
     })
     expect(broadcasts.at(-1)?.trackerHealth?.state).toBe('ok')
     expect(states()).toEqual(['working'])
+  })
+})
+
+describe('MAR-3190 R4: bodies are read only for issues that changed', () => {
+  let db: Database.Database
+  let crewId: string
+  let ledger: WorkLedgerService
+  let clock: Date
+
+  beforeEach(() => {
+    clock = new Date('2026-09-17T08:00:00.000Z')
+    db = getDatabase()
+    const crews = new CrewService(db)
+    crewId = crews.create({ name: 'Loom' }).id
+    crews.setTrackerBinding(crewId, { projectId: 'project-1' })
+    ledger = new WorkLedgerService(db)
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+  })
+
+  function watcherReading(
+    pages: TrackerIssue[][],
+    bodies: Map<string, string | null> = new Map(),
+  ) {
+    const readIssueBodies = vi.fn(
+      async (_ids: readonly string[]) => new Map(bodies),
+    )
+    const listLabeledIssues = vi.fn(async () => pages.shift() ?? [])
+    const service = new TrackerWatcherService({
+      crews: new CrewService(db),
+      ledger,
+      resolveKey: async () => 'lin_api_fixture',
+      createAdapter: () => ({
+        probe: async () => ({
+          ok: true,
+          issues: 0,
+          projectName: 'convergence',
+        }),
+        resolveProject: async () => ({ kind: 'not-found' as const }),
+        listLabeledIssues,
+        readIssueBodies,
+      }),
+      broadcast: () => {},
+      now: () => clock,
+      log: vi.fn(),
+    })
+    return { service, readIssueBodies }
+  }
+
+  it('tick 1 asks for all three, tick 2 for none, and only the mover after that', async () => {
+    const page = [
+      trackerIssue({ id: 'issue-1', identifier: 'EX-1' }),
+      trackerIssue({ id: 'issue-2', identifier: 'EX-2' }),
+      trackerIssue({ id: 'issue-3', identifier: 'EX-3' }),
+    ]
+    const moved = page.map((issue) =>
+      issue.id === 'issue-2'
+        ? { ...issue, updatedAt: '2026-09-18T09:00:00.000Z' }
+        : issue,
+    )
+    const { service, readIssueBodies } = watcherReading(
+      [page, page, moved],
+      new Map([
+        ['issue-1', '## What\n\nThe first.\n\nGrounded at x · 2026-09-16'],
+        ['issue-2', '## What\n\nThe second.'],
+        ['issue-3', null],
+      ]),
+    )
+
+    await service.tick()
+    expect(readIssueBodies).toHaveBeenCalledTimes(1)
+    expect(readIssueBodies.mock.calls[0]![0]).toEqual([
+      'issue-1',
+      'issue-2',
+      'issue-3',
+    ])
+    const first = ledger.list(crewId)
+    expect(first.find((e) => e.issueId === 'issue-1')?.fact.summary).toBe(
+      'The first.',
+    )
+    expect(first.find((e) => e.issueId === 'issue-1')?.groundedAt).toBe(
+      '2026-09-16',
+    )
+    expect(first.find((e) => e.issueId === 'issue-3')?.fact.summary).toBeNull()
+
+    // Nothing moved: the minute tick stays ONE request.
+    // Mutation: ask for every id every tick -> 2 here, red.
+    await service.tick()
+    expect(readIssueBodies).toHaveBeenCalledTimes(1)
+
+    // One issue's `updatedAt` moves: one id, not three.
+    await service.tick()
+    expect(readIssueBodies).toHaveBeenCalledTimes(2)
+    expect(readIssueBodies.mock.calls[1]![0]).toEqual(['issue-2'])
+    // ...and the two that were not asked for keep what the ledger holds.
+    // Mutation: read every issue from the bodies map in `applyIssueBodies`
+    // -> issue-1's summary is rewritten to null and a row records the loss.
+    const after = ledger.list(crewId)
+    expect(after.find((e) => e.issueId === 'issue-1')?.fact.summary).toBe(
+      'The first.',
+    )
+    expect(after.find((e) => e.issueId === 'issue-1')?.groundedAt).toBe(
+      '2026-09-16',
+    )
+  })
+
+  it('a refused bodies read appends nothing and sets the health', async () => {
+    const readIssueBodies = vi.fn(async () => {
+      throw refusal('rate-limited')
+    })
+    const service = new TrackerWatcherService({
+      crews: new CrewService(db),
+      ledger,
+      resolveKey: async () => 'lin_api_fixture',
+      createAdapter: () => ({
+        probe: async () => ({
+          ok: true,
+          issues: 0,
+          projectName: 'convergence',
+        }),
+        resolveProject: async () => ({ kind: 'not-found' as const }),
+        listLabeledIssues: async () => [trackerIssue({ id: 'issue-1' })],
+        readIssueBodies,
+      }),
+      broadcast: () => {},
+      now: () => clock,
+      log: vi.fn(),
+    })
+
+    await service.tick()
+    // Mutation: catch the refusal and diff the page anyway -> a row lands
+    // with `summary: null` for an issue whose body was never read, and the
+    // next tick believes it. Red here twice.
+    expect(ledger.list(crewId)).toEqual([])
+    expect(service.snapshot(crewId).trackerHealth?.state).toBe('rate-limited')
+  })
+
+  it('a quiet project asks for no bodies at all', async () => {
+    const { service, readIssueBodies } = watcherReading([[]])
+    await service.tick()
+    // Mutation: call `readIssueBodies([])` unconditionally -> a request per
+    // tick for a project with nothing in it, red.
+    expect(readIssueBodies).not.toHaveBeenCalled()
+  })
+})
+
+describe('MAR-3190 lap 2, B: an updatedAt-only move is read once, not forever', () => {
+  let db: Database.Database
+  let crewId: string
+  let ledger: WorkLedgerService
+  let clock: Date
+
+  beforeEach(() => {
+    clock = new Date('2026-09-17T08:00:00.000Z')
+    db = getDatabase()
+    const crews = new CrewService(db)
+    crewId = crews.create({ name: 'Loom' }).id
+    crews.setTrackerBinding(crewId, { projectId: 'project-1' })
+    ledger = new WorkLedgerService(db)
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+  })
+
+  it('four ticks: bodies read on 1 and 3, never again', async () => {
+    const still = trackerIssue({ id: 'issue-1', identifier: 'EX-1' })
+    // A comment, or a typo fixed in the body: `updatedAt` moves and NOTHING
+    // `sameObservation` compares does, so no row is written and the ledger's
+    // `updatedAt` stays where it was.
+    const moved = { ...still, updatedAt: '2026-09-18T09:00:00.000Z' }
+    const pages = [[still], [still], [moved], [moved]]
+    const readIssueBodies = vi.fn(
+      async (ids: readonly string[]) =>
+        new Map<string, string | null>(ids.map((id) => [id, 'The same body'])),
+    )
+    const service = new TrackerWatcherService({
+      crews: new CrewService(db),
+      ledger,
+      resolveKey: async () => 'lin_api_fixture',
+      createAdapter: () => ({
+        probe: async () => ({
+          ok: true,
+          issues: 0,
+          projectName: 'convergence',
+        }),
+        resolveProject: async () => ({ kind: 'not-found' as const }),
+        listLabeledIssues: async () => pages.shift() ?? [],
+        readIssueBodies,
+      }),
+      broadcast: () => {},
+      now: () => clock,
+      log: vi.fn(),
+    })
+
+    await service.tick()
+    expect(readIssueBodies).toHaveBeenCalledTimes(1)
+    await service.tick()
+    expect(readIssueBodies).toHaveBeenCalledTimes(1)
+
+    // The move: one read, and the body says exactly what it said before, so
+    // the diff writes nothing and the row keeps its old `updatedAt`.
+    await service.tick()
+    expect(readIssueBodies).toHaveBeenCalledTimes(2)
+    expect(ledger.currentView(crewId)[0]?.fact.updatedAt).toBe(
+      '2026-09-17T08:00:00.000Z',
+    )
+
+    // The tick that lap 1 never reached. Mutation: drop the in-memory
+    // last-read map -> 3 here, and this issue's body is fetched every minute
+    // for as long as the app runs.
+    await service.tick()
+    expect(readIssueBodies).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('MAR-3190 lap 2, C: a short bodies reply refuses the tick', () => {
+  let db: Database.Database
+  let crewId: string
+  let ledger: WorkLedgerService
+  const clock = new Date('2026-09-17T08:00:00.000Z')
+
+  beforeEach(() => {
+    db = getDatabase()
+    const crews = new CrewService(db)
+    crewId = crews.create({ name: 'Loom' }).id
+    crews.setTrackerBinding(crewId, { projectId: 'project-1' })
+    ledger = new WorkLedgerService(db)
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+  })
+
+  it('through the real adapter: two answered of three asked appends nothing', async () => {
+    const node = (id: string, identifier: string) =>
+      linearIssueNode({
+        id,
+        identifier,
+        state: 'In Progress',
+        labels: [linearLabel('opus', 'horse')],
+      })
+    const service = new TrackerWatcherService({
+      crews: new CrewService(db),
+      ledger,
+      resolveKey: async () => 'lin_api_fixture',
+      createAdapter: ({ apiKey, binding }) =>
+        createLinearTrackerAdapter({
+          apiKey,
+          binding,
+          now: () => clock,
+          fetch: async (_url, init) => {
+            const sent = JSON.parse(init.body) as { query: string }
+            return sent.query.includes('ConvergenceTrackerIssueBodies')
+              ? // Three asked, two answered.
+                recordedReply(
+                  200,
+                  linearIssueBodiesBody([
+                    { id: 'issue-1', description: 'One' },
+                    { id: 'issue-2', description: 'Two' },
+                  ]),
+                )
+              : recordedReply(
+                  200,
+                  linearIssuesBody([
+                    node('issue-1', 'EX-1'),
+                    node('issue-2', 'EX-2'),
+                    node('issue-3', 'EX-3'),
+                  ]),
+                )
+          },
+        }),
+      broadcast: () => {},
+      now: () => clock,
+      log: vi.fn(),
+    })
+
+    await service.tick()
+
+    // Mutation: accept the short reply -> three rows land, EX-3's carrying a
+    // summary of null for a body nobody ever read, and the next tick believes
+    // it because `updatedAt` never moved. Red here twice.
+    expect(ledger.currentView(crewId)).toEqual([])
+    expect(service.trackerHealth(crewId)).toMatchObject({
+      state: 'bad-response',
+    })
   })
 })

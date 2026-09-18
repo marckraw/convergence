@@ -113,18 +113,51 @@ export interface WorkLedgerJoinedRow extends WorkLedgerRow {
   attention: string | null
 }
 
+/**
+ * What a fact reads as when the stored JSON does not say (MAR-3190 lap 2, G).
+ *
+ * ONE object for both paths below, because the two used to disagree: a
+ * malformed `fact_json` fell back to three keys and no `labels`, so the
+ * unreadable case handed its readers a shape the readable case never
+ * produced. `summary` is absent from BOTH on purpose -- its key's presence is
+ * how the watcher knows a body has been read for this row (R4).
+ */
+const FACT_DEFAULTS: WorkLedgerFact = {
+  logicalStatus: null,
+  branchName: null,
+  updatedAt: null,
+  ledgerLapBefore: null,
+  lapDisagreed: false,
+  groomMe: false,
+  groomed: false,
+  grounded: false,
+  dispatch: false,
+  priority: null,
+  labels: [],
+}
+
 function readFact(raw: string): WorkLedgerFact {
   try {
     const value = JSON.parse(raw) as Partial<WorkLedgerFact> | null
     return {
-      logicalStatus: value?.logicalStatus ?? null,
-      branchName: value?.branchName ?? null,
-      updatedAt: value?.updatedAt ?? null,
-      ledgerLapBefore: value?.ledgerLapBefore ?? null,
-      lapDisagreed: value?.lapDisagreed ?? false,
+      ...FACT_DEFAULTS,
+      logicalStatus: value?.logicalStatus ?? FACT_DEFAULTS.logicalStatus,
+      branchName: value?.branchName ?? FACT_DEFAULTS.branchName,
+      updatedAt: value?.updatedAt ?? FACT_DEFAULTS.updatedAt,
+      ledgerLapBefore: value?.ledgerLapBefore ?? FACT_DEFAULTS.ledgerLapBefore,
+      lapDisagreed: value?.lapDisagreed ?? FACT_DEFAULTS.lapDisagreed,
+      groomMe: value?.groomMe ?? FACT_DEFAULTS.groomMe,
+      groomed: value?.groomed ?? FACT_DEFAULTS.groomed,
+      grounded: value?.grounded ?? FACT_DEFAULTS.grounded,
+      dispatch: value?.dispatch ?? FACT_DEFAULTS.dispatch,
+      priority: value?.priority ?? FACT_DEFAULTS.priority,
+      labels: value?.labels ?? FACT_DEFAULTS.labels,
+      ...(value && 'summary' in value
+        ? { summary: value.summary ?? null }
+        : {}),
     }
   } catch {
-    return { logicalStatus: null, branchName: null, updatedAt: null }
+    return { ...FACT_DEFAULTS }
   }
 }
 

@@ -7,8 +7,8 @@
  * outside `linear-tracker.*` may know a Linear field name.
  *
  * READ-ONLY by construction. The app records what the tracker says and never
- * writes back, so the port has exactly the two read methods below; a source
- * test pins that set.
+ * writes back, so the port has only the read methods below; a source test
+ * pins that set exactly.
  */
 
 export type {
@@ -56,6 +56,12 @@ export class TrackerRefusalError extends Error {
 export interface TrackerAdapter {
   probe(): Promise<TrackerProbe>
   listLabeledIssues(input: ListLabeledIssuesInput): Promise<TrackerIssue[]>
+  /**
+   * The bodies of named issues (MAR-3190 R4): id -> description, or null for
+   * an issue with none. A READ, asked only for issues that changed -- the
+   * page query deliberately does not carry descriptions.
+   */
+  readIssueBodies(ids: readonly string[]): Promise<Map<string, string | null>>
   /**
    * Finds the project a person named by URL, name or id (MAR-3156). A READ:
    * it asks which project answers to a reference and returns what it found,
