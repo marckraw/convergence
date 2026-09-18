@@ -83,6 +83,10 @@ export function migrateWorkLedgerVerdict(db: Database.Database): void {
     ).run()
     // Every column named, in the order the new table declares them: an
     // `INSERT ... SELECT *` is how a rebuild loses a column's contents.
+    // This list is v2's, frozen: any LATER rebuild must name every column
+    // added after this one -- `blocked` (v3) first -- or copy silently
+    // without it. The migration test's `PRAGMA table_info(work_ledger)`
+    // assertion after v1 -> v2 -> v3 is the canary for exactly that.
     db.prepare(
       `INSERT INTO work_ledger_rebuilt (
         id, crew_id, issue_id, issue_identifier, issue_title, issue_url,
@@ -112,6 +116,12 @@ export function migrateWorkLedgerVerdict(db: Database.Database): void {
  * runs after v2 on every database -- a fresh one and one that already carries
  * v1 + v2 end with the same columns -- behind its own sentinel, because
  * `ADD COLUMN` throws on a second run.
+ *
+ * A later rebuild (a v4 that has to widen a CHECK again) must name `blocked`
+ * in its `INSERT ... SELECT` list, first among the columns added after v2 --
+ * a list copied from v2's block would drop it without a word. The migration
+ * test asserts `PRAGMA table_info(work_ledger)` after v1 -> v2 -> v3 as the
+ * canary for that.
  *
  * `NOT NULL DEFAULT 0` rather than a nullable column: every row the app wrote
  * before this build was written by a tracker read that could not see the

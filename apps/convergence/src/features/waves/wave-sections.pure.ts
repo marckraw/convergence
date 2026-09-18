@@ -56,20 +56,38 @@ export interface WaveSections {
   waves: WaveGroup[]
 }
 
-/** What a blocked row asks for, whatever state it is in (MAR-3138 R4). */
+/** What a blocked row asks for, in any LIVE state (MAR-3138 R4). */
 export const BLOCKED_ACTION = 'decide'
+
+/**
+ * A row the loop has let go of (MAR-3138 lap 2, A): `done` and `unassigned`.
+ *
+ * Terminal is not "finished well", it is "the ledger will never hear about
+ * this issue again": `diffTrackerSnapshot` writes no further row for an
+ * `unassigned` one, and the seat-group query no longer returns it. So an ask
+ * put on a terminal row can never be answered -- removing the `blocked`
+ * label in Linear would not even reach the ledger. A terminal row therefore
+ * asks for nothing and sits in *Waves* alone, whatever facts it carries.
+ */
+export function isTerminalWaveRow(
+  entry: Pick<WorkLedgerEntry, 'state'>,
+): boolean {
+  return entry.state === 'done' || entry.state === 'unassigned'
+}
 
 /**
  * The human action on a row (R2), from its state: a reviewed issue waits on
  * Marcin's QA, a returned one on Fable's verdict, and a working one whose
  * seat has no conversation in the crew cannot be reached.
  *
- * `blocked` is asked FIRST (MAR-3138 R4): it is the tracker saying the work
- * cannot move until somebody decides, which outranks whatever the state would
- * otherwise ask for -- and it is the same question in every state, which is
- * why the answer is one word and not six.
+ * A terminal row is asked about FIRST (lap 2, A): nothing can be done about
+ * it, so it asks for nothing. After that `blocked` outranks the state
+ * (MAR-3138 R4) -- the tracker is saying the work cannot move until somebody
+ * decides, and that is the same question in every live state, which is why
+ * the answer is one word and not six.
  */
 export function waveRowAction(entry: WorkLedgerEntry): string | null {
+  if (isTerminalWaveRow(entry)) return null
   if (entry.blocked) return BLOCKED_ACTION
   if (entry.state === 'reviewed') return 'QA and say done'
   if (entry.state === 'returned') return 'verdict (Fable)'
@@ -104,12 +122,13 @@ export function waveLapLabel(lap: number, cap: number | null): string {
 /**
  * The rows into the four sections (R1): a pure function of the rows.
  *
- * *Waiting on you* is `reviewed` and every `blocked` row (MAR-3138 R4: a
- * decision is a decision in any state, and the row lands there ONCE rather
- * than in both sections); *In the wave* is `working`, `returned` and
- * `stopped` (MAR-3085: a parked lap is still work somebody picks up);
- * *Waiting to start* is `assigned`; *Waves* groups every row by its wave,
- * unwaved rows last. `done` and `unassigned` appear in *Waves* only.
+ * *Waiting on you* is `reviewed` and every `blocked` row in a LIVE state
+ * (MAR-3138 R4: a decision is a decision in any live state, and the row lands
+ * there ONCE rather than in both sections); *In the wave* is `working`,
+ * `returned` and `stopped` (MAR-3085: a parked lap is still work somebody
+ * picks up); *Waiting to start* is `assigned`; *Waves* groups every row by
+ * its wave, unwaved rows last. `done` and `unassigned` appear in *Waves*
+ * only -- including the blocked ones (lap 2, A).
  */
 export function sectionWaveRows(
   rows: readonly WorkLedgerEntry[],
@@ -133,9 +152,14 @@ export function sectionWaveRows(
       crewName: crew.name,
       lapLabel: waveLapLabel(entry.lap, crew.cap),
     }
-    // Blocked outranks the state (MAR-3138 R4), and the chain is what keeps
-    // the row out of a second section.
-    if (entry.blocked || entry.state === 'reviewed') {
+    // Blocked outranks the state (MAR-3138 R4) but not the end of the line
+    // (lap 2, A): a terminal row falls through to its wave group and asks for
+    // nothing. The chain is what keeps every other row out of a second
+    // section.
+    if (
+      !isTerminalWaveRow(entry) &&
+      (entry.blocked || entry.state === 'reviewed')
+    ) {
       sections.waitingOnYou.push(row)
     } else if (
       entry.state === 'working' ||

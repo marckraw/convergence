@@ -202,6 +202,9 @@ it('MAR-3138 R3: v3 adds `blocked` once, and a fresh DB ends where a v1+v2 one d
     migrateWorkLedgerBlocked(older)
 
     expect(ledgerColumns(older)).toEqual(ledgerColumns(fresh))
+    // The canary for a later rebuild (lap 2, C): a v4 whose
+    // `INSERT ... SELECT` list is copied from v2's block would drop `blocked`
+    // on the way through, and this assertion is what would say so.
     expect(ledgerColumns(older)).toContain('blocked')
     // The row that predates the column reads as not blocked, and the column
     // refuses a null: "the tracker did not say blocked" is `false`, not

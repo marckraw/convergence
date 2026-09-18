@@ -20,8 +20,8 @@ interface WaveRowViewProps {
 /**
  * One issue on the panel (R2): identifier, title, crew (when several are
  * bound), seat, state, PR, the human action, the `blocked` label and a host
- * outage marker -- the ledger's facts, nothing invented. A row with a reachable conversation is a
- * button; one without says why it is inert.
+ * outage marker -- the ledger's facts, nothing invented. A row with a
+ * reachable conversation is a button; one without says why it is inert.
  */
 export const WaveRowView: FC<WaveRowViewProps> = ({
   row,

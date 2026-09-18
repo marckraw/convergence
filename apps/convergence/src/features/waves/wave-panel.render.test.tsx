@@ -566,6 +566,24 @@ describe('MAR-3138 R4: a blocked row reads "decide" under Waiting on you', () =>
     expect(rowOf('crew-1:EX-2').queryByText('blocked')).toBeNull()
   })
 
+  it('lap 2, A: a blocked unassigned row asks for nothing -- it is only in Waves', () => {
+    renderView([
+      ledgerEntry({
+        issueIdentifier: 'EX-1',
+        state: 'unassigned',
+        seat: null,
+        blocked: true,
+      }),
+    ])
+
+    // Mutation: drop either terminal guard -> "decide" is on screen, red.
+    expect(screen.queryByText('decide')).toBeNull()
+    // The section is not even drawn: there is nothing waiting on anybody.
+    expect(screen.queryByRole('region', { name: 'Waiting on you' })).toBeNull()
+    // The row is still readable under its wave, label and all.
+    expect(rowOf('crew-1:EX-1').getByText('blocked')).toBeTruthy()
+  })
+
   it('a blocked reviewed row asks to decide, not to QA, and the rail counts it once', () => {
     renderView([
       ledgerEntry({
