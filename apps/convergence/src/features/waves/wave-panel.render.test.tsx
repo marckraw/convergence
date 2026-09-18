@@ -1083,6 +1083,32 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(document.body.textContent).not.toContain('of 12')
   })
 
+  it('MAR-3189 lap 2, B: the mode is written down, and a remount reads it back', async () => {
+    // The only write-through-a-control-then-remount pin the mode had died
+    // with the stored `rail`; without this one, dropping `saveWavePanelMode`
+    // left every test green. Mutation: drop the save -> red twice below.
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await act(async () => {
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Expand Loom' }),
+      )
+    })
+    expect(localStorage.getItem('convergence-wave-panel-mode')).toBe('expanded')
+    cleanup()
+
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Fold Loom' }))
+    })
+    expect(localStorage.getItem('convergence-wave-panel-mode')).toBe('compact')
+    cleanup()
+
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    expect(await screen.findByLabelText('Loom')).toBeTruthy()
+    expect(document.querySelector('[data-loom="expanded"]')).toBeNull()
+  })
+
   it('MAR-3189 R1: four titles, one sheet’s rows, and the others a click away', async () => {
     await mount(<WavePanel reservedWidth={RESERVED} />)
     await screen.findByLabelText('Loom')
@@ -1165,18 +1191,29 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(document.activeElement).toBe(folded)
   })
 
-  it('MAR-3189 R7: Esc folds the expanded stack', async () => {
+  it('MAR-3189 R7 + lap 2, C: Esc folds from wherever focus actually is', async () => {
     await mount(<WavePanel reservedWidth={RESERVED} />)
     await screen.findByLabelText('Loom')
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
     })
-    const stack = document.querySelector(
-      '[data-loom="expanded"]',
+
+    // The Expand button left the document with the compact stack, so without
+    // the rising-edge focus the keyboard is on `<body>` and a real Escape
+    // never reaches the stack's handler -- which the old test could not see,
+    // because it dispatched the key AT the element.
+    // Mutation: focus only on the falling edge -> activeElement is the body
+    // here, and the keypress below folds nothing, red.
+    const openTitle = document.querySelector(
+      '[data-loom="expanded"] [data-loom-sheet-title][aria-expanded="true"]',
     ) as HTMLElement
+    expect(document.activeElement).toBe(openTitle)
+
     // Mutation: drop the Escape branch -> the stack stays, red.
     await act(async () => {
-      fireEvent.keyDown(stack, { key: 'Escape' })
+      fireEvent.keyDown(document.activeElement as HTMLElement, {
+        key: 'Escape',
+      })
     })
     expect(document.querySelector('[data-loom="expanded"]')).toBeNull()
     expect(await screen.findByLabelText('Loom')).toBeTruthy()

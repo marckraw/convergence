@@ -46,9 +46,17 @@ export const WAVE_OUTAGE_DOT_CLASS = 'size-1.5 rounded-full bg-amber-400'
 export const LOOM_COMPACT_CLASS =
   'flex h-full shrink-0 flex-col border-r border-white/10 bg-background/40'
 
-/** Loom, expanded: the whole content area, the sheets side by side. */
+/**
+ * Loom, expanded: the whole content area, the sheets side by side.
+ *
+ * A COVER (MAR-3189 lap 2, D): absolutely placed over `app-main-panel` and
+ * opaque, so the conversation underneath keeps its box and its measurements
+ * while it is out of sight. Nothing here may become `hidden` or
+ * `display: none` -- a virtualized transcript with no box measures every row
+ * at zero and comes back scrolled somewhere nobody left it.
+ */
 export const LOOM_EXPANDED_CLASS =
-  'flex h-full w-full flex-row bg-background/20'
+  'absolute inset-0 z-20 flex h-full w-full flex-row bg-background'
 
 /**
  * A sheet's title: a button in both shapes, because it does the same thing in

@@ -233,8 +233,55 @@ describe('MAR-3148 R4: the wave column’s wiring in the shell', () => {
     await renderShell({ missionControlActive: true })
 
     // Mutation: drop `hidden={isWaveColumnHidden(...)}` at the mount ->
-    // the column and the tab both render, two landmarks, red.
+    // Loom and the tab both render, two boards, red.
+    //
+    // This assertion is on LOOM, not on `aria-label="Waves"` (lap 2, A): the
+    // column was renamed and the old selector could no longer see the thing
+    // the mutation brings back -- the guarantee had quietly stopped being
+    // guarded. The tab keeps its own name, which is why both queries are
+    // here.
+    expect(loomLandmarks()).toHaveLength(0)
+    expect(screen.queryByLabelText('Loom strip')).toBeNull()
     expect(waveLandmarks()).toHaveLength(1)
     expect(waveLandmarks()[0]?.getAttribute('data-wave-panel')).toBe('full')
+  })
+
+  it('MAR-3189 lap 2, D: expanded COVERS the content area, it does not remove its box', async () => {
+    stubBridge([crew()])
+
+    await renderShell()
+
+    const content = () =>
+      document.querySelector('[data-app-content]') as HTMLElement | null
+    expect(content()?.hasAttribute('inert')).toBe(false)
+
+    await act(async () => {
+      screen.getByRole('button', { name: 'Expand Loom' }).click()
+    })
+
+    const stack = document.querySelector(
+      '[data-loom="expanded"]',
+    ) as HTMLElement
+    // The cover: inside the main panel, absolutely placed over it, opaque.
+    // Mutation: drop `absolute inset-0` from LOOM_EXPANDED_CLASS -> red.
+    expect(mainPanel()?.contains(stack)).toBe(true)
+    expect(stack.className).toContain('absolute')
+    expect(stack.className).toContain('inset-0')
+    // The content keeps its box -- it is covered, not removed. Mutation: put
+    // `hidden` (or `display: none`) back on the wrapper -> red, and a
+    // virtualized transcript underneath measures every row at zero.
+    expect(content()).toBeTruthy()
+    expect(content()?.hasAttribute('hidden')).toBe(false)
+    expect(content()?.className).toBe('contents')
+    // ...and is out of reach while it is behind the cover.
+    // Mutation: drop `inert` -> red.
+    expect(content()?.hasAttribute('inert')).toBe(true)
+    expect(content()?.getAttribute('aria-hidden')).toBe('true')
+
+    await act(async () => {
+      screen.getByRole('button', { name: 'Fold Loom' }).click()
+    })
+    expect(content()?.hasAttribute('inert')).toBe(false)
+    expect(content()?.getAttribute('aria-hidden')).toBeNull()
   })
 })

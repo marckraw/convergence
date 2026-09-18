@@ -331,17 +331,30 @@ export const AppShell: FC<AppShellProps> = ({
 
         <div
           ref={setMainPanelElement}
-          className="app-main-panel flex min-w-0 flex-1 flex-col"
+          className="app-main-panel relative flex min-w-0 flex-1 flex-col"
         >
-          {/* `contents` and not a flex box of its own (MAR-3189 R5): this
-              wrapper exists ONLY so expanding Loom can hide the whole content
-              area in one place, and `display: contents` keeps every surface
-              inside it a direct flex child of the main panel, laid out
-              exactly as before. Hidden, not unmounted -- folding has to give
-              back the conversation a person left, scroll, drafts and all,
-              and an unmount gives back a fresh one that merely looks the
-              same. */}
-          <div className={loomExpanded ? 'hidden' : 'contents'}>
+          {/* `contents` always (MAR-3189 R5, lap 2 D): this wrapper exists
+              ONLY to mark the content area inert in one place, and
+              `display: contents` keeps every surface inside it a direct flex
+              child of the main panel, laid out exactly as before.
+
+              Expanded Loom COVERS this, it does not remove its box. Neither
+              unmounted nor `display: none`: the transcript is a virtualizer
+              measured by a ResizeObserver, and a surface with no box measures
+              every row at zero -- folding would give back a conversation
+              scrolled somewhere a person never left it. Covered, the layout
+              underneath never changes, so there is nothing to restore.
+
+              `inert` takes the whole subtree out of the tab order, off the
+              pointer and away from a screen reader while it is behind the
+              cover -- what `hidden` did for free, and the only part of it
+              worth keeping. */}
+          <div
+            data-app-content
+            className="contents"
+            inert={loomExpanded}
+            aria-hidden={loomExpanded || undefined}
+          >
             {routeFallback ? (
               <RouteFallbackView
                 fallback={routeFallback}

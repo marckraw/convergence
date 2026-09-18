@@ -209,16 +209,19 @@ export const WavePanel: FC<WavePanelProps> = ({
   }, [expanded, onExpandedChange])
 
   /**
-   * After a fold, focus lands back on the open sheet's title (R7).
+   * Focus follows the shape, in BOTH directions (R7; lap 2, C).
    *
-   * The button that was pressed -- `Fold Loom`, or the Esc key on the stack --
-   * leaves the document with the stack, so without this the focus ring falls
-   * to `<body>` and the keyboard has lost its place.
+   * Whichever control was pressed -- `Expand`, `Fold Loom`, or Esc on the
+   * stack -- leaves the document with the shape it belonged to, so without
+   * this the focus ring falls to `<body>` and the keyboard has lost its
+   * place. On a fold that only costs a tab stop; on an EXPAND it costs the
+   * Esc key itself, because the stack's handler never sees a keypress that
+   * was never aimed at it.
    */
   const titleElement = useRef<HTMLButtonElement | null>(null)
   const wasExpanded = useRef(expanded)
   useEffect(() => {
-    if (wasExpanded.current && !expanded) titleElement.current?.focus()
+    if (wasExpanded.current !== expanded) titleElement.current?.focus()
     wasExpanded.current = expanded
   }, [expanded])
   const titleRef = useCallback((element: HTMLButtonElement | null) => {

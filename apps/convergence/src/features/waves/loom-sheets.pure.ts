@@ -1,5 +1,6 @@
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
 import {
+  BLOCKED_ACTION,
   waveLapLabel,
   waveRowAction,
   waveRowHostMarker,
@@ -74,8 +75,17 @@ export function loomSheets(
     }
 
     if (entry.state === 'done') sheets.before.push(row)
-    else if (entry.blocked) sheets.now.decide.push(row)
-    else if (entry.state === 'working') sheets.now.inFlight.push(row)
+    else if (entry.blocked) {
+      // Decide always says what to do (lap 2, E). `waveRowAction` calls an
+      // `unassigned` row terminal and gives it no verb -- right for the old
+      // sections, where such a row sat in *Waves* asking nothing, and wrong
+      // here, where the sheet's whole promise is that somebody owes it a
+      // decision. The verb is put back at the point that made the claim,
+      // rather than by widening a function four other readers share.
+      sheets.now.decide.push(
+        row.action === null ? { ...row, action: BLOCKED_ACTION } : row,
+      )
+    } else if (entry.state === 'working') sheets.now.inFlight.push(row)
     else if (entry.state === 'reviewed') sheets.now.awaitingQa.push(row)
     else if (entry.state === 'returned') sheets.now.fablesTurn.push(row)
     else if (entry.state === 'assigned') {
@@ -94,8 +104,14 @@ export function loomSheets(
 /** The numbers the four titles carry (MAR-3189). */
 export interface LoomSheetCounts {
   before: number
-  /** Now, minus what is waiting on Marcin: no row of Now goes unnamed. */
-  inFlight: number
+  /**
+   * Now, minus what is waiting on Marcin: no row of Now goes unnamed.
+   *
+   * `open`, not `inFlight` (lap 2, F): it counts the rows waiting on a
+   * verdict and on a decision too, and neither of those is in flight. A
+   * number is only as honest as the word beside it.
+   */
+  open: number
   awaitingQa: number
   next: number
   plan: number
@@ -104,16 +120,16 @@ export interface LoomSheetCounts {
 /**
  * The counts, read off the same sheets the stack draws.
  *
- * `inFlight` here is wider than `now.inFlight`: the title says two numbers
- * and the sheet holds four groups, so the two have to cover all four or the
- * title would hide rows. The split is the one a person acts on -- what is
- * mine to look at (`awaitingQa`) against everything else that is moving,
- * waiting on a verdict or waiting on a decision.
+ * `open` is wider than `now.inFlight`: the title says two numbers and the
+ * sheet holds four groups, so the two have to cover all four or the title
+ * would hide rows. The split is the one a person acts on -- what is mine to
+ * look at (`awaitingQa`) against everything else still open, whether it is
+ * moving, waiting on a verdict or waiting on a decision.
  */
 export function loomSheetCounts(sheets: LoomSheets): LoomSheetCounts {
   return {
     before: sheets.before.length,
-    inFlight:
+    open:
       sheets.now.inFlight.length +
       sheets.now.fablesTurn.length +
       sheets.now.decide.length,
@@ -148,7 +164,7 @@ export function loomSheetTitle(
   const name = LOOM_SHEET_NAMES[sheet]
   if (sheet === 'before') return `${name} · ${counts.before} done`
   if (sheet === 'now') {
-    return `${name} · ${counts.inFlight} in flight · ${counts.awaitingQa} awaiting QA`
+    return `${name} · ${counts.open} open · ${counts.awaitingQa} awaiting QA`
   }
   if (sheet === 'next') return `${name} · ${counts.next} queued`
   return `${name} · ${counts.plan} in preparation`

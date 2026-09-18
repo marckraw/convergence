@@ -23,7 +23,10 @@ import {
   type WaveRow,
 } from './wave-sections.pure'
 import { ledgerEntry } from './wave-rows.fixture'
-import { WAVE_PANEL_COLUMN_CLASS } from './wave-panel.styles'
+import {
+  LOOM_EXPANDED_CLASS,
+  WAVE_PANEL_COLUMN_CLASS,
+} from './wave-panel.styles'
 
 const NOW = Date.parse('2026-09-17T12:10:00.000Z')
 const ids = (rows: WaveRow[]) => rows.map((row) => row.entry.issueIdentifier)
@@ -454,6 +457,18 @@ describe('MAR-3097 lap 2, B: the column keeps the main panel at its floor', () =
         maxWidth: max,
       }),
     ).toBe(expected)
+  })
+
+  it('MAR-3189 lap 2, D: the expanded stack is an opaque cover, never a hole', () => {
+    // The class IS the mechanism here: absolutely placed over the content
+    // area and opaque, so what it hides keeps its box. Mutation: drop
+    // `absolute inset-0` (or make the background translucent) -> red, and the
+    // conversation underneath is either visible through Loom or gone from
+    // the layout entirely.
+    expect(LOOM_EXPANDED_CLASS).toContain('absolute')
+    expect(LOOM_EXPANDED_CLASS).toContain('inset-0')
+    expect(LOOM_EXPANDED_CLASS).toContain('bg-background')
+    expect(LOOM_EXPANDED_CLASS).not.toMatch(/bg-background\//)
   })
 
   it('MAR-3155 R6: the column class carries no width of its own', () => {

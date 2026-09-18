@@ -108,6 +108,29 @@ describe('MAR-3189 R2: every row lands in exactly one sheet, by the ledger state
     expect([...seen].sort()).toEqual([...CASES.map((c) => c.id)].sort())
   })
 
+  it('lap 2, E: a row in Decide always says what to do', () => {
+    const sheets = loomSheets(
+      [
+        ledgerEntry({
+          issueIdentifier: 'EX-1',
+          state: 'unassigned',
+          seat: null,
+          blocked: true,
+        }),
+      ],
+      NOW,
+    )
+    // `waveRowAction` calls an `unassigned` row terminal and gives it no
+    // verb. In the old sections that row sat in *Waves* asking nothing; in
+    // Decide it would be a row under a heading that promises somebody owes it
+    // a decision, saying nothing at all. Mutation: leave the action null ->
+    // red. `waveRowAction` itself is untouched (R6).
+    expect(sheets.now.decide.map((row) => row.entry.issueIdentifier)).toEqual([
+      'EX-1',
+    ])
+    expect(sheets.now.decide[0]?.action).toBe('decide')
+  })
+
   it('a blocked row that is done is history, not a decision', () => {
     const sheets = loomSheets(
       [ledgerEntry({ issueIdentifier: 'EX-1', state: 'done', blocked: true })],
@@ -181,21 +204,17 @@ describe('MAR-3189: the titles say what their numbers mean', () => {
   const counts = loomSheetCounts(sheets)
 
   it('Now’s two numbers cover all four of its groups', () => {
-    // A title that counted only `now.inFlight` would read "1 in flight" while
-    // the sheet held four rows -- a number above the rows that lies about
-    // them. Mutation: `inFlight: sheets.now.inFlight.length` -> red.
-    expect(counts.inFlight).toBe(3)
+    // A title that counted only `now.inFlight` would read "1 open" while the
+    // sheet held four rows -- a number above the rows that lies about them.
+    // Mutation: `open: sheets.now.inFlight.length` -> red.
+    expect(counts.open).toBe(3)
     expect(counts.awaitingQa).toBe(1)
-    expect(counts.inFlight + counts.awaitingQa).toBe(
-      loomSheetSize(sheets, 'now'),
-    )
+    expect(counts.open + counts.awaitingQa).toBe(loomSheetSize(sheets, 'now'))
   })
 
   it('each title names its own unit', () => {
     expect(loomSheetTitle('before', counts)).toBe('Before · 2 done')
-    expect(loomSheetTitle('now', counts)).toBe(
-      'Now · 3 in flight · 1 awaiting QA',
-    )
+    expect(loomSheetTitle('now', counts)).toBe('Now · 3 open · 1 awaiting QA')
     expect(loomSheetTitle('next', counts)).toBe('Next · 1 queued')
     expect(loomSheetTitle('plan', counts)).toBe('Plan · 0 in preparation')
     // Mutation: one title for all four sheets -> red; the words are the
@@ -203,6 +222,30 @@ describe('MAR-3189: the titles say what their numbers mean', () => {
     expect(
       new Set(LOOM_SHEETS.map((s) => loomSheetTitle(s, counts))).size,
     ).toBe(4)
+  })
+
+  it('lap 2, F: the Now title names what it counts', () => {
+    // My own brief said "in flight", and it counted a returned row waiting on
+    // a verdict and a blocked one waiting on a decision -- neither is in
+    // flight. Mutation: count only `now.inFlight` -> `Now · 1 open · 2
+    // awaiting QA` here, red.
+    const mixed = loomSheets(
+      [
+        ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' }),
+        ledgerEntry({ issueIdentifier: 'EX-2', state: 'returned' }),
+        ledgerEntry({
+          issueIdentifier: 'EX-3',
+          state: 'working',
+          blocked: true,
+        }),
+        ledgerEntry({ issueIdentifier: 'EX-4', state: 'reviewed' }),
+        ledgerEntry({ issueIdentifier: 'EX-5', state: 'reviewed' }),
+      ],
+      NOW,
+    )
+    expect(loomSheetTitle('now', loomSheetCounts(mixed))).toBe(
+      'Now · 3 open · 2 awaiting QA',
+    )
   })
 
   it('Plan says what it cannot say yet; an empty sheet says it is empty', () => {

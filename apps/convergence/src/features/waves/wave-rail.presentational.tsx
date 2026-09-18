@@ -19,7 +19,7 @@ interface LoomStripViewProps {
 function stripCount(sheets: LoomSheets, sheet: LoomSheet): number {
   const counts = loomSheetCounts(sheets)
   if (sheet === 'before') return counts.before
-  if (sheet === 'now') return counts.inFlight + counts.awaitingQa
+  if (sheet === 'now') return counts.open + counts.awaitingQa
   if (sheet === 'next') return counts.next
   return counts.plan
 }
