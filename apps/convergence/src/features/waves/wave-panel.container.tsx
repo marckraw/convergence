@@ -86,8 +86,8 @@ export const WavePanel: FC<WavePanelProps> = ({
    *
    * What arrives here is what the person MEANT: a drag or a step that moved
    * the column brings the width they ended on; one the window refused, and
-   * any gesture over a column that is not on screen, brings nothing; a reset
-   * brings the default. The clamp is the storage's own [MIN, MAX], never the
+   * a drag or a step over a column that is no longer on screen, brings
+   * nothing; a reset brings the default. The clamp is the storage's own [MIN, MAX], never the
    * window's, and the round is done once here -- so **the state and the store
    * hold one number**, which is the preference, while the number on screen is
    * the decision's and may be smaller. In the case this whole issue is about

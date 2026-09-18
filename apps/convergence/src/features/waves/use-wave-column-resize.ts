@@ -27,8 +27,9 @@ import {
  *
  * A RESET is the one gesture whose meaning is not "what I see": it stores the
  * default, and the decision cuts that for display until the window grows.
- * And a gesture that ends with no column on screen stores nothing at all --
- * `column` is null then, from whatever reason took it away.
+ * And a drag or a step that ends with no column on screen stores nothing --
+ * `column` is null then, from whatever reason took it away. The reset needs
+ * no such line: its handle is not rendered when there is no column.
  */
 export interface WaveColumnResize {
   onHandleMouseDown: () => void
@@ -79,9 +80,10 @@ export function useWaveColumnResize(input: {
 
   const onHandleMouseDown = useCallback(() => {
     // Release any drag still installed before installing this one (lap 3, C).
-    // Refusing to start instead would be worse than a leak: a mouse-up the
-    // window never delivered -- released outside the frame -- would leave the
-    // old listeners in place and the handle dead for the rest of the session.
+    // Refusing to start instead would swallow the press: a drag whose mouse-up
+    // the window never delivered -- released outside the frame -- would stay
+    // installed, this press would be refused, and its mouse-up would finish
+    // the stale drag instead of starting the one the person meant.
     releaseDrag.current?.()
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'

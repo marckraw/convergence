@@ -832,6 +832,33 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(storedWidth()).toBeNull()
   })
 
+  it('MAR-3155 lap 3, B: a drag that ends after the last bound crew went away stores nothing', async () => {
+    // The third reason a column leaves the screen, and the one that needs no
+    // act of the person's: the crew list changes over IPC while the pointer
+    // is down. (Integration pin, Fable: the `hidden` case above reddens only
+    // its own limb of the on-screen fact.)
+    setWindowWidth(windowLeaving(900))
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    const handle = screen.getByRole('separator', {
+      name: 'Resize the wave column',
+    })
+
+    fireEvent.mouseDown(handle)
+    await act(async () => {
+      fireEvent.mouseMove(window, { clientX: RESERVED + 500 })
+    })
+    await act(async () => {
+      useSessionCrewStore.setState({ crews: [] })
+    })
+    expect(screen.queryByLabelText('Waves')).toBeNull()
+    await act(async () => {
+      fireEvent.mouseUp(window)
+    })
+    // Mutation: drop `board.boundCrewCount > 0` from the on-screen fact -> 500
+    // is stored for a column that no longer exists, red.
+    expect(storedWidth()).toBeNull()
+  })
+
   it('R5: clicking a row opens the seat’s conversation; rows that cannot, say why', async () => {
     const onOpenSession = vi.fn()
     const windowOpen = vi.spyOn(window, 'open').mockImplementation(() => null)
