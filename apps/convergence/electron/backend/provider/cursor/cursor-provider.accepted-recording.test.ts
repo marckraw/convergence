@@ -567,4 +567,190 @@ describe('Cursor accepted-recording boundary (MAR-3143)', () => {
     getDatabase().exec('DROP TRIGGER refuse_attention_none')
     errors.mockRestore()
   })
+
+  it('door: a refused passive notification note after endTurn is logged by the provider recorder (MAR-3152 R1)', async () => {
+    const { service, session, server, child } = await fixture({
+      holdPrompt: true,
+    })
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await service.start(session.id, { text: 'hi' })
+    await vi.waitUntil(() =>
+      server.requests.some((request) => request.method === 'session/prompt'),
+    )
+    server.resolveHeldPrompt({ stopReason: 'end_turn' })
+    await vi.waitUntil(
+      () => service.getById(session.id)?.status === 'completed',
+    )
+
+    getDatabase().exec(`CREATE TEMP TRIGGER refuse_task_note_notification
+      BEFORE INSERT ON session_conversation_items
+      WHEN NEW.kind = 'note'
+           AND NEW.provider_event_type = 'cursor/task'
+      BEGIN SELECT RAISE(ABORT, 'fixture task note refused'); END`)
+
+    // Notification — no id (the request-side door at :361 uses id: 88).
+    server.send({
+      jsonrpc: '2.0',
+      method: 'cursor/task',
+      params: {
+        toolCallId: 'call-task-notify-1',
+        description: 'Background task finished',
+        agentId: 'agent-1',
+        durationMs: 12,
+      },
+    })
+
+    await vi.waitUntil(() =>
+      errors.mock.calls.some((call) =>
+        String(call[0]).includes('Could not record the passive update note'),
+      ),
+    )
+    expect(
+      errors.mock.calls.some((call) =>
+        String(call[0]).includes('[cursor-acp] recording lost on notification'),
+      ),
+    ).toBe(false)
+    expect(child.kill).not.toHaveBeenCalled()
+
+    getDatabase().exec('DROP TRIGGER refuse_task_note_notification')
+
+    // Next prompt still answers on the resident process.
+    const promptsBefore = server.requests.filter(
+      (request) => request.method === 'session/prompt',
+    ).length
+    await service.sendMessage(session.id, { text: 'again' })
+    await vi.waitUntil(
+      () =>
+        server.requests.filter((request) => request.method === 'session/prompt')
+          .length > promptsBefore,
+    )
+    server.resolveHeldPrompt({ stopReason: 'end_turn' })
+    await vi.waitUntil(
+      () => service.getById(session.id)?.status === 'completed',
+    )
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+
+    errors.mockRestore()
+  })
+
+  it('door: a refused passive notification note mid-turn is announced once (MAR-3152 R2)', async () => {
+    const { service, session, server } = await fixture({ holdPrompt: true })
+    const failures: AcceptedRecordingFailureEvent[] = []
+    service.onAcceptedRecordingFailure((event) => failures.push(event))
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await service.start(session.id, { text: 'hi' })
+    await vi.waitUntil(() =>
+      server.requests.some((request) => request.method === 'session/prompt'),
+    )
+
+    getDatabase().exec(`CREATE TEMP TRIGGER refuse_task_note_mid_turn
+      BEFORE INSERT ON session_conversation_items
+      WHEN NEW.kind = 'note'
+           AND NEW.provider_event_type = 'cursor/task'
+      BEGIN SELECT RAISE(ABORT, 'fixture task note refused'); END`)
+
+    server.send({
+      jsonrpc: '2.0',
+      method: 'cursor/task',
+      params: {
+        toolCallId: 'call-task-mid-1',
+        description: 'Background task finished',
+        agentId: 'agent-1',
+        durationMs: 12,
+      },
+    })
+
+    await vi.waitUntil(() => failures.length >= 1)
+    expect(failures).toHaveLength(1)
+    expect(recordingFailedNotes(service, session.id)).toHaveLength(1)
+
+    getDatabase().exec('DROP TRIGGER refuse_task_note_mid_turn')
+    server.resolveHeldPrompt({ stopReason: 'end_turn' })
+    await vi.waitUntil(
+      () => service.getById(session.id)?.status === 'completed',
+    )
+    expect(failures).toHaveLength(1)
+    expect(recordingFailedNotes(service, session.id)).toHaveLength(1)
+
+    errors.mockRestore()
+  })
+
+  it('door: a refused flush on the notification path is logged and the note still lands (MAR-3152 R3)', async () => {
+    const { service, session, server } = await fixture({ holdPrompt: true })
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await service.start(session.id, { text: 'hi' })
+    await vi.waitUntil(() =>
+      server.requests.some((request) => request.method === 'session/prompt'),
+    )
+    server.resolveHeldPrompt({ stopReason: 'end_turn' })
+    await vi.waitUntil(
+      () => service.getById(session.id)?.status === 'completed',
+    )
+
+    // Late chunk after end_turn leaves a streaming assistant item to flush
+    // outside acceptance (the path where recordTurnWrite logs, not announces).
+    server.send({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'cursor-session-1',
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'will not flush on notify' },
+        },
+      },
+    })
+
+    await vi.waitUntil(() =>
+      service
+        .getConversation(session.id)
+        .some(
+          (item) =>
+            item.kind === 'message' &&
+            item.actor === 'assistant' &&
+            item.text.includes('will not flush on notify'),
+        ),
+    )
+
+    getDatabase().exec(`CREATE TEMP TRIGGER refuse_assistant_complete_notify
+      BEFORE UPDATE ON session_conversation_items
+      WHEN NEW.kind = 'message'
+           AND NEW.state = 'complete'
+           AND json_extract(NEW.payload_json, '$.actor') = 'assistant'
+      BEGIN SELECT RAISE(ABORT, 'fixture assistant flush refused'); END`)
+
+    server.send({
+      jsonrpc: '2.0',
+      method: 'cursor/task',
+      params: {
+        toolCallId: 'call-task-flush-1',
+        description: 'Background task finished',
+        agentId: 'agent-1',
+        durationMs: 12,
+      },
+    })
+
+    await vi.waitUntil(() =>
+      errors.mock.calls.some((call) =>
+        String(call[0]).includes(
+          'Could not record the flushed assistant buffer',
+        ),
+      ),
+    )
+    await vi.waitUntil(() =>
+      service
+        .getConversation(session.id)
+        .some(
+          (item) =>
+            item.kind === 'note' &&
+            item.providerMeta.providerEventType === 'cursor/task',
+        ),
+    )
+
+    getDatabase().exec('DROP TRIGGER refuse_assistant_complete_notify')
+    errors.mockRestore()
+  })
 })
