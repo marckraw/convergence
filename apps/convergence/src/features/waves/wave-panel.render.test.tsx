@@ -764,6 +764,31 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(document.body.style.cursor).toBe('')
   })
 
+  it('MAR-3161: a press after a lost mouse-up starts clean and stores nothing', async () => {
+    // Integration pin (Fable). A mouse-up the window never delivered leaves a
+    // drag installed with 500 as the pointer's last word. The next press
+    // never moves: it must NOT finish the stale drag.
+    setWindowWidth(windowLeaving(900))
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    const handle = screen.getByRole('separator', {
+      name: 'Resize the wave column',
+    })
+
+    fireEvent.mouseDown(handle)
+    await act(async () => {
+      fireEvent.mouseMove(window, { clientX: RESERVED + 500 })
+    })
+    // ...no mouse-up. The person presses again and lets go without moving.
+    fireEvent.mouseDown(handle)
+    await act(async () => {
+      fireEvent.mouseUp(window)
+    })
+    // Mutation: refuse the second press instead of releasing the first drag
+    // -> the stale closure answers the mouse-up and 500 is stored, red.
+    expect(storedWidth()).toBeNull()
+    expect(columnWidth()).toBe('280px')
+  })
+
   it('MAR-3155 lap 3, A: a drag the window refuses stores nothing', async () => {
     localStorage.setItem('convergence-wave-panel-width', '600')
     setWindowWidth(windowLeaving(400))
@@ -776,8 +801,9 @@ describe('MAR-3097: through the containers and the real stores', () => {
     // One pixel wider than the ceiling, then far wider: the pointer moves,
     // the column does not. The same loss as lap 2's ArrowRight, through the
     // other door.
-    // Mutation: drop the start-width comparison -> stored reads 400 and the
-    // 600px preference is gone for good, red.
+    // Mutation (MAR-3161): settle against the stored width instead of what
+    // it would SHOW under this ceiling -> stored reads 400 and the 600px
+    // preference is gone for good, red.
     for (const clientX of [RESERVED + 401, RESERVED + 900]) {
       fireEvent.mouseDown(handle)
       await act(async () => {
@@ -800,6 +826,40 @@ describe('MAR-3097: through the containers and the real stores', () => {
     })
     expect(columnWidth()).toBe('300px')
     expect(storedWidth()).toBe('300')
+  })
+
+  it('MAR-3161 R2: a mid-drag ceiling move stores the width you let go on', async () => {
+    // Residue from MAR-3155: startedAt compared to the width at mouse-down,
+    // so releasing back at that width after the ceiling grew stored nothing
+    // and the column jumped to the old preference.
+    // Mutation: capture the ceiling at mouse-down → stored stays 600 → red.
+    localStorage.setItem('convergence-wave-panel-width', '600')
+    setWindowWidth(windowLeaving(400))
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    const handle = screen.getByRole('separator', {
+      name: 'Resize the wave column',
+    })
+    expect(columnWidth()).toBe('400px')
+
+    fireEvent.mouseDown(handle)
+    await act(async () => {
+      fireEvent.mouseMove(window, { clientX: RESERVED + 320 })
+    })
+    expect(columnWidth()).toBe('320px')
+
+    await act(async () => {
+      setWindowWidth(windowLeaving(640))
+      window.dispatchEvent(new Event('resize'))
+    })
+
+    await act(async () => {
+      fireEvent.mouseMove(window, { clientX: RESERVED + 400 })
+    })
+    await act(async () => {
+      fireEvent.mouseUp(window)
+    })
+    expect(columnWidth()).toBe('400px')
+    expect(storedWidth()).toBe('400')
   })
 
   it('MAR-3155 lap 3, B: a drag that ends with the column hidden stores nothing', async () => {

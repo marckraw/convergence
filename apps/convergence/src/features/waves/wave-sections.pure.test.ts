@@ -6,6 +6,7 @@ import {
   isTerminalWaveRow,
   resolveWaveRow,
   sectionWaveRows,
+  settleWavePanelGesture,
   UNWAVED_GROUP,
   WAVE_PANEL_DEFAULT_COLUMN_WIDTH,
   WAVE_PANEL_MAX_COLUMN_WIDTH,
@@ -361,6 +362,82 @@ describe('MAR-3097 lap 2, B: the column keeps the main panel at its floor', () =
     expect(clampWavePanelWidth(900, 400)).toBe(400)
     expect(clampWavePanelWidth(10, 900)).toBe(WAVE_PANEL_MIN_COLUMN_WIDTH)
     expect(clampWavePanelWidth(400, 10)).toBe(WAVE_PANEL_MIN_COLUMN_WIDTH)
+  })
+
+  it.each([
+    {
+      name: 'dragged wider against the ceiling',
+      stored: 600,
+      max: 400,
+      requested: 900,
+      expected: null,
+    },
+    {
+      name: 'one pixel over the ceiling',
+      stored: 600,
+      max: 400,
+      requested: 401,
+      expected: null,
+    },
+    {
+      name: 'default preference, dragged to the ceiling',
+      stored: 280,
+      max: 400,
+      requested: 900,
+      expected: 400,
+    },
+    {
+      name: 'preference cut, then narrowed below the ceiling',
+      stored: 600,
+      max: 400,
+      requested: 384,
+      expected: 384,
+    },
+    {
+      name: 'the ceiling moved: release below the preference',
+      stored: 600,
+      max: 700,
+      requested: 400,
+      expected: 400,
+    },
+    {
+      name: 'a real choice away from the preference (the decision never sees a draft)',
+      stored: 280,
+      max: 640,
+      requested: 500,
+      expected: 500,
+    },
+    {
+      name: 'requested below the floor → the floor',
+      stored: 280,
+      max: 400,
+      requested: 10,
+      expected: WAVE_PANEL_MIN_COLUMN_WIDTH,
+    },
+    {
+      name: 'preference already shows the floor → null',
+      stored: WAVE_PANEL_MIN_COLUMN_WIDTH,
+      max: 400,
+      requested: 10,
+      expected: null,
+    },
+    {
+      name: 'a fractional requested → an integer',
+      stored: 280,
+      max: 640,
+      requested: 401.7,
+      expected: 402,
+    },
+  ] as const)('MAR-3161 R1: $name', ({ stored, max, requested, expected }) => {
+    // Mutation: compare result with storedWidth instead of fallback →
+    // "dragged wider against the ceiling" stores 400 → red.
+    expect(
+      settleWavePanelGesture({
+        requested,
+        storedWidth: stored,
+        maxWidth: max,
+      }),
+    ).toBe(expected)
   })
 
   it('MAR-3155 R6: the column class carries no width of its own', () => {

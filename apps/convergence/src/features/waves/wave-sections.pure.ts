@@ -341,6 +341,28 @@ export function clampWavePanelWidth(width: number, max: number): number {
 }
 
 /**
+ * What a finished resize gesture stores (MAR-3161 R1).
+ *
+ * Pattern: Decision — store nothing iff storing nothing would show the same
+ * width. The drag and the step ask this at the moment they end, with that
+ * moment's ceiling; comparing to the width when the gesture began is a
+ * different question (and wrong when the ceiling moves mid-drag).
+ */
+export function settleWavePanelGesture(input: {
+  requested: number
+  storedWidth: number
+  maxWidth: number
+}): number | null {
+  const result = Math.round(
+    clampWavePanelWidth(input.requested, input.maxWidth),
+  )
+  const fallback = Math.round(
+    clampWavePanelWidth(input.storedWidth, input.maxWidth),
+  )
+  return result === fallback ? null : result
+}
+
+/**
  * Why the column is a rail (MAR-3148 R1): because that is what was stored,
  * or because the window cannot hold the column and a readable main panel.
  *

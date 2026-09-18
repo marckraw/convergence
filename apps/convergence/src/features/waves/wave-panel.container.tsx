@@ -110,15 +110,16 @@ export const WavePanel: FC<WavePanelProps> = ({
     windowWidth,
     reservedWidth,
   })
-  // Whether there is a column on screen AT ALL, as one fact (lap 3, B).
-  //
-  // Every reason it can be absent, in one place: the rail (the decision), the
-  // Waves tab showing the same board (`hidden`), and the last bound crew
-  // going away over IPC. The hook outlives the handle -- hold the edge while
-  // any of those happens and the mouse-up still arrives -- so asking it about
-  // the rail alone would be asking a proxy for the question.
+  // Whether the panel renders anything at all (MAR-3161 R4): the Waves tab
+  // showing the same board (`hidden`), or the last bound crew gone. ONE const,
+  // read by the early return below and by the on-screen fact -- which adds
+  // the third reason a column can be absent, the rail (the decision). The
+  // hook outlives the handle -- hold the edge while any of the three happens
+  // and the mouse-up still arrives -- so asking it about the rail alone
+  // would be asking a proxy for the question (lap 3, B).
+  const columnAbsent = hidden || board.boundCrewCount === 0
   const onScreen =
-    !hidden && board.boundCrewCount > 0 && decision.mode === 'open'
+    !columnAbsent && decision.mode === 'open'
       ? { width: decision.width, maxWidth: decision.maxWidth }
       : null
   const resize = useWaveColumnResize({
@@ -126,12 +127,14 @@ export const WavePanel: FC<WavePanelProps> = ({
     // The decision's own numbers (lap 2, B): the ceiling's arithmetic lives
     // in one place, and a gesture is weighed against what the screen shows.
     column: onScreen,
+    // The real preference — never the draft (MAR-3161 R2).
+    storedWidth,
     onCommit: commitWidth,
     defaultWidth: WAVE_PANEL_DEFAULT_COLUMN_WIDTH,
     onDraft: setDraftWidth,
   })
 
-  if (hidden || board.boundCrewCount === 0) return null
+  if (columnAbsent) return null
 
   return decision.mode === 'rail' ? (
     <WaveRailView
