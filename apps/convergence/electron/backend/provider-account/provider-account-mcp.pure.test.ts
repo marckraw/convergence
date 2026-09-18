@@ -239,3 +239,125 @@ describe('interpretClaudeMcpLoginOutcome', () => {
     ).toEqual({ ok: false, message: 'exit code 7' })
   })
 })
+import {
+  buildCodexMcpAddCommand,
+  buildCodexMcpListCommand,
+  buildCodexMcpLoginCommand,
+  parseCodexMcpList,
+} from './provider-account-mcp.pure'
+
+describe('Codex account connectors (MAR-3183)', () => {
+  const input = {
+    binaryPath: '/fixture/codex',
+    configDir: '/fixture/account',
+    baseEnv: { PATH: '/bin', CODEX_HOME: '/wrong' },
+    serverName: 'linear',
+    url: 'https://mcp.linear.app/mcp',
+  }
+  it.each([
+    [buildCodexMcpListCommand, ['mcp', 'list', '--json']],
+    [buildCodexMcpLoginCommand, ['mcp', 'login', 'linear']],
+    [
+      buildCodexMcpAddCommand,
+      ['mcp', 'add', 'linear', '--url', 'https://mcp.linear.app/mcp'],
+    ],
+  ] as const)(
+    'builds %s with the exact account home and arguments',
+    (build, args) => {
+      expect(build(input)).toMatchObject({
+        args,
+        env: { CODEX_HOME: input.configDir },
+      })
+      expect(() => build({ ...input, configDir: ' ' })).toThrow(/directory/)
+    },
+  )
+
+  // CLI 0.155.0, 2026-09-18, isolated never-authenticated home:
+  // HTTP at 127.0.0.1:1 => unknown; stdio /usr/bin/true => unsupported.
+  // o_auth supplied by Fable's authenticated-account measurement in MAR-3183.
+  const fixture = [
+    {
+      name: 'http',
+      enabled: true,
+      disabled_reason: null,
+      transport: { type: 'streamable_http', url: 'http://127.0.0.1:1/mcp' },
+      auth_status: 'unknown',
+    },
+    {
+      name: 'stdio',
+      enabled: true,
+      disabled_reason: null,
+      transport: { type: 'stdio', command: '/usr/bin/true' },
+      auth_status: 'unsupported',
+    },
+    {
+      name: 'linear',
+      enabled: true,
+      disabled_reason: null,
+      transport: { type: 'streamable_http', url: 'https://mcp.linear.app/mcp' },
+      auth_status: 'o_auth',
+    },
+    {
+      name: 'future',
+      enabled: true,
+      transport: { type: 'stdio' },
+      auth_status: 'future_value',
+    },
+    {
+      name: 'disabled',
+      enabled: false,
+      disabled_reason: 'Policy disabled',
+      auth_status: 'o_auth',
+    },
+  ]
+  it('maps measured and unseen auth statuses without claiming unknown authorization', () => {
+    expect(
+      parseCodexMcpList(JSON.stringify(fixture)).map((c) => [
+        c.name,
+        c.status,
+        c.needsAuthorization,
+        c.statusLabel,
+      ]),
+    ).toEqual([
+      ['http', 'unknown', true, 'Unknown — press Authorize to find out'],
+      ['stdio', 'unknown', false, 'Authorization unsupported'],
+      ['linear', 'ready', false, 'Authorized'],
+      ['future', 'unknown', true, 'Unknown — press Authorize to find out'],
+      ['disabled', 'disabled', false, 'Policy disabled'],
+    ])
+    expect(parseCodexMcpList(JSON.stringify(fixture))[0]).toMatchObject({
+      description: 'http://127.0.0.1:1/mcp',
+    })
+  })
+  it('offers authorization when enabled is omitted', () => {
+    expect(
+      parseCodexMcpList('[{"name":"linear","auth_status":"unknown"}]')[0],
+    ).toMatchObject({ status: 'unknown', needsAuthorization: true })
+  })
+  it('uses the disabled reason even when enabled is true', () => {
+    expect(
+      parseCodexMcpList(
+        '[{"name":"linear","enabled":true,"disabled_reason":"Policy disabled","auth_status":"o_auth"}]',
+      )[0],
+    ).toMatchObject({
+      status: 'disabled',
+      statusLabel: 'Policy disabled',
+      needsAuthorization: false,
+    })
+  })
+  it('skips nameless entries without discarding named connectors', () => {
+    expect(
+      parseCodexMcpList('[{}, {"name":""}, {"name":"linear"}]').map(
+        (c) => c.name,
+      ),
+    ).toEqual(['linear'])
+  })
+  it.each(['{}', '{"servers":[]}', '{'])(
+    'refuses invalid connector list payload %s',
+    (stdout) => {
+      expect(() => parseCodexMcpList(stdout)).toThrow(
+        'Codex returned an invalid connector list.',
+      )
+    },
+  )
+})

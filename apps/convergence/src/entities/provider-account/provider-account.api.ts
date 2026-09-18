@@ -65,6 +65,8 @@ export const providerAccountApi = {
     accountId: string | null,
   ): Promise<ProviderAccountConnectors> =>
     window.electronAPI.providerAccounts.listConnectors(accountId),
+  connectLinear: (accountId: string): Promise<ProviderAccountConnectors> =>
+    window.electronAPI.providerAccounts.connectLinear(accountId),
   authorizeConnector: (input: {
     accountId: string | null
     serverName: string

@@ -70,6 +70,7 @@ export interface ProviderAccountsFieldsProps {
   onCheckHealth: () => void
   onToggleConnectors: (accountId: string) => void
   onAuthorizeConnector: (accountId: string, serverName: string) => void
+  onConnectLinear: (accountId: string) => void
 }
 
 function formatCheckedAt(value: string | null): string {
@@ -124,6 +125,7 @@ export function ProviderAccountsFields({
   onCheckHealth,
   onToggleConnectors,
   onAuthorizeConnector,
+  onConnectLinear,
 }: ProviderAccountsFieldsProps) {
   const isCodex = providerId === 'codex'
   const providerName = isCodex ? 'OpenAI' : 'Anthropic'
@@ -257,19 +259,17 @@ export function ProviderAccountsFields({
                       <Star className="mr-1.5 h-3.5 w-3.5" />
                       Set default
                     </Button>
-                    {!isCodex ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        aria-expanded={showsConnectors}
-                        disabled={isBusy || isLoadingConnectors}
-                        onClick={() => onToggleConnectors(row.id)}
-                      >
-                        <Plug className="mr-1.5 h-3.5 w-3.5" />
-                        Connectors
-                      </Button>
-                    ) : null}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      aria-expanded={showsConnectors}
+                      disabled={isBusy || isLoadingConnectors}
+                      onClick={() => onToggleConnectors(row.id)}
+                    >
+                      <Plug className="mr-1.5 h-3.5 w-3.5" />
+                      Connectors
+                    </Button>
                     <Button
                       type="button"
                       variant="ghost"
@@ -393,7 +393,7 @@ export function ProviderAccountsFields({
                   </div>
                 ) : null}
 
-                {!isCodex && showsConnectors ? (
+                {showsConnectors ? (
                   <div className="space-y-2 rounded-lg border border-border/70 bg-card/40 px-3 py-3">
                     <p className="text-xs leading-relaxed text-muted-foreground">
                       MCP tokens are stored per account, so each account
@@ -404,11 +404,8 @@ export function ProviderAccountsFields({
                       <p className="text-sm text-muted-foreground">
                         Asking this account what it can reach...
                       </p>
-                    ) : connectors?.error ? (
-                      <p className="text-sm text-muted-foreground">
-                        {connectors.error}
-                      </p>
-                    ) : connectors?.connectors.length === 0 ? (
+                    ) : connectors?.connectors.length === 0 &&
+                      !connectors.error ? (
                       <p className="text-sm text-muted-foreground">
                         No MCP servers are configured.
                       </p>
@@ -426,7 +423,8 @@ export function ProviderAccountsFields({
                               {connector.statusLabel}
                             </p>
                           </div>
-                          {connector.needsAuthorization ? (
+                          {connector.needsAuthorization ||
+                          (isCodex && connector.status === 'ready') ? (
                             <Button
                               type="button"
                               size="sm"
@@ -443,6 +441,28 @@ export function ProviderAccountsFields({
                         </div>
                       ))
                     )}
+                    {!isLoadingConnectors && connectors?.error ? (
+                      <p className="text-sm text-muted-foreground">
+                        {connectors.error}
+                      </p>
+                    ) : null}
+                    {isCodex &&
+                    !isLoadingConnectors &&
+                    connectors &&
+                    !connectors.connectors.some(
+                      (connector) => connector.name === 'linear',
+                    ) ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={actionPending}
+                        onClick={() => onConnectLinear(row.id)}
+                      >
+                        {authorizingServerName === 'linear'
+                          ? 'Waiting for browser...'
+                          : 'Connect Linear'}
+                      </Button>
+                    ) : null}
                   </div>
                 ) : null}
 

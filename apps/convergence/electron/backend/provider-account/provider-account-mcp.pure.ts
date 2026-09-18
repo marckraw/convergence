@@ -1,4 +1,11 @@
 import { buildClaudeAccountEnv } from './provider-account-env.pure'
+import { buildCodexAccountEnv } from './provider-account-codex-env.pure'
+import type { ProviderAccountConnector } from './provider-account-mcp.types'
+import {
+  type CodexServerRecord,
+  readCodexServerFlags,
+  normalizeCodexStatus,
+} from '../mcp/codex-mcp.pure'
 import type { ClaudeAccountEnvTarget } from './provider-account-env.pure'
 import type { ProviderAccountCommand } from './provider-account-enrolment.pure'
 import {
@@ -6,6 +13,107 @@ import {
   summarizeTerminalOutput,
 } from './provider-account-pty-runner.pure'
 
+interface CodexMcpCommandInput {
+  binaryPath: string
+  configDir: string
+  baseEnv: NodeJS.ProcessEnv
+  workingDirectory?: string
+}
+
+function buildCodexMcpCommand(
+  input: CodexMcpCommandInput,
+  args: string[],
+): ProviderAccountCommand {
+  if (!input.configDir.trim())
+    throw new Error('A Codex account directory is required.')
+  return {
+    command: input.binaryPath,
+    args,
+    env: buildCodexAccountEnv({
+      baseEnv: input.baseEnv,
+      account: { configDir: input.configDir },
+    }),
+    ...(input.workingDirectory ? { cwd: input.workingDirectory } : {}),
+  }
+}
+
+export function buildCodexMcpListCommand(
+  input: CodexMcpCommandInput,
+): ProviderAccountCommand {
+  return buildCodexMcpCommand(input, ['mcp', 'list', '--json'])
+}
+
+export function buildCodexMcpLoginCommand(
+  input: CodexMcpCommandInput & { serverName: string },
+): ProviderAccountCommand {
+  if (!input.serverName.trim())
+    throw new Error('Authorizing a connector requires the server name.')
+  return buildCodexMcpCommand(input, ['mcp', 'login', input.serverName])
+}
+
+export function buildCodexMcpAddCommand(
+  input: CodexMcpCommandInput & { serverName: string; url: string },
+): ProviderAccountCommand {
+  if (!input.serverName.trim() || !input.url.trim())
+    throw new Error('Adding a connector requires a name and URL.')
+  return buildCodexMcpCommand(input, [
+    'mcp',
+    'add',
+    input.serverName,
+    '--url',
+    input.url,
+  ])
+}
+
+/** CLI JSON is an IO boundary: retain only display fields, never headers or environment values. */
+export function parseCodexMcpList(json: string): ProviderAccountConnector[] {
+  let entries: CodexServerRecord[]
+  try {
+    const parsed: unknown = JSON.parse(json)
+    if (!Array.isArray(parsed))
+      throw new Error('Codex returned an invalid connector list.')
+    entries = parsed as CodexServerRecord[]
+  } catch {
+    throw new Error('Codex returned an invalid connector list.')
+  }
+  return entries.flatMap((entry): ProviderAccountConnector[] => {
+    if (!entry || typeof entry.name !== 'string' || !entry.name) return []
+    const transport = entry.transport
+    const { enabled, disabledReason } = readCodexServerFlags(entry)
+    const flags = normalizeCodexStatus(enabled, disabledReason)
+    const authStatus = 'auth_status' in entry ? entry.auth_status : undefined
+    const authorized = authStatus === 'o_auth'
+    const unsupported = authStatus === 'unsupported'
+    return [
+      {
+        name: entry.name,
+        status:
+          flags.status === 'disabled'
+            ? flags.status
+            : authorized
+              ? 'ready'
+              : 'unknown',
+        statusLabel:
+          flags.status === 'disabled'
+            ? flags.statusLabel
+            : authorized
+              ? 'Authorized'
+              : unsupported
+                ? 'Authorization unsupported'
+                : 'Unknown — press Authorize to find out',
+        description:
+          transport?.type === 'streamable_http' &&
+          typeof transport.url === 'string'
+            ? transport.url
+            : transport?.type === 'stdio'
+              ? 'stdio'
+              : 'Unknown transport',
+        needsAuthorization:
+          flags.status !== 'disabled' && !authorized && !unsupported,
+      },
+    ]
+  })
+}
 /**
  * Per-account MCP connector authorization (ADR 0007, PA11).
  *

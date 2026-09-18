@@ -422,6 +422,16 @@ async function startApp(): Promise<void> {
   const providerAccountMcpService = new ProviderAccountMcpService({
     repository: providerAccountRepository,
     accountMaintenance: claudeAccountMaintenance,
+    codexMaintenance: {
+      run: (account, work) =>
+        codexServerHosts.withStoppedServer(
+          {
+            executionHostId: account.executionHostId,
+            account: { configDir: account.configDir },
+          },
+          work,
+        ),
+    },
     runInteractiveCommand: createPtyCommandRunner({ ptyFactory }),
   })
   /** The same guard for Codex, whose account is a `CODEX_HOME` (PA9). */
@@ -479,6 +489,7 @@ async function startApp(): Promise<void> {
         // The version gates the resident server: an older codex-cli is refused
         // out loud rather than served by a path that no longer exists.
         codexServerHosts.setBinary(p.binaryPath, p.version ?? null)
+        providerAccountMcpService.setCodexBinaryPath(p.binaryPath)
         codexQuotaService.setServerHosts(codexServerHosts)
         providerAccountEnrolmentService.setBinaryPath(p.id, p.binaryPath)
       } else if (p.id === 'cursor') {

@@ -98,9 +98,48 @@ export function registerProviderAccountIpcHandlers(deps: {
   )
 
   ipcMain.handle(
+    'providerAccounts:connectLinear',
+    async (_event, accountId: string) => {
+      try {
+        await deps.mcp.connectLinear(accountId)
+        return deps.mcp.listConnectors(accountId)
+      } catch (error) {
+        const current = await deps.mcp.listConnectors(accountId)
+        return {
+          ...current,
+          error:
+            current.error ??
+            (error instanceof Error
+              ? error.message
+              : 'Failed to connect Linear.'),
+        }
+      }
+    },
+  )
+
+  ipcMain.handle(
     'providerAccounts:authorizeConnector',
     async (_event, input: { accountId: string | null; serverName: string }) => {
-      await deps.mcp.authorizeConnector(input)
+      try {
+        await deps.mcp.authorizeConnector(input)
+      } catch (error) {
+        // Return Codex's refusal as data so Electron does not prefix its sentence.
+        if (
+          input.accountId &&
+          deps.repository.get(input.accountId)?.providerId === 'codex'
+        ) {
+          const current = await deps.mcp.listConnectors(input.accountId)
+          return {
+            ...current,
+            error:
+              current.error ??
+              (error instanceof Error
+                ? error.message
+                : 'Failed to authorize connector.'),
+          }
+        }
+        throw error
+      }
       return deps.mcp.listConnectors(input.accountId)
     },
   )

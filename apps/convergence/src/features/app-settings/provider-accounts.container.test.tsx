@@ -59,6 +59,7 @@ const providerAccounts = {
   health: vi.fn(),
   listConnectors: vi.fn(),
   authorizeConnector: vi.fn(),
+  connectLinear: vi.fn(),
 }
 
 describe('ProviderAccountsContainer', () => {
@@ -108,7 +109,7 @@ describe('ProviderAccountsContainer', () => {
     expect(screen.getByText(/Organization org-a/)).toBeInTheDocument()
   })
 
-  it('separates OpenAI accounts and hides Claude-only connector actions', async () => {
+  it('separates OpenAI accounts and exposes their connectors', async () => {
     providerAccounts.list.mockResolvedValue([
       account(),
       account({
@@ -128,7 +129,7 @@ describe('ProviderAccountsContainer', () => {
     expect(screen.queryByText('a@example.com')).not.toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: 'Connectors' }),
-    ).not.toBeInTheDocument()
+    ).toBeInTheDocument()
     expect(screen.queryByLabelText('Account email')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'OpenAI' })).toHaveAttribute(
       'aria-pressed',
@@ -687,6 +688,139 @@ describe('ProviderAccountsContainer', () => {
   })
 
   describe('connectors', () => {
+    async function openCodex(
+      connectors: unknown[] = [],
+      error: string | null = null,
+    ) {
+      providerAccounts.list.mockResolvedValue([
+        account({ providerId: 'codex' }),
+      ])
+      providerAccounts.listConnectors.mockResolvedValue({
+        providerAccountId: 'acct-a',
+        connectors,
+        error,
+      })
+      render(<ProviderAccountsContainer />)
+      await screen.findByText(/No Anthropic accounts enrolled/)
+      fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Connectors' }))
+      await waitFor(() =>
+        expect(providerAccounts.listConnectors).toHaveBeenCalledWith('acct-a'),
+      )
+    }
+
+    it('connects missing Linear for this Codex account and displays the read-back status', async () => {
+      providerAccounts.connectLinear.mockResolvedValue({
+        providerAccountId: 'acct-a',
+        connectors: [
+          {
+            name: 'linear',
+            status: 'unknown',
+            statusLabel: 'Unknown — press Authorize to find out',
+            needsAuthorization: true,
+          },
+        ],
+        error: null,
+      })
+      await openCodex()
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Connect Linear' }),
+      )
+      expect(
+        await screen.findByText('Unknown — press Authorize to find out'),
+      ).toBeInTheDocument()
+      expect(providerAccounts.connectLinear).toHaveBeenCalledWith('acct-a')
+      expect(
+        screen.queryByRole('button', { name: 'Connect Linear' }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByText(/linear authorized for this account/),
+      ).not.toBeInTheDocument()
+    })
+
+    it('offers reauthorization but no Connect Linear for an existing Codex connector', async () => {
+      await openCodex([
+        {
+          name: 'linear',
+          status: 'ready',
+          statusLabel: 'Authorized',
+          needsAuthorization: false,
+        },
+      ])
+      await screen.findByText('Authorized')
+      expect(
+        screen.getByRole('button', { name: 'Authorize' }),
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Connect Linear' }),
+      ).not.toBeInTheDocument()
+    })
+
+    it('shows a Codex list error without hiding Connect Linear or claiming an empty list', async () => {
+      await openCodex([], 'Codex could not list connectors.')
+      expect(
+        await screen.findByText('Codex could not list connectors.'),
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByText('No MCP servers are configured.'),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Connect Linear' }),
+      ).toBeInTheDocument()
+    })
+
+    it('keeps Connect Linear available beside a maintenance refusal', async () => {
+      const message =
+        'This Codex account is in use. Wait for its active work to finish.'
+      providerAccounts.connectLinear.mockResolvedValue({
+        providerAccountId: 'acct-a',
+        connectors: [],
+        error: message,
+      })
+      await openCodex()
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Connect Linear' }),
+      )
+      expect(await screen.findByText(message)).toBeInTheDocument()
+      const retry = screen.getByRole('button', { name: 'Connect Linear' })
+      expect(retry).toBeEnabled()
+      fireEvent.click(retry)
+      await waitFor(() =>
+        expect(providerAccounts.connectLinear).toHaveBeenCalledTimes(2),
+      )
+      expect(screen.getByText(message)).toBeInTheDocument()
+    })
+
+    it('surfaces Codex maintenance refusal verbatim', async () => {
+      const message =
+        'This Codex account is in use. Wait for its active work to finish.'
+      providerAccounts.authorizeConnector.mockResolvedValue({
+        providerAccountId: 'acct-a',
+        connectors: [
+          {
+            name: 'linear',
+            status: 'unknown',
+            statusLabel: 'Unknown',
+            needsAuthorization: true,
+          },
+        ],
+        error: message,
+      })
+      await openCodex([
+        {
+          name: 'linear',
+          status: 'unknown',
+          statusLabel: 'Unknown',
+          needsAuthorization: true,
+        },
+      ])
+      fireEvent.click(await screen.findByRole('button', { name: 'Authorize' }))
+      expect(await screen.findByText(message)).toBeInTheDocument()
+      expect(screen.getByText('linear')).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Authorize' }),
+      ).toBeInTheDocument()
+    })
     it('asks this account what it can reach, not the machine', async () => {
       // MCP tokens are per credential slot, so the answer is account-shaped.
       render(<ProviderAccountsContainer />)

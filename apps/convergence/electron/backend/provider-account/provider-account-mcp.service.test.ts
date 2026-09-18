@@ -4,6 +4,229 @@ import { ProviderAccountMcpService } from './provider-account-mcp.service'
 import type { ProviderAccountCommand } from './provider-account-enrolment.pure'
 import { ProviderAccountRepository } from './provider-account.repository'
 import { ClaudeAccountMaintenance } from '../provider/claude-code/claude-account-maintenance.service'
+import type { ProviderAccountInteractiveRunner } from './provider-account-pty-runner'
+
+describe('Codex connectors (MAR-3183)', () => {
+  function bench(present = false, afterAddAuth = 'unknown') {
+    const repository = new ProviderAccountRepository(getDatabase())
+    repository.create({
+      id: 'codex-test',
+      providerId: 'codex',
+      label: 'Codex',
+      authKind: 'subscription-oauth',
+      configDir: '/fixture/codex-test',
+      credentialDir: '/fixture/codex-test',
+      executionHostId: 'local',
+    })
+    const events: string[] = []
+    const read = vi.fn(async (command: ProviderAccountCommand) => {
+      events.push(command.args[1])
+      expect(command.args).toEqual(['mcp', 'list', '--json'])
+      expect(command.env.CODEX_HOME).toBe('/fixture/codex-test')
+      return {
+        code: 0,
+        stderr: '',
+        stdout: JSON.stringify(
+          present || events.includes('add')
+            ? [
+                {
+                  name: 'linear',
+                  enabled: true,
+                  auth_status: present ? 'o_auth' : afterAddAuth,
+                },
+              ]
+            : [],
+        ),
+      }
+    })
+    const terminal = vi.fn<ProviderAccountInteractiveRunner>(
+      async (command, lifecycle) => {
+        events.push(command.args[1])
+        expect(command.env.CODEX_HOME).toBe('/fixture/codex-test')
+        expect(events).toContain('enter')
+        expect(events).not.toContain('exit')
+        lifecycle!.onExitConfirmed()
+        return { code: 0, output: '' }
+      },
+    )
+    const maintenance = {
+      async run<T>(_account: unknown, work: () => Promise<T>): Promise<T> {
+        events.push('enter')
+        try {
+          return await work()
+        } finally {
+          events.push('exit')
+        }
+      },
+    }
+    const subject = new ProviderAccountMcpService({
+      repository,
+      runCommand: read,
+      runInteractiveCommand: terminal,
+      codexBinaryPath: '/fixture/codex',
+      baseEnv: { PATH: '/bin' },
+      codexMaintenance: maintenance,
+    })
+    return { subject, repository, read, terminal, events, maintenance }
+  }
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+  })
+
+  it.each([false, true])(
+    'adds only missing Linear then logs in inside one door (present=%s)',
+    async (present) => {
+      const b = bench(present)
+      await b.subject.connectLinear('codex-test')
+      expect(b.events).toEqual(
+        present
+          ? ['list', 'enter', 'login', 'exit']
+          : ['list', 'enter', 'add', 'list', 'login', 'exit'],
+      )
+      expect(b.terminal.mock.calls.map(([c]) => c.args)).toEqual(
+        present
+          ? [['mcp', 'login', 'linear']]
+          : [
+              ['mcp', 'add', 'linear', '--url', 'https://mcp.linear.app/mcp'],
+              ['mcp', 'login', 'linear'],
+            ],
+      )
+    },
+  )
+  it('does not log in again when add already authorized Linear', async () => {
+    const b = bench(false, 'o_auth')
+    await b.subject.connectLinear('codex-test')
+    expect(b.events).toEqual(['list', 'enter', 'add', 'list', 'exit'])
+    expect(b.terminal).toHaveBeenCalledOnce()
+  })
+  it('does not log in when authorization is unsupported after add', async () => {
+    const b = bench(false, 'unsupported')
+    await b.subject.connectLinear('codex-test')
+    expect(b.events).toEqual(['list', 'enter', 'add', 'list', 'exit'])
+    expect(b.terminal).toHaveBeenCalledOnce()
+  })
+  it('names the server in a failed login', async () => {
+    const b = bench()
+    b.terminal.mockImplementation(async (_command, lifecycle) => {
+      lifecycle!.onExitConfirmed()
+      return { code: 1, output: '' }
+    })
+    await expect(
+      b.subject.authorizeConnector({
+        accountId: 'codex-test',
+        serverName: 'linear',
+      }),
+    ).rejects.toThrow('Codex connector linear failed (exit code 1).')
+  })
+  it('holds the Codex door after a result until confirmed exit', async () => {
+    const b = bench()
+    let confirm!: () => void
+    b.terminal.mockImplementation(async (_command, lifecycle) => {
+      confirm = lifecycle!.onExitConfirmed
+      return { code: 0, output: '' }
+    })
+    let settled = false
+    const pending = b.subject
+      .authorizeConnector({ accountId: 'codex-test', serverName: 'linear' })
+      .then(() => {
+        settled = true
+      })
+    await vi.waitFor(() => expect(b.terminal).toHaveBeenCalledOnce())
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(b.events).toEqual(['enter'])
+    expect(settled).toBe(false)
+    confirm()
+    await pending
+    expect(b.events).toEqual(['enter', 'exit'])
+  })
+  it('closes the door when login throws', async () => {
+    const b = bench()
+    b.terminal.mockRejectedValue(new Error('terminal failed'))
+    await expect(
+      b.subject.authorizeConnector({
+        accountId: 'codex-test',
+        serverName: 'linear',
+      }),
+    ).rejects.toThrow('terminal failed')
+    expect(b.events).toEqual(['enter', 'exit'])
+  })
+  it('refuses unguarded authorization and preserves maintenance refusals verbatim', async () => {
+    const b = bench()
+    const unguarded = new ProviderAccountMcpService({
+      repository: b.repository,
+      codexBinaryPath: '/fixture/codex',
+      runInteractiveCommand: b.terminal,
+    })
+    await expect(
+      unguarded.authorizeConnector({
+        accountId: 'codex-test',
+        serverName: 'linear',
+      }),
+    ).rejects.toThrow('Codex account maintenance is unavailable.')
+    b.maintenance.run = async () => {
+      throw new Error(
+        'This Codex account is in use. Wait for its active work to finish.',
+      )
+    }
+    await expect(
+      b.subject.authorizeConnector({
+        accountId: 'codex-test',
+        serverName: 'linear',
+      }),
+    ).rejects.toThrow(
+      /^This Codex account is in use. Wait for its active work to finish\.$/,
+    )
+    expect(b.terminal).not.toHaveBeenCalled()
+  })
+  it('lists outside maintenance and reports malformed output as an error', async () => {
+    const b = bench()
+    expect(await b.subject.listConnectors('codex-test')).toMatchObject({
+      connectors: [],
+      error: null,
+    })
+    expect(b.events).toEqual(['list'])
+    b.read.mockResolvedValue({ code: 0, stdout: '{}', stderr: '' })
+    expect((await b.subject.listConnectors('codex-test')).error).toBe(
+      'Codex returned an invalid connector list.',
+    )
+  })
+  it.each(['{}', '{"servers":[]}', '{'])(
+    'refuses invalid list %s without starting Connect Linear',
+    async (stdout) => {
+      const b = bench()
+      b.read.mockResolvedValue({ code: 0, stdout, stderr: '' })
+      expect(await b.subject.listConnectors('codex-test')).toMatchObject({
+        connectors: [],
+        error: 'Codex returned an invalid connector list.',
+      })
+      await expect(b.subject.connectLinear('codex-test')).rejects.toThrow(
+        'Codex returned an invalid connector list.',
+      )
+      expect(b.terminal).not.toHaveBeenCalled()
+      expect(b.events).not.toContain('enter')
+    },
+  )
+  it.each(['{}', '{"servers":[]}', '{'])(
+    'refuses invalid re-read %s after add without logging in',
+    async (stdout) => {
+      const b = bench()
+      b.read.mockImplementation(async () => {
+        b.events.push('list')
+        return {
+          code: 0,
+          stdout: b.events.includes('add') ? stdout : '[]',
+          stderr: '',
+        }
+      })
+      await expect(b.subject.connectLinear('codex-test')).rejects.toThrow(
+        'Codex returned an invalid connector list.',
+      )
+      expect(b.events).toEqual(['list', 'enter', 'add', 'list', 'exit'])
+      expect(b.terminal).toHaveBeenCalledOnce()
+    },
+  )
+})
 
 const HOME = '/Users/tester'
 const CONFIG_DIR = `${HOME}/.convergence/provider-accounts/claude/acct-a`
@@ -137,7 +360,7 @@ describe('ProviderAccountMcpService', () => {
   }
 
   it.each(['list', 'authorize'] as const)(
-    'refuses to %s Claude connectors for a Codex account before starting a process',
+    'refuses to %s Codex connectors when only the Claude binary is available',
     async (operation) => {
       repository.create({
         id: 'codex-a',
@@ -153,9 +376,7 @@ describe('ProviderAccountMcpService', () => {
       const subject = service({ run: read.run, runInteractive: write.run })
       if (operation === 'list') {
         const result = await subject.listConnectors('codex-a')
-        expect(result.error).toContain(
-          'only available for Claude Code accounts',
-        )
+        expect(result.error).toContain('Codex is not available on PATH')
         expect(result.connectors).toEqual([])
       } else {
         await expect(
@@ -163,7 +384,7 @@ describe('ProviderAccountMcpService', () => {
             accountId: 'codex-a',
             serverName: 'linear',
           }),
-        ).rejects.toThrow('only available for Claude Code accounts')
+        ).rejects.toThrow('Codex is not available on PATH')
       }
       expect(read.calls).toEqual([])
       expect(write.calls).toEqual([])

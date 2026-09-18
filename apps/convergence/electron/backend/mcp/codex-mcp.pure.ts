@@ -82,9 +82,7 @@ export function toSummary(
     return null
   }
 
-  const enabled = record.enabled !== false
-  const disabledReason =
-    typeof record.disabled_reason === 'string' ? record.disabled_reason : null
+  const { enabled, disabledReason } = readCodexServerFlags(record)
   const transport = record.transport ?? {}
   const status = normalizeCodexStatus(enabled, disabledReason)
   const command =
@@ -112,15 +110,24 @@ export function toSummary(
 
 export function getIdentity(record: CodexServerRecord): string {
   return JSON.stringify({
-    enabled: record.enabled ?? true,
-    disabledReason:
-      typeof record.disabled_reason === 'string'
-        ? record.disabled_reason
-        : null,
+    ...readCodexServerFlags(record),
     transport: record.transport ?? null,
     startupTimeoutSec: record.startup_timeout_sec ?? null,
     toolTimeoutSec: record.tool_timeout_sec ?? null,
     enabledTools: record.enabled_tools ?? null,
     disabledTools: record.disabled_tools ?? null,
   })
+}
+
+export function readCodexServerFlags(record: CodexServerRecord): {
+  enabled: boolean
+  disabledReason: string | null
+} {
+  return {
+    enabled: record.enabled !== false,
+    disabledReason:
+      typeof record.disabled_reason === 'string'
+        ? record.disabled_reason
+        : null,
+  }
 }
