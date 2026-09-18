@@ -1,6 +1,9 @@
 import { ipcMain } from 'electron'
 import type { TrackerCredentialStatus } from '../credentials/tracker-credentials.pure'
-import type { TrackerProbeReading } from '../../../src/shared/types/tracker.types'
+import type {
+  TrackerProbeReading,
+  TrackerProjectResolution,
+} from '../../../src/shared/types/tracker.types'
 import type { TrackerProbe } from './tracker.types'
 
 export interface TrackerIpcDeps {
@@ -10,6 +13,11 @@ export interface TrackerIpcDeps {
     deleteKey(crewId: string): Promise<TrackerCredentialStatus>
   }
   probe: (crewId: string) => Promise<TrackerProbe>
+  /** Finds the project a person named, by URL, name or id (MAR-3156). */
+  resolveProject: (
+    crewId: string,
+    reference: string,
+  ) => Promise<TrackerProjectResolution>
   /** A key is only ever filed under a crew that exists (lap 2, F). */
   crewExists: (crewId: string) => boolean
   now?: () => Date
@@ -28,6 +36,15 @@ export function registerTrackerIpcHandlers(deps: TrackerIpcDeps): void {
       probe: await deps.probe(crewId),
       at: now().toISOString(),
     }),
+  )
+
+  // A read like the probe (MAR-3156 R5): a crew id and what was typed go in,
+  // projects come back. The key is fetched behind this door and never crosses
+  // it in either direction.
+  ipcMain.handle(
+    'tracker:resolveProject',
+    (_event, crewId: string, reference: string) =>
+      deps.resolveProject(crewId, reference),
   )
 
   ipcMain.handle('tracker:credentialStatus', (_event, crewId: string) =>

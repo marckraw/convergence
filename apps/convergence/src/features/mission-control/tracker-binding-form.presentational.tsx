@@ -8,6 +8,7 @@ import { Input } from '@/shared/ui/input'
 import {
   probeAsksForKey,
   probeTimeLabel,
+  TRACKER_PROJECT_FIELD_HINT,
   trackerProbeSentence,
 } from './tracker-binding-form.pure'
 
@@ -76,9 +77,11 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
         <span className="text-xs">Linear</span>
       </div>
       <label className="flex flex-col gap-1">
-        <span className={LABEL}>Project id</span>
+        {/* What a person HAS is the URL in their address bar or the project's
+            name; the id is the one thing Linear shows nowhere (MAR-3156). */}
+        <span className={LABEL}>Project ({TRACKER_PROJECT_FIELD_HINT})</span>
         <Input
-          aria-label="Tracker project id"
+          aria-label="Tracker project"
           value={draft.projectId}
           disabled={busy}
           onChange={(event) => onDraftChange({ projectId: event.target.value })}

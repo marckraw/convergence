@@ -3,6 +3,7 @@ import type {
   TrackerCredentialStatus,
   TrackerProbeReading,
   WorkLedgerSnapshot,
+  TrackerProjectResolution,
 } from './tracker.types'
 import type { ProviderAccountLoginAttempt } from './provider-account-login.types'
 import type {
@@ -1868,6 +1869,11 @@ interface ElectronAPI {
   /** Read-only toward the tracker; no door returns the key (MAR-3084 R8). */
   tracker: {
     probe: (crewId: string) => Promise<TrackerProbeReading>
+    /** Finds the project a person named by URL, name or id (MAR-3156). */
+    resolveProject: (
+      crewId: string,
+      reference: string,
+    ) => Promise<TrackerProjectResolution>
     credentialStatus: (crewId: string) => Promise<TrackerCredentialStatus>
     setCredential: (
       crewId: string,

@@ -8,10 +8,15 @@ import type {
   TrackerCredentialStatus,
   TrackerProbeReading,
 } from '@/shared/types/tracker.types'
+import { parseLinearProjectReference } from '@/shared/lib/linear-project-reference.pure'
 import {
   TrackerBindingForm,
   type TrackerBindingDraft,
 } from './tracker-binding-form.presentational'
+import {
+  TRACKER_PROJECT_NEEDS_KEY_SENTENCE,
+  trackerProjectProblem,
+} from './tracker-binding-form.pure'
 
 function draftFrom(crew: SessionCrew): TrackerBindingDraft {
   return {
@@ -58,6 +63,26 @@ export const TrackerBindingFormContainer: FC<{ crew: SessionCrew }> = ({
     }
   }, [crew.id])
 
+  /**
+   * The id to bind, from whatever was typed (MAR-3156 R1/R3).
+   *
+   * A UUID is bound exactly as before -- no read, and no key needed, because
+   * the form has always allowed binding before the key is stored. Anything
+   * else is a URL or a name and has to be looked up, which needs the key; the
+   * refusals are sentences a person can act on, thrown so `run` shows them
+   * and nothing is saved.
+   */
+  const resolveProjectId = async (typed: string): Promise<string> => {
+    const reference = parseLinearProjectReference(typed)
+    if (reference === null || reference.kind === 'id') return typed
+    if (credential !== 'present') {
+      throw new Error(TRACKER_PROJECT_NEEDS_KEY_SENTENCE)
+    }
+    const resolution = await trackerApi.resolveProject(crew.id, typed)
+    if (resolution.kind === 'resolved') return resolution.project.id
+    throw new Error(trackerProjectProblem(resolution))
+  }
+
   const run = async (work: () => Promise<void>) => {
     setBusy(true)
     setError(null)
@@ -84,7 +109,11 @@ export const TrackerBindingFormContainer: FC<{ crew: SessionCrew }> = ({
       }
       onSaveBinding={() =>
         void run(async () => {
-          const saved = await sessionCrewApi.setTrackerBinding(crew.id, draft)
+          const projectId = await resolveProjectId(draft.projectId)
+          const saved = await sessionCrewApi.setTrackerBinding(crew.id, {
+            ...draft,
+            projectId,
+          })
           setDraft(draftFrom(saved))
         })
       }

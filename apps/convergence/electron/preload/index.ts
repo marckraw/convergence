@@ -196,6 +196,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   tracker: {
     probe: (crewId: string) => ipcRenderer.invoke('tracker:probe', crewId),
+    resolveProject: (crewId: string, reference: string) =>
+      ipcRenderer.invoke('tracker:resolveProject', crewId, reference),
     credentialStatus: (crewId: string) =>
       ipcRenderer.invoke('tracker:credentialStatus', crewId),
     setCredential: (crewId: string, apiKey: string) =>

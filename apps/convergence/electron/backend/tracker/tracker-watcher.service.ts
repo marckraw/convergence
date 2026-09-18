@@ -12,11 +12,30 @@ import {
   trackerHealthChanged,
 } from './tracker-watcher.pure'
 import {
+  DEFAULT_TRACKER_LABEL_PREFIX,
+  DEFAULT_TRACKER_STATUS_MAP,
+  DEFAULT_TRACKER_WAVE_PREFIX,
+} from './tracker-binding.pure'
+import {
   TrackerRefusalError,
   type TrackerAdapter,
   type TrackerBinding,
   type TrackerProbe,
+  type TrackerProjectResolution,
 } from './tracker.types'
+
+/**
+ * The binding an adapter is built with when the crew has none yet
+ * (MAR-3156 R3): a project lookup reads no field of it. Named so the empty
+ * project id below is read as "not bound yet" rather than as a value.
+ */
+const LOOKUP_ONLY_BINDING: TrackerBinding = {
+  kind: 'linear',
+  projectId: '',
+  labelPrefix: DEFAULT_TRACKER_LABEL_PREFIX,
+  wavePrefix: DEFAULT_TRACKER_WAVE_PREFIX,
+  statusMap: { ...DEFAULT_TRACKER_STATUS_MAP },
+}
 
 export interface TrackerWatcherDeps {
   crews: { list(): SessionCrew[] }
@@ -101,6 +120,40 @@ export class TrackerWatcherService {
       }
     }
     return this.deps.createAdapter({ apiKey, binding }).probe()
+  }
+
+  /**
+   * The binding form's project lookup (MAR-3156 R3/R5): the same shape as
+   * `probe` above -- the key comes from the Keychain by crew id, never from
+   * the renderer, and a missing key is a typed refusal rather than a throw.
+   *
+   * Unlike `probe` this runs BEFORE a binding exists: it is how the id gets
+   * found. So it asks the crew for a binding only to reuse its prefixes, and
+   * falls back to the defaults when there is none -- the lookup reads no
+   * binding field, and the adapter is built with one only because that is how
+   * an adapter is built.
+   */
+  async resolveProject(
+    crewId: string,
+    reference: string,
+  ): Promise<TrackerProjectResolution> {
+    const apiKey = await this.deps.resolveKey(crewId)
+    if (!apiKey) {
+      return {
+        kind: 'refused',
+        refusal: {
+          kind: 'unauthorized',
+          message: 'No API key is stored for this crew.',
+          retryAt: null,
+        },
+      }
+    }
+    const binding =
+      this.deps.crews.list().find((crew) => crew.id === crewId)
+        ?.trackerBinding ?? LOOKUP_ONLY_BINDING
+    return this.deps
+      .createAdapter({ apiKey, binding })
+      .resolveProject(reference)
   }
 
   start(intervalMs: number = TRACKER_WATCH_INTERVAL_MS): TrackerWatcherHandle {

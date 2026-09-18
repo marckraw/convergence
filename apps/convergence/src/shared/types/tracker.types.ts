@@ -71,8 +71,39 @@ export interface TrackerRefusal {
 }
 
 export type TrackerProbe =
-  | { ok: true; issues: number }
+  | {
+      ok: true
+      /** How many issues carry a seat label -- what the read counted. */
+      issues: number
+      /**
+       * The bound project's name, or null when no project answers to the
+       * stored id (MAR-3156 R4). Null is not "none found": it is the one
+       * answer a count must never be given for, because `0 issues` reads the
+       * same as a quiet project.
+       */
+      projectName: string | null
+    }
   | { ok: false; refusal: TrackerRefusal }
+
+/** One project the app can offer or bind to (MAR-3156). */
+export interface TrackerProjectMatch {
+  id: string
+  name: string
+  url: string
+}
+
+/**
+ * What came back from looking a project up by URL, name or id (MAR-3156 R2).
+ *
+ * `ambiguous` is a first-class answer rather than a refusal: several projects
+ * answering to one name is not an error, it is a question only the person can
+ * settle, so the candidates travel with it.
+ */
+export type TrackerProjectResolution =
+  | { kind: 'resolved'; project: TrackerProjectMatch }
+  | { kind: 'ambiguous'; candidates: TrackerProjectMatch[] }
+  | { kind: 'not-found' }
+  | { kind: 'refused'; refusal: TrackerRefusal }
 
 export interface ListLabeledIssuesInput {
   projectId: string

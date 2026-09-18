@@ -8,7 +8,11 @@ import {
   waitFor,
 } from '@testing-library/react'
 import type { SessionCrew } from '@/entities/session-crew'
-import type { TrackerProbeReading } from '@/shared/types/tracker.types'
+import type {
+  TrackerCredentialStatus,
+  TrackerProbeReading,
+  TrackerProjectResolution,
+} from '@/shared/types/tracker.types'
 import { TrackerBindingForm } from './tracker-binding-form.presentational'
 import { TrackerBindingFormContainer } from './tracker-binding-form.container'
 
@@ -56,16 +60,19 @@ afterEach(() => {
 })
 
 describe('MAR-3084 R9: the binding form shows facts, not the key', () => {
-  it('present + a probe of 12 reads "12 issues in project", with the four fields and the time', () => {
+  it('present + a probe of 12 reads "12 labeled issues in convergence", with the four fields and the time', () => {
     renderForm({
       credential: 'present',
-      lastProbe: { probe: { ok: true, issues: 12 }, at: AT },
+      lastProbe: {
+        probe: { ok: true, issues: 12, projectName: 'convergence' },
+        at: AT,
+      },
     })
 
-    expect(screen.getByText('12 issues in project')).toBeTruthy()
+    expect(screen.getByText('12 labeled issues in convergence')).toBeTruthy()
     expect(screen.getByText('Stored in Keychain')).toBeTruthy()
     expect(screen.getByText('Linear')).toBeTruthy()
-    expect(screen.getByLabelText('Tracker project id')).toHaveProperty(
+    expect(screen.getByLabelText('Tracker project')).toHaveProperty(
       'value',
       'project-1',
     )
@@ -129,7 +136,11 @@ describe('MAR-3084 R9: the binding form shows facts, not the key', () => {
         credentialStatus: vi.fn(async () => 'absent' as const),
         setCredential,
         deleteCredential: vi.fn(async () => 'absent' as const),
-        probe: vi.fn(async () => ({ probe: { ok: true, issues: 3 }, at: AT })),
+        probe: vi.fn(async () => ({
+          probe: { ok: true, issues: 3, projectName: 'convergence' },
+          at: AT,
+        })),
+        resolveProject: vi.fn(),
       },
       crew: { setTrackerBinding: vi.fn(async () => crew) },
     }
@@ -157,6 +168,148 @@ describe('MAR-3084 R9: the binding form shows facts, not the key', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Test' }))
     })
-    await screen.findByText('3 issues in project')
+    await screen.findByText('3 labeled issues in convergence')
+  })
+})
+
+describe('MAR-3156 R3: what happens when Bind is pressed', () => {
+  const UUID = '4f6d2a1e-8b3c-4d5e-9f01-2a3b4c5d6e7f'
+  const URL = 'https://linear.app/marckraw/project/convergence-0a1b2c3d4e5f'
+
+  function crewFor(projectId: string): SessionCrew {
+    return {
+      id: 'crew-1',
+      name: 'Loom',
+      emoji: null,
+      accentColor: null,
+      position: 0,
+      roundCap: null,
+      stallMinutes: null,
+      createdAt: AT,
+      updatedAt: AT,
+      sessionIds: [],
+      members: [],
+      trackerBinding: {
+        kind: 'linear',
+        projectId,
+        labelPrefix: 'horse:',
+        wavePrefix: 'wave:',
+        statusMap: {},
+      },
+    } satisfies SessionCrew
+  }
+
+  function bench(input: {
+    credential: TrackerCredentialStatus
+    resolution?: TrackerProjectResolution
+  }) {
+    const crew = crewFor('')
+    const setTrackerBinding = vi.fn(async () => crew)
+    const resolveProject = vi.fn(
+      async () => input.resolution ?? { kind: 'not-found' as const },
+    )
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      tracker: {
+        credentialStatus: vi.fn(async () => input.credential),
+        setCredential: vi.fn(async () => 'present' as const),
+        deleteCredential: vi.fn(async () => 'absent' as const),
+        probe: vi.fn(),
+        resolveProject,
+      },
+      crew: { setTrackerBinding },
+    }
+    return { crew, setTrackerBinding, resolveProject }
+  }
+
+  async function bindWith(
+    typed: string,
+    doors: ReturnType<typeof bench>,
+    crew: SessionCrew,
+  ) {
+    render(<TrackerBindingFormContainer crew={crew} />)
+    await waitFor(() => expect(doors.resolveProject).toBeDefined())
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Tracker project'), {
+        target: { value: typed },
+      })
+    })
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: /^(Bind to project|Save binding)$/,
+        }),
+      )
+    })
+  }
+
+  it('a UUID binds with no lookup, even with no key stored', async () => {
+    const doors = bench({ credential: 'absent' })
+    await bindWith(UUID, doors, doors.crew)
+
+    // Mutation: resolve unconditionally -> this asks a door that needs a key
+    // and the bind fails for somebody pasting the id, red.
+    expect(doors.resolveProject).not.toHaveBeenCalled()
+    expect(doors.setTrackerBinding).toHaveBeenCalledWith(
+      'crew-1',
+      expect.objectContaining({ projectId: UUID }),
+    )
+  })
+
+  it('a URL with no key stored saves nothing and says what to do', async () => {
+    const doors = bench({ credential: 'absent' })
+    await bindWith(URL, doors, doors.crew)
+
+    expect(doors.resolveProject).not.toHaveBeenCalled()
+    expect(doors.setTrackerBinding).not.toHaveBeenCalled()
+    expect(
+      screen.getByText(/Store the API key first to look a project up/),
+    ).toBeTruthy()
+  })
+
+  it('a name the key can resolve binds the ID it found', async () => {
+    const doors = bench({
+      credential: 'present',
+      resolution: {
+        kind: 'resolved',
+        project: { id: 'project-9', name: 'convergence', url: URL },
+      },
+    })
+    await bindWith('convergence', doors, doors.crew)
+
+    expect(doors.resolveProject).toHaveBeenCalledWith('crew-1', 'convergence')
+    // The id is what gets stored, exactly as before this issue: the binding
+    // shape did not change.
+    expect(doors.setTrackerBinding).toHaveBeenCalledWith(
+      'crew-1',
+      expect.objectContaining({ projectId: 'project-9' }),
+    )
+  })
+
+  it('a name several projects answer to saves nothing and lists them', async () => {
+    const doors = bench({
+      credential: 'present',
+      resolution: {
+        kind: 'ambiguous',
+        candidates: [
+          { id: 'a', name: 'convergence', url: 'https://linear.app/a' },
+          { id: 'b', name: 'Convergence', url: 'https://linear.app/b' },
+        ],
+      },
+    })
+    await bindWith('convergence', doors, doors.crew)
+
+    expect(doors.setTrackerBinding).not.toHaveBeenCalled()
+    expect(
+      screen.getByText(/Several projects answer to that name/),
+    ).toBeTruthy()
+    expect(screen.getByText(/https:\/\/linear\.app\/b/)).toBeTruthy()
+  })
+
+  it('a name nothing answers to saves nothing and asks for the URL', async () => {
+    const doors = bench({ credential: 'present' })
+    await bindWith('nothing answers', doors, doors.crew)
+
+    expect(doors.setTrackerBinding).not.toHaveBeenCalled()
+    expect(screen.getByText(/No project answers to that/)).toBeTruthy()
   })
 })

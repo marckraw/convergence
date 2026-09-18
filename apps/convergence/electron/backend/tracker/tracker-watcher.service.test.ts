@@ -70,7 +70,12 @@ describe('MAR-3084 R7: the tick is a house-rules timer', () => {
       ledger,
       resolveKey: async () => 'lin_api_fixture',
       createAdapter: () => ({
-        probe: async () => ({ ok: true, issues: 0 }),
+        probe: async () => ({
+          ok: true,
+          issues: 0,
+          projectName: 'convergence',
+        }),
+        resolveProject: async () => ({ kind: 'not-found' as const }),
         listLabeledIssues,
       }),
       broadcast: (snapshot) => broadcasts.push(snapshot),
@@ -118,7 +123,12 @@ describe('MAR-3084 R7: the tick is a house-rules timer', () => {
       ledger,
       resolveKey: async () => 'lin_api_fixture',
       createAdapter: () => ({
-        probe: async () => ({ ok: true, issues: 0 }),
+        probe: async () => ({
+          ok: true,
+          issues: 0,
+          projectName: 'convergence',
+        }),
+        resolveProject: async () => ({ kind: 'not-found' as const }),
         listLabeledIssues: list,
       }),
       broadcast: () => {},
@@ -319,7 +329,12 @@ describe('MAR-3084 R7: the tick is a house-rules timer', () => {
       ledger,
       resolveKey: async () => null,
       createAdapter: () => ({
-        probe: async () => ({ ok: true, issues: 0 }),
+        probe: async () => ({
+          ok: true,
+          issues: 0,
+          projectName: 'convergence',
+        }),
+        resolveProject: async () => ({ kind: 'not-found' as const }),
         listLabeledIssues: list,
       }),
       broadcast: () => {},

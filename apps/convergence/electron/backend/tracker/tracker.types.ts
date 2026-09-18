@@ -19,6 +19,8 @@ export type {
   TrackerRefusalKind,
   TrackerRefusal,
   TrackerProbe,
+  TrackerProjectMatch,
+  TrackerProjectResolution,
   ListLabeledIssuesInput,
 } from '../../../src/shared/types/tracker.types'
 import type {
@@ -26,6 +28,7 @@ import type {
   TrackerIssue,
   TrackerLogicalStatus,
   TrackerProbe,
+  TrackerProjectResolution,
   TrackerRefusal,
 } from '../../../src/shared/types/tracker.types'
 
@@ -53,4 +56,10 @@ export class TrackerRefusalError extends Error {
 export interface TrackerAdapter {
   probe(): Promise<TrackerProbe>
   listLabeledIssues(input: ListLabeledIssuesInput): Promise<TrackerIssue[]>
+  /**
+   * Finds the project a person named by URL, name or id (MAR-3156). A READ:
+   * it asks which project answers to a reference and returns what it found,
+   * and nothing about it can change anything on the far side.
+   */
+  resolveProject(reference: string): Promise<TrackerProjectResolution>
 }
