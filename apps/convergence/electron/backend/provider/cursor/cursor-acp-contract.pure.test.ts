@@ -3,6 +3,7 @@ import {
   CURSOR_ACP_ATTACHMENT_CAPABILITY,
   CURSOR_ACP_INTERACTION_CAPABILITY,
   CURSOR_ACP_MID_RUN_INPUT_CAPABILITY,
+  CURSOR_ACP_PROMPT_SILENCE_BUDGET_MS,
   CURSOR_ACP_PROVIDER_DECISION,
   CURSOR_ACP_SETTINGS_INFO,
   CURSOR_ACP_SKILLS_CAPABILITY,
@@ -10,6 +11,7 @@ import {
   buildCursorUnavailableContextWindow,
   classifyCursorAcpMessage,
   formatCursorAcpModelLabel,
+  formatCursorAcpSilenceBudgetNote,
   getCursorAcpCurrentModeId,
   getCursorAcpCurrentModelId,
   getCursorAcpDefaultModelId,
@@ -447,18 +449,18 @@ describe('cursor ACP contract helpers', () => {
       modeSettingMethod: 'session/set_mode',
       approvePermissionOptionId: 'allow-once',
       denyPermissionOptionId: 'reject-once',
-      stopStrategy: 'terminate-acp-process-until-session-cancel-is-supported',
       quotaTelemetry: 'unavailable-from-acp-prompt-result',
       contextWindowTelemetry:
         'model-context-metadata-only-token-usage-unavailable',
     })
+    expect(CURSOR_ACP_PROVIDER_DECISION).not.toHaveProperty('stopStrategy')
 
     expect(CURSOR_ACP_MID_RUN_INPUT_CAPABILITY).toMatchObject({
       supportsAnswer: true,
       supportsNativeFollowUp: false,
       supportsAppQueuedFollowUp: true,
       supportsSteer: false,
-      supportsInterrupt: false,
+      supportsInterrupt: true,
       defaultRunningMode: 'follow-up',
     })
 
@@ -488,5 +490,17 @@ describe('cursor ACP contract helpers', () => {
       label: 'Cursor dashboard',
       url: 'https://cursor.com/dashboard',
     })
+  })
+
+  it('derives the silence-budget note from CURSOR_ACP_PROMPT_SILENCE_BUDGET_MS (lap 2, F)', () => {
+    expect(formatCursorAcpSilenceBudgetNote()).toBe(
+      'no word from Cursor for 10 minutes',
+    )
+    expect(
+      formatCursorAcpSilenceBudgetNote(CURSOR_ACP_PROMPT_SILENCE_BUDGET_MS),
+    ).toBe('no word from Cursor for 10 minutes')
+    expect(formatCursorAcpSilenceBudgetNote(5 * 60 * 1000)).toBe(
+      'no word from Cursor for 5 minutes',
+    )
   })
 })

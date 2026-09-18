@@ -73,7 +73,10 @@ describe('provider-descriptor', () => {
     })
     expect(
       buildFallbackCursorDescriptor().contextManagement?.compact,
-    ).toMatchObject({ availability: 'runtime-check', method: 'slash-command' })
+    ).toMatchObject({
+      availability: 'unavailable',
+      method: 'unsupported',
+    })
     expect(
       buildFallbackAntigravityDescriptor().contextManagement?.compact,
     ).toMatchObject({ availability: 'unavailable', method: 'unsupported' })
@@ -200,7 +203,7 @@ describe('provider-descriptor', () => {
         supportsNativeFollowUp: false,
         supportsAppQueuedFollowUp: true,
         supportsSteer: false,
-        supportsInterrupt: false,
+        supportsInterrupt: true,
       },
       interactions: {
         inputRequests: ['choice', 'plan'],

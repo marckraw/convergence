@@ -4,8 +4,7 @@ import { vi } from 'vitest'
 
 /**
  * Fake Cursor ACP child + scripted JSON-RPC replies for provider tests
- * (MAR-3143 / CP2). Extracted from the former inline switch in
- * `cursor-provider.test.ts` so CP1 can share the same fixture.
+ * (MAR-3143 / CP2; grown for MAR-3142 / CP1).
  */
 export class MockCursorAcpChild extends EventEmitter {
   stdin = new PassThrough()
@@ -28,27 +27,68 @@ export interface MockCursorAcpOptions {
   holdPrompt?: boolean
   /** Hold `initialize` so tests can inject server requests before any prompt. */
   holdInitialize?: boolean
+  /** Refuse `session/load` with a not-found style error (MAR-3142 R5). */
+  refuseSessionLoad?: boolean | { code?: number; message: string }
+  /** Refuse `session/set_config_option` (MAR-3142 lap 3, C1a). */
+  refuseSetConfigOption?: boolean | { code?: number; message: string }
   availableCommands?: string[]
+  /**
+   * Record `session/cancel` without resolving a held prompt (MAR-3142 lap 2, A).
+   * Lets a test finish the prompt as `end_turn` after interrupt to pin sticky-flag clearing.
+   */
+  ignoreCancel?: boolean
+}
+
+export interface MockCursorAcpRecordedRequest {
+  seq: number
+  method: string
+  params?: Record<string, unknown>
+}
+
+export interface MockCursorAcpRecordedNotification {
+  seq: number
+  method: string
+  params?: Record<string, unknown>
+}
+
+export interface MockCursorAcpRecordedResponse {
+  seq: number
+  id: string | number
+  result?: unknown
+  error?: unknown
 }
 
 export interface MockCursorAcpServer {
-  requests: Array<{ method: string; params?: Record<string, unknown> }>
-  responses: Array<{ id: string | number; result?: unknown }>
+  requests: MockCursorAcpRecordedRequest[]
+  notifications: MockCursorAcpRecordedNotification[]
+  responses: MockCursorAcpRecordedResponse[]
   send: (message: unknown) => void
   resolveHeldPrompt: (result: unknown) => void
   resolveHeldInitialize: () => void
+  /** Clear a prior `refuseSetConfigOption` so a later switch can succeed. */
+  allowSetConfigOption: () => void
 }
 
 export function createMockCursorAcp(
   child: MockCursorAcpChild,
   options: MockCursorAcpOptions = {},
 ): MockCursorAcpServer {
-  const requests: Array<{ method: string; params?: Record<string, unknown> }> =
-    []
-  const responses: Array<{ id: string | number; result?: unknown }> = []
+  const requests: MockCursorAcpRecordedRequest[] = []
+  const notifications: MockCursorAcpRecordedNotification[] = []
+  const responses: MockCursorAcpRecordedResponse[] = []
   let heldPromptId: string | number | null = null
   let heldInitializeId: string | number | null = null
   let buffer = ''
+  let nextSessionOrdinal = 1
+  /** Shared across requests, notifications, and client responses (lap 3, E1). */
+  let nextSeq = 1
+  let refuseSetConfigOption = options.refuseSetConfigOption
+
+  function nextRecordSeq(): number {
+    const seq = nextSeq
+    nextSeq += 1
+    return seq
+  }
 
   function send(message: unknown): void {
     child.stdout.write(JSON.stringify(message) + '\n')
@@ -58,6 +98,37 @@ export function createMockCursorAcp(
     setTimeout(() => {
       send({ jsonrpc: '2.0', id, result })
     }, 0)
+  }
+
+  function respondError(
+    id: string | number,
+    code: number,
+    message: string,
+  ): void {
+    setTimeout(() => {
+      send({ jsonrpc: '2.0', id, error: { code, message } })
+    }, 0)
+  }
+
+  function sessionNewResult(): Record<string, unknown> {
+    const sessionId = `cursor-session-${nextSessionOrdinal}`
+    nextSessionOrdinal += 1
+    return {
+      sessionId,
+      configOptions: [
+        {
+          id: 'model',
+          currentValue: 'default[]',
+          options: [
+            { value: 'default[]', label: 'Auto' },
+            {
+              value: 'composer-2.5[context=300k,fast=true]',
+              label: 'Composer 2.5 Fast',
+            },
+          ],
+        },
+      ],
+    }
   }
 
   child.stdin.on('data', (chunk) => {
@@ -74,18 +145,43 @@ export function createMockCursorAcp(
         method?: string
         params?: Record<string, unknown>
         result?: unknown
+        error?: unknown
       }
 
       if ('id' in message && !message.method) {
         responses.push({
+          seq: nextRecordSeq(),
           id: message.id as string | number,
           result: message.result,
+          error: message.error,
         })
         continue
       }
 
+      // Outbound notification (no id) — CP1 cancel (MAR-3142 R2).
+      if (message.method && message.id === undefined) {
+        notifications.push({
+          seq: nextRecordSeq(),
+          method: message.method,
+          params: message.params,
+        })
+        if (
+          message.method === 'session/cancel' &&
+          heldPromptId !== null &&
+          !options.ignoreCancel
+        ) {
+          respond(heldPromptId, { stopReason: 'cancelled' })
+          heldPromptId = null
+        }
+        continue
+      }
+
       if (message.id !== undefined && message.method) {
-        requests.push({ method: message.method, params: message.params })
+        requests.push({
+          seq: nextRecordSeq(),
+          method: message.method,
+          params: message.params,
+        })
         switch (message.method) {
           case 'initialize':
             if (options.holdInitialize) {
@@ -98,24 +194,20 @@ export function createMockCursorAcp(
             respond(message.id, {})
             break
           case 'session/new':
-            respond(message.id, {
-              sessionId: 'cursor-session-1',
-              configOptions: [
-                {
-                  id: 'model',
-                  currentValue: 'default[]',
-                  options: [
-                    { value: 'default[]', label: 'Auto' },
-                    {
-                      value: 'composer-2.5[context=300k,fast=true]',
-                      label: 'Composer 2.5 Fast',
-                    },
-                  ],
-                },
-              ],
-            })
+            respond(message.id, sessionNewResult())
             break
-          case 'session/load':
+          case 'session/load': {
+            if (options.refuseSessionLoad) {
+              const refusal =
+                typeof options.refuseSessionLoad === 'object'
+                  ? options.refuseSessionLoad
+                  : {
+                      code: -32000,
+                      message: 'Session not found',
+                    }
+              respondError(message.id, refusal.code ?? -32000, refusal.message)
+              break
+            }
             send({
               jsonrpc: '2.0',
               method: 'session/update',
@@ -144,6 +236,7 @@ export function createMockCursorAcp(
             }
             respond(message.id, null)
             break
+          }
           case 'session/prompt':
             if (options.holdPrompt) {
               heldPromptId = message.id
@@ -174,7 +267,26 @@ export function createMockCursorAcp(
             respond(message.id, { stopReason: 'end_turn' })
             break
           case 'session/set_config_option':
+            if (refuseSetConfigOption) {
+              const refusal =
+                typeof refuseSetConfigOption === 'object'
+                  ? refuseSetConfigOption
+                  : {
+                      code: -32000,
+                      message: 'Config option rejected',
+                    }
+              respondError(message.id, refusal.code ?? -32000, refusal.message)
+              break
+            }
             respond(message.id, {})
+            break
+          case 'session/cancel':
+            // Cancel as a *request* is rejected on the measured CLI (CP0).
+            respondError(
+              message.id,
+              -32601,
+              '"Method not found": session/cancel',
+            )
             break
         }
       }
@@ -183,6 +295,7 @@ export function createMockCursorAcp(
 
   return {
     requests,
+    notifications,
     responses,
     send,
     resolveHeldPrompt(result: unknown): void {
@@ -198,6 +311,9 @@ export function createMockCursorAcp(
       }
       respond(heldInitializeId, { protocolVersion: 1 })
       heldInitializeId = null
+    },
+    allowSetConfigOption(): void {
+      refuseSetConfigOption = false
     },
   }
 }

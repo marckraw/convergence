@@ -9,10 +9,7 @@ import { markSkillSelectionsStatus } from '../../skills/skill-invocation.pure'
 import { CursorSkillsService } from '../../skills/cursor-skills.service'
 import type { SkillSelection } from '../../skills/skills.types'
 import type { ProviderSkillCatalog } from '../../skills/skills.types'
-import {
-  mapCursorCommandCatalog,
-  summarizeCursorCommandCatalogUpdate,
-} from '../../skills/cursor-skills.mapper.pure'
+import { summarizeCursorCommandCatalogUpdate } from '../../skills/cursor-skills.mapper.pure'
 import type {
   InteractionResponse,
   SessionDelta,
@@ -33,8 +30,6 @@ import type {
   OneShotResult,
   Provider,
   ProviderDescriptor,
-  ProviderContextManagementInput,
-  ProviderContextManagementResult,
   SessionContextWindow,
   SessionHandle,
   SessionStartConfig,
@@ -43,14 +38,14 @@ import type {
 import {
   buildCursorAcpInitializeParams,
   buildCursorAcpSessionParams,
-  CursorAcpProcessClient,
   readCursorAcpSessionId,
 } from './cursor-acp-client'
-import { createUnavailableContextWindow } from '../context-window.pure'
 import {
   buildCursorUnavailableContextWindow,
   CURSOR_ACP_LOGIN_METHOD_ID,
   CURSOR_ACP_MODEL_CONFIG_ID,
+  CURSOR_ACP_PROMPT_SILENCE_BUDGET_MS,
+  formatCursorAcpSilenceBudgetNote,
   getCursorAcpCurrentModelId,
 } from './cursor-acp-contract.pure'
 import {
@@ -73,8 +68,13 @@ import {
 } from './cursor-acp-message.pure'
 import {
   CursorAcpJsonRpcClient,
+  CursorAcpSilenceBudgetError,
   type CursorAcpJsonRpcId,
 } from './cursor-acp-jsonrpc'
+import {
+  buildContinuationRecoveryEntry,
+  isMissingContinuationError,
+} from '../continuation-recovery.pure'
 import { fetchCursorAcpDescriptorOrFallback } from './cursor-descriptor.service'
 
 const CURSOR_PROVIDER_ID = 'cursor'
@@ -402,63 +402,6 @@ export class CursorProvider implements Provider {
     )
   }
 
-  async manageContext(
-    config: SessionStartConfig,
-    input: ProviderContextManagementInput,
-  ): Promise<ProviderContextManagementResult> {
-    if (input.kind !== 'compact') {
-      throw new Error(`Unsupported Cursor context action: ${input.kind}`)
-    }
-    const cursorSessionId = config.continuationToken?.trim()
-    if (!cursorSessionId) {
-      throw new Error('Cursor context compaction requires a continuation token')
-    }
-
-    const client = new CursorAcpProcessClient(this.binaryPath, {
-      requestTimeoutMs: this.options.requestTimeoutMs,
-      operationTimeoutMs: 120_000,
-      appVersion: this.options.appVersion ?? null,
-    })
-    await client.withAuthenticatedConnection(
-      config.workingDirectory,
-      async (rpc) => {
-        const notifications: Array<{ method: string; params: unknown }> = []
-        rpc.onNotification((method, params) => {
-          notifications.push({ method, params })
-        })
-        const session = await rpc.request('session/load', {
-          sessionId: cursorSessionId,
-          ...buildCursorAcpSessionParams(config.workingDirectory),
-        })
-        await new Promise((resolve) => setTimeout(resolve, 500))
-        const catalog = mapCursorCommandCatalog({ session, notifications })
-        const compress = catalog.skills.find(
-          (entry) => entry.name.toLowerCase() === 'compress' && entry.enabled,
-        )
-        if (!compress) {
-          throw new Error(
-            'The current Cursor ACP session does not advertise the /compress command',
-          )
-        }
-        await rpc.request(
-          'session/prompt',
-          {
-            sessionId: cursorSessionId,
-            prompt: buildCursorAcpPrompt({ text: '/compress' }),
-          },
-          { timeoutMs: 0 },
-        )
-      },
-    )
-
-    return {
-      kind: 'compact',
-      contextWindow: createUnavailableContextWindow(
-        'Context compressed. Cursor ACP does not expose refreshed token usage.',
-      ),
-    }
-  }
-
   start(config: SessionStartConfig): SessionHandle {
     const binaryPath = this.binaryPath
     const debugSink = this.debugSink
@@ -492,11 +435,29 @@ export class CursorProvider implements Provider {
     let thinkingBuffer = ''
     let thinkingItemId: string | null = null
     let suppressReplayUpdates = false
-    let promptQueue: Promise<void> = Promise.resolve()
+    /**
+     * The ACP process is resident (MAR-3142 R1): it survives a completed turn,
+     * so the connection gate is re-armed per spawn rather than created once.
+     */
     let resolveReady: (() => void) | null = null
-    const readyPromise = new Promise<void>((resolve) => {
-      resolveReady = resolve
-    })
+    let readyPromise: Promise<void> = Promise.resolve()
+    let spawnedOnce = false
+    let initialMessageDelivered = false
+    /** A `session/prompt` has been issued and has not settled yet. */
+    let promptInFlight = false
+    /** A prompt run has begun, including the writes and reads before the send. */
+    let promptStarting = false
+    /** The user asked for this turn to be cancelled, so it ends stopped. */
+    let interruptRequested = false
+
+    function armReadyGate(): void {
+      readyPromise = new Promise<void>((resolve) => {
+        resolveReady = resolve
+      })
+    }
+
+    armReadyGate()
+
     const pendingApprovals = new Map<
       CursorAcpJsonRpcId,
       PendingCursorApproval
@@ -1047,38 +1008,56 @@ export class CursorProvider implements Provider {
       deliveryMode?: MidRunInputMode,
       skillSelections?: SkillSelection[],
     ): Promise<void> {
+      reconnectIfIdleProcessDied()
       await readyPromise
+      if (stopped) return
+      if (interruptRequested) {
+        settleInterruptedWithoutSend({
+          text,
+          attachments,
+          deliveryMode,
+          skillSelections,
+        })
+        return
+      }
       const activeRpc = rpc
       const activeSessionId = cursorSessionId
-      if (!activeRpc || !activeSessionId || stopped) {
-        if (!stopped) {
-          recordTeardown('the disconnected user message', () =>
-            sessionEmitter.addUserMessage({
-              providerAccountId: null,
-              text,
-              attachmentIds: attachments?.length
-                ? attachments.map((attachment) => attachment.id)
+      if (!activeRpc || !activeSessionId) {
+        recordTeardown('the disconnected user message', () =>
+          sessionEmitter.addUserMessage({
+            providerAccountId: null,
+            text,
+            attachmentIds: attachments?.length
+              ? attachments.map((attachment) => attachment.id)
+              : undefined,
+            deliveryMode:
+              deliveryMode === 'follow-up' || deliveryMode === 'steer'
+                ? deliveryMode
                 : undefined,
-              deliveryMode:
-                deliveryMode === 'follow-up' || deliveryMode === 'steer'
-                  ? deliveryMode
-                  : undefined,
-            }),
-          )
-          recordTeardown('the disconnected note', () =>
-            sessionEmitter.addNote({
-              text: 'Cursor is no longer connected, so this message was not sent.',
-              level: 'error',
-            }),
-          )
-          recordFailedTurnState()
-          recordTeardown('the cleared activity', () => setActivity(null))
-        }
+          }),
+        )
+        recordTeardown('the disconnected note', () =>
+          sessionEmitter.addNote({
+            text: 'Cursor is no longer connected, so this message was not sent.',
+            level: 'error',
+          }),
+        )
+        recordFailedTurnState()
+        recordTeardown('the cleared activity', () => setActivity(null))
         return
       }
 
       const skillResolution = await resolveSelectedSkills(text, skillSelections)
       if (stopped) return
+      if (interruptRequested) {
+        settleInterruptedWithoutSend({
+          text,
+          attachments,
+          deliveryMode,
+          skillSelections: skillResolution.skillSelections,
+        })
+        return
+      }
 
       const userMessageItemId = sessionEmitter.addUserMessage({
         providerAccountId: null,
@@ -1107,6 +1086,13 @@ export class CursorProvider implements Provider {
 
       try {
         const parts = await loadCursorParts(attachments)
+        if (stopped) return
+        if (interruptRequested) {
+          // User message already written — only the settle note (lap 3, A2).
+          settleInterruptedWithoutSend()
+          return
+        }
+        promptInFlight = true
         const promptPromise = activeRpc.request(
           'session/prompt',
           {
@@ -1116,7 +1102,15 @@ export class CursorProvider implements Provider {
               parts,
             }),
           },
-          { timeoutMs: 0 },
+          {
+            // A turn has no wall-clock limit, only a progress one: every
+            // session/update re-arms the budget (MAR-3142 R4).
+            silenceBudgetMs: CURSOR_ACP_PROMPT_SILENCE_BUDGET_MS,
+            onSilenceExpired: () =>
+              activeRpc.notify('session/cancel', {
+                sessionId: activeSessionId,
+              }),
+          },
         )
         // Acceptance begins where the CLI takes the send (R1), not at the
         // user-message write above.
@@ -1141,6 +1135,15 @@ export class CursorProvider implements Provider {
         endTurn(() => {
           setActivity(null)
           if (stopReason === 'cancelled') {
+            // A cancelled turn is a finished turn, never a failed one: the
+            // user stopped it and the process stays alive (MAR-3142 R2).
+            // Clear interruptRequested *after* this callback so the service
+            // still reads retainQueuedInputsOnCompletion while completed is
+            // delivered (MAR-3142 lap 3, A1).
+            sessionEmitter.addNote({
+              text: 'stopped by user',
+              level: 'info',
+            })
             setStatus('completed')
             setAttention('finished')
             return
@@ -1148,6 +1151,10 @@ export class CursorProvider implements Provider {
           setStatus('completed')
           setAttention('finished')
         })
+        // The flag is a property of one turn — clear it at every turn end so
+        // a late Stop after end_turn cannot sticky-retain the app queue
+        // (MAR-3142 lap 2, A). Must stay after endTurn so A1's pin holds.
+        interruptRequested = false
       } catch (error) {
         patchUserMessageSkills(
           userMessageItemId,
@@ -1155,39 +1162,102 @@ export class CursorProvider implements Provider {
           'failed',
         )
         throw error
+      } finally {
+        promptInFlight = false
       }
     }
 
-    function enqueuePrompt(
+    /**
+     * Stop landed before `session/prompt` — completed, no send (lap 2, D).
+     * When the user message has not been written yet, record it and note
+     * "not sent — stopped by user" so typed text does not vanish (lap 3, D1).
+     */
+    function settleInterruptedWithoutSend(pendingMessage?: {
+      text: string
+      attachments?: Attachment[]
+      deliveryMode?: MidRunInputMode
+      skillSelections?: SkillSelection[]
+    }): void {
+      endTurn(() => {
+        if (pendingMessage) {
+          sessionEmitter.addUserMessage({
+            providerAccountId: null,
+            text: pendingMessage.text,
+            skillSelections: pendingMessage.skillSelections,
+            attachmentIds: pendingMessage.attachments?.length
+              ? pendingMessage.attachments.map((attachment) => attachment.id)
+              : undefined,
+            deliveryMode:
+              pendingMessage.deliveryMode === 'follow-up' ||
+              pendingMessage.deliveryMode === 'steer'
+                ? pendingMessage.deliveryMode
+                : undefined,
+          })
+          sessionEmitter.addNote({
+            text: 'not sent — stopped by user',
+            level: 'info',
+          })
+        } else {
+          sessionEmitter.addNote({
+            text: 'stopped by user',
+            level: 'info',
+          })
+        }
+        setStatus('completed')
+        interruptRequested = false
+        setAttention('finished')
+        setActivity(null)
+      })
+    }
+
+    /**
+     * Runs one turn without a queue of its own: the app owns follow-ups
+     * (MAR-3142 R3), so a second send while this one is live is deferred by
+     * `sendMessage` rather than chained here.
+     */
+    function runPrompt(
       text: string,
       attachments?: Attachment[],
       deliveryMode?: MidRunInputMode,
       skillSelections?: SkillSelection[],
     ): void {
-      promptQueue = promptQueue
-        .then(() =>
-          sendPrompt(text, attachments, deliveryMode, skillSelections),
-        )
-        .catch((error) => {
-          if (stopped) return
-          endTurn()
-          recordTeardown('the flushed assistant buffer', () =>
-            flushAssistantBuffer(),
-          )
-          recordTeardown('the flushed thinking buffer', () =>
-            flushThinkingBuffer(),
-          )
-          recordTeardown('the prompt failure note', () =>
-            sessionEmitter.addNote({
-              text: `Cursor prompt failed: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-              level: 'error',
-            }),
-          )
-          recordFailedTurnState()
-          recordTeardown('the cleared activity', () => setActivity(null))
+      // Clear a sticky interrupt from a prior turn before this one starts
+      // (MAR-3142 lap 2, A; Claude clears at turn start too).
+      interruptRequested = false
+      promptStarting = true
+      void sendPrompt(text, attachments, deliveryMode, skillSelections)
+        .catch(handlePromptFailure)
+        .finally(() => {
+          promptStarting = false
+          promptInFlight = false
         })
+    }
+
+    function handlePromptFailure(error: unknown): void {
+      if (stopped) return
+      endTurn()
+      interruptRequested = false
+      recordTeardown('the flushed assistant buffer', () =>
+        flushAssistantBuffer(),
+      )
+      recordTeardown('the flushed thinking buffer', () => flushThinkingBuffer())
+      recordTeardown(
+        error instanceof CursorAcpSilenceBudgetError
+          ? 'the silence budget note'
+          : 'the prompt failure note',
+        () =>
+          sessionEmitter.addNote({
+            text:
+              error instanceof CursorAcpSilenceBudgetError
+                ? formatCursorAcpSilenceBudgetNote(error.budgetMs)
+                : `Cursor prompt failed: ${
+                    error instanceof Error ? error.message : String(error)
+                  }`,
+            level: 'error',
+          }),
+      )
+      recordFailedTurnState()
+      recordTeardown('the cleared activity', () => setActivity(null))
     }
 
     async function applySessionConfig(sessionResult: unknown): Promise<void> {
@@ -1221,6 +1291,55 @@ export class CursorProvider implements Provider {
       })
     }
 
+    async function startNewSession(
+      activeRpc: CursorAcpJsonRpcClient,
+    ): Promise<void> {
+      const sessionResult = await activeRpc.request(
+        'session/new',
+        buildCursorAcpSessionParams(config.workingDirectory),
+      )
+      const discoveredSessionId = readCursorAcpSessionId(sessionResult)
+      if (!discoveredSessionId) {
+        throw new Error('Cursor ACP session/new did not return a sessionId')
+      }
+      setContinuationToken(discoveredSessionId)
+      await applySessionConfig(sessionResult)
+    }
+
+    /**
+     * Resumes the stored Cursor session, or starts a fresh one when the token
+     * no longer names a session Cursor knows (MAR-3142 R5). Every other
+     * `session/load` refusal is still an initialization failure.
+     */
+    async function loadStoredSession(
+      activeRpc: CursorAcpJsonRpcClient,
+      storedSessionId: string,
+    ): Promise<void> {
+      try {
+        suppressReplayUpdates = true
+        const sessionResult = await activeRpc.request('session/load', {
+          sessionId: storedSessionId,
+          ...buildCursorAcpSessionParams(config.workingDirectory),
+        })
+        suppressReplayUpdates = false
+        await applySessionConfig(sessionResult)
+      } catch (error) {
+        suppressReplayUpdates = false
+        if (!isMissingContinuationError(error, ['session', 'cursor'])) {
+          throw error
+        }
+        await startNewSession(activeRpc)
+        const recovery = buildContinuationRecoveryEntry('Cursor', now())
+        recordTeardown('the continuation recovery note', () =>
+          sessionEmitter.addNote({
+            text: recovery.text,
+            level: recovery.level,
+            timestamp: recovery.timestamp,
+          }),
+        )
+      }
+    }
+
     async function initializeAndStart(): Promise<void> {
       const activeRpc = rpc
       if (!activeRpc || stopped) return
@@ -1235,33 +1354,23 @@ export class CursorProvider implements Provider {
         })
 
         if (cursorSessionId) {
-          suppressReplayUpdates = true
-          const sessionResult = await activeRpc.request('session/load', {
-            sessionId: cursorSessionId,
-            ...buildCursorAcpSessionParams(config.workingDirectory),
-          })
-          suppressReplayUpdates = false
-          await applySessionConfig(sessionResult)
+          await loadStoredSession(activeRpc, cursorSessionId)
         } else {
-          const sessionResult = await activeRpc.request(
-            'session/new',
-            buildCursorAcpSessionParams(config.workingDirectory),
-          )
-          const discoveredSessionId = readCursorAcpSessionId(sessionResult)
-          if (!discoveredSessionId) {
-            throw new Error('Cursor ACP session/new did not return a sessionId')
-          }
-          setContinuationToken(discoveredSessionId)
-          await applySessionConfig(sessionResult)
+          await startNewSession(activeRpc)
         }
 
         resolveReady?.()
-        enqueuePrompt(
-          config.initialMessage,
-          config.initialAttachments,
-          'normal',
-          config.initialSkillSelections,
-        )
+        // A respawn resumes the stored session; only the first start owes the
+        // session its opening message (MAR-3142 R1).
+        if (!initialMessageDelivered) {
+          initialMessageDelivered = true
+          runPrompt(
+            config.initialMessage,
+            config.initialAttachments,
+            'normal',
+            config.initialSkillSelections,
+          )
+        }
       } catch (error) {
         if (stopped) return
         suppressReplayUpdates = false
@@ -1285,8 +1394,23 @@ export class CursorProvider implements Provider {
       }
     }
 
+    /**
+     * Brings the resident process back for the next send (MAR-3142 R1). A
+     * process that died while the session sat idle left the stored session id
+     * behind, so the respawn resumes it with `session/load`; a process that
+     * died mid-turn already reported a failed turn and is not resurrected
+     * behind the user's back.
+     */
+    function reconnectIfIdleProcessDied(): void {
+      if (stopped || child || rpc) return
+      if (!spawnedOnce || status !== 'completed') return
+      armReadyGate()
+      spawnCursor()
+    }
+
     function spawnCursor(): void {
       if (stopped || child || rpc) return
+      spawnedOnce = true
 
       child = spawn(binaryPath, ['acp'], {
         cwd: config.workingDirectory,
@@ -1386,6 +1510,9 @@ export class CursorProvider implements Provider {
       if (stopped) return
       endTurn()
       stopped = true
+      promptInFlight = false
+      promptStarting = false
+      interruptRequested = false
       resolveReady?.()
       clearTimeout(startTimer)
       pendingApprovals.clear()
@@ -1410,6 +1537,97 @@ export class CursorProvider implements Provider {
     }
 
     return {
+      /** The ACP process and its session outlive a completed turn (R1). */
+      resident: true,
+      get retainQueuedInputsOnCompletion() {
+        return interruptRequested
+      },
+      /**
+       * Applies a model selection to the live ACP session and remembers it for
+       * a respawn (MAR-3142 lap 2, C). Apply first, remember on success so a
+       * refused option cannot stick on the handle (lap 3, C1a). Refuses while
+       * a turn is starting or in flight — having this method must not open a
+       * mid-turn switch the service would otherwise block (lap 3, C1b).
+       */
+      setModelSelection: async (model, effort) => {
+        if (promptStarting || promptInFlight) {
+          throw new Error(
+            'Model and effort can only change while the session is idle. Wait for the current turn to finish.',
+          )
+        }
+        const activeRpc = rpc
+        const sessionId = cursorSessionId
+        const requestedModel = model?.trim() || null
+        if (activeRpc && sessionId && !stopped && requestedModel) {
+          recordDebug({
+            direction: 'out',
+            channel: 'request',
+            method: 'session/set_config_option',
+            payload: {
+              sessionId,
+              configId: CURSOR_ACP_MODEL_CONFIG_ID,
+              value: requestedModel,
+            },
+            note: 'Apply Cursor model selection to the active ACP session',
+          })
+          await activeRpc.request('session/set_config_option', {
+            sessionId,
+            configId: CURSOR_ACP_MODEL_CONFIG_ID,
+            value: requestedModel,
+          })
+        }
+        config.model = model
+        config.effort = effort
+      },
+      /**
+       * Cancels the turn without ending the process (R2): Cursor answers the
+       * pending `session/prompt` with `stopReason: 'cancelled'`, which settles
+       * the turn as stopped rather than failed. During `promptStarting` there
+       * is nothing on the wire yet — the flag alone stops the send (lap 2, D).
+       * With neither starting nor in-flight, the service falls back to `stop`.
+       */
+      interrupt: async () => {
+        if (stopped) return 'not-applicable'
+        // In-flight prompt first: `promptStarting` stays true until sendPrompt
+        // settles, so checking it ahead of `promptInFlight` would skip cancel
+        // for every live turn (MAR-3142 lap 2, D).
+        if (promptInFlight) {
+          const activeRpc = rpc
+          const activeSessionId = cursorSessionId
+          if (!activeRpc || !activeSessionId) return 'not-applicable'
+          try {
+            // Answer pending human requests first so Cursor is not left blocked
+            // on an unanswered permission while we cancel (MAR-3142 lap 2, E;
+            // lap 3, E1 — inside the try so a throw is a note, not hard-stop).
+            for (const [id, approval] of pendingApprovals.entries()) {
+              activeRpc.respond(id, approval.cancelResult)
+            }
+            pendingApprovals.clear()
+            for (const [id, interaction] of pendingInteractions.entries()) {
+              activeRpc.respond(id, interaction.cancelResult)
+            }
+            pendingInteractions.clear()
+            activeRpc.notify('session/cancel', { sessionId: activeSessionId })
+          } catch (error) {
+            recordTeardown('the cancel failure note', () =>
+              sessionEmitter.addNote({
+                text: `Cursor cancel failed: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+                level: 'error',
+              }),
+            )
+            return 'not-applicable'
+          }
+          interruptRequested = true
+          return 'interrupted'
+        }
+        if (promptStarting) {
+          interruptRequested = true
+          return 'interrupted'
+        }
+        return 'not-applicable'
+      },
       onDelta: (callback) => {
         listeners.delta.push(callback)
       },
@@ -1454,7 +1672,13 @@ export class CursorProvider implements Provider {
           }
           return
         }
-        enqueuePrompt(text, attachments, options?.deliveryMode, skillSelections)
+        // Cursor ACP takes one prompt per turn, so mid-turn text belongs to
+        // the next one and the app holds it (R3). Only a live connection can
+        // defer: once the process is gone the turn it was carrying is over,
+        // and this send is an honest failed send rather than a follow-up
+        // waiting for a turn boundary that will never arrive.
+        if (rpc && (promptStarting || promptInFlight)) return 'queue-follow-up'
+        runPrompt(text, attachments, options?.deliveryMode, skillSelections)
       },
       approve: (providerApprovalId) => {
         if (!rpc) return
@@ -1485,8 +1709,16 @@ export class CursorProvider implements Provider {
         }
       },
       dispose: disposeRuntime,
+      /**
+       * The hard stop (R2). With no prompt in flight there is no turn to fail:
+       * the process is released and the session keeps the state its last turn
+       * left. With a prompt still in flight this is the fallback the service
+       * takes when `interrupt` could not be used, so the turn dies with the
+       * process and is reported failed.
+       */
       stop: () => {
         if (stopped) return
+        const hadPromptInFlight = promptInFlight || promptStarting
         for (const [id, approval] of pendingApprovals.entries()) {
           rpc?.respond(id, approval.cancelResult)
         }
@@ -1505,7 +1737,7 @@ export class CursorProvider implements Provider {
           flushAssistantBuffer(),
         )
         disposeRuntime()
-        recordFailedTurnState()
+        if (hadPromptInFlight) recordFailedTurnState()
         recordTeardown('the cleared activity', () => setActivity(null))
       },
     }
