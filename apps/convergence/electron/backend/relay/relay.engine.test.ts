@@ -19,6 +19,7 @@ import { WorkLedgerService } from '../work-ledger/work-ledger.service'
  * human pressing anything, so every test here drives a fake gateway. Nothing
  * in this file may reach a real session, a real provider, or a real process.
  */
+
 /** What a send or start carried, so tests can assert the account too. */
 interface RecordedTurn {
   sessionId: string

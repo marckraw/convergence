@@ -1,9 +1,5 @@
 import type { TrackerBinding } from '@/shared/types/tracker.types'
 
-/**
- * A crew is a named, decorated, cross-project collection of sessions.
- * Membership is many-to-many and promises membership only — no automation.
- */
 /** The seat fields a person types into, which therefore keep a draft. */
 export type SeatDraftField = 'roleCard' | 'hostPolicy' | 'wipLimit'
 
@@ -75,6 +71,10 @@ export interface SessionCrewMember {
   conversationMissing: boolean
 }
 
+/**
+ * A crew is a named, decorated, cross-project collection of sessions.
+ * Membership is many-to-many and promises membership only — no automation.
+ */
 export interface SessionCrew {
   id: string
   name: string

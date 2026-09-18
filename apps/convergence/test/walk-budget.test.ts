@@ -20,6 +20,8 @@ const TREE_WALKING_TESTS = [
   'workspace-import-ownership.test.ts',
   // This file's own sweep below reads every `*.pure.test.ts` in both trees.
   'test/walk-budget.test.ts',
+  // Every docblock in both trees documents something (MAR-3151).
+  'electron/backend/docblock-shape.walk.test.ts',
 ]
 
 /** The configs that run one of the walkers above. */

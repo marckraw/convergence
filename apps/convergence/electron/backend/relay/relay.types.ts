@@ -16,12 +16,6 @@ export type RelayTrigger = 'settled'
 export type RelayAction = 'hail' | 'spawn'
 
 /**
- * Everything needed to open the session a spawn relay creates. Nothing is
- * inferred from the source session: a wire that quietly changed provider or
- * project because its far end changed would be a wire nobody could reason
- * about, so every field is stated on the relay itself.
- */
-/**
  * What a wire may read off a crew seat (MAR-3083 R3/R4).
  *
  * Structural on purpose: the engine asks the crew gateway for this shape and
@@ -39,6 +33,12 @@ export interface RelaySeat {
   model: string | null
 }
 
+/**
+ * Everything needed to open the session a spawn relay creates. Nothing is
+ * inferred from the source session: a wire that quietly changed provider or
+ * project because its far end changed would be a wire nobody could reason
+ * about, so every field is stated on the relay itself.
+ */
 export interface RelaySpawnSpec {
   executionHost: SessionExecutionHostId
   workAddress: SessionWorkAddress | null

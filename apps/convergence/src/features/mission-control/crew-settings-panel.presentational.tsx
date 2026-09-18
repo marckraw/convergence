@@ -69,7 +69,6 @@ interface CrewSettingsPanelProps {
    * here a lock would protect. What was missing was the sentence.
    */
   running: boolean
-  /** The refusal a member's door gave, and which member it was about. */
   /**
    * The door's refusals, per seat and per field (MAR-3118 lap 2, B): two
    * commits from one switch -- a card and a name -- each keep their sentence.

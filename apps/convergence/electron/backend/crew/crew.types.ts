@@ -6,14 +6,6 @@ import {
 } from '../tracker/tracker-binding.pure'
 import type { TrackerBinding } from '../tracker/tracker.types'
 
-/**
- * One member of a crew, and the short name a baton addresses it by.
- *
- * Membership still carries no behaviour: the baton name is a label the wire
- * editor reads to pre-fill a condition with `BATON: <name>`, never something
- * the engine routes on. The engine only ever compares a wire's stored token
- * against a message's last line.
- */
 /** What a seat is for. A crew's own names are local; these are the shapes. */
 export type SessionCrewMemberRole =
   | 'mastermind'
@@ -46,6 +38,14 @@ export const DEFAULT_CREW_MEMBER_SEAT = {
   conversationMissing: false,
 }
 
+/**
+ * One member of a crew, and the short name a baton addresses it by.
+ *
+ * Membership still carries no behaviour: the baton name is a label the wire
+ * editor reads to pre-fill a condition with `BATON: <name>`, never something
+ * the engine routes on. The engine only ever compares a wire's stored token
+ * against a message's last line.
+ */
 export interface SessionCrewMember {
   /**
    * The conversation this seat is, or null for a dynamic seat: a recipe has

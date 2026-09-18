@@ -679,19 +679,6 @@ export class RelayService {
   }
 
   /**
-   * Records that a dispatch ended without a settle (MAR-2759): the user
-   * cancelled the queued input, the session holding it was deleted, or the
-   * system could not run it.
-   *
-   * The receipt's other ending, told by the session layer that owns the
-   * row, and stamped with the terminal's OWN word (design P): `cancelled`
-   * and `abandoned` the stall clock reads as quiet, since nothing is owed
-   * for work a station never took; `failed` it reads as loud. Only on hops
-   * still unanswered: a settle that already stamped the hop was the truer
-   * answer, and a later terminal rewrites nothing. By exact id, never by
-   * session, so a sibling receipt queued into the same station stays owed.
-   */
-  /**
    * Re-opens an errand a second attempt is carrying (MAR-2971, R2).
    *
    * A NEW hop on the SAME flow run, copied from the one the first attempt
@@ -760,6 +747,19 @@ export class RelayService {
     }
   }
 
+  /**
+   * Records that a dispatch ended without a settle (MAR-2759): the user
+   * cancelled the queued input, the session holding it was deleted, or the
+   * system could not run it.
+   *
+   * The receipt's other ending, told by the session layer that owns the
+   * row, and stamped with the terminal's OWN word (design P): `cancelled`
+   * and `abandoned` the stall clock reads as quiet, since nothing is owed
+   * for work a station never took; `failed` it reads as loud. Only on hops
+   * still unanswered: a settle that already stamped the hop was the truer
+   * answer, and a later terminal rewrites nothing. By exact id, never by
+   * session, so a sibling receipt queued into the same station stays owed.
+   */
   markDispatchesTerminated(
     dispatchIds: readonly string[],
     at: string,
