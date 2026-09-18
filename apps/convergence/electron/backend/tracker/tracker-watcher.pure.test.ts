@@ -28,6 +28,7 @@ function issue(
     logicalStatus,
     seat: 'opus',
     wave: null,
+    blocked: false,
     groundedAt: null,
     branchName: null,
     updatedAt: SEEN,
@@ -101,6 +102,34 @@ describe('MAR-3084 R5: state comes from the record', () => {
       ],
       issues: [issue('in-progress')],
       rows: [{ state: 'working', lap: 3 }],
+    },
+    {
+      // MAR-3138 R2: the status never moves in these three, so the flip is
+      // the only thing that can write a row -- or fail to.
+      // Mutation: leave `blocked` out of `sameObservation` -> the first two
+      // cases write nothing, red.
+      name: 'blocked goes on -> one row carrying it',
+      current: () => [recorded(issue('in-progress'))],
+      issues: [issue('in-progress', { blocked: true })],
+      rows: [{ state: 'working', blocked: true, lap: 1 }],
+    },
+    {
+      name: 'blocked comes off -> one row saying so',
+      current: () => [recorded(issue('in-progress', { blocked: true }))],
+      issues: [issue('in-progress')],
+      rows: [{ state: 'working', blocked: false }],
+    },
+    {
+      name: 'still blocked -> no row',
+      current: () => [recorded(issue('in-progress', { blocked: true }))],
+      issues: [issue('in-progress', { blocked: true })],
+      rows: [],
+    },
+    {
+      name: 'a blocked issue loses its seat label -> the unassigned row keeps blocked',
+      current: () => [recorded(issue('in-progress', { blocked: true }))],
+      issues: [],
+      rows: [{ state: 'unassigned', seat: null, blocked: true }],
     },
     {
       name: 'already unassigned and still absent -> no row',
@@ -457,6 +486,46 @@ describe('MAR-3085 R4 (lap 2): the hold ends when the tracker moves', () => {
       state: 'reviewed',
       verdict: null,
     })
+  })
+
+  it('MAR-3138 R2: a blocked returned row is still blocked on its verdict row and after the catch-up', () => {
+    const returned = asCurrent(
+      {
+        ...(diffTrackerSnapshot({
+          crewId: 'crew-1',
+          current: [],
+          issues: [issue('in-review', { status: 'In Review', blocked: true })],
+          seenAt: SEEN,
+        })[0] as NewWorkLedgerRecord),
+      },
+      'row-returned-blocked',
+    )
+    expect(returned).toMatchObject({ state: 'returned', blocked: true })
+
+    // Mutation: write `blocked: false` in `verdictLedgerRecord` -> red here.
+    const verdict = ruled(returned, 'return', 2)
+    expect(verdict).toMatchObject({ state: 'working', blocked: true })
+
+    // The tracker catches up while the label is still on: the confirmation
+    // row carries it too, and nothing else is written after that.
+    const confirmed = diffTrackerSnapshot({
+      crewId: 'crew-1',
+      current: [verdict],
+      issues: [issue('in-progress', { status: 'In Progress', blocked: true })],
+      seenAt: SEEN,
+    })
+    expect(confirmed).toHaveLength(1)
+    expect(confirmed[0]).toMatchObject({ blocked: true, verdict: null })
+
+    // The decision arrives: one row, at the same lap.
+    const decided = diffTrackerSnapshot({
+      crewId: 'crew-1',
+      current: [asCurrent(confirmed[0]!, 'row-confirm')],
+      issues: [issue('in-progress', { status: 'In Progress' })],
+      seenAt: '2026-09-17T08:05:00.000Z',
+    })
+    expect(decided).toHaveLength(1)
+    expect(decided[0]).toMatchObject({ blocked: false, lap: 2 })
   })
 
   it('a stopped row whose label is gone is still unassigned', () => {

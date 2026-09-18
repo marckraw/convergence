@@ -83,6 +83,10 @@ export function migrateWorkLedgerVerdict(db: Database.Database): void {
     ).run()
     // Every column named, in the order the new table declares them: an
     // `INSERT ... SELECT *` is how a rebuild loses a column's contents.
+    // This list is v2's, frozen: any LATER rebuild must name every column
+    // added after this one -- `blocked` (v3) first -- or copy silently
+    // without it. The migration test's `PRAGMA table_info(work_ledger)`
+    // assertion after v1 -> v2 -> v3 is the canary for exactly that.
     db.prepare(
       `INSERT INTO work_ledger_rebuilt (
         id, crew_id, issue_id, issue_identifier, issue_title, issue_url,
@@ -100,6 +104,39 @@ export function migrateWorkLedgerVerdict(db: Database.Database): void {
     ).run()
     db.prepare(
       "INSERT INTO app_state(key,value) VALUES ('work_ledger_v2','1')",
+    ).run()
+  })()
+}
+
+/**
+ * The `blocked` column (MAR-3138 R3).
+ *
+ * An `ALTER` rather than a rebuild: nothing about the existing definition
+ * changes, and a widened CHECK is the only thing SQLite refuses in place. It
+ * runs after v2 on every database -- a fresh one and one that already carries
+ * v1 + v2 end with the same columns -- behind its own sentinel, because
+ * `ADD COLUMN` throws on a second run.
+ *
+ * A later rebuild (a v4 that has to widen a CHECK again) must name `blocked`
+ * in its `INSERT ... SELECT` list, first among the columns added after v2 --
+ * a list copied from v2's block would drop it without a word. The migration
+ * test asserts `PRAGMA table_info(work_ledger)` after v1 -> v2 -> v3 as the
+ * canary for that.
+ *
+ * `NOT NULL DEFAULT 0` rather than a nullable column: every row the app wrote
+ * before this build was written by a tracker read that could not see the
+ * label, and "the tracker did not say blocked" is exactly `false`. The next
+ * tick appends the truth for any issue that is.
+ */
+export function migrateWorkLedgerBlocked(db: Database.Database): void {
+  if (db.prepare("SELECT 1 FROM app_state WHERE key='work_ledger_v3'").get())
+    return
+  db.transaction(() => {
+    db.prepare(
+      'ALTER TABLE work_ledger ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0',
+    ).run()
+    db.prepare(
+      "INSERT INTO app_state(key,value) VALUES ('work_ledger_v3','1')",
     ).run()
   })()
 }

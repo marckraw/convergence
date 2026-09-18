@@ -84,9 +84,10 @@ function nextLap(
  * cannot use later.
  *
  * The hold is the whole issue, not only its status: while it lasts, a title,
- * wave or seat change on the tracker writes no row either, and lands on the
- * first row after the status moves. Accepted -- a ruling is about the lap,
- * and the alternative is a row per edit during the lag.
+ * wave, seat or `blocked` change on the tracker writes no row either, and
+ * lands on the first row after the status moves (MAR-3138 R2 accepts that
+ * price). Accepted -- a ruling is about the lap, and the alternative is a row
+ * per edit during the lag.
  */
 function verdictHoldsAgainst(
   previous: WorkLedgerRecord,
@@ -104,6 +105,10 @@ function sameObservation(
     previous.seat === next.seat &&
     previous.wave === next.wave &&
     previous.trackerStatus === next.trackerStatus &&
+    // A label flip is an observation in its own right (MAR-3138 R2): left
+    // out, blocking and unblocking an issue whose status never moved would
+    // write no row at all, and the panel would never hear about it.
+    previous.blocked === next.blocked &&
     previous.issueIdentifier === next.issueIdentifier &&
     previous.issueTitle === next.issueTitle &&
     previous.issueUrl === next.issueUrl &&
@@ -178,6 +183,7 @@ export function diffTrackerSnapshot(input: {
       verdict: null,
       verdictSettleId: null,
       verdictNote: null,
+      blocked: issue.blocked,
     }
     if (previous && sameObservation(previous, next)) continue
     rows.push(next)
@@ -212,6 +218,9 @@ function carriedFrom(
     verdict: null,
     verdictSettleId: null,
     verdictNote: null,
+    // The issue left the seat group; nobody said the decision arrived
+    // (MAR-3138 R2), so the row keeps the last blocked the tracker reported.
+    blocked: previous.blocked,
   }
 }
 

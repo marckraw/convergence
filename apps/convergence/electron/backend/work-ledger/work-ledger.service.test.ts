@@ -31,6 +31,7 @@ function record(
     lap: 1,
     state: 'assigned',
     trackerStatus: 'Todo',
+    blocked: false,
     groundedAt: null,
     seenAt: '2026-09-17T08:00:00.000Z',
     fact: { logicalStatus: 'todo', branchName: null, updatedAt: null },
@@ -142,6 +143,51 @@ describe('MAR-3084 R4: the ledger is append-only and the view is the latest row'
     expect(plan.some((detail) => /TEMP B-TREE/.test(detail))).toBe(false)
   })
 
+  it('MAR-3138 R2: `blocked` survives the round trip, on the row and through a ruling', () => {
+    ledger.append([
+      record({ state: 'working', blocked: true }),
+      record({
+        issueId: 'issue-2',
+        issueIdentifier: 'EX-2',
+        state: 'working',
+        blocked: false,
+      }),
+    ])
+
+    // Mutation: write a constant 0 in the INSERT, or read the column as
+    // `false` in `workLedgerRecordFromRow` -> EX-1 comes back unblocked, red.
+    expect(
+      Object.fromEntries(
+        ledger
+          .currentView('crew-1')
+          .map((row) => [row.issueIdentifier, row.blocked]),
+      ),
+    ).toEqual({ 'EX-1': true, 'EX-2': false })
+    // The joined read is the one the panel gets, and it says the same.
+    expect(
+      Object.fromEntries(
+        ledger.list('crew-1').map((row) => [row.issueIdentifier, row.blocked]),
+      ),
+    ).toEqual({ 'EX-1': true, 'EX-2': false })
+
+    // A ruling carries the label it found on the row it bound to.
+    const bound = ledger
+      .currentView('crew-1')
+      .find((row) => row.issueIdentifier === 'EX-1')!
+    ledger.appendVerdict({
+      bound,
+      verdict: 'pass',
+      lap: 2,
+      settleId: 'settle-1',
+      seenAt: '2026-09-17T09:00:00.000Z',
+    })
+    expect(
+      ledger
+        .currentView('crew-1')
+        .find((row) => row.issueIdentifier === 'EX-1')!.blocked,
+    ).toBe(true)
+  })
+
   it('the service issues no UPDATE and no DELETE', () => {
     const source = readFileSync(
       join(__dirname, 'work-ledger.service.ts'),
@@ -196,6 +242,7 @@ describe('MAR-3084 R6: the facts join at read time from the app’s own records'
       logicalStatus: 'in-review',
       seat: 'opus',
       wave: null,
+      blocked: false,
       groundedAt: null,
       branchName: null,
       updatedAt: '2026-09-17T08:00:00.000Z',

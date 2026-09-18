@@ -94,6 +94,30 @@ export function childOfLabelGroup(
   return null
 }
 
+/**
+ * Whether the issue carries a PLAIN label of this name (MAR-3138 R1):
+ * case-insensitive and trimmed, with no parent group.
+ *
+ * The mirror image of `childOfLabelGroup`: there a name without a parent
+ * means nothing, here a name WITH one does. `blocked` under the `wave` group
+ * is a wave somebody named blocked; it holds no decision and must not count.
+ */
+export function hasPlainLabel(
+  labels: readonly LinearLabelNode[],
+  name: string,
+): boolean {
+  const wanted = name.trim().toLowerCase()
+  return labels.some(
+    (label) =>
+      (label.parent === null || label.parent === undefined) &&
+      typeof label.name === 'string' &&
+      label.name.trim().toLowerCase() === wanted,
+  )
+}
+
+/** The constitution's label for work that waits on a decision (MAR-3138). */
+export const BLOCKED_LABEL_NAME = 'blocked'
+
 export interface LinearIssuesPage {
   issues: TrackerIssue[]
   hasNextPage: boolean
@@ -166,6 +190,7 @@ export function parseLinearIssuesPage(
       logicalStatus: input.statusMap[status] ?? 'other',
       seat,
       wave: childOfLabelGroup(labelNodes, waveGroup),
+      blocked: hasPlainLabel(labelNodes, BLOCKED_LABEL_NAME),
       // No tracker field carries when `grounded` was set: a label has no
       // added-at, and the history query that does is a per-issue read this
       // slice does not spend on every tick. Null, never a guess.

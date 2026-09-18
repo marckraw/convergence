@@ -30,6 +30,7 @@ function joined(
     lap: 1,
     state: 'working',
     tracker_status: 'In Progress',
+    blocked: 0,
     grounded_at: null,
     seen_at: '2026-09-17T08:00:00.000Z',
     fact_json:

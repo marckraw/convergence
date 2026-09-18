@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { TrackerHealth } from '@/entities/work-ledger'
+import type { TrackerHealth, WorkLedgerEntry } from '@/entities/work-ledger'
 import {
   effectiveWavePanelMode,
+  isTerminalWaveRow,
   resolveWaveRow,
   sectionWaveRows,
   UNWAVED_GROUP,
@@ -305,6 +306,115 @@ describe('MAR-3097 lap 2, B: the column keeps the main panel at its floor', () =
     expect(WAVE_PANEL_COLUMN_CLASS).toContain(
       `w-[${WAVE_PANEL_COLUMN_WIDTH}px]`,
     )
+  })
+})
+
+describe('MAR-3138 R4: a blocked row waits on a decision, whatever its state', () => {
+  it.each([
+    ['done', true],
+    ['unassigned', true],
+    ['working', false],
+    ['returned', false],
+    ['stopped', false],
+    ['reviewed', false],
+    ['assigned', false],
+  ] as const)('lap 2, A: %s is terminal -> %s', (state, terminal) => {
+    // The two the ledger stops writing rows for, and no others: a
+    // `stopped` lap is parked, not over, and still asks to be re-groomed.
+    expect(isTerminalWaveRow({ state })).toBe(terminal)
+  })
+
+  it.each([
+    ['working', 'working' as const],
+    ['returned', 'returned' as const],
+    ['stopped', 'stopped' as const],
+    ['assigned', 'assigned' as const],
+  ])('a blocked %s row sits under Waiting on you, once', (_name, state) => {
+    const sections = sectionWaveRows(
+      [ledgerEntry({ issueIdentifier: 'EX-1', state, blocked: true })],
+      NOW,
+    )
+
+    // Mutation: leave a blocked row in its state's section -> red.
+    expect(ids(sections.waitingOnYou)).toEqual(['EX-1'])
+    expect(sections.waitingOnYou[0]!.action).toBe('decide')
+    expect(ids(sections.inTheWave)).toEqual([])
+    expect(ids(sections.waitingToStart)).toEqual([])
+    // Still in its wave group, exactly once.
+    expect(sections.waves.map((group) => ids(group.rows))).toEqual([['EX-1']])
+    expect(waveRailCounts(sections).waitingOnYou).toBe(1)
+    expect(waveBoardLine(sections)).toBe('1 issue · 1 waiting on you')
+  })
+
+  it.each([
+    ['done', 'done' as const],
+    ['unassigned', 'unassigned' as const],
+  ])(
+    'lap 2, A: a blocked %s row is terminal -- Waves only, and it asks for nothing',
+    (_name, state) => {
+      const entry = ledgerEntry({
+        issueIdentifier: 'EX-1',
+        state,
+        blocked: true,
+      })
+      const sections = sectionWaveRows([entry], NOW)
+
+      // The loop has let this issue go: `diffTrackerSnapshot` writes no
+      // further row for it and the tracker query no longer returns it, so an
+      // ask here could never be answered -- not even by removing the label.
+      // Mutation: drop the terminal guard in `sectionWaveRows` -> the row is
+      // under Waiting on you, red.
+      expect(ids(sections.waitingOnYou)).toEqual([])
+      expect(ids(sections.inTheWave)).toEqual([])
+      expect(ids(sections.waitingToStart)).toEqual([])
+      expect(waveRailCounts(sections).waitingOnYou).toBe(0)
+      expect(waveBoardLine(sections)).toBe('1 issue · 0 waiting on you')
+      // It is still on the board, with its wave and its facts.
+      expect(sections.waves.map((group) => ids(group.rows))).toEqual([['EX-1']])
+      expect(sections.waves[0]!.rows[0]!.entry.blocked).toBe(true)
+      // Mutation: drop the terminal guard in `waveRowAction` -> "decide", red.
+      expect(sections.waves[0]!.rows[0]!.action).toBeNull()
+      expect(waveRowAction(entry)).toBeNull()
+    },
+  )
+
+  it('a blocked reviewed row appears under Waiting on you once, not twice', () => {
+    const sections = sectionWaveRows(
+      [
+        ledgerEntry({
+          issueIdentifier: 'EX-1',
+          state: 'reviewed',
+          blocked: true,
+        }),
+      ],
+      NOW,
+    )
+    // Mutation: push a blocked row in its own `if` before the state chain ->
+    // two rows here, red.
+    expect(ids(sections.waitingOnYou)).toEqual(['EX-1'])
+    // Decide outranks QA: the issue cannot be checked until it is decided.
+    expect(sections.waitingOnYou[0]!.action).toBe('decide')
+  })
+
+  it('"decide" outranks every state’s action, and only while the label is on', () => {
+    const blocked = (overrides: Partial<WorkLedgerEntry>) =>
+      waveRowAction(
+        ledgerEntry({ issueIdentifier: 'EX-9', blocked: true, ...overrides }),
+      )
+    // Mutation: ask the state first -> each of these reads its state's word.
+    expect(blocked({ state: 'reviewed' })).toBe('decide')
+    expect(blocked({ state: 'returned' })).toBe('decide')
+    expect(blocked({ state: 'stopped' })).toBe('decide')
+    expect(blocked({ state: 'working', sessionId: null })).toBe('decide')
+    expect(blocked({ state: 'assigned' })).toBe('decide')
+    expect(
+      waveRowAction(
+        ledgerEntry({ issueIdentifier: 'EX-9', state: 'assigned' }),
+      ),
+    ).toBeNull()
+    // ...and never past the end of the line (lap 2, A).
+    expect(blocked({ state: 'done' })).toBeNull()
+    expect(blocked({ state: 'unassigned', seat: null })).toBeNull()
   })
 })
 

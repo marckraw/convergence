@@ -12,6 +12,7 @@ import { migrateTaskObserved } from './task-observed-migration.service'
 import { migrateCrewTrackerBinding } from './crew-tracker-binding-migration.service'
 import {
   migrateWorkLedger,
+  migrateWorkLedgerBlocked,
   migrateWorkLedgerVerdict,
 } from './work-ledger-migration.service'
 import { migrateCrewConfig } from './crew-config-migration.service'
@@ -2284,6 +2285,9 @@ export function getDatabase(dbPath?: string): Database.Database {
     // The verdict columns and the `stopped` state (MAR-3085): a rebuild, so
     // it runs after the v1 table exists.
     migrateWorkLedgerVerdict(database)
+    // The `blocked` column (MAR-3138): additive, so it runs after the rebuild
+    // above rather than being folded into it.
+    migrateWorkLedgerBlocked(database)
     database.transaction(() => {
       if (getTableColumnNames(database, 'sessions').has('origin_kind')) return
       database.exec(
