@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  TRACKER_REFUSAL_LABELS,
   probeAsksForKey,
   probeTimeLabel,
   TRACKER_PROJECT_MISSING_SENTENCE,
@@ -75,6 +76,10 @@ describe('MAR-3084 R9: what the last Test found', () => {
     })
     expect(trackerProbeSentence(refused('unreachable'))).toBe(
       'Linear could not be reached — detail',
+    )
+    // MAR-3169 R4: the new kind has its own words.
+    expect(TRACKER_REFUSAL_LABELS['project-not-visible']).toBe(
+      'Linear shows no project with this id to this key',
     )
     expect(probeAsksForKey(refused('unauthorized'))).toBe(true)
     expect(probeAsksForKey(refused('unreachable'))).toBe(false)

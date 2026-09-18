@@ -18,6 +18,7 @@ import {
   type TrackerAdapter,
   type TrackerBinding,
   type TrackerIssue,
+  type TrackerProjectResolution,
   type TrackerRefusal,
 } from './tracker.types'
 
@@ -472,5 +473,179 @@ describe('MAR-3156 A: the lookup door is where the key is fetched', () => {
     expect(JSON.stringify(answer)).not.toContain(KEY)
     expect(JSON.stringify(answer)).not.toContain('lin_api')
     expect(Object.keys(answer)).toEqual(['kind', 'project'])
+  })
+})
+
+describe('MAR-3169: an empty page is verified before it is believed', () => {
+  let db: Database.Database
+  let crewId: string
+  let ledger: WorkLedgerService
+  let broadcasts: WorkLedgerSnapshot[]
+  let clock: Date
+
+  beforeEach(() => {
+    db = getDatabase()
+    const crews = new CrewService(db)
+    crewId = crews.create({ name: 'Loom' }).id
+    crews.setTrackerBinding(crewId, { projectId: 'project-1' })
+    ledger = new WorkLedgerService(db)
+    broadcasts = []
+    clock = new Date('2026-09-17T08:00:00.000Z')
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+  })
+
+  /**
+   * A watcher whose far side answers from two queues the test fills: what
+   * the issue list returns this tick, and what the project lookup says.
+   */
+  function bench() {
+    const pages: TrackerIssue[][] = []
+    const lookups: TrackerProjectResolution[] = []
+    const listLabeledIssues = vi.fn(async () => pages.shift() ?? [])
+    const resolveProject = vi.fn(
+      async (): Promise<TrackerProjectResolution> =>
+        lookups.shift() ?? { kind: 'not-found' },
+    )
+    const service = new TrackerWatcherService({
+      crews: new CrewService(db),
+      ledger,
+      resolveKey: async () => 'lin_api_fixture',
+      createAdapter: () => ({
+        probe: async () => ({
+          ok: true,
+          issues: 0,
+          projectName: 'convergence',
+        }),
+        listLabeledIssues,
+        resolveProject,
+      }),
+      broadcast: (snapshot) => broadcasts.push(snapshot),
+      now: () => clock,
+    })
+    return { service, pages, lookups, listLabeledIssues, resolveProject }
+  }
+
+  const states = () => ledger.currentView(crewId).map((row) => row.state)
+  const RESOLVED: TrackerProjectResolution = {
+    kind: 'resolved',
+    project: {
+      id: 'project-1',
+      name: 'convergence',
+      url: 'https://linear.app/example/project/convergence-f66c7ae332ee',
+    },
+  }
+
+  /** One tick that reads ISSUE: the crew now has a `working` row. */
+  async function seedWorking(b: ReturnType<typeof bench>) {
+    b.pages.push([ISSUE])
+    await b.service.tick()
+    expect(states()).toEqual(['working'])
+  }
+
+  it('R1: a project the key cannot see keeps the rows and names the state', async () => {
+    const b = bench()
+    await seedWorking(b)
+
+    b.pages.push([])
+    b.lookups.push({ kind: 'not-found' })
+    clock = new Date('2026-09-17T08:01:00.000Z')
+    await b.service.tick()
+
+    // Mutation: skip the verification -> the empty page is believed and the
+    // riding row drifts to `unassigned`, red here.
+    expect(states()).toEqual(['working'])
+    expect(b.service.trackerHealth(crewId)).toMatchObject({
+      state: 'project-not-visible',
+      since: '2026-09-17T08:01:00.000Z',
+      backoffUntil: null,
+    })
+    // The windows hear it: a changed health is news even with no rows.
+    expect(broadcasts.at(-1)?.trackerHealth?.state).toBe('project-not-visible')
+    expect(b.resolveProject).toHaveBeenCalledWith('project-1')
+  })
+
+  it('R1: an empty page whose project IS there is believed, exactly as before', async () => {
+    const b = bench()
+    await seedWorking(b)
+
+    b.pages.push([])
+    b.lookups.push(RESOLVED)
+    await b.service.tick()
+
+    // The label came off: today's behaviour, untouched.
+    expect(states()).toEqual(['unassigned'])
+    expect(b.service.trackerHealth(crewId)?.state).toBe('ok')
+  })
+
+  it('R1: a refusal on the question is the tick’s refusal', async () => {
+    const b = bench()
+    await seedWorking(b)
+
+    b.pages.push([])
+    b.lookups.push({
+      kind: 'refused',
+      refusal: { kind: 'unreachable', message: 'gone', retryAt: null },
+    })
+    await b.service.tick()
+
+    // Mutation: treat a refused lookup as "the project is there" -> the row
+    // drifts and the health reads ok, red.
+    expect(states()).toEqual(['working'])
+    expect(b.service.trackerHealth(crewId)?.state).toBe('unreachable')
+  })
+
+  it('R1: an ambiguous answer cannot come from an id, and is read as the project being there', async () => {
+    const b = bench()
+    await seedWorking(b)
+
+    b.pages.push([])
+    b.lookups.push({
+      kind: 'ambiguous',
+      candidates: [
+        RESOLVED.kind === 'resolved' ? RESOLVED.project : (null as never),
+      ],
+    })
+    await b.service.tick()
+    expect(states()).toEqual(['unassigned'])
+  })
+
+  it('R2: a page with issues in it asks nothing more', async () => {
+    const b = bench()
+    await seedWorking(b)
+    b.pages.push([ISSUE])
+    await b.service.tick()
+
+    // Mutation: verify on every tick -> two lookups for two non-empty pages,
+    // red on the count.
+    expect(b.resolveProject).not.toHaveBeenCalled()
+    expect(b.listLabeledIssues).toHaveBeenCalledTimes(2)
+  })
+
+  it('R3: the state heals on the next tick that finds the project, with a new `since`', async () => {
+    const b = bench()
+    await seedWorking(b)
+
+    b.pages.push([])
+    b.lookups.push({ kind: 'not-found' })
+    clock = new Date('2026-09-17T08:01:00.000Z')
+    await b.service.tick()
+    expect(b.service.trackerHealth(crewId)?.state).toBe('project-not-visible')
+
+    // Due again at once: no backoff for this state.
+    b.pages.push([ISSUE])
+    clock = new Date('2026-09-17T08:02:00.000Z')
+    await b.service.tick()
+
+    expect(b.listLabeledIssues).toHaveBeenCalledTimes(3)
+    expect(b.service.trackerHealth(crewId)).toMatchObject({
+      state: 'ok',
+      since: '2026-09-17T08:02:00.000Z',
+    })
+    expect(broadcasts.at(-1)?.trackerHealth?.state).toBe('ok')
+    expect(states()).toEqual(['working'])
   })
 })

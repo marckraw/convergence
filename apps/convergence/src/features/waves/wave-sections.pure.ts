@@ -230,6 +230,7 @@ const OUTAGE_LABELS: Record<Exclude<TrackerHealth['state'], 'ok'>, string> = {
   unauthorized: 'tracker key refused',
   'rate-limited': 'tracker rate-limited',
   'bad-response': 'tracker answered badly',
+  'project-not-visible': 'tracker project not visible to this key',
 }
 
 export type WaveHeader =

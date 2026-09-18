@@ -61,6 +61,14 @@ export type TrackerRefusalKind =
   | 'rate-limited'
   | 'unreachable'
   | 'bad-response'
+  /**
+   * The key answers, but no project with the bound id is visible to it
+   * (MAR-3169): access lost, the project deleted or archived, or a binding
+   * pasted to the wrong id. Its own kind because the page it produces is
+   * EMPTY rather than refused -- read as ground truth, it looked like a calm
+   * day and drifted every riding row to `unassigned`.
+   */
+  | 'project-not-visible'
 
 export interface TrackerRefusal {
   kind: TrackerRefusalKind
@@ -203,6 +211,8 @@ export type TrackerHealthState =
   | 'unauthorized'
   | 'rate-limited'
   | 'bad-response'
+  /** The bound project is not visible to the key (MAR-3169). */
+  | 'project-not-visible'
 
 /** How the crew's tracker last answered (MAR-3084 R7). */
 export interface TrackerHealth {

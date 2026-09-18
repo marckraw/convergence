@@ -10,6 +10,7 @@ export const TRACKER_REFUSAL_LABELS: Record<TrackerRefusalKind, string> = {
   'rate-limited': 'Linear is rate limiting this key',
   unreachable: 'Linear could not be reached',
   'bad-response': 'Linear answered something unreadable',
+  'project-not-visible': 'Linear shows no project with this id to this key',
 }
 
 /** What a bound id nothing answers to reads as (MAR-3156 R4). */

@@ -50,6 +50,35 @@ export interface TrackerWatcherDeps {
   log?: (message: string, error?: unknown) => void
 }
 
+/**
+ * Throws the refusal an empty page really means, or returns when the project
+ * is there and the page is simply quiet (MAR-3169 R1).
+ *
+ * Thrown into the tick's own `catch`, so the new state rides the one refusal
+ * path every other outage already takes: no ledger row is appended, the
+ * health is named with an age, and the rows on screen stay where they were.
+ */
+async function verifyProjectVisible(
+  adapter: TrackerAdapter,
+  binding: TrackerBinding,
+): Promise<void> {
+  const resolution = await adapter.resolveProject(binding.projectId)
+  if (resolution.kind === 'not-found') {
+    throw new TrackerRefusalError({
+      kind: 'project-not-visible',
+      message: 'The key cannot see the bound project.',
+      retryAt: null,
+    })
+  }
+  // A refusal on the question is the tracker's answer for the whole tick,
+  // exactly as if the list itself had been refused.
+  if (resolution.kind === 'refused') {
+    throw new TrackerRefusalError(resolution.refusal)
+  }
+  // `resolved` -- and `ambiguous`, which an id cannot produce: the project is
+  // there, so the empty page is the truth and the tick goes on as before.
+}
+
 export interface TrackerWatcherHandle {
   stop: () => void
 }
@@ -204,6 +233,13 @@ export class TrackerWatcherService {
         labelPrefix: binding.labelPrefix,
         wavePrefix: binding.wavePrefix,
       })
+      // An empty page is verified before it is believed (MAR-3169 R1). A
+      // project the key cannot see answers with no issues, exactly like a
+      // quiet one -- and believed, it drifted every riding row to
+      // `unassigned` once a minute, forever. Only the empty page pays for the
+      // question (R2): a page with issues in it has already proved the
+      // project is there.
+      if (issues.length === 0) await verifyProjectVisible(adapter, binding)
       const now = this.now()
       const rows = diffTrackerSnapshot({
         crewId,
