@@ -1573,6 +1573,48 @@ describe('CursorProvider', () => {
     })
   })
 
+  it('reads retainQueuedInputsOnCompletion true at the no-send completed write (lap 3, A1 on the D1 path)', async () => {
+    const { handle, child, statuses } = startProvider()
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+    })
+
+    // Kill the idle process so the next send respawns and waits at the ready
+    // gate -- the Stop lands before any session/prompt is issued.
+    child.kill('SIGTERM')
+    const respawnChild = new MockCursorAcpChild()
+    spawnMock.mockReturnValue(respawnChild)
+    const respawnServer = createMockCursorAcp(respawnChild, {
+      holdInitialize: true,
+    })
+    const retainedAtCompleted: boolean[] = []
+    handle.onStatusChange((status) => {
+      if (status === 'completed') {
+        retainedAtCompleted.push(!!handle.retainQueuedInputsOnCompletion)
+      }
+    })
+
+    handle.sendMessage('typed during ready gate')
+    await waitFor(() => {
+      expect(respawnServer.requests.map((r) => r.method)).toContain(
+        'initialize',
+      )
+    })
+    await expect(handle.interrupt?.()).resolves.toBe('interrupted')
+    respawnServer.resolveHeldInitialize()
+
+    await waitFor(() => {
+      expect(retainedAtCompleted.length).toBeGreaterThan(0)
+    })
+    // The service reads the retain pin synchronously while `completed` is
+    // delivered, on this path as on the cancelled one. Mutation: clear
+    // interruptRequested before setStatus('completed') inside
+    // settleInterruptedWithoutSend -> the queue a Stop was meant to hold
+    // drains -> red here.
+    expect(retainedAtCompleted[0]).toBe(true)
+    expect(handle.retainQueuedInputsOnCompletion).toBe(false)
+  })
+
   it('records the user message when Stop lands before the write (lap 3, D1)', async () => {
     const { handle, child, statuses } = startProvider()
     await waitFor(() => {
