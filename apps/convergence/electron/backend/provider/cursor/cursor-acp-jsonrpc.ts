@@ -110,11 +110,14 @@ export class CursorAcpJsonRpcError extends Error {
 
 /** A request produced no progress for its silence budget (MAR-3142 R4). */
 export class CursorAcpSilenceBudgetError extends Error {
+  readonly budgetMs: number
+
   constructor(method: string, budgetMs: number) {
     super(
       `No word from Cursor for ${formatCursorAcpSilenceBudgetDuration(budgetMs)} while waiting for ${method}`,
     )
     this.name = 'CursorAcpSilenceBudgetError'
+    this.budgetMs = budgetMs
   }
 }
 
@@ -424,6 +427,9 @@ export class CursorAcpJsonRpcClient {
             `[cursor-acp] recording lost on server request ${request.method}`,
             error,
           )
+          // Release so a lost answer cannot leave the silence budget suspended
+          // for the life of the client (MAR-3142 lap 3, B2).
+          this.releaseHumanAnswer(request.id)
           return
         }
         this.respondError(
@@ -438,6 +444,7 @@ export class CursorAcpJsonRpcClient {
           `[cursor-acp] recording lost on server request ${request.method}`,
           error,
         )
+        this.releaseHumanAnswer(request.id)
         return
       }
       this.respondError(

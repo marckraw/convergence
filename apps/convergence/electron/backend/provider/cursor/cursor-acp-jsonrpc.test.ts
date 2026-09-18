@@ -335,4 +335,84 @@ describe('CursorAcpJsonRpcClient', () => {
       vi.useRealTimers()
     }
   })
+
+  it('resumes the silence budget from a fresh lastProgressAt (lap 3, B1)', async () => {
+    vi.useFakeTimers()
+    try {
+      const { stdin, stdout } = createMockStreams()
+      const client = new CursorAcpJsonRpcClient(stdin, stdout)
+      const expired = vi.fn()
+      client.onServerRequest(() => {})
+
+      const pending = client.request(
+        'session/prompt',
+        { sessionId: 's1' },
+        {
+          silenceBudgetMs: 1_000,
+          onSilenceExpired: expired,
+        },
+      )
+      const rejection = expect(pending).rejects.toThrow(/No word from Cursor/)
+
+      stdout.push(
+        '{"jsonrpc":"2.0","id":99,"method":"session/request_permission","params":{"sessionId":"s1"}}\n',
+      )
+      await vi.advanceTimersByTimeAsync(0)
+      // Eleven minutes of thinking — longer than the budget.
+      await vi.advanceTimersByTimeAsync(11 * 60 * 1000)
+      expect(expired).not.toHaveBeenCalled()
+
+      client.respond(99, {
+        outcome: { outcome: 'selected', optionId: 'allow-once' },
+      })
+      // Fresh window: still alive just under the budget.
+      await vi.advanceTimersByTimeAsync(999)
+      expect(expired).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(2)
+      await rejection
+      expect(expired).toHaveBeenCalledTimes(1)
+      client.destroy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('releases a human-answer id when a RecordingError aborts the handler (lap 3, B2)', async () => {
+    vi.useFakeTimers()
+    try {
+      const { stdin, stdout } = createMockStreams()
+      const client = new CursorAcpJsonRpcClient(stdin, stdout)
+      const expired = vi.fn()
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      client.onServerRequest(() => {
+        throw new RecordingError('the conversation item', {
+          report: () => undefined,
+        })
+      })
+
+      const pending = client.request(
+        'session/prompt',
+        { sessionId: 's1' },
+        {
+          silenceBudgetMs: 1_000,
+          onSilenceExpired: expired,
+        },
+      )
+      const rejection = expect(pending).rejects.toThrow(/No word from Cursor/)
+
+      stdout.push(
+        '{"jsonrpc":"2.0","id":99,"method":"session/request_permission","params":{"sessionId":"s1"}}\n',
+      )
+      await vi.advanceTimersByTimeAsync(0)
+      // Without release, the budget stays suspended forever.
+      await vi.advanceTimersByTimeAsync(1_000)
+      await rejection
+      expect(expired).toHaveBeenCalledTimes(1)
+      errors.mockRestore()
+      client.destroy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

@@ -1012,7 +1012,12 @@ export class CursorProvider implements Provider {
       await readyPromise
       if (stopped) return
       if (interruptRequested) {
-        settleInterruptedWithoutSend()
+        settleInterruptedWithoutSend({
+          text,
+          attachments,
+          deliveryMode,
+          skillSelections,
+        })
         return
       }
       const activeRpc = rpc
@@ -1045,7 +1050,12 @@ export class CursorProvider implements Provider {
       const skillResolution = await resolveSelectedSkills(text, skillSelections)
       if (stopped) return
       if (interruptRequested) {
-        settleInterruptedWithoutSend()
+        settleInterruptedWithoutSend({
+          text,
+          attachments,
+          deliveryMode,
+          skillSelections: skillResolution.skillSelections,
+        })
         return
       }
 
@@ -1078,16 +1088,8 @@ export class CursorProvider implements Provider {
         const parts = await loadCursorParts(attachments)
         if (stopped) return
         if (interruptRequested) {
-          endTurn(() => {
-            sessionEmitter.addNote({
-              text: 'stopped by user',
-              level: 'info',
-            })
-            setStatus('completed')
-            interruptRequested = false
-            setAttention('finished')
-            setActivity(null)
-          })
+          // User message already written — only the settle note (lap 3, A2).
+          settleInterruptedWithoutSend()
           return
         }
         promptInFlight = true
@@ -1135,6 +1137,9 @@ export class CursorProvider implements Provider {
           if (stopReason === 'cancelled') {
             // A cancelled turn is a finished turn, never a failed one: the
             // user stopped it and the process stays alive (MAR-3142 R2).
+            // Clear interruptRequested *after* this callback so the service
+            // still reads retainQueuedInputsOnCompletion while completed is
+            // delivered (MAR-3142 lap 3, A1).
             sessionEmitter.addNote({
               text: 'stopped by user',
               level: 'info',
@@ -1148,7 +1153,7 @@ export class CursorProvider implements Provider {
         })
         // The flag is a property of one turn — clear it at every turn end so
         // a late Stop after end_turn cannot sticky-retain the app queue
-        // (MAR-3142 lap 2, A).
+        // (MAR-3142 lap 2, A). Must stay after endTurn so A1's pin holds.
         interruptRequested = false
       } catch (error) {
         patchUserMessageSkills(
@@ -1162,13 +1167,42 @@ export class CursorProvider implements Provider {
       }
     }
 
-    /** Stop landed before `session/prompt` — completed, no send (lap 2, D). */
-    function settleInterruptedWithoutSend(): void {
+    /**
+     * Stop landed before `session/prompt` — completed, no send (lap 2, D).
+     * When the user message has not been written yet, record it and note
+     * "not sent — stopped by user" so typed text does not vanish (lap 3, D1).
+     */
+    function settleInterruptedWithoutSend(pendingMessage?: {
+      text: string
+      attachments?: Attachment[]
+      deliveryMode?: MidRunInputMode
+      skillSelections?: SkillSelection[]
+    }): void {
       endTurn(() => {
-        sessionEmitter.addNote({
-          text: 'stopped by user',
-          level: 'info',
-        })
+        if (pendingMessage) {
+          sessionEmitter.addUserMessage({
+            providerAccountId: null,
+            text: pendingMessage.text,
+            skillSelections: pendingMessage.skillSelections,
+            attachmentIds: pendingMessage.attachments?.length
+              ? pendingMessage.attachments.map((attachment) => attachment.id)
+              : undefined,
+            deliveryMode:
+              pendingMessage.deliveryMode === 'follow-up' ||
+              pendingMessage.deliveryMode === 'steer'
+                ? pendingMessage.deliveryMode
+                : undefined,
+          })
+          sessionEmitter.addNote({
+            text: 'not sent — stopped by user',
+            level: 'info',
+          })
+        } else {
+          sessionEmitter.addNote({
+            text: 'stopped by user',
+            level: 'info',
+          })
+        }
         setStatus('completed')
         interruptRequested = false
         setAttention('finished')
@@ -1215,7 +1249,7 @@ export class CursorProvider implements Provider {
           sessionEmitter.addNote({
             text:
               error instanceof CursorAcpSilenceBudgetError
-                ? formatCursorAcpSilenceBudgetNote()
+                ? formatCursorAcpSilenceBudgetNote(error.budgetMs)
                 : `Cursor prompt failed: ${
                     error instanceof Error ? error.message : String(error)
                   }`,
@@ -1510,33 +1544,40 @@ export class CursorProvider implements Provider {
       },
       /**
        * Applies a model selection to the live ACP session and remembers it for
-       * a respawn (MAR-3142 lap 2, C). Without this an idle resident handle
-       * refuses every switch.
+       * a respawn (MAR-3142 lap 2, C). Apply first, remember on success so a
+       * refused option cannot stick on the handle (lap 3, C1a). Refuses while
+       * a turn is starting or in flight — having this method must not open a
+       * mid-turn switch the service would otherwise block (lap 3, C1b).
        */
       setModelSelection: async (model, effort) => {
-        config.model = model
-        config.effort = effort
+        if (promptStarting || promptInFlight) {
+          throw new Error(
+            'Model and effort can only change while the session is idle. Wait for the current turn to finish.',
+          )
+        }
         const activeRpc = rpc
         const sessionId = cursorSessionId
-        if (!activeRpc || !sessionId || stopped) return
         const requestedModel = model?.trim() || null
-        if (!requestedModel) return
-        recordDebug({
-          direction: 'out',
-          channel: 'request',
-          method: 'session/set_config_option',
-          payload: {
+        if (activeRpc && sessionId && !stopped && requestedModel) {
+          recordDebug({
+            direction: 'out',
+            channel: 'request',
+            method: 'session/set_config_option',
+            payload: {
+              sessionId,
+              configId: CURSOR_ACP_MODEL_CONFIG_ID,
+              value: requestedModel,
+            },
+            note: 'Apply Cursor model selection to the active ACP session',
+          })
+          await activeRpc.request('session/set_config_option', {
             sessionId,
             configId: CURSOR_ACP_MODEL_CONFIG_ID,
             value: requestedModel,
-          },
-          note: 'Apply Cursor model selection to the active ACP session',
-        })
-        await activeRpc.request('session/set_config_option', {
-          sessionId,
-          configId: CURSOR_ACP_MODEL_CONFIG_ID,
-          value: requestedModel,
-        })
+          })
+        }
+        config.model = model
+        config.effort = effort
       },
       /**
        * Cancels the turn without ending the process (R2): Cursor answers the
@@ -1554,17 +1595,18 @@ export class CursorProvider implements Provider {
           const activeRpc = rpc
           const activeSessionId = cursorSessionId
           if (!activeRpc || !activeSessionId) return 'not-applicable'
-          // Answer pending human requests first so Cursor is not left blocked
-          // on an unanswered permission while we cancel (MAR-3142 lap 2, E).
-          for (const [id, approval] of pendingApprovals.entries()) {
-            activeRpc.respond(id, approval.cancelResult)
-          }
-          pendingApprovals.clear()
-          for (const [id, interaction] of pendingInteractions.entries()) {
-            activeRpc.respond(id, interaction.cancelResult)
-          }
-          pendingInteractions.clear()
           try {
+            // Answer pending human requests first so Cursor is not left blocked
+            // on an unanswered permission while we cancel (MAR-3142 lap 2, E;
+            // lap 3, E1 — inside the try so a throw is a note, not hard-stop).
+            for (const [id, approval] of pendingApprovals.entries()) {
+              activeRpc.respond(id, approval.cancelResult)
+            }
+            pendingApprovals.clear()
+            for (const [id, interaction] of pendingInteractions.entries()) {
+              activeRpc.respond(id, interaction.cancelResult)
+            }
+            pendingInteractions.clear()
             activeRpc.notify('session/cancel', { sessionId: activeSessionId })
           } catch (error) {
             recordTeardown('the cancel failure note', () =>
