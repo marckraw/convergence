@@ -1444,14 +1444,22 @@ export class CursorProvider implements Provider {
 
         const passiveNote = buildCursorAcpPassiveUpdateNote(method, params)
         if (passiveNote) {
-          flushAssistantBuffer()
-          flushThinkingBuffer()
-          sessionEmitter.addNote({
-            text: passiveNote.text,
-            level: passiveNote.level,
-            providerItemId: passiveNote.providerItemId,
-            providerEventType: method,
-          })
+          // Same recorder as the request-side passive path (MAR-3152): bare
+          // inside acceptance so emitDelta announces; labeled teardown outside.
+          recordTurnWrite('the flushed assistant buffer', () =>
+            flushAssistantBuffer(),
+          )
+          recordTurnWrite('the flushed thinking buffer', () =>
+            flushThinkingBuffer(),
+          )
+          recordTurnWrite('the passive update note', () =>
+            sessionEmitter.addNote({
+              text: passiveNote.text,
+              level: passiveNote.level,
+              providerItemId: passiveNote.providerItemId,
+              providerEventType: method,
+            }),
+          )
         }
       })
       rpc.onServerRequest((method, params, id, activeRpc) => {
