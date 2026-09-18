@@ -3,9 +3,20 @@
  * is one edit, not a hunt through JSX.
  */
 
-/** The open column's width, beside the sidebar. */
+/**
+ * The open column, beside the sidebar. No width here (MAR-3155 R6): the
+ * column's width is a preference the decision computes, rendered as an inline
+ * style, and a class saying `w-[280px]` would be a second encoding of it.
+ */
 export const WAVE_PANEL_COLUMN_CLASS =
-  'flex h-full w-[280px] shrink-0 flex-col border-r border-white/10 bg-background/40'
+  'flex h-full shrink-0 flex-col border-r border-white/10 bg-background/40'
+
+/**
+ * The column's drag handle (MAR-3155 R4): a copy of the sidebar's, because a
+ * feature may not import from `app` and the two edges may drift apart.
+ */
+export const WAVE_RESIZE_HANDLE_CLASS =
+  'app-resize-handle relative z-10 -mx-1.5 w-px shrink-0 cursor-col-resize border-x-[6px] border-x-transparent bg-clip-content transition-colors hover:bg-white/10 focus-visible:bg-white/20 focus-visible:outline-none'
 
 /** The collapsed rail. */
 export const WAVE_RAIL_CLASS =

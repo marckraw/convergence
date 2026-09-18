@@ -20,6 +20,11 @@ export interface WavePanelViewProps {
   inertReason: (entry: WorkLedgerEntry) => string | null
   onOpen: (entry: WorkLedgerEntry) => void
   onCollapse?: () => void
+  /**
+   * The column's width in pixels (MAR-3155): the decision's number, rendered
+   * inline. Absent in the full layout, which takes the room it is given.
+   */
+  width?: number
 }
 
 /**
@@ -37,6 +42,7 @@ export const WavePanelView: FC<WavePanelViewProps> = ({
   inertReason,
   onOpen,
   onCollapse,
+  width,
 }) => (
   <aside
     aria-label="Waves"
@@ -44,6 +50,7 @@ export const WavePanelView: FC<WavePanelViewProps> = ({
     className={cn(
       layout === 'column' ? WAVE_PANEL_COLUMN_CLASS : 'flex w-full flex-col',
     )}
+    style={layout === 'column' && width !== undefined ? { width } : undefined}
   >
     <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2">
       <h2 className="text-xs font-semibold tracking-tight">Waves</h2>

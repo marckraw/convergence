@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { TrackerHealth, WorkLedgerEntry } from '@/entities/work-ledger'
 import {
+  clampWavePanelWidth,
   effectiveWavePanelMode,
   isTerminalWaveRow,
   resolveWaveRow,
   sectionWaveRows,
   UNWAVED_GROUP,
-  WAVE_PANEL_COLUMN_WIDTH,
+  WAVE_PANEL_DEFAULT_COLUMN_WIDTH,
+  WAVE_PANEL_MAX_COLUMN_WIDTH,
+  WAVE_PANEL_MIN_COLUMN_WIDTH,
   WAVE_PANEL_MIN_MAIN_WIDTH,
   waveBoardLine,
   waveHeader,
@@ -261,31 +264,46 @@ describe('MAR-3097 lap 2, E: crews on rows', () => {
 })
 
 describe('MAR-3097 lap 2, B: the column keeps the main panel at its floor', () => {
+  /** The window that leaves exactly `available` px for the column. */
+  const windowLeaving = (available: number, reserved = 260) =>
+    reserved + WAVE_PANEL_MIN_MAIN_WIDTH + available
+
   it('renders the rail when the window is too narrow, and says which reason', () => {
-    const wide = 260 + WAVE_PANEL_COLUMN_WIDTH + WAVE_PANEL_MIN_MAIN_WIDTH
+    // The floor moved with MAR-3155: the column gives way by SHRINKING first,
+    // so the rail arrives when even the narrowest readable column will not
+    // fit -- not when the default one will not.
+    const wide = windowLeaving(WAVE_PANEL_MIN_COLUMN_WIDTH)
     expect(
       effectiveWavePanelMode({
         stored: 'open',
+        storedWidth: WAVE_PANEL_DEFAULT_COLUMN_WIDTH,
         windowWidth: wide,
         reservedWidth: 260,
       }),
-    ).toEqual({ mode: 'open', reason: null })
+    ).toEqual({
+      mode: 'open',
+      reason: null,
+      width: WAVE_PANEL_MIN_COLUMN_WIDTH,
+      maxWidth: WAVE_PANEL_MIN_COLUMN_WIDTH,
+    })
     // MAR-3148 R1: the rail has two causes, and only one of them can be
     // undone by clicking Open.
     expect(
       effectiveWavePanelMode({
         stored: 'open',
+        storedWidth: WAVE_PANEL_DEFAULT_COLUMN_WIDTH,
         windowWidth: wide - 1,
         reservedWidth: 260,
       }),
-    ).toEqual({ mode: 'rail', reason: 'narrow' })
+    ).toEqual({ mode: 'rail', reason: 'narrow', width: null, maxWidth: null })
     expect(
       effectiveWavePanelMode({
         stored: 'rail',
+        storedWidth: WAVE_PANEL_DEFAULT_COLUMN_WIDTH,
         windowWidth: 4000,
         reservedWidth: 0,
       }),
-    ).toEqual({ mode: 'rail', reason: 'stored' })
+    ).toEqual({ mode: 'rail', reason: 'stored', width: null, maxWidth: null })
     // Lap 2, B: the width answers first. A stored rail in a window that could
     // not hold the column either reads `narrow`, because that is why Open
     // cannot act -- answering `stored` left the control live over nothing.
@@ -293,19 +311,64 @@ describe('MAR-3097 lap 2, B: the column keeps the main panel at its floor', () =
     expect(
       effectiveWavePanelMode({
         stored: 'rail',
+        storedWidth: WAVE_PANEL_DEFAULT_COLUMN_WIDTH,
         windowWidth: wide - 1,
         reservedWidth: 260,
       }),
-    ).toEqual({ mode: 'rail', reason: 'narrow' })
+    ).toEqual({ mode: 'rail', reason: 'narrow', width: null, maxWidth: null })
   })
 
-  it('MAR-3148 R5: the column’s width is one fact, not two', () => {
-    // The class the column renders with and the number the floor is measured
-    // against must be the same width, or the panel fits on screen and not in
-    // the arithmetic (or the other way round).
-    expect(WAVE_PANEL_COLUMN_CLASS).toContain(
-      `w-[${WAVE_PANEL_COLUMN_WIDTH}px]`,
-    )
+  it('MAR-3155 R1: the width is the preference, cut to what the window can spare', () => {
+    const at = (storedWidth: number, available: number) =>
+      effectiveWavePanelMode({
+        stored: 'open',
+        storedWidth,
+        windowWidth: windowLeaving(available),
+        reservedWidth: 260,
+      })
+
+    // A preference wider than the room: honoured as far as it fits.
+    // Mutation: clamp to MAX alone (forget `available`) -> 600 here, red.
+    expect(at(600, 400)).toEqual({
+      mode: 'open',
+      reason: null,
+      width: 400,
+      // Lap 2, B: the ceiling the decision used, for the handle to announce.
+      // Mutation: return the constant -> 640 here, red.
+      maxWidth: 400,
+    })
+    expect(at(600, 900).maxWidth).toBe(WAVE_PANEL_MAX_COLUMN_WIDTH)
+    // The same preference where it does fit.
+    expect(at(600, 900).width).toBe(600)
+    // Never past the ceiling, however much room there is.
+    expect(at(5_000, 5_000).width).toBe(WAVE_PANEL_MAX_COLUMN_WIDTH)
+    // Never below the floor, however small the preference.
+    expect(at(100, 900).width).toBe(WAVE_PANEL_MIN_COLUMN_WIDTH)
+    // And a window that cannot hold the floor shows no column at all.
+    expect(at(600, WAVE_PANEL_MIN_COLUMN_WIDTH - 1)).toEqual({
+      mode: 'rail',
+      reason: 'narrow',
+      width: null,
+      maxWidth: null,
+    })
+  })
+
+  it('MAR-3155 R1: the clamp honours a preference as far as the room allows', () => {
+    // The decision's own arithmetic, alone: a ceiling below the floor is the
+    // window telling the column it cannot fit, and the FLOOR wins -- the
+    // decision has already refused anything narrower than that by then.
+    expect(clampWavePanelWidth(400, 900)).toBe(400)
+    expect(clampWavePanelWidth(900, 400)).toBe(400)
+    expect(clampWavePanelWidth(10, 900)).toBe(WAVE_PANEL_MIN_COLUMN_WIDTH)
+    expect(clampWavePanelWidth(400, 10)).toBe(WAVE_PANEL_MIN_COLUMN_WIDTH)
+  })
+
+  it('MAR-3155 R6: the column class carries no width of its own', () => {
+    // The width is the decision's number, rendered inline. A class saying
+    // `w-[280px]` would be a second encoding of it, and the rendered test
+    // asserts the inline width IS the decision's.
+    // Mutation: put `w-[280px]` back in the class -> red.
+    expect(WAVE_PANEL_COLUMN_CLASS).not.toMatch(/\bw-\[/)
   })
 })
 
