@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Readable, Writable } from 'stream'
+import { RecordingError } from '../../session/session.pure'
 import {
   CursorAcpJsonRpcClient,
   CursorAcpJsonRpcError,
@@ -172,6 +173,67 @@ describe('CursorAcpJsonRpcClient', () => {
     const pending = destroyedClient.request('initialize')
     destroyedClient.destroy()
     await expect(pending).rejects.toThrow('Cursor ACP client destroyed')
+  })
+
+  it('swallows RecordingError from notification handlers without escaping', async () => {
+    const { stdin, stdout } = createMockStreams()
+    const client = new CursorAcpJsonRpcClient(stdin, stdout)
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    client.onNotification(() => {
+      throw new RecordingError('the conversation item', {
+        report: () => undefined,
+      })
+    })
+
+    expect(() => {
+      stdout.push(
+        '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1"}}\n',
+      )
+    }).not.toThrow()
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(
+      errors.mock.calls.some((call) =>
+        String(call[0]).includes('recording lost on notification'),
+      ),
+    ).toBe(true)
+    errors.mockRestore()
+  })
+
+  it('swallows RecordingError from server-request handlers without -32603', async () => {
+    const { stdin, stdout, written } = createMockStreams()
+    const client = new CursorAcpJsonRpcClient(stdin, stdout)
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    client.onServerRequest((_method, _params, id, rpc) => {
+      rpc.respond(id, {
+        outcome: { outcome: 'selected', optionId: 'allow-once' },
+      })
+      throw new RecordingError('the conversation item', {
+        report: () => undefined,
+      })
+    })
+
+    stdout.push(
+      '{"jsonrpc":"2.0","id":99,"method":"session/request_permission","params":{"sessionId":"s1"}}\n',
+    )
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    expect(JSON.parse(written[0] ?? '{}')).toMatchObject({
+      jsonrpc: '2.0',
+      id: 99,
+      result: {
+        outcome: { outcome: 'selected', optionId: 'allow-once' },
+      },
+    })
+    expect(written.every((line) => !line.includes('-32603'))).toBe(true)
+    expect(
+      errors.mock.calls.some((call) =>
+        String(call[0]).includes('recording lost on server request'),
+      ),
+    ).toBe(true)
+    errors.mockRestore()
   })
 
   it('allows disabling timeout for a long-running request', async () => {
