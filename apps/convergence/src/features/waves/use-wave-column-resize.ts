@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import {
-  clampWavePanelWidth,
+  settleWavePanelGesture,
   WAVE_PANEL_WIDTH_STEP,
 } from './wave-sections.pure'
 
 /**
- * The column's drag, keyboard and reset gestures (MAR-3155 R4).
+ * The column's drag, keyboard and reset gestures (MAR-3155 R4; MAR-3161).
  *
  * A hook rather than anything inside a presentational: it listens on the
  * window and writes `document.body`, which is orchestration. The pointer's
@@ -13,17 +13,11 @@ import {
  * whatever stands to its left -- the sidebar's current width, which the shell
  * already passes as `reservedWidth`.
  *
- * What is stored is what the person MEANT (lap 2, A), and after lap 3 that
- * has one form for the two gestures that aim at a width:
- *
- * **a drag and a step store the width on screen when the gesture ENDS, and
- * store nothing when that equals the width on screen when it BEGAN.**
- *
- * The window's ceiling is what makes those differ: press or drag wider
- * against it and the screen does not move, so nothing was chosen and nothing
- * may be written down. Writing it down is how a 600 px preference became 400
- * forever -- the same loss through the keyboard (lap 2) and through the mouse
- * (lap 3), which is why the two now share one sentence instead of a list.
+ * **Store nothing iff storing nothing would show the same width.** The drag
+ * and the step ask that pure decision when they END, with the ceiling of
+ * that moment. The width when the gesture began is not the question — the
+ * ceiling can move mid-drag, and a stale draft can sit on screen at the next
+ * press.
  *
  * A RESET is the one gesture whose meaning is not "what I see": it stores the
  * default, and the decision cuts that for display until the window grows.
@@ -56,6 +50,11 @@ export interface WaveColumnOnScreen {
 export function useWaveColumnResize(input: {
   reservedWidth: number
   column: WaveColumnOnScreen | null
+  /**
+   * The stored preference — never `draftWidth ?? storedWidth`. The settle
+   * decision compares against what would show if nothing were written.
+   */
+  storedWidth: number
   /** Commits a finished gesture. */
   onCommit: (width: number) => void
   /** The width a double-click returns to. */
@@ -79,19 +78,15 @@ export function useWaveColumnResize(input: {
   const releaseDrag = useRef<(() => void) | null>(null)
 
   const onHandleMouseDown = useCallback(() => {
-    // Release any drag still installed before installing this one (lap 3, C).
-    // Refusing to start instead would swallow the press: a drag whose mouse-up
-    // the window never delivered -- released outside the frame -- would stay
-    // installed, this press would be refused, and its mouse-up would finish
-    // the stale drag instead of starting the one the person meant.
+    // Release any drag still installed before installing this one (tidiness,
+    // and the unmount witness at wave-panel.render.test.tsx). With the settle
+    // decision no longer comparing to a captured start width, refusing the
+    // press and releasing-before-install are observably the same for every
+    // input a test can stage — the surviving listeners answer the same
+    // events either way.
     releaseDrag.current?.()
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
-    // What the person was looking at when they took hold (lap 3, A). A drag
-    // that ends on this same width changed nothing on screen, whatever the
-    // pointer did -- dragging wider against the window's ceiling moves the
-    // cursor and not the column.
-    const startedAt = latest.current.column?.width ?? null
     // The pointer's own last word, kept here rather than read back off the
     // rendered width: a mouse-up that arrives in the same task as the last
     // mouse-move has had no render in between, and reading the screen there
@@ -114,15 +109,20 @@ export function useWaveColumnResize(input: {
       const column = latest.current.column
       stop()
       // A press that never moved is not a resize; a drag that ended with no
-      // column on screen resized nothing anybody saw.
+      // column on screen resized nothing anybody saw. Otherwise ask the
+      // pure decision with this moment's ceiling (MAR-3161 R2).
       const settled =
         moved === null || column === null
           ? null
-          : clampWavePanelWidth(moved, column.maxWidth)
+          : settleWavePanelGesture({
+              requested: moved,
+              storedWidth: latest.current.storedWidth,
+              maxWidth: column.maxWidth,
+            })
       // Commit BEFORE clearing the draft (lap 3, C): the two are order-safe
       // only under automatic batching otherwise, and a draft cleared first
       // would flash the old width between them.
-      if (settled !== null && settled !== startedAt) {
+      if (settled !== null) {
         latest.current.onCommit(settled)
       }
       latest.current.onDraft(null)
@@ -155,11 +155,13 @@ export function useWaveColumnResize(input: {
       const column = latest.current.column
       if (column === null) return
       event.preventDefault()
-      const next = clampWavePanelWidth(column.width + step, column.maxWidth)
-      // The window refused the step: nothing moved, so there is nothing the
-      // person chose. Same sentence as the drag's, one line above its own.
-      if (next === column.width) return
-      latest.current.onCommit(next)
+      const settled = settleWavePanelGesture({
+        requested: column.width + step,
+        storedWidth: latest.current.storedWidth,
+        maxWidth: column.maxWidth,
+      })
+      if (settled === null) return
+      latest.current.onCommit(settled)
     },
     [],
   )

@@ -802,6 +802,40 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(storedWidth()).toBe('300')
   })
 
+  it('MAR-3161 R2: a mid-drag ceiling move stores the width you let go on', async () => {
+    // Residue from MAR-3155: startedAt compared to the width at mouse-down,
+    // so releasing back at that width after the ceiling grew stored nothing
+    // and the column jumped to the old preference.
+    // Mutation: capture the ceiling at mouse-down → stored stays 600 → red.
+    localStorage.setItem('convergence-wave-panel-width', '600')
+    setWindowWidth(windowLeaving(400))
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    const handle = screen.getByRole('separator', {
+      name: 'Resize the wave column',
+    })
+    expect(columnWidth()).toBe('400px')
+
+    fireEvent.mouseDown(handle)
+    await act(async () => {
+      fireEvent.mouseMove(window, { clientX: RESERVED + 320 })
+    })
+    expect(columnWidth()).toBe('320px')
+
+    await act(async () => {
+      setWindowWidth(windowLeaving(640))
+      window.dispatchEvent(new Event('resize'))
+    })
+
+    await act(async () => {
+      fireEvent.mouseMove(window, { clientX: RESERVED + 400 })
+    })
+    await act(async () => {
+      fireEvent.mouseUp(window)
+    })
+    expect(columnWidth()).toBe('400px')
+    expect(storedWidth()).toBe('400')
+  })
+
   it('MAR-3155 lap 3, B: a drag that ends with the column hidden stores nothing', async () => {
     setWindowWidth(windowLeaving(900))
     const { rerender } = render(<WavePanel reservedWidth={RESERVED} />)
