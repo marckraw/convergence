@@ -62,12 +62,14 @@ export const BLOCKED_ACTION = 'decide'
 /**
  * A row the loop has let go of (MAR-3138 lap 2, A): `done` and `unassigned`.
  *
- * Terminal is not "finished well", it is "the ledger will never hear about
- * this issue again": `diffTrackerSnapshot` writes no further row for an
- * `unassigned` one, and the seat-group query no longer returns it. So an ask
- * put on a terminal row can never be answered -- removing the `blocked`
- * label in Linear would not even reach the ledger. A terminal row therefore
- * asks for nothing and sits in *Waves* alone, whatever facts it carries.
+ * Terminal is not "finished well", it is "the loop has let go": nobody will
+ * act on a `done` issue, and an `unassigned` one has left the seat group --
+ * `diffTrackerSnapshot` writes no further row for it and the seat-group query
+ * no longer returns it, so an ask put on it could never be answered (removing
+ * the `blocked` label in Linear would not even reach the ledger). A `done`
+ * issue still labeled is read every tick, but a decision on finished work is
+ * not a decision. A terminal row therefore asks for nothing and sits in
+ * *Waves* alone, whatever facts it carries.
  */
 export function isTerminalWaveRow(
   entry: Pick<WorkLedgerEntry, 'state'>,
