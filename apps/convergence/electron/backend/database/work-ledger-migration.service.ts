@@ -103,3 +103,30 @@ export function migrateWorkLedgerVerdict(db: Database.Database): void {
     ).run()
   })()
 }
+
+/**
+ * The `blocked` column (MAR-3138 R3).
+ *
+ * An `ALTER` rather than a rebuild: nothing about the existing definition
+ * changes, and a widened CHECK is the only thing SQLite refuses in place. It
+ * runs after v2 on every database -- a fresh one and one that already carries
+ * v1 + v2 end with the same columns -- behind its own sentinel, because
+ * `ADD COLUMN` throws on a second run.
+ *
+ * `NOT NULL DEFAULT 0` rather than a nullable column: every row the app wrote
+ * before this build was written by a tracker read that could not see the
+ * label, and "the tracker did not say blocked" is exactly `false`. The next
+ * tick appends the truth for any issue that is.
+ */
+export function migrateWorkLedgerBlocked(db: Database.Database): void {
+  if (db.prepare("SELECT 1 FROM app_state WHERE key='work_ledger_v3'").get())
+    return
+  db.transaction(() => {
+    db.prepare(
+      'ALTER TABLE work_ledger ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0',
+    ).run()
+    db.prepare(
+      "INSERT INTO app_state(key,value) VALUES ('work_ledger_v3','1')",
+    ).run()
+  })()
+}

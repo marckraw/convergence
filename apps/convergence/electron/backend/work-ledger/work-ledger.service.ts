@@ -51,8 +51,8 @@ export class WorkLedgerService {
       `INSERT INTO work_ledger (
         id, crew_id, issue_id, issue_identifier, issue_title, issue_url,
         seat, wave, lap, state, tracker_status, grounded_at, seen_at, fact_json,
-        verdict, verdict_settle_id, verdict_note
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        verdict, verdict_settle_id, verdict_note, blocked
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     this.db.transaction(() => {
       for (const record of records) {
@@ -74,6 +74,7 @@ export class WorkLedgerService {
           record.verdict,
           record.verdictSettleId,
           record.verdictNote,
+          record.blocked ? 1 : 0,
         )
       }
     })()

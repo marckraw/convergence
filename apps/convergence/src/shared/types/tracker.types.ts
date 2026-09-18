@@ -45,6 +45,12 @@ export interface TrackerIssue {
   seat: string | null
   /** The child under the wave group. */
   wave: string | null
+  /**
+   * The issue carries the constitution's plain `blocked` label (MAR-3138):
+   * it waits on a decision, the world or another issue. A PLAIN label, never
+   * a group child -- `wave > blocked` is a wave named blocked, not this.
+   */
+  blocked: boolean
   groundedAt: string | null
   branchName: string | null
   updatedAt: string
@@ -134,6 +140,12 @@ export interface WorkLedgerRecord {
   verdictSettleId: string | null
   /** A STOP carries the mastermind's reply; capped where it is written. */
   verdictNote: string | null
+  /**
+   * The tracker said this issue is blocked (MAR-3138) -- a fact of the row,
+   * carried forward the way every other tracker fact is, so the panel can ask
+   * a person to decide whatever state the issue is in.
+   */
+  blocked: boolean
 }
 
 export type NewWorkLedgerRecord = Omit<WorkLedgerRecord, 'id'>

@@ -62,6 +62,28 @@ export const RECORDED_TWO_ISSUE_PAGE = linearIssuesBody([
   }),
 ])
 
+/**
+ * The three shapes R1 reads `blocked` from (MAR-3138): the plain label, a
+ * group child that merely shares its name, and an issue without it.
+ */
+export const RECORDED_BLOCKED_LABEL_PAGE = linearIssuesBody([
+  linearIssueNode({
+    id: 'issue-blocked',
+    identifier: 'EX-10',
+    labels: [linearLabel('opus', 'horse'), linearLabel('Blocked', null)],
+  }),
+  linearIssueNode({
+    id: 'issue-blocked-wave',
+    identifier: 'EX-11',
+    labels: [linearLabel('opus', 'horse'), linearLabel('blocked', 'wave')],
+  }),
+  linearIssueNode({
+    id: 'issue-unblocked',
+    identifier: 'EX-12',
+    labels: [linearLabel('opus', 'horse'), linearLabel('grounded', null)],
+  }),
+])
+
 /** Linear's refusal of a bad key. */
 export const RECORDED_UNAUTHORIZED_BODY = {
   errors: [

@@ -546,6 +546,61 @@ describe('MAR-3085 R7: the row reads the lap, the cap and the ruling', () => {
   })
 })
 
+describe('MAR-3138 R4: a blocked row reads "decide" under Waiting on you', () => {
+  it('a working, blocked row is there and not in the wave, and says which label put it there', () => {
+    renderView([
+      ledgerEntry({ issueIdentifier: 'EX-1', state: 'working', blocked: true }),
+      ledgerEntry({ issueIdentifier: 'EX-2', state: 'working' }),
+    ])
+
+    const waiting = screen.getByRole('region', { name: 'Waiting on you' })
+    const inTheWave = screen.getByRole('region', { name: 'In the wave' })
+    // Mutation: leave a blocked row in its state's section -> EX-1 is in the
+    // wave and not here, red.
+    expect(within(waiting).getAllByText('EX-1')).toHaveLength(1)
+    expect(within(waiting).queryByText('EX-2')).toBeNull()
+    expect(within(inTheWave).queryByText('EX-1')).toBeNull()
+    expect(rowOf('crew-1:EX-1').getByText('decide')).toBeTruthy()
+    // Mutation: drop the marker from the row -> red.
+    expect(rowOf('crew-1:EX-1').getByText('blocked')).toBeTruthy()
+    expect(rowOf('crew-1:EX-2').queryByText('blocked')).toBeNull()
+  })
+
+  it('a blocked reviewed row asks to decide, not to QA, and the rail counts it once', () => {
+    renderView([
+      ledgerEntry({
+        issueIdentifier: 'EX-1',
+        state: 'reviewed',
+        blocked: true,
+      }),
+    ])
+    expect(rowOf('crew-1:EX-1').getByText('decide')).toBeTruthy()
+    expect(rowOf('crew-1:EX-1').queryByText('QA and say done')).toBeNull()
+
+    cleanup()
+    render(
+      <WaveRailView
+        sections={sectionWaveRows(
+          [
+            ledgerEntry({
+              issueIdentifier: 'EX-1',
+              state: 'working',
+              blocked: true,
+            }),
+          ],
+          NOW,
+        )}
+        outage={false}
+        narrow={false}
+        onExpand={vi.fn()}
+      />,
+    )
+    // The rail reads the same sections, so the count follows R4 for free.
+    expect(screen.getByLabelText('Waiting on you: 1')).toBeTruthy()
+    expect(screen.getByLabelText('In the wave: 0')).toBeTruthy()
+  })
+})
+
 describe('MAR-3148: the rail, the props and the clock', () => {
   const rows = [ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' })]
 

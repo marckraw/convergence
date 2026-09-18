@@ -24,6 +24,7 @@ export function ledgerEntry(
     verdict: null,
     verdictSettleId: null,
     verdictNote: null,
+    blocked: false,
     hostLiveness: {
       executionHost: 'local',
       lastEventAt: null,

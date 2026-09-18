@@ -68,6 +68,10 @@ export function verdictLedgerRecord(input: {
     },
     verdict: input.verdict,
     verdictSettleId: input.settleId,
+    // A ruling says nothing about the label (MAR-3138 R2): the row keeps the
+    // blocked the tracker last reported, so a verdict cannot silently unblock
+    // an issue that is still waiting on a decision.
+    blocked: bound.blocked,
     verdictNote:
       input.verdict === 'stop' && input.note
         ? input.note.slice(0, VERDICT_NOTE_MAX_LENGTH)
@@ -95,6 +99,8 @@ export interface WorkLedgerRow {
   verdict: string | null
   verdict_settle_id: string | null
   verdict_note: string | null
+  /** SQLite's 0/1 for the `blocked` label (MAR-3138). */
+  blocked: number
 }
 
 /** The row plus the facts joined in the same SELECT. */
@@ -152,6 +158,9 @@ export function workLedgerRecordFromRow(row: WorkLedgerRow): WorkLedgerRecord {
     verdict: readVerdict(row.verdict),
     verdictSettleId: row.verdict_settle_id,
     verdictNote: row.verdict_note,
+    // A row written before the v3 column existed reads as not blocked, the
+    // same as the column's default.
+    blocked: row.blocked === 1,
   }
 }
 

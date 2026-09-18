@@ -56,12 +56,21 @@ export interface WaveSections {
   waves: WaveGroup[]
 }
 
+/** What a blocked row asks for, whatever state it is in (MAR-3138 R4). */
+export const BLOCKED_ACTION = 'decide'
+
 /**
- * The human action on a row (R2), from its state alone: a reviewed issue
- * waits on Marcin's QA, a returned one on Fable's verdict, and a working one
- * whose seat has no conversation in the crew cannot be reached.
+ * The human action on a row (R2), from its state: a reviewed issue waits on
+ * Marcin's QA, a returned one on Fable's verdict, and a working one whose
+ * seat has no conversation in the crew cannot be reached.
+ *
+ * `blocked` is asked FIRST (MAR-3138 R4): it is the tracker saying the work
+ * cannot move until somebody decides, which outranks whatever the state would
+ * otherwise ask for -- and it is the same question in every state, which is
+ * why the answer is one word and not six.
  */
 export function waveRowAction(entry: WorkLedgerEntry): string | null {
+  if (entry.blocked) return BLOCKED_ACTION
   if (entry.state === 'reviewed') return 'QA and say done'
   if (entry.state === 'returned') return 'verdict (Fable)'
   // A STOP parks the lap until somebody grooms the issue again (MAR-3085 R7).
@@ -95,11 +104,12 @@ export function waveLapLabel(lap: number, cap: number | null): string {
 /**
  * The rows into the four sections (R1): a pure function of the rows.
  *
- * *Waiting on you* is `reviewed` (`blocked` rides MAR-3138); *In the wave* is
- * `working`, `returned` and `stopped` (MAR-3085: a parked lap is still work
- * somebody picks up); *Waiting to start* is `assigned`; *Waves* groups every
- * row by its wave, unwaved rows last. `done` and `unassigned` appear in
- * *Waves* only.
+ * *Waiting on you* is `reviewed` and every `blocked` row (MAR-3138 R4: a
+ * decision is a decision in any state, and the row lands there ONCE rather
+ * than in both sections); *In the wave* is `working`, `returned` and
+ * `stopped` (MAR-3085: a parked lap is still work somebody picks up);
+ * *Waiting to start* is `assigned`; *Waves* groups every row by its wave,
+ * unwaved rows last. `done` and `unassigned` appear in *Waves* only.
  */
 export function sectionWaveRows(
   rows: readonly WorkLedgerEntry[],
@@ -123,8 +133,11 @@ export function sectionWaveRows(
       crewName: crew.name,
       lapLabel: waveLapLabel(entry.lap, crew.cap),
     }
-    if (entry.state === 'reviewed') sections.waitingOnYou.push(row)
-    else if (
+    // Blocked outranks the state (MAR-3138 R4), and the chain is what keeps
+    // the row out of a second section.
+    if (entry.blocked || entry.state === 'reviewed') {
+      sections.waitingOnYou.push(row)
+    } else if (
       entry.state === 'working' ||
       entry.state === 'returned' ||
       // A stopped lap is still in the wave: it is work somebody has to pick

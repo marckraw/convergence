@@ -19,8 +19,8 @@ interface WaveRowViewProps {
 
 /**
  * One issue on the panel (R2): identifier, title, crew (when several are
- * bound), seat, state, PR, the human action and a host outage marker -- the
- * ledger's facts, nothing invented. A row with a reachable conversation is a
+ * bound), seat, state, PR, the human action, the `blocked` label and a host
+ * outage marker -- the ledger's facts, nothing invented. A row with a reachable conversation is a
  * button; one without says why it is inert.
  */
 export const WaveRowView: FC<WaveRowViewProps> = ({
@@ -53,6 +53,11 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
           .join(' · ')}
       </span>
       {action ? <span className={WAVE_ROW_ACTION_CLASS}>{action}</span> : null}
+      {/* The label itself, beside the action it caused (MAR-3138 R4): the
+          action says what to do, this says why it is being asked. */}
+      {entry.blocked ? (
+        <span className={WAVE_ROW_ACTION_CLASS}>blocked</span>
+      ) : null}
       {hostMarker ? (
         <span className={WAVE_ROW_ACTION_CLASS}>{hostMarker}</span>
       ) : null}

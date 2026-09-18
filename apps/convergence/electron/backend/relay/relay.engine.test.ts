@@ -3798,6 +3798,7 @@ describe('RelayEngine', () => {
           issueIdentifier: identifier,
           issueTitle: `Work ${identifier}`,
           issueUrl: `https://linear.app/example/issue/${identifier}`,
+          blocked: false,
           seat,
           wave: 'loom-p3',
           lap,

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  BLOCKED_LABEL_NAME,
   childOfLabelGroup,
   classifyLinearReply,
+  hasPlainLabel,
   LINEAR_LABELED_ISSUES_QUERY,
   linearLabeledIssuesRequest,
   linearRetryAt,
@@ -13,6 +15,7 @@ import {
   linearIssuesBody,
   linearLabel,
   RECORDED_200_WITH_ERRORS_BODY,
+  RECORDED_BLOCKED_LABEL_PAGE,
   RECORDED_RATELIMITED_BODY,
   RECORDED_TWO_ISSUE_PAGE,
   RECORDED_UNAUTHORIZED_BODY,
@@ -24,6 +27,37 @@ const READ = {
   wavePrefix: 'wave:',
   statusMap: { ...DEFAULT_TRACKER_STATUS_MAP },
 }
+
+describe('MAR-3138 R1: `blocked` is a plain label, read as a fact', () => {
+  it('reads it off the recorded page: plain counts, a group child of the same name does not', () => {
+    const read = parseLinearIssuesPage(RECORDED_BLOCKED_LABEL_PAGE, READ)
+
+    // Mutation: match any label whose name contains "blocked" whatever its
+    // parent -> EX-11 reads `true`, red.
+    expect(
+      read.ok &&
+        read.page.issues.map((issue) => [issue.identifier, issue.blocked]),
+    ).toEqual([
+      ['EX-10', true],
+      ['EX-11', false],
+      ['EX-12', false],
+    ])
+    // The same label under the wave group is exactly that: a wave.
+    expect(read.ok && read.page.issues[1]!.wave).toBe('blocked')
+  })
+
+  it.each([
+    ['a plain label', [linearLabel('blocked', null)], true],
+    ['cased and padded', [linearLabel('  BLoCKeD ', null)], true],
+    ['a child of the wave group', [linearLabel('blocked', 'wave')], false],
+    ['a child of any group', [linearLabel('blocked', 'horse')], false],
+    ['a plain look-alike', [linearLabel('unblocked', null)], false],
+    ['another plain label', [linearLabel('grounded', null)], false],
+    ['no labels', [], false],
+  ])('%s -> %s', (_case, labels, blocked) => {
+    expect(hasPlainLabel(labels, BLOCKED_LABEL_NAME)).toBe(blocked)
+  })
+})
 
 describe('MAR-3084 R1: the seat is a label child, read as group/child', () => {
   it('counts the issue labeled in the group and not the plain `horse:opus` look-alike', () => {
@@ -46,6 +80,7 @@ describe('MAR-3084 R1: the seat is a label child, read as group/child', () => {
             logicalStatus: 'in-progress',
             seat: 'opus',
             wave: 'loom-p2',
+            blocked: false,
             groundedAt: null,
             branchName: 'example/ex-1-work',
             updatedAt: '2026-09-17T08:00:00.000Z',

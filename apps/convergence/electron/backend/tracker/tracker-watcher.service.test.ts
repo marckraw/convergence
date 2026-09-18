@@ -28,6 +28,7 @@ const ISSUE: TrackerIssue = {
   status: 'In Progress',
   logicalStatus: 'in-progress',
   seat: 'opus',
+  blocked: false,
   wave: null,
   groundedAt: null,
   branchName: null,
