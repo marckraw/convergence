@@ -1,5 +1,11 @@
 # convergence
 
+## 0.68.2
+
+### Patch Changes
+
+- beaad16: Dragging the wave column while the window or the sidebar changes size now stores the width you let go on.
+
 ## 0.68.1
 
 ### Patch Changes
