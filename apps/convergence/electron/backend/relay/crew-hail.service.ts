@@ -39,7 +39,7 @@ export class CrewHailService {
    * Raises one, or returns null because this crew is already asking (or has
    * already been answered) about exactly this.
    *
-   * Two dedupe rules, one per shape of question:
+   * Three dedupe rules, one per shape of question:
    *
    * - A hail that names an accused HOP dedupes on that identity, and on it
    *   ALONE, including acknowledged rows (MAR-2759). The frozen rule is that
@@ -48,31 +48,18 @@ export class CrewHailService {
    *   minute later must stay silent -- minute-by-minute nagging about an
    *   acknowledged alarm is noise wearing an alarm's clothes. A NEW hop is a
    *   new identity and re-arms on its own.
-   * - A hail with no hop dedupes as before: at most one OPEN call per crew,
-   *   reason, station and flow run, and answering it clears the way for the
-   *   next.
+   * - A hail with no hop but a FLOW RUN dedupes as before: at most one OPEN
+   *   call per crew, reason, station and run, whatever it says. The run is
+   *   the episode, and two unrouted batons inside one run are one problem
+   *   with the run; answering it clears the way for the next.
+   * - A hail with no hop and NO run has no episode to belong to, so what it
+   *   is ABOUT is its identity: it dedupes on `detail` as well (MAR-3150).
+   *   Today that is the verdict hail, and without this a mastermind's second,
+   *   DIFFERENT broken `VERDICT:` line raised nothing until the first was
+   *   answered -- the second problem was invisible.
    */
   raise(input: RaiseCrewHailInput): CrewHail | null {
-    const existing = input.hopId
-      ? (this.db
-          .prepare('SELECT id FROM crew_hails WHERE hop_id = ?')
-          .get(input.hopId) as { id: string } | undefined)
-      : (this.db
-          .prepare(
-            `SELECT id FROM crew_hails
-             WHERE acknowledged_at IS NULL
-               AND crew_id = ?
-               AND reason = ?
-               AND session_id = ?
-               AND flow_run_id IS ?`,
-          )
-          .get(
-            input.crewId,
-            input.reason,
-            input.sessionId,
-            input.flowRunId ?? null,
-          ) as { id: string } | undefined)
-    if (existing) return null
+    if (this.alreadyAsking(input)) return null
 
     const id = randomUUID()
     this.db
@@ -97,6 +84,53 @@ export class CrewHailService {
       )
 
     return this.requireById(id)
+  }
+
+  /**
+   * The call this one would duplicate, by the shape of the question it asks.
+   *
+   * One place rather than three conditions at the call site, so a fourth
+   * shape cannot be added by widening one branch and forgetting the others.
+   */
+  private alreadyAsking(input: RaiseCrewHailInput): boolean {
+    if (input.hopId) {
+      return (
+        this.db
+          .prepare('SELECT id FROM crew_hails WHERE hop_id = ?')
+          .get(input.hopId) !== undefined
+      )
+    }
+    const flowRunId = input.flowRunId ?? null
+    if (flowRunId === null) {
+      // No hop and no run (MAR-3150): the detail is the identity.
+      return (
+        this.db
+          .prepare(
+            `SELECT id FROM crew_hails
+             WHERE acknowledged_at IS NULL
+               AND crew_id = ?
+               AND reason = ?
+               AND session_id = ?
+               AND flow_run_id IS NULL
+               AND detail = ?`,
+          )
+          .get(input.crewId, input.reason, input.sessionId, input.detail) !==
+        undefined
+      )
+    }
+    return (
+      this.db
+        .prepare(
+          `SELECT id FROM crew_hails
+           WHERE acknowledged_at IS NULL
+             AND crew_id = ?
+             AND reason = ?
+             AND session_id = ?
+             AND flow_run_id IS ?`,
+        )
+        .get(input.crewId, input.reason, input.sessionId, flowRunId) !==
+      undefined
+    )
   }
 
   /**
