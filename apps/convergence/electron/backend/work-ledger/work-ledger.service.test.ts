@@ -1,4 +1,5 @@
 import { mkdtempSync, readFileSync, rmSync } from 'fs'
+import { trackerIssue } from '../tracker/linear-tracker.fixture'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -233,20 +234,14 @@ describe('MAR-3084 R6: the facts join at read time from the app’s own records'
   })
 
   function issue(id: string, identifier: string): TrackerIssue {
-    return {
+    return trackerIssue({
       id,
       identifier,
       title: identifier,
       url: `https://linear.app/example/issue/${identifier.toLowerCase()}`,
       status: 'In Review',
       logicalStatus: 'in-review',
-      seat: 'opus',
-      wave: null,
-      blocked: false,
-      groundedAt: null,
-      branchName: null,
-      updatedAt: '2026-09-17T08:00:00.000Z',
-    }
+    })
   }
 
   it('the seat’s session, its PR only for the issue its branch names, and its host', () => {

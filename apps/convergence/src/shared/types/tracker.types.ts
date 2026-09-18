@@ -51,6 +51,37 @@ export interface TrackerIssue {
    * a group child -- `wave > blocked` is a wave named blocked, not this.
    */
   blocked: boolean
+  /**
+   * The plain labels the loop runs on (MAR-3190 R2), each read the way
+   * `blocked` is: a parentless label of that name, case-insensitively. A
+   * `grounded` under some group is that group's child, not this fact.
+   */
+  groomMe: boolean
+  groomed: boolean
+  grounded: boolean
+  dispatch: boolean
+  /**
+   * Linear's own priority (0 = its word "none", 1 urgent … 4 low), or null
+   * when the tracker did not answer with one. Never a default: "no priority"
+   * and "priority none" are different things, and the dispatch order
+   * (MAR-2981) reads them differently.
+   */
+  priority: number | null
+  /**
+   * Every label as a person would read it: a plain label as written, a group
+   * child as `group › child`. For display only -- every fact above is read
+   * from the structure, never from this list.
+   */
+  labels: string[]
+  /**
+   * The issue's promise in a sentence, from its body (R6). Null until the
+   * body has been read, and null for an issue whose body says nothing.
+   */
+  summary: string | null
+  /**
+   * When the issue was last grounded, `YYYY-MM-DD`, read from the body's own
+   * `Grounded at … · <date>` line (R5) -- the only place that fact exists.
+   */
   groundedAt: string | null
   branchName: string | null
   updatedAt: string
@@ -147,6 +178,26 @@ export interface WorkLedgerFact {
   logicalStatus: TrackerLogicalStatus | null
   branchName: string | null
   updatedAt: string | null
+  /** The plain label facts (MAR-3190 R2); absent on rows older than R2. */
+  groomMe?: boolean
+  groomed?: boolean
+  grounded?: boolean
+  dispatch?: boolean
+  /** Linear's priority, or null (MAR-3190 R3). */
+  priority?: number | null
+  /** Every label as a person reads it (MAR-3190). */
+  labels?: string[]
+  /**
+   * The issue's promise (MAR-3190 R6) -- and the row's own answer to "has a
+   * body ever been read for this issue?".
+   *
+   * The KEY's presence is the flag, which is why `readFact` leaves it absent
+   * rather than defaulting it to null like everything else here: a row
+   * written before this slice has no summary and no way to know it is
+   * missing one, and `issuesNeedingBody` (R4) has to be able to tell that
+   * row from one whose body genuinely says nothing.
+   */
+  summary?: string | null
   /** The lap the ledger held when a verdict row was written (MAR-3085 R3). */
   ledgerLapBefore?: number | null
   /** The verdict's lap was not the ledger's lap + 1; the ruling still wins. */

@@ -6,6 +6,7 @@ import type {
 import type {
   NewWorkLedgerRecord,
   TrackerHealth,
+  WorkLedgerFact,
   WorkLedgerRecord,
   WorkLedgerState,
 } from '../work-ledger/work-ledger.types'
@@ -96,6 +97,26 @@ function verdictHoldsAgainst(
   return previous.verdict !== null && previous.trackerStatus === issue.status
 }
 
+/** Two label lists holding the same names in the same order. */
+function sameLabels(
+  previous: readonly string[] | undefined,
+  next: readonly string[] | undefined,
+): boolean {
+  const a = previous ?? []
+  const b = next ?? []
+  return a.length === b.length && a.every((name, at) => name === b[at])
+}
+
+/**
+ * Whether the tick saw exactly what the ledger already holds.
+ *
+ * EVERY fact a reader can see is compared here (MAR-3190 R7). A fact left off
+ * this list is a fact that can change on the tracker and never reach the
+ * screen: the row is not rewritten, so nothing is broadcast, so the panel
+ * goes on showing the old value until something else about the issue happens
+ * to move. `blocked` taught us that (MAR-3138 R2); the label facts, the
+ * priority, the label list and the summary are the same shape of promise.
+ */
 function sameObservation(
   previous: WorkLedgerRecord,
   next: NewWorkLedgerRecord,
@@ -112,8 +133,38 @@ function sameObservation(
     previous.issueIdentifier === next.issueIdentifier &&
     previous.issueTitle === next.issueTitle &&
     previous.issueUrl === next.issueUrl &&
-    previous.groundedAt === next.groundedAt
+    previous.groundedAt === next.groundedAt &&
+    previous.fact.groomMe === next.fact.groomMe &&
+    previous.fact.groomed === next.fact.groomed &&
+    previous.fact.grounded === next.fact.grounded &&
+    previous.fact.dispatch === next.fact.dispatch &&
+    (previous.fact.priority ?? null) === (next.fact.priority ?? null) &&
+    sameLabels(previous.fact.labels, next.fact.labels) &&
+    (previous.fact.summary ?? null) === (next.fact.summary ?? null)
   )
+}
+
+/**
+ * What the tick saw, as the row carries it (MAR-3190).
+ *
+ * `summary` is always written, even as null: its KEY is how a later tick
+ * knows a body has been read for this issue at all (R4), so writing the fact
+ * without it would make every row look like a row from before this slice and
+ * ask for every body on every tick.
+ */
+function factFrom(issue: TrackerIssue): WorkLedgerFact {
+  return {
+    logicalStatus: issue.logicalStatus,
+    branchName: issue.branchName,
+    updatedAt: issue.updatedAt,
+    groomMe: issue.groomMe,
+    groomed: issue.groomed,
+    grounded: issue.grounded,
+    dispatch: issue.dispatch,
+    priority: issue.priority,
+    labels: issue.labels,
+    summary: issue.summary,
+  }
 }
 
 /**
@@ -151,11 +202,7 @@ export function diffTrackerSnapshot(input: {
         rows.push({
           ...carriedFrom(previous, input.seenAt),
           trackerStatus: issue.status,
-          fact: {
-            logicalStatus: issue.logicalStatus,
-            branchName: issue.branchName,
-            updatedAt: issue.updatedAt,
-          },
+          fact: factFrom(issue),
         })
       }
       continue
@@ -173,11 +220,7 @@ export function diffTrackerSnapshot(input: {
       trackerStatus: issue.status,
       groundedAt: issue.groundedAt,
       seenAt: input.seenAt,
-      fact: {
-        logicalStatus: issue.logicalStatus,
-        branchName: issue.branchName,
-        updatedAt: issue.updatedAt,
-      },
+      fact: factFrom(issue),
       // The watcher records what the tracker said; a ruling is the
       // mastermind's act and only `appendVerdict` writes one (MAR-3085).
       verdict: null,
@@ -190,7 +233,14 @@ export function diffTrackerSnapshot(input: {
   }
 
   for (const previous of input.current) {
-    if (seen.has(previous.issueId) || previous.state === 'unassigned') continue
+    if (seen.has(previous.issueId)) continue
+    // Absence is not an event for work the loop has let go of (MAR-3190 R8).
+    // The page now ages a Done issue out after fourteen days, so every
+    // finished issue eventually stops being in it -- and read as "left the
+    // loop" that would turn a row a person has already accepted into an
+    // `unassigned` one, months after anybody looked at it. `unassigned` was
+    // always skipped here; `done` joins it for the same reason.
+    if (isTerminal(previous.state)) continue
     rows.push(carriedFrom(previous, input.seenAt))
   }
   return rows
@@ -218,8 +268,10 @@ function carriedFrom(
     verdict: null,
     verdictSettleId: null,
     verdictNote: null,
-    // The issue left the seat group; nobody said the decision arrived
-    // (MAR-3138 R2), so the row keeps the last blocked the tracker reported.
+    // The issue left the loop -- no Loom label at all now, or it left the
+    // project (MAR-3190 R1 widened what "left" means). Nobody said the
+    // decision arrived (MAR-3138 R2), so the row keeps the last blocked the
+    // tracker reported.
     blocked: previous.blocked,
   }
 }

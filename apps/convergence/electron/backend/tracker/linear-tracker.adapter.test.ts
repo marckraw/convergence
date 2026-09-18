@@ -7,6 +7,7 @@ import { parseLinearProjectReference } from '../../../src/shared/lib/linear-proj
 import { normalizeTrackerBinding } from './tracker-binding.pure'
 import { TrackerRefusalError } from './tracker.types'
 import {
+  linearIssueBodiesBody,
   linearIssueNode,
   linearIssuesBody,
   linearLabel,
@@ -315,5 +316,60 @@ describe('MAR-3084 R2: the adapter agrees with the far side', () => {
     expect(JSON.parse(fetch.mock.calls[1]![1].body).variables.after).toBe(
       'cursor-1',
     )
+  })
+})
+
+describe('MAR-3190 R4: the adapter reads bodies in pages of fifty', () => {
+  it('fifty-one ids -> two requests, one merged map', async () => {
+    const asked: string[][] = []
+    const fetch = vi.fn<TrackerFetch>(async (_url, init) => {
+      const body = JSON.parse(init.body) as {
+        query: string
+        variables: { ids: string[] }
+      }
+      asked.push(body.variables.ids)
+      return recordedReply(
+        200,
+        linearIssueBodiesBody(
+          body.variables.ids.map((id) => ({ id, description: `body ${id}` })),
+        ),
+      )
+    })
+    const ids = Array.from({ length: 51 }, (_, at) => `issue-${at}`)
+
+    const bodies = await adapterAnswering(fetch).readIssueBodies(ids)
+
+    // Mutation: name every id in one request -> one call, and the request's
+    // size is Linear's problem instead of ours.
+    expect(asked).toHaveLength(2)
+    expect(asked[0]).toHaveLength(50)
+    expect(asked[1]).toEqual(['issue-50'])
+    expect(bodies.size).toBe(51)
+    expect(bodies.get('issue-50')).toBe('body issue-50')
+  })
+
+  it('a refusal on the second page leaves as a throw, never a half map', async () => {
+    let call = 0
+    const fetch = vi.fn<TrackerFetch>(async () => {
+      call += 1
+      return call === 1
+        ? recordedReply(200, linearIssueBodiesBody([{ id: 'issue-0' }]))
+        : recordedReply(401, RECORDED_UNAUTHORIZED_BODY)
+    })
+    const ids = Array.from({ length: 51 }, (_, at) => `issue-${at}`)
+
+    // Mutation: collect what the pages that answered gave and return it ->
+    // every unread issue's summary is written as gone.
+    await expect(
+      adapterAnswering(fetch).readIssueBodies(ids),
+    ).rejects.toBeInstanceOf(TrackerRefusalError)
+  })
+
+  it('no ids -> no request at all', async () => {
+    const fetch = vi.fn<TrackerFetch>(async () => recordedReply(200, {}))
+    await expect(adapterAnswering(fetch).readIssueBodies([])).resolves.toEqual(
+      new Map(),
+    )
+    expect(fetch).not.toHaveBeenCalled()
   })
 })

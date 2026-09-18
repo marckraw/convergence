@@ -113,6 +113,14 @@ export interface WorkLedgerJoinedRow extends WorkLedgerRow {
   attention: string | null
 }
 
+/**
+ * The stored facts, with a default for every key a row may predate.
+ *
+ * `summary` is the exception, and deliberately so (MAR-3190 R4): its KEY is
+ * how the watcher tells a row whose body has been read from one written
+ * before bodies were read at all. Defaulted to null here, every old row would
+ * claim to have an empty summary and no tick would ever fetch one.
+ */
 function readFact(raw: string): WorkLedgerFact {
   try {
     const value = JSON.parse(raw) as Partial<WorkLedgerFact> | null
@@ -122,6 +130,15 @@ function readFact(raw: string): WorkLedgerFact {
       updatedAt: value?.updatedAt ?? null,
       ledgerLapBefore: value?.ledgerLapBefore ?? null,
       lapDisagreed: value?.lapDisagreed ?? false,
+      groomMe: value?.groomMe ?? false,
+      groomed: value?.groomed ?? false,
+      grounded: value?.grounded ?? false,
+      dispatch: value?.dispatch ?? false,
+      priority: value?.priority ?? null,
+      labels: value?.labels ?? [],
+      ...(value && 'summary' in value
+        ? { summary: value.summary ?? null }
+        : {}),
     }
   } catch {
     return { logicalStatus: null, branchName: null, updatedAt: null }

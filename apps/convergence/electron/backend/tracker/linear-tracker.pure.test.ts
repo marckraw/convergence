@@ -1,21 +1,38 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyIssueBodies,
   BLOCKED_LABEL_NAME,
   childOfLabelGroup,
   classifyLinearReply,
   hasPlainLabel,
+  inTheLoop,
+  issuesNeedingBody,
+  LINEAR_BODY_PAGE_SIZE,
+  LINEAR_DONE_WINDOW,
+  LINEAR_ISSUE_BODIES_QUERY,
   LINEAR_LABELED_ISSUES_QUERY,
+  linearIssueBodiesRequest,
   linearLabeledIssuesRequest,
   linearRetryAt,
+  LOOM_PLAIN_LABELS,
+  parseLinearIssueBodiesReply,
   parseLinearIssuesPage,
+  readGroundedAt,
+  readIssueLabels,
+  readIssuePriority,
+  readIssueSummary,
 } from './linear-tracker.pure'
 import { DEFAULT_TRACKER_STATUS_MAP } from './tracker-binding.pure'
 import {
+  linearIssueBodiesBody,
   linearIssueNode,
   linearIssuesBody,
   linearLabel,
+  trackerIssue,
   RECORDED_200_WITH_ERRORS_BODY,
   RECORDED_BLOCKED_LABEL_PAGE,
+  RECORDED_LOOM_MEMBERSHIP_PAGE,
+  RECORDED_PRIORITY_PAGE,
   RECORDED_RATELIMITED_BODY,
   RECORDED_TWO_ISSUE_PAGE,
   RECORDED_UNAUTHORIZED_BODY,
@@ -81,6 +98,16 @@ describe('MAR-3084 R1: the seat is a label child, read as group/child', () => {
             seat: 'opus',
             wave: 'loom-p2',
             blocked: false,
+            // The widened read (MAR-3190): the same issue, now carrying the
+            // facts the sheets need. EX-2 is still absent, which is what this
+            // case has always been about.
+            groomMe: false,
+            groomed: false,
+            grounded: true,
+            dispatch: false,
+            priority: null,
+            labels: ['horse › opus', 'wave › loom-p2', 'grounded'],
+            summary: null,
             groundedAt: null,
             branchName: 'example/ex-1-work',
             updatedAt: '2026-09-17T08:00:00.000Z',
@@ -162,18 +189,51 @@ describe('MAR-3084 R1: the seat is a label child, read as group/child', () => {
     })
   })
 
-  it('asks for the project and the seat group by parent name, read-only', () => {
+  it('MAR-3190 R1: asks for BOTH groups and every plain Loom label, read-only', () => {
     expect(
       linearLabeledIssuesRequest({
         projectId: 'project-1',
         labelPrefix: 'horse:',
+        wavePrefix: 'wave:',
         after: null,
       }).variables,
-    ).toEqual({ projectId: 'project-1', seatGroup: 'horse', after: null })
+      // Mutation: drop `waveGroup` from the variables -> the wave clause in
+      // the query has nothing to compare and Linear refuses the whole read.
+    ).toEqual({
+      projectId: 'project-1',
+      seatGroup: 'horse',
+      waveGroup: 'wave',
+      after: null,
+    })
     expect(LINEAR_LABELED_ISSUES_QUERY).toMatch(/^query /)
     expect(LINEAR_LABELED_ISSUES_QUERY).toContain(
-      'labels: { some: { parent: { name: { eq: $seatGroup } } } }',
+      '{ parent: { name: { eq: $seatGroup } } }',
     )
+    expect(LINEAR_LABELED_ISSUES_QUERY).toContain(
+      '{ parent: { name: { eq: $waveGroup } } }',
+    )
+    // Asserted against the CONSTANT, not a written-out list: a name added to
+    // `LOOM_PLAIN_LABELS` that the filter never asks for would leave the
+    // parse waiting for issues the server already dropped.
+    // Mutation: build the clauses from a literal array -> red the day the
+    // two lists disagree.
+    for (const name of LOOM_PLAIN_LABELS) {
+      expect(LINEAR_LABELED_ISSUES_QUERY).toContain(
+        `{ name: { eqIgnoreCase: "${name}" } }`,
+      )
+    }
+    // R8's window, exactly as the schema spells it.
+    // Mutation: a computed ISO date instead of the duration -> red, and the
+    // window would freeze at the moment the app started.
+    expect(LINEAR_LABELED_ISSUES_QUERY).toContain(
+      '{ completedAt: { null: true } }',
+    )
+    expect(LINEAR_LABELED_ISSUES_QUERY).toContain(
+      `{ completedAt: { gt: "${LINEAR_DONE_WINDOW}" } }`,
+    )
+    expect(LINEAR_DONE_WINDOW).toBe('-P14D')
+    // R3: the page carries the priority it reads.
+    expect(LINEAR_LABELED_ISSUES_QUERY).toContain('priority')
   })
 })
 
@@ -279,5 +339,292 @@ describe('MAR-3084 lap 2, D: when a rate-limited reply says requests resume', ()
         NOW,
       ),
     ).toBeNull()
+  })
+})
+
+describe('MAR-3190 R1: membership is any Loom label, decided twice by one rule', () => {
+  const read = (body: unknown) => {
+    const page = parseLinearIssuesPage(body, READ)
+    if (!page.ok) throw new Error('expected a page')
+    return page.page.issues
+  }
+
+  it('keeps every way into the loop and drops the look-alike', () => {
+    const issues = read(RECORDED_LOOM_MEMBERSHIP_PAGE)
+    // Mutation: keep `if (seat === null) continue` -> EX-21..EX-23 and EX-25
+    // vanish, and Plan has nothing to show for the second slice running.
+    expect(issues.map((issue) => issue.identifier)).toEqual([
+      'EX-20',
+      'EX-21',
+      'EX-22',
+      'EX-23',
+      'EX-25',
+    ])
+    const byId = new Map(issues.map((issue) => [issue.id, issue]))
+    expect(byId.get('issue-seat')?.seat).toBe('opus-mac')
+    expect(byId.get('issue-wave')?.seat).toBeNull()
+    expect(byId.get('issue-wave')?.wave).toBe('loom-view')
+    expect(byId.get('issue-groom-me')?.groomMe).toBe(true)
+    expect(byId.get('issue-groomed-grounded')?.groomed).toBe(true)
+    expect(byId.get('issue-groomed-grounded')?.grounded).toBe(true)
+    // A wave called `blocked` is in the loop as a wave and is NOT blocked --
+    // the distinction MAR-3138 drew, now load-bearing for membership too.
+    // Mutation: decide membership from label NAMES -> EX-24 comes back.
+    expect(byId.get('issue-wave-blocked')?.wave).toBe('blocked')
+    expect(byId.get('issue-wave-blocked')?.blocked).toBe(false)
+  })
+
+  it('the parse and the filter ask the same question', () => {
+    const groups = { seatGroup: 'horse', waveGroup: 'wave' }
+    expect(inTheLoop([linearLabel('opus-mac', 'horse')], groups)).toBe(true)
+    expect(inTheLoop([linearLabel('loom-view', 'wave')], groups)).toBe(true)
+    for (const name of LOOM_PLAIN_LABELS) {
+      expect(inTheLoop([linearLabel(name, null)], groups)).toBe(true)
+    }
+    // Mutation: `hasPlainLabel` reading a group child as plain -> true here.
+    expect(inTheLoop([linearLabel('grounded', 'wave')], groups)).toBe(true)
+    expect(inTheLoop([linearLabel('horse:opus-mac', null)], groups)).toBe(false)
+    expect(inTheLoop([], groups)).toBe(false)
+  })
+})
+
+describe('MAR-3190 R2: a label fact is a plain, parentless label', () => {
+  it.each([
+    ['plain, as written', [linearLabel('grounded', null)], true],
+    ['plain, capitalised', [linearLabel('Grounded', null)], true],
+    ['plain, padded', [linearLabel('  grounded  ', null)], true],
+    ['under a group', [linearLabel('grounded', 'wave')], false],
+    ['a longer name containing it', [linearLabel('regrounded', null)], false],
+    ['absent', [linearLabel('groomed', null)], false],
+  ])('%s -> %s', (_case, labels, expected) => {
+    // Mutation: `labels.some(l => l.name.includes('grounded'))` -> the group
+    // child and `regrounded` both read true, red twice.
+    expect(hasPlainLabel(labels, 'grounded')).toBe(expected)
+  })
+})
+
+describe('MAR-3190 R3: priority is Linear’s number or null, never a default', () => {
+  it.each([
+    ['urgent', 1, 1],
+    ['Linear’s own "none"', 0, 0],
+    ['low', 4, 4],
+    ['missing', undefined, null],
+    ['not a number', 'high', null],
+    ['fractional', 1.5, null],
+    ['not finite', Number.NaN, null],
+  ])('%s -> %s', (_case, value, expected) => {
+    // Mutation: `?? 0` -> "missing" reads as the person choosing none, red.
+    expect(readIssuePriority(value)).toBe(expected)
+  })
+
+  it('through the page, by issue', () => {
+    const page = parseLinearIssuesPage(RECORDED_PRIORITY_PAGE, READ)
+    if (!page.ok) throw new Error('expected a page')
+    expect(
+      page.page.issues.map((issue) => [issue.identifier, issue.priority]),
+    ).toEqual([
+      ['EX-30', 1],
+      ['EX-31', 0],
+      ['EX-32', null],
+      ['EX-33', null],
+      ['EX-34', null],
+    ])
+  })
+})
+
+describe('MAR-3190: the label list is for display, never for facts', () => {
+  it('a plain label as written, a group child as group › child', () => {
+    expect(
+      readIssueLabels([
+        linearLabel('opus-mac', 'horse'),
+        linearLabel('groom-me', null),
+        linearLabel('  ', null),
+      ]),
+    ).toEqual(['horse › opus-mac', 'groom-me'])
+  })
+})
+
+describe('MAR-3190 R5: the grounding date is the body’s latest', () => {
+  it.each([
+    ['one line', 'Grounded at `abc1234` · 2026-09-18', '2026-09-18'],
+    [
+      'a re-ground, out of order',
+      'Grounded at abc1234 · 2026-09-10\n\nre-grounded at def5678 · 2026-09-17',
+      '2026-09-17',
+    ],
+    [
+      'the earlier line written last',
+      'Grounded at a · 2026-09-17\n\nGrounded at b · 2026-09-10',
+      '2026-09-17',
+    ],
+    ['capitalised differently', 'GROUNDED AT x · 2026-01-02', '2026-01-02'],
+    ['inside a code span', '`Grounded at x · 2026-03-04`', '2026-03-04'],
+    ['a day that does not exist', 'Grounded at x · 2026-13-45', null],
+    ['no line at all', '## What\n\nSome work.', null],
+    ['an empty body', '', null],
+    ['no body', null, null],
+  ])('%s -> %s', (_case, body, expected) => {
+    // Mutation: return the FIRST match -> "a re-ground, out of order" reads
+    // 2026-09-10 and a freshly re-grounded issue looks stale, red.
+    expect(readGroundedAt(body)).toBe(expected)
+  })
+})
+
+describe('MAR-3190 R6: the summary is the promise, short', () => {
+  it('the `## What` sentence wins over a groomed body’s preamble', () => {
+    const body = [
+      '**Groomed and grounded 2026-09-18 by Fable on master** `96c38902`.',
+      '## Why',
+      'Because the sheets need facts.',
+      '## What',
+      'An issue is **in the loop** when it carries any `Loom` label.',
+      '## Territory',
+      '* a file',
+    ].join('\n\n')
+    // Mutation: always the first paragraph -> the preamble about who groomed
+    // it, which says nothing about what the issue is for, red.
+    expect(readIssueSummary(body)).toBe(
+      'An issue is in the loop when it carries any Loom label.',
+    )
+  })
+
+  it.each([
+    ['no `## What`', 'Just the one sentence.', 'Just the one sentence.'],
+    ['a leading heading', '# Title\n\nThe body.', 'The body.'],
+    [
+      'a link',
+      'See [the spec](https://example.com) first.',
+      'See the spec first.',
+    ],
+    ['broken whitespace', 'One\n  two   three', 'One two three'],
+    ['an empty body', '', null],
+    ['headings only', '# A\n\n## B', null],
+    ['no body', null, null],
+  ])('%s', (_case, body, expected) => {
+    expect(readIssueSummary(body)).toBe(expected)
+  })
+
+  it('cuts long prose on a word boundary, ellipsis inside the bound', () => {
+    const long = `${'word '.repeat(100)}end`
+    const summary = readIssueSummary(long)
+    expect(summary).not.toBeNull()
+    // Mutation: slice at the bound without looking for a space -> the last
+    // word is cut in half, red.
+    expect(summary!.length).toBeLessThanOrEqual(280)
+    expect(summary!.endsWith('…')).toBe(true)
+    expect(summary!.slice(0, -1).trim().endsWith('word')).toBe(true)
+  })
+})
+
+describe('MAR-3190 R4: bodies are read only for issues that changed', () => {
+  const memory = (
+    overrides: Partial<Parameters<typeof issuesNeedingBody>[0][number]> & {
+      issueId: string
+    },
+  ) => ({
+    updatedAt: '2026-09-17T08:00:00.000Z',
+    summary: 'The work',
+    groundedAt: '2026-09-17',
+    read: true,
+    ...overrides,
+  })
+
+  it('new issues, moved issues, and rows from before this slice', () => {
+    const issues = [
+      trackerIssue({ id: 'known-still' }),
+      trackerIssue({
+        id: 'known-moved',
+        updatedAt: '2026-09-18T09:00:00.000Z',
+      }),
+      trackerIssue({ id: 'brand-new' }),
+      trackerIssue({ id: 'known-unread' }),
+    ]
+    const rows = [
+      memory({ issueId: 'known-still' }),
+      memory({ issueId: 'known-moved' }),
+      // A row written before bodies were ever read: no summary KEY, so it
+      // cannot say it is missing one any other way.
+      memory({ issueId: 'known-unread', read: false, summary: null }),
+    ]
+    // Mutation: ask for every id -> 'known-still' joins the list, red.
+    expect(issuesNeedingBody(rows, issues)).toEqual([
+      'known-moved',
+      'brand-new',
+      'known-unread',
+    ])
+    // Mutation: drop the `read` half -> 'known-unread' never gets a body and
+    // stays summary-less forever, red.
+    expect(issuesNeedingBody(rows, [issues[0]!])).toEqual([])
+  })
+
+  it('carries what it did not ask for, parses what it did', () => {
+    const issues = [
+      trackerIssue({ id: 'asked' }),
+      trackerIssue({ id: 'carried' }),
+      trackerIssue({ id: 'asked-empty' }),
+    ]
+    const bodies = new Map<string, string | null>([
+      ['asked', '## What\n\nRead the bodies.\n\nGrounded at x · 2026-09-18'],
+      ['asked-empty', null],
+    ])
+    const applied = applyIssueBodies(
+      issues,
+      bodies,
+      [
+        memory({
+          issueId: 'carried',
+          summary: 'What the row already knew',
+          groundedAt: '2026-09-11',
+        }),
+      ],
+      ['asked', 'asked-empty'],
+    )
+    expect(applied[0]).toMatchObject({
+      summary: 'Read the bodies.',
+      groundedAt: '2026-09-18',
+    })
+    // Mutation: read every issue from the bodies map -> 'carried' loses the
+    // summary the ledger holds, and the diff writes that loss as a row.
+    expect(applied[1]).toMatchObject({
+      summary: 'What the row already knew',
+      groundedAt: '2026-09-11',
+    })
+    // Asked for and not answered is a body that says nothing, not a carry.
+    expect(applied[2]).toMatchObject({ summary: null, groundedAt: null })
+  })
+
+  it('the bodies query names the ids and asks for nothing else', () => {
+    expect(LINEAR_ISSUE_BODIES_QUERY).toMatch(/^query /)
+    expect(LINEAR_ISSUE_BODIES_QUERY).toContain('filter: { id: { in: $ids } }')
+    expect(LINEAR_ISSUE_BODIES_QUERY).toContain('description')
+    // The page query must NOT carry descriptions: that is the whole split.
+    // Mutation: add `description` to the page query -> red, and every body
+    // travels on every minute tick.
+    expect(LINEAR_LABELED_ISSUES_QUERY).not.toContain('description')
+    expect(linearIssueBodiesRequest(['a', 'b']).variables).toEqual({
+      ids: ['a', 'b'],
+    })
+    expect(LINEAR_BODY_PAGE_SIZE).toBe(50)
+  })
+
+  it('reads a bodies reply, and refuses one it cannot read', () => {
+    const read = parseLinearIssueBodiesReply(
+      linearIssueBodiesBody([
+        { id: 'a', description: 'The body' },
+        { id: 'b' },
+      ]),
+    )
+    expect(read.ok).toBe(true)
+    if (read.ok) {
+      expect(read.bodies.get('a')).toBe('The body')
+      expect(read.bodies.get('b')).toBeNull()
+    }
+    expect(parseLinearIssueBodiesReply({ data: {} })).toMatchObject({
+      ok: false,
+      refusal: { kind: 'bad-response' },
+    })
+    expect(
+      parseLinearIssueBodiesReply({ data: { issues: { nodes: [{}] } } }),
+    ).toMatchObject({ ok: false, refusal: { kind: 'bad-response' } })
   })
 })

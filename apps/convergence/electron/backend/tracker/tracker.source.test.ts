@@ -32,13 +32,14 @@ describe('MAR-3084 R8: the app never writes to the tracker', () => {
     electronMocks.channels.length = 0
   })
 
-  it('the adapter port has exactly the three read methods', () => {
-    // Widened once, on purpose (MAR-3156): `resolveProject` asks which
-    // project answers to a URL, a name or an id. What this case pins is
-    // unchanged -- the SET is exact, so a writing method cannot arrive
-    // unnoticed.
+  it('the adapter port has exactly the four read methods', () => {
+    // Widened twice, on purpose: `resolveProject` asks which project answers
+    // to a URL, a name or an id (MAR-3156), and `readIssueBodies` asks for
+    // the descriptions of issues that changed (MAR-3190 R4). What this case
+    // pins is unchanged -- the SET is exact, so a writing method cannot
+    // arrive unnoticed.
     expectTypeOf<keyof TrackerAdapter>().toEqualTypeOf<
-      'probe' | 'listLabeledIssues' | 'resolveProject'
+      'probe' | 'listLabeledIssues' | 'readIssueBodies' | 'resolveProject'
     >()
     const source = readFileSync(join(__dirname, 'tracker.types.ts'), 'utf8')
     const port = /export interface TrackerAdapter \{([\s\S]*?)\n\}/.exec(
@@ -47,7 +48,12 @@ describe('MAR-3084 R8: the app never writes to the tracker', () => {
     // Mutation: add `updateIssueStatus(...)` to the port -> red here.
     expect(
       [...(port?.[1] ?? '').matchAll(/^\s+(\w+)\(/gm)].map((match) => match[1]),
-    ).toEqual(['probe', 'listLabeledIssues', 'resolveProject'])
+    ).toEqual([
+      'probe',
+      'listLabeledIssues',
+      'readIssueBodies',
+      'resolveProject',
+    ])
   })
 
   it('no shipped file under backend/tracker/ holds a GraphQL mutation outside a comment', () => {

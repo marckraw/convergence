@@ -11,6 +11,7 @@ import {
   trackerHealthAfter,
   trackerHealthChanged,
 } from './tracker-watcher.pure'
+import { applyIssueBodies, issuesNeedingBody } from './linear-tracker.pure'
 import {
   DEFAULT_TRACKER_LABEL_PREFIX,
   DEFAULT_TRACKER_STATUS_MAP,
@@ -269,11 +270,28 @@ export class TrackerWatcherService {
       // back empty -- so two requests a minute for a quiet project instead of
       // one, and none extra for a project with labeled issues in it (R2).
       if (issues.length === 0) await verifyProjectVisible(adapter, binding)
+      const current = this.deps.ledger.currentView(crewId)
+      // The bodies, and only for issues that moved (MAR-3190 R4). Asked
+      // BEFORE the diff and inside the same try, so a refused bodies read is
+      // a refused tick: half a page carrying summaries and half carrying
+      // nulls would be written as rows saying those summaries were deleted.
+      const memory = current.map((row) => ({
+        issueId: row.issueId,
+        updatedAt: row.fact.updatedAt,
+        summary: row.fact.summary ?? null,
+        groundedAt: row.groundedAt,
+        read: 'summary' in row.fact,
+      }))
+      const wanted = issuesNeedingBody(memory, issues)
+      const bodies =
+        wanted.length > 0
+          ? await adapter.readIssueBodies(wanted)
+          : new Map<string, string | null>()
       const now = this.now()
       const rows = diffTrackerSnapshot({
         crewId,
-        current: this.deps.ledger.currentView(crewId),
-        issues,
+        current,
+        issues: applyIssueBodies(issues, bodies, memory, wanted),
         seenAt: now.toISOString(),
       })
       this.deps.ledger.append(rows)

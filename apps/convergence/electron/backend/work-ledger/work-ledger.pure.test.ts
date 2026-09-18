@@ -87,6 +87,58 @@ describe('reading a ledger row', () => {
   })
 })
 
+describe('MAR-3190: a row written before the widened read still reads', () => {
+  it('defaults every new fact, and leaves `summary` ABSENT', () => {
+    const record = workLedgerRecordFromRow(
+      joined({
+        fact_json: JSON.stringify({
+          logicalStatus: 'in-progress',
+          branchName: 'agent/ex-1',
+          updatedAt: '2026-09-17T08:00:00.000Z',
+        }),
+      }),
+    )
+    // Mutation: drop the defaults -> `fact.labels` is undefined and every
+    // reader of the list has to guard it.
+    expect(record.fact).toMatchObject({
+      groomMe: false,
+      groomed: false,
+      grounded: false,
+      dispatch: false,
+      priority: null,
+      labels: [],
+    })
+    // The one key that must NOT be defaulted (R4): its absence is how the
+    // watcher knows this row has never had a body read for it.
+    // Mutation: `summary: value?.summary ?? null` -> true here, and no tick
+    // ever fetches a body for a row written before this slice.
+    expect(Object.prototype.hasOwnProperty.call(record.fact, 'summary')).toBe(
+      false,
+    )
+  })
+
+  it('a row written after it keeps its summary, null and all', () => {
+    const record = workLedgerRecordFromRow(
+      joined({
+        fact_json: JSON.stringify({
+          logicalStatus: 'in-progress',
+          summary: null,
+          labels: ['groom-me'],
+          priority: 0,
+        }),
+      }),
+    )
+    expect(Object.prototype.hasOwnProperty.call(record.fact, 'summary')).toBe(
+      true,
+    )
+    expect(record.fact.summary).toBeNull()
+    expect(record.fact.labels).toEqual(['groom-me'])
+    // Zero is Linear's own word, not "no priority" (R3).
+    // Mutation: `value?.priority ?? null` losing 0 to a falsy check -> red.
+    expect(record.fact.priority).toBe(0)
+  })
+})
+
 describe('MAR-3084 lap 2, B: the identifier matches as a token', () => {
   it.each([
     ['MAR-300', 'agent/mar-3008-tray-key', false],

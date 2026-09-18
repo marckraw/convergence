@@ -12,6 +12,7 @@ import type {
   WorkLedgerRecord,
 } from '../work-ledger/work-ledger.types'
 import { verdictLedgerRecord } from '../work-ledger/work-ledger.pure'
+import { trackerIssue } from './linear-tracker.fixture'
 
 const SEEN = '2026-09-17T08:00:00.000Z'
 
@@ -19,21 +20,13 @@ function issue(
   logicalStatus: TrackerLogicalStatus,
   overrides: Partial<TrackerIssue> = {},
 ): TrackerIssue {
-  return {
+  return trackerIssue({
     id: 'issue-1',
-    identifier: 'EX-1',
-    title: 'The work',
-    url: 'https://linear.app/example/issue/ex-1',
     status: logicalStatus,
     logicalStatus,
-    seat: 'opus',
-    wave: null,
-    blocked: false,
-    groundedAt: null,
-    branchName: null,
     updatedAt: SEEN,
     ...overrides,
-  }
+  })
 }
 
 /** The row a previous tick would have appended for `issue`. */
@@ -576,5 +569,113 @@ describe('MAR-3085 R4 (lap 2): the hold ends when the tracker moves', () => {
         seenAt: SEEN,
       })[0],
     ).toMatchObject({ state: 'unassigned', seat: null })
+  })
+})
+
+describe('MAR-3190 R7: every displayed fact is an observation', () => {
+  const base = issue('in-progress', { id: 'issue-1' })
+  const previous = recorded(base)
+
+  it.each([
+    ['dispatch arrives', { dispatch: true }],
+    ['groom-me leaves', { groomMe: true }],
+    ['groomed flips', { groomed: true }],
+    ['grounded flips', { grounded: true }],
+    ['the priority changes', { priority: 2 }],
+    ['a label is added', { labels: ['horse › opus-mac'] }],
+    ['the summary is rewritten', { summary: 'A different promise' }],
+  ])('%s -> exactly one row', (_case, overrides) => {
+    // Mutation: leave any of these out of `sameObservation` -> no row, so no
+    // broadcast, so the panel shows the old value until something else about
+    // the issue happens to move.
+    const rows = diffTrackerSnapshot({
+      crewId: 'crew-1',
+      current: [previous],
+      issues: [{ ...base, ...overrides }],
+      seenAt: SEEN,
+    })
+    expect(rows).toHaveLength(1)
+  })
+
+  it('the same observation twice writes nothing, and the fact carries them all', () => {
+    expect(
+      diffTrackerSnapshot({
+        crewId: 'crew-1',
+        current: [previous],
+        issues: [base],
+        seenAt: SEEN,
+      }),
+    ).toEqual([])
+    const [row] = diffTrackerSnapshot({
+      crewId: 'crew-1',
+      current: [],
+      issues: [
+        {
+          ...base,
+          groomed: true,
+          priority: 1,
+          labels: ['groomed'],
+          summary: 'The promise',
+        },
+      ],
+      seenAt: SEEN,
+    })
+    expect(row?.fact).toMatchObject({
+      groomMe: false,
+      groomed: true,
+      grounded: false,
+      dispatch: false,
+      priority: 1,
+      labels: ['groomed'],
+      summary: 'The promise',
+    })
+    // The KEY is the flag R4 reads (`'summary' in fact`), so it is written
+    // even when there is nothing to say. Mutation: omit it when null -> every
+    // such row asks for its body again on every tick.
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        diffTrackerSnapshot({
+          crewId: 'crew-1',
+          current: [],
+          issues: [base],
+          seenAt: SEEN,
+        })[0]!.fact,
+        'summary',
+      ),
+    ).toBe(true)
+  })
+})
+
+describe('MAR-3190 R8: absence never rewrites a finished row', () => {
+  it('a Done row aged out of the window is left alone; a live one is carried', () => {
+    const done = recorded(issue('done', { id: 'issue-done' }), {
+      state: 'done',
+    })
+    const working = recorded(issue('in-progress', { id: 'issue-working' }))
+    const rows = diffTrackerSnapshot({
+      crewId: 'crew-1',
+      current: [done, working],
+      issues: [],
+      seenAt: SEEN,
+    })
+    // Mutation: drop the terminal guard -> the Done row a person accepted
+    // weeks ago turns `unassigned` the day it ages out of the 14-day window.
+    expect(rows.map((row) => [row.issueId, row.state])).toEqual([
+      ['issue-working', 'unassigned'],
+    ])
+  })
+
+  it('an already-unassigned row is still left alone', () => {
+    const gone = recorded(issue('in-progress', { id: 'issue-gone' }), {
+      state: 'unassigned',
+    })
+    expect(
+      diffTrackerSnapshot({
+        crewId: 'crew-1',
+        current: [gone],
+        issues: [],
+        seenAt: SEEN,
+      }),
+    ).toEqual([])
   })
 })

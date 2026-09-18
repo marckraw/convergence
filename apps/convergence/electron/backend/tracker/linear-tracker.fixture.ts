@@ -4,6 +4,41 @@
  * is synthetic; nothing here comes from a real workspace.
  */
 
+import type { TrackerIssue } from './tracker.types'
+
+/**
+ * A `TrackerIssue` as the port answers with one, for tests.
+ *
+ * One builder rather than a literal per suite (MAR-3190): the shape grows
+ * every time the read model widens, and a literal per suite means the next
+ * field is added in six places or -- worse -- defaulted differently in each.
+ */
+export function trackerIssue(
+  overrides: Partial<TrackerIssue> & Pick<TrackerIssue, 'id'>,
+): TrackerIssue {
+  return {
+    identifier: 'EX-1',
+    title: 'The work',
+    url: 'https://linear.app/example/issue/ex-1',
+    status: 'In Progress',
+    logicalStatus: 'in-progress',
+    seat: 'opus',
+    wave: null,
+    blocked: false,
+    groomMe: false,
+    groomed: false,
+    grounded: false,
+    dispatch: false,
+    priority: null,
+    labels: [],
+    summary: null,
+    groundedAt: null,
+    branchName: null,
+    updatedAt: '2026-09-17T08:00:00.000Z',
+    ...overrides,
+  }
+}
+
 export function linearLabel(name: string, parent: string | null) {
   return { name, parent: parent === null ? null : { name: parent } }
 }
@@ -15,6 +50,8 @@ export function linearIssueNode(input: {
   state?: string
   labels: ReturnType<typeof linearLabel>[]
   branchName?: string
+  updatedAt?: string
+  priority?: unknown
 }) {
   return {
     id: input.id,
@@ -23,9 +60,28 @@ export function linearIssueNode(input: {
     url: `https://linear.app/example/issue/${input.identifier.toLowerCase()}`,
     branchName:
       input.branchName ?? `example/${input.identifier.toLowerCase()}-work`,
-    updatedAt: '2026-09-17T08:00:00.000Z',
+    updatedAt: input.updatedAt ?? '2026-09-17T08:00:00.000Z',
+    // Linear answers `priority: Float!`, so it is always on the node; the
+    // pages that leave it out are the ones R3 reads as null.
+    ...('priority' in input ? { priority: input.priority } : {}),
     state: { name: input.state ?? 'Todo' },
     labels: { nodes: input.labels },
+  }
+}
+
+/** One issue body reply node, as `LINEAR_ISSUE_BODIES_QUERY` asks for it. */
+export function linearIssueBodiesBody(
+  nodes: { id: string; description?: string | null }[],
+) {
+  return {
+    data: {
+      issues: {
+        nodes: nodes.map((node) => ({
+          id: node.id,
+          description: node.description ?? null,
+        })),
+      },
+    },
   }
 }
 
@@ -186,3 +242,86 @@ export function recordedReply(
     json: async () => body,
   }
 }
+
+/**
+ * The page R1 reads membership from (MAR-3190): one issue per way IN, and one
+ * that only looks like it belongs.
+ *
+ * Recorded against the widened filter, which asks for any Loom label — so a
+ * `groom-me` issue with no seat is exactly what Linear now returns, and the
+ * parse has to keep it.
+ */
+export const RECORDED_LOOM_MEMBERSHIP_PAGE = linearIssuesBody([
+  linearIssueNode({
+    id: 'issue-seat',
+    identifier: 'EX-20',
+    state: 'In Progress',
+    labels: [linearLabel('opus-mac', 'horse')],
+    priority: 2,
+  }),
+  linearIssueNode({
+    id: 'issue-wave',
+    identifier: 'EX-21',
+    labels: [linearLabel('loom-view', 'wave')],
+  }),
+  linearIssueNode({
+    id: 'issue-groom-me',
+    identifier: 'EX-22',
+    state: 'Backlog',
+    labels: [linearLabel('groom-me', null)],
+  }),
+  linearIssueNode({
+    id: 'issue-groomed-grounded',
+    identifier: 'EX-23',
+    state: 'Todo',
+    labels: [linearLabel('groomed', null), linearLabel('Grounded', null)],
+    priority: 0,
+  }),
+  // A plain label somebody named like a group child: no seat, no wave, no
+  // plain Loom name — it was never in the loop.
+  linearIssueNode({
+    id: 'issue-look-alike',
+    identifier: 'EX-24',
+    labels: [linearLabel('horse:opus-mac', null)],
+  }),
+  // A wave that happens to be called `blocked`: in the loop as a WAVE, and
+  // not blocked — the distinction MAR-3138 drew, now load-bearing twice.
+  linearIssueNode({
+    id: 'issue-wave-blocked',
+    identifier: 'EX-25',
+    labels: [linearLabel('blocked', 'wave')],
+  }),
+])
+
+/** The priorities R3 reads, including the ones that are not numbers. */
+export const RECORDED_PRIORITY_PAGE = linearIssuesBody([
+  linearIssueNode({
+    id: 'issue-urgent',
+    identifier: 'EX-30',
+    labels: [linearLabel('opus-mac', 'horse')],
+    priority: 1,
+  }),
+  linearIssueNode({
+    id: 'issue-none',
+    identifier: 'EX-31',
+    labels: [linearLabel('opus-mac', 'horse')],
+    priority: 0,
+  }),
+  linearIssueNode({
+    id: 'issue-missing',
+    identifier: 'EX-32',
+    labels: [linearLabel('opus-mac', 'horse')],
+  }),
+  linearIssueNode({
+    id: 'issue-not-a-number',
+    identifier: 'EX-33',
+    labels: [linearLabel('opus-mac', 'horse')],
+    priority: 'high',
+  }),
+  linearIssueNode({
+    id: 'issue-fractional',
+    identifier: 'EX-34',
+    labels: [linearLabel('opus-mac', 'horse')],
+    priority: 1.5,
+  }),
+])
