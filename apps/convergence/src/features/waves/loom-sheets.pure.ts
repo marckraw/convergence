@@ -1,0 +1,191 @@
+import type { WorkLedgerEntry } from '@/entities/work-ledger'
+import {
+  waveLapLabel,
+  waveRowAction,
+  waveRowHostMarker,
+  type WaveRow,
+  type WaveRowCrew,
+} from './wave-sections.pure'
+import { LOOM_SHEET_NAMES, type LoomSheet } from './wave-panel-sheet.pure'
+
+/**
+ * What is on Now, in the four groups the sheet draws (MAR-3189 R2).
+ *
+ * The names are the questions a person asks of the row: is it moving, does it
+ * want my eyes, does it want Fable's verdict, does it want a decision.
+ */
+export interface LoomNowSheet {
+  /** Work a horse is on: `working`. */
+  inFlight: WaveRow[]
+  /** Work that stopped for Marcin's acceptance: `reviewed`. */
+  awaitingQa: WaveRow[]
+  /** Work that stopped for a verdict: `returned`. */
+  fablesTurn: WaveRow[]
+  /** Work the tracker says cannot move until somebody decides: `blocked`. */
+  decide: WaveRow[]
+}
+
+/** Loom's four sheets (MAR-3189 R2). One result feeds compact and expanded. */
+export interface LoomSheets {
+  before: WaveRow[]
+  now: LoomNowSheet
+  next: WaveRow[]
+  plan: WaveRow[]
+}
+
+/**
+ * The rows into the four sheets (MAR-3189 R2): a pure function of the rows,
+ * beside `sectionWaveRows` rather than instead of it -- Mission Control's
+ * Waves tab still reads the old four sections, and one selector rewritten for
+ * two boards would have been two boards changed by this slice.
+ *
+ * Every row lands in exactly ONE list, and the chain below is what guarantees
+ * it. `done` is asked first because the loop has let go of it: a finished
+ * issue still carrying a `blocked` label is history, not a decision (the same
+ * ordering `sectionWaveRows` takes from MAR-3138 lap 2, A). After that
+ * `blocked` outranks the state (MAR-3138 R4) -- the tracker is saying the
+ * work cannot move until somebody decides, and that is the same question
+ * whatever state the issue is in.
+ *
+ * `assigned` splits on the seat, and that split is the whole difference
+ * between Next and Plan: an issue with a seat is queued at a named horse,
+ * while one without is still being shaped.
+ */
+export function loomSheets(
+  rows: readonly WorkLedgerEntry[],
+  now: number,
+  crewOf: (crewId: string) => WaveRowCrew = () => ({ name: null, cap: null }),
+): LoomSheets {
+  const sheets: LoomSheets = {
+    before: [],
+    now: { inFlight: [], awaitingQa: [], fablesTurn: [], decide: [] },
+    next: [],
+    plan: [],
+  }
+
+  for (const entry of rows) {
+    const crew = crewOf(entry.crewId)
+    const row: WaveRow = {
+      entry,
+      action: waveRowAction(entry),
+      hostMarker: waveRowHostMarker(entry, now),
+      crewName: crew.name,
+      lapLabel: waveLapLabel(entry.lap, crew.cap),
+    }
+
+    if (entry.state === 'done') sheets.before.push(row)
+    else if (entry.blocked) sheets.now.decide.push(row)
+    else if (entry.state === 'working') sheets.now.inFlight.push(row)
+    else if (entry.state === 'reviewed') sheets.now.awaitingQa.push(row)
+    else if (entry.state === 'returned') sheets.now.fablesTurn.push(row)
+    else if (entry.state === 'assigned') {
+      if (entry.seat === null) sheets.plan.push(row)
+      else sheets.next.push(row)
+    }
+    // `unassigned` and `stopped`: work nobody is carrying right now. They sit
+    // in Plan with the word the row already speaks -- `re-groom (Fable)` for
+    // a stopped lap, nothing for an issue that has left the seat group.
+    else sheets.plan.push(row)
+  }
+
+  return sheets
+}
+
+/** The numbers the four titles carry (MAR-3189). */
+export interface LoomSheetCounts {
+  before: number
+  /** Now, minus what is waiting on Marcin: no row of Now goes unnamed. */
+  inFlight: number
+  awaitingQa: number
+  next: number
+  plan: number
+}
+
+/**
+ * The counts, read off the same sheets the stack draws.
+ *
+ * `inFlight` here is wider than `now.inFlight`: the title says two numbers
+ * and the sheet holds four groups, so the two have to cover all four or the
+ * title would hide rows. The split is the one a person acts on -- what is
+ * mine to look at (`awaitingQa`) against everything else that is moving,
+ * waiting on a verdict or waiting on a decision.
+ */
+export function loomSheetCounts(sheets: LoomSheets): LoomSheetCounts {
+  return {
+    before: sheets.before.length,
+    inFlight:
+      sheets.now.inFlight.length +
+      sheets.now.fablesTurn.length +
+      sheets.now.decide.length,
+    awaitingQa: sheets.now.awaitingQa.length,
+    next: sheets.next.length,
+    plan: sheets.plan.length,
+  }
+}
+
+/** How many rows a sheet holds, for the empty-sheet note. */
+export function loomSheetSize(sheets: LoomSheets, sheet: LoomSheet): number {
+  if (sheet === 'before') return sheets.before.length
+  if (sheet === 'next') return sheets.next.length
+  if (sheet === 'plan') return sheets.plan.length
+  return (
+    sheets.now.inFlight.length +
+    sheets.now.awaitingQa.length +
+    sheets.now.fablesTurn.length +
+    sheets.now.decide.length
+  )
+}
+
+/**
+ * A sheet's title (MAR-3189): the name, then what its number MEANS. A bare
+ * count beside four different words would make the reader guess which four
+ * things are being counted.
+ */
+export function loomSheetTitle(
+  sheet: LoomSheet,
+  counts: LoomSheetCounts,
+): string {
+  const name = LOOM_SHEET_NAMES[sheet]
+  if (sheet === 'before') return `${name} · ${counts.before} done`
+  if (sheet === 'now') {
+    return `${name} · ${counts.inFlight} in flight · ${counts.awaitingQa} awaiting QA`
+  }
+  if (sheet === 'next') return `${name} · ${counts.next} queued`
+  return `${name} · ${counts.plan} in preparation`
+}
+
+/** What Plan cannot say yet, and says instead of pretending (MAR-3189). */
+export const LOOM_PLAN_NOTE = 'Plan needs the wider read (LV1)'
+
+/**
+ * The line under a sheet's title, or null when the rows speak for themselves.
+ *
+ * Plan always carries its note: today it can only hold `assigned` issues with
+ * no seat, which is not what a plan is -- the wider read is LV1's, and saying
+ * so is honest where an empty sheet would read as "nothing is planned".
+ */
+export function loomSheetNote(
+  sheet: LoomSheet,
+  sheets: LoomSheets,
+): string | null {
+  if (sheet === 'plan') return LOOM_PLAN_NOTE
+  return loomSheetSize(sheets, sheet) === 0
+    ? `Nothing in ${LOOM_SHEET_NAMES[sheet]} right now.`
+    : null
+}
+
+/**
+ * Which ledger this is, under Loom's name (MAR-3189).
+ *
+ * r4 asks for `<project> · All waves`. The app does not hold a tracker
+ * project's NAME -- a binding carries `projectId` and nothing else
+ * (`TrackerBinding`) -- so the honest stand-in is the crew whose tracker
+ * these rows came from, which is the same word the header already uses for an
+ * outage. `All waves` is a statement of fact until LV3 gives Before its wave
+ * grouping: nothing here is filtered.
+ */
+export function loomSubline(crewNames: readonly string[]): string {
+  if (crewNames.length === 0) return 'All waves'
+  if (crewNames.length === 1) return `${crewNames[0]} · All waves`
+  return `${crewNames.length} crews · All waves`
+}

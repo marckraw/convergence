@@ -23,15 +23,15 @@ import {
   type WorkLedgerEntry,
   type WorkLedgerSnapshot,
 } from '@/entities/work-ledger'
-import { WavePanel, WavesTab } from './wave-panel.container'
+import { WavePanel } from './wave-panel.container'
+import { WavesTab } from './waves-tab.container'
 import {
   WavePanelView,
   type WavePanelViewProps,
 } from './wave-panel.presentational'
-import {
-  WaveRailView,
-  WAVE_RAIL_NARROW_TITLE,
-} from './wave-rail.presentational'
+import { LoomStripView } from './wave-rail.presentational'
+import { loomSheets } from './loom-sheets.pure'
+import { LOOM_SHEETS, LOOM_SHEET_NAMES } from './wave-panel-sheet.pure'
 import {
   sectionWaveRows,
   waveHeader,
@@ -300,32 +300,50 @@ describe('MAR-3097 lap 2, F2: wave groups are disclosures', () => {
   })
 })
 
-describe('MAR-3097 R4: the rail is the same model', () => {
-  it('shows four counts equal to the section lengths, and the outage dot', () => {
+describe('MAR-3189 R4: the strip is the same model', () => {
+  it('shows the four sheet counts and the outage dot', () => {
     const rows = [
       ledgerEntry({ issueIdentifier: 'EX-1', state: 'reviewed' }),
       ledgerEntry({ issueIdentifier: 'EX-2', state: 'working' }),
-      ledgerEntry({ issueIdentifier: 'EX-3', state: 'returned' }),
-      ledgerEntry({ issueIdentifier: 'EX-4', state: 'assigned', wave: null }),
+      ledgerEntry({ issueIdentifier: 'EX-3', state: 'assigned' }),
+      ledgerEntry({ issueIdentifier: 'EX-4', state: 'done' }),
     ]
-    const sections = sectionWaveRows(rows, NOW)
-    render(<WaveRailView sections={sections} outage onExpand={vi.fn()} />)
-    const count = (key: string) =>
-      document.querySelector(`[data-wave-count="${key}"]`)?.textContent
-    expect([
-      count('waitingOnYou'),
-      count('inTheWave'),
-      count('waitingToStart'),
-      count('waves'),
-    ]).toEqual(
-      [
-        sections.waitingOnYou.length,
-        sections.inTheWave.length,
-        sections.waitingToStart.length,
-        sections.waves.length,
-      ].map(String),
-    )
+    const sheets = loomSheets(rows, NOW)
+    render(<LoomStripView sheets={sheets} outage onExpand={vi.fn()} />)
+
+    const shown = (sheet: string) =>
+      document.querySelector(`[data-wave-count="${sheet}"]`)?.textContent
+    // The strip reads the sheets, not a second selector of its own.
+    // Mutation: count `sections` instead -> red.
+    expect(shown('before')).toBe('1')
+    expect(shown('now')).toBe('2')
+    expect(shown('next')).toBe('1')
+    expect(shown('plan')).toBe('0')
+    for (const sheet of LOOM_SHEETS) {
+      expect(
+        screen.getByLabelText(new RegExp(`^${LOOM_SHEET_NAMES[sheet]}: `)),
+      ).toBeTruthy()
+    }
     expect(screen.getByLabelText('Tracker not answering')).toBeTruthy()
+  })
+
+  it('MAR-3189: Expand acts from the strip, where Open used to refuse', () => {
+    const onExpand = vi.fn()
+    render(
+      <LoomStripView
+        sheets={loomSheets([], NOW)}
+        outage={false}
+        onExpand={onExpand}
+      />,
+    )
+    const expand = screen.getByRole('button', { name: 'Expand Loom' })
+    // The control no longer opens a column the window cannot hold; it puts
+    // Loom in the content area, which this window CAN hold. An inert button
+    // here would be the strip claiming a limit the mechanism does not have.
+    // Mutation: `aria-disabled` + a swallowed click -> red.
+    expect(expand.getAttribute('aria-disabled')).toBeNull()
+    fireEvent.click(expand)
+    expect(onExpand).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -387,63 +405,54 @@ describe('MAR-3097: through the containers and the real stores', () => {
     crews = [{ ...boundCrew('crew-1', 'Loom'), trackerBinding: null }]
     await mount(<WavePanel />)
     // Mutation: mount the column unconditionally -> red.
-    expect(screen.queryByLabelText('Waves')).toBeNull()
-    expect(screen.queryByLabelText('Waves rail')).toBeNull()
+    expect(screen.queryByLabelText('Loom')).toBeNull()
+    expect(screen.queryByLabelText('Loom strip')).toBeNull()
   })
 
   it('B: a bound crew -> the column; hidden (the Waves tab showing) -> nothing', async () => {
     await mount(<WavePanel />)
-    expect(await screen.findByLabelText('Waves')).toBeTruthy()
+    expect(await screen.findByLabelText('Loom')).toBeTruthy()
     cleanup()
     await mount(<WavePanel hidden />)
-    expect(screen.queryByLabelText('Waves')).toBeNull()
+    expect(screen.queryByLabelText('Loom')).toBeNull()
   })
 
-  it('B: too narrow -> the rail, and the stored mode is untouched', async () => {
+  it('MAR-3189 R4: too narrow -> the strip, and the stored mode is untouched', async () => {
     // One pixel short of the narrowest readable column (MAR-3155 R1): the
-    // column shrinks before it becomes the rail, so the window that forces
-    // the rail is now measured against the column's FLOOR, not its default.
+    // column shrinks before it becomes the strip, so the window that forces
+    // the strip is measured against the column's FLOOR, not its default.
     setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
     await mount(<WavePanel reservedWidth={260} />)
-    // Mutation: ignore the width -> the open column, red.
-    expect(await screen.findByLabelText('Waves rail')).toBeTruthy()
+    // Mutation: ignore the width -> the compact column, red.
+    expect(await screen.findByLabelText('Loom strip')).toBeTruthy()
     expect(localStorage.getItem('convergence-wave-panel-mode')).toBeNull()
-    // MAR-3148 R1, through the container: the rail the WIDTH forced cannot be
-    // opened, and says so. Mutation: pass `narrow` from anything but the
-    // decision's reason -> red.
-    const open = screen.getByRole('button', { name: /too narrow/i })
-    expect(open.getAttribute('aria-disabled')).toBe('true')
-    expect(open.getAttribute('title')).toBe(WAVE_RAIL_NARROW_TITLE)
   })
 
-  it('B: a rail the person chose still opens', async () => {
-    localStorage.setItem('convergence-wave-panel-mode', 'rail')
-    await mount(<WavePanel />)
-    await screen.findByLabelText('Waves rail')
-    const open = screen.getByRole('button', { name: 'Open the wave panel' })
-    expect(open.getAttribute('aria-disabled')).toBeNull()
-    fireEvent.click(open)
-    expect(screen.getByLabelText('Waves')).toBeTruthy()
+  it('MAR-3189 R1: a mode stored before Loom opens the column, never nothing', async () => {
+    // `rail` and `open` are the two modes this app stored before the sheets
+    // existed. Mutation: keep `rail` as a mode of its own -> a person who had
+    // collapsed the column upgrades into a panel shape that is gone, red.
+    for (const legacy of ['rail', 'open', 'sideways']) {
+      localStorage.setItem('convergence-wave-panel-mode', legacy)
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      expect(await screen.findByLabelText('Loom')).toBeTruthy()
+      cleanup()
+    }
   })
 
-  it('B: a stored rail in a window too narrow for the column cannot open either', async () => {
-    localStorage.setItem('convergence-wave-panel-mode', 'rail')
+  it('MAR-3189 R5: Expand from the strip reaches the stack a narrow window can hold', async () => {
     setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
     await mount(<WavePanel reservedWidth={260} />)
-    await screen.findByLabelText('Waves rail')
-
-    // Mutation: answer the stored reason first -> the click below opens
-    // nothing and rewrites the preference to `open`, red.
-    const open = screen.getByRole('button', { name: /too narrow/i })
-    fireEvent.click(open)
-    expect(screen.getByLabelText('Waves rail')).toBeTruthy()
-    expect(screen.queryByLabelText('Waves')).toBeNull()
-    expect(localStorage.getItem('convergence-wave-panel-mode')).toBe('rail')
+    await screen.findByLabelText('Loom strip')
+    // Mutation: refuse the click while narrow (the rail's old law) -> red.
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+    expect(screen.getByRole('button', { name: 'Fold Loom' })).toBeTruthy()
+    expect(screen.queryByLabelText('Loom strip')).toBeNull()
   })
 
   /** The `aside`'s inline width, as the browser would lay it out. */
   const columnWidth = () =>
-    (screen.getByLabelText('Waves') as HTMLElement).style.width
+    (screen.getByLabelText('Loom') as HTMLElement).style.width
 
   const storedWidth = () => localStorage.getItem('convergence-wave-panel-width')
 
@@ -451,23 +460,23 @@ describe('MAR-3097: through the containers and the real stores', () => {
     RESERVED + WAVE_PANEL_MIN_MAIN_WIDTH + available
 
   it('MAR-3155 R2: a narrow window cuts the column without rewriting the preference', async () => {
-    localStorage.setItem('convergence-wave-panel-width', '600')
-    setWindowWidth(windowLeaving(400))
+    localStorage.setItem('convergence-wave-panel-width', '380')
+    setWindowWidth(windowLeaving(320))
     await mount(<WavePanel reservedWidth={RESERVED} />)
 
     // What fits is on screen; what was chosen is still what is stored.
     // Mutation: save the effective width on render -> the widened case below
-    // reads 400px, red.
-    expect(columnWidth()).toBe('400px')
-    expect(storedWidth()).toBe('600')
+    // reads 320px, red.
+    expect(columnWidth()).toBe('320px')
+    expect(storedWidth()).toBe('380')
 
     // The window grows back, with nobody touching anything.
     await act(async () => {
       setWindowWidth(windowLeaving(900))
       window.dispatchEvent(new Event('resize'))
     })
-    expect(columnWidth()).toBe('600px')
-    expect(storedWidth()).toBe('600')
+    expect(columnWidth()).toBe('380px')
+    expect(storedWidth()).toBe('380')
   })
 
   it('MAR-3155 R4: the handle drags, steps and resets, and stores each finished gesture', async () => {
@@ -490,19 +499,19 @@ describe('MAR-3097: through the containers and the real stores', () => {
     // A drag: the pointer is a PAGE coordinate, so the column's width is
     // `clientX` minus the sidebar beside it.
     // Mutation: drop `- reservedWidth` -> the width is off by the sidebar
-    // (760 instead of 500), red.
+    // (620 instead of 360), red.
     fireEvent.mouseDown(handle)
     await act(async () => {
-      fireEvent.mouseMove(window, { clientX: RESERVED + 500 })
+      fireEvent.mouseMove(window, { clientX: RESERVED + 360 })
     })
-    expect(columnWidth()).toBe('500px')
+    expect(columnWidth()).toBe('360px')
     // Nothing is stored until the gesture ends.
     expect(storedWidth()).toBeNull()
     await act(async () => {
       fireEvent.mouseUp(window)
     })
-    expect(columnWidth()).toBe('500px')
-    expect(storedWidth()).toBe('500')
+    expect(columnWidth()).toBe('360px')
+    expect(storedWidth()).toBe('360')
     expect(document.body.style.cursor).toBe('')
     expect(document.body.style.userSelect).toBe('')
 
@@ -510,17 +519,17 @@ describe('MAR-3097: through the containers and the real stores', () => {
     await act(async () => {
       fireEvent.keyDown(handle, { key: 'ArrowRight' })
     })
-    expect(columnWidth()).toBe(`${500 + WAVE_PANEL_WIDTH_STEP}px`)
-    expect(storedWidth()).toBe(String(500 + WAVE_PANEL_WIDTH_STEP))
+    expect(columnWidth()).toBe(`${360 + WAVE_PANEL_WIDTH_STEP}px`)
+    expect(storedWidth()).toBe(String(360 + WAVE_PANEL_WIDTH_STEP))
     await act(async () => {
       fireEvent.keyDown(handle, { key: 'ArrowLeft' })
     })
-    expect(storedWidth()).toBe('500')
+    expect(storedWidth()).toBe('360')
     // A key the handle has no use for changes nothing.
     await act(async () => {
       fireEvent.keyDown(handle, { key: 'a' })
     })
-    expect(storedWidth()).toBe('500')
+    expect(storedWidth()).toBe('360')
 
     // Double-click: back to the default, and stored.
     await act(async () => {
@@ -582,10 +591,10 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(storedWidth()).toBe('400')
   })
 
-  it('MAR-3155 R4: the rail has no handle, and an unmount mid-drag gives the cursor back', async () => {
+  it('MAR-3155 R4: the strip has no handle, and an unmount mid-drag gives the cursor back', async () => {
     setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
     await mount(<WavePanel reservedWidth={RESERVED} />)
-    await screen.findByLabelText('Waves rail')
+    await screen.findByLabelText('Loom strip')
     // Mutation: render the handle whatever the mode -> red (a separator with
     // no column to resize).
     expect(screen.queryByRole('separator')).toBeNull()
@@ -601,56 +610,59 @@ describe('MAR-3097: through the containers and the real stores', () => {
     // not tell "an unmount stores nothing" from "a press that never moved
     // stores nothing", which is a different rule.
     await act(async () => {
-      fireEvent.mouseMove(window, { clientX: RESERVED + 500 })
+      fireEvent.mouseMove(window, { clientX: RESERVED + 360 })
     })
-    expect(columnWidth()).toBe('500px')
+    expect(columnWidth()).toBe('360px')
     // Mutation: drop the unmount cleanup -> the whole app keeps a resize
     // cursor and unselectable text after the column goes away, red.
     cleanup()
     expect(document.body.style.cursor).toBe('')
     expect(document.body.style.userSelect).toBe('')
     // Mutation: commit on release rather than on a finished mouse-up -> the
-    // interrupted drag leaves 500 behind, red.
+    // interrupted drag leaves 360 behind, red.
     expect(storedWidth()).toBeNull()
   })
 
   it('MAR-3155 lap 2, A: a step the window refuses stores nothing', async () => {
-    localStorage.setItem('convergence-wave-panel-width', '600')
-    setWindowWidth(windowLeaving(400))
+    localStorage.setItem('convergence-wave-panel-width', '380')
+    setWindowWidth(windowLeaving(320))
     await mount(<WavePanel reservedWidth={RESERVED} />)
     const handle = screen.getByRole('separator', {
       name: 'Resize the wave column',
     })
-    expect(columnWidth()).toBe('400px')
+    expect(columnWidth()).toBe('320px')
 
     // They pressed WIDER. The window has nothing more to give, so nothing
-    // moves -- and nothing may be written down: storing 400 here is how a
-    // 600px preference is lost for good.
-    // Mutation: commit the clamped step unconditionally -> stored reads 400,
+    // moves -- and nothing may be written down: storing 320 here is how a
+    // 380px preference is lost for good.
+    // Mutation: commit the clamped step unconditionally -> stored reads 320,
     // red.
     await act(async () => {
       fireEvent.keyDown(handle, { key: 'ArrowRight' })
     })
-    expect(columnWidth()).toBe('400px')
-    expect(storedWidth()).toBe('600')
+    expect(columnWidth()).toBe('320px')
+    expect(storedWidth()).toBe('380')
 
     // Narrower still works: that gesture does move something.
     await act(async () => {
       fireEvent.keyDown(handle, { key: 'ArrowLeft' })
     })
-    expect(columnWidth()).toBe(`${400 - WAVE_PANEL_WIDTH_STEP}px`)
-    expect(storedWidth()).toBe(String(400 - WAVE_PANEL_WIDTH_STEP))
+    expect(columnWidth()).toBe(`${320 - WAVE_PANEL_WIDTH_STEP}px`)
+    expect(storedWidth()).toBe(String(320 - WAVE_PANEL_WIDTH_STEP))
   })
 
   it('MAR-3155 lap 2, A: a reset stores the default, not the window’s ceiling', async () => {
-    setWindowWidth(windowLeaving(260))
+    // A preference the window is already cutting: with the Loom bounds the
+    // default IS the floor, so the ceiling can only differ from it from above.
+    localStorage.setItem('convergence-wave-panel-width', '380')
+    setWindowWidth(windowLeaving(300))
     await mount(<WavePanel reservedWidth={RESERVED} />)
     const handle = screen.getByRole('separator', {
       name: 'Resize the wave column',
     })
-    expect(columnWidth()).toBe('260px')
+    expect(columnWidth()).toBe('300px')
 
-    // Mutation: clamp the reset to the window's ceiling -> stored reads 260,
+    // Mutation: clamp the reset to the window's ceiling -> stored reads 300,
     // and "reset" has pinned this window's ceiling as the preference, red.
     await act(async () => {
       fireEvent.doubleClick(handle)
@@ -672,7 +684,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
       screen.getByRole('separator', { name: 'Resize the wave column' }),
     )
     await act(async () => {
-      fireEvent.mouseMove(window, { clientX: RESERVED + 500 })
+      fireEvent.mouseMove(window, { clientX: RESERVED + 360 })
     })
 
     // The window crosses the column's floor while the pointer is still down:
@@ -682,7 +694,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
       setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
       window.dispatchEvent(new Event('resize'))
     })
-    expect(screen.getByLabelText('Waves rail')).toBeTruthy()
+    expect(screen.getByLabelText('Loom strip')).toBeTruthy()
     await act(async () => {
       fireEvent.mouseUp(window)
     })
@@ -741,18 +753,18 @@ describe('MAR-3097: through the containers and the real stores', () => {
     fireEvent.mouseDown(handle)
     fireEvent.mouseDown(handle)
     await act(async () => {
-      fireEvent.mouseMove(window, { clientX: RESERVED + 500 })
+      fireEvent.mouseMove(window, { clientX: RESERVED + 360 })
       fireEvent.mouseUp(window)
     })
-    expect(columnWidth()).toBe('500px')
+    expect(columnWidth()).toBe('360px')
 
     // What a person notices: the column stops following the pointer when
     // they let go. (The leak a second mouse-down could cause is a different
     // question, and the unmount case below is what witnesses it.)
     await act(async () => {
-      fireEvent.mouseMove(window, { clientX: RESERVED + 620 })
+      fireEvent.mouseMove(window, { clientX: RESERVED + 390 })
     })
-    expect(columnWidth()).toBe('500px')
+    expect(columnWidth()).toBe('360px')
   })
 
   it('MAR-3155 lap 3, C: a second mouse-down leaves nothing behind to commit after an unmount', async () => {
@@ -773,7 +785,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
     // the FIRST press's pair survives the unmount, answers these events and
     // commits a width from a column nobody can see, red.
     await act(async () => {
-      fireEvent.mouseMove(window, { clientX: RESERVED + 500 })
+      fireEvent.mouseMove(window, { clientX: RESERVED + 360 })
       fireEvent.mouseUp(window)
     })
     expect(storedWidth()).toBeNull()
@@ -792,7 +804,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
 
     fireEvent.mouseDown(handle)
     await act(async () => {
-      fireEvent.mouseMove(window, { clientX: RESERVED + 500 })
+      fireEvent.mouseMove(window, { clientX: RESERVED + 360 })
     })
     // ...no mouse-up. The person presses again and lets go without moving.
     fireEvent.mouseDown(handle)
@@ -800,7 +812,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
       fireEvent.mouseUp(window)
     })
     // Mutation: refuse the second press instead of releasing the first drag
-    // -> the stale closure answers the mouse-up and 500 is stored, red.
+    // -> the stale closure answers the mouse-up and 360 is stored, red.
     expect(storedWidth()).toBeNull()
     expect(columnWidth()).toBe('280px')
   })
@@ -848,34 +860,34 @@ describe('MAR-3097: through the containers and the real stores', () => {
     // Residue from MAR-3155: startedAt compared to the width at mouse-down,
     // so releasing back at that width after the ceiling grew stored nothing
     // and the column jumped to the old preference.
-    // Mutation: capture the ceiling at mouse-down → stored stays 600 → red.
-    localStorage.setItem('convergence-wave-panel-width', '600')
-    setWindowWidth(windowLeaving(400))
+    // Mutation: capture the ceiling at mouse-down → stored stays 400 → red.
+    localStorage.setItem('convergence-wave-panel-width', '400')
+    setWindowWidth(windowLeaving(300))
     await mount(<WavePanel reservedWidth={RESERVED} />)
     const handle = screen.getByRole('separator', {
       name: 'Resize the wave column',
     })
-    expect(columnWidth()).toBe('400px')
+    expect(columnWidth()).toBe('300px')
 
     fireEvent.mouseDown(handle)
     await act(async () => {
-      fireEvent.mouseMove(window, { clientX: RESERVED + 320 })
+      fireEvent.mouseMove(window, { clientX: RESERVED + 290 })
     })
-    expect(columnWidth()).toBe('320px')
+    expect(columnWidth()).toBe('290px')
 
     await act(async () => {
-      setWindowWidth(windowLeaving(640))
+      setWindowWidth(windowLeaving(400))
       window.dispatchEvent(new Event('resize'))
     })
 
     await act(async () => {
-      fireEvent.mouseMove(window, { clientX: RESERVED + 400 })
+      fireEvent.mouseMove(window, { clientX: RESERVED + 340 })
     })
     await act(async () => {
       fireEvent.mouseUp(window)
     })
-    expect(columnWidth()).toBe('400px')
-    expect(storedWidth()).toBe('400')
+    expect(columnWidth()).toBe('340px')
+    expect(storedWidth()).toBe('340')
   })
 
   it('MAR-3155 lap 3, B: a drag that ends with the column hidden stores nothing', async () => {
@@ -890,7 +902,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
 
     fireEvent.mouseDown(handle)
     await act(async () => {
-      fireEvent.mouseMove(window, { clientX: RESERVED + 500 })
+      fireEvent.mouseMove(window, { clientX: RESERVED + 360 })
     })
 
     // Mission Control opens its own Waves tab while the pointer is down: the
@@ -899,7 +911,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
     await act(async () => {
       rerender(<WavePanel reservedWidth={RESERVED} hidden />)
     })
-    expect(screen.queryByLabelText('Waves')).toBeNull()
+    expect(screen.queryByLabelText('Loom')).toBeNull()
     await act(async () => {
       fireEvent.mouseUp(window)
     })
@@ -921,12 +933,12 @@ describe('MAR-3097: through the containers and the real stores', () => {
 
     fireEvent.mouseDown(handle)
     await act(async () => {
-      fireEvent.mouseMove(window, { clientX: RESERVED + 500 })
+      fireEvent.mouseMove(window, { clientX: RESERVED + 360 })
     })
     await act(async () => {
       useSessionCrewStore.setState({ crews: [] })
     })
-    expect(screen.queryByLabelText('Waves')).toBeNull()
+    expect(screen.queryByLabelText('Loom')).toBeNull()
     await act(async () => {
       fireEvent.mouseUp(window)
     })
@@ -939,7 +951,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
     const onOpenSession = vi.fn()
     const windowOpen = vi.spyOn(window, 'open').mockImplementation(() => null)
     await mount(<WavePanel onOpenSession={onOpenSession} />)
-    await screen.findByLabelText('Waves')
+    await screen.findByLabelText('Loom')
     const openable = document.querySelector(
       '[data-wave-row="crew-1:EX-2"]',
     ) as HTMLElement
@@ -951,26 +963,33 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(onOpenSession.mock.calls[0]![0].id).toBe('session-opus')
     expect(windowOpen).not.toHaveBeenCalled()
     expect(
-      rowOf('crew-1:EX-3').getByText('no conversation for this seat'),
-    ).toBeTruthy()
-    expect(
       rowOf('crew-1:EX-4').getByText('conversation not loaded'),
+    ).toBeTruthy()
+    // EX-3 is `assigned` with a seat, so it is queued in Next (R2) -- the
+    // reason a row cannot open travels with it into whichever sheet it lands.
+    fireEvent.click(screen.getByRole('button', { name: /^Next · / }))
+    expect(
+      rowOf('crew-1:EX-3').getByText('no conversation for this seat'),
     ).toBeTruthy()
     windowOpen.mockRestore()
   })
 
-  it('R4: collapsing to the rail persists, and a remount reads it back', async () => {
-    await mount(<WavePanel />)
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Collapse the wave panel' }),
-    )
-    expect(screen.getByLabelText('Waves rail')).toBeTruthy()
+  it('MAR-3189 R3: the open sheet persists, and a remount reads it back', async () => {
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    fireEvent.click(await screen.findByRole('button', { name: /^Next · / }))
+    // Mutation: hold the sheet in state without writing it -> null here, and
+    // the remount below opens Now again, red.
+    expect(localStorage.getItem('convergence-loom-sheet')).toBe('next')
     cleanup()
-    await mount(<WavePanel />)
-    expect(await screen.findByLabelText('Waves rail')).toBeTruthy()
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    expect(
+      (await screen.findByRole('button', { name: /^Next · / })).getAttribute(
+        'aria-expanded',
+      ),
+    ).toBe('true')
   })
 
-  it('R6: the Waves tab shows the same row keys as the panel', async () => {
+  it('MAR-3189 R2/R6: the four sheets together hold exactly the tab’s rows', async () => {
     const keys = () =>
       [...document.querySelectorAll('[data-wave-row]')]
         .map((node) => node.getAttribute('data-wave-row'))
@@ -978,14 +997,27 @@ describe('MAR-3097: through the containers and the real stores', () => {
 
     await mount(<WavesTab />)
     await screen.findByLabelText('Waves')
-    const tab = keys()
+    // The tab draws each row twice -- in its section and again under its wave
+    // -- so the comparison is between the two SETS of rows, not their counts.
+    const tab = [...new Set(keys())].sort()
     cleanup()
 
-    await mount(<WavePanel />)
-    await screen.findByLabelText('Waves')
-    // The column's wave groups start closed but stay in the DOM.
-    // Mutation: filter the tab by a different predicate -> red.
-    expect(keys()).toEqual(tab)
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Loom')
+    // One sheet at a time (R1), so the panel's rows are the UNION of the four
+    // -- which is the rendered half of R2's "every row lands in exactly one
+    // sheet". Mutation: send a row to two sheets -> a duplicate key here,
+    // red; drop the `else` that catches `unassigned`/`stopped` -> short, red.
+    const seen = new Set<string>()
+    for (const sheet of LOOM_SHEETS) {
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: new RegExp(`^${LOOM_SHEET_NAMES[sheet]} · `),
+        }),
+      )
+      for (const key of keys()) seen.add(key as string)
+    }
+    expect([...seen].sort()).toEqual(tab)
     expect(tab.length).toBeGreaterThan(0)
   })
 
@@ -1049,6 +1081,105 @@ describe('MAR-3097: through the containers and the real stores', () => {
     // Mutation: pass the crew's `roundCap` -> "lap 3 of 12", red.
     expect(rowOf('crew-1:EX-9').getByText(/lap 3 ·/)).toBeTruthy()
     expect(document.body.textContent).not.toContain('of 12')
+  })
+
+  it('MAR-3189 R1: four titles, one sheet’s rows, and the others a click away', async () => {
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Loom')
+
+    const titles = () =>
+      [...document.querySelectorAll('[data-loom-sheet-title]')].map((node) =>
+        node.getAttribute('data-loom-sheet-title'),
+      )
+    // Mutation: render only the open sheet's title -> one button, red.
+    expect(titles()).toEqual(['before', 'now', 'next', 'plan'])
+    for (const sheet of LOOM_SHEETS) {
+      expect(
+        screen.getByRole('button', {
+          name: new RegExp(`^${LOOM_SHEET_NAMES[sheet]} · `),
+        }),
+      ).toBeTruthy()
+    }
+
+    // Now opens by default, and it is the ONLY body in the DOM.
+    expect(document.querySelector('[data-loom-sheet="now"]')).toBeTruthy()
+    expect(document.querySelectorAll('[data-loom-sheet]')).toHaveLength(1)
+    expect(rowOf('crew-1:EX-2').getByText('Work EX-2')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /^Next · / }))
+    // Mutation: leave the previous sheet rendered -> two bodies, red.
+    expect(document.querySelector('[data-loom-sheet="next"]')).toBeTruthy()
+    expect(document.querySelector('[data-loom-sheet="now"]')).toBeNull()
+    expect(titles()).toEqual(['before', 'now', 'next', 'plan'])
+    expect(document.querySelector('[data-wave-row="crew-1:EX-3"]')).toBeTruthy()
+    expect(document.querySelector('[data-wave-row="crew-1:EX-2"]')).toBeNull()
+  })
+
+  it('MAR-3189 R7: the titles are buttons, so the keyboard opens a sheet', async () => {
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    const next = await screen.findByRole('button', { name: /^Next · / })
+    // A `div` with an onClick would take neither of these without a handler
+    // of our own. Mutation: render the titles as `div`s -> no button role to
+    // find, red.
+    expect(next.tagName).toBe('BUTTON')
+    next.focus()
+    fireEvent.keyDown(next, { key: 'Enter' })
+    fireEvent.click(next)
+    expect(next.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('MAR-3189 R3/R7: Expand and Fold keep the sheet, the width, the scroll and the focus', async () => {
+    localStorage.setItem('convergence-wave-panel-width', '360')
+    setWindowWidth(windowLeaving(900))
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Loom')
+    expect(columnWidth()).toBe('360px')
+
+    fireEvent.click(screen.getByRole('button', { name: /^Next · / }))
+    const body = document.querySelector(
+      '[data-loom-sheet="next"]',
+    ) as HTMLElement
+    fireEvent.scroll(body, { target: { scrollTop: 240 } })
+    expect(body.scrollTop).toBe(240)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+    })
+    expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
+    // The sheet travels with the shape: expanded opens on Next too.
+    // Mutation: fold (or expand) to `now` -> red.
+    expect(document.querySelector('[data-loom-sheet="next"]')).toBeTruthy()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Fold Loom' }))
+    })
+    const folded = await screen.findByRole('button', { name: /^Next · / })
+    expect(folded.getAttribute('aria-expanded')).toBe('true')
+    expect(columnWidth()).toBe('360px')
+    // Mutation: drop the scroll ref (or key it on nothing) -> 0 here, red.
+    expect(
+      (document.querySelector('[data-loom-sheet="next"]') as HTMLElement)
+        .scrollTop,
+    ).toBe(240)
+    // Mutation: drop the focus restore -> `document.body`, red.
+    expect(document.activeElement).toBe(folded)
+  })
+
+  it('MAR-3189 R7: Esc folds the expanded stack', async () => {
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Loom')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+    })
+    const stack = document.querySelector(
+      '[data-loom="expanded"]',
+    ) as HTMLElement
+    // Mutation: drop the Escape branch -> the stack stays, red.
+    await act(async () => {
+      fireEvent.keyDown(stack, { key: 'Escape' })
+    })
+    expect(document.querySelector('[data-loom="expanded"]')).toBeNull()
+    expect(await screen.findByLabelText('Loom')).toBeTruthy()
   })
 })
 
@@ -1157,8 +1288,8 @@ describe('MAR-3138 R4: a blocked row reads "decide" under Waiting on you', () =>
 
     cleanup()
     render(
-      <WaveRailView
-        sections={sectionWaveRows(
+      <LoomStripView
+        sheets={loomSheets(
           [
             ledgerEntry({
               issueIdentifier: 'EX-1',
@@ -1169,57 +1300,43 @@ describe('MAR-3138 R4: a blocked row reads "decide" under Waiting on you', () =>
           NOW,
         )}
         outage={false}
-        narrow={false}
         onExpand={vi.fn()}
       />,
     )
-    // The rail reads the same sections, so the count follows R4 for free.
-    expect(screen.getByLabelText('Waiting on you: 1')).toBeTruthy()
-    expect(screen.getByLabelText('In the wave: 0')).toBeTruthy()
+    // The strip reads the same sheets, so the count follows R2 for free: a
+    // blocked working row is counted ONCE, under Now.
+    // Mutation: count `now.inFlight` and `now.decide` separately -> 2, red.
+    expect(screen.getByLabelText('Now: 1')).toBeTruthy()
+    expect(screen.getByLabelText('Before: 0')).toBeTruthy()
   })
 })
 
 describe('MAR-3148: the rail, the props and the clock', () => {
   const rows = [ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' })]
 
-  it('R1: the rail a narrow window forced says why in its name, and stays reachable', () => {
+  it('MAR-3189: the strip’s Expand is a live control with one job', () => {
+    // MAR-3148 R1 lived here: the rail's Open could not act in a window too
+    // narrow for the column, so it carried its reason in its accessible name
+    // and refused the click. That state is gone -- the stored `rail` mode is
+    // gone with it (R1), and Expand opens the content area, which no window
+    // is too narrow for. What survives from that law is the shape of the
+    // control: named, focusable, and it does what its name says.
     const onExpand = vi.fn()
     render(
-      <WaveRailView
-        sections={sectionWaveRows(rows, NOW)}
+      <LoomStripView
+        sheets={loomSheets(rows, NOW)}
         outage={false}
-        narrow
         onExpand={onExpand}
       />,
     )
-
-    // Named by what it is AND why it cannot act: the reason has to reach a
-    // screen reader, which a `title` on a disabled button never does.
-    // Mutation: keep the reason out of the name (or use `disabled`) -> red.
-    const open = screen.getByRole('button', { name: /too narrow/i })
-    expect(open.hasAttribute('disabled')).toBe(false)
-    expect(open.getAttribute('aria-disabled')).toBe('true')
-    expect(open.getAttribute('title')).toBe(WAVE_RAIL_NARROW_TITLE)
-    // Reachable: still in the tab order, and a click does nothing.
-    open.focus()
-    expect(document.activeElement).toBe(open)
-    fireEvent.click(open)
-    expect(onExpand).not.toHaveBeenCalled()
-
-    cleanup()
-    const onOpen = vi.fn()
-    render(
-      <WaveRailView
-        sections={sectionWaveRows(rows, NOW)}
-        outage={false}
-        onExpand={onOpen}
-      />,
-    )
-    const stored = screen.getByRole('button', { name: 'Open the wave panel' })
-    expect(stored.getAttribute('aria-disabled')).toBeNull()
-    expect(stored.getAttribute('title')).toBeNull()
-    fireEvent.click(stored)
-    expect(onOpen).toHaveBeenCalledTimes(1)
+    const expand = screen.getByRole('button', { name: 'Expand Loom' })
+    expect(expand.hasAttribute('disabled')).toBe(false)
+    expect(expand.getAttribute('aria-disabled')).toBeNull()
+    expand.focus()
+    expect(document.activeElement).toBe(expand)
+    // Mutation: swallow the click while the window is narrow -> red.
+    fireEvent.click(expand)
+    expect(onExpand).toHaveBeenCalledTimes(1)
   })
 
   it('C: a row that cannot open its seat is inert and says so', () => {

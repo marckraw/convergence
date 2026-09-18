@@ -1,90 +1,72 @@
 import type { FC } from 'react'
-import { PanelLeftOpen } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
+import { Maximize2 } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
-import { waveRailCounts, type WaveSections } from './wave-sections.pure'
+import { loomSheetCounts, type LoomSheets } from './loom-sheets.pure'
+import {
+  LOOM_SHEETS,
+  LOOM_SHEET_NAMES,
+  type LoomSheet,
+} from './wave-panel-sheet.pure'
 import { WAVE_OUTAGE_DOT_CLASS, WAVE_RAIL_CLASS } from './wave-panel.styles'
 
-/** What the rail says when Open cannot act (MAR-3148 R1). */
-export const WAVE_RAIL_NARROW_TITLE = 'Window too narrow for the wave column'
-
-/** The Open control's name, carrying its reason when it cannot act. */
-export function waveRailOpenLabel(narrow: boolean): string {
-  return narrow
-    ? `Open the wave panel — ${WAVE_RAIL_NARROW_TITLE}`
-    : 'Open the wave panel'
-}
-
-interface WaveRailViewProps {
-  sections: WaveSections
+interface LoomStripViewProps {
+  sheets: LoomSheets
   outage: boolean
-  /**
-   * The window is too narrow to hold the column, so opening it would put the
-   * conversation below its floor: the control says so instead of doing
-   * nothing (MAR-3148 R1).
-   */
-  narrow?: boolean
   onExpand: () => void
 }
 
-const COUNTS = [
-  ['waitingOnYou', 'Waiting on you'],
-  ['inTheWave', 'In the wave'],
-  ['waitingToStart', 'Waiting to start'],
-  ['waves', 'Waves'],
-] as const
+/** How many rows each sheet holds, for the strip's four numbers. */
+function stripCount(sheets: LoomSheets, sheet: LoomSheet): number {
+  const counts = loomSheetCounts(sheets)
+  if (sheet === 'before') return counts.before
+  if (sheet === 'now') return counts.inFlight + counts.awaitingQa
+  if (sheet === 'next') return counts.next
+  return counts.plan
+}
 
 /**
- * The collapsed column (R4): four counts and the outage dot, read off the
- * same sections the open panel draws -- there is no second selector.
+ * Loom in a window too narrow to hold the column (MAR-3189 R4): the four
+ * counts and the outage dot, read off the same sheets the stack draws.
+ *
+ * Expand is LIVE here, unlike the rail it replaces (MAR-3148 R1). That
+ * control used to open a column beside the conversation, which a window this
+ * narrow could not hold, so it said so and did nothing. Expand puts Loom in
+ * the content area instead -- there is no width left to refuse, so refusing
+ * would be the strip claiming a limit the mechanism no longer has.
  */
-export const WaveRailView: FC<WaveRailViewProps> = ({
-  sections,
+export const LoomStripView: FC<LoomStripViewProps> = ({
+  sheets,
   outage,
-  narrow = false,
   onExpand,
-}) => {
-  const counts = waveRailCounts(sections)
-  return (
-    <aside aria-label="Waves rail" className={WAVE_RAIL_CLASS}>
-      {/* Inert, not disabled (MAR-3148 lap 2, A): `disabled` on this button
-          carries `disabled:pointer-events-none`, so its `title` could never
-          appear on hover, and it left the tab order with `aria-label` as its
-          whole name -- the reason was unreadable by mouse, keyboard and
-          screen reader alike. `aria-disabled` keeps it focusable, the reason
-          rides the accessible name, and the click does nothing. */}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        aria-label={waveRailOpenLabel(narrow)}
-        aria-disabled={narrow || undefined}
-        className={cn('size-7 p-0', narrow && 'opacity-50')}
-        title={narrow ? WAVE_RAIL_NARROW_TITLE : undefined}
-        onClick={() => {
-          if (!narrow) onExpand()
-        }}
+}) => (
+  <aside aria-label="Loom strip" data-loom="strip" className={WAVE_RAIL_CLASS}>
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      aria-label="Expand Loom"
+      className="size-7 p-0"
+      onClick={onExpand}
+    >
+      <Maximize2 className="size-3.5" />
+    </Button>
+    {outage ? (
+      <span
+        role="status"
+        aria-label="Tracker not answering"
+        className={WAVE_OUTAGE_DOT_CLASS}
+      />
+    ) : null}
+    {LOOM_SHEETS.map((sheet) => (
+      <span
+        key={sheet}
+        data-wave-count={sheet}
+        title={LOOM_SHEET_NAMES[sheet]}
+        aria-label={`${LOOM_SHEET_NAMES[sheet]}: ${stripCount(sheets, sheet)}`}
+        className="text-xs tabular-nums text-muted-foreground"
       >
-        <PanelLeftOpen className="size-3.5" />
-      </Button>
-      {outage ? (
-        <span
-          role="status"
-          aria-label="Tracker not answering"
-          className={WAVE_OUTAGE_DOT_CLASS}
-        />
-      ) : null}
-      {COUNTS.map(([key, label]) => (
-        <span
-          key={key}
-          data-wave-count={key}
-          title={label}
-          aria-label={`${label}: ${counts[key]}`}
-          className="text-xs tabular-nums text-muted-foreground"
-        >
-          {counts[key]}
-        </span>
-      ))}
-    </aside>
-  )
-}
+        {stripCount(sheets, sheet)}
+      </span>
+    ))}
+  </aside>
+)

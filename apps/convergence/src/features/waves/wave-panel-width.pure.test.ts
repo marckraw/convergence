@@ -17,9 +17,12 @@ import {
 describe('MAR-3155 R3: a width from storage', () => {
   it.each([
     ['a width inside the range', '360', 360],
-    ['the floor itself', '240', WAVE_PANEL_MIN_COLUMN_WIDTH],
-    ['the ceiling itself', '640', WAVE_PANEL_MAX_COLUMN_WIDTH],
-    ['below the floor', '100', WAVE_PANEL_MIN_COLUMN_WIDTH],
+    ['the floor itself', '280', WAVE_PANEL_MIN_COLUMN_WIDTH],
+    ['the ceiling itself', '400', WAVE_PANEL_MAX_COLUMN_WIDTH],
+    // MAR-3189 R4: a width stored under the old 240-640 law loads inside the
+    // new one. Mutation: parse without the clamp -> 640 here, red.
+    ['a width from before the Loom bounds', '640', 400],
+    ['below the old floor', '100', WAVE_PANEL_MIN_COLUMN_WIDTH],
     ['above the ceiling', '5000', WAVE_PANEL_MAX_COLUMN_WIDTH],
     ['a fraction', '360.5', 360.5],
     ['padded', '  360  ', 360],
@@ -45,7 +48,7 @@ describe('MAR-3155 R3: a width from storage', () => {
     for (const width of [
       WAVE_PANEL_MIN_COLUMN_WIDTH,
       WAVE_PANEL_DEFAULT_COLUMN_WIDTH,
-      423,
+      321,
       WAVE_PANEL_MAX_COLUMN_WIDTH,
     ]) {
       expect(parseWavePanelWidth(serializeWavePanelWidth(width))).toBe(width)
