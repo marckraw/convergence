@@ -663,9 +663,9 @@ describe('MAR-3148 R3: the clock ticks only for an age on screen', () => {
 
   /**
    * How many timers are pending once the board has settled. The "reading the
-   * tracker…" wait carries an age of its own, so the clock does start while
-   * the first list is in flight; what R3 is about is whether it is still
-   * running after the answer lands.
+   * tracker…" wait carries no age (lap 2, D), so the clock does not start
+   * while the first list is in flight either; the count is read after the
+   * answer lands, which is when rows or an outage age could have appeared.
    */
   async function mountBoard(snapshot: WorkLedgerSnapshot) {
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
