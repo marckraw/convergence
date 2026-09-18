@@ -3,9 +3,19 @@ import type { SessionSummary } from '@/entities/session'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
 import { loadWavePanelMode, saveWavePanelMode } from './wave-panel-mode.api'
 import type { WavePanelMode } from './wave-panel-mode.pure'
+import { loadWavePanelWidth, saveWavePanelWidth } from './wave-panel-width.api'
 import { WavePanelView } from './wave-panel.presentational'
 import { WaveRailView } from './wave-rail.presentational'
-import { effectiveWavePanelMode } from './wave-sections.pure'
+import { WaveResizeHandle } from './wave-resize-handle.presentational'
+import {
+  clampWavePanelWidth,
+  effectiveWavePanelMode,
+  WAVE_PANEL_DEFAULT_COLUMN_WIDTH,
+  WAVE_PANEL_MAX_COLUMN_WIDTH,
+  WAVE_PANEL_MIN_COLUMN_WIDTH,
+  WAVE_PANEL_MIN_MAIN_WIDTH,
+} from './wave-sections.pure'
+import { useWaveColumnResize } from './use-wave-column-resize'
 import { useWaveBoard, type WaveBoard } from './use-wave-board'
 
 interface WavePanelProps {
@@ -65,20 +75,50 @@ export const WavePanel: FC<WavePanelProps> = ({
 }) => {
   const board = useWaveBoard()
   const [stored, setStored] = useState<WavePanelMode>(loadWavePanelMode)
+  const [storedWidth, setStoredWidth] = useState<number>(loadWavePanelWidth)
   const windowWidth = useWindowWidth()
   const changeMode = useCallback((next: WavePanelMode) => {
     setStored(next)
     saveWavePanelMode(next)
   }, [])
+  /**
+   * A finished gesture, and only a finished gesture, becomes the preference
+   * (R2). The clamp here is the storage's own floor and ceiling, NOT the
+   * window's: a wide column dragged in a wide window must still be wide when
+   * the window grows back, so what a narrow window can show is never what
+   * gets written down.
+   */
+  const commitWidth = useCallback((next: number) => {
+    const chosen = clampWavePanelWidth(next, WAVE_PANEL_MAX_COLUMN_WIDTH)
+    setStoredWidth(chosen)
+    saveWavePanelWidth(chosen)
+  }, [])
   const { inertReason, openRow } = useRowDoors(board, onOpenSession)
-
-  if (hidden || board.boundCrewCount === 0) return null
-
+  // The draft is asked for before the early returns below, because hooks are
+  // not optional; it is only READ when a column is on screen.
+  const [draftWidth, setDraftWidth] = useState<number | null>(null)
   const decision = effectiveWavePanelMode({
     stored,
+    storedWidth: draftWidth ?? storedWidth,
     windowWidth,
     reservedWidth,
   })
+  const resize = useWaveColumnResize({
+    reservedWidth,
+    width: decision.width,
+    // The same ceiling the decision used, so a gesture stores what it shows.
+    maxWidth: Math.min(
+      WAVE_PANEL_MAX_COLUMN_WIDTH,
+      windowWidth - reservedWidth - WAVE_PANEL_MIN_MAIN_WIDTH,
+    ),
+    onCommit: commitWidth,
+    defaultWidth: WAVE_PANEL_DEFAULT_COLUMN_WIDTH,
+    onDraft: setDraftWidth,
+  })
+
+  if (hidden || board.boundCrewCount === 0) return null
+
+  const width = decision.width ?? WAVE_PANEL_DEFAULT_COLUMN_WIDTH
   return decision.mode === 'rail' ? (
     <WaveRailView
       sections={board.sections}
@@ -87,14 +127,28 @@ export const WavePanel: FC<WavePanelProps> = ({
       onExpand={() => changeMode('open')}
     />
   ) : (
-    <WavePanelView
-      layout="column"
-      sections={board.sections}
-      header={board.header}
-      inertReason={inertReason}
-      onOpen={openRow}
-      onCollapse={() => changeMode('rail')}
-    />
+    // The handle is the column's right EDGE, so it is a sibling in the shell's
+    // flex row rather than a child of the aside -- the same shape the
+    // sidebar's handle has.
+    <>
+      <WavePanelView
+        layout="column"
+        sections={board.sections}
+        header={board.header}
+        inertReason={inertReason}
+        onOpen={openRow}
+        onCollapse={() => changeMode('rail')}
+        width={width}
+      />
+      <WaveResizeHandle
+        width={width}
+        min={WAVE_PANEL_MIN_COLUMN_WIDTH}
+        max={WAVE_PANEL_MAX_COLUMN_WIDTH}
+        onMouseDown={resize.onHandleMouseDown}
+        onKeyDown={resize.onHandleKeyDown}
+        onDoubleClick={resize.onHandleDoubleClick}
+      />
+    </>
   )
 }
 

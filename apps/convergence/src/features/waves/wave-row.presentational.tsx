@@ -32,11 +32,19 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
   const key = waveRowKey(entry)
   const body = (
     <>
-      <span className="flex items-baseline gap-1.5">
-        <span className="font-mono text-[11px] text-muted-foreground">
+      <span className="flex w-full items-baseline gap-1.5">
+        {/* One unbreakable token (MAR-3155 R5): at the old fixed width
+            `MAR-3085` wrapped after the dash, which is the one thing a row
+            exists to say. It never shrinks; the title takes what is left. */}
+        <span className="shrink-0 whitespace-nowrap font-mono text-[11px] text-muted-foreground">
           {entry.issueIdentifier}
         </span>
-        <span className="truncate">{entry.issueTitle}</span>
+        {/* Two lines rather than one cut short, and the whole title one hover
+            away -- `min-w-0` so the flex child may actually be narrower than
+            its text. */}
+        <span className="line-clamp-2 min-w-0" title={entry.issueTitle}>
+          {entry.issueTitle}
+        </span>
       </span>
       <span className={WAVE_ROW_META_CLASS}>
         {[

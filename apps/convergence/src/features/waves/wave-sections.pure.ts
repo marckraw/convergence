@@ -312,8 +312,33 @@ export function waveRowKey(
 
 /** The narrowest main panel the docked column leaves (lap 2, B). */
 export const WAVE_PANEL_MIN_MAIN_WIDTH = 480
-/** The open column's width, in pixels. */
-export const WAVE_PANEL_COLUMN_WIDTH = 280
+
+/**
+ * The column's width, in pixels (MAR-3155): a preference now, not a fact.
+ *
+ * The floor is where a row stops being readable at all -- narrower than this
+ * the identifier and the title fight over the same line, which is the defect
+ * this issue exists for. The ceiling is where the column stops being a column
+ * beside the conversation and starts being a second page. The default is what
+ * the fixed column was, so an app that has never been dragged looks the same.
+ */
+export const WAVE_PANEL_MIN_COLUMN_WIDTH = 240
+export const WAVE_PANEL_MAX_COLUMN_WIDTH = 640
+export const WAVE_PANEL_DEFAULT_COLUMN_WIDTH = 280
+/** One arrow key's worth of resize (R4). */
+export const WAVE_PANEL_WIDTH_STEP = 16
+
+/**
+ * A width into the range the column may actually take right now.
+ *
+ * `max` is the caller's, because the ceiling moves with the window: a wide
+ * preference in a narrow window is honoured as far as it fits and no further,
+ * and what was preferred is NOT rewritten (R2).
+ */
+export function clampWavePanelWidth(width: number, max: number): number {
+  const ceiling = Math.max(WAVE_PANEL_MIN_COLUMN_WIDTH, max)
+  return Math.min(ceiling, Math.max(WAVE_PANEL_MIN_COLUMN_WIDTH, width))
+}
 
 /**
  * Why the column is a rail (MAR-3148 R1): because that is what was stored,
@@ -329,15 +354,25 @@ export interface WavePanelModeDecision {
   mode: 'open' | 'rail'
   /** Null while the column is open; otherwise why it is not. */
   reason: WavePanelRailReason | null
+  /**
+   * The width the column renders at, or null on the rail (MAR-3155 R1).
+   *
+   * The decision's own number, never the stored one: the caller renders THIS
+   * and stores what the person chose, which is what keeps a narrow window
+   * from quietly becoming a preference.
+   */
+  width: number | null
 }
 
 /**
- * The mode the column renders in (lap 2, B): the stored one, unless the
- * window is too narrow to keep the main panel at its floor, in which case the
- * rail -- without touching what is stored.
+ * The mode and the width the column renders in (lap 2, B; MAR-3155 R1): the
+ * stored ones, unless the window is too narrow -- in which case a narrower
+ * column first, and only then the rail. Neither is written back.
  */
 export function effectiveWavePanelMode(input: {
   stored: 'open' | 'rail'
+  /** What the person last chose; may be wider than the window allows. */
+  storedWidth: number
   windowWidth: number
   reservedWidth: number
 }): WavePanelModeDecision {
@@ -345,11 +380,24 @@ export function effectiveWavePanelMode(input: {
   // is on screen NOW, not which test happened to run first. A stored rail in
   // a window too narrow for the column read as `stored`, so Open stayed live
   // -- and a click on it rewrote the preference to `open` and opened nothing.
-  const main = input.windowWidth - input.reservedWidth - WAVE_PANEL_COLUMN_WIDTH
-  if (main < WAVE_PANEL_MIN_MAIN_WIDTH) {
-    return { mode: 'rail', reason: 'narrow' }
+  //
+  // What the window can spare for the column, once the main panel has its
+  // floor. Below the column's own floor there is no readable column left, and
+  // only then does the rail take over (MAR-3155 R1).
+  const available =
+    input.windowWidth - input.reservedWidth - WAVE_PANEL_MIN_MAIN_WIDTH
+  if (available < WAVE_PANEL_MIN_COLUMN_WIDTH) {
+    return { mode: 'rail', reason: 'narrow', width: null }
   }
-  return input.stored === 'rail'
-    ? { mode: 'rail', reason: 'stored' }
-    : { mode: 'open', reason: null }
+  if (input.stored === 'rail') {
+    return { mode: 'rail', reason: 'stored', width: null }
+  }
+  return {
+    mode: 'open',
+    reason: null,
+    width: clampWavePanelWidth(
+      input.storedWidth,
+      Math.min(WAVE_PANEL_MAX_COLUMN_WIDTH, available),
+    ),
+  }
 }

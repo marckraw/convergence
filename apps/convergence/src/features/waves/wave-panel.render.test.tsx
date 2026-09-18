@@ -35,6 +35,11 @@ import {
 import {
   sectionWaveRows,
   waveHeader,
+  WAVE_PANEL_DEFAULT_COLUMN_WIDTH,
+  WAVE_PANEL_MAX_COLUMN_WIDTH,
+  WAVE_PANEL_MIN_COLUMN_WIDTH,
+  WAVE_PANEL_MIN_MAIN_WIDTH,
+  WAVE_PANEL_WIDTH_STEP,
   type WaveHeaderCrew,
 } from './wave-sections.pure'
 import { ledgerEntry } from './wave-rows.fixture'
@@ -106,6 +111,16 @@ function renderView(
     />,
   )
 }
+
+/**
+ * A window whose room for the column is one pixel under its floor: the
+ * narrowest thing the panel can show is the rail (MAR-3155 R1). Derived from
+ * the constants so it cannot drift away from them the way `260 + 280 + 479`
+ * did when the floor moved.
+ */
+const RESERVED = 260
+const TOO_NARROW_FOR_A_COLUMN =
+  RESERVED + WAVE_PANEL_MIN_MAIN_WIDTH + WAVE_PANEL_MIN_COLUMN_WIDTH - 1
 
 function setWindowWidth(width: number) {
   Object.defineProperty(window, 'innerWidth', {
@@ -179,6 +194,38 @@ describe('MAR-3097 R2 + lap 2, F1: a row shows the ledger’s facts', () => {
       rowOf('crew-1:EX-4').getByText('host unreachable since 4m'),
     ).toBeTruthy()
     expect(rowOf('crew-1:EX-5').queryByText(/host unreachable/)).toBeNull()
+  })
+})
+
+describe('MAR-3155 R5: the identifier never breaks; the title gets the rest', () => {
+  it('the id is one unbreakable token and the whole title is one hover away', () => {
+    const title =
+      'Loom: carry the blocked label through the tracker adapter and the work ledger'
+    renderView([
+      ledgerEntry({
+        issueIdentifier: 'MAR-3085',
+        state: 'working',
+        issueTitle: title,
+      }),
+    ])
+
+    const row = rowOf('crew-1:MAR-3085')
+    const id = row.getByText('MAR-3085')
+    // At the old fixed width this wrapped after the dash. jsdom has no layout
+    // engine, so what is asserted here is the RULE the browser lays out by;
+    // the wrap itself is Marcin's QA step 1.
+    // Mutation: drop `whitespace-nowrap` (or let the id shrink) -> red.
+    expect(id.className).toContain('whitespace-nowrap')
+    expect(id.className).toContain('shrink-0')
+
+    const titleEl = row.getByText(title)
+    // Two lines at most, and never cut without a way to read the rest.
+    // Mutation: drop the `title` attribute -> red.
+    expect(titleEl.getAttribute('title')).toBe(title)
+    expect(titleEl.className).toContain('line-clamp-2')
+    // `min-w-0`: without it a flex child refuses to be narrower than its text
+    // and the id gets pushed off instead.
+    expect(titleEl.className).toContain('min-w-0')
   })
 })
 
@@ -337,7 +384,10 @@ describe('MAR-3097: through the containers and the real stores', () => {
   })
 
   it('B: too narrow -> the rail, and the stored mode is untouched', async () => {
-    setWindowWidth(260 + 280 + 479)
+    // One pixel short of the narrowest readable column (MAR-3155 R1): the
+    // column shrinks before it becomes the rail, so the window that forces
+    // the rail is now measured against the column's FLOOR, not its default.
+    setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
     await mount(<WavePanel reservedWidth={260} />)
     // Mutation: ignore the width -> the open column, red.
     expect(await screen.findByLabelText('Waves rail')).toBeTruthy()
@@ -362,7 +412,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
 
   it('B: a stored rail in a window too narrow for the column cannot open either', async () => {
     localStorage.setItem('convergence-wave-panel-mode', 'rail')
-    setWindowWidth(260 + 280 + 479)
+    setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
     await mount(<WavePanel reservedWidth={260} />)
     await screen.findByLabelText('Waves rail')
 
@@ -373,6 +423,169 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(screen.getByLabelText('Waves rail')).toBeTruthy()
     expect(screen.queryByLabelText('Waves')).toBeNull()
     expect(localStorage.getItem('convergence-wave-panel-mode')).toBe('rail')
+  })
+
+  /** The `aside`'s inline width, as the browser would lay it out. */
+  const columnWidth = () =>
+    (screen.getByLabelText('Waves') as HTMLElement).style.width
+
+  const storedWidth = () => localStorage.getItem('convergence-wave-panel-width')
+
+  const windowLeaving = (available: number) =>
+    RESERVED + WAVE_PANEL_MIN_MAIN_WIDTH + available
+
+  it('MAR-3155 R2: a narrow window cuts the column without rewriting the preference', async () => {
+    localStorage.setItem('convergence-wave-panel-width', '600')
+    setWindowWidth(windowLeaving(400))
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+
+    // What fits is on screen; what was chosen is still what is stored.
+    // Mutation: save the effective width on render -> the widened case below
+    // reads 400px, red.
+    expect(columnWidth()).toBe('400px')
+    expect(storedWidth()).toBe('600')
+
+    // The window grows back, with nobody touching anything.
+    await act(async () => {
+      setWindowWidth(windowLeaving(900))
+      window.dispatchEvent(new Event('resize'))
+    })
+    expect(columnWidth()).toBe('600px')
+    expect(storedWidth()).toBe('600')
+  })
+
+  it('MAR-3155 R4: the handle drags, steps and resets, and stores each finished gesture', async () => {
+    setWindowWidth(windowLeaving(900))
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    expect(columnWidth()).toBe(`${WAVE_PANEL_DEFAULT_COLUMN_WIDTH}px`)
+    const handle = screen.getByRole('separator', {
+      name: 'Resize the wave column',
+    })
+    expect(handle.getAttribute('aria-valuemin')).toBe(
+      String(WAVE_PANEL_MIN_COLUMN_WIDTH),
+    )
+    expect(handle.getAttribute('aria-valuemax')).toBe(
+      String(WAVE_PANEL_MAX_COLUMN_WIDTH),
+    )
+    expect(handle.getAttribute('aria-valuenow')).toBe(
+      String(WAVE_PANEL_DEFAULT_COLUMN_WIDTH),
+    )
+
+    // A drag: the pointer is a PAGE coordinate, so the column's width is
+    // `clientX` minus the sidebar beside it.
+    // Mutation: drop `- reservedWidth` -> the width is off by the sidebar
+    // (760 instead of 500), red.
+    fireEvent.mouseDown(handle)
+    await act(async () => {
+      fireEvent.mouseMove(window, { clientX: RESERVED + 500 })
+    })
+    expect(columnWidth()).toBe('500px')
+    // Nothing is stored until the gesture ends.
+    expect(storedWidth()).toBeNull()
+    await act(async () => {
+      fireEvent.mouseUp(window)
+    })
+    expect(columnWidth()).toBe('500px')
+    expect(storedWidth()).toBe('500')
+    expect(document.body.style.cursor).toBe('')
+    expect(document.body.style.userSelect).toBe('')
+
+    // A step from the keyboard.
+    await act(async () => {
+      fireEvent.keyDown(handle, { key: 'ArrowRight' })
+    })
+    expect(columnWidth()).toBe(`${500 + WAVE_PANEL_WIDTH_STEP}px`)
+    expect(storedWidth()).toBe(String(500 + WAVE_PANEL_WIDTH_STEP))
+    await act(async () => {
+      fireEvent.keyDown(handle, { key: 'ArrowLeft' })
+    })
+    expect(storedWidth()).toBe('500')
+    // A key the handle has no use for changes nothing.
+    await act(async () => {
+      fireEvent.keyDown(handle, { key: 'a' })
+    })
+    expect(storedWidth()).toBe('500')
+
+    // Double-click: back to the default, and stored.
+    await act(async () => {
+      fireEvent.doubleClick(handle)
+    })
+    expect(columnWidth()).toBe(`${WAVE_PANEL_DEFAULT_COLUMN_WIDTH}px`)
+    expect(storedWidth()).toBe(String(WAVE_PANEL_DEFAULT_COLUMN_WIDTH))
+  })
+
+  it('MAR-3155 R4: a drag past the bounds stops at them, and stores what is on screen', async () => {
+    setWindowWidth(windowLeaving(900))
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    const handle = screen.getByRole('separator', {
+      name: 'Resize the wave column',
+    })
+
+    fireEvent.mouseDown(handle)
+    await act(async () => {
+      fireEvent.mouseMove(window, { clientX: RESERVED + 5_000 })
+    })
+    expect(columnWidth()).toBe(`${WAVE_PANEL_MAX_COLUMN_WIDTH}px`)
+    await act(async () => {
+      fireEvent.mouseUp(window)
+    })
+    // Mutation: commit the raw pointer instead of what is on screen -> 5000
+    // lands in storage and comes back as a ceiling-wide column forever, red.
+    expect(storedWidth()).toBe(String(WAVE_PANEL_MAX_COLUMN_WIDTH))
+
+    fireEvent.mouseDown(handle)
+    await act(async () => {
+      fireEvent.mouseMove(window, { clientX: RESERVED + 10 })
+      fireEvent.mouseUp(window)
+    })
+    expect(columnWidth()).toBe(`${WAVE_PANEL_MIN_COLUMN_WIDTH}px`)
+    expect(storedWidth()).toBe(String(WAVE_PANEL_MIN_COLUMN_WIDTH))
+  })
+
+  it('MAR-3155 R4: in a narrow window a drag stores what the window can show', async () => {
+    // The input where the two clamps disagree. What is written down is
+    // bounded by the ROOM, not only by the ceiling: a pointer dragged past
+    // the edge of a small window must not leave a 640px preference behind a
+    // 400px column.
+    // Mutation: commit the raw pointer and let the caller's [MIN, MAX] clamp
+    // catch it -> 640 is stored while 400 is on screen, red.
+    setWindowWidth(windowLeaving(400))
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    const handle = screen.getByRole('separator', {
+      name: 'Resize the wave column',
+    })
+
+    fireEvent.mouseDown(handle)
+    await act(async () => {
+      fireEvent.mouseMove(window, { clientX: RESERVED + 900 })
+    })
+    await act(async () => {
+      fireEvent.mouseUp(window)
+    })
+    expect(columnWidth()).toBe('400px')
+    expect(storedWidth()).toBe('400')
+  })
+
+  it('MAR-3155 R4: the rail has no handle, and an unmount mid-drag gives the cursor back', async () => {
+    setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Waves rail')
+    // Mutation: render the handle whatever the mode -> red (a separator with
+    // no column to resize).
+    expect(screen.queryByRole('separator')).toBeNull()
+
+    cleanup()
+    setWindowWidth(windowLeaving(900))
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    fireEvent.mouseDown(
+      screen.getByRole('separator', { name: 'Resize the wave column' }),
+    )
+    expect(document.body.style.cursor).toBe('col-resize')
+    // Mutation: drop the unmount cleanup -> the whole app keeps a resize
+    // cursor and unselectable text after the column goes away, red.
+    cleanup()
+    expect(document.body.style.cursor).toBe('')
+    expect(document.body.style.userSelect).toBe('')
   })
 
   it('R5: clicking a row opens the seat’s conversation; rows that cannot, say why', async () => {
@@ -696,6 +909,8 @@ describe('MAR-3148: the rail, the props and the clock', () => {
       | 'inertReason'
       | 'onOpen'
       | 'onCollapse'
+      // MAR-3155: the column's width is a prop now, not a class.
+      | 'width'
     >()
     renderView([], [], 'full')
     expect(
