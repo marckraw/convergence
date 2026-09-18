@@ -1,5 +1,15 @@
 # convergence
 
+## 0.68.0
+
+### Minor Changes
+
+- 36e34b0: The wave column can be dragged wider or narrower and remembers its width; issue ids stay on one line and titles get two.
+
+### Patch Changes
+
+- 21466f3: Renaming a crew seat now carries the wires that waited for its old name, in the same act, and tells you how many moved.
+
 ## 0.67.2
 
 ### Patch Changes
