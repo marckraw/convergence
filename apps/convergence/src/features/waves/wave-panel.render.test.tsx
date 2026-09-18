@@ -1105,6 +1105,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
             issueIdentifier: 'EX-1',
             state: 'working',
             seat: 'opus',
+            sessionId: 'session-opus',
             trackerStatus: 'In Progress',
             lap: 2,
           }),
@@ -1117,7 +1118,9 @@ describe('MAR-3097: through the containers and the real stores', () => {
     await screen.findByLabelText('Loom')
 
     const failed = within(
-      document.querySelector('[data-loom-horse="crew-1:opus"]') as HTMLElement,
+      document.querySelector(
+        '[data-loom-horse="crew-1:session-opus"]',
+      ) as HTMLElement,
     )
     // The session says failed; the tracker says In Progress. Both are true,
     // and a card that merged them would have to pick one and lie.
@@ -1128,7 +1131,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
 
     const running = within(
       document.querySelector(
-        '[data-loom-horse="crew-1:idle-seat"]',
+        '[data-loom-horse="crew-1:session-idle-seat"]',
       ) as HTMLElement,
     )
     expect(running.getByText('Working')).toBeTruthy()
@@ -1152,6 +1155,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
             issueIdentifier: 'EX-1',
             state: 'working',
             seat: 'opus',
+            sessionId: 'session-opus',
           }),
         ],
         trackerHealth: health('ok'),
@@ -1227,7 +1231,11 @@ describe('MAR-3097: through the containers and the real stores', () => {
     )
     await screen.findByLabelText('Loom')
 
-    fireEvent.click(screen.getByRole('button', { name: /^opus — Working/ }))
+    // The card's accessible name is its CONTENT (lap 2, D): an `aria-label`
+    // of seat + runtime replaced it, so the issue a horse holds was never
+    // announced. Mutation: put that label back -> the held identifier is not
+    // in the name and this query fails.
+    fireEvent.click(screen.getByRole('button', { name: /opus.*Working/ }))
     // Mutation: look the seat up by `batonName` in the session list -> a
     // same-named session in another crew opens, red.
     expect(onOpenSession).toHaveBeenCalledTimes(1)
@@ -1236,7 +1244,9 @@ describe('MAR-3097: through the containers and the real stores', () => {
     // The seat whose conversation the store does not hold cannot be opened,
     // and says so in the words a row uses.
     const gone = within(
-      document.querySelector('[data-loom-horse="crew-1:gone"]') as HTMLElement,
+      document.querySelector(
+        '[data-loom-horse="crew-1:session-gone"]',
+      ) as HTMLElement,
     )
     expect(gone.queryByRole('button')).toBeNull()
     expect(gone.getByText('conversation not loaded')).toBeTruthy()
@@ -1263,6 +1273,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
             issueIdentifier: 'EX-1',
             state: 'working',
             seat: 'opus',
+            sessionId: 'session-opus',
           }),
         ],
         trackerHealth: health('ok'),
@@ -1284,6 +1295,123 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(compact).toContain('2 horses')
     expect(compact).toContain('recipe · spawns on dispatch')
     expect(expanded).toBe(compact)
+  })
+
+  it('MAR-3191 lap 2, A: a blocked held row is on the card and under Decide', async () => {
+    crews = [
+      { ...boundCrew('crew-1', 'Loom'), members: [residentSeat('opus')] },
+    ]
+    useSessionStore.setState({
+      globalSessions: [
+        { ...SESSION, id: 'session-opus', status: 'idle' } as SessionSummary,
+      ],
+    })
+    snapshots = {
+      'crew-1': {
+        crewId: 'crew-1',
+        entries: [
+          ledgerEntry({
+            issueIdentifier: 'MAR-1',
+            state: 'working',
+            seat: 'opus',
+            sessionId: 'session-opus',
+            blocked: true,
+            hostLiveness: {
+              executionHost: 'lm',
+              lastEventAt: '2026-09-17T12:06:00.000Z',
+              hostReachable: false,
+            },
+          }),
+        ],
+        trackerHealth: health('ok'),
+      },
+    }
+
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Loom')
+
+    const card = within(
+      document.querySelector(
+        '[data-loom-horse="crew-1:session-opus"]',
+      ) as HTMLElement,
+    )
+    // Lap 1 read "Idle · No active ticket" here, about a horse busy on a
+    // blocked issue on a host nobody had heard from in ten minutes.
+    // Mutation: search `inFlight` only -> "No active ticket", red.
+    expect(card.getAllByText(/MAR-1/).length).toBeGreaterThan(0)
+    expect(card.getByText('Not seen')).toBeTruthy()
+    expect(card.getByText(/blocked · decide/)).toBeTruthy()
+    // ...and it is still where a person looks for decisions.
+    expect(
+      within(screen.getByRole('region', { name: 'Decide' })).getAllByText(
+        /MAR-1/,
+      ).length,
+    ).toBeGreaterThan(0)
+  })
+
+  it('MAR-3191 lap 2, C: a deleted conversation says so', async () => {
+    crews = [
+      {
+        ...boundCrew('crew-1', 'Loom'),
+        members: [residentSeat('gone', { conversationMissing: true })],
+      },
+    ]
+    useSessionStore.setState({ globalSessions: [] })
+    snapshots = {
+      'crew-1': { crewId: 'crew-1', entries: [], trackerHealth: health('ok') },
+    }
+
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Loom')
+    // Mutation: ignore `conversationMissing` -> "conversation not loaded",
+    // which reads as "wait" about a seat somebody has to go and remove.
+    expect(screen.getByText('conversation deleted')).toBeTruthy()
+  })
+
+  it('MAR-3191 lap 2, D: the QA control says what it controls', async () => {
+    crews = [{ ...boundCrew('crew-1', 'Loom'), members: [] }]
+    snapshots = {
+      'crew-1': {
+        crewId: 'crew-1',
+        entries: Array.from({ length: 12 }, (_, at) =>
+          ledgerEntry({
+            issueIdentifier: `QA-${at + 1}`,
+            state: 'reviewed',
+            seat: null,
+          }),
+        ),
+        trackerHealth: health('ok'),
+      },
+    }
+
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Loom')
+
+    const toggle = () =>
+      screen.getByRole('button', { name: /Show (all 12 awaiting QA|fewer)/ })
+    const section = screen.getByRole('region', { name: 'Awaiting QA' })
+    // Mutation: drop `aria-expanded` -> null, and a screen reader cannot
+    // tell whether the twelve are showing.
+    expect(toggle().getAttribute('aria-expanded')).toBe('false')
+    expect(toggle().getAttribute('aria-controls')).toBe(section.id)
+    // Inside the section it controls, so the relationship is readable.
+    expect(section.contains(toggle())).toBe(true)
+    fireEvent.click(toggle())
+    expect(toggle().getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('MAR-3191 lap 2, E: a crew with no horse seats says so', async () => {
+    crews = [{ ...boundCrew('crew-1', 'Loom'), members: [] }]
+    snapshots = {
+      'crew-1': { crewId: 'crew-1', entries: [], trackerHealth: health('ok') },
+    }
+
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Loom')
+    // Mutation: the five-zero line back -> red; arithmetic about nothing is
+    // not an answer to "who is riding?".
+    expect(screen.getByText('No horse seats in this crew')).toBeTruthy()
+    expect(screen.queryByText(/0 horses/)).toBeNull()
   })
 
   it('MAR-3189 lap 2, B: the mode is written down, and a remount reads it back', async () => {

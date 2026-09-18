@@ -1,4 +1,4 @@
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
 import { waveRowKey, type WaveRow } from './wave-sections.pure'
 import { WaveRowView } from './wave-row.presentational'
@@ -13,6 +13,13 @@ interface WaveSectionViewProps {
    * counted the preview would be the panel telling a person there are three.
    */
   count?: number
+  /** The section's own id, when a control outside its rows must name it. */
+  id?: string
+  /**
+   * A control that belongs to this section, rendered after its rows -- inside
+   * the section, so `aria-controls` names an ancestor of the control itself.
+   */
+  footer?: ReactNode
   inertReason: (entry: WorkLedgerEntry) => string | null
   onOpen: (entry: WorkLedgerEntry) => void
   /**
@@ -28,6 +35,8 @@ export const WaveSectionView: FC<WaveSectionViewProps> = ({
   title,
   rows,
   count,
+  id,
+  footer,
   inertReason,
   onOpen,
   disclosure,
@@ -56,9 +65,10 @@ export const WaveSectionView: FC<WaveSectionViewProps> = ({
       {list}
     </details>
   ) : (
-    <section aria-label={title} className="flex flex-col">
+    <section id={id} aria-label={title} className="flex flex-col">
       <h3 className={WAVE_SECTION_TITLE_CLASS}>{heading}</h3>
       {list}
+      {footer}
     </section>
   )
 }

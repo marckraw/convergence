@@ -4,6 +4,7 @@ import {
   loomHorseRuntimeLabel,
   loomHorses,
   loomHorsesLine,
+  LOOM_NO_HORSES_LINE,
   LOOM_RECIPE_LINE,
   type LoomHorseSession,
 } from './loom-horses.pure'
@@ -136,6 +137,7 @@ describe('MAR-3191 R2: the runtime word never guesses', () => {
         issueIdentifier: 'EX-1',
         state: 'working',
         seat: 'opus-mac',
+        sessionId: 'session-opus-mac',
         hostLiveness: {
           executionHost: 'lm',
           lastEventAt: '2026-09-19T07:56:00.000Z',
@@ -184,20 +186,25 @@ describe('MAR-3191: the host comes from where the seat actually works', () => {
 
 describe('MAR-3191 R4: every row appears exactly once', () => {
   const rows = [
+    // The ledger joins a row to the conversation that holds it, and that
+    // join -- not the seat's name -- is what a card claims by (lap 2, B).
     ledgerEntry({
       issueIdentifier: 'EX-1',
       state: 'working',
       seat: 'opus-mac',
+      sessionId: 'session-opus-mac',
     }),
     ledgerEntry({
       issueIdentifier: 'EX-2',
       state: 'working',
       seat: 'nobody-here',
+      sessionId: 'session-nobody',
     }),
     ledgerEntry({
       issueIdentifier: 'EX-3',
       state: 'returned',
       seat: 'opus-mac',
+      sessionId: 'session-opus-mac',
     }),
   ]
   const sheets = loomSheets(rows, NOW)
@@ -243,12 +250,14 @@ describe('MAR-3191 R4: every row appears exactly once', () => {
           issueIdentifier: 'EX-OLD',
           state: 'working',
           seat: 'opus-mac',
+          sessionId: 'session-opus-mac',
           seenAt: '2026-09-19T07:00:00.000Z',
         }),
         ledgerEntry({
           issueIdentifier: 'EX-NEW',
           state: 'working',
           seat: 'opus-mac',
+          sessionId: 'session-opus-mac',
           seenAt: '2026-09-19T07:59:00.000Z',
         }),
       ],
@@ -294,8 +303,201 @@ describe('MAR-3191: the horses line adds up', () => {
     expect(loomHorsesLine(horses)).toBe(
       '5 horses · 1 working · 1 idle · 1 failed · 1 not seen · 1 recipe',
     )
-    expect(loomHorsesLine([])).toBe(
-      '0 horses · 0 working · 0 idle · 0 failed · 0 not seen',
+    // Mutation: five zeros instead of the sentence -> red (lap 2, E).
+    expect(loomHorsesLine([])).toBe(LOOM_NO_HORSES_LINE)
+  })
+})
+
+describe('MAR-3191 lap 2, A: the held row is wherever the sheet put it', () => {
+  const blockedRow = ledgerEntry({
+    issueIdentifier: 'MAR-1',
+    state: 'working',
+    seat: 'opus-mac',
+    sessionId: 'session-opus-mac',
+    blocked: true,
+    hostLiveness: {
+      executionHost: 'lm',
+      lastEventAt: '2026-09-19T07:50:00.000Z',
+      hostReachable: false,
+    },
+  })
+
+  it('a blocked working row is on the card, says so, and stays under Decide', () => {
+    const sheets = loomSheets([blockedRow], NOW)
+    // `loomSheets` sends a blocked row to Decide, never to in-flight.
+    expect(sheets.now.inFlight).toEqual([])
+    expect(sheets.now.decide).toHaveLength(1)
+
+    const horse = loomHorses({
+      crews: [boundCrewWith('crew-1', 'Loom', [residentSeat('opus-mac')])],
+      sessionsById: new Map([['session-opus-mac', session('idle')]]),
+      sheets,
+      hostLabelOf,
+    })[0]!
+
+    // Mutation: search `inFlight` only -> held is null, the card reads
+    // "Idle · No active ticket" about a horse busy on a blocked issue on a
+    // dead host. That is the exact sentence R2 exists to refuse.
+    expect(horse.held?.entry.issueIdentifier).toBe('MAR-1')
+    expect(horse.heldFrom).toBe('decide')
+    expect(horse.runtime).toBe('not-seen')
+    // And it is still listed where a person looks for decisions.
+    expect(loomNowRows(sheets, [horse])).toEqual([])
+    expect(sheets.now.decide).toHaveLength(1)
+  })
+
+  it('an in-flight row is preferred when the seat holds both', () => {
+    const sheets = loomSheets(
+      [
+        blockedRow,
+        ledgerEntry({
+          issueIdentifier: 'MAR-2',
+          state: 'working',
+          seat: 'opus-mac',
+          sessionId: 'session-opus-mac',
+        }),
+      ],
+      NOW,
     )
+    const horse = loomHorses({
+      crews: [boundCrewWith('crew-1', 'Loom', [residentSeat('opus-mac')])],
+      sessionsById: new Map([['session-opus-mac', session('running')]]),
+      sheets,
+      hostLabelOf,
+    })[0]!
+    expect(horse.held?.entry.issueIdentifier).toBe('MAR-2')
+    expect(horse.heldFrom).toBe('in-flight')
+    // Only the in-flight one leaves the list; the blocked one stays in Decide.
+    expect(loomNowRows(sheets, [horse])).toEqual([])
+    expect(sheets.now.decide.map((row) => row.entry.issueIdentifier)).toEqual([
+      'MAR-1',
+    ])
+  })
+
+  it('the session’s own host-unreachable is enough, with no rows at all', () => {
+    // The third witness (lap 2, A). Mutation: ignore `attention` -> `idle`,
+    // and a seat the app has lost the wire to reads as sitting still.
+    const horse = loomHorses({
+      crews: [boundCrewWith('crew-1', 'Loom', [residentSeat('opus-mac')])],
+      sessionsById: new Map([
+        [
+          'session-opus-mac',
+          { status: 'idle', attention: 'host-unreachable' } as LoomHorseSession,
+        ],
+      ]),
+      sheets: noSheets,
+      hostLabelOf,
+    })[0]!
+    expect(horse.runtime).toBe('not-seen')
+  })
+
+  it('a returned row on a dead host is the second witness', () => {
+    const sheets = loomSheets(
+      [
+        ledgerEntry({
+          issueIdentifier: 'MAR-3',
+          state: 'returned',
+          seat: 'opus-mac',
+          sessionId: 'session-opus-mac',
+          hostLiveness: {
+            executionHost: 'lm',
+            lastEventAt: '2026-09-19T07:50:00.000Z',
+            hostReachable: false,
+          },
+        }),
+      ],
+      NOW,
+    )
+    const horse = loomHorses({
+      crews: [boundCrewWith('crew-1', 'Loom', [residentSeat('opus-mac')])],
+      sessionsById: new Map([['session-opus-mac', session('idle')]]),
+      sheets,
+      hostLabelOf,
+    })[0]!
+    // Mutation: read liveness from `held` only -> `idle`, red.
+    expect(horse.runtime).toBe('not-seen')
+  })
+})
+
+describe('MAR-3191 lap 2, B: a row is claimed by the ledger’s join', () => {
+  it('two residents may share a name; the row belongs to one of them', () => {
+    const crew = boundCrewWith('crew-1', 'Loom', [
+      residentSeat('opus-mac', { sessionId: 'session-a' }),
+      residentSeat('opus-mac', { sessionId: 'session-b' }),
+    ])
+    const sheets = loomSheets(
+      [
+        ledgerEntry({
+          issueIdentifier: 'EX-1',
+          state: 'working',
+          seat: 'opus-mac',
+          sessionId: 'session-b',
+        }),
+      ],
+      NOW,
+    )
+    const horses = loomHorses({
+      crews: [crew],
+      sessionsById: new Map([
+        ['session-a', session('running')],
+        ['session-b', session('running')],
+      ]),
+      sheets,
+      hostLabelOf,
+    })
+
+    // Mutation: match by `entry.seat === batonName` -> BOTH cards claim EX-1,
+    // the list removes it once, and the two cards' keys collide.
+    expect(horses[0]?.held).toBeNull()
+    expect(horses[1]?.held?.entry.issueIdentifier).toBe('EX-1')
+    expect(horses[0]?.key).not.toBe(horses[1]?.key)
+    expect(loomNowRows(sheets, horses)).toEqual([])
+  })
+
+  it('a recipe claims its crew’s seat rows that carry no session', () => {
+    const sheets = loomSheets(
+      [
+        ledgerEntry({
+          issueIdentifier: 'EX-9',
+          state: 'working',
+          seat: 'grok-mac',
+          sessionId: null,
+        }),
+      ],
+      NOW,
+    )
+    const horse = loomHorses({
+      crews: [
+        boundCrewWith('crew-1', 'Loom', [
+          crewMember({ batonName: 'grok-mac' }),
+        ]),
+      ],
+      sessionsById: new Map(),
+      sheets,
+      hostLabelOf,
+    })[0]!
+    // A recipe has no conversation, so a name is all it can be addressed by.
+    expect(horse.held?.entry.issueIdentifier).toBe('EX-9')
+    expect(horse.key).toBe('crew-1:recipe:grok-mac')
+  })
+})
+
+describe('MAR-3191 lap 2, C: a deleted conversation is not an unfetched one', () => {
+  it('the record’s own flag reaches the model', () => {
+    const horses = loomHorses({
+      crews: [
+        boundCrewWith('crew-1', 'Loom', [
+          residentSeat('gone', { conversationMissing: true }),
+          residentSeat('here'),
+        ]),
+      ],
+      sessionsById: new Map(),
+      sheets: noSheets,
+      hostLabelOf,
+    })
+    // Mutation: ignore the flag -> both read "conversation not loaded", and
+    // one of them is a seat a person has to go and remove.
+    expect(horses[0]?.conversationMissing).toBe(true)
+    expect(horses[1]?.conversationMissing).toBe(false)
   })
 })

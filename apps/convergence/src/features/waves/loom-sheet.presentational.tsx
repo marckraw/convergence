@@ -19,6 +19,9 @@ import {
   LOOM_SHEET_NOTE_CLASS,
 } from './wave-panel.styles'
 
+/** The Awaiting QA section, so its own control can point at it (lap 2, D). */
+const QA_SECTION_ID = 'loom-awaiting-qa'
+
 interface LoomSheetViewProps {
   sheet: LoomSheet
   sheets: LoomSheets
@@ -107,26 +110,34 @@ export const LoomSheetView: FC<LoomSheetViewProps> = ({
               verdict I owe, then the decision somebody owes, then the work
               that needs nothing from anyone. */}
           <div className="flex flex-col">
+            {/* The control lives INSIDE the section it reveals (lap 2, D),
+                so `aria-controls` points at an ancestor a screen reader is
+                already inside and the relationship is readable. */}
             <WaveSectionView
               title="Awaiting QA"
               count={qa.length}
               rows={qaShown}
               inertReason={inertReason}
               onOpen={onOpen}
+              footer={
+                qa.length > LOOM_QA_PREVIEW ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-expanded={qaExpanded}
+                    aria-controls={QA_SECTION_ID}
+                    className={LOOM_QA_TOGGLE_CLASS}
+                    onClick={onToggleQa}
+                  >
+                    {qaExpanded
+                      ? 'Show fewer'
+                      : `Show all ${qa.length} awaiting QA`}
+                  </Button>
+                ) : null
+              }
+              id={QA_SECTION_ID}
             />
-            {qa.length > LOOM_QA_PREVIEW ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className={LOOM_QA_TOGGLE_CLASS}
-                onClick={onToggleQa}
-              >
-                {qaExpanded
-                  ? 'Show fewer'
-                  : `Show all ${qa.length} awaiting QA`}
-              </Button>
-            ) : null}
             <WaveSectionView
               title="Fable’s turn"
               rows={sheets.now.fablesTurn}

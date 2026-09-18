@@ -216,23 +216,26 @@ export function loomSubline(crewNames: readonly string[]): string {
  * dropping it because no card claimed it would hide exactly the work nobody
  * is watching.
  *
- * A seat's `returned` row is different and deliberately so: the card NAMES it
- * ("lap N returned · Fable's turn") and the row also stays under Fable's turn.
- * That is one fact shown where each reader needs it -- the seat's card answers
- * "what is this horse on?", the section answers "what do I owe a verdict on?"
- * -- not a row counted twice; `loomSheetCounts` is unchanged and still counts
- * it once.
+ * Only a row the card took FROM THIS LIST is removed (lap 2, A). A blocked
+ * working row is named on its seat's card too, but it lives under *Decide*
+ * and stays there -- as a `returned` row is named on the card and stays under
+ * Fable's turn. That is one fact shown where each reader needs it: the card
+ * answers "what is this horse on?", the section answers "what does somebody
+ * owe here?"; `loomSheetCounts` is unchanged and still counts it once.
  *
  * One function, called by both shapes, so compact and expanded cannot come to
  * different conclusions about what has already been shown.
  */
 export function loomNowRows(
   sheets: LoomSheets,
-  horses: readonly { held: WaveRow | null }[],
+  horses: readonly {
+    held: WaveRow | null
+    heldFrom?: 'in-flight' | 'decide' | null
+  }[],
 ): WaveRow[] {
   const heldKeys = new Set(
     horses.flatMap((horse) =>
-      horse.held
+      horse.held && (horse.heldFrom ?? 'in-flight') === 'in-flight'
         ? [`${horse.held.entry.crewId}:${horse.held.entry.issueId}`]
         : [],
     ),

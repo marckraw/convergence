@@ -1,3 +1,5 @@
+import type { LoomHorseRuntime } from './loom-horses.pure'
+
 /**
  * Every visual knob of the wave panel (MAR-3097), so "narrower" or "quieter"
  * is one edit, not a hunt through JSX.
@@ -93,12 +95,13 @@ export const LOOM_HORSES_LINE_CLASS =
 export const LOOM_HORSE_CARD_CLASS =
   'flex h-auto w-full flex-col items-start gap-0.5 whitespace-normal rounded-md border px-3 py-2 text-left text-xs font-normal'
 
-export const LOOM_HORSE_TINT_CLASS: Readonly<Record<string, string>> = {
-  working: 'border-sky-400/30 bg-sky-400/5',
-  failed: 'border-red-400/40 bg-red-400/5',
-  idle: 'border-white/10',
-  'not-seen': 'border-white/10 bg-white/[0.02]',
-}
+export const LOOM_HORSE_TINT_CLASS: Readonly<Record<LoomHorseRuntime, string>> =
+  {
+    working: 'border-sky-400/30 bg-sky-400/5',
+    failed: 'border-red-400/40 bg-red-400/5',
+    idle: 'border-white/10',
+    'not-seen': 'border-white/10 bg-white/[0.02]',
+  }
 
 /** The card's second line: host · tracker status · lap. */
 export const LOOM_HORSE_META_CLASS =

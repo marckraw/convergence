@@ -54,6 +54,8 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
     horse.hostLabel,
     held ? `Linear: ${held.entry.trackerStatus}` : null,
     held ? `Lap ${held.entry.lap}` : null,
+    // A blocked held row says so on the card and stays under Decide (A).
+    horse.heldFrom === 'decide' ? 'blocked · decide' : null,
     horse.returned
       ? `lap ${horse.returned.entry.lap} returned · Fable’s turn`
       : null,
@@ -91,7 +93,6 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
         <Button
           type="button"
           variant="ghost"
-          aria-label={`${horse.seat ?? 'unnamed seat'} — ${loomHorseRuntimeLabel(horse)}`}
           className={cn(
             LOOM_HORSE_CARD_CLASS,
             LOOM_HORSE_TINT_CLASS[horse.runtime],
@@ -117,7 +118,12 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
           <span className={LOOM_HORSE_META_CLASS}>
             {horse.kind === 'dynamic'
               ? 'no conversation for this seat'
-              : 'conversation not loaded'}
+              : horse.conversationMissing
+                ? // The record knows the difference (lap 2, C): a deleted
+                  // conversation is not one the app has yet to fetch, and a
+                  // person can act on the first and only wait for the second.
+                  'conversation deleted'
+                : 'conversation not loaded'}
           </span>
         </div>
       )}
