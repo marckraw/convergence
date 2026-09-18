@@ -1,5 +1,11 @@
 # convergence
 
+## 0.68.3
+
+### Patch Changes
+
+- 5bfa8a6: When the tracker key can no longer see the bound project, the wave panel says so and keeps your rows instead of showing a quiet project.
+
 ## 0.68.2
 
 ### Patch Changes
