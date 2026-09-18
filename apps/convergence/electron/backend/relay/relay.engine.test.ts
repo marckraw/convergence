@@ -4030,6 +4030,32 @@ describe('RelayEngine', () => {
       expect(gateway.sent.map((turn) => turn.sessionId)).toEqual(['s2'])
     })
 
+    it('MAR-3150 R4: two different broken lines in one conversation are two hails; the same line twice is one', async () => {
+      returnedRow('MAR-1')
+      const dispatchId = opusAnswered()
+      wire('s1', 's2')
+      const settle = async (line: string) => {
+        await verdictEngine(
+          createGateway({ lastMessages: { s1: `${line}\n\nBATON: opus` } }),
+        ).handleSettle(settled('s1', 'completed', false, [dispatchId]))
+      }
+
+      await settle('VERDICT: PASSED lap 2')
+      // Mutation: drop `detail` from the run-less dedupe key in
+      // `CrewHailService.raise` -> the second line raises nothing and this
+      // expects two details but reads one, red.
+      await settle('VERDICT: RETURN lap')
+
+      expect(detailOf()).toHaveLength(2)
+      expect(detailOf()[0]).toContain('VERDICT: RETURN lap')
+      expect(detailOf()[1]).toContain('VERDICT: PASSED lap 2')
+
+      // The same problem again is still one call: the mastermind re-sending
+      // an unfixed line must not stack a third chair.
+      await settle('VERDICT: RETURN lap')
+      expect(detailOf()).toHaveLength(2)
+    })
+
     it('lap 2, B: a refused ledger write costs the ruling, never the baton', async () => {
       returnedRow('MAR-1')
       const dispatchId = opusAnswered()
