@@ -317,7 +317,6 @@ export const ProviderAccountsContainer: FC = () => {
 
   const handleToggleConnectors = useCallback(
     async (accountId: string) => {
-      if (providerId !== 'claude-code') return
       if (expandedConnectorsAccountId === accountId) {
         setExpandedConnectorsAccountId(null)
         return
@@ -338,25 +337,30 @@ export const ProviderAccountsContainer: FC = () => {
         setIsLoadingConnectors(false)
       }
     },
-    [providerId, expandedConnectorsAccountId],
+    [expandedConnectorsAccountId],
   )
 
   const handleAuthorizeConnector = useCallback(
-    async (accountId: string, serverName: string) => {
-      if (providerId !== 'claude-code') return
+    async (accountId: string, serverName: string, connectLinear = false) => {
       setAuthorizingServerName(serverName)
       setMessage(null)
       setError(null)
       try {
         // Returns the account's refreshed view, so the row reflects what the
         // authorization actually achieved rather than what it attempted.
-        setConnectors(
-          await providerAccountApi.authorizeConnector({
-            accountId,
-            serverName,
-          }),
-        )
-        setMessage(`${serverName} authorized for this account.`)
+        const result = connectLinear
+          ? await providerAccountApi.connectLinear(accountId)
+          : await providerAccountApi.authorizeConnector({
+              accountId,
+              serverName,
+            })
+        setConnectors(result)
+        if (!result.error)
+          setMessage(
+            providerId === 'codex'
+              ? 'Connector status refreshed.'
+              : `${serverName} authorized for this account.`,
+          )
       } catch (err) {
         setError(describeError(err, `Failed to authorize ${serverName}.`))
       } finally {
@@ -455,6 +459,9 @@ export const ProviderAccountsContainer: FC = () => {
       onToggleConnectors={(accountId) => void handleToggleConnectors(accountId)}
       onAuthorizeConnector={(accountId, serverName) =>
         void handleAuthorizeConnector(accountId, serverName)
+      }
+      onConnectLinear={(accountId) =>
+        void handleAuthorizeConnector(accountId, 'linear', true)
       }
     />
   )

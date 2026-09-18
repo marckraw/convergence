@@ -2068,6 +2068,7 @@ interface ElectronAPI {
     listConnectors: (
       accountId: string | null,
     ) => Promise<ProviderAccountConnectorsData>
+    connectLinear: (accountId: string) => Promise<ProviderAccountConnectorsData>
     authorizeConnector: (input: {
       accountId: string | null
       serverName: string

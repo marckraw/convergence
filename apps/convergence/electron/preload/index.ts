@@ -588,6 +588,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     health: () => ipcRenderer.invoke('providerAccounts:health'),
     listConnectors: (accountId: string | null) =>
       ipcRenderer.invoke('providerAccounts:listConnectors', accountId),
+    connectLinear: (accountId: string) =>
+      ipcRenderer.invoke('providerAccounts:connectLinear', accountId),
     authorizeConnector: (input: {
       accountId: string | null
       serverName: string

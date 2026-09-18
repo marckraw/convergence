@@ -1,4 +1,6 @@
 import { buildClaudeAccountEnv } from './provider-account-env.pure'
+import { buildCodexAccountEnv } from './provider-account-codex-env.pure'
+import type { ProviderAccountConnector } from './provider-account-mcp.service'
 import type { ClaudeAccountEnvTarget } from './provider-account-env.pure'
 import type { ProviderAccountCommand } from './provider-account-enrolment.pure'
 import {
@@ -6,6 +8,115 @@ import {
   summarizeTerminalOutput,
 } from './provider-account-pty-runner.pure'
 
+interface CodexMcpCommandInput {
+  binaryPath: string
+  configDir: string
+  baseEnv: NodeJS.ProcessEnv
+  workingDirectory?: string
+}
+
+function buildCodexMcpCommand(
+  input: CodexMcpCommandInput,
+  args: string[],
+): ProviderAccountCommand {
+  if (!input.configDir.trim())
+    throw new Error('A Codex account directory is required.')
+  return {
+    command: input.binaryPath,
+    args,
+    env: buildCodexAccountEnv({
+      baseEnv: input.baseEnv,
+      account: { configDir: input.configDir },
+    }),
+    ...(input.workingDirectory ? { cwd: input.workingDirectory } : {}),
+  }
+}
+
+export function buildCodexMcpListCommand(
+  input: CodexMcpCommandInput,
+): ProviderAccountCommand {
+  return buildCodexMcpCommand(input, ['mcp', 'list', '--json'])
+}
+
+export function buildCodexMcpLoginCommand(
+  input: CodexMcpCommandInput & { serverName: string },
+): ProviderAccountCommand {
+  if (!input.serverName.trim())
+    throw new Error('Authorizing a connector requires the server name.')
+  return buildCodexMcpCommand(input, ['mcp', 'login', input.serverName])
+}
+
+export function buildCodexMcpAddCommand(
+  input: CodexMcpCommandInput & { serverName: string; url: string },
+): ProviderAccountCommand {
+  if (!input.serverName.trim() || !input.url.trim())
+    throw new Error('Adding a connector requires a name and URL.')
+  return buildCodexMcpCommand(input, [
+    'mcp',
+    'add',
+    input.serverName,
+    '--url',
+    input.url,
+  ])
+}
+
+/** CLI JSON is an IO boundary: retain only display fields, never headers or environment values. */
+export function parseCodexMcpList(json: string): ProviderAccountConnector[] {
+  let entries: unknown
+  try {
+    entries = JSON.parse(json)
+  } catch {
+    throw new Error('Codex returned an invalid connector list.')
+  }
+  if (!Array.isArray(entries))
+    throw new Error('Codex returned an invalid connector list.')
+  return entries.map((value: unknown) => {
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      !('name' in value) ||
+      typeof value.name !== 'string'
+    ) {
+      throw new Error('Codex returned an invalid connector entry.')
+    }
+    const entry = value as Record<string, unknown>
+    const transport = entry.transport as
+      | { type?: unknown; url?: unknown }
+      | undefined
+    const enabled = entry.enabled === true
+    const disabledReason =
+      typeof entry.disabled_reason === 'string' ? entry.disabled_reason : null
+    const authorized = entry.auth_status === 'o_auth'
+    const unsupported = entry.auth_status === 'unsupported'
+    return {
+      name: value.name,
+      status: !enabled ? 'disabled' : authorized ? 'ready' : 'unknown',
+      statusLabel: !enabled
+        ? (disabledReason ?? 'Disabled')
+        : authorized
+          ? 'Authorized'
+          : unsupported
+            ? 'Authorization unsupported'
+            : 'Unknown — press Authorize to find out',
+      description:
+        transport?.type === 'streamable_http' &&
+        typeof transport.url === 'string'
+          ? transport.url
+          : transport?.type === 'stdio'
+            ? 'stdio'
+            : 'Unknown transport',
+      transportType:
+        transport?.type === 'streamable_http'
+          ? 'streamable_http'
+          : transport?.type === 'stdio'
+            ? 'stdio'
+            : 'unknown',
+      enabled,
+      disabledReason,
+      needsAuthorization: enabled && !authorized && !unsupported,
+    }
+  })
+}
 /**
  * Per-account MCP connector authorization (ADR 0007, PA11).
  *

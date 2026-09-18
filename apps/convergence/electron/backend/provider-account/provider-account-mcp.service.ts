@@ -6,13 +6,20 @@ import {
   buildClaudeMcpListCommand,
   buildClaudeMcpLoginCommand,
   interpretClaudeMcpLoginOutcome,
+  buildCodexMcpListCommand,
+  buildCodexMcpLoginCommand,
+  buildCodexMcpAddCommand,
+  parseCodexMcpList,
 } from './provider-account-mcp.pure'
 import type { ProviderAccountCommandRunner } from './provider-account-enrolment.service'
+import type { ProviderAccountCommand } from './provider-account-enrolment.pure'
 import type {
   InteractiveCommandResult,
   ProviderAccountInteractiveRunner,
 } from './provider-account-pty-runner'
 import { resolveAccountForTurn } from './provider-account-resolution.pure'
+import { resolveCodexAccountForTurn } from './provider-account-resolution.pure'
+import type { CodexAccountEnvTarget } from './provider-account-codex-env.pure'
 import type { ProviderAccountRepository } from './provider-account.repository'
 
 /**
@@ -33,6 +40,9 @@ import type { ProviderAccountRepository } from './provider-account.repository'
  */
 
 export interface ProviderAccountConnector {
+  transportType?: 'streamable_http' | 'stdio' | 'unknown'
+  enabled?: boolean
+  disabledReason?: string | null
   name: string
   status: McpServerStatus
   statusLabel: string
@@ -87,6 +97,10 @@ export interface ProviderAccountMcpDeps {
    */
   workingDirectory?: () => string
   accountMaintenance?: ClaudeAccountMaintenance
+  codexBinaryPath?: string | null
+  codexMaintenance?: {
+    run<T>(account: CodexAccountEnvTarget, work: () => Promise<T>): Promise<T>
+  }
 }
 
 export class ProviderAccountMcpService {
@@ -97,8 +111,12 @@ export class ProviderAccountMcpService {
   private readonly workingDirectory: () => string
   private binaryPath: string | null
   private readonly accountMaintenance: ClaudeAccountMaintenance
+  private codexBinaryPath: string | null
+  private readonly codexMaintenance: ProviderAccountMcpDeps['codexMaintenance']
 
   constructor(deps: ProviderAccountMcpDeps) {
+    this.codexBinaryPath = deps.codexBinaryPath ?? null
+    this.codexMaintenance = deps.codexMaintenance
     this.repository = deps.repository
     this.runCommand = deps.runCommand ?? defaultRunCommand
     this.runInteractiveCommand = deps.runInteractiveCommand
@@ -113,6 +131,103 @@ export class ProviderAccountMcpService {
     this.binaryPath = binaryPath
   }
 
+  setCodexBinaryPath(binaryPath: string | null): void {
+    this.codexBinaryPath = binaryPath
+  }
+
+  private codexAccount(accountId: string | null): CodexAccountEnvTarget | null {
+    const account = accountId ? this.repository.get(accountId) : null
+    return account?.providerId === 'codex'
+      ? resolveCodexAccountForTurn({ accountId, account })
+      : null
+  }
+
+  private codexCommandInput(account: CodexAccountEnvTarget) {
+    if (!this.codexBinaryPath)
+      throw new Error('Codex is not available on PATH.')
+    return {
+      binaryPath: this.codexBinaryPath,
+      configDir: account.configDir,
+      baseEnv: this.baseEnv,
+      workingDirectory: this.workingDirectory(),
+    }
+  }
+
+  private async listCodexConnectors(
+    account: CodexAccountEnvTarget,
+  ): Promise<ProviderAccountConnector[]> {
+    const result = await this.runCommand(
+      buildCodexMcpListCommand(this.codexCommandInput(account)),
+    )
+    if (result.code !== 0)
+      throw new Error(
+        `Codex could not list connectors (exit code ${result.code}).`,
+      )
+    return parseCodexMcpList(result.stdout)
+  }
+
+  private async runCodexLogin(
+    account: CodexAccountEnvTarget,
+    serverName: string,
+  ): Promise<InteractiveCommandResult> {
+    return this.runCodexTerminal(
+      buildCodexMcpLoginCommand({
+        ...this.codexCommandInput(account),
+        serverName,
+      }),
+    )
+  }
+
+  private async runCodexTerminal(
+    command: ProviderAccountCommand,
+  ): Promise<InteractiveCommandResult> {
+    let confirmExit!: () => void
+    const exited = new Promise<void>((resolve) => {
+      confirmExit = resolve
+    })
+    const result = await this.runInteractiveCommand(command, {
+      onExitConfirmed: confirmExit,
+      awaitExitOnTimeout: true,
+      redactOutput: true,
+    })
+    await exited
+    if (result.code !== 0)
+      throw new Error(
+        `Codex connector ${command.args[1]} failed (exit code ${result.code}).`,
+      )
+    return { code: result.code, output: '' }
+  }
+
+  private withCodexMaintenance<T>(
+    account: CodexAccountEnvTarget,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    if (!this.codexMaintenance)
+      throw new Error(
+        'Codex account maintenance is unavailable. No connectors were changed.',
+      )
+    return this.codexMaintenance.run(account, work)
+  }
+
+  async connectLinear(accountId: string): Promise<InteractiveCommandResult> {
+    const account = this.codexAccount(accountId)
+    if (!account) throw new Error('Connect Linear requires a Codex account.')
+    const connectors = await this.listCodexConnectors(account)
+    return this.withCodexMaintenance(account, async () => {
+      if (!connectors.some((connector) => connector.name === 'linear')) {
+        // Codex add can initiate OAuth itself; it needs the same terminal and exit witness.
+        await this.runCodexTerminal(
+          buildCodexMcpAddCommand({
+            ...this.codexCommandInput(account),
+            serverName: 'linear',
+            url: 'https://mcp.linear.app/mcp',
+          }),
+        )
+      }
+      return this.runCodexLogin(account, 'linear')
+    })
+  }
+
   /**
    * What this account can and cannot reach.
    *
@@ -125,6 +240,24 @@ export class ProviderAccountMcpService {
   async listConnectors(
     accountId: string | null,
   ): Promise<ProviderAccountConnectorsResult> {
+    try {
+      const account = this.codexAccount(accountId)
+      if (account)
+        return {
+          providerAccountId: accountId,
+          connectors: await this.listCodexConnectors(account),
+          error: null,
+        }
+    } catch (error) {
+      return {
+        providerAccountId: accountId,
+        connectors: [],
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to list Codex connectors.',
+      }
+    }
     const binaryPath = this.binaryPath
     if (!binaryPath) {
       return {
@@ -191,6 +324,13 @@ export class ProviderAccountMcpService {
     serverName: string
     canOpenBrowser?: boolean
   }): Promise<InteractiveCommandResult> {
+    const account = this.codexAccount(input.accountId)
+    if (account) {
+      this.codexCommandInput(account)
+      return this.withCodexMaintenance(account, () =>
+        this.runCodexLogin(account, input.serverName),
+      )
+    }
     const release = await this.accountMaintenance.admit(input.accountId)
     let launched = false
     try {
