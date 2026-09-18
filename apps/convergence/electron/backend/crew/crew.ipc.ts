@@ -51,14 +51,10 @@ function memberMatchesRef(
  */
 export function registerCrewIpcHandlers(deps: {
   service: CrewService
-  /**
-   * Owns `session_relays` writes for a seat rename carry (MAR-3157). Optional
-   * only so older unit tests that register the crew surface alone still boot;
-   * production always passes the live RelayService.
-   */
-  relays?: RelayService
+  /** Owns `session_relays` writes for a seat rename carry (MAR-3157). */
+  relays: RelayService
   /** Shared with RelayService so rename + carry commit in one transaction. */
-  db?: Database.Database
+  db: Database.Database
   broadcast?: CrewBroadcastFn
   broadcastRelays?: RelayBroadcastFn
   /**
@@ -69,7 +65,7 @@ export function registerCrewIpcHandlers(deps: {
   forgetTrackerKey?: (crewId: string) => Promise<unknown>
   log?: (message: string, error: unknown) => void
 }): void {
-  const { service } = deps
+  const { service, relays, db } = deps
   const broadcast = deps.broadcast ?? broadcastCrews
   const broadcastWireList = deps.broadcastRelays ?? defaultBroadcastRelays
 
@@ -128,6 +124,7 @@ export function registerCrewIpcHandlers(deps: {
     ) => mutate(() => service.setMemberSeat(crewId, member, patch)),
   )
 
+  // A seat that is a recipe rather than a conversation (MAR-3083 R3).
   ipcMain.handle(
     'crew:addRecipeMember',
     (_event, crewId: string, input: CreateCrewRecipeSeatInput) =>
@@ -154,16 +151,6 @@ export function registerCrewIpcHandlers(deps: {
       member: CrewMemberRef,
       batonName: string | null,
     ): SeatRenameResult => {
-      const relays = deps.relays
-      const db = deps.db
-      if (!relays || !db) {
-        // Unit tests that register crew IPC without relays still rename.
-        const crew = mutate(() =>
-          service.setMemberBatonName(crewId, member, batonName),
-        )
-        return { crew, carried: [], left: [] }
-      }
-
       const run = db.transaction((): SeatRenameResult => {
         const before = service.getById(crewId)
         if (!before) throw new Error(`Crew not found: ${crewId}`)
@@ -174,18 +161,19 @@ export function registerCrewIpcHandlers(deps: {
         const oldName = existing.batonName
         const crew = service.setMemberBatonName(crewId, member, batonName)
         const newName = normalizeCrewBatonName(batonName)
-        const remainingOldHolders =
-          oldName === null
-            ? 0
-            : crew.members.filter((entry) => entry.batonName === oldName).length
         const carry = relays.carrySeatRename({
           crewId,
           oldName,
           newName,
           renamedMemberSessionId: existing.sessionId,
-          remainingOldHolders,
         })
-        return { crew, carried: carry.carried, left: carry.left }
+        return {
+          crew,
+          carried: carry.carried,
+          left: carry.left,
+          oldName,
+          newName,
+        }
       })
 
       const result = run()

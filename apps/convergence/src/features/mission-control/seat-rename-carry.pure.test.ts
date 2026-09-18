@@ -11,7 +11,7 @@ describe('formatSeatRenameCarryNotice (MAR-3157 R6)', () => {
         newName: 'opus-mac',
       }),
     ).toBe(
-      '2 wires now wait for "BATON: opus-mac" 1 wire still waits for "BATON: horse opus" (it targets another seat)',
+      '2 wires now wait for "BATON: opus-mac"; 1 wire still waits for "BATON: horse opus"',
     )
     expect(
       formatSeatRenameCarryNotice({
@@ -29,5 +29,25 @@ describe('formatSeatRenameCarryNotice (MAR-3157 R6)', () => {
         newName: 'opus-mac',
       }),
     ).toBeNull()
+  })
+
+  it('names the clearing row and the plural left', () => {
+    // Mutation: delete the left>0 / no-new-name branch → null → red.
+    expect(
+      formatSeatRenameCarryNotice({
+        carried: 0,
+        left: 1,
+        oldName: 'horse opus',
+        newName: null,
+      }),
+    ).toBe('1 wire still waits for "BATON: horse opus"')
+    expect(
+      formatSeatRenameCarryNotice({
+        carried: 0,
+        left: 2,
+        oldName: 'horse opus',
+        newName: null,
+      }),
+    ).toBe('2 wires still wait for "BATON: horse opus"')
   })
 })

@@ -1827,6 +1827,8 @@ interface ElectronAPI {
       crew: SessionCrewData
       carried: string[]
       left: string[]
+      oldName: string | null
+      newName: string | null
     }>
     addRecipeMember: (
       crewId: string,

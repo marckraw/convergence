@@ -3767,7 +3767,6 @@ describe('RelayEngine', () => {
         oldName: 'horse opus',
         newName: 'opus-mac',
         renamedMemberSessionId: null,
-        remainingOldHolders: 0,
       })
       expect(relays.getById(relay.id)?.spawnSpec?.member).toBe('opus-mac')
 

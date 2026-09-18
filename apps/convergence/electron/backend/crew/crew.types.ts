@@ -184,13 +184,16 @@ export function sessionCrewFromRow(
 }
 
 /**
- * What the seat-rename door answers: the crew after the rename, and which
- * wires moved with it (MAR-3157).
+ * What the seat-rename door answers: the crew after the rename, which wires
+ * moved with it, and the stored names the notice must use (MAR-3157).
  */
 export interface SeatRenameResult {
   crew: SessionCrew
   carried: string[]
   left: string[]
+  /** As stored after normalize — the renderer must not re-derive. */
+  oldName: string | null
+  newName: string | null
 }
 
 /** A binding is bound exactly when both its kind and its project are set. */

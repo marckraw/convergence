@@ -842,31 +842,29 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       committingDrafts.current.add(inFlight)
       setBusy(true)
       setSeatProblem(key, 'batonName', null)
-      const previousName = member?.batonName ?? null
       try {
         const result = await sessionCrewApi.setMemberBatonName(
           crew.id,
           ref,
           typed.trim() ? typed : null,
         )
-        const nextName = typed.trim() ? typed.trim().toLowerCase() : null
         const notice = formatSeatRenameCarryNotice({
           carried: result.carried.length,
           left: result.left.length,
-          oldName: previousName,
-          newName: nextName,
+          oldName: result.oldName,
+          newName: result.newName,
         })
         const noticeKey =
           member?.sessionId != null
             ? key
-            : nextName
-              ? memberKey({ sessionId: null, batonName: nextName })
+            : result.newName
+              ? memberKey({ sessionId: null, batonName: result.newName })
               : key
         setSeatNotices({
           crewId: crew.id,
           byKey: notice ? { [noticeKey]: notice } : {},
         })
-        if (nextName && noticeKey !== key && openSeatKey === key) {
+        if (result.newName && noticeKey !== key && openSeatKey === key) {
           setOpenSeatKey(noticeKey)
         }
         setBatonNameDrafts((drafts) => {
@@ -876,6 +874,8 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         })
         await loadCrews()
       } catch (error) {
+        // A refusal replaces any prior carry notice — only the door's reason.
+        setSeatNotices({ crewId: crew.id, byKey: {} })
         // The roster stays as it was and the typing stays in the field, with
         // the door's own reason under it.
         refuseSeatField(key, 'batonName', batonNameRefusal(error), typed)

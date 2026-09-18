@@ -250,17 +250,16 @@ export class RelayService {
   }
 
   /**
-   * Carries every wire that reached a renamed seat by its old name to the
-   * new name — tokens inbound to that conversation seat, and spawn specs
-   * that named the seat — leaving hand-written conditions and fan-outs alone
-   * (MAR-3157). RelayService owns every write to `session_relays`.
+   * Carries every wire whose recipient is the renamed seat — inbound tokens
+   * on a conversation seat, and token + spawn member on a recipe seat —
+   * leaving hand-written conditions and fan-outs alone (MAR-3157).
+   * RelayService owns every write to `session_relays`.
    */
   carrySeatRename(input: {
     crewId: string
     oldName: string | null
     newName: string | null
     renamedMemberSessionId: string | null
-    remainingOldHolders: number
   }): { carried: string[]; left: string[] } {
     const wires = this.list()
       .filter((relay) => relay.crewId === input.crewId)
@@ -274,7 +273,6 @@ export class RelayService {
       oldName: input.oldName,
       newName: input.newName,
       renamedMemberSessionId: input.renamedMemberSessionId,
-      remainingOldHolders: input.remainingOldHolders,
       wires,
     })
     for (const change of plan.updates) {

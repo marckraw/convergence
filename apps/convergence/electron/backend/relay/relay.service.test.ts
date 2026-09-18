@@ -1279,7 +1279,6 @@ describe('RelayService', () => {
         oldName: 'horse opus',
         newName: 'opus-mac',
         renamedMemberSessionId: 's2',
-        remainingOldHolders: 0,
       })
 
       expect(result.carried.sort()).toEqual([in1.id, in2.id].sort())
@@ -1290,11 +1289,12 @@ describe('RelayService', () => {
       expect(service.getById(ret.id)?.conditionToken).toBeNull()
     })
 
-    it('R3: rewrites spawn_spec.member when no other seat still holds the old name', () => {
+    it('A/R3: a recipe self-hail carries token and spawn member together', () => {
       const relay = service.create({
         crewId: 'c1',
         sourceSessionId: 's1',
         action: 'spawn',
+        conditionToken: 'BATON: horse opus',
         spawnSpec,
       })
       expect(relay.spawnSpec?.member).toBe('horse opus')
@@ -1304,11 +1304,29 @@ describe('RelayService', () => {
         oldName: 'horse opus',
         newName: 'opus-mac',
         renamedMemberSessionId: null,
-        remainingOldHolders: 0,
       })
 
       expect(result.carried).toEqual([relay.id])
+      expect(result.left).toEqual([])
       expect(service.getById(relay.id)?.spawnSpec?.member).toBe('opus-mac')
+      expect(service.getById(relay.id)?.conditionToken).toBe('BATON: opus-mac')
+    })
+
+    it('B: a resident rename does not rewrite a spawn that names the same string', () => {
+      const relay = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'spawn',
+        spawnSpec,
+      })
+      const result = service.carrySeatRename({
+        crewId: 'c1',
+        oldName: 'horse opus',
+        newName: 'opus-mac',
+        renamedMemberSessionId: 's2',
+      })
+      expect(result.carried).toEqual([])
+      expect(service.getById(relay.id)?.spawnSpec?.member).toBe('horse opus')
     })
 
     it('R5: clearing lists waiters and changes no wire', () => {
@@ -1324,7 +1342,6 @@ describe('RelayService', () => {
         oldName: 'horse opus',
         newName: null,
         renamedMemberSessionId: 's2',
-        remainingOldHolders: 0,
       })
       expect(result.carried).toEqual([])
       expect(result.left).toEqual([inbound.id])

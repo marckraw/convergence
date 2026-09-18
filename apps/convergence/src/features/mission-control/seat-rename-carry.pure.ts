@@ -24,19 +24,11 @@ export function formatSeatRenameCarryNotice(input: {
   }
   if (left > 0 && oldName !== null && oldName.trim() !== '') {
     const previous = batonConditionToken(oldName)
-    if (newName !== null && newName.trim() !== '') {
-      parts.push(
-        left === 1
-          ? `1 wire still waits for "${previous}" (it targets another seat)`
-          : `${left} wires still wait for "${previous}" (they target another seat)`,
-      )
-    } else {
-      parts.push(
-        left === 1
-          ? `1 wire still waits for "${previous}"`
-          : `${left} wires still wait for "${previous}"`,
-      )
-    }
+    parts.push(
+      left === 1
+        ? `1 wire still waits for "${previous}"`
+        : `${left} wires still wait for "${previous}"`,
+    )
   }
-  return parts.length > 0 ? parts.join(' ') : null
+  return parts.length > 0 ? parts.join('; ') : null
 }

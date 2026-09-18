@@ -23,7 +23,7 @@ export interface SeatRenameCarryUpdate {
 
 /**
  * Which wires move with a seat rename, and which stay waiting on the old
- * name because they target someone else (or still name a seat that holds it).
+ * name because they target someone else.
  */
 export interface SeatRenameCarryPlan {
   updates: SeatRenameCarryUpdate[]
@@ -37,21 +37,20 @@ export interface SeatRenameCarryPlan {
  * Pattern: Planner — pure decide-then-apply so the service's transaction is
  * a dumb write of an already-settled list, and the recipient / exact-token /
  * spawn-name rules stay testable without a database.
+ *
+ * A wire has one recipient: the conversation it targets, or the recipe seat
+ * its spawn spec names. Every reference to the renamed seat on a wire whose
+ * recipient IS that seat moves together. `null === null` is never a match —
+ * a recipe rename does not treat every target-less wire as inbound.
  */
 export function planSeatRenameCarry(input: {
   oldName: string | null
   newName: string | null
   /** Conversation seat this rename belongs to; null for a recipe seat. */
   renamedMemberSessionId: string | null
-  /**
-   * How many other members of the crew still hold `oldName` after this
-   * rename. When > 0, a spawn that names `old` may mean the other seat.
-   */
-  remainingOldHolders: number
   wires: SeatRenameCarryWire[]
 }): SeatRenameCarryPlan {
-  const { oldName, newName, renamedMemberSessionId, remainingOldHolders } =
-    input
+  const { oldName, newName, renamedMemberSessionId } = input
 
   // First naming, or nothing to leave behind: there is no old token to move.
   if (oldName === null || oldName.trim() === '') {
@@ -61,36 +60,36 @@ export function planSeatRenameCarry(input: {
   const oldToken = batonConditionToken(oldName)
   const clearing = newName === null || newName.trim() === ''
   const newToken = clearing ? null : batonConditionToken(newName)
+  const isRecipe = renamedMemberSessionId === null
 
   const updatesById = new Map<string, SeatRenameCarryUpdate>()
   const left = new Set<string>()
 
   for (const wire of input.wires) {
+    // Recipient is M ⇔ conversation∧target===sessionId ∨ recipe∧spawnMember===old.
+    const recipientIsM = isRecipe
+      ? wire.spawnMember === oldName
+      : wire.targetSessionId === renamedMemberSessionId
     const waitsOnOld = sameCondition(wire.conditionToken, oldToken)
-    if (waitsOnOld) {
-      if (
-        !clearing &&
-        newToken !== null &&
-        renamedMemberSessionId !== null &&
-        wire.targetSessionId === renamedMemberSessionId
-      ) {
-        const existing = updatesById.get(wire.id) ?? { id: wire.id }
-        existing.conditionToken = newToken
-        updatesById.set(wire.id, existing)
-      } else {
-        left.add(wire.id)
-      }
-    }
 
-    if (wire.spawnMember !== null && wire.spawnMember === oldName) {
-      if (!clearing && newName !== null && remainingOldHolders === 0) {
+    if (recipientIsM) {
+      if (!clearing && newName !== null) {
         const existing = updatesById.get(wire.id) ?? { id: wire.id }
-        existing.spawnMember = newName
-        updatesById.set(wire.id, existing)
-        left.delete(wire.id)
-      } else if (!updatesById.has(wire.id)) {
+        let changed = false
+        if (waitsOnOld && newToken !== null) {
+          existing.conditionToken = newToken
+          changed = true
+        }
+        if (isRecipe && wire.spawnMember === oldName) {
+          existing.spawnMember = newName
+          changed = true
+        }
+        if (changed) updatesById.set(wire.id, existing)
+      } else if (waitsOnOld || (isRecipe && wire.spawnMember === oldName)) {
         left.add(wire.id)
       }
+    } else if (waitsOnOld) {
+      left.add(wire.id)
     }
   }
 

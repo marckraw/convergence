@@ -48,6 +48,7 @@ function renderPanel(
     } | null
     onRemoveMember?: (member: CrewMemberRef) => void
     onOpenConversation?: (sessionId: string) => void
+    seatNotices?: Record<string, string>
   } = {},
 ) {
   const noop = vi.fn()
@@ -84,6 +85,7 @@ function renderPanel(
           },
         }
       : {},
+    seatNotices: seat.seatNotices ?? {},
     batonNameDrafts: seat.batonNameDrafts ?? {},
     onCrewNameChange: noop,
     onBatonNameEdit: noop,
@@ -493,6 +495,20 @@ describe('R5 — the baton name field', () => {
     expect(
       screen.getByText('Wires address this seat as “opus-3”.'),
     ).toBeInTheDocument()
+  })
+
+  it('MAR-3157: shows the carry notice under the name field', () => {
+    // Mutation: delete the data-seat-name-notice block → query fails → red.
+    renderPanel(null, null, [opus], vi.fn(), {
+      ...seatCtx,
+      openSeatKey: 's1',
+      seatNotices: {
+        s1: '1 wire now waits for "BATON: opus-mac"',
+      },
+    })
+    const notice = document.querySelector('[data-seat-name-notice]')
+    expect(notice).not.toBeNull()
+    expect(notice).toHaveTextContent('1 wire now waits for "BATON: opus-mac"')
   })
 })
 

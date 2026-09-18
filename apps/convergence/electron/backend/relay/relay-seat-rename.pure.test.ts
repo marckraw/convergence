@@ -25,7 +25,6 @@ describe('planSeatRenameCarry (MAR-3157)', () => {
       oldName,
       newName,
       renamedMemberSessionId: 's-m',
-      remainingOldHolders: 0,
       wires: [
         wire({
           id: 'in-1',
@@ -63,7 +62,6 @@ describe('planSeatRenameCarry (MAR-3157)', () => {
       oldName,
       newName,
       renamedMemberSessionId: 's-m',
-      remainingOldHolders: 0,
       wires: [
         wire({
           id: 'exact',
@@ -100,26 +98,72 @@ describe('planSeatRenameCarry (MAR-3157)', () => {
     ])
   })
 
-  it('R3: spawn member follows when no other seat still holds the old name', () => {
-    const alone = planSeatRenameCarry({
-      oldName,
-      newName,
+  it('A: a recipe self-hail carries token and spawn member together', () => {
+    // Mutation: carry the member without the token → updates lack conditionToken → red.
+    const plan = planSeatRenameCarry({
+      oldName: 'reviewer',
+      newName: 'critic',
       renamedMemberSessionId: null,
-      remainingOldHolders: 0,
-      wires: [wire({ id: 'spawn', spawnMember: oldName })],
+      wires: [
+        wire({
+          id: 'self-hail',
+          targetSessionId: null,
+          conditionToken: 'BATON: reviewer',
+          spawnMember: 'reviewer',
+        }),
+      ],
     })
-    expect(alone.carried).toEqual(['spawn'])
-    expect(alone.updates).toEqual([{ id: 'spawn', spawnMember: newName }])
+    expect(plan.carried).toEqual(['self-hail'])
+    expect(plan.left).toEqual([])
+    expect(plan.updates).toEqual([
+      {
+        id: 'self-hail',
+        conditionToken: 'BATON: critic',
+        spawnMember: 'critic',
+      },
+    ])
+  })
 
-    const shared = planSeatRenameCarry({
+  it('A: a recipe rename does not treat a target-less unrelated wire as inbound', () => {
+    // Mutation: drop the conversation-seat clause (null===null) → carried → red.
+    const plan = planSeatRenameCarry({
       oldName,
       newName,
       renamedMemberSessionId: null,
-      remainingOldHolders: 1,
+      wires: [
+        wire({
+          id: 'unrelated',
+          targetSessionId: null,
+          conditionToken: batonConditionToken(oldName),
+          spawnMember: null,
+        }),
+      ],
+    })
+    expect(plan.carried).toEqual([])
+    expect(plan.left).toEqual(['unrelated'])
+    expect(plan.updates).toEqual([])
+  })
+
+  it('R3/B: spawn member follows a recipe rename; a resident rename leaves the spawn alone', () => {
+    const recipe = planSeatRenameCarry({
+      oldName,
+      newName,
+      renamedMemberSessionId: null,
       wires: [wire({ id: 'spawn', spawnMember: oldName })],
     })
-    expect(shared.carried).toEqual([])
-    expect(shared.left).toEqual(['spawn'])
+    expect(recipe.carried).toEqual(['spawn'])
+    expect(recipe.updates).toEqual([{ id: 'spawn', spawnMember: newName }])
+
+    // Resident + recipe may share a string; only the recipe is a spawn referent.
+    const resident = planSeatRenameCarry({
+      oldName,
+      newName,
+      renamedMemberSessionId: 's-resident',
+      wires: [wire({ id: 'spawn', spawnMember: oldName })],
+    })
+    expect(resident.carried).toEqual([])
+    expect(resident.left).toEqual([])
+    expect(resident.updates).toEqual([])
   })
 
   it('R5: clearing carries nothing and lists every waiter on the old name', () => {
@@ -127,7 +171,6 @@ describe('planSeatRenameCarry (MAR-3157)', () => {
       oldName,
       newName: null,
       renamedMemberSessionId: 's-m',
-      remainingOldHolders: 0,
       wires: [
         wire({
           id: 'in',
@@ -144,7 +187,7 @@ describe('planSeatRenameCarry (MAR-3157)', () => {
     })
     expect(plan.carried).toEqual([])
     expect(plan.updates).toEqual([])
-    expect(plan.left.sort()).toEqual(['fan', 'in', 'spawn'])
+    expect(plan.left.sort()).toEqual(['fan', 'in'])
   })
 
   it('R5: first naming carries nothing', () => {
@@ -152,7 +195,6 @@ describe('planSeatRenameCarry (MAR-3157)', () => {
       oldName: null,
       newName,
       renamedMemberSessionId: 's-m',
-      remainingOldHolders: 0,
       wires: [
         wire({
           id: 'in',
