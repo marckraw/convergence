@@ -1823,7 +1823,13 @@ interface ElectronAPI {
       crewId: string,
       member: { sessionId: string } | { batonName: string },
       batonName: string | null,
-    ) => Promise<SessionCrewData>
+    ) => Promise<{
+      crew: SessionCrewData
+      carried: string[]
+      left: string[]
+      oldName: string | null
+      newName: string | null
+    }>
     addRecipeMember: (
       crewId: string,
       input: {

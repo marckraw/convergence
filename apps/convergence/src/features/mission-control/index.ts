@@ -36,6 +36,7 @@ export {
   batonNameRefusal,
   formatCrewLoopDefault,
 } from './crew-loop.pure'
+export { formatSeatRenameCarryNotice } from './seat-rename-carry.pure'
 
 // The Canvas as a workspace (R10, R13): the toolbar, the three right-hand
 // panels, and the pure rules behind them. Together these are the Canvas home

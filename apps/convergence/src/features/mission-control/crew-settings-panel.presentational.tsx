@@ -74,6 +74,8 @@ interface CrewSettingsPanelProps {
    * commits from one switch -- a card and a name -- each keep their sentence.
    */
   seatProblems: Record<string, Partial<Record<SeatRefusalField, string>>>
+  /** Non-refusal notices under a seat's baton name (MAR-3157). */
+  seatNotices?: Record<string, string>
   /** What is being typed, per member, until they finish. */
   batonNameDrafts: Record<string, string>
   /**
@@ -168,6 +170,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
   busy,
   running,
   seatProblems,
+  seatNotices = {},
   batonNameDrafts,
   onCrewNameChange,
   onBatonNameEdit,
@@ -258,6 +261,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
             }
             hostOptions={hostOptions}
             problems={seatProblems[key] ?? {}}
+            nameNotice={seatNotices[key] ?? null}
             busy={busy}
             onNameChange={(value) => onBatonNameEdit(key, value)}
             onNameCommit={() => onBatonNameCommit(key)}

@@ -88,8 +88,13 @@ export const sessionCrewApi = {
     crewId: string,
     member: CrewMemberRef,
     batonName: string | null,
-  ): Promise<SessionCrew> =>
-    window.electronAPI.crew.setMemberBatonName(crewId, member, batonName),
+  ): Promise<{
+    crew: SessionCrew
+    carried: string[]
+    left: string[]
+    oldName: string | null
+    newName: string | null
+  }> => window.electronAPI.crew.setMemberBatonName(crewId, member, batonName),
 
   /**
    * Remembers where a card was dropped, or puts it back under the automatic

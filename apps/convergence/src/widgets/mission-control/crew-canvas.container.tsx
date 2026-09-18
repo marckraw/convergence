@@ -61,6 +61,7 @@ import {
   crewsHoldingSession,
   batonNameRefusal,
   seatPatchField,
+  formatSeatRenameCarryNotice,
   appendRunPage,
   beforeDeliveryOptions,
   changeDraftRecipient,
@@ -209,6 +210,14 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         Record<SeatRefusalField, { message: string; value: string | null }>
       >
     >
+  }>({ crewId: null, byKey: {} })
+  /**
+   * Notices under a seat's baton name after a rename carry (MAR-3157) — not
+   * refusals: muted copy about how many wires moved.
+   */
+  const [seatNotices, setSeatNotices] = useState<{
+    crewId: string | null
+    byKey: Record<string, string>
   }>({ crewId: null, byKey: {} })
   /** The one seat whose editor is open (MAR-3118 R2). */
   const [openSeatKey, setOpenSeatKey] = useState<string | null>(null)
@@ -430,6 +439,10 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         ]),
       ),
     [refusalsHere],
+  )
+  const noticesHere = useMemo(
+    () => (crew && seatNotices.crewId === crew.id ? seatNotices.byKey : {}),
+    [crew, seatNotices],
   )
 
   const relays = useMemo(
@@ -830,11 +843,30 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       setBusy(true)
       setSeatProblem(key, 'batonName', null)
       try {
-        await sessionCrewApi.setMemberBatonName(
+        const result = await sessionCrewApi.setMemberBatonName(
           crew.id,
           ref,
           typed.trim() ? typed : null,
         )
+        const notice = formatSeatRenameCarryNotice({
+          carried: result.carried.length,
+          left: result.left.length,
+          oldName: result.oldName,
+          newName: result.newName,
+        })
+        const noticeKey =
+          member?.sessionId != null
+            ? key
+            : result.newName
+              ? memberKey({ sessionId: null, batonName: result.newName })
+              : key
+        setSeatNotices({
+          crewId: crew.id,
+          byKey: notice ? { [noticeKey]: notice } : {},
+        })
+        if (result.newName && noticeKey !== key && openSeatKey === key) {
+          setOpenSeatKey(noticeKey)
+        }
         setBatonNameDrafts((drafts) => {
           const next = { ...drafts }
           delete next[key]
@@ -842,6 +874,8 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         })
         await loadCrews()
       } catch (error) {
+        // A refusal replaces any prior carry notice — only the door's reason.
+        setSeatNotices({ crewId: crew.id, byKey: {} })
         // The roster stays as it was and the typing stays in the field, with
         // the door's own reason under it.
         refuseSeatField(key, 'batonName', batonNameRefusal(error), typed)
@@ -858,6 +892,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       refuseSeatField,
       setSeatProblem,
       isRefusedAsTyped,
+      openSeatKey,
     ],
   )
 
@@ -1923,6 +1958,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               busy={busy}
               running={crewIsRunning}
               seatProblems={seatProblems}
+              seatNotices={noticesHere}
               batonNameDrafts={batonNameDrafts}
               seatDrafts={seatDrafts}
               resolveHost={(sessionId) =>

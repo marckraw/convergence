@@ -56,6 +56,11 @@ interface SeatEditorProps {
   hostOptions: readonly SeatHostOption[]
   /** The door's refusals about this seat, one per field (lap 2, B). */
   problems: Partial<Record<SeatRefusalField, string>>
+  /**
+   * A non-refusal notice under the baton name (MAR-3157): how many wires
+   * moved with a rename. Distinct from `problems` so it is not amber.
+   */
+  nameNotice?: string | null
   busy: boolean
   onNameChange: (value: string) => void
   onNameCommit: () => void
@@ -86,6 +91,7 @@ export const SeatEditor: FC<SeatEditorProps> = ({
   factsHeading,
   hostOptions,
   problems,
+  nameNotice = null,
   busy,
   onNameChange,
   onNameCommit,
@@ -197,6 +203,14 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           </Button>
         </div>
         {refusalFor('batonName')}
+        {nameNotice ? (
+          <p
+            data-seat-name-notice
+            className="text-[11px] text-muted-foreground"
+          >
+            {nameNotice}
+          </p>
+        ) : null}
         <p className="text-[10px] text-muted-foreground">
           {batonNameHelper(nameValue, recipe)}
         </p>

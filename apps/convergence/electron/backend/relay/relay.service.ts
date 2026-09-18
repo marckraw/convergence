@@ -14,6 +14,7 @@ import {
   normalizeRelaySpawnSpec,
   BUDGETED_OUTCOMES,
 } from './relay.pure'
+import { planSeatRenameCarry } from './relay-seat-rename.pure'
 import {
   relayHopFromRow,
   sessionRelayFromRow,
@@ -246,6 +247,54 @@ export class RelayService {
       )
 
     return this.requireById(id)
+  }
+
+  /**
+   * Carries every wire whose recipient is the renamed seat — inbound tokens
+   * on a conversation seat, and token + spawn member on a recipe seat —
+   * leaving hand-written conditions and fan-outs alone (MAR-3157).
+   * RelayService owns every write to `session_relays`.
+   */
+  carrySeatRename(input: {
+    crewId: string
+    oldName: string | null
+    newName: string | null
+    renamedMemberSessionId: string | null
+  }): { carried: string[]; left: string[] } {
+    const wires = this.list()
+      .filter((relay) => relay.crewId === input.crewId)
+      .map((relay) => ({
+        id: relay.id,
+        targetSessionId: relay.targetSessionId,
+        conditionToken: relay.conditionToken,
+        spawnMember: relay.spawnSpec?.member ?? null,
+      }))
+    const plan = planSeatRenameCarry({
+      oldName: input.oldName,
+      newName: input.newName,
+      renamedMemberSessionId: input.renamedMemberSessionId,
+      wires,
+    })
+    for (const change of plan.updates) {
+      const current = this.requireById(change.id)
+      const patch: UpdateSessionRelayInput = {}
+      if (change.conditionToken !== undefined) {
+        patch.conditionToken = change.conditionToken
+      }
+      if (change.spawnMember !== undefined) {
+        if (!current.spawnSpec) {
+          throw new Error(
+            `Wire ${change.id} names a seat to rename but has no spawn spec`,
+          )
+        }
+        patch.spawnSpec = {
+          ...current.spawnSpec,
+          member: change.spawnMember,
+        }
+      }
+      this.update(change.id, patch)
+    }
+    return { carried: plan.carried, left: plan.left }
   }
 
   /**

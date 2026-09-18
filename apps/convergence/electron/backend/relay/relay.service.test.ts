@@ -1228,6 +1228,165 @@ describe('RelayService', () => {
       expect(hops.map((hop) => hop.id)).toEqual([recent.id])
     })
   })
+
+  describe('carrySeatRename (MAR-3157)', () => {
+    const spawnSpec = {
+      member: 'horse opus' as string | null,
+      executionHost: 'local' as const,
+      workAddress: null,
+      roleCard: null,
+      returnWire: null,
+      projectId: 'p1',
+      providerId: 'codex',
+      model: null,
+      effort: null,
+      name: 'Reviewer',
+      providerAccountId: null,
+    }
+
+    it('R1: carries two inbound tokens; leaves a fan-out; leaves an unconditional return', () => {
+      const in1 = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        conditionToken: 'BATON: horse opus',
+      })
+      const in2 = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's3',
+        action: 'hail',
+        targetSessionId: 's2',
+        conditionToken: 'BATON: horse opus',
+      })
+      const fan = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's3',
+        conditionToken: 'BATON: horse opus',
+      })
+      const ret = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's2',
+        action: 'hail',
+        targetSessionId: 's1',
+        conditionToken: null,
+      })
+
+      const result = service.carrySeatRename({
+        crewId: 'c1',
+        oldName: 'horse opus',
+        newName: 'opus-mac',
+        renamedMemberSessionId: 's2',
+      })
+
+      expect(result.carried.sort()).toEqual([in1.id, in2.id].sort())
+      expect(result.left).toEqual([fan.id])
+      expect(service.getById(in1.id)?.conditionToken).toBe('BATON: opus-mac')
+      expect(service.getById(in2.id)?.conditionToken).toBe('BATON: opus-mac')
+      expect(service.getById(fan.id)?.conditionToken).toBe('BATON: horse opus')
+      expect(service.getById(ret.id)?.conditionToken).toBeNull()
+    })
+
+    it('A/R3: a recipe self-hail carries token and spawn member together', () => {
+      const relay = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'spawn',
+        conditionToken: 'BATON: horse opus',
+        spawnSpec,
+      })
+      expect(relay.spawnSpec?.member).toBe('horse opus')
+
+      const result = service.carrySeatRename({
+        crewId: 'c1',
+        oldName: 'horse opus',
+        newName: 'opus-mac',
+        renamedMemberSessionId: null,
+      })
+
+      expect(result.carried).toEqual([relay.id])
+      expect(result.left).toEqual([])
+      expect(service.getById(relay.id)?.spawnSpec?.member).toBe('opus-mac')
+      expect(service.getById(relay.id)?.conditionToken).toBe('BATON: opus-mac')
+    })
+
+    it('B: a rename in one crew does not rewrite wires in another', () => {
+      // Mutation: delete `.filter((relay) => relay.crewId === input.crewId)` → red.
+      db.prepare(
+        "INSERT INTO session_crews (id, name) VALUES ('c2', 'Other loop')",
+      ).run()
+      const here = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        conditionToken: 'BATON: horse opus',
+      })
+      const elsewhere = service.create({
+        crewId: 'c2',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        conditionToken: 'BATON: horse opus',
+      })
+
+      const result = service.carrySeatRename({
+        crewId: 'c1',
+        oldName: 'horse opus',
+        newName: 'opus-mac',
+        renamedMemberSessionId: 's2',
+      })
+
+      expect(result.carried).toEqual([here.id])
+      expect(result.left).toEqual([])
+      expect(service.getById(here.id)?.conditionToken).toBe('BATON: opus-mac')
+      expect(service.getById(elsewhere.id)?.conditionToken).toBe(
+        'BATON: horse opus',
+      )
+      expect(result.carried).not.toContain(elsewhere.id)
+      expect(result.left).not.toContain(elsewhere.id)
+    })
+
+    it('B: a resident rename does not rewrite a spawn that names the same string', () => {
+      const relay = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'spawn',
+        spawnSpec,
+      })
+      const result = service.carrySeatRename({
+        crewId: 'c1',
+        oldName: 'horse opus',
+        newName: 'opus-mac',
+        renamedMemberSessionId: 's2',
+      })
+      expect(result.carried).toEqual([])
+      expect(service.getById(relay.id)?.spawnSpec?.member).toBe('horse opus')
+    })
+
+    it('R5: clearing lists waiters and changes no wire', () => {
+      const inbound = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        conditionToken: 'BATON: horse opus',
+      })
+      const result = service.carrySeatRename({
+        crewId: 'c1',
+        oldName: 'horse opus',
+        newName: null,
+        renamedMemberSessionId: 's2',
+      })
+      expect(result.carried).toEqual([])
+      expect(result.left).toEqual([inbound.id])
+      expect(service.getById(inbound.id)?.conditionToken).toBe(
+        'BATON: horse opus',
+      )
+    })
+  })
 })
 
 /**

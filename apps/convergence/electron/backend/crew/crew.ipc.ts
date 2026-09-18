@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
+import type Database from 'better-sqlite3'
 import type { CrewService } from './crew.service'
 import type {
   CreateCrewRecipeSeatInput,
@@ -8,9 +9,17 @@ import type {
 import type { TrackerBindingInput } from '../tracker/tracker-binding.pure'
 import type {
   CreateSessionCrewInput,
+  SeatRenameResult,
   SessionCrew,
+  SessionCrewMember,
   UpdateSessionCrewInput,
 } from './crew.types'
+import { normalizeCrewBatonName } from './crew.pure'
+import type { RelayService } from '../relay/relay.service'
+import {
+  broadcastRelays as defaultBroadcastRelays,
+  type RelayBroadcastFn,
+} from '../relay/relay.ipc'
 
 export const CREW_UPDATED_CHANNEL = 'crew:updated'
 
@@ -24,6 +33,17 @@ export const broadcastCrews: CrewBroadcastFn = (crews) => {
   }
 }
 
+function memberMatchesRef(
+  member: SessionCrewMember,
+  ref: CrewMemberRef,
+): boolean {
+  if ('sessionId' in ref) return member.sessionId === ref.sessionId
+  const wanted = normalizeCrewBatonName(ref.batonName)
+  return (
+    member.sessionId === null && wanted !== null && member.batonName === wanted
+  )
+}
+
 /**
  * Every mutation answers the caller AND broadcasts the whole crew list to all
  * windows: crews are cross-project furniture, so a second Mission Control
@@ -31,7 +51,12 @@ export const broadcastCrews: CrewBroadcastFn = (crews) => {
  */
 export function registerCrewIpcHandlers(deps: {
   service: CrewService
+  /** Owns `session_relays` writes for a seat rename carry (MAR-3157). */
+  relays: RelayService
+  /** Shared with RelayService so rename + carry commit in one transaction. */
+  db: Database.Database
   broadcast?: CrewBroadcastFn
+  broadcastRelays?: RelayBroadcastFn
   /**
    * Forgets a deleted crew's tracker key (MAR-3084 lap 2, C). A secret must
    * not outlive its owner, and the deleted crew's form was the only surface
@@ -40,8 +65,9 @@ export function registerCrewIpcHandlers(deps: {
   forgetTrackerKey?: (crewId: string) => Promise<unknown>
   log?: (message: string, error: unknown) => void
 }): void {
-  const { service } = deps
+  const { service, relays, db } = deps
   const broadcast = deps.broadcast ?? broadcastCrews
+  const broadcastWireList = deps.broadcastRelays ?? defaultBroadcastRelays
 
   const mutate = <T>(run: () => T): T => {
     const result = run()
@@ -119,8 +145,69 @@ export function registerCrewIpcHandlers(deps: {
 
   ipcMain.handle(
     'crew:setMemberBatonName',
-    (_event, crewId: string, member: CrewMemberRef, batonName: string | null) =>
-      mutate(() => service.setMemberBatonName(crewId, member, batonName)),
+    (
+      _event,
+      crewId: string,
+      member: CrewMemberRef,
+      batonName: string | null,
+    ): SeatRenameResult => {
+      const run = db.transaction((): SeatRenameResult => {
+        const before = service.getById(crewId)
+        if (!before) throw new Error(`Crew not found: ${crewId}`)
+        const existing = before.members.find((entry) =>
+          memberMatchesRef(entry, member),
+        )
+        if (!existing) throw new Error('That seat is not in this crew')
+        const oldName = existing.batonName
+        const crew = service.setMemberBatonName(crewId, member, batonName)
+        // The new name is READ from the row just written, never re-derived
+        // from the input (lap 3, C). A conversation seat is found by its
+        // session. A recipe seat has no id but its name, so it is found by
+        // elimination: the one recipe whose name no OTHER recipe held before
+        // the write. That leans on recipe names being unique inside a crew --
+        // the service refuses a collision (`refuseRecipeNameCollision`) and
+        // the partial unique index `CREW_RECIPE_NAME_INDEX`
+        // (crew-seat-migration.service.ts) refuses the row whatever writes it.
+        const otherRecipeNames = new Set(
+          before.members
+            .filter(
+              (entry) =>
+                entry.sessionId === null && entry.batonName !== oldName,
+            )
+            .map((entry) => entry.batonName),
+        )
+        const afterMember =
+          existing.sessionId != null
+            ? crew.members.find(
+                (entry) => entry.sessionId === existing.sessionId,
+              )
+            : crew.members.find(
+                (entry) =>
+                  entry.sessionId === null &&
+                  entry.batonName !== null &&
+                  !otherRecipeNames.has(entry.batonName),
+              )
+        const newName = afterMember?.batonName ?? null
+        const carry = relays.carrySeatRename({
+          crewId,
+          oldName,
+          newName,
+          renamedMemberSessionId: existing.sessionId,
+        })
+        return {
+          crew,
+          carried: carry.carried,
+          left: carry.left,
+          oldName,
+          newName,
+        }
+      })
+
+      const result = run()
+      broadcast(service.list())
+      broadcastWireList(relays.list())
+      return result
+    },
   )
 
   // Where a card was dropped (R10). A mutation like every other in this file,
