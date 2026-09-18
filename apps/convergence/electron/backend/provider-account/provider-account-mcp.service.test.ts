@@ -7,7 +7,7 @@ import { ClaudeAccountMaintenance } from '../provider/claude-code/claude-account
 import type { ProviderAccountInteractiveRunner } from './provider-account-pty-runner'
 
 describe('Codex connectors (MAR-3183)', () => {
-  function bench(present = false) {
+  function bench(present = false, afterAddAuth = 'unknown') {
     const repository = new ProviderAccountRepository(getDatabase())
     repository.create({
       id: 'codex-test',
@@ -27,8 +27,14 @@ describe('Codex connectors (MAR-3183)', () => {
         code: 0,
         stderr: '',
         stdout: JSON.stringify(
-          present
-            ? [{ name: 'linear', enabled: true, auth_status: 'o_auth' }]
+          present || events.includes('add')
+            ? [
+                {
+                  name: 'linear',
+                  enabled: true,
+                  auth_status: present ? 'o_auth' : afterAddAuth,
+                },
+              ]
             : [],
         ),
       }
@@ -76,7 +82,7 @@ describe('Codex connectors (MAR-3183)', () => {
       expect(b.events).toEqual(
         present
           ? ['list', 'enter', 'login', 'exit']
-          : ['list', 'enter', 'add', 'login', 'exit'],
+          : ['list', 'enter', 'add', 'list', 'login', 'exit'],
       )
       expect(b.terminal.mock.calls.map(([c]) => c.args)).toEqual(
         present
@@ -88,6 +94,25 @@ describe('Codex connectors (MAR-3183)', () => {
       )
     },
   )
+  it('does not log in again when add already authorized Linear', async () => {
+    const b = bench(false, 'o_auth')
+    await b.subject.connectLinear('codex-test')
+    expect(b.events).toEqual(['list', 'enter', 'add', 'list', 'exit'])
+    expect(b.terminal).toHaveBeenCalledOnce()
+  })
+  it('names the server in a failed login', async () => {
+    const b = bench()
+    b.terminal.mockImplementation(async (_command, lifecycle) => {
+      lifecycle!.onExitConfirmed()
+      return { code: 1, output: '' }
+    })
+    await expect(
+      b.subject.authorizeConnector({
+        accountId: 'codex-test',
+        serverName: 'linear',
+      }),
+    ).rejects.toThrow('Codex connector linear failed (exit code 1).')
+  })
   it('holds the Codex door after a result until confirmed exit', async () => {
     const b = bench()
     let confirm!: () => void
@@ -155,7 +180,7 @@ describe('Codex connectors (MAR-3183)', () => {
       error: null,
     })
     expect(b.events).toEqual(['list'])
-    b.read.mockResolvedValue({ code: 0, stdout: '{}', stderr: '' })
+    b.read.mockResolvedValue({ code: 0, stdout: '{', stderr: '' })
     expect((await b.subject.listConnectors('codex-test')).error).toBe(
       'Codex returned an invalid connector list.',
     )

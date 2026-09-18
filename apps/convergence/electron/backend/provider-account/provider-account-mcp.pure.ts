@@ -1,6 +1,11 @@
 import { buildClaudeAccountEnv } from './provider-account-env.pure'
 import { buildCodexAccountEnv } from './provider-account-codex-env.pure'
-import type { ProviderAccountConnector } from './provider-account-mcp.service'
+import type { ProviderAccountConnector } from './provider-account-mcp.types'
+import {
+  parseCodexServers,
+  readCodexServerFlags,
+  normalizeCodexStatus,
+} from '../mcp/codex-mcp.pure'
 import type { ClaudeAccountEnvTarget } from './provider-account-env.pure'
 import type { ProviderAccountCommand } from './provider-account-enrolment.pure'
 import {
@@ -62,59 +67,48 @@ export function buildCodexMcpAddCommand(
 
 /** CLI JSON is an IO boundary: retain only display fields, never headers or environment values. */
 export function parseCodexMcpList(json: string): ProviderAccountConnector[] {
-  let entries: unknown
+  let entries: ReturnType<typeof parseCodexServers>
   try {
-    entries = JSON.parse(json)
+    entries = parseCodexServers(json)
   } catch {
     throw new Error('Codex returned an invalid connector list.')
   }
-  if (!Array.isArray(entries))
-    throw new Error('Codex returned an invalid connector list.')
-  return entries.map((value: unknown) => {
-    if (
-      !value ||
-      typeof value !== 'object' ||
-      !('name' in value) ||
-      typeof value.name !== 'string'
-    ) {
-      throw new Error('Codex returned an invalid connector entry.')
-    }
-    const entry = value as Record<string, unknown>
-    const transport = entry.transport as
-      | { type?: unknown; url?: unknown }
-      | undefined
-    const enabled = entry.enabled === true
-    const disabledReason =
-      typeof entry.disabled_reason === 'string' ? entry.disabled_reason : null
-    const authorized = entry.auth_status === 'o_auth'
-    const unsupported = entry.auth_status === 'unsupported'
-    return {
-      name: value.name,
-      status: !enabled ? 'disabled' : authorized ? 'ready' : 'unknown',
-      statusLabel: !enabled
-        ? (disabledReason ?? 'Disabled')
-        : authorized
-          ? 'Authorized'
-          : unsupported
-            ? 'Authorization unsupported'
-            : 'Unknown — press Authorize to find out',
-      description:
-        transport?.type === 'streamable_http' &&
-        typeof transport.url === 'string'
-          ? transport.url
-          : transport?.type === 'stdio'
-            ? 'stdio'
-            : 'Unknown transport',
-      transportType:
-        transport?.type === 'streamable_http'
-          ? 'streamable_http'
-          : transport?.type === 'stdio'
-            ? 'stdio'
-            : 'unknown',
-      enabled,
-      disabledReason,
-      needsAuthorization: enabled && !authorized && !unsupported,
-    }
+  return entries.flatMap((entry): ProviderAccountConnector[] => {
+    if (!entry || typeof entry.name !== 'string' || !entry.name) return []
+    const transport = entry.transport
+    const { enabled, disabledReason } = readCodexServerFlags(entry)
+    const flags = normalizeCodexStatus(enabled, disabledReason)
+    const authStatus = 'auth_status' in entry ? entry.auth_status : undefined
+    const authorized = authStatus === 'o_auth'
+    const unsupported = authStatus === 'unsupported'
+    return [
+      {
+        name: entry.name,
+        status:
+          flags.status === 'disabled'
+            ? flags.status
+            : authorized
+              ? 'ready'
+              : 'unknown',
+        statusLabel:
+          flags.status === 'disabled'
+            ? flags.statusLabel
+            : authorized
+              ? 'Authorized'
+              : unsupported
+                ? 'Authorization unsupported'
+                : 'Unknown — press Authorize to find out',
+        description:
+          transport?.type === 'streamable_http' &&
+          typeof transport.url === 'string'
+            ? transport.url
+            : transport?.type === 'stdio'
+              ? 'stdio'
+              : 'Unknown transport',
+        needsAuthorization:
+          flags.status !== 'disabled' && !authorized && !unsupported,
+      },
+    ]
   })
 }
 /**

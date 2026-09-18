@@ -1,7 +1,15 @@
 import { spawn } from 'child_process'
 import { ClaudeAccountMaintenance } from '../provider/claude-code/claude-account-maintenance.service'
 import { mapClaudeStatus, parseClaudeListEntries } from '../mcp/claude-mcp.pure'
-import type { McpServerStatus } from '../mcp/mcp.types'
+import { parseCodexServers } from '../mcp/codex-mcp.pure'
+import type {
+  ProviderAccountConnector,
+  ProviderAccountConnectorsResult,
+} from './provider-account-mcp.types'
+export type {
+  ProviderAccountConnector,
+  ProviderAccountConnectorsResult,
+} from './provider-account-mcp.types'
 import {
   buildClaudeMcpListCommand,
   buildClaudeMcpLoginCommand,
@@ -38,25 +46,6 @@ import type { ProviderAccountRepository } from './provider-account.repository'
  * are two runners here rather than one: reading a list is a pipe's job, while
  * authorizing is a terminal's — `claude mcp login` refuses piped stdio (PA11.1).
  */
-
-export interface ProviderAccountConnector {
-  transportType?: 'streamable_http' | 'stdio' | 'unknown'
-  enabled?: boolean
-  disabledReason?: string | null
-  name: string
-  status: McpServerStatus
-  statusLabel: string
-  description: string
-  /** True when this account has to authorize before the tools work here. */
-  needsAuthorization: boolean
-}
-
-export interface ProviderAccountConnectorsResult {
-  providerAccountId: string | null
-  connectors: ProviderAccountConnector[]
-  /** Set when the list could not be read at all; connectors is then empty. */
-  error: string | null
-}
 
 const defaultRunCommand: ProviderAccountCommandRunner = (command) =>
   new Promise((resolve, reject) => {
@@ -156,6 +145,10 @@ export class ProviderAccountMcpService {
   private async listCodexConnectors(
     account: CodexAccountEnvTarget,
   ): Promise<ProviderAccountConnector[]> {
+    return parseCodexMcpList(await this.readCodexList(account))
+  }
+
+  private async readCodexList(account: CodexAccountEnvTarget): Promise<string> {
     const result = await this.runCommand(
       buildCodexMcpListCommand(this.codexCommandInput(account)),
     )
@@ -163,7 +156,7 @@ export class ProviderAccountMcpService {
       throw new Error(
         `Codex could not list connectors (exit code ${result.code}).`,
       )
-    return parseCodexMcpList(result.stdout)
+    return result.stdout
   }
 
   private async runCodexLogin(
@@ -193,7 +186,7 @@ export class ProviderAccountMcpService {
     await exited
     if (result.code !== 0)
       throw new Error(
-        `Codex connector ${command.args[1]} failed (exit code ${result.code}).`,
+        `Codex connector ${command.args[2]} failed (exit code ${result.code}).`,
       )
     return { code: result.code, output: '' }
   }
@@ -216,13 +209,28 @@ export class ProviderAccountMcpService {
     return this.withCodexMaintenance(account, async () => {
       if (!connectors.some((connector) => connector.name === 'linear')) {
         // Codex add can initiate OAuth itself; it needs the same terminal and exit witness.
-        await this.runCodexTerminal(
+        const added = await this.runCodexTerminal(
           buildCodexMcpAddCommand({
             ...this.codexCommandInput(account),
             serverName: 'linear',
             url: 'https://mcp.linear.app/mcp',
           }),
         )
+        const stdout = await this.readCodexList(account)
+        let linear
+        try {
+          linear = parseCodexServers(stdout).find(
+            (entry) => entry?.name === 'linear',
+          )
+        } catch {
+          throw new Error('Codex returned an invalid connector list.')
+        }
+        if (
+          linear &&
+          'auth_status' in linear &&
+          linear.auth_status === 'o_auth'
+        )
+          return added
       }
       return this.runCodexLogin(account, 'linear')
     })

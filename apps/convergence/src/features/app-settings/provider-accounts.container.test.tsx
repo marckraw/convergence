@@ -774,7 +774,14 @@ describe('ProviderAccountsContainer', () => {
         'This Codex account is in use. Wait for its active work to finish.'
       providerAccounts.authorizeConnector.mockResolvedValue({
         providerAccountId: 'acct-a',
-        connectors: [],
+        connectors: [
+          {
+            name: 'linear',
+            status: 'unknown',
+            statusLabel: 'Unknown',
+            needsAuthorization: true,
+          },
+        ],
         error: message,
       })
       await openCodex([
@@ -787,6 +794,10 @@ describe('ProviderAccountsContainer', () => {
       ])
       fireEvent.click(await screen.findByRole('button', { name: 'Authorize' }))
       expect(await screen.findByText(message)).toBeInTheDocument()
+      expect(screen.getByText('linear')).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Authorize' }),
+      ).toBeInTheDocument()
     })
     it('asks this account what it can reach, not the machine', async () => {
       // MCP tokens are per credential slot, so the answer is account-shaped.

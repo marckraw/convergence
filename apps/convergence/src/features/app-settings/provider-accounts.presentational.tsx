@@ -404,11 +404,8 @@ export function ProviderAccountsFields({
                       <p className="text-sm text-muted-foreground">
                         Asking this account what it can reach...
                       </p>
-                    ) : connectors?.error ? (
-                      <p className="text-sm text-muted-foreground">
-                        {connectors.error}
-                      </p>
-                    ) : connectors?.connectors.length === 0 ? (
+                    ) : connectors?.connectors.length === 0 &&
+                      !connectors.error ? (
                       <p className="text-sm text-muted-foreground">
                         No MCP servers are configured.
                       </p>
@@ -444,6 +441,11 @@ export function ProviderAccountsFields({
                         </div>
                       ))
                     )}
+                    {!isLoadingConnectors && connectors?.error ? (
+                      <p className="text-sm text-muted-foreground">
+                        {connectors.error}
+                      </p>
+                    ) : null}
                     {isCodex &&
                     !isLoadingConnectors &&
                     connectors &&

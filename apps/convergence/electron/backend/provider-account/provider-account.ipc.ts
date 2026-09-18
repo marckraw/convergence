@@ -104,13 +104,14 @@ export function registerProviderAccountIpcHandlers(deps: {
         await deps.mcp.connectLinear(accountId)
         return deps.mcp.listConnectors(accountId)
       } catch (error) {
+        const current = await deps.mcp.listConnectors(accountId)
         return {
-          providerAccountId: accountId,
-          connectors: [],
+          ...current,
           error:
-            error instanceof Error
+            current.error ??
+            (error instanceof Error
               ? error.message
-              : 'Failed to connect Linear.',
+              : 'Failed to connect Linear.'),
         }
       }
     },
@@ -127,13 +128,14 @@ export function registerProviderAccountIpcHandlers(deps: {
           input.accountId &&
           deps.repository.get(input.accountId)?.providerId === 'codex'
         ) {
+          const current = await deps.mcp.listConnectors(input.accountId)
           return {
-            providerAccountId: input.accountId,
-            connectors: [],
+            ...current,
             error:
-              error instanceof Error
+              current.error ??
+              (error instanceof Error
                 ? error.message
-                : 'Failed to authorize connector.',
+                : 'Failed to authorize connector.'),
           }
         }
         throw error

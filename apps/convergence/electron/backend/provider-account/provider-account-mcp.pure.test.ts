@@ -326,10 +326,30 @@ describe('Codex account connectors (MAR-3183)', () => {
       ['disabled', 'disabled', false, 'Policy disabled'],
     ])
     expect(parseCodexMcpList(JSON.stringify(fixture))[0]).toMatchObject({
-      transportType: 'streamable_http',
       description: 'http://127.0.0.1:1/mcp',
-      enabled: true,
-      disabledReason: null,
     })
+  })
+  it('offers authorization when enabled is omitted', () => {
+    expect(
+      parseCodexMcpList('[{"name":"linear","auth_status":"unknown"}]')[0],
+    ).toMatchObject({ status: 'unknown', needsAuthorization: true })
+  })
+  it('uses the disabled reason even when enabled is true', () => {
+    expect(
+      parseCodexMcpList(
+        '[{"name":"linear","enabled":true,"disabled_reason":"Policy disabled","auth_status":"o_auth"}]',
+      )[0],
+    ).toMatchObject({
+      status: 'disabled',
+      statusLabel: 'Policy disabled',
+      needsAuthorization: false,
+    })
+  })
+  it('skips nameless entries without discarding named connectors', () => {
+    expect(
+      parseCodexMcpList('[{}, {"name":""}, {"name":"linear"}]').map(
+        (c) => c.name,
+      ),
+    ).toEqual(['linear'])
   })
 })
