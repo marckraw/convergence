@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  expectTypeOf,
+  it,
+  vi,
+} from 'vitest'
 import {
   act,
   cleanup,
@@ -16,8 +24,14 @@ import {
   type WorkLedgerSnapshot,
 } from '@/entities/work-ledger'
 import { WavePanel, WavesTab } from './wave-panel.container'
-import { WavePanelView } from './wave-panel.presentational'
-import { WaveRailView } from './wave-rail.presentational'
+import {
+  WavePanelView,
+  type WavePanelViewProps,
+} from './wave-panel.presentational'
+import {
+  WaveRailView,
+  WAVE_RAIL_NARROW_TITLE,
+} from './wave-rail.presentational'
 import {
   sectionWaveRows,
   waveHeader,
@@ -328,6 +342,37 @@ describe('MAR-3097: through the containers and the real stores', () => {
     // Mutation: ignore the width -> the open column, red.
     expect(await screen.findByLabelText('Waves rail')).toBeTruthy()
     expect(localStorage.getItem('convergence-wave-panel-mode')).toBeNull()
+    // MAR-3148 R1, through the container: the rail the WIDTH forced cannot be
+    // opened, and says so. Mutation: pass `narrow` from anything but the
+    // decision's reason -> red.
+    const open = screen.getByRole('button', { name: /too narrow/i })
+    expect(open.getAttribute('aria-disabled')).toBe('true')
+    expect(open.getAttribute('title')).toBe(WAVE_RAIL_NARROW_TITLE)
+  })
+
+  it('B: a rail the person chose still opens', async () => {
+    localStorage.setItem('convergence-wave-panel-mode', 'rail')
+    await mount(<WavePanel />)
+    await screen.findByLabelText('Waves rail')
+    const open = screen.getByRole('button', { name: 'Open the wave panel' })
+    expect(open.getAttribute('aria-disabled')).toBeNull()
+    fireEvent.click(open)
+    expect(screen.getByLabelText('Waves')).toBeTruthy()
+  })
+
+  it('B: a stored rail in a window too narrow for the column cannot open either', async () => {
+    localStorage.setItem('convergence-wave-panel-mode', 'rail')
+    setWindowWidth(260 + 280 + 479)
+    await mount(<WavePanel reservedWidth={260} />)
+    await screen.findByLabelText('Waves rail')
+
+    // Mutation: answer the stored reason first -> the click below opens
+    // nothing and rewrites the preference to `open`, red.
+    const open = screen.getByRole('button', { name: /too narrow/i })
+    fireEvent.click(open)
+    expect(screen.getByLabelText('Waves rail')).toBeTruthy()
+    expect(screen.queryByLabelText('Waves')).toBeNull()
+    expect(localStorage.getItem('convergence-wave-panel-mode')).toBe('rail')
   })
 
   it('R5: clicking a row opens the seat’s conversation; rows that cannot, say why', async () => {
@@ -498,5 +543,200 @@ describe('MAR-3085 R7: the row reads the lap, the cap and the ruling', () => {
       rowOf('crew-1:EX-2').getByText('opus · working · lap 3'),
     ).toBeTruthy()
     expect(document.body.textContent).not.toContain('lap 3 of')
+  })
+})
+
+describe('MAR-3148: the rail, the props and the clock', () => {
+  const rows = [ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' })]
+
+  it('R1: the rail a narrow window forced says why in its name, and stays reachable', () => {
+    const onExpand = vi.fn()
+    render(
+      <WaveRailView
+        sections={sectionWaveRows(rows, NOW)}
+        outage={false}
+        narrow
+        onExpand={onExpand}
+      />,
+    )
+
+    // Named by what it is AND why it cannot act: the reason has to reach a
+    // screen reader, which a `title` on a disabled button never does.
+    // Mutation: keep the reason out of the name (or use `disabled`) -> red.
+    const open = screen.getByRole('button', { name: /too narrow/i })
+    expect(open.hasAttribute('disabled')).toBe(false)
+    expect(open.getAttribute('aria-disabled')).toBe('true')
+    expect(open.getAttribute('title')).toBe(WAVE_RAIL_NARROW_TITLE)
+    // Reachable: still in the tab order, and a click does nothing.
+    open.focus()
+    expect(document.activeElement).toBe(open)
+    fireEvent.click(open)
+    expect(onExpand).not.toHaveBeenCalled()
+
+    cleanup()
+    const onOpen = vi.fn()
+    render(
+      <WaveRailView
+        sections={sectionWaveRows(rows, NOW)}
+        outage={false}
+        onExpand={onOpen}
+      />,
+    )
+    const stored = screen.getByRole('button', { name: 'Open the wave panel' })
+    expect(stored.getAttribute('aria-disabled')).toBeNull()
+    expect(stored.getAttribute('title')).toBeNull()
+    fireEvent.click(stored)
+    expect(onOpen).toHaveBeenCalledTimes(1)
+  })
+
+  it('C: a row that cannot open its seat is inert and says so', () => {
+    render(
+      <WavePanelView
+        layout="column"
+        sections={sectionWaveRows(
+          [ledgerEntry({ issueIdentifier: 'EX-9', sessionId: null })],
+          NOW,
+        )}
+        header={waveHeader({ crews: ANSWERED, rowCount: 1, now: NOW })}
+        inertReason={() => 'no conversation for this seat'}
+        onOpen={vi.fn()}
+      />,
+    )
+    const row = document.querySelector('[data-wave-row="crew-1:EX-9"]')
+    // Mutation: drop `aria-disabled` from the inert row -> red (the previous
+    // lap rendered every row through `inertReason={() => null}`, the ENABLED
+    // branch, so deleting the attribute changed nothing).
+    expect(row?.getAttribute('aria-disabled')).toBe('true')
+    expect(row?.tagName).toBe('DIV')
+    expect(
+      rowOf('crew-1:EX-9').getByText('no conversation for this seat'),
+    ).toBeTruthy()
+  })
+
+  it('R2: the panel takes no Connect handler, and says where to bind instead', () => {
+    // Mutation: reintroduce `onConnectTracker` -> red (the key set grows).
+    expectTypeOf<keyof WavePanelViewProps>().toEqualTypeOf<
+      | 'sections'
+      | 'header'
+      | 'layout'
+      | 'boardLine'
+      | 'inertReason'
+      | 'onOpen'
+      | 'onCollapse'
+    >()
+    renderView([], [], 'full')
+    expect(
+      screen.getByText('Connect a tracker in a crew’s settings on the Canvas.'),
+    ).toBeTruthy()
+    expect(
+      screen.queryByRole('button', { name: 'Connect a tracker' }),
+    ).toBeNull()
+  })
+
+  it('R5: an unreachable host on a seatless working row shows both, and the row is inert', () => {
+    renderView([
+      ledgerEntry({
+        issueIdentifier: 'EX-7',
+        state: 'working',
+        sessionId: null,
+        hostLiveness: {
+          executionHost: 'lm',
+          lastEventAt: '2026-09-17T12:06:00.000Z',
+          hostReachable: false,
+        },
+      }),
+    ])
+    const row = rowOf('crew-1:EX-7')
+    // The action and the marker are two facts, and the row carries both.
+    expect(row.getByText('seat not in crew')).toBeTruthy()
+    expect(row.getByText('host unreachable since 4m')).toBeTruthy()
+  })
+})
+
+describe('MAR-3148 R3: the clock ticks only for an age on screen', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /**
+   * How many timers are pending once the board has settled. The "reading the
+   * tracker…" wait carries no age (lap 2, D), so the clock does not start
+   * while the first list is in flight either; the count is read after the
+   * answer lands, which is when rows or an outage age could have appeared.
+   */
+  async function mountBoard(snapshot: WorkLedgerSnapshot) {
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      crew: {
+        list: vi.fn(async () => [boundCrew('crew-1', 'Loom')]),
+        onUpdated: vi.fn(() => () => {}),
+      },
+      workLedger: {
+        list: vi.fn(async () => snapshot),
+        onUpdated: vi.fn(() => () => {}),
+      },
+    }
+    useSessionStore.setState({ globalSessions: [SESSION] })
+    useSessionCrewStore.setState({ crews: [] })
+    useWorkLedgerStore.setState({
+      snapshots: {},
+      broadcastCount: {},
+      error: null,
+      unsubscribeBroadcast: null,
+    })
+    await act(async () => {
+      render(<WavesTab />)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    return vi.getTimerCount()
+  }
+
+  it('a bound, healthy, empty board holds no timer once it has read', async () => {
+    // Mutation: gate on `boundCrewIds.length > 0` -> the empty board keeps
+    // ticking, red.
+    expect(
+      await mountBoard({
+        crewId: 'crew-1',
+        entries: [],
+        trackerHealth: health('ok'),
+      }),
+    ).toBe(0)
+  })
+
+  it('one row keeps the clock', async () => {
+    expect(
+      await mountBoard({
+        crewId: 'crew-1',
+        entries: [ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' })],
+        trackerHealth: health('ok'),
+      }),
+    ).toBeGreaterThan(0)
+  })
+
+  it('D: a board still reading holds no timer — that sentence has no age in it', async () => {
+    expect(
+      await mountBoard({
+        crewId: 'crew-1',
+        entries: [],
+        trackerHealth: null,
+      }),
+    ).toBe(0)
+    expect(screen.getByRole('status').textContent).toBe('reading the tracker…')
+  })
+
+  it('an outage with no rows keeps it too: the header carries an age', async () => {
+    expect(
+      await mountBoard({
+        crewId: 'crew-1',
+        entries: [],
+        trackerHealth: health('unreachable'),
+      }),
+    ).toBeGreaterThan(0)
+    // And the age is really on screen, which is what the clock is for.
+    expect(screen.getByRole('status').textContent).toMatch(/· \d+\w+$/)
   })
 })

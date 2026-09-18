@@ -277,6 +277,22 @@ export const WAVE_PANEL_MIN_MAIN_WIDTH = 480
 export const WAVE_PANEL_COLUMN_WIDTH = 280
 
 /**
+ * Why the column is a rail (MAR-3148 R1): because that is what was stored,
+ * or because the window cannot hold the column and a readable main panel.
+ *
+ * The difference is the whole point: a rail somebody chose reopens on a
+ * click, and a rail the width forced cannot -- so the control has to say so
+ * rather than do nothing.
+ */
+export type WavePanelRailReason = 'stored' | 'narrow'
+
+export interface WavePanelModeDecision {
+  mode: 'open' | 'rail'
+  /** Null while the column is open; otherwise why it is not. */
+  reason: WavePanelRailReason | null
+}
+
+/**
  * The mode the column renders in (lap 2, B): the stored one, unless the
  * window is too narrow to keep the main panel at its floor, in which case the
  * rail -- without touching what is stored.
@@ -285,8 +301,16 @@ export function effectiveWavePanelMode(input: {
   stored: 'open' | 'rail'
   windowWidth: number
   reservedWidth: number
-}): 'open' | 'rail' {
-  if (input.stored === 'rail') return 'rail'
+}): WavePanelModeDecision {
+  // The width is asked FIRST (lap 2, B): the reason has to say why the rail
+  // is on screen NOW, not which test happened to run first. A stored rail in
+  // a window too narrow for the column read as `stored`, so Open stayed live
+  // -- and a click on it rewrote the preference to `open` and opened nothing.
   const main = input.windowWidth - input.reservedWidth - WAVE_PANEL_COLUMN_WIDTH
-  return main < WAVE_PANEL_MIN_MAIN_WIDTH ? 'rail' : 'open'
+  if (main < WAVE_PANEL_MIN_MAIN_WIDTH) {
+    return { mode: 'rail', reason: 'narrow' }
+  }
+  return input.stored === 'rail'
+    ? { mode: 'rail', reason: 'stored' }
+    : { mode: 'open', reason: null }
 }

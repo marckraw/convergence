@@ -10,7 +10,7 @@ import {
   WAVE_PANEL_COLUMN_CLASS,
 } from './wave-panel.styles'
 
-interface WavePanelViewProps {
+export interface WavePanelViewProps {
   sections: WaveSections
   header: WaveHeader
   /** `column` beside the conversation; `full` as Mission Control's tab. */
@@ -19,7 +19,6 @@ interface WavePanelViewProps {
   boardLine?: string
   inertReason: (entry: WorkLedgerEntry) => string | null
   onOpen: (entry: WorkLedgerEntry) => void
-  onConnectTracker?: () => void
   onCollapse?: () => void
 }
 
@@ -37,7 +36,6 @@ export const WavePanelView: FC<WavePanelViewProps> = ({
   boardLine,
   inertReason,
   onOpen,
-  onConnectTracker,
   onCollapse,
 }) => (
   <aside
@@ -88,19 +86,10 @@ export const WavePanelView: FC<WavePanelViewProps> = ({
     {header.kind === 'connect' ? (
       <div className="flex flex-col gap-2 px-3 py-4 text-xs text-muted-foreground">
         <p>No crew reads a tracker yet.</p>
-        {onConnectTracker ? (
-          <Button
-            type="button"
-            variant="link"
-            size="sm"
-            className="h-auto justify-start p-0 text-xs"
-            onClick={onConnectTracker}
-          >
-            Connect a tracker
-          </Button>
-        ) : (
-          <p>Connect a tracker in a crew’s settings on the Canvas.</p>
-        )}
+        {/* Prose, not a control (MAR-3148 R2): this state is only reachable
+            in Mission Control's Waves tab, which is already where crews are
+            bound -- a button here would lead to the room it is standing in. */}
+        <p>Connect a tracker in a crew’s settings on the Canvas.</p>
       </div>
     ) : header.kind === 'quiet' ? (
       <p className="px-3 py-4 text-xs text-muted-foreground">Quiet project</p>

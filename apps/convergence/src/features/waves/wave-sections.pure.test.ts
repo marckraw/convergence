@@ -5,6 +5,7 @@ import {
   resolveWaveRow,
   sectionWaveRows,
   UNWAVED_GROUP,
+  WAVE_PANEL_COLUMN_WIDTH,
   WAVE_PANEL_MIN_MAIN_WIDTH,
   waveBoardLine,
   waveHeader,
@@ -17,6 +18,7 @@ import {
   type WaveRow,
 } from './wave-sections.pure'
 import { ledgerEntry } from './wave-rows.fixture'
+import { WAVE_PANEL_COLUMN_CLASS } from './wave-panel.styles'
 
 const NOW = Date.parse('2026-09-17T12:10:00.000Z')
 const ids = (rows: WaveRow[]) => rows.map((row) => row.entry.issueIdentifier)
@@ -258,29 +260,51 @@ describe('MAR-3097 lap 2, E: crews on rows', () => {
 })
 
 describe('MAR-3097 lap 2, B: the column keeps the main panel at its floor', () => {
-  it('renders the rail when the window is too narrow, and keeps a stored rail', () => {
-    const wide = 260 + 280 + WAVE_PANEL_MIN_MAIN_WIDTH
+  it('renders the rail when the window is too narrow, and says which reason', () => {
+    const wide = 260 + WAVE_PANEL_COLUMN_WIDTH + WAVE_PANEL_MIN_MAIN_WIDTH
     expect(
       effectiveWavePanelMode({
         stored: 'open',
         windowWidth: wide,
         reservedWidth: 260,
       }),
-    ).toBe('open')
+    ).toEqual({ mode: 'open', reason: null })
+    // MAR-3148 R1: the rail has two causes, and only one of them can be
+    // undone by clicking Open.
     expect(
       effectiveWavePanelMode({
         stored: 'open',
         windowWidth: wide - 1,
         reservedWidth: 260,
       }),
-    ).toBe('rail')
+    ).toEqual({ mode: 'rail', reason: 'narrow' })
     expect(
       effectiveWavePanelMode({
         stored: 'rail',
         windowWidth: 4000,
         reservedWidth: 0,
       }),
-    ).toBe('rail')
+    ).toEqual({ mode: 'rail', reason: 'stored' })
+    // Lap 2, B: the width answers first. A stored rail in a window that could
+    // not hold the column either reads `narrow`, because that is why Open
+    // cannot act -- answering `stored` left the control live over nothing.
+    // Mutation: ask the stored mode first -> red.
+    expect(
+      effectiveWavePanelMode({
+        stored: 'rail',
+        windowWidth: wide - 1,
+        reservedWidth: 260,
+      }),
+    ).toEqual({ mode: 'rail', reason: 'narrow' })
+  })
+
+  it('MAR-3148 R5: the column’s width is one fact, not two', () => {
+    // The class the column renders with and the number the floor is measured
+    // against must be the same width, or the panel fits on screen and not in
+    // the arithmetic (or the other way round).
+    expect(WAVE_PANEL_COLUMN_CLASS).toContain(
+      `w-[${WAVE_PANEL_COLUMN_WIDTH}px]`,
+    )
   })
 })
 

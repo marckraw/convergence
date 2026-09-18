@@ -81,10 +81,6 @@ export function useWaveBoard(): WaveBoard {
     [snapshots, boundCrewIds, crewFacts],
   )
 
-  // Ages ("since 4m") are statements about now; tick while anything on
-  // screen could carry one.
-  useFeedClock(boundCrewIds.length > 0, setNow)
-
   const several = boundCrewIds.length > 1
   const sections = useMemo(
     () =>
@@ -98,6 +94,14 @@ export function useWaveBoard(): WaveBoard {
     () => waveHeader({ crews: headerCrews, rowCount: rows.length, now }),
     [headerCrews, rows.length, now],
   )
+
+  // The clock exists for the ages on screen -- a row's "host unreachable
+  // since 4m" and an outage header's "· 10m" (MAR-3148 R3). Nothing else
+  // counts: "reading the tracker…" is a sentence without a number in it
+  // (lap 2, D), and a bound crew whose tracker answered with nothing to show
+  // carries no age at all. Waking React once a minute to recompute either is
+  // the cost this gate exists to refuse.
+  useFeedClock(rows.length > 0 || header.kind === 'outage', setNow)
 
   const sessionsById = useMemo(
     () => new Map(sessions.map((session) => [session.id, session])),
