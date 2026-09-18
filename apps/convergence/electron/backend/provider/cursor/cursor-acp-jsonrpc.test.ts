@@ -261,4 +261,38 @@ describe('CursorAcpJsonRpcClient', () => {
       vi.useRealTimers()
     }
   })
+
+  it('expires a silence budget and re-arms on notifications', async () => {
+    vi.useFakeTimers()
+    try {
+      const { stdin, stdout, written } = createMockStreams()
+      const client = new CursorAcpJsonRpcClient(stdin, stdout)
+      const expired = vi.fn()
+
+      const pending = client.request(
+        'session/prompt',
+        { sessionId: 's1' },
+        {
+          silenceBudgetMs: 1_000,
+          onSilenceExpired: expired,
+        },
+      )
+      const rejection = expect(pending).rejects.toThrow(/No word from Cursor/)
+
+      await vi.advanceTimersByTimeAsync(500)
+      stdout.push(
+        '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1"}}\n',
+      )
+      await vi.advanceTimersByTimeAsync(500)
+      expect(expired).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      await rejection
+      expect(expired).toHaveBeenCalledTimes(1)
+      expect(written[0]).toContain('session/prompt')
+      client.destroy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

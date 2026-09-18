@@ -70,7 +70,11 @@ interface PendingRequest {
   method: string
   resolve: (value: unknown) => void
   reject: (err: Error) => void
+  /** Hard wall-clock timeout, or the silence-budget re-arm timer. */
   timeout: NodeJS.Timeout | null
+  silenceBudgetMs: number | null
+  lastProgressAt: number
+  onSilenceExpired?: () => void
 }
 
 export interface CursorAcpJsonRpcClientOptions {
@@ -80,6 +84,14 @@ export interface CursorAcpJsonRpcClientOptions {
 
 export interface CursorAcpJsonRpcRequestOptions {
   timeoutMs?: number
+  /**
+   * Silence budget for this request (MAR-3142 R4). Re-armed by every inbound
+   * notification while the request is pending. Distinct from `timeoutMs`, which
+   * is a hard wall clock from send.
+   */
+  silenceBudgetMs?: number
+  /** Called once when the silence budget expires, before the promise rejects. */
+  onSilenceExpired?: () => void
 }
 
 export class CursorAcpJsonRpcError extends Error {
@@ -90,6 +102,16 @@ export class CursorAcpJsonRpcError extends Error {
   ) {
     super(message)
     this.name = 'CursorAcpJsonRpcError'
+  }
+}
+
+/** A request produced no progress for its silence budget (MAR-3142 R4). */
+export class CursorAcpSilenceBudgetError extends Error {
+  constructor(method: string, budgetMs: number) {
+    super(
+      `No word from Cursor for ${Math.round(budgetMs / 60_000)} minutes while waiting for ${method}`,
+    )
+    this.name = 'CursorAcpSilenceBudgetError'
   }
 }
 
@@ -153,20 +175,23 @@ export class CursorAcpJsonRpcClient {
     }
 
     return new Promise((resolve, reject) => {
-      const requestTimeoutMs = options.timeoutMs ?? this.requestTimeoutMs
-      const timeout =
-        requestTimeoutMs > 0
-          ? setTimeout(() => {
-              this.pending.delete(id)
-              reject(
-                new Error(
-                  `Timed out waiting for Cursor ACP ${method} after ${requestTimeoutMs}ms`,
-                ),
-              )
-            }, requestTimeoutMs)
+      const silenceBudgetMs =
+        typeof options.silenceBudgetMs === 'number' &&
+        options.silenceBudgetMs > 0
+          ? options.silenceBudgetMs
           : null
+      const requestTimeoutMs = options.timeoutMs ?? this.requestTimeoutMs
 
-      this.pending.set(id, { method, resolve, reject, timeout })
+      const pending: PendingRequest = {
+        method,
+        resolve,
+        reject,
+        timeout: null,
+        silenceBudgetMs,
+        lastProgressAt: Date.now(),
+        onSilenceExpired: options.onSilenceExpired,
+      }
+      this.pending.set(id, pending)
 
       try {
         this.send(msg, {
@@ -180,6 +205,23 @@ export class CursorAcpJsonRpcClient {
           id,
           error instanceof Error ? error : new Error(String(error)),
         )
+        return
+      }
+
+      if (silenceBudgetMs !== null) {
+        this.armSilenceBudget(id)
+        return
+      }
+
+      if (requestTimeoutMs > 0) {
+        pending.timeout = setTimeout(() => {
+          this.pending.delete(id)
+          reject(
+            new Error(
+              `Timed out waiting for Cursor ACP ${method} after ${requestTimeoutMs}ms`,
+            ),
+          )
+        }, requestTimeoutMs)
       }
     })
   }
@@ -341,6 +383,7 @@ export class CursorAcpJsonRpcClient {
   }
 
   private handleServerRequest(request: CursorAcpJsonRpcRequest): void {
+    this.noteSilenceProgress()
     this.recordDebug({
       direction: 'in',
       channel: 'request',
@@ -391,6 +434,7 @@ export class CursorAcpJsonRpcClient {
   }
 
   private handleNotification(notification: CursorAcpJsonRpcNotification): void {
+    this.noteSilenceProgress()
     this.recordDebug({
       direction: 'in',
       channel: 'notification',
@@ -409,6 +453,54 @@ export class CursorAcpJsonRpcClient {
       }
       throw error
     }
+  }
+
+  /**
+   * Re-arms every pending silence budget (Codex-shaped; MAR-3142 R4).
+   * Inbound notifications and server requests count as progress.
+   */
+  private noteSilenceProgress(): void {
+    const at = Date.now()
+    for (const [id, pending] of this.pending) {
+      if (pending.silenceBudgetMs === null) continue
+      pending.lastProgressAt = at
+      this.armSilenceBudget(id)
+    }
+  }
+
+  private armSilenceBudget(id: CursorAcpJsonRpcId): void {
+    const pending = this.pending.get(id)
+    if (!pending || pending.silenceBudgetMs === null) return
+
+    if (pending.timeout) {
+      clearTimeout(pending.timeout)
+      pending.timeout = null
+    }
+
+    const quietFor = Date.now() - pending.lastProgressAt
+    const remaining = pending.silenceBudgetMs - quietFor
+
+    if (remaining <= 0) {
+      this.pending.delete(id)
+      try {
+        pending.onSilenceExpired?.()
+      } catch (error) {
+        console.error(
+          `[cursor-acp] onSilenceExpired failed for ${pending.method}`,
+          error,
+        )
+      }
+      pending.reject(
+        new CursorAcpSilenceBudgetError(
+          pending.method,
+          pending.silenceBudgetMs,
+        ),
+      )
+      return
+    }
+
+    pending.timeout = setTimeout(() => this.armSilenceBudget(id), remaining)
+    pending.timeout.unref?.()
   }
 
   private rejectPending(error: Error): void {

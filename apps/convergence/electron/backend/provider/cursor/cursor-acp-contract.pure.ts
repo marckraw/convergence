@@ -32,6 +32,11 @@ export const CURSOR_ACP_REQUEST_METHODS = [
   'session/set_config_option',
 ] as const
 
+/** Outbound notifications Convergence sends to the Cursor ACP process (MAR-3142). */
+export const CURSOR_ACP_CLIENT_NOTIFICATION_METHODS = [
+  'session/cancel',
+] as const
+
 export const CURSOR_ACP_SERVER_REQUEST_METHODS = [
   'session/request_permission',
   'cursor/ask_question',
@@ -40,6 +45,12 @@ export const CURSOR_ACP_SERVER_REQUEST_METHODS = [
   'cursor/task',
   'cursor/generate_image',
 ] as const
+
+/**
+ * Silence budget for an in-flight `session/prompt`: re-armed by every
+ * `session/update`. Ten minutes of no progress cancels the turn (MAR-3142 R4).
+ */
+export const CURSOR_ACP_PROMPT_SILENCE_BUDGET_MS = 10 * 60 * 1000
 
 export const CURSOR_ACP_SESSION_UPDATES = [
   'agent_message_chunk',
@@ -68,10 +79,10 @@ export const CURSOR_ACP_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability 
     supportsNativeFollowUp: false,
     supportsAppQueuedFollowUp: true,
     supportsSteer: false,
-    supportsInterrupt: false,
+    supportsInterrupt: true,
     defaultRunningMode: 'follow-up',
     notes:
-      'Cursor ACP supports structured server requests and app-queued follow-up can be built on the long-lived session. Native steer/interrupt remains disabled until cancellation and concurrent prompt behavior are hardened.',
+      'Cursor ACP cancels an in-flight prompt with a session/cancel notification; the process and session stay alive for the next turn. Mid-turn text is app-queued follow-up.',
   }
 
 export const CURSOR_ACP_SKILLS_CAPABILITY: ProviderSkillsCapability = {
@@ -96,7 +107,6 @@ export const CURSOR_ACP_PROVIDER_DECISION = {
   modeSettingMethod: 'session/set_mode',
   approvePermissionOptionId: 'allow-once',
   denyPermissionOptionId: 'reject-once',
-  stopStrategy: 'terminate-acp-process-until-session-cancel-is-supported',
   quotaTelemetry: 'unavailable-from-acp-prompt-result',
   contextWindowTelemetry: 'model-context-metadata-only-token-usage-unavailable',
 } as const

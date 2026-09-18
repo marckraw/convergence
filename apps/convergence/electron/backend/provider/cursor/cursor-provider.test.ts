@@ -1093,4 +1093,223 @@ describe('CursorProvider', () => {
       expect(attentions.at(-1)).toBe('failed')
     })
   })
+
+  it('keeps one ACP process across three turns (R1)', async () => {
+    const { child, server, handle, statuses } = startProvider()
+
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+    })
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(
+      server.requests.filter((request) => request.method === 'initialize'),
+    ).toHaveLength(1)
+    expect(
+      server.requests.filter((request) => request.method === 'session/prompt'),
+    ).toHaveLength(1)
+    expect(child.kill).not.toHaveBeenCalled()
+
+    handle.sendMessage('second')
+    await waitFor(() => {
+      expect(
+        server.requests.filter(
+          (request) => request.method === 'session/prompt',
+        ),
+      ).toHaveLength(2)
+    })
+    handle.sendMessage('third')
+    await waitFor(() => {
+      expect(
+        server.requests.filter(
+          (request) => request.method === 'session/prompt',
+        ),
+      ).toHaveLength(3)
+      expect(
+        statuses.filter((status) => status === 'completed').length,
+      ).toBeGreaterThanOrEqual(3)
+    })
+
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(
+      server.requests.filter((request) => request.method === 'initialize'),
+    ).toHaveLength(1)
+    expect(child.kill).not.toHaveBeenCalled()
+  })
+
+  it('respawns lazily after the idle process dies (R1)', async () => {
+    const firstChild = new MockCursorAcpChild()
+    const secondChild = new MockCursorAcpChild()
+    spawnMock.mockReturnValueOnce(firstChild).mockReturnValueOnce(secondChild)
+    const firstServer = createMockCursorAcp(firstChild)
+    const secondServer = createMockCursorAcp(secondChild)
+    const provider = new CursorProvider('agent')
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: '/repo',
+      initialMessage: 'hi',
+      model: null,
+      effort: null,
+      continuationToken: null,
+    })
+    const statuses: string[] = []
+    handle.onStatusChange((status) => statuses.push(status))
+
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+    })
+    expect(firstServer.requests.map((r) => r.method)).toContain('session/new')
+
+    firstChild.emit('exit', 0, null)
+
+    handle.sendMessage('again')
+    await waitFor(() => {
+      expect(secondServer.requests.map((r) => r.method)).toContain(
+        'session/load',
+      )
+      expect(secondServer.requests.map((r) => r.method)).toContain(
+        'session/prompt',
+      )
+    })
+    expect(spawnMock).toHaveBeenCalledTimes(2)
+    expect(
+      secondServer.requests.filter((r) => r.method === 'initialize'),
+    ).toHaveLength(1)
+    expect(secondServer.requests.some((r) => r.method === 'session/new')).toBe(
+      false,
+    )
+  })
+
+  it('interrupts with session/cancel notification and keeps the process (R2)', async () => {
+    const { child, server, handle, statuses, attentions, deltas } =
+      startProvider(undefined, { holdPrompt: true })
+
+    await waitFor(() => {
+      expect(server.requests.map((r) => r.method)).toContain('session/prompt')
+    })
+
+    await expect(handle.interrupt?.()).resolves.toBe('interrupted')
+    expect(server.notifications).toEqual(
+      expect.arrayContaining([
+        {
+          method: 'session/cancel',
+          params: { sessionId: 'cursor-session-1' },
+        },
+      ]),
+    )
+
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+      expect(attentions).toContain('finished')
+    })
+    expect(statuses).not.toContain('failed')
+    expect(JSON.stringify(deltas)).toContain('stopped by user')
+    expect(child.kill).not.toHaveBeenCalled()
+
+    handle.sendMessage('after stop')
+    await waitFor(() => {
+      expect(
+        server.requests.filter((r) => r.method === 'session/prompt'),
+      ).toHaveLength(2)
+    })
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends session/cancel as a notification, never as a request (R2)', async () => {
+    const { server, handle } = startProvider(undefined, { holdPrompt: true })
+    await waitFor(() => {
+      expect(server.requests.map((r) => r.method)).toContain('session/prompt')
+    })
+
+    await expect(handle.interrupt?.()).resolves.toBe('interrupted')
+    expect(
+      server.notifications.some((n) => n.method === 'session/cancel'),
+    ).toBe(true)
+    expect(server.requests.some((r) => r.method === 'session/cancel')).toBe(
+      false,
+    )
+  })
+
+  it('defers mid-turn text to the app queue (R3)', async () => {
+    const { server, handle } = startProvider(undefined, { holdPrompt: true })
+    await waitFor(() => {
+      expect(server.requests.map((r) => r.method)).toContain('session/prompt')
+    })
+
+    expect(handle.sendMessage('queued')).toBe('queue-follow-up')
+    expect(
+      server.requests.filter((r) => r.method === 'session/prompt'),
+    ).toHaveLength(1)
+
+    server.resolveHeldPrompt({ stopReason: 'end_turn' })
+    await waitFor(() => {
+      expect(
+        server.requests.filter((r) => r.method === 'session/prompt'),
+      ).toHaveLength(1)
+    })
+  })
+
+  it('cancels a silent prompt after the silence budget (R4)', async () => {
+    vi.useFakeTimers()
+    try {
+      const { server, handle, statuses, deltas } = startProvider(undefined, {
+        holdPrompt: true,
+        requestTimeoutMs: 25,
+      })
+
+      await vi.waitFor(() => {
+        expect(server.requests.map((r) => r.method)).toContain('session/prompt')
+      })
+
+      await vi.advanceTimersByTimeAsync(10 * 60 * 1000)
+
+      await vi.waitFor(() => {
+        expect(
+          server.notifications.some((n) => n.method === 'session/cancel'),
+        ).toBe(true)
+        expect(JSON.stringify(deltas)).toContain(
+          'no word from Cursor for 10 minutes',
+        )
+        expect(statuses).toContain('failed')
+      })
+      handle.dispose?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('recovers a refused session/load through session/new (R5)', async () => {
+    const child = new MockCursorAcpChild()
+    spawnMock.mockReturnValue(child)
+    const server = createMockCursorAcp(child, { refuseSessionLoad: true })
+    const provider = new CursorProvider('agent')
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: '/repo',
+      initialMessage: 'hi',
+      model: null,
+      effort: null,
+      continuationToken: 'stale-session',
+    })
+    const statuses: string[] = []
+    const deltas: SessionDelta[] = []
+    handle.onStatusChange((status) => statuses.push(status))
+    handle.onDelta((delta) => deltas.push(delta))
+
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+    })
+    expect(server.requests.map((r) => r.method)).toEqual(
+      expect.arrayContaining([
+        'initialize',
+        'authenticate',
+        'session/load',
+        'session/new',
+        'session/prompt',
+      ]),
+    )
+    expect(statuses).not.toContain('failed')
+    expect(JSON.stringify(deltas)).toMatch(
+      /continuation was no longer available/i,
+    )
+  })
 })

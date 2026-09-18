@@ -447,18 +447,18 @@ describe('cursor ACP contract helpers', () => {
       modeSettingMethod: 'session/set_mode',
       approvePermissionOptionId: 'allow-once',
       denyPermissionOptionId: 'reject-once',
-      stopStrategy: 'terminate-acp-process-until-session-cancel-is-supported',
       quotaTelemetry: 'unavailable-from-acp-prompt-result',
       contextWindowTelemetry:
         'model-context-metadata-only-token-usage-unavailable',
     })
+    expect(CURSOR_ACP_PROVIDER_DECISION).not.toHaveProperty('stopStrategy')
 
     expect(CURSOR_ACP_MID_RUN_INPUT_CAPABILITY).toMatchObject({
       supportsAnswer: true,
       supportsNativeFollowUp: false,
       supportsAppQueuedFollowUp: true,
       supportsSteer: false,
-      supportsInterrupt: false,
+      supportsInterrupt: true,
       defaultRunningMode: 'follow-up',
     })
 

@@ -200,7 +200,7 @@ describe('provider-descriptor', () => {
         supportsNativeFollowUp: false,
         supportsAppQueuedFollowUp: true,
         supportsSteer: false,
-        supportsInterrupt: false,
+        supportsInterrupt: true,
       },
       interactions: {
         inputRequests: ['choice', 'plan'],

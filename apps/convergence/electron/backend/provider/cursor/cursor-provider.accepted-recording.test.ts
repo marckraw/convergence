@@ -86,6 +86,7 @@ async function fixture(
   return { service, session, child, server, dir }
 }
 
+/** Active provider handle for handle-layer assertions (MAR-3143 lap 2, C). */
 function activeHandle(
   service: SessionService,
   sessionId: string,
@@ -94,7 +95,6 @@ function activeHandle(
   approve: (id?: string) => void
   deny: (id?: string) => void
   dispose: () => void
-  resident?: boolean
 } {
   const handle = (
     service as unknown as {
@@ -105,18 +105,12 @@ function activeHandle(
           approve: (id?: string) => void
           deny: (id?: string) => void
           dispose: () => void
-          resident?: boolean
         }
       >
     }
   ).activeHandles.get(sessionId)
   if (!handle) throw new Error(`No active handle for ${sessionId}`)
   return handle
-}
-
-/** Keep the ACP process addressable after endTurn (CP1's idle shape). */
-function keepResident(service: SessionService, sessionId: string): void {
-  activeHandle(service, sessionId).resident = true
 }
 
 function recordingFailedNotes(service: SessionService, sessionId: string) {
@@ -372,7 +366,6 @@ describe('Cursor accepted-recording boundary (MAR-3143)', () => {
     await vi.waitUntil(() =>
       server.requests.some((request) => request.method === 'session/prompt'),
     )
-    keepResident(service, session.id)
     server.resolveHeldPrompt({ stopReason: 'end_turn' })
     await vi.waitUntil(
       () => service.getById(session.id)?.status === 'completed',
@@ -546,7 +539,6 @@ describe('Cursor accepted-recording boundary (MAR-3143)', () => {
       () => service.getById(session.id)?.attention === 'needs-approval',
     )
 
-    keepResident(service, session.id)
     server.resolveHeldPrompt({ stopReason: 'end_turn' })
     await vi.waitUntil(
       () => service.getById(session.id)?.status === 'completed',
