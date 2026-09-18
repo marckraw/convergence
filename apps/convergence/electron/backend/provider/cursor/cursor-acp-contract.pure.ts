@@ -48,9 +48,24 @@ export const CURSOR_ACP_SERVER_REQUEST_METHODS = [
 
 /**
  * Silence budget for an in-flight `session/prompt`: re-armed by every
- * `session/update`. Ten minutes of no progress cancels the turn (MAR-3142 R4).
+ * `session/update`, suspended while a server request awaits a human answer
+ * (MAR-3142 R4 / lap 2 B). Ten minutes of no progress cancels the turn.
  */
 export const CURSOR_ACP_PROMPT_SILENCE_BUDGET_MS = 10 * 60 * 1000
+
+/** Human-readable duration for silence-budget notes and errors (MAR-3142 F). */
+export function formatCursorAcpSilenceBudgetDuration(
+  budgetMs: number = CURSOR_ACP_PROMPT_SILENCE_BUDGET_MS,
+): string {
+  return `${Math.round(budgetMs / 60_000)} minutes`
+}
+
+/** Transcript note when a silence budget expires (MAR-3142 F). */
+export function formatCursorAcpSilenceBudgetNote(
+  budgetMs: number = CURSOR_ACP_PROMPT_SILENCE_BUDGET_MS,
+): string {
+  return `no word from Cursor for ${formatCursorAcpSilenceBudgetDuration(budgetMs)}`
+}
 
 export const CURSOR_ACP_SESSION_UPDATES = [
   'agent_message_chunk',

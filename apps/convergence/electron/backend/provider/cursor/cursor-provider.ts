@@ -9,10 +9,7 @@ import { markSkillSelectionsStatus } from '../../skills/skill-invocation.pure'
 import { CursorSkillsService } from '../../skills/cursor-skills.service'
 import type { SkillSelection } from '../../skills/skills.types'
 import type { ProviderSkillCatalog } from '../../skills/skills.types'
-import {
-  mapCursorCommandCatalog,
-  summarizeCursorCommandCatalogUpdate,
-} from '../../skills/cursor-skills.mapper.pure'
+import { summarizeCursorCommandCatalogUpdate } from '../../skills/cursor-skills.mapper.pure'
 import type {
   InteractionResponse,
   SessionDelta,
@@ -33,8 +30,6 @@ import type {
   OneShotResult,
   Provider,
   ProviderDescriptor,
-  ProviderContextManagementInput,
-  ProviderContextManagementResult,
   SessionContextWindow,
   SessionHandle,
   SessionStartConfig,
@@ -43,15 +38,14 @@ import type {
 import {
   buildCursorAcpInitializeParams,
   buildCursorAcpSessionParams,
-  CursorAcpProcessClient,
   readCursorAcpSessionId,
 } from './cursor-acp-client'
-import { createUnavailableContextWindow } from '../context-window.pure'
 import {
   buildCursorUnavailableContextWindow,
   CURSOR_ACP_LOGIN_METHOD_ID,
   CURSOR_ACP_MODEL_CONFIG_ID,
   CURSOR_ACP_PROMPT_SILENCE_BUDGET_MS,
+  formatCursorAcpSilenceBudgetNote,
   getCursorAcpCurrentModelId,
 } from './cursor-acp-contract.pure'
 import {
@@ -406,63 +400,6 @@ export class CursorProvider implements Provider {
       this.debugSink,
       this.options.appVersion ?? null,
     )
-  }
-
-  async manageContext(
-    config: SessionStartConfig,
-    input: ProviderContextManagementInput,
-  ): Promise<ProviderContextManagementResult> {
-    if (input.kind !== 'compact') {
-      throw new Error(`Unsupported Cursor context action: ${input.kind}`)
-    }
-    const cursorSessionId = config.continuationToken?.trim()
-    if (!cursorSessionId) {
-      throw new Error('Cursor context compaction requires a continuation token')
-    }
-
-    const client = new CursorAcpProcessClient(this.binaryPath, {
-      requestTimeoutMs: this.options.requestTimeoutMs,
-      operationTimeoutMs: 120_000,
-      appVersion: this.options.appVersion ?? null,
-    })
-    await client.withAuthenticatedConnection(
-      config.workingDirectory,
-      async (rpc) => {
-        const notifications: Array<{ method: string; params: unknown }> = []
-        rpc.onNotification((method, params) => {
-          notifications.push({ method, params })
-        })
-        const session = await rpc.request('session/load', {
-          sessionId: cursorSessionId,
-          ...buildCursorAcpSessionParams(config.workingDirectory),
-        })
-        await new Promise((resolve) => setTimeout(resolve, 500))
-        const catalog = mapCursorCommandCatalog({ session, notifications })
-        const compress = catalog.skills.find(
-          (entry) => entry.name.toLowerCase() === 'compress' && entry.enabled,
-        )
-        if (!compress) {
-          throw new Error(
-            'The current Cursor ACP session does not advertise the /compress command',
-          )
-        }
-        await rpc.request(
-          'session/prompt',
-          {
-            sessionId: cursorSessionId,
-            prompt: buildCursorAcpPrompt({ text: '/compress' }),
-          },
-          { timeoutMs: 0 },
-        )
-      },
-    )
-
-    return {
-      kind: 'compact',
-      contextWindow: createUnavailableContextWindow(
-        'Context compressed. Cursor ACP does not expose refreshed token usage.',
-      ),
-    }
   }
 
   start(config: SessionStartConfig): SessionHandle {
@@ -1073,37 +1010,44 @@ export class CursorProvider implements Provider {
     ): Promise<void> {
       reconnectIfIdleProcessDied()
       await readyPromise
+      if (stopped) return
+      if (interruptRequested) {
+        settleInterruptedWithoutSend()
+        return
+      }
       const activeRpc = rpc
       const activeSessionId = cursorSessionId
-      if (!activeRpc || !activeSessionId || stopped) {
-        if (!stopped) {
-          recordTeardown('the disconnected user message', () =>
-            sessionEmitter.addUserMessage({
-              providerAccountId: null,
-              text,
-              attachmentIds: attachments?.length
-                ? attachments.map((attachment) => attachment.id)
+      if (!activeRpc || !activeSessionId) {
+        recordTeardown('the disconnected user message', () =>
+          sessionEmitter.addUserMessage({
+            providerAccountId: null,
+            text,
+            attachmentIds: attachments?.length
+              ? attachments.map((attachment) => attachment.id)
+              : undefined,
+            deliveryMode:
+              deliveryMode === 'follow-up' || deliveryMode === 'steer'
+                ? deliveryMode
                 : undefined,
-              deliveryMode:
-                deliveryMode === 'follow-up' || deliveryMode === 'steer'
-                  ? deliveryMode
-                  : undefined,
-            }),
-          )
-          recordTeardown('the disconnected note', () =>
-            sessionEmitter.addNote({
-              text: 'Cursor is no longer connected, so this message was not sent.',
-              level: 'error',
-            }),
-          )
-          recordFailedTurnState()
-          recordTeardown('the cleared activity', () => setActivity(null))
-        }
+          }),
+        )
+        recordTeardown('the disconnected note', () =>
+          sessionEmitter.addNote({
+            text: 'Cursor is no longer connected, so this message was not sent.',
+            level: 'error',
+          }),
+        )
+        recordFailedTurnState()
+        recordTeardown('the cleared activity', () => setActivity(null))
         return
       }
 
       const skillResolution = await resolveSelectedSkills(text, skillSelections)
       if (stopped) return
+      if (interruptRequested) {
+        settleInterruptedWithoutSend()
+        return
+      }
 
       const userMessageItemId = sessionEmitter.addUserMessage({
         providerAccountId: null,
@@ -1132,6 +1076,20 @@ export class CursorProvider implements Provider {
 
       try {
         const parts = await loadCursorParts(attachments)
+        if (stopped) return
+        if (interruptRequested) {
+          endTurn(() => {
+            sessionEmitter.addNote({
+              text: 'stopped by user',
+              level: 'info',
+            })
+            setStatus('completed')
+            interruptRequested = false
+            setAttention('finished')
+            setActivity(null)
+          })
+          return
+        }
         promptInFlight = true
         const promptPromise = activeRpc.request(
           'session/prompt',
@@ -1182,15 +1140,16 @@ export class CursorProvider implements Provider {
               level: 'info',
             })
             setStatus('completed')
-            // Read by the service while the completed status is delivered, so
-            // it is cleared after that write, not before it.
-            interruptRequested = false
             setAttention('finished')
             return
           }
           setStatus('completed')
           setAttention('finished')
         })
+        // The flag is a property of one turn — clear it at every turn end so
+        // a late Stop after end_turn cannot sticky-retain the app queue
+        // (MAR-3142 lap 2, A).
+        interruptRequested = false
       } catch (error) {
         patchUserMessageSkills(
           userMessageItemId,
@@ -1201,6 +1160,20 @@ export class CursorProvider implements Provider {
       } finally {
         promptInFlight = false
       }
+    }
+
+    /** Stop landed before `session/prompt` — completed, no send (lap 2, D). */
+    function settleInterruptedWithoutSend(): void {
+      endTurn(() => {
+        sessionEmitter.addNote({
+          text: 'stopped by user',
+          level: 'info',
+        })
+        setStatus('completed')
+        interruptRequested = false
+        setAttention('finished')
+        setActivity(null)
+      })
     }
 
     /**
@@ -1214,6 +1187,9 @@ export class CursorProvider implements Provider {
       deliveryMode?: MidRunInputMode,
       skillSelections?: SkillSelection[],
     ): void {
+      // Clear a sticky interrupt from a prior turn before this one starts
+      // (MAR-3142 lap 2, A; Claude clears at turn start too).
+      interruptRequested = false
       promptStarting = true
       void sendPrompt(text, attachments, deliveryMode, skillSelections)
         .catch(handlePromptFailure)
@@ -1239,7 +1215,7 @@ export class CursorProvider implements Provider {
           sessionEmitter.addNote({
             text:
               error instanceof CursorAcpSilenceBudgetError
-                ? 'no word from Cursor for 10 minutes'
+                ? formatCursorAcpSilenceBudgetNote()
                 : `Cursor prompt failed: ${
                     error instanceof Error ? error.message : String(error)
                   }`,
@@ -1533,31 +1509,82 @@ export class CursorProvider implements Provider {
         return interruptRequested
       },
       /**
+       * Applies a model selection to the live ACP session and remembers it for
+       * a respawn (MAR-3142 lap 2, C). Without this an idle resident handle
+       * refuses every switch.
+       */
+      setModelSelection: async (model, effort) => {
+        config.model = model
+        config.effort = effort
+        const activeRpc = rpc
+        const sessionId = cursorSessionId
+        if (!activeRpc || !sessionId || stopped) return
+        const requestedModel = model?.trim() || null
+        if (!requestedModel) return
+        recordDebug({
+          direction: 'out',
+          channel: 'request',
+          method: 'session/set_config_option',
+          payload: {
+            sessionId,
+            configId: CURSOR_ACP_MODEL_CONFIG_ID,
+            value: requestedModel,
+          },
+          note: 'Apply Cursor model selection to the active ACP session',
+        })
+        await activeRpc.request('session/set_config_option', {
+          sessionId,
+          configId: CURSOR_ACP_MODEL_CONFIG_ID,
+          value: requestedModel,
+        })
+      },
+      /**
        * Cancels the turn without ending the process (R2): Cursor answers the
        * pending `session/prompt` with `stopReason: 'cancelled'`, which settles
-       * the turn as stopped rather than failed. With no prompt in flight there
-       * is nothing to cancel, and the service falls back to `stop`.
+       * the turn as stopped rather than failed. During `promptStarting` there
+       * is nothing on the wire yet — the flag alone stops the send (lap 2, D).
+       * With neither starting nor in-flight, the service falls back to `stop`.
        */
       interrupt: async () => {
-        if (stopped || !promptInFlight) return 'not-applicable'
-        const activeRpc = rpc
-        const activeSessionId = cursorSessionId
-        if (!activeRpc || !activeSessionId) return 'not-applicable'
-        try {
-          activeRpc.notify('session/cancel', { sessionId: activeSessionId })
-        } catch (error) {
-          recordTeardown('the cancel failure note', () =>
-            sessionEmitter.addNote({
-              text: `Cursor cancel failed: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-              level: 'error',
-            }),
-          )
-          return 'not-applicable'
+        if (stopped) return 'not-applicable'
+        // In-flight prompt first: `promptStarting` stays true until sendPrompt
+        // settles, so checking it ahead of `promptInFlight` would skip cancel
+        // for every live turn (MAR-3142 lap 2, D).
+        if (promptInFlight) {
+          const activeRpc = rpc
+          const activeSessionId = cursorSessionId
+          if (!activeRpc || !activeSessionId) return 'not-applicable'
+          // Answer pending human requests first so Cursor is not left blocked
+          // on an unanswered permission while we cancel (MAR-3142 lap 2, E).
+          for (const [id, approval] of pendingApprovals.entries()) {
+            activeRpc.respond(id, approval.cancelResult)
+          }
+          pendingApprovals.clear()
+          for (const [id, interaction] of pendingInteractions.entries()) {
+            activeRpc.respond(id, interaction.cancelResult)
+          }
+          pendingInteractions.clear()
+          try {
+            activeRpc.notify('session/cancel', { sessionId: activeSessionId })
+          } catch (error) {
+            recordTeardown('the cancel failure note', () =>
+              sessionEmitter.addNote({
+                text: `Cursor cancel failed: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+                level: 'error',
+              }),
+            )
+            return 'not-applicable'
+          }
+          interruptRequested = true
+          return 'interrupted'
         }
-        interruptRequested = true
-        return 'interrupted'
+        if (promptStarting) {
+          interruptRequested = true
+          return 'interrupted'
+        }
+        return 'not-applicable'
       },
       onDelta: (callback) => {
         listeners.delta.push(callback)

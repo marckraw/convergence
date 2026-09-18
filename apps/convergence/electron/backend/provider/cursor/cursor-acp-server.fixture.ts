@@ -30,6 +30,11 @@ export interface MockCursorAcpOptions {
   /** Refuse `session/load` with a not-found style error (MAR-3142 R5). */
   refuseSessionLoad?: boolean | { code?: number; message: string }
   availableCommands?: string[]
+  /**
+   * Record `session/cancel` without resolving a held prompt (MAR-3142 lap 2, A).
+   * Lets a test finish the prompt as `end_turn` after interrupt to pin sticky-flag clearing.
+   */
+  ignoreCancel?: boolean
 }
 
 export interface MockCursorAcpServer {
@@ -134,7 +139,11 @@ export function createMockCursorAcp(
           method: message.method,
           params: message.params,
         })
-        if (message.method === 'session/cancel' && heldPromptId !== null) {
+        if (
+          message.method === 'session/cancel' &&
+          heldPromptId !== null &&
+          !options.ignoreCancel
+        ) {
           respond(heldPromptId, { stopReason: 'cancelled' })
           heldPromptId = null
         }

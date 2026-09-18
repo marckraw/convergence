@@ -55,6 +55,8 @@ function startProvider(
     skillsCatalog?: ProviderSkillCatalog
     debugSink?: ProviderDebugSink
     holdPrompt?: boolean
+    holdInitialize?: boolean
+    ignoreCancel?: boolean
     requestTimeoutMs?: number
   },
 ) {
@@ -62,6 +64,8 @@ function startProvider(
   spawnMock.mockReturnValue(child)
   const server = createMockCursorAcp(child, {
     holdPrompt: options?.holdPrompt,
+    holdInitialize: options?.holdInitialize,
+    ignoreCancel: options?.ignoreCancel,
   })
   const provider = options?.skillsCatalog
     ? new CursorProvider(
@@ -172,39 +176,13 @@ afterEach(() => {
 })
 
 describe('CursorProvider', () => {
-  it('compresses a loaded session only when ACP advertises /compress', async () => {
-    const child = new MockCursorAcpChild()
-    spawnMock.mockReturnValue(child)
-    const server = createMockCursorAcp(child, {
-      availableCommands: ['/compress'],
-    })
-    const provider = new CursorProvider('agent', noopDebugSink, undefined, {
-      requestTimeoutMs: 1_000,
-    })
-
-    const result = await provider.manageContext?.(
-      {
-        sessionId: 'session-1',
-        workingDirectory: '/repo',
-        initialMessage: '',
-        model: null,
-        effort: null,
-        continuationToken: 'cursor-session-1',
-      },
-      { kind: 'compact' },
-    )
-
-    expect(server.requests.map((request) => request.method)).toEqual([
-      'initialize',
-      'authenticate',
-      'session/load',
-      'session/prompt',
-    ])
-    expect(server.requests.at(-1)?.params).toMatchObject({
-      sessionId: 'cursor-session-1',
-      prompt: [{ type: 'text', text: '/compress' }],
-    })
-    expect(result?.contextWindow.availability).toBe('unavailable')
+  it('does not expose manageContext while compaction rides a one-off client (lap 2, C)', () => {
+    const provider = new CursorProvider('agent')
+    expect('manageContext' in provider).toBe(false)
+    expect(
+      typeof (provider as { manageContext?: unknown }).manageContext ===
+        'function',
+    ).toBe(false)
   })
 
   it('runs one-shot prompts through Cursor ACP and terminates the process', async () => {
@@ -1251,6 +1229,10 @@ describe('CursorProvider', () => {
   it('cancels a silent prompt after the silence budget (R4)', async () => {
     vi.useFakeTimers()
     try {
+      const {
+        formatCursorAcpSilenceBudgetNote,
+        CURSOR_ACP_PROMPT_SILENCE_BUDGET_MS,
+      } = await import('./cursor-acp-contract.pure')
       const { server, handle, statuses, deltas } = startProvider(undefined, {
         holdPrompt: true,
         requestTimeoutMs: 25,
@@ -1260,14 +1242,14 @@ describe('CursorProvider', () => {
         expect(server.requests.map((r) => r.method)).toContain('session/prompt')
       })
 
-      await vi.advanceTimersByTimeAsync(10 * 60 * 1000)
+      await vi.advanceTimersByTimeAsync(CURSOR_ACP_PROMPT_SILENCE_BUDGET_MS)
 
       await vi.waitFor(() => {
         expect(
           server.notifications.some((n) => n.method === 'session/cancel'),
         ).toBe(true)
         expect(JSON.stringify(deltas)).toContain(
-          'no word from Cursor for 10 minutes',
+          formatCursorAcpSilenceBudgetNote(),
         )
         expect(statuses).toContain('failed')
       })
@@ -1275,6 +1257,238 @@ describe('CursorProvider', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('clears interruptRequested after an end_turn so the next prompt runs (lap 2, A)', async () => {
+    const { server, handle, statuses } = startProvider(undefined, {
+      holdPrompt: true,
+      ignoreCancel: true,
+    })
+    await waitFor(() => {
+      expect(server.requests.map((r) => r.method)).toContain('session/prompt')
+    })
+
+    await expect(handle.interrupt?.()).resolves.toBe('interrupted')
+    expect(handle.retainQueuedInputsOnCompletion).toBe(true)
+    // Cursor already finished — cancel is ignored; end_turn wins.
+    server.resolveHeldPrompt({ stopReason: 'end_turn' })
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+    })
+    expect(handle.retainQueuedInputsOnCompletion).toBe(false)
+
+    handle.sendMessage('follow-up after sticky interrupt')
+    await waitFor(() => {
+      expect(
+        server.requests.filter((r) => r.method === 'session/prompt'),
+      ).toHaveLength(2)
+    })
+  })
+
+  it('suspends the silence budget while a permission awaits the human (lap 2, B)', async () => {
+    vi.useFakeTimers()
+    try {
+      const { CURSOR_ACP_PROMPT_SILENCE_BUDGET_MS } =
+        await import('./cursor-acp-contract.pure')
+      const { server, handle, statuses, deltas } = startProvider(undefined, {
+        holdPrompt: true,
+      })
+
+      await vi.waitFor(() => {
+        expect(server.requests.map((r) => r.method)).toContain('session/prompt')
+      })
+
+      server.send({
+        jsonrpc: '2.0',
+        id: 501,
+        method: 'session/request_permission',
+        params: {
+          sessionId: 'cursor-session-1',
+          toolCall: {
+            toolCallId: 'tool-wait',
+            title: 'Wait',
+            kind: 'execute',
+            rawInput: { command: 'sleep' },
+          },
+          options: [
+            { optionId: 'allow-once', name: 'Allow once' },
+            { optionId: 'reject-once', name: 'Reject' },
+          ],
+        },
+      })
+
+      await vi.waitFor(() => {
+        expect(JSON.stringify(deltas)).toContain('Wait')
+      })
+
+      await vi.advanceTimersByTimeAsync(30 * 60 * 1000)
+      expect(
+        server.notifications.some((n) => n.method === 'session/cancel'),
+      ).toBe(false)
+      expect(statuses).not.toContain('failed')
+
+      handle.approve('501')
+      await vi.advanceTimersByTimeAsync(CURSOR_ACP_PROMPT_SILENCE_BUDGET_MS)
+      await vi.waitFor(() => {
+        expect(
+          server.notifications.some((n) => n.method === 'session/cancel'),
+        ).toBe(true)
+        expect(statuses).toContain('failed')
+      })
+      handle.dispose?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('switches the model on an idle resident session without respawning (lap 2, C)', async () => {
+    const { server, handle, child } = startProvider(undefined, {
+      holdPrompt: true,
+    })
+    await waitFor(() => {
+      expect(server.requests.map((r) => r.method)).toContain('session/prompt')
+    })
+    server.resolveHeldPrompt({ stopReason: 'end_turn' })
+    await waitFor(() => {
+      expect(
+        server.requests.filter((r) => r.method === 'session/prompt'),
+      ).toHaveLength(1)
+    })
+
+    await handle.setModelSelection?.(
+      'composer-2.5[context=300k,fast=true]',
+      null,
+    )
+    await waitFor(() => {
+      expect(
+        server.requests.some(
+          (r) =>
+            r.method === 'session/set_config_option' &&
+            r.params?.configId === 'model' &&
+            r.params?.value === 'composer-2.5[context=300k,fast=true]',
+        ),
+      ).toBe(true)
+    })
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(child.kill).not.toHaveBeenCalled()
+
+    handle.sendMessage('after model switch')
+    await waitFor(() => {
+      expect(
+        server.requests.filter((r) => r.method === 'session/prompt'),
+      ).toHaveLength(2)
+    })
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('interrupts during promptStarting without sending session/prompt (lap 2, D)', async () => {
+    const skillsGate = {
+      resolve: undefined as (() => void) | undefined,
+      promise: null as Promise<void> | null,
+    }
+    skillsGate.promise = new Promise<void>((resolve) => {
+      skillsGate.resolve = resolve
+    })
+    const catalog = cursorCatalog([cursorSkill('review')])
+    const child = new MockCursorAcpChild()
+    spawnMock.mockReturnValue(child)
+    const server = createMockCursorAcp(child)
+    const provider = new CursorProvider(
+      'agent',
+      noopDebugSink,
+      {
+        list: vi.fn(async () => {
+          await skillsGate.promise
+          return catalog
+        }),
+      },
+      { requestTimeoutMs: 1_000 },
+    )
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: '/repo',
+      initialMessage: 'hi',
+      model: null,
+      effort: null,
+      continuationToken: null,
+    })
+    const statuses: string[] = []
+    const deltas: SessionDelta[] = []
+    handle.onStatusChange((status) => statuses.push(status))
+    handle.onDelta((delta) => deltas.push(delta))
+
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+    })
+    expect(
+      server.requests.filter((r) => r.method === 'session/prompt'),
+    ).toHaveLength(1)
+
+    // Second turn hangs in skill resolution — promptStarting, not yet sent.
+    handle.sendMessage('with skill', undefined, [
+      selection(cursorSkill('review')),
+    ])
+    await waitFor(() => {
+      expect(handle.sendMessage('queued during start')).toBe('queue-follow-up')
+    })
+
+    await expect(handle.interrupt?.()).resolves.toBe('interrupted')
+    skillsGate.resolve?.()
+
+    await waitFor(() => {
+      expect(JSON.stringify(deltas)).toContain('stopped by user')
+    })
+    expect(statuses).not.toContain('failed')
+    expect(
+      server.requests.filter((r) => r.method === 'session/prompt'),
+    ).toHaveLength(1)
+    expect(child.kill).not.toHaveBeenCalled()
+  })
+
+  it('answers pending approvals before notifying session/cancel (lap 2, E)', async () => {
+    const { server, handle, attentions, deltas, statuses } = startProvider(
+      undefined,
+      { holdPrompt: true },
+    )
+    await waitFor(() => {
+      expect(server.requests.map((r) => r.method)).toContain('session/prompt')
+    })
+
+    server.send({
+      jsonrpc: '2.0',
+      id: 88,
+      method: 'session/request_permission',
+      params: {
+        sessionId: 'cursor-session-1',
+        toolCall: {
+          toolCallId: 'tool-stop',
+          title: 'Needs cancel',
+          kind: 'execute',
+          rawInput: { command: 'rm' },
+        },
+        options: [
+          { optionId: 'allow-once', name: 'Allow once' },
+          { optionId: 'reject-once', name: 'Reject' },
+        ],
+      },
+    })
+    await waitFor(() => {
+      expect(attentions).toContain('needs-approval')
+      expect(JSON.stringify(deltas)).toContain('Needs cancel')
+    })
+
+    await expect(handle.interrupt?.()).resolves.toBe('interrupted')
+
+    await waitFor(() => {
+      expect(server.responses).toContainEqual({
+        id: 88,
+        result: { outcome: { outcome: 'cancelled' } },
+      })
+      expect(
+        server.notifications.some((n) => n.method === 'session/cancel'),
+      ).toBe(true)
+      expect(statuses).toContain('completed')
+    })
   })
 
   it('recovers a refused session/load through session/new (R5)', async () => {

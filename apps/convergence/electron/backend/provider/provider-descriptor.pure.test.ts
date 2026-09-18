@@ -73,7 +73,10 @@ describe('provider-descriptor', () => {
     })
     expect(
       buildFallbackCursorDescriptor().contextManagement?.compact,
-    ).toMatchObject({ availability: 'runtime-check', method: 'slash-command' })
+    ).toMatchObject({
+      availability: 'unavailable',
+      method: 'unsupported',
+    })
     expect(
       buildFallbackAntigravityDescriptor().contextManagement?.compact,
     ).toMatchObject({ availability: 'unavailable', method: 'unsupported' })

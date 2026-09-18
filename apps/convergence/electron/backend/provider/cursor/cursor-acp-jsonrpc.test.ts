@@ -295,4 +295,44 @@ describe('CursorAcpJsonRpcClient', () => {
       vi.useRealTimers()
     }
   })
+
+  it('suspends the silence budget while a server request awaits an answer', async () => {
+    vi.useFakeTimers()
+    try {
+      const { stdin, stdout } = createMockStreams()
+      const client = new CursorAcpJsonRpcClient(stdin, stdout)
+      const expired = vi.fn()
+      client.onServerRequest(() => {
+        // Leave the request unanswered — the human has not decided yet.
+      })
+
+      const pending = client.request(
+        'session/prompt',
+        { sessionId: 's1' },
+        {
+          silenceBudgetMs: 1_000,
+          onSilenceExpired: expired,
+        },
+      )
+      const rejection = expect(pending).rejects.toThrow(/No word from Cursor/)
+
+      stdout.push(
+        '{"jsonrpc":"2.0","id":99,"method":"session/request_permission","params":{"sessionId":"s1"}}\n',
+      )
+      await vi.advanceTimersByTimeAsync(0)
+
+      await vi.advanceTimersByTimeAsync(30 * 60 * 1000)
+      expect(expired).not.toHaveBeenCalled()
+
+      client.respond(99, {
+        outcome: { outcome: 'selected', optionId: 'allow-once' },
+      })
+      await vi.advanceTimersByTimeAsync(1_000)
+      await rejection
+      expect(expired).toHaveBeenCalledTimes(1)
+      client.destroy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

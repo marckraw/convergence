@@ -116,11 +116,14 @@ export const PI_CONTEXT_MANAGEMENT_CAPABILITY: ProviderContextManagementCapabili
 export const CURSOR_CONTEXT_MANAGEMENT_CAPABILITY: ProviderContextManagementCapability =
   {
     compact: {
-      availability: 'runtime-check',
-      method: 'slash-command',
+      // Off while the session keeps a resident ACP process: the one-off
+      // `/compress` client would race it. MAR-3153 brings compaction back
+      // through the live RPC (MAR-3142 lap 2, C).
+      availability: 'unavailable',
+      method: 'unsupported',
       supportsInstructions: false,
       notes:
-        'Convergence checks the current ACP session command catalog for /compress before invoking it.',
+        'Manual context compaction is temporarily unavailable for Cursor while the conversation keeps its process across turns. It returns through the resident session in a follow-up.',
     },
   }
 

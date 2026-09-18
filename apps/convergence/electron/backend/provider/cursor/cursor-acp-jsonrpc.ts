@@ -1,6 +1,9 @@
 import type { Readable, Writable } from 'stream'
 import { RecordingError } from '../../session/session.pure'
-import { redactCursorAcpPayload } from './cursor-acp-contract.pure'
+import {
+  formatCursorAcpSilenceBudgetDuration,
+  redactCursorAcpPayload,
+} from './cursor-acp-contract.pure'
 
 export type CursorAcpJsonRpcId = string | number
 
@@ -109,7 +112,7 @@ export class CursorAcpJsonRpcError extends Error {
 export class CursorAcpSilenceBudgetError extends Error {
   constructor(method: string, budgetMs: number) {
     super(
-      `No word from Cursor for ${Math.round(budgetMs / 60_000)} minutes while waiting for ${method}`,
+      `No word from Cursor for ${formatCursorAcpSilenceBudgetDuration(budgetMs)} while waiting for ${method}`,
     )
     this.name = 'CursorAcpSilenceBudgetError'
   }
@@ -118,6 +121,12 @@ export class CursorAcpSilenceBudgetError extends Error {
 export class CursorAcpJsonRpcClient {
   private nextId = 1
   private pending = new Map<CursorAcpJsonRpcId, PendingRequest>()
+  /**
+   * Server requests that still await a client answer. While any are open the
+   * silence budget is suspended — waiting on the human is not Cursor silence
+   * (MAR-3142 lap 2, B).
+   */
+  private awaitingHumanAnswers = new Set<CursorAcpJsonRpcId>()
   private requestHandler: CursorAcpServerRequestHandler | null = null
   private notificationHandler: CursorAcpNotificationHandler | null = null
   private buffer = ''
@@ -247,6 +256,7 @@ export class CursorAcpJsonRpcClient {
       channel: 'response',
       payload: result,
     })
+    this.releaseHumanAnswer(id)
   }
 
   respondError(
@@ -265,6 +275,7 @@ export class CursorAcpJsonRpcClient {
       channel: 'response',
       payload: msg.error,
     })
+    this.releaseHumanAnswer(id)
   }
 
   onServerRequest(handler: CursorAcpServerRequestHandler): void {
@@ -278,6 +289,7 @@ export class CursorAcpJsonRpcClient {
   destroy(reason: string | Error = 'Cursor ACP client destroyed'): void {
     if (this.destroyed) return
     this.destroyed = true
+    this.awaitingHumanAnswers.clear()
     this.stdout.off('data', this.handleData)
     this.stdout.off('end', this.handleEnd)
     this.stdout.off('error', this.handleStreamError)
@@ -383,7 +395,10 @@ export class CursorAcpJsonRpcClient {
   }
 
   private handleServerRequest(request: CursorAcpJsonRpcRequest): void {
-    this.noteSilenceProgress()
+    // A pending human answer is not silence — suspend until we respond
+    // (MAR-3142 lap 2, B). Do not re-arm here.
+    this.awaitingHumanAnswers.add(request.id)
+    this.suspendSilenceBudgets()
     this.recordDebug({
       direction: 'in',
       channel: 'request',
@@ -457,9 +472,10 @@ export class CursorAcpJsonRpcClient {
 
   /**
    * Re-arms every pending silence budget (Codex-shaped; MAR-3142 R4).
-   * Inbound notifications and server requests count as progress.
+   * Inbound notifications count as progress. Server requests suspend instead.
    */
   private noteSilenceProgress(): void {
+    if (this.awaitingHumanAnswers.size > 0) return
     const at = Date.now()
     for (const [id, pending] of this.pending) {
       if (pending.silenceBudgetMs === null) continue
@@ -468,9 +484,39 @@ export class CursorAcpJsonRpcClient {
     }
   }
 
+  /** Clears silence timers while a human answer is outstanding (lap 2, B). */
+  private suspendSilenceBudgets(): void {
+    for (const pending of this.pending.values()) {
+      if (pending.silenceBudgetMs === null) continue
+      if (pending.timeout) {
+        clearTimeout(pending.timeout)
+        pending.timeout = null
+      }
+    }
+  }
+
+  private releaseHumanAnswer(id: CursorAcpJsonRpcId): void {
+    if (!this.awaitingHumanAnswers.delete(id)) return
+    if (this.awaitingHumanAnswers.size > 0) return
+    // Fresh quiet window from the moment the answer goes out.
+    const at = Date.now()
+    for (const [pendingId, pending] of this.pending) {
+      if (pending.silenceBudgetMs === null) continue
+      pending.lastProgressAt = at
+      this.armSilenceBudget(pendingId)
+    }
+  }
+
   private armSilenceBudget(id: CursorAcpJsonRpcId): void {
     const pending = this.pending.get(id)
     if (!pending || pending.silenceBudgetMs === null) return
+    if (this.awaitingHumanAnswers.size > 0) {
+      if (pending.timeout) {
+        clearTimeout(pending.timeout)
+        pending.timeout = null
+      }
+      return
+    }
 
     if (pending.timeout) {
       clearTimeout(pending.timeout)
