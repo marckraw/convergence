@@ -1,5 +1,11 @@
 # convergence
 
+## 0.66.0
+
+### Minor Changes
+
+- 174b5b2: An issue labeled `blocked` shows under _Waiting on you_ with the action “decide”, in any live state — a finished or unassigned issue asks for nothing.
+
 ## 0.65.2
 
 ### Patch Changes
