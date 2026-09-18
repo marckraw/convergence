@@ -284,6 +284,7 @@ describe('MAR-3097 lap 2, B: the column keeps the main panel at its floor', () =
       mode: 'open',
       reason: null,
       width: WAVE_PANEL_MIN_COLUMN_WIDTH,
+      maxWidth: WAVE_PANEL_MIN_COLUMN_WIDTH,
     })
     // MAR-3148 R1: the rail has two causes, and only one of them can be
     // undone by clicking Open.
@@ -294,7 +295,7 @@ describe('MAR-3097 lap 2, B: the column keeps the main panel at its floor', () =
         windowWidth: wide - 1,
         reservedWidth: 260,
       }),
-    ).toEqual({ mode: 'rail', reason: 'narrow', width: null })
+    ).toEqual({ mode: 'rail', reason: 'narrow', width: null, maxWidth: null })
     expect(
       effectiveWavePanelMode({
         stored: 'rail',
@@ -302,7 +303,7 @@ describe('MAR-3097 lap 2, B: the column keeps the main panel at its floor', () =
         windowWidth: 4000,
         reservedWidth: 0,
       }),
-    ).toEqual({ mode: 'rail', reason: 'stored', width: null })
+    ).toEqual({ mode: 'rail', reason: 'stored', width: null, maxWidth: null })
     // Lap 2, B: the width answers first. A stored rail in a window that could
     // not hold the column either reads `narrow`, because that is why Open
     // cannot act -- answering `stored` left the control live over nothing.
@@ -314,7 +315,7 @@ describe('MAR-3097 lap 2, B: the column keeps the main panel at its floor', () =
         windowWidth: wide - 1,
         reservedWidth: 260,
       }),
-    ).toEqual({ mode: 'rail', reason: 'narrow', width: null })
+    ).toEqual({ mode: 'rail', reason: 'narrow', width: null, maxWidth: null })
   })
 
   it('MAR-3155 R1: the width is the preference, cut to what the window can spare', () => {
@@ -328,7 +329,15 @@ describe('MAR-3097 lap 2, B: the column keeps the main panel at its floor', () =
 
     // A preference wider than the room: honoured as far as it fits.
     // Mutation: clamp to MAX alone (forget `available`) -> 600 here, red.
-    expect(at(600, 400)).toEqual({ mode: 'open', reason: null, width: 400 })
+    expect(at(600, 400)).toEqual({
+      mode: 'open',
+      reason: null,
+      width: 400,
+      // Lap 2, B: the ceiling the decision used, for the handle to announce.
+      // Mutation: return the constant -> 640 here, red.
+      maxWidth: 400,
+    })
+    expect(at(600, 900).maxWidth).toBe(WAVE_PANEL_MAX_COLUMN_WIDTH)
     // The same preference where it does fit.
     expect(at(600, 900).width).toBe(600)
     // Never past the ceiling, however much room there is.
@@ -340,6 +349,7 @@ describe('MAR-3097 lap 2, B: the column keeps the main panel at its floor', () =
       mode: 'rail',
       reason: 'narrow',
       width: null,
+      maxWidth: null,
     })
   })
 

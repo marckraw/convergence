@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import {
   clampWavePanelWidth,
   WAVE_PANEL_WIDTH_STEP,
@@ -13,9 +13,18 @@ import {
  * whatever stands to its left -- the sidebar's current width, which the shell
  * already passes as `reservedWidth`.
  *
- * Only a FINISHED gesture commits (R2). While a drag runs the draft is on
- * screen and nothing is stored; a drag interrupted by an unmount gives back
- * the cursor it borrowed and stores nothing at all.
+ * What is stored is what the person MEANT, and a gesture that changes nothing
+ * on screen stores nothing (lap 2, A). That is the rule the three gestures
+ * differ under:
+ *
+ * - a DRAG stores what was on screen when the pointer was let go -- they saw
+ *   it, so that is what they chose;
+ * - a STEP whose clamped result is the width already on screen stores
+ *   nothing: the window refused the gesture, and writing the refusal down
+ *   would turn "I pressed wider" into "I chose narrower, forever";
+ * - a RESET stores the DEFAULT itself, never the window's ceiling. The
+ *   decision cuts it for display and it comes back when the window does;
+ * - a gesture that ends with no column on screen at all stores nothing.
  */
 export interface WaveColumnResize {
   onHandleMouseDown: () => void
@@ -27,8 +36,11 @@ export function useWaveColumnResize(input: {
   reservedWidth: number
   /** The width on screen now: the decision's, already clamped. */
   width: number | null
-  /** The widest the column may be right now: `min(MAX, available)`. */
-  maxWidth: number
+  /**
+   * The widest this window can show, straight from the decision -- null when
+   * there is no column on screen, and then no gesture commits anything.
+   */
+  maxWidth: number | null
   /** Commits a finished gesture. */
   onCommit: (width: number) => void
   /** The width a double-click returns to. */
@@ -40,7 +52,11 @@ export function useWaveColumnResize(input: {
   // not the ones captured when the drag began: the window can be resized
   // under a held pointer, and the commit has to store what is on screen.
   const latest = useRef(input)
-  useEffect(() => {
+  // A LAYOUT effect, not a passive one (lap 2, C): a passive effect leaves a
+  // window between the commit and the flush in which a window listener would
+  // read the previous render's numbers. Nothing can stage that in jsdom; the
+  // effect's timing is the whole guard.
+  useLayoutEffect(() => {
     latest.current = input
   })
   // Set while a drag is running, so an unmount mid-drag can tell that the
@@ -48,6 +64,12 @@ export function useWaveColumnResize(input: {
   const releaseDrag = useRef<(() => void) | null>(null)
 
   const onHandleMouseDown = useCallback(() => {
+    // One live drag at a time. Measured (lap 2, D): with two installs the
+    // second mouse-up is not needed -- BOTH handlers answer the same event,
+    // so nothing leaks through the pointer. What this guard actually keeps
+    // true is that `releaseDrag` names the drag that is running, so an
+    // unmount releases the listeners that are really installed. No test in
+    // jsdom can witness that; it is stated here instead of pinned.
     if (releaseDrag.current) return
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
@@ -70,13 +92,16 @@ export function useWaveColumnResize(input: {
     }
     const onMouseUp = () => {
       const moved = dragged
+      const ceiling = latest.current.maxWidth
       stop()
       latest.current.onDraft(null)
       // A press that never moved is not a resize: nothing to store.
       if (moved === null) return
-      latest.current.onCommit(
-        clampWavePanelWidth(moved, latest.current.maxWidth),
-      )
+      // And neither is a drag the window ended (lap 2, A): if the column
+      // crossed the floor mid-drag there is a rail on screen, nothing to
+      // have chosen, and a commit here would store a width nobody saw.
+      if (ceiling === null) return
+      latest.current.onCommit(clampWavePanelWidth(moved, ceiling))
     }
 
     releaseDrag.current = stop
@@ -104,21 +129,24 @@ export function useWaveColumnResize(input: {
             : 0
       if (step === 0) return
       const current = latest.current.width
-      if (current === null) return
+      const ceiling = latest.current.maxWidth
+      if (current === null || ceiling === null) return
       event.preventDefault()
-      // Through the same clamp as the drag, so a step at the edge stores what
-      // it shows rather than a preference nothing on screen agrees with.
-      latest.current.onCommit(
-        clampWavePanelWidth(current + step, latest.current.maxWidth),
-      )
+      const next = clampWavePanelWidth(current + step, ceiling)
+      // The window refused the step (lap 2, A): nothing moved, so there is
+      // nothing the person chose. Committing here is how a 600 px preference
+      // became 400 forever -- they pressed WIDER and lost their wide column.
+      if (next === current) return
+      latest.current.onCommit(next)
     },
     [],
   )
 
   const onHandleDoubleClick = useCallback(() => {
-    latest.current.onCommit(
-      clampWavePanelWidth(latest.current.defaultWidth, latest.current.maxWidth),
-    )
+    // The DEFAULT itself, never the window's ceiling (lap 2, A): a reset in a
+    // cramped window must not pin that window's ceiling as the preference.
+    // The decision cuts it for display; it comes back when the window does.
+    latest.current.onCommit(latest.current.defaultWidth)
   }, [])
 
   return { onHandleMouseDown, onHandleKeyDown, onHandleDoubleClick }

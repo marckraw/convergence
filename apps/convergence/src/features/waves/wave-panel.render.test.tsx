@@ -581,11 +581,167 @@ describe('MAR-3097: through the containers and the real stores', () => {
       screen.getByRole('separator', { name: 'Resize the wave column' }),
     )
     expect(document.body.style.cursor).toBe('col-resize')
+    // A gesture that actually MOVED (lap 2, D): without this the case could
+    // not tell "an unmount stores nothing" from "a press that never moved
+    // stores nothing", which is a different rule.
+    await act(async () => {
+      fireEvent.mouseMove(window, { clientX: RESERVED + 500 })
+    })
+    expect(columnWidth()).toBe('500px')
     // Mutation: drop the unmount cleanup -> the whole app keeps a resize
     // cursor and unselectable text after the column goes away, red.
     cleanup()
     expect(document.body.style.cursor).toBe('')
     expect(document.body.style.userSelect).toBe('')
+    // Mutation: commit on release rather than on a finished mouse-up -> the
+    // interrupted drag leaves 500 behind, red.
+    expect(storedWidth()).toBeNull()
+  })
+
+  it('MAR-3155 lap 2, A: a step the window refuses stores nothing', async () => {
+    localStorage.setItem('convergence-wave-panel-width', '600')
+    setWindowWidth(windowLeaving(400))
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    const handle = screen.getByRole('separator', {
+      name: 'Resize the wave column',
+    })
+    expect(columnWidth()).toBe('400px')
+
+    // They pressed WIDER. The window has nothing more to give, so nothing
+    // moves -- and nothing may be written down: storing 400 here is how a
+    // 600px preference is lost for good.
+    // Mutation: commit the clamped step unconditionally -> stored reads 400,
+    // red.
+    await act(async () => {
+      fireEvent.keyDown(handle, { key: 'ArrowRight' })
+    })
+    expect(columnWidth()).toBe('400px')
+    expect(storedWidth()).toBe('600')
+
+    // Narrower still works: that gesture does move something.
+    await act(async () => {
+      fireEvent.keyDown(handle, { key: 'ArrowLeft' })
+    })
+    expect(columnWidth()).toBe(`${400 - WAVE_PANEL_WIDTH_STEP}px`)
+    expect(storedWidth()).toBe(String(400 - WAVE_PANEL_WIDTH_STEP))
+  })
+
+  it('MAR-3155 lap 2, A: a reset stores the default, not the window’s ceiling', async () => {
+    setWindowWidth(windowLeaving(260))
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    const handle = screen.getByRole('separator', {
+      name: 'Resize the wave column',
+    })
+    expect(columnWidth()).toBe('260px')
+
+    // Mutation: clamp the reset to the window's ceiling -> stored reads 260,
+    // and "reset" has pinned this window's ceiling as the preference, red.
+    await act(async () => {
+      fireEvent.doubleClick(handle)
+    })
+    expect(storedWidth()).toBe(String(WAVE_PANEL_DEFAULT_COLUMN_WIDTH))
+
+    // And the default is there when the window can show it again.
+    await act(async () => {
+      setWindowWidth(windowLeaving(900))
+      window.dispatchEvent(new Event('resize'))
+    })
+    expect(columnWidth()).toBe(`${WAVE_PANEL_DEFAULT_COLUMN_WIDTH}px`)
+  })
+
+  it('MAR-3155 lap 2, A: a drag the window ended stores nothing', async () => {
+    setWindowWidth(windowLeaving(900))
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    fireEvent.mouseDown(
+      screen.getByRole('separator', { name: 'Resize the wave column' }),
+    )
+    await act(async () => {
+      fireEvent.mouseMove(window, { clientX: RESERVED + 500 })
+    })
+
+    // The window crosses the column's floor while the pointer is still down:
+    // the rail is on screen, so there is nothing they can be said to have
+    // chosen.
+    await act(async () => {
+      setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
+      window.dispatchEvent(new Event('resize'))
+    })
+    expect(screen.getByLabelText('Waves rail')).toBeTruthy()
+    await act(async () => {
+      fireEvent.mouseUp(window)
+    })
+    // Mutation: drop the `maxWidth === null` guard -> 240 is stored with a
+    // rail on screen, red.
+    expect(storedWidth()).toBeNull()
+  })
+
+  it('MAR-3155 lap 2, B: the handle announces the range this window can give', async () => {
+    setWindowWidth(windowLeaving(400))
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    const handle = () =>
+      screen.getByRole('separator', { name: 'Resize the wave column' })
+    // Mutation: pass the MAX constant -> 640 here while 400 is the most the
+    // mechanism can do, red.
+    expect(handle().getAttribute('aria-valuemax')).toBe('400')
+    expect(handle().getAttribute('aria-valuemin')).toBe(
+      String(WAVE_PANEL_MIN_COLUMN_WIDTH),
+    )
+
+    await act(async () => {
+      setWindowWidth(windowLeaving(900))
+      window.dispatchEvent(new Event('resize'))
+    })
+    expect(handle().getAttribute('aria-valuemax')).toBe(
+      String(WAVE_PANEL_MAX_COLUMN_WIDTH),
+    )
+  })
+
+  it('MAR-3155 lap 2, C: a width is one number on screen and in the store', async () => {
+    setWindowWidth(windowLeaving(900))
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    const handle = screen.getByRole('separator', {
+      name: 'Resize the wave column',
+    })
+
+    fireEvent.mouseDown(handle)
+    await act(async () => {
+      fireEvent.mouseMove(window, { clientX: RESERVED + 300.5 })
+      fireEvent.mouseUp(window)
+    })
+    // Mutation: round only in the serializer -> the state keeps 300.5 and the
+    // handle announces it while the store says 301, red.
+    expect(handle.getAttribute('aria-valuenow')).toBe('301')
+    expect(storedWidth()).toBe('301')
+    expect(columnWidth()).toBe('301px')
+  })
+
+  it('MAR-3155 lap 2, D: a second mouse-down mid-drag leaks no listener', async () => {
+    setWindowWidth(windowLeaving(900))
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    const handle = screen.getByRole('separator', {
+      name: 'Resize the wave column',
+    })
+
+    fireEvent.mouseDown(handle)
+    fireEvent.mouseDown(handle)
+    await act(async () => {
+      fireEvent.mouseMove(window, { clientX: RESERVED + 500 })
+      fireEvent.mouseUp(window)
+    })
+    expect(columnWidth()).toBe('500px')
+
+    // One mouse-up ended the gesture, and nothing moves after it.
+    //
+    // Measured and reported (lap 2, D): dropping the re-entrancy guard leaves
+    // this GREEN -- two installs both answer the same mouse-up, so neither
+    // leaks. The guard's real job is that `releaseDrag` names the live drag
+    // for the unmount path, which jsdom cannot witness. This case still pins
+    // the thing a person would notice: the column stops moving when they let
+    // go.
+    await act(async () => {
+      fireEvent.mouseMove(window, { clientX: RESERVED + 620 })
+    })
+    expect(columnWidth()).toBe('500px')
   })
 
   it('R5: clicking a row opens the seat’s conversation; rows that cannot, say why', async () => {

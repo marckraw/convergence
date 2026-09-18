@@ -13,7 +13,6 @@ import {
   WAVE_PANEL_DEFAULT_COLUMN_WIDTH,
   WAVE_PANEL_MAX_COLUMN_WIDTH,
   WAVE_PANEL_MIN_COLUMN_WIDTH,
-  WAVE_PANEL_MIN_MAIN_WIDTH,
 } from './wave-sections.pure'
 import { useWaveColumnResize } from './use-wave-column-resize'
 import { useWaveBoard, type WaveBoard } from './use-wave-board'
@@ -83,13 +82,19 @@ export const WavePanel: FC<WavePanelProps> = ({
   }, [])
   /**
    * A finished gesture, and only a finished gesture, becomes the preference
-   * (R2). The clamp here is the storage's own floor and ceiling, NOT the
-   * window's: a wide column dragged in a wide window must still be wide when
-   * the window grows back, so what a narrow window can show is never what
-   * gets written down.
+   * (R2, lap 2, A/C).
+   *
+   * What arrives here is what the person MEANT: a drag brings the width they
+   * saw when they let go -- cut by the window, because that is what was on
+   * screen -- while a step the window refused and a reset bring nothing and
+   * the default. The clamp here is the storage's own [MIN, MAX], not the
+   * window's, and the round is done once so the number in state, the number
+   * on screen and the number in the store are the same one.
    */
   const commitWidth = useCallback((next: number) => {
-    const chosen = clampWavePanelWidth(next, WAVE_PANEL_MAX_COLUMN_WIDTH)
+    const chosen = Math.round(
+      clampWavePanelWidth(next, WAVE_PANEL_MAX_COLUMN_WIDTH),
+    )
     setStoredWidth(chosen)
     saveWavePanelWidth(chosen)
   }, [])
@@ -106,11 +111,9 @@ export const WavePanel: FC<WavePanelProps> = ({
   const resize = useWaveColumnResize({
     reservedWidth,
     width: decision.width,
-    // The same ceiling the decision used, so a gesture stores what it shows.
-    maxWidth: Math.min(
-      WAVE_PANEL_MAX_COLUMN_WIDTH,
-      windowWidth - reservedWidth - WAVE_PANEL_MIN_MAIN_WIDTH,
-    ),
+    // The decision's own ceiling (lap 2, B): the arithmetic lives in one
+    // place, and a gesture is measured against what the screen can show.
+    maxWidth: decision.maxWidth,
     onCommit: commitWidth,
     defaultWidth: WAVE_PANEL_DEFAULT_COLUMN_WIDTH,
     onDraft: setDraftWidth,
@@ -118,7 +121,6 @@ export const WavePanel: FC<WavePanelProps> = ({
 
   if (hidden || board.boundCrewCount === 0) return null
 
-  const width = decision.width ?? WAVE_PANEL_DEFAULT_COLUMN_WIDTH
   return decision.mode === 'rail' ? (
     <WaveRailView
       sections={board.sections}
@@ -129,7 +131,8 @@ export const WavePanel: FC<WavePanelProps> = ({
   ) : (
     // The handle is the column's right EDGE, so it is a sibling in the shell's
     // flex row rather than a child of the aside -- the same shape the
-    // sidebar's handle has.
+    // sidebar's handle has. On this branch the decision HAS a width and a
+    // ceiling (lap 2, B), so there is no fallback to reach for.
     <>
       <WavePanelView
         layout="column"
@@ -138,12 +141,15 @@ export const WavePanel: FC<WavePanelProps> = ({
         inertReason={inertReason}
         onOpen={openRow}
         onCollapse={() => changeMode('rail')}
-        width={width}
+        width={decision.width}
       />
       <WaveResizeHandle
-        width={width}
+        width={decision.width}
         min={WAVE_PANEL_MIN_COLUMN_WIDTH}
-        max={WAVE_PANEL_MAX_COLUMN_WIDTH}
+        // What this window can actually do, not what the constant allows: a
+        // separator that announces 240-640 while 400 is the most it can give
+        // is telling a screen reader something the mechanism refuses.
+        max={decision.maxWidth}
         onMouseDown={resize.onHandleMouseDown}
         onKeyDown={resize.onHandleKeyDown}
         onDoubleClick={resize.onHandleDoubleClick}

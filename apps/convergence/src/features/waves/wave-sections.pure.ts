@@ -350,19 +350,39 @@ export function clampWavePanelWidth(width: number, max: number): number {
  */
 export type WavePanelRailReason = 'stored' | 'narrow'
 
-export interface WavePanelModeDecision {
-  mode: 'open' | 'rail'
-  /** Null while the column is open; otherwise why it is not. */
-  reason: WavePanelRailReason | null
-  /**
-   * The width the column renders at, or null on the rail (MAR-3155 R1).
-   *
-   * The decision's own number, never the stored one: the caller renders THIS
-   * and stores what the person chose, which is what keeps a narrow window
-   * from quietly becoming a preference.
-   */
-  width: number | null
-}
+/**
+ * What the column renders as (MAR-3155 R1), as one of two shapes rather than
+ * four independent fields.
+ *
+ * A union, so no caller can reach an open column with no width and reach for
+ * a fallback the decision never gave (lap 2, B). On the rail there is no
+ * width and no ceiling; open, both are numbers.
+ */
+export type WavePanelModeDecision =
+  | {
+      mode: 'rail'
+      /** Why the column is not open. */
+      reason: WavePanelRailReason
+      width: null
+      maxWidth: null
+    }
+  | {
+      mode: 'open'
+      reason: null
+      /**
+       * The width the column renders at: the decision's own number, never the
+       * stored one, which is what keeps a narrow window from quietly becoming
+       * a preference.
+       */
+      width: number
+      /**
+       * The widest this window can show right now (lap 2, B). The ceiling's
+       * arithmetic lives HERE and only here -- a caller that computed its own
+       * would be the second encoding R6 exists to prevent -- and it is what
+       * the handle announces.
+       */
+      maxWidth: number
+    }
 
 /**
  * The mode and the width the column renders in (lap 2, B; MAR-3155 R1): the
@@ -387,17 +407,16 @@ export function effectiveWavePanelMode(input: {
   const available =
     input.windowWidth - input.reservedWidth - WAVE_PANEL_MIN_MAIN_WIDTH
   if (available < WAVE_PANEL_MIN_COLUMN_WIDTH) {
-    return { mode: 'rail', reason: 'narrow', width: null }
+    return { mode: 'rail', reason: 'narrow', width: null, maxWidth: null }
   }
   if (input.stored === 'rail') {
-    return { mode: 'rail', reason: 'stored', width: null }
+    return { mode: 'rail', reason: 'stored', width: null, maxWidth: null }
   }
+  const maxWidth = Math.min(WAVE_PANEL_MAX_COLUMN_WIDTH, available)
   return {
     mode: 'open',
     reason: null,
-    width: clampWavePanelWidth(
-      input.storedWidth,
-      Math.min(WAVE_PANEL_MAX_COLUMN_WIDTH, available),
-    ),
+    width: clampWavePanelWidth(input.storedWidth, maxWidth),
+    maxWidth,
   }
 }
