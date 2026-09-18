@@ -1915,7 +1915,7 @@ describe('MissionControl', () => {
       fireEvent.blur(name)
 
       expect(
-        await screen.findByText('1 wire now waits for "BATON: opus-mac"'),
+        await screen.findByText('1 wire followed the rename to "opus-mac"'),
       ).toBeInTheDocument()
       expect(document.querySelector('[data-seat-name-notice]')).not.toBeNull()
 
@@ -1932,6 +1932,48 @@ describe('MissionControl', () => {
         await screen.findByText('This crew already has a seat named "grok"'),
       ).toBeInTheDocument()
       expect(document.querySelector('[data-seat-name-notice]')).toBeNull()
+    })
+
+    it('MAR-3157: a recipe rename keeps the notice under the renamed seat', async () => {
+      // Mutation: key the notice by the old name → query under critic fails → red.
+      const recipe = {
+        ...DEFAULT_CREW_MEMBER_SEAT,
+        sessionId: null as string | null,
+        batonName: 'reviewer',
+        canvasX: null,
+        canvasY: null,
+        kind: 'dynamic' as const,
+        providerId: 'codex',
+        hostPolicy: 'local',
+      }
+      const api = await openCrewSettings('Night shift', [recipe])
+      const renamed = makeCrew({
+        id: 'crew-1',
+        name: 'Night shift',
+        sessionIds: ['a', 'b'],
+        members: [{ ...recipe, batonName: 'critic' }],
+      })
+      vi.mocked(api.setMemberBatonName).mockResolvedValueOnce({
+        crew: renamed,
+        carried: ['wire-1'],
+        left: [],
+        oldName: 'reviewer',
+        newName: 'critic',
+      })
+      listCrews.mockResolvedValue([renamed])
+
+      fireEvent.click(screen.getByRole('button', { name: /^reviewer — / }))
+      const name = screen.getByLabelText('Baton name for reviewer')
+      fireEvent.change(name, { target: { value: 'critic' } })
+      fireEvent.blur(name)
+
+      expect(
+        await screen.findByText('1 wire followed the rename to "critic"'),
+      ).toBeInTheDocument()
+      expect(screen.getByLabelText('Baton name for critic')).toBeInTheDocument()
+      const notice = document.querySelector('[data-seat-name-notice]')
+      expect(notice).not.toBeNull()
+      expect(notice).toHaveTextContent('1 wire followed the rename to "critic"')
     })
 
     /**

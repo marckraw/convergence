@@ -3,6 +3,10 @@ import { batonConditionToken } from './crew-loop.pure'
 /**
  * The sentence under the seat name after a rename carry (MAR-3157 R6).
  * Zero and zero → null (nothing to say).
+ *
+ * Carried wires may have moved only a spawn member (no token), so the
+ * sentence says they followed the rename — never that they "wait for" a
+ * BATON the wire may not have.
  */
 export function formatSeatRenameCarryNotice(input: {
   carried: number
@@ -15,11 +19,10 @@ export function formatSeatRenameCarryNotice(input: {
 
   const parts: string[] = []
   if (carried > 0 && newName !== null && newName.trim() !== '') {
-    const next = batonConditionToken(newName)
     parts.push(
       carried === 1
-        ? `1 wire now waits for "${next}"`
-        : `${carried} wires now wait for "${next}"`,
+        ? `1 wire followed the rename to "${newName}"`
+        : `${carried} wires followed the rename to "${newName}"`,
     )
   }
   if (left > 0 && oldName !== null && oldName.trim() !== '') {

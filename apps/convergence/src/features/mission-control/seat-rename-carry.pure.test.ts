@@ -11,7 +11,7 @@ describe('formatSeatRenameCarryNotice (MAR-3157 R6)', () => {
         newName: 'opus-mac',
       }),
     ).toBe(
-      '2 wires now wait for "BATON: opus-mac"; 1 wire still waits for "BATON: horse opus"',
+      '2 wires followed the rename to "opus-mac"; 1 wire still waits for "BATON: horse opus"',
     )
     expect(
       formatSeatRenameCarryNotice({
@@ -20,7 +20,7 @@ describe('formatSeatRenameCarryNotice (MAR-3157 R6)', () => {
         oldName: 'horse opus',
         newName: 'opus-mac',
       }),
-    ).toBe('1 wire now waits for "BATON: opus-mac"')
+    ).toBe('1 wire followed the rename to "opus-mac"')
     expect(
       formatSeatRenameCarryNotice({
         carried: 0,
@@ -49,5 +49,26 @@ describe('formatSeatRenameCarryNotice (MAR-3157 R6)', () => {
         newName: null,
       }),
     ).toBe('2 wires still wait for "BATON: horse opus"')
+  })
+
+  it('A: a member-only carry says followed, never waits for', () => {
+    // Unconditional spawn: carried by spawnMember alone, no token.
+    // Mutation: bring back "now waits for" → red.
+    expect(
+      formatSeatRenameCarryNotice({
+        carried: 1,
+        left: 0,
+        oldName: 'reviewer',
+        newName: 'critic',
+      }),
+    ).toBe('1 wire followed the rename to "critic"')
+    expect(
+      formatSeatRenameCarryNotice({
+        carried: 1,
+        left: 0,
+        oldName: 'reviewer',
+        newName: 'critic',
+      }),
+    ).not.toMatch(/waits for/)
   })
 })

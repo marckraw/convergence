@@ -1312,6 +1312,43 @@ describe('RelayService', () => {
       expect(service.getById(relay.id)?.conditionToken).toBe('BATON: opus-mac')
     })
 
+    it('B: a rename in one crew does not rewrite wires in another', () => {
+      // Mutation: delete `.filter((relay) => relay.crewId === input.crewId)` → red.
+      db.prepare(
+        "INSERT INTO session_crews (id, name) VALUES ('c2', 'Other loop')",
+      ).run()
+      const here = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        conditionToken: 'BATON: horse opus',
+      })
+      const elsewhere = service.create({
+        crewId: 'c2',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        conditionToken: 'BATON: horse opus',
+      })
+
+      const result = service.carrySeatRename({
+        crewId: 'c1',
+        oldName: 'horse opus',
+        newName: 'opus-mac',
+        renamedMemberSessionId: 's2',
+      })
+
+      expect(result.carried).toEqual([here.id])
+      expect(result.left).toEqual([])
+      expect(service.getById(here.id)?.conditionToken).toBe('BATON: opus-mac')
+      expect(service.getById(elsewhere.id)?.conditionToken).toBe(
+        'BATON: horse opus',
+      )
+      expect(result.carried).not.toContain(elsewhere.id)
+      expect(result.left).not.toContain(elsewhere.id)
+    })
+
     it('B: a resident rename does not rewrite a spawn that names the same string', () => {
       const relay = service.create({
         crewId: 'c1',

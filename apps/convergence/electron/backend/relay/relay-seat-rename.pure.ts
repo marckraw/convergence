@@ -22,8 +22,9 @@ export interface SeatRenameCarryUpdate {
 }
 
 /**
- * Which wires move with a seat rename, and which stay waiting on the old
- * name because they target someone else.
+ * Which wires move with a seat rename, and which are listed as left —
+ * fan-outs that still wait on the old token, or the seat's own waiters
+ * when the name is cleared.
  */
 export interface SeatRenameCarryPlan {
   updates: SeatRenameCarryUpdate[]

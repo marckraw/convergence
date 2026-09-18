@@ -369,15 +369,16 @@ describe('crew IPC', () => {
       expect(first.newName).toBe('opus-mac')
     })
 
-    it('R4: a refused relay write rolls the seat name back', () => {
+    it('R4: a refused relay write rolls the seat name back and broadcasts nothing', () => {
       const db = getDatabase()
       db.prepare(
         "INSERT INTO sessions (id, project_id, provider_id, name, working_directory) VALUES ('s2', 'p1', 'codex', 's2', '/tmp/p1')",
       ).run()
+      const broadcastWires = vi.fn<RelayBroadcastFn>()
       electronMocks.handlers.clear()
       const { relays, service } = registerCrewSurface({
         broadcast,
-        broadcastRelays: vi.fn<RelayBroadcastFn>(),
+        broadcastRelays: broadcastWires,
       })
 
       const crew = invoke<SessionCrew>('crew:create', { name: 'Night' })
@@ -401,6 +402,8 @@ describe('crew IPC', () => {
         BEFORE UPDATE ON session_relays
         BEGIN SELECT RAISE(ABORT, 'fixture relay refused'); END`)
 
+      broadcast.mockClear()
+      broadcastWires.mockClear()
       expect(() =>
         invoke(
           'crew:setMemberBatonName',
@@ -409,6 +412,10 @@ describe('crew IPC', () => {
           'opus-mac',
         ),
       ).toThrow()
+
+      // Mutation: broadcast before run() → these fire → red.
+      expect(broadcast).not.toHaveBeenCalled()
+      expect(broadcastWires).not.toHaveBeenCalled()
 
       const members = service.getById(crew.id)!.members
       expect(members.find((m) => m.sessionId === 's2')?.batonName).toBe(

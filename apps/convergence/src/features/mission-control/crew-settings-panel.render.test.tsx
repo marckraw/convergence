@@ -503,12 +503,12 @@ describe('R5 — the baton name field', () => {
       ...seatCtx,
       openSeatKey: 's1',
       seatNotices: {
-        s1: '1 wire now waits for "BATON: opus-mac"',
+        s1: '1 wire followed the rename to "opus-mac"',
       },
     })
     const notice = document.querySelector('[data-seat-name-notice]')
     expect(notice).not.toBeNull()
-    expect(notice).toHaveTextContent('1 wire now waits for "BATON: opus-mac"')
+    expect(notice).toHaveTextContent('1 wire followed the rename to "opus-mac"')
   })
 })
 

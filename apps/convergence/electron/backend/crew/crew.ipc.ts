@@ -160,7 +160,26 @@ export function registerCrewIpcHandlers(deps: {
         if (!existing) throw new Error('That seat is not in this crew')
         const oldName = existing.batonName
         const crew = service.setMemberBatonName(crewId, member, batonName)
-        const newName = normalizeCrewBatonName(batonName)
+        const otherRecipeNames = new Set(
+          before.members
+            .filter(
+              (entry) =>
+                entry.sessionId === null && entry.batonName !== oldName,
+            )
+            .map((entry) => entry.batonName),
+        )
+        const afterMember =
+          existing.sessionId != null
+            ? crew.members.find(
+                (entry) => entry.sessionId === existing.sessionId,
+              )
+            : crew.members.find(
+                (entry) =>
+                  entry.sessionId === null &&
+                  entry.batonName !== null &&
+                  !otherRecipeNames.has(entry.batonName),
+              )
+        const newName = afterMember?.batonName ?? null
         const carry = relays.carrySeatRename({
           crewId,
           oldName,
