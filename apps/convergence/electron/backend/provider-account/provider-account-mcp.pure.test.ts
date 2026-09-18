@@ -352,4 +352,12 @@ describe('Codex account connectors (MAR-3183)', () => {
       ),
     ).toEqual(['linear'])
   })
+  it.each(['{}', '{"servers":[]}', '{'])(
+    'refuses invalid connector list payload %s',
+    (stdout) => {
+      expect(() => parseCodexMcpList(stdout)).toThrow(
+        'Codex returned an invalid connector list.',
+      )
+    },
+  )
 })

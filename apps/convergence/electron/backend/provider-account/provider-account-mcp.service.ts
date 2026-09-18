@@ -1,7 +1,6 @@
 import { spawn } from 'child_process'
 import { ClaudeAccountMaintenance } from '../provider/claude-code/claude-account-maintenance.service'
 import { mapClaudeStatus, parseClaudeListEntries } from '../mcp/claude-mcp.pure'
-import { parseCodexServers } from '../mcp/codex-mcp.pure'
 import type {
   ProviderAccountConnector,
   ProviderAccountConnectorsResult,
@@ -216,21 +215,10 @@ export class ProviderAccountMcpService {
             url: 'https://mcp.linear.app/mcp',
           }),
         )
-        const stdout = await this.readCodexList(account)
-        let linear
-        try {
-          linear = parseCodexServers(stdout).find(
-            (entry) => entry?.name === 'linear',
-          )
-        } catch {
-          throw new Error('Codex returned an invalid connector list.')
-        }
-        if (
-          linear &&
-          'auth_status' in linear &&
-          linear.auth_status === 'o_auth'
+        const linear = (await this.listCodexConnectors(account)).find(
+          (connector) => connector.name === 'linear',
         )
-          return added
+        if (linear && !linear.needsAuthorization) return added
       }
       return this.runCodexLogin(account, 'linear')
     })

@@ -756,7 +756,7 @@ describe('ProviderAccountsContainer', () => {
       ).not.toBeInTheDocument()
     })
 
-    it('shows a Codex list error rather than an empty list or Connect Linear', async () => {
+    it('shows a Codex list error without hiding Connect Linear or claiming an empty list', async () => {
       await openCodex([], 'Codex could not list connectors.')
       expect(
         await screen.findByText('Codex could not list connectors.'),
@@ -765,8 +765,30 @@ describe('ProviderAccountsContainer', () => {
         screen.queryByText('No MCP servers are configured.'),
       ).not.toBeInTheDocument()
       expect(
-        screen.queryByRole('button', { name: 'Connect Linear' }),
-      ).not.toBeInTheDocument()
+        screen.getByRole('button', { name: 'Connect Linear' }),
+      ).toBeInTheDocument()
+    })
+
+    it('keeps Connect Linear available beside a maintenance refusal', async () => {
+      const message =
+        'This Codex account is in use. Wait for its active work to finish.'
+      providerAccounts.connectLinear.mockResolvedValue({
+        providerAccountId: 'acct-a',
+        connectors: [],
+        error: message,
+      })
+      await openCodex()
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Connect Linear' }),
+      )
+      expect(await screen.findByText(message)).toBeInTheDocument()
+      const retry = screen.getByRole('button', { name: 'Connect Linear' })
+      expect(retry).toBeEnabled()
+      fireEvent.click(retry)
+      await waitFor(() =>
+        expect(providerAccounts.connectLinear).toHaveBeenCalledTimes(2),
+      )
+      expect(screen.getByText(message)).toBeInTheDocument()
     })
 
     it('surfaces Codex maintenance refusal verbatim', async () => {

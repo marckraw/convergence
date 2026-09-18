@@ -2,7 +2,7 @@ import { buildClaudeAccountEnv } from './provider-account-env.pure'
 import { buildCodexAccountEnv } from './provider-account-codex-env.pure'
 import type { ProviderAccountConnector } from './provider-account-mcp.types'
 import {
-  parseCodexServers,
+  type CodexServerRecord,
   readCodexServerFlags,
   normalizeCodexStatus,
 } from '../mcp/codex-mcp.pure'
@@ -67,9 +67,12 @@ export function buildCodexMcpAddCommand(
 
 /** CLI JSON is an IO boundary: retain only display fields, never headers or environment values. */
 export function parseCodexMcpList(json: string): ProviderAccountConnector[] {
-  let entries: ReturnType<typeof parseCodexServers>
+  let entries: CodexServerRecord[]
   try {
-    entries = parseCodexServers(json)
+    const parsed: unknown = JSON.parse(json)
+    if (!Array.isArray(parsed))
+      throw new Error('Codex returned an invalid connector list.')
+    entries = parsed as CodexServerRecord[]
   } catch {
     throw new Error('Codex returned an invalid connector list.')
   }

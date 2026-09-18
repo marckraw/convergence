@@ -100,6 +100,12 @@ describe('Codex connectors (MAR-3183)', () => {
     expect(b.events).toEqual(['list', 'enter', 'add', 'list', 'exit'])
     expect(b.terminal).toHaveBeenCalledOnce()
   })
+  it('does not log in when authorization is unsupported after add', async () => {
+    const b = bench(false, 'unsupported')
+    await b.subject.connectLinear('codex-test')
+    expect(b.events).toEqual(['list', 'enter', 'add', 'list', 'exit'])
+    expect(b.terminal).toHaveBeenCalledOnce()
+  })
   it('names the server in a failed login', async () => {
     const b = bench()
     b.terminal.mockImplementation(async (_command, lifecycle) => {
@@ -180,11 +186,46 @@ describe('Codex connectors (MAR-3183)', () => {
       error: null,
     })
     expect(b.events).toEqual(['list'])
-    b.read.mockResolvedValue({ code: 0, stdout: '{', stderr: '' })
+    b.read.mockResolvedValue({ code: 0, stdout: '{}', stderr: '' })
     expect((await b.subject.listConnectors('codex-test')).error).toBe(
       'Codex returned an invalid connector list.',
     )
   })
+  it.each(['{}', '{"servers":[]}', '{'])(
+    'refuses invalid list %s without starting Connect Linear',
+    async (stdout) => {
+      const b = bench()
+      b.read.mockResolvedValue({ code: 0, stdout, stderr: '' })
+      expect(await b.subject.listConnectors('codex-test')).toMatchObject({
+        connectors: [],
+        error: 'Codex returned an invalid connector list.',
+      })
+      await expect(b.subject.connectLinear('codex-test')).rejects.toThrow(
+        'Codex returned an invalid connector list.',
+      )
+      expect(b.terminal).not.toHaveBeenCalled()
+      expect(b.events).not.toContain('enter')
+    },
+  )
+  it.each(['{}', '{"servers":[]}', '{'])(
+    'refuses invalid re-read %s after add without logging in',
+    async (stdout) => {
+      const b = bench()
+      b.read.mockImplementation(async () => {
+        b.events.push('list')
+        return {
+          code: 0,
+          stdout: b.events.includes('add') ? stdout : '[]',
+          stderr: '',
+        }
+      })
+      await expect(b.subject.connectLinear('codex-test')).rejects.toThrow(
+        'Codex returned an invalid connector list.',
+      )
+      expect(b.events).toEqual(['list', 'enter', 'add', 'list', 'exit'])
+      expect(b.terminal).toHaveBeenCalledOnce()
+    },
+  )
 })
 
 const HOME = '/Users/tester'

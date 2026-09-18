@@ -449,7 +449,6 @@ export function ProviderAccountsFields({
                     {isCodex &&
                     !isLoadingConnectors &&
                     connectors &&
-                    !connectors.error &&
                     !connectors.connectors.some(
                       (connector) => connector.name === 'linear',
                     ) ? (
