@@ -794,16 +794,6 @@ export class SessionService {
   }
 
   /**
-   * Subscribes to sessions coming to rest. Fires once per status transition
-   * into `completed` or `failed`.
-   *
-   * Every other listener seam on this service is a single-slot field whose
-   * setter silently evicts whoever registered before -- and every one of those
-   * slots is already taken by renderer broadcasts, notifications or provider
-   * debug logging. This seam is a list handing back an unsubscribe precisely so
-   * a second observer (relays) can watch settles without displacing the first.
-   */
-  /**
    * The receipt's other ending (MAR-2759): a dispatch that will never be
    * named by a settle. Delivered inline -- the listener only releases what
    * it was holding for those ids, and nothing here is mid-lifecycle.
@@ -1191,6 +1181,16 @@ export class SessionService {
     }
   }
 
+  /**
+   * Subscribes to sessions coming to rest. Fires once per status transition
+   * into `completed` or `failed`.
+   *
+   * Every other listener seam on this service is a single-slot field whose
+   * setter silently evicts whoever registered before -- and every one of those
+   * slots is already taken by renderer broadcasts, notifications or provider
+   * debug logging. This seam is a list handing back an unsubscribe precisely so
+   * a second observer (relays) can watch settles without displacing the first.
+   */
   onSessionSettled(listener: SessionSettledListener): () => void {
     this.sessionSettledListeners.add(listener)
     return () => {
@@ -1680,15 +1680,6 @@ export class SessionService {
   }
 
   /**
-   * The text of the newest finished assistant message in a session, or null
-   * when there is none to carry.
-   *
-   * This is the relay payload. It reads the single row rather than
-   * materializing the whole conversation because it runs on every settle, and
-   * it flushes coalesced patches first so a message that finished streaming
-   * moments before the session settled is not missed.
-   */
-  /**
    * The provider account this session's most recent turn actually ran on.
    *
    * Sessions carry no account of their own -- the durable record is per turn --
@@ -1739,6 +1730,15 @@ export class SessionService {
     )
   }
 
+  /**
+   * The text of the newest finished assistant message in a session, or null
+   * when there is none to carry.
+   *
+   * This is the relay payload. It reads the single row rather than
+   * materializing the whole conversation because it runs on every settle, and
+   * it flushes coalesced patches first so a message that finished streaming
+   * moments before the session settled is not missed.
+   */
   getLastAssistantMessageText(sessionId: string): string | null {
     this.flushPendingConversationPatchesForSession(sessionId)
 
@@ -2912,40 +2912,6 @@ export class SessionService {
   }
 
   /**
-   * Whether a turn is under way on this session, as far as this process can
-   * tell: `running` with a live handle to carry it (a reattached remote turn
-   * has one too), or a send that has begun and not yet reached a provider
-   * (MAR-2550) -- for the width of that await the status is not `running`
-   * yet, and an opener sent then could land inside the turn about to start.
-   * A `running` row with neither is a process that is gone; the ordinary
-   * send path fails it and starts afresh.
-   *
-   * The in-flight half proves an attempt, not a turn -- safe to queue behind
-   * only because its failure has an owner: `withDispatchInFlight` terminates
-   * the rows when the attempt fails and nothing else carries them (design P).
-   */
-  /**
-   * Whether a turn is running on this session OR on its way up (MAR-2888).
-   *
-   * The reset door's question, and NOT `isCarryingATurn`'s. A reset cannot
-   * share a turn, so the door has to refuse for a window wider than "a turn
-   * is running": it must also cover the beat between `start()` returning and
-   * the provider's first status, where the row still reads `idle` while a
-   * turn is on its way up.
-   *
-   * It used to ask whether a handle was ATTACHED, which is wider still and
-   * wrong at the other end: a resident handle is not released when its turn
-   * completes, so after any finished turn an idle session looked busy. That
-   * refusal then became a queued input with nothing to drain it -- the only
-   * automatic drain is a handle's own `completed` -- so a `/clear` hail at an
-   * idle Claude session would have waited for a turn that was never coming.
-   *
-   * Measured, because the two cases are one field apart: cold start reads a
-   * handle with status `idle`, an idle resident reads a handle with status
-   * `completed`. So the question is "is there a handle, and has its turn not
-   * ended yet", plus a send already on its way, which is a turn too.
-   */
-  /**
    * Puts back the relay mute a send was about to borrow (MAR-2888 lap 4).
    *
    * A relay opener always asks for quiet, and the mute is written to the
@@ -2970,6 +2936,27 @@ export class SessionService {
       .run(sessionId)
   }
 
+  /**
+   * Whether a turn is running on this session OR on its way up (MAR-2888).
+   *
+   * The reset door's question, and NOT `isCarryingATurn`'s. A reset cannot
+   * share a turn, so the door has to refuse for a window wider than "a turn
+   * is running": it must also cover the beat between `start()` returning and
+   * the provider's first status, where the row still reads `idle` while a
+   * turn is on its way up.
+   *
+   * It used to ask whether a handle was ATTACHED, which is wider still and
+   * wrong at the other end: a resident handle is not released when its turn
+   * completes, so after any finished turn an idle session looked busy. That
+   * refusal then became a queued input with nothing to drain it -- the only
+   * automatic drain is a handle's own `completed` -- so a `/clear` hail at an
+   * idle Claude session would have waited for a turn that was never coming.
+   *
+   * Measured, because the two cases are one field apart: cold start reads a
+   * handle with status `idle`, an idle resident reads a handle with status
+   * `completed`. So the question is "is there a handle, and has its turn not
+   * ended yet", plus a send already on its way, which is a turn too.
+   */
   private isTurnUnderWayOrArriving(session: Session): boolean {
     if (this.dispatches.isDispatching(session.id)) return true
     if (!this.activeHandles.has(session.id)) return false
@@ -2982,6 +2969,19 @@ export class SessionService {
     return !isTerminalSessionStatus(session.status)
   }
 
+  /**
+   * Whether a turn is under way on this session, as far as this process can
+   * tell: `running` with a live handle to carry it (a reattached remote turn
+   * has one too), or a send that has begun and not yet reached a provider
+   * (MAR-2550) -- for the width of that await the status is not `running`
+   * yet, and an opener sent then could land inside the turn about to start.
+   * A `running` row with neither is a process that is gone; the ordinary
+   * send path fails it and starts afresh.
+   *
+   * The in-flight half proves an attempt, not a turn -- safe to queue behind
+   * only because its failure has an owner: `withDispatchInFlight` terminates
+   * the rows when the attempt fails and nothing else carries them (design P).
+   */
   private isCarryingATurn(session: Session): boolean {
     if (this.dispatches.isDispatching(session.id)) return true
     return session.status === 'running' && this.activeHandles.has(session.id)

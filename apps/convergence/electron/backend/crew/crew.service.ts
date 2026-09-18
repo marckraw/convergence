@@ -156,13 +156,6 @@ export class CrewService {
   }
 
   /**
-   * Names one member's baton, or clears it.
-   *
-   * Its own method rather than a field on `update`, for the same reason arming
-   * is: it belongs to a member, not to the crew, and burying it in the crew
-   * form would mean editing a colour could rename a route.
-   */
-  /**
    * Remembers where a member's card was dropped on the Canvas (R10).
    *
    * A null pair means "lay it out" and is how a card is put back under the
@@ -192,6 +185,13 @@ export class CrewService {
     return this.requireById(crewId)
   }
 
+  /**
+   * Names one member's baton, or clears it.
+   *
+   * Its own method rather than a field on `update`, for the same reason arming
+   * is: it belongs to a member, not to the crew, and burying it in the crew
+   * form would mean editing a colour could rename a route.
+   */
   setMemberBatonName(
     crewId: string,
     member: CrewMemberRef,

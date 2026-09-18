@@ -121,6 +121,18 @@ interface CrewCanvasProps {
 }
 
 /**
+ * What a typed seat field sends to the door. A WIP limit goes as a number so
+ * `normalizeCrewLimit` can refuse `0` in its own words; a blank clears to the
+ * default, as every other seat field does.
+ */
+function seatDraftPatch(field: SeatDraftField, typed: string): SeatPatch {
+  if (field === 'wipLimit')
+    return { wipLimit: typed.trim() === '' ? null : Number(typed) }
+  if (field === 'roleCard') return { roleCard: typed.trim() || null }
+  return { hostPolicy: typed.trim() || null }
+}
+
+/**
  * The Canvas as a workspace (R10, R13).
  *
  * It holds the toolbar, the diagram and the one right-hand panel, and it owns
@@ -138,18 +150,6 @@ interface CrewCanvasProps {
  * the switch stores a switch, adding a conversation stores a membership. The
  * engine is the only thing that ever delivers.
  */
-/**
- * What a typed seat field sends to the door. A WIP limit goes as a number so
- * `normalizeCrewLimit` can refuse `0` in its own words; a blank clears to the
- * default, as every other seat field does.
- */
-function seatDraftPatch(field: SeatDraftField, typed: string): SeatPatch {
-  if (field === 'wipLimit')
-    return { wipLimit: typed.trim() === '' ? null : Number(typed) }
-  if (field === 'roleCard') return { roleCard: typed.trim() || null }
-  return { hostPolicy: typed.trim() || null }
-}
-
 export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
   const crewGroups = useMemo(
     () => groups.filter((group) => group.crew !== null),
