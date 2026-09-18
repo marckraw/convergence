@@ -11,6 +11,7 @@ import {
   LINEAR_DONE_WINDOW,
   LINEAR_ISSUE_BODIES_QUERY,
   LINEAR_LABELED_ISSUES_QUERY,
+  dayAfter,
   linearIssueBodiesRequest,
   linearLabeledIssuesRequest,
   linearRetryAt,
@@ -528,7 +529,44 @@ describe('MAR-3190 R5 + lap 2, A: the grounding date is read from the record', (
     expect(readGroundedAt(body, TODAY)).toBe(expected)
   })
 
-  it('a date in the future is a typo, never a grounding', () => {
+  it.each([
+    [
+      'tomorrow in UTC — a grounding written after local midnight',
+      '2026-09-19',
+      '2026-09-19',
+    ],
+    ['today', '2026-09-18', '2026-09-18'],
+    ['the day after tomorrow', '2026-09-20', null],
+    ['a far typo', '2099-01-01', null],
+  ])('lap 3, H: %s -> %s', (_case, date, expected) => {
+    // Stated, not inherited: this table is about the day AFTER `today`, so
+    // the day it calls today has to be written down here.
+    const today = '2026-09-18'
+    // `today` is the app's UTC date; we ground after local midnight, so a
+    // fresh grounding legitimately reads as tomorrow. Refused, the mistake
+    // STICKS — the body is not read again until the issue changes, so the
+    // issue would show no grounding at all for as long as nobody touched it.
+    // Mutation: the strict `date > today` back -> the first case reads null,
+    // red.
+    expect(
+      readGroundedAt(`## Grounded at\n\n\`x · ${date} · checked: y\``, today),
+    ).toBe(expected)
+  })
+
+  it('lap 3, H: the day of slack is computed in UTC, across a year boundary', () => {
+    // Mutation: string arithmetic on the day (`2026-12-32`) -> red.
+    expect(dayAfter('2026-12-31')).toBe('2027-01-01')
+    expect(dayAfter('2026-02-28')).toBe('2026-03-01')
+    expect(dayAfter('2028-02-28')).toBe('2028-02-29')
+    expect(
+      readGroundedAt(
+        '## Grounded at\n\n`x · 2027-01-01 · checked: y`',
+        '2026-12-31',
+      ),
+    ).toBe('2027-01-01')
+  })
+
+  it('a date beyond the slack is a typo, never a grounding', () => {
     // Mutation: drop the `today` guard -> 2099 wins every comparison and the
     // issue reads as freshly grounded forever, red.
     expect(

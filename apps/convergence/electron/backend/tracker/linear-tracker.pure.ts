@@ -649,6 +649,18 @@ function groundingRegions(body: string): string[] {
   return regions
 }
 
+/**
+ * The day after a `YYYY-MM-DD`, in UTC (MAR-3190 lap 3, H).
+ *
+ * Pure arithmetic on the given date -- no `Date.now`, no local zone -- so the
+ * caller's `today` is the only clock in play.
+ */
+export function dayAfter(date: string): string {
+  const at = new Date(`${date}T00:00:00.000Z`)
+  at.setUTCDate(at.getUTCDate() + 1)
+  return at.toISOString().slice(0, 10)
+}
+
 /** Whether a `YYYY-MM-DD` names a day that exists. */
 function isCalendarDate(value: string): boolean {
   const at = new Date(`${value}T00:00:00.000Z`)
@@ -666,6 +678,14 @@ function isCalendarDate(value: string): boolean {
  * `today` is passed in rather than read, so this stays pure and so a date in
  * the FUTURE can be refused: a typo like `2099-01-01` would otherwise win
  * every comparison and present an issue as grounded forever.
+ *
+ * ONE DAY of slack, though, and that day is load-bearing (lap 3, H). `today`
+ * is the app's UTC date; a grounding written after local midnight east of UTC
+ * carries tomorrow's UTC date, and a strict `date > today` refused it -- then
+ * the mistake STUCK, because a body is only read again when the issue's
+ * `updatedAt` moves. A fresh grounding would have read as no grounding at
+ * all, for as long as nobody touched the issue. A day is wider than every
+ * inhabited offset; two days would start accepting real typos.
  */
 export function readGroundedAt(
   body: string | null,
@@ -676,7 +696,7 @@ export function readGroundedAt(
   for (const region of groundingRegions(body)) {
     for (const match of region.matchAll(DATE_AFTER_SEPARATOR)) {
       const date = match[1]
-      if (!date || !isCalendarDate(date) || date > today) continue
+      if (!date || !isCalendarDate(date) || date > dayAfter(today)) continue
       if (latest === null || date > latest) latest = date
     }
   }
