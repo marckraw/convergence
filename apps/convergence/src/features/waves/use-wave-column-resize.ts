@@ -13,18 +13,22 @@ import {
  * whatever stands to its left -- the sidebar's current width, which the shell
  * already passes as `reservedWidth`.
  *
- * What is stored is what the person MEANT, and a gesture that changes nothing
- * on screen stores nothing (lap 2, A). That is the rule the three gestures
- * differ under:
+ * What is stored is what the person MEANT (lap 2, A), and after lap 3 that
+ * has one form for the two gestures that aim at a width:
  *
- * - a DRAG stores what was on screen when the pointer was let go -- they saw
- *   it, so that is what they chose;
- * - a STEP whose clamped result is the width already on screen stores
- *   nothing: the window refused the gesture, and writing the refusal down
- *   would turn "I pressed wider" into "I chose narrower, forever";
- * - a RESET stores the DEFAULT itself, never the window's ceiling. The
- *   decision cuts it for display and it comes back when the window does;
- * - a gesture that ends with no column on screen at all stores nothing.
+ * **a drag and a step store the width on screen when the gesture ENDS, and
+ * store nothing when that equals the width on screen when it BEGAN.**
+ *
+ * The window's ceiling is what makes those differ: press or drag wider
+ * against it and the screen does not move, so nothing was chosen and nothing
+ * may be written down. Writing it down is how a 600 px preference became 400
+ * forever -- the same loss through the keyboard (lap 2) and through the mouse
+ * (lap 3), which is why the two now share one sentence instead of a list.
+ *
+ * A RESET is the one gesture whose meaning is not "what I see": it stores the
+ * default, and the decision cuts that for display until the window grows.
+ * And a gesture that ends with no column on screen stores nothing at all --
+ * `column` is null then, from whatever reason took it away.
  */
 export interface WaveColumnResize {
   onHandleMouseDown: () => void
@@ -32,15 +36,25 @@ export interface WaveColumnResize {
   onHandleDoubleClick: () => void
 }
 
+/**
+ * The column on screen, or null when there is none (lap 3, B).
+ *
+ * ONE fact, computed once by the caller from every reason a column can be
+ * absent -- the rail, Mission Control's own Waves tab, the last bound crew
+ * going away. Asking any single one of them here would be asking a proxy:
+ * the hook outlives the handle, so a drag can end while the column it was
+ * resizing is gone.
+ */
+export interface WaveColumnOnScreen {
+  /** The width on screen now: the decision's, already clamped. */
+  width: number
+  /** The widest this window can show right now, from the same decision. */
+  maxWidth: number
+}
+
 export function useWaveColumnResize(input: {
   reservedWidth: number
-  /** The width on screen now: the decision's, already clamped. */
-  width: number | null
-  /**
-   * The widest this window can show, straight from the decision -- null when
-   * there is no column on screen, and then no gesture commits anything.
-   */
-  maxWidth: number | null
+  column: WaveColumnOnScreen | null
   /** Commits a finished gesture. */
   onCommit: (width: number) => void
   /** The width a double-click returns to. */
@@ -50,7 +64,7 @@ export function useWaveColumnResize(input: {
 }): WaveColumnResize {
   // The listeners are installed once per drag and must see today's numbers,
   // not the ones captured when the drag began: the window can be resized
-  // under a held pointer, and the commit has to store what is on screen.
+  // under a held pointer, and the commit has to weigh what is on screen.
   const latest = useRef(input)
   // A LAYOUT effect, not a passive one (lap 2, C): a passive effect leaves a
   // window between the commit and the flush in which a window listener would
@@ -59,20 +73,23 @@ export function useWaveColumnResize(input: {
   useLayoutEffect(() => {
     latest.current = input
   })
-  // Set while a drag is running, so an unmount mid-drag can tell that the
-  // body still carries a cursor this hook borrowed.
+  // Set while a drag is running: what it takes to give the window and the
+  // body back.
   const releaseDrag = useRef<(() => void) | null>(null)
 
   const onHandleMouseDown = useCallback(() => {
-    // One live drag at a time. Measured (lap 2, D): with two installs the
-    // second mouse-up is not needed -- BOTH handlers answer the same event,
-    // so nothing leaks through the pointer. What this guard actually keeps
-    // true is that `releaseDrag` names the drag that is running, so an
-    // unmount releases the listeners that are really installed. No test in
-    // jsdom can witness that; it is stated here instead of pinned.
-    if (releaseDrag.current) return
+    // Release any drag still installed before installing this one (lap 3, C).
+    // Refusing to start instead would be worse than a leak: a mouse-up the
+    // window never delivered -- released outside the frame -- would leave the
+    // old listeners in place and the handle dead for the rest of the session.
+    releaseDrag.current?.()
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
+    // What the person was looking at when they took hold (lap 3, A). A drag
+    // that ends on this same width changed nothing on screen, whatever the
+    // pointer did -- dragging wider against the window's ceiling moves the
+    // cursor and not the column.
+    const startedAt = latest.current.column?.width ?? null
     // The pointer's own last word, kept here rather than read back off the
     // rendered width: a mouse-up that arrives in the same task as the last
     // mouse-move has had no render in between, and reading the screen there
@@ -92,16 +109,21 @@ export function useWaveColumnResize(input: {
     }
     const onMouseUp = () => {
       const moved = dragged
-      const ceiling = latest.current.maxWidth
+      const column = latest.current.column
       stop()
+      // A press that never moved is not a resize; a drag that ended with no
+      // column on screen resized nothing anybody saw.
+      const settled =
+        moved === null || column === null
+          ? null
+          : clampWavePanelWidth(moved, column.maxWidth)
+      // Commit BEFORE clearing the draft (lap 3, C): the two are order-safe
+      // only under automatic batching otherwise, and a draft cleared first
+      // would flash the old width between them.
+      if (settled !== null && settled !== startedAt) {
+        latest.current.onCommit(settled)
+      }
       latest.current.onDraft(null)
-      // A press that never moved is not a resize: nothing to store.
-      if (moved === null) return
-      // And neither is a drag the window ended (lap 2, A): if the column
-      // crossed the floor mid-drag there is a rail on screen, nothing to
-      // have chosen, and a commit here would store a width nobody saw.
-      if (ceiling === null) return
-      latest.current.onCommit(clampWavePanelWidth(moved, ceiling))
     }
 
     releaseDrag.current = stop
@@ -128,15 +150,13 @@ export function useWaveColumnResize(input: {
             ? -WAVE_PANEL_WIDTH_STEP
             : 0
       if (step === 0) return
-      const current = latest.current.width
-      const ceiling = latest.current.maxWidth
-      if (current === null || ceiling === null) return
+      const column = latest.current.column
+      if (column === null) return
       event.preventDefault()
-      const next = clampWavePanelWidth(current + step, ceiling)
-      // The window refused the step (lap 2, A): nothing moved, so there is
-      // nothing the person chose. Committing here is how a 600 px preference
-      // became 400 forever -- they pressed WIDER and lost their wide column.
-      if (next === current) return
+      const next = clampWavePanelWidth(column.width + step, column.maxWidth)
+      // The window refused the step: nothing moved, so there is nothing the
+      // person chose. Same sentence as the drag's, one line above its own.
+      if (next === column.width) return
       latest.current.onCommit(next)
     },
     [],

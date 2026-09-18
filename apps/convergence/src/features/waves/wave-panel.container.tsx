@@ -82,14 +82,16 @@ export const WavePanel: FC<WavePanelProps> = ({
   }, [])
   /**
    * A finished gesture, and only a finished gesture, becomes the preference
-   * (R2, lap 2, A/C).
+   * (R2, lap 2 A/C, lap 3 A).
    *
-   * What arrives here is what the person MEANT: a drag brings the width they
-   * saw when they let go -- cut by the window, because that is what was on
-   * screen -- while a step the window refused and a reset bring nothing and
-   * the default. The clamp here is the storage's own [MIN, MAX], not the
-   * window's, and the round is done once so the number in state, the number
-   * on screen and the number in the store are the same one.
+   * What arrives here is what the person MEANT: a drag or a step that moved
+   * the column brings the width they ended on; one the window refused, and
+   * any gesture over a column that is not on screen, brings nothing; a reset
+   * brings the default. The clamp is the storage's own [MIN, MAX], never the
+   * window's, and the round is done once here -- so **the state and the store
+   * hold one number**, which is the preference, while the number on screen is
+   * the decision's and may be smaller. In the case this whole issue is about
+   * they differ on purpose: state and store 600, screen 400.
    */
   const commitWidth = useCallback((next: number) => {
     const chosen = Math.round(
@@ -108,12 +110,22 @@ export const WavePanel: FC<WavePanelProps> = ({
     windowWidth,
     reservedWidth,
   })
+  // Whether there is a column on screen AT ALL, as one fact (lap 3, B).
+  //
+  // Every reason it can be absent, in one place: the rail (the decision), the
+  // Waves tab showing the same board (`hidden`), and the last bound crew
+  // going away over IPC. The hook outlives the handle -- hold the edge while
+  // any of those happens and the mouse-up still arrives -- so asking it about
+  // the rail alone would be asking a proxy for the question.
+  const onScreen =
+    !hidden && board.boundCrewCount > 0 && decision.mode === 'open'
+      ? { width: decision.width, maxWidth: decision.maxWidth }
+      : null
   const resize = useWaveColumnResize({
     reservedWidth,
-    width: decision.width,
-    // The decision's own ceiling (lap 2, B): the arithmetic lives in one
-    // place, and a gesture is measured against what the screen can show.
-    maxWidth: decision.maxWidth,
+    // The decision's own numbers (lap 2, B): the ceiling's arithmetic lives
+    // in one place, and a gesture is weighed against what the screen shows.
+    column: onScreen,
     onCommit: commitWidth,
     defaultWidth: WAVE_PANEL_DEFAULT_COLUMN_WIDTH,
     onDraft: setDraftWidth,

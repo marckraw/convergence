@@ -715,7 +715,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(columnWidth()).toBe('301px')
   })
 
-  it('MAR-3155 lap 2, D: a second mouse-down mid-drag leaks no listener', async () => {
+  it('MAR-3155 lap 2, D: the listeners come off on mouse-up', async () => {
     setWindowWidth(windowLeaving(900))
     await mount(<WavePanel reservedWidth={RESERVED} />)
     const handle = screen.getByRole('separator', {
@@ -730,18 +730,106 @@ describe('MAR-3097: through the containers and the real stores', () => {
     })
     expect(columnWidth()).toBe('500px')
 
-    // One mouse-up ended the gesture, and nothing moves after it.
-    //
-    // Measured and reported (lap 2, D): dropping the re-entrancy guard leaves
-    // this GREEN -- two installs both answer the same mouse-up, so neither
-    // leaks. The guard's real job is that `releaseDrag` names the live drag
-    // for the unmount path, which jsdom cannot witness. This case still pins
-    // the thing a person would notice: the column stops moving when they let
-    // go.
+    // What a person notices: the column stops following the pointer when
+    // they let go. (The leak a second mouse-down could cause is a different
+    // question, and the unmount case below is what witnesses it.)
     await act(async () => {
       fireEvent.mouseMove(window, { clientX: RESERVED + 620 })
     })
     expect(columnWidth()).toBe('500px')
+  })
+
+  it('MAR-3155 lap 3, C: a second mouse-down leaves nothing behind to commit after an unmount', async () => {
+    setWindowWidth(windowLeaving(900))
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    const handle = screen.getByRole('separator', {
+      name: 'Resize the wave column',
+    })
+
+    // Two presses without a release between them: what a stuck button, a
+    // re-render under the pointer or a lost mouse-up can produce.
+    fireEvent.mouseDown(handle)
+    fireEvent.mouseDown(handle)
+    cleanup()
+
+    // The column is gone, and with it every listener this hook installed.
+    // Mutation: drop `releaseDrag.current?.()` from `onHandleMouseDown` ->
+    // the FIRST press's pair survives the unmount, answers these events and
+    // commits a width from a column nobody can see, red.
+    await act(async () => {
+      fireEvent.mouseMove(window, { clientX: RESERVED + 500 })
+      fireEvent.mouseUp(window)
+    })
+    expect(storedWidth()).toBeNull()
+    expect(document.body.style.cursor).toBe('')
+  })
+
+  it('MAR-3155 lap 3, A: a drag the window refuses stores nothing', async () => {
+    localStorage.setItem('convergence-wave-panel-width', '600')
+    setWindowWidth(windowLeaving(400))
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    const handle = screen.getByRole('separator', {
+      name: 'Resize the wave column',
+    })
+    expect(columnWidth()).toBe('400px')
+
+    // One pixel wider than the ceiling, then far wider: the pointer moves,
+    // the column does not. The same loss as lap 2's ArrowRight, through the
+    // other door.
+    // Mutation: drop the start-width comparison -> stored reads 400 and the
+    // 600px preference is gone for good, red.
+    for (const clientX of [RESERVED + 401, RESERVED + 900]) {
+      fireEvent.mouseDown(handle)
+      await act(async () => {
+        fireEvent.mouseMove(window, { clientX })
+      })
+      await act(async () => {
+        fireEvent.mouseUp(window)
+      })
+      expect(columnWidth()).toBe('400px')
+      expect(storedWidth()).toBe('600')
+    }
+
+    // A drag that DOES move the column is still a choice, and is stored.
+    fireEvent.mouseDown(handle)
+    await act(async () => {
+      fireEvent.mouseMove(window, { clientX: RESERVED + 300 })
+    })
+    await act(async () => {
+      fireEvent.mouseUp(window)
+    })
+    expect(columnWidth()).toBe('300px')
+    expect(storedWidth()).toBe('300')
+  })
+
+  it('MAR-3155 lap 3, B: a drag that ends with the column hidden stores nothing', async () => {
+    setWindowWidth(windowLeaving(900))
+    const { rerender } = render(<WavePanel reservedWidth={RESERVED} />)
+    await act(async () => {
+      await Promise.resolve()
+    })
+    const handle = screen.getByRole('separator', {
+      name: 'Resize the wave column',
+    })
+
+    fireEvent.mouseDown(handle)
+    await act(async () => {
+      fireEvent.mouseMove(window, { clientX: RESERVED + 500 })
+    })
+
+    // Mission Control opens its own Waves tab while the pointer is down: the
+    // column steps aside (MAR-3097 lap 2, B) and there is nothing on screen
+    // the person can be said to have sized.
+    await act(async () => {
+      rerender(<WavePanel reservedWidth={RESERVED} hidden />)
+    })
+    expect(screen.queryByLabelText('Waves')).toBeNull()
+    await act(async () => {
+      fireEvent.mouseUp(window)
+    })
+    // Mutation: ask the decision's numbers regardless of `hidden` -> 500 is
+    // stored for a column nobody can see, red.
+    expect(storedWidth()).toBeNull()
   })
 
   it('R5: clicking a row opens the seat’s conversation; rows that cannot, say why', async () => {
