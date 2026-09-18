@@ -598,7 +598,33 @@ describe('MAR-3169: an empty page is verified before it is believed', () => {
     expect(b.service.trackerHealth(crewId)?.state).toBe('unreachable')
   })
 
-  it('R1: an ambiguous answer cannot come from an id, and is read as the project being there', async () => {
+  it('lap 2, A: a lookup that finds a DIFFERENT id means the bound string is not a project this key can see', async () => {
+    // The population this issue exists for: a binding stored before MAR-3156
+    // (a pasted URL, a typed name), which the list filters as `project.id eq`
+    // and answers empty -- and which the lookup, re-reading its argument as
+    // free text, could find BY NAME. The Test asks by id and says "not
+    // visible"; the tick has to say the same.
+    const b = bench()
+    await seedWorking(b)
+
+    b.pages.push([])
+    b.lookups.push({
+      kind: 'resolved',
+      project: {
+        id: '4f6d2a1e-8b3c-4d5e-9f01-2a3b4c5d6e7f',
+        name: 'project-1',
+        url: 'https://linear.app/example/project/project-1-f66c7ae332ee',
+      },
+    })
+    await b.service.tick()
+
+    // Mutation: accept any `resolved` -> the empty page is believed and the
+    // riding row drifts to `unassigned`, red here.
+    expect(states()).toEqual(['working'])
+    expect(b.service.trackerHealth(crewId)?.state).toBe('project-not-visible')
+  })
+
+  it('lap 2, A: several projects answering to the bound string is not the project either', async () => {
     const b = bench()
     await seedWorking(b)
 
@@ -607,10 +633,19 @@ describe('MAR-3169: an empty page is verified before it is believed', () => {
       kind: 'ambiguous',
       candidates: [
         RESOLVED.kind === 'resolved' ? RESOLVED.project : (null as never),
+        {
+          id: '7c1b9e04-2f5a-4c8d-b3e6-1d0a9f8e7c6b',
+          name: 'project-1',
+          url: 'https://linear.app/example/project/project-1-aabbccddeeff',
+        },
       ],
     })
     await b.service.tick()
-    expect(states()).toEqual(['unassigned'])
+
+    // Mutation: read `ambiguous` as the project being there -> the row
+    // drifts, red here.
+    expect(states()).toEqual(['working'])
+    expect(b.service.trackerHealth(crewId)?.state).toBe('project-not-visible')
   })
 
   it('R2: a page with issues in it asks nothing more', async () => {

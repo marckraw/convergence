@@ -63,20 +63,30 @@ async function verifyProjectVisible(
   binding: TrackerBinding,
 ): Promise<void> {
   const resolution = await adapter.resolveProject(binding.projectId)
-  if (resolution.kind === 'not-found') {
-    throw new TrackerRefusalError({
-      kind: 'project-not-visible',
-      message: 'The key cannot see the bound project.',
-      retryAt: null,
-    })
-  }
   // A refusal on the question is the tracker's answer for the whole tick,
   // exactly as if the list itself had been refused.
   if (resolution.kind === 'refused') {
     throw new TrackerRefusalError(resolution.refusal)
   }
-  // `resolved` -- and `ambiguous`, which an id cannot produce: the project is
-  // there, so the empty page is the truth and the tick goes on as before.
+  // The question is asked BY ID, the way the Test asks it (lap 2, A). The
+  // door re-reads its argument as free text, so a binding stored before
+  // MAR-3156 -- a pasted URL, a typed name, which the list then filters as
+  // `project.id eq <that string>` and answers empty -- would come back
+  // `resolved` by name here, and the tick would believe the empty page while
+  // the Test on the same crew says the project is not visible. Only the id
+  // it was asked about counts as found; a different id, several projects, or
+  // none all mean the bound string is not a project this key can see.
+  if (
+    resolution.kind === 'resolved' &&
+    resolution.project.id === binding.projectId
+  ) {
+    return
+  }
+  throw new TrackerRefusalError({
+    kind: 'project-not-visible',
+    message: 'The key cannot see the bound project.',
+    retryAt: null,
+  })
 }
 
 export interface TrackerWatcherHandle {
@@ -235,10 +245,14 @@ export class TrackerWatcherService {
       })
       // An empty page is verified before it is believed (MAR-3169 R1). A
       // project the key cannot see answers with no issues, exactly like a
-      // quiet one -- and believed, it drifted every riding row to
-      // `unassigned` once a minute, forever. Only the empty page pays for the
-      // question (R2): a page with issues in it has already proved the
-      // project is there.
+      // quiet one -- and believed, every riding row was written `unassigned`
+      // on the first such tick: it left the wave, and nothing brought it
+      // back, while the header said "Quiet project".
+      //
+      // The cost, as far as this code can measure it (lap 2, B): one extra
+      // request per tick per bound crew, and only on a tick whose page came
+      // back empty -- so two requests a minute for a quiet project instead of
+      // one, and none extra for a project with labeled issues in it (R2).
       if (issues.length === 0) await verifyProjectVisible(adapter, binding)
       const now = this.now()
       const rows = diffTrackerSnapshot({
