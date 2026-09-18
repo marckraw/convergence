@@ -1,5 +1,11 @@
 # convergence
 
+## 0.71.0
+
+### Minor Changes
+
+- a758cb2: The tracker watcher now reads every issue the loop has touched — not only the ones with a horse — with its labels, priority, a short summary and the grounding date from the issue's own body.
+
 ## 0.70.0
 
 ### Minor Changes
