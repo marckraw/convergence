@@ -24,7 +24,6 @@ export const WavesTab: FC<{
   }
   return (
     <WavePanelView
-      layout="full"
       sections={board.sections}
       header={board.header}
       boardLine={board.boardLine}

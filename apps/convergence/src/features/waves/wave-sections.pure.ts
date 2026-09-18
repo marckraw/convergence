@@ -191,23 +191,6 @@ export function sectionWaveRows(
   return sections
 }
 
-/** The rail's four counts (R4), read off the same sections. */
-export interface WaveRailCounts {
-  waitingOnYou: number
-  inTheWave: number
-  waitingToStart: number
-  waves: number
-}
-
-export function waveRailCounts(sections: WaveSections): WaveRailCounts {
-  return {
-    waitingOnYou: sections.waitingOnYou.length,
-    inTheWave: sections.inTheWave.length,
-    waitingToStart: sections.waitingToStart.length,
-    waves: sections.waves.length,
-  }
-}
-
 /** The board's own line for the Waves tab (lap 2, D), from the same sections. */
 export function waveBoardLine(sections: WaveSections): string {
   const issues = sections.waves.reduce(

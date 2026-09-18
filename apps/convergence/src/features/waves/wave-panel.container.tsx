@@ -17,7 +17,7 @@ import type { LoomSheet } from './wave-panel-sheet.pure'
 import { loomSubline } from './loom-sheets.pure'
 import { LoomCompactView } from './loom-compact.presentational'
 import { LoomExpandedView } from './loom-expanded.presentational'
-import { LoomStripView } from './wave-rail.presentational'
+import { LoomStripView } from './loom-strip.presentational'
 import { WaveResizeHandle } from './wave-resize-handle.presentational'
 import {
   clampWavePanelWidth,

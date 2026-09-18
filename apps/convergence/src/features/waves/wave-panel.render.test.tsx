@@ -29,7 +29,7 @@ import {
   WavePanelView,
   type WavePanelViewProps,
 } from './wave-panel.presentational'
-import { LoomStripView } from './wave-rail.presentational'
+import { LoomStripView } from './loom-strip.presentational'
 import { loomSheets } from './loom-sheets.pure'
 import { LOOM_SHEETS, LOOM_SHEET_NAMES } from './wave-panel-sheet.pure'
 import {
@@ -99,11 +99,9 @@ const rowOf = (key: string) =>
 function renderView(
   rows: WorkLedgerEntry[],
   crews: WaveHeaderCrew[] = ANSWERED,
-  layout: 'column' | 'full' = 'column',
 ) {
   return render(
     <WavePanelView
-      layout={layout}
       sections={sectionWaveRows(rows, NOW)}
       header={waveHeader({ crews, rowCount: rows.length, now: NOW })}
       inertReason={() => null}
@@ -274,7 +272,7 @@ describe('MAR-3097 R3 + lap 2, A: the header never says a zero it did not read',
   })
 
   it('the tab with no binding says where to connect one', () => {
-    renderView([], [], 'full')
+    renderView([], [])
     expect(screen.getByText('No crew reads a tracker yet.')).toBeTruthy()
     expect(
       screen.getByText('Connect a tracker in a crew’s settings on the Canvas.'),
@@ -283,20 +281,19 @@ describe('MAR-3097 R3 + lap 2, A: the header never says a zero it did not read',
 })
 
 describe('MAR-3097 lap 2, F2: wave groups are disclosures', () => {
-  it('closed in the column, open in the full tab', () => {
-    const rows = [ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' })]
-    renderView(rows)
-    const column = document.querySelector('details[data-wave-group]')
-    // Mutation: open by default in the column -> red.
-    expect(column?.hasAttribute('open')).toBe(false)
-    expect(column?.querySelector('summary')?.textContent).toBe(
+  it('open in the tab, with the wave’s name and count on the summary', () => {
+    // Was "closed in the column, open in the full tab". The closed half died
+    // with the column (MAR-3189 lap 2, G): its reason was that a narrow
+    // column repeated rows already shown above, and Loom's Before sheet does
+    // not group by wave at all until LV3. Nothing replaces it, because
+    // nothing renders a closed wave group any more.
+    // Mutation: `disclosure="closed"` in the tab -> red.
+    renderView([ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' })])
+    const group = document.querySelector('details[data-wave-group]')
+    expect(group?.hasAttribute('open')).toBe(true)
+    expect(group?.querySelector('summary')?.textContent).toBe(
       'Wave loom-p2 · 1',
     )
-    cleanup()
-    renderView(rows, ANSWERED, 'full')
-    expect(
-      document.querySelector('details[data-wave-group]')?.hasAttribute('open'),
-    ).toBe(true)
   })
 })
 
@@ -1224,7 +1221,6 @@ describe('MAR-3085 R7: the row reads the lap, the cap and the ruling', () => {
   it('a stopped lap reads its lap, the verdict word, and "re-groom (Fable)"', () => {
     render(
       <WavePanelView
-        layout="column"
         sections={sectionWaveRows(
           [
             ledgerEntry({
@@ -1257,7 +1253,6 @@ describe('MAR-3085 R7: the row reads the lap, the cap and the ruling', () => {
   it('a crew with no cap reads the lap alone', () => {
     render(
       <WavePanelView
-        layout="column"
         sections={sectionWaveRows(
           [ledgerEntry({ issueIdentifier: 'EX-2', state: 'working', lap: 3 })],
           NOW,
@@ -1379,7 +1374,6 @@ describe('MAR-3148: the rail, the props and the clock', () => {
   it('C: a row that cannot open its seat is inert and says so', () => {
     render(
       <WavePanelView
-        layout="column"
         sections={sectionWaveRows(
           [ledgerEntry({ issueIdentifier: 'EX-9', sessionId: null })],
           NOW,
@@ -1402,18 +1396,13 @@ describe('MAR-3148: the rail, the props and the clock', () => {
 
   it('R2: the panel takes no Connect handler, and says where to bind instead', () => {
     // Mutation: reintroduce `onConnectTracker` -> red (the key set grows).
+    // `layout`, `onCollapse` and `width` left with the column (MAR-3189
+    // lap 2, G): this view is Mission Control's tab and nothing else.
+    // Mutation: reintroduce `onConnectTracker` (or any of the three) -> red.
     expectTypeOf<keyof WavePanelViewProps>().toEqualTypeOf<
-      | 'sections'
-      | 'header'
-      | 'layout'
-      | 'boardLine'
-      | 'inertReason'
-      | 'onOpen'
-      | 'onCollapse'
-      // MAR-3155: the column's width is a prop now, not a class.
-      | 'width'
+      'sections' | 'header' | 'boardLine' | 'inertReason' | 'onOpen'
     >()
-    renderView([], [], 'full')
+    renderView([], [])
     expect(
       screen.getByText('Connect a tracker in a crew’s settings on the Canvas.'),
     ).toBeTruthy()

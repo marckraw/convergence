@@ -14,7 +14,6 @@ import {
   WAVE_PANEL_MIN_MAIN_WIDTH,
   waveBoardLine,
   waveHeader,
-  waveRailCounts,
   waveRowAction,
   waveRowHostMarker,
   waveRowKey,
@@ -23,10 +22,7 @@ import {
   type WaveRow,
 } from './wave-sections.pure'
 import { ledgerEntry } from './wave-rows.fixture'
-import {
-  LOOM_EXPANDED_CLASS,
-  WAVE_PANEL_COLUMN_CLASS,
-} from './wave-panel.styles'
+import { LOOM_COMPACT_CLASS, LOOM_EXPANDED_CLASS } from './wave-panel.styles'
 
 const NOW = Date.parse('2026-09-17T12:10:00.000Z')
 const ids = (rows: WaveRow[]) => rows.map((row) => row.entry.issueIdentifier)
@@ -69,17 +65,12 @@ describe('MAR-3097 R1: the sections are a pure function of the rows', () => {
   })
 })
 
-describe('MAR-3097 R4: the rail counts are the section lengths', () => {
-  it('reads each count off the same sections', () => {
-    const sections = sectionWaveRows(ROWS, NOW)
-    expect(waveRailCounts(sections)).toEqual({
-      waitingOnYou: sections.waitingOnYou.length,
-      inTheWave: sections.inTheWave.length,
-      waitingToStart: sections.waitingToStart.length,
-      waves: sections.waves.length,
-    })
-  })
-})
+// `MAR-3097 R4: the rail counts are the section lengths` stood here and went
+// with `waveRailCounts` (MAR-3189 lap 2, G): nothing renders the old sections
+// as counts any more. Its guarantee -- the collapsed panel reads the SAME
+// model the open one draws, never a second selector -- lives in
+// `MAR-3189 R4: the strip is the same model` in `wave-panel.render.test.tsx`,
+// which asserts the strip's four numbers against `loomSheets`.
 
 describe('MAR-3097 R2: the human action, derived from the state', () => {
   it.each([
@@ -471,12 +462,15 @@ describe('MAR-3097 lap 2, B: the column keeps the main panel at its floor', () =
     expect(LOOM_EXPANDED_CLASS).not.toMatch(/bg-background\//)
   })
 
-  it('MAR-3155 R6: the column class carries no width of its own', () => {
-    // The width is the decision's number, rendered inline. A class saying
+  it('MAR-3155 R6: the compact class carries no width of its own', () => {
+    // Inherited from `WAVE_PANEL_COLUMN_CLASS`, which went with the column
+    // (MAR-3189 lap 2, G): the rule is about whichever class dresses the
+    // panel beside the conversation, and that is Loom's compact stack now.
+    // The width is the decision's number, rendered inline; a class saying
     // `w-[280px]` would be a second encoding of it, and the rendered test
     // asserts the inline width IS the decision's.
     // Mutation: put `w-[280px]` back in the class -> red.
-    expect(WAVE_PANEL_COLUMN_CLASS).not.toMatch(/\bw-\[/)
+    expect(LOOM_COMPACT_CLASS).not.toMatch(/\bw-\[/)
   })
 })
 
@@ -513,7 +507,7 @@ describe('MAR-3138 R4: a blocked row waits on a decision, whatever its state', (
     expect(ids(sections.waitingToStart)).toEqual([])
     // Still in its wave group, exactly once.
     expect(sections.waves.map((group) => ids(group.rows))).toEqual([['EX-1']])
-    expect(waveRailCounts(sections).waitingOnYou).toBe(1)
+    expect(sections.waitingOnYou.length).toBe(1)
     expect(waveBoardLine(sections)).toBe('1 issue · 1 waiting on you')
   })
 
@@ -538,7 +532,7 @@ describe('MAR-3138 R4: a blocked row waits on a decision, whatever its state', (
       expect(ids(sections.waitingOnYou)).toEqual([])
       expect(ids(sections.inTheWave)).toEqual([])
       expect(ids(sections.waitingToStart)).toEqual([])
-      expect(waveRailCounts(sections).waitingOnYou).toBe(0)
+      expect(sections.waitingOnYou.length).toBe(0)
       expect(waveBoardLine(sections)).toBe('1 issue · 0 waiting on you')
       // It is still on the board, with its wave and its facts.
       expect(sections.waves.map((group) => ids(group.rows))).toEqual([['EX-1']])
@@ -606,7 +600,7 @@ describe('MAR-3085 R7: the lap, the cap and the ruling on the row', () => {
     expect(sections.inTheWave.map((row) => row.action)).toEqual([
       're-groom (Fable)',
     ])
-    expect(waveRailCounts(sections).inTheWave).toBe(1)
+    expect(sections.inTheWave.length).toBe(1)
     expect(sections.inTheWave[0]!.lapLabel).toBe('lap 3 of 6')
   })
 
