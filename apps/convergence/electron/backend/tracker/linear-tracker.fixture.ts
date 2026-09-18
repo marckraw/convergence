@@ -84,6 +84,54 @@ export const RECORDED_BLOCKED_LABEL_PAGE = linearIssuesBody([
   }),
 ])
 
+/**
+ * A projects lookup reply (MAR-3156), in the shape
+ * `{ data: { projects: { nodes: [...] } } }` the query asks for. Synthetic
+ * ids and a synthetic workspace, as everything here is -- and the ids are
+ * UUIDs, as Linear's are, so a resolved id re-reads as an id (lap 2, D).
+ */
+export function linearProjectNode(input: {
+  id: string
+  name: string
+  slug?: string
+}) {
+  return {
+    id: input.id,
+    name: input.name,
+    url: `https://linear.app/example/project/${input.slug ?? input.name.toLowerCase()}-${input.id}`,
+  }
+}
+
+export function linearProjectsBody(
+  nodes: ReturnType<typeof linearProjectNode>[],
+) {
+  return { data: { projects: { nodes } } }
+}
+
+/** The one project a right reference reaches. */
+export const RECORDED_ONE_PROJECT_BODY = linearProjectsBody([
+  linearProjectNode({
+    id: '4f6d2a1e-8b3c-4d5e-9f01-2a3b4c5d6e7f',
+    name: 'convergence',
+  }),
+])
+
+/** Two projects a person's NAME can reach: the question only they can settle. */
+export const RECORDED_TWO_PROJECT_BODY = linearProjectsBody([
+  linearProjectNode({
+    id: '4f6d2a1e-8b3c-4d5e-9f01-2a3b4c5d6e7f',
+    name: 'convergence',
+  }),
+  linearProjectNode({
+    id: '7c1b9e04-2f5a-4c8d-b3e6-1d0a9f8e7c6b',
+    name: 'Convergence',
+    slug: 'convergence-old',
+  }),
+])
+
+/** Nothing answers: an empty node list, never an error. */
+export const RECORDED_NO_PROJECT_BODY = linearProjectsBody([])
+
 /** Linear's refusal of a bad key. */
 export const RECORDED_UNAUTHORIZED_BODY = {
   errors: [

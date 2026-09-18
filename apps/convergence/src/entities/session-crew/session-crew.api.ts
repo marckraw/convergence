@@ -6,6 +6,7 @@ import type {
 import type {
   TrackerCredentialStatus,
   TrackerProbeReading,
+  TrackerProjectResolution,
 } from '@/shared/types/tracker.types'
 import type {
   CreateSessionCrewInput,
@@ -133,6 +134,11 @@ export const sessionCrewApi = {
 export const trackerApi = {
   probe: (crewId: string): Promise<TrackerProbeReading> =>
     window.electronAPI.tracker.probe(crewId),
+  resolveProject: (
+    crewId: string,
+    reference: string,
+  ): Promise<TrackerProjectResolution> =>
+    window.electronAPI.tracker.resolveProject(crewId, reference),
   credentialStatus: (crewId: string): Promise<TrackerCredentialStatus> =>
     window.electronAPI.tracker.credentialStatus(crewId),
   setCredential: (

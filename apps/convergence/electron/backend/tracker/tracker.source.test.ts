@@ -32,9 +32,13 @@ describe('MAR-3084 R8: the app never writes to the tracker', () => {
     electronMocks.channels.length = 0
   })
 
-  it('the adapter port has exactly the two read methods', () => {
+  it('the adapter port has exactly the three read methods', () => {
+    // Widened once, on purpose (MAR-3156): `resolveProject` asks which
+    // project answers to a URL, a name or an id. What this case pins is
+    // unchanged -- the SET is exact, so a writing method cannot arrive
+    // unnoticed.
     expectTypeOf<keyof TrackerAdapter>().toEqualTypeOf<
-      'probe' | 'listLabeledIssues'
+      'probe' | 'listLabeledIssues' | 'resolveProject'
     >()
     const source = readFileSync(join(__dirname, 'tracker.types.ts'), 'utf8')
     const port = /export interface TrackerAdapter \{([\s\S]*?)\n\}/.exec(
@@ -43,7 +47,7 @@ describe('MAR-3084 R8: the app never writes to the tracker', () => {
     // Mutation: add `updateIssueStatus(...)` to the port -> red here.
     expect(
       [...(port?.[1] ?? '').matchAll(/^\s+(\w+)\(/gm)].map((match) => match[1]),
-    ).toEqual(['probe', 'listLabeledIssues'])
+    ).toEqual(['probe', 'listLabeledIssues', 'resolveProject'])
   })
 
   it('no shipped file under backend/tracker/ holds a GraphQL mutation outside a comment', () => {
@@ -64,7 +68,8 @@ describe('MAR-3084 R8: the app never writes to the tracker', () => {
         setKey: async () => 'present',
         deleteKey: async () => 'absent',
       },
-      probe: async () => ({ ok: true, issues: 0 }),
+      probe: async () => ({ ok: true, issues: 0, projectName: 'convergence' }),
+      resolveProject: async () => ({ kind: 'not-found' }),
       crewExists: () => true,
     })
     registerWorkLedgerIpcHandlers({
@@ -72,6 +77,8 @@ describe('MAR-3084 R8: the app never writes to the tracker', () => {
     })
     expect(electronMocks.channels).toEqual([
       'tracker:probe',
+      // A read (MAR-3156 R5): it answers with projects and never a key.
+      'tracker:resolveProject',
       'tracker:credentialStatus',
       'tracker:setCredential',
       'tracker:deleteCredential',

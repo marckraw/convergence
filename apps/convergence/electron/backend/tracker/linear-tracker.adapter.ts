@@ -3,8 +3,15 @@ import {
   LINEAR_GRAPHQL_URL,
   LINEAR_MAX_PAGES,
   linearLabeledIssuesRequest,
+  linearProjectLookupRequest,
   parseLinearIssuesPage,
+  parseLinearProjectsReply,
+  type LinearProject,
 } from './linear-tracker.pure'
+import {
+  parseLinearProjectReference,
+  type LinearProjectReference,
+} from '../../../src/shared/lib/linear-project-reference.pure'
 import {
   TrackerRefusalError,
   type ListLabeledIssuesInput,
@@ -12,6 +19,8 @@ import {
   type TrackerBinding,
   type TrackerIssue,
   type TrackerProbe,
+  type TrackerProjectResolution,
+  type TrackerRefusal,
 } from './tracker.types'
 
 export type TrackerFetch = (
@@ -46,10 +55,17 @@ export function createLinearTrackerAdapter(deps: {
       fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }))
   const now = deps.now ?? (() => new Date())
 
-  async function readPage(
-    input: ListLabeledIssuesInput,
-    after: string | null,
-  ): Promise<{ issues: TrackerIssue[]; next: string | null }> {
+  /**
+   * One POST, and a readable body or a typed refusal.
+   *
+   * Both reads go through here (MAR-3156): the key's header, the network's
+   * silence and Linear's own refusals are one story, told once, so a second
+   * read cannot learn a different set of manners.
+   */
+  async function ask(request: {
+    query: string
+    variables: Record<string, unknown>
+  }): Promise<unknown> {
     let reply: Awaited<ReturnType<TrackerFetch>>
     try {
       reply = await doFetch(LINEAR_GRAPHQL_URL, {
@@ -58,13 +74,7 @@ export function createLinearTrackerAdapter(deps: {
           'content-type': 'application/json',
           authorization: deps.apiKey,
         },
-        body: JSON.stringify(
-          linearLabeledIssuesRequest({
-            projectId: input.projectId,
-            labelPrefix: input.labelPrefix,
-            after,
-          }),
-        ),
+        body: JSON.stringify(request),
       })
     } catch {
       throw new TrackerRefusalError({
@@ -88,6 +98,20 @@ export function createLinearTrackerAdapter(deps: {
       now: now(),
     })
     if (refusal) throw new TrackerRefusalError(refusal)
+    return body
+  }
+
+  async function readPage(
+    input: ListLabeledIssuesInput,
+    after: string | null,
+  ): Promise<{ issues: TrackerIssue[]; next: string | null }> {
+    const body = await ask(
+      linearLabeledIssuesRequest({
+        projectId: input.projectId,
+        labelPrefix: input.labelPrefix,
+        after,
+      }),
+    )
 
     const read = parseLinearIssuesPage(body, {
       labelPrefix: input.labelPrefix,
@@ -120,28 +144,76 @@ export function createLinearTrackerAdapter(deps: {
     })
   }
 
+  /** The projects answering to one reference; a refusal leaves as a throw. */
+  async function findProjects(
+    reference: LinearProjectReference,
+  ): Promise<LinearProject[]> {
+    const body = await ask(linearProjectLookupRequest(reference))
+    const read = parseLinearProjectsReply(body)
+    if (!read.ok) throw new TrackerRefusalError(read.refusal)
+    return read.projects
+  }
+
+  function asRefusal(error: unknown): TrackerRefusal {
+    return error instanceof TrackerRefusalError
+      ? error.refusal
+      : {
+          kind: 'bad-response',
+          message: 'Linear answered something this app could not read.',
+          retryAt: null,
+        }
+  }
+
+  async function resolveProject(
+    reference: string,
+  ): Promise<TrackerProjectResolution> {
+    const parsed = parseLinearProjectReference(reference)
+    if (parsed === null) {
+      return {
+        kind: 'refused',
+        refusal: {
+          kind: 'bad-response',
+          message: 'Type a project URL, a project name or its id.',
+          retryAt: null,
+        },
+      }
+    }
+    try {
+      const projects = await findProjects(parsed)
+      // Never `nodes[0]` (R2): one project is an answer, several is a
+      // question for the person, and binding the first would answer it on
+      // their behalf -- silently, and wrongly half the time.
+      if (projects.length === 0) return { kind: 'not-found' }
+      if (projects.length > 1) {
+        return { kind: 'ambiguous', candidates: projects }
+      }
+      return { kind: 'resolved', project: projects[0]! }
+    } catch (error) {
+      return { kind: 'refused', refusal: asRefusal(error) }
+    }
+  }
+
   return {
     listLabeledIssues,
+    resolveProject,
     async probe(): Promise<TrackerProbe> {
       try {
+        // What the key can actually see under the bound id, FIRST (R4): a
+        // count for a project nobody can reach reads as a quiet project, and
+        // that is the sentence this feature exists to stop telling.
+        const [project] = await findProjects({
+          kind: 'id',
+          value: deps.binding.projectId,
+        })
+        if (!project) return { ok: true, issues: 0, projectName: null }
         const issues = await listLabeledIssues({
           projectId: deps.binding.projectId,
           labelPrefix: deps.binding.labelPrefix,
           wavePrefix: deps.binding.wavePrefix,
         })
-        return { ok: true, issues: issues.length }
+        return { ok: true, issues: issues.length, projectName: project.name }
       } catch (error) {
-        if (error instanceof TrackerRefusalError) {
-          return { ok: false, refusal: error.refusal }
-        }
-        return {
-          ok: false,
-          refusal: {
-            kind: 'bad-response',
-            message: 'Linear answered something this app could not read.',
-            retryAt: null,
-          },
-        }
+        return { ok: false, refusal: asRefusal(error) }
       }
     },
   }

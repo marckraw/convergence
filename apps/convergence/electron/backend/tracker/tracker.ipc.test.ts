@@ -25,17 +25,27 @@ function invoke<T>(channel: string, ...args: unknown[]): T {
 
 describe('MAR-3084 lap 2, F: no key without an owner', () => {
   const setKey = vi.fn(async () => 'present' as const)
+  const resolveProject = vi.fn(async () => ({
+    kind: 'resolved' as const,
+    project: {
+      id: 'project-1',
+      name: 'convergence',
+      url: 'https://linear.app/example/project/convergence-0a1b2c3d4e5f',
+    },
+  }))
 
   beforeEach(() => {
     electronMocks.handlers.clear()
     setKey.mockClear()
+    resolveProject.mockClear()
     registerTrackerIpcHandlers({
       credentials: {
         status: async () => 'absent',
         setKey,
         deleteKey: async () => 'absent',
       },
-      probe: async () => ({ ok: true, issues: 0 }),
+      probe: async () => ({ ok: true, issues: 0, projectName: 'convergence' }),
+      resolveProject,
       crewExists: (crewId) => crewId === 'crew-1',
     })
   })
@@ -61,5 +71,18 @@ describe('MAR-3084 lap 2, F: no key without an owner', () => {
       ),
     ).rejects.toThrow('existing crew')
     expect(setKey).not.toHaveBeenCalled()
+  })
+
+  it('MAR-3156 R5: the lookup takes a crew id and a reference, and answers no key', async () => {
+    const answer = await invoke<
+      Promise<{ kind: string; project?: { id: string } }>
+    >('tracker:resolveProject', 'crew-1', 'convergence')
+
+    expect(resolveProject).toHaveBeenCalledWith('crew-1', 'convergence')
+    // Mutation: hand the key back with the answer -> red here (and the door
+    // would be the one place in this feature where a key leaves the main
+    // process).
+    expect(JSON.stringify(answer)).not.toContain('lin_api')
+    expect(Object.keys(answer)).toEqual(['kind', 'project'])
   })
 })

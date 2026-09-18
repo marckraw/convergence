@@ -849,6 +849,8 @@ async function startApp(): Promise<void> {
   registerTrackerIpcHandlers({
     credentials: trackerCredentials,
     probe: (crewId) => trackerWatcher.probe(crewId),
+    resolveProject: (crewId, reference) =>
+      trackerWatcher.resolveProject(crewId, reference),
     crewExists: (crewId) => crewService.getById(crewId) !== null,
   })
   registerWorkLedgerIpcHandlers({

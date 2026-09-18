@@ -1,4 +1,5 @@
 import { trackerLabelGroupName } from './tracker-binding.pure'
+import type { LinearProjectReference } from '../../../src/shared/lib/linear-project-reference.pure'
 import type {
   TrackerIssue,
   TrackerLogicalStatus,
@@ -117,6 +118,97 @@ export function hasPlainLabel(
 
 /** The constitution's label for work that waits on a decision (MAR-3138). */
 export const BLOCKED_LABEL_NAME = 'blocked'
+
+/**
+ * How many projects a name lookup asks for (MAR-3156 R2).
+ *
+ * More than one, because the answer "several projects answer to that name" is
+ * the one this feature must be able to give: asking for one and taking it
+ * would bind the wrong project silently.
+ */
+export const LINEAR_PROJECT_MATCH_LIMIT = 5
+
+/**
+ * One project, by the three fields a person needs to recognise it.
+ *
+ * Schema read against Linear's published SDK schema
+ * (`linear/linear` → `packages/sdk/src/schema.graphql`), the same way the
+ * issue query above was, and confirmed against the live workspace:
+ *
+ * - `Query.projects(filter: ProjectFilter, first: Int): ProjectConnection`
+ * - `type Project { id: ID!, name: String!, slugId: String!, url: String! }`
+ * - `input ProjectFilter { id: EntityIdentifierIDComparator, name:
+ *   StringComparator, slugId: StringComparator, … }`
+ * - `EntityIdentifierIDComparator.eq: ID`, `StringComparator.eq` and
+ *   `StringComparator.eqIgnoreCase`
+ *
+ * The live half: the trailing hex of a project URL (`…/project/convergence-
+ * f66c7ae332ee`) IS that project's `slugId` — asked of the workspace, not
+ * inferred from the shape.
+ *
+ * One query text for all three ways in: the filter is the variable, so the
+ * lookup by id, by the URL's slug id and by name are one read with three
+ * shapes rather than three queries to keep in step.
+ */
+export const LINEAR_PROJECT_LOOKUP_QUERY = `query ConvergenceTrackerProject($filter: ProjectFilter!) {
+  projects(first: ${LINEAR_PROJECT_MATCH_LIMIT}, filter: $filter) {
+    nodes {
+      id
+      name
+      url
+    }
+  }
+}`
+
+export function linearProjectLookupRequest(reference: LinearProjectReference): {
+  query: string
+  variables: Record<string, unknown>
+} {
+  const filter =
+    reference.kind === 'id'
+      ? { id: { eq: reference.value } }
+      : reference.kind === 'slugId'
+        ? { slugId: { eq: reference.value } }
+        : // A name is what a person calls the project, so it is matched the
+          // way a person means it (R2).
+          { name: { eqIgnoreCase: reference.value } }
+  return { query: LINEAR_PROJECT_LOOKUP_QUERY, variables: { filter } }
+}
+
+/** One project as the lookup reads it. */
+export interface LinearProject {
+  id: string
+  name: string
+  url: string
+}
+
+export type LinearProjectsRead =
+  | { ok: true; projects: LinearProject[] }
+  | { ok: false; refusal: TrackerRefusal }
+
+/** The projects in a lookup reply, or why the body could not be read. */
+export function parseLinearProjectsReply(body: unknown): LinearProjectsRead {
+  if (!isRecord(body)) return badResponse('Linear answered with no JSON body.')
+  const projects = isRecord(body.data) ? body.data.projects : undefined
+  if (!isRecord(projects) || !Array.isArray(projects.nodes)) {
+    return badResponse('Linear answered without a project list.')
+  }
+  const parsed: LinearProject[] = []
+  for (const node of projects.nodes) {
+    if (!isRecord(node))
+      return badResponse('Linear answered a malformed project.')
+    const { id, name, url } = node
+    if (
+      typeof id !== 'string' ||
+      typeof name !== 'string' ||
+      typeof url !== 'string'
+    ) {
+      return badResponse('Linear answered a project without its identity.')
+    }
+    parsed.push({ id, name, url })
+  }
+  return { ok: true, projects: parsed }
+}
 
 export interface LinearIssuesPage {
   issues: TrackerIssue[]
