@@ -205,3 +205,39 @@ export function loomSubline(crewNames: readonly string[]): string {
   if (crewNames.length === 1) return `${crewNames[0]} · All waves`
   return `${crewNames.length} crews · All waves`
 }
+
+/**
+ * Now's in-flight list with the cards' own rows taken out (MAR-3191 R4).
+ *
+ * Every row appears exactly once on the sheet. A `working` row a horse card
+ * already names is not listed again below it; a `working` row whose seat
+ * matches no horse in the crew STAYS in the list, still saying the thing it
+ * already says (`seat not in crew`) -- that row is the interesting one, and
+ * dropping it because no card claimed it would hide exactly the work nobody
+ * is watching.
+ *
+ * A seat's `returned` row is different and deliberately so: the card NAMES it
+ * ("lap N returned · Fable's turn") and the row also stays under Fable's turn.
+ * That is one fact shown where each reader needs it -- the seat's card answers
+ * "what is this horse on?", the section answers "what do I owe a verdict on?"
+ * -- not a row counted twice; `loomSheetCounts` is unchanged and still counts
+ * it once.
+ *
+ * One function, called by both shapes, so compact and expanded cannot come to
+ * different conclusions about what has already been shown.
+ */
+export function loomNowRows(
+  sheets: LoomSheets,
+  horses: readonly { held: WaveRow | null }[],
+): WaveRow[] {
+  const heldKeys = new Set(
+    horses.flatMap((horse) =>
+      horse.held
+        ? [`${horse.held.entry.crewId}:${horse.held.entry.issueId}`]
+        : [],
+    ),
+  )
+  return sheets.now.inFlight.filter(
+    (row) => !heldKeys.has(`${row.entry.crewId}:${row.entry.issueId}`),
+  )
+}

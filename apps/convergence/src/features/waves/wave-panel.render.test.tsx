@@ -42,7 +42,7 @@ import {
   WAVE_PANEL_WIDTH_STEP,
   type WaveHeaderCrew,
 } from './wave-sections.pure'
-import { ledgerEntry } from './wave-rows.fixture'
+import { crewMember, ledgerEntry, residentSeat } from './wave-rows.fixture'
 
 /**
  * The wave panel, rendered (MAR-3097; the MAR-2280 law): what a person reads
@@ -1078,6 +1078,212 @@ describe('MAR-3097: through the containers and the real stores', () => {
     // Mutation: pass the crew's `roundCap` -> "lap 3 of 12", red.
     expect(rowOf('crew-1:EX-9').getByText(/lap 3 ·/)).toBeTruthy()
     expect(document.body.textContent).not.toContain('of 12')
+  })
+
+  it('MAR-3191 R3: runtime and tracker status are two facts on two lines', async () => {
+    crews = [
+      {
+        ...boundCrew('crew-1', 'Loom'),
+        members: [residentSeat('opus'), residentSeat('idle-seat')],
+      },
+    ]
+    useSessionStore.setState({
+      globalSessions: [
+        { ...SESSION, id: 'session-opus', status: 'failed' } as SessionSummary,
+        {
+          ...SESSION,
+          id: 'session-idle-seat',
+          status: 'running',
+        } as SessionSummary,
+      ],
+    })
+    snapshots = {
+      'crew-1': {
+        crewId: 'crew-1',
+        entries: [
+          ledgerEntry({
+            issueIdentifier: 'EX-1',
+            state: 'working',
+            seat: 'opus',
+            trackerStatus: 'In Progress',
+            lap: 2,
+          }),
+        ],
+        trackerHealth: health('ok'),
+      },
+    }
+
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Loom')
+
+    const failed = within(
+      document.querySelector('[data-loom-horse="crew-1:opus"]') as HTMLElement,
+    )
+    // The session says failed; the tracker says In Progress. Both are true,
+    // and a card that merged them would have to pick one and lie.
+    // Mutation: derive the word from the row's state -> "Working", red.
+    expect(failed.getByText('Failed')).toBeTruthy()
+    expect(failed.getByText(/Linear: In Progress/)).toBeTruthy()
+    expect(failed.getByText(/Lap 2/)).toBeTruthy()
+
+    const running = within(
+      document.querySelector(
+        '[data-loom-horse="crew-1:idle-seat"]',
+      ) as HTMLElement,
+    )
+    expect(running.getByText('Working')).toBeTruthy()
+    expect(running.getByText('No active ticket')).toBeTruthy()
+  })
+
+  it('MAR-3191 R4: the held row is on the card and not in the list', async () => {
+    crews = [
+      { ...boundCrew('crew-1', 'Loom'), members: [residentSeat('opus')] },
+    ]
+    useSessionStore.setState({
+      globalSessions: [
+        { ...SESSION, id: 'session-opus', status: 'running' } as SessionSummary,
+      ],
+    })
+    snapshots = {
+      'crew-1': {
+        crewId: 'crew-1',
+        entries: [
+          ledgerEntry({
+            issueIdentifier: 'EX-1',
+            state: 'working',
+            seat: 'opus',
+          }),
+        ],
+        trackerHealth: health('ok'),
+      },
+    }
+
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Loom')
+
+    // Mutation: list the held rows too -> the identifier appears twice on one
+    // sheet, red.
+    expect(screen.getAllByText(/EX-1/)).toHaveLength(1)
+    expect(screen.queryByRole('region', { name: 'In flight' })).toBeNull()
+  })
+
+  it('MAR-3191 R5: Awaiting QA counts what it has and reveals what it says', async () => {
+    crews = [{ ...boundCrew('crew-1', 'Loom'), members: [] }]
+    snapshots = {
+      'crew-1': {
+        crewId: 'crew-1',
+        entries: Array.from({ length: 12 }, (_, at) =>
+          ledgerEntry({
+            issueIdentifier: `QA-${at + 1}`,
+            state: 'reviewed',
+            seat: null,
+          }),
+        ),
+        trackerHealth: health('ok'),
+      },
+    }
+
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Loom')
+
+    const qaRows = () =>
+      document.querySelectorAll('[data-wave-row^="crew-1:QA-"]').length
+    // The heading counts the twelve it HAS, not the three it shows.
+    // Mutation: heading from `rows.length` -> "Awaiting QA · 3", red.
+    expect(
+      screen.getByRole('region', { name: 'Awaiting QA' }).textContent,
+    ).toContain('Awaiting QA · 12')
+    expect(qaRows()).toBe(3)
+
+    const reveal = screen.getByRole('button', {
+      name: 'Show all 12 awaiting QA',
+    })
+    fireEvent.click(reveal)
+    // Mutation: a control that only changes its label -> still 3, red.
+    expect(qaRows()).toBe(12)
+    fireEvent.click(screen.getByRole('button', { name: 'Show fewer' }))
+    expect(qaRows()).toBe(3)
+  })
+
+  it('MAR-3191 R6: a card opens the conversation the crew record names', async () => {
+    const onOpenSession = vi.fn()
+    crews = [
+      {
+        ...boundCrew('crew-1', 'Loom'),
+        members: [residentSeat('opus'), residentSeat('gone')],
+      },
+    ]
+    useSessionStore.setState({
+      globalSessions: [
+        { ...SESSION, id: 'session-opus', status: 'running' } as SessionSummary,
+      ],
+    })
+    snapshots = {
+      'crew-1': { crewId: 'crew-1', entries: [], trackerHealth: health('ok') },
+    }
+
+    await mount(
+      <WavePanel reservedWidth={RESERVED} onOpenSession={onOpenSession} />,
+    )
+    await screen.findByLabelText('Loom')
+
+    fireEvent.click(screen.getByRole('button', { name: /^opus — Working/ }))
+    // Mutation: look the seat up by `batonName` in the session list -> a
+    // same-named session in another crew opens, red.
+    expect(onOpenSession).toHaveBeenCalledTimes(1)
+    expect(onOpenSession.mock.calls[0]![0].id).toBe('session-opus')
+
+    // The seat whose conversation the store does not hold cannot be opened,
+    // and says so in the words a row uses.
+    const gone = within(
+      document.querySelector('[data-loom-horse="crew-1:gone"]') as HTMLElement,
+    )
+    expect(gone.queryByRole('button')).toBeNull()
+    expect(gone.getByText('conversation not loaded')).toBeTruthy()
+    expect(gone.getByText('Not seen')).toBeTruthy()
+  })
+
+  it('MAR-3191 R7: compact and expanded say the same thing', async () => {
+    crews = [
+      {
+        ...boundCrew('crew-1', 'Loom'),
+        members: [residentSeat('opus'), crewMember({ batonName: 'recipe-1' })],
+      },
+    ]
+    useSessionStore.setState({
+      globalSessions: [
+        { ...SESSION, id: 'session-opus', status: 'running' } as SessionSummary,
+      ],
+    })
+    snapshots = {
+      'crew-1': {
+        crewId: 'crew-1',
+        entries: [
+          ledgerEntry({
+            issueIdentifier: 'EX-1',
+            state: 'working',
+            seat: 'opus',
+          }),
+        ],
+        trackerHealth: health('ok'),
+      },
+    }
+
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    const compact = (
+      document.querySelector('[data-loom-sheet="now"]') as HTMLElement
+    ).textContent
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+    })
+    const expanded = (
+      document.querySelector('[data-loom-sheet="now"]') as HTMLElement
+    ).textContent
+
+    // Mutation: drop the horses block from one shape -> red.
+    expect(compact).toContain('2 horses')
+    expect(compact).toContain('recipe · spawns on dispatch')
+    expect(expanded).toBe(compact)
   })
 
   it('MAR-3189 lap 2, B: the mode is written down, and a remount reads it back', async () => {

@@ -2,10 +2,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import { useSessionCrewStore } from '@/entities/session-crew'
 import {
+  executionHostEndpointDisplayName,
+  isLocalExecutionHost,
+} from '@/entities/execution-host'
+import { useAppSettingsStore } from '@/entities/app-settings'
+import {
   useWorkLedgerStore,
   type WorkLedgerEntry,
 } from '@/entities/work-ledger'
 import { useFeedClock } from '@/shared/hooks/use-feed-clock'
+import { loomHorses, type LoomHorse } from './loom-horses.pure'
 import { loomSheets, type LoomSheets } from './loom-sheets.pure'
 import {
   resolveWaveRow,
@@ -18,6 +24,15 @@ import {
   type WaveSections,
 } from './wave-sections.pure'
 
+/**
+ * What Loom calls this machine.
+ *
+ * `This Mac`, the same words the crew's seat editor uses, rather than the
+ * composer's `Local`: the two already disagreed before this slice, and a
+ * panel about SEATS should read like the surface where seats are configured.
+ */
+export const LOOM_LOCAL_HOST_LABEL = 'This Mac'
+
 export interface WaveBoard {
   /** How many crews read a tracker; zero means the column is not mounted. */
   boundCrewCount: number
@@ -26,6 +41,10 @@ export interface WaveBoard {
   sections: WaveSections
   /** The same rows in Loom's four sheets (MAR-3189 R2). */
   sheets: LoomSheets
+  /** The bound crews' horse seats, in crew order (MAR-3191 R1). */
+  horses: LoomHorse[]
+  /** One loaded conversation by id, for a card's own door (MAR-3191 R6). */
+  findSession: (sessionId: string) => SessionSummary | null
   header: WaveHeader
   boardLine: string
   resolveRow: (entry: WorkLedgerEntry) => WaveRowOpening<SessionSummary>
@@ -44,6 +63,9 @@ export function useWaveBoard(): WaveBoard {
   const snapshots = useWorkLedgerStore((state) => state.snapshots)
   const loadLedger = useWorkLedgerStore((state) => state.load)
   const sessions = useSessionStore((state) => state.globalSessions)
+  const endpoints = useAppSettingsStore(
+    (state) => state.settings.executionHostEndpoints,
+  )
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -125,12 +147,41 @@ export function useWaveBoard(): WaveBoard {
       resolveWaveRow(entry, (id) => sessionsById.get(id) ?? null),
     [sessionsById],
   )
+  const findSession = useCallback(
+    (sessionId: string) => sessionsById.get(sessionId) ?? null,
+    [sessionsById],
+  )
+
+  /**
+   * A host id in the words the rest of the app uses (MAR-3191).
+   *
+   * The same source every other surface reads -- the saved endpoints in app
+   * settings, named by the execution-host entity's own helper -- so Loom
+   * cannot come to call a host something no other screen calls it. No new
+   * IPC: the labels are already in the renderer.
+   */
+  const hostLabelOf = useCallback(
+    (hostId: string | null) => {
+      if (isLocalExecutionHost(hostId)) return LOOM_LOCAL_HOST_LABEL
+      const endpoint = endpoints.find((candidate) => candidate.id === hostId)
+      // The id itself when nothing names it: data a person can act on beats
+      // a confident word the app does not have.
+      return endpoint ? executionHostEndpointDisplayName(endpoint) : hostId
+    },
+    [endpoints],
+  )
+  const horses = useMemo(
+    () => loomHorses({ crews, sessionsById, sheets, hostLabelOf }),
+    [crews, sessionsById, sheets, hostLabelOf],
+  )
 
   return {
     boundCrewCount: boundCrewIds.length,
     crewNames: headerCrews.map((crew) => crew.name),
     sections,
     sheets,
+    horses,
+    findSession,
     header,
     boardLine: waveBoardLine(sections),
     resolveRow,

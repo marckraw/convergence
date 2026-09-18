@@ -1,5 +1,6 @@
 import type { UIEvent } from 'react'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
+import type { LoomHorse } from './loom-horses.pure'
 import type { LoomSheets } from './loom-sheets.pure'
 import type { LoomSheet } from './wave-panel-sheet.pure'
 import type { WaveHeader } from './wave-sections.pure'
@@ -12,6 +13,15 @@ import type { WaveHeader } from './wave-sections.pure'
  */
 export interface LoomStackProps {
   sheets: LoomSheets
+  /** The bound crews' horse seats (MAR-3191 R1) — the same list in both shapes. */
+  horses: readonly LoomHorse[]
+  /** Awaiting QA's reveal, held by the container so a fold cannot lose it. */
+  qaExpanded: boolean
+  onToggleQa: () => void
+  /** Opens a seat's conversation; the panel never sends (R6). */
+  onOpenSeat?: (sessionId: string) => void
+  /** Selects the Next sheet in place, for an idle seat's queued work. */
+  onShowNext?: () => void
   header: WaveHeader
   /** `convergence development · All waves` -- which ledger this is. */
   subline: string

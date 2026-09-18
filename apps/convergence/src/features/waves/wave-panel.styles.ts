@@ -77,3 +77,39 @@ export const LOOM_EDGE_CLASS =
 /** The edge's label, reading bottom-to-top like a book spine. */
 export const LOOM_EDGE_LABEL_CLASS =
   'whitespace-nowrap [writing-mode:vertical-rl] rotate-180'
+
+/** The horses line above the cards (MAR-3191). */
+export const LOOM_HORSES_LINE_CLASS =
+  'px-3 pb-1 pt-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground'
+
+/**
+ * A horse card (MAR-3191): the runtime tints it, so a failed seat is visible
+ * from across the room and an idle one does not shout.
+ *
+ * The app's own tokens, not r4's literals: the frame was drawn against a
+ * mockup's palette and this panel sits beside the conversation, where a raw
+ * hex would be the one surface that does not follow the theme.
+ */
+export const LOOM_HORSE_CARD_CLASS =
+  'flex h-auto w-full flex-col items-start gap-0.5 whitespace-normal rounded-md border px-3 py-2 text-left text-xs font-normal'
+
+export const LOOM_HORSE_TINT_CLASS: Readonly<Record<string, string>> = {
+  working: 'border-sky-400/30 bg-sky-400/5',
+  failed: 'border-red-400/40 bg-red-400/5',
+  idle: 'border-white/10',
+  'not-seen': 'border-white/10 bg-white/[0.02]',
+}
+
+/** The card's second line: host · tracker status · lap. */
+export const LOOM_HORSE_META_CLASS =
+  'truncate text-[11px] text-muted-foreground'
+
+/** The runtime word itself, beside the seat's name. */
+export const LOOM_HORSE_RUNTIME_CLASS = 'shrink-0 text-[11px] font-medium'
+
+/** The reveal control under Awaiting QA. */
+export const LOOM_QA_TOGGLE_CLASS =
+  'mx-3 mb-1 h-6 justify-start px-1 text-[11px] text-muted-foreground'
+
+/** Expanded lays the horses and the QA list side by side (r4 508:363). */
+export const LOOM_NOW_WIDE_CLASS = 'lg:grid lg:grid-cols-2 lg:gap-x-4'

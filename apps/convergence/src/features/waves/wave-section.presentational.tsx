@@ -7,6 +7,12 @@ import { WAVE_SECTION_TITLE_CLASS } from './wave-panel.styles'
 interface WaveSectionViewProps {
   title: string
   rows: WaveRow[]
+  /**
+   * How many rows the section HAS, when that differs from what it shows
+   * (MAR-3191 R5). Awaiting QA previews three of twelve, and a heading that
+   * counted the preview would be the panel telling a person there are three.
+   */
+  count?: number
   inertReason: (entry: WorkLedgerEntry) => string | null
   onOpen: (entry: WorkLedgerEntry) => void
   /**
@@ -21,6 +27,7 @@ interface WaveSectionViewProps {
 export const WaveSectionView: FC<WaveSectionViewProps> = ({
   title,
   rows,
+  count,
   inertReason,
   onOpen,
   disclosure,
@@ -34,7 +41,7 @@ export const WaveSectionView: FC<WaveSectionViewProps> = ({
       onOpen={onOpen}
     />
   ))
-  const heading = `${title} · ${rows.length}`
+  const heading = `${title} · ${count ?? rows.length}`
 
   return disclosure ? (
     <details
