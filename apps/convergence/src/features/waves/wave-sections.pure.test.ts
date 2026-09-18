@@ -285,6 +285,17 @@ describe('MAR-3097 lap 2, B: the column keeps the main panel at its floor', () =
         reservedWidth: 0,
       }),
     ).toEqual({ mode: 'rail', reason: 'stored' })
+    // Lap 2, B: the width answers first. A stored rail in a window that could
+    // not hold the column either reads `narrow`, because that is why Open
+    // cannot act -- answering `stored` left the control live over nothing.
+    // Mutation: ask the stored mode first -> red.
+    expect(
+      effectiveWavePanelMode({
+        stored: 'rail',
+        windowWidth: wide - 1,
+        reservedWidth: 260,
+      }),
+    ).toEqual({ mode: 'rail', reason: 'narrow' })
   })
 
   it('MAR-3148 R5: the column’s width is one fact, not two', () => {

@@ -345,8 +345,8 @@ describe('MAR-3097: through the containers and the real stores', () => {
     // MAR-3148 R1, through the container: the rail the WIDTH forced cannot be
     // opened, and says so. Mutation: pass `narrow` from anything but the
     // decision's reason -> red.
-    const open = screen.getByRole('button', { name: 'Open the wave panel' })
-    expect(open).toHaveProperty('disabled', true)
+    const open = screen.getByRole('button', { name: /too narrow/i })
+    expect(open.getAttribute('aria-disabled')).toBe('true')
     expect(open.getAttribute('title')).toBe(WAVE_RAIL_NARROW_TITLE)
   })
 
@@ -355,9 +355,24 @@ describe('MAR-3097: through the containers and the real stores', () => {
     await mount(<WavePanel />)
     await screen.findByLabelText('Waves rail')
     const open = screen.getByRole('button', { name: 'Open the wave panel' })
-    expect(open).toHaveProperty('disabled', false)
+    expect(open.getAttribute('aria-disabled')).toBeNull()
     fireEvent.click(open)
     expect(screen.getByLabelText('Waves')).toBeTruthy()
+  })
+
+  it('B: a stored rail in a window too narrow for the column cannot open either', async () => {
+    localStorage.setItem('convergence-wave-panel-mode', 'rail')
+    setWindowWidth(260 + 280 + 479)
+    await mount(<WavePanel reservedWidth={260} />)
+    await screen.findByLabelText('Waves rail')
+
+    // Mutation: answer the stored reason first -> the click below opens
+    // nothing and rewrites the preference to `open`, red.
+    const open = screen.getByRole('button', { name: /too narrow/i })
+    fireEvent.click(open)
+    expect(screen.getByLabelText('Waves rail')).toBeTruthy()
+    expect(screen.queryByLabelText('Waves')).toBeNull()
+    expect(localStorage.getItem('convergence-wave-panel-mode')).toBe('rail')
   })
 
   it('R5: clicking a row opens the seat’s conversation; rows that cannot, say why', async () => {
@@ -534,34 +549,68 @@ describe('MAR-3085 R7: the row reads the lap, the cap and the ruling', () => {
 describe('MAR-3148: the rail, the props and the clock', () => {
   const rows = [ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' })]
 
-  it('R1: the rail a narrow window forced says Open cannot act; a stored rail opens', () => {
-    render(
-      <WaveRailView
-        sections={sectionWaveRows(rows, NOW)}
-        outage={false}
-        narrow
-        onExpand={vi.fn()}
-      />,
-    )
-    const open = screen.getByRole('button', { name: 'Open the wave panel' })
-    // Mutation: keep it enabled -> red here.
-    expect(open).toHaveProperty('disabled', true)
-    expect(open.getAttribute('title')).toBe(WAVE_RAIL_NARROW_TITLE)
-
-    cleanup()
+  it('R1: the rail a narrow window forced says why in its name, and stays reachable', () => {
     const onExpand = vi.fn()
     render(
       <WaveRailView
         sections={sectionWaveRows(rows, NOW)}
         outage={false}
+        narrow
         onExpand={onExpand}
       />,
     )
+
+    // Named by what it is AND why it cannot act: the reason has to reach a
+    // screen reader, which a `title` on a disabled button never does.
+    // Mutation: keep the reason out of the name (or use `disabled`) -> red.
+    const open = screen.getByRole('button', { name: /too narrow/i })
+    expect(open.hasAttribute('disabled')).toBe(false)
+    expect(open.getAttribute('aria-disabled')).toBe('true')
+    expect(open.getAttribute('title')).toBe(WAVE_RAIL_NARROW_TITLE)
+    // Reachable: still in the tab order, and a click does nothing.
+    open.focus()
+    expect(document.activeElement).toBe(open)
+    fireEvent.click(open)
+    expect(onExpand).not.toHaveBeenCalled()
+
+    cleanup()
+    const onOpen = vi.fn()
+    render(
+      <WaveRailView
+        sections={sectionWaveRows(rows, NOW)}
+        outage={false}
+        onExpand={onOpen}
+      />,
+    )
     const stored = screen.getByRole('button', { name: 'Open the wave panel' })
-    expect(stored).toHaveProperty('disabled', false)
+    expect(stored.getAttribute('aria-disabled')).toBeNull()
     expect(stored.getAttribute('title')).toBeNull()
     fireEvent.click(stored)
-    expect(onExpand).toHaveBeenCalledTimes(1)
+    expect(onOpen).toHaveBeenCalledTimes(1)
+  })
+
+  it('C: a row that cannot open its seat is inert and says so', () => {
+    render(
+      <WavePanelView
+        layout="column"
+        sections={sectionWaveRows(
+          [ledgerEntry({ issueIdentifier: 'EX-9', sessionId: null })],
+          NOW,
+        )}
+        header={waveHeader({ crews: ANSWERED, rowCount: 1, now: NOW })}
+        inertReason={() => 'no conversation for this seat'}
+        onOpen={vi.fn()}
+      />,
+    )
+    const row = document.querySelector('[data-wave-row="crew-1:EX-9"]')
+    // Mutation: drop `aria-disabled` from the inert row -> red (the previous
+    // lap rendered every row through `inertReason={() => null}`, the ENABLED
+    // branch, so deleting the attribute changed nothing).
+    expect(row?.getAttribute('aria-disabled')).toBe('true')
+    expect(row?.tagName).toBe('DIV')
+    expect(
+      rowOf('crew-1:EX-9').getByText('no conversation for this seat'),
+    ).toBeTruthy()
   })
 
   it('R2: the panel takes no Connect handler, and says where to bind instead', () => {
@@ -668,6 +717,17 @@ describe('MAR-3148 R3: the clock ticks only for an age on screen', () => {
     ).toBeGreaterThan(0)
   })
 
+  it('D: a board still reading holds no timer — that sentence has no age in it', async () => {
+    expect(
+      await mountBoard({
+        crewId: 'crew-1',
+        entries: [],
+        trackerHealth: null,
+      }),
+    ).toBe(0)
+    expect(screen.getByRole('status').textContent).toBe('reading the tracker…')
+  })
+
   it('an outage with no rows keeps it too: the header carries an age', async () => {
     expect(
       await mountBoard({
@@ -676,5 +736,7 @@ describe('MAR-3148 R3: the clock ticks only for an age on screen', () => {
         trackerHealth: health('unreachable'),
       }),
     ).toBeGreaterThan(0)
+    // And the age is really on screen, which is what the clock is for.
+    expect(screen.getByRole('status').textContent).toMatch(/· \d+\w+$/)
   })
 })

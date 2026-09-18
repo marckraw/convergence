@@ -136,6 +136,13 @@ async function renderShell(props: Record<string, unknown> = {}) {
 
 describe('MAR-3148 R4: the wave column’s wiring in the shell', () => {
   beforeEach(() => {
+    // Stated, not inherited (lap 2, E): jsdom's default width sits a few
+    // pixels above the column's floor, so these cases would have turned on
+    // the environment rather than on the wiring under test.
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 1600,
+    })
     localStorage.clear()
     useSessionStore.setState({ globalSessions: [] })
     useSessionCrewStore.setState({ crews: [] })

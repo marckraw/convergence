@@ -302,9 +302,15 @@ export function effectiveWavePanelMode(input: {
   windowWidth: number
   reservedWidth: number
 }): WavePanelModeDecision {
-  if (input.stored === 'rail') return { mode: 'rail', reason: 'stored' }
+  // The width is asked FIRST (lap 2, B): the reason has to say why the rail
+  // is on screen NOW, not which test happened to run first. A stored rail in
+  // a window too narrow for the column read as `stored`, so Open stayed live
+  // -- and a click on it rewrote the preference to `open` and opened nothing.
   const main = input.windowWidth - input.reservedWidth - WAVE_PANEL_COLUMN_WIDTH
-  return main < WAVE_PANEL_MIN_MAIN_WIDTH
-    ? { mode: 'rail', reason: 'narrow' }
+  if (main < WAVE_PANEL_MIN_MAIN_WIDTH) {
+    return { mode: 'rail', reason: 'narrow' }
+  }
+  return input.stored === 'rail'
+    ? { mode: 'rail', reason: 'stored' }
     : { mode: 'open', reason: null }
 }
