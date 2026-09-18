@@ -1,5 +1,11 @@
 # convergence
 
+## 0.65.1
+
+### Patch Changes
+
+- 66372c1: A Cursor conversation whose local record cannot be written mid-turn no longer dies or reports a failed send: the loss is noted on the conversation and the run continues to its end.
+
 ## 0.65.0
 
 ### Minor Changes
