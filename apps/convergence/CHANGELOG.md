@@ -1,5 +1,11 @@
 # convergence
 
+## 0.68.1
+
+### Patch Changes
+
+- 60d7092: Binding a crew to Linear takes the project's URL or name as well as its id, and the Test names the project it reached.
+
 ## 0.68.0
 
 ### Minor Changes
