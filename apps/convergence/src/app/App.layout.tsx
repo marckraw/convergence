@@ -83,6 +83,19 @@ export const AppShell: FC<AppShellProps> = ({
   const [missionControlMode, setMissionControlMode] = useState<string | null>(
     null,
   )
+  /**
+   * Loom has the content area (MAR-3189 R5).
+   *
+   * Two pieces of state, and both are the panel's own facts held HERE because
+   * only the layout can act on them: whether the stack is expanded, and the
+   * element it is drawn into. Nothing about the sidebar or the selected
+   * session is touched by either -- folding puts the main panel's previous
+   * content back exactly as it was, because it was never taken away, only
+   * not rendered.
+   */
+  const [loomExpanded, setLoomExpanded] = useState(false)
+  const [mainPanelElement, setMainPanelElement] =
+    useState<HTMLDivElement | null>(null)
   const [fallbackSelectedChatSpaceId, setFallbackSelectedChatSpaceId] =
     useState<string | null>(null)
   const [fallbackDraftChatSpaceId, setFallbackDraftChatSpaceId] = useState<
@@ -301,9 +314,10 @@ export const AppShell: FC<AppShellProps> = ({
           />
         )}
 
-        {/* The wave column (MAR-3097): the ledger beside the conversation,
-            open or collapsed to its rail. Absent when no crew reads a tracker,
-            and while Mission Control shows its own Waves tab. */}
+        {/* Loom (MAR-3097, MAR-3189): the ledger beside the conversation, its
+            four sheets compact in this slot or expanded into the content area.
+            Absent when no crew reads a tracker, and while Mission Control
+            shows its own Waves tab. */}
         <WavePanel
           onOpenSession={onSelectAnySession}
           hidden={isWaveColumnHidden({
@@ -311,62 +325,90 @@ export const AppShell: FC<AppShellProps> = ({
             missionControlMode,
           })}
           reservedWidth={sidebarCollapsed ? COLLAPSED_SIDEBAR : sidebarWidth}
+          onExpandedChange={setLoomExpanded}
+          expandedContainer={mainPanelElement}
         />
 
-        <div className="app-main-panel flex min-w-0 flex-1 flex-col">
-          {routeFallback ? (
-            <RouteFallbackView
-              fallback={routeFallback}
-              onAction={onRouteFallbackAction ?? (() => undefined)}
-            />
-          ) : missionControlActive ? (
-            <MissionControl
-              onOpenSession={onSelectAnySession}
-              onModeChange={setMissionControlMode}
-            />
-          ) : activeSurface === 'chat' ? (
-            <ChatSurface
-              selectedSpaceId={effectiveSelectedChatSpaceId}
-              draftSpaceId={effectiveDraftChatSpaceId}
-              onBeginSpaceAttempt={handleBeginChatSpaceAttempt}
-              onCancelSpaceAttempt={
-                effectiveSelectedChatSpaceId
-                  ? () => {
-                      if (onCancelChatSpaceAttempt) {
-                        onCancelChatSpaceAttempt(effectiveSelectedChatSpaceId)
-                      } else {
-                        setFallbackDraftChatSpaceId(null)
+        <div
+          ref={setMainPanelElement}
+          className="app-main-panel relative flex min-w-0 flex-1 flex-col"
+        >
+          {/* `contents` always (MAR-3189 R5, lap 2 D): this wrapper exists
+              ONLY to mark the content area inert in one place, and
+              `display: contents` keeps every surface inside it a direct flex
+              child of the main panel, laid out exactly as before.
+
+              Expanded Loom COVERS this, it does not remove its box. Neither
+              unmounted nor `display: none`: the transcript is a virtualizer
+              measured by a ResizeObserver, and a surface with no box measures
+              every row at zero -- folding would give back a conversation
+              scrolled somewhere a person never left it. Covered, the layout
+              underneath never changes, so there is nothing to restore.
+
+              `inert` takes the whole subtree out of the tab order, off the
+              pointer and away from a screen reader while it is behind the
+              cover -- what `hidden` did for free, and the only part of it
+              worth keeping. */}
+          <div
+            data-app-content
+            className="contents"
+            inert={loomExpanded}
+            aria-hidden={loomExpanded || undefined}
+          >
+            {routeFallback ? (
+              <RouteFallbackView
+                fallback={routeFallback}
+                onAction={onRouteFallbackAction ?? (() => undefined)}
+              />
+            ) : missionControlActive ? (
+              <MissionControl
+                onOpenSession={onSelectAnySession}
+                onModeChange={setMissionControlMode}
+              />
+            ) : activeSurface === 'chat' ? (
+              <ChatSurface
+                selectedSpaceId={effectiveSelectedChatSpaceId}
+                draftSpaceId={effectiveDraftChatSpaceId}
+                onBeginSpaceAttempt={handleBeginChatSpaceAttempt}
+                onCancelSpaceAttempt={
+                  effectiveSelectedChatSpaceId
+                    ? () => {
+                        if (onCancelChatSpaceAttempt) {
+                          onCancelChatSpaceAttempt(effectiveSelectedChatSpaceId)
+                        } else {
+                          setFallbackDraftChatSpaceId(null)
+                        }
                       }
-                    }
-                  : undefined
-              }
-              onSpaceDeleted={() => {
-                if (onNewGlobalChat) {
-                  onNewGlobalChat()
-                } else {
-                  setFallbackSelectedChatSpaceId(null)
-                  setFallbackDraftChatSpaceId(null)
+                    : undefined
                 }
-              }}
-              onOpenSession={onSelectAnySession}
-            />
-          ) : hasProject ? (
-            <>
-              <NotificationsOnboardingContainer />
-              <div className="min-h-0 flex-1">
-                <WorkspaceLayout />
+                onSpaceDeleted={() => {
+                  if (onNewGlobalChat) {
+                    onNewGlobalChat()
+                  } else {
+                    setFallbackSelectedChatSpaceId(null)
+                    setFallbackDraftChatSpaceId(null)
+                  }
+                }}
+                onOpenSession={onSelectAnySession}
+              />
+            ) : hasProject ? (
+              <>
+                <NotificationsOnboardingContainer />
+                <div className="min-h-0 flex-1">
+                  <WorkspaceLayout />
+                </div>
+              </>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center">
+                <h1 className="text-2xl font-bold tracking-tight">
+                  Welcome to Convergence
+                </h1>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Create a project to get started.
+                </p>
               </div>
-            </>
-          ) : (
-            <div className="flex h-full flex-col items-center justify-center">
-              <h1 className="text-2xl font-bold tracking-tight">
-                Welcome to Convergence
-              </h1>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Create a project to get started.
-              </p>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 

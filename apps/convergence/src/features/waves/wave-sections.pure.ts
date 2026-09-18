@@ -191,23 +191,6 @@ export function sectionWaveRows(
   return sections
 }
 
-/** The rail's four counts (R4), read off the same sections. */
-export interface WaveRailCounts {
-  waitingOnYou: number
-  inTheWave: number
-  waitingToStart: number
-  waves: number
-}
-
-export function waveRailCounts(sections: WaveSections): WaveRailCounts {
-  return {
-    waitingOnYou: sections.waitingOnYou.length,
-    inTheWave: sections.inTheWave.length,
-    waitingToStart: sections.waitingToStart.length,
-    waves: sections.waves.length,
-  }
-}
-
 /** The board's own line for the Waves tab (lap 2, D), from the same sections. */
 export function waveBoardLine(sections: WaveSections): string {
   const issues = sections.waves.reduce(
@@ -315,16 +298,18 @@ export function waveRowKey(
 export const WAVE_PANEL_MIN_MAIN_WIDTH = 480
 
 /**
- * The column's width, in pixels (MAR-3155): a preference now, not a fact.
+ * The column's width, in pixels (MAR-3155; MAR-3189 R4): a preference, not a
+ * fact.
  *
  * The floor is where a row stops being readable at all -- narrower than this
- * the identifier and the title fight over the same line, which is the defect
- * this issue exists for. The ceiling is where the column stops being a column
- * beside the conversation and starts being a second page. The default is what
- * the fixed column was, so an app that has never been dragged looks the same.
+ * the identifier and the title fight over the same line. The ceiling is where
+ * the column stops being a column beside the conversation and starts being a
+ * second page: past it the answer is Expand, which gives Loom the whole
+ * content area, rather than a wider and wider rail. Loom's design (r4) draws
+ * the compact stack between these two numbers and nowhere else.
  */
-export const WAVE_PANEL_MIN_COLUMN_WIDTH = 240
-export const WAVE_PANEL_MAX_COLUMN_WIDTH = 640
+export const WAVE_PANEL_MIN_COLUMN_WIDTH = 280
+export const WAVE_PANEL_MAX_COLUMN_WIDTH = 400
 export const WAVE_PANEL_DEFAULT_COLUMN_WIDTH = 280
 /** One arrow key's worth of resize (R4). */
 export const WAVE_PANEL_WIDTH_STEP = 16
@@ -334,10 +319,16 @@ export const WAVE_PANEL_WIDTH_STEP = 16
  *
  * `max` is the caller's, because the ceiling moves with the window: a wide
  * preference in a narrow window is honoured as far as it fits and no further,
- * and what was preferred is NOT rewritten (R2).
+ * and what was preferred is NOT rewritten (MAR-3155 R2). The LAW's ceiling is
+ * applied here too (MAR-3189 R4), so a caller cannot widen the column past
+ * 400 by passing a bigger `max` -- every caller's max is already at or below
+ * it, and this is what keeps that true rather than merely observed.
  */
 export function clampWavePanelWidth(width: number, max: number): number {
-  const ceiling = Math.max(WAVE_PANEL_MIN_COLUMN_WIDTH, max)
+  const ceiling = Math.max(
+    WAVE_PANEL_MIN_COLUMN_WIDTH,
+    Math.min(WAVE_PANEL_MAX_COLUMN_WIDTH, max),
+  )
   return Math.min(ceiling, Math.max(WAVE_PANEL_MIN_COLUMN_WIDTH, width))
 }
 
@@ -364,34 +355,26 @@ export function settleWavePanelGesture(input: {
 }
 
 /**
- * Why the column is a rail (MAR-3148 R1): because that is what was stored,
- * or because the window cannot hold the column and a readable main panel.
+ * What Loom renders as (MAR-3189 R1/R4/R5), as one of three shapes rather
+ * than four independent fields.
  *
- * The difference is the whole point: a rail somebody chose reopens on a
- * click, and a rail the width forced cannot -- so the control has to say so
- * rather than do nothing.
- */
-export type WavePanelRailReason = 'stored' | 'narrow'
-
-/**
- * What the column renders as (MAR-3155 R1), as one of two shapes rather than
- * four independent fields.
+ * A union, so no caller can reach a compact column with no width and reach
+ * for a fallback the decision never gave (MAR-3155 lap 2, B). Only `compact`
+ * has a width and a ceiling; the strip is too narrow to have one and the
+ * expanded stack takes the content area it is given.
  *
- * A union, so no caller can reach an open column with no width and reach for
- * a fallback the decision never gave (lap 2, B). On the rail there is no
- * width and no ceiling; open, both are numbers.
+ * `strip` carries no reason field any more: with the stored mode reduced to
+ * `compact | expanded` (MAR-3189), the only thing that can put the strip on
+ * screen is a window too narrow for the column. The reason IS the shape.
  */
 export type WavePanelModeDecision =
   | {
-      mode: 'rail'
-      /** Why the column is not open. */
-      reason: WavePanelRailReason
+      mode: 'strip'
       width: null
       maxWidth: null
     }
   | {
-      mode: 'open'
-      reason: null
+      mode: 'compact'
       /**
        * The width the column renders at: the decision's own number, never the
        * stored one, which is what keeps a narrow window from quietly becoming
@@ -399,46 +382,50 @@ export type WavePanelModeDecision =
        */
       width: number
       /**
-       * The widest this window can show right now (lap 2, B). The ceiling's
-       * arithmetic lives HERE and only here -- a caller that computed its own
-       * would be the second encoding R6 exists to prevent -- and it is what
-       * the handle announces.
+       * The widest this window can show right now (MAR-3155 lap 2, B). The
+       * ceiling's arithmetic lives HERE and only here -- a caller that
+       * computed its own would be the second encoding R6 exists to prevent --
+       * and it is what the handle announces.
        */
       maxWidth: number
     }
+  | {
+      mode: 'expanded'
+      width: null
+      maxWidth: null
+    }
 
 /**
- * The mode and the width the column renders in (lap 2, B; MAR-3155 R1): the
- * stored ones, unless the window is too narrow -- in which case a narrower
- * column first, and only then the rail. Neither is written back.
+ * The shape and the width Loom renders in (MAR-3189 R4/R5): the stored ones,
+ * unless the window is too narrow for a readable column beside a readable
+ * conversation -- in which case a narrower column first, and only then the
+ * strip. Neither the mode nor the width is written back.
+ *
+ * The expanded stack is asked FIRST and is never refused: it does not stand
+ * beside the main panel, it IS the main panel (R5), so the window arithmetic
+ * that can starve the column says nothing about it.
  */
 export function effectiveWavePanelMode(input: {
-  stored: 'open' | 'rail'
+  stored: 'compact' | 'expanded'
   /** What the person last chose; may be wider than the window allows. */
   storedWidth: number
   windowWidth: number
   reservedWidth: number
 }): WavePanelModeDecision {
-  // The width is asked FIRST (lap 2, B): the reason has to say why the rail
-  // is on screen NOW, not which test happened to run first. A stored rail in
-  // a window too narrow for the column read as `stored`, so Open stayed live
-  // -- and a click on it rewrote the preference to `open` and opened nothing.
-  //
+  if (input.stored === 'expanded') {
+    return { mode: 'expanded', width: null, maxWidth: null }
+  }
   // What the window can spare for the column, once the main panel has its
   // floor. Below the column's own floor there is no readable column left, and
-  // only then does the rail take over (MAR-3155 R1).
+  // only then does the strip take over (MAR-3155 R1).
   const available =
     input.windowWidth - input.reservedWidth - WAVE_PANEL_MIN_MAIN_WIDTH
   if (available < WAVE_PANEL_MIN_COLUMN_WIDTH) {
-    return { mode: 'rail', reason: 'narrow', width: null, maxWidth: null }
-  }
-  if (input.stored === 'rail') {
-    return { mode: 'rail', reason: 'stored', width: null, maxWidth: null }
+    return { mode: 'strip', width: null, maxWidth: null }
   }
   const maxWidth = Math.min(WAVE_PANEL_MAX_COLUMN_WIDTH, available)
   return {
-    mode: 'open',
-    reason: null,
+    mode: 'compact',
     width: clampWavePanelWidth(input.storedWidth, maxWidth),
     maxWidth,
   }

@@ -6,6 +6,7 @@ import {
   type WorkLedgerEntry,
 } from '@/entities/work-ledger'
 import { useFeedClock } from '@/shared/hooks/use-feed-clock'
+import { loomSheets, type LoomSheets } from './loom-sheets.pure'
 import {
   resolveWaveRow,
   sectionWaveRows,
@@ -20,7 +21,11 @@ import {
 export interface WaveBoard {
   /** How many crews read a tracker; zero means the column is not mounted. */
   boundCrewCount: number
+  /** The bound crews' names, in crew order: Loom's subline reads them. */
+  crewNames: string[]
   sections: WaveSections
+  /** The same rows in Loom's four sheets (MAR-3189 R2). */
+  sheets: LoomSheets
   header: WaveHeader
   boardLine: string
   resolveRow: (entry: WorkLedgerEntry) => WaveRowOpening<SessionSummary>
@@ -90,6 +95,14 @@ export function useWaveBoard(): WaveBoard {
       })),
     [rows, now, several, crewFacts],
   )
+  const sheets = useMemo(
+    () =>
+      loomSheets(rows, now, (crewId) => ({
+        name: several ? (crewFacts.get(crewId)?.name ?? crewId) : null,
+        cap: null,
+      })),
+    [rows, now, several, crewFacts],
+  )
   const header = useMemo(
     () => waveHeader({ crews: headerCrews, rowCount: rows.length, now }),
     [headerCrews, rows.length, now],
@@ -115,7 +128,9 @@ export function useWaveBoard(): WaveBoard {
 
   return {
     boundCrewCount: boundCrewIds.length,
+    crewNames: headerCrews.map((crew) => crew.name),
     sections,
+    sheets,
     header,
     boardLine: waveBoardLine(sections),
     resolveRow,

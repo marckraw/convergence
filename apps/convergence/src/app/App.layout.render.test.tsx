@@ -118,6 +118,12 @@ function stubBridge(crews: SessionCrew[]) {
 const waveLandmarks = () =>
   document.querySelectorAll('aside[aria-label="Waves"]')
 
+/** Loom in its column: the shell's own slot beside the conversation. */
+const loomLandmarks = () => document.querySelectorAll('[aria-label="Loom"]')
+
+const mainPanel = () =>
+  document.querySelector('.app-main-panel') as HTMLElement | null
+
 async function renderShell(props: Record<string, unknown> = {}) {
   await act(async () => {
     // The shell's own container provides this; the test provides it here so
@@ -164,8 +170,8 @@ describe('MAR-3148 R4: the wave column’s wiring in the shell', () => {
 
     await renderShell()
 
-    expect(waveLandmarks()).toHaveLength(0)
-    expect(screen.queryByLabelText('Waves rail')).toBeNull()
+    expect(loomLandmarks()).toHaveLength(0)
+    expect(screen.queryByLabelText('Loom strip')).toBeNull()
   })
 
   it('a bound crew: exactly one column beside the conversation', async () => {
@@ -173,7 +179,46 @@ describe('MAR-3148 R4: the wave column’s wiring in the shell', () => {
 
     await renderShell()
 
-    expect(waveLandmarks()).toHaveLength(1)
+    expect(loomLandmarks()).toHaveLength(1)
+    // Beside it, not inside it: compact Loom is a sibling of the content
+    // area. Mutation: mount the panel inside `app-main-panel` -> red.
+    expect(mainPanel()?.contains(loomLandmarks()[0] ?? null)).toBe(false)
+  })
+
+  it('MAR-3189 R5: expanded fills the content area, and folding puts it back', async () => {
+    stubBridge([crew()])
+    const onSelectAnySession = vi.fn()
+
+    await renderShell({ onSelectAnySession })
+
+    const sidebarBefore = document.querySelector('.app-sidebar-panel')
+    const mainBefore = mainPanel()?.innerHTML ?? ''
+    expect(mainBefore.length).toBeGreaterThan(0)
+
+    await act(async () => {
+      screen.getByRole('button', { name: 'Expand Loom' }).click()
+    })
+
+    // The stack is a DESCENDANT of the content area, not a wide rail beside
+    // it. Mutation: render expanded in the rail slot at 100% width -> red.
+    const stack = document.querySelector('[data-loom="expanded"]')
+    expect(stack).toBeTruthy()
+    expect(mainPanel()?.contains(stack as Node)).toBe(true)
+    // Nothing in the rail slot, and nothing else moved: the sidebar is the
+    // same element and no session was selected on the way.
+    expect(document.querySelector('[data-loom="compact"]')).toBeNull()
+    expect(document.querySelector('.app-sidebar-panel')).toBe(sidebarBefore)
+    expect(onSelectAnySession).not.toHaveBeenCalled()
+
+    await act(async () => {
+      screen.getByRole('button', { name: 'Fold Loom' }).click()
+    })
+
+    expect(document.querySelector('[data-loom="expanded"]')).toBeNull()
+    expect(loomLandmarks()).toHaveLength(1)
+    // Mutation: unmount the main panel's content instead of not rendering it
+    // -> what comes back is a different tree, red.
+    expect(mainPanel()?.innerHTML).toBe(mainBefore)
   })
 
   it('Mission Control on its Waves tab: one landmark, and it is the tab’s', async () => {
@@ -188,8 +233,55 @@ describe('MAR-3148 R4: the wave column’s wiring in the shell', () => {
     await renderShell({ missionControlActive: true })
 
     // Mutation: drop `hidden={isWaveColumnHidden(...)}` at the mount ->
-    // the column and the tab both render, two landmarks, red.
+    // Loom and the tab both render, two boards, red.
+    //
+    // This assertion is on LOOM, not on `aria-label="Waves"` (lap 2, A): the
+    // column was renamed and the old selector could no longer see the thing
+    // the mutation brings back -- the guarantee had quietly stopped being
+    // guarded. The tab keeps its own name, which is why both queries are
+    // here.
+    expect(loomLandmarks()).toHaveLength(0)
+    expect(screen.queryByLabelText('Loom strip')).toBeNull()
     expect(waveLandmarks()).toHaveLength(1)
     expect(waveLandmarks()[0]?.getAttribute('data-wave-panel')).toBe('full')
+  })
+
+  it('MAR-3189 lap 2, D: expanded COVERS the content area, it does not remove its box', async () => {
+    stubBridge([crew()])
+
+    await renderShell()
+
+    const content = () =>
+      document.querySelector('[data-app-content]') as HTMLElement | null
+    expect(content()?.hasAttribute('inert')).toBe(false)
+
+    await act(async () => {
+      screen.getByRole('button', { name: 'Expand Loom' }).click()
+    })
+
+    const stack = document.querySelector(
+      '[data-loom="expanded"]',
+    ) as HTMLElement
+    // The cover: inside the main panel, absolutely placed over it, opaque.
+    // Mutation: drop `absolute inset-0` from LOOM_EXPANDED_CLASS -> red.
+    expect(mainPanel()?.contains(stack)).toBe(true)
+    expect(stack.className).toContain('absolute')
+    expect(stack.className).toContain('inset-0')
+    // The content keeps its box -- it is covered, not removed. Mutation: put
+    // `hidden` (or `display: none`) back on the wrapper -> red, and a
+    // virtualized transcript underneath measures every row at zero.
+    expect(content()).toBeTruthy()
+    expect(content()?.hasAttribute('hidden')).toBe(false)
+    expect(content()?.className).toBe('contents')
+    // ...and is out of reach while it is behind the cover.
+    // Mutation: drop `inert` -> red.
+    expect(content()?.hasAttribute('inert')).toBe(true)
+    expect(content()?.getAttribute('aria-hidden')).toBe('true')
+
+    await act(async () => {
+      screen.getByRole('button', { name: 'Fold Loom' }).click()
+    })
+    expect(content()?.hasAttribute('inert')).toBe(false)
+    expect(content()?.getAttribute('aria-hidden')).toBeNull()
   })
 })

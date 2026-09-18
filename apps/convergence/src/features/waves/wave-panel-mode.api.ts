@@ -11,7 +11,7 @@ export function loadWavePanelMode(): WavePanelMode {
   try {
     return parseWavePanelMode(localStorage.getItem(STORAGE_KEY))
   } catch {
-    return 'open'
+    return 'compact'
   }
 }
 
@@ -19,6 +19,6 @@ export function saveWavePanelMode(mode: WavePanelMode): void {
   try {
     localStorage.setItem(STORAGE_KEY, serializeWavePanelMode(mode))
   } catch {
-    // localStorage not available; the column starts open next time.
+    // localStorage not available; the column starts compact next time.
   }
 }
