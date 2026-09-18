@@ -31,6 +31,10 @@ import {
   trackerIssue,
   RECORDED_200_WITH_ERRORS_BODY,
   RECORDED_BLOCKED_LABEL_PAGE,
+  RECORDED_GROUNDING_INLINE,
+  RECORDED_GROUNDING_MIXED,
+  RECORDED_GROUNDING_RE_GROUNDED,
+  RECORDED_GROUNDING_SINGLE,
   RECORDED_LOOM_MEMBERSHIP_PAGE,
   RECORDED_PRIORITY_PAGE,
   RECORDED_RATELIMITED_BODY,
@@ -106,7 +110,7 @@ describe('MAR-3084 R1: the seat is a label child, read as group/child', () => {
             grounded: true,
             dispatch: false,
             priority: null,
-            labels: ['horse › opus', 'wave › loom-p2', 'grounded'],
+            labels: ['grounded', 'horse › opus', 'wave › loom-p2'],
             summary: null,
             groundedAt: null,
             branchName: 'example/ex-1-work',
@@ -412,6 +416,9 @@ describe('MAR-3190 R3: priority is Linear’s number or null, never a default', 
     ['not a number', 'high', null],
     ['fractional', 1.5, null],
     ['not finite', Number.NaN, null],
+    ['below Linear’s range', -1, null],
+    ['above Linear’s range', 5, null],
+    ['far above', 7, null],
   ])('%s -> %s', (_case, value, expected) => {
     // Mutation: `?? 0` -> "missing" reads as the person choosing none, red.
     expect(readIssuePriority(value)).toBe(expected)
@@ -433,40 +440,103 @@ describe('MAR-3190 R3: priority is Linear’s number or null, never a default', 
 })
 
 describe('MAR-3190: the label list is for display, never for facts', () => {
-  it('a plain label as written, a group child as group › child', () => {
+  it('a plain label as written, a group child as group › child, sorted', () => {
     expect(
       readIssueLabels([
         linearLabel('opus-mac', 'horse'),
         linearLabel('groom-me', null),
         linearLabel('  ', null),
       ]),
-    ).toEqual(['horse › opus-mac', 'groom-me'])
+    ).toEqual(['groom-me', 'horse › opus-mac'])
+  })
+
+  it('lap 2, F: the same set in any order reads the same list', () => {
+    // `labels { nodes }` carries no `orderBy`, and `sameLabels` compares by
+    // position: an order the server changed would append a row per
+    // multi-label issue per minute with nothing about the issue moving.
+    // Mutation: drop the sort -> the two lists differ, red.
+    const one = readIssueLabels([
+      linearLabel('groomed', null),
+      linearLabel('opus-mac', 'horse'),
+      linearLabel('grounded', null),
+    ])
+    const other = readIssueLabels([
+      linearLabel('opus-mac', 'horse'),
+      linearLabel('grounded', null),
+      linearLabel('groomed', null),
+    ])
+    expect(one).toEqual(other)
   })
 })
 
-describe('MAR-3190 R5: the grounding date is the body’s latest', () => {
+describe('MAR-3190 R5 + lap 2, A: the grounding date is read from the record', () => {
+  const TODAY = '2026-09-19'
+
+  it('the shapes a real groomed body has', () => {
+    // Every one of these returned NULL in lap 1, because the reader was
+    // written to a sentence about the format instead of to the format.
+    // Mutation: require the word `at` on the date's line -> the heading and
+    // re-grounded shapes go null again, red three times.
+    expect(readGroundedAt(RECORDED_GROUNDING_RE_GROUNDED, TODAY)).toBe(
+      '2026-09-18',
+    )
+    expect(readGroundedAt(RECORDED_GROUNDING_SINGLE, TODAY)).toBe('2026-09-18')
+    expect(readGroundedAt(RECORDED_GROUNDING_INLINE, TODAY)).toBe('2026-09-16')
+  })
+
+  it('a re-ground is the fresher fact, wherever it sits', () => {
+    // The dangerous case: lap 1 would have reported the OLDER date here --
+    // stale grounding presented as current. Mutation: first match -> red.
+    expect(readGroundedAt(RECORDED_GROUNDING_MIXED, TODAY)).toBe('2026-09-18')
+  })
+
   it.each([
-    ['one line', 'Grounded at `abc1234` · 2026-09-18', '2026-09-18'],
     [
-      'a re-ground, out of order',
-      'Grounded at abc1234 · 2026-09-10\n\nre-grounded at def5678 · 2026-09-17',
+      'a heading section',
+      '## Grounded at\n\n`x · 2026-09-14 · checked: y`',
+      '2026-09-14',
+    ],
+    [
+      'the section ends at the next heading',
+      '## Grounded at\n\n`x · 2026-09-14`\n\n## Terminal\n\n`y · 2026-09-20`',
+      '2026-09-14',
+    ],
+    [
+      'a re-grounded line alone',
+      '`re-grounded abc · 2026-09-17 after a STOP`',
       '2026-09-17',
     ],
     [
-      'the earlier line written last',
-      'Grounded at a · 2026-09-17\n\nGrounded at b · 2026-09-10',
-      '2026-09-17',
+      'inline, capitalised differently',
+      'GROUNDED AT x · 2026-01-02',
+      '2026-01-02',
     ],
-    ['capitalised differently', 'GROUNDED AT x · 2026-01-02', '2026-01-02'],
-    ['inside a code span', '`Grounded at x · 2026-03-04`', '2026-03-04'],
+    // The preamble every groomed body opens with: prose about the grooming,
+    // no "at", and no `·` before the date. Mutation: match the bare word
+    // `grounded` -> this reads 2026-09-18 and every issue looks grounded.
+    [
+      'the groomed-and-grounded preamble is not a grounding',
+      '**Groomed and grounded 2026-09-18 by Fable on master** `96c38902`.',
+      null,
+    ],
     ['a day that does not exist', 'Grounded at x · 2026-13-45', null],
-    ['no line at all', '## What\n\nSome work.', null],
+    ['a date with no separator before it', 'Grounded at x 2026-09-14', null],
+    ['no grounding at all', '## What\n\nSome work.', null],
     ['an empty body', '', null],
     ['no body', null, null],
   ])('%s -> %s', (_case, body, expected) => {
-    // Mutation: return the FIRST match -> "a re-ground, out of order" reads
-    // 2026-09-10 and a freshly re-grounded issue looks stale, red.
-    expect(readGroundedAt(body)).toBe(expected)
+    expect(readGroundedAt(body, TODAY)).toBe(expected)
+  })
+
+  it('a date in the future is a typo, never a grounding', () => {
+    // Mutation: drop the `today` guard -> 2099 wins every comparison and the
+    // issue reads as freshly grounded forever, red.
+    expect(
+      readGroundedAt(
+        '## Grounded at\n\n`x · 2026-09-14 · checked: y`\n\n`re-grounded z · 2099-01-01`',
+        TODAY,
+      ),
+    ).toBe('2026-09-14')
   })
 })
 
@@ -489,6 +559,26 @@ describe('MAR-3190 R6: the summary is the promise, short', () => {
   })
 
   it.each([
+    [
+      'the What sentence in the heading’s own block',
+      '## What\nThe promise.',
+      'The promise.',
+    ],
+    [
+      'a bullet first under What',
+      '## What\n\n- The promise, as a list item.\n- And more.',
+      'The promise, as a list item. And more.',
+    ],
+    [
+      'a numbered first item',
+      '## What\n\n1. The numbered promise.',
+      'The numbered promise.',
+    ],
+    [
+      '`## What` last, with nothing after it',
+      'The opening paragraph.\n\n## What',
+      'The opening paragraph.',
+    ],
     ['no `## What`', 'Just the one sentence.', 'Just the one sentence.'],
     ['a leading heading', '# Title\n\nThe body.', 'The body.'],
     [
@@ -567,18 +657,19 @@ describe('MAR-3190 R4: bodies are read only for issues that changed', () => {
       ['asked', '## What\n\nRead the bodies.\n\nGrounded at x · 2026-09-18'],
       ['asked-empty', null],
     ])
-    const applied = applyIssueBodies(
+    const applied = applyIssueBodies({
       issues,
       bodies,
-      [
+      memory: [
         memory({
           issueId: 'carried',
           summary: 'What the row already knew',
           groundedAt: '2026-09-11',
         }),
       ],
-      ['asked', 'asked-empty'],
-    )
+      asked: ['asked', 'asked-empty'],
+      today: '2026-09-19',
+    })
     expect(applied[0]).toMatchObject({
       summary: 'Read the bodies.',
       groundedAt: '2026-09-18',

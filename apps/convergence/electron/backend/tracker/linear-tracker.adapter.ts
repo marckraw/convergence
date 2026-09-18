@@ -166,6 +166,18 @@ export function createLinearTrackerAdapter(deps: {
       const body = await ask(linearIssueBodiesRequest(page))
       const read = parseLinearIssueBodiesReply(body)
       if (!read.ok) throw new TrackerRefusalError(read.refusal)
+      // Every id asked for must come back (lap 2, C). A short reply read as
+      // an answer writes `summary: null` over a summary the ledger already
+      // holds -- a deletion nobody asked for, which the next tick then
+      // believes, because `updatedAt` never moved.
+      const missing = page.filter((id) => !read.bodies.has(id))
+      if (missing.length > 0) {
+        throw new TrackerRefusalError({
+          kind: 'bad-response',
+          message: 'Linear answered fewer bodies than asked.',
+          retryAt: null,
+        })
+      }
       for (const [id, description] of read.bodies) bodies.set(id, description)
     }
     return bodies

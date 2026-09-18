@@ -339,17 +339,23 @@ export function inTheLoop(
  * Linear's priority as an integer, or null (MAR-3190 R3).
  *
  * `Issue.priority` is a `Float!` carrying 0-4, where 0 is Linear's own word
- * "none". Null only when the tracker answered with something that is not one
- * of those -- never `?? 0`, which would tell a reader "the person chose no
- * priority" about a field nobody answered.
+ * "none". Null for anything outside that range and for anything that is not
+ * a whole number -- never `?? 0`, which would tell a reader "the person chose
+ * no priority" about a field nobody answered.
  */
 export function readIssuePriority(value: unknown): number | null {
-  return typeof value === 'number' && Number.isInteger(value) ? value : null
+  if (typeof value !== 'number' || !Number.isInteger(value)) return null
+  // Linear's own range, and nothing else (lap 2, E): 0 is its word "none",
+  // 1 urgent … 4 low. A `-1` or a `7` is not a priority this app can order
+  // by, and passing it through would put a number on screen that means
+  // nothing to anybody.
+  return value >= 0 && value <= 4 ? value : null
 }
 
 /**
  * Every label as a person reads it (MAR-3190): a plain label as written, a
- * group child as `group › child`. Display only -- no fact is read from here.
+ * group child as `group › child`, in a stable order. Display only -- no fact
+ * is read from here.
  */
 export function readIssueLabels(labels: readonly LinearLabelNode[]): string[] {
   const names: string[] = []
@@ -361,7 +367,11 @@ export function readIssueLabels(labels: readonly LinearLabelNode[]): string[] {
         : null
     names.push(parent ? `${parent} › ${label.name.trim()}` : label.name.trim())
   }
-  return names
+  // Sorted (lap 2, F): `labels { nodes }` carries no `orderBy`, so the order
+  // is the server's to change -- and `sameLabels` compares by position, so an
+  // order that wobbled would append a row per multi-label issue per minute
+  // while nothing about the issue had changed at all.
+  return names.sort()
 }
 
 /**
@@ -574,14 +584,70 @@ export function parseLinearIssueBodiesReply(
 }
 
 /**
- * Every `Grounded at … · YYYY-MM-DD` (or `re-grounded …`) in a body.
- *
- * Loose about what sits between the words and the date -- a commit sha, a
- * backtick, a bold marker -- and strict about the date itself, because that
- * is the fact. The `·` is the constitution's own separator.
+ * The line that opens a grounding, inline: `Grounded at convergence a3236635
+ * · 2026-09-16 · checked: …`. The date is in the REST of that line.
  */
-const GROUNDED_AT_PATTERN =
-  /(?:re-)?grounded\s+at\b[^\n]*?·[^\n]*?(\d{4}-\d{2}-\d{2})/gi
+const INLINE_GROUNDED_AT = /grounded\s+at\b/i
+
+/**
+ * A heading whose text is `Grounded at` -- the shape a groomed body actually
+ * uses. Everything under it, to the next heading, is the grounding.
+ */
+const GROUNDED_AT_HEADING = /^#{1,6}\s*grounded\s+at\s*$/i
+
+/** Any heading at all: where a heading-opened region ends. */
+const ANY_HEADING = /^#{1,6}\s/
+
+/**
+ * A re-grounding line: `re-grounded 3e691917 · 2026-09-18 after lap 1's STOP`.
+ * It says `re-grounded`, NOT `re-grounded at` -- which is exactly why a
+ * pattern written to the phrase "grounded at" saw none of them.
+ */
+const RE_GROUNDED_LINE = /^[\s`*_>-]*re-grounded\b/i
+
+/** A date that follows the constitution's `·` separator, anywhere after it. */
+const DATE_AFTER_SEPARATOR = /·[^\n]*?(\d{4}-\d{2}-\d{2})/g
+
+/**
+ * The parts of a body that ARE a grounding (MAR-3190 R5, lap 2 A).
+ *
+ * Three shapes, because the record has three -- measured against MAR-3183's
+ * and MAR-3189's real bodies, not against a sentence about them:
+ *
+ * 1. the rest of a line after the phrase `grounded at` (the skill's inline
+ *    worked example);
+ * 2. every line under a `## Grounded at` heading, to the next heading (what a
+ *    groomed issue actually carries);
+ * 3. any line beginning `re-grounded`, wherever it sits -- it has no "at",
+ *    and a re-ground is the freshest fact in the body.
+ *
+ * A body's opening "Groomed and grounded 2026-09-18 by Fable on master" is
+ * deliberately NOT a region: it is prose about the grooming, it says no "at",
+ * and its date carries no `·` before it.
+ */
+function groundingRegions(body: string): string[] {
+  const regions: string[] = []
+  const lines = body.split('\n')
+  let underHeading = false
+  for (const line of lines) {
+    if (GROUNDED_AT_HEADING.test(line.trim())) {
+      underHeading = true
+      continue
+    }
+    if (underHeading && ANY_HEADING.test(line.trim())) underHeading = false
+    if (underHeading) {
+      regions.push(line)
+      continue
+    }
+    if (RE_GROUNDED_LINE.test(line)) {
+      regions.push(line)
+      continue
+    }
+    const inline = INLINE_GROUNDED_AT.exec(line)
+    if (inline) regions.push(line.slice(inline.index + inline[0].length))
+  }
+  return regions
+}
 
 /** Whether a `YYYY-MM-DD` names a day that exists. */
 function isCalendarDate(value: string): boolean {
@@ -592,21 +658,27 @@ function isCalendarDate(value: string): boolean {
 /**
  * When the issue was last grounded, from its own body (MAR-3190 R5).
  *
- * The LATEST date, not the first: a re-grounded issue keeps its original line
- * and adds another, and the question a reader asks -- "is this grounding still
- * fresh?" -- is about the most recent one. Lexicographic comparison is exact
- * here because the format is fixed-width ISO.
+ * The LATEST valid date in any grounding region, because a re-ground keeps
+ * the original line and adds another: the question a reader asks -- "is this
+ * grounding still fresh?" -- is about the most recent one. Lexicographic
+ * comparison is exact here because the format is fixed-width ISO.
  *
- * A date that names no day (`2026-13-45`) is not a grounding; it is a typo,
- * and reading it as one would put a future-dated freshness on the row.
+ * `today` is passed in rather than read, so this stays pure and so a date in
+ * the FUTURE can be refused: a typo like `2099-01-01` would otherwise win
+ * every comparison and present an issue as grounded forever.
  */
-export function readGroundedAt(body: string | null): string | null {
+export function readGroundedAt(
+  body: string | null,
+  today: string,
+): string | null {
   if (!body) return null
   let latest: string | null = null
-  for (const match of body.matchAll(GROUNDED_AT_PATTERN)) {
-    const date = match[1]
-    if (!date || !isCalendarDate(date)) continue
-    if (latest === null || date > latest) latest = date
+  for (const region of groundingRegions(body)) {
+    for (const match of region.matchAll(DATE_AFTER_SEPARATOR)) {
+      const date = match[1]
+      if (!date || !isCalendarDate(date) || date > today) continue
+      if (latest === null || date > latest) latest = date
+    }
   }
   return latest
 }
@@ -640,13 +712,38 @@ function cutOnAWord(text: string): string {
   return `${(lastSpace > 0 ? room.slice(0, lastSpace) : room).trimEnd()}…`
 }
 
+/** A leading list marker on the first line of a paragraph. */
+const LIST_MARKER = /^\s*(?:[-*+]|\d+[.)])\s+/
+
+/**
+ * The first readable text in a block, or null if it is only a heading.
+ *
+ * List markers come off every line, not just the first (lap 2, D): a `## What`
+ * written as bullets is still one promise, and `- ` left in the middle of it
+ * reads as a stray dash in a sentence.
+ */
+function promiseIn(block: string): string | null {
+  const body = block
+    .split('\n')
+    .filter((line) => !ANY_HEADING.test(line.trim()))
+    .map((line) => line.replace(LIST_MARKER, ''))
+    .join('\n')
+  const text = plainText(body)
+  return text || null
+}
+
 /**
  * The issue's promise in a sentence (MAR-3190 R6).
  *
  * `## What` first, because a groomed body opens with a preamble -- who
  * groomed it, against which commit, which rules bind the lap -- and none of
- * that is what the issue is FOR. Only when there is no such heading does the
- * first paragraph stand in.
+ * that is what the issue is FOR. Only when there is no such heading, or
+ * nothing readable under it, does the body's own first paragraph stand in.
+ *
+ * The heading's own BLOCK is searched before the next one (lap 2, D): a body
+ * that writes `## What` and the sentence on the following line, with no blank
+ * line between, is ONE block -- and reading only the blocks after it returned
+ * the next section's prose, which is a promise about a different thing.
  */
 export function readIssueSummary(body: string | null): string | null {
   if (!body) return null
@@ -654,13 +751,18 @@ export function readIssueSummary(body: string | null): string | null {
   const whatIndex = blocks.findIndex((block) =>
     /^#{1,6}\s+what\s*$/i.test(block.split('\n')[0]?.trim() ?? ''),
   )
-  const candidates = whatIndex === -1 ? blocks : blocks.slice(whatIndex + 1)
-  for (const block of candidates) {
-    // A heading is a signpost, never the promise itself.
-    if (/^#{1,6}\s/.test(block)) continue
-    const text = plainText(block)
-    if (!text) continue
-    return text.length <= ISSUE_SUMMARY_MAX ? text : cutOnAWord(text)
+  const fromWhat =
+    whatIndex === -1 ? null : firstPromise(blocks.slice(whatIndex))
+  const text = fromWhat ?? firstPromise(blocks)
+  if (text === null) return null
+  return text.length <= ISSUE_SUMMARY_MAX ? text : cutOnAWord(text)
+}
+
+/** The first block that says something, read as prose. */
+function firstPromise(blocks: readonly string[]): string | null {
+  for (const block of blocks) {
+    const text = promiseIn(block)
+    if (text) return text
   }
   return null
 }
@@ -705,16 +807,27 @@ export function issuesNeedingBody(
  * The page with every issue's summary and grounding date on it (R4).
  *
  * A body that was read this tick is parsed; one that was not is carried from
- * the row the ledger already holds. An issue whose body was ASKED for and not
- * answered reads as a body that says nothing -- the read succeeded, Linear
- * simply had no description for it.
+ * the row the ledger already holds. An id that was asked for and is present
+ * with a null description is a body that says nothing; an id that was asked
+ * for and is MISSING never reaches here -- the adapter refuses the read
+ * (lap 2, C), because writing null for it would delete a summary the ledger
+ * already knew and then never ask again.
  */
-export function applyIssueBodies(
-  issues: readonly TrackerIssue[],
-  bodies: ReadonlyMap<string, string | null>,
-  memory: readonly IssueBodyMemory[],
-  asked: readonly string[] = [...bodies.keys()],
-): TrackerIssue[] {
+export function applyIssueBodies(input: {
+  issues: readonly TrackerIssue[]
+  bodies: ReadonlyMap<string, string | null>
+  memory: readonly IssueBodyMemory[]
+  /**
+   * The ids this tick ASKED for. Required, never defaulted from the map's
+   * keys (lap 2, C): a reply that is missing an id would otherwise look like
+   * an id nobody asked about, and the issue would quietly carry its old
+   * summary while the read that should have refused had already succeeded.
+   */
+  asked: readonly string[]
+  /** Today, for the grounding reader's future-date guard (lap 2, A). */
+  today: string
+}): TrackerIssue[] {
+  const { issues, bodies, memory, asked, today } = input
   const known = new Map(memory.map((row) => [row.issueId, row]))
   const askedFor = new Set(asked)
   return issues.map((issue) => {
@@ -723,7 +836,7 @@ export function applyIssueBodies(
       return {
         ...issue,
         summary: readIssueSummary(body),
-        groundedAt: readGroundedAt(body),
+        groundedAt: readGroundedAt(body, today),
       }
     }
     const row = known.get(issue.id)

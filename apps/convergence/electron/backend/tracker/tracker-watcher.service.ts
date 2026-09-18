@@ -25,6 +25,27 @@ import {
   type TrackerProjectResolution,
 } from './tracker.types'
 
+/** One issue of one crew, as the body-read memory keys it. */
+function bodyKey(crewId: string, issueId: string): string {
+  return `${crewId}:${issueId}`
+}
+
+/**
+ * The later of two ISO timestamps, either of which may be missing.
+ *
+ * String comparison is exact for the shape Linear sends (`Z`-suffixed
+ * ISO-8601, fixed width); anything unparseable loses to the other rather
+ * than winning by accident.
+ */
+function laterUpdatedAt(
+  fromRow: string | null,
+  fromMemory: string | null,
+): string | null {
+  if (fromRow === null) return fromMemory
+  if (fromMemory === null) return fromRow
+  return fromMemory > fromRow ? fromMemory : fromRow
+}
+
 /**
  * The binding an adapter is built with when the crew has none yet
  * (MAR-3156 R3): a project lookup reads no field of it. Named so the empty
@@ -221,6 +242,18 @@ export class TrackerWatcherService {
     return { stop: () => clearInterval(timer) }
   }
 
+  /**
+   * What `updatedAt` each issue's body was last READ at, for this process's
+   * life (lap 2, B).
+   *
+   * In memory and not in the ledger, because it is not an observation of the
+   * issue -- it is this watcher's own note about a request it made. Lost on
+   * restart, which costs one extra body read per issue, once; kept forever, a
+   * comment on an issue would cost one every minute until somebody edited the
+   * issue in a way the ledger records.
+   */
+  private readonly lastBodyRead = new Map<string, string>()
+
   async tick(): Promise<void> {
     if (this.ticking) return
     this.ticking = true
@@ -275,9 +308,20 @@ export class TrackerWatcherService {
       // BEFORE the diff and inside the same try, so a refused bodies read is
       // a refused tick: half a page carrying summaries and half carrying
       // nulls would be written as rows saying those summaries were deleted.
+      //
+      // The memory is the LATER of two `updatedAt`s (lap 2, B): the row's,
+      // and this process's own record of what it last read a body at. They
+      // differ for a change the ledger does not record -- a typo fix, a
+      // comment -- which moves `updatedAt` without moving anything
+      // `sameObservation` compares, so no row is written and the row's
+      // `updatedAt` stays behind forever. Read from the row alone, that
+      // issue's body would be fetched again every single minute.
       const memory = current.map((row) => ({
         issueId: row.issueId,
-        updatedAt: row.fact.updatedAt,
+        updatedAt: laterUpdatedAt(
+          row.fact.updatedAt,
+          this.lastBodyRead.get(bodyKey(crewId, row.issueId)) ?? null,
+        ),
         summary: row.fact.summary ?? null,
         groundedAt: row.groundedAt,
         read: 'summary' in row.fact,
@@ -288,10 +332,24 @@ export class TrackerWatcherService {
           ? await adapter.readIssueBodies(wanted)
           : new Map<string, string | null>()
       const now = this.now()
+      // Only after the read succeeded: a refused read remembers nothing, so
+      // the next tick asks again.
+      const askedFor = new Set(wanted)
+      for (const issue of issues) {
+        if (askedFor.has(issue.id)) {
+          this.lastBodyRead.set(bodyKey(crewId, issue.id), issue.updatedAt)
+        }
+      }
       const rows = diffTrackerSnapshot({
         crewId,
         current,
-        issues: applyIssueBodies(issues, bodies, memory, wanted),
+        issues: applyIssueBodies({
+          issues,
+          bodies,
+          memory,
+          asked: wanted,
+          today: now.toISOString().slice(0, 10),
+        }),
         seenAt: now.toISOString(),
       })
       this.deps.ledger.append(rows)

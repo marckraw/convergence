@@ -325,3 +325,34 @@ export const RECORDED_PRIORITY_PAGE = linearIssuesBody([
     priority: 1.5,
   }),
 ])
+
+/**
+ * Real grounding sections, copied from the tracker (MAR-3190 lap 2, A).
+ *
+ * Not invented from a sentence about the format -- the lap-1 reader was
+ * written to a description of these and matched none of them. The long
+ * `checked:` lists are cut where noted; every other character, including the
+ * backticks, the `·` separators and the missing "at" after `re-grounded`, is
+ * as the issue carries it.
+ */
+export const RECORDED_GROUNDING_RE_GROUNDED = `## Grounded at
+
+\`convergence 3c65015b · 2026-09-18 · checked: the Claude connector service — listConnectors :125, authorizeConnector :189 (reads: sed) …\`
+
+\`re-grounded 3e691917 · 2026-09-18 after lap 1's STOP · checked: the territory is byte-identical between 3c65015b and 3e691917 (reads: git diff --stat) …\``
+
+/** MAR-3189's section: one line, no re-ground. */
+export const RECORDED_GROUNDING_SINGLE = `## Grounded at
+
+\`convergence 96c38902 · 2026-09-18 · checked: the feature's files and exports (reads: ls, index.ts:1–2) …\``
+
+/** The skill's own worked example, which IS written inline. */
+export const RECORDED_GROUNDING_INLINE =
+  'Grounded at convergence a3236635 · 2026-09-16 · checked: the mount and its props (reads: sed) …'
+
+/** An inline first grounding and a later re-ground: the later one wins. */
+export const RECORDED_GROUNDING_MIXED = `**Groomed and grounded 2026-09-12 by Fable on master** \`a3236635\`.
+
+Grounded at convergence a3236635 · 2026-09-12 · checked: the mount (reads: sed).
+
+\`re-grounded 3e691917 · 2026-09-18 after lap 1's STOP · checked: nothing moved.\``

@@ -87,6 +87,19 @@ describe('reading a ledger row', () => {
   })
 })
 
+describe('MAR-3190 lap 2, G: an unreadable fact reads like a readable one', () => {
+  it('the catch path gives the same defaults as the success path', () => {
+    const broken = workLedgerRecordFromRow(joined({ fact_json: '{' })).fact
+    const empty = workLedgerRecordFromRow(joined({ fact_json: '{}' })).fact
+    // Mutation: the old catch (three keys, no `labels`) -> `labels` is
+    // undefined here and every reader of the list has to guard it, red.
+    expect(broken).toEqual(empty)
+    expect(broken.labels).toEqual([])
+    expect(broken.groomed).toBe(false)
+    expect(Object.prototype.hasOwnProperty.call(broken, 'summary')).toBe(false)
+  })
+})
+
 describe('MAR-3190: a row written before the widened read still reads', () => {
   it('defaults every new fact, and leaves `summary` ABSENT', () => {
     const record = workLedgerRecordFromRow(

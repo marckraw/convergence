@@ -373,3 +373,34 @@ describe('MAR-3190 R4: the adapter reads bodies in pages of fifty', () => {
     expect(fetch).not.toHaveBeenCalled()
   })
 })
+
+describe('MAR-3190 lap 2, C: every id asked for must come back', () => {
+  it('a reply missing an id is a refusal, not a null body', async () => {
+    const fetch = vi.fn<TrackerFetch>(async () =>
+      recordedReply(
+        200,
+        linearIssueBodiesBody([{ id: 'issue-1', description: 'One' }]),
+      ),
+    )
+    // Mutation: accept the short reply -> resolves with a one-entry map, and
+    // `issue-2`'s known summary is written away as null.
+    await expect(
+      adapterAnswering(fetch).readIssueBodies(['issue-1', 'issue-2']),
+    ).rejects.toBeInstanceOf(TrackerRefusalError)
+  })
+
+  it('a node present with a null description is still an answer', async () => {
+    const fetch = vi.fn<TrackerFetch>(async () =>
+      recordedReply(
+        200,
+        linearIssueBodiesBody([{ id: 'issue-1' }, { id: 'issue-2' }]),
+      ),
+    )
+    const bodies = await adapterAnswering(fetch).readIssueBodies([
+      'issue-1',
+      'issue-2',
+    ])
+    expect(bodies.get('issue-1')).toBeNull()
+    expect(bodies.size).toBe(2)
+  })
+})
