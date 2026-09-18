@@ -4,9 +4,18 @@ import { Button } from '@/shared/ui/button'
 import { waveRailCounts, type WaveSections } from './wave-sections.pure'
 import { WAVE_OUTAGE_DOT_CLASS, WAVE_RAIL_CLASS } from './wave-panel.styles'
 
+/** What the rail says when Open cannot act (MAR-3148 R1). */
+export const WAVE_RAIL_NARROW_TITLE = 'Window too narrow for the wave column'
+
 interface WaveRailViewProps {
   sections: WaveSections
   outage: boolean
+  /**
+   * The window is too narrow to hold the column, so opening it would put the
+   * conversation below its floor: the control says so instead of doing
+   * nothing (MAR-3148 R1).
+   */
+  narrow?: boolean
   onExpand: () => void
 }
 
@@ -24,6 +33,7 @@ const COUNTS = [
 export const WaveRailView: FC<WaveRailViewProps> = ({
   sections,
   outage,
+  narrow = false,
   onExpand,
 }) => {
   const counts = waveRailCounts(sections)
@@ -35,6 +45,8 @@ export const WaveRailView: FC<WaveRailViewProps> = ({
         size="sm"
         aria-label="Open the wave panel"
         className="size-7 p-0"
+        disabled={narrow}
+        title={narrow ? WAVE_RAIL_NARROW_TITLE : undefined}
         onClick={onExpand}
       >
         <PanelLeftOpen className="size-3.5" />

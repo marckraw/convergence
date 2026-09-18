@@ -74,11 +74,16 @@ export const WavePanel: FC<WavePanelProps> = ({
 
   if (hidden || board.boundCrewCount === 0) return null
 
-  const mode = effectiveWavePanelMode({ stored, windowWidth, reservedWidth })
-  return mode === 'rail' ? (
+  const decision = effectiveWavePanelMode({
+    stored,
+    windowWidth,
+    reservedWidth,
+  })
+  return decision.mode === 'rail' ? (
     <WaveRailView
       sections={board.sections}
       outage={board.header.kind === 'outage'}
+      narrow={decision.reason === 'narrow'}
       onExpand={() => changeMode('open')}
     />
   ) : (
