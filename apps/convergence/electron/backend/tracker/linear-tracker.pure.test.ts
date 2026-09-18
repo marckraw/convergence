@@ -564,6 +564,17 @@ describe('MAR-3190 R6: the summary is the promise, short', () => {
       '## What\nThe promise.',
       'The promise.',
     ],
+    // The case that DISTINGUISHES the two halves. With a preamble in front,
+    // reading only the blocks AFTER the heading finds nothing under What and
+    // falls back to the preamble -- a promise about a different thing. The
+    // case above cannot see that, because there the fallback happens to give
+    // the same answer (two halves covering each other).
+    // Mutation: `blocks.slice(whatIndex + 1)` -> 'The opening paragraph.', red.
+    [
+      'the heading’s own block wins over the body’s first paragraph',
+      'The opening paragraph.\n\n## What\nThe promise.',
+      'The promise.',
+    ],
     [
       'a bullet first under What',
       '## What\n\n- The promise, as a list item.\n- And more.',
