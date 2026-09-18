@@ -1,5 +1,11 @@
 # convergence
 
+## 0.67.2
+
+### Patch Changes
+
+- 4248e5a: A Cursor passive update that arrives between turns and cannot be recorded is noted by the conversation's own recorder, like every other lost write.
+
 ## 0.67.1
 
 ### Patch Changes
