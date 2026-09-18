@@ -110,12 +110,13 @@ export const WavePanel: FC<WavePanelProps> = ({
     windowWidth,
     reservedWidth,
   })
-  // Whether there is a column on screen AT ALL, as one fact (lap 3, B;
-  // MAR-3161 R4). Every reason it can be absent, in one place: the Waves tab
-  // showing the same board (`hidden`), the last bound crew going away, and
-  // the rail (the decision). The hook outlives the handle -- hold the edge
-  // while any of those happens and the mouse-up still arrives -- so asking
-  // it about the rail alone would be asking a proxy for the question.
+  // Whether the panel renders anything at all (MAR-3161 R4): the Waves tab
+  // showing the same board (`hidden`), or the last bound crew gone. ONE const,
+  // read by the early return below and by the on-screen fact -- which adds
+  // the third reason a column can be absent, the rail (the decision). The
+  // hook outlives the handle -- hold the edge while any of the three happens
+  // and the mouse-up still arrives -- so asking it about the rail alone
+  // would be asking a proxy for the question (lap 3, B).
   const columnAbsent = hidden || board.boundCrewCount === 0
   const onScreen =
     !columnAbsent && decision.mode === 'open'

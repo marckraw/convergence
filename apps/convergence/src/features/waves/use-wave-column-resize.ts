@@ -78,12 +78,14 @@ export function useWaveColumnResize(input: {
   const releaseDrag = useRef<(() => void) | null>(null)
 
   const onHandleMouseDown = useCallback(() => {
-    // Release any drag still installed before installing this one (tidiness,
-    // and the unmount witness at wave-panel.render.test.tsx). With the settle
-    // decision no longer comparing to a captured start width, refusing the
-    // press and releasing-before-install are observably the same for every
-    // input a test can stage — the surviving listeners answer the same
-    // events either way.
+    // Release any drag still installed before installing this one. Refusing
+    // the press instead is NOT the same thing: after a mouse-up the window
+    // never delivered, the old closure still holds the pointer's last word,
+    // so a second press that never moves would finish the STALE drag and
+    // commit a width nobody chose with this gesture. Released first, the new
+    // press starts clean -- `dragged` is null again, and a press that never
+    // moved stores nothing (witnessed at wave-panel.render.test.tsx, "a press
+    // after a lost mouse-up").
     releaseDrag.current?.()
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'

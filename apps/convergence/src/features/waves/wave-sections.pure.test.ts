@@ -401,7 +401,7 @@ describe('MAR-3097 lap 2, B: the column keeps the main panel at its floor', () =
       expected: 400,
     },
     {
-      name: 'a stale draft on screen, then a real choice',
+      name: 'a real choice away from the preference (the decision never sees a draft)',
       stored: 280,
       max: 640,
       requested: 500,
