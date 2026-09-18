@@ -160,6 +160,14 @@ export function registerCrewIpcHandlers(deps: {
         if (!existing) throw new Error('That seat is not in this crew')
         const oldName = existing.batonName
         const crew = service.setMemberBatonName(crewId, member, batonName)
+        // The new name is READ from the row just written, never re-derived
+        // from the input (lap 3, C). A conversation seat is found by its
+        // session. A recipe seat has no id but its name, so it is found by
+        // elimination: the one recipe whose name no OTHER recipe held before
+        // the write. That leans on recipe names being unique inside a crew --
+        // the service refuses a collision (`refuseRecipeNameCollision`) and
+        // the partial unique index `CREW_RECIPE_NAME_INDEX`
+        // (crew-seat-migration.service.ts) refuses the row whatever writes it.
         const otherRecipeNames = new Set(
           before.members
             .filter(
