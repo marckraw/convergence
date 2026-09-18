@@ -183,6 +183,16 @@ export function sessionCrewFromRow(
   }
 }
 
+/**
+ * What the seat-rename door answers: the crew after the rename, and which
+ * wires moved with it (MAR-3157).
+ */
+export interface SeatRenameResult {
+  crew: SessionCrew
+  carried: string[]
+  left: string[]
+}
+
 /** A binding is bound exactly when both its kind and its project are set. */
 export function trackerBindingFromRow(
   row: SessionCrewRow,

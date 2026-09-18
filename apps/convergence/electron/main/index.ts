@@ -747,6 +747,8 @@ async function startApp(): Promise<void> {
   const trackerCredentials = new TrackerCredentialsService()
   registerCrewIpcHandlers({
     service: crewService,
+    relays: relayService,
+    db,
     forgetTrackerKey: (crewId) => trackerCredentials.deleteKey(crewId),
   })
   registerCrewExportIpc(new CrewExportService(db), crewService)

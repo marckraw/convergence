@@ -20,6 +20,7 @@ import { registerCrewIpcHandlers } from './crew.ipc'
 import { CrewService } from './crew.service'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import type { SessionCrew } from './crew.types'
+import { RelayService } from '../relay/relay.service'
 
 function invoke<T>(channel: string, ...args: unknown[]): T {
   const handler = electronMocks.handlers.get(channel)
@@ -169,5 +170,124 @@ describe('crew IPC', () => {
       { roleCard: 'You are an errand.' },
     )
     expect(edited.members[0]!.roleCard).toBe('You are an errand.')
+  })
+
+  describe('MAR-3157: seat rename carries wires in one transaction', () => {
+    it('renames, carries inbound tokens, and broadcasts crews and relays', () => {
+      const db = getDatabase()
+      db.prepare(
+        "INSERT INTO sessions (id, project_id, provider_id, name, working_directory) VALUES ('s2', 'p1', 'codex', 's2', '/tmp/p1')",
+      ).run()
+      db.prepare(
+        "INSERT INTO sessions (id, project_id, provider_id, name, working_directory) VALUES ('s3', 'p1', 'codex', 's3', '/tmp/p1')",
+      ).run()
+      const relays = new RelayService(db)
+      const broadcastWires = vi.fn()
+      electronMocks.handlers.clear()
+      broadcast.mockClear()
+      registerCrewIpcHandlers({
+        service: new CrewService(db),
+        relays,
+        db,
+        broadcast,
+        broadcastRelays: broadcastWires,
+      })
+
+      const crew = invoke<SessionCrew>('crew:create', { name: 'Night' })
+      invoke<SessionCrew>('crew:addMember', crew.id, 's1')
+      invoke<SessionCrew>('crew:addMember', crew.id, 's2')
+      invoke<SessionCrew>('crew:addMember', crew.id, 's3')
+      invoke<SessionCrew>(
+        'crew:setMemberBatonName',
+        crew.id,
+        { sessionId: 's2' },
+        'horse opus',
+      )
+
+      const inbound = relays.create({
+        crewId: crew.id,
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        conditionToken: 'BATON: horse opus',
+      })
+      const fan = relays.create({
+        crewId: crew.id,
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's3',
+        conditionToken: 'BATON: horse opus',
+      })
+
+      broadcast.mockClear()
+      broadcastWires.mockClear()
+      const result = invoke<{
+        crew: SessionCrew
+        carried: string[]
+        left: string[]
+      }>('crew:setMemberBatonName', crew.id, { sessionId: 's2' }, 'opus-mac')
+
+      expect(result.carried).toEqual([inbound.id])
+      expect(result.left).toEqual([fan.id])
+      expect(
+        result.crew.members.find((m) => m.sessionId === 's2')?.batonName,
+      ).toBe('opus-mac')
+      expect(relays.getById(inbound.id)?.conditionToken).toBe('BATON: opus-mac')
+      expect(relays.getById(fan.id)?.conditionToken).toBe('BATON: horse opus')
+      expect(broadcast).toHaveBeenCalled()
+      expect(broadcastWires).toHaveBeenCalled()
+    })
+
+    it('R4: a refused relay write rolls the seat name back', () => {
+      const db = getDatabase()
+      db.prepare(
+        "INSERT INTO sessions (id, project_id, provider_id, name, working_directory) VALUES ('s2', 'p1', 'codex', 's2', '/tmp/p1')",
+      ).run()
+      const relays = new RelayService(db)
+      electronMocks.handlers.clear()
+      registerCrewIpcHandlers({
+        service: new CrewService(db),
+        relays,
+        db,
+        broadcast,
+        broadcastRelays: vi.fn(),
+      })
+
+      const crew = invoke<SessionCrew>('crew:create', { name: 'Night' })
+      invoke<SessionCrew>('crew:addMember', crew.id, 's1')
+      invoke<SessionCrew>('crew:addMember', crew.id, 's2')
+      invoke<SessionCrew>(
+        'crew:setMemberBatonName',
+        crew.id,
+        { sessionId: 's2' },
+        'horse opus',
+      )
+      relays.create({
+        crewId: crew.id,
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        conditionToken: 'BATON: horse opus',
+      })
+
+      db.exec(`CREATE TEMP TRIGGER refuse_relay_rename
+        BEFORE UPDATE ON session_relays
+        BEGIN SELECT RAISE(ABORT, 'fixture relay refused'); END`)
+
+      expect(() =>
+        invoke(
+          'crew:setMemberBatonName',
+          crew.id,
+          { sessionId: 's2' },
+          'opus-mac',
+        ),
+      ).toThrow()
+
+      const members = new CrewService(db).getById(crew.id)!.members
+      expect(members.find((m) => m.sessionId === 's2')?.batonName).toBe(
+        'horse opus',
+      )
+      db.exec('DROP TRIGGER refuse_relay_rename')
+    })
   })
 })

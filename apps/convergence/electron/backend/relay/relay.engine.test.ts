@@ -3758,6 +3758,36 @@ describe('RelayEngine', () => {
       })
     })
 
+    it('MAR-3157 R3: after carrySeatRename, a spawn names the new seat and fires', async () => {
+      const relay = spawnWire('s1', { member: 'horse opus' })
+      expect(relay.spawnSpec?.member).toBe('horse opus')
+
+      relays.carrySeatRename({
+        crewId: 'c1',
+        oldName: 'horse opus',
+        newName: 'opus-mac',
+        renamedMemberSessionId: null,
+        remainingOldHolders: 0,
+      })
+      expect(relays.getById(relay.id)?.spawnSpec?.member).toBe('opus-mac')
+
+      seatsByBatonName['opus-mac'] = {
+        batonName: 'opus-mac',
+        kind: 'dynamic',
+        roleCard: 'You are opus-mac.',
+        hostPolicy: 'local',
+        providerId: 'codex',
+        model: 'gpt-5.6',
+      }
+      const gateway = createGateway({})
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.created).toHaveLength(1)
+      expect(hops.at(-1)?.outcome).not.toBe('error')
+      expect(hops.at(-1)?.error ?? null).toBeNull()
+    })
+
     it('sends nothing extra to a seat nobody has described', async () => {
       wire('s1', 's2')
       const gateway = createGateway({ lastMessages: { s1: 'the brief' } })

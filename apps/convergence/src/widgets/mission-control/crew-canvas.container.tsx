@@ -61,6 +61,7 @@ import {
   crewsHoldingSession,
   batonNameRefusal,
   seatPatchField,
+  formatSeatRenameCarryNotice,
   appendRunPage,
   beforeDeliveryOptions,
   changeDraftRecipient,
@@ -209,6 +210,14 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         Record<SeatRefusalField, { message: string; value: string | null }>
       >
     >
+  }>({ crewId: null, byKey: {} })
+  /**
+   * Notices under a seat's baton name after a rename carry (MAR-3157) — not
+   * refusals: muted copy about how many wires moved.
+   */
+  const [seatNotices, setSeatNotices] = useState<{
+    crewId: string | null
+    byKey: Record<string, string>
   }>({ crewId: null, byKey: {} })
   /** The one seat whose editor is open (MAR-3118 R2). */
   const [openSeatKey, setOpenSeatKey] = useState<string | null>(null)
@@ -430,6 +439,10 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
         ]),
       ),
     [refusalsHere],
+  )
+  const noticesHere = useMemo(
+    () => (crew && seatNotices.crewId === crew.id ? seatNotices.byKey : {}),
+    [crew, seatNotices],
   )
 
   const relays = useMemo(
@@ -829,12 +842,33 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       committingDrafts.current.add(inFlight)
       setBusy(true)
       setSeatProblem(key, 'batonName', null)
+      const previousName = member?.batonName ?? null
       try {
-        await sessionCrewApi.setMemberBatonName(
+        const result = await sessionCrewApi.setMemberBatonName(
           crew.id,
           ref,
           typed.trim() ? typed : null,
         )
+        const nextName = typed.trim() ? typed.trim().toLowerCase() : null
+        const notice = formatSeatRenameCarryNotice({
+          carried: result.carried.length,
+          left: result.left.length,
+          oldName: previousName,
+          newName: nextName,
+        })
+        const noticeKey =
+          member?.sessionId != null
+            ? key
+            : nextName
+              ? memberKey({ sessionId: null, batonName: nextName })
+              : key
+        setSeatNotices({
+          crewId: crew.id,
+          byKey: notice ? { [noticeKey]: notice } : {},
+        })
+        if (nextName && noticeKey !== key && openSeatKey === key) {
+          setOpenSeatKey(noticeKey)
+        }
         setBatonNameDrafts((drafts) => {
           const next = { ...drafts }
           delete next[key]
@@ -858,6 +892,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       refuseSeatField,
       setSeatProblem,
       isRefusedAsTyped,
+      openSeatKey,
     ],
   )
 
@@ -1923,6 +1958,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               busy={busy}
               running={crewIsRunning}
               seatProblems={seatProblems}
+              seatNotices={noticesHere}
               batonNameDrafts={batonNameDrafts}
               seatDrafts={seatDrafts}
               resolveHost={(sessionId) =>

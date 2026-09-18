@@ -88,7 +88,7 @@ export const sessionCrewApi = {
     crewId: string,
     member: CrewMemberRef,
     batonName: string | null,
-  ): Promise<SessionCrew> =>
+  ): Promise<{ crew: SessionCrew; carried: string[]; left: string[] }> =>
     window.electronAPI.crew.setMemberBatonName(crewId, member, batonName),
 
   /**
