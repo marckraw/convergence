@@ -1087,12 +1087,6 @@ export class ClaudeCodeProvider implements Provider {
     }
 
     /**
-     * Files Claude's own limit reading against the account serving this turn
-     * (ADR 0007, PA8). Unparseable input is dropped rather than displayed —
-     * degrade, never invent — and a signal is never recorded without an account
-     * scope to file it under.
-     */
-    /**
      * Dirty reconnection (ADR 0007, PA11).
      *
      * A connector this account has not authorized fails inside a tool result,

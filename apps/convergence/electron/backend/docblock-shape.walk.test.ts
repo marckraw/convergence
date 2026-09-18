@@ -10,38 +10,34 @@ import { WALK_TEST_TIMEOUT_MS } from '../../test/walk-budget'
  * The tree at run time, never a list of files: the class this guards -- a
  * docblock displaced when a method was inserted above the function it
  * described -- arrives in files nobody has written yet, and a hand-kept list
- * would go stale exactly the way the ten displaced blocks did.
+ * would go stale exactly the way the thirteen flush blocks did.
  *
  * Its own file rather than beside the checker, because `walk-budget.test.ts`
  * keeps directory walks out of `*.pure.test.ts`: a repository-sized, load-
  * sensitive cost inside a module suite is how a walk becomes the test that
  * loses the race (MAR-2989).
+ *
+ * The expected set is EMPTY, with no exception list (lap 2, A): the two blocks
+ * lap 1 would not guess at were ruled on -- each described something that no
+ * longer existed, and both were deleted -- so there is nothing left for a list
+ * to hold. An exception list that can never be empty is a second place for the
+ * truth to live.
  */
 
 const WORKSPACE = join(__dirname, '..', '..')
-const TREES = ['electron/backend', 'src']
 
 /**
- * The two blocks this lap could not file, kept here rather than fixed by a
- * guess (MAR-3151, lap 1 STOP). Each one is a question for a person, and the
- * list is the place the answer lands:
+ * The floor per tree, not across both (lap 2, C).
  *
- * - `claude-code-provider.ts` — "Files Claude's own limit reading against the
- *   account serving this turn (ADR 0007, PA8)". No limit or quota function
- *   remains in that file, so the block describes something that moved or was
- *   removed; filing it above `noteMcpAuthFailure` would make it lie.
- * - `crew-settings-panel.presentational.tsx` — a one-line block above the
- *   MAR-3118 block that documents the SAME prop, `seatProblems`. The owner is
- *   not in doubt; the fix is a DELETION of superseded prose, which is the one
- *   thing this issue put out of scope.
- *
- * Shrinking only: a new entry here needs its own ruling, and the count below
- * is what makes adding one deliberate.
+ * `src` alone clears any union floor, so one number for the pair would let
+ * `electron/backend` stop resolving -- a rename, a moved root -- while the
+ * canary went on passing over half the repository. At `7e60df84` the scanned
+ * counts were 356 and 627; these are floors, not targets.
  */
-const AWAITING_A_RULING = [
-  'electron/backend/provider/claude-code/claude-code-provider.ts:1089',
-  'src/features/mission-control/crew-settings-panel.presentational.tsx:72',
-]
+const TREES = [
+  { path: 'electron/backend', floor: 200 },
+  { path: 'src', floor: 400 },
+] as const
 
 /**
  * Files whose docblocks are not the repository's prose: tests and fixtures
@@ -62,37 +58,39 @@ function sourcesUnder(tree: string): string[] {
     .map((file) => `${tree}/${file}`)
 }
 
+/** Every docblock in one tree that documents another docblock. */
+function orphansIn(tree: string): string[] {
+  return sourcesUnder(tree).flatMap((file) =>
+    findAdjacentDocblocks(readFileSync(join(WORKSPACE, file), 'utf8')).map(
+      (line) => `${file}:${line}`,
+    ),
+  )
+}
+
 describe('MAR-3151 R4: no docblock in either tree documents another docblock', () => {
   it(
     'walks electron/backend and src',
     { timeout: WALK_TEST_TIMEOUT_MS },
     () => {
-      const files = TREES.flatMap(sourcesUnder)
-      // The walk itself is load-bearing: a tree that resolved to nothing
-      // would pass this suite forever while the canary watched no files.
-      expect(files.length).toBeGreaterThan(400)
+      for (const tree of TREES) {
+        // The walk is load-bearing per TREE (lap 2, C): a tree that resolved
+        // to nothing would pass this suite forever while the canary watched
+        // half the repository.
+        // Mutation: drop either floor, or match no file -> red here.
+        expect(sourcesUnder(tree.path).length, tree.path).toBeGreaterThan(
+          tree.floor,
+        )
+      }
 
-      const orphans = files.flatMap((file) =>
-        findAdjacentDocblocks(readFileSync(join(WORKSPACE, file), 'utf8')).map(
-          (line) => `${file}:${line}`,
-        ),
-      )
+      // Sorted before comparing (lap 2, D): `readdirSync` order is the
+      // filesystem's, so an unsorted comparison would one day fail on the
+      // order a machine enumerates in rather than on a defect.
+      const orphans = TREES.flatMap((tree) => orphansIn(tree.path)).sort()
 
       // Mutation: move the MAR-2759 block back above
-      // `redeliverHopForDispatch` -> that line is listed here, red.
-      expect(orphans).toEqual(AWAITING_A_RULING)
+      // `redeliverHopForDispatch`, or restore either block lap 2 deleted ->
+      // that line is listed here, red.
+      expect(orphans).toEqual([])
     },
   )
-
-  it('the two blocks awaiting a ruling are still exactly where they were', () => {
-    // A stale exception is worse than none: if somebody files one of these,
-    // this case fails and the entry has to go. And the list may not quietly
-    // grow -- a third orphan fails the walk above instead of joining it.
-    expect(AWAITING_A_RULING).toHaveLength(2)
-    for (const entry of AWAITING_A_RULING) {
-      const [file, line] = entry.split(':')
-      const source = readFileSync(join(WORKSPACE, file!), 'utf8')
-      expect(findAdjacentDocblocks(source), entry).toContain(Number(line))
-    }
-  })
 })

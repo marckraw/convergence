@@ -123,9 +123,11 @@ export type Role = A
 
   it('reports a flush note even above a documented TYPE', () => {
     // Mutation: exempt a first block whose pair documents a type or an
-    // interface -> [] here. That rule was measured against the trees and it
-    // admitted fourteen notes above documented FUNCTIONS while waving the
-    // shape above through; the blank line is what the authors actually used.
+    // interface -> [] here. That rule was measured against the trees before
+    // it was replaced: it reported legitimate module notes whose pair
+    // documents a function or a const, and it admitted two real orphans
+    // displaced to the top of their files. The blank line is what the authors
+    // actually used -- `docblock-shape.pure.ts` carries the census.
     expect(
       findAdjacentDocblocks(`/**
  * What this module is.

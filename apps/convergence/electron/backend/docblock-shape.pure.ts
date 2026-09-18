@@ -1,8 +1,8 @@
 /**
  * Whether a docblock documents anything (MAR-3151).
  *
- * Ten times in these trees a `/**` block sat directly against ANOTHER `/**`
- * block -- displaced when a method was inserted above the function it
+ * Thirteen times in these trees a `/**` block sat directly against ANOTHER
+ * `/**` block -- displaced when a method was inserted above the function it
  * described -- and every one was found by a reader rather than by a gate. A
  * docblock that documents nothing is worse than none: it states a behaviour
  * about whatever happens to be under it.
@@ -13,13 +13,27 @@
  *   which is the orphan shape -- an editor pasting a new method with its own
  *   docblock leaves the old one flush against it;
  * - a block separated from the next by a blank line is PROSE the author stood
- *   apart on purpose: a module note or a section note. Measured, not assumed:
- *   every one of the sixteen notes in `electron/backend` and `src` is
- *   separated that way, and nine of the ten displaced blocks were flush.
+ *   apart on purpose: a module note or a section note.
+ *
+ * Measured, not assumed. At `7e60df84`, the commit before the canary landed,
+ * the 983 scanned files in `electron/backend` (356) and `src` (627) held 34
+ * adjacent pairs, and the two kinds separate cleanly:
+ *
+ * - **13 flush pairs, all 13 a defect** -- 11 blocks displaced from the
+ *   declaration their own words name, plus two stale ones (a docblock for a
+ *   function that had been removed, and a one-liner superseded by the block
+ *   under it). MAR-3151 filed the eleven and deleted the two.
+ * - **21 blank-separated pairs, all 21 prose** -- twenty module notes and one
+ *   section note (`entities/provider-account/provider-account.pure.ts`).
+ *
+ * One legitimate note was flush: `relay/relay.engine.test.ts`, outside the
+ * scanned set. MAR-3151 gave it the blank line rather than bending the rule
+ * around it.
  *
  * So the exemption is narrow in the way that matters -- it is not "the first
  * block in a file", which would wave a block displaced to the top of a file
- * straight through (`crew/crew.types.ts` was exactly that).
+ * straight through (`crew/crew.types.ts` and
+ * `src/entities/session-crew/session-crew.types.ts` were exactly that).
  *
  * `docblock-shape.walk.test.ts` spends this on both trees.
  */
