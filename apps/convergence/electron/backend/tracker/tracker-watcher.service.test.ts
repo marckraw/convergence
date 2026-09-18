@@ -624,6 +624,32 @@ describe('MAR-3169: an empty page is verified before it is believed', () => {
     expect(b.service.trackerHealth(crewId)?.state).toBe('project-not-visible')
   })
 
+  it('lap 3, A: an upper-case binding and Linear’s lower-case answer are the same project', async () => {
+    // A UUID typed or pasted in upper case is bound verbatim; Linear answers
+    // with its own lower-case form. Same id -- the quiet page is the truth.
+    new CrewService(db).setTrackerBinding(crewId, {
+      projectId: '4F6D2A1E-8B3C-4D5E-9F01-2A3B4C5D6E7F',
+    })
+    const b = bench()
+    await seedWorking(b)
+
+    b.pages.push([])
+    b.lookups.push({
+      kind: 'resolved',
+      project: {
+        id: '4f6d2a1e-8b3c-4d5e-9f01-2a3b4c5d6e7f',
+        name: 'convergence',
+        url: 'https://linear.app/example/project/convergence-f66c7ae332ee',
+      },
+    })
+    await b.service.tick()
+
+    // Mutation: compare with a strict `===` -> the project reads as not
+    // visible and the row is held back as if the key were blind, red here.
+    expect(states()).toEqual(['unassigned'])
+    expect(b.service.trackerHealth(crewId)?.state).toBe('ok')
+  })
+
   it('lap 2, A: several projects answering to the bound string is not the project either', async () => {
     const b = bench()
     await seedWorking(b)

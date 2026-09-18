@@ -51,8 +51,23 @@ export interface TrackerWatcherDeps {
 }
 
 /**
+ * Whether two project ids are the same id, with the equality the far side
+ * used to answer (lap 3, A).
+ *
+ * The form binds a typed UUID verbatim and the reference parser accepts one
+ * in upper case, while Linear answers with its own lower-case form. A strict
+ * `===` would call such a project invisible on its first quiet tick while it
+ * lists issues perfectly well. Comparing without case is safe either way: if
+ * Linear itself were case-sensitive, the lookup would already have answered
+ * `not-found` and the tick would refuse regardless.
+ */
+function sameProjectId(a: string, b: string): boolean {
+  return a.toLowerCase() === b.toLowerCase()
+}
+
+/**
  * Throws the refusal an empty page really means, or returns when the project
- * is there and the page is simply quiet (MAR-3169 R1).
+ * is there UNDER THE BOUND ID and the page is simply quiet (MAR-3169 R1).
  *
  * Thrown into the tick's own `catch`, so the new state rides the one refusal
  * path every other outage already takes: no ledger row is appended, the
@@ -68,17 +83,17 @@ async function verifyProjectVisible(
   if (resolution.kind === 'refused') {
     throw new TrackerRefusalError(resolution.refusal)
   }
-  // The question is asked BY ID, the way the Test asks it (lap 2, A). The
-  // door re-reads its argument as free text, so a binding stored before
-  // MAR-3156 -- a pasted URL, a typed name, which the list then filters as
-  // `project.id eq <that string>` and answers empty -- would come back
-  // `resolved` by name here, and the tick would believe the empty page while
-  // the Test on the same crew says the project is not visible. Only the id
-  // it was asked about counts as found; a different id, several projects, or
-  // none all mean the bound string is not a project this key can see.
+  // Only an answer that carries the BOUND ID is believed (lap 2, A; lap 3,
+  // B). The tick still asks the free-text door, and that door re-reads its
+  // argument: a binding stored before MAR-3156 -- a pasted URL, a typed name,
+  // which the list then filters as `project.id eq <that string>` and answers
+  // empty -- could come back `resolved` BY NAME, and the tick would believe
+  // the empty page while the Test on the same crew says the project is not
+  // visible. So a different id, several projects, or none all mean the bound
+  // string is not a project this key can see.
   if (
     resolution.kind === 'resolved' &&
-    resolution.project.id === binding.projectId
+    sameProjectId(resolution.project.id, binding.projectId)
   ) {
     return
   }
