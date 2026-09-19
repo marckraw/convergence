@@ -8,3 +8,5 @@ Read DESIGN.md and docs/agents/design-library-workflow.md. Follow Promote a sele
 Establish the selected decision and exact frames. General praise is not authorization to replace shared references. Inventory masters, nested dependencies, current uses and overrides before mutation. Protect frozen consumers by creating a new maintained revision where necessary. Update registered current screens and inspect each; list unverified additional uses as gaps.
 
 Record source paths, build/commit, date, Figma component and context links. Approved-but-unimplemented and observed implementation remain distinct. Keep decisions in Linear and design state in Figma; do not create a repository roadmap. Return the changed component and screen links, verification evidence and any remaining human review.
+
+Apply Present component capabilities from the shared workflow to the maintained family. Preserve content overrides during consolidation and verify actual provider/state bindings, not just variant labels. Keep one clear review reference with visibly demonstrated options.
