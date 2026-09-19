@@ -1,5 +1,18 @@
 # convergence
 
+## 0.78.0
+
+### Minor Changes
+
+- 3e81229: Loom's Plan sheet ends with 'Not in the loop' — the project's open issues that carry no Loom label yet, folded until you open it.
+- d543358: Search Loom by issue id or title: every sheet filters at once, a match elsewhere is one click away, and no match tells you why.
+- 82f2728: Mission Control's Waves tab is retired — Loom is where the tracker's work is read.
+
+### Patch Changes
+
+- 0c14dda: Loom cards say 'in preparation' or 'queued' for work nobody has begun, instead of 'assigned · lap 1'.
+- 63628f5: Restore Learn Loom's designed modal height, solid overlapping sheets, clear count labels, and evenly spaced quick-reference cards.
+
 ## 0.77.0
 
 ### Minor Changes
