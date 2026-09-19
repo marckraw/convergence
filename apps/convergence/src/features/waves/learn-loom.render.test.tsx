@@ -501,6 +501,16 @@ const sheetsOf = () =>
 const animated = () => [...sheetsOf(), ticket()]
 const frame = () =>
   document.querySelector('[data-learn-loom-illustration]') as HTMLElement
+/**
+ * The one sheet the row has actually opened, read from the widths rather
+ * than from the active flag: after a burst, "which sheet is open" is a
+ * question about geometry, and the flag is not the geometry.
+ */
+const settled = () =>
+  sheetsOf()
+    .find((sheet) => sheet.style.flexGrow === '1')
+    ?.getAttribute('data-learn-loom-sheet')
+
 /** The whole drawing as one comparable string: where and how wide. */
 const geometry = () => ({
   left: ticket().style.left,
@@ -651,14 +661,18 @@ describe('MAR-3202 R5: a burst settles, because nothing is queued', () => {
     })
     // There is no JS animation state, so there is nothing that could lag:
     // the DOM already holds the settled value and the browser is merely
-    // retargeted mid-flight. Mutation: a non-functional `setStep(step + 1)`
-    // -> every press reads the same render, the guide settles on step 1 and
-    // the ticket's left is 242px instead of 18px, red.
-    expect(screen.getByText('6 / 6')).toBeTruthy()
+    // retargeted mid-flight. The GEOMETRY is asserted first, before the step
+    // text LL1 already owns, so a mutation has to answer LL2's claim rather
+    // than trip over a sentence someone else is guarding. Mutation: a
+    // non-functional `setStep(step + 1)` -> every press reads the same
+    // render, the guide settles on step 1, and the ticket rests at 242px
+    // over `next` instead of 18px over `before`, red on the next line.
     expect(ticket().style.left).toBe(`${learnLoomTicketLeft(0)}px`)
+    expect(settled()).toBe('before')
     expect(document.querySelectorAll('[data-learn-loom-ticket]')).toHaveLength(
       1,
     )
+    expect(screen.getByText('6 / 6')).toBeTruthy()
     expect(onClose).not.toHaveBeenCalled()
 
     act(() => {
@@ -666,11 +680,12 @@ describe('MAR-3202 R5: a burst settles, because nothing is queued', () => {
         screen.getByRole('button', { name: LEARN_LOOM_CONTROLS.back }).click()
       }
     })
-    expect(screen.getByText('1 / 6')).toBeTruthy()
     expect(ticket().style.left).toBe(`${learnLoomTicketLeft(3)}px`)
+    expect(settled()).toBe('plan')
     expect(document.querySelectorAll('[data-learn-loom-ticket]')).toHaveLength(
       1,
     )
+    expect(screen.getByText('1 / 6')).toBeTruthy()
   })
 })
 
