@@ -1,5 +1,12 @@
 # convergence
 
+## 0.73.0
+
+### Minor Changes
+
+- f9a06b8: Loom's Before sheet groups the last two weeks of finished issues by wave, newest first, and says plainly that Done is not a release.
+- 5f47e09: Click an issue in Loom to read it in place: status and what it means for you, a short summary, labels, the linked pull request, and doors to the conversation working on it and to Linear — read-only.
+
 ## 0.72.0
 
 ### Minor Changes
