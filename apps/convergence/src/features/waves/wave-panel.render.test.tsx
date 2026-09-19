@@ -2010,6 +2010,198 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(card.textContent).not.toContain('This Mac')
   })
 
+  describe('MAR-3194: the Plan sheet', () => {
+    /** The instant and day these cases call "today"; written down here. */
+    const PLAN_NOW = Date.parse('2026-09-19T12:00:00.000Z')
+    const PLAN_TODAY = '2026-09-19'
+
+    const planEntry = (
+      identifier: string,
+      state: WorkLedgerEntry['state'],
+      facts: Record<string, boolean> = {},
+      groundedAt: string | null = null,
+    ) =>
+      ledgerEntry({
+        issueIdentifier: identifier,
+        state,
+        seat: null,
+        sessionId: null,
+        groundedAt,
+        fact: {
+          logicalStatus: null,
+          branchName: null,
+          updatedAt: null,
+          ...facts,
+        },
+      })
+
+    const openPlan = async (entries: WorkLedgerEntry[]) => {
+      vi.setSystemTime(PLAN_NOW)
+      snapshots = {
+        'crew-1': { crewId: 'crew-1', entries, trackerHealth: health('ok') },
+      }
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      fireEvent.click(screen.getByRole('button', { name: /^Plan · / }))
+    }
+
+    const planBody = () =>
+      document.querySelector('[data-loom-sheet="plan"]') as HTMLElement
+
+    const FOUR_STAGES = [
+      planEntry('EX-DEFINE', 'assigned', { groomMe: true }),
+      planEntry('EX-GROUND', 'assigned', { groomed: true }),
+      planEntry(
+        'EX-ASSIGN',
+        'assigned',
+        { groomed: true, grounded: true },
+        PLAN_TODAY,
+      ),
+      planEntry('EX-STOP', 'stopped'),
+    ]
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('R3: every stage explains itself, and nothing else grew a hint', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      await openPlan(FOUR_STAGES)
+
+      const hints = [...planBody().querySelectorAll('[data-wave-hint]')].map(
+        (node) => [node.getAttribute('data-wave-hint'), node.textContent],
+      )
+      expect(hints).toEqual([
+        ['Define', 'Clarify intent and acceptance'],
+        ['Ground in code', 'Check the proposal against current code'],
+        ['Assign & clear', 'Choose the horse, then clear it to run'],
+        ['Re-groom', 'A lap stopped — the issue goes back to grooming'],
+      ])
+      cleanup()
+
+      // Mutation: render the hint line unconditionally -> the Waves tab
+      // grows a line under every section heading, red.
+      await mount(<WavesTab />)
+      await screen.findByLabelText('Waves')
+      expect(document.querySelectorAll('[data-wave-hint]')).toHaveLength(0)
+      expect(
+        document.querySelectorAll('[data-wave-row]').length,
+      ).toBeGreaterThan(0)
+    })
+
+    it('R2: each row says what it lacks, in its own words', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      await openPlan(FOUR_STAGES)
+      // Mutation: leave `action` at `waveRowAction`'s null -> the rows go
+      // silent about what they are missing, red.
+      expect(rowOf('crew-1:EX-DEFINE').getByText('groom-me')).toBeTruthy()
+      expect(rowOf('crew-1:EX-GROUND').getByText('not grounded')).toBeTruthy()
+      expect(
+        rowOf('crew-1:EX-ASSIGN').getByText(
+          'no horse assigned · grounded today',
+        ),
+      ).toBeTruthy()
+      expect(rowOf('crew-1:EX-STOP').getByText('re-groom (Fable)')).toBeTruthy()
+    })
+
+    it('R5: the title counts preparation; what left is one line', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      await openPlan([
+        planEntry('EX-1', 'assigned'),
+        planEntry('EX-2', 'assigned', { groomed: true }),
+        planEntry('EX-3', 'assigned', { groomed: true, grounded: true }),
+        planEntry('EX-G1', 'unassigned'),
+        planEntry('EX-G2', 'unassigned'),
+        planEntry('EX-G3', 'unassigned'),
+        planEntry('EX-G4', 'unassigned'),
+      ])
+      // Mutation: count `sheets.plan.length` -> `Plan · 7 in preparation`
+      // over a sheet drawing three, red.
+      expect(screen.getByRole('button', { name: /^Plan · / }).textContent).toBe(
+        'Plan · 3 in preparation',
+      )
+      expect(planBody().querySelectorAll('[data-wave-row]')).toHaveLength(3)
+      expect(screen.getByText('4 issues left the loop')).toBeTruthy()
+      expect(screen.getByText(/nothing here edits an issue/)).toBeTruthy()
+      cleanup()
+
+      // Only rows that left: the line alone, and no read-only promise about
+      // a sheet with nothing on it.
+      await openPlan([planEntry('EX-G1', 'unassigned')])
+      expect(screen.getByText('1 issue left the loop')).toBeTruthy()
+      expect(screen.queryByText(/nothing here edits an issue/)).toBeNull()
+      cleanup()
+
+      // Nothing at all: the sheet's own name, not LV1's retired apology.
+      await openPlan([])
+      expect(screen.getByText('Nothing in Plan right now.')).toBeTruthy()
+      expect(screen.queryByText(/left the loop/)).toBeNull()
+      expect(screen.queryByText(/wider read/)).toBeNull()
+    })
+
+    it('R6: the only thing you can press is a row', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      await openPlan(FOUR_STAGES)
+      const body = planBody()
+
+      // Nothing on this sheet takes input.
+      expect(
+        body.querySelectorAll(
+          'input, select, textarea, [contenteditable="true"]',
+        ),
+      ).toHaveLength(0)
+
+      // Every control inside the sheet is a row, opening its detail. The
+      // scan is over CONTROLS, not the sheet's words: "Assign & clear" is a
+      // heading and `no horse assigned` is a row's own sentence.
+      // Mutation: add an `Assign` button to the sheet -> red.
+      const controls = [
+        ...body.querySelectorAll('button, summary, a[href], [role="button"]'),
+      ]
+      const strays = controls.filter((node) => !node.closest('[data-wave-row]'))
+      expect(strays).toHaveLength(0)
+      expect(controls).toHaveLength(4)
+
+      fireEvent.click(
+        body.querySelector('[data-wave-row="crew-1:EX-GROUND"]') as HTMLElement,
+      )
+      expect(
+        document.querySelector('[data-loom-detail="crew-1:EX-GROUND"]'),
+      ).toBeTruthy()
+    })
+
+    it('R7: compact and expanded say the same thing', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      await openPlan(FOUR_STAGES)
+      const readPlan = () => {
+        const body = planBody()
+        return {
+          headings: [...body.querySelectorAll('h3')].map((n) => n.textContent),
+          hints: [...body.querySelectorAll('[data-wave-hint]')].map(
+            (n) => n.textContent,
+          ),
+          rows: [...body.querySelectorAll('[data-wave-row]')].map(
+            (n) => n.textContent,
+          ),
+        }
+      }
+      const compact = readPlan()
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+      })
+      expect(readPlan()).toEqual(compact)
+      // Not vacuous: all four stages, each with its hint and its row.
+      expect(compact.headings).toEqual([
+        'Define · 1',
+        'Ground in code · 1',
+        'Assign & clear · 1',
+        'Re-groom · 1',
+      ])
+      expect(compact.hints).toHaveLength(4)
+      expect(compact.rows).toHaveLength(4)
+    })
+  })
+
   describe('MAR-3192: the Before sheet', () => {
     /** The instant these cases call "now"; written down, never inherited. */
     const BEFORE_NOW = Date.parse('2026-09-19T12:00:00.000Z')

@@ -3,7 +3,6 @@ import type { WorkLedgerState } from '@/entities/work-ledger'
 import {
   loomNowRows,
   loomSubline,
-  LOOM_PLAN_NOTE,
   loomSheetCounts,
   loomSheetNote,
   loomSheets,
@@ -249,11 +248,12 @@ describe('MAR-3189: the titles say what their numbers mean', () => {
     )
   })
 
-  it('Plan says what it cannot say yet; an empty sheet says it is empty', () => {
-    // Mutation: return null for Plan -> red. An empty Plan reading as
-    // "nothing is planned" would be the panel claiming a fact it does not
-    // have; the wider read is LV1's.
-    expect(loomSheetNote('plan', sheets, NOW)).toBe(LOOM_PLAN_NOTE)
+  it('an empty sheet says it is empty, in its own name', () => {
+    // MAR-3194: Plan's old apology ("needs the wider read") went out with
+    // LV1. An empty Plan now says what every other empty sheet says.
+    expect(loomSheetNote('plan', loomSheets([], NOW), NOW)).toBe(
+      'Nothing in Plan right now.',
+    )
     expect(loomSheetNote('now', sheets, NOW)).toBeNull()
     expect(loomSheetNote('next', sheets, NOW)).toBeNull()
     expect(loomSheetNote('before', loomSheets([], NOW), NOW)).toBe(

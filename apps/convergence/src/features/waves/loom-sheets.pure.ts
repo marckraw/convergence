@@ -9,6 +9,7 @@ import {
   type WaveRowCrew,
 } from './wave-sections.pure'
 import { LOOM_SHEET_NAMES, type LoomSheet } from './wave-panel-sheet.pure'
+import { loomPlan, loomPlanLeftLine, loomUtcDay } from './loom-plan.pure'
 
 /**
  * What is on Now, in the four groups the sheet draws (MAR-3189 R2).
@@ -143,7 +144,11 @@ export function loomSheetCounts(
       sheets.now.decide.length,
     awaitingQa: sheets.now.awaitingQa.length,
     next: sheets.next.length,
-    plan: sheets.plan.length,
+    // What is being PREPARED (MAR-3194 R5). `sheets.plan` also holds the rows
+    // that left the loop -- the partition is untouched -- and those are
+    // counted in a sentence, not listed, so counting the list would promise
+    // rows the sheet does not draw.
+    plan: loomPlan(sheets.plan, loomUtcDay(now)).preparing,
   }
 }
 
@@ -179,7 +184,6 @@ export function loomSheetTitle(
 }
 
 /** What Plan cannot say yet, and says instead of pretending (MAR-3189). */
-export const LOOM_PLAN_NOTE = 'Plan needs the wider read (LV1)'
 
 /**
  * The line under a sheet's title, or null when the rows speak for themselves.
@@ -193,7 +197,17 @@ export function loomSheetNote(
   sheets: LoomSheets,
   now: number,
 ): string | null {
-  if (sheet === 'plan') return LOOM_PLAN_NOTE
+  if (sheet === 'plan') {
+    // Plan reads the whole ledger since LV1, so the sheet no longer has to
+    // apologise for a slice that shipped. An empty Plan is still two facts:
+    // nothing is being prepared, or nothing is being prepared BECAUSE
+    // everything here has left the loop (MAR-3194 R5).
+    const { preparing, left } = loomPlan(sheets.plan, loomUtcDay(now))
+    if (preparing > 0) return null
+    return left > 0
+      ? loomPlanLeftLine(left)
+      : `Nothing in ${LOOM_SHEET_NAMES.plan} right now.`
+  }
   if (sheet === 'before') {
     // An empty Before is two different facts (MAR-3192 R5): nothing has
     // finished, or nothing finished LATELY. Saying "nothing here" about a
