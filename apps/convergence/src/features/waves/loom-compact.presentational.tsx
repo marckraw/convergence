@@ -43,7 +43,7 @@ export const LoomCompactView: FC<
   width,
   onExpand,
 }) => {
-  const counts = loomSheetCounts(sheets, now)
+  const counts = loomSheetCounts(sheets, now, horses)
   return (
     <aside
       aria-label="Loom"

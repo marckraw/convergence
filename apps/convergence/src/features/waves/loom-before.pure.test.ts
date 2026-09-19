@@ -189,7 +189,7 @@ describe('MAR-3192 R4: the title counts what the sheet shows', () => {
 
     // Mutation: count `sheets.before.length` -> the title says 8 over a
     // sheet holding 3, and no amount of scrolling reaches the other five.
-    expect(loomSheetTitle('before', loomSheetCounts(sheets, NOW))).toBe(
+    expect(loomSheetTitle('before', loomSheetCounts(sheets, NOW, []))).toBe(
       'Before · 3 done',
     )
     expect(loomBefore(sheets.before, NOW).older).toBe(5)

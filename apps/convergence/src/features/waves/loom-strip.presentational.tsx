@@ -2,6 +2,7 @@ import type { FC } from 'react'
 import { Maximize2 } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { loomSheetCounts, type LoomSheets } from './loom-sheets.pure'
+import type { LoomHorse } from './loom-horses.pure'
 import {
   LOOM_SHEETS,
   LOOM_SHEET_NAMES,
@@ -13,13 +14,27 @@ interface LoomStripViewProps {
   sheets: LoomSheets
   /** The board's clock; Before's count is a window over it (MAR-3192). */
   now: number
+  /**
+   * The same horse seats the stacks get (MAR-3193 R5).
+   *
+   * The strip draws only the totals, but it reads them from the ONE counts
+   * function, and Next's split is a fact about seats -- handing it an empty
+   * roster here would be a second derivation quietly disagreeing with the
+   * column's.
+   */
+  horses: readonly LoomHorse[]
   outage: boolean
   onExpand: () => void
 }
 
 /** How many rows each sheet holds, for the strip's four numbers. */
-function stripCount(sheets: LoomSheets, sheet: LoomSheet, now: number): number {
-  const counts = loomSheetCounts(sheets, now)
+function stripCount(
+  sheets: LoomSheets,
+  sheet: LoomSheet,
+  now: number,
+  horses: readonly LoomHorse[],
+): number {
+  const counts = loomSheetCounts(sheets, now, horses)
   if (sheet === 'before') return counts.before
   if (sheet === 'now') return counts.open + counts.awaitingQa
   if (sheet === 'next') return counts.next
@@ -39,6 +54,7 @@ function stripCount(sheets: LoomSheets, sheet: LoomSheet, now: number): number {
 export const LoomStripView: FC<LoomStripViewProps> = ({
   sheets,
   now,
+  horses,
   outage,
   onExpand,
 }) => (
@@ -65,10 +81,10 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
         key={sheet}
         data-wave-count={sheet}
         title={LOOM_SHEET_NAMES[sheet]}
-        aria-label={`${LOOM_SHEET_NAMES[sheet]}: ${stripCount(sheets, sheet, now)}`}
+        aria-label={`${LOOM_SHEET_NAMES[sheet]}: ${stripCount(sheets, sheet, now, horses)}`}
         className="text-xs tabular-nums text-muted-foreground"
       >
-        {stripCount(sheets, sheet, now)}
+        {stripCount(sheets, sheet, now, horses)}
       </span>
     ))}
   </aside>

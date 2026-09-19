@@ -44,7 +44,7 @@ export const LoomExpandedView: FC<LoomStackProps & { onFold: () => void }> = ({
   titleRef,
   onFold,
 }) => {
-  const counts = loomSheetCounts(sheets, now)
+  const counts = loomSheetCounts(sheets, now, horses)
   // The container decides what Escape means (MAR-3195 R5): with a detail
   // open it closes THAT, and only the next one folds. Falling back to
   // `onFold` keeps the shape usable on its own.

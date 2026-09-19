@@ -15,6 +15,11 @@ import {
   loomUtcDay,
 } from './loom-plan.pure'
 import {
+  loomNext,
+  LOOM_NEXT_ORDER_LINE,
+  LOOM_NEXT_UNSEATED_TITLE,
+} from './loom-next.pure'
+import {
   loomHorsesLine,
   LOOM_QA_PREVIEW,
   type LoomHorse,
@@ -109,6 +114,9 @@ export const LoomSheetView = <TSession,>({
   // (MAR-3194 R5); `today` comes from the board's own clock, so the day a
   // grounding is aged against is the day the rest of the panel is drawn on.
   const plan = loomPlan(sheets.plan, loomUtcDay(now))
+  // The same one derivation for the queues and (through `loomSheetCounts`)
+  // the title above them (MAR-3193 R5).
+  const next = loomNext(sheets.next, horses)
   const leftLine = loomPlanLeftLine(plan.left)
   const qa = sheets.now.awaitingQa
   const qaShown = qaExpanded ? qa : qa.slice(0, LOOM_QA_PREVIEW)
@@ -234,12 +242,30 @@ export const LoomSheetView = <TSession,>({
             </div>
           ) : null}
           {sheet === 'next' ? (
-            <WaveSectionView
-              title="Queued"
-              rows={sheets.next}
-              inertReason={inertReason}
-              onOpen={onOpen}
-            />
+            <>
+              {/* One group per horse that has anything waiting (MAR-3193
+                  R1), each saying what that horse is doing now. */}
+              {next.seats.map((seat) => (
+                <WaveSectionView
+                  key={seat.key}
+                  title={seat.title}
+                  hint={seat.capacity}
+                  count={seat.ready.length + seat.preparing.length}
+                  rows={[...seat.ready, ...seat.preparing]}
+                  inertReason={inertReason}
+                  onOpen={onOpen}
+                />
+              ))}
+              <WaveSectionView
+                title={LOOM_NEXT_UNSEATED_TITLE}
+                rows={next.unseated}
+                inertReason={inertReason}
+                onOpen={onOpen}
+              />
+              {next.seats.length > 0 || next.unseated.length > 0 ? (
+                <p className={LOOM_SHEET_NOTE_CLASS}>{LOOM_NEXT_ORDER_LINE}</p>
+              ) : null}
+            </>
           ) : null}
           {sheet === 'plan' ? (
             <>

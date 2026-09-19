@@ -235,7 +235,7 @@ describe('MAR-3194 R5: the title counts preparation; what left is words', () => 
     expect([plan.preparing, plan.left]).toEqual([3, 4])
     // Mutation: title from `sheets.plan.length` -> `Plan · 7 in
     // preparation` over a sheet drawing three, red.
-    expect(loomSheetTitle('plan', loomSheetCounts(sheets, NOW))).toBe(
+    expect(loomSheetTitle('plan', loomSheetCounts(sheets, NOW, []))).toBe(
       'Plan · 3 in preparation',
     )
     expect(loomPlanLeftLine(plan.left)).toBe('4 issues left the loop')

@@ -307,7 +307,13 @@ describe('MAR-3189 R4: the strip is the same model', () => {
     ]
     const sheets = loomSheets(rows, NOW)
     render(
-      <LoomStripView sheets={sheets} now={NOW} outage onExpand={vi.fn()} />,
+      <LoomStripView
+        sheets={sheets}
+        now={NOW}
+        horses={[]}
+        outage
+        onExpand={vi.fn()}
+      />,
     )
 
     const shown = (sheet: string) =>
@@ -330,6 +336,7 @@ describe('MAR-3189 R4: the strip is the same model', () => {
     const onExpand = vi.fn()
     render(
       <LoomStripView
+        horses={[]}
         sheets={loomSheets([], NOW)}
         now={NOW}
         outage={false}
@@ -2010,6 +2017,184 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(card.textContent).not.toContain('This Mac')
   })
 
+  describe('MAR-3193: the Next sheet', () => {
+    const READY = { groomed: true, grounded: true, dispatch: true }
+
+    const queued = (
+      identifier: string,
+      facts: Record<string, boolean | number | null> = READY,
+      seat: string | null = 'opus',
+      sessionId: string | null = 'session-opus',
+    ) =>
+      ledgerEntry({
+        issueIdentifier: identifier,
+        state: 'assigned',
+        seat,
+        sessionId,
+        fact: {
+          logicalStatus: null,
+          branchName: null,
+          updatedAt: null,
+          ...facts,
+        },
+      })
+
+    const openNext = async (entries: WorkLedgerEntry[]) => {
+      crews = [
+        { ...boundCrew('crew-1', 'Loom'), members: [residentSeat('opus')] },
+      ]
+      snapshots = {
+        'crew-1': { crewId: 'crew-1', entries, trackerHealth: health('ok') },
+      }
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      fireEvent.click(screen.getByRole('button', { name: /^Next · / }))
+    }
+
+    const nextBody = () =>
+      document.querySelector('[data-loom-sheet="next"]') as HTMLElement
+
+    const QUEUE = [
+      queued('MAR-21', { ...READY, priority: 1 }),
+      queued('MAR-20', { ...READY, priority: 3 }),
+      queued('MAR-30', { groomed: true, priority: 1 }),
+      queued('MAR-99', READY, 'ghost', null),
+    ]
+
+    it('R1 + R4: one group per horse, saying what it is doing', async () => {
+      useSessionStore.setState({
+        globalSessions: [
+          {
+            ...SESSION,
+            id: 'session-opus',
+            status: 'running',
+          } as SessionSummary,
+        ],
+      })
+      await openNext([
+        ...QUEUE,
+        ledgerEntry({
+          issueIdentifier: 'MAR-9',
+          state: 'working',
+          seat: 'opus',
+          sessionId: 'session-opus',
+        }),
+      ])
+
+      const body = nextBody()
+      expect(
+        [...body.querySelectorAll('[data-wave-hint]')].map((node) => [
+          node.getAttribute('data-wave-hint'),
+          node.textContent,
+        ]),
+      ).toEqual([['opus', 'This Mac · Working on MAR-9 · 3 queued']])
+      // The stray is drawn last, in its own group, saying whose seat the
+      // label named. Mutation: match on the seat name across crews -> it
+      // would be claimed by opus and this group would not exist, red.
+      expect(
+        within(body).getByText('seat "ghost" not in the crew'),
+      ).toBeTruthy()
+      expect(
+        [...body.querySelectorAll('h3')].map((node) => node.textContent),
+      ).toEqual(['opus · 3', 'No seat named in this crew · 1'])
+      // The running row is NOT in the queue; the footer says where it is.
+      expect(body.querySelector('[data-wave-row="crew-1:MAR-9"]')).toBeNull()
+      expect(
+        within(body).getByText(
+          'Order: priority, then issue number · running work stays in Now',
+        ),
+      ).toBeTruthy()
+      expect(body.textContent).not.toContain('Paused')
+      expect(body.textContent).not.toContain('dispatch rule')
+    })
+
+    it('R2 + R3: Ready is numbered in order; Preparing says what is missing', async () => {
+      await openNext(QUEUE)
+      const words = [...nextBody().querySelectorAll('[data-wave-row]')].map(
+        (node) => node.getAttribute('data-wave-row'),
+      )
+      // Priority 1 before priority 3, and Preparing after Ready.
+      expect(words).toEqual([
+        'crew-1:MAR-21',
+        'crew-1:MAR-20',
+        'crew-1:MAR-30',
+        'crew-1:MAR-99',
+      ])
+      expect(rowOf('crew-1:MAR-21').getByText('1 · ready')).toBeTruthy()
+      expect(rowOf('crew-1:MAR-20').getByText('2 · ready')).toBeTruthy()
+      expect(
+        rowOf('crew-1:MAR-30').getByText('needs grounded · dispatch'),
+      ).toBeTruthy()
+    })
+
+    it('R5: the title splits ready from preparing', async () => {
+      await openNext(QUEUE)
+      // Mutation: N from `sheets.next.length` -> `Next · 4 ready`, red.
+      expect(screen.getByRole('button', { name: /^Next · / }).textContent).toBe(
+        'Next · 2 ready · 2 preparing',
+      )
+      cleanup()
+
+      await openNext([queued('MAR-21')])
+      expect(screen.getByRole('button', { name: /^Next · / }).textContent).toBe(
+        'Next · 1 ready',
+      )
+    })
+
+    it('R6: the only thing you can press is a row', async () => {
+      await openNext(QUEUE)
+      const body = nextBody()
+      expect(
+        body.querySelectorAll(
+          'input, select, textarea, [contenteditable="true"]',
+        ),
+      ).toHaveLength(0)
+      // Mutation: a stray control on the sheet -> red.
+      const controls = [
+        ...body.querySelectorAll('button, summary, a[href], [role="button"]'),
+      ]
+      expect(
+        controls.filter((node) => !node.closest('[data-wave-row]')),
+      ).toHaveLength(0)
+      expect(controls).toHaveLength(4)
+
+      fireEvent.click(
+        body.querySelector('[data-wave-row="crew-1:MAR-30"]') as HTMLElement,
+      )
+      expect(
+        document.querySelector('[data-loom-detail="crew-1:MAR-30"]'),
+      ).toBeTruthy()
+    })
+
+    it('R7: compact and expanded say the same thing', async () => {
+      await openNext(QUEUE)
+      const readNext = () => {
+        const body = nextBody()
+        return {
+          titles: [...body.querySelectorAll('h3')].map((n) => n.textContent),
+          capacity: [...body.querySelectorAll('[data-wave-hint]')].map(
+            (n) => n.textContent,
+          ),
+          rows: [...body.querySelectorAll('[data-wave-row]')].map(
+            (n) => n.textContent,
+          ),
+        }
+      }
+      const compact = readNext()
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+      })
+      expect(readNext()).toEqual(compact)
+      // Not vacuous.
+      expect(compact.titles).toEqual([
+        'opus · 3',
+        'No seat named in this crew · 1',
+      ])
+      expect(compact.capacity).toHaveLength(1)
+      expect(compact.rows).toHaveLength(4)
+    })
+  })
+
   describe('MAR-3194: the Plan sheet', () => {
     /** The instant and day these cases call "today"; written down here. */
     const PLAN_NOW = Date.parse('2026-09-19T12:00:00.000Z')
@@ -2581,6 +2766,7 @@ describe('MAR-3138 R4: a blocked row reads "decide" under Waiting on you', () =>
     cleanup()
     render(
       <LoomStripView
+        horses={[]}
         sheets={loomSheets(
           [
             ledgerEntry({
@@ -2617,6 +2803,7 @@ describe('MAR-3148: the rail, the props and the clock', () => {
     const onExpand = vi.fn()
     render(
       <LoomStripView
+        horses={[]}
         sheets={loomSheets(rows, NOW)}
         now={NOW}
         outage={false}
