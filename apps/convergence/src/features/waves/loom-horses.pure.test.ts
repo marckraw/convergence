@@ -501,3 +501,123 @@ describe('MAR-3191 lap 2, C: a deleted conversation is not an unfetched one', ()
     expect(horses[1]?.conversationMissing).toBe(false)
   })
 })
+
+describe('MAR-3191 lap 3, F: a card holds the issue the horse is WORKING', () => {
+  /** The seat's one row, blocked, in each of Now's four live states. */
+  const cardFor = (state: 'assigned' | 'reviewed' | 'returned' | 'working') => {
+    const sheets = loomSheets(
+      [
+        ledgerEntry({
+          issueIdentifier: 'MAR-9',
+          state,
+          seat: 'opus-mac',
+          sessionId: 'session-opus-mac',
+          blocked: true,
+          hostLiveness: {
+            executionHost: 'lm',
+            lastEventAt: '2026-09-19T07:50:00.000Z',
+            hostReachable: false,
+          },
+        }),
+      ],
+      NOW,
+    )
+    const horse = loomHorses({
+      crews: [boundCrewWith('crew-1', 'Loom', [residentSeat('opus-mac')])],
+      sessionsById: new Map([['session-opus-mac', session('idle')]]),
+      sheets,
+      hostLabelOf,
+    })[0]!
+    return { sheets, horse }
+  }
+
+  it.each(['assigned', 'reviewed', 'returned'] as const)(
+    'a blocked %s issue is NOT what the horse is working on',
+    (state) => {
+      // Every one of these is drawn under *Decide*, because `loomSheets`
+      // buckets a blocked row by its label before its state. Lap 2 asked the
+      // GROUP for the seat's work and so claimed all three.
+      // Mutation: drop the state filter -> the card says the horse is
+      // working MAR-9 when it is queued, awaiting QA, or returned. Red.
+      const { horse } = cardFor(state)
+      expect(horse.held).toBeNull()
+      expect(horse.heldFrom).toBeNull()
+    },
+  )
+
+  it('a blocked working issue IS, and says where it is drawn', () => {
+    const { sheets, horse } = cardFor('working')
+    expect(horse.held?.entry.issueIdentifier).toBe('MAR-9')
+    expect(horse.heldFrom).toBe('decide')
+    // Still listed where a person looks for decisions, and never twice.
+    expect(loomNowRows(sheets, [horse])).toEqual([])
+    expect(sheets.now.decide).toHaveLength(1)
+  })
+
+  it('a blocked returned row is found, with its host marker', () => {
+    // `returned` used to be looked up in `fablesTurn` alone, and a blocked
+    // returned row is not there -- so the card missed both the row and one
+    // of the three witnesses that say "Not seen".
+    // Mutation: read `returned` from `fablesTurn` only -> `returned` is null
+    // and the runtime falls back to the session's `idle`. Red twice.
+    const { horse } = cardFor('returned')
+    expect(horse.returned?.entry.issueIdentifier).toBe('MAR-9')
+    expect(horse.returned?.hostMarker).toBe('host unreachable since 10m')
+    expect(horse.runtime).toBe('not-seen')
+  })
+
+  it('an unblocked returned row is still found under Fable’s turn', () => {
+    const sheets = loomSheets(
+      [
+        ledgerEntry({
+          issueIdentifier: 'MAR-8',
+          state: 'returned',
+          seat: 'opus-mac',
+          sessionId: 'session-opus-mac',
+        }),
+      ],
+      NOW,
+    )
+    const horse = loomHorses({
+      crews: [boundCrewWith('crew-1', 'Loom', [residentSeat('opus-mac')])],
+      sessionsById: new Map([['session-opus-mac', session('running')]]),
+      sheets,
+      hostLabelOf,
+    })[0]!
+    expect(horse.returned?.entry.issueIdentifier).toBe('MAR-8')
+    expect(sheets.now.fablesTurn).toHaveLength(1)
+  })
+
+  it('a seat holding a working row and a blocked one holds the working one', () => {
+    const sheets = loomSheets(
+      [
+        ledgerEntry({
+          issueIdentifier: 'MAR-WORK',
+          state: 'working',
+          seat: 'opus-mac',
+          sessionId: 'session-opus-mac',
+          seenAt: '2026-09-19T07:00:00.000Z',
+        }),
+        ledgerEntry({
+          issueIdentifier: 'MAR-QA',
+          state: 'reviewed',
+          seat: 'opus-mac',
+          sessionId: 'session-opus-mac',
+          blocked: true,
+          seenAt: '2026-09-19T07:59:00.000Z',
+        }),
+      ],
+      NOW,
+    )
+    const horse = loomHorses({
+      crews: [boundCrewWith('crew-1', 'Loom', [residentSeat('opus-mac')])],
+      sessionsById: new Map([['session-opus-mac', session('running')]]),
+      sheets,
+      hostLabelOf,
+    })[0]!
+    // The blocked row is NEWER, so a lookup that sorted before filtering
+    // would take it. Mutation: sort then filter -> MAR-QA on the card, red.
+    expect(horse.held?.entry.issueIdentifier).toBe('MAR-WORK')
+    expect(horse.heldFrom).toBe('in-flight')
+  })
+})

@@ -1,5 +1,6 @@
 import type { SessionCrew, SessionCrewMember } from '@/entities/session-crew'
 import type { AttentionState, SessionStatus } from '@/entities/session'
+import type { WorkLedgerState } from '@/entities/work-ledger'
 import type { LoomSheets } from './loom-sheets.pure'
 import type { WaveRow } from './wave-sections.pure'
 
@@ -42,12 +43,16 @@ export interface LoomHorse {
   /**
    * Which group the held row came from (lap 2, A).
    *
-   * A blocked `working` row lives under *Decide*, not in flight -- and it
+   * A blocked `working` row is drawn under *Decide*, not in flight -- and it
    * stays listed there, the way a `returned` row stays under Fable's turn.
-   * Only an in-flight row leaves the list, so `loomNowRows` has to know
-   * which this was rather than guess from the row.
+   * The card says which, so a person reading `blocked · decide` knows where
+   * the row they are also seeing below came from.
+   *
+   * Only ever the group of a `working` row, so in practice `in-flight` or
+   * `decide`; the type is the full set because the group is read from the
+   * sheet rather than inferred, and inferring it is the mistake lap 3 fixed.
    */
-  heldFrom: 'in-flight' | 'decide' | null
+  heldFrom: LoomNowGroup | null
   /** The record says this resident's conversation was deleted (lap 2, C). */
   conversationMissing: boolean
   /** A `returned` row of this seat, named here AND left under Fable's turn. */
@@ -128,15 +133,56 @@ function rowBelongsToSeat(
   )
 }
 
-/** This seat's row in `rows`, newest by `seenAt` first. */
-function newestForSeat(
-  rows: readonly WaveRow[],
+/** Which of Now's four groups a row was drawn under. */
+type LoomNowGroup = 'in-flight' | 'awaiting-qa' | 'fables-turn' | 'decide'
+
+/** One of this seat's rows, with the group the sheet drew it under. */
+interface SeatRow {
+  row: WaveRow
+  group: LoomNowGroup
+}
+
+/**
+ * Every row of Now that belongs to this seat, whichever group holds it.
+ *
+ * A flat list on purpose (MAR-3191 lap 3, F). Lap 2 asked the GROUPS for the
+ * seat's work -- in flight, else Decide -- and Decide holds blocked rows in
+ * every state, so a blocked issue that was merely queued, or waiting on QA,
+ * or returned for a verdict was claimed as the issue the horse is working on.
+ * A group is where a row was drawn; only its STATE says what it is.
+ */
+function seatRowsInNow(
+  sheets: LoomSheets,
   crewId: string,
   member: { sessionId: string | null; batonName: string | null },
-): WaveRow | null {
-  const mine = rows
-    .filter((row) => rowBelongsToSeat(row, member, crewId))
-    .sort((a, b) => b.entry.seenAt.localeCompare(a.entry.seenAt))
+): SeatRow[] {
+  const groups: [LoomNowGroup, readonly WaveRow[]][] = [
+    ['in-flight', sheets.now.inFlight],
+    ['awaiting-qa', sheets.now.awaitingQa],
+    ['fables-turn', sheets.now.fablesTurn],
+    ['decide', sheets.now.decide],
+  ]
+  return groups.flatMap(([group, rows]) =>
+    rows
+      .filter((row) => rowBelongsToSeat(row, member, crewId))
+      .map((row) => ({ row, group })),
+  )
+}
+
+/**
+ * This seat's newest row in one ledger state, and where it was drawn.
+ *
+ * The state is the question; the group only answers "where would a person
+ * find this row on screen?", which the card needs so it can say `blocked ·
+ * decide` about a row that is still listed under Decide.
+ */
+function newestInState(
+  rows: readonly SeatRow[],
+  state: WorkLedgerState,
+): SeatRow | null {
+  const mine = [...rows]
+    .filter((seatRow) => seatRow.row.entry.state === state)
+    .sort((a, b) => b.row.entry.seenAt.localeCompare(a.row.entry.seenAt))
   return mine[0] ?? null
 }
 
@@ -170,19 +216,14 @@ export function loomHorses(input: {
         member.sessionId === null
           ? null
           : (input.sessionsById.get(member.sessionId) ?? null)
-      // The seat's `working` row wherever the sheet put it (lap 2, A): a
-      // blocked one is under *Decide*, and looking only in flight told a
-      // person their busiest horse held nothing.
-      const inFlight = newestForSeat(input.sheets.now.inFlight, crew.id, member)
-      const blocked = inFlight
-        ? null
-        : newestForSeat(input.sheets.now.decide, crew.id, member)
-      const held = inFlight ?? blocked
-      const returned = newestForSeat(
-        input.sheets.now.fablesTurn,
-        crew.id,
-        member,
-      )
+      // The seat's rows by STATE, wherever the sheet drew them (lap 3, F).
+      // A card holds the issue the horse is WORKING, never one that merely
+      // shares its seat and its blocked label.
+      const mine = seatRowsInNow(input.sheets, crew.id, member)
+      const working = newestInState(mine, 'working')
+      const returnedRow = newestInState(mine, 'returned')
+      const held = working?.row ?? null
+      const returned = returnedRow?.row ?? null
       // The host the seat works on: a resident works where its conversation
       // runs, a recipe where its policy says it will be spawned.
       const hostId =
@@ -208,7 +249,7 @@ export function loomHorses(input: {
         openable: session !== null,
         conversationMissing: member.conversationMissing,
         held,
-        heldFrom: inFlight ? 'in-flight' : blocked ? 'decide' : null,
+        heldFrom: working?.group ?? null,
         returned,
       })
     }
