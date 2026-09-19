@@ -404,12 +404,11 @@ describe('CursorProvider', () => {
     handle.approve('77')
 
     await waitFor(() => {
-      expect(server.responses).toContainEqual(
-        expect.objectContaining({
-          id: 77,
-          result: { outcome: { outcome: 'selected', optionId: 'allow-once' } },
-        }),
-      )
+      expect(server.responses).toContainEqual({
+        seq: expect.any(Number),
+        id: 77,
+        result: { outcome: { outcome: 'selected', optionId: 'allow-once' } },
+      })
     })
   })
 
@@ -448,12 +447,11 @@ describe('CursorProvider', () => {
     handle.deny('78')
 
     await waitFor(() => {
-      expect(server.responses).toContainEqual(
-        expect.objectContaining({
-          id: 78,
-          result: { outcome: { outcome: 'selected', optionId: 'reject-once' } },
-        }),
-      )
+      expect(server.responses).toContainEqual({
+        seq: expect.any(Number),
+        id: 78,
+        result: { outcome: { outcome: 'selected', optionId: 'reject-once' } },
+      })
       expect(attentions.at(-1)).toBe('none')
     })
   })
@@ -489,24 +487,22 @@ describe('CursorProvider', () => {
     handle.approve('201')
 
     await waitFor(() => {
-      expect(server.responses).toContainEqual(
-        expect.objectContaining({
-          id: 201,
-          result: { outcome: { outcome: 'selected', optionId: 'allow-once' } },
-        }),
-      )
+      expect(server.responses).toContainEqual({
+        seq: expect.any(Number),
+        id: 201,
+        result: { outcome: { outcome: 'selected', optionId: 'allow-once' } },
+      })
       expect(attentions.at(-1)).toBe('needs-approval')
     })
 
     handle.approve('202')
 
     await waitFor(() => {
-      expect(server.responses).toContainEqual(
-        expect.objectContaining({
-          id: 202,
-          result: { outcome: { outcome: 'selected', optionId: 'allow-once' } },
-        }),
-      )
+      expect(server.responses).toContainEqual({
+        seq: expect.any(Number),
+        id: 202,
+        result: { outcome: { outcome: 'selected', optionId: 'allow-once' } },
+      })
       expect(attentions.at(-1)).toBe('none')
     })
   })
@@ -534,12 +530,11 @@ describe('CursorProvider', () => {
     })
 
     await waitFor(() => {
-      expect(server.responses).toContainEqual(
-        expect.objectContaining({
-          id: 88,
-          result: { outcome: { outcome: 'selected', optionId: 'allow-once' } },
-        }),
-      )
+      expect(server.responses).toContainEqual({
+        seq: expect.any(Number),
+        id: 88,
+        result: { outcome: { outcome: 'selected', optionId: 'allow-once' } },
+      })
     })
   })
 
@@ -589,22 +584,21 @@ describe('CursorProvider', () => {
     })
 
     await waitFor(() => {
-      expect(server.responses).toContainEqual(
-        expect.objectContaining({
-          id: 90,
-          result: {
-            outcome: {
-              outcome: 'answered',
-              answers: [
-                {
-                  questionId: 'mode',
-                  selectedOptionIds: ['plan'],
-                },
-              ],
-            },
+      expect(server.responses).toContainEqual({
+        seq: expect.any(Number),
+        id: 90,
+        result: {
+          outcome: {
+            outcome: 'answered',
+            answers: [
+              {
+                questionId: 'mode',
+                selectedOptionIds: ['plan'],
+              },
+            ],
           },
-        }),
-      )
+        },
+      })
       expect(
         server.requests.filter(
           (request) => request.method === 'session/prompt',
@@ -656,16 +650,15 @@ describe('CursorProvider', () => {
     })
 
     await waitFor(() => {
-      expect(server.responses).toContainEqual(
-        expect.objectContaining({
-          id: 91,
-          result: {
-            outcome: {
-              outcome: 'accepted',
-            },
+      expect(server.responses).toContainEqual({
+        seq: expect.any(Number),
+        id: 91,
+        result: {
+          outcome: {
+            outcome: 'accepted',
           },
-        }),
-      )
+        },
+      })
     })
   })
 
@@ -874,23 +867,22 @@ describe('CursorProvider', () => {
     })
 
     await waitFor(() => {
-      expect(server.responses).toContainEqual(
-        expect.objectContaining({
-          id: 92,
-          result: {
-            outcome: {
-              outcome: 'accepted',
-              todos: [
-                {
-                  id: 'todo-1',
-                  content: 'Represent todos',
-                  status: 'completed',
-                },
-              ],
-            },
+      expect(server.responses).toContainEqual({
+        seq: expect.any(Number),
+        id: 92,
+        result: {
+          outcome: {
+            outcome: 'accepted',
+            todos: [
+              {
+                id: 'todo-1',
+                content: 'Represent todos',
+                status: 'completed',
+              },
+            ],
           },
-        }),
-      )
+        },
+      })
       expect(JSON.stringify(deltas)).toContain('Represent todos')
     })
   })
@@ -1074,14 +1066,16 @@ describe('CursorProvider', () => {
     await waitFor(() => {
       expect(server.responses).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({
+          {
+            seq: expect.any(Number),
             id: 101,
             result: { outcome: { outcome: 'cancelled' } },
-          }),
-          expect.objectContaining({
+          },
+          {
+            seq: expect.any(Number),
             id: 102,
             result: { outcome: { outcome: 'cancelled' } },
-          }),
+          },
         ]),
       )
       expect(child.kill).toHaveBeenCalledWith('SIGTERM')
@@ -1186,10 +1180,11 @@ describe('CursorProvider', () => {
     await expect(handle.interrupt?.()).resolves.toBe('interrupted')
     expect(server.notifications).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
+        {
+          seq: expect.any(Number),
           method: 'session/cancel',
           params: { sessionId: 'cursor-session-1' },
-        }),
+        },
       ]),
     )
 
@@ -1395,7 +1390,6 @@ describe('CursorProvider', () => {
       ).toHaveLength(1)
     })
     // promptStarting clears in runPrompt.finally after the turn settles.
-    await new Promise((resolve) => setTimeout(resolve, 20))
 
     await handle.setModelSelection?.(
       'composer-2.5[context=300k,fast=true]',
@@ -1503,7 +1497,7 @@ describe('CursorProvider', () => {
         server.requests.filter((r) => r.method === 'session/prompt'),
       ).toHaveLength(1)
     })
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    // promptStarting clears in runPrompt.finally after the turn settles.
 
     await expect(
       handle.setModelSelection?.('composer-2.5[context=300k,fast=true]', null),
@@ -1530,6 +1524,15 @@ describe('CursorProvider', () => {
           r.params?.value === 'composer-2.5[context=300k,fast=true]',
       ),
     ).toBe(false)
+    // The respawn carries the OLD model — the one the session was configured
+    // with, not a blank (MAR-3154 R3).
+    expect(
+      respawnServer.requests.some(
+        (r) =>
+          r.method === 'session/set_config_option' &&
+          r.params?.value === 'default[]',
+      ),
+    ).toBe(true)
   })
 
   it('refuses setModelSelection while a prompt is in flight (lap 3, C1b)', async () => {
@@ -1557,7 +1560,7 @@ describe('CursorProvider', () => {
         server.requests.filter((r) => r.method === 'session/prompt'),
       ).toHaveLength(1)
     })
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    // promptStarting clears in runPrompt.finally after the turn settles.
     await handle.setModelSelection?.(
       'composer-2.5[context=300k,fast=true]',
       null,
@@ -1687,12 +1690,11 @@ describe('CursorProvider', () => {
     await expect(handle.interrupt?.()).resolves.toBe('interrupted')
 
     await waitFor(() => {
-      expect(server.responses).toContainEqual(
-        expect.objectContaining({
-          id: 88,
-          result: { outcome: { outcome: 'cancelled' } },
-        }),
-      )
+      expect(server.responses).toContainEqual({
+        seq: expect.any(Number),
+        id: 88,
+        result: { outcome: { outcome: 'cancelled' } },
+      })
       expect(
         server.notifications.some((n) => n.method === 'session/cancel'),
       ).toBe(true)
