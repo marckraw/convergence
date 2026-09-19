@@ -2808,11 +2808,28 @@ describe('MAR-3097: through the containers and the real stores', () => {
       // the dialog is born "Loom, at a glance" and corrects itself, so two
       // titles are recorded here, red.
       const titles: string[] = []
-      const observer = new MutationObserver(() => {
-        const title = document.querySelector(
-          '[data-slot="dialog-title"]',
-        )?.textContent
-        if (title && titles[titles.length - 1] !== title) titles.push(title)
+      const seen = (text: string | null) => {
+        if (text && titles[titles.length - 1] !== text) titles.push(text)
+      }
+      // Read from the RECORDS, not from the live DOM: by the time a callback
+      // runs, a correction one commit later has already happened, and a
+      // reader that looks at `document` sees only the corrected end state.
+      const observer = new MutationObserver((records) => {
+        for (const record of records) {
+          for (const node of record.addedNodes) {
+            if (!(node instanceof HTMLElement)) continue
+            const title = node.matches('[data-slot="dialog-title"]')
+              ? node
+              : node.querySelector('[data-slot="dialog-title"]')
+            seen(title?.textContent ?? null)
+          }
+          if (
+            record.type === 'characterData' &&
+            record.target.parentElement?.closest('[data-slot="dialog-title"]')
+          ) {
+            seen(record.target.textContent)
+          }
+        }
       })
       observer.observe(document.body, {
         subtree: true,
