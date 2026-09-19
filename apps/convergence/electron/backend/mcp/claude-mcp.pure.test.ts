@@ -171,3 +171,125 @@ not a server row
     expect(parseClaudeServerDetails('No MCP server found')).toBeNull()
   })
 })
+
+describe('claude mcp list status by words (MAR-3205)', () => {
+  it.each([
+    {
+      name: 'heavy check Connected (measured Claude Code 2.1.x)',
+      line: 'linear: https://mcp.linear.app/sse (HTTP) - ✔ Connected',
+      expected: {
+        name: 'linear',
+        description: 'https://mcp.linear.app/sse',
+        statusLabel: '✔ Connected',
+        transportType: 'http' as const,
+      },
+      status: 'ready' as const,
+    },
+    {
+      name: 'legacy check Connected',
+      line: 'github: https://api.github.com/mcp (HTTP) - ✓ Connected',
+      expected: {
+        name: 'github',
+        description: 'https://api.github.com/mcp',
+        statusLabel: '✓ Connected',
+        transportType: 'http' as const,
+      },
+      status: 'ready' as const,
+    },
+    {
+      name: 'heavy ballot Failed',
+      line: 'broken: https://example.test/mcp (HTTP) - ✘ Failed to connect',
+      expected: {
+        name: 'broken',
+        description: 'https://example.test/mcp',
+        statusLabel: '✘ Failed to connect',
+        transportType: 'http' as const,
+      },
+      status: 'failed' as const,
+    },
+    {
+      name: 'legacy ballot Failed',
+      line: 'broken: https://example.test/mcp (HTTP) - ✗ Failed to connect',
+      expected: {
+        name: 'broken',
+        description: 'https://example.test/mcp',
+        statusLabel: '✗ Failed to connect',
+        transportType: 'http' as const,
+      },
+      status: 'failed' as const,
+    },
+    {
+      name: 'Needs authentication bang',
+      line: 'atlassian: https://mcp.atlassian.com/v1/mcp (HTTP) - ! Needs authentication',
+      expected: {
+        name: 'atlassian',
+        description: 'https://mcp.atlassian.com/v1/mcp',
+        statusLabel: '! Needs authentication',
+        transportType: 'http' as const,
+      },
+      status: 'needs-auth' as const,
+    },
+    {
+      name: 'Connected with no glyph',
+      line: 'plain: https://example.test/mcp (HTTP) - Connected',
+      expected: {
+        name: 'plain',
+        description: 'https://example.test/mcp',
+        statusLabel: 'Connected',
+        transportType: 'http' as const,
+      },
+      status: 'ready' as const,
+    },
+  ])('R1: $name', ({ line, expected, status }) => {
+    expect(parseClaudeListEntries(line)).toEqual([expected])
+    expect(mapClaudeStatus(expected.statusLabel)).toBe(status)
+  })
+
+  it.each([
+    {
+      name: 'colons in the server name',
+      line: 'plugin:figma:figma: https://mcp.figma.com/mcp (HTTP) - ✔ Connected',
+      expected: {
+        name: 'plugin:figma:figma',
+        description: 'https://mcp.figma.com/mcp',
+        statusLabel: '✔ Connected',
+        transportType: 'http' as const,
+      },
+    },
+    {
+      name: 'description that is not a URL',
+      line: 'railway: railway mcp - ✔ Connected',
+      expected: {
+        name: 'railway',
+        description: 'railway mcp',
+        statusLabel: '✔ Connected',
+        transportType: 'stdio' as const,
+      },
+    },
+    {
+      name: 'stdio command whose args contain a dash',
+      line: 'docs: npx -y @acme/project-docs-mcp - ✓ Connected',
+      expected: {
+        name: 'docs',
+        description: 'npx -y @acme/project-docs-mcp',
+        statusLabel: '✓ Connected',
+        transportType: 'stdio' as const,
+      },
+    },
+  ])('R2: $name', ({ line, expected }) => {
+    expect(parseClaudeListEntries(line)).toEqual([expected])
+  })
+
+  it('R3: an invented status word is kept as unknown, never dropped', () => {
+    const line = 'mystery: https://example.test/mcp (HTTP) - ✳ Quuxed'
+    expect(parseClaudeListEntries(line)).toEqual([
+      {
+        name: 'mystery',
+        description: 'https://example.test/mcp',
+        statusLabel: '✳ Quuxed',
+        transportType: 'http',
+      },
+    ])
+    expect(mapClaudeStatus('✳ Quuxed')).toBe('unknown')
+  })
+})
