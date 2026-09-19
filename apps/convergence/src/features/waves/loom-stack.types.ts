@@ -7,6 +7,41 @@ import type { LoomSheet } from './wave-panel-sheet.pure'
 import type { SessionSummary } from '@/entities/session'
 import type { WaveHeader } from './wave-sections.pure'
 import type { LoomCrewOption } from './wave-panel-crew.pure'
+import type { LoomSearchSummary } from './loom-search.pure'
+
+/**
+ * The search field's facts and doors (MAR-3234), the same in both shapes.
+ *
+ * `value` is the field's own text, never delayed (R10); what the sheets are
+ * filtered by is the container's debounced copy, which no shape sees.
+ */
+export interface LoomSearchField {
+  value: string
+  onChange: (value: string) => void
+  /** Empties the field and applies at once (R10). */
+  onClear: () => void
+  /** Enter: applies what is typed now, without waiting (R10). */
+  onApply: () => void
+  inputRef?: (element: HTMLInputElement | null) => void
+  /** Compact only: whether the field's own row is drawn (R7). */
+  revealed: boolean
+  /** Compact's search icon (R7). */
+  onToggleReveal: () => void
+  /** `/` inside Loom, outside any text input (R6). */
+  onShortcut: () => void
+}
+
+/**
+ * What the open sheet is told while a query is active (MAR-3234); absent
+ * when nothing is searched, so an unsearched sheet is today's sheet.
+ */
+export interface LoomSheetSearch {
+  summary: LoomSearchSummary
+  /** The "nowhere" sentence (R5), composed by the container. */
+  nowhere: string
+  /** The horse cards the search shows (R4). */
+  shownHorses: readonly LoomHorse[]
+}
 
 /**
  * What a stack hands the open sheet so it can render a detail.
@@ -90,6 +125,10 @@ export interface LoomStackProps {
   outside?: ReactNode
   /** `convergence development · All waves` -- which ledger this is. */
   subline: LoomSubline
+  /** The search field (MAR-3234), in the header of both shapes. */
+  field: LoomSearchField
+  /** The active search, or null when nothing is searched (MAR-3234). */
+  search: LoomSheetSearch | null
   open: LoomSheet
   onSelectSheet: (sheet: LoomSheet) => void
   inertReason: (entry: WorkLedgerEntry) => string | null

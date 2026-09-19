@@ -13,6 +13,7 @@ import {
 import { useFeedClock } from '@/shared/hooks/use-feed-clock'
 import { loomHorses, type LoomHorse } from './loom-horses.pure'
 import { loomSheets, type LoomSheets } from './loom-sheets.pure'
+import { loomSearchHorses, loomSearchRows } from './loom-search.pure'
 import { loadLoomCrew, saveLoomCrew } from './wave-panel-crew.api'
 import { resolveLoomCrew, type LoomCrewOption } from './wave-panel-crew.pure'
 import {
@@ -51,10 +52,29 @@ export interface WaveBoard {
   selectedCrewId: string | null
   /** Picks the crew Loom shows and remembers it (MAR-3225 R4). */
   selectCrew: (crewId: string) => void
-  /** The same rows in Loom's four sheets (MAR-3189 R2). */
+  /**
+   * The same rows in Loom's four sheets (MAR-3189 R2) -- the rows that match
+   * the search while there is one (MAR-3234 R2), so every title and every
+   * number of the strip follows the one filter.
+   */
   sheets: LoomSheets
-  /** The shown crews' horse seats, in crew order (MAR-3191 R1). */
+  /**
+   * The sheets with no search applied (MAR-3234): the same object as
+   * `sheets` when nothing is searched. For what must not blink while a
+   * person types -- an open detail is still the issue they are reading.
+   */
+  allSheets: LoomSheets
+  /**
+   * The shown crew's horse seats, in crew order (MAR-3191 R1), derived from
+   * the UNFILTERED sheets (MAR-3234 R4): a horse whose issue does not match
+   * is still working on it, and Next's queues and a detail's seat read that.
+   */
   horses: LoomHorse[]
+  /**
+   * The horse cards a search shows (MAR-3234 R4): a card iff the issue it
+   * holds matches; every horse when nothing is searched.
+   */
+  shownHorses: readonly LoomHorse[]
   /** One loaded conversation by id, for a card's own door (MAR-3191 R6). */
   findSession: (sessionId: string) => SessionSummary | null
   /** When a crew's tracker last answered, for the detail's footer (MAR-3195). */
@@ -76,7 +96,7 @@ export interface WaveBoard {
  * below is built from the shown crew's rows alone, so a second crew cannot
  * leak into Loom through any one of them.
  */
-export function useWaveBoard(): WaveBoard {
+export function useWaveBoard(query: string | null): WaveBoard {
   const crews = useSessionCrewStore((state) => state.crews)
   const loadCrews = useSessionCrewStore((state) => state.load)
   const snapshots = useWorkLedgerStore((state) => state.snapshots)
@@ -150,7 +170,18 @@ export function useWaveBoard(): WaveBoard {
     [snapshots, shownCrewIds, crewFacts],
   )
 
-  const sheets = useMemo(() => loomSheets(rows, now), [rows, now])
+  const allSheets = useMemo(() => loomSheets(rows, now), [rows, now])
+  // The search (MAR-3234 R2, R10): one filter over the rows, run once per
+  // settled query -- never per keystroke, and never at all with no query, so
+  // an unsearched Loom is today's Loom by identity.
+  const searchedRows = useMemo(
+    () => (query === null ? null : loomSearchRows(rows, query)),
+    [rows, query],
+  )
+  const sheets = useMemo(
+    () => (searchedRows === null ? allSheets : loomSheets(searchedRows, now)),
+    [allSheets, searchedRows, now],
+  )
   const header = useMemo(
     () => waveHeader({ crews: headerCrews, rowCount: rows.length, now }),
     [headerCrews, rows.length, now],
@@ -204,9 +235,21 @@ export function useWaveBoard(): WaveBoard {
     () => crews.filter((crew) => shownCrewIds.includes(crew.id)),
     [crews, shownCrewIds],
   )
+  // From the UNFILTERED sheets (MAR-3234 R4): "held" stays true of a horse
+  // whose issue the search does not match; only the cards are filtered.
   const horses = useMemo(
-    () => loomHorses({ crews: shownCrews, sessionsById, sheets, hostLabelOf }),
-    [shownCrews, sessionsById, sheets, hostLabelOf],
+    () =>
+      loomHorses({
+        crews: shownCrews,
+        sessionsById,
+        sheets: allSheets,
+        hostLabelOf,
+      }),
+    [shownCrews, sessionsById, allSheets, hostLabelOf],
+  )
+  const shownHorses = useMemo(
+    () => loomSearchHorses(horses, query),
+    [horses, query],
   )
 
   return {
@@ -215,7 +258,9 @@ export function useWaveBoard(): WaveBoard {
     selectedCrewId,
     selectCrew,
     sheets,
+    allSheets,
     horses,
+    shownHorses,
     findSession,
     lastOkAtOf,
     now,

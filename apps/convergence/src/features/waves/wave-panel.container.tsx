@@ -38,6 +38,14 @@ import { useWaveColumnResize } from './use-wave-column-resize'
 import { useWaveBoard } from './use-wave-board'
 import { LoomRefresh } from './loom-refresh.container'
 import { LoomOutside } from './loom-outside.container'
+import { useLoomOutside } from './use-loom-outside'
+import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
+import {
+  LOOM_SEARCH_DEBOUNCE_MS,
+  loomSearchNowhereLine,
+  loomSearchSummary,
+  normalizeLoomQuery,
+} from './loom-search.pure'
 
 interface WavePanelProps {
   onOpenSession?: (session: SessionSummary) => void
@@ -187,7 +195,55 @@ export const WavePanel: FC<WavePanelProps> = ({
   onExpandedChange,
   expandedContainer,
 }) => {
-  const board = useWaveBoard()
+  /**
+   * Loom's search (MAR-3234): the field's text, immediate, and the query the
+   * sheets are filtered by -- a debounced copy of it (R10), so typing costs
+   * one derivation when the typing stops, not one per key. An empty field
+   * applies at once: a clear is never a wait.
+   *
+   * Never persisted (R8): it lives exactly as long as this panel does, and a
+   * crew switch or the strip empties it.
+   */
+  const [searchText, setSearchText] = useState('')
+  const [appliedText, applySearch] = useDebouncedValue(
+    searchText,
+    LOOM_SEARCH_DEBOUNCE_MS,
+    { immediate: normalizeLoomQuery(searchText) === null },
+  )
+  const query = normalizeLoomQuery(appliedText)
+  const board = useWaveBoard(query)
+  // Another crew is another Loom (R8): its search starts empty. Adjusted
+  // during render, not in an effect, so no frame ever filters the new crew's
+  // rows by the old crew's query.
+  const [searchCrew, setSearchCrew] = useState(board.selectedCrewId)
+  if (searchCrew !== board.selectedCrewId) {
+    setSearchCrew(board.selectedCrewId)
+    setSearchText('')
+  }
+  // One read of the crew's issues outside the loop (MAR-3236), for Plan's
+  // group AND the search's summary -- never two subscriptions to one fact.
+  const outsideSnapshot = useLoomOutside(board.selectedCrewId)
+  /**
+   * Compact's field row (R7): drawn once the icon or `/` asks for it, and
+   * for as long as the field holds a query whatever else happens.
+   */
+  const [searchAsked, setSearchAsked] = useState(false)
+  const searchRevealed = searchAsked || searchText !== ''
+  const searchInput = useRef<HTMLInputElement | null>(null)
+  const searchInputRef = useCallback((element: HTMLInputElement | null) => {
+    searchInput.current = element
+  }, [])
+  // Focus is asked for, then given once the field is in the document: in
+  // compact the icon's press is what DRAWS the field, a render later.
+  const [searchFocusAsk, setSearchFocusAsk] = useState(0)
+  useEffect(() => {
+    if (searchFocusAsk > 0) searchInput.current?.focus()
+  }, [searchFocusAsk])
+  const focusSearch = useCallback(() => {
+    setSearchAsked(true)
+    setSearchFocusAsk((count) => count + 1)
+  }, [])
+  const clearSearch = useCallback(() => setSearchText(''), [])
   const [stored, setStored] = useState<WavePanelMode>(loadWavePanelMode)
   const [storedWidth, setStoredWidth] = useState<number>(loadWavePanelWidth)
   const [sheet, setSheet] = useState<LoomSheet>(loadLoomSheet)
@@ -248,17 +304,21 @@ export const WavePanel: FC<WavePanelProps> = ({
    * searched the sheet it was opened from would close the card under a
    * person's hands at the moment the thing they were reading changed.
    */
+  //
+  // The UNSEARCHED sheets (MAR-3234): a detail is the issue a person is
+  // reading, and typing into the search must not close it under them -- nor
+  // throw their focus back to a row that is no longer drawn.
   const allRows = useMemo(
     () => [
-      ...board.sheets.before,
-      ...board.sheets.now.inFlight,
-      ...board.sheets.now.awaitingQa,
-      ...board.sheets.now.fablesTurn,
-      ...board.sheets.now.decide,
-      ...board.sheets.next,
-      ...board.sheets.plan,
+      ...board.allSheets.before,
+      ...board.allSheets.now.inFlight,
+      ...board.allSheets.now.awaitingQa,
+      ...board.allSheets.now.fablesTurn,
+      ...board.allSheets.now.decide,
+      ...board.allSheets.next,
+      ...board.allSheets.plan,
     ],
-    [board.sheets],
+    [board.allSheets],
   )
   const detailRow = useMemo(
     () =>
@@ -343,11 +403,15 @@ export const WavePanel: FC<WavePanelProps> = ({
   )
   // The detail freezes the sheet's memory while it is open; the ref is read
   // inside the scroll handler, so it must be the same object across renders.
-  const detailOpen = useRef(false)
-  detailOpen.current = detailKey !== null
+  //
+  // So does a search (MAR-3234 R3): a filtered sheet is shorter than the
+  // list, Chromium clamps `scrollTop` and fires that as a scroll -- and
+  // recording it would lose the place a clear promises to give back.
+  const scrollFrozen = useRef(false)
+  scrollFrozen.current = detailKey !== null || query !== null
   const { bodyRef, onBodyScroll, restore } = useSheetScroll(
     sheet,
-    detailOpen,
+    scrollFrozen,
     board.selectedCrewId,
   )
   const hadDetailForScroll = useRef(detailKey !== null)
@@ -357,6 +421,14 @@ export const WavePanel: FC<WavePanelProps> = ({
     if (hadDetailForScroll.current && detailKey === null) restore()
     hadDetailForScroll.current = detailKey !== null
   }, [detailKey, restore])
+  // A clear gives the sheet back where it was (R3), the same way a closed
+  // detail does -- the body is not remounted, so nothing else would.
+  const searched = query !== null
+  const wasSearched = useRef(searched)
+  useLayoutEffect(() => {
+    if (wasSearched.current && !searched) restore()
+    wasSearched.current = searched
+  }, [searched, restore])
   // The draft is asked for before the early returns below, because hooks are
   // not optional; it is only READ when a column is on screen.
   const [draftWidth, setDraftWidth] = useState<number | null>(null)
@@ -377,6 +449,9 @@ export const WavePanel: FC<WavePanelProps> = ({
     !columnAbsent && decision.mode === 'compact'
       ? { width: decision.width, maxWidth: decision.maxWidth }
       : null
+  // The strip has no field (R8): going there empties the search, so the
+  // column that comes back is the whole Loom, not a filter nobody can see.
+  if (decision.mode === 'strip' && searchText !== '') setSearchText('')
   const resize = useWaveColumnResize({
     reservedWidth,
     // The decision's own numbers (lap 2, B): the ceiling's arithmetic lives
@@ -476,8 +551,14 @@ export const WavePanel: FC<WavePanelProps> = ({
     onShowNext: () => selectSheet('next'),
     onShowDetail: showDetail,
     detail: detailView,
-    // The ordering R5 is about: a detail open means Escape closes THAT.
-    onEscape: detailKey === null ? undefined : closeDetail,
+    // The ordering (MAR-3195 R5, MAR-3234 R6): a non-empty search clears
+    // first, then an open detail closes, and only then does expanded fold.
+    onEscape:
+      searchText !== ''
+        ? clearSearch
+        : detailKey === null
+          ? undefined
+          : closeDetail,
     header: board.header,
     // The crew on screen, and only while its tracker is answering (R6): an
     // outage keeps the line it always had and gets no control beside it.
@@ -493,8 +574,51 @@ export const WavePanel: FC<WavePanelProps> = ({
     // crew so a switch is a fresh, folded group reading that crew's list.
     outside:
       board.selectedCrewId !== null ? (
-        <LoomOutside key={board.selectedCrewId} crewId={board.selectedCrewId} />
+        <LoomOutside
+          key={board.selectedCrewId}
+          snapshot={outsideSnapshot}
+          query={query}
+        />
       ) : null,
+    field: {
+      value: searchText,
+      onChange: setSearchText,
+      onClear: () => {
+        clearSearch()
+        focusSearch()
+      },
+      onApply: applySearch,
+      inputRef: searchInputRef,
+      revealed: searchRevealed,
+      onToggleReveal: () => {
+        // The icon hides an EMPTY field; one holding a query stays (R7).
+        if (searchRevealed && searchText === '') setSearchAsked(false)
+        else focusSearch()
+      },
+      onShortcut: focusSearch,
+    },
+    search:
+      query === null
+        ? null
+        : {
+            summary: loomSearchSummary({
+              sheets: board.sheets,
+              outside: outsideSnapshot,
+              query,
+              open: sheet,
+            }),
+            nowhere: loomSearchNowhereLine({
+              query,
+              crewName:
+                board.crewOptions.find(
+                  (crew) => crew.id === board.selectedCrewId,
+                )?.name ?? null,
+              outsideReadAt: outsideSnapshot?.readAt ?? null,
+              now: board.now,
+              severalCrews: board.boundCrewCount > 1,
+            }),
+            shownHorses: board.shownHorses,
+          },
     subline: {
       text: loomSubline(
         board.crewOptions.find((crew) => crew.id === board.selectedCrewId)

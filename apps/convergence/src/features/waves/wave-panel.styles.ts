@@ -134,3 +134,45 @@ export const LOOM_DETAIL_MUTED_CLASS = 'text-[11px] text-muted-foreground'
 /** The detail's own footer: what this card is, and how fresh. */
 export const LOOM_DETAIL_FOOTER_CLASS =
   'pt-1 text-[10px] uppercase tracking-wide text-muted-foreground'
+
+/**
+ * Loom's search field (MAR-3234). Provisional: no design brief exists for it
+ * yet, so every class is here, where the Design Director can restyle it in
+ * one edit.
+ */
+export const LOOM_SEARCH_FIELD_CLASS = 'relative flex min-w-0 items-center'
+
+/** Expanded: in the header row, 240 px at most (R7). */
+export const LOOM_SEARCH_EXPANDED_CLASS = 'w-full max-w-[240px] shrink'
+
+/** Compact: the field's own row under the header (R7). */
+export const LOOM_SEARCH_COMPACT_ROW_CLASS = 'shrink-0 px-3 pb-3'
+
+/** The magnifier inside the field; decoration only. */
+export const LOOM_SEARCH_ICON_CLASS =
+  'pointer-events-none absolute left-2.5 size-3.5 text-muted-foreground'
+
+/** The input itself; the browser's own cancel control is hidden -- ours clears at once. */
+export const LOOM_SEARCH_INPUT_CLASS =
+  'h-8 pl-8 pr-8 text-xs [&::-webkit-search-cancel-button]:appearance-none'
+
+/** The glyph inside the clear control and the compact icon. */
+export const LOOM_SEARCH_GLYPH_CLASS = 'size-3.5'
+
+/** The clear control inside the field's right edge. */
+export const LOOM_SEARCH_CLEAR_CLASS =
+  'absolute right-1 size-6 text-muted-foreground hover:text-foreground'
+
+/** Compact's search icon beside the subline (R7). */
+export const LOOM_SEARCH_TOGGLE_CLASS = 'size-7 shrink-0 text-muted-foreground'
+
+/** Compact's subline row: the subline, then the search icon. */
+export const LOOM_SEARCH_SUBLINE_ROW_CLASS = 'mb-2 flex items-start gap-2'
+
+/** The "no match here" line in the open sheet (R3, R5). */
+export const LOOM_SEARCH_MISS_CLASS =
+  'px-3 pt-3 text-[11px] leading-relaxed text-muted-foreground'
+
+/** One "1 in Plan" answer: a button that opens that sheet (R3). */
+export const LOOM_SEARCH_ELSEWHERE_CLASS =
+  'h-auto p-0 text-[11px] font-medium text-foreground underline underline-offset-2'

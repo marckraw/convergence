@@ -86,7 +86,7 @@ describe('MAR-3236 R6: the group says what it read, honestly', () => {
     expect(view.title).toBe('Not in the loop · 1+')
     expect(view.moreLine).toBe(LOOM_OUTSIDE_MORE_LINE)
     expect(LOOM_OUTSIDE_MORE_LINE).toBe(
-      'More in Linear — showing the newest 300',
+      "More in Linear — showing 300 of this project's open issues",
     )
     expect(view.emptyLine).toBeNull()
   })
