@@ -17,15 +17,85 @@ import {
   waveRowAction,
   waveRowHostMarker,
   waveRowKey,
+  waveRowMetaWords,
   waveRowsFromSnapshots,
   waveLapLabel,
   type WaveRow,
 } from './wave-sections.pure'
 import { ledgerEntry } from './wave-rows.fixture'
+import { loomStatusMeaning } from './loom-detail.pure'
 import { LOOM_COMPACT_CLASS, LOOM_EXPANDED_CLASS } from './wave-panel.styles'
 
 const NOW = Date.parse('2026-09-17T12:10:00.000Z')
 const ids = (rows: WaveRow[]) => rows.map((row) => row.entry.issueIdentifier)
+
+describe('MAR-3199 R5: card words say what happened', () => {
+  it.each<{
+    name: string
+    entry: Partial<WorkLedgerEntry>
+    crewName?: string
+    words: string[]
+  }>([
+    {
+      name: 'assigned without a seat',
+      entry: { state: 'assigned', seat: null },
+      words: ['no seat', 'in preparation'],
+    },
+    {
+      name: 'assigned with a seat',
+      entry: { state: 'assigned', seat: 'opus-mac' },
+      words: ['opus-mac', 'queued'],
+    },
+    {
+      name: 'working with a crew and lap cap',
+      entry: { state: 'working', lap: 2 },
+      crewName: 'Loom',
+      words: ['Loom', 'opus', 'working', 'lap 2 of 6'],
+    },
+    {
+      name: 'reviewed with verdict and PR',
+      entry: {
+        state: 'reviewed',
+        verdict: 'pass',
+        pr: {
+          number: 678,
+          state: 'open',
+          url: 'https://github.com/example/repo/pull/678',
+          headBranch: 'agent/ex-1',
+          checkedAt: '2026-09-17T12:00:00.000Z',
+          source: 'gh',
+        },
+      },
+      words: ['opus', 'reviewed', 'lap 1 of 6', 'pass', 'PR #678 open'],
+    },
+    {
+      name: 'unassigned',
+      entry: { state: 'unassigned', seat: null },
+      words: ['no seat', 'unassigned'],
+    },
+  ])('$name', ({ entry, crewName, words }) => {
+    const row = sectionWaveRows(
+      [ledgerEntry({ issueIdentifier: 'EX-1', ...entry })],
+      NOW,
+      () => ({ name: crewName ?? null, cap: 6 }),
+    ).waves[0].rows[0]
+    expect(waveRowMetaWords(row)).toEqual(words)
+  })
+
+  it('keeps assigned card wording in agreement with the detail, with or without a seat', () => {
+    for (const seat of [null, 'opus-mac']) {
+      const entry = ledgerEntry({
+        issueIdentifier: 'EX-1',
+        state: 'assigned',
+        seat,
+      })
+      const row = sectionWaveRows([entry], NOW).waitingToStart[0]
+      expect(waveRowMetaWords(row)[1]).toBe(
+        loomStatusMeaning(entry).toLowerCase(),
+      )
+    }
+  })
+})
 
 /** Eight rows, every state at least once, and one without a wave. */
 const ROWS = [
