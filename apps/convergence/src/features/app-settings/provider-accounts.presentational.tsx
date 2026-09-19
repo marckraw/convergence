@@ -13,6 +13,15 @@ import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 
+/**
+ * Whose truth the Connectors list tells (MAR-3213, R3): the panel shows what
+ * the Claude CLI reports for the account — a terminal's one-shot view — while
+ * a running conversation loads its own list at its start. The exact copy the
+ * brief rules; keep it byte-for-byte.
+ */
+const CLAUDE_CONNECTORS_VIEW_SENTENCE =
+  "This is what the Claude CLI reports for this account — what a terminal sees. A running conversation loads its own list when it starts and can differ; open that conversation's Harness details to see it. Restart the app after authorizing a claude.ai connector so running conversations pick it up."
+
 const STATUS_TONE: Record<
   ProviderAccountSettingsRow['status']['tone'],
   string
@@ -462,6 +471,11 @@ export function ProviderAccountsFields({
                           ? 'Waiting for browser...'
                           : 'Connect Linear'}
                       </Button>
+                    ) : null}
+                    {!isCodex ? (
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        {CLAUDE_CONNECTORS_VIEW_SENTENCE}
+                      </p>
                     ) : null}
                   </div>
                 ) : null}
