@@ -22,6 +22,14 @@ import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 const CLAUDE_CONNECTORS_VIEW_SENTENCE =
   "This is what the Claude CLI reports for this account — what a terminal sees. A running conversation loads its own list when it starts and can differ; open that conversation's Harness details to see it. Restart the app after authorizing a claude.ai connector so running conversations pick it up."
 
+/**
+ * Where Connect Linear writes for a Claude account (MAR-3185, R5): the server
+ * goes to the shared profile every Claude account is reconciled from
+ * (`mcpServers`), the authorization to this account's slot (`mcpOAuth`).
+ */
+const CLAUDE_LINEAR_HOMES_SENTENCE =
+  'Linear is added for every Claude account on this Mac; authorization is per account.'
+
 const STATUS_TONE: Record<
   ProviderAccountSettingsRow['status']['tone'],
   string
@@ -455,8 +463,7 @@ export function ProviderAccountsFields({
                         {connectors.error}
                       </p>
                     ) : null}
-                    {isCodex &&
-                    !isLoadingConnectors &&
+                    {!isLoadingConnectors &&
                     connectors &&
                     !connectors.connectors.some(
                       (connector) => connector.name === 'linear',
@@ -475,6 +482,11 @@ export function ProviderAccountsFields({
                     {!isCodex ? (
                       <p className="text-xs leading-relaxed text-muted-foreground">
                         {CLAUDE_CONNECTORS_VIEW_SENTENCE}
+                      </p>
+                    ) : null}
+                    {!isCodex ? (
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        {CLAUDE_LINEAR_HOMES_SENTENCE}
                       </p>
                     ) : null}
                   </div>

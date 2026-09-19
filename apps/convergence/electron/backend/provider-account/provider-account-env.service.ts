@@ -89,6 +89,81 @@ export async function resolveClaudeAccountEnv(
     })
   }
 
+  const reconciled = await reconcileClaudeAccountConfigNow({
+    account: input.account,
+    workingDirectory: input.workingDirectory,
+    homeDir: input.homeDir,
+    io: input.io,
+  })
+
+  if (reconciled.kind === 'unreadable') {
+    // The one state where reconciling would mean guessing: we cannot tell
+    // apart "new account" from "file the disk briefly refused to hand back",
+    // so we write nothing and let the account's own file stand. The account
+    // directories below still decide identity, so this costs a trust prompt
+    // or a missing MCP server at worst — never the wrong credential.
+    input.onNote?.(
+      `Could not read the Claude account config at ${reconciled.accountConfigPath}; leaving it untouched and starting this turn without its MCP servers.`,
+    )
+    return buildClaudeAccountEnv({
+      baseEnv,
+      account: input.account,
+      injections: input.injections,
+    })
+  }
+
+  return buildClaudeAccountEnv({
+    baseEnv,
+    account: input.account,
+    passthroughNames: collectMcpEnvPassthroughNames(
+      reconciled.config.mcpServers,
+    ),
+    injections: input.injections,
+  })
+}
+
+export interface ReconcileClaudeAccountConfigNowInput {
+  account: ClaudeAccountEnvTarget
+  /**
+   * The directory whose trust entry is reconciled. The spawn passes the
+   * session's; a caller with no session (Connect Linear) omits it, exactly as
+   * enrolment does — there is no directory whose trust could honestly be
+   * copied.
+   */
+  workingDirectory?: string
+  homeDir?: string
+  io?: ClaudeConfigIo
+}
+
+/**
+ * What one reconciliation did. `write` separates "already agreed" from "the
+ * atomic write failed", because the spawn may shrug at a failed write (the
+ * next spawn heals it) while a caller about to authorize a server in the
+ * account's file may not.
+ */
+export type ReconcileClaudeAccountConfigNowResult =
+  | { kind: 'unreadable'; accountConfigPath: string }
+  | {
+      kind: 'reconciled'
+      config: Record<string, unknown>
+      write: 'unchanged' | 'written' | 'failed'
+    }
+
+/**
+ * Brings one account's `.claude.json` into agreement with the shared
+ * `~/.claude.json` now — the spawn's own reconciliation, callable without a
+ * spawn (ADR 0007; MAR-3185).
+ *
+ * One implementation with two callers: `resolveClaudeAccountEnv` runs it at
+ * every Claude spawn, and Connect Linear runs it right after adding a server to
+ * the shared profile, so the account can authorize a server its file already
+ * lists. A second copy of these steps would be free to disagree with the spawn
+ * about what the account's file should hold, and the spawn would win at the
+ * next turn.
+ */
+export async function reconcileClaudeAccountConfigNow(
+  input: ReconcileClaudeAccountConfigNowInput,
+): Promise<ReconcileClaudeAccountConfigNowResult> {
   const io = input.io ?? defaultIo
   const home = input.homeDir ?? homedir()
   const sharedRead = await readClaudeConfig(io, join(home, '.claude.json'))
@@ -96,19 +171,7 @@ export async function resolveClaudeAccountEnv(
   const accountRead = await readClaudeConfig(io, accountConfigPath)
 
   if (accountRead.kind === 'unreadable') {
-    // The one state where reconciling would mean guessing: we cannot tell
-    // apart "new account" from "file the disk briefly refused to hand back",
-    // so we write nothing and let the account's own file stand. The account
-    // directories below still decide identity, so this costs a trust prompt
-    // or a missing MCP server at worst — never the wrong credential.
-    input.onNote?.(
-      `Could not read the Claude account config at ${accountConfigPath}; leaving it untouched and starting this turn without its MCP servers.`,
-    )
-    return buildClaudeAccountEnv({
-      baseEnv,
-      account: input.account,
-      injections: input.injections,
-    })
+    return { kind: 'unreadable', accountConfigPath }
   }
 
   const sharedConfig = sharedRead.kind === 'ok' ? sharedRead.value : null
@@ -120,24 +183,46 @@ export async function resolveClaudeAccountEnv(
     workingDirectory: input.workingDirectory,
   })
 
-  if (reconciled.changed) {
-    try {
-      await writeConfigAtomically(io, accountConfigPath, reconciled.config)
-    } catch {
-      // Best effort. A failed reconcile costs a trust prompt or a missing
-      // server, never the wrong credential — the account directories below are
-      // what decide identity, and they do not depend on this write.
-    }
+  if (!reconciled.changed) {
+    return { kind: 'reconciled', config: reconciled.config, write: 'unchanged' }
   }
 
-  return buildClaudeAccountEnv({
-    baseEnv,
-    account: input.account,
-    passthroughNames: collectMcpEnvPassthroughNames(
-      reconciled.config.mcpServers,
-    ),
-    injections: input.injections,
-  })
+  try {
+    await writeConfigAtomically(io, accountConfigPath, reconciled.config)
+    return { kind: 'reconciled', config: reconciled.config, write: 'written' }
+  } catch {
+    // Best effort for the spawn. A failed reconcile costs a trust prompt or a
+    // missing server, never the wrong credential — the account directories are
+    // what decide identity, and they do not depend on this write.
+    return { kind: 'reconciled', config: reconciled.config, write: 'failed' }
+  }
+}
+
+/**
+ * The names in the shared profile's `mcpServers` — the very object
+ * `reconcileClaudeAccountConfigNow` copies into each account. Connect Linear
+ * asks this, rather than `claude mcp list`, because the question is "will the
+ * reconciliation carry `linear`?", and the list answers a wider one (project
+ * `.mcp.json` servers, claude.ai connectors). Reads `mcpServers` keys only.
+ *
+ * An absent file has no servers. A file that cannot be trusted is an error:
+ * adding a server beside bytes nobody could parse would be a guess.
+ */
+export async function readSharedClaudeMcpServerNames(input: {
+  homeDir?: string
+  io?: ClaudeConfigIo
+}): Promise<string[]> {
+  const io = input.io ?? defaultIo
+  const path = join(input.homeDir ?? homedir(), '.claude.json')
+  const read = await readClaudeConfig(io, path)
+  if (read.kind === 'unreadable') {
+    throw new Error(
+      `Could not read the shared Claude profile at ${path}. No connectors were changed.`,
+    )
+  }
+  if (read.kind === 'absent') return []
+  const servers = read.value.mcpServers
+  return isRecord(servers) ? Object.keys(servers) : []
 }
 
 async function readClaudeConfig(

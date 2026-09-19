@@ -5,6 +5,23 @@ import type { ProviderAccountCommand } from './provider-account-enrolment.pure'
 import { ProviderAccountRepository } from './provider-account.repository'
 import { ClaudeAccountMaintenance } from '../provider/claude-code/claude-account-maintenance.service'
 import type { ProviderAccountInteractiveRunner } from './provider-account-pty-runner'
+import {
+  reconcileClaudeAccountConfigNow,
+  type ClaudeConfigIo,
+} from './provider-account-env.service'
+
+// Pass-through spy on the spawn's own reconciliation, so Connect Linear can be
+// held to calling *that* export rather than a second copy of its steps.
+vi.mock('./provider-account-env.service', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('./provider-account-env.service')>()
+  return {
+    ...actual,
+    reconcileClaudeAccountConfigNow: vi.fn(
+      actual.reconcileClaudeAccountConfigNow,
+    ),
+  }
+})
 
 describe('Codex connectors (MAR-3183)', () => {
   function bench(present = false, afterAddAuth = 'unknown') {
@@ -615,5 +632,298 @@ describe('ProviderAccountMcpService', () => {
       ).rejects.toThrow(/not available on PATH/)
       expect(terminal.run).not.toHaveBeenCalled()
     })
+  })
+})
+
+describe('Claude Connect Linear (MAR-3185)', () => {
+  const SHARED_FILE = `${HOME}/.claude.json`
+  const ACCOUNT_FILE = `${CONFIG_DIR}/.claude.json`
+  const LINEAR = { type: 'http', url: 'https://mcp.linear.app/mcp' }
+  const GITHUB = { type: 'http', url: 'https://api.github.com/mcp' }
+
+  let repository: ProviderAccountRepository
+
+  beforeEach(() => {
+    vi.mocked(reconcileClaudeAccountConfigNow).mockClear()
+    repository = new ProviderAccountRepository(getDatabase())
+    repository.create({
+      id: 'acct-a',
+      providerId: 'claude-code',
+      label: 'Personal Max',
+      authKind: 'subscription-oauth',
+      configDir: CONFIG_DIR,
+      credentialDir: CREDENTIAL_DIR,
+      executionHostId: 'local',
+      email: 'a@example.com',
+      orgId: 'org-a',
+    })
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+  })
+
+  /**
+   * A fake disk plus both runners, recording one timeline. The piped runner's
+   * `mcp add` writes the shared file the way the measured CLI does, and
+   * refuses an existing name the way it does (exit 1, file untouched).
+   */
+  function bench(files: {
+    shared?: Record<string, unknown> | null | 'garbage'
+    account?: Record<string, unknown> | null | 'garbage'
+    canOpenBrowser?: boolean
+  }) {
+    const disk = new Map<string, string>()
+    if (files.shared === 'garbage') disk.set(SHARED_FILE, '{not json')
+    else if (files.shared) disk.set(SHARED_FILE, JSON.stringify(files.shared))
+    if (files.account === 'garbage') disk.set(ACCOUNT_FILE, '{not json')
+    else if (files.account)
+      disk.set(ACCOUNT_FILE, JSON.stringify(files.account))
+    const events: string[] = []
+    const io: ClaudeConfigIo = {
+      readFile: async (path) => {
+        const contents = disk.get(path)
+        if (contents === undefined)
+          throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
+        return contents
+      },
+      writeFile: async (path, contents) => {
+        disk.set(path, contents)
+      },
+      rename: async (from, to) => {
+        disk.set(to, disk.get(from)!)
+        disk.delete(from)
+        events.push(to === ACCOUNT_FILE ? 'write-account' : `write ${to}`)
+      },
+    }
+    const piped = vi.fn(async (command: ProviderAccountCommand) => {
+      events.push(command.args[1])
+      if (command.args[1] === 'login')
+        return { code: 1, stdout: '', stderr: PIPED_STDIO_REFUSAL }
+      if (command.args[1] !== 'add')
+        return { code: 0, stdout: LIST_OUTPUT, stderr: '' }
+      const shared = disk.has(SHARED_FILE)
+        ? (JSON.parse(disk.get(SHARED_FILE)!) as Record<string, unknown>)
+        : {}
+      const servers = (shared.mcpServers ?? {}) as Record<string, unknown>
+      const [name, url] = command.args.slice(-2)
+      if (servers[name])
+        return {
+          code: 1,
+          stdout: '',
+          stderr: `MCP server ${name} already exists in user config`,
+        }
+      disk.set(
+        SHARED_FILE,
+        JSON.stringify({
+          ...shared,
+          mcpServers: { ...servers, [name]: { type: 'http', url } },
+        }),
+      )
+      return { code: 0, stdout: 'Added HTTP MCP server', stderr: '' }
+    })
+    const terminal = vi.fn<ProviderAccountInteractiveRunner>(
+      async (command) => {
+        events.push(command.args[1])
+        return { code: 0, output: 'Authenticated.' }
+      },
+    )
+    const gate = new ClaudeAccountMaintenance()
+    const subject = new ProviderAccountMcpService({
+      repository,
+      runCommand: piped,
+      runInteractiveCommand: terminal,
+      baseEnv: { PATH: '/usr/local/bin', HOME },
+      binaryPath: '/usr/local/bin/claude',
+      workingDirectory: () => '/repo',
+      accountMaintenance: gate,
+      homeDir: HOME,
+      claudeConfigIo: io,
+    })
+    const connect = () =>
+      subject.connectLinear('acct-a', {
+        canOpenBrowser: files.canOpenBrowser,
+      })
+    const readAccount = () =>
+      JSON.parse(disk.get(ACCOUNT_FILE) ?? 'null') as {
+        mcpServers?: Record<string, unknown>
+      } | null
+    const readShared = () =>
+      JSON.parse(disk.get(SHARED_FILE) ?? 'null') as {
+        mcpServers?: Record<string, unknown>
+      } | null
+    return { connect, piped, terminal, events, readAccount, readShared, gate }
+  }
+
+  it.each([
+    {
+      case: 'shared and account both have linear → login only',
+      shared: { mcpServers: { linear: LINEAR } },
+      account: { mcpServers: { linear: LINEAR } },
+      sequence: ['login'],
+    },
+    {
+      case: 'shared has linear, the account drifted → reconcile, login, no add',
+      shared: { mcpServers: { linear: LINEAR, github: GITHUB } },
+      account: { mcpServers: { github: GITHUB } },
+      sequence: ['write-account', 'login'],
+    },
+    {
+      case: 'shared lacks linear → add, reconcile, login',
+      shared: { mcpServers: { github: GITHUB } },
+      account: { mcpServers: { github: GITHUB } },
+      sequence: ['add', 'write-account', 'login'],
+    },
+    {
+      case: 'no shared profile yet → add, reconcile, login',
+      shared: null,
+      account: null,
+      sequence: ['add', 'write-account', 'login'],
+    },
+  ])('R4 adds only what is missing: $case', async (input) => {
+    const b = bench(input)
+
+    await b.connect()
+
+    expect(b.events).toEqual(input.sequence)
+    // Whatever the path, the account ends with the shared entry itself.
+    expect(b.readAccount()?.mcpServers?.linear).toEqual(LINEAR)
+    expect(b.readShared()?.mcpServers?.linear).toEqual(LINEAR)
+  })
+
+  it('R1 the add is the only command without the account directory; the rest run as the account', async () => {
+    const b = bench({ shared: {}, account: {} })
+
+    await b.connect()
+
+    const add = b.piped.mock.calls.map(([command]) => command)
+    expect(add.map((command) => command.args)).toEqual([
+      [
+        'mcp',
+        'add',
+        '-s',
+        'user',
+        '--transport',
+        'http',
+        'linear',
+        'https://mcp.linear.app/mcp',
+      ],
+    ])
+    expect(add[0].env).not.toHaveProperty('CLAUDE_CONFIG_DIR')
+    expect(add[0].env).not.toHaveProperty('CLAUDE_SECURESTORAGE_CONFIG_DIR')
+    for (const [command] of b.terminal.mock.calls)
+      expect(command.env.CLAUDE_CONFIG_DIR).toBe(CONFIG_DIR)
+  })
+
+  it('R2 reconciles the account from the shared entry with the spawn’s own export, before the login', async () => {
+    const b = bench({
+      shared: { mcpServers: { github: GITHUB }, projects: { '/x': {} } },
+      account: {
+        mcpServers: { github: GITHUB },
+        oauthAccount: { emailAddress: 'a@example.com' },
+      },
+    })
+
+    await b.connect()
+
+    expect(b.readAccount()).toEqual({
+      mcpServers: {
+        github: GITHUB,
+        linear: b.readShared()!.mcpServers!.linear,
+      },
+      // Every other key of the account's file stands: identity is its own.
+      oauthAccount: { emailAddress: 'a@example.com' },
+    })
+    expect(b.events.indexOf('write-account')).toBeLessThan(
+      b.events.indexOf('login'),
+    )
+    expect(vi.mocked(reconcileClaudeAccountConfigNow)).toHaveBeenCalledOnce()
+    expect(
+      vi.mocked(reconcileClaudeAccountConfigNow).mock.calls[0][0],
+    ).toMatchObject({
+      account: { configDir: CONFIG_DIR, credentialDir: CREDENTIAL_DIR },
+      homeDir: HOME,
+    })
+  })
+
+  it('R3 authorizes on a terminal as the account, never through the pipe', async () => {
+    const b = bench({
+      shared: { mcpServers: { linear: LINEAR } },
+      account: { mcpServers: { linear: LINEAR } },
+    })
+
+    await b.connect()
+
+    expect(b.terminal).toHaveBeenCalledOnce()
+    const [login] = b.terminal.mock.calls[0]
+    expect(login.args).toEqual(['mcp', 'login', 'linear'])
+    expect(login.env.CLAUDE_CONFIG_DIR).toBe(CONFIG_DIR)
+    expect(login.env.CLAUDE_SECURESTORAGE_CONFIG_DIR).toBe(CREDENTIAL_DIR)
+    expect(b.piped.mock.calls.map(([c]) => c.args[1])).not.toContain('login')
+  })
+
+  it('R3 keeps the no-browser rule of the existing door', async () => {
+    const b = bench({
+      shared: { mcpServers: { linear: LINEAR } },
+      account: { mcpServers: { linear: LINEAR } },
+      canOpenBrowser: false,
+    })
+
+    await b.connect()
+
+    expect(b.terminal.mock.calls[0][0].args).toEqual([
+      'mcp',
+      'login',
+      'linear',
+      '--no-browser',
+    ])
+  })
+
+  it('stops before reconciling or authorizing when the add fails', async () => {
+    const b = bench({ shared: {}, account: {} })
+    b.piped.mockResolvedValueOnce({
+      code: 2,
+      stdout: '',
+      stderr: 'Invalid transport',
+    })
+
+    await expect(b.connect()).rejects.toThrow(
+      'Claude Code could not add Linear to the shared profile (exit code 2): Invalid transport',
+    )
+    expect(reconcileClaudeAccountConfigNow).not.toHaveBeenCalled()
+    expect(b.terminal).not.toHaveBeenCalled()
+  })
+
+  it('does not authorize a server the account file could not be given', async () => {
+    const b = bench({
+      shared: { mcpServers: { linear: LINEAR } },
+      account: 'garbage',
+    })
+
+    await expect(b.connect()).rejects.toThrow(
+      /this account’s config could not be updated, so it was not authorized/,
+    )
+    expect(b.terminal).not.toHaveBeenCalled()
+  })
+
+  it('refuses an unreadable shared profile without adding anything', async () => {
+    const b = bench({ shared: 'garbage', account: {} })
+
+    await expect(b.connect()).rejects.toThrow(
+      `Could not read the shared Claude profile at ${SHARED_FILE}. No connectors were changed.`,
+    )
+    expect(b.piped).not.toHaveBeenCalled()
+    expect(b.terminal).not.toHaveBeenCalled()
+  })
+
+  it('holds the account’s admission through the sequence and refuses during maintenance', async () => {
+    const b = bench({ shared: {}, account: {} })
+
+    await b.gate.run('acct-a', async () => {
+      await expect(b.connect()).rejects.toThrow(/being updated/)
+    })
+    expect(b.piped).not.toHaveBeenCalled()
+    expect(b.terminal).not.toHaveBeenCalled()
   })
 })

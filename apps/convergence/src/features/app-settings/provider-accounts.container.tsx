@@ -356,8 +356,10 @@ export const ProviderAccountsContainer: FC = () => {
             })
         setConnectors(result)
         if (!result.error)
+          // Connect Linear's row is the read-back, so the message claims
+          // nothing the list does not already say (MAR-3185, R6).
           setMessage(
-            providerId === 'codex'
+            providerId === 'codex' || connectLinear
               ? 'Connector status refreshed.'
               : `${serverName} authorized for this account.`,
           )

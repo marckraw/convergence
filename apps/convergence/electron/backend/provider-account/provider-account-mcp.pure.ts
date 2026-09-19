@@ -277,6 +277,61 @@ export function buildClaudeMcpListCommand(input: {
 }
 
 /**
+ * Adding a server is a shared-profile write, never an account write (ADR 0007,
+ * MAR-3185). The account's `.claude.json` is overwritten from the shared
+ * `~/.claude.json` at every spawn, so a server added under an account's
+ * `CLAUDE_CONFIG_DIR` would work once and be erased by the next turn.
+ *
+ * The environment is the ambient one — `buildClaudeAccountEnv` with no account
+ * — minus the two variables that would point the CLI at some account's
+ * directory instead of `~/.claude.json`, the file the reconciliation reads. An
+ * app launched from a shell that exports them would otherwise add the server
+ * to a file nothing copies from.
+ *
+ * Measured on Claude Code 2.1.278 (MAR-3185): the add exits 0 without
+ * prompting and writes `mcpServers.<name> = { type: "http", url }` at the top
+ * level; on a name that already exists it refuses ("MCP server <name> already
+ * exists in user config", exit 1) and leaves the file untouched.
+ */
+export const CLAUDE_MCP_ADD_USER_HTTP_SUBCOMMAND: readonly string[] = [
+  'mcp',
+  'add',
+  '-s',
+  'user',
+  '--transport',
+  'http',
+]
+
+const CLAUDE_ACCOUNT_DIRECTORY_VARIABLES = [
+  'CLAUDE_CONFIG_DIR',
+  'CLAUDE_SECURESTORAGE_CONFIG_DIR',
+] as const
+
+export function buildClaudeMcpAddCommand(input: {
+  binaryPath: string
+  serverName: string
+  url: string
+  baseEnv: NodeJS.ProcessEnv
+  workingDirectory?: string
+}): ProviderAccountCommand {
+  const serverName = input.serverName.trim()
+  const url = input.url.trim()
+  if (!serverName || !url) {
+    throw new Error('Adding a connector requires a name and URL.')
+  }
+
+  const env = buildClaudeAccountEnv({ baseEnv: input.baseEnv, account: null })
+  for (const name of CLAUDE_ACCOUNT_DIRECTORY_VARIABLES) delete env[name]
+
+  return {
+    command: input.binaryPath,
+    args: [...CLAUDE_MCP_ADD_USER_HTTP_SUBCOMMAND, serverName, url],
+    env,
+    ...(input.workingDirectory ? { cwd: input.workingDirectory } : {}),
+  }
+}
+
+/**
  * Wordings that mean "this MCP server needs authorizing", as data.
  *
  * Deliberately a list rather than one regex: these are strings from a CLI
