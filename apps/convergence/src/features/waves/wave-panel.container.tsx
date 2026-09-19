@@ -445,6 +445,7 @@ export const WavePanel: FC<WavePanelProps> = ({
       <LoomStripView
         sheets={board.sheets}
         now={board.now}
+        horses={board.horses}
         outage={board.header.kind === 'outage'}
         onExpand={() => changeMode('expanded')}
       />

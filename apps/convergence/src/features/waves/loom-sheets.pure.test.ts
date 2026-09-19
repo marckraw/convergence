@@ -201,7 +201,7 @@ describe('MAR-3189: the titles say what their numbers mean', () => {
     ],
     NOW,
   )
-  const counts = loomSheetCounts(sheets, NOW)
+  const counts = loomSheetCounts(sheets, NOW, [])
 
   it('Now’s two numbers cover all four of its groups', () => {
     // A title that counted only `now.inFlight` would read "1 open" while the
@@ -215,7 +215,10 @@ describe('MAR-3189: the titles say what their numbers mean', () => {
   it('each title names its own unit', () => {
     expect(loomSheetTitle('before', counts)).toBe('Before · 2 done')
     expect(loomSheetTitle('now', counts)).toBe('Now · 3 open · 1 awaiting QA')
-    expect(loomSheetTitle('next', counts)).toBe('Next · 1 queued')
+    // CHANGED by MAR-3193 R5: Next's title is a split, not a total. No
+    // horse is bound in this fixture, so the one queued row is claimed by
+    // no seat and cannot run -- which is `preparing`, not `ready`.
+    expect(loomSheetTitle('next', counts)).toBe('Next · 0 ready · 1 preparing')
     expect(loomSheetTitle('plan', counts)).toBe('Plan · 0 in preparation')
     // Mutation: one title for all four sheets -> red; the words are the
     // difference between four counts and four unexplained numbers.
@@ -243,7 +246,7 @@ describe('MAR-3189: the titles say what their numbers mean', () => {
       ],
       NOW,
     )
-    expect(loomSheetTitle('now', loomSheetCounts(mixed, NOW))).toBe(
+    expect(loomSheetTitle('now', loomSheetCounts(mixed, NOW, []))).toBe(
       'Now · 3 open · 2 awaiting QA',
     )
   })

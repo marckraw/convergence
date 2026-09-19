@@ -10,6 +10,8 @@ import {
 } from './wave-sections.pure'
 import { LOOM_SHEET_NAMES, type LoomSheet } from './wave-panel-sheet.pure'
 import { loomPlan, loomPlanLeftLine, loomUtcDay } from './loom-plan.pure'
+import type { LoomHorse } from './loom-horses.pure'
+import { loomNext } from './loom-next.pure'
 
 /**
  * What is on Now, in the four groups the sheet draws (MAR-3189 R2).
@@ -115,7 +117,20 @@ export interface LoomSheetCounts {
    */
   open: number
   awaitingQa: number
+  /**
+   * Everything queued -- ready and preparing together (MAR-3193 R5).
+   *
+   * The strip draws this one, and its four numbers are "how much is in each
+   * sheet"; splitting it there would change what that column means.
+   */
   next: number
+  /**
+   * Of `next`, what could run now: a seat claims it and it carries the three
+   * labels (MAR-3193 R2).
+   */
+  nextReady: number
+  /** Of `next`, what cannot run yet -- including rows no seat claims. */
+  nextPreparing: number
   plan: number
 }
 
@@ -131,7 +146,12 @@ export interface LoomSheetCounts {
 export function loomSheetCounts(
   sheets: LoomSheets,
   now: number,
+  horses: readonly LoomHorse[],
 ): LoomSheetCounts {
+  // Next's split is a fact about SEATS, not only labels (MAR-3193 R5): a row
+  // whose `horse ›` label names nobody cannot run however it is labelled, so
+  // the horses decide the number as much as the facts do.
+  const next = loomNext(sheets.next, horses)
   return {
     // What the sheet SHOWS, from the sheet's own derivation (MAR-3192 R4).
     // `sheets.before` keeps every finished row the ledger ever wrote -- the
@@ -144,6 +164,8 @@ export function loomSheetCounts(
       sheets.now.decide.length,
     awaitingQa: sheets.now.awaitingQa.length,
     next: sheets.next.length,
+    nextReady: next.ready,
+    nextPreparing: next.preparing,
     // What is being PREPARED (MAR-3194 R5). `sheets.plan` also holds the rows
     // that left the loop -- the partition is untouched -- and those are
     // counted in a sentence, not listed, so counting the list would promise
@@ -179,18 +201,24 @@ export function loomSheetTitle(
   if (sheet === 'now') {
     return `${name} · ${counts.open} open · ${counts.awaitingQa} awaiting QA`
   }
-  if (sheet === 'next') return `${name} · ${counts.next} queued`
+  if (sheet === 'next') {
+    // What a person can act on first, and what is still waiting on a label
+    // (MAR-3193 R5). One number when nothing is preparing: a trailing
+    // `· 0 preparing` is noise that reads like a warning.
+    const ready = `${name} · ${counts.nextReady} ready`
+    return counts.nextPreparing > 0
+      ? `${ready} · ${counts.nextPreparing} preparing`
+      : ready
+  }
   return `${name} · ${counts.plan} in preparation`
 }
-
-/** What Plan cannot say yet, and says instead of pretending (MAR-3189). */
 
 /**
  * The line under a sheet's title, or null when the rows speak for themselves.
  *
- * Plan always carries its note: today it can only hold `assigned` issues with
- * no seat, which is not what a plan is -- the wider read is LV1's, and saying
- * so is honest where an empty sheet would read as "nothing is planned".
+ * An empty sheet is rarely one fact, which is why Before and Plan compute
+ * theirs: "nothing here" and "nothing here LATELY" read the same and are
+ * not, and the note is where the difference is said.
  */
 export function loomSheetNote(
   sheet: LoomSheet,
