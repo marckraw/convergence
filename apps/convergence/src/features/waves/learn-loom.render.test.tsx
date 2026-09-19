@@ -790,6 +790,11 @@ describe('MAR-3203 R1: one scroller, and it is the teaching body', () => {
     // out are the two things a short window may never take away.
     expect(body.contains(header)).toBe(false)
     expect(body.contains(footer)).toBe(false)
+    // The header's `shrink-0` is the shared DialogHeader's, not the guide's,
+    // so removing it from LEARN_LOOM_HEADER_CLASS leaves this green. The
+    // mutation that matches THIS claim is an override -- `shrink` in the
+    // guide's own class, which tailwind-merge lets win -> red. The footer is
+    // the guide's own div, so there `shrink-0` is ours to lose.
     expect(header.className).toContain('shrink-0')
     expect(footer.className).toContain('shrink-0')
 
@@ -884,22 +889,32 @@ describe('MAR-3203: the footer keeps its primary, whatever it loses', () => {
     open()
     const button = (name: string | RegExp) =>
       screen.getByRole('button', { name })
+    // `shrink-0` has to be asked for as a WHOLE class. The shared Button's
+    // base already carries `[&_svg]:shrink-0` for its icons, so a plain
+    // `toContain('shrink-0')` is green on every button in the app and would
+    // prove nothing here -- it is the substring, not the rule.
+    const holds = (el: Element) => /(^|\s)shrink-0(\s|$)/.test(classesOf(el))
+    const narrows = (el: Element) => /(^|\s)min-w-0(\s|$)/.test(classesOf(el))
+
     // Mutation: swap the two -> the control that advances the lesson is the
-    // first thing squeezed out of a narrow row, red here.
-    expect(next().className).toContain('shrink-0')
-    expect(button(LEARN_LOOM_CONTROLS.reference).className).toContain('min-w-0')
-    expect(button(LEARN_LOOM_CONTROLS.back).className).toContain('min-w-0')
+    // first thing squeezed out of a narrow row, red on all four lines.
+    expect(holds(next())).toBe(true)
+    expect(narrows(next())).toBe(false)
+    expect(narrows(button(LEARN_LOOM_CONTROLS.reference))).toBe(true)
+    expect(narrows(button(LEARN_LOOM_CONTROLS.back))).toBe(true)
     // The refusing Back is still a quiet control, and narrows like one.
     expect(button(LEARN_LOOM_CONTROLS.back).getAttribute('aria-disabled')).toBe(
       'true',
     )
 
     // And the same promise in the quick reference's own two-control row.
+    // Mutation: give its primary the shared ghost class -> red here, and
+    // green on a `toContain` -- which is why this reads the whole class.
     press(LEARN_LOOM_CONTROLS.reference)
-    expect(button(LEARN_LOOM_CONTROLS.backToLoom).className).toContain(
-      'shrink-0',
-    )
-    expect(button(LEARN_LOOM_CONTROLS.restart).className).toContain('min-w-0')
+    expect(holds(button(LEARN_LOOM_CONTROLS.backToLoom))).toBe(true)
+    expect(narrows(button(LEARN_LOOM_CONTROLS.backToLoom))).toBe(false)
+    expect(narrows(button(LEARN_LOOM_CONTROLS.restart))).toBe(true)
+    expect(holds(button(LEARN_LOOM_CONTROLS.restart))).toBe(false)
   })
 
   it('and it stays one row: it is never allowed to wrap or stack', () => {
