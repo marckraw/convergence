@@ -381,6 +381,31 @@ describe('MAR-3201 lap 3, G: the three looks', () => {
     expect(status().className).toContain('text-foreground')
   })
 
+  it('lap 4, G3: the ticket reads in the frames’ order, and the icons are the stack’s', () => {
+    open()
+    // Nodes 559:841-844, top to bottom: identifier, title, status, note.
+    // Mutation: put the note back at the top -> red.
+    const lines = Array.from(ticket().querySelectorAll('p')).map(
+      (line) => line.textContent,
+    )
+    expect(lines).toEqual([
+      'DEMO-101',
+      'Improve account setup',
+      'Brief → code check',
+      'Illustrative ticket',
+    ])
+
+    // 559:815 is emerald and 559:821 is sky -- the real stack's own colours,
+    // which both surfaces now read from one map.
+    // Mutation: hardcode the icons muted in the guide -> red.
+    const icon = (sheet: string) =>
+      document.querySelector(
+        `[data-learn-loom-sheet="${sheet}"] svg`,
+      ) as SVGElement
+    expect(icon('before').getAttribute('class')).toContain('text-emerald-500')
+    expect(icon('now').getAttribute('class')).toContain('text-sky-400')
+  })
+
   it('G3: the ticket’s note is sentence case, and the reference leads larger', () => {
     open()
     const note = within(ticket()).getByText('Illustrative ticket')
