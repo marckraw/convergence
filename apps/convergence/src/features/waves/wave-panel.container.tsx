@@ -40,11 +40,6 @@ import { LoomRefresh } from './loom-refresh.container'
 
 interface WavePanelProps {
   onOpenSession?: (session: SessionSummary) => void
-  /**
-   * Mission Control is showing its Waves tab (lap 2, B): the column would be
-   * the same board twice, so it steps aside.
-   */
-  hidden?: boolean
   /** Pixels already taken beside the column (the sidebar), for the floor. */
   reservedWidth?: number
   /**
@@ -75,8 +70,8 @@ interface WavePanelProps {
  * refusal words the detail composes reachable only through a horse card.
  *
  * The refusal did not disappear; it moved inside the detail, which is where
- * it belongs now that a row's door is the ISSUE. Mission Control's Waves tab
- * keeps the real reason -- there a row still opens a conversation.
+ * it belongs now that a row's door is the ISSUE. (The Waves tab kept the real
+ * reason until MAR-3233 retired it; the prop stays in the sheet's contract.)
  */
 const LOOM_ROWS_ALWAYS_OPEN = () => null
 
@@ -179,20 +174,19 @@ function useSheetScroll(
 }
 
 /**
- * Loom beside the conversation (MAR-3097, MAR-3189). Mounted only when a crew
- * reads a tracker; not beside Mission Control's own Waves tab. Four sheets,
- * one open, compact in its column or expanded across the content area -- and
- * the strip, without touching any choice, when the window is too narrow for a
- * column. Never writes to the tracker.
+ * Loom beside the conversation (MAR-3097, MAR-3189). Mounted only when a
+ * crew reads a tracker. Four sheets, one open, compact in its column or
+ * expanded across the content area -- and the strip, without touching any
+ * choice, when the window is too narrow for a column. Never writes to the
+ * tracker.
  */
 export const WavePanel: FC<WavePanelProps> = ({
   onOpenSession,
-  hidden = false,
   reservedWidth = 0,
   onExpandedChange,
   expandedContainer,
 }) => {
-  const board = useWaveBoard('selected')
+  const board = useWaveBoard()
   const [stored, setStored] = useState<WavePanelMode>(loadWavePanelMode)
   const [storedWidth, setStoredWidth] = useState<number>(loadWavePanelWidth)
   const [sheet, setSheet] = useState<LoomSheet>(loadLoomSheet)
@@ -371,14 +365,13 @@ export const WavePanel: FC<WavePanelProps> = ({
     windowWidth,
     reservedWidth,
   })
-  // Whether the panel renders anything at all (MAR-3161 R4): the Waves tab
-  // showing the same board (`hidden`), or the last bound crew gone. ONE const,
-  // read by the early return below and by the on-screen fact -- which adds
-  // the third reason a column can be absent, the strip (the decision). The
-  // hook outlives the handle -- hold the edge while any of the three happens
-  // and the mouse-up still arrives -- so asking it about the strip alone
-  // would be asking a proxy for the question (lap 3, B).
-  const columnAbsent = hidden || board.boundCrewCount === 0
+  // Whether the panel renders anything at all (MAR-3161 R4): the last bound
+  // crew gone. ONE const, read by the early return below and by the
+  // on-screen fact -- which adds the second reason a column can be absent,
+  // the strip (the decision). The hook outlives the handle -- hold the edge
+  // while either happens and the mouse-up still arrives -- so asking it
+  // about the strip alone would be asking a proxy for the question (lap 3, B).
+  const columnAbsent = board.boundCrewCount === 0
   const onScreen =
     !columnAbsent && decision.mode === 'compact'
       ? { width: decision.width, maxWidth: decision.maxWidth }
@@ -425,10 +418,10 @@ export const WavePanel: FC<WavePanelProps> = ({
   const guideButton = useRef<HTMLButtonElement | null>(null)
   const openGuide = useCallback(() => setGuideOpen(true), [])
   const closeGuide = useCallback(() => setGuideOpen(false), [])
-  // When Loom itself is gone -- no bound crew, or the Waves tab took over --
-  // the guide goes with it (lap 3, A). Closed, not merely unmounted: a guide
-  // left `open` would come back by itself the moment a crew is bound again,
-  // which is the one thing R9 forbids.
+  // When Loom itself is gone -- no bound crew -- the guide goes with it
+  // (lap 3, A). Closed, not merely unmounted: a guide left `open` would come
+  // back by itself the moment a crew is bound again, which is the one thing
+  // R9 forbids.
   useEffect(() => {
     if (columnAbsent) setGuideOpen(false)
   }, [columnAbsent])
@@ -521,8 +514,8 @@ export const WavePanel: FC<WavePanelProps> = ({
     open: sheet,
     onSelectSheet: selectSheet,
     inertReason: LOOM_ROWS_ALWAYS_OPEN,
-    // In Loom a row is a door to the ISSUE (MAR-3195); the Waves tab's rows
-    // still open the conversation, through `WavesTab`'s own `openRow`.
+    // In Loom a row is a door to the ISSUE (MAR-3195); the refusal words live
+    // inside the detail.
     onOpen: showDetail,
     bodyRef,
     onBodyScroll,

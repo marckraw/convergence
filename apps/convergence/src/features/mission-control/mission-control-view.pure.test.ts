@@ -53,9 +53,21 @@ describe('parseMissionControlView', () => {
     expect(readStoredViewMode('crews')).toBe('canvas')
   })
 
-  it('MAR-3097 R6: reads a stored Waves tab as Waves', () => {
-    expect(readStoredViewMode('waves')).toBe('waves')
-    expect(parseMissionControlView('{"mode":"waves"}').mode).toBe('waves')
+  /**
+   * R2 (MAR-3233). The Waves tab retired into Loom; a stored `waves` is a
+   * word this build no longer knows, and reads as the default mode -- the
+   * parse law: no stored value leaves a person without a view. Nothing is
+   * rewritten until the person chooses.
+   *
+   * Mutation that reds it: return the stored string unchecked from
+   * `readStoredViewMode`.
+   */
+  it('MAR-3233 R2: reads a stored Waves as the default room; a known mode, garbage and nothing for the table', () => {
+    expect(readStoredViewMode('waves')).toBe('flat')
+    expect(parseMissionControlView('{"mode":"waves"}').mode).toBe('flat')
+    expect(readStoredViewMode('canvas')).toBe('canvas')
+    expect(readStoredViewMode('constellations')).toBe('flat')
+    expect(readStoredViewMode(null)).toBe('flat')
   })
 
   it('falls back to the flat room for a view mode it does not know', () => {

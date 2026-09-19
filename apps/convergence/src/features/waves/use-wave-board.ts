@@ -17,13 +17,10 @@ import { loadLoomCrew, saveLoomCrew } from './wave-panel-crew.api'
 import { resolveLoomCrew, type LoomCrewOption } from './wave-panel-crew.pure'
 import {
   resolveWaveRow,
-  sectionWaveRows,
-  waveBoardLine,
   waveHeader,
   waveRowsFromSnapshots,
   type WaveHeader,
   type WaveRowOpening,
-  type WaveSections,
 } from './wave-sections.pure'
 
 /**
@@ -38,27 +35,22 @@ export const LOOM_LOCAL_HOST_LABEL = 'This Mac'
 /**
  * Which crews a board is built from (MAR-3225).
  *
- * - `all`: every bound crew -- Mission Control's Waves tab, the all-crews
- *   surface, where each row names its crew.
- * - `selected`: the one crew a person picked -- Loom, which is one crew's
- *   loom at a time. Two projects are two looms.
+ * One crew at a time -- Loom is one crew's loom at a time. Two projects are
+ * two looms. (An `all` scope existed for Mission Control's Waves tab until
+ * MAR-3233 retired it.)
  */
-export type WaveBoardScope = 'all' | 'selected'
-
 export interface WaveBoard {
   /** How many crews read a tracker; zero means the column is not mounted. */
   boundCrewCount: number
   /** Every bound crew, in crew order: what Loom's crew picker lists. */
   crewOptions: LoomCrewOption[]
   /**
-   * The crew the board is built from under `selected` (MAR-3225 R2): the
-   * stored choice while it is bound, else the first bound crew; `null` under
-   * `all`, or when nothing is bound.
+   * The crew the board is built from (MAR-3225 R2): the stored choice while
+   * it is bound, else the first bound crew; `null` when nothing is bound.
    */
   selectedCrewId: string | null
   /** Picks the crew Loom shows and remembers it (MAR-3225 R4). */
   selectCrew: (crewId: string) => void
-  sections: WaveSections
   /** The same rows in Loom's four sheets (MAR-3189 R2). */
   sheets: LoomSheets
   /** The shown crews' horse seats, in crew order (MAR-3191 R1). */
@@ -70,22 +62,21 @@ export interface WaveBoard {
   /** The board's own clock, so an age is computed once per tick (R8). */
   now: number
   header: WaveHeader
-  boardLine: string
   resolveRow: (entry: WorkLedgerEntry) => WaveRowOpening<SessionSummary>
 }
 
 /**
- * The one model behind the wave column, its rail and Mission Control's Waves
- * tab (MAR-3097 R4, R6): the bound crews' last snapshots, sectioned once.
+ * The one model behind Loom (MAR-3097 R4, MAR-3189): the bound crews' last
+ * snapshots, sectioned once.
  *
  * Owns the subscriptions and the `now` clock (R8), so every presentational
  * that draws a wave row is handed facts and never reaches a store.
  *
- * One hook for both surfaces, told which crews to show (MAR-3225): Loom asks
- * for the `selected` crew, the Waves tab for `all`. A parameter rather than a
- * second hook, so the two cannot drift into reading the ledger differently.
+ * One hook for the whole board, one crew at a time (MAR-3225): everything
+ * below is built from the shown crew's rows alone, so a second crew cannot
+ * leak into Loom through any one of them.
  */
-export function useWaveBoard(scope: WaveBoardScope): WaveBoard {
+export function useWaveBoard(): WaveBoard {
   const crews = useSessionCrewStore((state) => state.crews)
   const loadCrews = useSessionCrewStore((state) => state.load)
   const snapshots = useWorkLedgerStore((state) => state.snapshots)
@@ -95,8 +86,8 @@ export function useWaveBoard(scope: WaveBoardScope): WaveBoard {
     (state) => state.settings.executionHostEndpoints,
   )
   const [now, setNow] = useState(() => Date.now())
-  // Read under both scopes (hooks are not optional) and used only under
-  // `selected`: the Waves tab has no choice to remember.
+  // The crew Loom is on screen for (MAR-3225 R2): the stored choice while it
+  // is bound, else the first bound crew.
   const [storedCrew, setStoredCrew] = useState<string | null>(loadLoomCrew)
 
   useEffect(() => {
@@ -133,19 +124,13 @@ export function useWaveBoard(scope: WaveBoardScope): WaveBoard {
       boundCrewIds.map((id) => ({ id, name: crewFacts.get(id)?.name ?? id })),
     [boundCrewIds, crewFacts],
   )
-  const selectedCrewId =
-    scope === 'selected' ? resolveLoomCrew(storedCrew, boundCrewIds) : null
+  const selectedCrewId = resolveLoomCrew(storedCrew, boundCrewIds)
   // The crews this board is BUILT from (MAR-3225 R1). Everything below --
   // rows, header health, horses -- reads this list and never `boundCrewIds`,
   // so a second crew cannot leak into Loom through any one of them.
   const shownCrewIds = useMemo(
-    () =>
-      scope === 'all'
-        ? boundCrewIds
-        : selectedCrewId === null
-          ? []
-          : [selectedCrewId],
-    [scope, boundCrewIds, selectedCrewId],
+    () => (selectedCrewId === null ? [] : [selectedCrewId]),
+    [selectedCrewId],
   )
   const selectCrew = useCallback((crewId: string) => {
     setStoredCrew(crewId)
@@ -165,26 +150,7 @@ export function useWaveBoard(scope: WaveBoardScope): WaveBoard {
     [snapshots, shownCrewIds, crewFacts],
   )
 
-  // A row names its crew only where rows of several crews sit side by side
-  // (MAR-3225 R5): the Waves tab. In Loom one crew is on screen and the
-  // subline already names it.
-  const several = shownCrewIds.length > 1
-  const sections = useMemo(
-    () =>
-      sectionWaveRows(rows, now, (crewId) => ({
-        name: several ? (crewFacts.get(crewId)?.name ?? crewId) : null,
-        cap: null,
-      })),
-    [rows, now, several, crewFacts],
-  )
-  const sheets = useMemo(
-    () =>
-      loomSheets(rows, now, (crewId) => ({
-        name: several ? (crewFacts.get(crewId)?.name ?? crewId) : null,
-        cap: null,
-      })),
-    [rows, now, several, crewFacts],
-  )
+  const sheets = useMemo(() => loomSheets(rows, now), [rows, now])
   const header = useMemo(
     () => waveHeader({ crews: headerCrews, rowCount: rows.length, now }),
     [headerCrews, rows.length, now],
@@ -248,14 +214,12 @@ export function useWaveBoard(scope: WaveBoardScope): WaveBoard {
     crewOptions,
     selectedCrewId,
     selectCrew,
-    sections,
     sheets,
     horses,
     findSession,
     lastOkAtOf,
     now,
     header,
-    boardLine: waveBoardLine(sections),
     resolveRow,
   }
 }

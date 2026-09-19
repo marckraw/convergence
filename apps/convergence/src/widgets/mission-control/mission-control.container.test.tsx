@@ -271,44 +271,6 @@ describe('MissionControl', () => {
     )
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       session: { getAllSummaries },
-      // The Waves tab reads the ledger (MAR-3097).
-      workLedger: {
-        list: vi.fn(async (crewId: string) => ({
-          crewId,
-          entries: [
-            {
-              id: 'row-1',
-              crewId,
-              issueId: 'issue-1',
-              issueIdentifier: 'EX-1',
-              issueTitle: 'The reviewed issue',
-              issueUrl: 'https://linear.app/example/issue/ex-1',
-              seat: 'opus',
-              wave: 'loom-p2',
-              lap: 1,
-              state: 'reviewed',
-              trackerStatus: 'Reviewed',
-              groundedAt: null,
-              seenAt: '2026-09-17T12:00:00.000Z',
-              fact: {
-                logicalStatus: 'reviewed',
-                branchName: null,
-                updatedAt: null,
-              },
-              sessionId: null,
-              pr: null,
-              hostLiveness: null,
-            },
-          ],
-          trackerHealth: {
-            state: 'ok',
-            since: '2026-09-17T12:00:00.000Z',
-            lastOkAt: '2026-09-17T12:00:00.000Z',
-            backoffUntil: null,
-          },
-        })),
-        onUpdated: vi.fn(() => () => undefined),
-      },
       // The crew details host the tracker form (MAR-3084), which asks
       // whether a key is stored as soon as it mounts.
       tracker: {
@@ -724,47 +686,7 @@ describe('MissionControl', () => {
   // membership, wire authoring, baton names, limits, and the calls waiting
   // for a human — now has a home on the Canvas, and its suite moved with it.
   // What survives here is the mode list, which must no longer offer it.
-  it('MAR-3097 lap 2, D: the Waves tab carries its own line and none of the session chrome', async () => {
-    seedCrews([
-      makeCrew({
-        id: 'crew-1',
-        name: 'Loom',
-        trackerBinding: {
-          kind: 'linear',
-          projectId: 'project-1',
-          labelPrefix: 'horse:',
-          wavePrefix: 'wave:',
-          statusMap: {},
-        },
-      }),
-    ])
-    seed([makeSession({ id: 'a', name: 'Wire the room' })], [CLAUDE_CODE])
-    const onModeChange = vi.fn()
-
-    render(<MissionControl onModeChange={onModeChange} />)
-    await screen.findByText('Wire the room')
-    expect(screen.getByLabelText('Search session cards')).toBeInTheDocument()
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Waves' }))
-
-    expect(
-      await screen.findByText('1 issue · 1 waiting on you'),
-    ).toBeInTheDocument()
-    expect(
-      document.querySelector('[data-wave-row="crew-1:EX-1"]'),
-    ).not.toBeNull()
-    // Mutation: render the search in waves mode -> red.
-    expect(screen.queryByLabelText('Search session cards')).toBeNull()
-    expect(screen.queryByLabelText('Order session cards')).toBeNull()
-    expect(screen.queryByText(/session.* need/)).toBeNull()
-    // One scroller: Mission Control's; the full tab does not add its own.
-    expect(
-      document.querySelectorAll('[data-wave-panel="full"] .overflow-y-auto'),
-    ).toHaveLength(0)
-    expect(onModeChange).toHaveBeenLastCalledWith('waves')
-  })
-
-  it('offers three layouts, because Crews retired into the Canvas and Waves reads the tracker', async () => {
+  it('offers two layouts, because Crews retired into the Canvas and Waves into Loom (MAR-3233 R1)', async () => {
     seedCrews([makeCrew({ id: 'crew-1', name: 'Night shift' })])
     seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
 
@@ -774,12 +696,11 @@ describe('MissionControl', () => {
     expect(
       await screen.findByRole('button', { name: 'Flat' }),
     ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Canvas' })).toBeInTheDocument()
+    // Mutation: leave either retired mode in the list -> red here.
     expect(
-      await screen.findByRole('button', { name: 'Canvas' }),
-    ).toBeInTheDocument()
-    expect(
-      await screen.findByRole('button', { name: 'Waves' }),
-    ).toBeInTheDocument()
+      screen.queryByRole('button', { name: 'Waves' }),
+    ).not.toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: 'Crews' }),
     ).not.toBeInTheDocument()
