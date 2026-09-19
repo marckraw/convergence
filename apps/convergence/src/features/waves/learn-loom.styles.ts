@@ -12,13 +12,13 @@ import type { LearnLoomEmphasis } from './learn-loom.pure'
 
 /** 1000 wide, never wider than the viewport minus its 24 px margins. */
 export const LEARN_LOOM_DIALOG_CLASS =
-  'w-[min(1000px,calc(100vw-48px))] max-h-[calc(100vh-48px)] rounded-[20px] gap-0 px-8 pt-7 pb-6'
+  'w-[min(1000px,calc(100vw-48px))] h-[840px] max-h-[calc(100vh-48px)] bg-background rounded-[20px] gap-0 px-8 pt-7 pb-6'
 
 /** Black at 68 %, and no blur — the contract is explicit about both. */
 export const LEARN_LOOM_OVERLAY_CLASS = 'bg-black/[0.68] backdrop-blur-none'
 
 export const LEARN_LOOM_HEADER_CLASS =
-  'flex h-11 shrink-0 flex-row items-center justify-between gap-4 space-y-0'
+  'flex h-11 shrink-0 flex-row items-center justify-between gap-4 space-y-0 bg-transparent'
 
 export const LEARN_LOOM_DIALOG_TITLE_CLASS = 'text-[22px] font-semibold'
 
@@ -68,11 +68,12 @@ export const LEARN_LOOM_CONTROL_OFF_CLASS =
  */
 export const LEARN_LOOM_EYEBROW_CLASS =
   'flex items-center gap-4 text-xs font-semibold text-blue-500'
-export const LEARN_LOOM_STEP_INTRO_CLASS = 'flex flex-col gap-2'
+export const LEARN_LOOM_STEP_INTRO_CLASS =
+  'flex min-h-[82px] shrink-0 flex-col gap-2'
 export const LEARN_LOOM_STEP_TITLE_CLASS =
   'text-[27px] font-semibold leading-[135%]'
 
-export const LEARN_LOOM_EXPLANATION_CLASS = 'flex flex-col gap-4'
+export const LEARN_LOOM_EXPLANATION_CLASS = 'flex shrink-0 flex-col gap-4'
 export const LEARN_LOOM_MAIN_CLASS = 'text-base leading-[145%]'
 /**
  * The headline and its explanation are one filled card (lap 3, G1), not two
@@ -80,7 +81,7 @@ export const LEARN_LOOM_MAIN_CLASS = 'text-base leading-[145%]'
  * apart from the prose around them. Node `559:847`: no border, radius 10.
  */
 export const LEARN_LOOM_KEY_CARD_CLASS =
-  'flex flex-col gap-1.5 rounded-[10px] bg-white/[0.04] px-4 py-3.5'
+  'flex flex-col gap-1.5 rounded-[10px] bg-card px-4 py-3.5'
 export const LEARN_LOOM_KEY_HEADLINE_CLASS = 'text-[15px] font-semibold'
 /** Foreground, not muted: `559:849` is the same grey as the prose above it. */
 export const LEARN_LOOM_KEY_EXPLANATION_CLASS = 'text-sm leading-[145%]'
@@ -111,7 +112,7 @@ export const LEARN_LOOM_ILLUSTRATION_CLASS =
  * states is a property the browser has to interpolate (LL2 R1).
  */
 export const LEARN_LOOM_SHEET_CLASS =
-  'relative flex h-full min-w-0 shrink-0 flex-col gap-1.5 rounded-[14px] border pt-3 pl-4 pr-[18px]'
+  'relative flex h-full min-w-0 shrink-0 flex-col gap-1.5 overflow-hidden rounded-[14px] border pt-3 pl-4 pr-[18px]'
 /**
  * Widths and the overlap come from `LEARN_LOOM_GEOMETRY`, not from here.
  *
@@ -120,9 +121,9 @@ export const LEARN_LOOM_SHEET_CLASS =
  * transition at all -- there is no number in common for the browser to move
  * between. Both states now carry the same two numbers (LL2 R1).
  */
-export const LEARN_LOOM_SHEET_CLOSED_CLASS = 'border-white/10 bg-white/[0.02]'
+export const LEARN_LOOM_SHEET_CLOSED_CLASS = 'border-border bg-background'
 /** The active sheet's border carries the step's emphasis (lap 3, G3). */
-export const LEARN_LOOM_SHEET_ACTIVE_CLASS = 'bg-white/[0.04]'
+export const LEARN_LOOM_SHEET_ACTIVE_CLASS = 'bg-card'
 
 /**
  * The guide's one transition, wherever it is worn (LL2 R1).
@@ -144,7 +145,7 @@ export const LEARN_LOOM_MOTION_CLASS =
  * A sheet trades its share of the row, and wears the emphasis.
  *
  * `background-color` is on the list because a step CHANGES it: the closed
- * fill is white at 2 % and the active one at 4 %, so leaving it off made the
+ * surface uses the background token and the active one the card token, so leaving it off made the
  * fill snap while the border and the width glided (LL2's verdict).
  */
 export const LEARN_LOOM_SHEET_TRANSITION_CLASS =
@@ -158,8 +159,10 @@ export const LEARN_LOOM_SHEET_TRANSITION_CLASS =
  */
 export const LEARN_LOOM_TICKET_TRANSITION_CLASS =
   'transition-[left,border-color]'
-export const LEARN_LOOM_SHEET_NAME_CLASS = 'text-base font-semibold'
-export const LEARN_LOOM_SHEET_COUNT_CLASS = 'text-xs text-muted-foreground'
+export const LEARN_LOOM_SHEET_NAME_CLASS =
+  'text-base font-semibold leading-[135%]'
+export const LEARN_LOOM_SHEET_COUNT_CLASS =
+  'text-xs leading-[135%] whitespace-pre-line text-muted-foreground'
 
 /**
  * 128 tall; its width, left edge and clamp are derived (lap 3, F).
@@ -170,7 +173,7 @@ export const LEARN_LOOM_SHEET_COUNT_CLASS = 'text-xs text-muted-foreground'
  * exactly the narrow viewports the clamp exists for (LL3).
  */
 export const LEARN_LOOM_TICKET_CLASS =
-  'absolute top-[116px] flex h-32 min-w-0 flex-col gap-[7px] rounded-[10px] border bg-white/[0.04] px-3 pt-3'
+  'absolute top-[116px] flex h-32 min-w-0 flex-col leading-[135%] gap-[7px] rounded-[10px] border bg-card px-3 pt-3'
 
 /**
  * The identifier is blue on every step, like the eyebrow (`559:841`,
@@ -223,8 +226,9 @@ export const LEARN_LOOM_REFERENCE_GRID_CLASS =
   'grid grid-cols-1 min-[860px]:grid-cols-2 gap-3'
 /** No border in `559:2312`; a fill, radius 12, and 14/15 padding. */
 export const LEARN_LOOM_REFERENCE_CARD_CLASS =
-  'flex flex-col gap-2 rounded-xl bg-white/[0.04] px-[15px] pt-3.5 pb-4'
-export const LEARN_LOOM_REFERENCE_CARD_TITLE_CLASS = 'text-base font-semibold'
+  'flex min-h-[152px] flex-col gap-2 rounded-xl bg-card px-[15px] pt-3.5 pb-4'
+export const LEARN_LOOM_REFERENCE_CARD_TITLE_CLASS =
+  'text-base font-semibold leading-[145%]'
 /** Foreground, not muted (`559:2314`). */
 export const LEARN_LOOM_REFERENCE_LINE_CLASS = 'text-sm leading-[145%]'
 /** The reference's own promise, above the cards (`559:2309`): 19 px. */

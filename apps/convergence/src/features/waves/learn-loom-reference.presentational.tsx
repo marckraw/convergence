@@ -28,11 +28,11 @@ export const LearnLoomReferenceView: FC = () => (
           <h3 className={LEARN_LOOM_REFERENCE_CARD_TITLE_CLASS}>
             {card.title}
           </h3>
-          {card.lines.map((line) => (
-            <p key={line} className={LEARN_LOOM_REFERENCE_LINE_CLASS}>
-              {line}
-            </p>
-          ))}
+          <div className={LEARN_LOOM_REFERENCE_LINE_CLASS}>
+            {card.lines.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+          </div>
         </section>
       ))}
     </div>

@@ -63,6 +63,7 @@ export const LearnLoomIllustrationView: FC<{ view: LearnLoomStepView }> = ({
           <div
             key={sheet.sheet}
             data-learn-loom-sheet={sheet.sheet}
+            aria-label={sheet.title}
             data-learn-loom-active={sheet.active ? 'true' : 'false'}
             style={{
               ...learnLoomMotionStyle(),
@@ -99,7 +100,7 @@ export const LearnLoomIllustrationView: FC<{ view: LearnLoomStepView }> = ({
             {/* Closed sheets keep their name, icon and count, horizontal --
                 the person is meant to recognise the panel behind them. */}
             <p className={LEARN_LOOM_SHEET_NAME_CLASS}>{sheet.name}</p>
-            <p className={LEARN_LOOM_SHEET_COUNT_CLASS}>{sheet.title}</p>
+            <p className={LEARN_LOOM_SHEET_COUNT_CLASS}>{sheet.countLabel}</p>
           </div>
         )
       })}

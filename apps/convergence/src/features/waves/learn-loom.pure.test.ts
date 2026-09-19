@@ -71,6 +71,20 @@ describe('MAR-3201 R1: the lesson is the handoff’s table', () => {
 })
 
 describe('MAR-3201 R2: the titles are the app’s own sentences', () => {
+  it('shows the name once, with compact counts on closed sheets', () => {
+    const prepare = learnLoomSheetViews(LEARN_LOOM_STEPS[0]!)
+    expect(prepare.map((sheet) => sheet.countLabel)).toEqual([
+      '0 done',
+      '0 open\n0 awaiting QA',
+      '0 ready',
+      '1 in preparation',
+    ])
+    const accept = learnLoomSheetViews(LEARN_LOOM_STEPS[4]!)
+    expect(accept.find((sheet) => sheet.sheet === 'now')!.countLabel).toBe(
+      '0 open · 1 awaiting QA',
+    )
+  })
+
   it('each sheet title is what loomSheetTitle says for that step', () => {
     for (const step of LEARN_LOOM_STEPS) {
       const views = learnLoomSheetViews(step)
