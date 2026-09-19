@@ -70,6 +70,10 @@ export type HarnessFact = {
       mcpServers: {
         total: number
         connected: number
+        /** The connected servers by name (MAR-3213); absent on facts written before it. */
+        connectedNames?: string[]
+        /** Connected servers beyond the 16 named above. */
+        connectedOmitted?: number
         others: { name: string; status: string | null }[]
         omitted: number
         omittedAlerts: number

@@ -431,3 +431,108 @@ it('RUN61 r5 raw init placeholder is shown — mutation drop raw mapping turns r
   })
   expect(screen.queryByText('Harness record truncated')).not.toBeNull()
 })
+
+// -- MAR-3213 R2: the panel names the connected servers; old facts still render --
+
+function openHarnessPopover(facts: SessionHarnessFacts) {
+  render(
+    <HarnessFactsView
+      facts={facts}
+      error={null}
+      loading={false}
+      onRetry={vi.fn()}
+    />,
+  )
+  fireEvent.pointerDown(screen.getByTestId('harness-pill'), {
+    button: 0,
+    ctrlKey: false,
+    pointerType: 'mouse',
+  })
+}
+
+it('MAR-3213 R2 names the connected servers under the count — mutation derive the names from the whole list turns red', () => {
+  // The reader is the real one, so the fact's shape is exactly what a live
+  // session writes: names of the connected only, pending left to `others`.
+  const fact = readClaudeHarnessFact(
+    {
+      type: 'system',
+      subtype: 'init',
+      mcp_servers: [
+        { name: 'claude.ai Figma', status: 'connected' },
+        { name: 'srv-b', status: 'connected' },
+        { name: 'linear', status: 'needs-auth' },
+      ],
+    },
+    'now',
+  )
+  if (fact?.kind !== 'harness.init') throw Error('not init')
+  const facts: SessionHarnessFacts = {
+    turns: [],
+    currentTurn: null,
+    compactions: [],
+    init: {
+      ...fact,
+      mcpServers: fact.mcpServers
+        ? { ...fact.mcpServers, connectedOmitted: 1 }
+        : null,
+    },
+    rateLimit: null,
+  }
+  openHarnessPopover(facts)
+  expect(screen.getByText('MCP servers · 2 connected of 3')).toBeInTheDocument()
+  // The connected names line, then the not-connected list as today.
+  expect(
+    screen.getByText('Connected: claude.ai Figma, srv-b'),
+  ).toBeInTheDocument()
+  expect(screen.getByText('… and 1 more connected')).toBeInTheDocument()
+  expect(screen.getByText('linear · needs-auth')).toBeInTheDocument()
+})
+
+it('MAR-3213 R2 an old fact without the new fields renders exactly today — mutation render the names unconditionally turns red', () => {
+  // A fact recorded before this change: no connectedNames, no
+  // connectedOmitted. Its render must be byte-identical to the panel before
+  // the fields existed — no new line, no empty label, no "undefined".
+  const facts: SessionHarnessFacts = {
+    turns: [],
+    currentTurn: null,
+    compactions: [],
+    init: {
+      kind: 'harness.init',
+      at: 'now',
+      claudeCodeVersion: null,
+      model: null,
+      permissionMode: null,
+      mcpServers: {
+        total: 2,
+        connected: 1,
+        others: [{ name: 'linear', status: 'needs-auth' }],
+        omitted: 0,
+        omittedAlerts: 0,
+      },
+      plugins: null,
+      capabilities: null,
+      tools: null,
+      skills: null,
+      slashCommands: null,
+    },
+    rateLimit: null,
+  }
+  const { container } = render(
+    <HarnessFactsView
+      facts={facts}
+      error={null}
+      loading={false}
+      onRetry={vi.fn()}
+    />,
+  )
+  fireEvent.pointerDown(screen.getByTestId('harness-pill'), {
+    button: 0,
+    ctrlKey: false,
+    pointerType: 'mouse',
+  })
+  expect(screen.getByText('MCP servers · 1 connected of 2')).toBeInTheDocument()
+  expect(screen.getByText('linear · needs-auth')).toBeInTheDocument()
+  expect(screen.queryByText(/Connected:/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/more connected/)).not.toBeInTheDocument()
+  expect(container.textContent).not.toContain('undefined')
+})

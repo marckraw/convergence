@@ -933,3 +933,36 @@ it('opens the OpenAI tab directly from the composer account action', async () =>
   ).toBeInTheDocument()
   useDialogStore.getState().close()
 })
+
+// -- MAR-3213 R3: the panel says whose truth it shows --
+
+const CLAUDE_CONNECTORS_SENTENCE =
+  "This is what the Claude CLI reports for this account — what a terminal sees. A running conversation loads its own list when it starts and can differ; open that conversation's Harness details to see it. Restart the app after authorizing a claude.ai connector so running conversations pick it up."
+
+it('MAR-3213 R3 the Connectors list says it is the CLI\u2019s view for a Claude account only — mutation show it for Codex too turns red', async () => {
+  providerAccounts.list.mockResolvedValue([
+    account(),
+    account({
+      id: 'codex-a',
+      providerId: 'codex',
+      email: 'openai@example.com',
+      plan: 'team',
+    }),
+  ])
+  render(<ProviderAccountsContainer />)
+
+  // The Claude account's Connectors list carries the sentence.
+  fireEvent.click(
+    (await screen.findAllByRole('button', { name: 'Connectors' }))[0]!,
+  )
+  expect(
+    await screen.findByText(CLAUDE_CONNECTORS_SENTENCE),
+  ).toBeInTheDocument()
+
+  // The Codex account's does not: its list is already per-account server
+  // state, not a terminal's one-shot view.
+  fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+  await screen.findByText('openai@example.com')
+  fireEvent.click(screen.getByRole('button', { name: 'Connectors' }))
+  expect(screen.queryByText(CLAUDE_CONNECTORS_SENTENCE)).not.toBeInTheDocument()
+})

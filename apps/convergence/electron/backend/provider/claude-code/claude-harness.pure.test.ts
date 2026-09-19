@@ -522,3 +522,76 @@ it('RUN61 r5 nameless servers and plugins remain visible — mutation filter unn
     plugins: { count: 3, names: ['unnamed', 'unnamed', 'named'], omitted: 0 },
   })
 })
+
+// -- MAR-3213 R1: the session names the servers it actually loaded --
+
+it('MAR-3213 R1 names the connected servers, connected only — mutation derive names from the whole list turns red', () => {
+  const fact = readClaudeHarnessFact(
+    {
+      type: 'system',
+      subtype: 'init',
+      mcp_servers: [
+        { name: 'a', status: 'connected' },
+        { name: 'b', status: 'connected' },
+        { name: 'c', status: 'needs-auth' },
+      ],
+    },
+    'now',
+  )
+  expect(fact).toMatchObject({
+    kind: 'harness.init',
+    mcpServers: {
+      total: 3,
+      connected: 2,
+      connectedNames: ['a', 'b'],
+      connectedOmitted: 0,
+      others: [{ name: 'c', status: 'needs-auth' }],
+    },
+  })
+})
+
+it.each`
+  label          | servers                                                                               | expected
+  ${'seventeen'} | ${Array.from({ length: 17 }, (_, i) => ({ name: `srv-${i}`, status: 'connected' }))}  | ${{ connected: 17, connectedNames: Array.from({ length: 16 }, (_, i) => `srv-${i}`), connectedOmitted: 1 }}
+  ${'long name'} | ${[{ name: 'n'.repeat(200), status: 'connected' }, { name: 'p', status: 'pending' }]} | ${{ connected: 1 }}
+`(
+  'MAR-3213 R1 bounds the names like the others: $label',
+  ({ servers, expected }) => {
+    const fact = readClaudeHarnessFact(
+      { type: 'system', subtype: 'init', mcp_servers: servers },
+      'now',
+    )
+    expect(fact).toMatchObject({ mcpServers: expected })
+    if (fact?.kind !== 'harness.init') throw Error('not init')
+    // Every name that made it is within the 48-byte budget, whole characters.
+    for (const name of fact.mcpServers?.connectedNames ?? []) {
+      expect(Buffer.byteLength(JSON.stringify(name))).toBeLessThanOrEqual(48)
+      expect(name.includes('�')).toBe(false)
+    }
+    // A pending server never masquerades as connected.
+    expect(fact.mcpServers?.connectedNames ?? []).not.toContain('p')
+  },
+)
+
+it('MAR-3213 R1 a session with nothing connected carries no new fields — old facts and new stay byte-identical', () => {
+  const fact = readClaudeHarnessFact(
+    {
+      type: 'system',
+      subtype: 'init',
+      mcp_servers: [
+        { name: 'x', status: 'failed' },
+        { name: 'y', status: 'pending' },
+      ],
+    },
+    'now',
+  )
+  expect(fact).toMatchObject({ mcpServers: { total: 2, connected: 0 } })
+  // The fields are absent, not empty: absent is also what every fact
+  // recorded before this change carries, and the renderer keys on it.
+  expect(fact?.kind === 'harness.init' && fact.mcpServers).not.toHaveProperty(
+    'connectedNames',
+  )
+  expect(fact?.kind === 'harness.init' && fact.mcpServers).not.toHaveProperty(
+    'connectedOmitted',
+  )
+})

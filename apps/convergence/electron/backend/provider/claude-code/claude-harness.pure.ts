@@ -137,6 +137,13 @@ export function readClaudeHarnessFact(
         .sort(
           (a, b) => Number(isAlert(b.status)) - Number(isAlert(a.status)),
         ) ?? []
+    // The connected servers by NAME (MAR-3213): the count alone left the
+    // panel unable to say WHICH servers the session loaded, so the two
+    // truths (the CLI's one-shot list vs the running conversation's) could
+    // only be told apart by subtraction. Connected only — `pending` and
+    // failing servers stay in `others`, where their statuses live.
+    const connectedList =
+      servers?.filter((server) => server.status === 'connected') ?? []
     const plugins = Array.isArray(e.plugins) ? e.plugins : null
     const capabilities = strings(e.capabilities)
     return boundedFact({
@@ -149,6 +156,16 @@ export function readClaudeHarnessFact(
         ? {
             total: servers.length,
             connected: servers.length - others.length,
+            // Emitted only when a connected server exists, so an init with
+            // nothing connected stays byte-identical to the facts written
+            // before these fields existed (MAR-3213 R4: the existing
+            // shape-pinned tests stay green untouched).
+            ...(connectedList.length > 0 && {
+              connectedNames: connectedList
+                .slice(0, 16)
+                .map((server) => text('mcpServers', server.name, 48)!),
+              connectedOmitted: Math.max(0, connectedList.length - 16),
+            }),
             others: others.slice(0, 16).map((server) => ({
               name: text('mcpServers', server.name, 48)!,
               status: text('mcpServers', server.status),

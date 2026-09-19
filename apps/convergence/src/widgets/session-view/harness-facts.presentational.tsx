@@ -225,6 +225,15 @@ export function HarnessFactsView({
               <div className="mt-2">
                 MCP servers · {init.mcpServers.connected} connected of{' '}
                 {init.mcpServers.total}
+                {/* Which servers the session actually loaded (MAR-3213) —
+                    absent on facts recorded before the change, and then
+                    nothing extra renders. */}
+                {!!init.mcpServers.connectedNames?.length && (
+                  <p>Connected: {init.mcpServers.connectedNames.join(', ')}</p>
+                )}
+                {(init.mcpServers.connectedOmitted ?? 0) > 0 && (
+                  <p>{`… and ${init.mcpServers.connectedOmitted} more connected`}</p>
+                )}
                 {init.mcpServers.others.map((server, index) => (
                   <p
                     key={`${index}:${server.name}`}
