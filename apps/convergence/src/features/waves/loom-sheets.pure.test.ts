@@ -318,3 +318,28 @@ describe('MAR-3191 R4: Now lists only the rows no card holds', () => {
     ).toHaveLength(1)
   })
 })
+
+describe('MAR-3191 lap 2, A: one row lives in exactly one group', () => {
+  it('a blocked working row is in Decide and never in the in-flight list', () => {
+    // This is the structural guarantee `loomNowRows` leans on instead of a
+    // `heldFrom` guard: the guard could not fire, because a row the card
+    // took from Decide is not in this list at all.
+    // Mutation: `loomSheets` pushing a blocked row to BOTH groups -> the
+    // union assertion in `loom-horses.pure.test.ts` goes red first.
+    const sheets = loomSheets(
+      [
+        ledgerEntry({
+          issueIdentifier: 'EX-1',
+          state: 'working',
+          seat: 'opus',
+          blocked: true,
+        }),
+      ],
+      NOW,
+    )
+    expect(sheets.now.inFlight).toEqual([])
+    expect(sheets.now.decide).toHaveLength(1)
+    const held = sheets.now.decide[0]!
+    expect(loomNowRows(sheets, [{ held }])).toEqual([])
+  })
+})
