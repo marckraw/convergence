@@ -303,6 +303,12 @@ describe('MAR-3236 R7: it follows the crew', () => {
       view = render(<LoomOutside crewId="crew-1" />)
     })
     expect(fold().textContent).toBe('Not in the loop · 3')
+    // Another crew's read is pushed to every window: it is not this one's.
+    // Mutation: take every push -> crew-1's list vanishes, red.
+    await act(async () => {
+      pushOutside(read('crew-2', []))
+    })
+    expect(fold().textContent).toBe('Not in the loop · 3')
 
     // Hold crew-2's answer, so the moment between the switch and the read
     // is on screen.
