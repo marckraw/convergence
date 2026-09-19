@@ -11,10 +11,8 @@ import {
   LOOM_SEARCH_SUBLINE_ROW_CLASS,
 } from './wave-panel.styles'
 import { LEARN_LOOM_ENTRY } from './learn-loom-copy.pure'
-import {
-  LoomSearchFieldView,
-  LoomSearchToggleView,
-} from './loom-search.presentational'
+import { LoomSearchFieldView } from './loom-search.presentational'
+import { LoomSearchToggleView } from './loom-search-toggle.presentational'
 import { isLoomSearchShortcut } from './loom-search.pure'
 
 export const LoomCompactView: FC<

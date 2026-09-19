@@ -16,16 +16,14 @@ import {
   loomSearchRows,
   loomSearchSummary,
   LOOM_SEARCH_NO_HORSE_LINE,
+  LOOM_SEARCH_LEFT_TITLE,
   LOOM_SEARCH_OLDER_TITLE,
   normalizeLoomQuery,
 } from './loom-search.pure'
 import { loomSheets } from './loom-sheets.pure'
-import { loomBefore, loomBeforeOlder } from './loom-before.pure'
-import { loomPlan, loomPlanLeft, loomUtcDay } from './loom-plan.pure'
 import { loomOutsideView, LOOM_OUTSIDE_MORE_LINE } from './loom-outside.pure'
 import { LOOM_NO_HORSES_LINE, type LoomHorse } from './loom-horses.pure'
 import { ledgerEntry } from './wave-rows.fixture'
-import type { WaveRow } from './wave-sections.pure'
 
 /** Loom's search as pure functions (MAR-3234). */
 
@@ -242,46 +240,10 @@ describe('R3 / R5: the summary says where', () => {
   })
 })
 
-describe('R5: the counted buckets can be listed, and the counts stay theirs', () => {
-  const OLD = '2026-08-01T12:00:00.000Z'
-  const OLDER = '2026-07-01T12:00:00.000Z'
-  const rowOf = (item: WorkLedgerEntry): WaveRow => ({
-    entry: item,
-    action: null,
-    hostMarker: null,
-    crewName: null,
-    lapLabel: 'lap 1',
-  })
-
-  it('Before: the rows past the window, newest first -- the same rows `older` counts', () => {
-    const rows = [
-      rowOf(
-        entry('EX-1', 'Fresh', {
-          state: 'done',
-          seenAt: '2026-09-18T12:00:00.000Z',
-        }),
-      ),
-      rowOf(entry('EX-2', 'Older', { state: 'done', seenAt: OLDER })),
-      rowOf(entry('EX-3', 'Old', { state: 'done', seenAt: OLD })),
-    ]
-    const listed = loomBeforeOlder(rows, NOW)
-    expect(listed.map((row) => row.entry.issueIdentifier)).toEqual([
-      'EX-3',
-      'EX-2',
-    ])
-    expect(listed).toHaveLength(loomBefore(rows, NOW).older)
+describe('R5: the headings over the listed buckets', () => {
+  it('say what the bucket is, with the window’s own number', () => {
+    expect(LOOM_SEARCH_LEFT_TITLE).toBe('Left the loop')
     expect(LOOM_SEARCH_OLDER_TITLE).toBe('Older than 14 days')
-  })
-
-  it('Plan: the rows that left the loop -- the same rows `left` counts', () => {
-    const rows = [
-      rowOf(entry('EX-1', 'Shaping', { state: 'assigned', seat: null })),
-      rowOf(entry('EX-2', 'Gone', { state: 'unassigned' })),
-      rowOf(entry('EX-3', 'Stopped', { state: 'stopped' })),
-    ]
-    const listed = loomPlanLeft(rows)
-    expect(listed.map((row) => row.entry.issueIdentifier)).toEqual(['EX-2'])
-    expect(listed).toHaveLength(loomPlan(rows, loomUtcDay(NOW)).left)
   })
 })
 

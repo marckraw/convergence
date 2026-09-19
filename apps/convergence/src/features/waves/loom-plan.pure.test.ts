@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   loomGroundingWords,
   loomPlan,
+  loomPlanLeft,
   loomPlanLeftLine,
   loomUtcDay,
   LOOM_GROUNDING_FRESH_DAYS,
@@ -245,5 +246,23 @@ describe('MAR-3194 R5: the title counts preparation; what left is words', () => 
     expect(loomPlanLeftLine(1)).toBe('1 issue left the loop')
     expect(loomPlanLeftLine(0)).toBeNull()
     expect(loomPlanLeftLine(-1)).toBeNull()
+  })
+})
+
+describe('MAR-3234 R5: the rows that left can be listed while Loom is searched', () => {
+  it('the rows `left` counts, and only those', () => {
+    const rows = [
+      planRow('EX-1', 'assigned'),
+      planRow('EX-2', 'unassigned'),
+      planRow('EX-3', 'stopped'),
+      planRow('EX-4', 'unassigned'),
+    ]
+    const listed = loomPlanLeft(rows)
+    // Mutation: list the stopped row too -> EX-3 joins, red.
+    expect(listed.map((one) => one.entry.issueIdentifier)).toEqual([
+      'EX-2',
+      'EX-4',
+    ])
+    expect(listed).toHaveLength(loomPlan(rows, TODAY).left)
   })
 })

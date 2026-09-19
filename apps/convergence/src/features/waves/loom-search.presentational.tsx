@@ -4,17 +4,14 @@ import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import type { LoomSearchField } from './loom-stack.types'
+import { LOOM_SEARCH_NAME } from './loom-search.pure'
 import {
   LOOM_SEARCH_CLEAR_CLASS,
   LOOM_SEARCH_FIELD_CLASS,
   LOOM_SEARCH_GLYPH_CLASS,
   LOOM_SEARCH_ICON_CLASS,
   LOOM_SEARCH_INPUT_CLASS,
-  LOOM_SEARCH_TOGGLE_CLASS,
 } from './wave-panel.styles'
-
-/** The field's accessible name, and compact's icon's (R7). */
-export const LOOM_SEARCH_NAME = 'Search Loom'
 
 /**
  * Loom's search field (MAR-3234). Render-only: the text, the debounce and
@@ -63,25 +60,4 @@ export const LoomSearchFieldView: FC<{
       </Button>
     ) : null}
   </div>
-)
-
-/**
- * Compact's search icon (R7): reveals the field as its own row. It says
- * whether the row is drawn, so a screen reader hears what pressing it does.
- */
-export const LoomSearchToggleView: FC<{
-  revealed: boolean
-  onToggle: () => void
-}> = ({ revealed, onToggle }) => (
-  <Button
-    type="button"
-    variant="ghost"
-    size="icon"
-    aria-label={LOOM_SEARCH_NAME}
-    aria-expanded={revealed}
-    className={LOOM_SEARCH_TOGGLE_CLASS}
-    onClick={onToggle}
-  >
-    <Search aria-hidden="true" className={LOOM_SEARCH_GLYPH_CLASS} />
-  </Button>
 )

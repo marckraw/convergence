@@ -33,6 +33,9 @@ import {
  */
 export const LOOM_SEARCH_DEBOUNCE_MS = 200
 
+/** The field's accessible name, and compact's icon's (R7). */
+export const LOOM_SEARCH_NAME = 'Search Loom'
+
 /** A typed query as the filter reads it: trimmed, and `null` when empty. */
 export function normalizeLoomQuery(raw: string): string | null {
   const query = raw.trim()
