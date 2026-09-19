@@ -1581,6 +1581,25 @@ describe('MAR-3097: through the containers and the real stores', () => {
   })
 
   it('MAR-3195 R6: the detail is read-only, provably', async () => {
+    // WITH labels, or the chips this rule is mostly about do not exist and
+    // turning one into a button proves nothing.
+    snapshots = {
+      'crew-1': {
+        crewId: 'crew-1',
+        entries: rows.map((row) =>
+          row.issueIdentifier === 'EX-2'
+            ? {
+                ...row,
+                fact: {
+                  ...row.fact,
+                  labels: ['groomed', 'horse › opus', 'loom-view'],
+                },
+              }
+            : row,
+        ),
+        trackerHealth: health('ok'),
+      },
+    }
     await mount(<WavePanel reservedWidth={RESERVED} />)
     await screen.findByLabelText('Loom')
     fireEvent.click(
@@ -1590,6 +1609,9 @@ describe('MAR-3097: through the containers and the real stores', () => {
 
     // Mutation: a label chip as a `button`, or any field added -> red.
     expect(card.querySelectorAll('input, select, textarea')).toHaveLength(0)
+    expect(
+      within(card).getByRole('region', { name: 'Labels' }).textContent,
+    ).toContain('groomed')
     expect(card.querySelectorAll('[contenteditable]')).toHaveLength(0)
     expect(
       [...card.querySelectorAll('button')].map((button) =>
