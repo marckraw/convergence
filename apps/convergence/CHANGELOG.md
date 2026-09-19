@@ -1,5 +1,11 @@
 # convergence
 
+## 0.72.0
+
+### Minor Changes
+
+- 017b1d7: Loom's Now sheet opens with the crew's horses — who is working on what, on which host, working, idle, failed or not seen — and Awaiting QA shows an honest count with a control that reveals the rest.
+
 ## 0.71.0
 
 ### Minor Changes
