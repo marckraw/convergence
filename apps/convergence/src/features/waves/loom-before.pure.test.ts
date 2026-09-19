@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   loomBefore,
+  loomBeforeOlder,
   loomBeforeOlderLine,
   LOOM_BEFORE_WINDOW_DAYS,
   LOOM_NO_WAVE_KEY,
@@ -199,5 +200,22 @@ describe('MAR-3192 R4: the title counts what the sheet shows', () => {
   it('one older issue is said in the singular; none is said not at all', () => {
     expect(loomBeforeOlderLine(1)).toBe('1 older issue not shown')
     expect(loomBeforeOlderLine(0)).toBeNull()
+  })
+})
+
+describe('MAR-3234 R5: the older rows can be listed while Loom is searched', () => {
+  it('the rows past the window, newest first -- exactly the rows `older` counts', () => {
+    const rows = [
+      doneRow('EX-1', 'loom-p2', new Date(NOW - 1 * DAY).toISOString()),
+      doneRow('EX-2', 'loom-p2', new Date(NOW - 40 * DAY).toISOString()),
+      doneRow('EX-3', null, new Date(NOW - 20 * DAY).toISOString()),
+    ]
+    const listed = loomBeforeOlder(rows, NOW)
+    // Mutation: list the rows INSIDE the window -> EX-1, red.
+    expect(listed.map((row) => row.entry.issueIdentifier)).toEqual([
+      'EX-3',
+      'EX-2',
+    ])
+    expect(listed).toHaveLength(loomBefore(rows, NOW).older)
   })
 })

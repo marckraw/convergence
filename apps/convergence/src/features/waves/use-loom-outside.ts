@@ -7,11 +7,17 @@ import { loomOutsideApi } from './loom-outside.api'
  * the watcher's memory, then every read that replaces it -- and only this
  * crew's. A switch of crew starts from nothing rather than showing the last
  * crew's list under the new crew's name.
+ *
+ * `null` when no crew is on screen: nothing is read, nothing is held
+ * (MAR-3234 -- the panel reads this once, before it knows it has a crew).
  */
-export function useLoomOutside(crewId: string): TrackerOutsideSnapshot | null {
+export function useLoomOutside(
+  crewId: string | null,
+): TrackerOutsideSnapshot | null {
   const [held, setHeld] = useState<TrackerOutsideSnapshot | null>(null)
 
   useEffect(() => {
+    if (crewId === null) return
     let live = true
     const stop = loomOutsideApi.onUpdated((snapshot) => {
       if (snapshot.crewId === crewId) setHeld(snapshot)

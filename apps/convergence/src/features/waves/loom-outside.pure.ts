@@ -2,6 +2,7 @@ import type {
   TrackerOutsideIssue,
   TrackerOutsideSnapshot,
 } from '@/shared/types/tracker.types'
+import { loomOutsideMatches } from './loom-search.pure'
 
 /**
  * The group at the end of Plan (MAR-3236 R6): the project's open issues that
@@ -21,8 +22,15 @@ export const LOOM_OUTSIDE_NEVER_READ_TITLE = `${LOOM_OUTSIDE_NAME} · not read y
 export const LOOM_OUTSIDE_EMPTY_LINE =
   'Every open issue in this project carries a Loom label.'
 
-/** The read was cut by its bound (R3): the list is not the whole project. */
-export const LOOM_OUTSIDE_MORE_LINE = 'More in Linear — showing the newest 300'
+/**
+ * The read was cut by its bound (R3): the list is not the whole project.
+ *
+ * Not "the newest" (MAR-3234, from MAR-3236's verdict): Linear's schema does
+ * not say which way `orderBy: updatedAt` sorts, so the app cannot back which
+ * 300 these are -- only how many, and whose.
+ */
+export const LOOM_OUTSIDE_MORE_LINE =
+  "More in Linear — showing 300 of this project's open issues"
 
 /** `Not in the loop · N`, or `N+` when the read was cut short. */
 export function loomOutsideTitle(count: number, more: boolean): string {
@@ -57,8 +65,15 @@ export interface LoomOutsideView {
   moreLine: string | null
 }
 
+/**
+ * Everything the group draws, from one snapshot -- and, while Loom is
+ * searched (MAR-3234 R5), only the issues that answer the query: the title
+ * counts the matches, and there is nothing to unfold when none does. With
+ * no query the view is exactly the one MAR-3236 drew.
+ */
 export function loomOutsideView(
   snapshot: TrackerOutsideSnapshot | null,
+  query: string | null = null,
 ): LoomOutsideView {
   if (snapshot === null || snapshot.readAt === null) {
     return {
@@ -67,6 +82,20 @@ export function loomOutsideView(
       rows: [],
       emptyLine: null,
       moreLine: null,
+    }
+  }
+  if (query !== null) {
+    const rows = loomOutsideOrder(
+      snapshot.issues.filter((issue) => loomOutsideMatches(issue, query)),
+    )
+    // No "every issue carries a label" here: that is a sentence about the
+    // project, and with a query the list is only the part that matched.
+    return {
+      title: loomOutsideTitle(rows.length, snapshot.more),
+      foldable: rows.length > 0,
+      rows,
+      emptyLine: null,
+      moreLine: snapshot.more ? LOOM_OUTSIDE_MORE_LINE : null,
     }
   }
   const rows = loomOutsideOrder(snapshot.issues)

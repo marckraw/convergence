@@ -130,6 +130,23 @@ export function loomBefore(rows: readonly WaveRow[], now: number): LoomBefore {
   return { groups, shown: shown.length, older: rows.length - shown.length }
 }
 
+/**
+ * The finished rows past the window, newest first (MAR-3234 R5).
+ *
+ * Asked for only while a search is active: then a match that is otherwise
+ * one of `older` is LISTED, because "is this ticket anywhere" deserves the
+ * row, not a count. With no search the sheet never calls this, so Before
+ * draws exactly what it drew before.
+ */
+export function loomBeforeOlder(
+  rows: readonly WaveRow[],
+  now: number,
+): WaveRow[] {
+  return rows
+    .filter((row) => !inWindow(row, now))
+    .sort((a, b) => instantOf(b) - instantOf(a))
+}
+
 /** `5 older issues not shown`, or null when nothing is hidden (R5). */
 export function loomBeforeOlderLine(older: number): string | null {
   if (older <= 0) return null

@@ -5,8 +5,15 @@ import { LoomStackView } from './loom-stack.presentational'
 import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
 import type { LoomStackProps } from './loom-stack.types'
-import { LOOM_COMPACT_CLASS } from './wave-panel.styles'
+import {
+  LOOM_COMPACT_CLASS,
+  LOOM_SEARCH_COMPACT_ROW_CLASS,
+  LOOM_SEARCH_SUBLINE_ROW_CLASS,
+} from './wave-panel.styles'
 import { LEARN_LOOM_ENTRY } from './learn-loom-copy.pure'
+import { LoomSearchFieldView } from './loom-search.presentational'
+import { LoomSearchToggleView } from './loom-search-toggle.presentational'
+import { isLoomSearchShortcut } from './loom-search.pure'
 
 export const LoomCompactView: FC<
   LoomStackProps & { width: number; onExpand: () => void }
@@ -17,6 +24,11 @@ export const LoomCompactView: FC<
     className={LOOM_COMPACT_CLASS}
     style={{ width }}
     onKeyDown={(event) => {
+      if (isLoomSearchShortcut(event)) {
+        event.preventDefault()
+        props.field.onShortcut()
+        return
+      }
       if (event.key === 'Escape' && props.onEscape) {
         event.stopPropagation()
         props.onEscape()
@@ -37,11 +49,24 @@ export const LoomCompactView: FC<
       </Button>
     </div>
     <div className="shrink-0 px-3 pb-4 text-xs text-muted-foreground">
-      <p className="mb-2 break-words">
-        <LoomSublineContent subline={props.subline} />
-      </p>
+      <div className={LOOM_SEARCH_SUBLINE_ROW_CLASS}>
+        <p className="min-w-0 flex-1 break-words">
+          <LoomSublineContent subline={props.subline} />
+        </p>
+        <LoomSearchToggleView
+          revealed={props.field.revealed}
+          onToggle={props.field.onToggleReveal}
+        />
+      </div>
       <LoomStatusView header={props.header} refresh={props.refresh} />
     </div>
+    {/* The search field's own row, under the header, while it is revealed
+        or holds a query (MAR-3234 R7). */}
+    {props.field.revealed ? (
+      <div className={LOOM_SEARCH_COMPACT_ROW_CLASS}>
+        <LoomSearchFieldView field={props.field} />
+      </div>
+    ) : null}
     <LoomStackView {...props} />
     {/* A sibling of the stack, never inside the scrolling sheet body: the
         lesson has to be reachable without scrolling a queue first

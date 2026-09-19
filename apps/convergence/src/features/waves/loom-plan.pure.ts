@@ -202,6 +202,17 @@ export function loomPlan(rows: readonly WaveRow[], today: string): LoomPlan {
   }
 }
 
+/**
+ * The rows that left the loop (MAR-3234 R5), in the ledger's order.
+ *
+ * The same question `loomPlan` counts by -- `stageOf` is null -- so the list
+ * and the count cannot disagree about which rows left. Asked for only while
+ * a search is active; with none, Plan draws exactly what it drew before.
+ */
+export function loomPlanLeft(rows: readonly WaveRow[]): WaveRow[] {
+  return rows.filter((row) => stageOf(row) === null)
+}
+
 /** `4 issues left the loop`, or null when none did (R5). */
 export function loomPlanLeftLine(left: number): string | null {
   if (left <= 0) return null

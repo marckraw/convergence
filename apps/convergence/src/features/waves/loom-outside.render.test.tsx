@@ -13,6 +13,7 @@ import type {
 } from '@/shared/types/tracker.types'
 import { WavePanel } from './wave-panel.container'
 import { LoomOutside } from './loom-outside.container'
+import { useLoomOutside } from './use-loom-outside'
 import { ledgerEntry } from './wave-rows.fixture'
 
 /**
@@ -256,7 +257,9 @@ describe('MAR-3236 R6: the group is last in Plan, folded, honest', () => {
       fireEvent.click(fold())
     })
     const lines = [...group()!.querySelectorAll('p')].map((p) => p.textContent)
-    expect(lines.at(-1)).toBe('More in Linear — showing the newest 300')
+    expect(lines.at(-1)).toBe(
+      "More in Linear — showing 300 of this project's open issues",
+    )
   })
 
   it('never read, then an empty read: its own words each time, and nothing to open', async () => {
@@ -292,6 +295,14 @@ describe('MAR-3236 R6: the group is last in Plan, folded, honest', () => {
   })
 })
 
+/**
+ * The group as the panel mounts it since MAR-3234: the crew's snapshot read
+ * once above it and handed down, rather than read by the group itself.
+ */
+function OutsideFor({ crewId }: { crewId: string }) {
+  return <LoomOutside snapshot={useLoomOutside(crewId)} query={null} />
+}
+
 describe('MAR-3236 R7: it follows the crew', () => {
   it('a switch reads the new crew’s snapshot and never shows the old one under it', async () => {
     outside = {
@@ -300,7 +311,7 @@ describe('MAR-3236 R7: it follows the crew', () => {
     }
     let view: ReturnType<typeof render> | null = null
     await act(async () => {
-      view = render(<LoomOutside crewId="crew-1" />)
+      view = render(<OutsideFor crewId="crew-1" />)
     })
     expect(fold().textContent).toBe('Not in the loop · 3')
     // Another crew's read is pushed to every window: it is not this one's.
@@ -320,7 +331,7 @@ describe('MAR-3236 R7: it follows the crew', () => {
         }),
     )
     await act(async () => {
-      view!.rerender(<LoomOutside crewId="crew-2" />)
+      view!.rerender(<OutsideFor crewId="crew-2" />)
     })
     // Mutation: keep the last crew's snapshot until the new one lands ->
     // `· 3` under crew-2, red.

@@ -5,8 +5,13 @@ import { LoomStackView } from './loom-stack.presentational'
 import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
 import type { LoomStackProps } from './loom-stack.types'
-import { LOOM_EXPANDED_CLASS } from './wave-panel.styles'
+import {
+  LOOM_EXPANDED_CLASS,
+  LOOM_SEARCH_EXPANDED_CLASS,
+} from './wave-panel.styles'
 import { LEARN_LOOM_ENTRY } from './learn-loom-copy.pure'
+import { LoomSearchFieldView } from './loom-search.presentational'
+import { isLoomSearchShortcut } from './loom-search.pure'
 
 /** Opaque cover: the transcript underneath retains its measured box. */
 export const LoomExpandedView: FC<LoomStackProps & { onFold: () => void }> = ({
@@ -18,6 +23,11 @@ export const LoomExpandedView: FC<LoomStackProps & { onFold: () => void }> = ({
     data-loom="expanded"
     className={LOOM_EXPANDED_CLASS}
     onKeyDown={(event) => {
+      if (isLoomSearchShortcut(event)) {
+        event.preventDefault()
+        props.field.onShortcut()
+        return
+      }
       if (event.key === 'Escape') {
         event.stopPropagation()
         ;(props.onEscape ?? onFold)()
@@ -29,6 +39,11 @@ export const LoomExpandedView: FC<LoomStackProps & { onFold: () => void }> = ({
       <p className="min-w-0 flex-1 text-xs text-muted-foreground">
         <LoomSublineContent subline={props.subline} />
       </p>
+      {/* Between the subline and the guide (MAR-3234 R7). */}
+      <LoomSearchFieldView
+        field={props.field}
+        className={LOOM_SEARCH_EXPANDED_CLASS}
+      />
       {/* Before Fold Loom, so the lesson is reachable without leaving the
           panel it explains (MAR-3201 R9). */}
       <Button

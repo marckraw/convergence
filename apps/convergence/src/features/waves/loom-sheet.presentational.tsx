@@ -5,15 +5,25 @@ import { Button } from '@/shared/ui/button'
 import { loomNowRows, loomSheetNote, type LoomSheets } from './loom-sheets.pure'
 import {
   loomBefore,
+  loomBeforeOlder,
   loomBeforeOlderLine,
   LOOM_DONE_IS_NOT_RELEASED,
 } from './loom-before.pure'
 import {
   LOOM_PLAN_IS_READ_ONLY,
   loomPlan,
+  loomPlanLeft,
   loomPlanLeftLine,
   loomUtcDay,
 } from './loom-plan.pure'
+import {
+  loomSearchElsewhereLabel,
+  loomSearchElsewherePrefix,
+  loomSearchHorsesLine,
+  LOOM_SEARCH_LEFT_TITLE,
+  LOOM_SEARCH_OLDER_TITLE,
+} from './loom-search.pure'
+import type { LoomSheetSearch } from './loom-stack.types'
 import {
   loomNext,
   LOOM_NEXT_ORDER_LINE,
@@ -35,6 +45,8 @@ import {
   LOOM_QA_TOGGLE_CLASS,
   LOOM_SHEET_BODY_CLASS,
   LOOM_SHEET_NOTE_CLASS,
+  LOOM_SEARCH_ELSEWHERE_CLASS,
+  LOOM_SEARCH_MISS_CLASS,
 } from './wave-panel.styles'
 
 /** The Awaiting QA section, so its own control can point at it (lap 2, D). */
@@ -79,6 +91,13 @@ interface LoomSheetViewProps<TSession = unknown> {
    * node, the way the header takes Refresh: this file stays render-only.
    */
   outside?: ReactNode
+  /**
+   * The active search (MAR-3234), or absent when nothing is searched -- and
+   * then the sheet is exactly the sheet it was before search existed.
+   */
+  search?: LoomSheetSearch | null
+  /** Opens another sheet: the "1 in Plan" answers are doors to it (R3). */
+  onSelectSheet?: (sheet: LoomSheet) => void
   /** The scroll container itself, so the container can restore its offset (R3). */
   bodyRef?: (element: HTMLDivElement | null) => void
   onScroll?: (event: UIEvent<HTMLDivElement>) => void
@@ -108,11 +127,31 @@ export const LoomSheetView = <TSession,>({
   inertReason,
   onOpen,
   outside,
+  search = null,
+  onSelectSheet,
   bodyRef,
   onScroll,
   className,
 }: LoomSheetViewProps<TSession>) => {
-  const note = loomSheetNote(sheet, sheets, now)
+  // While a search is active the sheet's own notes step aside: "Nothing in
+  // Now right now" about a filtered sheet is a sentence about the filter
+  // wearing the words of the ledger (MAR-3234 R3/R5).
+  const note = search ? null : loomSheetNote(sheet, sheets, now)
+  // With a search, the open sheet may hold nothing the query matches; then
+  // its whole body is the one line that says where the matches are (R3), or
+  // why there are none (R5).
+  const missed =
+    search !== null && search.summary.bySheet[sheet] === 0 ? search : null
+  // The counted-not-listed buckets are LISTED while a query is active (R5):
+  // "is this ticket anywhere" deserves the row, not a count. With no query
+  // these are never computed, so the sheet is byte-identical to before.
+  const olderRows = search ? loomBeforeOlder(sheets.before, now) : []
+  const leftRows = search ? loomPlanLeft(sheets.plan) : []
+  // The cards a search shows (R4): a horse iff the issue it holds matches.
+  const cards = search ? search.shownHorses : horses
+  const horsesLine = search
+    ? loomSearchHorsesLine(search.shownHorses, horses)
+    : loomHorsesLine(horses)
   // One derivation for the groups, the older line and (through
   // `loomSheetCounts`) the title above them (MAR-3192 R4).
   const before = loomBefore(sheets.before, now)
@@ -142,6 +181,29 @@ export const LoomSheetView = <TSession,>({
           onOpenConversation={detail.onOpenConversation}
           closeRef={detail.closeRef}
         />
+      ) : missed ? (
+        <p data-loom-search-miss="" className={LOOM_SEARCH_MISS_CLASS}>
+          {missed.summary.elsewhere.length > 0 ? (
+            <>
+              {loomSearchElsewherePrefix(sheet)}
+              {missed.summary.elsewhere.map((place, at) => (
+                <span key={place.sheet}>
+                  {at > 0 ? ', ' : null}
+                  <Button
+                    type="button"
+                    variant="link"
+                    className={LOOM_SEARCH_ELSEWHERE_CLASS}
+                    onClick={() => onSelectSheet?.(place.sheet)}
+                  >
+                    {loomSearchElsewhereLabel(place)}
+                  </Button>
+                </span>
+              ))}
+            </>
+          ) : (
+            missed.nowhere
+          )}
+        </p>
       ) : (
         <>
           {note ? <p className={LOOM_SHEET_NOTE_CLASS}>{note}</p> : null}
@@ -156,12 +218,23 @@ export const LoomSheetView = <TSession,>({
                   key={group.key}
                   title={group.title}
                   rows={group.rows}
-                  disclosure={at === 0 ? 'open' : 'closed'}
+                  // Every group open while searched (MAR-3234 R3): a match
+                  // folded inside a closed wave is not "one click away".
+                  disclosure={search || at === 0 ? 'open' : 'closed'}
                   inertReason={inertReason}
                   onOpen={onOpen}
                 />
               ))}
-              {olderLine && before.shown > 0 ? (
+              {olderRows.length > 0 ? (
+                <WaveSectionView
+                  appearance="loom"
+                  title={LOOM_SEARCH_OLDER_TITLE}
+                  rows={olderRows}
+                  inertReason={inertReason}
+                  onOpen={onOpen}
+                />
+              ) : null}
+              {!search && olderLine && before.shown > 0 ? (
                 <p className={LOOM_SHEET_NOTE_CLASS}>{olderLine}</p>
               ) : null}
               {before.shown > 0 ? (
@@ -181,10 +254,8 @@ export const LoomSheetView = <TSession,>({
                 aria-label="Horses"
                 className="flex min-w-0 flex-col gap-2"
               >
-                <h3 className={LOOM_HORSES_LINE_CLASS}>
-                  {loomHorsesLine(horses)}
-                </h3>
-                {horses.map((horse) => (
+                <h3 className={LOOM_HORSES_LINE_CLASS}>{horsesLine}</h3>
+                {cards.map((horse) => (
                   <LoomHorseCard
                     key={horse.key}
                     horse={horse}
@@ -316,7 +387,16 @@ export const LoomSheetView = <TSession,>({
                   />
                 ))}
               </div>
-              {leftLine && plan.preparing > 0 ? (
+              {leftRows.length > 0 ? (
+                <WaveSectionView
+                  appearance="loom"
+                  title={LOOM_SEARCH_LEFT_TITLE}
+                  rows={leftRows}
+                  inertReason={inertReason}
+                  onOpen={onOpen}
+                />
+              ) : null}
+              {!search && leftLine && plan.preparing > 0 ? (
                 <p className={LOOM_SHEET_NOTE_CLASS}>{leftLine}</p>
               ) : null}
               {plan.preparing > 0 ? (
