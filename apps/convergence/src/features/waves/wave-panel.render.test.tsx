@@ -306,7 +306,9 @@ describe('MAR-3189 R4: the strip is the same model', () => {
       ledgerEntry({ issueIdentifier: 'EX-4', state: 'done' }),
     ]
     const sheets = loomSheets(rows, NOW)
-    render(<LoomStripView sheets={sheets} outage onExpand={vi.fn()} />)
+    render(
+      <LoomStripView sheets={sheets} now={NOW} outage onExpand={vi.fn()} />,
+    )
 
     const shown = (sheet: string) =>
       document.querySelector(`[data-wave-count="${sheet}"]`)?.textContent
@@ -329,6 +331,7 @@ describe('MAR-3189 R4: the strip is the same model', () => {
     render(
       <LoomStripView
         sheets={loomSheets([], NOW)}
+        now={NOW}
         outage={false}
         onExpand={onExpand}
       />,
@@ -2007,6 +2010,133 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(card.textContent).not.toContain('This Mac')
   })
 
+  describe('MAR-3192: the Before sheet', () => {
+    /** The instant these cases call "now"; written down, never inherited. */
+    const BEFORE_NOW = Date.parse('2026-09-19T12:00:00.000Z')
+    const DAY = 24 * 60 * 60 * 1000
+    const doneAt = (identifier: string, wave: string | null, days: number) =>
+      ledgerEntry({
+        issueIdentifier: identifier,
+        state: 'done',
+        wave,
+        seenAt: new Date(BEFORE_NOW - days * DAY).toISOString(),
+      })
+
+    const openBefore = async (entries: ReturnType<typeof ledgerEntry>[]) => {
+      vi.setSystemTime(BEFORE_NOW)
+      snapshots = {
+        'crew-1': { crewId: 'crew-1', entries, trackerHealth: health('ok') },
+      }
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      fireEvent.click(screen.getByRole('button', { name: /^Before · / }))
+    }
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('R6: groups by wave, the newest open and the rest folded', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      await openBefore([
+        doneAt('EX-1', 'loom-view', 1),
+        doneAt('EX-2', 'loom-view', 2),
+        doneAt('EX-3', 'cursor-parity', 5),
+      ])
+
+      const groups = [...document.querySelectorAll('[data-wave-group]')]
+      expect(groups.map((g) => g.getAttribute('data-wave-group'))).toEqual([
+        'loom-view',
+        'cursor-parity',
+      ])
+      // Mutation: every group `closed` -> the newest work is folded away and
+      // the sheet opens on nothing, red.
+      expect(groups[0]?.hasAttribute('open')).toBe(true)
+      expect(groups[1]?.hasAttribute('open')).toBe(false)
+      expect(groups[0]?.querySelector('summary')?.textContent).toBe(
+        'loom-view · 2',
+      )
+
+      // ...and a Before row still opens its detail (LV6).
+      fireEvent.click(
+        document.querySelector('[data-wave-row="crew-1:EX-1"]') as HTMLElement,
+      )
+      expect(
+        document.querySelector('[data-loom-detail="crew-1:EX-1"]'),
+      ).toBeTruthy()
+    })
+
+    it('R5: the four things the sheet can say', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      // Some shown, some older: both sentences.
+      await openBefore([doneAt('EX-NEW', 'w', 1), doneAt('EX-OLD', 'w', 30)])
+      expect(screen.getByText('1 older issue not shown')).toBeTruthy()
+      expect(
+        screen.getByText(/Done is the issue’s tracker status/),
+      ).toBeTruthy()
+      cleanup()
+
+      // Nothing older: the Done sentence alone.
+      await openBefore([doneAt('EX-NEW', 'w', 1)])
+      expect(screen.queryByText(/older issue/)).toBeNull()
+      expect(
+        screen.getByText(/Done is the issue’s tracker status/),
+      ).toBeTruthy()
+      cleanup()
+
+      // Only older work: the older line alone, and no claim about releases.
+      await openBefore([doneAt('EX-OLD', 'w', 30)])
+      expect(screen.getByText('1 older issue not shown')).toBeTruthy()
+      // Mutation: always render the Done sentence -> red here and below.
+      expect(
+        screen.queryByText(/Done is the issue’s tracker status/),
+      ).toBeNull()
+      cleanup()
+
+      // Nothing at all: the sheet's own note, unchanged from LV0.
+      await openBefore([])
+      expect(screen.getByText('Nothing in Before right now.')).toBeTruthy()
+      expect(screen.queryByText(/older issue/)).toBeNull()
+      expect(
+        screen.queryByText(/Done is the issue’s tracker status/),
+      ).toBeNull()
+    })
+
+    it('R4: the title counts what the sheet shows', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      await openBefore([
+        doneAt('EX-1', 'w', 1),
+        doneAt('EX-2', 'w', 2),
+        doneAt('EX-3', 'w', 40),
+      ])
+      // Mutation: count `sheets.before.length` -> `Before · 3 done` over a
+      // sheet holding two, red.
+      expect(
+        screen.getByRole('button', { name: /^Before · / }).textContent,
+      ).toBe('Before · 2 done')
+      expect(document.querySelectorAll('[data-wave-row]')).toHaveLength(2)
+    })
+
+    it('R7: compact and expanded say the same thing', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      await openBefore([doneAt('EX-1', 'w', 1), doneAt('EX-2', 'x', 2)])
+      const compact = (
+        document.querySelector('[data-loom-sheet="before"]') as HTMLElement
+      ).textContent
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+      })
+      const expanded = (
+        document.querySelector('[data-loom-sheet="before"]') as HTMLElement
+      ).textContent
+      expect(expanded).toBe(compact)
+      // Not vacuous: both groups are in that text, the second folded.
+      expect(compact).toContain('w · 1')
+      expect(compact).toContain('x · 1')
+      expect(compact).toContain('EX-1')
+    })
+  })
+
   it('MAR-3189 lap 2, B: the mode is written down, and a remount reads it back', async () => {
     // The only write-through-a-control-then-remount pin the mode had died
     // with the stored `rail`; without this one, dropping `saveWavePanelMode`
@@ -2258,6 +2388,7 @@ describe('MAR-3138 R4: a blocked row reads "decide" under Waiting on you', () =>
           ],
           NOW,
         )}
+        now={NOW}
         outage={false}
         onExpand={vi.fn()}
       />,
@@ -2284,6 +2415,7 @@ describe('MAR-3148: the rail, the props and the clock', () => {
     render(
       <LoomStripView
         sheets={loomSheets(rows, NOW)}
+        now={NOW}
         outage={false}
         onExpand={onExpand}
       />,

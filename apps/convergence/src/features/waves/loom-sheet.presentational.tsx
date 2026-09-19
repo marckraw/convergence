@@ -4,6 +4,11 @@ import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
 import { loomNowRows, loomSheetNote, type LoomSheets } from './loom-sheets.pure'
 import {
+  loomBefore,
+  loomBeforeOlderLine,
+  LOOM_DONE_IS_NOT_RELEASED,
+} from './loom-before.pure'
+import {
   loomHorsesLine,
   LOOM_QA_PREVIEW,
   type LoomHorse,
@@ -27,6 +32,8 @@ const QA_SECTION_ID = 'loom-awaiting-qa'
 interface LoomSheetViewProps<TSession = unknown> {
   sheet: LoomSheet
   sheets: LoomSheets
+  /** The board's clock; Before's window is judged against it (MAR-3192). */
+  now: number
   /** The bound crews' horse seats, in crew order (MAR-3191 R1). */
   horses: readonly LoomHorse[]
   /**
@@ -72,6 +79,7 @@ interface LoomSheetViewProps<TSession = unknown> {
 export const LoomSheetView = <TSession,>({
   sheet,
   sheets,
+  now,
   horses,
   qaExpanded,
   onToggleQa,
@@ -86,7 +94,11 @@ export const LoomSheetView = <TSession,>({
   onScroll,
   className,
 }: LoomSheetViewProps<TSession>) => {
-  const note = loomSheetNote(sheet, sheets)
+  const note = loomSheetNote(sheet, sheets, now)
+  // One derivation for the groups, the older line and (through
+  // `loomSheetCounts`) the title above them (MAR-3192 R4).
+  const before = loomBefore(sheets.before, now)
+  const olderLine = loomBeforeOlderLine(before.older)
   const qa = sheets.now.awaitingQa
   const qaShown = qaExpanded ? qa : qa.slice(0, LOOM_QA_PREVIEW)
   return (
@@ -108,12 +120,29 @@ export const LoomSheetView = <TSession,>({
         <>
           {note ? <p className={LOOM_SHEET_NOTE_CLASS}>{note}</p> : null}
           {sheet === 'before' ? (
-            <WaveSectionView
-              title="Done"
-              rows={sheets.before}
-              inertReason={inertReason}
-              onOpen={onOpen}
-            />
+            <>
+              {/* Grouped by the wave the work belonged to (MAR-3192 R1),
+                  newest first and only the newest open: what a person wants
+                  from "what was before" is the last thing that finished. */}
+              {before.groups.map((group, at) => (
+                <WaveSectionView
+                  key={group.key}
+                  title={group.title}
+                  rows={group.rows}
+                  disclosure={at === 0 ? 'open' : 'closed'}
+                  inertReason={inertReason}
+                  onOpen={onOpen}
+                />
+              ))}
+              {olderLine && before.shown > 0 ? (
+                <p className={LOOM_SHEET_NOTE_CLASS}>{olderLine}</p>
+              ) : null}
+              {before.shown > 0 ? (
+                <p className={LOOM_SHEET_NOTE_CLASS}>
+                  {LOOM_DONE_IS_NOT_RELEASED}
+                </p>
+              ) : null}
+            </>
           ) : null}
           {sheet === 'now' ? (
             <div className={wide ? LOOM_NOW_WIDE_CLASS : undefined}>

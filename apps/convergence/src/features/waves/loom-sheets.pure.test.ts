@@ -202,7 +202,7 @@ describe('MAR-3189: the titles say what their numbers mean', () => {
     ],
     NOW,
   )
-  const counts = loomSheetCounts(sheets)
+  const counts = loomSheetCounts(sheets, NOW)
 
   it('Now’s two numbers cover all four of its groups', () => {
     // A title that counted only `now.inFlight` would read "1 open" while the
@@ -244,7 +244,7 @@ describe('MAR-3189: the titles say what their numbers mean', () => {
       ],
       NOW,
     )
-    expect(loomSheetTitle('now', loomSheetCounts(mixed))).toBe(
+    expect(loomSheetTitle('now', loomSheetCounts(mixed, NOW))).toBe(
       'Now · 3 open · 2 awaiting QA',
     )
   })
@@ -253,10 +253,10 @@ describe('MAR-3189: the titles say what their numbers mean', () => {
     // Mutation: return null for Plan -> red. An empty Plan reading as
     // "nothing is planned" would be the panel claiming a fact it does not
     // have; the wider read is LV1's.
-    expect(loomSheetNote('plan', sheets)).toBe(LOOM_PLAN_NOTE)
-    expect(loomSheetNote('now', sheets)).toBeNull()
-    expect(loomSheetNote('next', sheets)).toBeNull()
-    expect(loomSheetNote('before', loomSheets([], NOW))).toBe(
+    expect(loomSheetNote('plan', sheets, NOW)).toBe(LOOM_PLAN_NOTE)
+    expect(loomSheetNote('now', sheets, NOW)).toBeNull()
+    expect(loomSheetNote('next', sheets, NOW)).toBeNull()
+    expect(loomSheetNote('before', loomSheets([], NOW), NOW)).toBe(
       'Nothing in Before right now.',
     )
   })
