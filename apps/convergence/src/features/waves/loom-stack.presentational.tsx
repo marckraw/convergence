@@ -20,6 +20,20 @@ export const LOOM_SHEET_ICONS = {
   plan: Pencil,
 }
 
+/**
+ * What colour each sheet's icon wears, in one place.
+ *
+ * The guide's illustration draws the same four icons as the real stack, and
+ * the frames colour them identically (`559:815` emerald, `559:821` sky, the
+ * other two muted). Written once so the two surfaces cannot drift apart.
+ */
+export const LOOM_SHEET_ICON_CLASS = {
+  before: 'text-emerald-500',
+  now: 'text-sky-400',
+  next: '',
+  plan: '',
+}
+
 const icons = LOOM_SHEET_ICONS
 
 /** One paper stack in two orientations; only the selected sheet owns a body. */
@@ -82,11 +96,7 @@ export function LoomStackView({
             >
               <Icon
                 aria-hidden="true"
-                className={cn(
-                  'size-4 shrink-0',
-                  sheet === 'before' && 'text-emerald-500',
-                  sheet === 'now' && 'text-sky-400',
-                )}
+                className={cn('size-4 shrink-0', LOOM_SHEET_ICON_CLASS[sheet])}
               />
               {wide && !open ? (
                 <>

@@ -328,7 +328,7 @@ describe('MAR-3201 lap 3, G: the three looks', () => {
     const card = document.querySelector('[data-learn-loom-key]') as HTMLElement
     // Mutation: render them as bare paragraphs again -> no fill, red.
     expect(card.className).toContain('bg-white/[0.04]')
-    expect(card.className).toContain('rounded-xl')
+    expect(card.className).toContain('rounded-[10px]')
     expect(
       within(card).getByText(
         'Groomed = understood. Grounded = checked in code.',
@@ -343,32 +343,42 @@ describe('MAR-3201 lap 3, G: the three looks', () => {
     expect(within(card).queryByText('YOUR PART')).toBeNull()
   })
 
-  it('G2 + G3: the step’s colour is worn by the eyebrow, the ticket and the sheet', () => {
+  it('lap 4, G2 + G3: two borders carry the step’s colour, and nothing else does', () => {
     open()
     const eyebrow = () =>
       document.querySelector('[data-learn-loom-step] p') as HTMLElement
     const identifier = () => within(ticket()).getByText('DEMO-101')
+    const status = () => within(ticket()).getByText(/Brief|Awaiting QA|Done/)
     const activeSheet = () =>
       document.querySelector('[data-learn-loom-active="true"]') as HTMLElement
 
-    // Blue while the work is being prepared and carried out.
-    // Mutation: leave the eyebrow muted -> red.
-    expect(eyebrow().className).toContain('text-sky-300')
-    expect(eyebrow().className).not.toContain('text-muted-foreground')
-    expect(identifier().className).toContain('text-sky-300')
-    expect(activeSheet().className).toContain('border-sky-400/40')
+    // Read off nodes 559:810/841/834/840, 559:1810/1841/1820/1840 and
+    // 559:2060/2091/2064/2090: the eyebrow and the identifier are the SAME
+    // blue on all six steps, and only the active sheet's border and the
+    // ticket's move. Mutation: colour the eyebrow by emphasis -> red on the
+    // amber step.
+    expect(eyebrow().className).toContain('text-blue-500')
+    expect(identifier().className).toContain('text-blue-500')
+    expect(activeSheet().className).toContain('border-blue-500')
+    expect(ticket().className).toContain('border-blue-500')
+    // The status line says the change in words, never in hue (R7).
+    expect(status().className).toContain('text-foreground')
 
     // Amber when it is waiting on a person.
     advanceTo(4)
-    expect(eyebrow().className).toContain('text-amber-300')
-    expect(identifier().className).toContain('text-amber-300')
-    expect(activeSheet().className).toContain('border-amber-400/50')
+    expect(eyebrow().className).toContain('text-blue-500')
+    expect(identifier().className).toContain('text-blue-500')
+    expect(activeSheet().className).toContain('border-amber-400')
+    expect(ticket().className).toContain('border-amber-400')
+    expect(status().className).toContain('text-foreground')
 
     // Green when it is accepted.
     advanceTo(1)
-    expect(eyebrow().className).toContain('text-emerald-300')
-    expect(identifier().className).toContain('text-emerald-300')
-    expect(activeSheet().className).toContain('border-emerald-400/50')
+    expect(eyebrow().className).toContain('text-blue-500')
+    expect(identifier().className).toContain('text-blue-500')
+    expect(activeSheet().className).toContain('border-emerald-500')
+    expect(ticket().className).toContain('border-emerald-500')
+    expect(status().className).toContain('text-foreground')
   })
 
   it('G3: the ticket’s note is sentence case, and the reference leads larger', () => {
@@ -383,7 +393,7 @@ describe('MAR-3201 lap 3, G: the three looks', () => {
     const lead = screen.getByText(
       'One shared plan. Agents do the work. You accept the result.',
     )
-    expect(lead.className).toContain('text-[18px]')
+    expect(lead.className).toContain('text-[19px]')
     expect(lead.className).toContain('font-semibold')
   })
 })

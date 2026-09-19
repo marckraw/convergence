@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { HelpCircle, Minimize2 } from 'lucide-react'
+import { Minimize2 } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { LoomStackView } from './loom-stack.presentational'
 import { LoomStatusView } from './loom-status.presentational'
@@ -35,10 +35,9 @@ export const LoomExpandedView: FC<LoomStackProps & { onFold: () => void }> = ({
         variant="ghost"
         size="sm"
         ref={props.guideRef}
-        className="h-10 shrink-0 gap-2 px-3 text-xs"
+        className="h-10 w-[148px] shrink-0 px-3 text-xs"
         onClick={props.onOpenGuide}
       >
-        <HelpCircle className="size-3.5" />
         {LEARN_LOOM_ENTRY}
       </Button>
       <Button

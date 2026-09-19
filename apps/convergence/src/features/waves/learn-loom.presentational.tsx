@@ -18,11 +18,12 @@ import { LearnLoomReferenceView } from './learn-loom-reference.presentational'
 import type { LearnLoomStepView, LearnLoomView } from './learn-loom.pure'
 import {
   LEARN_LOOM_BODY_CLASS,
+  LEARN_LOOM_CLOSE_CLASS,
   LEARN_LOOM_CONTROL_CLASS,
   LEARN_LOOM_CONTROL_OFF_CLASS,
   LEARN_LOOM_DIALOG_CLASS,
   LEARN_LOOM_DIALOG_TITLE_CLASS,
-  LEARN_LOOM_EMPHASIS_TEXT_CLASS,
+  LEARN_LOOM_EXPLANATION_CLASS,
   LEARN_LOOM_EYEBROW_CLASS,
   LEARN_LOOM_FOOTER_CLASS,
   LEARN_LOOM_HEADER_CLASS,
@@ -32,9 +33,10 @@ import {
   LEARN_LOOM_MAIN_CLASS,
   LEARN_LOOM_OVERLAY_CLASS,
   LEARN_LOOM_PRIMARY_CLASS,
+  LEARN_LOOM_REFERENCE_CONTROL_CLASS,
+  LEARN_LOOM_STEP_INTRO_CLASS,
   LEARN_LOOM_STEP_TITLE_CLASS,
   LEARN_LOOM_YOUR_PART_CLASS,
-  LEARN_LOOM_YOUR_PART_LABEL_CLASS,
 } from './learn-loom.styles'
 
 export interface LearnLoomViewProps {
@@ -101,7 +103,7 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
           type="button"
           variant="ghost"
           size="sm"
-          className={LEARN_LOOM_CONTROL_CLASS}
+          className={LEARN_LOOM_CLOSE_CLASS}
           onClick={onClose}
         >
           {LEARN_LOOM_CONTROLS.close}
@@ -121,20 +123,18 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
           <LearnLoomReferenceView />
         ) : (
           <>
-            <div data-learn-loom-step={step.step.key}>
-              <p
-                className={cn(
-                  LEARN_LOOM_EYEBROW_CLASS,
-                  LEARN_LOOM_EMPHASIS_TEXT_CLASS[step.step.emphasis],
-                )}
-              >
+            <div
+              data-learn-loom-step={step.step.key}
+              className={LEARN_LOOM_STEP_INTRO_CLASS}
+            >
+              <p className={LEARN_LOOM_EYEBROW_CLASS}>
                 <span>{step.copy.index}</span>
                 <span>{step.copy.label}</span>
               </p>
               <h2 className={LEARN_LOOM_STEP_TITLE_CLASS}>{step.copy.title}</h2>
             </div>
             <LearnLoomIllustrationView view={step} />
-            <div className="flex flex-col gap-3">
+            <div className={LEARN_LOOM_EXPLANATION_CLASS}>
               <p className={LEARN_LOOM_MAIN_CLASS}>{step.copy.main}</p>
               <div data-learn-loom-key className={LEARN_LOOM_KEY_CARD_CLASS}>
                 <p className={LEARN_LOOM_KEY_HEADLINE_CLASS}>
@@ -144,13 +144,16 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
                   {step.copy.keyExplanation}
                 </p>
               </div>
-              <p className="flex flex-wrap items-baseline gap-3">
-                <span className={LEARN_LOOM_YOUR_PART_LABEL_CLASS}>
-                  {LEARN_LOOM_YOUR_PART}
-                </span>
-                <span className={LEARN_LOOM_YOUR_PART_CLASS}>
-                  {step.copy.yourPart}
-                </span>
+              {/* `559:850` is one text node: the label and the sentence
+                  share size, weight and colour, parted by a small gap. */}
+              <p
+                className={cn(
+                  LEARN_LOOM_YOUR_PART_CLASS,
+                  'flex flex-wrap items-baseline gap-2.5',
+                )}
+              >
+                <span>{LEARN_LOOM_YOUR_PART}</span>
+                <span>{step.copy.yourPart}</span>
               </p>
             </div>
           </>
@@ -164,7 +167,7 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
               type="button"
               variant="ghost"
               size="sm"
-              className={LEARN_LOOM_CONTROL_CLASS}
+              className={LEARN_LOOM_REFERENCE_CONTROL_CLASS}
               onClick={onRestart}
             >
               {LEARN_LOOM_CONTROLS.restart}
@@ -172,7 +175,7 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
             <Button
               type="button"
               size="sm"
-              className={LEARN_LOOM_PRIMARY_CLASS}
+              className={LEARN_LOOM_REFERENCE_CONTROL_CLASS}
               onClick={onClose}
             >
               {LEARN_LOOM_CONTROLS.backToLoom}

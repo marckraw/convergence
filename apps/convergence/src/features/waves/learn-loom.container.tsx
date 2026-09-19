@@ -25,9 +25,12 @@ export const LearnLoomGuide: FC<{ open: boolean; onClose: () => void }> = ({
   /**
    * There is no reset here, and that is the point (lap 3, B).
    *
-   * A passive effect on `open` was a frame too late: the commit that mounted
-   * the dialog still held the old view, so a guide closed on the quick
-   * reference was born named "Loom, at a glance" and then corrected itself.
+   * What a reset would be fixing, measured: with no fresh mount, step and
+   * view simply SURVIVE -- a guide left on the quick reference reopens on
+   * the quick reference, permanently, until something remounts it. (The
+   * sharper claim that a passive effect leaves a stale title committed for
+   * one frame did not reproduce: React flushes the effect before Radix
+   * mounts the content, so the old name never reaches the document.)
    * The panel gives this component a key that changes when the guide closes,
    * so every session starts from a fresh mount -- including the sessions the
    * guide never sees closing, like Loom's column disappearing underneath it.
