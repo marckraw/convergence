@@ -1472,6 +1472,50 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(document.querySelector('[data-wave-row]')).toBeTruthy()
   })
 
+  it('MAR-3195 R1: every sheet’s rows can be read, not only the open one’s', async () => {
+    snapshots = {
+      'crew-1': {
+        crewId: 'crew-1',
+        entries: [
+          ledgerEntry({ issueIdentifier: 'EX-DONE', state: 'done' }),
+          ledgerEntry({
+            issueIdentifier: 'EX-NEXT',
+            state: 'assigned',
+            seat: 'opus',
+          }),
+        ],
+        trackerHealth: health('ok'),
+      },
+    }
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Loom')
+
+    // Before and Next, each opened from its own sheet. The lookup spans all
+    // five groups because an issue MOVES between them while it is read --
+    // a card opened on a working row must survive its acceptance.
+    // Mutation: search only the open sheet's group (drop `before`, or any
+    // other) -> that sheet's rows open nothing at all, red.
+    for (const [sheet, identifier] of [
+      ['Before', 'EX-DONE'],
+      ['Next', 'EX-NEXT'],
+    ] as const) {
+      fireEvent.click(
+        screen.getByRole('button', { name: new RegExp(`^${sheet} · `) }),
+      )
+      fireEvent.click(
+        document.querySelector(
+          `[data-wave-row="crew-1:${identifier}"]`,
+        ) as HTMLElement,
+      )
+      expect(
+        document.querySelector(`[data-loom-detail="crew-1:${identifier}"]`),
+      ).toBeTruthy()
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Close the issue detail' }),
+      )
+    }
+  })
+
   it('MAR-3195 R5: closing gives back the scroll and the focus', async () => {
     setWindowWidth(windowLeaving(900))
     await mount(<WavePanel reservedWidth={RESERVED} />)
