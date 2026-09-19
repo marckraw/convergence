@@ -4,10 +4,16 @@ import type {
   TrackerHealth,
   WorkLedgerSnapshot,
 } from '../work-ledger/work-ledger.types'
+import type {
+  TrackerReadEvent,
+  TrackerRefreshReply,
+} from '../../../src/shared/types/tracker.types'
 import {
   diffTrackerSnapshot,
   isTrackerTickDue,
-  TRACKER_WATCH_INTERVAL_MS,
+  nextTrackerTickDelay,
+  TRACKER_BURST_WINDOW_MS,
+  TRACKER_TICK_FLOOR_MS,
   trackerHealthAfter,
   trackerHealthChanged,
 } from './tracker-watcher.pure'
@@ -68,6 +74,12 @@ export interface TrackerWatcherDeps {
     binding: TrackerBinding
   }) => TrackerAdapter
   broadcast: (snapshot: WorkLedgerSnapshot) => void
+  /**
+   * Every successful read of a crew's tracker (MAR-3227 R6), news or not --
+   * what the panel's "read N s ago" counts from. Optional: a watcher with no
+   * window to tell is still a watcher.
+   */
+  onRead?: (event: TrackerReadEvent) => void
   now?: () => Date
   log?: (message: string, error?: unknown) => void
 }
@@ -130,18 +142,40 @@ export interface TrackerWatcherHandle {
   stop: () => void
 }
 
+/** Why a read was asked for; a label for the log and the reader, no more. */
+export type TrackerKickReason = 'activity' | 'focus' | 'manual'
+
 /**
  * The label watcher (MAR-3084 R5, R7): reads each bound crew's tracker and
  * appends what changed to the work ledger. Never writes to the tracker.
  *
- * A house-rules timer, as `startRelayStallClock`: an immediate first tick then
- * one per interval, unreferenced so it never holds the app open, and a throw
- * inside a tick is logged and never takes the interval with it. A refusal
- * changes the crew's health and nothing else -- the ledger keeps its rows.
+ * A house-rules timer, as `startRelayStallClock`: an immediate first tick,
+ * unreferenced so it never holds the app open, and a throw inside a tick is
+ * logged and never takes the schedule with it. A refusal changes the crew's
+ * health and nothing else -- the ledger keeps its rows.
+ *
+ * The schedule is one self-rescheduling timer that asks
+ * `nextTrackerTickDelay` (MAR-3227): a burst after crew activity, the old
+ * beat while a window is focused, a slow one otherwise, and a floor under
+ * everything. One timer, never a stack: every reason to read replaces it.
  */
 export class TrackerWatcherService {
   private readonly health = new Map<string, TrackerHealth>()
   private ticking = false
+  /** When the last read STARTED, in ms: what the floor and the beat count from. */
+  private lastTickAt: number | null = null
+  /** Crew activity keeps the fast beat until then (MAR-3227 R2). */
+  private burstUntil: number | null = null
+  /** Whether a window has focus (R3); the app starts in front of a person. */
+  private windowFocused = true
+  /**
+   * A read somebody asked for that has not happened yet (R4). One flag, not a
+   * count: three kicks during a read ask for one read after it, not three.
+   */
+  private pending = false
+  private timer: ReturnType<typeof setTimeout> | null = null
+  private running = false
+  private lastKick: TrackerKickReason | null = null
 
   constructor(private readonly deps: TrackerWatcherDeps) {}
 
@@ -232,14 +266,117 @@ export class TrackerWatcherService {
       .resolveProject(reference)
   }
 
-  start(intervalMs: number = TRACKER_WATCH_INTERVAL_MS): TrackerWatcherHandle {
-    const fire = () => {
-      void this.tick().catch((error) => this.log('Tick failed', error))
+  start(): TrackerWatcherHandle {
+    this.running = true
+    this.schedule()
+    return {
+      stop: () => {
+        this.running = false
+        if (this.timer !== null) clearTimeout(this.timer)
+        this.timer = null
+      },
     }
-    fire()
-    const timer = setInterval(fire, intervalMs)
+  }
+
+  /**
+   * Asks for a read now, subject to the floor (MAR-3227 R1, R4).
+   *
+   * During a read it only sets the one `pending` flag -- the read in flight
+   * reschedules when it ends, and the flag makes that one follow-up read
+   * happen after the floor. Never zero reads, never a queue.
+   */
+  kick(reason: TrackerKickReason): void {
+    this.lastKick = reason
+    this.pending = true
+    this.schedule()
+  }
+
+  /** The last reason a read was asked for; a fact for tests and the log. */
+  lastKickReason(): TrackerKickReason | null {
+    return this.lastKick
+  }
+
+  /**
+   * A crew's seat was dispatched to or came back (MAR-3227 R2): the two
+   * moments its tracker is about to change. Opens (or extends) the burst and
+   * asks for a read. An unbound crew has no tracker to hurry.
+   */
+  noteActivity(crewId: string): void {
+    const crew = this.deps.crews.list().find((each) => each.id === crewId)
+    if (!crew?.trackerBinding) return
+    this.burstUntil = this.now().getTime() + TRACKER_BURST_WINDOW_MS
+    this.kick('activity')
+  }
+
+  /**
+   * A window gained or lost focus (MAR-3227 R3). Coming back is a reason to
+   * read; going away only slows the beat -- a burst already open keeps its
+   * pace, because the horse is working whether anybody watches or not.
+   */
+  setWindowFocused(focused: boolean): void {
+    this.windowFocused = focused
+    if (focused) this.kick('focus')
+    else this.schedule()
+  }
+
+  /**
+   * The Refresh control (MAR-3227 R6), for the crew on screen.
+   *
+   * Honest in both directions: a crew backing off is not read (R5), and
+   * inside the floor nothing is asked for at all -- the reply says when a
+   * press would read, so the control can say `just read` instead of
+   * pretending to work.
+   */
+  refresh(crewId: string): TrackerRefreshReply {
+    const now = this.now()
+    const health = this.trackerHealth(crewId)
+    if (!isTrackerTickDue({ health, now })) {
+      return {
+        outcome: 'backing-off',
+        refreshableAt: health?.backoffUntil ?? null,
+      }
+    }
+    if (
+      this.lastTickAt !== null &&
+      now.getTime() - this.lastTickAt < TRACKER_TICK_FLOOR_MS
+    ) {
+      return {
+        outcome: 'just-read',
+        refreshableAt: new Date(
+          this.lastTickAt + TRACKER_TICK_FLOOR_MS,
+        ).toISOString(),
+      }
+    }
+    this.kick('manual')
+    return { outcome: 'reading', refreshableAt: null }
+  }
+
+  /**
+   * Replaces the one timer with one asking the pure schedule.
+   *
+   * Never during a read: the read reschedules as it ends (in `tick`'s
+   * `finally`), with whatever arrived meanwhile -- a kick, a focus change, a
+   * burst. A timer armed mid-read would fire into the single-flight guard
+   * and spend the pending kick on a read that never happened.
+   */
+  private schedule(): void {
+    if (!this.running || this.ticking) return
+    if (this.timer !== null) clearTimeout(this.timer)
+    const delay = nextTrackerTickDelay({
+      now: this.now().getTime(),
+      lastTickAt: this.lastTickAt,
+      burstUntil: this.burstUntil,
+      windowFocused: this.windowFocused,
+      kicked: this.pending,
+    })
+    const timer = setTimeout(() => this.fire(), delay)
     timer.unref?.()
-    return { stop: () => clearInterval(timer) }
+    this.timer = timer
+  }
+
+  private fire(): void {
+    this.timer = null
+    void this.tick().catch((error) => this.log('Tick failed', error))
   }
 
   /**
@@ -257,6 +394,9 @@ export class TrackerWatcherService {
   async tick(): Promise<void> {
     if (this.ticking) return
     this.ticking = true
+    // This read answers every kick made before it started.
+    this.pending = false
+    this.lastTickAt = this.now().getTime()
     try {
       for (const crew of this.deps.crews.list()) {
         if (!crew.trackerBinding) continue
@@ -268,6 +408,7 @@ export class TrackerWatcherService {
       }
     } finally {
       this.ticking = false
+      this.schedule()
     }
   }
 
@@ -357,6 +498,10 @@ export class TrackerWatcherService {
       next = trackerHealthAfter({ previous, outcome: { ok: true }, now })
     } catch (error) {
       if (!(error instanceof TrackerRefusalError)) throw error
+      // Health outranks speed (MAR-3227 R5): a tracker saying "slow down"
+      // ends the burst, so nothing keeps asking at the fast beat once its
+      // backoff is over.
+      if (error.refusal.kind === 'rate-limited') this.burstUntil = null
       next = trackerHealthAfter({
         previous,
         outcome: { ok: false, refusal: error.refusal },
@@ -364,6 +509,19 @@ export class TrackerWatcherService {
       })
     }
     this.health.set(crewId, next)
+    if (
+      next.lastOkAt !== null &&
+      next.state === 'ok' &&
+      this.lastTickAt !== null
+    ) {
+      this.deps.onRead?.({
+        crewId,
+        lastOkAt: next.lastOkAt,
+        refreshableAt: new Date(
+          this.lastTickAt + TRACKER_TICK_FLOOR_MS,
+        ).toISOString(),
+      })
+    }
     // Only news goes to the windows (lap 2, F): rows appended, or a health
     // that changed state or backoff. `workLedger:list` always answers fresh.
     if (appended > 0 || trackerHealthChanged(previous, next)) {

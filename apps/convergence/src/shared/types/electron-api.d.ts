@@ -2,6 +2,8 @@ import type {
   TrackerBinding,
   TrackerCredentialStatus,
   TrackerProbeReading,
+  TrackerReadEvent,
+  TrackerRefreshReply,
   WorkLedgerSnapshot,
   TrackerProjectResolution,
 } from './tracker.types'
@@ -1886,6 +1888,10 @@ interface ElectronAPI {
       apiKey: string,
     ) => Promise<TrackerCredentialStatus>
     deleteCredential: (crewId: string) => Promise<TrackerCredentialStatus>
+    /** Asks for a read sooner (MAR-3227 R6); inside the floor, asks nothing. */
+    refresh: (crewId: string) => Promise<TrackerRefreshReply>
+    /** Every successful read of a crew's tracker, news or not (MAR-3227 R6). */
+    onRead: (callback: (event: TrackerReadEvent) => void) => () => void
   }
   workLedger: {
     list: (crewId: string) => Promise<WorkLedgerSnapshot>

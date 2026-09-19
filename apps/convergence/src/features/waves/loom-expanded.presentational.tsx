@@ -54,7 +54,7 @@ export const LoomExpandedView: FC<LoomStackProps & { onFold: () => void }> = ({
       </Button>
     </div>
     <div className="shrink-0 px-6 pb-3">
-      <LoomStatusView header={props.header} />
+      <LoomStatusView header={props.header} refresh={props.refresh} />
     </div>
     <LoomStackView {...props} wide />
   </section>

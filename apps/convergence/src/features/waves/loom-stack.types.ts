@@ -1,4 +1,4 @@
-import type { UIEvent } from 'react'
+import type { ReactNode, UIEvent } from 'react'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
 import type { LoomHorse } from './loom-horses.pure'
 import type { LoomIssueDetail } from './loom-detail.pure'
@@ -77,6 +77,12 @@ export interface LoomStackProps {
    */
   onEscape?: () => void
   header: WaveHeader
+  /**
+   * The Refresh control beside the tracker's line (MAR-3227 R6), or null
+   * where it has nothing honest to do: no crew on screen, or the tracker in
+   * an outage the header is already naming.
+   */
+  refresh?: ReactNode
   /** `convergence development · All waves` -- which ledger this is. */
   subline: LoomSubline
   open: LoomSheet

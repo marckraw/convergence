@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   diffTrackerSnapshot,
   isTrackerTickDue,
+  nextTrackerTickDelay,
+  TRACKER_BACKGROUND_INTERVAL_MS,
+  TRACKER_BURST_INTERVAL_MS,
+  TRACKER_BURST_WINDOW_MS,
   TRACKER_RATE_LIMIT_DEFAULT_BACKOFF_MS,
+  TRACKER_TICK_FLOOR_MS,
+  TRACKER_WATCH_INTERVAL_MS,
   trackerHealthAfter,
   trackerHealthChanged,
 } from './tracker-watcher.pure'
@@ -677,5 +683,84 @@ describe('MAR-3190 R8: absence never rewrites a finished row', () => {
         seenAt: SEEN,
       }),
     ).toEqual([])
+  })
+})
+
+describe('MAR-3227 R1: four speeds, one floor, from one pure function', () => {
+  const T = 1_000_000
+
+  it('the constants are the ones the budget was written for', () => {
+    expect(TRACKER_TICK_FLOOR_MS).toBe(10_000)
+    expect(TRACKER_BURST_INTERVAL_MS).toBe(15_000)
+    expect(TRACKER_BURST_WINDOW_MS).toBe(180_000)
+    expect(TRACKER_WATCH_INTERVAL_MS).toBe(60_000)
+    expect(TRACKER_BACKGROUND_INTERVAL_MS).toBe(300_000)
+  })
+
+  it.each([
+    {
+      name: 'never read: now, whatever else is true',
+      input: { lastTickAt: null, burstUntil: null, windowFocused: false },
+      kicked: false,
+      delay: 0,
+    },
+    {
+      name: 'inside a burst: 15 s, focused or not',
+      input: { lastTickAt: T, burstUntil: T + 60_000, windowFocused: false },
+      kicked: false,
+      delay: 15_000,
+    },
+    {
+      name: 'focused, no burst: 60 s',
+      input: { lastTickAt: T, burstUntil: null, windowFocused: true },
+      kicked: false,
+      delay: 60_000,
+    },
+    {
+      name: 'not focused, no burst: 5 min',
+      input: { lastTickAt: T, burstUntil: null, windowFocused: false },
+      kicked: false,
+      delay: 300_000,
+    },
+    {
+      name: 'a burst that has expired is no burst: back to the focused beat',
+      input: { lastTickAt: T, burstUntil: T, windowFocused: true },
+      kicked: false,
+      delay: 60_000,
+    },
+    {
+      name: 'a kick long after the last read: now',
+      input: { lastTickAt: T - 30_000, burstUntil: null, windowFocused: true },
+      kicked: true,
+      delay: 0,
+    },
+  ])('$name', ({ input, kicked, delay }) => {
+    expect(nextTrackerTickDelay({ ...input, now: T, kicked })).toBe(delay)
+  })
+
+  it('the beat counts from the last read, not from whenever it is asked', () => {
+    // 40 s after a read, focused: 20 s to go, not another 60.
+    expect(
+      nextTrackerTickDelay({
+        now: T + 40_000,
+        lastTickAt: T,
+        burstUntil: null,
+        windowFocused: true,
+        kicked: false,
+      }),
+    ).toBe(20_000)
+  })
+
+  it('two kicks in a second: the second waits out the floor', () => {
+    // Mutation: drop the floor -> 0, red.
+    expect(
+      nextTrackerTickDelay({
+        now: T + 1_000,
+        lastTickAt: T,
+        burstUntil: T + TRACKER_BURST_WINDOW_MS,
+        windowFocused: true,
+        kicked: true,
+      }),
+    ).toBe(9_000)
   })
 })

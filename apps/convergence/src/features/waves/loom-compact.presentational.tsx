@@ -40,7 +40,7 @@ export const LoomCompactView: FC<
       <p className="mb-2 break-words">
         <LoomSublineContent subline={props.subline} />
       </p>
-      <LoomStatusView header={props.header} />
+      <LoomStatusView header={props.header} refresh={props.refresh} />
     </div>
     <LoomStackView {...props} />
     {/* A sibling of the stack, never inside the scrolling sheet body: the

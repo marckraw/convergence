@@ -4,7 +4,10 @@ import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import { CrewService } from '../crew/crew.service'
 import { WorkLedgerService } from '../work-ledger/work-ledger.service'
 import type { WorkLedgerSnapshot } from '../work-ledger/work-ledger.types'
-import { TRACKER_WATCH_INTERVAL_MS } from './tracker-watcher.pure'
+import {
+  TRACKER_BACKGROUND_INTERVAL_MS,
+  TRACKER_WATCH_INTERVAL_MS,
+} from './tracker-watcher.pure'
 import { TrackerWatcherService } from './tracker-watcher.service'
 import { createLinearTrackerAdapter } from './linear-tracker.adapter'
 import {
@@ -15,6 +18,7 @@ import {
   recordedReply,
   trackerIssue,
 } from './linear-tracker.fixture'
+import type { TrackerReadEvent } from '../../../src/shared/types/tracker.types'
 import {
   TrackerRefusalError,
   type TrackerAdapter,
@@ -1004,5 +1008,276 @@ describe('MAR-3190 lap 2, C: a short bodies reply refuses the tick', () => {
     expect(service.trackerHealth(crewId)).toMatchObject({
       state: 'bad-response',
     })
+  })
+})
+
+describe('MAR-3227: the tracker is read when it matters', () => {
+  const T0 = new Date('2026-09-19T12:00:00.000Z').getTime()
+  let db: Database.Database
+  let crews: CrewService
+  let crewId: string
+  let ledger: WorkLedgerService
+  let broadcasts: WorkLedgerSnapshot[]
+  let reads: TrackerReadEvent[]
+  let handle: { stop: () => void } | null
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(T0)
+    db = getDatabase()
+    crews = new CrewService(db)
+    crewId = crews.create({ name: 'Loom' }).id
+    crews.setTrackerBinding(crewId, { projectId: 'project-1' })
+    ledger = new WorkLedgerService(db)
+    broadcasts = []
+    reads = []
+    handle = null
+  })
+
+  afterEach(() => {
+    handle?.stop()
+    vi.useRealTimers()
+    closeDatabase()
+    resetDatabase()
+  })
+
+  /** Seconds since T0, for reading a schedule off the fake clock. */
+  const at = () => Math.round((Date.now() - T0) / 1000)
+
+  /** A watcher on the fake clock; `list` records WHEN each read happened. */
+  function watcher(
+    list: TrackerAdapter['listLabeledIssues'] = async () => [ISSUE],
+  ) {
+    const times: number[] = []
+    const listLabeledIssues = vi.fn<TrackerAdapter['listLabeledIssues']>(
+      (input) => {
+        times.push(at())
+        return list(input)
+      },
+    )
+    const service = new TrackerWatcherService({
+      crews,
+      ledger,
+      resolveKey: async () => 'lin_api_fixture',
+      createAdapter: () => ({
+        probe: async () => ({ ok: true, issues: 0, projectName: 'x' }),
+        resolveProject: async () => ({ kind: 'not-found' as const }),
+        listLabeledIssues,
+        readIssueBodies: async () => new Map<string, string | null>(),
+      }),
+      broadcast: (snapshot) => broadcasts.push(snapshot),
+      onRead: (event) => reads.push(event),
+      now: () => new Date(),
+      log: vi.fn(),
+    })
+    return { service, times, listLabeledIssues }
+  }
+
+  async function until(seconds: number) {
+    await vi.advanceTimersByTimeAsync(T0 + seconds * 1000 - Date.now())
+  }
+
+  it('R2: activity opens a 3-minute burst at 15 s, then the beat goes back to 60 s', async () => {
+    const { service, times } = watcher()
+    handle = service.start()
+    await until(30)
+    expect(times).toEqual([0])
+
+    service.noteActivity(crewId)
+    await until(340)
+    // Mutation: a burst that never ends (ignore `burstUntil`'s expiry) ->
+    // 225, 240, ... after 210, red.
+    expect(times).toEqual([
+      0, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165, 180, 195, 210, 270, 330,
+    ])
+  })
+
+  it('R2: activity at the same moment is one read and one timer, never a stack', async () => {
+    const { service, times } = watcher()
+    handle = service.start()
+    await until(30)
+    service.noteActivity(crewId)
+    service.noteActivity(crewId)
+    service.noteActivity(crewId)
+    expect(vi.getTimerCount()).toBe(1)
+    await until(44)
+    expect(times).toEqual([0, 30])
+  })
+
+  it('R2: an unbound crew’s activity hurries nothing', async () => {
+    const { service, times } = watcher()
+    const unbound = crews.create({ name: 'Unbound' }).id
+    handle = service.start()
+    await until(30)
+    service.noteActivity(unbound)
+    await until(59)
+    expect(times).toEqual([0])
+  })
+
+  it('R3: blur slows to the background beat; focus reads at once and returns to 60 s', async () => {
+    const { service, times } = watcher()
+    handle = service.start()
+    await until(1)
+    service.setWindowFocused(false)
+    // Mutation: ignore blur -> a read at 60, red.
+    await until(TRACKER_BACKGROUND_INTERVAL_MS / 1000 - 1)
+    expect(times).toEqual([0])
+    await until(TRACKER_BACKGROUND_INTERVAL_MS / 1000)
+    expect(times).toEqual([0, 300])
+
+    await until(400)
+    service.setWindowFocused(true)
+    await until(400)
+    expect(times).toEqual([0, 300, 400])
+    expect(service.lastKickReason()).toBe('focus')
+    await until(TRACKER_WATCH_INTERVAL_MS / 1000 + 400)
+    expect(times).toEqual([0, 300, 400, 460])
+  })
+
+  it('R3: a blur never slows an open burst', async () => {
+    const { service, times } = watcher()
+    handle = service.start()
+    await until(30)
+    service.noteActivity(crewId)
+    service.setWindowFocused(false)
+    await until(60)
+    expect(times).toEqual([0, 30, 45, 60])
+  })
+
+  it('R3: focus inside the floor waits the floor out, then reads', async () => {
+    const { service, times } = watcher()
+    handle = service.start()
+    await until(3)
+    service.setWindowFocused(true)
+    await until(9)
+    expect(times).toEqual([0])
+    await until(10)
+    expect(times).toEqual([0, 10])
+  })
+
+  it('R4: three kicks during one slow read are exactly one read after it, after the floor', async () => {
+    let release: () => void = () => {}
+    let slow = true
+    const { service, times } = watcher(async () => {
+      if (slow) {
+        slow = false
+        await new Promise<void>((resolve) => {
+          release = resolve
+        })
+      }
+      return [ISSUE]
+    })
+    handle = service.start()
+    await until(1)
+    service.kick('manual')
+    await until(2)
+    service.kick('focus')
+    await until(3)
+    service.kick('activity')
+    await until(5)
+    release()
+    await until(9)
+    expect(times).toEqual([0])
+    // Mutation: drop the pending flag -> no read at 10, red.
+    await until(10)
+    expect(times).toEqual([0, 10])
+    // Mutation: queue every kick -> 20 and 30 as well, red.
+    await until(69)
+    expect(times).toEqual([0, 10])
+    await until(70)
+    expect(times).toEqual([0, 10, 70])
+  })
+
+  it('R5: a kick or a Refresh during a 5-minute backoff asks the tracker nothing', async () => {
+    const { service, times } = watcher(async () => {
+      throw refusal('rate-limited', null)
+    })
+    handle = service.start()
+    await until(30)
+    expect(service.trackerHealth(crewId)?.state).toBe('rate-limited')
+
+    expect(service.refresh(crewId)).toEqual({
+      outcome: 'backing-off',
+      refreshableAt: '2026-09-19T12:05:00.000Z',
+    })
+    service.noteActivity(crewId)
+    service.kick('manual')
+    // Mutation: let a kick read past `isTrackerTickDue` -> a read at 30, red.
+    await until(299)
+    expect(times).toEqual([0])
+  })
+
+  it('R5: a rate-limited answer closes the burst; the healthy crew goes back to the beat', async () => {
+    const limited = crewId
+    const healthy = crews.create({ name: 'Healthy' }).id
+    crews.setTrackerBinding(healthy, { projectId: 'project-2' })
+    const healthyTimes: number[] = []
+    const { service } = watcher(async (input) => {
+      if (input.projectId === 'project-2') {
+        healthyTimes.push(at())
+        return [ISSUE]
+      }
+      if (at() >= 45) throw refusal('rate-limited', null)
+      return [ISSUE]
+    })
+    handle = service.start()
+    await until(30)
+    service.noteActivity(limited)
+    await until(59)
+    // The 429 lands at 45; the burst it closes would have read at 60.
+    // Mutation: keep the burst -> 60 and 75 on the healthy crew, red.
+    await until(104)
+    expect(healthyTimes).toEqual([0, 30, 45])
+    await until(105)
+    expect(healthyTimes).toEqual([0, 30, 45, 105])
+  })
+
+  it('R6: Refresh inside the floor says just read and asks for nothing; after it, reads now', async () => {
+    const { service, times } = watcher()
+    handle = service.start()
+    await until(4)
+    expect(service.refresh(crewId)).toEqual({
+      outcome: 'just-read',
+      refreshableAt: '2026-09-19T12:00:10.000Z',
+    })
+    await until(59)
+    expect(times).toEqual([0])
+
+    expect(service.refresh(crewId)).toEqual({
+      outcome: 'reading',
+      refreshableAt: null,
+    })
+    expect(service.lastKickReason()).toBe('manual')
+    await until(59)
+    expect(times).toEqual([0, 59])
+  })
+
+  it('R6: every successful read is heard, news or not; the ledger channel still carries news only', async () => {
+    const { service } = watcher()
+    handle = service.start()
+    await until(60)
+    // Mutation: tell only on news -> one read heard, red.
+    expect(reads).toEqual([
+      {
+        crewId,
+        lastOkAt: '2026-09-19T12:00:00.000Z',
+        refreshableAt: '2026-09-19T12:00:10.000Z',
+      },
+      {
+        crewId,
+        lastOkAt: '2026-09-19T12:01:00.000Z',
+        refreshableAt: '2026-09-19T12:01:10.000Z',
+      },
+    ])
+    expect(broadcasts).toHaveLength(1)
+  })
+
+  it('R6: a refused read is not heard as a read', async () => {
+    const { service } = watcher(async () => {
+      throw refusal('unreachable')
+    })
+    handle = service.start()
+    await until(1)
+    expect(reads).toEqual([])
   })
 })
