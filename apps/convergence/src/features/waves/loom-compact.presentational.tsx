@@ -22,6 +22,11 @@ export const LoomCompactView: FC<
   LoomStackProps & { width: number; onExpand: () => void }
 > = ({
   sheets,
+  horses,
+  qaExpanded,
+  onToggleQa,
+  onOpenSeat,
+  onShowNext,
   header,
   subline,
   open,
@@ -74,6 +79,11 @@ export const LoomCompactView: FC<
               <LoomSheetView
                 sheet={sheet}
                 sheets={sheets}
+                horses={horses}
+                qaExpanded={qaExpanded}
+                onToggleQa={onToggleQa}
+                onOpenSeat={onOpenSeat}
+                onShowNext={onShowNext}
                 inertReason={inertReason}
                 onOpen={onOpen}
                 bodyRef={bodyRef}

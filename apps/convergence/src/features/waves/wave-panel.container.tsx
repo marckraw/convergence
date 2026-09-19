@@ -138,6 +138,15 @@ export const WavePanel: FC<WavePanelProps> = ({
   const [stored, setStored] = useState<WavePanelMode>(loadWavePanelMode)
   const [storedWidth, setStoredWidth] = useState<number>(loadWavePanelWidth)
   const [sheet, setSheet] = useState<LoomSheet>(loadLoomSheet)
+  /**
+   * Whether Awaiting QA is revealed (MAR-3191 R5).
+   *
+   * Here and not in the sheet, because the sheet's body is unmounted every
+   * time a person opens another sheet or folds Loom -- a reveal held down
+   * there would quietly close itself, which is the kind of small lie this
+   * panel exists not to tell.
+   */
+  const [qaExpanded, setQaExpanded] = useState(false)
   const windowWidth = useWindowWidth()
   const changeMode = useCallback((next: WavePanelMode) => {
     setStored(next)
@@ -167,6 +176,21 @@ export const WavePanel: FC<WavePanelProps> = ({
     saveWavePanelWidth(chosen)
   }, [])
   const { inertReason, openRow } = useRowDoors(board, onOpenSession)
+  /**
+   * A card opens the conversation the CREW RECORD names (MAR-3191 R6).
+   *
+   * By the member's own `sessionId`, never by looking its baton name up in
+   * the session list: two crews may name a seat the same, and a name lookup
+   * would open the other crew's conversation with no way for a person to
+   * tell. The panel opens and never sends.
+   */
+  const openSeat = useCallback(
+    (sessionId: string) => {
+      const session = board.findSession(sessionId)
+      if (session) onOpenSession?.(session)
+    },
+    [board, onOpenSession],
+  )
   const { bodyRef, onBodyScroll } = useSheetScroll(sheet)
   // The draft is asked for before the early returns below, because hooks are
   // not optional; it is only READ when a column is on screen.
@@ -232,6 +256,11 @@ export const WavePanel: FC<WavePanelProps> = ({
 
   const stack = {
     sheets: board.sheets,
+    horses: board.horses,
+    qaExpanded,
+    onToggleQa: () => setQaExpanded((was) => !was),
+    onOpenSeat: openSeat,
+    onShowNext: () => selectSheet('next'),
     header: board.header,
     subline: loomSubline(board.crewNames),
     open: sheet,

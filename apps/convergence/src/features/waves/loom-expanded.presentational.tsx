@@ -24,6 +24,11 @@ import {
  */
 export const LoomExpandedView: FC<LoomStackProps & { onFold: () => void }> = ({
   sheets,
+  horses,
+  qaExpanded,
+  onToggleQa,
+  onOpenSeat,
+  onShowNext,
   header,
   subline,
   open,
@@ -81,10 +86,16 @@ export const LoomExpandedView: FC<LoomStackProps & { onFold: () => void }> = ({
               <LoomSheetView
                 sheet={sheet}
                 sheets={sheets}
+                horses={horses}
+                qaExpanded={qaExpanded}
+                onToggleQa={onToggleQa}
+                onOpenSeat={onOpenSeat}
+                onShowNext={onShowNext}
                 inertReason={inertReason}
                 onOpen={onOpen}
                 bodyRef={bodyRef}
                 onScroll={onBodyScroll}
+                wide
                 className="min-h-0 flex-1"
               />
             </div>

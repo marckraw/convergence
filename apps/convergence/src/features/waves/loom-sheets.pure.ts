@@ -205,3 +205,40 @@ export function loomSubline(crewNames: readonly string[]): string {
   if (crewNames.length === 1) return `${crewNames[0]} · All waves`
   return `${crewNames.length} crews · All waves`
 }
+
+/**
+ * Now's in-flight list with the cards' own rows taken out (MAR-3191 R4).
+ *
+ * Every row appears exactly once on the sheet. A `working` row a horse card
+ * already names is not listed again below it; a `working` row whose seat
+ * matches no horse in the crew STAYS in the list, still saying the thing it
+ * already says (`seat not in crew`) -- that row is the interesting one, and
+ * dropping it because no card claimed it would hide exactly the work nobody
+ * is watching.
+ *
+ * A card's held row may come from *Decide* instead (lap 2, A) -- a blocked
+ * working row -- and it stays listed there, as a `returned` row stays under
+ * Fable's turn. That needs no guard HERE: `loomSheets` puts every row in
+ * exactly one group, so a row the card took from `decide` is not in this
+ * list to begin with, and a `heldFrom` check could never change the answer.
+ * The card's own words say where its row came from; this function only ever
+ * subtracts what it holds.
+ *
+ * One function, called by both shapes, so compact and expanded cannot come to
+ * different conclusions about what has already been shown.
+ */
+export function loomNowRows(
+  sheets: LoomSheets,
+  horses: readonly { held: WaveRow | null }[],
+): WaveRow[] {
+  const heldKeys = new Set(
+    horses.flatMap((horse) =>
+      horse.held
+        ? [`${horse.held.entry.crewId}:${horse.held.entry.issueId}`]
+        : [],
+    ),
+  )
+  return sheets.now.inFlight.filter(
+    (row) => !heldKeys.has(`${row.entry.crewId}:${row.entry.issueId}`),
+  )
+}

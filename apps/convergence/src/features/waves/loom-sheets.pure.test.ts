@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkLedgerState } from '@/entities/work-ledger'
 import {
+  loomNowRows,
   loomSubline,
   LOOM_PLAN_NOTE,
   loomSheetCounts,
@@ -274,5 +275,71 @@ describe('MAR-3189: the subline names the ledger on screen', () => {
       '2 crews · All waves',
     )
     expect(loomSubline([])).toBe('All waves')
+  })
+})
+
+describe('MAR-3191 R4: Now lists only the rows no card holds', () => {
+  const sheets = loomSheets(
+    [
+      ledgerEntry({ issueIdentifier: 'EX-1', state: 'working', seat: 'opus' }),
+      ledgerEntry({ issueIdentifier: 'EX-2', state: 'working', seat: 'astra' }),
+    ],
+    NOW,
+  )
+
+  it('removes a held row and keeps the rest, by crew AND issue', () => {
+    const held = sheets.now.inFlight[0]!
+    // Mutation: list the held rows too -> EX-1 appears on the card and in the
+    // list, twice on one sheet.
+    expect(
+      loomNowRows(sheets, [{ held }]).map((row) => row.entry.issueIdentifier),
+    ).toEqual(['EX-2'])
+    // A card with nothing in hand removes nothing.
+    expect(loomNowRows(sheets, [{ held: null }])).toHaveLength(2)
+    expect(loomNowRows(sheets, [])).toHaveLength(2)
+  })
+
+  it('a row of another crew with the same issue id is not removed', () => {
+    // Mutation: key the removal on `issueId` alone -> the other crew's row
+    // disappears from a sheet nobody is showing it on, red.
+    const other = loomSheets(
+      [
+        ledgerEntry({
+          issueIdentifier: 'EX-1',
+          state: 'working',
+          seat: 'opus',
+          crewId: 'crew-2',
+        }),
+      ],
+      NOW,
+    )
+    expect(
+      loomNowRows(other, [{ held: sheets.now.inFlight[0]! }]),
+    ).toHaveLength(1)
+  })
+})
+
+describe('MAR-3191 lap 2, A: one row lives in exactly one group', () => {
+  it('a blocked working row is in Decide and never in the in-flight list', () => {
+    // This is the structural guarantee `loomNowRows` leans on instead of a
+    // `heldFrom` guard: the guard could not fire, because a row the card
+    // took from Decide is not in this list at all.
+    // Mutation: `loomSheets` pushing a blocked row to BOTH groups -> the
+    // union assertion in `loom-horses.pure.test.ts` goes red first.
+    const sheets = loomSheets(
+      [
+        ledgerEntry({
+          issueIdentifier: 'EX-1',
+          state: 'working',
+          seat: 'opus',
+          blocked: true,
+        }),
+      ],
+      NOW,
+    )
+    expect(sheets.now.inFlight).toEqual([])
+    expect(sheets.now.decide).toHaveLength(1)
+    const held = sheets.now.decide[0]!
+    expect(loomNowRows(sheets, [{ held }])).toEqual([])
   })
 })
