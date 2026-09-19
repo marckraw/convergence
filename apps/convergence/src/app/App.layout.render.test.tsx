@@ -20,12 +20,13 @@ vi.mock('sonner', () => ({
 /**
  * The wave column's wiring, through the real shell (MAR-3148 R4).
  *
- * The panel's own tests render the container; this one is about the two
- * decisions `App.layout` makes for it -- whether the column exists at all,
- * and whether it steps aside for Mission Control's own Waves tab. Neither is
- * visible from inside the feature, and both are one prop wide, which is
- * exactly the kind of wiring that disappears in a refactor with every gate
- * still green.
+ * The panel's own tests render the container; this one is about the one
+ * decision `App.layout` makes for it -- whether the column exists at all.
+ * That is not visible from inside the feature, and it is one prop wide,
+ * which is exactly the kind of wiring that disappears in a refactor with
+ * every gate still green. (The column used also to step aside for
+ * Mission Control's Waves tab; that reason retired with the tab,
+ * MAR-3233, and the rail now stays beside every layout.)
  */
 
 const AT = '2026-09-18T00:00:00.000Z'
@@ -114,9 +115,6 @@ function stubBridge(crews: SessionCrew[]) {
     providerAccounts: { list: vi.fn(async () => []) },
   }
 }
-
-const waveLandmarks = () =>
-  document.querySelectorAll('aside[aria-label="Waves"]')
 
 /** Loom in its column: the shell's own slot beside the conversation. */
 const loomLandmarks = () => document.querySelectorAll('[aria-label="Loom"]')
@@ -221,10 +219,10 @@ describe('MAR-3148 R4: the wave column’s wiring in the shell', () => {
     expect(mainPanel()?.innerHTML).toBe(mainBefore)
   })
 
-  it('Mission Control on its Waves tab: one landmark, and it is the tab’s', async () => {
+  it('Mission Control open: the Loom rail stays beside it, and a stored Waves opens a layout that exists', async () => {
     stubBridge([crew()])
-    // The room remembers the tab it was left on, so the shell mounts with
-    // Mission Control already showing Waves.
+    // A room left on the retired tab upgrades into a layout that exists
+    // (MAR-3233 R2): nothing is rewritten until the person chooses.
     localStorage.setItem(
       'convergence-mission-control-view',
       JSON.stringify({ mode: 'waves' }),
@@ -232,18 +230,16 @@ describe('MAR-3148 R4: the wave column’s wiring in the shell', () => {
 
     await renderShell({ missionControlActive: true })
 
-    // Mutation: drop `hidden={isWaveColumnHidden(...)}` at the mount ->
-    // Loom and the tab both render, two boards, red.
-    //
-    // This assertion is on LOOM, not on `aria-label="Waves"` (lap 2, A): the
-    // column was renamed and the old selector could no longer see the thing
-    // the mutation brings back -- the guarantee had quietly stopped being
-    // guarded. The tab keeps its own name, which is why both queries are
-    // here.
-    expect(loomLandmarks()).toHaveLength(0)
+    // The rail is beside the room in every layout (MAR-3233): with the
+    // Waves tab gone there is no board it would double. Mutation: bring
+    // back a Mission-Control hide at the mount -> red at 0.
+    expect(loomLandmarks()).toHaveLength(1)
     expect(screen.queryByLabelText('Loom strip')).toBeNull()
-    expect(waveLandmarks()).toHaveLength(1)
-    expect(waveLandmarks()[0]?.getAttribute('data-wave-panel')).toBe('full')
+    // ...and the retired word opened Flat, not nothing.
+    expect(
+      screen.getByRole('button', { name: 'Flat' }).getAttribute('aria-pressed'),
+    ).toBe('true')
+    expect(screen.queryByRole('button', { name: 'Waves' })).toBeNull()
   })
 
   it('MAR-3189 lap 2, D: expanded COVERS the content area, it does not remove its box', async () => {

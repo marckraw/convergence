@@ -6,7 +6,7 @@ import { GlobalStatusBar } from '@/widgets/global-status-bar'
 import { MissionControl } from '@/widgets/mission-control'
 import { WorkspaceLayout } from '@/widgets/workspace-layout'
 import { NotificationsOnboardingContainer } from '@/features/notifications-onboarding'
-import { isWaveColumnHidden, WavePanel } from '@/features/waves'
+import { WavePanel } from '@/features/waves'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import type { SessionSummary } from '@/entities/session'
 import { cn } from '@/shared/lib/cn.pure'
@@ -78,11 +78,6 @@ export const AppShell: FC<AppShellProps> = ({
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sidebarPeekOpen, setSidebarPeekOpen] = useState(false)
-  // Which view Mission Control last showed; the wave column steps aside for
-  // its Waves tab (MAR-3097 lap 2, B).
-  const [missionControlMode, setMissionControlMode] = useState<string | null>(
-    null,
-  )
   /**
    * Loom has the content area (MAR-3189 R5).
    *
@@ -316,14 +311,9 @@ export const AppShell: FC<AppShellProps> = ({
 
         {/* Loom (MAR-3097, MAR-3189): the ledger beside the conversation, its
             four sheets compact in this slot or expanded into the content area.
-            Absent when no crew reads a tracker, and while Mission Control
-            shows its own Waves tab. */}
+            Absent when no crew reads a tracker. */}
         <WavePanel
           onOpenSession={onSelectAnySession}
-          hidden={isWaveColumnHidden({
-            missionControlActive,
-            missionControlMode,
-          })}
           reservedWidth={sidebarCollapsed ? COLLAPSED_SIDEBAR : sidebarWidth}
           onExpandedChange={setLoomExpanded}
           expandedContainer={mainPanelElement}
@@ -361,10 +351,7 @@ export const AppShell: FC<AppShellProps> = ({
                 onAction={onRouteFallbackAction ?? (() => undefined)}
               />
             ) : missionControlActive ? (
-              <MissionControl
-                onOpenSession={onSelectAnySession}
-                onModeChange={setMissionControlMode}
-              />
+              <MissionControl onOpenSession={onSelectAnySession} />
             ) : activeSurface === 'chat' ? (
               <ChatSurface
                 selectedSpaceId={effectiveSelectedChatSpaceId}

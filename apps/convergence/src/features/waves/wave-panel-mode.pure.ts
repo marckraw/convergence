@@ -22,15 +22,3 @@ export function parseWavePanelMode(raw: string | null): WavePanelMode {
 export function serializeWavePanelMode(mode: WavePanelMode): string {
   return mode
 }
-
-/**
- * Whether the docked column steps aside (lap 2, B): while Mission Control
- * shows its own Waves tab, the column would be the same board twice -- two
- * `Waves` landmarks announcing one outage.
- */
-export function isWaveColumnHidden(input: {
-  missionControlActive: boolean
-  missionControlMode: string | null
-}): boolean {
-  return input.missionControlActive && input.missionControlMode === 'waves'
-}

@@ -1,12 +1,4 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  expectTypeOf,
-  it,
-  vi,
-} from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   act,
   cleanup,
@@ -24,23 +16,15 @@ import {
   type WorkLedgerSnapshot,
 } from '@/entities/work-ledger'
 import { WavePanel } from './wave-panel.container'
-import { WavesTab } from './waves-tab.container'
-import {
-  WavePanelView,
-  type WavePanelViewProps,
-} from './wave-panel.presentational'
 import { LoomStripView } from './loom-strip.presentational'
 import { loomSheets } from './loom-sheets.pure'
 import { LOOM_SHEETS, LOOM_SHEET_NAMES } from './wave-panel-sheet.pure'
 import {
-  sectionWaveRows,
-  waveHeader,
   WAVE_PANEL_DEFAULT_COLUMN_WIDTH,
   WAVE_PANEL_MAX_COLUMN_WIDTH,
   WAVE_PANEL_MIN_COLUMN_WIDTH,
   WAVE_PANEL_MIN_MAIN_WIDTH,
   WAVE_PANEL_WIDTH_STEP,
-  type WaveHeaderCrew,
 } from './wave-sections.pure'
 import { crewMember, ledgerEntry, residentSeat } from './wave-rows.fixture'
 
@@ -58,9 +42,6 @@ const health = (state: TrackerHealth['state']): TrackerHealth => ({
   lastOkAt: AT,
   backoffUntil: null,
 })
-
-/** One bound crew that has answered: the honest default (lap 2, A). */
-const ANSWERED: WaveHeaderCrew[] = [{ name: 'Loom', health: health('ok') }]
 
 function boundCrew(id: string, name: string): SessionCrew {
   return {
@@ -96,20 +77,6 @@ const SESSION = {
 const rowOf = (key: string) =>
   within(document.querySelector(`[data-wave-row="${key}"]`) as HTMLElement)
 
-function renderView(
-  rows: WorkLedgerEntry[],
-  crews: WaveHeaderCrew[] = ANSWERED,
-) {
-  return render(
-    <WavePanelView
-      sections={sectionWaveRows(rows, NOW)}
-      header={waveHeader({ crews, rowCount: rows.length, now: NOW })}
-      inertReason={() => null}
-      onOpen={vi.fn()}
-    />,
-  )
-}
-
 /**
  * A window whose room for the column is one pixel under its floor: the
  * narrowest thing the panel can show is the rail (MAR-3155 R1). Derived from
@@ -132,169 +99,6 @@ afterEach(() => {
   delete (window as unknown as { electronAPI?: unknown }).electronAPI
   localStorage.clear()
   setWindowWidth(1024)
-})
-
-describe('MAR-3097 R2 + lap 2, F1: a row shows the ledger’s facts', () => {
-  it('one row per action, the host marker beside the action, never on unstarted work', () => {
-    const down = {
-      executionHost: 'lm',
-      lastEventAt: '2026-09-17T12:06:00.000Z',
-      hostReachable: false,
-    }
-    renderView([
-      ledgerEntry({
-        issueIdentifier: 'EX-1',
-        state: 'reviewed',
-        pr: {
-          number: 678,
-          url: 'https://github.com/example/repo/pull/678',
-          state: 'open',
-          headBranch: 'agent/ex-1',
-          checkedAt: AT,
-          source: 'gh',
-        },
-      }),
-      ledgerEntry({
-        issueIdentifier: 'EX-2',
-        state: 'returned',
-        hostLiveness: down,
-      }),
-      ledgerEntry({
-        issueIdentifier: 'EX-3',
-        state: 'working',
-        sessionId: null,
-      }),
-      ledgerEntry({
-        issueIdentifier: 'EX-4',
-        state: 'working',
-        hostLiveness: down,
-      }),
-      ledgerEntry({
-        issueIdentifier: 'EX-5',
-        state: 'assigned',
-        hostLiveness: down,
-      }),
-    ])
-
-    expect(rowOf('crew-1:EX-1').getByText('QA and say done')).toBeTruthy()
-    expect(rowOf('crew-1:EX-1').getByText('Work EX-1')).toBeTruthy()
-    expect(
-      rowOf('crew-1:EX-1').getByText('opus · reviewed · lap 1 · PR #678 open'),
-    ).toBeTruthy()
-    // Mutation: "QA and say done" for returned -> red here.
-    expect(rowOf('crew-1:EX-2').getByText('verdict (Fable)')).toBeTruthy()
-    expect(rowOf('crew-1:EX-2').queryByText('QA and say done')).toBeNull()
-    expect(
-      rowOf('crew-1:EX-2').getByText('host unreachable since 4m'),
-    ).toBeTruthy()
-    expect(rowOf('crew-1:EX-3').getByText('seat not in crew')).toBeTruthy()
-    expect(
-      rowOf('crew-1:EX-4').getByText('host unreachable since 4m'),
-    ).toBeTruthy()
-    expect(rowOf('crew-1:EX-5').queryByText(/host unreachable/)).toBeNull()
-  })
-})
-
-describe('MAR-3155 R5: the identifier never breaks; the title gets the rest', () => {
-  it('the id is one unbreakable token and the whole title is one hover away', () => {
-    const title =
-      'Loom: carry the blocked label through the tracker adapter and the work ledger'
-    renderView([
-      ledgerEntry({
-        issueIdentifier: 'MAR-3085',
-        state: 'working',
-        issueTitle: title,
-      }),
-    ])
-
-    const row = rowOf('crew-1:MAR-3085')
-    const id = row.getByText('MAR-3085')
-    // At the old fixed width this wrapped after the dash. jsdom has no layout
-    // engine, so what is asserted here is the RULE the browser lays out by;
-    // the wrap itself is Marcin's QA step 1.
-    // Mutation: drop `whitespace-nowrap` (or let the id shrink) -> red.
-    expect(id.className).toContain('whitespace-nowrap')
-    expect(id.className).toContain('shrink-0')
-
-    const titleEl = row.getByText(title)
-    // Two lines at most, and never cut without a way to read the rest.
-    // Mutation: drop the `title` attribute -> red.
-    expect(titleEl.getAttribute('title')).toBe(title)
-    expect(titleEl.className).toContain('line-clamp-2')
-    // `min-w-0`: without it a flex child refuses to be narrower than its text
-    // and the id gets pushed off instead.
-    expect(titleEl.className).toContain('min-w-0')
-  })
-})
-
-describe('MAR-3097 R3 + lap 2, A: the header never says a zero it did not read', () => {
-  it('unreachable: the header reads the age and the last rows stay', () => {
-    renderView(
-      [ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' })],
-      [{ name: 'Loom', health: health('unreachable') }],
-    )
-    expect(screen.getByRole('status').textContent).toBe(
-      'tracker unreachable · 10m',
-    )
-    expect(
-      document.querySelector('[data-wave-row="crew-1:EX-1"]'),
-    ).not.toBeNull()
-    // Mutation: render "0 in wave" on unreachable -> red.
-    expect(document.body.textContent).not.toMatch(/\b0 in wave\b/)
-  })
-
-  it('MAR-3169 R4: a project the key cannot see reads its age, and the last rows stay', () => {
-    renderView(
-      [ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' })],
-      [{ name: 'Loom', health: health('project-not-visible') }],
-    )
-    // Never "Quiet project": the empty page this state comes from is exactly
-    // what used to read as a calm day.
-    expect(screen.getByRole('status').textContent).toBe(
-      'tracker project not visible to this key · 10m',
-    )
-    expect(
-      document.querySelector('[data-wave-row="crew-1:EX-1"]'),
-    ).not.toBeNull()
-    expect(document.body.textContent).not.toContain('Quiet project')
-  })
-
-  it('A: a bound crew not yet heard from reads "reading the tracker…", never "Quiet project"', () => {
-    renderView([], [{ name: 'Loom', health: null }])
-    // Mutation: drop the null branch -> "Quiet project", red.
-    expect(screen.getByRole('status').textContent).toBe('reading the tracker…')
-    expect(screen.queryByText('Quiet project')).toBeNull()
-  })
-
-  it('A: a tracker that answered with zero rows -> Quiet project', () => {
-    renderView([])
-    expect(screen.getByText('Quiet project')).toBeTruthy()
-  })
-
-  it('the tab with no binding says where to connect one', () => {
-    renderView([], [])
-    expect(screen.getByText('No crew reads a tracker yet.')).toBeTruthy()
-    expect(
-      screen.getByText('Connect a tracker in a crew’s settings on the Canvas.'),
-    ).toBeTruthy()
-  })
-})
-
-describe('MAR-3097 lap 2, F2: wave groups are disclosures', () => {
-  it('open in the tab, with the wave’s name and count on the summary', () => {
-    // Was "closed in the column, open in the full tab". The closed half died
-    // with the column (MAR-3189 lap 2, G): its reason was that a narrow
-    // column repeated rows already shown above, and Loom's Before sheet does
-    // not group by wave at all until LV3. Nothing replaces it, because
-    // nothing renders a closed wave group any more.
-    // Mutation: `disclosure="closed"` in the tab -> red.
-    renderView([ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' })])
-    const group = document.querySelector('details[data-wave-group]')
-    expect(group?.hasAttribute('open')).toBe(true)
-    expect(group?.querySelector('summary')?.textContent).toBe(
-      'Wave loom-p2 · 1',
-    )
-  })
 })
 
 describe('MAR-3189 R4: the strip is the same model', () => {
@@ -420,12 +224,9 @@ describe('MAR-3097: through the containers and the real stores', () => {
       .reduce((sum, fn) => sum + (fn.mock?.calls.length ?? 0), 0)
   }
 
-  let rerenderPanel: (ui: React.ReactElement) => void = () => {}
-
   async function mount(ui: React.ReactElement) {
     await act(async () => {
-      const view = render(ui)
-      rerenderPanel = view.rerender
+      render(ui)
     })
   }
 
@@ -437,12 +238,9 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(screen.queryByLabelText('Loom strip')).toBeNull()
   })
 
-  it('B: a bound crew -> the column; hidden (the Waves tab showing) -> nothing', async () => {
+  it('B: a bound crew -> the column', async () => {
     await mount(<WavePanel />)
     expect(await screen.findByLabelText('Loom')).toBeTruthy()
-    cleanup()
-    await mount(<WavePanel hidden />)
-    expect(screen.queryByLabelText('Loom')).toBeNull()
   })
 
   it('MAR-3189 R4: too narrow -> the strip, and the stored mode is untouched', async () => {
@@ -918,41 +716,10 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(storedWidth()).toBe('340')
   })
 
-  it('MAR-3155 lap 3, B: a drag that ends with the column hidden stores nothing', async () => {
-    setWindowWidth(windowLeaving(900))
-    const { rerender } = render(<WavePanel reservedWidth={RESERVED} />)
-    await act(async () => {
-      await Promise.resolve()
-    })
-    const handle = screen.getByRole('separator', {
-      name: 'Resize the wave column',
-    })
-
-    fireEvent.mouseDown(handle)
-    await act(async () => {
-      fireEvent.mouseMove(window, { clientX: RESERVED + 360 })
-    })
-
-    // Mission Control opens its own Waves tab while the pointer is down: the
-    // column steps aside (MAR-3097 lap 2, B) and there is nothing on screen
-    // the person can be said to have sized.
-    await act(async () => {
-      rerender(<WavePanel reservedWidth={RESERVED} hidden />)
-    })
-    expect(screen.queryByLabelText('Loom')).toBeNull()
-    await act(async () => {
-      fireEvent.mouseUp(window)
-    })
-    // Mutation: ask the decision's numbers regardless of `hidden` -> 500 is
-    // stored for a column nobody can see, red.
-    expect(storedWidth()).toBeNull()
-  })
-
   it('MAR-3155 lap 3, B: a drag that ends after the last bound crew went away stores nothing', async () => {
-    // The third reason a column leaves the screen, and the one that needs no
-    // act of the person's: the crew list changes over IPC while the pointer
-    // is down. (Integration pin, Fable: the `hidden` case above reddens only
-    // its own limb of the on-screen fact.)
+    // The one reason a column leaves the screen mid-drag now the Waves tab
+    // is retired (MAR-3233): the crew list changes over IPC while the
+    // pointer is down.
     setWindowWidth(windowLeaving(900))
     await mount(<WavePanel reservedWidth={RESERVED} />)
     const handle = screen.getByRole('separator', {
@@ -979,8 +746,8 @@ describe('MAR-3097: through the containers and the real stores', () => {
     // Superseding MAR-3097 R5's "a row opens the seat's conversation": from
     // this slice a Loom row is a door to the issue, and the conversation is
     // one of the two doors OUT of the detail. Nothing is lost -- the same
-    // session still opens, through `onOpenSession`, one click further in,
-    // and the Waves tab's rows keep the old behaviour (R8, its own test).
+    // session still opens, through `onOpenSession`, one click further in.
+    // (The Waves tab kept the old door until MAR-3233 retired it.)
     const onOpenSession = vi.fn()
     const windowOpen = vi.spyOn(window, 'open').mockImplementation(() => null)
     await mount(<WavePanel onOpenSession={onOpenSession} />)
@@ -1034,25 +801,19 @@ describe('MAR-3097: through the containers and the real stores', () => {
     ).toBe('true')
   })
 
-  it('MAR-3189 R2/R6: the four sheets together hold exactly the tab’s rows', async () => {
+  it('MAR-3189 R2/R6: the four sheets together hold exactly the ledger’s rows', async () => {
     const keys = () =>
       [...document.querySelectorAll('[data-wave-row]')]
         .map((node) => node.getAttribute('data-wave-row'))
         .sort()
 
-    await mount(<WavesTab />)
-    await screen.findByLabelText('Waves')
-    // The tab draws each row twice -- in its section and again under its wave
-    // -- so the comparison is between the two SETS of rows, not their counts.
-    const tab = [...new Set(keys())].sort()
-    cleanup()
-
     await mount(<WavePanel reservedWidth={RESERVED} />)
     await screen.findByLabelText('Loom')
     // One sheet at a time (R1), so the panel's rows are the UNION of the four
     // -- which is the rendered half of R2's "every row lands in exactly one
-    // sheet". Mutation: send a row to two sheets -> a duplicate key here,
-    // red; drop the `else` that catches `unassigned`/`stopped` -> short, red.
+    // sheet", read against the snapshot itself: the ledger is the oracle.
+    // Mutation: send a row to two sheets -> a duplicate key here, red; drop
+    // the `else` that catches `unassigned`/`stopped` -> short, red.
     const seen = new Set<string>()
     for (const sheet of LOOM_SHEETS) {
       fireEvent.click(
@@ -1062,41 +823,10 @@ describe('MAR-3097: through the containers and the real stores', () => {
       )
       for (const key of keys()) seen.add(key as string)
     }
-    expect([...seen].sort()).toEqual(tab)
-    expect(tab.length).toBeGreaterThan(0)
-  })
-
-  it('E: two crews, one unreachable -> the header names it; every row names its crew', async () => {
-    crews = [boundCrew('crew-1', 'Loom'), boundCrew('crew-2', 'Night shift')]
-    snapshots = {
-      'crew-1': {
-        crewId: 'crew-1',
-        entries: [ledgerEntry({ issueIdentifier: 'EX-1', crewId: 'crew-1' })],
-        trackerHealth: health('ok'),
-      },
-      'crew-2': {
-        crewId: 'crew-2',
-        entries: [ledgerEntry({ issueIdentifier: 'EX-1', crewId: 'crew-2' })],
-        trackerHealth: {
-          ...health('unreachable'),
-          since: new Date(Date.now() - 10 * 60_000).toISOString(),
-        },
-      },
-    }
-    await mount(<WavesTab />)
-    await screen.findByLabelText('Waves')
-
-    // Mutation: the first non-ok health for all, unnamed -> red.
-    expect(screen.getByRole('status').textContent).toBe(
-      'tracker unreachable · Night shift · 10m',
+    expect([...seen].sort()).toEqual(
+      rows.map((row) => `crew-1:${row.issueIdentifier}`).sort(),
     )
-    expect(
-      rowOf('crew-1:EX-1').getAllByText(/^Loom · opus · working/).length,
-    ).toBeGreaterThan(0)
-    expect(
-      rowOf('crew-2:EX-1').getAllByText(/^Night shift · opus · working/).length,
-    ).toBeGreaterThan(0)
-    expect(screen.getByText('2 issues · 0 waiting on you')).toBeTruthy()
+    expect(rows.length).toBeGreaterThan(0)
   })
 
   it('lap 2, E: the board passes no cap, so a row reads the lap alone', async () => {
@@ -1119,9 +849,9 @@ describe('MAR-3097: through the containers and the real stores', () => {
     }
 
     await act(async () => {
-      render(<WavesTab />)
+      render(<WavePanel reservedWidth={RESERVED} />)
     })
-    await screen.findByLabelText('Waves')
+    await screen.findByLabelText('Loom')
 
     // Mutation: pass the crew's `roundCap` -> "lap 3 of 12", red.
     expect(rowOf('crew-1:EX-9').getByText(/lap 3 ·/)).toBeTruthy()
@@ -1952,32 +1682,6 @@ describe('MAR-3097: through the containers and the real stores', () => {
     ).toBeTruthy()
   })
 
-  it('MAR-3195 lap 2, G: a Waves-tab row opens its conversation, and an inert one says why', async () => {
-    // The only row-click -> session assertion in the repo moved to Loom with
-    // this slice, and every other `<WavesTab />` render mounts without the
-    // handler — so deleting the call in `waves-tab.container.tsx` left the
-    // whole suite green. Mission Control's tab is NOT Loom: there a row is
-    // still a door to the conversation (R8).
-    const onOpenSession = vi.fn()
-    await mount(<WavesTab onOpenSession={onOpenSession} />)
-    await screen.findByLabelText('Waves')
-
-    // Mutation: drop the `onOpenSession?.()` call in `waves-tab.container`
-    // -> nothing opens and this is red.
-    fireEvent.click(
-      document.querySelector('[data-wave-row="crew-1:EX-2"]') as HTMLElement,
-    )
-    expect(onOpenSession).toHaveBeenCalledTimes(1)
-    expect(onOpenSession.mock.calls[0]![0].id).toBe('session-opus')
-
-    // ...and a row whose conversation the store does not hold says so ON the
-    // row, because there the row is the control that would have opened it.
-    // Mutation: pass `() => null` as the tab's `inertReason` too -> red.
-    expect(
-      rowOf('crew-1:EX-4').getByText('conversation not loaded'),
-    ).toBeTruthy()
-  })
-
   it('MAR-3195 lap 2, D: the detail’s horse is found by identity, not by name', async () => {
     crews = [
       {
@@ -2324,16 +2028,6 @@ describe('MAR-3097: through the containers and the real stores', () => {
         ['Assign & clear', 'Choose the horse, then clear it to run'],
         ['Re-groom', 'A lap stopped — the issue goes back to grooming'],
       ])
-      cleanup()
-
-      // Mutation: render the hint line unconditionally -> the Waves tab
-      // grows a line under every section heading, red.
-      await mount(<WavesTab />)
-      await screen.findByLabelText('Waves')
-      expect(document.querySelectorAll('[data-wave-hint]')).toHaveLength(0)
-      expect(
-        document.querySelectorAll('[data-wave-row]').length,
-      ).toBeGreaterThan(0)
     })
 
     it('R2: each row says what it lacks, in its own words', async () => {
@@ -2769,16 +2463,18 @@ describe('MAR-3097: through the containers and the real stores', () => {
       await screen.findByLabelText('Loom')
       await openGuide()
 
-      // The Waves tab takes over: Loom's column is not drawn at all.
+      // The last bound crew goes while the guide is open — the one way a
+      // column leaves now the Waves tab is retired (MAR-3233): Loom's
+      // column is not drawn at all.
       await act(async () => {
-        rerenderPanel(<WavePanel reservedWidth={RESERVED} hidden />)
+        useSessionCrewStore.setState({ crews: [] })
       })
       expect(screen.queryByRole('dialog')).toBeNull()
 
       // Mutation: drop the close-on-absent effect -> the guide is still
       // `open`, so coming back re-opens it by itself, which R9 forbids.
       await act(async () => {
-        rerenderPanel(<WavePanel reservedWidth={RESERVED} />)
+        useSessionCrewStore.setState({ crews })
       })
       await screen.findByLabelText('Loom')
       expect(screen.queryByRole('dialog')).toBeNull()
@@ -3347,27 +3043,13 @@ describe('MAR-3097: through the containers and the real stores', () => {
       )
     })
 
-    it('R5: a Loom row carries no crew name; the Waves tab still does', async () => {
+    it('R5: a Loom row carries no crew name', async () => {
       await mount(<WavePanel reservedWidth={RESERVED} />)
       await screen.findByLabelText('Loom')
       fireEvent.click(screen.getByRole('button', { name: /^Plan · / }))
       // Mutation: `several` from the bound count -> "Loom · …" on the row,
       // red.
       expect(rowOf('crew-1:EX-2').queryByText(/^Loom · /)).toBeNull()
-      cleanup()
-
-      // The Waves tab is the all-crews surface: every crew, each named --
-      // whatever Loom has selected.
-      localStorage.setItem('convergence-loom-crew', 'crew-2')
-      await mount(<WavesTab />)
-      await screen.findByLabelText('Waves')
-      expect(
-        rowOf('crew-1:EX-1').getAllByText(/^Loom · opus · working/).length,
-      ).toBeGreaterThan(0)
-      expect(
-        rowOf('crew-2:NS-1').getAllByText(/^Night shift · night · working/)
-          .length,
-      ).toBeGreaterThan(0)
     })
 
     /**
@@ -3483,7 +3165,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
         expect(refreshLine()).toBe('Refreshnever read')
       })
 
-      it('an outage keeps its line and has no control; the Waves tab has none either', async () => {
+      it('an outage keeps its line and has no control', async () => {
         localStorage.setItem('convergence-loom-crew', 'crew-2')
         await mount(<WavePanel reservedWidth={RESERVED} />)
         await screen.findByLabelText('Loom')
@@ -3491,12 +3173,6 @@ describe('MAR-3097: through the containers and the real stores', () => {
           'tracker unreachable',
         )
         // Mutation: draw the control whatever the health -> red.
-        expect(refreshButton()).toBeNull()
-        cleanup()
-
-        localStorage.setItem('convergence-loom-crew', 'crew-1')
-        await mount(<WavesTab />)
-        await screen.findByLabelText('Waves')
         expect(refreshButton()).toBeNull()
       })
 
@@ -3512,108 +3188,8 @@ describe('MAR-3097: through the containers and the real stores', () => {
   })
 })
 
-describe('MAR-3085 R7: the row reads the lap, the cap and the ruling', () => {
-  it('a stopped lap reads its lap, the verdict word, and "re-groom (Fable)"', () => {
-    render(
-      <WavePanelView
-        sections={sectionWaveRows(
-          [
-            ledgerEntry({
-              issueIdentifier: 'EX-1',
-              state: 'stopped',
-              lap: 3,
-              verdict: 'stop',
-              verdictSettleId: 'settle-1',
-              verdictNote: 'the reply',
-            }),
-          ],
-          NOW,
-        )}
-        header={waveHeader({ crews: ANSWERED, rowCount: 1, now: NOW })}
-        inertReason={() => null}
-        onOpen={vi.fn()}
-      />,
-    )
-
-    // Mutation: drop the lap label from the row -> red.
-    expect(
-      rowOf('crew-1:EX-1').getByText('opus · stopped · lap 3 · stop'),
-    ).toBeTruthy()
-    expect(rowOf('crew-1:EX-1').getByText('re-groom (Fable)')).toBeTruthy()
-    expect(
-      screen.getByRole('region', { name: 'In the wave' }).textContent,
-    ).toContain('EX-1')
-  })
-
-  it('a crew with no cap reads the lap alone', () => {
-    render(
-      <WavePanelView
-        sections={sectionWaveRows(
-          [ledgerEntry({ issueIdentifier: 'EX-2', state: 'working', lap: 3 })],
-          NOW,
-        )}
-        header={waveHeader({ crews: ANSWERED, rowCount: 1, now: NOW })}
-        inertReason={() => null}
-        onOpen={vi.fn()}
-      />,
-    )
-    expect(
-      rowOf('crew-1:EX-2').getByText('opus · working · lap 3'),
-    ).toBeTruthy()
-    expect(document.body.textContent).not.toContain('lap 3 of')
-  })
-})
-
-describe('MAR-3138 R4: a blocked row reads "decide" under Waiting on you', () => {
-  it('a working, blocked row is there and not in the wave, and says which label put it there', () => {
-    renderView([
-      ledgerEntry({ issueIdentifier: 'EX-1', state: 'working', blocked: true }),
-      ledgerEntry({ issueIdentifier: 'EX-2', state: 'working' }),
-    ])
-
-    const waiting = screen.getByRole('region', { name: 'Waiting on you' })
-    const inTheWave = screen.getByRole('region', { name: 'In the wave' })
-    // Mutation: leave a blocked row in its state's section -> EX-1 is in the
-    // wave and not here, red.
-    expect(within(waiting).getAllByText('EX-1')).toHaveLength(1)
-    expect(within(waiting).queryByText('EX-2')).toBeNull()
-    expect(within(inTheWave).queryByText('EX-1')).toBeNull()
-    expect(rowOf('crew-1:EX-1').getByText('decide')).toBeTruthy()
-    // Mutation: drop the marker from the row -> red.
-    expect(rowOf('crew-1:EX-1').getByText('blocked')).toBeTruthy()
-    expect(rowOf('crew-1:EX-2').queryByText('blocked')).toBeNull()
-  })
-
-  it('lap 2, A: a blocked unassigned row asks for nothing -- it is only in Waves', () => {
-    renderView([
-      ledgerEntry({
-        issueIdentifier: 'EX-1',
-        state: 'unassigned',
-        seat: null,
-        blocked: true,
-      }),
-    ])
-
-    // Mutation: drop either terminal guard -> "decide" is on screen, red.
-    expect(screen.queryByText('decide')).toBeNull()
-    // The section is not even drawn: there is nothing waiting on anybody.
-    expect(screen.queryByRole('region', { name: 'Waiting on you' })).toBeNull()
-    // The row is still readable under its wave, label and all.
-    expect(rowOf('crew-1:EX-1').getByText('blocked')).toBeTruthy()
-  })
-
-  it('a blocked reviewed row asks to decide, not to QA, and the rail counts it once', () => {
-    renderView([
-      ledgerEntry({
-        issueIdentifier: 'EX-1',
-        state: 'reviewed',
-        blocked: true,
-      }),
-    ])
-    expect(rowOf('crew-1:EX-1').getByText('decide')).toBeTruthy()
-    expect(rowOf('crew-1:EX-1').queryByText('QA and say done')).toBeNull()
-
-    cleanup()
+describe('MAR-3138 R4: a blocked working row is counted once, under Now', () => {
+  it('the rail counts a blocked working row once, under Now', () => {
     render(
       <LoomStripView
         horses={[]}
@@ -3669,65 +3245,6 @@ describe('MAR-3148: the rail, the props and the clock', () => {
     fireEvent.click(expand)
     expect(onExpand).toHaveBeenCalledTimes(1)
   })
-
-  it('C: a row that cannot open its seat is inert and says so', () => {
-    render(
-      <WavePanelView
-        sections={sectionWaveRows(
-          [ledgerEntry({ issueIdentifier: 'EX-9', sessionId: null })],
-          NOW,
-        )}
-        header={waveHeader({ crews: ANSWERED, rowCount: 1, now: NOW })}
-        inertReason={() => 'no conversation for this seat'}
-        onOpen={vi.fn()}
-      />,
-    )
-    const row = document.querySelector('[data-wave-row="crew-1:EX-9"]')
-    // Mutation: drop `aria-disabled` from the inert row -> red (the previous
-    // lap rendered every row through `inertReason={() => null}`, the ENABLED
-    // branch, so deleting the attribute changed nothing).
-    expect(row?.getAttribute('aria-disabled')).toBe('true')
-    expect(row?.tagName).toBe('DIV')
-    expect(
-      rowOf('crew-1:EX-9').getByText('no conversation for this seat'),
-    ).toBeTruthy()
-  })
-
-  it('R2: the panel takes no Connect handler, and says where to bind instead', () => {
-    // Mutation: reintroduce `onConnectTracker` -> red (the key set grows).
-    // `layout`, `onCollapse` and `width` left with the column (MAR-3189
-    // lap 2, G): this view is Mission Control's tab and nothing else.
-    // Mutation: reintroduce `onConnectTracker` (or any of the three) -> red.
-    expectTypeOf<keyof WavePanelViewProps>().toEqualTypeOf<
-      'sections' | 'header' | 'boardLine' | 'inertReason' | 'onOpen'
-    >()
-    renderView([], [])
-    expect(
-      screen.getByText('Connect a tracker in a crew’s settings on the Canvas.'),
-    ).toBeTruthy()
-    expect(
-      screen.queryByRole('button', { name: 'Connect a tracker' }),
-    ).toBeNull()
-  })
-
-  it('R5: an unreachable host on a seatless working row shows both, and the row is inert', () => {
-    renderView([
-      ledgerEntry({
-        issueIdentifier: 'EX-7',
-        state: 'working',
-        sessionId: null,
-        hostLiveness: {
-          executionHost: 'lm',
-          lastEventAt: '2026-09-17T12:06:00.000Z',
-          hostReachable: false,
-        },
-      }),
-    ])
-    const row = rowOf('crew-1:EX-7')
-    // The action and the marker are two facts, and the row carries both.
-    expect(row.getByText('seat not in crew')).toBeTruthy()
-    expect(row.getByText('host unreachable since 4m')).toBeTruthy()
-  })
 })
 
 describe('MAR-3148 R3: the clock ticks only for an age on screen', () => {
@@ -3743,6 +3260,12 @@ describe('MAR-3148 R3: the clock ticks only for an age on screen', () => {
    * tracker…" wait carries no age (lap 2, D), so the clock does not start
    * while the first list is in flight either; the count is read after the
    * answer lands, which is when rows or an outage age could have appeared.
+   *
+   * The board is read through Loom's own panel now the Waves tab is retired
+   * (MAR-3233), so the stub also hands LoomRefresh a `tracker` it can hear
+   * -- and the healthy snapshots carry no `lastOkAt`, so the refresh line
+   * reads "never read" and holds no age: the number counted here is the
+   * BOARD's clock and nothing else.
    */
   async function mountBoard(snapshot: WorkLedgerSnapshot) {
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
@@ -3754,6 +3277,10 @@ describe('MAR-3148 R3: the clock ticks only for an age on screen', () => {
         list: vi.fn(async () => snapshot),
         onUpdated: vi.fn(() => () => {}),
       },
+      tracker: {
+        onRead: vi.fn(() => () => {}),
+        refresh: vi.fn(),
+      },
     }
     useSessionStore.setState({ globalSessions: [SESSION] })
     useSessionCrewStore.setState({ crews: [] })
@@ -3764,7 +3291,7 @@ describe('MAR-3148 R3: the clock ticks only for an age on screen', () => {
       unsubscribeBroadcast: null,
     })
     await act(async () => {
-      render(<WavesTab />)
+      render(<WavePanel reservedWidth={RESERVED} />)
     })
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
@@ -3779,7 +3306,7 @@ describe('MAR-3148 R3: the clock ticks only for an age on screen', () => {
       await mountBoard({
         crewId: 'crew-1',
         entries: [],
-        trackerHealth: health('ok'),
+        trackerHealth: { ...health('ok'), lastOkAt: null },
       }),
     ).toBe(0)
   })
@@ -3789,7 +3316,7 @@ describe('MAR-3148 R3: the clock ticks only for an age on screen', () => {
       await mountBoard({
         crewId: 'crew-1',
         entries: [ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' })],
-        trackerHealth: health('ok'),
+        trackerHealth: { ...health('ok'), lastOkAt: null },
       }),
     ).toBeGreaterThan(0)
   })
