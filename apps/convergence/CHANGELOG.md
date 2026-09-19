@@ -1,5 +1,11 @@
 # convergence
 
+## 0.75.1
+
+### Patch Changes
+
+- e10f861: Restore Loom's overlapping sheet design, readable tabs, responsive layouts, and ticket status and label cards.
+
 ## 0.75.0
 
 ### Minor Changes
