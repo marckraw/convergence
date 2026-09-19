@@ -11,7 +11,55 @@ import type {
   WorkLedgerState,
 } from '../work-ledger/work-ledger.types'
 
+/**
+ * The four speeds and the floor the tracker is read at (MAR-3227 R1).
+ *
+ * The slow part of Loom catching up was never the renderer fetching from the
+ * main process (that is a push) -- it was this process deciding when to ask
+ * the tracker. So the speed follows what probably just changed the tracker
+ * and whether a person is looking, and nothing asks faster than the floor.
+ *
+ * Worst case per bound crew, one list read per tick: a burst 240/h (and only
+ * while one is open), focused 60/h, background 12/h.
+ */
+export const TRACKER_TICK_FLOOR_MS = 10_000
+/** While a burst is open: a horse was just dispatched to, or just returned. */
+export const TRACKER_BURST_INTERVAL_MS = 15_000
+/** How long one piece of crew activity keeps the burst open. */
+export const TRACKER_BURST_WINDOW_MS = 3 * 60_000
+/** A window is focused and nothing happened: the old flat beat, unchanged. */
 export const TRACKER_WATCH_INTERVAL_MS = 60_000
+/** No window is focused and no burst is open: nobody is looking. */
+export const TRACKER_BACKGROUND_INTERVAL_MS = 5 * 60_000
+
+/**
+ * How long until the next read of the tracker (MAR-3227 R1).
+ *
+ * The cadence is counted from the START of the last read rather than from
+ * `now`, so rescheduling on a focus change or a new burst never pushes a due
+ * read further away than its speed says. `kicked` is a read somebody asked
+ * for (activity, focus, Refresh, or a kick that arrived mid-read): it wants
+ * one now, and the floor is the only thing that can make it wait.
+ */
+export function nextTrackerTickDelay(input: {
+  now: number
+  lastTickAt: number | null
+  burstUntil: number | null
+  windowFocused: boolean
+  kicked: boolean
+}): number {
+  // Never read: nothing to count from, and nothing for the floor to protect.
+  if (input.lastTickAt === null) return 0
+  const since = input.now - input.lastTickAt
+  const interval = input.kicked
+    ? 0
+    : input.burstUntil !== null && input.now < input.burstUntil
+      ? TRACKER_BURST_INTERVAL_MS
+      : input.windowFocused
+        ? TRACKER_WATCH_INTERVAL_MS
+        : TRACKER_BACKGROUND_INTERVAL_MS
+  return Math.max(interval - since, TRACKER_TICK_FLOOR_MS - since, 0)
+}
 
 /**
  * How long a rate-limited tracker is left alone when its reply names no

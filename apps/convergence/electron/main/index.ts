@@ -140,7 +140,11 @@ import {
 import { TrackerCredentialsService } from '../backend/credentials/tracker-credentials.service'
 import { TrackerWatcherService } from '../backend/tracker/tracker-watcher.service'
 import { createLinearTrackerAdapter } from '../backend/tracker/linear-tracker.adapter'
-import { registerTrackerIpcHandlers } from '../backend/tracker/tracker.ipc'
+import {
+  broadcastTrackerRead,
+  registerTrackerIpcHandlers,
+} from '../backend/tracker/tracker.ipc'
+import { isBudgetedOutcome } from '../backend/relay/relay.pure'
 import {
   broadcastCrewHails,
   registerCrewHailIpcHandlers,
@@ -774,6 +778,19 @@ async function startApp(): Promise<void> {
   // later. Two instances would be two readers of one table with no shared
   // view of what was just written.
   const workLedgerService = new WorkLedgerService(db)
+  // The label watcher (MAR-3084): reads each bound crew's tracker and appends
+  // what changed to the work ledger. Read-only toward the tracker; the key
+  // stays in the Keychain and only the main process reads it. Built before
+  // the engine, because a delivered hop is one of the moments it is told the
+  // tracker is about to change (MAR-3227 R2).
+  const trackerWatcher = new TrackerWatcherService({
+    crews: crewService,
+    ledger: workLedgerService,
+    resolveKey: (crewId) => trackerCredentials.resolveKey(crewId),
+    createAdapter: (input) => createLinearTrackerAdapter(input),
+    broadcast: broadcastWorkLedger,
+    onRead: broadcastTrackerRead,
+  })
   const relayEngine = new RelayEngine({
     relays: relayService,
     ledger: workLedgerService,
@@ -810,7 +827,16 @@ async function startApp(): Promise<void> {
       listByProvider: (providerId) =>
         providerAccountRepository.listByProvider(providerId),
     },
-    onHopAppended: broadcastRelayHop,
+    onHopAppended: (hop) => {
+      broadcastRelayHop(hop)
+      // A hop that put work in a seat -- delivered, queued or spawned, the
+      // engine's own budgeted outcomes -- is a horse about to pick up or a
+      // mastermind about to read a return (MAR-3227 R2). Refusals move
+      // nothing on the tracker.
+      if (isBudgetedOutcome(hop.outcome)) {
+        trackerWatcher.noteActivity(hop.crewId)
+      }
+    },
     onHopSettled: broadcastRelayHopSettled,
     onHailsChanged: () => broadcastCrewHails(crewHailService.listOpen()),
     onRelaysChanged: () => broadcastRelays(relayService.list()),
@@ -830,6 +856,14 @@ async function startApp(): Promise<void> {
   sessionService.onSessionSettled((event) => {
     void relayEngine.handleSettle(event)
   })
+  // A crew seat coming to rest is the other moment the tracker is about to
+  // change (MAR-3227 R2): a horse returning. The watcher ignores a crew with
+  // no tracker, so every crew the seat sits in is simply told.
+  sessionService.onSessionSettled((event) => {
+    for (const crewId of crewService.crewIdsForSession(event.sessionId)) {
+      trackerWatcher.noteActivity(crewId)
+    }
+  })
   // The receipt's other ending: a cancelled or abandoned dispatch releases
   // exactly what the engine was holding for it (MAR-2759).
   sessionService.onDispatchTerminal((event) => {
@@ -847,27 +881,22 @@ async function startApp(): Promise<void> {
   // untested `setInterval` in the bootstrap.
   startRelayStallClock(relayEngine)
 
-  // The label watcher (MAR-3084): reads each bound crew's tracker once a
-  // minute and appends what changed to the work ledger. Read-only toward the
-  // tracker; the key stays in the Keychain and only the main process reads it.
-  const trackerWatcher = new TrackerWatcherService({
-    crews: crewService,
-    ledger: workLedgerService,
-    resolveKey: (crewId) => trackerCredentials.resolveKey(crewId),
-    createAdapter: (input) => createLinearTrackerAdapter(input),
-    broadcast: broadcastWorkLedger,
-  })
   registerTrackerIpcHandlers({
     credentials: trackerCredentials,
     probe: (crewId) => trackerWatcher.probe(crewId),
     resolveProject: (crewId, reference) =>
       trackerWatcher.resolveProject(crewId, reference),
     crewExists: (crewId) => crewService.getById(crewId) !== null,
+    refresh: (crewId) => trackerWatcher.refresh(crewId),
   })
   registerWorkLedgerIpcHandlers({
     snapshot: (crewId) => trackerWatcher.snapshot(crewId),
   })
   trackerWatcher.start()
+  // Looking counts (MAR-3227 R3): coming back to any window asks for a read,
+  // and with no window in front the watcher slows to its background beat.
+  app.on('browser-window-focus', () => trackerWatcher.setWindowFocused(true))
+  app.on('browser-window-blur', () => trackerWatcher.setWindowFocused(false))
 
   registerIpcHandlers(
     projectService,

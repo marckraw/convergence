@@ -281,3 +281,34 @@ export interface WorkLedgerSnapshot {
   entries: WorkLedgerEntry[]
   trackerHealth: TrackerHealth | null
 }
+
+/**
+ * What pressing Refresh did (MAR-3227 R6).
+ *
+ * - `reading`: a read was asked for and will happen now (or right after the
+ *   read already in flight).
+ * - `just-read`: the tracker was read under the floor ago; nothing was asked
+ *   for, and `refreshableAt` says when a press would read.
+ * - `backing-off`: this crew's tracker is being left alone (a rate limit);
+ *   nothing was asked for.
+ */
+export interface TrackerRefreshReply {
+  outcome: 'reading' | 'just-read' | 'backing-off'
+  refreshableAt: string | null
+}
+
+/**
+ * One successful read of one crew's tracker (MAR-3227 R6), pushed on
+ * `tracker:read` after EVERY such read.
+ *
+ * Separate from `workLedger:updated` on purpose: that channel carries news
+ * only (MAR-3084 lap 2, F), and most reads have none. Without this the
+ * panel's "read N s ago" would count from the last read that happened to
+ * change something, and say minutes while the tracker was read seconds ago.
+ */
+export interface TrackerReadEvent {
+  crewId: string
+  lastOkAt: string
+  /** When the floor lets the next read happen. */
+  refreshableAt: string
+}

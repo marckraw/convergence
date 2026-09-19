@@ -77,6 +77,7 @@ describe('MAR-3084 R8: the app never writes to the tracker', () => {
       probe: async () => ({ ok: true, issues: 0, projectName: 'convergence' }),
       resolveProject: async () => ({ kind: 'not-found' }),
       crewExists: () => true,
+      refresh: () => ({ outcome: 'reading', refreshableAt: null }),
     })
     registerWorkLedgerIpcHandlers({
       snapshot: (crewId) => ({ crewId, entries: [], trackerHealth: null }),
@@ -85,6 +86,9 @@ describe('MAR-3084 R8: the app never writes to the tracker', () => {
       'tracker:probe',
       // A read (MAR-3156 R5): it answers with projects and never a key.
       'tracker:resolveProject',
+      // A read asked for sooner (MAR-3227 R6): it moves nothing on the
+      // tracker and never returns a key.
+      'tracker:refresh',
       'tracker:credentialStatus',
       'tracker:setCredential',
       'tracker:deleteCredential',

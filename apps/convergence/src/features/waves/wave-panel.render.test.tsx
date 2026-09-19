@@ -3369,6 +3369,146 @@ describe('MAR-3097: through the containers and the real stores', () => {
           .length,
       ).toBeGreaterThan(0)
     })
+
+    /**
+     * Refresh, on the same two crews (MAR-3227 R6, re-grounded after
+     * MAR-3225): Loom's crew is healthy, Night shift's tracker is down.
+     */
+    describe('MAR-3227 R6: Refresh is honest', () => {
+      const FROZEN = Date.parse('2026-09-19T15:00:00.000Z')
+      const iso = (offsetMs: number) =>
+        new Date(FROZEN + offsetMs).toISOString()
+      let refresh: ReturnType<typeof vi.fn>
+      let heard: (event: {
+        crewId: string
+        lastOkAt: string
+        refreshableAt: string
+      }) => void
+
+      beforeEach(() => {
+        vi.useFakeTimers({ shouldAdvanceTime: true })
+        vi.setSystemTime(FROZEN)
+        snapshots['crew-1'] = {
+          ...snapshots['crew-1']!,
+          trackerHealth: { ...health('ok'), lastOkAt: iso(-42_000) },
+        }
+        refresh = vi.fn(async () => ({
+          outcome: 'reading',
+          refreshableAt: null,
+        }))
+        heard = () => {}
+        ;(
+          window as unknown as { electronAPI: Record<string, unknown> }
+        ).electronAPI.tracker = {
+          refresh,
+          onRead: vi.fn((callback: typeof heard) => {
+            heard = callback
+            return () => {}
+          }),
+        }
+      })
+
+      afterEach(() => {
+        vi.useRealTimers()
+      })
+
+      const refreshButton = () =>
+        screen.queryByRole('button', { name: 'Refresh' })
+      const refreshLine = () =>
+        document.querySelector('[data-loom-refresh]')?.textContent ?? null
+
+      it('names when the shown crew’s tracker was read, and asks for THAT crew', async () => {
+        await mount(<WavePanel reservedWidth={RESERVED} />)
+        await screen.findByLabelText('Loom')
+        expect(refreshLine()).toBe('Refreshread 42 s ago')
+        await act(async () => {
+          fireEvent.click(refreshButton()!)
+        })
+        expect(refresh).toHaveBeenCalledWith('crew-1')
+      })
+
+      it('a read that changed nothing still resets the age; another crew’s read does not', async () => {
+        await mount(<WavePanel reservedWidth={RESERVED} />)
+        await screen.findByLabelText('Loom')
+        await act(async () => {
+          heard({
+            crewId: 'crew-2',
+            lastOkAt: iso(0),
+            refreshableAt: iso(10_000),
+          })
+        })
+        expect(refreshLine()).toBe('Refreshread 42 s ago')
+        await act(async () => {
+          heard({
+            crewId: 'crew-1',
+            lastOkAt: iso(0),
+            refreshableAt: iso(10_000),
+          })
+        })
+        // Inside the floor: `just read`, and pressing would do nothing, so
+        // the control cannot be pressed. Mutation: always enabled -> red.
+        expect(refreshLine()).toBe('Refreshjust read')
+        expect(refreshButton()!.hasAttribute('disabled')).toBe(true)
+        // Nothing pretends: no spinner, no busy state.
+        expect(document.querySelector('[data-loom-refresh] svg')).toBeNull()
+        expect(document.querySelector('[aria-busy="true"]')).toBeNull()
+
+        // The floor passes: the age counts again from the read.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(12_000)
+        })
+        expect(refreshLine()).toMatch(/^Refreshread 1[23] s ago$/)
+        expect(refreshButton()!.hasAttribute('disabled')).toBe(false)
+      })
+
+      it('a press the floor refuses says just read and asks nothing more', async () => {
+        refresh.mockResolvedValue({
+          outcome: 'just-read',
+          refreshableAt: iso(6_000),
+        })
+        await mount(<WavePanel reservedWidth={RESERVED} />)
+        await screen.findByLabelText('Loom')
+        await act(async () => {
+          fireEvent.click(refreshButton()!)
+        })
+        expect(refreshLine()).toBe('Refreshjust read')
+        expect(refreshButton()!.hasAttribute('disabled')).toBe(true)
+        expect(refresh).toHaveBeenCalledTimes(1)
+      })
+
+      it('never read: says so', async () => {
+        snapshots['crew-1'] = { ...snapshots['crew-1']!, trackerHealth: null }
+        await mount(<WavePanel reservedWidth={RESERVED} />)
+        await screen.findByLabelText('Loom')
+        expect(refreshLine()).toBe('Refreshnever read')
+      })
+
+      it('an outage keeps its line and has no control; the Waves tab has none either', async () => {
+        localStorage.setItem('convergence-loom-crew', 'crew-2')
+        await mount(<WavePanel reservedWidth={RESERVED} />)
+        await screen.findByLabelText('Loom')
+        expect(screen.getByRole('status').textContent).toContain(
+          'tracker unreachable',
+        )
+        // Mutation: draw the control whatever the health -> red.
+        expect(refreshButton()).toBeNull()
+        cleanup()
+
+        localStorage.setItem('convergence-loom-crew', 'crew-1')
+        await mount(<WavesTab />)
+        await screen.findByLabelText('Waves')
+        expect(refreshButton()).toBeNull()
+      })
+
+      it('in both shells', async () => {
+        await mount(<WavePanel reservedWidth={RESERVED} />)
+        await screen.findByLabelText('Loom')
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+        })
+        expect(refreshButton()!.closest('[data-loom="expanded"]')).toBeTruthy()
+      })
+    })
   })
 })
 

@@ -47,6 +47,7 @@ describe('MAR-3084 lap 2, F: no key without an owner', () => {
       probe: async () => ({ ok: true, issues: 0, projectName: 'convergence' }),
       resolveProject,
       crewExists: (crewId) => crewId === 'crew-1',
+      refresh: () => ({ outcome: 'reading', refreshableAt: null }),
     })
   })
 

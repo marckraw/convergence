@@ -36,6 +36,7 @@ import {
 } from './wave-sections.pure'
 import { useWaveColumnResize } from './use-wave-column-resize'
 import { useWaveBoard } from './use-wave-board'
+import { LoomRefresh } from './loom-refresh.container'
 
 interface WavePanelProps {
   onOpenSession?: (session: SessionSummary) => void
@@ -484,6 +485,16 @@ export const WavePanel: FC<WavePanelProps> = ({
     // The ordering R5 is about: a detail open means Escape closes THAT.
     onEscape: detailKey === null ? undefined : closeDetail,
     header: board.header,
+    // The crew on screen, and only while its tracker is answering (R6): an
+    // outage keeps the line it always had and gets no control beside it.
+    refresh:
+      board.selectedCrewId !== null && board.header.kind !== 'outage' ? (
+        <LoomRefresh
+          key={board.selectedCrewId}
+          crewId={board.selectedCrewId}
+          lastOkAt={board.lastOkAtOf(board.selectedCrewId)}
+        />
+      ) : null,
     subline: {
       text: loomSubline(
         board.crewOptions.find((crew) => crew.id === board.selectedCrewId)

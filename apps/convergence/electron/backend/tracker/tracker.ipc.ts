@@ -1,8 +1,10 @@
-import { ipcMain } from 'electron'
+import { BrowserWindow, ipcMain } from 'electron'
 import type { TrackerCredentialStatus } from '../credentials/tracker-credentials.pure'
 import type {
   TrackerProbeReading,
   TrackerProjectResolution,
+  TrackerReadEvent,
+  TrackerRefreshReply,
 } from '../../../src/shared/types/tracker.types'
 import type { TrackerProbe } from './tracker.types'
 
@@ -20,7 +22,18 @@ export interface TrackerIpcDeps {
   ) => Promise<TrackerProjectResolution>
   /** A key is only ever filed under a crew that exists (lap 2, F). */
   crewExists: (crewId: string) => boolean
+  /** Asks for a read of the crew's tracker now, subject to the floor (MAR-3227). */
+  refresh: (crewId: string) => TrackerRefreshReply
   now?: () => Date
+}
+
+export const TRACKER_READ_CHANNEL = 'tracker:read'
+
+/** Tells every window a crew's tracker was just read (MAR-3227 R6). */
+export const broadcastTrackerRead = (event: TrackerReadEvent): void => {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send(TRACKER_READ_CHANNEL, event)
+  }
 }
 
 /**
@@ -45,6 +58,12 @@ export function registerTrackerIpcHandlers(deps: TrackerIpcDeps): void {
     'tracker:resolveProject',
     (_event, crewId: string, reference: string) =>
       deps.resolveProject(crewId, reference),
+  )
+
+  // A read, asked for sooner (MAR-3227 R6): it moves nothing on the tracker,
+  // and it never reads a crew that is backing off or inside the floor.
+  ipcMain.handle('tracker:refresh', (_event, crewId: string) =>
+    deps.refresh(crewId),
   )
 
   ipcMain.handle('tracker:credentialStatus', (_event, crewId: string) =>
