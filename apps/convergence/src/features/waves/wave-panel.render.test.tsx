@@ -2784,6 +2784,49 @@ describe('MAR-3097: through the containers and the real stores', () => {
       expect(screen.queryByRole('dialog')).toBeNull()
     })
 
+    it('lap 3, B: a reopened guide is born at step one, under its own name', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await openGuide()
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Next: assign a horse →' }),
+        )
+        fireEvent.click(screen.getByRole('button', { name: 'Quick reference' }))
+      })
+      expect(
+        screen.getByRole('dialog', { name: 'Loom, at a glance' }),
+      ).toBeTruthy()
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Back to Loom' }))
+      })
+      expect(screen.queryByRole('dialog')).toBeNull()
+
+      // Every title this reopen puts on screen, in order -- read as the DOM
+      // changes, because the defect is a FRAME, not an end state.
+      // Mutation: a stable key plus a reset in a `useEffect` on `open` ->
+      // the dialog is born "Loom, at a glance" and corrects itself, so two
+      // titles are recorded here, red.
+      const titles: string[] = []
+      const observer = new MutationObserver(() => {
+        const title = document.querySelector(
+          '[data-slot="dialog-title"]',
+        )?.textContent
+        if (title && titles[titles.length - 1] !== title) titles.push(title)
+      })
+      observer.observe(document.body, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+      })
+      await openGuide()
+      await act(async () => {})
+      observer.disconnect()
+
+      expect(titles).toEqual(['How Loom works'])
+      expect(screen.getByText('1 / 6')).toBeTruthy()
+    })
+
     it('R6: Escape closes the guide and nothing else, from expanded', async () => {
       snapshots = {
         'crew-1': {

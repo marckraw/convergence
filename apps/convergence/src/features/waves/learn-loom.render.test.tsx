@@ -320,47 +320,71 @@ describe('MAR-3201 R5: navigation', () => {
     expect(screen.getByText('1 / 6')).toBeTruthy()
     expect(document.querySelector('[data-learn-loom-reference]')).toBeNull()
   })
+})
 
-  it('a reopened guide is born at step one, under its own name', async () => {
-    // Mounted the way the panel mounts it: the key changes when it closes.
-    const mountGuide = (isOpen: boolean) => (
-      <LearnLoomGuide
-        key={`learn-loom-${isOpen}`}
-        open={isOpen}
-        onClose={() => {}}
-      />
-    )
-    const view = render(mountGuide(true))
-    advanceTo(3)
-    press(LEARN_LOOM_CONTROLS.reference)
+describe('MAR-3201 lap 3, G: the three looks', () => {
+  it('G1: the headline and its explanation are one filled card', () => {
+    open()
+    const card = document.querySelector('[data-learn-loom-key]') as HTMLElement
+    // Mutation: render them as bare paragraphs again -> no fill, red.
+    expect(card.className).toContain('bg-white/[0.04]')
+    expect(card.className).toContain('rounded-xl')
     expect(
-      screen.getByRole('dialog', { name: 'Loom, at a glance' }),
+      within(card).getByText(
+        'Groomed = understood. Grounded = checked in code.',
+      ),
     ).toBeTruthy()
-    view.rerender(mountGuide(false))
+    expect(
+      within(card).getByText(
+        'Grounding has a date. After seven days, Loom flags it as expired; ask the mastermind to check it again.',
+      ),
+    ).toBeTruthy()
+    // YOUR PART stays outside it.
+    expect(within(card).queryByText('YOUR PART')).toBeNull()
+  })
 
-    // Every title this reopen puts on screen, in order -- read from the DOM
-    // as it changes, because the defect is a FRAME, not an end state.
-    // Mutation: reset step/view in a `useEffect` on `open` instead -> the
-    // dialog is born "Loom, at a glance" and corrects itself, so two titles
-    // are recorded here, red.
-    const titles: string[] = []
-    const observer = new MutationObserver(() => {
-      const title = document.querySelector(
-        '[data-slot="dialog-title"]',
-      )?.textContent
-      if (title && titles[titles.length - 1] !== title) titles.push(title)
-    })
-    observer.observe(document.body, {
-      subtree: true,
-      childList: true,
-      characterData: true,
-    })
-    view.rerender(mountGuide(true))
-    await act(async () => {})
-    observer.disconnect()
+  it('G2 + G3: the step’s colour is worn by the eyebrow, the ticket and the sheet', () => {
+    open()
+    const eyebrow = () =>
+      document.querySelector('[data-learn-loom-step] p') as HTMLElement
+    const identifier = () => within(ticket()).getByText('DEMO-101')
+    const activeSheet = () =>
+      document.querySelector('[data-learn-loom-active="true"]') as HTMLElement
 
-    expect(titles).toEqual(['How Loom works'])
-    expect(screen.getByText('1 / 6')).toBeTruthy()
+    // Blue while the work is being prepared and carried out.
+    // Mutation: leave the eyebrow muted -> red.
+    expect(eyebrow().className).toContain('text-sky-300')
+    expect(eyebrow().className).not.toContain('text-muted-foreground')
+    expect(identifier().className).toContain('text-sky-300')
+    expect(activeSheet().className).toContain('border-sky-400/40')
+
+    // Amber when it is waiting on a person.
+    advanceTo(4)
+    expect(eyebrow().className).toContain('text-amber-300')
+    expect(identifier().className).toContain('text-amber-300')
+    expect(activeSheet().className).toContain('border-amber-400/50')
+
+    // Green when it is accepted.
+    advanceTo(1)
+    expect(eyebrow().className).toContain('text-emerald-300')
+    expect(identifier().className).toContain('text-emerald-300')
+    expect(activeSheet().className).toContain('border-emerald-400/50')
+  })
+
+  it('G3: the ticket’s note is sentence case, and the reference leads larger', () => {
+    open()
+    const note = within(ticket()).getByText('Illustrative ticket')
+    // Mutation: restore `uppercase` -> red. The words are a note about the
+    // card, not a label stamped on it.
+    expect(note.className).not.toContain('uppercase')
+    expect(note.className).toContain('text-muted-foreground')
+
+    press(LEARN_LOOM_CONTROLS.reference)
+    const lead = screen.getByText(
+      'One shared plan. Agents do the work. You accept the result.',
+    )
+    expect(lead.className).toContain('text-[18px]')
+    expect(lead.className).toContain('font-semibold')
   })
 })
 
