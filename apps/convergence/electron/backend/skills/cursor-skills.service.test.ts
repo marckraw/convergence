@@ -41,9 +41,7 @@ describe('CursorSkillsService', () => {
       ],
       error: null,
     })
-    expect(listAvailableCommands).toHaveBeenCalledWith('/repo', {
-      forceReload: true,
-    })
+    expect(listAvailableCommands).toHaveBeenCalledWith('/repo')
   })
 
   it('returns a Cursor provider error catalog when discovery fails', async () => {

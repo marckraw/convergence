@@ -6,7 +6,7 @@ import type { ProviderSkillCatalog, SkillCatalogOptions } from './skills.types'
 export interface CursorCommandsClient {
   listAvailableCommands: (
     projectPath: string,
-    options?: SkillCatalogOptions,
+    options?: { waitMs?: number },
   ) => Promise<unknown>
 }
 
@@ -39,11 +39,12 @@ export class CursorSkillsService {
     projectPath: string,
     options: SkillCatalogOptions = {},
   ): Promise<ProviderSkillCatalog> {
+    // Cursor discovery always spawns a fresh ACP process; `forceReload` is a
+    // no-op here (MAR-3240 R4). Accept the shared SkillCatalogOptions shape so
+    // the Skills browser can keep one refresh call site across providers.
+    void options.forceReload
     try {
-      const payload = await this.client.listAvailableCommands(
-        projectPath,
-        options,
-      )
+      const payload = await this.client.listAvailableCommands(projectPath)
       return mapCursorCommandCatalog(payload)
     } catch (error) {
       return buildProviderSkillErrorCatalog({
