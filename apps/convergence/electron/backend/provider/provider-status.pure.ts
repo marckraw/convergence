@@ -1,3 +1,7 @@
+import {
+  compareCursorVersions,
+  normalizeCursorVersion,
+} from './cursor/cursor-latest-version.pure'
 import type {
   ProviderInstallInfo,
   ProviderStatusInfo,
@@ -15,6 +19,7 @@ export interface KnownProvider {
   legacyPackageNames?: string[]
   latestVersionSource?:
     | { type: 'npm' }
+    | { type: 'cursor-install-script' }
     | { type: 'github-release'; owner: string; repo: string }
   installCommand: string
   updateCommand: string
@@ -63,6 +68,7 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
     binaryName: 'cursor-agent',
     binaryAliases: ['agent'],
     packageName: null,
+    latestVersionSource: { type: 'cursor-install-script' },
     installCommand: 'curl https://cursor.com/install -fsS | bash',
     updateCommand: 'agent update',
     supportsSelfUpdate: true,
@@ -168,11 +174,15 @@ export function buildProviderUpdateInfo(
   install: ProviderInstallInfo | null = null,
   binaryPath: string | null = null,
 ): ProviderUpdateInfo {
-  const currentVersion = extractSemver(currentVersionOutput)
-  const normalizedLatestVersion = extractSemver(latestVersion)
+  const cursorSource =
+    provider.latestVersionSource?.type === 'cursor-install-script'
+  const normalize = cursorSource ? normalizeCursorVersion : extractSemver
+  const compare = cursorSource ? compareCursorVersions : compareSemver
+  const currentVersion = normalize(currentVersionOutput)
+  const normalizedLatestVersion = normalize(latestVersion)
   const comparison =
     currentVersion && normalizedLatestVersion
-      ? compareSemver(currentVersion, normalizedLatestVersion)
+      ? compare(currentVersion, normalizedLatestVersion)
       : null
 
   const strategy = resolveProviderUpdateStrategy(provider, install, binaryPath)

@@ -10,6 +10,35 @@ import {
 } from './provider-status.pure'
 
 describe('provider-status.pure', () => {
+  it.each([
+    ['2026.06.03-0bbb28e', '2026.07.11-abc1234', 'outdated'],
+    ['2026.10.01-abc1234', '2026.9.30-0bbb28e', 'current'],
+    ['2026.07.11-abc1234', '2026.07.11-abc1234', 'current'],
+    ['2026.07.11-abc1234', '2026.07.11-bbb1234', 'unknown'],
+    ['garbage', '2026.07.11-abc1234', 'unknown'],
+    ['2026.06.03-0bbb28e', 'garbage', 'unknown'],
+    ['2026.06.03-0bbb28e-extra', '2026.07.11-abc1234', 'unknown'],
+    ['2026.02.30-0bbb28e', '2026.07.11-abc1234', 'unknown'],
+  ])(
+    'builds Cursor update status for %s against %s',
+    (current, latest, status) => {
+      const provider = getKnownProviders().find(
+        (entry) => entry.id === 'cursor',
+      )!
+      expect(provider.latestVersionSource).toEqual({
+        type: 'cursor-install-script',
+      })
+      expect(
+        buildProviderStatus(
+          provider,
+          '/usr/local/bin/cursor-agent',
+          current,
+          latest,
+        ).update.status,
+      ).toBe(status)
+    },
+  )
+
   it('returns the expected known providers', () => {
     expect(getKnownProviders().map((provider) => provider.id)).toEqual([
       'claude-code',
