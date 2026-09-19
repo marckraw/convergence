@@ -48,6 +48,8 @@ export function linearIssueNode(input: {
   identifier: string
   title?: string
   state?: string
+  /** `WorkflowState.type`, when the query asks for it (MAR-3236). */
+  stateType?: string
   labels: ReturnType<typeof linearLabel>[]
   branchName?: string
   updatedAt?: string
@@ -64,7 +66,10 @@ export function linearIssueNode(input: {
     // Linear answers `priority: Float!`, so it is always on the node; the
     // pages that leave it out are the ones R3 reads as null.
     ...('priority' in input ? { priority: input.priority } : {}),
-    state: { name: input.state ?? 'Todo' },
+    state: {
+      name: input.state ?? 'Todo',
+      ...(input.stateType === undefined ? {} : { type: input.stateType }),
+    },
     labels: { nodes: input.labels },
   }
 }
@@ -356,3 +361,77 @@ export const RECORDED_GROUNDING_MIXED = `**Groomed and grounded 2026-09-12 by Fa
 Grounded at convergence a3236635 · 2026-09-12 · checked: the mount (reads: sed).
 
 \`re-grounded 3e691917 · 2026-09-18 after lap 1's STOP · checked: nothing moved.\``
+
+/**
+ * The page the outside read parses (MAR-3236 R1, R2), as
+ * `LINEAR_OUTSIDE_ISSUES_QUERY` asks for it: every way IN the loop, every way
+ * that only looks like it, and the two closed state types the filter cannot
+ * express. Written from the published schema; every id is synthetic.
+ */
+export const RECORDED_OUTSIDE_PAGE = linearIssuesBody([
+  linearIssueNode({
+    id: 'out-unlabelled',
+    identifier: 'EX-40',
+    state: 'Backlog',
+    stateType: 'backlog',
+    labels: [],
+    priority: 3,
+    updatedAt: '2026-09-19T10:00:00.000Z',
+  }),
+  linearIssueNode({
+    id: 'out-groom-me',
+    identifier: 'EX-41',
+    stateType: 'unstarted',
+    labels: [linearLabel('groom-me', null)],
+  }),
+  linearIssueNode({
+    id: 'out-seat',
+    identifier: 'EX-42',
+    stateType: 'started',
+    labels: [linearLabel('opus-mac', 'horse')],
+  }),
+  linearIssueNode({
+    id: 'out-wave-only',
+    identifier: 'EX-43',
+    stateType: 'unstarted',
+    labels: [linearLabel('x', 'wave')],
+  }),
+  // A plain label somebody named like a group child: not a Loom label, so
+  // the labeled parse drops it -- and this one keeps it.
+  linearIssueNode({
+    id: 'out-look-alike',
+    identifier: 'EX-44',
+    stateType: 'unstarted',
+    labels: [linearLabel('horse:opus', null)],
+    updatedAt: '2026-09-18T10:00:00.000Z',
+  }),
+  linearIssueNode({
+    id: 'out-bug',
+    identifier: 'EX-45',
+    state: 'Todo',
+    stateType: 'unstarted',
+    labels: [linearLabel('Bug', null)],
+    priority: 1,
+    updatedAt: '2026-09-19T11:00:00.000Z',
+  }),
+  linearIssueNode({
+    id: 'out-dispatch',
+    identifier: 'EX-46',
+    stateType: 'unstarted',
+    labels: [linearLabel('dispatch', null)],
+  }),
+  linearIssueNode({
+    id: 'out-canceled',
+    identifier: 'EX-47',
+    state: 'Canceled',
+    stateType: 'canceled',
+    labels: [],
+  }),
+  linearIssueNode({
+    id: 'out-completed',
+    identifier: 'EX-48',
+    state: 'Done',
+    stateType: 'completed',
+    labels: [],
+  }),
+])

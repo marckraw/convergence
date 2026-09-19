@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   diffTrackerSnapshot,
+  isOutsideReadDue,
   isTrackerTickDue,
   nextTrackerTickDelay,
   TRACKER_BACKGROUND_INTERVAL_MS,
   TRACKER_BURST_INTERVAL_MS,
   TRACKER_BURST_WINDOW_MS,
+  TRACKER_OUTSIDE_INTERVAL_MS,
   TRACKER_RATE_LIMIT_DEFAULT_BACKOFF_MS,
   TRACKER_TICK_FLOOR_MS,
   TRACKER_WATCH_INTERVAL_MS,
@@ -762,5 +764,40 @@ describe('MAR-3227 R1: four speeds, one floor, from one pure function', () => {
         kicked: true,
       }),
     ).toBe(9_000)
+  })
+})
+
+describe('MAR-3236 R4: the outside read has a slow beat of its own', () => {
+  const T = Date.parse('2026-09-19T12:00:00.000Z')
+
+  it('the beat is ten minutes', () => {
+    expect(TRACKER_OUTSIDE_INTERVAL_MS).toBe(600_000)
+  })
+
+  it.each([
+    { name: 'never read', last: null, now: T, kicked: false, due: true },
+    {
+      name: 'one second short of the beat',
+      last: T,
+      now: T + 599_000,
+      kicked: false,
+      due: false,
+    },
+    {
+      name: 'exactly the beat',
+      last: T,
+      now: T + 600_000,
+      kicked: false,
+      due: true,
+    },
+    {
+      name: 'a Refresh asked, a second after a read',
+      last: T,
+      now: T + 1_000,
+      kicked: true,
+      due: true,
+    },
+  ])('$name -> $due', ({ last, now, kicked, due }) => {
+    expect(isOutsideReadDue({ now, lastOutsideReadAt: last, kicked })).toBe(due)
   })
 })

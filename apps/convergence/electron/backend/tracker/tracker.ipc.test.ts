@@ -34,8 +34,16 @@ describe('MAR-3084 lap 2, F: no key without an owner', () => {
     },
   }))
 
+  const outside = vi.fn((crewId: string) => ({
+    crewId,
+    issues: [],
+    more: false,
+    readAt: null,
+  }))
+
   beforeEach(() => {
     electronMocks.handlers.clear()
+    outside.mockClear()
     setKey.mockClear()
     resolveProject.mockClear()
     registerTrackerIpcHandlers({
@@ -48,6 +56,7 @@ describe('MAR-3084 lap 2, F: no key without an owner', () => {
       resolveProject,
       crewExists: (crewId) => crewId === 'crew-1',
       refresh: () => ({ outcome: 'reading', refreshableAt: null }),
+      outside,
     })
   })
 
@@ -85,5 +94,18 @@ describe('MAR-3084 lap 2, F: no key without an owner', () => {
     // process).
     expect(JSON.stringify(answer)).not.toContain('lin_api')
     expect(Object.keys(answer)).toEqual(['kind', 'project'])
+  })
+
+  it('MAR-3236: tracker:outside answers the watcher’s memory for that crew, and no key', async () => {
+    const answer = await invoke<Promise<unknown>>('tracker:outside', 'crew-1')
+    // Mutation: answer another crew's snapshot -> red.
+    expect(outside).toHaveBeenCalledWith('crew-1')
+    expect(answer).toEqual({
+      crewId: 'crew-1',
+      issues: [],
+      more: false,
+      readAt: null,
+    })
+    expect(JSON.stringify(answer)).not.toContain('lin_api')
   })
 })

@@ -11,7 +11,12 @@ import {
   LINEAR_DONE_WINDOW,
   LINEAR_ISSUE_BODIES_QUERY,
   LINEAR_LABELED_ISSUES_QUERY,
+  LINEAR_OUTSIDE_ISSUES_QUERY,
+  LINEAR_OUTSIDE_MAX_PAGES,
+  LINEAR_PAGE_SIZE,
   dayAfter,
+  linearOutsideIssuesRequest,
+  parseLinearOutsidePage,
   linearIssueBodiesRequest,
   linearLabeledIssuesRequest,
   linearRetryAt,
@@ -37,6 +42,7 @@ import {
   RECORDED_GROUNDING_RE_GROUNDED,
   RECORDED_GROUNDING_SINGLE,
   RECORDED_LOOM_MEMBERSHIP_PAGE,
+  RECORDED_OUTSIDE_PAGE,
   RECORDED_PRIORITY_PAGE,
   RECORDED_RATELIMITED_BODY,
   RECORDED_TWO_ISSUE_PAGE,
@@ -766,5 +772,130 @@ describe('MAR-3190 R4: bodies are read only for issues that changed', () => {
     expect(
       parseLinearIssueBodiesReply({ data: { issues: { nodes: [{}] } } }),
     ).toMatchObject({ ok: false, refusal: { kind: 'bad-response' } })
+  })
+})
+
+describe('MAR-3236 R1: outside means "the labeled read would not keep it", by one rule', () => {
+  const groups = { seatGroup: 'horse', waveGroup: 'wave' }
+
+  it('keeps the unlabelled, the look-alike and the Bug; drops every Loom label', () => {
+    const read = parseLinearOutsidePage(RECORDED_OUTSIDE_PAGE, groups)
+    if (!read.ok) throw new Error('expected a page')
+    // Mutation: a hand-written label list instead of `inTheLoop`, missing
+    // `dispatch` -> EX-46 is kept, red.
+    expect(read.page.issues.map((issue) => issue.identifier)).toEqual([
+      'EX-40',
+      'EX-44',
+      'EX-45',
+    ])
+  })
+
+  it('the SAME page read by the labeled parse keeps exactly the ones dropped here', () => {
+    const outside = parseLinearOutsidePage(RECORDED_OUTSIDE_PAGE, groups)
+    const labeled = parseLinearIssuesPage(RECORDED_OUTSIDE_PAGE, {
+      labelPrefix: 'horse:',
+      wavePrefix: 'wave:',
+      statusMap: { ...DEFAULT_TRACKER_STATUS_MAP },
+    })
+    if (!outside.ok || !labeled.ok) throw new Error('expected pages')
+    const kept = new Set(labeled.page.issues.map((issue) => issue.identifier))
+    // The two reads partition the open issues: nothing in both, nothing lost.
+    expect([...kept].sort()).toEqual(['EX-41', 'EX-42', 'EX-43', 'EX-46'])
+    for (const issue of outside.page.issues) {
+      expect(kept.has(issue.identifier)).toBe(false)
+    }
+  })
+
+  it('a kept issue carries the light fields and nothing else', () => {
+    const read = parseLinearOutsidePage(RECORDED_OUTSIDE_PAGE, groups)
+    if (!read.ok) throw new Error('expected a page')
+    expect(read.page.issues[2]).toEqual({
+      id: 'out-bug',
+      identifier: 'EX-45',
+      title: 'Issue EX-45',
+      url: 'https://linear.app/example/issue/ex-45',
+      status: 'Todo',
+      priority: 1,
+      labels: ['Bug'],
+      updatedAt: '2026-09-19T11:00:00.000Z',
+    })
+    expect(read.page.issues[1]?.priority).toBeNull()
+  })
+})
+
+describe('MAR-3236 R2: open only, light only', () => {
+  it('the query filters on the measured comparator, orders by updatedAt and reads no body', () => {
+    expect(LINEAR_OUTSIDE_ISSUES_QUERY).toContain('completedAt: { null: true }')
+    expect(LINEAR_OUTSIDE_ISSUES_QUERY).toContain('state { name type }')
+    expect(LINEAR_OUTSIDE_ISSUES_QUERY).toContain('orderBy: updatedAt')
+    expect(LINEAR_OUTSIDE_ISSUES_QUERY).toContain(`first: ${LINEAR_PAGE_SIZE}`)
+    expect(LINEAR_OUTSIDE_ISSUES_QUERY).toContain(
+      'project: { id: { eq: $projectId } }',
+    )
+    // Mutation: select `description` -> red.
+    expect(LINEAR_OUTSIDE_ISSUES_QUERY).not.toMatch(/\bdescription\b/)
+    // Membership is the parse's, never the filter's.
+    expect(LINEAR_OUTSIDE_ISSUES_QUERY).not.toContain('labels: {')
+    // Only the comparator this codebase has measured.
+    expect(LINEAR_OUTSIDE_ISSUES_QUERY).not.toContain('canceledAt')
+    expect(LINEAR_OUTSIDE_MAX_PAGES).toBe(3)
+  })
+
+  it('declares only the variables it sends', () => {
+    const request = linearOutsideIssuesRequest({
+      projectId: 'project-1',
+      after: 'cursor-1',
+    })
+    expect(request.variables).toEqual({
+      projectId: 'project-1',
+      after: 'cursor-1',
+    })
+    const declared = [
+      ...(request.query.split('{')[0] ?? '').matchAll(/\$(\w+):/g),
+    ].map((match) => match[1])
+    expect(declared).toEqual(['projectId', 'after'])
+  })
+
+  it('a cancelled, completed or duplicate issue never reaches the list', () => {
+    const read = parseLinearOutsidePage(
+      linearIssuesBody([
+        linearIssueNode({
+          id: 'a',
+          identifier: 'EX-1',
+          stateType: 'canceled',
+          labels: [],
+        }),
+        linearIssueNode({
+          id: 'b',
+          identifier: 'EX-2',
+          stateType: 'completed',
+          labels: [],
+        }),
+        linearIssueNode({
+          id: 'c',
+          identifier: 'EX-3',
+          stateType: 'duplicate',
+          labels: [],
+        }),
+        linearIssueNode({
+          id: 'd',
+          identifier: 'EX-4',
+          stateType: 'triage',
+          labels: [],
+        }),
+      ]),
+      { seatGroup: 'horse', waveGroup: 'wave' },
+    )
+    if (!read.ok) throw new Error('expected a page')
+    // Mutation: drop the state-type check -> EX-1..EX-3 appear, red.
+    expect(read.page.issues.map((issue) => issue.identifier)).toEqual(['EX-4'])
+  })
+
+  it('a page claiming more with no cursor is refused, not walked', () => {
+    const read = parseLinearOutsidePage(
+      linearIssuesBody([], { hasNextPage: true, endCursor: null }),
+      { seatGroup: 'horse', waveGroup: 'wave' },
+    )
+    expect(read.ok).toBe(false)
   })
 })

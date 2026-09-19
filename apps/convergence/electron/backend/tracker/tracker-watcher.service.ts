@@ -5,11 +5,13 @@ import type {
   WorkLedgerSnapshot,
 } from '../work-ledger/work-ledger.types'
 import type {
+  TrackerOutsideSnapshot,
   TrackerReadEvent,
   TrackerRefreshReply,
 } from '../../../src/shared/types/tracker.types'
 import {
   diffTrackerSnapshot,
+  isOutsideReadDue,
   isTrackerTickDue,
   nextTrackerTickDelay,
   TRACKER_BURST_WINDOW_MS,
@@ -22,6 +24,7 @@ import {
   DEFAULT_TRACKER_LABEL_PREFIX,
   DEFAULT_TRACKER_STATUS_MAP,
   DEFAULT_TRACKER_WAVE_PREFIX,
+  trackerLabelGroupName,
 } from './tracker-binding.pure'
 import {
   TrackerRefusalError,
@@ -80,6 +83,11 @@ export interface TrackerWatcherDeps {
    * window to tell is still a watcher.
    */
   onRead?: (event: TrackerReadEvent) => void
+  /**
+   * A crew's outside read replaced its snapshot (MAR-3236). Optional, like
+   * `onRead`: a watcher with no window to tell is still a watcher.
+   */
+  broadcastOutside?: (snapshot: TrackerOutsideSnapshot) => void
   now?: () => Date
   log?: (message: string, error?: unknown) => void
 }
@@ -176,6 +184,28 @@ export class TrackerWatcherService {
   private timer: ReturnType<typeof setTimeout> | null = null
   private running = false
   private lastKick: TrackerKickReason | null = null
+  /**
+   * Each crew's last outside read (MAR-3236), in memory and nowhere else:
+   * a view of the project beside the ledger, never rows in it. Replaced
+   * whole by every successful read; a refused one leaves it as it was.
+   *
+   * Each carries the project it was read from: a crew re-bound to another
+   * project must not show the old project's issues as its own.
+   */
+  private readonly outside = new Map<
+    string,
+    { projectId: string; snapshot: TrackerOutsideSnapshot }
+  >()
+  /**
+   * When each crew's outside read was last ATTEMPTED, in ms, and for which
+   * project (R4): a re-bound crew has never been read for its new project.
+   */
+  private readonly lastOutsideRead = new Map<
+    string,
+    { at: number; projectId: string }
+  >()
+  /** Crews whose Refresh asked for an outside read that has not run yet. */
+  private readonly outsideAsked = new Set<string>()
 
   constructor(private readonly deps: TrackerWatcherDeps) {}
 
@@ -190,6 +220,19 @@ export class TrackerWatcherService {
 
   trackerHealth(crewId: string): TrackerHealth | null {
     return this.health.get(crewId) ?? null
+  }
+
+  /**
+   * A crew's outside issues as last read (MAR-3236), or the never-read
+   * snapshot -- `readAt: null` -- so the panel can say so instead of zero.
+   */
+  outsideSnapshot(crewId: string): TrackerOutsideSnapshot {
+    const held = this.outside.get(crewId)
+    const projectId =
+      this.deps.crews.list().find((crew) => crew.id === crewId)?.trackerBinding
+        ?.projectId ?? null
+    if (held && held.projectId === projectId) return held.snapshot
+    return { crewId, issues: [], more: false, readAt: null }
   }
 
   snapshot(crewId: string): WorkLedgerSnapshot {
@@ -347,6 +390,9 @@ export class TrackerWatcherService {
         ).toISOString(),
       }
     }
+    // A person asking is the one kick that also reaches outside the loop
+    // (MAR-3236 R4), and only for the crew they are looking at.
+    this.outsideAsked.add(crewId)
     this.kick('manual')
     return { outcome: 'reading', refreshableAt: null }
   }
@@ -426,6 +472,7 @@ export class TrackerWatcherService {
     const adapter = this.deps.createAdapter({ apiKey, binding })
     const previous = this.trackerHealth(crewId)
     let appended = 0
+    let labeledOk = false
     let next: TrackerHealth
     try {
       const issues = await adapter.listLabeledIssues({
@@ -495,6 +542,7 @@ export class TrackerWatcherService {
       })
       this.deps.ledger.append(rows)
       appended = rows.length
+      labeledOk = true
       next = trackerHealthAfter({ previous, outcome: { ok: true }, now })
     } catch (error) {
       if (!(error instanceof TrackerRefusalError)) throw error
@@ -526,6 +574,63 @@ export class TrackerWatcherService {
     // that changed state or backoff. `workLedger:list` always answers fresh.
     if (appended > 0 || trackerHealthChanged(previous, next)) {
       this.deps.broadcast(this.snapshot(crewId))
+    }
+    // The outside read rides this tick (MAR-3236 R4), and only behind a
+    // labeled read that succeeded: the health gate, the floor and the
+    // single-flight guard above are its guards too, and a crew whose tracker
+    // just refused is not asked a second question.
+    if (labeledOk) await this.readOutside(crewId, binding, adapter)
+  }
+
+  /**
+   * The crew's open issues outside the loop, on their own slow beat (R4).
+   *
+   * The beat counts from the ATTEMPT, so a refusal waits the beat out like a
+   * success -- which is what keeps the worst case at 6 reads an hour. A
+   * refusal keeps the last snapshot and changes nothing else: the labeled
+   * read has already said how the tracker is.
+   */
+  private async readOutside(
+    crewId: string,
+    binding: TrackerBinding,
+    adapter: TrackerAdapter,
+  ): Promise<void> {
+    const now = this.now()
+    const last = this.lastOutsideRead.get(crewId)
+    if (
+      !isOutsideReadDue({
+        now: now.getTime(),
+        lastOutsideReadAt:
+          last && last.projectId === binding.projectId ? last.at : null,
+        kicked: this.outsideAsked.has(crewId),
+      })
+    ) {
+      return
+    }
+    this.outsideAsked.delete(crewId)
+    this.lastOutsideRead.set(crewId, {
+      at: now.getTime(),
+      projectId: binding.projectId,
+    })
+    try {
+      const page = await adapter.listOutsideIssues({
+        projectId: binding.projectId,
+        seatGroup: trackerLabelGroupName(binding.labelPrefix),
+        waveGroup: trackerLabelGroupName(binding.wavePrefix),
+      })
+      const snapshot: TrackerOutsideSnapshot = {
+        crewId,
+        issues: page.issues,
+        more: page.more,
+        readAt: this.now().toISOString(),
+      }
+      this.outside.set(crewId, { projectId: binding.projectId, snapshot })
+      this.deps.broadcastOutside?.(snapshot)
+    } catch (error) {
+      this.log(
+        `Could not read the issues outside the loop for ${crewId}`,
+        error,
+      )
     }
   }
 }

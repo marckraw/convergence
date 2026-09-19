@@ -150,6 +150,52 @@ export interface ListLabeledIssuesInput {
   wavePrefix: string
 }
 
+/**
+ * One open issue of the bound project that is NOT in the loop (MAR-3236): it
+ * carries no Loom label, so the labeled read never kept it. Light by
+ * construction -- no body is read for it, so it has no summary and no
+ * grounding date, and it never becomes a ledger row.
+ */
+export interface TrackerOutsideIssue {
+  id: string
+  identifier: string
+  title: string
+  url: string
+  /** The tracker's own state name, verbatim. */
+  status: string
+  /** Linear's 0-4, or null when the tracker did not answer with one. */
+  priority: number | null
+  /** Every label as a person reads it (`group › child` for a group child). */
+  labels: string[]
+  updatedAt: string
+}
+
+/** The label group names the outside read needs to decide membership. */
+export interface ListOutsideIssuesInput {
+  projectId: string
+  seatGroup: string
+  waveGroup: string
+}
+
+/** What one outside read answered: a bounded list, and whether it was cut. */
+export interface TrackerOutsidePage {
+  issues: TrackerOutsideIssue[]
+  /** True when the tracker had a further page the bound did not read. */
+  more: boolean
+}
+
+/**
+ * A crew's last outside read (MAR-3236), held in memory by the watcher and
+ * answered by `tracker:outside` / pushed on `tracker:outsideUpdated`.
+ * `readAt` null means it has never been read in this process's life.
+ */
+export interface TrackerOutsideSnapshot {
+  crewId: string
+  issues: TrackerOutsideIssue[]
+  more: boolean
+  readAt: string | null
+}
+
 /** What the renderer may learn about a crew's key: whether one exists. */
 export type TrackerCredentialStatus = 'present' | 'absent'
 
