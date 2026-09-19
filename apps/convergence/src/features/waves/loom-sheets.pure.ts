@@ -261,12 +261,21 @@ export function loomSheetNote(
  * these rows came from, which is the same word the header already uses for an
  * outage. `All waves` is a statement of fact until LV3 gives Before its wave
  * grouping: nothing here is filtered.
+ *
+ * One crew, always (MAR-3225): Loom shows the selected crew's ledger and no
+ * other, so the `N crews` count had nothing left to describe.
  */
-export function loomSubline(crewNames: readonly string[]): string {
-  if (crewNames.length === 0) return 'All waves'
-  if (crewNames.length === 1) return `${crewNames[0]} · All waves`
-  return `${crewNames.length} crews · All waves`
+export function loomSubline(crewName: string | null): string {
+  return crewName === null
+    ? LOOM_SUBLINE_TAIL
+    : `${crewName} · ${LOOM_SUBLINE_TAIL}`
 }
+
+/**
+ * The subline's tail, as text beside the crew picker too (MAR-3225 R3): the
+ * picker replaces the crew's NAME, never the sentence it sits in.
+ */
+export const LOOM_SUBLINE_TAIL = 'All waves'
 
 /**
  * Now's in-flight list with the cards' own rows taken out (MAR-3191 R4).

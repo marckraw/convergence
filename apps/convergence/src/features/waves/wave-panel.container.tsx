@@ -18,6 +18,7 @@ import type { WavePanelMode } from './wave-panel-mode.pure'
 import { loadLoomSheet, saveLoomSheet } from './wave-panel-sheet.api'
 import type { LoomSheet } from './wave-panel-sheet.pure'
 import { loomSubline } from './loom-sheets.pure'
+import { loomCrewHasChoice } from './wave-panel-crew.pure'
 import { loomIssueDetail } from './loom-detail.pure'
 import { rowBelongsToSeat } from './loom-horses.pure'
 import { LoomCompactView } from './loom-compact.presentational'
@@ -116,7 +117,11 @@ function useWindowWidth(): number {
  * does -- the sheet ITSELF is remembered between runs, but a scroll offset
  * into rows that have since changed is not a promise worth keeping.
  */
-function useSheetScroll(sheet: LoomSheet, frozen: { current: boolean }) {
+function useSheetScroll(
+  sheet: LoomSheet,
+  frozen: { current: boolean },
+  crewId: string | null,
+) {
   const offsets = useRef<Record<LoomSheet, number>>({
     before: 0,
     now: 0,
@@ -126,6 +131,20 @@ function useSheetScroll(sheet: LoomSheet, frozen: { current: boolean }) {
   // Keyed on the open sheet, so React tears the old body down and hands us the
   // new one -- which is exactly when the offset has to go back on.
   const element = useRef<HTMLDivElement | null>(null)
+  /**
+   * Another crew is another list (MAR-3225 R4): every sheet starts at the top
+   * for it, and the offsets a person left in one crew's rows are not applied
+   * to a different crew's. Layout time, so the new rows are never painted at
+   * the old crew's offset. The sheet's body does NOT remount on a switch --
+   * it is keyed on the sheet -- so the element is reset here, not by `bodyRef`.
+   */
+  const shownCrew = useRef(crewId)
+  useLayoutEffect(() => {
+    if (shownCrew.current === crewId) return
+    shownCrew.current = crewId
+    offsets.current = { before: 0, now: 0, next: 0, plan: 0 }
+    if (element.current) element.current.scrollTop = 0
+  }, [crewId])
   const bodyRef = useCallback(
     (node: HTMLDivElement | null) => {
       element.current = node
@@ -172,7 +191,7 @@ export const WavePanel: FC<WavePanelProps> = ({
   onExpandedChange,
   expandedContainer,
 }) => {
-  const board = useWaveBoard()
+  const board = useWaveBoard('selected')
   const [stored, setStored] = useState<WavePanelMode>(loadWavePanelMode)
   const [storedWidth, setStoredWidth] = useState<number>(loadWavePanelWidth)
   const [sheet, setSheet] = useState<LoomSheet>(loadLoomSheet)
@@ -289,6 +308,20 @@ export const WavePanel: FC<WavePanelProps> = ({
     setDetailKey(waveRowKey(entry))
   }, [])
   const closeDetail = useCallback(() => setDetailKey(null), [])
+  /**
+   * Another crew (MAR-3225 R4): the whole board is that crew's, and an issue
+   * read in place belongs to the crew it was opened from -- so the detail
+   * closes. The sheet, the mode and the width are the person's place in LOOM,
+   * not in a crew, and stay exactly as they are.
+   */
+  const { selectCrew: selectBoardCrew } = board
+  const selectCrew = useCallback(
+    (crewId: string) => {
+      selectBoardCrew(crewId)
+      setDetailKey(null)
+    },
+    [selectBoardCrew],
+  )
   // Focus returns once the rows are back on screen (R5), which is a render
   // later than the click that closed the card.
   // A row that leaves the ledger takes its key with it (lap 2, C). Left
@@ -330,7 +363,11 @@ export const WavePanel: FC<WavePanelProps> = ({
   // inside the scroll handler, so it must be the same object across renders.
   const detailOpen = useRef(false)
   detailOpen.current = detailKey !== null
-  const { bodyRef, onBodyScroll, restore } = useSheetScroll(sheet, detailOpen)
+  const { bodyRef, onBodyScroll, restore } = useSheetScroll(
+    sheet,
+    detailOpen,
+    board.selectedCrewId,
+  )
   const hadDetailForScroll = useRef(detailKey !== null)
   // The rows are back in the DOM by layout time, so the offset goes on
   // before the browser paints -- a person never sees the list at the top.
@@ -461,7 +498,22 @@ export const WavePanel: FC<WavePanelProps> = ({
     // The ordering R5 is about: a detail open means Escape closes THAT.
     onEscape: detailKey === null ? undefined : closeDetail,
     header: board.header,
-    subline: loomSubline(board.crewNames),
+    subline: {
+      text: loomSubline(
+        board.crewOptions.find((crew) => crew.id === board.selectedCrewId)
+          ?.name ?? null,
+      ),
+      // A choice only when there is one (R3): with one bound crew the line
+      // is the text it always was, and no control is drawn.
+      picker:
+        loomCrewHasChoice(board.crewOptions) && board.selectedCrewId !== null
+          ? {
+              options: board.crewOptions,
+              selectedId: board.selectedCrewId,
+              onSelect: selectCrew,
+            }
+          : null,
+    },
     open: sheet,
     onSelectSheet: selectSheet,
     inertReason: LOOM_ROWS_ALWAYS_OPEN,

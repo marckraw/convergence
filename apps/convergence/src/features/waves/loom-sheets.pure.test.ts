@@ -3,6 +3,7 @@ import type { WorkLedgerState } from '@/entities/work-ledger'
 import {
   loomNowRows,
   loomSubline,
+  LOOM_SUBLINE_TAIL,
   loomSheetCounts,
   loomSheetNote,
   loomSheets,
@@ -266,18 +267,16 @@ describe('MAR-3189: the titles say what their numbers mean', () => {
 })
 
 describe('MAR-3189: the subline names the ledger on screen', () => {
-  it('one crew by name, several by count, none at all still says what is shown', () => {
+  it('the crew on screen by name; none at all still says what is shown', () => {
     // r4 asks for the tracker PROJECT's name, which a binding does not carry
     // (`projectId` only), so the crew's name stands in -- the same word the
-    // outage header uses. Mutation: name the first crew when several are
-    // bound -> the line claims one ledger while showing two, red.
-    expect(loomSubline(['convergence development'])).toBe(
+    // outage header uses. MAR-3225 retired the `N crews` branch: Loom shows
+    // one crew at a time, so the subline names that crew and only that crew.
+    expect(loomSubline('convergence development')).toBe(
       'convergence development · All waves',
     )
-    expect(loomSubline(['convergence development', 'night shift'])).toBe(
-      '2 crews · All waves',
-    )
-    expect(loomSubline([])).toBe('All waves')
+    expect(loomSubline(null)).toBe('All waves')
+    expect(`x · ${LOOM_SUBLINE_TAIL}`).toBe('x · All waves')
   })
 })
 

@@ -2,6 +2,7 @@ import type { FC } from 'react'
 import { Maximize2 } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { LoomStackView } from './loom-stack.presentational'
+import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
 import type { LoomStackProps } from './loom-stack.types'
 import { LOOM_COMPACT_CLASS } from './wave-panel.styles'
@@ -36,7 +37,9 @@ export const LoomCompactView: FC<
       </Button>
     </div>
     <div className="shrink-0 px-3 pb-4 text-xs text-muted-foreground">
-      <p className="mb-2 break-words">{props.subline}</p>
+      <p className="mb-2 break-words">
+        <LoomSublineContent subline={props.subline} />
+      </p>
       <LoomStatusView header={props.header} />
     </div>
     <LoomStackView {...props} />

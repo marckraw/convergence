@@ -13,6 +13,8 @@ import {
 import { useFeedClock } from '@/shared/hooks/use-feed-clock'
 import { loomHorses, type LoomHorse } from './loom-horses.pure'
 import { loomSheets, type LoomSheets } from './loom-sheets.pure'
+import { loadLoomCrew, saveLoomCrew } from './wave-panel-crew.api'
+import { resolveLoomCrew, type LoomCrewOption } from './wave-panel-crew.pure'
 import {
   resolveWaveRow,
   sectionWaveRows,
@@ -33,15 +35,33 @@ import {
  */
 export const LOOM_LOCAL_HOST_LABEL = 'This Mac'
 
+/**
+ * Which crews a board is built from (MAR-3225).
+ *
+ * - `all`: every bound crew -- Mission Control's Waves tab, the all-crews
+ *   surface, where each row names its crew.
+ * - `selected`: the one crew a person picked -- Loom, which is one crew's
+ *   loom at a time. Two projects are two looms.
+ */
+export type WaveBoardScope = 'all' | 'selected'
+
 export interface WaveBoard {
   /** How many crews read a tracker; zero means the column is not mounted. */
   boundCrewCount: number
-  /** The bound crews' names, in crew order: Loom's subline reads them. */
-  crewNames: string[]
+  /** Every bound crew, in crew order: what Loom's crew picker lists. */
+  crewOptions: LoomCrewOption[]
+  /**
+   * The crew the board is built from under `selected` (MAR-3225 R2): the
+   * stored choice while it is bound, else the first bound crew; `null` under
+   * `all`, or when nothing is bound.
+   */
+  selectedCrewId: string | null
+  /** Picks the crew Loom shows and remembers it (MAR-3225 R4). */
+  selectCrew: (crewId: string) => void
   sections: WaveSections
   /** The same rows in Loom's four sheets (MAR-3189 R2). */
   sheets: LoomSheets
-  /** The bound crews' horse seats, in crew order (MAR-3191 R1). */
+  /** The shown crews' horse seats, in crew order (MAR-3191 R1). */
   horses: LoomHorse[]
   /** One loaded conversation by id, for a card's own door (MAR-3191 R6). */
   findSession: (sessionId: string) => SessionSummary | null
@@ -60,8 +80,12 @@ export interface WaveBoard {
  *
  * Owns the subscriptions and the `now` clock (R8), so every presentational
  * that draws a wave row is handed facts and never reaches a store.
+ *
+ * One hook for both surfaces, told which crews to show (MAR-3225): Loom asks
+ * for the `selected` crew, the Waves tab for `all`. A parameter rather than a
+ * second hook, so the two cannot drift into reading the ledger differently.
  */
-export function useWaveBoard(): WaveBoard {
+export function useWaveBoard(scope: WaveBoardScope): WaveBoard {
   const crews = useSessionCrewStore((state) => state.crews)
   const loadCrews = useSessionCrewStore((state) => state.load)
   const snapshots = useWorkLedgerStore((state) => state.snapshots)
@@ -71,6 +95,9 @@ export function useWaveBoard(): WaveBoard {
     (state) => state.settings.executionHostEndpoints,
   )
   const [now, setNow] = useState(() => Date.now())
+  // Read under both scopes (hooks are not optional) and used only under
+  // `selected`: the Waves tab has no choice to remember.
+  const [storedCrew, setStoredCrew] = useState<string | null>(loadLoomCrew)
 
   useEffect(() => {
     void loadCrews()
@@ -95,24 +122,53 @@ export function useWaveBoard(): WaveBoard {
     [crews],
   )
 
+  // Every bound crew's ledger is read, whichever is on screen: switching is
+  // then a re-derivation of rows already here, not a read the person waits on.
   useEffect(() => {
     if (boundCrewIds.length > 0) void loadLedger(boundCrewIds)
   }, [boundCrewIds, loadLedger])
 
+  const crewOptions = useMemo(
+    () =>
+      boundCrewIds.map((id) => ({ id, name: crewFacts.get(id)?.name ?? id })),
+    [boundCrewIds, crewFacts],
+  )
+  const selectedCrewId =
+    scope === 'selected' ? resolveLoomCrew(storedCrew, boundCrewIds) : null
+  // The crews this board is BUILT from (MAR-3225 R1). Everything below --
+  // rows, header health, horses -- reads this list and never `boundCrewIds`,
+  // so a second crew cannot leak into Loom through any one of them.
+  const shownCrewIds = useMemo(
+    () =>
+      scope === 'all'
+        ? boundCrewIds
+        : selectedCrewId === null
+          ? []
+          : [selectedCrewId],
+    [scope, boundCrewIds, selectedCrewId],
+  )
+  const selectCrew = useCallback((crewId: string) => {
+    setStoredCrew(crewId)
+    saveLoomCrew(crewId)
+  }, [])
+
   const rows = useMemo(
-    () => waveRowsFromSnapshots(snapshots, boundCrewIds),
-    [snapshots, boundCrewIds],
+    () => waveRowsFromSnapshots(snapshots, shownCrewIds),
+    [snapshots, shownCrewIds],
   )
   const headerCrews = useMemo(
     () =>
-      boundCrewIds.map((id) => ({
+      shownCrewIds.map((id) => ({
         name: crewFacts.get(id)?.name ?? id,
         health: snapshots[id]?.trackerHealth ?? null,
       })),
-    [snapshots, boundCrewIds, crewFacts],
+    [snapshots, shownCrewIds, crewFacts],
   )
 
-  const several = boundCrewIds.length > 1
+  // A row names its crew only where rows of several crews sit side by side
+  // (MAR-3225 R5): the Waves tab. In Loom one crew is on screen and the
+  // subline already names it.
+  const several = shownCrewIds.length > 1
   const sections = useMemo(
     () =>
       sectionWaveRows(rows, now, (crewId) => ({
@@ -178,14 +234,20 @@ export function useWaveBoard(): WaveBoard {
     },
     [endpoints],
   )
+  const shownCrews = useMemo(
+    () => crews.filter((crew) => shownCrewIds.includes(crew.id)),
+    [crews, shownCrewIds],
+  )
   const horses = useMemo(
-    () => loomHorses({ crews, sessionsById, sheets, hostLabelOf }),
-    [crews, sessionsById, sheets, hostLabelOf],
+    () => loomHorses({ crews: shownCrews, sessionsById, sheets, hostLabelOf }),
+    [shownCrews, sessionsById, sheets, hostLabelOf],
   )
 
   return {
     boundCrewCount: boundCrewIds.length,
-    crewNames: headerCrews.map((crew) => crew.name),
+    crewOptions,
+    selectedCrewId,
+    selectCrew,
     sections,
     sheets,
     horses,

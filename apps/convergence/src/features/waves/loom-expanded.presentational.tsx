@@ -2,6 +2,7 @@ import type { FC } from 'react'
 import { Minimize2 } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { LoomStackView } from './loom-stack.presentational'
+import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
 import type { LoomStackProps } from './loom-stack.types'
 import { LOOM_EXPANDED_CLASS } from './wave-panel.styles'
@@ -26,7 +27,7 @@ export const LoomExpandedView: FC<LoomStackProps & { onFold: () => void }> = ({
     <div className="flex shrink-0 items-center gap-4 px-6 py-3">
       <h2 className="text-lg font-semibold tracking-tight">Loom</h2>
       <p className="min-w-0 flex-1 text-xs text-muted-foreground">
-        {props.subline}
+        <LoomSublineContent subline={props.subline} />
       </p>
       {/* Before Fold Loom, so the lesson is reachable without leaving the
           panel it explains (MAR-3201 R9). */}
