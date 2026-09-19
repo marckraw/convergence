@@ -35,18 +35,29 @@ export const LEARN_LOOM_FOOTER_CLASS =
 /** 36 tall in the header, where the frame draws it smaller than a control. */
 export const LEARN_LOOM_CLOSE_CLASS = 'h-9 px-3'
 
-/** The footer's two quiet controls are a fixed 148 wide; the primary, 224. */
-export const LEARN_LOOM_CONTROL_CLASS = 'h-10 w-[148px]'
-export const LEARN_LOOM_PRIMARY_CLASS = 'h-10 w-[224px]'
+/**
+ * The footer's two quiet controls are a fixed 148 wide; the primary, 224.
+ *
+ * Which of them gives way when the row runs out of width is decided here and
+ * not by the browser's source order (LL3): the quiet controls may narrow
+ * (`min-w-0`) and the primary may not (`shrink-0`), so the control that
+ * advances the lesson is the last thing on screen rather than the first
+ * thing pushed off it. The row still fits with room to spare at the ruled
+ * 900 x 600 floor -- this is what happens BELOW the floor, and at zoom.
+ */
+export const LEARN_LOOM_CONTROL_CLASS = 'h-10 w-[148px] min-w-0'
+export const LEARN_LOOM_PRIMARY_CLASS = 'h-10 w-[224px] shrink-0'
 /** The quick reference has two controls, and the frame gives both 240. */
-export const LEARN_LOOM_REFERENCE_CONTROL_CLASS = 'h-10 w-[240px]'
+export const LEARN_LOOM_REFERENCE_CONTROL_CLASS = 'h-10 w-[240px] min-w-0'
+/** Its primary is the same 240, and holds it for the same reason. */
+export const LEARN_LOOM_REFERENCE_PRIMARY_CLASS = 'h-10 w-[240px] shrink-0'
 /**
  * A control that refuses, without leaving the keyboard (lap 3, C): the
  * `disabled` ATTRIBUTE drops focus the moment Back disables itself, so the
  * refusal is said with `aria-disabled` and drawn here, at the frame's 35 %.
  */
 export const LEARN_LOOM_CONTROL_OFF_CLASS =
-  'h-10 w-[148px] cursor-not-allowed opacity-35'
+  'h-10 w-[148px] min-w-0 cursor-not-allowed opacity-35'
 
 /**
  * The eyebrow is blue on EVERY step, not the step's own colour.
@@ -129,9 +140,15 @@ export const LEARN_LOOM_SHEET_ACTIVE_CLASS = 'bg-white/[0.04]'
 export const LEARN_LOOM_MOTION_CLASS =
   'duration-[var(--learn-loom-duration)] ease-[var(--learn-loom-easing)] motion-reduce:transition-none'
 
-/** A sheet trades its share of the row, and wears the emphasis. */
+/**
+ * A sheet trades its share of the row, and wears the emphasis.
+ *
+ * `background-color` is on the list because a step CHANGES it: the closed
+ * fill is white at 2 % and the active one at 4 %, so leaving it off made the
+ * fill snap while the border and the width glided (LL2's verdict).
+ */
 export const LEARN_LOOM_SHEET_TRANSITION_CLASS =
-  'transition-[flex-grow,flex-basis,border-color]'
+  'transition-[flex-grow,flex-basis,border-color,background-color]'
 
 /**
  * The ticket only ever travels sideways and changes border colour.
@@ -144,18 +161,25 @@ export const LEARN_LOOM_TICKET_TRANSITION_CLASS =
 export const LEARN_LOOM_SHEET_NAME_CLASS = 'text-base font-semibold'
 export const LEARN_LOOM_SHEET_COUNT_CLASS = 'text-xs text-muted-foreground'
 
-/** 128 tall; its width, left edge and clamp are derived (lap 3, F). */
+/**
+ * 128 tall; its width, left edge and clamp are derived (lap 3, F).
+ *
+ * `min-w-0` so the card may actually reach the clamp `learnLoomTicketMaxWidth`
+ * hands it: a flex item that refuses to go below its content's width would
+ * make the max-width advisory, and the ticket would push out of its sheet at
+ * exactly the narrow viewports the clamp exists for (LL3).
+ */
 export const LEARN_LOOM_TICKET_CLASS =
-  'absolute top-[116px] flex h-32 flex-col gap-[7px] rounded-[10px] border bg-white/[0.04] px-3 pt-3'
+  'absolute top-[116px] flex h-32 min-w-0 flex-col gap-[7px] rounded-[10px] border bg-white/[0.04] px-3 pt-3'
 
 /**
  * The identifier is blue on every step, like the eyebrow (`559:841`,
  * `559:1841`, `559:2091` are all the same blue), and 11 px, not 12.
  */
 export const LEARN_LOOM_TICKET_ID_CLASS =
-  'text-[11px] font-semibold text-blue-500'
+  'text-[11px] font-semibold whitespace-nowrap text-blue-500'
 export const LEARN_LOOM_TICKET_TITLE_CLASS =
-  'text-[15px] font-medium text-foreground'
+  'text-[15px] font-medium break-words text-foreground'
 /**
  * The status line is NOT coloured.
  *
@@ -163,9 +187,11 @@ export const LEARN_LOOM_TICKET_TITLE_CLASS =
  * the words change from step to step, the colour does not. That is stronger
  * for R7, not weaker: the fact never rides on the hue alone.
  */
-export const LEARN_LOOM_TICKET_STATUS_CLASS = 'text-xs text-foreground'
+export const LEARN_LOOM_TICKET_STATUS_CLASS =
+  'text-xs break-words text-foreground'
 /** Sentence case, muted, and last in the card: a note, not a label. */
-export const LEARN_LOOM_TICKET_NOTE_CLASS = 'text-[10px] text-muted-foreground'
+export const LEARN_LOOM_TICKET_NOTE_CLASS =
+  'text-[10px] break-words text-muted-foreground'
 
 /**
  * The three emphases, on the app's own tokens (R10).
@@ -184,7 +210,17 @@ export const LEARN_LOOM_EMPHASIS_CLASS: Readonly<
   green: 'border-emerald-500',
 }
 
-export const LEARN_LOOM_REFERENCE_GRID_CLASS = 'grid grid-cols-2 gap-3'
+/**
+ * Two columns only where two columns fit (LL3 R5).
+ *
+ * A viewport breakpoint rather than a container query: the dialog is
+ * `min(1000px, 100vw - 48px)`, so its width is a function of the viewport's
+ * and the two are the same question. 860 is where a card's two columns stop
+ * being readable inside the 64 px of dialog padding. Electron's View -> Zoom
+ * In shrinks the CSS viewport, so zoom folds these cards for free.
+ */
+export const LEARN_LOOM_REFERENCE_GRID_CLASS =
+  'grid grid-cols-1 min-[860px]:grid-cols-2 gap-3'
 /** No border in `559:2312`; a fill, radius 12, and 14/15 padding. */
 export const LEARN_LOOM_REFERENCE_CARD_CLASS =
   'flex flex-col gap-2 rounded-xl bg-white/[0.04] px-[15px] pt-3.5 pb-4'
