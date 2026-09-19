@@ -1,3 +1,4 @@
+import { CheckCircle2 } from 'lucide-react'
 import type { FC } from 'react'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
 import { cn } from '@/shared/lib/cn.pure'
@@ -11,6 +12,7 @@ import {
 } from './wave-panel.styles'
 
 interface WaveRowViewProps {
+  appearance?: 'loom'
   row: WaveRow
   /** Why the row cannot open its seat, or null when it can. */
   inertReason: string | null
@@ -24,15 +26,31 @@ interface WaveRowViewProps {
  * reachable conversation is a button; one without says why it is inert.
  */
 export const WaveRowView: FC<WaveRowViewProps> = ({
+  appearance,
   row,
   inertReason,
   onOpen,
 }) => {
   const { entry, action, hostMarker, crewName, lapLabel } = row
   const key = waveRowKey(entry)
+  const loom = appearance === 'loom'
+  const cardClass = loom
+    ? 'mb-2 gap-2 rounded-lg border border-foreground/5 bg-foreground/[0.035] p-3'
+    : undefined
   const body = (
     <>
-      <span className="flex w-full items-baseline gap-1.5">
+      <span
+        className={cn(
+          'flex w-full items-baseline gap-1.5',
+          loom && 'flex-wrap',
+        )}
+      >
+        {loom && entry.state === 'done' ? (
+          <CheckCircle2
+            aria-hidden
+            className="size-3.5 shrink-0 self-center text-emerald-500"
+          />
+        ) : null}
         {/* One unbreakable token (MAR-3155 R5): at the old fixed width
             `MAR-3085` wrapped after the dash, which is the one thing a row
             exists to say. It never shrinks; the title takes what is left. */}
@@ -42,11 +60,22 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
         {/* Two lines rather than one cut short, and the whole title one hover
             away -- `min-w-0` so the flex child may actually be narrower than
             its text. */}
-        <span className="line-clamp-2 min-w-0" title={entry.issueTitle}>
+        <span
+          className={cn(
+            'line-clamp-2 min-w-0',
+            loom && 'w-full text-xs font-medium leading-relaxed',
+          )}
+          title={entry.issueTitle}
+        >
           {entry.issueTitle}
         </span>
       </span>
-      <span className={WAVE_ROW_META_CLASS}>
+      <span
+        className={cn(
+          WAVE_ROW_META_CLASS,
+          loom && 'max-w-full whitespace-normal break-words',
+        )}
+      >
         {[
           crewName,
           entry.seat ?? 'no seat',
@@ -60,6 +89,23 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
           .filter(Boolean)
           .join(' · ')}
       </span>
+      {loom ? (
+        <span className="flex max-w-full flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+          <span
+            className={cn(
+              'rounded bg-foreground/5 px-1.5 py-0.5',
+              entry.state === 'done' && 'text-emerald-500',
+            )}
+          >
+            Linear: {entry.trackerStatus || 'not seen'}
+          </span>
+          {entry.fact.labels?.map((label) => (
+            <span key={label} className="rounded bg-foreground/5 px-1.5 py-0.5">
+              {label}
+            </span>
+          ))}
+        </span>
+      ) : null}
       {action ? <span className={WAVE_ROW_ACTION_CLASS}>{action}</span> : null}
       {/* The label itself, beside the action it caused (MAR-3138 R4): the
           action says what to do, this says why it is being asked. */}
@@ -80,13 +126,17 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
       type="button"
       variant="ghost"
       data-wave-row={key}
-      className={cn(WAVE_ROW_CLASS, WAVE_ROW_OPENABLE_CLASS)}
+      className={cn(WAVE_ROW_CLASS, WAVE_ROW_OPENABLE_CLASS, cardClass)}
       onClick={() => onOpen(entry)}
     >
       {body}
     </Button>
   ) : (
-    <div data-wave-row={key} aria-disabled="true" className={WAVE_ROW_CLASS}>
+    <div
+      data-wave-row={key}
+      aria-disabled="true"
+      className={cn(WAVE_ROW_CLASS, cardClass)}
+    >
       {body}
     </div>
   )

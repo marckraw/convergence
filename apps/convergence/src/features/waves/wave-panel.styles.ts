@@ -50,7 +50,7 @@ export const LOOM_COMPACT_CLASS =
  * at zero and comes back scrolled somewhere nobody left it.
  */
 export const LOOM_EXPANDED_CLASS =
-  'absolute inset-0 z-20 flex h-full w-full flex-row bg-background'
+  'absolute inset-0 z-20 flex h-full w-full flex-col bg-background'
 
 /**
  * A sheet's title: a button in both shapes, because it does the same thing in
@@ -60,11 +60,11 @@ export const LOOM_SHEET_TITLE_CLASS =
   'flex w-full items-center gap-2 border-b border-white/10 px-3 py-2 text-left text-[11px] font-medium tracking-tight text-muted-foreground transition-colors hover:bg-white/5 focus-visible:bg-white/5 focus-visible:outline-none'
 
 /** The open sheet's title, the one the eye should land on first. */
-export const LOOM_SHEET_TITLE_OPEN_CLASS = 'bg-white/[0.04] text-foreground'
+export const LOOM_SHEET_TITLE_OPEN_CLASS = 'text-foreground'
 
 /** The open sheet's body: the only scroller in the stack. */
 export const LOOM_SHEET_BODY_CLASS =
-  'app-scrollbar min-h-0 flex-1 overflow-y-auto pb-3'
+  'app-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain pb-3'
 
 /**
  * A section's one-line explanation of itself (MAR-3194 R3). Sits under the
@@ -76,17 +76,6 @@ export const WAVE_SECTION_HINT_CLASS =
 
 export const LOOM_SHEET_NOTE_CLASS =
   'px-3 pt-3 text-[11px] text-muted-foreground'
-
-/**
- * A closed sheet in the expanded stack: a narrow vertical edge, its name and
- * count turned on their side, the way r4 draws them.
- */
-export const LOOM_EDGE_CLASS =
-  'flex h-full w-11 shrink-0 justify-center rounded-none border-b-0 border-r border-white/10 px-0 py-3 text-center text-[11px] text-muted-foreground'
-
-/** The edge's label, reading bottom-to-top like a book spine. */
-export const LOOM_EDGE_LABEL_CLASS =
-  'whitespace-nowrap [writing-mode:vertical-rl] rotate-180'
 
 /** The horses line above the cards (MAR-3191). */
 export const LOOM_HORSES_LINE_CLASS =
@@ -101,7 +90,7 @@ export const LOOM_HORSES_LINE_CLASS =
  * hex would be the one surface that does not follow the theme.
  */
 export const LOOM_HORSE_CARD_CLASS =
-  'flex h-auto w-full flex-col items-start gap-0.5 whitespace-normal rounded-md border px-3 py-2 text-left text-xs font-normal'
+  'flex h-auto w-full flex-col items-start gap-1.5 whitespace-normal rounded-lg border px-3 py-3 text-left text-xs font-normal'
 
 export const LOOM_HORSE_TINT_CLASS: Readonly<Record<LoomHorseRuntime, string>> =
   {
@@ -113,7 +102,7 @@ export const LOOM_HORSE_TINT_CLASS: Readonly<Record<LoomHorseRuntime, string>> =
 
 /** The card's second line: host · tracker status · lap. */
 export const LOOM_HORSE_META_CLASS =
-  'truncate text-[11px] text-muted-foreground'
+  'whitespace-normal break-words text-[11px] text-muted-foreground'
 
 /** The runtime word itself, beside the seat's name. */
 export const LOOM_HORSE_RUNTIME_CLASS = 'shrink-0 text-[11px] font-medium'
@@ -123,7 +112,8 @@ export const LOOM_QA_TOGGLE_CLASS =
   'mx-3 mb-1 h-6 justify-start px-1 text-[11px] text-muted-foreground'
 
 /** Expanded lays the horses and the QA list side by side (r4 508:363). */
-export const LOOM_NOW_WIDE_CLASS = 'lg:grid lg:grid-cols-2 lg:gap-x-4'
+export const LOOM_NOW_WIDE_CLASS =
+  'grid grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))] gap-4'
 
 /**
  * The issue detail (MAR-3195): the sheet's body, capped so a wide expanded

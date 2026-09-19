@@ -39,6 +39,7 @@ export const LoomTitleView: FC<LoomTitleViewProps> = ({
     type="button"
     variant="ghost"
     data-loom-sheet-title={sheet}
+    aria-label={title}
     aria-expanded={open}
     aria-controls={open ? `loom-sheet-${sheet}` : undefined}
     className={cn(
