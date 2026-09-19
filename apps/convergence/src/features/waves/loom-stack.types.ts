@@ -70,4 +70,11 @@ export interface LoomStackProps {
   onBodyScroll?: (event: UIEvent<HTMLDivElement>) => void
   /** The open sheet's title, so focus can come back to it after a fold (R7). */
   titleRef?: (element: HTMLButtonElement | null) => void
+  /** Opens the guide (MAR-3201 R9); the panel itself does not change. */
+  onOpenGuide: () => void
+  /**
+   * The control that opened the guide, so closing can put focus back on it
+   * (MAR-3201 R6). Whichever shell is mounted registers its own.
+   */
+  guideRef?: (element: HTMLButtonElement | null) => void
 }

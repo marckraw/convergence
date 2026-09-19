@@ -22,6 +22,7 @@ import { rowBelongsToSeat } from './loom-horses.pure'
 import { LoomCompactView } from './loom-compact.presentational'
 import { LoomExpandedView } from './loom-expanded.presentational'
 import { LoomStripView } from './loom-strip.presentational'
+import { LearnLoomGuide } from './learn-loom.container'
 import { WaveResizeHandle } from './wave-resize-handle.presentational'
 import { waveRowKey } from './wave-sections.pure'
 import {
@@ -392,6 +393,29 @@ export const WavePanel: FC<WavePanelProps> = ({
     if (wasExpanded.current !== expanded) titleElement.current?.focus()
     wasExpanded.current = expanded
   }, [expanded])
+  // The guide's own open/closed, and the control that opened it. Closing
+  // puts focus back where it was, because a modal that returns a person to
+  // nowhere has moved them without asking (MAR-3201 R6).
+  const [guideOpen, setGuideOpen] = useState(false)
+  const guideButton = useRef<HTMLButtonElement | null>(null)
+  const openGuide = useCallback(() => setGuideOpen(true), [])
+  const closeGuide = useCallback(() => setGuideOpen(false), [])
+  // The falling edge, the same shape this file uses for a closed detail and
+  // a folded stack: focus can only go back once the dialog's focus scope has
+  // unmounted, because until then it pulls the keyboard straight back in.
+  const guideWasOpen = useRef(false)
+  useEffect(() => {
+    if (guideWasOpen.current && !guideOpen) guideButton.current?.focus()
+    guideWasOpen.current = guideOpen
+  }, [guideOpen])
+  // Stable, deliberately: an inline ref callback is a new function on every
+  // render, so React detaches it (with `null`) and re-attaches it each time
+  // -- and one of those renders is the one that closes the guide, which left
+  // the ref empty at the exact moment focus was being returned.
+  const guideRef = useCallback((element: HTMLButtonElement | null) => {
+    guideButton.current = element
+  }, [])
+
   const titleRef = useCallback((element: HTMLButtonElement | null) => {
     titleElement.current = element
   }, [])
@@ -438,7 +462,20 @@ export const WavePanel: FC<WavePanelProps> = ({
     bodyRef,
     onBodyScroll,
     titleRef,
+    onOpenGuide: openGuide,
+    guideRef,
   }
+
+  /**
+   * The guide, mounted as a SIBLING of whichever shell is drawn (R6).
+   *
+   * Not inside them: React portals bubble synthetic events through the React
+   * tree, so a dialog rendered under `LoomExpandedView` would deliver its
+   * Escape keydown to that section's `onKeyDown` -- which folds Loom. Out
+   * here the shells are not ancestors, so the key cannot reach them and
+   * nothing had to be stopped by hand.
+   */
+  const guide = <LearnLoomGuide open={guideOpen} onClose={closeGuide} />
 
   if (decision.mode === 'strip') {
     return (
@@ -456,9 +493,14 @@ export const WavePanel: FC<WavePanelProps> = ({
     const expandedStack = (
       <LoomExpandedView {...stack} onFold={() => changeMode('compact')} />
     )
-    return expandedContainer
-      ? createPortal(expandedStack, expandedContainer)
-      : expandedStack
+    return (
+      <>
+        {expandedContainer
+          ? createPortal(expandedStack, expandedContainer)
+          : expandedStack}
+        {guide}
+      </>
+    )
   }
 
   // The handle is the column's right EDGE, so it is a sibling in the shell's
@@ -483,6 +525,7 @@ export const WavePanel: FC<WavePanelProps> = ({
         onKeyDown={resize.onHandleKeyDown}
         onDoubleClick={resize.onHandleDoubleClick}
       />
+      {guide}
     </>
   )
 }

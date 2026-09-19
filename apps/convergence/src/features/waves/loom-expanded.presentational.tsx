@@ -1,10 +1,11 @@
 import type { FC } from 'react'
-import { Minimize2 } from 'lucide-react'
+import { HelpCircle, Minimize2 } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { LoomStackView } from './loom-stack.presentational'
 import { LoomStatusView } from './loom-status.presentational'
 import type { LoomStackProps } from './loom-stack.types'
 import { LOOM_EXPANDED_CLASS } from './wave-panel.styles'
+import { LEARN_LOOM_ENTRY } from './learn-loom-copy.pure'
 
 /** Opaque cover: the transcript underneath retains its measured box. */
 export const LoomExpandedView: FC<LoomStackProps & { onFold: () => void }> = ({
@@ -27,6 +28,19 @@ export const LoomExpandedView: FC<LoomStackProps & { onFold: () => void }> = ({
       <p className="min-w-0 flex-1 text-xs text-muted-foreground">
         {props.subline}
       </p>
+      {/* Before Fold Loom, so the lesson is reachable without leaving the
+          panel it explains (MAR-3201 R9). */}
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        ref={props.guideRef}
+        className="h-10 shrink-0 gap-2 px-3 text-xs"
+        onClick={props.onOpenGuide}
+      >
+        <HelpCircle className="size-3.5" />
+        {LEARN_LOOM_ENTRY}
+      </Button>
       <Button
         type="button"
         variant="ghost"

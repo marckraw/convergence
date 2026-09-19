@@ -1,10 +1,11 @@
 import type { FC } from 'react'
-import { Maximize2 } from 'lucide-react'
+import { HelpCircle, Maximize2 } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { LoomStackView } from './loom-stack.presentational'
 import { LoomStatusView } from './loom-status.presentational'
 import type { LoomStackProps } from './loom-stack.types'
 import { LOOM_COMPACT_CLASS } from './wave-panel.styles'
+import { LEARN_LOOM_ENTRY } from './learn-loom-copy.pure'
 
 export const LoomCompactView: FC<
   LoomStackProps & { width: number; onExpand: () => void }
@@ -39,5 +40,24 @@ export const LoomCompactView: FC<
       <LoomStatusView header={props.header} />
     </div>
     <LoomStackView {...props} />
+    {/* A sibling of the stack, never inside the scrolling sheet body: the
+        lesson has to be reachable without scrolling a queue first
+        (MAR-3201 R9). */}
+    <div
+      data-loom-footer
+      className="flex shrink-0 items-center border-t border-white/10 px-3 py-2"
+    >
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        ref={props.guideRef}
+        className="h-10 w-full justify-start gap-2 px-2 text-xs"
+        onClick={props.onOpenGuide}
+      >
+        <HelpCircle className="size-3.5 shrink-0" />
+        {LEARN_LOOM_ENTRY}
+      </Button>
+    </div>
   </aside>
 )

@@ -402,6 +402,24 @@ describe('MAR-3097: through the containers and the real stores', () => {
     useSessionCrewStore.setState({ crews: [] })
   })
 
+  /**
+   * Every call the preload mock has taken. The guide is a lesson, not a
+   * dashboard: from open to close this number must not move (MAR-3201 R8).
+   */
+  function preloadCalls() {
+    const api = (
+      window as unknown as {
+        electronAPI: Record<
+          string,
+          Record<string, { mock?: { calls: unknown[] } }>
+        >
+      }
+    ).electronAPI
+    return Object.values(api)
+      .flatMap((group) => Object.values(group))
+      .reduce((sum, fn) => sum + (fn.mock?.calls.length ?? 0), 0)
+  }
+
   async function mount(ui: React.ReactElement) {
     await act(async () => {
       render(ui)
@@ -2672,6 +2690,218 @@ describe('MAR-3097: through the containers and the real stores', () => {
     ).toBe(240)
     // Mutation: drop the focus restore -> `document.body`, red.
     expect(document.activeElement).toBe(folded)
+  })
+
+  describe('MAR-3201: the guide opens over Loom and gives it back', () => {
+    const openGuide = async () => {
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'How Loom works' }))
+      })
+      return screen.getByRole('dialog', { name: 'How Loom works' })
+    }
+
+    it('R9: an entry in both shells, and the guide never opens by itself', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      // Mutation: `useState(true)` for open -> a dialog here, red.
+      expect(screen.queryByRole('dialog')).toBeNull()
+
+      // Compact: the control is a sibling of the stack, not inside the sheet
+      // that scrolls. Mutation: put the footer inside the sheet body -> red.
+      const compactEntry = screen.getByRole('button', {
+        name: 'How Loom works',
+      })
+      expect(compactEntry.closest('[data-loom-sheet]')).toBeNull()
+      expect(compactEntry.closest('[data-loom-footer]')).toBeTruthy()
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+      })
+      expect(screen.queryByRole('dialog')).toBeNull()
+      const expandedEntry = screen.getByRole('button', {
+        name: 'How Loom works',
+      })
+      expect(expandedEntry.closest('[data-loom="expanded"]')).toBeTruthy()
+      expect(expandedEntry.closest('[data-loom-sheet]')).toBeNull()
+    })
+
+    it('R6: Escape closes the guide and nothing else, from expanded', async () => {
+      snapshots = {
+        'crew-1': {
+          crewId: 'crew-1',
+          entries: [
+            ledgerEntry({
+              issueIdentifier: 'EX-1',
+              state: 'assigned',
+              seat: 'opus',
+            }),
+          ],
+          trackerHealth: health('ok'),
+        },
+      }
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+      })
+      fireEvent.click(screen.getByRole('button', { name: /^Next · / }))
+      const body = document.querySelector(
+        '[data-loom-sheet="next"]',
+      ) as HTMLElement
+      body.scrollTop = 64
+      fireEvent.scroll(body)
+
+      const entry = screen.getByRole('button', { name: 'How Loom works' })
+      await openGuide()
+      // The trap: a dialog rendered under the shell would deliver this key
+      // to the shell's own onKeyDown, which folds Loom. Mutation: render the
+      // guide inside `LoomExpandedView` -> the expanded stack is gone here,
+      // red.
+      await act(async () => {
+        fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+      })
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
+      expect(
+        screen
+          .getByRole('button', { name: /^Next · / })
+          .getAttribute('aria-expanded'),
+      ).toBe('true')
+      expect(
+        (document.querySelector('[data-loom-sheet="next"]') as HTMLElement)
+          .scrollTop,
+      ).toBe(64)
+      // Mutation: drop the focus return in `closeGuide` -> the body has it,
+      // red.
+      expect(document.activeElement).toBe(entry)
+    })
+
+    it('R6: the close button gives compact back unchanged, detail and all', async () => {
+      snapshots = {
+        'crew-1': {
+          crewId: 'crew-1',
+          entries: [
+            ledgerEntry({
+              issueIdentifier: 'EX-1',
+              state: 'assigned',
+              seat: 'opus',
+            }),
+          ],
+          trackerHealth: health('ok'),
+        },
+      }
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      fireEvent.click(screen.getByRole('button', { name: /^Next · / }))
+      fireEvent.click(
+        document.querySelector('[data-wave-row="crew-1:EX-1"]') as HTMLElement,
+      )
+      expect(document.querySelector('[data-loom-detail]')).toBeTruthy()
+      const width = (
+        document.querySelector('[data-loom="compact"]') as HTMLElement
+      ).style.width
+
+      const entry = screen.getByRole('button', { name: 'How Loom works' })
+      await openGuide()
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Close ×' }))
+      })
+
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(document.querySelector('[data-loom="compact"]')).toBeTruthy()
+      // The issue detail underneath survives the visit.
+      expect(document.querySelector('[data-loom-detail]')).toBeTruthy()
+      expect(
+        (document.querySelector('[data-loom="compact"]') as HTMLElement).style
+          .width,
+      ).toBe(width)
+      expect(document.activeElement).toBe(entry)
+    })
+
+    it('R8: illustrative — no crew, no ledger, and the real counts untouched', async () => {
+      // A busy board first: the titles behind the dialog keep their numbers.
+      snapshots = {
+        'crew-1': {
+          crewId: 'crew-1',
+          entries: [
+            ledgerEntry({ issueIdentifier: 'EX-1', state: 'done' }),
+            ledgerEntry({ issueIdentifier: 'EX-2', state: 'done' }),
+          ],
+          trackerHealth: health('ok'),
+        },
+      }
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      // Read from the DOM, not by role: an open modal hides the rest of the
+      // page from assistive queries, which is exactly what it should do.
+      const realBefore = () =>
+        [...document.querySelectorAll('[data-loom-sheet-title]')]
+          .map((node) => node.textContent)
+          .find((text) => text?.startsWith('Before · '))
+      expect(realBefore()).toBe('Before · 2 done')
+
+      await openGuide()
+      expect(realBefore()).toBe('Before · 2 done')
+      // Mutation: feed the illustration `board.sheets` -> its Before reads
+      // `2 done` at step one instead of `0 done`, red.
+      const illustration = document.querySelector(
+        '[data-learn-loom-illustration]',
+      ) as HTMLElement
+      expect(illustration.textContent).toContain('Before · 0 done')
+      expect(illustration.textContent).toContain('Plan · 1 in preparation')
+      cleanup()
+
+      // Now with nothing at all: a bound crew whose ledger is empty. The
+      // lesson is the same lesson.
+      snapshots = {
+        'crew-1': {
+          crewId: 'crew-1',
+          entries: [],
+          trackerHealth: health('ok'),
+        },
+      }
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await openGuide()
+      const empty = document.querySelector(
+        '[data-learn-loom-illustration]',
+      ) as HTMLElement
+      expect(empty.textContent).toContain('Plan · 1 in preparation')
+      expect(empty.textContent).toContain('Before · 0 done')
+      expect(
+        document.querySelector('[data-learn-loom-ticket="DEMO-101"]'),
+      ).toBeTruthy()
+    })
+
+    it('R8: the guide touches no store and no preload while it is open', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      // Counted at the preload, not by spying on the stores' actions: those
+      // actions are `useEffect` dependencies in the panel, so replacing one
+      // with a spy re-runs the effect and CAUSES the very call the spy is
+      // watching. The IPC boundary is where "reads no project data" is
+      // actually decidable.
+      const before = preloadCalls()
+      const snapshotsBefore = useWorkLedgerStore.getState().snapshots
+
+      await openGuide()
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Next: assign a horse →' }),
+        )
+      })
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Quick reference' }))
+      })
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Back to Loom' }))
+      })
+
+      // Mutation: have the guide call `board.resolveRow` or a store action
+      // on open -> this number moves, red.
+      expect(preloadCalls()).toBe(before)
+      expect(useWorkLedgerStore.getState().snapshots).toBe(snapshotsBefore)
+    })
   })
 
   it('MAR-3189 R7 + lap 2, C: Esc folds from wherever focus actually is', async () => {

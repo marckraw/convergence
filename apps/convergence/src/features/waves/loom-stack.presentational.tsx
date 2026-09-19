@@ -6,7 +6,21 @@ import { loomSheetCounts, loomSheetTitle } from './loom-sheets.pure'
 import { LOOM_SHEETS, LOOM_SHEET_NAMES } from './wave-panel-sheet.pure'
 import type { LoomStackProps } from './loom-stack.types'
 
-const icons = { before: CheckCircle2, now: Timer, next: Layers, plan: Pencil }
+/**
+ * The four sheets' icons, one map (MAR-3201 R2).
+ *
+ * Exported so the guide's illustration draws the icons the stack draws,
+ * rather than a second list that could quietly disagree with the panel it
+ * is teaching.
+ */
+export const LOOM_SHEET_ICONS = {
+  before: CheckCircle2,
+  now: Timer,
+  next: Layers,
+  plan: Pencil,
+}
+
+const icons = LOOM_SHEET_ICONS
 
 /** One paper stack in two orientations; only the selected sheet owns a body. */
 export function LoomStackView({
