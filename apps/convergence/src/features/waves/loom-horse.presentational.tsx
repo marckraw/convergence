@@ -27,6 +27,13 @@ interface LoomHorseCardProps {
   onOpenSeat?: (sessionId: string) => void
   /** Shows the seat what is queued for it -- the Next sheet, in place. */
   onShowNext?: () => void
+  /**
+   * Reads the held issue in place (MAR-3195). A SIBLING of the card, never
+   * nested inside it: a held `working` row is listed nowhere else (LV2 R4),
+   * so this is that issue's only door -- and a button inside a button is not
+   * one a person can reach.
+   */
+  onShowDetail?: () => void
 }
 
 /**
@@ -41,6 +48,7 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
   horse,
   onOpenSeat,
   onShowNext,
+  onShowDetail,
 }) => {
   const Icon = RUNTIME_ICON[horse.runtime]
   // The model's own answer (R6), never `sessionId !== null`: a resident whose
@@ -127,6 +135,20 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
           </span>
         </div>
       )}
+      {held && onShowDetail ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          // Its own mark, so focus can come back HERE and not to the card's
+          // first button (MAR-3195 lap 2, E).
+          data-loom-horse-details={horse.key}
+          className="h-6 px-1 text-[11px] text-muted-foreground"
+          onClick={onShowDetail}
+        >
+          Details
+        </Button>
+      ) : null}
       {horse.runtime === 'idle' && onShowNext ? (
         <Button
           type="button"

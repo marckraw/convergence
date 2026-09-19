@@ -45,6 +45,10 @@ export interface WaveBoard {
   horses: LoomHorse[]
   /** One loaded conversation by id, for a card's own door (MAR-3191 R6). */
   findSession: (sessionId: string) => SessionSummary | null
+  /** When a crew's tracker last answered, for the detail's footer (MAR-3195). */
+  lastOkAtOf: (crewId: string) => string | null
+  /** The board's own clock, so an age is computed once per tick (R8). */
+  now: number
   header: WaveHeader
   boardLine: string
   resolveRow: (entry: WorkLedgerEntry) => WaveRowOpening<SessionSummary>
@@ -151,6 +155,10 @@ export function useWaveBoard(): WaveBoard {
     (sessionId: string) => sessionsById.get(sessionId) ?? null,
     [sessionsById],
   )
+  const lastOkAtOf = useCallback(
+    (crewId: string) => snapshots[crewId]?.trackerHealth?.lastOkAt ?? null,
+    [snapshots],
+  )
 
   /**
    * A host id in the words the rest of the app uses (MAR-3191).
@@ -182,6 +190,8 @@ export function useWaveBoard(): WaveBoard {
     sheets,
     horses,
     findSession,
+    lastOkAtOf,
+    now,
     header,
     boardLine: waveBoardLine(sections),
     resolveRow,

@@ -1,9 +1,25 @@
 import type { UIEvent } from 'react'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
 import type { LoomHorse } from './loom-horses.pure'
+import type { LoomIssueDetail } from './loom-detail.pure'
 import type { LoomSheets } from './loom-sheets.pure'
 import type { LoomSheet } from './wave-panel-sheet.pure'
+import type { SessionSummary } from '@/entities/session'
 import type { WaveHeader } from './wave-sections.pure'
+
+/**
+ * What a stack hands the open sheet so it can render a detail.
+ *
+ * Typed with the conversation the app actually has (lap 2, H): `unknown`
+ * here bought nothing and cost two casts at the container's seam, where a
+ * cast is exactly the place a wrong type would stop being caught.
+ */
+export interface LoomSheetDetail {
+  view: LoomIssueDetail<SessionSummary>
+  onClose: () => void
+  onOpenConversation: (session: SessionSummary) => void
+  closeRef?: (element: HTMLButtonElement | null) => void
+}
 
 /**
  * What both of Loom's shapes are handed (MAR-3189 R1).
@@ -22,6 +38,18 @@ export interface LoomStackProps {
   onOpenSeat?: (sessionId: string) => void
   /** Selects the Next sheet in place, for an idle seat's queued work. */
   onShowNext?: () => void
+  /** Reads an issue in place (MAR-3195); the key is all it needs. */
+  onShowDetail?: (entry: WorkLedgerEntry) => void
+  /** Reads an issue in place (MAR-3195); absent when nothing is open. */
+  detail?: LoomSheetDetail | null
+  /**
+   * Escape, decided by the container (MAR-3195 R5).
+   *
+   * The ordering is the rule: with a detail open, Escape closes THAT and
+   * Loom stays as it is; only the next one folds. Deciding it here rather
+   * than in each shape is what keeps the two from disagreeing.
+   */
+  onEscape?: () => void
   header: WaveHeader
   /** `convergence development · All waves` -- which ledger this is. */
   subline: string
