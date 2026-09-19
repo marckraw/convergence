@@ -1,5 +1,17 @@
 # convergence
 
+## 0.76.0
+
+### Minor Changes
+
+- 4a457e9: Loom explains itself: How Loom works opens a six-step guide and a quick reference — one example ticket walks through Plan, Next, Now and Before. On demand, from expanded Loom and the rail.
+- 09e6f7d: How Loom works now moves: the example ticket travels between the sheets as you step through, and stays put with reduced motion.
+
+### Patch Changes
+
+- 419ff65: How Loom works stays usable in small windows: only the lesson scrolls, the example ticket never clips, and the quick reference folds to one column.
+- 9c9e92b: A conversation's Harness details now name the MCP servers it actually loaded, and the account's Connectors list says it shows the CLI's view — the two can differ.
+
 ## 0.75.2
 
 ### Patch Changes
