@@ -14,7 +14,14 @@ import {
   LEARN_LOOM_TICKET,
 } from './learn-loom-copy.pure'
 import { loomSheetTitle } from './loom-sheets.pure'
-import { LEARN_LOOM_STEPS } from './learn-loom.pure'
+import {
+  learnLoomMoves,
+  learnLoomTicketLeft,
+  LEARN_LOOM_GEOMETRY,
+  LEARN_LOOM_MOTION,
+  LEARN_LOOM_STEPS,
+} from './learn-loom.pure'
+import { LOOM_SHEETS } from './wave-panel-sheet.pure'
 
 /**
  * The guide, rendered (the MAR-2280 law). The copy here is pasted from the
@@ -474,5 +481,248 @@ describe('MAR-3201 R7 + R10: a modal, accessibly, that does not move', () => {
     expect(overlay.className).toContain('bg-black/[0.68]')
     expect(overlay.className).toContain('backdrop-blur-none')
     expect(overlay.className).not.toContain('backdrop-blur-sm')
+  })
+})
+
+/**
+ * LL2, rendered (MAR-3202).
+ *
+ * The movement is a CSS transition, so what a rendered test can hold is the
+ * CONFIGURATION the browser is handed and the END STATE it is asked to walk
+ * to. jsdom computes no layout and evaluates no media query, so neither the
+ * interpolation itself nor `prefers-reduced-motion` can be observed here --
+ * the promise about the preference is kept in a class, so that is where it
+ * is checked, exactly as the breathing card's is checked in its stylesheet.
+ */
+
+const sheetsOf = () =>
+  [...document.querySelectorAll('[data-learn-loom-sheet]')] as HTMLElement[]
+/** Everything the guide animates, in one list: the four sheets and the card. */
+const animated = () => [...sheetsOf(), ticket()]
+const frame = () =>
+  document.querySelector('[data-learn-loom-illustration]') as HTMLElement
+/** The whole drawing as one comparable string: where and how wide. */
+const geometry = () => ({
+  left: ticket().style.left,
+  sheets: sheetsOf()
+    .map((sheet) => `${sheet.style.flexGrow}/${sheet.style.flexBasis}`)
+    .join(' '),
+})
+
+describe('MAR-3202 R1: one timing and one curve, worn by everything', () => {
+  it('the sheets and the ticket carry the constant itself', () => {
+    open()
+    for (const el of animated()) {
+      const at = el.getAttribute('data-learn-loom-sheet') ?? 'ticket'
+      // Mutation: give the ticket its own 200 ms -> its variable reads
+      // `200ms` while the sheets read `350ms`, red on this line.
+      expect(el.style.getPropertyValue('--learn-loom-duration'), at).toBe(
+        `${LEARN_LOOM_MOTION.durationMs}ms`,
+      )
+      expect(el.style.getPropertyValue('--learn-loom-easing'), at).toBe(
+        LEARN_LOOM_MOTION.easing,
+      )
+      // And the stylesheet reads those variables rather than a second copy
+      // of the numbers -- otherwise the constant above would be decoration.
+      expect(el.className, at).toContain(
+        'duration-[var(--learn-loom-duration)]',
+      )
+      expect(el.className, at).toContain('ease-[var(--learn-loom-easing)]')
+      // Mutation: add `delay-100`, or an inline `transitionDelay` -> red.
+      // The handoff forbids a stagger by name; this is where one could enter.
+      expect(el.style.transitionDelay, at).toBe('')
+      expect(el.className, at).not.toMatch(/\bdelay-/)
+    }
+  })
+
+  it('and each transitions only what a step actually changes', () => {
+    open()
+    for (const sheet of sheetsOf()) {
+      expect(sheet.className).toContain(
+        'transition-[flex-grow,flex-basis,border-color]',
+      )
+    }
+    expect(ticket().className).toContain('transition-[left,border-color]')
+  })
+})
+
+describe('MAR-3202 R2: one continuous ticket, out and back', () => {
+  it('the same node survives all five moves and all five returns', () => {
+    open()
+    const first = ticket()
+    for (let at = 0; at < 5; at += 1) {
+      fireEvent.click(next())
+      // Mutation: wrap the ticket in `AnimatePresence` keyed by step, or key
+      // it by step -> a fresh node arrives here, red.
+      expect(ticket(), `forward to step ${at + 1}`).toBe(first)
+      expect(
+        document.querySelectorAll('[data-learn-loom-ticket]'),
+        `forward to step ${at + 1}`,
+      ).toHaveLength(1)
+    }
+    for (let at = 5; at > 0; at -= 1) {
+      press(LEARN_LOOM_CONTROLS.back)
+      expect(ticket(), `back to step ${at - 1}`).toBe(first)
+      expect(
+        document.querySelectorAll('[data-learn-loom-ticket]'),
+        `back to step ${at - 1}`,
+      ).toHaveLength(1)
+    }
+  })
+
+  it('and it never fades, because there is nothing to fade into', () => {
+    open()
+    // An enter/exit animation is the shape of two cards pretending to be
+    // one. The ticket may move and may change colour; that is the list.
+    expect(ticket().className).not.toContain('opacity')
+    expect(ticket().className).not.toContain('transform')
+    expect(ticket().className).not.toContain('animate-')
+  })
+})
+
+describe('MAR-3202 R3: Work, Review and Accept do not slide', () => {
+  it('the drawing moves exactly when learnLoomMoves says it does', () => {
+    open()
+    let before = geometry()
+    for (let at = 0; at < 5; at += 1) {
+      fireEvent.click(next())
+      const after = geometry()
+      // The pure rule is the ORACLE and the drawing is measured against it,
+      // so an index-derived `learnLoomMoves` fails here as well as in its
+      // own table: it would claim work -> review moves while nothing did.
+      const moves = learnLoomMoves(at, at + 1)
+      expect(after.left !== before.left, `ticket, ${at} -> ${at + 1}`).toBe(
+        moves,
+      )
+      expect(after.sheets !== before.sheets, `sheets, ${at} -> ${at + 1}`).toBe(
+        moves,
+      )
+      before = after
+    }
+  })
+
+  it('yet the emphasis still changes where the geometry does not', () => {
+    open()
+    advanceTo(3)
+    const still = geometry()
+    expect(ticket().className).toContain('border-blue-500')
+
+    fireEvent.click(next())
+    // Review -> Accept: the same place in Loom, a different moment in it.
+    expect(geometry()).toEqual(still)
+    expect(ticket().className).toContain('border-amber-400')
+    expect(
+      (document.querySelector('[data-learn-loom-active="true"]') as HTMLElement)
+        .className,
+    ).toContain('border-amber-400')
+  })
+})
+
+describe('MAR-3202 R4: the frame is the boundary, and it holds', () => {
+  it('fixed, clipping, and animating nothing of its own', () => {
+    open()
+    expect(frame().className).toContain('h-[264px]')
+    // The bound, not decoration: the row's widths stay conserved today by
+    // arithmetic, and this is what keeps R4 true when LL3 changes the row.
+    expect(frame().className).toContain('overflow-hidden')
+    // Mutation: give the frame the sheets' motion classes, or a transition
+    // on `height` -> red. A boundary that moves is not a boundary.
+    expect(frame().className).not.toMatch(/\btransition-/)
+    expect(frame().style.getPropertyValue('--learn-loom-duration')).toBe('')
+    expect(frame().style.height).toBe('')
+  })
+
+  it('and the footer sits outside it at every step', () => {
+    open()
+    for (let at = 0; at < 6; at += 1) {
+      const footer = document.querySelector('[data-learn-loom-footer]')!
+      expect(frame().contains(footer), `step ${at}`).toBe(false)
+      if (at < 5) fireEvent.click(next())
+    }
+  })
+})
+
+describe('MAR-3202 R5: a burst settles, because nothing is queued', () => {
+  it('ten presses land on the arithmetic step’s own geometry', () => {
+    const onClose = vi.fn()
+    render(<LearnLoomGuide open onClose={onClose} />)
+    act(() => {
+      for (let at = 0; at < 10; at += 1) next().click()
+    })
+    // There is no JS animation state, so there is nothing that could lag:
+    // the DOM already holds the settled value and the browser is merely
+    // retargeted mid-flight. Mutation: a non-functional `setStep(step + 1)`
+    // -> every press reads the same render, the guide settles on step 1 and
+    // the ticket's left is 242px instead of 18px, red.
+    expect(screen.getByText('6 / 6')).toBeTruthy()
+    expect(ticket().style.left).toBe(`${learnLoomTicketLeft(0)}px`)
+    expect(document.querySelectorAll('[data-learn-loom-ticket]')).toHaveLength(
+      1,
+    )
+    expect(onClose).not.toHaveBeenCalled()
+
+    act(() => {
+      for (let at = 0; at < 10; at += 1) {
+        screen.getByRole('button', { name: LEARN_LOOM_CONTROLS.back }).click()
+      }
+    })
+    expect(screen.getByText('1 / 6')).toBeTruthy()
+    expect(ticket().style.left).toBe(`${learnLoomTicketLeft(3)}px`)
+    expect(document.querySelectorAll('[data-learn-loom-ticket]')).toHaveLength(
+      1,
+    )
+  })
+})
+
+describe('MAR-3202 R6: reduced motion is LL1', () => {
+  it('every animated element yields its transition to the preference', () => {
+    open()
+    for (const el of animated()) {
+      const at = el.getAttribute('data-learn-loom-sheet') ?? 'ticket'
+      // Mutation: drop this class -> red. jsdom evaluates no media query, so
+      // the class IS the evidence available here; what it resolves to is
+      // Tailwind's own `transition-property: none`, and Marcin's step 14.
+      expect(el.className, at).toContain('motion-reduce:transition-none')
+    }
+  })
+
+  it('and the guide is never hidden or replaced by the preference', () => {
+    open()
+    // Nothing about the lesson is conditioned on motion: there is no second
+    // branch here to fall into. The same four sheets, the same one ticket,
+    // the same controls, whatever the preference says.
+    expect(sheetsOf()).toHaveLength(4)
+    expect(document.querySelectorAll('[data-learn-loom-ticket]')).toHaveLength(
+      1,
+    )
+    expect(within(dialog()).getByText('DEMO-101')).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: LEARN_LOOM_CONTROLS.back }),
+    ).toBeTruthy()
+  })
+})
+
+describe('MAR-3202 R7: LL1’s end states, unchanged', () => {
+  it('closed sheets still cost 136, and the ticket still lands on LL1’s left', () => {
+    open()
+    for (let at = 0; at < 6; at += 1) {
+      const activeAt = LOOM_SHEETS.indexOf(LEARN_LOOM_STEPS[at]!.activeSheet)
+      // The numbers are still derived from `LEARN_LOOM_GEOMETRY`; LL2 only
+      // changed when the browser arrives at them.
+      expect(ticket().style.left, `step ${at}`).toBe(
+        `${learnLoomTicketLeft(activeAt)}px`,
+      )
+      for (const sheet of sheetsOf()) {
+        const name = sheet.getAttribute('data-learn-loom-sheet')
+        const isActive = sheet.getAttribute('data-learn-loom-active') === 'true'
+        expect(sheet.style.flexGrow, `${name} at step ${at}`).toBe(
+          isActive ? '1' : '0',
+        )
+        expect(sheet.style.flexBasis, `${name} at step ${at}`).toBe(
+          isActive ? '0px' : `${LEARN_LOOM_GEOMETRY.closedWidth}px`,
+        )
+      }
+      if (at < 5) fireEvent.click(next())
+    }
   })
 })

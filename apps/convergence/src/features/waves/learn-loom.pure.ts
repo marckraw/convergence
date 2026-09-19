@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import {
   LOOM_SHEETS,
   LOOM_SHEET_NAMES,
@@ -154,6 +155,54 @@ export function learnLoomTicketMaxWidth(sheetCount: number): string {
   const closed = (sheetCount - 1) * learnLoomSheetStride()
   const insets = 2 * LEARN_LOOM_GEOMETRY.ticketInset
   return `calc(100% - ${closed + insets}px)`
+}
+
+/**
+ * One timing and one curve for everything the illustration moves (LL2 R1).
+ *
+ * The handoff's motion table asks for 350 ms and Figma's EASE_IN_AND_OUT,
+ * whose web equivalent is this cubic-bezier. It is ONE object because the
+ * sheets, the ticket and the two emphasis borders have to arrive together:
+ * two timings that could drift apart would read as two separate movements,
+ * which is the opposite of what this lesson claims -- one issue, one journey.
+ */
+export const LEARN_LOOM_MOTION = {
+  durationMs: 350,
+  easing: 'cubic-bezier(0.42, 0, 0.58, 1)',
+} as const
+
+/**
+ * The custom properties every animated element of the guide carries.
+ *
+ * The transition's PROPERTY list differs per element -- a sheet trades its
+ * share of the row, the ticket travels -- but its duration and curve may not,
+ * so those two reach CSS as values built here rather than as class names.
+ * `duration-[${LEARN_LOOM_MOTION.durationMs}ms]` is a class Tailwind never
+ * emits, so a constant can only stay load-bearing by travelling as data; the
+ * same reason the breathing card sends its colour down this way.
+ */
+export function learnLoomMotionStyle(): CSSProperties {
+  return {
+    '--learn-loom-duration': `${LEARN_LOOM_MOTION.durationMs}ms`,
+    '--learn-loom-easing': LEARN_LOOM_MOTION.easing,
+  } as CSSProperties
+}
+
+/**
+ * Does the ticket travel between these two steps (LL2 R3)?
+ *
+ * Answered from the ACTIVE SHEET, never from the index. Work, Review and
+ * Accept are three beats of the lesson that share one place in Loom, and that
+ * shared place is precisely the distinction the guide exists to teach: the
+ * card does not leave Now while the mastermind reviews or the person accepts.
+ * An index-derived answer would slide it while the words said it had not
+ * moved, and teach the opposite of the sentence beside it.
+ */
+export function learnLoomMoves(from: number, to: number): boolean {
+  return (
+    LEARN_LOOM_STEPS[learnLoomStepAt(from)]!.activeSheet !==
+    LEARN_LOOM_STEPS[learnLoomStepAt(to)]!.activeSheet
+  )
 }
 
 /** The step a person lands on: opening always starts the lesson (R5). */

@@ -81,17 +81,66 @@ export const LEARN_LOOM_KEY_EXPLANATION_CLASS = 'text-sm leading-[145%]'
  */
 export const LEARN_LOOM_YOUR_PART_CLASS = 'text-[13px] font-medium'
 
-/** Height 264, and the sheets inside it are all of it. */
+/**
+ * Height 264, and the sheets inside it are all of it.
+ *
+ * `overflow-hidden` is the bound behind LL2 R4, not decoration. The row's
+ * widths happen to stay conserved mid-transition -- one sheet's `flex-grow`
+ * falls by exactly what another's rises, on the same curve -- but that is an
+ * arithmetic accident of today's four sheets. Clipping here is what makes
+ * "a transition never moves the footer" true whatever LL3 does to the row.
+ */
 export const LEARN_LOOM_ILLUSTRATION_CLASS =
-  'flex h-[264px] shrink-0 items-stretch'
-/** Padding 12 top, 16 left, 18 right, and no bottom (`559:814`). */
+  'flex h-[264px] shrink-0 items-stretch overflow-hidden'
+/**
+ * Padding 12 top, 16 left, 18 right, and no bottom (`559:814`).
+ *
+ * `shrink-0` and `min-w-0` sit here, shared, rather than on the two states:
+ * both are unchanged BY a step, and a property that differs between the
+ * states is a property the browser has to interpolate (LL2 R1).
+ */
 export const LEARN_LOOM_SHEET_CLASS =
-  'relative flex h-full flex-col gap-1.5 rounded-[14px] border pt-3 pl-4 pr-[18px]'
-/** Widths and the overlap come from `LEARN_LOOM_GEOMETRY`, not from here. */
-export const LEARN_LOOM_SHEET_CLOSED_CLASS =
-  'shrink-0 border-white/10 bg-white/[0.02]'
+  'relative flex h-full min-w-0 shrink-0 flex-col gap-1.5 rounded-[14px] border pt-3 pl-4 pr-[18px]'
+/**
+ * Widths and the overlap come from `LEARN_LOOM_GEOMETRY`, not from here.
+ *
+ * Neither state names a size any more: `width: 136` on one state and `flex-1`
+ * on the other is the same drawing as `flex-basis`/`flex-grow`, and no
+ * transition at all -- there is no number in common for the browser to move
+ * between. Both states now carry the same two numbers (LL2 R1).
+ */
+export const LEARN_LOOM_SHEET_CLOSED_CLASS = 'border-white/10 bg-white/[0.02]'
 /** The active sheet's border carries the step's emphasis (lap 3, G3). */
-export const LEARN_LOOM_SHEET_ACTIVE_CLASS = 'min-w-0 flex-1 bg-white/[0.04]'
+export const LEARN_LOOM_SHEET_ACTIVE_CLASS = 'bg-white/[0.04]'
+
+/**
+ * The guide's one transition, wherever it is worn (LL2 R1).
+ *
+ * Duration and curve are read from the custom properties
+ * `learnLoomMotionStyle` puts on each animated element, so the timing has
+ * exactly one source and the sheets cannot drift away from the ticket.
+ *
+ * `motion-reduce:transition-none` has to stay a CLASS. Declaring the
+ * transition inline instead would out-specify the media query -- inline
+ * styles beat it -- and the preference would be read, obeyed by nothing, and
+ * silently lost. This is also how the real stack keeps the same promise
+ * (`loom-stack.presentational.tsx`).
+ */
+export const LEARN_LOOM_MOTION_CLASS =
+  'duration-[var(--learn-loom-duration)] ease-[var(--learn-loom-easing)] motion-reduce:transition-none'
+
+/** A sheet trades its share of the row, and wears the emphasis. */
+export const LEARN_LOOM_SHEET_TRANSITION_CLASS =
+  'transition-[flex-grow,flex-basis,border-color]'
+
+/**
+ * The ticket only ever travels sideways and changes border colour.
+ *
+ * Deliberately NOT `opacity` or `transform`: it is one card making one
+ * journey, so there is never anything to fade in or out (LL2 R2).
+ */
+export const LEARN_LOOM_TICKET_TRANSITION_CLASS =
+  'transition-[left,border-color]'
 export const LEARN_LOOM_SHEET_NAME_CLASS = 'text-base font-semibold'
 export const LEARN_LOOM_SHEET_COUNT_CLASS = 'text-xs text-muted-foreground'
 
