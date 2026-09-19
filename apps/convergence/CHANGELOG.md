@@ -1,5 +1,11 @@
 # convergence
 
+## 0.75.2
+
+### Patch Changes
+
+- 5092bd6: The Connectors panel shows connected servers again — newer Claude Code versions print a different check mark, and every healthy connector was being dropped.
+
 ## 0.75.1
 
 ### Patch Changes
