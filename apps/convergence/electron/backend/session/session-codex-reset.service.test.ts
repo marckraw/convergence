@@ -17,6 +17,7 @@ import { ProviderRegistry } from '../provider/provider-registry'
 import { LocalExecutionHost } from '../provider/execution-host/local-execution-host'
 import {
   buildFallbackCodexDescriptor,
+  buildFallbackPiDescriptor,
   buildClaudeDescriptor,
 } from '../provider/provider-descriptor.pure'
 import type { SessionStartConfig } from '../provider/provider.types'
@@ -57,7 +58,7 @@ describe('Codex reset through the composer door', () => {
     ).run('reset-project', 'Reset', directory)
     const registry = new ProviderRegistry()
     starts = []
-    for (const providerId of ['codex', 'claude-code']) {
+    for (const providerId of ['codex', 'claude-code', 'pi']) {
       registry.register({
         id: providerId,
         name: 'Codex',
@@ -65,7 +66,9 @@ describe('Codex reset through the composer door', () => {
         describe: async () =>
           providerId === 'codex'
             ? buildFallbackCodexDescriptor()
-            : buildClaudeDescriptor(),
+            : providerId === 'pi'
+              ? buildFallbackPiDescriptor()
+              : buildClaudeDescriptor(),
         start(config) {
           starts.push(config)
           return {
@@ -388,6 +391,77 @@ describe('Codex reset through the composer door', () => {
       },
       resumed: [{ text: '/clear', thread: 'prior-thread' }],
       remaining: [{ text: 'payload', state: 'queued' }],
+    })
+  })
+  function createPiSession(): string {
+    return service.create({
+      projectId: 'reset-project',
+      workspaceId: null,
+      providerId: 'pi',
+      name: 'GLM',
+      model: 'openrouter/z-ai/glm-5.3',
+      effort: 'high',
+    }).id
+  }
+
+  it('leaves Pi /clear unwrapped — revert the Pi reset capability turns red (MAR-3215)', async () => {
+    const pi = createPiSession()
+    await service.start(pi, {
+      text: 'before',
+      contextItemIds: [contextId],
+    })
+    emit({
+      kind: 'session.patch',
+      patch: { continuationToken: '/pi/before.jsonl', status: 'completed' },
+    })
+    await service.sendMessage(pi, { text: '/clear' })
+    expect({
+      text: starts.at(-1)?.initialMessage,
+      resumes: starts.at(-1)?.continuationToken,
+    }).toEqual({ text: '/clear', resumes: '/pi/before.jsonl' })
+  })
+
+  it('drains a queued Pi reset opener, then delivers the payload into the fresh session file (MAR-3215)', async () => {
+    const pi = createPiSession()
+    await service.start(pi, { text: 'before' })
+    emit({
+      kind: 'session.patch',
+      patch: { status: 'running', continuationToken: '/pi/before.jsonl' },
+    })
+    await service.sendMessageWithOpener(pi, {
+      opener: '/clear',
+      text: 'payload',
+    })
+    emit({ kind: 'session.patch', patch: { status: 'completed' } })
+    const opener = starts.at(-1)
+    // What the Pi adapter does with the opener: a fresh file, the boundary,
+    // and a completed turn that drains the payload behind it.
+    const boundary = new ProviderSessionEmitter({
+      providerId: 'pi',
+      emitDelta: (delta) => emit(delta),
+      now: () => new Date().toISOString(),
+    })
+    boundary.patchSession({ continuationToken: '/pi/fresh.jsonl' })
+    boundary.addNote({
+      text: CONTEXT_RESTARTED_NOTE_TEXT,
+      level: 'warning',
+      providerEventType: SESSION_RESTARTED_EVENT_TYPE,
+    })
+    emit({ kind: 'session.patch', patch: { status: 'completed' } })
+    expect({
+      opener: {
+        text: opener?.initialMessage,
+        resumes: opener?.continuationToken,
+      },
+      payload: {
+        text: starts.at(-1)?.initialMessage,
+        resumes: starts.at(-1)?.continuationToken,
+      },
+      remaining: service.getQueuedInputs(pi).length,
+    }).toEqual({
+      opener: { text: '/clear', resumes: '/pi/before.jsonl' },
+      payload: { text: 'payload', resumes: '/pi/fresh.jsonl' },
+      remaining: 0,
     })
   })
 })

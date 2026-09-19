@@ -15,11 +15,12 @@ import {
 } from './provider-descriptor.pure'
 
 describe('provider-descriptor', () => {
-  it('advertises Codex reset and keeps Pi unsupported — disable Codex or enable Pi turns red', () => {
+  it('advertises Codex and Pi reset and keeps Cursor unsupported — disable Codex or Pi, or enable Cursor, turns red', () => {
     expect({
       codex: buildFallbackCodexDescriptor().supportsConversationReset,
       pi: buildFallbackPiDescriptor().supportsConversationReset,
-    }).toEqual({ codex: true, pi: false })
+      cursor: buildFallbackCursorDescriptor().supportsConversationReset,
+    }).toEqual({ codex: true, pi: true, cursor: false })
   })
   it('builds labeled effort options', () => {
     expect(

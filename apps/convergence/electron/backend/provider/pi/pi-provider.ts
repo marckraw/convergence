@@ -20,6 +20,18 @@ import type {
   SessionStartConfig,
   SessionStatus,
 } from '../provider.types'
+import { ProviderBusyError } from '../provider.types'
+import { CONVERSATION_RESET_COMMAND } from '../../../../src/shared/lib/conversation-reset.pure'
+import {
+  CONTEXT_RESTARTED_NOTE_TEXT,
+  SESSION_RESTARTED_EVENT_TYPE,
+} from '../session-restart.pure'
+import {
+  buildPiResetFailureNote,
+  PI_RESET_VETOED_REASON,
+  readPiNewSessionVerdict,
+  readPiSessionFile,
+} from './pi-session-reset.pure'
 import { createUnavailableContextWindow } from '../context-window.pure'
 import { ProviderSessionEmitter } from '../provider-session.emitter'
 import {
@@ -454,6 +466,18 @@ export class PiProvider implements Provider {
     } | null = null
     let sawTurnActivity = false
     let pendingTurnOutcome: PiTurnOutcome | null = null
+    let currentStatus: SessionStatus | null = null
+    // A `spawnPi` between its entry and its turn: awaits run before `child`,
+    // `rpc` or `currentTurn` exist, and a turn is already arriving then.
+    let launching = false
+    // The start's own turn, between `start()` and its timer.
+    let startScheduled = true
+    // A `/clear` under way (MAR-3215). Set synchronously when the start
+    // itself is a reset, so the ten milliseconds before the start timer fires
+    // already refuse a second one.
+    let resetting = config.initialMessage === CONVERSATION_RESET_COMMAND
+    // The short-lived Pi a dormant reset asks for a fresh session file.
+    let resetProbe: ChildProcess | null = null
     const settlesOnAgentSettled = piSupportsAgentSettled(this.version)
     const pendingToolCallArgs = new Map<
       string,
@@ -473,6 +497,7 @@ export class PiProvider implements Provider {
       now,
     })
     function setStatus(status: SessionStatus): void {
+      currentStatus = status
       listeners.status.forEach((cb) => cb(status))
       sessionEmitter.patchSession({ status })
     }
@@ -1241,18 +1266,32 @@ export class PiProvider implements Provider {
       )
     }
 
+    type SpawnPiOptions = {
+      skillSelections?: SkillSelection[]
+      userMessageItemId?: string | null
+      emitUserEntry?: boolean
+      allowContinuationRecovery?: boolean
+    }
+
     async function spawnPi(
       initialMessage: string,
       initialAttachments?: Attachment[],
-      options?: {
-        skillSelections?: SkillSelection[]
-        userMessageItemId?: string | null
-        emitUserEntry?: boolean
-        allowContinuationRecovery?: boolean
-      },
+      options?: SpawnPiOptions,
     ): Promise<void> {
       if (stopped || child || rpc) return
+      launching = true
+      try {
+        await launchPiTurn(initialMessage, initialAttachments, options)
+      } finally {
+        launching = false
+      }
+    }
 
+    async function launchPiTurn(
+      initialMessage: string,
+      initialAttachments?: Attachment[],
+      options?: SpawnPiOptions,
+    ): Promise<void> {
       const skillResolution = await resolveSelectedSkills(
         initialMessage,
         options?.skillSelections,
@@ -1424,13 +1463,216 @@ export class PiProvider implements Provider {
       )
     }
 
-    const startTimer = setTimeout(
-      () =>
-        void spawnPi(config.initialMessage, config.initialAttachments, {
-          skillSelections: config.initialSkillSelections,
-        }),
-      10,
-    )
+    /** A turn is running, settling, or on its way in: a reset must wait. */
+    function turnUnderWayOrArriving(): boolean {
+      return (
+        resetting ||
+        startScheduled ||
+        launching ||
+        isStreaming ||
+        currentTurn !== null ||
+        currentStatus === 'running'
+      )
+    }
+
+    /**
+     * Asks a short-lived Pi, started with no `--session`, which file its new
+     * session will live in (MAR-3215).
+     *
+     * Why a process at all: the conversation's continuation token is the only
+     * thing that decides which session the NEXT spawn resumes, and a token
+     * cannot be dropped — the record keeps the previous one when a patch
+     * carries none (`session.service.ts`, the session patch's
+     * `continuationToken?.trim()` fallback), and a Pi handle is released after
+     * every completed turn, so the next message always starts from the
+     * record. The reset therefore has to REPLACE the token, and only Pi can
+     * name the file. No prompt is sent; `get_state` spends nothing. The file
+     * does not exist until the first message is written to it, and
+     * `--session <that path>` opens it as an empty session (measured on Pi
+     * 0.85.1).
+     */
+    async function readFreshPiSessionFile(): Promise<string> {
+      const childEnv = await resolveEnvironment(process.env)
+      if (stopped) throw new Error('the session was stopped.')
+      const probe = spawn(binaryPath, ['--mode', 'rpc'], {
+        cwd: config.workingDirectory,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: childEnv,
+      })
+      resetProbe = probe
+      if (!probe.stdin || !probe.stdout) {
+        resetProbe = null
+        probe.kill('SIGTERM')
+        throw new Error('Pi did not open its stdio pipes.')
+      }
+      const probeRpc = new PiRpcClient(probe.stdin, probe.stdout)
+      let timeout: ReturnType<typeof setTimeout> | null = null
+      const processFailure = new Promise<never>((_resolve, reject) => {
+        probe.once('error', reject)
+        probe.once('exit', (code, signal) => {
+          reject(
+            new Error(
+              `Pi exited before naming its new session (${code ?? signal ?? 'unknown'}).`,
+            ),
+          )
+        })
+      })
+      try {
+        const response = await Promise.race([
+          probeRpc.request({ type: 'get_state' }),
+          new Promise<never>((_resolve, reject) => {
+            timeout = setTimeout(
+              () =>
+                reject(new Error('Pi did not name its new session in time.')),
+              20_000,
+            )
+            timeout.unref?.()
+          }),
+          processFailure,
+        ])
+        const fresh = readPiSessionFile(response)
+        if (!fresh) {
+          throw new Error(
+            response.success
+              ? 'Pi did not name a session file for the new session.'
+              : `${response.error || 'Pi refused get_state'}.`,
+          )
+        }
+        return fresh
+      } finally {
+        if (timeout) clearTimeout(timeout)
+        probeRpc.destroy()
+        probe.kill('SIGTERM')
+        if (resetProbe === probe) resetProbe = null
+      }
+    }
+
+    type ResetOutcome =
+      | { kind: 'restarted' }
+      | { kind: 'nothing-to-clear' }
+      | { kind: 'failed'; reason: string }
+
+    function describeResetError(err: unknown): string {
+      const message = err instanceof Error ? err.message : String(err)
+      return /[.!?]$/.test(message) ? message : `${message}.`
+    }
+
+    /**
+     * No live process: the common case between turns and always after a
+     * relaunch. Nothing is resumed to be cleared, so no `new_session` is sent;
+     * the token is replaced by a fresh file and the next spawn opens it.
+     */
+    async function resetDormantSession(): Promise<ResetOutcome> {
+      // Nothing to clear, so nothing is opened: a conversation that never
+      // named a session gets no boundary, exactly as Codex's thread-less
+      // reset (codex-provider.ts, `oldThreadId !== null`).
+      if (!sessionFile) return { kind: 'nothing-to-clear' }
+      let fresh: string
+      try {
+        fresh = await readFreshPiSessionFile()
+      } catch (err) {
+        return { kind: 'failed', reason: describeResetError(err) }
+      }
+      setContinuationToken(fresh)
+      // The file IS this conversation's now; the spawn that opens it reports
+      // the same path, so there is nothing left to capture.
+      continuationCaptured = true
+      return { kind: 'restarted' }
+    }
+
+    /** A live, idle process: Pi switches in place through RPC `new_session`. */
+    async function resetLiveSession(
+      activeRpc: PiRpcClient,
+    ): Promise<ResetOutcome> {
+      const previous = sessionFile
+      let verdict: ReturnType<typeof readPiNewSessionVerdict>
+      try {
+        recordDebug('request', { direction: 'out', method: 'new_session' })
+        verdict = readPiNewSessionVerdict(
+          await activeRpc.request({ type: 'new_session' }),
+        )
+      } catch (err) {
+        return { kind: 'failed', reason: describeResetError(err) }
+      }
+      if (verdict.kind === 'cancelled') {
+        return { kind: 'failed', reason: PI_RESET_VETOED_REASON }
+      }
+      if (verdict.kind === 'refused') {
+        return {
+          kind: 'failed',
+          reason: describeResetError(
+            `Pi refused new_session: ${verdict.error}`,
+          ),
+        }
+      }
+      continuationCaptured = false
+      await captureContinuationToken()
+      if (!sessionFile || sessionFile === previous) {
+        // Pi switched but did not say where to. The running process is in the
+        // new session while the record still names the old one, and the next
+        // respawn would quietly resume it: end the process so the two agree,
+        // and say the reset did not take.
+        if (rpc === activeRpc) {
+          rpc.destroy()
+          rpc = null
+          child?.kill('SIGTERM')
+        }
+        return {
+          kind: 'failed',
+          reason: 'Pi opened a new session but did not report its file.',
+        }
+      }
+      return { kind: 'restarted' }
+    }
+
+    /**
+     * `/clear`: a command, never a prompt (MAR-3215). The same contract as
+     * Codex's reset (`codex-provider.ts`, `sendCodexTurn`): no user message,
+     * no prompt, one boundary on success and none otherwise, a turn that
+     * settles `completed` or `failed`.
+     */
+    async function resetConversation(): Promise<void> {
+      resetting = true
+      setStatus('running')
+      setAttention('none')
+      try {
+        const outcome = rpc
+          ? await resetLiveSession(rpc)
+          : await resetDormantSession()
+        if (stopped) return
+        if (outcome.kind === 'failed') {
+          sessionEmitter.addNote({
+            text: buildPiResetFailureNote(outcome.reason),
+            level: 'error',
+          })
+          setStatus('failed')
+          setAttention('failed')
+          return
+        }
+        if (outcome.kind === 'restarted') {
+          sessionEmitter.addNote({
+            text: CONTEXT_RESTARTED_NOTE_TEXT,
+            level: 'warning',
+            providerEventType: SESSION_RESTARTED_EVENT_TYPE,
+          })
+        }
+        setStatus('completed')
+        setAttention('finished')
+      } finally {
+        resetting = false
+      }
+    }
+
+    const startTimer = setTimeout(() => {
+      startScheduled = false
+      if (config.initialMessage === CONVERSATION_RESET_COMMAND) {
+        void resetConversation()
+        return
+      }
+      void spawnPi(config.initialMessage, config.initialAttachments, {
+        skillSelections: config.initialSkillSelections,
+      })
+    }, 10)
 
     function disposeRuntime(): void {
       if (stopped) return
@@ -1438,6 +1680,8 @@ export class PiProvider implements Provider {
       clearTimeout(startTimer)
       rpc?.destroy()
       rpc = null
+      resetProbe?.kill('SIGTERM')
+      resetProbe = null
       pendingToolCallArgs.clear()
       pendingExtensionUiRequests.clear()
       currentTurn = null
@@ -1483,6 +1727,24 @@ export class PiProvider implements Provider {
       },
       sendMessage: (text, attachments, skillSelections, options) => {
         if (stopped) return
+        if (text === CONVERSATION_RESET_COMMAND) {
+          if (turnUnderWayOrArriving()) {
+            // Typed, as Codex's is (MAR-2888): "not now" is a fact about
+            // timing that a relay answers by queueing, not a broken delivery.
+            throw new ProviderBusyError(
+              'Wait for the current turn to finish before clearing the conversation.',
+            )
+          }
+          void resetConversation()
+          return
+        }
+        if (resetting) {
+          // A message sent while the reset is under way would land in
+          // whichever session wins the race; it waits for the boundary.
+          throw new ProviderBusyError(
+            'Wait for the conversation to finish clearing.',
+          )
+        }
         const deliveryMode = options?.deliveryMode ?? 'normal'
         if (!rpc) {
           if (deliveryMode === 'follow-up' || deliveryMode === 'steer') {
