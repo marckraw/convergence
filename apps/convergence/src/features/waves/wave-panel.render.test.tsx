@@ -746,8 +746,8 @@ describe('MAR-3097: through the containers and the real stores', () => {
     // Superseding MAR-3097 R5's "a row opens the seat's conversation": from
     // this slice a Loom row is a door to the issue, and the conversation is
     // one of the two doors OUT of the detail. Nothing is lost -- the same
-    // session still opens, through `onOpenSession`, one click further in,
-    // and the Waves tab's rows keep the old behaviour (R8, its own test).
+    // session still opens, through `onOpenSession`, one click further in.
+    // (The Waves tab kept the old door until MAR-3233 retired it.)
     const onOpenSession = vi.fn()
     const windowOpen = vi.spyOn(window, 'open').mockImplementation(() => null)
     await mount(<WavePanel onOpenSession={onOpenSession} />)
