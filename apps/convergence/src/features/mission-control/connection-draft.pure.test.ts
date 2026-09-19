@@ -1,7 +1,7 @@
 import { REMOTE_SPAWN_PLACE_REQUIRED } from '@/shared/lib/spawn-spec.pure'
 import {
   buildFallbackCodexDescriptor,
-  buildFallbackCursorDescriptor,
+  buildFallbackAntigravityDescriptor,
 } from '../../../electron/backend/provider/provider-descriptor.pure'
 import { describe, expect, it } from 'vitest'
 import type { SessionRelay } from '@/entities/session-relay'
@@ -247,7 +247,7 @@ describe('the Before delivery selector (R8)', () => {
     })
     const unsupported = beforeDeliveryOptions({
       supportsReset: false,
-      providerName: 'Cursor',
+      providerName: 'Antigravity CLI',
       recipientName: 'Sol',
     })
 
@@ -272,7 +272,7 @@ describe('the Before delivery selector (R8)', () => {
       false,
     ])
     // The reason names the provider, so it is actionable rather than a shrug.
-    expect(unsupported[1].help).toContain('Cursor')
+    expect(unsupported[1].help).toContain('Antigravity')
     // And the custom first message survives on every provider: R8 keeps the
     // arbitrary opener beside the new selector rather than replacing it.
     expect(unsupported[2].disabled).toBe(false)
@@ -448,8 +448,8 @@ describe('changeDraftRecipient', () => {
       { kind: 'session', sessionId: 'sol' },
       {
         supportsReset:
-          buildFallbackCursorDescriptor().supportsConversationReset,
-        providerName: 'Cursor',
+          buildFallbackAntigravityDescriptor().supportsConversationReset,
+        providerName: 'Antigravity CLI',
       },
     )
 
@@ -458,7 +458,7 @@ describe('changeDraftRecipient', () => {
       kind: 'session',
       sessionId: 'sol',
     })
-    expect(result.note).toContain('Cursor')
+    expect(result.note).toContain('Antigravity')
   })
 
   it('keeps Clear for Codex — disable the Codex reset capability turns red', () => {
@@ -485,8 +485,8 @@ describe('changeDraftRecipient', () => {
       { kind: 'session', sessionId: 'sol' },
       {
         supportsReset:
-          buildFallbackCursorDescriptor().supportsConversationReset,
-        providerName: 'Cursor',
+          buildFallbackAntigravityDescriptor().supportsConversationReset,
+        providerName: 'Antigravity CLI',
       },
     )
 

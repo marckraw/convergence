@@ -27,6 +27,11 @@ export interface MockCursorAcpOptions {
   holdPrompt?: boolean
   /** Hold `initialize` so tests can inject server requests before any prompt. */
   holdInitialize?: boolean
+  /**
+   * The ordinal of the first `session/new` id this server mints, so two
+   * processes in one test never hand out the same id (MAR-3216).
+   */
+  firstSessionOrdinal?: number
   /** Refuse `session/load` with a not-found style error (MAR-3142 R5). */
   refuseSessionLoad?: boolean | { code?: number; message: string }
   /** Refuse `session/set_config_option` (MAR-3142 lap 3, C1a). */
@@ -67,6 +72,10 @@ export interface MockCursorAcpServer {
   resolveHeldInitialize: () => void
   /** Clear a prior `refuseSetConfigOption` so a later switch can succeed. */
   allowSetConfigOption: () => void
+  /** Refuse `session/set_config_option` from now on (MAR-3216). */
+  startRefusingSetConfigOption: () => void
+  /** Refuse `session/new` from now on — a reset that fails (MAR-3216 R3). */
+  startRefusingSessionNew: () => void
 }
 
 export function createMockCursorAcp(
@@ -79,10 +88,11 @@ export function createMockCursorAcp(
   let heldPromptId: string | number | null = null
   let heldInitializeId: string | number | null = null
   let buffer = ''
-  let nextSessionOrdinal = 1
+  let nextSessionOrdinal = options.firstSessionOrdinal ?? 1
   /** Shared across requests, notifications, and client responses (lap 3, E1). */
   let nextSeq = 1
   let refuseSetConfigOption = options.refuseSetConfigOption
+  let refuseSessionNew = false
 
   function nextRecordSeq(): number {
     const seq = nextSeq
@@ -194,6 +204,10 @@ export function createMockCursorAcp(
             respond(message.id, {})
             break
           case 'session/new':
+            if (refuseSessionNew) {
+              respondError(message.id, -32000, 'Session creation failed')
+              break
+            }
             respond(message.id, sessionNewResult())
             break
           case 'session/load': {
@@ -314,6 +328,12 @@ export function createMockCursorAcp(
     },
     allowSetConfigOption(): void {
       refuseSetConfigOption = false
+    },
+    startRefusingSetConfigOption(): void {
+      refuseSetConfigOption = true
+    },
+    startRefusingSessionNew(): void {
+      refuseSessionNew = true
     },
   }
 }
