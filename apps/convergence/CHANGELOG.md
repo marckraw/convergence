@@ -1,5 +1,15 @@
 # convergence
 
+## 0.77.0
+
+### Minor Changes
+
+- 1ed51b5: Claude Code accounts get the Connect Linear button too: the server is added once to the shared profile and each account authorizes it for itself.
+- 3453b4b: Cursor conversations can start over: /clear opens a fresh Cursor session, and Mission Control wires can clear a Cursor seat before delivering.
+- 07d44fd: Loom shows one crew at a time: with more than one crew reading a tracker, pick the crew in Loom's header and the whole view — sheets, horses, counts — follows. Your choice is remembered.
+- 681af89: Loom catches up faster: the tracker is re-read right after a dispatch or a return and when you come back to the window, there is a Refresh control, and it slows down when nobody is looking — never more than one read every ten seconds.
+- 92c4e6c: Pi conversations (GLM and other OpenRouter models) can start over: /clear opens a fresh Pi session, and Mission Control wires can clear a Pi seat before delivering.
+
 ## 0.76.0
 
 ### Minor Changes
