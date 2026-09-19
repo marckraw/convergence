@@ -404,3 +404,84 @@ describe('MAR-3190 lap 2, C: every id asked for must come back', () => {
     expect(bodies.size).toBe(2)
   })
 })
+
+describe('MAR-3236 R3: the outside read is bounded, and says so', () => {
+  const groups = {
+    projectId: 'project-1',
+    seatGroup: 'horse',
+    waveGroup: 'wave',
+  }
+
+  /** A full page of unlabelled open issues, numbered from `from`. */
+  function fullPage(from: number, hasNextPage: boolean) {
+    return linearIssuesBody(
+      Array.from({ length: 100 }, (_, at) =>
+        linearIssueNode({
+          id: `issue-${from + at}`,
+          identifier: `EX-${from + at}`,
+          stateType: 'unstarted',
+          labels: [],
+        }),
+      ),
+      { hasNextPage, endCursor: hasNextPage ? `cursor-${from + 100}` : null },
+    )
+  }
+
+  it('three full pages and a fourth waiting: 300 issues, more, exactly three requests', async () => {
+    const fetch = vi.fn<TrackerFetch>(async (_url, init) => {
+      const { variables } = JSON.parse(init.body) as {
+        variables: { after: string | null }
+      }
+      const from = variables.after
+        ? Number(variables.after.replace('cursor-', ''))
+        : 0
+      // Every page says there is another -- a project bigger than the bound.
+      return recordedReply(200, fullPage(from, true))
+    })
+    const page = await adapterAnswering(fetch).listOutsideIssues(groups)
+    expect(page.issues).toHaveLength(300)
+    expect(page.more).toBe(true)
+    // Mutation: loop until `hasNextPage` is false -> a fourth request, red.
+    expect(fetch).toHaveBeenCalledTimes(3)
+    const afters = fetch.mock.calls.map(
+      (call) =>
+        (JSON.parse(call[1].body) as { variables: { after: string | null } })
+          .variables.after,
+    )
+    expect(afters).toEqual([null, 'cursor-100', 'cursor-200'])
+    const query = (
+      JSON.parse(fetch.mock.calls[0]![1].body) as { query: string }
+    ).query
+    expect(query).toContain('ConvergenceTrackerOutsideIssues')
+    expect(fetch.mock.calls[0]![1].headers.authorization).toBe(KEY)
+  })
+
+  it('a project that ends inside the bound: every issue, and no `more`', async () => {
+    const fetch = vi.fn<TrackerFetch>(async (_url, init) => {
+      const { variables } = JSON.parse(init.body) as {
+        variables: { after: string | null }
+      }
+      return recordedReply(
+        200,
+        variables.after === null ? fullPage(0, true) : fullPage(100, false),
+      )
+    })
+    const page = await adapterAnswering(fetch).listOutsideIssues(groups)
+    expect(page.issues).toHaveLength(200)
+    expect(page.more).toBe(false)
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('a refusal on a later page is a throw, never a partial list', async () => {
+    let calls = 0
+    const fetch = vi.fn<TrackerFetch>(async () => {
+      calls += 1
+      return calls === 1
+        ? recordedReply(200, fullPage(0, true))
+        : recordedReply(429, {}, { 'Retry-After': '30' })
+    })
+    await expect(
+      adapterAnswering(fetch).listOutsideIssues(groups),
+    ).rejects.toBeInstanceOf(TrackerRefusalError)
+  })
+})

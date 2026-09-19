@@ -18,7 +18,11 @@ import {
   recordedReply,
   trackerIssue,
 } from './linear-tracker.fixture'
-import type { TrackerReadEvent } from '../../../src/shared/types/tracker.types'
+import type {
+  TrackerOutsideIssue,
+  TrackerOutsideSnapshot,
+  TrackerReadEvent,
+} from '../../../src/shared/types/tracker.types'
 import {
   TrackerRefusalError,
   type TrackerAdapter,
@@ -29,6 +33,12 @@ import {
 } from './tracker.types'
 
 const ISSUE: TrackerIssue = trackerIssue({ id: 'issue-1' })
+
+/** A project with nothing outside the loop (MAR-3236): the port's new read. */
+const NO_OUTSIDE: TrackerAdapter['listOutsideIssues'] = async () => ({
+  issues: [],
+  more: false,
+})
 
 function refusal(kind: TrackerRefusal['kind'], retryAt: string | null = null) {
   return new TrackerRefusalError({ kind, message: kind, retryAt })
@@ -73,6 +83,7 @@ describe('MAR-3084 R7: the tick is a house-rules timer', () => {
         resolveProject: async () => ({ kind: 'not-found' as const }),
         listLabeledIssues,
         readIssueBodies: async () => new Map<string, string | null>(),
+        listOutsideIssues: NO_OUTSIDE,
       }),
       broadcast: (snapshot) => broadcasts.push(snapshot),
       now: () => clock,
@@ -127,6 +138,7 @@ describe('MAR-3084 R7: the tick is a house-rules timer', () => {
         resolveProject: async () => ({ kind: 'not-found' as const }),
         listLabeledIssues: list,
         readIssueBodies: async () => new Map<string, string | null>(),
+        listOutsideIssues: NO_OUTSIDE,
       }),
       broadcast: () => {},
       now: () => clock,
@@ -345,6 +357,7 @@ describe('MAR-3084 R7: the tick is a house-rules timer', () => {
         resolveProject: async () => ({ kind: 'not-found' as const }),
         listLabeledIssues: list,
         readIssueBodies: async () => new Map<string, string | null>(),
+        listOutsideIssues: NO_OUTSIDE,
       }),
       broadcast: () => {},
       now: () => clock,
@@ -402,6 +415,7 @@ describe('MAR-3156 A: the lookup door is where the key is fetched', () => {
           }),
           listLabeledIssues: async () => [],
           readIssueBodies: async () => new Map<string, string | null>(),
+          listOutsideIssues: NO_OUTSIDE,
           resolveProject,
         }
       },
@@ -530,6 +544,7 @@ describe('MAR-3169: an empty page is verified before it is believed', () => {
         }),
         listLabeledIssues,
         readIssueBodies: async () => new Map<string, string | null>(),
+        listOutsideIssues: NO_OUTSIDE,
         resolveProject,
       }),
       broadcast: (snapshot) => broadcasts.push(snapshot),
@@ -761,6 +776,7 @@ describe('MAR-3190 R4: bodies are read only for issues that changed', () => {
         resolveProject: async () => ({ kind: 'not-found' as const }),
         listLabeledIssues,
         readIssueBodies,
+        listOutsideIssues: NO_OUTSIDE,
       }),
       broadcast: () => {},
       now: () => clock,
@@ -843,6 +859,7 @@ describe('MAR-3190 R4: bodies are read only for issues that changed', () => {
         resolveProject: async () => ({ kind: 'not-found' as const }),
         listLabeledIssues: async () => [trackerIssue({ id: 'issue-1' })],
         readIssueBodies,
+        listOutsideIssues: NO_OUTSIDE,
       }),
       broadcast: () => {},
       now: () => clock,
@@ -910,6 +927,7 @@ describe('MAR-3190 lap 2, B: an updatedAt-only move is read once, not forever', 
         resolveProject: async () => ({ kind: 'not-found' as const }),
         listLabeledIssues: async () => pages.shift() ?? [],
         readIssueBodies,
+        listOutsideIssues: NO_OUTSIDE,
       }),
       broadcast: () => {},
       now: () => clock,
@@ -1064,6 +1082,7 @@ describe('MAR-3227: the tracker is read when it matters', () => {
         resolveProject: async () => ({ kind: 'not-found' as const }),
         listLabeledIssues,
         readIssueBodies: async () => new Map<string, string | null>(),
+        listOutsideIssues: NO_OUTSIDE,
       }),
       broadcast: (snapshot) => broadcasts.push(snapshot),
       onRead: (event) => reads.push(event),
@@ -1279,5 +1298,227 @@ describe('MAR-3227: the tracker is read when it matters', () => {
     handle = service.start()
     await until(1)
     expect(reads).toEqual([])
+  })
+})
+
+describe('MAR-3236: the issues outside the loop, read beside the ledger', () => {
+  const T0 = new Date('2026-09-19T12:00:00.000Z').getTime()
+  let db: Database.Database
+  let crews: CrewService
+  let crewId: string
+  let ledger: WorkLedgerService
+  let handle: { stop: () => void } | null
+
+  const OUTSIDE: TrackerOutsideIssue = {
+    id: 'out-1',
+    identifier: 'EX-90',
+    title: 'Nobody has groomed this',
+    url: 'https://linear.app/example/issue/ex-90',
+    status: 'Backlog',
+    priority: null,
+    labels: ['Bug'],
+    updatedAt: '2026-09-19T11:00:00.000Z',
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(T0)
+    db = getDatabase()
+    crews = new CrewService(db)
+    crewId = crews.create({ name: 'Loom' }).id
+    crews.setTrackerBinding(crewId, { projectId: 'project-1' })
+    ledger = new WorkLedgerService(db)
+    handle = null
+  })
+
+  afterEach(() => {
+    handle?.stop()
+    vi.useRealTimers()
+    closeDatabase()
+    resetDatabase()
+  })
+
+  const at = () => Math.round((Date.now() - T0) / 1000)
+
+  async function until(seconds: number) {
+    await vi.advanceTimersByTimeAsync(T0 + seconds * 1000 - Date.now())
+  }
+
+  /**
+   * A watcher on the fake clock recording WHEN each read happened, per
+   * crew: the labeled read and the outside read, separately.
+   */
+  function watcher(
+    options: {
+      list?: TrackerAdapter['listLabeledIssues']
+      outside?: TrackerAdapter['listOutsideIssues']
+    } = {},
+  ) {
+    const labeled: Record<string, number[]> = {}
+    const outside: Record<string, number[]> = {}
+    const pushed: TrackerOutsideSnapshot[] = []
+    const record = (into: Record<string, number[]>, projectId: string) => {
+      ;(into[projectId] ??= []).push(at())
+    }
+    const listOutsideIssues = vi.fn<TrackerAdapter['listOutsideIssues']>(
+      async (input) => {
+        record(outside, input.projectId)
+        return options.outside
+          ? options.outside(input)
+          : { issues: [OUTSIDE], more: false }
+      },
+    )
+    const service = new TrackerWatcherService({
+      crews,
+      ledger,
+      resolveKey: async () => 'lin_api_fixture',
+      createAdapter: () => ({
+        probe: async () => ({ ok: true, issues: 0, projectName: 'x' }),
+        resolveProject: async () => ({ kind: 'not-found' as const }),
+        listLabeledIssues: async (input) => {
+          record(labeled, input.projectId)
+          return options.list ? options.list(input) : [ISSUE]
+        },
+        readIssueBodies: async () => new Map<string, string | null>(),
+        listOutsideIssues,
+      }),
+      broadcast: () => {},
+      broadcastOutside: (snapshot) => pushed.push(snapshot),
+      now: () => new Date(),
+      log: vi.fn(),
+    })
+    return { service, labeled, outside, pushed, listOutsideIssues }
+  }
+
+  it('R4: a burst reads the loop fast and outside it once; ten minutes, a Refresh, never a focus', async () => {
+    const { service, labeled, outside } = watcher()
+    service.noteActivity(crewId)
+    handle = service.start()
+    await until(30)
+    expect(labeled['project-1']).toEqual([0, 15, 30])
+    // Mutation: read outside on every tick -> [0, 15, 30], red.
+    expect(outside['project-1']).toEqual([0])
+
+    await until(599)
+    expect(outside['project-1']).toEqual([0])
+    await until(600)
+    expect(labeled['project-1']).toContain(600)
+    expect(outside['project-1']).toEqual([0, 600])
+
+    await until(630)
+    expect(service.refresh(crewId).outcome).toBe('reading')
+    await until(631)
+    expect(outside['project-1']).toEqual([0, 600, 630])
+
+    // A focus kick reads the loop and nothing outside it.
+    await until(700)
+    service.setWindowFocused(true)
+    await until(701)
+    expect(labeled['project-1']).toContain(700)
+    // Mutation: mark the outside read due on every kick -> 700 here, red.
+    expect(outside['project-1']).toEqual([0, 600, 630])
+  })
+
+  it('R4: a Refresh reaches outside the loop only for the crew it was pressed for', async () => {
+    const other = crews.create({ name: 'Other' }).id
+    crews.setTrackerBinding(other, { projectId: 'project-2' })
+    const { service, outside } = watcher()
+    handle = service.start()
+    await until(30)
+    expect(service.refresh(other).outcome).toBe('reading')
+    await until(31)
+    // Mutation: a Refresh marks every crew due -> project-1 read at 30, red.
+    expect(outside['project-1']).toEqual([0])
+    expect(outside['project-2']).toEqual([0, 30])
+  })
+
+  it('R4: a crew backing off reads nothing outside, not even for a Refresh', async () => {
+    const { service, outside } = watcher({
+      list: async () => {
+        // Refused on the very tick the outside read falls due.
+        if (at() >= 600) throw refusal('rate-limited', null)
+        return [ISSUE]
+      },
+    })
+    handle = service.start()
+    await until(600)
+    expect(service.trackerHealth(crewId)?.state).toBe('rate-limited')
+    await until(610)
+    expect(service.refresh(crewId).outcome).toBe('backing-off')
+    // Inside the default 5-minute backoff from 600 s.
+    await until(890)
+    // Mutation: read outside whether or not the labeled read succeeded ->
+    // a read at 600, red.
+    expect(outside['project-1']).toEqual([0])
+  })
+
+  it('R4: a refused outside read keeps the last snapshot and pushes nothing', async () => {
+    let calls = 0
+    const { service, pushed } = watcher({
+      outside: async () => {
+        calls += 1
+        if (calls === 2) throw refusal('unreachable')
+        return { issues: [OUTSIDE], more: calls > 2 }
+      },
+    })
+    expect(service.outsideSnapshot(crewId)).toEqual({
+      crewId,
+      issues: [],
+      more: false,
+      readAt: null,
+    })
+    handle = service.start()
+    await until(1)
+    const first = service.outsideSnapshot(crewId)
+    expect(first).toEqual({
+      crewId,
+      issues: [OUTSIDE],
+      more: false,
+      readAt: '2026-09-19T12:00:00.000Z',
+    })
+    expect(pushed).toEqual([first])
+
+    await until(600)
+    // Mutation: clear the snapshot on a refusal -> never-read, red.
+    expect(service.outsideSnapshot(crewId)).toEqual(first)
+    expect(pushed).toHaveLength(1)
+    // The labeled read's health is untouched by the outside refusal.
+    expect(service.trackerHealth(crewId)?.state).toBe('ok')
+
+    // The beat counts from the attempt: no retry on the next tick.
+    await until(1199)
+    expect(calls).toBe(2)
+    await until(1200)
+    expect(calls).toBe(3)
+    expect(service.outsideSnapshot(crewId).more).toBe(true)
+  })
+
+  it('a crew re-bound to another project never shows the old project’s issues', async () => {
+    const { service } = watcher()
+    handle = service.start()
+    await until(1)
+    expect(service.outsideSnapshot(crewId).issues).toEqual([OUTSIDE])
+    crews.setTrackerBinding(crewId, { projectId: 'project-9' })
+    expect(service.outsideSnapshot(crewId).readAt).toBeNull()
+  })
+
+  it('R5: beside the ledger, not in it -- an outside read writes no row', async () => {
+    const { service, listOutsideIssues } = watcher()
+    // The labeled read alone first: what the ledger holds without outside.
+    const bare = watcher({ outside: async () => ({ issues: [], more: false }) })
+    await bare.service.tick()
+    const before = JSON.stringify(ledger.currentView(crewId))
+    // `workLedger:list` answers `snapshot(crewId).entries` from the ledger.
+    const listBefore = JSON.stringify(bare.service.snapshot(crewId).entries)
+    await service.tick()
+    expect(listOutsideIssues).toHaveBeenCalledTimes(1)
+    expect(service.outsideSnapshot(crewId).issues).toEqual([OUTSIDE])
+    // Mutation: append outside issues as `unassigned` -> a row for EX-90,
+    // red.
+    expect(JSON.stringify(ledger.currentView(crewId))).toBe(before)
+    expect(JSON.stringify(service.snapshot(crewId).entries)).toBe(listBefore)
+    expect(
+      ledger.list(crewId).some((row) => row.issueIdentifier === 'EX-90'),
+    ).toBe(false)
   })
 })

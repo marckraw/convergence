@@ -205,6 +205,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     deleteCredential: (crewId: string) =>
       ipcRenderer.invoke('tracker:deleteCredential', crewId),
     refresh: (crewId: string) => ipcRenderer.invoke('tracker:refresh', crewId),
+    outside: (crewId: string) => ipcRenderer.invoke('tracker:outside', crewId),
+    onOutsideUpdated: (callback: (snapshot: unknown) => void) => {
+      const handler = (_: unknown, snapshot: unknown) => callback(snapshot)
+      ipcRenderer.on('tracker:outsideUpdated', handler)
+      return () => {
+        ipcRenderer.removeListener('tracker:outsideUpdated', handler)
+      }
+    },
     onRead: (callback: (event: unknown) => void) => {
       const handler = (_: unknown, event: unknown) => callback(event)
       ipcRenderer.on('tracker:read', handler)

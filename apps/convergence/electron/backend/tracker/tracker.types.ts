@@ -22,10 +22,15 @@ export type {
   TrackerProjectMatch,
   TrackerProjectResolution,
   ListLabeledIssuesInput,
+  ListOutsideIssuesInput,
+  TrackerOutsideIssue,
+  TrackerOutsidePage,
 } from '../../../src/shared/types/tracker.types'
 import type {
   ListLabeledIssuesInput,
+  ListOutsideIssuesInput,
   TrackerIssue,
+  TrackerOutsidePage,
   TrackerLogicalStatus,
   TrackerProbe,
   TrackerProjectResolution,
@@ -68,4 +73,10 @@ export interface TrackerAdapter {
    * and nothing about it can change anything on the far side.
    */
   resolveProject(reference: string): Promise<TrackerProjectResolution>
+  /**
+   * The project's OPEN issues that carry no Loom label (MAR-3236). A READ,
+   * light and bounded: no body, at most `LINEAR_OUTSIDE_MAX_PAGES` pages, and
+   * `more` says when the bound cut it short.
+   */
+  listOutsideIssues(input: ListOutsideIssuesInput): Promise<TrackerOutsidePage>
 }

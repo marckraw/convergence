@@ -1,4 +1,4 @@
-import type { UIEvent } from 'react'
+import type { ReactNode, UIEvent } from 'react'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
@@ -73,6 +73,12 @@ interface LoomSheetViewProps<TSession = unknown> {
     onOpenConversation: (session: TSession) => void
     closeRef?: (element: HTMLButtonElement | null) => void
   } | null
+  /**
+   * "Not in the loop" (MAR-3236), built by the container for the crew on
+   * screen and drawn LAST in Plan -- after the stages and the left line. A
+   * node, the way the header takes Refresh: this file stays render-only.
+   */
+  outside?: ReactNode
   /** The scroll container itself, so the container can restore its offset (R3). */
   bodyRef?: (element: HTMLDivElement | null) => void
   onScroll?: (event: UIEvent<HTMLDivElement>) => void
@@ -101,6 +107,7 @@ export const LoomSheetView = <TSession,>({
   detail,
   inertReason,
   onOpen,
+  outside,
   bodyRef,
   onScroll,
   className,
@@ -317,6 +324,9 @@ export const LoomSheetView = <TSession,>({
                   {LOOM_PLAN_IS_READ_ONLY}
                 </p>
               ) : null}
+              {/* Last, and outside the count in Plan's title: none of it is
+                  preparation until somebody labels it (MAR-3236 R6). */}
+              {outside}
             </>
           ) : null}
         </>

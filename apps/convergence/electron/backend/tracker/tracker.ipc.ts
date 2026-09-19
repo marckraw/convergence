@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import type { TrackerCredentialStatus } from '../credentials/tracker-credentials.pure'
 import type {
+  TrackerOutsideSnapshot,
   TrackerProbeReading,
   TrackerProjectResolution,
   TrackerReadEvent,
@@ -24,15 +25,32 @@ export interface TrackerIpcDeps {
   crewExists: (crewId: string) => boolean
   /** Asks for a read of the crew's tracker now, subject to the floor (MAR-3227). */
   refresh: (crewId: string) => TrackerRefreshReply
+  /**
+   * The crew's open issues outside the loop, as last read (MAR-3236). From
+   * the watcher's memory: answering never asks the tracker anything.
+   */
+  outside: (crewId: string) => TrackerOutsideSnapshot
   now?: () => Date
 }
 
 export const TRACKER_READ_CHANNEL = 'tracker:read'
+export const TRACKER_OUTSIDE_UPDATED_CHANNEL = 'tracker:outsideUpdated'
 
 /** Tells every window a crew's tracker was just read (MAR-3227 R6). */
 export const broadcastTrackerRead = (event: TrackerReadEvent): void => {
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) win.webContents.send(TRACKER_READ_CHANNEL, event)
+  }
+}
+
+/** Tells every window a crew's outside read replaced its snapshot (MAR-3236). */
+export const broadcastTrackerOutside = (
+  snapshot: TrackerOutsideSnapshot,
+): void => {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(TRACKER_OUTSIDE_UPDATED_CHANNEL, snapshot)
+    }
   }
 }
 
@@ -64,6 +82,12 @@ export function registerTrackerIpcHandlers(deps: TrackerIpcDeps): void {
   // and it never reads a crew that is backing off or inside the floor.
   ipcMain.handle('tracker:refresh', (_event, crewId: string) =>
     deps.refresh(crewId),
+  )
+
+  // A read of what the watcher already holds (MAR-3236): the issues outside
+  // the loop, from memory. It asks the tracker nothing and carries no key.
+  ipcMain.handle('tracker:outside', (_event, crewId: string) =>
+    deps.outside(crewId),
   )
 
   ipcMain.handle('tracker:credentialStatus', (_event, crewId: string) =>

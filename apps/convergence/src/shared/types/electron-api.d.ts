@@ -1,6 +1,7 @@
 import type {
   TrackerBinding,
   TrackerCredentialStatus,
+  TrackerOutsideSnapshot,
   TrackerProbeReading,
   TrackerReadEvent,
   TrackerRefreshReply,
@@ -1892,6 +1893,12 @@ interface ElectronAPI {
     refresh: (crewId: string) => Promise<TrackerRefreshReply>
     /** Every successful read of a crew's tracker, news or not (MAR-3227 R6). */
     onRead: (callback: (event: TrackerReadEvent) => void) => () => void
+    /** The crew's open issues outside the loop, as last read (MAR-3236). */
+    outside: (crewId: string) => Promise<TrackerOutsideSnapshot>
+    /** A crew's outside read replaced its snapshot (MAR-3236). */
+    onOutsideUpdated: (
+      callback: (snapshot: TrackerOutsideSnapshot) => void,
+    ) => () => void
   }
   workLedger: {
     list: (crewId: string) => Promise<WorkLedgerSnapshot>

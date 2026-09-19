@@ -3,11 +3,14 @@ import {
   LINEAR_BODY_PAGE_SIZE,
   LINEAR_GRAPHQL_URL,
   LINEAR_MAX_PAGES,
+  LINEAR_OUTSIDE_MAX_PAGES,
   linearIssueBodiesRequest,
   linearLabeledIssuesRequest,
+  linearOutsideIssuesRequest,
   linearProjectLookupRequest,
   parseLinearIssueBodiesReply,
   parseLinearIssuesPage,
+  parseLinearOutsidePage,
   parseLinearProjectsReply,
   type LinearProject,
 } from './linear-tracker.pure'
@@ -18,9 +21,12 @@ import {
 import {
   TrackerRefusalError,
   type ListLabeledIssuesInput,
+  type ListOutsideIssuesInput,
   type TrackerAdapter,
   type TrackerBinding,
   type TrackerIssue,
+  type TrackerOutsideIssue,
+  type TrackerOutsidePage,
   type TrackerProbe,
   type TrackerProjectResolution,
   type TrackerRefusal,
@@ -183,6 +189,34 @@ export function createLinearTrackerAdapter(deps: {
     return bodies
   }
 
+  /**
+   * The project's open issues outside the loop (MAR-3236 R3), at most
+   * `LINEAR_OUTSIDE_MAX_PAGES` pages. A further page is never asked for: it
+   * is reported as `more`, so the list says it was cut instead of reading as
+   * the whole project. A refusal on any page leaves as a throw -- a partial
+   * list never replaces the last good one.
+   */
+  async function listOutsideIssues(
+    input: ListOutsideIssuesInput,
+  ): Promise<TrackerOutsidePage> {
+    const issues: TrackerOutsideIssue[] = []
+    let after: string | null = null
+    for (let page = 0; page < LINEAR_OUTSIDE_MAX_PAGES; page += 1) {
+      const body = await ask(
+        linearOutsideIssuesRequest({ projectId: input.projectId, after }),
+      )
+      const read = parseLinearOutsidePage(body, {
+        seatGroup: input.seatGroup,
+        waveGroup: input.waveGroup,
+      })
+      if (!read.ok) throw new TrackerRefusalError(read.refusal)
+      issues.push(...read.page.issues)
+      if (!read.page.hasNextPage) return { issues, more: false }
+      after = read.page.endCursor
+    }
+    return { issues, more: true }
+  }
+
   /** The projects answering to one reference; a refusal leaves as a throw. */
   async function findProjects(
     reference: LinearProjectReference,
@@ -236,6 +270,7 @@ export function createLinearTrackerAdapter(deps: {
     listLabeledIssues,
     readIssueBodies,
     resolveProject,
+    listOutsideIssues,
     async probe(): Promise<TrackerProbe> {
       try {
         // What the key can actually see under the bound id, FIRST (R4): a

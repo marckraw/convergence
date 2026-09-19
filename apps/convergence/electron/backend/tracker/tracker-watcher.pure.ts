@@ -62,6 +62,35 @@ export function nextTrackerTickDelay(input: {
 }
 
 /**
+ * The outside read's own slow beat (MAR-3236 R4): the project's issues that
+ * are not in the loop change on a person's time, not a horse's, so they are
+ * read at most every ten minutes -- or when a person presses Refresh.
+ *
+ * Worst case per bound crew: 6 outside reads an hour × at most
+ * `LINEAR_OUTSIDE_MAX_PAGES` (3) pages = 18 requests an hour, on top of the
+ * labeled read's numbers above.
+ */
+export const TRACKER_OUTSIDE_INTERVAL_MS = 10 * 60_000
+
+/**
+ * Whether this tick should also read a crew's outside issues (R4).
+ *
+ * Due when never read, when the slow beat has passed since the last read, or
+ * when a person's Refresh asked for it (`kicked`). A burst or a focus kick
+ * is not a reason: those are about the loop moving, and nothing outside the
+ * loop moved because a horse came back.
+ */
+export function isOutsideReadDue(input: {
+  now: number
+  lastOutsideReadAt: number | null
+  kicked: boolean
+}): boolean {
+  if (input.kicked) return true
+  if (input.lastOutsideReadAt === null) return true
+  return input.now - input.lastOutsideReadAt >= TRACKER_OUTSIDE_INTERVAL_MS
+}
+
+/**
  * How long a rate-limited tracker is left alone when its reply names no
  * reset time (lap 2, D). A rate limit always backs off.
  */

@@ -141,6 +141,7 @@ import { TrackerCredentialsService } from '../backend/credentials/tracker-creden
 import { TrackerWatcherService } from '../backend/tracker/tracker-watcher.service'
 import { createLinearTrackerAdapter } from '../backend/tracker/linear-tracker.adapter'
 import {
+  broadcastTrackerOutside,
   broadcastTrackerRead,
   registerTrackerIpcHandlers,
 } from '../backend/tracker/tracker.ipc'
@@ -790,6 +791,7 @@ async function startApp(): Promise<void> {
     createAdapter: (input) => createLinearTrackerAdapter(input),
     broadcast: broadcastWorkLedger,
     onRead: broadcastTrackerRead,
+    broadcastOutside: broadcastTrackerOutside,
   })
   const relayEngine = new RelayEngine({
     relays: relayService,
@@ -888,6 +890,7 @@ async function startApp(): Promise<void> {
       trackerWatcher.resolveProject(crewId, reference),
     crewExists: (crewId) => crewService.getById(crewId) !== null,
     refresh: (crewId) => trackerWatcher.refresh(crewId),
+    outside: (crewId) => trackerWatcher.outsideSnapshot(crewId),
   })
   registerWorkLedgerIpcHandlers({
     snapshot: (crewId) => trackerWatcher.snapshot(crewId),

@@ -3,6 +3,7 @@ import type { LinearProjectReference } from '../../../src/shared/lib/linear-proj
 import type {
   TrackerIssue,
   TrackerLogicalStatus,
+  TrackerOutsideIssue,
   TrackerRefusal,
 } from './tracker.types'
 
@@ -50,6 +51,15 @@ export const BLOCKED_LABEL_NAME = 'blocked'
  * out from rewriting its row.
  */
 export const LINEAR_DONE_WINDOW = '-P14D'
+
+/**
+ * A ceiling on the OUTSIDE read's pages (MAR-3236 R3): 3 × 100 = 300 issues.
+ *
+ * Unlike `LINEAR_MAX_PAGES` this is not a runaway guard that refuses -- the
+ * outside list is a view, not a ledger, so a cut list is honest as long as it
+ * says so. A further page is reported as `more: true` and never read.
+ */
+export const LINEAR_OUTSIDE_MAX_PAGES = 3
 
 /** How many issue ids one bodies read asks for (R4). */
 export const LINEAR_BODY_PAGE_SIZE = 50
@@ -462,6 +472,145 @@ export function parseLinearIssuesPage(
     ok: true,
     page: { issues: parsed, hasNextPage, endCursor },
   }
+}
+
+/**
+ * The state types an issue is no longer open in (MAR-3236 R2).
+ *
+ * `WorkflowState.type` is documented in Linear's published schema as one of
+ * "triage", "backlog", "unstarted", "started", "completed", "canceled",
+ * "duplicate". The query filters on `completedAt` only -- the one comparator
+ * this codebase has measured -- so cancelled issues are dropped HERE, by the
+ * state's type. `completed` is belt and braces behind the filter; `duplicate`
+ * is a closed issue too, and Before owns finished work.
+ */
+export const LINEAR_CLOSED_STATE_TYPES = [
+  'completed',
+  'canceled',
+  'duplicate',
+] as const
+
+/**
+ * The bound project's open issues, light, newest first (MAR-3236 R2).
+ *
+ * No label clause: "carries no Loom label" is decided in the parse, by the
+ * same `inTheLoop` the labeled parse keeps issues by, so there is one rule
+ * and a name added to it moves both reads at once. No `description`: nothing
+ * about an issue outside the loop needs its body.
+ *
+ * Schema read against Linear's published SDK schema
+ * (`linear/linear` → `packages/sdk/src/schema.graphql`): `Query.issues(after:
+ * String, filter: IssueFilter, first: Int, orderBy: PaginationOrderBy)`,
+ * `enum PaginationOrderBy { createdAt updatedAt }`, `IssueFilter {
+ * completedAt: NullableDateComparator, project: NullableProjectFilter }`,
+ * `NullableDateComparator { null: Boolean }`, `WorkflowState { type: String!
+ * }`. The schema does not state the direction `orderBy` sorts in.
+ */
+export const LINEAR_OUTSIDE_ISSUES_QUERY = `query ConvergenceTrackerOutsideIssues($projectId: ID!, $after: String) {
+  issues(
+    first: ${LINEAR_PAGE_SIZE}
+    after: $after
+    orderBy: updatedAt
+    filter: {
+      project: { id: { eq: $projectId } }
+      completedAt: { null: true }
+    }
+  ) {
+    nodes {
+      id
+      identifier
+      title
+      url
+      updatedAt
+      priority
+      state { name type }
+      labels { nodes { name parent { name } } }
+    }
+    pageInfo { hasNextPage endCursor }
+  }
+}`
+
+export function linearOutsideIssuesRequest(input: {
+  projectId: string
+  after: string | null
+}): { query: string; variables: Record<string, string | null> } {
+  return {
+    query: LINEAR_OUTSIDE_ISSUES_QUERY,
+    variables: { projectId: input.projectId, after: input.after },
+  }
+}
+
+export interface LinearOutsidePage {
+  issues: TrackerOutsideIssue[]
+  hasNextPage: boolean
+  endCursor: string | null
+}
+
+export type LinearOutsidePageRead =
+  | { ok: true; page: LinearOutsidePage }
+  | { ok: false; refusal: TrackerRefusal }
+
+/**
+ * One page of the outside read (MAR-3236 R1, R2): every issue the labeled
+ * parse would KEEP is dropped, by `!inTheLoop` -- the one rule, never a
+ * second list of names -- and every issue in a closed state is dropped.
+ */
+export function parseLinearOutsidePage(
+  body: unknown,
+  groups: { seatGroup: string; waveGroup: string },
+): LinearOutsidePageRead {
+  if (!isRecord(body)) return badResponse('Linear answered with no JSON body.')
+  const issues = isRecord(body.data) ? body.data.issues : undefined
+  if (!isRecord(issues) || !Array.isArray(issues.nodes)) {
+    return badResponse('Linear answered without an issue list.')
+  }
+  const pageInfo = isRecord(issues.pageInfo) ? issues.pageInfo : {}
+  const closed: readonly string[] = LINEAR_CLOSED_STATE_TYPES
+
+  const parsed: TrackerOutsideIssue[] = []
+  for (const node of issues.nodes) {
+    if (!isRecord(node))
+      return badResponse('Linear answered a malformed issue.')
+    const { id, identifier, title, url, updatedAt } = node
+    if (
+      typeof id !== 'string' ||
+      typeof identifier !== 'string' ||
+      typeof title !== 'string' ||
+      typeof url !== 'string' ||
+      typeof updatedAt !== 'string'
+    ) {
+      return badResponse('Linear answered an issue without its identity.')
+    }
+    const labelNodes =
+      isRecord(node.labels) && Array.isArray(node.labels.nodes)
+        ? (node.labels.nodes.filter(isRecord) as LinearLabelNode[])
+        : []
+    if (inTheLoop(labelNodes, groups)) continue
+    const state = isRecord(node.state) ? node.state : {}
+    if (typeof state.type === 'string' && closed.includes(state.type)) continue
+    parsed.push({
+      id,
+      identifier,
+      title,
+      url,
+      status: typeof state.name === 'string' ? state.name : '',
+      priority: readIssuePriority(node.priority),
+      labels: readIssueLabels(labelNodes),
+      updatedAt,
+    })
+  }
+
+  const hasNextPage = pageInfo.hasNextPage === true
+  const endCursor =
+    typeof pageInfo.endCursor === 'string' && pageInfo.endCursor
+      ? pageInfo.endCursor
+      : null
+  // A page that says there is more but gives no way to ask is not a page
+  // this read can walk; refused, so the last snapshot stays.
+  if (hasNextPage && endCursor === null) {
+    return badResponse('Linear said there is another page but gave no cursor.')
+  }
+  return { ok: true, page: { issues: parsed, hasNextPage, endCursor } }
 }
 
 function errorCodes(body: unknown): string[] {
