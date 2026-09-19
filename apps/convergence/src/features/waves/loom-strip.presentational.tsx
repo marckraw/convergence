@@ -11,13 +11,15 @@ import { WAVE_OUTAGE_DOT_CLASS, WAVE_RAIL_CLASS } from './wave-panel.styles'
 
 interface LoomStripViewProps {
   sheets: LoomSheets
+  /** The board's clock; Before's count is a window over it (MAR-3192). */
+  now: number
   outage: boolean
   onExpand: () => void
 }
 
 /** How many rows each sheet holds, for the strip's four numbers. */
-function stripCount(sheets: LoomSheets, sheet: LoomSheet): number {
-  const counts = loomSheetCounts(sheets)
+function stripCount(sheets: LoomSheets, sheet: LoomSheet, now: number): number {
+  const counts = loomSheetCounts(sheets, now)
   if (sheet === 'before') return counts.before
   if (sheet === 'now') return counts.open + counts.awaitingQa
   if (sheet === 'next') return counts.next
@@ -36,6 +38,7 @@ function stripCount(sheets: LoomSheets, sheet: LoomSheet): number {
  */
 export const LoomStripView: FC<LoomStripViewProps> = ({
   sheets,
+  now,
   outage,
   onExpand,
 }) => (
@@ -62,10 +65,10 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
         key={sheet}
         data-wave-count={sheet}
         title={LOOM_SHEET_NAMES[sheet]}
-        aria-label={`${LOOM_SHEET_NAMES[sheet]}: ${stripCount(sheets, sheet)}`}
+        aria-label={`${LOOM_SHEET_NAMES[sheet]}: ${stripCount(sheets, sheet, now)}`}
         className="text-xs tabular-nums text-muted-foreground"
       >
-        {stripCount(sheets, sheet)}
+        {stripCount(sheets, sheet, now)}
       </span>
     ))}
   </aside>

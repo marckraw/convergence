@@ -22,6 +22,7 @@ export const LoomCompactView: FC<
   LoomStackProps & { width: number; onExpand: () => void }
 > = ({
   sheets,
+  now,
   horses,
   qaExpanded,
   onToggleQa,
@@ -42,7 +43,7 @@ export const LoomCompactView: FC<
   width,
   onExpand,
 }) => {
-  const counts = loomSheetCounts(sheets)
+  const counts = loomSheetCounts(sheets, now)
   return (
     <aside
       aria-label="Loom"
@@ -87,6 +88,7 @@ export const LoomCompactView: FC<
               <LoomSheetView
                 sheet={sheet}
                 sheets={sheets}
+                now={now}
                 horses={horses}
                 qaExpanded={qaExpanded}
                 onToggleQa={onToggleQa}

@@ -29,6 +29,14 @@ export interface LoomSheetDetail {
  */
 export interface LoomStackProps {
   sheets: LoomSheets
+  /**
+   * The board's clock (MAR-3192 R2).
+   *
+   * Before's window is judged against it, and the title's count comes from
+   * the same call the sheet does -- so both shapes and the heading above
+   * them are always looking at one instant.
+   */
+  now: number
   /** The bound crews' horse seats (MAR-3191 R1) — the same list in both shapes. */
   horses: readonly LoomHorse[]
   /** Awaiting QA's reveal, held by the container so a fold cannot lose it. */

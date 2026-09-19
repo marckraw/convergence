@@ -417,6 +417,7 @@ export const WavePanel: FC<WavePanelProps> = ({
 
   const stack = {
     sheets: board.sheets,
+    now: board.now,
     horses: board.horses,
     qaExpanded,
     onToggleQa: () => setQaExpanded((was) => !was),
@@ -443,6 +444,7 @@ export const WavePanel: FC<WavePanelProps> = ({
     return (
       <LoomStripView
         sheets={board.sheets}
+        now={board.now}
         outage={board.header.kind === 'outage'}
         onExpand={() => changeMode('expanded')}
       />

@@ -1,4 +1,5 @@
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
+import { loomBefore, loomBeforeOlderLine } from './loom-before.pure'
 import {
   BLOCKED_ACTION,
   waveLapLabel,
@@ -126,9 +127,16 @@ export interface LoomSheetCounts {
  * look at (`awaitingQa`) against everything else still open, whether it is
  * moving, waiting on a verdict or waiting on a decision.
  */
-export function loomSheetCounts(sheets: LoomSheets): LoomSheetCounts {
+export function loomSheetCounts(
+  sheets: LoomSheets,
+  now: number,
+): LoomSheetCounts {
   return {
-    before: sheets.before.length,
+    // What the sheet SHOWS, from the sheet's own derivation (MAR-3192 R4).
+    // `sheets.before` keeps every finished row the ledger ever wrote -- the
+    // partition is untouched -- so counting it would put a number over the
+    // sheet that no amount of scrolling could reach.
+    before: loomBefore(sheets.before, now).shown,
     open:
       sheets.now.inFlight.length +
       sheets.now.fablesTurn.length +
@@ -183,8 +191,20 @@ export const LOOM_PLAN_NOTE = 'Plan needs the wider read (LV1)'
 export function loomSheetNote(
   sheet: LoomSheet,
   sheets: LoomSheets,
+  now: number,
 ): string | null {
   if (sheet === 'plan') return LOOM_PLAN_NOTE
+  if (sheet === 'before') {
+    // An empty Before is two different facts (MAR-3192 R5): nothing has
+    // finished, or nothing finished LATELY. Saying "nothing here" about a
+    // fortnight of silence that follows a year of work is the sheet
+    // forgetting on a person's behalf.
+    const { shown, older } = loomBefore(sheets.before, now)
+    if (shown > 0) return null
+    return older > 0
+      ? loomBeforeOlderLine(older)
+      : `Nothing in ${LOOM_SHEET_NAMES.before} right now.`
+  }
   return loomSheetSize(sheets, sheet) === 0
     ? `Nothing in ${LOOM_SHEET_NAMES[sheet]} right now.`
     : null
