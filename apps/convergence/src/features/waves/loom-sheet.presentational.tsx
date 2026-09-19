@@ -145,6 +145,7 @@ export const LoomSheetView = <TSession,>({
                   from "what was before" is the last thing that finished. */}
               {before.groups.map((group, at) => (
                 <WaveSectionView
+                  appearance="loom"
                   key={group.key}
                   title={group.title}
                   rows={group.rows}
@@ -169,7 +170,10 @@ export const LoomSheetView = <TSession,>({
               about seats, and the four sections below only ever answered it
               about issues -- an idle or unreachable horse held none, so it
               was invisible on the sheet that exists to show it. */}
-              <section aria-label="Horses" className="flex flex-col">
+              <section
+                aria-label="Horses"
+                className="flex min-w-0 flex-col gap-2"
+              >
                 <h3 className={LOOM_HORSES_LINE_CLASS}>
                   {loomHorsesLine(horses)}
                 </h3>
@@ -195,6 +199,7 @@ export const LoomSheetView = <TSession,>({
                 so `aria-controls` points at an ancestor a screen reader is
                 already inside and the relationship is readable. */}
                 <WaveSectionView
+                  appearance="loom"
                   title="Awaiting QA"
                   count={qa.length}
                   rows={qaShown}
@@ -220,12 +225,14 @@ export const LoomSheetView = <TSession,>({
                   id={QA_SECTION_ID}
                 />
                 <WaveSectionView
+                  appearance="loom"
                   title="Fable’s turn"
                   rows={sheets.now.fablesTurn}
                   inertReason={inertReason}
                   onOpen={onOpen}
                 />
                 <WaveSectionView
+                  appearance="loom"
                   title="Decide"
                   rows={sheets.now.decide}
                   inertReason={inertReason}
@@ -233,6 +240,7 @@ export const LoomSheetView = <TSession,>({
                 />
                 {/* The rows no card holds (R4): one function, both shapes. */}
                 <WaveSectionView
+                  appearance="loom"
                   title="In flight"
                   rows={loomNowRows(sheets, horses)}
                   inertReason={inertReason}
@@ -245,23 +253,33 @@ export const LoomSheetView = <TSession,>({
             <>
               {/* One group per horse that has anything waiting (MAR-3193
                   R1), each saying what that horse is doing now. */}
-              {next.seats.map((seat) => (
+              <div
+                className={
+                  wide
+                    ? 'grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-4'
+                    : undefined
+                }
+              >
+                {next.seats.map((seat) => (
+                  <WaveSectionView
+                    appearance="loom"
+                    key={seat.key}
+                    title={seat.title}
+                    hint={seat.capacity}
+                    count={seat.ready.length + seat.preparing.length}
+                    rows={[...seat.ready, ...seat.preparing]}
+                    inertReason={inertReason}
+                    onOpen={onOpen}
+                  />
+                ))}
                 <WaveSectionView
-                  key={seat.key}
-                  title={seat.title}
-                  hint={seat.capacity}
-                  count={seat.ready.length + seat.preparing.length}
-                  rows={[...seat.ready, ...seat.preparing]}
+                  appearance="loom"
+                  title={LOOM_NEXT_UNSEATED_TITLE}
+                  rows={next.unseated}
                   inertReason={inertReason}
                   onOpen={onOpen}
                 />
-              ))}
-              <WaveSectionView
-                title={LOOM_NEXT_UNSEATED_TITLE}
-                rows={next.unseated}
-                inertReason={inertReason}
-                onOpen={onOpen}
-              />
+              </div>
               {next.seats.length > 0 || next.unseated.length > 0 ? (
                 <p className={LOOM_SHEET_NOTE_CLASS}>{LOOM_NEXT_ORDER_LINE}</p>
               ) : null}
@@ -272,16 +290,25 @@ export const LoomSheetView = <TSession,>({
               {/* The stages of preparation, in the order it happens
                   (MAR-3194 R3). Read-only by ruling: the only thing a
                   person can press here is a row, and it opens the detail. */}
-              {plan.stages.map((stage) => (
-                <WaveSectionView
-                  key={stage.key}
-                  title={stage.title}
-                  hint={stage.hint}
-                  rows={stage.rows}
-                  inertReason={inertReason}
-                  onOpen={onOpen}
-                />
-              ))}
+              <div
+                className={
+                  wide
+                    ? 'grid grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))] gap-4'
+                    : undefined
+                }
+              >
+                {plan.stages.map((stage) => (
+                  <WaveSectionView
+                    appearance="loom"
+                    key={stage.key}
+                    title={stage.title}
+                    hint={stage.hint}
+                    rows={stage.rows}
+                    inertReason={inertReason}
+                    onOpen={onOpen}
+                  />
+                ))}
+              </div>
               {leftLine && plan.preparing > 0 ? (
                 <p className={LOOM_SHEET_NOTE_CLASS}>{leftLine}</p>
               ) : null}

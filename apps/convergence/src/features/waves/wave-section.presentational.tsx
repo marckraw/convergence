@@ -8,6 +8,7 @@ import {
 } from './wave-panel.styles'
 
 interface WaveSectionViewProps {
+  appearance?: 'loom'
   title: string
   rows: WaveRow[]
   /**
@@ -41,6 +42,7 @@ interface WaveSectionViewProps {
 
 /** One titled section of the wave panel, with its count; empty draws nothing. */
 export const WaveSectionView: FC<WaveSectionViewProps> = ({
+  appearance,
   title,
   rows,
   count,
@@ -56,6 +58,7 @@ export const WaveSectionView: FC<WaveSectionViewProps> = ({
     <WaveRowView
       key={waveRowKey(row.entry)}
       row={row}
+      appearance={appearance}
       inertReason={inertReason(row.entry)}
       onOpen={onOpen}
     />
