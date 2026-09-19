@@ -3050,6 +3050,326 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(document.querySelector('[data-loom="expanded"]')).toBeNull()
     expect(await screen.findByLabelText('Loom')).toBeTruthy()
   })
+
+  describe('MAR-3225: one crew at a time', () => {
+    /**
+     * Two crews with disjoint ledgers, each with its own horse -- and Night
+     * shift's tracker down, so its health line is one more thing that must
+     * not leak into Loom while Loom shows the other crew.
+     */
+    beforeEach(() => {
+      crews = [
+        { ...boundCrew('crew-1', 'Loom'), members: [residentSeat('opus')] },
+        {
+          ...boundCrew('crew-2', 'Night shift'),
+          sessionIds: ['session-night'],
+          members: [residentSeat('night')],
+        },
+      ]
+      useSessionStore.setState({
+        globalSessions: [
+          SESSION,
+          {
+            ...SESSION,
+            id: 'session-night',
+            name: 'night',
+          } as SessionSummary,
+        ],
+      })
+      snapshots = {
+        'crew-1': {
+          crewId: 'crew-1',
+          entries: [
+            ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' }),
+            ledgerEntry({
+              issueIdentifier: 'EX-2',
+              state: 'assigned',
+              seat: null,
+              sessionId: null,
+            }),
+          ],
+          trackerHealth: health('ok'),
+        },
+        'crew-2': {
+          crewId: 'crew-2',
+          entries: [
+            ledgerEntry({
+              issueIdentifier: 'NS-1',
+              crewId: 'crew-2',
+              state: 'working',
+              seat: 'night',
+              sessionId: 'session-night',
+            }),
+            ledgerEntry({
+              issueIdentifier: 'NS-2',
+              crewId: 'crew-2',
+              state: 'assigned',
+              seat: null,
+              sessionId: null,
+            }),
+            ledgerEntry({
+              issueIdentifier: 'NS-3',
+              crewId: 'crew-2',
+              state: 'assigned',
+              seat: null,
+              sessionId: null,
+            }),
+          ],
+          trackerHealth: {
+            ...health('unreachable'),
+            since: new Date(Date.now() - 10 * 60_000).toISOString(),
+          },
+        },
+      }
+    })
+
+    const crewPicker = () => screen.getByRole('combobox', { name: 'Crew' })
+
+    /** Opens the picker by keyboard, as jsdom has no pointer capture. */
+    const openPicker = async () => {
+      await act(async () => {
+        fireEvent.keyDown(crewPicker(), { key: 'Enter' })
+      })
+    }
+
+    const pickCrew = async (name: string) => {
+      await openPicker()
+      await act(async () => {
+        fireEvent.keyDown(screen.getByRole('option', { name }), {
+          key: 'Enter',
+        })
+      })
+    }
+
+    /**
+     * Every issue Loom names on every sheet, opened one after another -- as
+     * a row, or as the issue a horse card holds (a held row is on the card
+     * and not in the list, MAR-3191 R4).
+     */
+    const issuesOnEverySheet = () => {
+      const seen = new Set<string>()
+      for (const sheet of LOOM_SHEETS) {
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: new RegExp(`^${LOOM_SHEET_NAMES[sheet]} · `),
+          }),
+        )
+        const loom = document.querySelector('[data-loom]') as HTMLElement
+        for (const id of loom.textContent?.match(/\b(?:EX|NS)-\d+/g) ?? []) {
+          seen.add(id)
+        }
+      }
+      return [...seen].sort()
+    }
+
+    const horseKeys = () =>
+      [...document.querySelectorAll('[data-loom-horse]')].map((node) =>
+        node.getAttribute('data-loom-horse'),
+      )
+
+    it('R1: one crew’s rows, horses, counts and health, and only that crew’s', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+
+      // Nothing stored: the first bound crew (R2).
+      expect(crewPicker().textContent).toBe('Loom')
+      // Mutation: build `loomHorses` from every crew -> Night shift's card
+      // is on Now beside Loom's, red.
+      expect(horseKeys()).toEqual(['crew-1:session-opus'])
+      // Night shift's tracker is down; Loom is not showing Night shift.
+      // Mutation: header health from every bound crew -> red.
+      expect(document.body.textContent).not.toContain('tracker unreachable')
+      expect(
+        screen.getByRole('button', { name: /^Plan · / }).textContent,
+      ).toContain('Plan · 1 in preparation')
+      // Mutation: rows from every bound crew -> NS-* rows, red.
+      expect(issuesOnEverySheet()).toEqual(['EX-1', 'EX-2'])
+    })
+
+    it('R1: the strip’s four numbers are the selected crew’s alone', async () => {
+      localStorage.setItem('convergence-loom-crew', 'crew-2')
+      setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom strip')
+      const shown = (sheet: string) =>
+        document.querySelector(`[data-wave-count="${sheet}"]`)?.textContent
+      // Night shift: one working, two in Plan. The union would read 2 and 3.
+      expect(shown('now')).toBe('1')
+      expect(shown('plan')).toBe('2')
+      // ...and its outage dot, because the crew on screen is the one down.
+      expect(screen.getByLabelText('Tracker not answering')).toBeTruthy()
+    })
+
+    it('R2: a stored crew that is no longer bound falls to the first, never to nothing', async () => {
+      localStorage.setItem('convergence-loom-crew', 'crew-deleted')
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      // Mutation: trust the stored id -> an empty board for a crew that is
+      // not there, red.
+      expect(crewPicker().textContent).toBe('Loom')
+      expect(horseKeys()).toEqual(['crew-1:session-opus'])
+      expect(
+        (document.querySelector('[data-loom-horse]') as HTMLElement)
+          .textContent,
+      ).toContain('EX-1')
+    })
+
+    it('R3: two crews -> a control named Crew, in both shells; the tail stays text', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      const subline = () => crewPicker().closest('p') as HTMLElement
+
+      expect(crewPicker().textContent).toBe('Loom')
+      expect(subline().textContent).toContain(' · All waves')
+      await openPicker()
+      // Every bound crew by name, in crew order.
+      expect(
+        screen.getAllByRole('option').map((option) => option.textContent),
+      ).toEqual(['Loom', 'Night shift'])
+      // Escape is the list's own: it closes the list and leaves the panel.
+      await act(async () => {
+        fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' })
+      })
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+      })
+      expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
+      expect(crewPicker().textContent).toBe('Loom')
+      expect(subline().textContent).toContain(' · All waves')
+      expect(subline().closest('[data-loom="expanded"]')).toBeTruthy()
+
+      // The portalled list's Escape must not bubble into the shell and fold
+      // it. Mutation: drop the list's stopPropagation -> folded, red.
+      await openPicker()
+      await act(async () => {
+        fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' })
+      })
+      expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
+    })
+
+    it('R3: one crew -> the subline is the text it always was, no control, in both shells', async () => {
+      crews = [crews[0]!]
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      const line = () =>
+        [...document.querySelectorAll('[data-loom] p')].find(
+          (node) => node.textContent === 'Loom · All waves',
+        )
+      // Mutation: draw the control for one crew -> a combobox, and no plain
+      // line reading exactly this, red.
+      expect(screen.queryByRole('combobox', { name: 'Crew' })).toBeNull()
+      expect(line()?.children).toHaveLength(0)
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+      })
+      expect(screen.queryByRole('combobox', { name: 'Crew' })).toBeNull()
+      expect(line()?.children).toHaveLength(0)
+    })
+
+    it('R4: switching swaps everything and keeps the sheet, the mode and the width', async () => {
+      localStorage.setItem('convergence-wave-panel-width', '360')
+      setWindowWidth(windowLeaving(900))
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+
+      // A's Now scrolled, then Plan opened with an issue read in place.
+      const body = (sheet: string) =>
+        document.querySelector(`[data-loom-sheet="${sheet}"]`) as HTMLElement
+      fireEvent.scroll(body('now'), { target: { scrollTop: 240 } })
+      fireEvent.click(screen.getByRole('button', { name: /^Plan · / }))
+      fireEvent.scroll(body('plan'), { target: { scrollTop: 120 } })
+      fireEvent.click(
+        document.querySelector('[data-wave-row="crew-1:EX-2"]') as HTMLElement,
+      )
+      expect(document.querySelector('[data-loom-detail]')).toBeTruthy()
+
+      await pickCrew('Night shift')
+
+      // The detail closes: its key is crew-scoped and is resolved against
+      // the shown crew's rows only. Mutation: hold on to the last row the
+      // key found once the live rows no longer have it -> A's issue is still
+      // read in place over B's board, red.
+      expect(document.querySelector('[data-loom-detail]')).toBeNull()
+      // The place in Loom is kept: Plan, compact, 360.
+      expect(
+        screen
+          .getByRole('button', { name: /^Plan · / })
+          .getAttribute('aria-expanded'),
+      ).toBe('true')
+      expect(document.querySelector('[data-loom="compact"]')).toBeTruthy()
+      expect(columnWidth()).toBe('360px')
+      // ...and everything on it is B's.
+      expect(crewPicker().textContent).toBe('Night shift')
+      expect(
+        screen.getByRole('button', { name: /^Plan · / }).textContent,
+      ).toContain('Plan · 2 in preparation')
+      expect(horseKeys()).toEqual([])
+      // Each sheet starts at the top for B; A's offsets are not applied.
+      // Mutation: do not reset the offsets on a switch -> 120 here and 240
+      // on Now, red.
+      expect(body('plan').scrollTop).toBe(0)
+      fireEvent.click(screen.getByRole('button', { name: /^Now · / }))
+      expect(body('now').scrollTop).toBe(0)
+      expect(horseKeys()).toEqual(['crew-2:session-night'])
+      expect(document.body.textContent).toContain('tracker unreachable')
+      expect(issuesOnEverySheet()).toEqual(['NS-1', 'NS-2', 'NS-3'])
+
+      // A switch with NO detail open: nothing restores the sheet on the
+      // way, so the live body itself must go back to the top. Mutation:
+      // zero the saved offsets but not the element -> 80, red.
+      fireEvent.click(screen.getByRole('button', { name: /^Plan · / }))
+      fireEvent.scroll(body('plan'), { target: { scrollTop: 80 } })
+      await pickCrew('Loom')
+      expect(document.querySelector('[data-loom-detail]')).toBeNull()
+      expect(body('plan').scrollTop).toBe(0)
+      await pickCrew('Night shift')
+
+      // Remembered. Mutation: do not persist -> the remount opens on Loom,
+      // red twice.
+      expect(localStorage.getItem('convergence-loom-crew')).toBe('crew-2')
+      cleanup()
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      expect(crewPicker().textContent).toBe('Night shift')
+    })
+
+    it('R4: switching in expanded stays expanded', async () => {
+      localStorage.setItem('convergence-wave-panel-mode', 'expanded')
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
+      await pickCrew('Night shift')
+      expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
+      expect(crewPicker().textContent).toBe('Night shift')
+      expect(localStorage.getItem('convergence-wave-panel-mode')).toBe(
+        'expanded',
+      )
+    })
+
+    it('R5: a Loom row carries no crew name; the Waves tab still does', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      fireEvent.click(screen.getByRole('button', { name: /^Plan · / }))
+      // Mutation: `several` from the bound count -> "Loom · …" on the row,
+      // red.
+      expect(rowOf('crew-1:EX-2').queryByText(/^Loom · /)).toBeNull()
+      cleanup()
+
+      // The Waves tab is the all-crews surface: every crew, each named --
+      // whatever Loom has selected.
+      localStorage.setItem('convergence-loom-crew', 'crew-2')
+      await mount(<WavesTab />)
+      await screen.findByLabelText('Waves')
+      expect(
+        rowOf('crew-1:EX-1').getAllByText(/^Loom · opus · working/).length,
+      ).toBeGreaterThan(0)
+      expect(
+        rowOf('crew-2:NS-1').getAllByText(/^Night shift · night · working/)
+          .length,
+      ).toBeGreaterThan(0)
+    })
+  })
 })
 
 describe('MAR-3085 R7: the row reads the lap, the cap and the ruling', () => {

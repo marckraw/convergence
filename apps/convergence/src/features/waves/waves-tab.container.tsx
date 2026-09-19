@@ -13,7 +13,7 @@ import { useWaveBoard } from './use-wave-board'
 export const WavesTab: FC<{
   onOpenSession?: (session: SessionSummary) => void
 }> = ({ onOpenSession }) => {
-  const board = useWaveBoard()
+  const board = useWaveBoard('all')
   const inertReason = (entry: WorkLedgerEntry) => {
     const opening = board.resolveRow(entry)
     return opening.openable ? null : opening.reason

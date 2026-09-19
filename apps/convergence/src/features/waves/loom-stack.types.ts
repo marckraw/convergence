@@ -6,6 +6,7 @@ import type { LoomSheets } from './loom-sheets.pure'
 import type { LoomSheet } from './wave-panel-sheet.pure'
 import type { SessionSummary } from '@/entities/session'
 import type { WaveHeader } from './wave-sections.pure'
+import type { LoomCrewOption } from './wave-panel-crew.pure'
 
 /**
  * What a stack hands the open sheet so it can render a detail.
@@ -19,6 +20,23 @@ export interface LoomSheetDetail {
   onClose: () => void
   onOpenConversation: (session: SessionSummary) => void
   closeRef?: (element: HTMLButtonElement | null) => void
+}
+
+/**
+ * Which ledger this is (MAR-3189), and the choice of crew when there is one
+ * (MAR-3225 R3).
+ *
+ * `text` is the whole line either way; `picker` is present only when more
+ * than one crew reads a tracker, and then it draws the crew's name as a
+ * control while the rest of the line stays text.
+ */
+export interface LoomSubline {
+  text: string
+  picker: {
+    options: readonly LoomCrewOption[]
+    selectedId: string
+    onSelect: (crewId: string) => void
+  } | null
 }
 
 /**
@@ -60,7 +78,7 @@ export interface LoomStackProps {
   onEscape?: () => void
   header: WaveHeader
   /** `convergence development · All waves` -- which ledger this is. */
-  subline: string
+  subline: LoomSubline
   open: LoomSheet
   onSelectSheet: (sheet: LoomSheet) => void
   inertReason: (entry: WorkLedgerEntry) => string | null
