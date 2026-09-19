@@ -50,8 +50,6 @@ export const LoomCompactView: FC<
         Expand <Maximize2 className="size-3.5" />
       </Button>
     </div>
-    {/* The search field's own row, under the header, while it is revealed
-        or holds a query (MAR-3234 R7). */}
     <div className="shrink-0 px-3 pb-4 text-xs text-muted-foreground">
       <div className={LOOM_SEARCH_SUBLINE_ROW_CLASS}>
         <p className="min-w-0 flex-1 break-words">
@@ -64,6 +62,8 @@ export const LoomCompactView: FC<
       </div>
       <LoomStatusView header={props.header} refresh={props.refresh} />
     </div>
+    {/* The search field's own row, under the header, while it is revealed
+        or holds a query (MAR-3234 R7). */}
     {props.field.revealed ? (
       <div className={LOOM_SEARCH_COMPACT_ROW_CLASS}>
         <LoomSearchFieldView field={props.field} />

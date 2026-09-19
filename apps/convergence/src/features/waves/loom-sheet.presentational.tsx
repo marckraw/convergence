@@ -140,7 +140,8 @@ export const LoomSheetView = <TSession,>({
   // With a search, the open sheet may hold nothing the query matches; then
   // its whole body is the one line that says where the matches are (R3), or
   // why there are none (R5).
-  const missed = search !== null && search.summary.bySheet[sheet] === 0
+  const missed =
+    search !== null && search.summary.bySheet[sheet] === 0 ? search : null
   // The counted-not-listed buckets are LISTED while a query is active (R5):
   // "is this ticket anywhere" deserves the row, not a count. With no query
   // these are never computed, so the sheet is byte-identical to before.
@@ -182,10 +183,10 @@ export const LoomSheetView = <TSession,>({
         />
       ) : missed ? (
         <p data-loom-search-miss="" className={LOOM_SEARCH_MISS_CLASS}>
-          {search!.summary.elsewhere.length > 0 ? (
+          {missed.summary.elsewhere.length > 0 ? (
             <>
               {loomSearchElsewherePrefix(sheet)}
-              {search!.summary.elsewhere.map((place, at) => (
+              {missed.summary.elsewhere.map((place, at) => (
                 <span key={place.sheet}>
                   {at > 0 ? ', ' : null}
                   <Button
@@ -200,7 +201,7 @@ export const LoomSheetView = <TSession,>({
               ))}
             </>
           ) : (
-            search!.nowhere
+            missed.nowhere
           )}
         </p>
       ) : (
