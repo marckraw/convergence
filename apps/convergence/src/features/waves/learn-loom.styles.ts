@@ -34,12 +34,27 @@ export const LEARN_LOOM_FOOTER_CLASS =
 /** 224 wide, the contract's primary button. */
 export const LEARN_LOOM_PRIMARY_CLASS = 'h-10 w-[224px] justify-center'
 export const LEARN_LOOM_CONTROL_CLASS = 'h-10 px-3'
+/**
+ * A control that refuses, without leaving the keyboard (lap 3, C): the
+ * `disabled` ATTRIBUTE drops focus the moment Back disables itself, so the
+ * refusal is said with `aria-disabled` and drawn here.
+ */
+export const LEARN_LOOM_CONTROL_OFF_CLASS =
+  'h-10 px-3 opacity-40 cursor-not-allowed'
 
+/** The step's own colour, not muted (lap 3, G2): it names where you are. */
 export const LEARN_LOOM_EYEBROW_CLASS =
-  'flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground'
+  'flex items-center gap-2 text-xs font-semibold tracking-wide'
 export const LEARN_LOOM_STEP_TITLE_CLASS =
   'text-[27px] font-semibold leading-[135%] tracking-tight'
 export const LEARN_LOOM_MAIN_CLASS = 'text-base leading-[145%]'
+/**
+ * The headline and its explanation are one filled card (lap 3, G1), not two
+ * loose paragraphs: they are the step's single idea, and the frame sets them
+ * apart from the prose around them.
+ */
+export const LEARN_LOOM_KEY_CARD_CLASS =
+  'flex flex-col gap-1.5 rounded-xl bg-white/[0.04] px-4 py-3.5'
 export const LEARN_LOOM_KEY_HEADLINE_CLASS = 'text-[15px] font-semibold'
 export const LEARN_LOOM_KEY_EXPLANATION_CLASS =
   'text-sm leading-[145%] text-muted-foreground'
@@ -52,24 +67,23 @@ export const LEARN_LOOM_ILLUSTRATION_CLASS =
   'flex h-[264px] shrink-0 items-stretch'
 export const LEARN_LOOM_SHEET_CLASS =
   'relative flex h-full flex-col rounded-[14px] border p-4'
-/** Closed 136 wide; the active sheet takes what is left. */
+/** Widths and the overlap come from `LEARN_LOOM_GEOMETRY`, not from here. */
 export const LEARN_LOOM_SHEET_CLOSED_CLASS =
-  'w-[136px] shrink-0 border-white/10 bg-white/[0.02]'
-export const LEARN_LOOM_SHEET_ACTIVE_CLASS =
-  'min-w-0 flex-1 border-white/15 bg-white/[0.04]'
-/** The 24 px the contract overlaps neighbouring sheets by. */
-export const LEARN_LOOM_SHEET_OVERLAP_CLASS = '-ml-6'
+  'shrink-0 border-white/10 bg-white/[0.02]'
+/** The active sheet's border carries the step's emphasis (lap 3, G3). */
+export const LEARN_LOOM_SHEET_ACTIVE_CLASS = 'min-w-0 flex-1 bg-white/[0.04]'
 export const LEARN_LOOM_SHEET_NAME_CLASS = 'text-base font-semibold'
 export const LEARN_LOOM_SHEET_COUNT_CLASS = 'text-xs text-muted-foreground'
 
-/** 360 × 128, clamped so it can never be wider than its sheet minus 36. */
+/** 128 tall; its width, left edge and clamp are derived (lap 3, F). */
 export const LEARN_LOOM_TICKET_CLASS =
-  'absolute top-[116px] flex h-32 w-[min(360px,calc(100%-372px))] flex-col gap-[7px] rounded-[10px] border bg-background/80 p-3'
+  'absolute top-[116px] flex h-32 flex-col gap-[7px] rounded-[10px] border bg-background/80 p-3'
 
-export const LEARN_LOOM_TICKET_ID_CLASS = 'text-sm font-semibold'
-export const LEARN_LOOM_TICKET_TITLE_CLASS = 'text-sm'
-export const LEARN_LOOM_TICKET_NOTE_CLASS =
-  'text-[11px] uppercase tracking-wide text-muted-foreground'
+/** The identifier is small and semibold, in the step's colour (lap 3, G3). */
+export const LEARN_LOOM_TICKET_ID_CLASS = 'text-xs font-semibold'
+export const LEARN_LOOM_TICKET_TITLE_CLASS = 'text-[15px] text-foreground'
+/** Sentence case, muted: a note about the card, not a label on it. */
+export const LEARN_LOOM_TICKET_NOTE_CLASS = 'text-[11px] text-muted-foreground'
 
 /**
  * The three emphases, on the app's own tokens (R10).
@@ -88,6 +102,15 @@ export const LEARN_LOOM_EMPHASIS_CLASS: Readonly<
   green: 'border-emerald-400/50',
 }
 
+/** The words that carry the same fact the colour does (R7). */
+export const LEARN_LOOM_EMPHASIS_TEXT_CLASS: Readonly<
+  Record<LearnLoomEmphasis, string>
+> = {
+  blue: 'text-sky-300',
+  amber: 'text-amber-300',
+  green: 'text-emerald-300',
+}
+
 export const LEARN_LOOM_TICKET_STATUS_CLASS: Readonly<
   Record<LearnLoomEmphasis, string>
 > = {
@@ -102,3 +125,6 @@ export const LEARN_LOOM_REFERENCE_CARD_CLASS =
 export const LEARN_LOOM_REFERENCE_CARD_TITLE_CLASS = 'text-[15px] font-semibold'
 export const LEARN_LOOM_REFERENCE_LINE_CLASS =
   'text-sm leading-[145%] text-muted-foreground'
+/** The reference's own promise, above the cards (lap 3, G3). */
+export const LEARN_LOOM_REFERENCE_LEAD_CLASS =
+  'text-[18px] font-semibold text-foreground'

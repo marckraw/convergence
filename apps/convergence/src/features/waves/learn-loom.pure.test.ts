@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   learnLoomAnnouncement,
+  learnLoomLiveMessage,
+  learnLoomSheetStride,
+  learnLoomTicketLeft,
+  learnLoomTicketMaxWidth,
+  LEARN_LOOM_GEOMETRY,
   learnLoomSheetViews,
   learnLoomStepAt,
   learnLoomStepView,
@@ -109,6 +114,34 @@ describe('MAR-3201 R5: where a press lands', () => {
   })
 })
 
+describe('MAR-3201 lap 3, F: one geometry, everything else derived', () => {
+  it('the ticket sits one inset inside the active sheet, at every step', () => {
+    const { closedWidth, overlap, ticketInset } = LEARN_LOOM_GEOMETRY
+    for (const [at] of LOOM_SHEETS.entries()) {
+      // Computed from the four numbers, never from the `112` they happen to
+      // make today: changing `closedWidth` alone must move this with it.
+      expect(learnLoomTicketLeft(at)).toBe(
+        at * (closedWidth - overlap) + ticketInset,
+      )
+    }
+    expect(learnLoomSheetStride()).toBe(closedWidth - overlap)
+    // Mutation: use `closedWidth` as the stride (forget the overlap) -> the
+    // ticket drifts further right with every step, red.
+    expect(learnLoomTicketLeft(0)).toBe(ticketInset)
+    expect(learnLoomTicketLeft(3) - learnLoomTicketLeft(2)).toBe(
+      learnLoomSheetStride(),
+    )
+  })
+
+  it('the clamp leaves the active sheet its insets on both sides', () => {
+    const { closedWidth, overlap, ticketInset } = LEARN_LOOM_GEOMETRY
+    const closed = (LOOM_SHEETS.length - 1) * (closedWidth - overlap)
+    expect(learnLoomTicketMaxWidth(LOOM_SHEETS.length)).toBe(
+      `calc(100% - ${closed + 2 * ticketInset}px)`,
+    )
+  })
+})
+
 describe('MAR-3201 R7: the step is said, not only shown', () => {
   it('names the position and the step’s own title', () => {
     expect(learnLoomAnnouncement(0)).toBe(
@@ -117,9 +150,24 @@ describe('MAR-3201 R7: the step is said, not only shown', () => {
     expect(learnLoomAnnouncement(4)).toBe(
       'Step 5 of 6: Reviewed means it’s your turn.',
     )
-    // The sentence is built from the copy module, so it cannot drift from
-    // the heading a sighted person reads.
-    expect(learnLoomAnnouncement(2)).toContain(LEARN_LOOM_STEP_COPY[2]!.title)
+    // Pasted, not read from the module: an assertion that builds its own
+    // expectation from the code under test cannot fail.
+    expect(learnLoomAnnouncement(2)).toBe(
+      'Step 3 of 6: Watch the work, not just the spinner.',
+    )
+  })
+
+  it('says the ticket’s status and its sheet, for both views', () => {
+    // The status words are the reason colour is never the only carrier, and
+    // they live inside an `aria-hidden` illustration (lap 3, D).
+    expect(learnLoomLiveMessage('steps', 0)).toBe(
+      'Step 1 of 6: Turn an idea into work an agent can do. Brief → code check. Plan · 1 in preparation.',
+    )
+    expect(learnLoomLiveMessage('steps', 5)).toBe(
+      'Step 6 of 6: Accepted work becomes Before. Linear: Done. Before · 1 done.',
+    )
+    // Mutation: return the steps sentence for the reference too -> red.
+    expect(learnLoomLiveMessage('reference', 3)).toBe('Loom, at a glance')
   })
 
   it('the view carries the step’s own copy', () => {

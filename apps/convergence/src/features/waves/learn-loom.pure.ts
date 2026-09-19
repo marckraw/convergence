@@ -5,6 +5,7 @@ import {
 } from './wave-panel-sheet.pure'
 import { loomSheetTitle, type LoomSheetCounts } from './loom-sheets.pure'
 import {
+  LEARN_LOOM_REFERENCE_TITLE,
   LEARN_LOOM_STEP_COPY,
   type LearnLoomStepCopy,
 } from './learn-loom-copy.pure'
@@ -108,6 +109,53 @@ export const LEARN_LOOM_STEPS: readonly LearnLoomStep[] = [
 
 export const LEARN_LOOM_STEP_COUNT = LEARN_LOOM_STEPS.length
 
+/**
+ * The illustration's measurements, once (MAR-3201 lap 3, F).
+ *
+ * Every other number the drawing needs -- the stride between closed sheets,
+ * the ticket's left edge, the width it may not exceed -- is derived from
+ * these four. LL2 animates those positions and LL3 reflows them, so a
+ * second copy of any of them is a future disagreement with a deadline.
+ */
+export const LEARN_LOOM_GEOMETRY = {
+  /** A sheet nobody is looking at. */
+  closedWidth: 136,
+  /** How far each sheet sits over its neighbour. */
+  overlap: 24,
+  /** The ticket's inset from the active sheet's left edge. */
+  ticketInset: 18,
+  /** What the ticket wants to be, when the sheet has room for it. */
+  ticketWidth: 360,
+} as const
+
+/** How much width each closed sheet actually costs, after the overlap. */
+export function learnLoomSheetStride(): number {
+  return LEARN_LOOM_GEOMETRY.closedWidth - LEARN_LOOM_GEOMETRY.overlap
+}
+
+/**
+ * The ticket's left edge for an active sheet at `index`.
+ *
+ * Every sheet before the active one is closed, so the active sheet's own
+ * left edge is `index` strides in, and the ticket sits one inset inside it.
+ */
+export function learnLoomTicketLeft(activeIndex: number): number {
+  return activeIndex * learnLoomSheetStride() + LEARN_LOOM_GEOMETRY.ticketInset
+}
+
+/**
+ * The widest the ticket may be, as a CSS length over the illustration.
+ *
+ * The active sheet is whatever the three closed ones leave, and the ticket
+ * keeps its inset on both sides of that -- so the clamp is written once,
+ * from the same four numbers, rather than as a magic `372`.
+ */
+export function learnLoomTicketMaxWidth(sheetCount: number): string {
+  const closed = (sheetCount - 1) * learnLoomSheetStride()
+  const insets = 2 * LEARN_LOOM_GEOMETRY.ticketInset
+  return `calc(100% - ${closed + insets}px)`
+}
+
 /** The step a person lands on: opening always starts the lesson (R5). */
 export const LEARN_LOOM_FIRST_STEP = 0
 
@@ -167,6 +215,33 @@ export function learnLoomSheetViews(
 export function learnLoomAnnouncement(index: number): string {
   const at = learnLoomStepAt(index)
   return `Step ${at + 1} of ${LEARN_LOOM_STEP_COUNT}: ${LEARN_LOOM_STEP_COPY[at]!.title}`
+}
+
+/**
+ * Everything the guide says out loud (lap 3, D).
+ *
+ * One sentence for whichever view is open, so a person who cannot see the
+ * dialog is told the same three facts a sighted person reads: where they
+ * are, what the ticket's status is now, and which sheet that puts it in.
+ * The status words live here as well as on the card, because the card sits
+ * inside an `aria-hidden` illustration -- and those words are the reason
+ * colour is never the only carrier of the step's meaning.
+ */
+export function learnLoomLiveMessage(
+  view: LearnLoomView,
+  index: number,
+): string {
+  if (view === 'reference') return LEARN_LOOM_REFERENCE_TITLE
+  const at = learnLoomStepAt(index)
+  const step = LEARN_LOOM_STEPS[at]!
+  const active = learnLoomSheetViews(step).find((sheet) => sheet.active)!
+  // Each part is one spoken sentence. The step's title already ends in a
+  // full stop and the other two do not, so the punctuation is added where
+  // it is missing rather than appended blindly -- `do.. Brief` is what
+  // blind appending sounds like.
+  return [learnLoomAnnouncement(at), step.ticketStatus, active.title]
+    .map((part) => (part.endsWith('.') ? part : `${part}.`))
+    .join(' ')
 }
 
 /** Everything one step needs, from its index alone. */

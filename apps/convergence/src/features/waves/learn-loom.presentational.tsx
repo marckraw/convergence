@@ -1,5 +1,6 @@
 import type { FC } from 'react'
 import { Button } from '@/shared/ui/button'
+import { cn } from '@/shared/lib/cn.pure'
 import {
   Dialog,
   DialogContent,
@@ -18,11 +19,14 @@ import type { LearnLoomStepView, LearnLoomView } from './learn-loom.pure'
 import {
   LEARN_LOOM_BODY_CLASS,
   LEARN_LOOM_CONTROL_CLASS,
+  LEARN_LOOM_CONTROL_OFF_CLASS,
   LEARN_LOOM_DIALOG_CLASS,
   LEARN_LOOM_DIALOG_TITLE_CLASS,
+  LEARN_LOOM_EMPHASIS_TEXT_CLASS,
   LEARN_LOOM_EYEBROW_CLASS,
   LEARN_LOOM_FOOTER_CLASS,
   LEARN_LOOM_HEADER_CLASS,
+  LEARN_LOOM_KEY_CARD_CLASS,
   LEARN_LOOM_KEY_EXPLANATION_CLASS,
   LEARN_LOOM_KEY_HEADLINE_CLASS,
   LEARN_LOOM_MAIN_CLASS,
@@ -37,6 +41,8 @@ export interface LearnLoomViewProps {
   open: boolean
   view: LearnLoomView
   step: LearnLoomStepView
+  /** What the guide says out loud, for whichever view is open (lap 3, D). */
+  liveMessage: string
   onClose: () => void
   onNext: () => void
   onBack: () => void
@@ -57,6 +63,7 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
   open,
   view,
   step,
+  liveMessage,
   onClose,
   onNext,
   onBack,
@@ -101,18 +108,26 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
         </Button>
       </DialogHeader>
 
+      {/* One region for both views (lap 3, D): entering the quick reference
+          is a change of place, and silence is not an announcement. It
+          carries the ticket's status words too, because those live inside
+          an `aria-hidden` illustration. */}
+      <div aria-live="polite" data-learn-loom-live className="sr-only">
+        {liveMessage}
+      </div>
+
       <div className={LEARN_LOOM_BODY_CLASS}>
         {view === 'reference' ? (
           <LearnLoomReferenceView />
         ) : (
           <>
-            {/* The step, announced for a person who cannot see it move (R7).
-                The live region carries the same sentence the heading does. */}
-            <div aria-live="polite" data-learn-loom-live className="sr-only">
-              {step.announcement}
-            </div>
             <div data-learn-loom-step={step.step.key}>
-              <p className={LEARN_LOOM_EYEBROW_CLASS}>
+              <p
+                className={cn(
+                  LEARN_LOOM_EYEBROW_CLASS,
+                  LEARN_LOOM_EMPHASIS_TEXT_CLASS[step.step.emphasis],
+                )}
+              >
                 <span>{step.copy.index}</span>
                 <span>{step.copy.label}</span>
               </p>
@@ -121,12 +136,14 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
             <LearnLoomIllustrationView view={step} />
             <div className="flex flex-col gap-3">
               <p className={LEARN_LOOM_MAIN_CLASS}>{step.copy.main}</p>
-              <p className={LEARN_LOOM_KEY_HEADLINE_CLASS}>
-                {step.copy.keyHeadline}
-              </p>
-              <p className={LEARN_LOOM_KEY_EXPLANATION_CLASS}>
-                {step.copy.keyExplanation}
-              </p>
+              <div data-learn-loom-key className={LEARN_LOOM_KEY_CARD_CLASS}>
+                <p className={LEARN_LOOM_KEY_HEADLINE_CLASS}>
+                  {step.copy.keyHeadline}
+                </p>
+                <p className={LEARN_LOOM_KEY_EXPLANATION_CLASS}>
+                  {step.copy.keyExplanation}
+                </p>
+              </div>
               <p className="flex flex-wrap items-baseline gap-3">
                 <span className={LEARN_LOOM_YOUR_PART_LABEL_CLASS}>
                   {LEARN_LOOM_YOUR_PART}
@@ -172,13 +189,23 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
             >
               {LEARN_LOOM_CONTROLS.reference}
             </Button>
+            {/* `aria-disabled`, never the attribute (lap 3, C): pressing
+                Back on step 2 makes this same node refuse, and a `disabled`
+                element loses the focus that is standing on it. */}
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              disabled={step.backDisabled}
-              className={LEARN_LOOM_CONTROL_CLASS}
-              onClick={onBack}
+              aria-disabled={step.backDisabled || undefined}
+              className={
+                step.backDisabled
+                  ? LEARN_LOOM_CONTROL_OFF_CLASS
+                  : LEARN_LOOM_CONTROL_CLASS
+              }
+              onClick={() => {
+                if (step.backDisabled) return
+                onBack()
+              }}
             >
               {LEARN_LOOM_CONTROLS.back}
             </Button>

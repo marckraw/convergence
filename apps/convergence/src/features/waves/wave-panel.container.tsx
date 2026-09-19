@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type FC,
+  type ReactNode,
   type UIEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
@@ -400,6 +401,14 @@ export const WavePanel: FC<WavePanelProps> = ({
   const guideButton = useRef<HTMLButtonElement | null>(null)
   const openGuide = useCallback(() => setGuideOpen(true), [])
   const closeGuide = useCallback(() => setGuideOpen(false), [])
+  // When Loom itself is gone -- no bound crew, or the Waves tab took over --
+  // the guide goes with it (lap 3, A). Closed, not merely unmounted: a guide
+  // left `open` would come back by itself the moment a crew is bound again,
+  // which is the one thing R9 forbids.
+  useEffect(() => {
+    if (columnAbsent) setGuideOpen(false)
+  }, [columnAbsent])
+
   // The falling edge, the same shape this file uses for a closed detail and
   // a folded stack: focus can only go back once the dialog's focus scope has
   // unmounted, because until then it pulls the keyboard straight back in.
@@ -467,25 +476,54 @@ export const WavePanel: FC<WavePanelProps> = ({
   }
 
   /**
-   * The guide, mounted as a SIBLING of whichever shell is drawn (R6).
+   * The guide: a SIBLING of whichever shell is drawn, and keyed twice over.
    *
-   * Not inside them: React portals bubble synthetic events through the React
-   * tree, so a dialog rendered under `LoomExpandedView` would deliver its
-   * Escape keydown to that section's `onKeyDown` -- which folds Loom. Out
-   * here the shells are not ancestors, so the key cannot reach them and
-   * nothing had to be stopped by hand.
+   * A sibling, never a child (R6): React portals bubble synthetic events
+   * through the React tree, so a dialog rendered under `LoomExpandedView`
+   * would deliver its Escape keydown to that section's `onKeyDown` -- which
+   * folds Loom. Out here the shells are not ancestors, so the key cannot
+   * reach them and nothing had to be stopped by hand.
+   *
+   * The key is stable while a session lasts, so React matches the guide
+   * across the three shells instead of matching it by position against
+   * whatever each branch renders first (lap 3, A) -- narrowing the window
+   * past the strip threshold used to unmount the dialog mid-step. And it
+   * CHANGES when the guide closes, so the next session is a fresh mount with
+   * no state to correct (lap 3, B) -- whichever way it closed, including the
+   * panel closing it because Loom's column went away.
    */
-  const guide = <LearnLoomGuide open={guideOpen} onClose={closeGuide} />
+  const guide = (
+    <LearnLoomGuide
+      key={`learn-loom-${guideOpen}`}
+      open={guideOpen}
+      onClose={closeGuide}
+    />
+  )
+
+  /**
+   * The shell for this mode -- and the guide beside it, always (lap 3, A).
+   *
+   * One return rather than three, so the guide is the same keyed element in
+   * every mode: rendered per branch, a window narrowing past the strip
+   * threshold unmounted the dialog mid-step, and widening again mounted a
+   * fresh one that was still `open`.
+   */
+  const withGuide = (shell: ReactNode) => (
+    <>
+      {shell}
+      {guide}
+    </>
+  )
 
   if (decision.mode === 'strip') {
-    return (
+    return withGuide(
       <LoomStripView
         sheets={board.sheets}
         now={board.now}
         horses={board.horses}
         outage={board.header.kind === 'outage'}
         onExpand={() => changeMode('expanded')}
-      />
+      />,
     )
   }
 
@@ -493,13 +531,10 @@ export const WavePanel: FC<WavePanelProps> = ({
     const expandedStack = (
       <LoomExpandedView {...stack} onFold={() => changeMode('compact')} />
     )
-    return (
-      <>
-        {expandedContainer
-          ? createPortal(expandedStack, expandedContainer)
-          : expandedStack}
-        {guide}
-      </>
+    return withGuide(
+      expandedContainer
+        ? createPortal(expandedStack, expandedContainer)
+        : expandedStack,
     )
   }
 
@@ -507,7 +542,7 @@ export const WavePanel: FC<WavePanelProps> = ({
   // flex row rather than a child of the aside -- the same shape the sidebar's
   // handle has. On this branch the decision HAS a width and a ceiling (lap 2,
   // B), so there is no fallback to reach for.
-  return (
+  return withGuide(
     <>
       <LoomCompactView
         {...stack}
@@ -525,7 +560,6 @@ export const WavePanel: FC<WavePanelProps> = ({
         onKeyDown={resize.onHandleKeyDown}
         onDoubleClick={resize.onHandleDoubleClick}
       />
-      {guide}
-    </>
+    </>,
   )
 }

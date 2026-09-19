@@ -1,5 +1,6 @@
-import { useEffect, useState, type FC } from 'react'
+import { useState, type FC } from 'react'
 import {
+  learnLoomLiveMessage,
   LEARN_LOOM_FIRST_STEP,
   learnLoomStepAt,
   learnLoomStepView,
@@ -21,20 +22,23 @@ export const LearnLoomGuide: FC<{ open: boolean; onClose: () => void }> = ({
   const [step, setStep] = useState(LEARN_LOOM_FIRST_STEP)
   const [view, setView] = useState<LearnLoomView>('steps')
 
-  // Opening always starts the lesson at its first beat: a guide that resumed
-  // where it was left would open on a step whose context a person no longer
-  // has (R5).
-  useEffect(() => {
-    if (!open) return
-    setStep(LEARN_LOOM_FIRST_STEP)
-    setView('steps')
-  }, [open])
+  /**
+   * There is no reset here, and that is the point (lap 3, B).
+   *
+   * A passive effect on `open` was a frame too late: the commit that mounted
+   * the dialog still held the old view, so a guide closed on the quick
+   * reference was born named "Loom, at a glance" and then corrected itself.
+   * The panel gives this component a key that changes when the guide closes,
+   * so every session starts from a fresh mount -- including the sessions the
+   * guide never sees closing, like Loom's column disappearing underneath it.
+   */
 
   return (
     <LearnLoomGuideView
       open={open}
       view={view}
       step={learnLoomStepView(step)}
+      liveMessage={learnLoomLiveMessage(view, step)}
       onClose={onClose}
       // Functional updates, so a burst of presses lands on the arithmetic
       // result instead of on whichever render each press happened to read.

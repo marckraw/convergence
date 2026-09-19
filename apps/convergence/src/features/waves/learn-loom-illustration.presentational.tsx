@@ -2,27 +2,27 @@ import type { FC } from 'react'
 import { cn } from '@/shared/lib/cn.pure'
 import { LOOM_SHEET_ICONS } from './loom-stack.presentational'
 import { LEARN_LOOM_TICKET } from './learn-loom-copy.pure'
-import type { LearnLoomStepView } from './learn-loom.pure'
+import {
+  learnLoomTicketLeft,
+  learnLoomTicketMaxWidth,
+  LEARN_LOOM_GEOMETRY,
+  type LearnLoomStepView,
+} from './learn-loom.pure'
 import {
   LEARN_LOOM_EMPHASIS_CLASS,
+  LEARN_LOOM_EMPHASIS_TEXT_CLASS,
   LEARN_LOOM_ILLUSTRATION_CLASS,
   LEARN_LOOM_SHEET_ACTIVE_CLASS,
   LEARN_LOOM_SHEET_CLOSED_CLASS,
   LEARN_LOOM_SHEET_CLASS,
   LEARN_LOOM_SHEET_COUNT_CLASS,
   LEARN_LOOM_SHEET_NAME_CLASS,
-  LEARN_LOOM_SHEET_OVERLAP_CLASS,
   LEARN_LOOM_TICKET_CLASS,
   LEARN_LOOM_TICKET_ID_CLASS,
   LEARN_LOOM_TICKET_NOTE_CLASS,
   LEARN_LOOM_TICKET_STATUS_CLASS,
   LEARN_LOOM_TICKET_TITLE_CLASS,
 } from './learn-loom.styles'
-
-/** A closed sheet is 136 wide and overlaps its neighbour by 24 (R10). */
-const CLOSED_STRIDE = 112
-/** The ticket sits 18 in from the active sheet's left edge. */
-const TICKET_INSET = 18
 
 /**
  * The four sheets and the one ticket (MAR-3201 R2, R3).
@@ -50,12 +50,21 @@ export const LearnLoomIllustrationView: FC<{ view: LearnLoomStepView }> = ({
             key={sheet.sheet}
             data-learn-loom-sheet={sheet.sheet}
             data-learn-loom-active={sheet.active ? 'true' : 'false'}
+            style={{
+              // Derived, never written twice (lap 3, F).
+              width: sheet.active ? undefined : LEARN_LOOM_GEOMETRY.closedWidth,
+              marginLeft: at > 0 ? -LEARN_LOOM_GEOMETRY.overlap : undefined,
+            }}
             className={cn(
               LEARN_LOOM_SHEET_CLASS,
               sheet.active
                 ? LEARN_LOOM_SHEET_ACTIVE_CLASS
                 : LEARN_LOOM_SHEET_CLOSED_CLASS,
-              at > 0 && LEARN_LOOM_SHEET_OVERLAP_CLASS,
+              // The active sheet wears the step's colour, as its ticket does
+              // (lap 3, G3); the closed ones keep the quiet border.
+              sheet.active
+                ? LEARN_LOOM_EMPHASIS_CLASS[view.step.emphasis]
+                : undefined,
             )}
           >
             <Icon className="size-[18px] text-muted-foreground" />
@@ -70,14 +79,23 @@ export const LearnLoomIllustrationView: FC<{ view: LearnLoomStepView }> = ({
       })}
       <div
         data-learn-loom-ticket={LEARN_LOOM_TICKET.identifier}
-        style={{ left: activeAt * CLOSED_STRIDE + TICKET_INSET }}
+        style={{
+          left: learnLoomTicketLeft(activeAt),
+          width: LEARN_LOOM_GEOMETRY.ticketWidth,
+          maxWidth: learnLoomTicketMaxWidth(view.sheets.length),
+        }}
         className={cn(
           LEARN_LOOM_TICKET_CLASS,
           LEARN_LOOM_EMPHASIS_CLASS[view.step.emphasis],
         )}
       >
         <p className={LEARN_LOOM_TICKET_NOTE_CLASS}>{LEARN_LOOM_TICKET.note}</p>
-        <p className={LEARN_LOOM_TICKET_ID_CLASS}>
+        <p
+          className={cn(
+            LEARN_LOOM_TICKET_ID_CLASS,
+            LEARN_LOOM_EMPHASIS_TEXT_CLASS[view.step.emphasis],
+          )}
+        >
           {LEARN_LOOM_TICKET.identifier}
         </p>
         <p className={LEARN_LOOM_TICKET_TITLE_CLASS}>

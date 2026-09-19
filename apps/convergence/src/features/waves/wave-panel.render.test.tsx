@@ -420,9 +420,12 @@ describe('MAR-3097: through the containers and the real stores', () => {
       .reduce((sum, fn) => sum + (fn.mock?.calls.length ?? 0), 0)
   }
 
+  let rerenderPanel: (ui: React.ReactElement) => void = () => {}
+
   async function mount(ui: React.ReactElement) {
     await act(async () => {
-      render(ui)
+      const view = render(ui)
+      rerenderPanel = view.rerender
     })
   }
 
@@ -2723,6 +2726,62 @@ describe('MAR-3097: through the containers and the real stores', () => {
       })
       expect(expandedEntry.closest('[data-loom="expanded"]')).toBeTruthy()
       expect(expandedEntry.closest('[data-loom-sheet]')).toBeNull()
+    })
+
+    it('lap 3, A: the guide survives the shell it was opened over', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await openGuide()
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Next: assign a horse →' }),
+        )
+      })
+      expect(screen.getByText('2 / 6')).toBeTruthy()
+
+      // Narrow the window until Loom collapses to the strip. Mutation: drop
+      // `{guide}` from the strip branch -> the dialog vanishes mid-step and
+      // this is red.
+      await act(async () => {
+        setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
+        fireEvent(window, new Event('resize'))
+      })
+      expect(screen.getByLabelText('Loom strip')).toBeTruthy()
+      expect(
+        screen.getByRole('dialog', { name: 'How Loom works' }),
+      ).toBeTruthy()
+      // Still on the step it was on: the guide was never remounted.
+      expect(screen.getByText('2 / 6')).toBeTruthy()
+
+      // ...and back again, without the guide losing its place.
+      await act(async () => {
+        setWindowWidth(1024)
+        fireEvent(window, new Event('resize'))
+      })
+      expect(
+        screen.getByRole('dialog', { name: 'How Loom works' }),
+      ).toBeTruthy()
+      expect(screen.getByText('2 / 6')).toBeTruthy()
+    })
+
+    it('lap 3, A: a column that goes away closes the guide, and it stays closed', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await openGuide()
+
+      // The Waves tab takes over: Loom's column is not drawn at all.
+      await act(async () => {
+        rerenderPanel(<WavePanel reservedWidth={RESERVED} hidden />)
+      })
+      expect(screen.queryByRole('dialog')).toBeNull()
+
+      // Mutation: drop the close-on-absent effect -> the guide is still
+      // `open`, so coming back re-opens it by itself, which R9 forbids.
+      await act(async () => {
+        rerenderPanel(<WavePanel reservedWidth={RESERVED} />)
+      })
+      await screen.findByLabelText('Loom')
+      expect(screen.queryByRole('dialog')).toBeNull()
     })
 
     it('R6: Escape closes the guide and nothing else, from expanded', async () => {

@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -109,6 +110,16 @@ describe('MAR-3201 R4: the copy is r1’s, exactly', () => {
     },
   ]
 
+  /** Pasted, not imported: a test that reads the module cannot check it. */
+  const TICKET_STATUS = [
+    'Brief → code check',
+    '1 · ready',
+    'Linear: In Progress',
+    'Fable’s turn · Linear: In Review',
+    'Awaiting QA · Linear: Reviewed',
+    'Linear: Done',
+  ]
+
   it('every word of every step, and the ticket’s status line', () => {
     open()
     for (const [at, step] of EXPECTED.entries()) {
@@ -122,9 +133,7 @@ describe('MAR-3201 R4: the copy is r1’s, exactly', () => {
       expect(screen.getByText('YOUR PART')).toBeTruthy()
       expect(screen.getByText(step.part)).toBeTruthy()
       expect(screen.getByRole('button', { name: step.primary })).toBeTruthy()
-      expect(
-        within(ticket()).getByText(LEARN_LOOM_STEPS[at]!.ticketStatus),
-      ).toBeTruthy()
+      expect(within(ticket()).getByText(TICKET_STATUS[at]!)).toBeTruthy()
       if (at < EXPECTED.length - 1) fireEvent.click(next())
     }
   })
@@ -236,27 +245,49 @@ describe('MAR-3201 R2: the illustration speaks the app’s count language', () =
 })
 
 describe('MAR-3201 R5: navigation', () => {
-  it('Back is disabled on the first step and reverses after it', () => {
+  it('Back refuses on the first step without losing the keyboard', () => {
     open()
-    expect(
-      screen.getByRole('button', { name: LEARN_LOOM_CONTROLS.back }),
-    ).toBeDisabled()
+    const back = () =>
+      screen.getByRole('button', { name: LEARN_LOOM_CONTROLS.back })
+    expect(back().getAttribute('aria-disabled')).toBe('true')
+    // Never the attribute: a `disabled` element drops the focus standing on
+    // it, which is what happens to a keyboard user pressing Back on step 2.
+    // Mutation: `disabled={step.backDisabled}` -> red.
+    expect(back().hasAttribute('disabled')).toBe(false)
+
     fireEvent.click(next())
-    const back = screen.getByRole('button', { name: LEARN_LOOM_CONTROLS.back })
-    expect(back).not.toBeDisabled()
-    fireEvent.click(back)
+    expect(back().getAttribute('aria-disabled')).toBeNull()
+    back().focus()
+    fireEvent.click(back())
     expect(screen.getByText('1 / 6')).toBeTruthy()
+    // Back disabled ITSELF, and the keyboard is still on it.
+    expect(document.activeElement).toBe(back())
+    expect(back().getAttribute('aria-disabled')).toBe('true')
+
+    // A further press does nothing at all.
+    fireEvent.click(back())
+    expect(screen.getByText('1 / 6')).toBeTruthy()
+    expect(document.activeElement).toBe(back())
   })
 
-  it('ten rapid presses settle on the arithmetic result', () => {
-    open()
-    for (let at = 0; at < 8; at += 1) fireEvent.click(next())
+  it('a burst of presses lands on the arithmetic result, and closes nothing', () => {
+    const onClose = vi.fn()
+    render(<LearnLoomGuide open onClose={onClose} />)
+    // Eight presses inside ONE act: React batches them, so only a functional
+    // update can walk the whole lesson. Mutation: `setStep(step + 1)` -> all
+    // eight read the same rendered step and land on `2 / 6`, red.
+    act(() => {
+      for (let at = 0; at < 8; at += 1) next().click()
+    })
+    expect(screen.getByText('6 / 6')).toBeTruthy()
+    // Nothing in a burst closes the guide, whatever step it runs through.
+    expect(onClose).not.toHaveBeenCalled()
+
     for (let at = 0; at < 2; at += 1) {
       fireEvent.click(
         screen.getByRole('button', { name: LEARN_LOOM_CONTROLS.back }),
       )
     }
-    // 8 forward (clamped at 6) then 2 back = step 4, one ticket, its copy.
     expect(screen.getByText('4 / 6')).toBeTruthy()
     expect(document.querySelectorAll('[data-learn-loom-ticket]')).toHaveLength(
       1,
@@ -269,6 +300,14 @@ describe('MAR-3201 R5: navigation', () => {
     expect(
       within(ticket()).getByText('Fable’s turn · Linear: In Review'),
     ).toBeTruthy()
+    expect(onClose).not.toHaveBeenCalled()
+
+    // The last step's primary control does close, exactly once.
+    fireEvent.click(next())
+    fireEvent.click(next())
+    expect(screen.getByText('6 / 6')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Loom' }))
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 
   it('Quick reference opens from any step, and restart goes to step one', () => {
@@ -282,31 +321,70 @@ describe('MAR-3201 R5: navigation', () => {
     expect(document.querySelector('[data-learn-loom-reference]')).toBeNull()
   })
 
-  it('opening always starts at step one', () => {
-    const view = render(<LearnLoomGuide open onClose={() => {}} />)
-    advanceTo(2)
-    expect(screen.getByText('3 / 6')).toBeTruthy()
-    view.rerender(<LearnLoomGuide open={false} onClose={() => {}} />)
-    view.rerender(<LearnLoomGuide open onClose={() => {}} />)
+  it('a reopened guide is born at step one, under its own name', async () => {
+    // Mounted the way the panel mounts it: the key changes when it closes.
+    const mountGuide = (isOpen: boolean) => (
+      <LearnLoomGuide
+        key={`learn-loom-${isOpen}`}
+        open={isOpen}
+        onClose={() => {}}
+      />
+    )
+    const view = render(mountGuide(true))
+    advanceTo(3)
+    press(LEARN_LOOM_CONTROLS.reference)
+    expect(
+      screen.getByRole('dialog', { name: 'Loom, at a glance' }),
+    ).toBeTruthy()
+    view.rerender(mountGuide(false))
+
+    // Every title this reopen puts on screen, in order -- read from the DOM
+    // as it changes, because the defect is a FRAME, not an end state.
+    // Mutation: reset step/view in a `useEffect` on `open` instead -> the
+    // dialog is born "Loom, at a glance" and corrects itself, so two titles
+    // are recorded here, red.
+    const titles: string[] = []
+    const observer = new MutationObserver(() => {
+      const title = document.querySelector(
+        '[data-slot="dialog-title"]',
+      )?.textContent
+      if (title && titles[titles.length - 1] !== title) titles.push(title)
+    })
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    })
+    view.rerender(mountGuide(true))
+    await act(async () => {})
+    observer.disconnect()
+
+    expect(titles).toEqual(['How Loom works'])
     expect(screen.getByText('1 / 6')).toBeTruthy()
   })
 })
 
 describe('MAR-3201 R7 + R10: a modal, accessibly, that does not move', () => {
-  it('role, name, and a live region that follows the step', () => {
+  it('role, name, and one live region that follows both views', () => {
     open()
     expect(screen.getByRole('dialog', { name: 'How Loom works' })).toBeTruthy()
     expect(dialog().getAttribute('aria-modal')).toBe('true')
-    const live = document.querySelector('[data-learn-loom-live]')!
-    expect(live.getAttribute('aria-live')).toBe('polite')
-    expect(live.textContent).toBe(
-      'Step 1 of 6: Turn an idea into work an agent can do.',
+    const live = () => document.querySelector('[data-learn-loom-live]')!
+    expect(live().getAttribute('aria-live')).toBe('polite')
+    // Where you are, what the ticket says now, and which sheet that is --
+    // the status words live here because the illustration is aria-hidden.
+    // Mutation: remove the live region, or drop the status words -> red.
+    expect(live().textContent).toBe(
+      'Step 1 of 6: Turn an idea into work an agent can do. Brief → code check. Plan · 1 in preparation.',
     )
-    fireEvent.click(next())
-    // Mutation: remove the live region -> red.
-    expect(live.textContent).toBe(
-      'Step 2 of 6: Choose the right horse for the work.',
+    advanceTo(4)
+    expect(live().textContent).toBe(
+      'Step 5 of 6: Reviewed means it’s your turn. Awaiting QA · Linear: Reviewed. Now · 0 open · 1 awaiting QA.',
     )
+    // Entering the quick reference is a change of place, and it is said.
+    // Mutation: move the region back inside the steps branch -> red.
+    press(LEARN_LOOM_CONTROLS.reference)
+    expect(live().textContent).toBe('Loom, at a glance')
   })
 
   it('exactly one close control, and it is the design’s', () => {
@@ -317,7 +395,10 @@ describe('MAR-3201 R7 + R10: a modal, accessibly, that does not move', () => {
     expect(screen.queryByRole('button', { name: 'Close' })).toBeNull()
   })
 
-  it('the footer is the dialog’s last child and never moves between steps', () => {
+  // Named for what it proves: jsdom has no layout, so "the footer does not
+  // jump" is Marcin's eyes. What is checked here is that it is outside the
+  // one region allowed to grow.
+  it('the footer is outside the scrolling body, in every step', () => {
     open()
     const footer = () => document.querySelector('[data-learn-loom-footer]')!
     expect(dialog().lastElementChild).toBe(footer())
