@@ -1127,6 +1127,11 @@ describe('MAR-3097: through the containers and the real stores', () => {
     // Mutation: derive the word from the row's state -> "Working", red.
     expect(failed.getByText('Failed')).toBeTruthy()
     expect(failed.getByText(/Linear: In Progress/)).toBeTruthy()
+    // The card's accessible NAME carries the issue it holds (lap 2, D). An
+    // `aria-label` of seat + runtime replaces the content, so a screen
+    // reader would hear "opus — Failed" and never learn which issue.
+    // Mutation: put that label back -> this query finds no such button, red.
+    expect(screen.getByRole('button', { name: /EX-1/ })).toBeTruthy()
     expect(failed.getByText(/Lap 2/)).toBeTruthy()
 
     const running = within(
