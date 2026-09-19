@@ -43,14 +43,30 @@ function DialogOverlay({
   )
 }
 
+/**
+ * The dialog box, its backdrop and a built-in close (MAR-3201 A).
+ *
+ * `overlayClassName` and `hideClose` are both optional and both default to
+ * today's behaviour: with neither passed, every existing caller renders the
+ * markup it rendered before. They exist because the backdrop and the close
+ * were the two things a caller could not reach -- the overlay is rendered
+ * here with no props, and neither it nor the portal is exported -- so a
+ * design that needs a different backdrop, or supplies its own close control,
+ * had no way in but forking the primitive.
+ */
 function DialogContent({
   className,
+  overlayClassName,
+  hideClose,
   children,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+}: React.ComponentProps<typeof DialogPrimitive.Content> & {
+  overlayClassName?: string
+  hideClose?: boolean
+}) {
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
@@ -60,10 +76,12 @@ function DialogContent({
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="absolute top-4 right-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-          <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
-        </DialogPrimitive.Close>
+        {hideClose ? null : (
+          <DialogPrimitive.Close className="absolute top-4 right-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+        )}
       </DialogPrimitive.Content>
     </DialogPortal>
   )

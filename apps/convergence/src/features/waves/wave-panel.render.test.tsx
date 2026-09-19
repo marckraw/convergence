@@ -402,9 +402,30 @@ describe('MAR-3097: through the containers and the real stores', () => {
     useSessionCrewStore.setState({ crews: [] })
   })
 
+  /**
+   * Every call the preload mock has taken. The guide is a lesson, not a
+   * dashboard: from open to close this number must not move (MAR-3201 R8).
+   */
+  function preloadCalls() {
+    const api = (
+      window as unknown as {
+        electronAPI: Record<
+          string,
+          Record<string, { mock?: { calls: unknown[] } }>
+        >
+      }
+    ).electronAPI
+    return Object.values(api)
+      .flatMap((group) => Object.values(group))
+      .reduce((sum, fn) => sum + (fn.mock?.calls.length ?? 0), 0)
+  }
+
+  let rerenderPanel: (ui: React.ReactElement) => void = () => {}
+
   async function mount(ui: React.ReactElement) {
     await act(async () => {
-      render(ui)
+      const view = render(ui)
+      rerenderPanel = view.rerender
     })
   }
 
@@ -2672,6 +2693,334 @@ describe('MAR-3097: through the containers and the real stores', () => {
     ).toBe(240)
     // Mutation: drop the focus restore -> `document.body`, red.
     expect(document.activeElement).toBe(folded)
+  })
+
+  describe('MAR-3201: the guide opens over Loom and gives it back', () => {
+    const openGuide = async () => {
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'How Loom works' }))
+      })
+      return screen.getByRole('dialog', { name: 'How Loom works' })
+    }
+
+    it('R9: an entry in both shells, and the guide never opens by itself', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      // Mutation: `useState(true)` for open -> a dialog here, red.
+      expect(screen.queryByRole('dialog')).toBeNull()
+
+      // Compact: the control is a sibling of the stack, not inside the sheet
+      // that scrolls. Mutation: put the footer inside the sheet body -> red.
+      const compactEntry = screen.getByRole('button', {
+        name: 'How Loom works',
+      })
+      expect(compactEntry.closest('[data-loom-sheet]')).toBeNull()
+      expect(compactEntry.closest('[data-loom-footer]')).toBeTruthy()
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+      })
+      expect(screen.queryByRole('dialog')).toBeNull()
+      const expandedEntry = screen.getByRole('button', {
+        name: 'How Loom works',
+      })
+      expect(expandedEntry.closest('[data-loom="expanded"]')).toBeTruthy()
+      expect(expandedEntry.closest('[data-loom-sheet]')).toBeNull()
+    })
+
+    it('lap 3, A: the guide survives the shell it was opened over', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await openGuide()
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Next: assign a horse →' }),
+        )
+      })
+      expect(screen.getByText('2 / 6')).toBeTruthy()
+
+      // Narrow the window until Loom collapses to the strip. Mutation: drop
+      // `{guide}` from the strip branch -> the dialog vanishes mid-step and
+      // this is red.
+      await act(async () => {
+        setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
+        fireEvent(window, new Event('resize'))
+      })
+      expect(screen.getByLabelText('Loom strip')).toBeTruthy()
+      expect(
+        screen.getByRole('dialog', { name: 'How Loom works' }),
+      ).toBeTruthy()
+      // Still on the step it was on: the guide was never remounted.
+      expect(screen.getByText('2 / 6')).toBeTruthy()
+
+      // ...and back again, without the guide losing its place.
+      await act(async () => {
+        setWindowWidth(1024)
+        fireEvent(window, new Event('resize'))
+      })
+      expect(
+        screen.getByRole('dialog', { name: 'How Loom works' }),
+      ).toBeTruthy()
+      expect(screen.getByText('2 / 6')).toBeTruthy()
+    })
+
+    it('lap 3, A: a column that goes away closes the guide, and it stays closed', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await openGuide()
+
+      // The Waves tab takes over: Loom's column is not drawn at all.
+      await act(async () => {
+        rerenderPanel(<WavePanel reservedWidth={RESERVED} hidden />)
+      })
+      expect(screen.queryByRole('dialog')).toBeNull()
+
+      // Mutation: drop the close-on-absent effect -> the guide is still
+      // `open`, so coming back re-opens it by itself, which R9 forbids.
+      await act(async () => {
+        rerenderPanel(<WavePanel reservedWidth={RESERVED} />)
+      })
+      await screen.findByLabelText('Loom')
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+
+    it('lap 3, B: a reopened guide is born at step one, under its own name', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await openGuide()
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Next: assign a horse →' }),
+        )
+        fireEvent.click(screen.getByRole('button', { name: 'Quick reference' }))
+      })
+      expect(
+        screen.getByRole('dialog', { name: 'Loom, at a glance' }),
+      ).toBeTruthy()
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Back to Loom' }))
+      })
+      expect(screen.queryByRole('dialog')).toBeNull()
+
+      // Every title this reopen puts on screen, in order -- read as the DOM
+      // changes, because the defect is a FRAME, not an end state.
+      // Mutation: a stable key plus a reset in a `useEffect` on `open` ->
+      // the dialog is born "Loom, at a glance" and corrects itself, so two
+      // titles are recorded here, red.
+      const titles: string[] = []
+      const seen = (text: string | null) => {
+        if (text && titles[titles.length - 1] !== text) titles.push(text)
+      }
+      // Read from the RECORDS, not from the live DOM: by the time a callback
+      // runs, a correction one commit later has already happened, and a
+      // reader that looks at `document` sees only the corrected end state.
+      const observer = new MutationObserver((records) => {
+        for (const record of records) {
+          for (const node of record.addedNodes) {
+            if (!(node instanceof HTMLElement)) continue
+            const title = node.matches('[data-slot="dialog-title"]')
+              ? node
+              : node.querySelector('[data-slot="dialog-title"]')
+            seen(title?.textContent ?? null)
+          }
+          if (
+            record.type === 'characterData' &&
+            record.target.parentElement?.closest('[data-slot="dialog-title"]')
+          ) {
+            seen(record.target.textContent)
+          }
+        }
+      })
+      observer.observe(document.body, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+      })
+      await openGuide()
+      await act(async () => {})
+      observer.disconnect()
+
+      expect(titles).toEqual(['How Loom works'])
+      expect(screen.getByText('1 / 6')).toBeTruthy()
+    })
+
+    it('R6: Escape closes the guide and nothing else, from expanded', async () => {
+      snapshots = {
+        'crew-1': {
+          crewId: 'crew-1',
+          entries: [
+            ledgerEntry({
+              issueIdentifier: 'EX-1',
+              state: 'assigned',
+              seat: 'opus',
+            }),
+          ],
+          trackerHealth: health('ok'),
+        },
+      }
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+      })
+      fireEvent.click(screen.getByRole('button', { name: /^Next · / }))
+      const body = document.querySelector(
+        '[data-loom-sheet="next"]',
+      ) as HTMLElement
+      body.scrollTop = 64
+      fireEvent.scroll(body)
+
+      const entry = screen.getByRole('button', { name: 'How Loom works' })
+      await openGuide()
+      // The trap: a dialog rendered under the shell would deliver this key
+      // to the shell's own onKeyDown, which folds Loom. Mutation: render the
+      // guide inside `LoomExpandedView` -> the expanded stack is gone here,
+      // red.
+      await act(async () => {
+        fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+      })
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
+      expect(
+        screen
+          .getByRole('button', { name: /^Next · / })
+          .getAttribute('aria-expanded'),
+      ).toBe('true')
+      expect(
+        (document.querySelector('[data-loom-sheet="next"]') as HTMLElement)
+          .scrollTop,
+      ).toBe(64)
+      // Mutation: drop the focus return in `closeGuide` -> the body has it,
+      // red.
+      expect(document.activeElement).toBe(entry)
+    })
+
+    it('R6: the close button gives compact back unchanged, detail and all', async () => {
+      snapshots = {
+        'crew-1': {
+          crewId: 'crew-1',
+          entries: [
+            ledgerEntry({
+              issueIdentifier: 'EX-1',
+              state: 'assigned',
+              seat: 'opus',
+            }),
+          ],
+          trackerHealth: health('ok'),
+        },
+      }
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      fireEvent.click(screen.getByRole('button', { name: /^Next · / }))
+      fireEvent.click(
+        document.querySelector('[data-wave-row="crew-1:EX-1"]') as HTMLElement,
+      )
+      expect(document.querySelector('[data-loom-detail]')).toBeTruthy()
+      const width = (
+        document.querySelector('[data-loom="compact"]') as HTMLElement
+      ).style.width
+
+      const entry = screen.getByRole('button', { name: 'How Loom works' })
+      await openGuide()
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Close ×' }))
+      })
+
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(document.querySelector('[data-loom="compact"]')).toBeTruthy()
+      // The issue detail underneath survives the visit.
+      expect(document.querySelector('[data-loom-detail]')).toBeTruthy()
+      expect(
+        (document.querySelector('[data-loom="compact"]') as HTMLElement).style
+          .width,
+      ).toBe(width)
+      expect(document.activeElement).toBe(entry)
+    })
+
+    it('R8: illustrative — no crew, no ledger, and the real counts untouched', async () => {
+      // A busy board first: the titles behind the dialog keep their numbers.
+      snapshots = {
+        'crew-1': {
+          crewId: 'crew-1',
+          entries: [
+            ledgerEntry({ issueIdentifier: 'EX-1', state: 'done' }),
+            ledgerEntry({ issueIdentifier: 'EX-2', state: 'done' }),
+          ],
+          trackerHealth: health('ok'),
+        },
+      }
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      // Read from the DOM, not by role: an open modal hides the rest of the
+      // page from assistive queries, which is exactly what it should do.
+      const realBefore = () =>
+        [...document.querySelectorAll('[data-loom-sheet-title]')]
+          .map((node) => node.textContent)
+          .find((text) => text?.startsWith('Before · '))
+      expect(realBefore()).toBe('Before · 2 done')
+
+      await openGuide()
+      expect(realBefore()).toBe('Before · 2 done')
+      // Mutation: feed the illustration `board.sheets` -> its Before reads
+      // `2 done` at step one instead of `0 done`, red.
+      const illustration = document.querySelector(
+        '[data-learn-loom-illustration]',
+      ) as HTMLElement
+      expect(illustration.textContent).toContain('Before · 0 done')
+      expect(illustration.textContent).toContain('Plan · 1 in preparation')
+      cleanup()
+
+      // Now with nothing at all: a bound crew whose ledger is empty. The
+      // lesson is the same lesson.
+      snapshots = {
+        'crew-1': {
+          crewId: 'crew-1',
+          entries: [],
+          trackerHealth: health('ok'),
+        },
+      }
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await openGuide()
+      const empty = document.querySelector(
+        '[data-learn-loom-illustration]',
+      ) as HTMLElement
+      expect(empty.textContent).toContain('Plan · 1 in preparation')
+      expect(empty.textContent).toContain('Before · 0 done')
+      expect(
+        document.querySelector('[data-learn-loom-ticket="DEMO-101"]'),
+      ).toBeTruthy()
+    })
+
+    it('R8: the guide touches no store and no preload while it is open', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      // Counted at the preload, not by spying on the stores' actions: those
+      // actions are `useEffect` dependencies in the panel, so replacing one
+      // with a spy re-runs the effect and CAUSES the very call the spy is
+      // watching. The IPC boundary is where "reads no project data" is
+      // actually decidable.
+      const before = preloadCalls()
+      const snapshotsBefore = useWorkLedgerStore.getState().snapshots
+
+      await openGuide()
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Next: assign a horse →' }),
+        )
+      })
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Quick reference' }))
+      })
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Back to Loom' }))
+      })
+
+      // Mutation: have the guide call `board.resolveRow` or a store action
+      // on open -> this number moves, red.
+      expect(preloadCalls()).toBe(before)
+      expect(useWorkLedgerStore.getState().snapshots).toBe(snapshotsBefore)
+    })
   })
 
   it('MAR-3189 R7 + lap 2, C: Esc folds from wherever focus actually is', async () => {
