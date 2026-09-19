@@ -268,10 +268,10 @@ describe('claude mcp list status by words (MAR-3205)', () => {
     },
     {
       name: 'stdio command whose args contain a dash',
-      line: 'docs: npx -y @acme/project-docs-mcp - ✓ Connected',
+      line: 'docs: npx @acme/cli - workspace - ✓ Connected',
       expected: {
         name: 'docs',
-        description: 'npx -y @acme/project-docs-mcp',
+        description: 'npx @acme/cli - workspace',
         statusLabel: '✓ Connected',
         transportType: 'stdio' as const,
       },
