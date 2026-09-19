@@ -13,16 +13,18 @@ export function useLoomOutside(crewId: string): TrackerOutsideSnapshot | null {
 
   useEffect(() => {
     let live = true
-    setHeld(null)
     const stop = loomOutsideApi.onUpdated((snapshot) => {
       if (snapshot.crewId === crewId) setHeld(snapshot)
     })
     void loomOutsideApi
       .read(crewId)
       .then((snapshot) => {
-        // A push that already arrived is at least as new as this answer.
+        // A push for THIS crew that already arrived is at least as new as
+        // this answer; anything held for another crew is not.
         if (!live || snapshot === null || snapshot.crewId !== crewId) return
-        setHeld((was) => (was && was.readAt !== null ? was : snapshot))
+        setHeld((was) =>
+          was && was.crewId === crewId && was.readAt !== null ? was : snapshot,
+        )
       })
       .catch(() => {
         // The door refused; the group says "not read yet", which is true.
@@ -33,5 +35,7 @@ export function useLoomOutside(crewId: string): TrackerOutsideSnapshot | null {
     }
   }, [crewId])
 
+  // The one guard against another crew's list (R7): what is held may still
+  // be the last crew's until this crew's read lands, and it never shows.
   return held !== null && held.crewId === crewId ? held : null
 }
