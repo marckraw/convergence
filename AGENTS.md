@@ -37,6 +37,8 @@ not assign that role.
 
 - **Design Director:** for design exploration and Figma collaboration, read
   [DESIGN.md](DESIGN.md) and [the design workflow](docs/agents/design-workflow.md).
+  For Figma component maintenance and skills, also read
+  [the library workflow](docs/agents/design-library-workflow.md).
   This role usually works in the ChatGPT Codex desktop app, outside the
   Convergence executor/reviewer relay loop. It hands compact design briefs
   to Fable in Linear; it does not arm runs or own implementation/release.
