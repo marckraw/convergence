@@ -944,30 +944,39 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(storedWidth()).toBeNull()
   })
 
-  it('R5: clicking a row opens the seat’s conversation; rows that cannot, say why', async () => {
+  it('MAR-3195: a Loom row opens the ISSUE, and the conversation opens from inside it', async () => {
+    // Superseding MAR-3097 R5's "a row opens the seat's conversation": from
+    // this slice a Loom row is a door to the issue, and the conversation is
+    // one of the two doors OUT of the detail. Nothing is lost -- the same
+    // session still opens, through `onOpenSession`, one click further in,
+    // and the Waves tab's rows keep the old behaviour (R8, its own test).
     const onOpenSession = vi.fn()
     const windowOpen = vi.spyOn(window, 'open').mockImplementation(() => null)
     await mount(<WavePanel onOpenSession={onOpenSession} />)
     await screen.findByLabelText('Loom')
-    const openable = document.querySelector(
-      '[data-wave-row="crew-1:EX-2"]',
-    ) as HTMLElement
 
-    fireEvent.click(openable)
+    fireEvent.click(
+      document.querySelector('[data-wave-row="crew-1:EX-2"]') as HTMLElement,
+    )
+    // Mutation: keep the old door (open the session on the row's click) ->
+    // no detail, red.
+    expect(document.querySelector('[data-loom-detail]')).toBeTruthy()
+    expect(onOpenSession).not.toHaveBeenCalled()
 
-    // Mutation: open the issue URL instead -> never called with the session.
+    fireEvent.click(screen.getByRole('button', { name: 'Open conversation →' }))
     expect(onOpenSession).toHaveBeenCalledTimes(1)
     expect(onOpenSession.mock.calls[0]![0].id).toBe('session-opus')
     expect(windowOpen).not.toHaveBeenCalled()
-    expect(
-      rowOf('crew-1:EX-4').getByText('conversation not loaded'),
-    ).toBeTruthy()
-    // EX-3 is `assigned` with a seat, so it is queued in Next (R2) -- the
-    // reason a row cannot open travels with it into whichever sheet it lands.
-    fireEvent.click(screen.getByRole('button', { name: /^Next · / }))
-    expect(
-      rowOf('crew-1:EX-3').getByText('no conversation for this seat'),
-    ).toBeTruthy()
+
+    // The reason a row cannot be opened still travels with it, now into the
+    // detail. EX-4's session is not in the store.
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Close the issue detail' }),
+    )
+    fireEvent.click(
+      document.querySelector('[data-wave-row="crew-1:EX-4"]') as HTMLElement,
+    )
+    expect(screen.getByText('conversation not loaded')).toBeTruthy()
     windowOpen.mockRestore()
   })
 
@@ -1417,6 +1426,204 @@ describe('MAR-3097: through the containers and the real stores', () => {
     // not an answer to "who is riding?".
     expect(screen.getByText('No horse seats in this crew')).toBeTruthy()
     expect(screen.queryByText(/0 horses/)).toBeNull()
+  })
+
+  it('MAR-3195 R1: the detail is derived from the live row, never a copy', async () => {
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Loom')
+    fireEvent.click(
+      document.querySelector('[data-wave-row="crew-1:EX-2"]') as HTMLElement,
+    )
+    expect(screen.getByText(/Linear: In Progress/)).toBeTruthy()
+
+    // The tracker moves while the card is open.
+    await act(async () => {
+      useWorkLedgerStore.setState({
+        snapshots: {
+          'crew-1': {
+            crewId: 'crew-1',
+            entries: rows.map((row) =>
+              row.issueIdentifier === 'EX-2'
+                ? { ...row, trackerStatus: 'In Review', state: 'returned' }
+                : row,
+            ),
+            trackerHealth: health('ok'),
+          },
+        },
+      })
+    })
+    // Mutation: keep the entry object in state -> the card goes on saying
+    // "In Progress" about an issue that came back ten minutes ago, red.
+    expect(screen.getByText(/Linear: In Review/)).toBeTruthy()
+
+    // And a row that leaves the ledger takes its detail with it.
+    await act(async () => {
+      useWorkLedgerStore.setState({
+        snapshots: {
+          'crew-1': {
+            crewId: 'crew-1',
+            entries: rows.filter((row) => row.issueIdentifier !== 'EX-2'),
+            trackerHealth: health('ok'),
+          },
+        },
+      })
+    })
+    expect(document.querySelector('[data-loom-detail]')).toBeNull()
+    expect(document.querySelector('[data-wave-row]')).toBeTruthy()
+  })
+
+  it('MAR-3195 R5: closing gives back the scroll and the focus', async () => {
+    setWindowWidth(windowLeaving(900))
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Loom')
+    const body = document.querySelector(
+      '[data-loom-sheet="now"]',
+    ) as HTMLElement
+    fireEvent.scroll(body, { target: { scrollTop: 240 } })
+
+    const row = document.querySelector(
+      '[data-wave-row="crew-1:EX-2"]',
+    ) as HTMLElement
+    row.focus()
+    fireEvent.click(row)
+    // Focus starts inside the card, so Esc and Tab have somewhere to be.
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Close the issue detail' }),
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Close the issue detail' }),
+    )
+    // Mutation: drop the focus restore -> `<body>`, and the keyboard has
+    // lost the place it was reading from.
+    expect(document.activeElement).toBe(
+      document.querySelector('[data-wave-row="crew-1:EX-2"]'),
+    )
+    expect(
+      (document.querySelector('[data-loom-sheet="now"]') as HTMLElement)
+        .scrollTop,
+    ).toBe(240)
+  })
+
+  it('MAR-3195 R5: in expanded, the first Esc closes the detail and the second folds', async () => {
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Loom')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+    })
+    fireEvent.click(
+      document.querySelector('[data-wave-row="crew-1:EX-2"]') as HTMLElement,
+    )
+    expect(document.querySelector('[data-loom-detail]')).toBeTruthy()
+
+    const stack = document.querySelector(
+      '[data-loom="expanded"]',
+    ) as HTMLElement
+    // Mutation: fold on the first Esc -> the stack is gone here, and a person
+    // reading an issue loses the whole panel to one keystroke.
+    await act(async () => {
+      fireEvent.keyDown(stack, { key: 'Escape' })
+    })
+    expect(document.querySelector('[data-loom-detail]')).toBeNull()
+    expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
+
+    await act(async () => {
+      fireEvent.keyDown(
+        document.querySelector('[data-loom="expanded"]') as HTMLElement,
+        { key: 'Escape' },
+      )
+    })
+    expect(document.querySelector('[data-loom="expanded"]')).toBeNull()
+  })
+
+  it('MAR-3195 R6: the detail is read-only, provably', async () => {
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Loom')
+    fireEvent.click(
+      document.querySelector('[data-wave-row="crew-1:EX-2"]') as HTMLElement,
+    )
+    const card = document.querySelector('[data-loom-detail]') as HTMLElement
+
+    // Mutation: a label chip as a `button`, or any field added -> red.
+    expect(card.querySelectorAll('input, select, textarea')).toHaveLength(0)
+    expect(card.querySelectorAll('[contenteditable]')).toHaveLength(0)
+    expect(
+      [...card.querySelectorAll('button')].map((button) =>
+        (button.getAttribute('aria-label') ?? button.textContent ?? '').trim(),
+      ),
+    ).toEqual(['Close the issue detail', 'Open conversation →'])
+    // Every door out is an anchor the main process routes to the browser
+    // (EX-2 has no PR, so here that is the Linear one alone).
+    // Mutation: an anchor without `target="_blank"` -> it would navigate the
+    // app's own window away from Convergence, red.
+    const anchors = [...card.querySelectorAll('a')]
+    expect(anchors.length).toBeGreaterThan(0)
+    expect(anchors.every((a) => a.getAttribute('target') === '_blank')).toBe(
+      true,
+    )
+    expect(anchors.every((a) => a.getAttribute('rel') === 'noreferrer')).toBe(
+      true,
+    )
+    expect(
+      anchors.some((a) =>
+        (a.getAttribute('href') ?? '').includes('linear.app'),
+      ),
+    ).toBe(true)
+  })
+
+  it('MAR-3195 R7: one card, both shapes', async () => {
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Loom')
+    fireEvent.click(
+      document.querySelector('[data-wave-row="crew-1:EX-2"]') as HTMLElement,
+    )
+    const compact = (
+      document.querySelector('[data-loom-detail]') as HTMLElement
+    ).textContent
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+    })
+    const expanded = (
+      document.querySelector('[data-loom-detail]') as HTMLElement
+    ).textContent
+    // Mutation: a second detail component for expanded -> the text differs
+    // or the card is absent, red.
+    expect(expanded).toBe(compact)
+  })
+
+  it('MAR-3195: a horse card’s Details button opens its held issue', async () => {
+    crews = [
+      { ...boundCrew('crew-1', 'Loom'), members: [residentSeat('opus')] },
+    ]
+    useSessionStore.setState({
+      globalSessions: [
+        { ...SESSION, id: 'session-opus', status: 'running' } as SessionSummary,
+      ],
+    })
+    snapshots = {
+      'crew-1': {
+        crewId: 'crew-1',
+        entries: [
+          ledgerEntry({
+            issueIdentifier: 'MAR-9',
+            state: 'working',
+            seat: 'opus',
+            sessionId: 'session-opus',
+          }),
+        ],
+        trackerHealth: health('ok'),
+      },
+    }
+
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Loom')
+    // A held working row is listed nowhere else (LV2 R4), so the card is
+    // that issue's only door. Mutation: drop the Details button -> the one
+    // issue a horse is actually on cannot be read at all, red.
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }))
+    expect(
+      document.querySelector('[data-loom-detail="crew-1:MAR-9"]'),
+    ).toBeTruthy()
   })
 
   it('MAR-3189 lap 2, B: the mode is written down, and a remount reads it back', async () => {

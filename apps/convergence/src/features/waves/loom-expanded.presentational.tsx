@@ -29,6 +29,9 @@ export const LoomExpandedView: FC<LoomStackProps & { onFold: () => void }> = ({
   onToggleQa,
   onOpenSeat,
   onShowNext,
+  onShowDetail,
+  detail,
+  onEscape,
   header,
   subline,
   open,
@@ -41,10 +44,13 @@ export const LoomExpandedView: FC<LoomStackProps & { onFold: () => void }> = ({
   onFold,
 }) => {
   const counts = loomSheetCounts(sheets)
+  // The container decides what Escape means (MAR-3195 R5): with a detail
+  // open it closes THAT, and only the next one folds. Falling back to
+  // `onFold` keeps the shape usable on its own.
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key !== 'Escape') return
     event.stopPropagation()
-    onFold()
+    ;(onEscape ?? onFold)()
   }
   return (
     <section
@@ -91,6 +97,8 @@ export const LoomExpandedView: FC<LoomStackProps & { onFold: () => void }> = ({
                 onToggleQa={onToggleQa}
                 onOpenSeat={onOpenSeat}
                 onShowNext={onShowNext}
+                onShowDetail={onShowDetail}
+                detail={open === sheet ? detail : null}
                 inertReason={inertReason}
                 onOpen={onOpen}
                 bodyRef={bodyRef}

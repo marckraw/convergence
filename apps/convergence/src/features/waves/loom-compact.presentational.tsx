@@ -27,6 +27,9 @@ export const LoomCompactView: FC<
   onToggleQa,
   onOpenSeat,
   onShowNext,
+  onShowDetail,
+  detail,
+  onEscape,
   header,
   subline,
   open,
@@ -43,6 +46,11 @@ export const LoomCompactView: FC<
   return (
     <aside
       aria-label="Loom"
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || !onEscape) return
+        event.stopPropagation()
+        onEscape()
+      }}
       data-loom="compact"
       className={LOOM_COMPACT_CLASS}
       style={{ width }}
@@ -84,6 +92,8 @@ export const LoomCompactView: FC<
                 onToggleQa={onToggleQa}
                 onOpenSeat={onOpenSeat}
                 onShowNext={onShowNext}
+                onShowDetail={onShowDetail}
+                detail={open === sheet ? detail : null}
                 inertReason={inertReason}
                 onOpen={onOpen}
                 bodyRef={bodyRef}

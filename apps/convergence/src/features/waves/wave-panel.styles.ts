@@ -116,3 +116,23 @@ export const LOOM_QA_TOGGLE_CLASS =
 
 /** Expanded lays the horses and the QA list side by side (r4 508:363). */
 export const LOOM_NOW_WIDE_CLASS = 'lg:grid lg:grid-cols-2 lg:gap-x-4'
+
+/**
+ * The issue detail (MAR-3195): the sheet's body, capped so a wide expanded
+ * stack does not stretch one paragraph across the room.
+ */
+export const LOOM_DETAIL_CLASS =
+  'flex max-w-[520px] flex-col gap-2 px-3 pb-3 pt-2 text-xs'
+
+export const LOOM_DETAIL_SECTION_CLASS =
+  'flex flex-col gap-1 rounded-md border border-white/10 p-2'
+
+/** A read-only label chip: a span, never a control (R6). */
+export const LOOM_DETAIL_CHIP_CLASS =
+  'rounded bg-white/5 px-1.5 py-0.5 text-[11px] text-muted-foreground'
+
+export const LOOM_DETAIL_MUTED_CLASS = 'text-[11px] text-muted-foreground'
+
+/** The detail's own footer: what this card is, and how fresh. */
+export const LOOM_DETAIL_FOOTER_CLASS =
+  'pt-1 text-[10px] uppercase tracking-wide text-muted-foreground'
