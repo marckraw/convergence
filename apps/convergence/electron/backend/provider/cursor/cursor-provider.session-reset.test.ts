@@ -392,3 +392,136 @@ describe('Cursor /clear — the conversation reset (MAR-3216)', () => {
     )
   })
 })
+
+/**
+ * A relay clears the conversation as a turn of its own and queues the real
+ * message behind it; the session service drains that queue synchronously when
+ * the target handle reports `completed`. On a Cursor seat the clear ran and
+ * the message never arrived (MAR-3245).
+ */
+describe('Cursor /clear then deliver (MAR-3245)', () => {
+  /**
+   * What the session service's queue drain does at a turn boundary: hand the
+   * queued payload to the handle, synchronously, from the status listener.
+   */
+  function drainOn(
+    handle: SessionHandle,
+    settlement: 'completed' | 'failed',
+    text: string,
+  ): Array<ReturnType<SessionHandle['sendMessage']>> {
+    const answers: Array<ReturnType<SessionHandle['sendMessage']>> = []
+    let drained = false
+    handle.onStatusChange((status) => {
+      if (status !== settlement || drained) return
+      drained = true
+      answers.push(handle.sendMessage(text))
+    })
+    return answers
+  }
+
+  function prompts(server: MockCursorAcpServer) {
+    return server.requests.filter((r) => r.method === 'session/prompt')
+  }
+
+  function promptsCarrying(server: MockCursorAcpServer, text: string) {
+    return prompts(server).filter((request) =>
+      (
+        (request.params?.prompt as Array<{ text?: string }> | undefined) ?? []
+      ).some((part) => part.text === text),
+    )
+  }
+
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 40))
+
+  it('R0/R1: the message delivered on the reset’s "completed" reaches the new session', async () => {
+    const { servers } = world()
+    const handle = start()
+    const seen = observe(handle)
+    await waitFor(() => expect(seen.completions()).toBe(1))
+
+    const answers = drainOn(handle, 'completed', 'hello')
+    handle.sendMessage('/clear')
+    await waitFor(() => expect(prompts(servers[0])).toHaveLength(2), 2000)
+
+    expect(answers).toEqual([undefined])
+    expect(prompts(servers[0]).at(-1)?.params?.sessionId).toBe(
+      'cursor-session-2',
+    )
+    expect(prompts(servers[0]).at(-1)?.params?.prompt).toEqual([
+      { type: 'text', text: 'hello' },
+    ])
+  })
+
+  it('R1: the dormant reset settles the same way — the message lands on the respawned session', async () => {
+    const { servers, children } = world()
+    const handle = start()
+    const seen = observe(handle)
+    await waitFor(() => expect(seen.completions()).toBe(1))
+    children[0].emit('exit', 0, null)
+
+    const answers = drainOn(handle, 'completed', 'hello')
+    handle.sendMessage('/clear')
+    await waitFor(() => expect(prompts(servers[1])).toHaveLength(1), 2000)
+
+    expect(answers).toEqual([undefined])
+    expect(prompts(servers[1]).at(-1)?.params?.sessionId).toBe(
+      'cursor-session-101',
+    )
+    expect(promptsCarrying(servers[0], 'hello')).toEqual([])
+  })
+
+  it('R2: a message sent while the reset is genuinely under way still defers', async () => {
+    const { servers } = world()
+    const handle = start()
+    const seen = observe(handle)
+    await waitFor(() => expect(seen.completions()).toBe(1))
+    const promptsBefore = prompts(servers[0]).length
+
+    handle.sendMessage('/clear')
+    // The window is real: `session/new` is out but unanswered — the fixture
+    // replies on a later tick — so the conversation still names the old id.
+    expect(methods(servers[0], -1)).toEqual(['session/new'])
+    expect(seen.tokens).toEqual(['cursor-session-1'])
+
+    expect(handle.sendMessage('hello')).toBe('queue-follow-up')
+    expect(prompts(servers[0])).toHaveLength(promptsBefore)
+  })
+
+  it('R2: that deferred message is delivered on the new session, and never on the old one', async () => {
+    const { servers } = world()
+    const handle = start()
+    const seen = observe(handle)
+    await waitFor(() => expect(seen.completions()).toBe(1))
+
+    const answers = drainOn(handle, 'completed', 'hello')
+    handle.sendMessage('/clear')
+    handle.sendMessage('hello')
+    await waitFor(() => expect(answers).toHaveLength(1), 2000)
+    await settle()
+
+    expect(promptsCarrying(servers[0], 'hello')).toHaveLength(1)
+    expect(promptsCarrying(servers[0], 'hello')[0]?.params?.sessionId).toBe(
+      'cursor-session-2',
+    )
+  })
+
+  it('R3: a failed clear is not a trap — the next message runs on the previous session', async () => {
+    const { servers } = world()
+    const handle = start()
+    const seen = observe(handle)
+    await waitFor(() => expect(seen.completions()).toBe(1))
+    servers[0].startRefusingSessionNew()
+
+    const answers = drainOn(handle, 'failed', 'still here')
+    handle.sendMessage('/clear')
+    await waitFor(
+      () => expect(promptsCarrying(servers[0], 'still here')).toHaveLength(1),
+      2000,
+    )
+
+    expect(answers).toEqual([undefined])
+    expect(
+      promptsCarrying(servers[0], 'still here')[0]?.params?.sessionId,
+    ).toBe('cursor-session-1')
+  })
+})

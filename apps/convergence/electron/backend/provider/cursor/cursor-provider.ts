@@ -1660,6 +1660,36 @@ export class CursorProvider implements Provider {
     }
 
     /**
+     * The reset's own work, and the whole life of the `resetting` window: it
+     * opens here, synchronously, and closes the moment the work is over —
+     * before the caller announces anything.
+     *
+     * A settlement status is the turn boundary the app's input queue drains
+     * on, and it drains by calling `sendMessage` synchronously from the
+     * status listener. A handle that still said "resetting" there answered
+     * `'queue-follow-up'` and put the message back into a queue whose only
+     * drain is the boundary that had just passed, so a relay's `/clear` ran
+     * and its payload never arrived (MAR-3245). Keeping every announcement
+     * outside this function is what makes that unreachable, rather than an
+     * ordering rule inside one to remember.
+     */
+    async function runReset(
+      previousSessionId: string | null,
+    ): Promise<CursorResetOutcome> {
+      resetting = true
+      try {
+        setStatus('running')
+        setAttention('none')
+        const activeRpc = rpc
+        return activeRpc
+          ? await resetLiveSession(activeRpc)
+          : await resetDormantSession(previousSessionId)
+      } finally {
+        resetting = false
+      }
+    }
+
+    /**
      * `/clear`: a command, never a prompt (MAR-3216). The same contract as
      * Codex's reset (`codex-provider.ts`, `sendCodexTurn`) and Pi's: no user
      * message, no `session/prompt`, one boundary on success and none
@@ -1667,43 +1697,33 @@ export class CursorProvider implements Provider {
      * stays resident, so the next message prompts into the new session.
      */
     async function resetConversation(): Promise<void> {
-      resetting = true
       const previousSessionId = cursorSessionId
-      try {
-        setStatus('running')
-        setAttention('none')
-        const activeRpc = rpc
-        const outcome = activeRpc
-          ? await resetLiveSession(activeRpc)
-          : await resetDormantSession(previousSessionId)
-        if (stopped) return
-        if (outcome.kind === 'failed') {
-          // `startNewSession` adopts the new id before it applies the model;
-          // a reset that failed after that point must not leave the record
-          // naming a session the conversation never moved into.
-          if (previousSessionId && cursorSessionId !== previousSessionId) {
-            setContinuationToken(previousSessionId)
-          }
-          sessionEmitter.addNote({
-            text: `Could not clear the conversation: ${outcome.reason} The previous conversation is still active; your next message will resume it.`,
-            level: 'error',
-          })
-          setStatus('failed')
-          setAttention('failed')
-          return
+      const outcome = await runReset(previousSessionId)
+      if (stopped) return
+      if (outcome.kind === 'failed') {
+        // `startNewSession` adopts the new id before it applies the model;
+        // a reset that failed after that point must not leave the record
+        // naming a session the conversation never moved into.
+        if (previousSessionId && cursorSessionId !== previousSessionId) {
+          setContinuationToken(previousSessionId)
         }
-        if (outcome.kind === 'restarted') {
-          sessionEmitter.addNote({
-            text: CONTEXT_RESTARTED_NOTE_TEXT,
-            level: 'warning',
-            providerEventType: SESSION_RESTARTED_EVENT_TYPE,
-          })
-        }
-        setStatus('completed')
-        setAttention('finished')
-      } finally {
-        resetting = false
+        sessionEmitter.addNote({
+          text: `Could not clear the conversation: ${outcome.reason} The previous conversation is still active; your next message will resume it.`,
+          level: 'error',
+        })
+        setStatus('failed')
+        setAttention('failed')
+        return
       }
+      if (outcome.kind === 'restarted') {
+        sessionEmitter.addNote({
+          text: CONTEXT_RESTARTED_NOTE_TEXT,
+          level: 'warning',
+          providerEventType: SESSION_RESTARTED_EVENT_TYPE,
+        })
+      }
+      setStatus('completed')
+      setAttention('finished')
     }
 
     function handleResetFailure(error: unknown): void {
