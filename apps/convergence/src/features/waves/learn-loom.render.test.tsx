@@ -226,10 +226,10 @@ describe('MAR-3201 R2: the illustration speaks the app’s count language', () =
     const now = sheets[1]!
     expect(now.getAttribute('data-learn-loom-active')).toBe('true')
     // Compared against the app's own function, not a pasted string.
-    expect(now.textContent).toContain(
+    expect(now.getAttribute('aria-label')).toBe(
       loomSheetTitle('now', LEARN_LOOM_STEPS[4]!.counts),
     )
-    expect(now.textContent).toContain('Now')
+    expect(now.textContent).toBe('Now0 open · 1 awaiting QA')
   })
 
   it('the active sheet is the step’s, and only one is active', () => {
@@ -334,7 +334,7 @@ describe('MAR-3201 lap 3, G: the three looks', () => {
     open()
     const card = document.querySelector('[data-learn-loom-key]') as HTMLElement
     // Mutation: render them as bare paragraphs again -> no fill, red.
-    expect(card.className).toContain('bg-white/[0.04]')
+    expect(card.className).toContain('bg-card')
     expect(card.className).toContain('rounded-[10px]')
     expect(
       within(card).getByText(

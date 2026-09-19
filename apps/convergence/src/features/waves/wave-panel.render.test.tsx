@@ -2966,8 +2966,8 @@ describe('MAR-3097: through the containers and the real stores', () => {
       const illustration = document.querySelector(
         '[data-learn-loom-illustration]',
       ) as HTMLElement
-      expect(illustration.textContent).toContain('Before · 0 done')
-      expect(illustration.textContent).toContain('Plan · 1 in preparation')
+      expect(illustration.textContent).toContain('Before0 done')
+      expect(illustration.textContent).toContain('Plan1 in preparation')
       cleanup()
 
       // Now with nothing at all: a bound crew whose ledger is empty. The
@@ -2985,8 +2985,8 @@ describe('MAR-3097: through the containers and the real stores', () => {
       const empty = document.querySelector(
         '[data-learn-loom-illustration]',
       ) as HTMLElement
-      expect(empty.textContent).toContain('Plan · 1 in preparation')
-      expect(empty.textContent).toContain('Before · 0 done')
+      expect(empty.textContent).toContain('Plan1 in preparation')
+      expect(empty.textContent).toContain('Before0 done')
       expect(
         document.querySelector('[data-learn-loom-ticket="DEMO-101"]'),
       ).toBeTruthy()

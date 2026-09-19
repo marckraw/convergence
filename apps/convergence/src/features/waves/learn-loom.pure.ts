@@ -234,6 +234,8 @@ export interface LearnLoomSheetView {
   name: string
   /** `Plan · 1 in preparation` — the app's own sentence (R2). */
   title: string
+  /** Count-only line below the separately rendered sheet name. */
+  countLabel: string
   active: boolean
 }
 
@@ -264,6 +266,9 @@ export function learnLoomSheetViews(
     sheet,
     name: LOOM_SHEET_NAMES[sheet],
     title: loomSheetTitle(sheet, step.counts),
+    countLabel: loomSheetTitle(sheet, step.counts)
+      .slice(`${LOOM_SHEET_NAMES[sheet]} · `.length)
+      .replaceAll(' · ', sheet === step.activeSheet ? ' · ' : '\n'),
     active: sheet === step.activeSheet,
   }))
 }
