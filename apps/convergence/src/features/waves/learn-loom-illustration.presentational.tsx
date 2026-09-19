@@ -6,6 +6,7 @@ import {
 } from './loom-stack.presentational'
 import { LEARN_LOOM_TICKET } from './learn-loom-copy.pure'
 import {
+  learnLoomMotionStyle,
   learnLoomTicketLeft,
   learnLoomTicketMaxWidth,
   LEARN_LOOM_GEOMETRY,
@@ -14,16 +15,19 @@ import {
 import {
   LEARN_LOOM_EMPHASIS_CLASS,
   LEARN_LOOM_ILLUSTRATION_CLASS,
+  LEARN_LOOM_MOTION_CLASS,
   LEARN_LOOM_SHEET_ACTIVE_CLASS,
   LEARN_LOOM_SHEET_CLOSED_CLASS,
   LEARN_LOOM_SHEET_CLASS,
   LEARN_LOOM_SHEET_COUNT_CLASS,
   LEARN_LOOM_SHEET_NAME_CLASS,
+  LEARN_LOOM_SHEET_TRANSITION_CLASS,
   LEARN_LOOM_TICKET_CLASS,
   LEARN_LOOM_TICKET_ID_CLASS,
   LEARN_LOOM_TICKET_NOTE_CLASS,
   LEARN_LOOM_TICKET_STATUS_CLASS,
   LEARN_LOOM_TICKET_TITLE_CLASS,
+  LEARN_LOOM_TICKET_TRANSITION_CLASS,
 } from './learn-loom.styles'
 
 /**
@@ -34,6 +38,14 @@ import {
  * it, and the lesson's whole claim is that this is one card travelling
  * through Loom rather than six cards appearing and vanishing -- which is
  * also what LL2 needs in order to animate the journey at all.
+ *
+ * LL2 moves it with a plain CSS transition (MAR-3202 R1). Everything that
+ * changes between two steps is already a style this component writes -- the
+ * ticket's `left`, each sheet's share of the row, two border colours -- so a
+ * transition on those properties retargets itself when a step changes
+ * mid-flight, which is R5 for free, and yields to `prefers-reduced-motion`
+ * through a class, which is R6 for free. No JavaScript holds an animation,
+ * so there is no queue that could lag behind a burst of presses.
  */
 export const LearnLoomIllustrationView: FC<{ view: LearnLoomStepView }> = ({
   view,
@@ -53,12 +65,21 @@ export const LearnLoomIllustrationView: FC<{ view: LearnLoomStepView }> = ({
             data-learn-loom-sheet={sheet.sheet}
             data-learn-loom-active={sheet.active ? 'true' : 'false'}
             style={{
-              // Derived, never written twice (lap 3, F).
-              width: sheet.active ? undefined : LEARN_LOOM_GEOMETRY.closedWidth,
+              ...learnLoomMotionStyle(),
+              // Both states are the SAME two numbers, which is the whole of
+              // LL2's mechanism: a closed sheet is `flex-basis` 136 with no
+              // grow, an open one is basis 0 taking every share, and the
+              // browser walks between them. The used widths are LL1's --
+              // 136 closed, the rest active -- because the numbers are still
+              // derived, never written twice (lap 3, F).
+              flexGrow: sheet.active ? 1 : 0,
+              flexBasis: sheet.active ? 0 : LEARN_LOOM_GEOMETRY.closedWidth,
               marginLeft: at > 0 ? -LEARN_LOOM_GEOMETRY.overlap : undefined,
             }}
             className={cn(
               LEARN_LOOM_SHEET_CLASS,
+              LEARN_LOOM_SHEET_TRANSITION_CLASS,
+              LEARN_LOOM_MOTION_CLASS,
               sheet.active
                 ? LEARN_LOOM_SHEET_ACTIVE_CLASS
                 : LEARN_LOOM_SHEET_CLOSED_CLASS,
@@ -85,12 +106,18 @@ export const LearnLoomIllustrationView: FC<{ view: LearnLoomStepView }> = ({
       <div
         data-learn-loom-ticket={LEARN_LOOM_TICKET.identifier}
         style={{
+          ...learnLoomMotionStyle(),
+          // The one value that carries the journey. It is still the derived
+          // left edge of whichever sheet is active -- LL2 changes when the
+          // browser arrives at it, never where.
           left: learnLoomTicketLeft(activeAt),
           width: LEARN_LOOM_GEOMETRY.ticketWidth,
           maxWidth: learnLoomTicketMaxWidth(view.sheets.length),
         }}
         className={cn(
           LEARN_LOOM_TICKET_CLASS,
+          LEARN_LOOM_TICKET_TRANSITION_CLASS,
+          LEARN_LOOM_MOTION_CLASS,
           LEARN_LOOM_EMPHASIS_CLASS[view.step.emphasis],
         )}
       >

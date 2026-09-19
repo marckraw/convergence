@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   learnLoomAnnouncement,
   learnLoomLiveMessage,
+  learnLoomMotionStyle,
+  learnLoomMoves,
+  LEARN_LOOM_MOTION,
   learnLoomSheetStride,
   learnLoomTicketLeft,
   learnLoomTicketMaxWidth,
@@ -175,5 +178,65 @@ describe('MAR-3201 R7: the step is said, not only shown', () => {
     expect(view.copy).toBe(LEARN_LOOM_STEP_COPY[3])
     expect(view.step).toBe(LEARN_LOOM_STEPS[3])
     expect(view.announcement).toBe(learnLoomAnnouncement(3))
+  })
+})
+
+describe('MAR-3202 R1: one timing, one curve, one source', () => {
+  it('is the handoff’s 350 ms and Figma’s EASE_IN_AND_OUT', () => {
+    // Pasted from the frozen handoff's motion table, not imported from the
+    // module under test: `350 ms, Figma EASE_IN_AND_OUT; web equivalent
+    // ease-in-out / cubic-bezier(0.42,0,0.58,1)`.
+    expect(LEARN_LOOM_MOTION.durationMs).toBe(350)
+    expect(LEARN_LOOM_MOTION.easing).toBe('cubic-bezier(0.42, 0, 0.58, 1)')
+  })
+
+  it('reaches CSS as exactly those two values and nothing else', () => {
+    // The style is the ONLY road from the constant to the screen, so a
+    // constant the elements do not actually carry is a constant that lies.
+    // Mutation: hard-code `350ms` here instead of reading the constant ->
+    // the two assertions below still agree, so they are written against
+    // `LEARN_LOOM_MOTION` itself and the one above pins its value.
+    expect(learnLoomMotionStyle()).toEqual({
+      '--learn-loom-duration': `${LEARN_LOOM_MOTION.durationMs}ms`,
+      '--learn-loom-easing': LEARN_LOOM_MOTION.easing,
+    })
+    // No delay rides along: a stagger is the one thing the handoff forbids
+    // by name, and it could only arrive as a third property here.
+    expect(Object.keys(learnLoomMotionStyle())).toHaveLength(2)
+  })
+})
+
+describe('MAR-3202 R3: the ticket moves only when its sheet changes', () => {
+  it('every adjacent pair, in both directions', () => {
+    // The handoff's table, read as places rather than as beats: Work, Review
+    // and Accept are all `now`.
+    const EXPECTED: readonly [number, number, boolean][] = [
+      [0, 1, true], // prepare -> assign: plan -> next
+      [1, 2, true], // assign -> work: next -> now
+      [2, 3, false], // work -> review: both now
+      [3, 4, false], // review -> accept: both now
+      [4, 5, true], // accept -> history: now -> before
+    ]
+    for (const [from, to, moves] of EXPECTED) {
+      expect(learnLoomMoves(from, to), `${from} -> ${to}`).toBe(moves)
+      expect(learnLoomMoves(to, from), `${to} -> ${from}`).toBe(moves)
+    }
+  })
+
+  it('is the active sheet’s question, not the index’s', () => {
+    // Mutation: `return from !== to` -> both of these flip, red. The second
+    // is the one an index can never get right: two steps apart and still
+    // the same place in Loom.
+    expect(learnLoomMoves(2, 4)).toBe(false)
+    expect(learnLoomMoves(3, 3)).toBe(false)
+    // ... and a step cannot be said to move to itself.
+    expect(learnLoomMoves(0, 0)).toBe(false)
+  })
+
+  it('clamps like every other reader of a step index', () => {
+    // Out of range lands on the first step, so a stray index cannot claim a
+    // move that the guide would never draw.
+    expect(learnLoomMoves(-4, 0)).toBe(false)
+    expect(learnLoomMoves(99, 5)).toBe(false)
   })
 })
