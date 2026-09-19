@@ -34,6 +34,7 @@ import {
   LEARN_LOOM_OVERLAY_CLASS,
   LEARN_LOOM_PRIMARY_CLASS,
   LEARN_LOOM_REFERENCE_CONTROL_CLASS,
+  LEARN_LOOM_REFERENCE_PRIMARY_CLASS,
   LEARN_LOOM_STEP_INTRO_CLASS,
   LEARN_LOOM_STEP_TITLE_CLASS,
   LEARN_LOOM_YOUR_PART_CLASS,
@@ -175,7 +176,7 @@ export const LearnLoomGuideView: FC<LearnLoomViewProps> = ({
             <Button
               type="button"
               size="sm"
-              className={LEARN_LOOM_REFERENCE_CONTROL_CLASS}
+              className={LEARN_LOOM_REFERENCE_PRIMARY_CLASS}
               onClick={onClose}
             >
               {LEARN_LOOM_CONTROLS.backToLoom}

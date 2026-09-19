@@ -136,12 +136,33 @@ describe('MAR-3201 lap 3, F: one geometry, everything else derived', () => {
     )
   })
 
+  // LL3 changed this assertion's expected string, and only its string: the
+  // clamp is still the same four numbers with the same arithmetic, now
+  // floored at zero so it survives an illustration narrower than its own
+  // cost. The old form is asserted absent below, because a bare `calc` that
+  // goes negative is not a smaller clamp -- it is no clamp at all.
   it('the clamp leaves the active sheet its insets on both sides', () => {
     const { closedWidth, overlap, ticketInset } = LEARN_LOOM_GEOMETRY
     const closed = (LOOM_SHEETS.length - 1) * (closedWidth - overlap)
     expect(learnLoomTicketMaxWidth(LOOM_SHEETS.length)).toBe(
-      `calc(100% - ${closed + 2 * ticketInset}px)`,
+      `max(0px, calc(100% - ${closed + 2 * ticketInset}px))`,
     )
+  })
+
+  it('MAR-3203: and it never resolves negative, at any width', () => {
+    // The literal the browser is handed, written out rather than rebuilt
+    // from the module under test: 3 x 112 + 2 x 18.
+    expect(learnLoomTicketMaxWidth(LOOM_SHEETS.length)).toBe(
+      'max(0px, calc(100% - 372px))',
+    )
+    // Mutation: drop the `max(0px, ` floor -> red here, on a clamp that a
+    // browser discards outright once `100%` falls under 372 px.
+    expect(learnLoomTicketMaxWidth(LOOM_SHEETS.length)).toContain('max(0px')
+    // The floor is a floor, not a replacement: the derived cost is still in
+    // the string, so a ticket that has room is still clamped by the sheets.
+    expect(learnLoomTicketMaxWidth(LOOM_SHEETS.length)).toContain('372px')
+    // And it is derived, not pasted: more sheets cost more, still floored.
+    expect(learnLoomTicketMaxWidth(6)).toBe('max(0px, calc(100% - 596px))')
   })
 })
 

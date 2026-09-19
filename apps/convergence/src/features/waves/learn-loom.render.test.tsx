@@ -545,14 +545,23 @@ describe('MAR-3202 R1: one timing and one curve, worn by everything', () => {
     }
   })
 
+  // LL3 changed this assertion's sheet list, and only that: a step changes
+  // the sheet's FILL too (closed white/2 %, active white/4 %), which LL2
+  // left off the list, so the fill snapped while the border and the width
+  // glided. The rule is unchanged -- the list is now the truer reading of
+  // "what a step actually changes".
   it('and each transitions only what a step actually changes', () => {
     open()
     for (const sheet of sheetsOf()) {
       expect(sheet.className).toContain(
-        'transition-[flex-grow,flex-basis,border-color]',
+        'transition-[flex-grow,flex-basis,border-color,background-color]',
       )
     }
     expect(ticket().className).toContain('transition-[left,border-color]')
+    // Still only what changes: the ticket's fill is the same at every step,
+    // so it is not on its list. Mutation: paste the sheets' property list
+    // onto the ticket -> red.
+    expect(ticket().className).not.toContain('background-color')
   })
 })
 
@@ -739,5 +748,169 @@ describe('MAR-3202 R7: LL1’s end states, unchanged', () => {
       }
       if (at < 5) fireEvent.click(next())
     }
+  })
+})
+
+/**
+ * LL3, rendered (MAR-3203).
+ *
+ * The slice is a set of rules about widths, and jsdom computes no widths.
+ * What is held here is the only half a rendered test can hold honestly: WHICH
+ * element scrolls, and which declarations the browser is handed. That nothing
+ * overlaps at 900 x 600 is Marcin's eyes, in the running app -- it is written
+ * out in the issue's QA list and claimed by nobody here.
+ *
+ * Every rule below is a PIN as much as a change: the arithmetic at the ruled
+ * floor says the guide already fits, so most of this slice is making sure a
+ * later hand cannot quietly take the fit away.
+ */
+
+const classesOf = (el: Element) => el.getAttribute('class') ?? ''
+/** Everything inside the dialog, itself included, that scrolls vertically. */
+const scrollers = () =>
+  [dialog(), ...dialog().querySelectorAll('*')].filter((el) =>
+    /overflow-y-auto|overflow-y-scroll|overflow-auto|overflow-scroll/.test(
+      classesOf(el),
+    ),
+  )
+
+describe('MAR-3203 R1: one scroller, and it is the teaching body', () => {
+  it('exactly one, and the title and the footer are outside it', () => {
+    open()
+    // Mutation: add `overflow-y-auto` to LEARN_LOOM_DIALOG_CLASS, or to the
+    // illustration frame -> two scrollers, red here. Two scrollers is how a
+    // short window ends up hiding the close control behind a scrollbar the
+    // person never thinks to use.
+    expect(scrollers()).toHaveLength(1)
+    const body = scrollers()[0]!
+
+    const header = document.querySelector('[data-slot="dialog-header"]')!
+    const footer = document.querySelector('[data-learn-loom-footer]')!
+    // Mutation: move either inside the body -> red. The title and the way
+    // out are the two things a short window may never take away.
+    expect(body.contains(header)).toBe(false)
+    expect(body.contains(footer)).toBe(false)
+    expect(header.className).toContain('shrink-0')
+    expect(footer.className).toContain('shrink-0')
+
+    // And it is the TEACHING body: a scroller that holds nothing scrolls
+    // nothing. Mutation: leave the illustration outside it -> red.
+    expect(body.contains(frame())).toBe(true)
+    expect(
+      body.contains(document.querySelector('[data-learn-loom-step]')!),
+    ).toBe(true)
+  })
+
+  it('and still exactly one when the quick reference is open', () => {
+    open()
+    press(LEARN_LOOM_CONTROLS.reference)
+    expect(scrollers()).toHaveLength(1)
+    const body = scrollers()[0]!
+    expect(
+      body.contains(document.querySelector('[data-learn-loom-reference]')!),
+    ).toBe(true)
+    expect(
+      body.contains(document.querySelector('[data-learn-loom-footer]')!),
+    ).toBe(false)
+  })
+})
+
+describe('MAR-3203 R3: the ticket narrows rather than clipping', () => {
+  it('carries a clamp that cannot resolve negative, at every step', () => {
+    open()
+    for (let at = 0; at < 6; at += 1) {
+      // The literal handed to the browser. Mutation: drop the `max(0px, `
+      // floor -> the clamp is invalid below 372 px of illustration, the
+      // browser discards the whole declaration, and the ticket springs back
+      // to its full 360 -- red here.
+      expect(ticket().style.maxWidth, `step ${at}`).toBe(
+        'max(0px, calc(100% - 372px))',
+      )
+      // Mutation: replace the derived clamp with a fixed `w-[360px]` and no
+      // max-width -> red. The width stays a want, the clamp the bound.
+      expect(ticket().style.width, `step ${at}`).toBe(
+        `${LEARN_LOOM_GEOMETRY.ticketWidth}px`,
+      )
+      if (at < 5) fireEvent.click(next())
+    }
+  })
+
+  it('its prose wraps, and its identifier is one unbreakable token', () => {
+    open()
+    // Mutation: drop `min-w-0` -> the card's content width becomes its floor
+    // and the max-width above is advisory, red here.
+    expect(ticket().className).toContain('min-w-0')
+    const line = (text: string | RegExp) => within(ticket()).getByText(text)
+    for (const text of [
+      'Improve account setup',
+      'Brief → code check',
+      'Illustrative ticket',
+    ]) {
+      expect(line(text).className, text).toContain('break-words')
+    }
+    // Mutation: give `DEMO-101` `break-words` too -> red. An identifier
+    // broken across two lines is a different identifier to read.
+    expect(line('DEMO-101').className).toContain('whitespace-nowrap')
+    expect(line('DEMO-101').className).not.toContain('break-words')
+  })
+})
+
+describe('MAR-3203 R5: the quick reference folds to one column', () => {
+  it('one column below 860 px of viewport, two at and above it', () => {
+    open()
+    press(LEARN_LOOM_CONTROLS.reference)
+    const grid = document.querySelector('[data-learn-loom-reference] > div')!
+    // A viewport breakpoint, not a container guess: the dialog's own width
+    // is a function of the viewport's, so they are the same question, and
+    // Electron's View -> Zoom In shrinks the CSS viewport.
+    // Mutation: `md:grid-cols-2` (768) instead -> red. 768 is narrower than
+    // where these cards actually stop being readable.
+    expect(classesOf(grid)).toContain('min-[860px]:grid-cols-2')
+    // Mutation: drop `grid-cols-1` and rely on the default -> red. The
+    // single column is the stated rule, not an accident of the grid.
+    expect(classesOf(grid)).toContain('grid-cols-1')
+    expect(classesOf(grid)).not.toMatch(/(^|\s|:)md:grid-cols-2/)
+    // Mutation: leave the unconditional `grid-cols-2` in place -> red; it
+    // would win below 860 as readily as above it.
+    expect(classesOf(grid)).not.toMatch(/(^|\s)grid-cols-2/)
+    expect(document.querySelectorAll('[data-learn-loom-card]')).toHaveLength(
+      LEARN_LOOM_REFERENCE_CARDS.length,
+    )
+  })
+})
+
+describe('MAR-3203: the footer keeps its primary, whatever it loses', () => {
+  it('the quiet controls may narrow and the primary may not', () => {
+    open()
+    const button = (name: string | RegExp) =>
+      screen.getByRole('button', { name })
+    // Mutation: swap the two -> the control that advances the lesson is the
+    // first thing squeezed out of a narrow row, red here.
+    expect(next().className).toContain('shrink-0')
+    expect(button(LEARN_LOOM_CONTROLS.reference).className).toContain('min-w-0')
+    expect(button(LEARN_LOOM_CONTROLS.back).className).toContain('min-w-0')
+    // The refusing Back is still a quiet control, and narrows like one.
+    expect(button(LEARN_LOOM_CONTROLS.back).getAttribute('aria-disabled')).toBe(
+      'true',
+    )
+
+    // And the same promise in the quick reference's own two-control row.
+    press(LEARN_LOOM_CONTROLS.reference)
+    expect(button(LEARN_LOOM_CONTROLS.backToLoom).className).toContain(
+      'shrink-0',
+    )
+    expect(button(LEARN_LOOM_CONTROLS.restart).className).toContain('min-w-0')
+  })
+
+  it('and it stays one row: it is never allowed to wrap or stack', () => {
+    open()
+    const footer = document.querySelector('[data-learn-loom-footer]')!
+    // Mutation: add `flex-wrap`, or `flex-col sm:flex-row` -> red. A footer
+    // that wraps is a footer that grows, and a footer that grows in a short
+    // window pushes the lesson off the top of its own scroller.
+    expect(footer.className).toContain('flex-row')
+    expect(footer.className).not.toMatch(/\bflex-wrap\b/)
+    expect(footer.className).not.toMatch(/\bflex-col\b/)
+    expect(footer.className).toContain('h-10')
   })
 })

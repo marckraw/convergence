@@ -150,11 +150,19 @@ export function learnLoomTicketLeft(activeIndex: number): number {
  * The active sheet is whatever the three closed ones leave, and the ticket
  * keeps its inset on both sides of that -- so the clamp is written once,
  * from the same four numbers, rather than as a magic `372`.
+ *
+ * The `max(0px, ...)` is load-bearing, not defensive tidiness (LL3). Under
+ * an illustration narrower than what the closed sheets and the two insets
+ * already cost, the bare `calc` resolves NEGATIVE, and a negative
+ * `max-width` is invalid -- so the browser discards the declaration
+ * entirely, the ticket springs back to its full 360 and overflows the sheet
+ * it is meant to sit inside. The clamp would fail exactly where it is
+ * needed. Floored at zero it stays a number, and the ticket keeps shrinking.
  */
 export function learnLoomTicketMaxWidth(sheetCount: number): string {
   const closed = (sheetCount - 1) * learnLoomSheetStride()
   const insets = 2 * LEARN_LOOM_GEOMETRY.ticketInset
-  return `calc(100% - ${closed + insets}px)`
+  return `max(0px, calc(100% - ${closed + insets}px))`
 }
 
 /**
