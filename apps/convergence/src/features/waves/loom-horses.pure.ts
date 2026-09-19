@@ -119,7 +119,7 @@ export interface LoomHorseSession {
  * A recipe has no conversation, so a name is all it can be addressed by; it
  * claims its crew's rows for that seat which carry no session at all.
  */
-function rowBelongsToSeat(
+export function rowBelongsToSeat(
   row: WaveRow,
   member: { sessionId: string | null; batonName: string | null },
   crewId: string,

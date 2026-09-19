@@ -135,6 +135,11 @@ describe('MAR-3195 R3: the PR block says what the app read', () => {
     // "checks passed" from `state === 'merged'` -> the card claims something
     // nobody looked at, red.
     expect(block.ci).toBe(CI_NOT_SEEN)
+    // The line a person reads, joined here so it can be pinned (lap 2, F).
+    // Mutation: drop `ci` from the join -> red.
+    expect(block.line).toBe(
+      'checked 5m ago · review: approved · CI status not seen',
+    )
     // The URL the read gave, never one built from the branch.
     // Mutation: build it from `headBranch` -> red.
     expect(block.url).toBe(pr.url)
@@ -156,6 +161,7 @@ describe('MAR-3195 R3: the PR block says what the app read', () => {
     expect(block.title).toBeNull()
     expect(block.review).toBeNull()
     expect(block.ci).toBe(CI_NOT_SEEN)
+    expect(block.line).toBe('checked 5m ago · CI status not seen')
   })
 
   it('no PR is its own sentence', () => {

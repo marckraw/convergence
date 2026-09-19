@@ -73,11 +73,21 @@ export type LoomDetailPr =
       checked: string | null
       review: string | null
       ci: string
+      /**
+       * The one muted line a person actually reads (lap 2, F).
+       *
+       * Joined HERE and not in JSX: assembled in the component, `ci` could
+       * be dropped from the array and every gate stayed green -- the
+       * always-on honesty sentence R3 exists for, unpinned at any layer.
+       */
+      line: string
     }
 
 function detailPr(pr: SessionPullRequest | null, now: number): LoomDetailPr {
   if (!pr) return { linked: false, line: 'No linked pull request' }
   const age = livenessAge(pr.checkedAt, now)
+  const checked = age === null ? null : `checked ${age} ago`
+  const review = pr.reviewDecision ? REVIEW_WORDS[pr.reviewDecision] : null
   return {
     linked: true,
     headline: `PR #${pr.number} · ${pr.state}`,
@@ -85,9 +95,12 @@ function detailPr(pr: SessionPullRequest | null, now: number): LoomDetailPr {
     // link that 404s is worse than no link.
     url: pr.url,
     title: pr.title?.trim() ? pr.title.trim() : null,
-    checked: age === null ? null : `checked ${age} ago`,
-    review: pr.reviewDecision ? REVIEW_WORDS[pr.reviewDecision] : null,
+    checked,
+    review,
     ci: CI_NOT_SEEN,
+    line: [checked, review, CI_NOT_SEEN]
+      .filter((part): part is string => part !== null)
+      .join(' · '),
   }
 }
 

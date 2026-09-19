@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -17,12 +18,12 @@ import { loadLoomSheet, saveLoomSheet } from './wave-panel-sheet.api'
 import type { LoomSheet } from './wave-panel-sheet.pure'
 import { loomSubline } from './loom-sheets.pure'
 import { loomIssueDetail } from './loom-detail.pure'
-import type { LoomSheetDetail } from './loom-stack.types'
+import { rowBelongsToSeat } from './loom-horses.pure'
 import { LoomCompactView } from './loom-compact.presentational'
 import { LoomExpandedView } from './loom-expanded.presentational'
 import { LoomStripView } from './loom-strip.presentational'
 import { WaveResizeHandle } from './wave-resize-handle.presentational'
-import { waveRowKey, type WaveRow } from './wave-sections.pure'
+import { waveRowKey } from './wave-sections.pure'
 import {
   clampWavePanelWidth,
   effectiveWavePanelMode,
@@ -31,7 +32,7 @@ import {
   WAVE_PANEL_MIN_COLUMN_WIDTH,
 } from './wave-sections.pure'
 import { useWaveColumnResize } from './use-wave-column-resize'
-import { useWaveBoard, type WaveBoard } from './use-wave-board'
+import { useWaveBoard } from './use-wave-board'
 
 interface WavePanelProps {
   onOpenSession?: (session: SessionSummary) => void
@@ -61,20 +62,38 @@ interface WavePanelProps {
 }
 
 /**
- * Why a row cannot be opened, read once (lap 2, F4).
+ * In Loom a row always opens (MAR-3195 lap 2, A).
  *
- * The matching `openRow` left with MAR-3195: in Loom a row is a door to the
- * ISSUE now, and the conversation opens from inside the detail. The reason a
- * row would refuse is still shown on the row itself, so the lookup stays.
+ * `WaveRowView` decides whether it is a button from `inertReason` -- a fact
+ * about the seat's CONVERSATION. Passing the real reason here made every
+ * Plan row, and every row whose conversation is not loaded, an inert `div`:
+ * exactly the issues a person most wants to read, unreadable, with the
+ * refusal words the detail composes reachable only through a horse card.
+ *
+ * The refusal did not disappear; it moved inside the detail, which is where
+ * it belongs now that a row's door is the ISSUE. Mission Control's Waves tab
+ * keeps the real reason -- there a row still opens a conversation.
  */
-function useRowDoors(board: WaveBoard) {
-  return useCallback(
-    (entry: WorkLedgerEntry) => {
-      const opening = board.resolveRow(entry)
-      return opening.openable ? null : opening.reason
-    },
-    [board],
-  )
+const LOOM_ROWS_ALWAYS_OPEN = () => null
+
+/**
+ * How to find again the control that opened a detail (MAR-3195 R5).
+ *
+ * A selector rather than the element: the rows are unmounted while the
+ * detail has the body, so the node that was clicked is detached by the time
+ * the card closes, and focusing it would put the keyboard nowhere.
+ *
+ * The Details button carries its OWN attribute (lap 2, E). Remembering
+ * `[data-loom-horse="…"] button` sent focus to the card's first button --
+ * *Open conversation* -- so Escape then Enter left the board entirely.
+ */
+function openerSelector(active: HTMLElement): string | null {
+  const details = active.closest('[data-loom-horse-details]')
+  if (details) {
+    return `[data-loom-horse-details="${details.getAttribute('data-loom-horse-details')}"]`
+  }
+  const row = active.closest('[data-wave-row]')
+  return row ? `[data-wave-row="${row.getAttribute('data-wave-row')}"]` : null
 }
 
 function useWindowWidth(): number {
@@ -95,7 +114,7 @@ function useWindowWidth(): number {
  * does -- the sheet ITSELF is remembered between runs, but a scroll offset
  * into rows that have since changed is not a promise worth keeping.
  */
-function useSheetScroll(sheet: LoomSheet) {
+function useSheetScroll(sheet: LoomSheet, frozen: { current: boolean }) {
   const offsets = useRef<Record<LoomSheet, number>>({
     before: 0,
     now: 0,
@@ -104,19 +123,37 @@ function useSheetScroll(sheet: LoomSheet) {
   })
   // Keyed on the open sheet, so React tears the old body down and hands us the
   // new one -- which is exactly when the offset has to go back on.
+  const element = useRef<HTMLDivElement | null>(null)
   const bodyRef = useCallback(
-    (element: HTMLDivElement | null) => {
-      if (element) element.scrollTop = offsets.current[sheet]
+    (node: HTMLDivElement | null) => {
+      element.current = node
+      if (node) node.scrollTop = offsets.current[sheet]
     },
     [sheet],
   )
+  /**
+   * Put the sheet back where it was (MAR-3195 lap 2, B).
+   *
+   * Needed as its own act because the scroll container does NOT unmount
+   * when a detail takes the body -- only its children swap -- so `bodyRef`
+   * is never called again and nothing would restore the offset.
+   */
+  const restore = useCallback(() => {
+    if (element.current) element.current.scrollTop = offsets.current[sheet]
+  }, [sheet])
   const onBodyScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
+      // Frozen while a detail is open (MAR-3195 lap 2, B). The scroll
+      // container does NOT unmount when the card takes the body, and a
+      // detail shorter than the list clamps `scrollTop` to 0 -- Chromium
+      // fires that as a scroll, and writing it here would destroy the place
+      // a person was reading from, for this sheet, for good.
+      if (frozen.current) return
       offsets.current[sheet] = event.currentTarget.scrollTop
     },
-    [sheet],
+    [sheet, frozen],
   )
-  return { bodyRef, onBodyScroll }
+  return { bodyRef, onBodyScroll, restore }
 }
 
 /**
@@ -186,7 +223,6 @@ export const WavePanel: FC<WavePanelProps> = ({
     setStoredWidth(chosen)
     saveWavePanelWidth(chosen)
   }, [])
-  const inertReason = useRowDoors(board)
   /**
    * Every row Loom can show, flat, for the detail's key lookup (R1).
    *
@@ -214,22 +250,22 @@ export const WavePanel: FC<WavePanelProps> = ({
         : (allRows.find((row) => waveRowKey(row.entry) === detailKey) ?? null),
     [allRows, detailKey],
   )
-  /** The horse whose seat this row belongs to, for the detail's two lines. */
+  /**
+   * The horse this row belongs to (lap 2, D), by the same identity rule the
+   * cards claim rows with -- the ledger's join for a resident, the seat name
+   * for a recipe. A `crewId + seat` fallback was the name collision MAR-3191
+   * lap 2 removed, put back by the back door.
+   */
   const detailHorse = useMemo(() => {
     if (!detailRow) return null
-    const key = waveRowKey(detailRow.entry)
     return (
-      board.horses.find(
-        (horse) =>
-          (horse.held && waveRowKey(horse.held.entry) === key) ||
-          (horse.returned && waveRowKey(horse.returned.entry) === key),
-      ) ??
-      board.horses.find(
-        (horse) =>
-          horse.crewId === detailRow.entry.crewId &&
-          horse.seat === detailRow.entry.seat,
-      ) ??
-      null
+      board.horses.find((horse) =>
+        rowBelongsToSeat(
+          detailRow,
+          { sessionId: horse.sessionId, batonName: horse.seat },
+          horse.crewId,
+        ),
+      ) ?? null
     )
   }, [board.horses, detailRow])
 
@@ -241,24 +277,25 @@ export const WavePanel: FC<WavePanelProps> = ({
    * and guessing wrong puts the keyboard somewhere nobody asked for.
    */
   const openedFrom = useRef<string | null>(null)
-  const showDetail = useCallback((row: WaveRow) => {
+  const showDetail = useCallback((entry: WorkLedgerEntry) => {
     // The SELECTOR, not the element: the rows are unmounted while the detail
     // has the body, so the node that was clicked is detached by the time the
     // card closes and focusing it would put the keyboard nowhere.
     const active = document.activeElement
     openedFrom.current =
-      active instanceof HTMLElement
-        ? active.closest('[data-wave-row]')?.getAttribute('data-wave-row')
-          ? `[data-wave-row="${active.closest('[data-wave-row]')!.getAttribute('data-wave-row')}"]`
-          : active.closest('[data-loom-horse]')
-            ? `[data-loom-horse="${active.closest('[data-loom-horse]')!.getAttribute('data-loom-horse')}"] button`
-            : null
-        : null
-    setDetailKey(waveRowKey(row.entry))
+      active instanceof HTMLElement ? openerSelector(active) : null
+    setDetailKey(waveRowKey(entry))
   }, [])
   const closeDetail = useCallback(() => setDetailKey(null), [])
   // Focus returns once the rows are back on screen (R5), which is a render
   // later than the click that closed the card.
+  // A row that leaves the ledger takes its key with it (lap 2, C). Left
+  // behind, the key goes on claiming Escape -- in expanded the first press
+  // would silently do nothing -- and the detail would re-open by itself the
+  // day that identifier came back.
+  useEffect(() => {
+    if (detailKey !== null && detailRow === null) setDetailKey(null)
+  }, [detailKey, detailRow])
   const hadDetail = useRef(detailKey !== null)
   useEffect(() => {
     if (hadDetail.current && detailKey === null && openedFrom.current) {
@@ -287,7 +324,18 @@ export const WavePanel: FC<WavePanelProps> = ({
     },
     [board, onOpenSession],
   )
-  const { bodyRef, onBodyScroll } = useSheetScroll(sheet)
+  // The detail freezes the sheet's memory while it is open; the ref is read
+  // inside the scroll handler, so it must be the same object across renders.
+  const detailOpen = useRef(false)
+  detailOpen.current = detailKey !== null
+  const { bodyRef, onBodyScroll, restore } = useSheetScroll(sheet, detailOpen)
+  const hadDetailForScroll = useRef(detailKey !== null)
+  // The rows are back in the DOM by layout time, so the offset goes on
+  // before the browser paints -- a person never sees the list at the top.
+  useLayoutEffect(() => {
+    if (hadDetailForScroll.current && detailKey === null) restore()
+    hadDetailForScroll.current = detailKey !== null
+  }, [detailKey, restore])
   // The draft is asked for before the early returns below, because hooks are
   // not optional; it is only READ when a column is on screen.
   const [draftWidth, setDraftWidth] = useState<number | null>(null)
@@ -360,10 +408,10 @@ export const WavePanel: FC<WavePanelProps> = ({
             horse: detailHorse,
             lastOkAt: board.lastOkAtOf(detailRow.entry.crewId),
             now: board.now,
-          }) as LoomSheetDetail['view'],
+          }),
           onClose: closeDetail,
-          onOpenConversation: (session: unknown) =>
-            onOpenSession?.(session as SessionSummary),
+          onOpenConversation: (session: SessionSummary) =>
+            onOpenSession?.(session),
           closeRef: closeButton,
         }
 
@@ -382,17 +430,10 @@ export const WavePanel: FC<WavePanelProps> = ({
     subline: loomSubline(board.crewNames),
     open: sheet,
     onSelectSheet: selectSheet,
-    inertReason,
+    inertReason: LOOM_ROWS_ALWAYS_OPEN,
     // In Loom a row is a door to the ISSUE (MAR-3195); the Waves tab's rows
     // still open the conversation, through `WavesTab`'s own `openRow`.
-    onOpen: (entry: WorkLedgerEntry) =>
-      showDetail({
-        entry,
-        action: null,
-        hostMarker: null,
-        crewName: null,
-        lapLabel: '',
-      }),
+    onOpen: showDetail,
     bodyRef,
     onBodyScroll,
     titleRef,

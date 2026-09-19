@@ -93,11 +93,7 @@ export const LoomDetailView = <TSession,>({
           {detail.pr.title ? (
             <span className="whitespace-normal">{detail.pr.title}</span>
           ) : null}
-          <span className={LOOM_DETAIL_MUTED_CLASS}>
-            {[detail.pr.checked, detail.pr.review, detail.pr.ci]
-              .filter((part): part is string => part !== null)
-              .join(' · ')}
-          </span>
+          <span className={LOOM_DETAIL_MUTED_CLASS}>{detail.pr.line}</span>
         </>
       ) : (
         <span className={LOOM_DETAIL_MUTED_CLASS}>{detail.pr.line}</span>

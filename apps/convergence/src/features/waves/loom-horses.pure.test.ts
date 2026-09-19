@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { SessionStatus } from '@/entities/session'
 import {
   loomHorseRuntimeLabel,
+  rowBelongsToSeat,
   loomHorses,
   loomHorsesLine,
   LOOM_NO_HORSES_LINE,
@@ -452,6 +453,45 @@ describe('MAR-3191 lap 2, B: a row is claimed by the ledger’s join', () => {
     expect(horses[1]?.held?.entry.issueIdentifier).toBe('EX-1')
     expect(horses[0]?.key).not.toBe(horses[1]?.key)
     expect(loomNowRows(sheets, horses)).toEqual([])
+  })
+
+  it('the rule itself, exported for the detail to reuse (MAR-3195 lap 2, D)', () => {
+    const row = {
+      entry: ledgerEntry({
+        issueIdentifier: 'EX-1',
+        seat: 'opus-mac',
+        sessionId: 'session-b',
+      }),
+      action: null,
+      hostMarker: null,
+      crewName: null,
+      lapLabel: 'lap 1',
+    }
+    // A resident claims by the ledger's join, never by the shared name.
+    // Mutation: compare `entry.seat` to `batonName` -> the first case reads
+    // true and two same-named seats claim one row again.
+    expect(
+      rowBelongsToSeat(
+        row,
+        { sessionId: 'session-a', batonName: 'opus-mac' },
+        'crew-1',
+      ),
+    ).toBe(false)
+    expect(
+      rowBelongsToSeat(
+        row,
+        { sessionId: 'session-b', batonName: 'opus-mac' },
+        'crew-1',
+      ),
+    ).toBe(true)
+    // ...and never across crews.
+    expect(
+      rowBelongsToSeat(
+        row,
+        { sessionId: 'session-b', batonName: 'opus-mac' },
+        'crew-2',
+      ),
+    ).toBe(false)
   })
 
   it('a recipe claims its crew’s seat rows that carry no session', () => {

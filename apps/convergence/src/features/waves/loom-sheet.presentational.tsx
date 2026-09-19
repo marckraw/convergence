@@ -12,7 +12,6 @@ import { LoomHorseCard } from './loom-horse.presentational'
 import { LoomDetailView } from './loom-detail.presentational'
 import type { LoomIssueDetail } from './loom-detail.pure'
 import { type LoomSheet } from './wave-panel-sheet.pure'
-import type { WaveRow } from './wave-sections.pure'
 import { WaveSectionView } from './wave-section.presentational'
 import {
   LOOM_HORSES_LINE_CLASS,
@@ -39,8 +38,8 @@ interface LoomSheetViewProps<TSession = unknown> {
   onToggleQa: () => void
   onOpenSeat?: (sessionId: string) => void
   onShowNext?: () => void
-  /** Reads a horse's held issue in place (MAR-3195). */
-  onShowDetail?: (row: WaveRow) => void
+  /** Reads an issue in place (MAR-3195); the key is all it needs. */
+  onShowDetail?: (entry: WorkLedgerEntry) => void
   /** Expanded lays the horses beside the QA list; compact stacks them. */
   wide?: boolean
   inertReason: (entry: WorkLedgerEntry) => string | null
@@ -134,7 +133,7 @@ export const LoomSheetView = <TSession,>({
                     onShowNext={onShowNext}
                     onShowDetail={
                       horse.held && onShowDetail
-                        ? () => onShowDetail(horse.held!)
+                        ? () => onShowDetail(horse.held!.entry)
                         : undefined
                     }
                   />

@@ -140,6 +140,9 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
           type="button"
           variant="ghost"
           size="sm"
+          // Its own mark, so focus can come back HERE and not to the card's
+          // first button (MAR-3195 lap 2, E).
+          data-loom-horse-details={horse.key}
           className="h-6 px-1 text-[11px] text-muted-foreground"
           onClick={onShowDetail}
         >
