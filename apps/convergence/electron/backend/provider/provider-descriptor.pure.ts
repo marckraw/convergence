@@ -152,11 +152,16 @@ const UNSUPPORTED_SKILLS_CAPABILITY: ProviderSkillsCapability = {
  * the provider, and five copies of it are five chances to disagree the day a
  * provider gains the ability.
  *
- * Claude and Codex both honour the shared /clear command. Other providers
- * remain unsupported until their adapters implement the same reset contract.
+ * Claude, Codex and Pi honour the shared /clear command (Pi since MAR-3215).
+ * Other providers remain unsupported until their adapters implement the same
+ * reset contract.
  */
 export function providerSupportsConversationReset(providerId: string): boolean {
-  return providerId === 'claude-code' || providerId === 'codex'
+  return (
+    providerId === 'claude-code' ||
+    providerId === 'codex' ||
+    providerId === 'pi'
+  )
 }
 
 export const NO_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability = {

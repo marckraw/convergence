@@ -1,7 +1,7 @@
 import { REMOTE_SPAWN_PLACE_REQUIRED } from '@/shared/lib/spawn-spec.pure'
 import {
   buildFallbackCodexDescriptor,
-  buildFallbackPiDescriptor,
+  buildFallbackCursorDescriptor,
 } from '../../../electron/backend/provider/provider-descriptor.pure'
 import { describe, expect, it } from 'vitest'
 import type { SessionRelay } from '@/entities/session-relay'
@@ -247,7 +247,7 @@ describe('the Before delivery selector (R8)', () => {
     })
     const unsupported = beforeDeliveryOptions({
       supportsReset: false,
-      providerName: 'Pi',
+      providerName: 'Cursor',
       recipientName: 'Sol',
     })
 
@@ -272,7 +272,7 @@ describe('the Before delivery selector (R8)', () => {
       false,
     ])
     // The reason names the provider, so it is actionable rather than a shrug.
-    expect(unsupported[1].help).toContain('Pi')
+    expect(unsupported[1].help).toContain('Cursor')
     // And the custom first message survives on every provider: R8 keeps the
     // arbitrary opener beside the new selector rather than replacing it.
     expect(unsupported[2].disabled).toBe(false)
@@ -447,8 +447,9 @@ describe('changeDraftRecipient', () => {
       clearing,
       { kind: 'session', sessionId: 'sol' },
       {
-        supportsReset: buildFallbackPiDescriptor().supportsConversationReset,
-        providerName: 'Pi',
+        supportsReset:
+          buildFallbackCursorDescriptor().supportsConversationReset,
+        providerName: 'Cursor',
       },
     )
 
@@ -457,7 +458,7 @@ describe('changeDraftRecipient', () => {
       kind: 'session',
       sessionId: 'sol',
     })
-    expect(result.note).toContain('Pi')
+    expect(result.note).toContain('Cursor')
   })
 
   it('keeps Clear for Codex — disable the Codex reset capability turns red', () => {
@@ -483,8 +484,9 @@ describe('changeDraftRecipient', () => {
       { ...clearing, beforeDelivery: 'custom', customOpener: 'Read HANDOFF.' },
       { kind: 'session', sessionId: 'sol' },
       {
-        supportsReset: buildFallbackPiDescriptor().supportsConversationReset,
-        providerName: 'Pi',
+        supportsReset:
+          buildFallbackCursorDescriptor().supportsConversationReset,
+        providerName: 'Cursor',
       },
     )
 
