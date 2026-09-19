@@ -308,20 +308,6 @@ export const WavePanel: FC<WavePanelProps> = ({
     setDetailKey(waveRowKey(entry))
   }, [])
   const closeDetail = useCallback(() => setDetailKey(null), [])
-  /**
-   * Another crew (MAR-3225 R4): the whole board is that crew's, and an issue
-   * read in place belongs to the crew it was opened from -- so the detail
-   * closes. The sheet, the mode and the width are the person's place in LOOM,
-   * not in a crew, and stay exactly as they are.
-   */
-  const { selectCrew: selectBoardCrew } = board
-  const selectCrew = useCallback(
-    (crewId: string) => {
-      selectBoardCrew(crewId)
-      setDetailKey(null)
-    },
-    [selectBoardCrew],
-  )
   // Focus returns once the rows are back on screen (R5), which is a render
   // later than the click that closed the card.
   // A row that leaves the ledger takes its key with it (lap 2, C). Left
@@ -510,7 +496,14 @@ export const WavePanel: FC<WavePanelProps> = ({
           ? {
               options: board.crewOptions,
               selectedId: board.selectedCrewId,
-              onSelect: selectCrew,
+              // Switching keeps the sheet, the mode and the width -- the
+              // person's place in LOOM, not in a crew -- and closes an open
+              // detail without a line of its own here (R4): the detail's key
+              // is crew-scoped (`crew:issue`) and resolved against the shown
+              // crew's rows only, so it finds nothing on another crew's board
+              // and lap 2, C's effect clears it. A second close here was
+              // proven redundant by mutation, so it is not written.
+              onSelect: board.selectCrew,
             }
           : null,
     },

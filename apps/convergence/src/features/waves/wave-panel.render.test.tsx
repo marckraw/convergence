@@ -3287,8 +3287,10 @@ describe('MAR-3097: through the containers and the real stores', () => {
 
       await pickCrew('Night shift')
 
-      // Mutation: keep the detail across the switch -> A's issue still read
-      // in place over B's board, red.
+      // The detail closes: its key is crew-scoped and is resolved against
+      // the shown crew's rows only. Mutation: hold on to the last row the
+      // key found once the live rows no longer have it -> A's issue is still
+      // read in place over B's board, red.
       expect(document.querySelector('[data-loom-detail]')).toBeNull()
       // The place in Loom is kept: Plan, compact, 360.
       expect(
