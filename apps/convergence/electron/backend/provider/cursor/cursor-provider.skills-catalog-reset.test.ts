@@ -8,6 +8,7 @@ import {
   MockCursorAcpChild,
   type MockCursorAcpServer,
 } from './cursor-acp-server.fixture'
+import { CURSOR_ACP_RECORDED_INITIALIZE_RESULT } from './cursor-acp.recorded.fixture'
 
 const { spawnMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -104,7 +105,9 @@ function attachCommandDiscoveryServer(
       }
       respond(
         message.id,
-        message.method === 'initialize' ? { protocolVersion: 1 } : {},
+        message.method === 'initialize'
+          ? CURSOR_ACP_RECORDED_INITIALIZE_RESULT
+          : {},
       )
     }
   })

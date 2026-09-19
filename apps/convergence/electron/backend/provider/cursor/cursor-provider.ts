@@ -45,13 +45,12 @@ import {
   SESSION_RESTARTED_EVENT_TYPE,
 } from '../session-restart.pure'
 import {
-  buildCursorAcpInitializeParams,
   buildCursorAcpSessionParams,
+  performCursorAcpHandshake,
   readCursorAcpSessionId,
 } from './cursor-acp-client'
 import {
   buildCursorUnavailableContextWindow,
-  CURSOR_ACP_LOGIN_METHOD_ID,
   CURSOR_ACP_MODEL_CONFIG_ID,
   CURSOR_ACP_PROMPT_SILENCE_BUDGET_MS,
   formatCursorAcpSilenceBudgetNote,
@@ -84,9 +83,16 @@ import {
   buildContinuationRecoveryEntry,
   isMissingContinuationError,
 } from '../continuation-recovery.pure'
-import { fetchCursorAcpDescriptorOrFallback } from './cursor-descriptor.service'
+import {
+  fetchCursorAcpDescriptor,
+  type CursorAcpSessionDiscoveryClient,
+} from './cursor-descriptor.service'
+import { buildFallbackCursorDescriptor } from '../provider-descriptor.pure'
 
 const CURSOR_PROVIDER_ID = 'cursor'
+
+/** `describe()` has no session of its own; its debug lines need an owner. */
+const CURSOR_DESCRIPTOR_DEBUG_SESSION_ID = 'cursor-descriptor'
 
 function now(): string {
   return new Date().toISOString()
@@ -126,7 +132,18 @@ interface CursorProviderOptions {
   requestTimeoutMs?: number
   /** Reported to Cursor in the ACP initialize handshake. */
   appVersion?: string | null
+  /**
+   * Injected by tests to drive `describe()`'s probe; production opens a
+   * disposable ACP session over the real binary.
+   */
+  descriptorClient?: CursorAcpSessionDiscoveryClient
 }
+
+/**
+ * A failed model probe is retried, never frozen (MAR-3145 R3) — but not on
+ * every keystroke that opens a model picker.
+ */
+const CURSOR_DESCRIPTOR_RETRY_FLOOR_MS = 30_000
 
 function findPendingApproval(
   pendingApprovals: Map<CursorAcpJsonRpcId, PendingCursorApproval>,
@@ -347,12 +364,10 @@ function runCursorAcpOneShot(
       const activeRpc = rpc
       if (!activeRpc) return
 
-      await activeRpc.request(
-        'initialize',
-        buildCursorAcpInitializeParams(appVersion),
-      )
-      await activeRpc.request('authenticate', {
-        methodId: CURSOR_ACP_LOGIN_METHOD_ID,
+      await performCursorAcpHandshake(activeRpc, {
+        appVersion,
+        onDebugNote: (note) =>
+          recordDebug({ direction: 'in', channel: 'lifecycle', note }),
       })
 
       const sessionResult = await activeRpc.request(
@@ -394,7 +409,10 @@ export class CursorProvider implements Provider {
   id = CURSOR_PROVIDER_ID
   name = 'Cursor'
   supportsContinuation = true
+  /** Only ever a descriptor that came from a probe that succeeded (R3). */
   private descriptorPromise: Promise<ProviderDescriptor> | null = null
+  private descriptorProbe: Promise<ProviderDescriptor> | null = null
+  private descriptorFailedAt: number | null = null
 
   constructor(
     private binaryPath: string,
@@ -405,16 +423,61 @@ export class CursorProvider implements Provider {
     private options: CursorProviderOptions = {},
   ) {}
 
+  /**
+   * The model list, probed from a disposable ACP session. A probe that fails
+   * (CLI updating, a slow start, logged out) yields the one-model fallback for
+   * this call only: the fallback is never cached, the failure is said once in
+   * the debug log, and the next call past the retry floor probes again
+   * (MAR-3145 R3).
+   */
   describe(): Promise<ProviderDescriptor> {
-    if (!this.descriptorPromise) {
-      this.descriptorPromise = fetchCursorAcpDescriptorOrFallback(
-        this.binaryPath,
-        undefined,
-        { appVersion: this.options.appVersion ?? null },
-      )
+    if (this.descriptorPromise) return this.descriptorPromise
+    if (this.descriptorProbe) return this.descriptorProbe
+
+    if (
+      this.descriptorFailedAt !== null &&
+      Date.now() - this.descriptorFailedAt < CURSOR_DESCRIPTOR_RETRY_FLOOR_MS
+    ) {
+      return Promise.resolve(buildFallbackCursorDescriptor())
     }
 
-    return this.descriptorPromise
+    const probe = fetchCursorAcpDescriptor(this.binaryPath, undefined, {
+      appVersion: this.options.appVersion ?? null,
+      client: this.options.descriptorClient,
+    }).then(
+      (descriptor) => {
+        this.descriptorFailedAt = null
+        this.descriptorPromise = Promise.resolve(descriptor)
+        return descriptor
+      },
+      (error: unknown) => {
+        this.descriptorFailedAt = Date.now()
+        this.recordDescriptorProbeFailure(error)
+        return buildFallbackCursorDescriptor()
+      },
+    )
+
+    this.descriptorProbe = probe
+    void probe.finally(() => {
+      if (this.descriptorProbe === probe) this.descriptorProbe = null
+    })
+
+    return probe
+  }
+
+  /** One line per failed probe — the bare catch this replaced said nothing. */
+  private recordDescriptorProbeFailure(error: unknown): void {
+    const message = error instanceof Error ? error.message : String(error)
+    this.debugSink.record({
+      sessionId: CURSOR_DESCRIPTOR_DEBUG_SESSION_ID,
+      providerId: CURSOR_PROVIDER_ID,
+      at: Date.now(),
+      direction: 'in',
+      channel: 'lifecycle',
+      note: `Cursor model discovery failed: ${message}. Showing the fallback model list; retrying in at most ${Math.round(
+        CURSOR_DESCRIPTOR_RETRY_FLOOR_MS / 1000,
+      )}s.`,
+    })
   }
 
   oneShot(input: OneShotInput): Promise<OneShotResult> {
@@ -1411,12 +1474,10 @@ export class CursorProvider implements Provider {
       }
 
       try {
-        await activeRpc.request(
-          'initialize',
-          buildCursorAcpInitializeParams(appVersion),
-        )
-        await activeRpc.request('authenticate', {
-          methodId: CURSOR_ACP_LOGIN_METHOD_ID,
+        await performCursorAcpHandshake(activeRpc, {
+          appVersion,
+          onDebugNote: (note) =>
+            recordDebug({ direction: 'in', channel: 'lifecycle', note }),
         })
 
         if (opening === 'fresh') {

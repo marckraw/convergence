@@ -9,6 +9,7 @@ import {
   readCursorAcpSessionId,
   type CursorAcpSpawn,
 } from './cursor-acp-client'
+import { CURSOR_ACP_RECORDED_INITIALIZE_RESULT } from './cursor-acp.recorded.fixture'
 
 const SESSION_RESULT = {
   sessionId: 'cursor-session-1',
@@ -135,7 +136,7 @@ describe('CursorAcpProcessClient', () => {
       methods.push(String(message.method))
       switch (message.method) {
         case 'initialize':
-          respond(child, message, { protocolVersion: 1 })
+          respond(child, message, CURSOR_ACP_RECORDED_INITIALIZE_RESULT)
           break
         case 'authenticate':
           respond(child, message, { authenticated: true })
@@ -171,6 +172,8 @@ describe('CursorAcpProcessClient', () => {
       methods.push({ method: String(message.method), params: message.params })
       switch (message.method) {
         case 'initialize':
+          respond(child, message, CURSOR_ACP_RECORDED_INITIALIZE_RESULT)
+          break
         case 'authenticate':
           respond(child, message, {})
           break
@@ -200,6 +203,8 @@ describe('CursorAcpProcessClient', () => {
     const spawnHarness = createSpawn((child, message) => {
       switch (message.method) {
         case 'initialize':
+          respond(child, message, CURSOR_ACP_RECORDED_INITIALIZE_RESULT)
+          break
         case 'authenticate':
           respond(child, message, {})
           break

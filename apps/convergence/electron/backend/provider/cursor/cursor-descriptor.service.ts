@@ -1,5 +1,4 @@
 import type { ProviderDescriptor } from '../provider.types'
-import { buildFallbackCursorDescriptor } from '../provider-descriptor.pure'
 import {
   CursorAcpProcessClient,
   type CursorAcpProcessClientOptions,
@@ -14,6 +13,11 @@ export interface CursorAcpDescriptorServiceOptions extends CursorAcpProcessClien
   client?: CursorAcpSessionDiscoveryClient
 }
 
+/**
+ * Probes the model list over a disposable ACP session. It rejects on failure on
+ * purpose: `CursorProvider.describe()` owns what a failed probe means, so that
+ * no caller can quietly cache a fallback as the truth (MAR-3145 R3).
+ */
 export async function fetchCursorAcpDescriptor(
   binaryPath: string,
   cwd: string = process.cwd(),
@@ -24,16 +28,4 @@ export async function fetchCursorAcpDescriptor(
     client ?? new CursorAcpProcessClient(binaryPath, clientOptions)
   const sessionResult = await discoveryClient.createSession(cwd)
   return buildCursorDescriptorFromSession(sessionResult)
-}
-
-export async function fetchCursorAcpDescriptorOrFallback(
-  binaryPath: string,
-  cwd: string = process.cwd(),
-  options: CursorAcpDescriptorServiceOptions = {},
-): Promise<ProviderDescriptor> {
-  try {
-    return await fetchCursorAcpDescriptor(binaryPath, cwd, options)
-  } catch {
-    return buildFallbackCursorDescriptor()
-  }
 }

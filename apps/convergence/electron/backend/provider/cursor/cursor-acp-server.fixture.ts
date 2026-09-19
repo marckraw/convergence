@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events'
 import { PassThrough } from 'stream'
 import { vi } from 'vitest'
+import { CURSOR_ACP_RECORDED_INITIALIZE_RESULT } from './cursor-acp.recorded.fixture'
 
 /**
  * Fake Cursor ACP child + scripted JSON-RPC replies for provider tests
@@ -42,6 +43,13 @@ export interface MockCursorAcpOptions {
    * Lets a test finish the prompt as `end_turn` after interrupt to pin sticky-flag clearing.
    */
   ignoreCancel?: boolean
+  /**
+   * Replaces the recorded `initialize` result (MAR-3145). The default is what
+   * the live CLI actually answered, `cursor_login` included — a fake that
+   * offered less than the far side would make the handshake's refusal
+   * unreachable.
+   */
+  initializeResult?: unknown
 }
 
 export interface MockCursorAcpRecordedRequest {
@@ -93,6 +101,8 @@ export function createMockCursorAcp(
   let nextSeq = 1
   let refuseSetConfigOption = options.refuseSetConfigOption
   let refuseSessionNew = false
+  const initializeResult =
+    options.initializeResult ?? CURSOR_ACP_RECORDED_INITIALIZE_RESULT
 
   function nextRecordSeq(): number {
     const seq = nextSeq
@@ -198,7 +208,7 @@ export function createMockCursorAcp(
               heldInitializeId = message.id
               break
             }
-            respond(message.id, { protocolVersion: 1 })
+            respond(message.id, initializeResult)
             break
           case 'authenticate':
             respond(message.id, {})
@@ -323,7 +333,7 @@ export function createMockCursorAcp(
       if (heldInitializeId === null) {
         throw new Error('No held Cursor initialize request')
       }
-      respond(heldInitializeId, { protocolVersion: 1 })
+      respond(heldInitializeId, initializeResult)
       heldInitializeId = null
     },
     allowSetConfigOption(): void {
