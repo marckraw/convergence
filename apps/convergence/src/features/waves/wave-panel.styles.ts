@@ -66,6 +66,14 @@ export const LOOM_SHEET_TITLE_OPEN_CLASS = 'bg-white/[0.04] text-foreground'
 export const LOOM_SHEET_BODY_CLASS =
   'app-scrollbar min-h-0 flex-1 overflow-y-auto pb-3'
 
+/**
+ * A section's one-line explanation of itself (MAR-3194 R3). Sits under the
+ * heading, in the heading's own colour but not its uppercase: it is a
+ * sentence to read, not a label to scan past.
+ */
+export const WAVE_SECTION_HINT_CLASS =
+  'px-3 pb-1 text-[11px] text-muted-foreground'
+
 export const LOOM_SHEET_NOTE_CLASS =
   'px-3 pt-3 text-[11px] text-muted-foreground'
 

@@ -2,7 +2,10 @@ import type { FC, ReactNode } from 'react'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
 import { waveRowKey, type WaveRow } from './wave-sections.pure'
 import { WaveRowView } from './wave-row.presentational'
-import { WAVE_SECTION_TITLE_CLASS } from './wave-panel.styles'
+import {
+  WAVE_SECTION_HINT_CLASS,
+  WAVE_SECTION_TITLE_CLASS,
+} from './wave-panel.styles'
 
 interface WaveSectionViewProps {
   title: string
@@ -13,6 +16,12 @@ interface WaveSectionViewProps {
    * counted the preview would be the panel telling a person there are three.
    */
   count?: number
+  /**
+   * One line explaining what this section is for (MAR-3194 R3), under the
+   * heading. Optional and rendered only when given: every section that
+   * existed before this prop draws exactly the markup it drew before.
+   */
+  hint?: string
   /** The section's own id, when a control outside its rows must name it. */
   id?: string
   /**
@@ -35,6 +44,7 @@ export const WaveSectionView: FC<WaveSectionViewProps> = ({
   title,
   rows,
   count,
+  hint,
   id,
   footer,
   inertReason,
@@ -51,6 +61,11 @@ export const WaveSectionView: FC<WaveSectionViewProps> = ({
     />
   ))
   const heading = `${title} · ${count ?? rows.length}`
+  const hintLine = hint ? (
+    <p data-wave-hint={title} className={WAVE_SECTION_HINT_CLASS}>
+      {hint}
+    </p>
+  ) : null
 
   return disclosure ? (
     <details
@@ -62,11 +77,13 @@ export const WaveSectionView: FC<WaveSectionViewProps> = ({
       <summary className={`${WAVE_SECTION_TITLE_CLASS} cursor-pointer`}>
         {heading}
       </summary>
+      {hintLine}
       {list}
     </details>
   ) : (
     <section id={id} aria-label={title} className="flex flex-col">
       <h3 className={WAVE_SECTION_TITLE_CLASS}>{heading}</h3>
+      {hintLine}
       {list}
       {footer}
     </section>

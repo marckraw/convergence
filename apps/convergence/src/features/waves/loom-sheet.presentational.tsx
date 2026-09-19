@@ -9,6 +9,12 @@ import {
   LOOM_DONE_IS_NOT_RELEASED,
 } from './loom-before.pure'
 import {
+  LOOM_PLAN_IS_READ_ONLY,
+  loomPlan,
+  loomPlanLeftLine,
+  loomUtcDay,
+} from './loom-plan.pure'
+import {
   loomHorsesLine,
   LOOM_QA_PREVIEW,
   type LoomHorse,
@@ -99,6 +105,11 @@ export const LoomSheetView = <TSession,>({
   // `loomSheetCounts`) the title above them (MAR-3192 R4).
   const before = loomBefore(sheets.before, now)
   const olderLine = loomBeforeOlderLine(before.older)
+  // The same one derivation for Plan's stages, its left line and its title
+  // (MAR-3194 R5); `today` comes from the board's own clock, so the day a
+  // grounding is aged against is the day the rest of the panel is drawn on.
+  const plan = loomPlan(sheets.plan, loomUtcDay(now))
+  const leftLine = loomPlanLeftLine(plan.left)
   const qa = sheets.now.awaitingQa
   const qaShown = qaExpanded ? qa : qa.slice(0, LOOM_QA_PREVIEW)
   return (
@@ -231,12 +242,29 @@ export const LoomSheetView = <TSession,>({
             />
           ) : null}
           {sheet === 'plan' ? (
-            <WaveSectionView
-              title="In preparation"
-              rows={sheets.plan}
-              inertReason={inertReason}
-              onOpen={onOpen}
-            />
+            <>
+              {/* The stages of preparation, in the order it happens
+                  (MAR-3194 R3). Read-only by ruling: the only thing a
+                  person can press here is a row, and it opens the detail. */}
+              {plan.stages.map((stage) => (
+                <WaveSectionView
+                  key={stage.key}
+                  title={stage.title}
+                  hint={stage.hint}
+                  rows={stage.rows}
+                  inertReason={inertReason}
+                  onOpen={onOpen}
+                />
+              ))}
+              {leftLine && plan.preparing > 0 ? (
+                <p className={LOOM_SHEET_NOTE_CLASS}>{leftLine}</p>
+              ) : null}
+              {plan.preparing > 0 ? (
+                <p className={LOOM_SHEET_NOTE_CLASS}>
+                  {LOOM_PLAN_IS_READ_ONLY}
+                </p>
+              ) : null}
+            </>
           ) : null}
         </>
       )}
