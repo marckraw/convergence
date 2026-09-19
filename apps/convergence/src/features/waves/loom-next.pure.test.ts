@@ -144,6 +144,75 @@ describe('MAR-3193 R1: a row is in the queue of the horse it belongs to', () => 
   })
 })
 
+describe('MAR-3193 lap 2, A: a seat can outlive its conversation', () => {
+  /**
+   * The backend nulls `entry.sessionId` when the seat's conversation is gone
+   * (`workLedgerEntryFromJoinedRow`) while the crew member keeps its id, so
+   * the conversation join refuses a row that plainly belongs to this horse.
+   */
+  const orphaned = (identifier: string, facts = READY) =>
+    queued(identifier, { seat: 'opus-mac', sessionId: null, facts })
+
+  const gone = horse({
+    key: 'crew-1:opus-mac',
+    seat: 'opus-mac',
+    sessionId: 's1',
+    conversationMissing: true,
+  })
+
+  it('the row is that seat’s, and says what is actually wrong', () => {
+    const next = loomNext([orphaned('MAR-1')], [gone])
+    expect(next.seats).toHaveLength(1)
+    expect(next.unseated).toEqual([])
+    expect(identifiers(next.seats[0]!.preparing)).toEqual(['MAR-1'])
+    // The lap's bug: this read `seat "opus-mac" not in the crew`, which was
+    // false -- the seat is in the crew, its conversation is not.
+    expect(next.seats[0]!.preparing[0]?.action).toBe('seat has no conversation')
+    expect(next.seats[0]!.ready).toEqual([])
+  })
+
+  it('a fully-labelled row in that state is still not ready', () => {
+    // Mutation: let the fallback row fall through to the label check -> it
+    // reads `1 · ready`, red. Nothing runs through a door that is gone.
+    const next = loomNext([orphaned('MAR-1', READY)], [gone])
+    expect(next.ready).toBe(0)
+    expect(next.preparing).toBe(1)
+    expect(next.seats[0]!.ready).toEqual([])
+  })
+
+  it('it counts in the capacity line and in the title', () => {
+    const sheets = loomSheets(
+      [
+        queuedEntry('MAR-1', { seat: 'opus-mac', sessionId: null }),
+        queuedEntry('MAR-2', { seat: 'opus-mac', sessionId: null }),
+      ],
+      NOW,
+    )
+    const next = loomNext(sheets.next, [gone])
+    expect(next.seats[0]?.capacity).toBe('This Mac · Idle · 2 queued')
+    expect(loomSheetTitle('next', loomSheetCounts(sheets, NOW, [gone]))).toBe(
+      'Next · 0 ready · 2 preparing',
+    )
+  })
+
+  it('the crew is still half the match', () => {
+    // Mutation: drop the `crewId` half of the fallback -> a same-named seat
+    // in another crew takes the row, red.
+    const next = loomNext(
+      [orphaned('MAR-1')],
+      [horse({ key: 'crew-2:opus-mac', crewId: 'crew-2', seat: 'opus-mac' })],
+    )
+    expect(next.seats).toEqual([])
+    expect(next.unseated[0]?.action).toBe('seat "opus-mac" not in the crew')
+  })
+
+  it('a name matching no horse still says nobody is named', () => {
+    const next = loomNext([queued('MAR-9', { seat: 'ghost' })], [gone])
+    expect(next.seats).toEqual([])
+    expect(next.unseated[0]?.action).toBe('seat "ghost" not in the crew')
+  })
+})
+
 describe('MAR-3193 R2: Ready means it could run; Preparing says what is missing', () => {
   it('all eight label combinations', () => {
     const flags = [false, true]

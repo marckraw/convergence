@@ -2166,6 +2166,47 @@ describe('MAR-3097: through the containers and the real stores', () => {
       ).toBeTruthy()
     })
 
+    it('lap 2, B: an empty Next says nothing about an order', async () => {
+      await openNext([])
+      const body = nextBody()
+      // Mutation: render the footer unconditionally -> a sheet with no
+      // queue at all explains the order of nothing, red.
+      expect(body.textContent).not.toContain('Order: priority')
+      expect(body.querySelectorAll('[data-wave-row]')).toHaveLength(0)
+      expect(within(body).getByText('Nothing in Next right now.')).toBeTruthy()
+    })
+
+    it('lap 2, A: a seat whose conversation is gone still owns its queue', async () => {
+      // The backend nulls the row's `sessionId` when the conversation is
+      // deleted, while the crew member keeps its id.
+      crews = [
+        {
+          ...boundCrew('crew-1', 'Loom'),
+          members: [residentSeat('opus', { conversationMissing: true })],
+        },
+      ]
+      snapshots = {
+        'crew-1': {
+          crewId: 'crew-1',
+          entries: [queued('MAR-5', READY, 'opus', null)],
+          trackerHealth: health('ok'),
+        },
+      }
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      fireEvent.click(screen.getByRole('button', { name: /^Next · / }))
+
+      const body = nextBody()
+      expect(
+        [...body.querySelectorAll('h3')].map((node) => node.textContent),
+      ).toEqual(['opus · 1'])
+      expect(within(body).getByText('seat has no conversation')).toBeTruthy()
+      expect(body.textContent).not.toContain('not in the crew')
+      expect(screen.getByRole('button', { name: /^Next · / }).textContent).toBe(
+        'Next · 0 ready · 1 preparing',
+      )
+    })
+
     it('R7: compact and expanded say the same thing', async () => {
       await openNext(QUEUE)
       const readNext = () => {

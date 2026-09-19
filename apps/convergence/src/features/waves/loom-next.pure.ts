@@ -14,6 +14,12 @@ import type { WaveRow } from './wave-sections.pure'
 export const LOOM_NEXT_ORDER_LINE =
   'Order: priority, then issue number · running work stays in Now'
 
+/**
+ * What a queued row says when its seat exists but its conversation does not
+ * (lap 2, A). The seat IS in the crew -- saying otherwise was the lap's bug.
+ */
+export const LOOM_NEXT_NO_CONVERSATION = 'seat has no conversation'
+
 /** The group for queued rows whose seat is not a seat of their crew. */
 export const LOOM_NEXT_UNSEATED_TITLE = 'No seat named in this crew'
 
@@ -133,39 +139,92 @@ function preparingAction(row: WaveRow): string {
 /**
  * The queues, one per horse that has anything waiting (MAR-3193).
  *
- * The seat a row belongs to is decided by `rowBelongsToSeat` -- the same
- * join MAR-3191 uses for the cards -- so a queue and the horse card above it
- * can never disagree about whose work a row is. Crew is part of that join:
- * two crews may name a seat the same, and matching on the name alone would
- * hand one crew's work to another crew's horse.
+ * The seat a row belongs to is decided in two passes, and they answer two
+ * different questions (lap 2, A): `rowBelongsToSeat` -- the same join
+ * MAR-3191 uses for the cards -- answers *whose conversation carries this
+ * row*, and the narrower fallback answers *whose name is on it*. The second
+ * exists because a seat can outlive its conversation, and only the first
+ * question changes its answer when that happens. Crew is half of both: two
+ * crews may name a seat the same.
  */
 export function loomNext(
   rows: readonly WaveRow[],
   horses: readonly LoomHorse[],
 ): LoomNext {
   const claimed = new Set<WaveRow>()
-  const seats: LoomNextSeat[] = []
+  const mine = new Map<string, WaveRow[]>()
+  // Rows a seat owns by NAME while its conversation is gone (lap 2, A).
+  // They are queued on that horse and cannot run, whatever their labels
+  // say, so they are tracked apart from the rows the label check judges.
+  const nameOnly = new Set<WaveRow>()
 
+  const take = (horse: LoomHorse, row: WaveRow) => {
+    claimed.add(row)
+    const list = mine.get(horse.key)
+    if (list) list.push(row)
+    else mine.set(horse.key, [row])
+  }
+
+  // Pass one: whose CONVERSATION carries this row.
   for (const horse of horses) {
-    const mine = rows.filter(
-      (row) =>
-        !claimed.has(row) &&
+    for (const row of rows) {
+      if (claimed.has(row)) continue
+      if (
         rowBelongsToSeat(
           row,
           { sessionId: horse.sessionId, batonName: horse.seat },
           horse.crewId,
-        ),
-    )
-    for (const row of mine) claimed.add(row)
+        )
+      ) {
+        take(horse, row)
+      }
+    }
+  }
+
+  // Pass two: whose NAME is on it (lap 2, A).
+  //
+  // A resident seat whose conversation was deleted keeps its `sessionId` on
+  // the crew member while the backend nulls it on the row
+  // (`workLedgerEntryFromJoinedRow`), so the first join refuses a row that
+  // plainly belongs to that horse -- and the sheet said the seat was not in
+  // the crew, which was false. The crew is still half the match: two crews
+  // may name a seat the same, and a name alone would hand one crew's work
+  // to the other's horse.
+  for (const horse of horses) {
+    if (horse.seat === null) continue
+    for (const row of rows) {
+      if (claimed.has(row)) continue
+      if (
+        row.entry.crewId === horse.crewId &&
+        row.entry.seat !== null &&
+        row.entry.seat === horse.seat
+      ) {
+        take(horse, row)
+        nameOnly.add(row)
+      }
+    }
+  }
+
+  const seats: LoomNextSeat[] = []
+  for (const horse of horses) {
+    const queue = mine.get(horse.key) ?? []
     // A seat with nothing queued is not drawn: Now already lists every
     // horse, and an empty group here would say "this horse has a queue".
-    if (mine.length === 0) continue
+    if (queue.length === 0) continue
 
     const ready: WaveRow[] = []
     const preparing: WaveRow[] = []
-    for (const row of mine) {
-      if (loomMissingLabels(row.entry.fact).length === 0) ready.push(row)
-      else preparing.push({ ...row, action: preparingAction(row) })
+    for (const row of queue) {
+      // A seat with no conversation cannot start anything, so its rows are
+      // never Ready and never numbered -- the number is a promise about
+      // what runs next, and nothing runs through a door that is gone.
+      if (nameOnly.has(row)) {
+        preparing.push({ ...row, action: LOOM_NEXT_NO_CONVERSATION })
+      } else if (loomMissingLabels(row.entry.fact).length === 0) {
+        ready.push(row)
+      } else {
+        preparing.push({ ...row, action: preparingAction(row) })
+      }
     }
     ready.sort(loomQueueCompare)
     preparing.sort(loomQueueCompare)
