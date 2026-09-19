@@ -1,24 +1,26 @@
 # Cursor ACP surface (measured)
 
-**Status:** observed · CP0 (MAR-3141)  
+**Status:** observed · CP0 (MAR-3141) + probe 2 (MAR-3239)  
 **CLI:** `cursor-agent` `2026.06.03-0bbb28e` at `~/.local/bin/cursor-agent`  
-**Date:** 2026-09-17  
+**Date:** 2026-09-17 (CP0) · 2026-09-20 (probe 2)  
 **OS:** macOS (darwin 25)  
 **Probe (throwaway, not committed):** Node JSON-RPC client speaking Convergence’s
 `initialize` / `authenticate` / `session/new` shape, then additional methods.
 Transcript scrubbed in memory before any write. Default model; **7** one-line
 `session/prompt` calls in lap 1; lap 2 spent **0** further prompts (transcript
 still on disk).  
-**Committed probe tool (wrong envelope):** `apps/convergence/tools/probe-cursor-acp.mjs`
-with `--probe-cancel` / `--cancel-after-ms` sends `session/cancel` as a JSON-RPC
-**request** (`client.request(...)`). That path is `-32601` on this CLI; the
-working cancel is a **notification**. Do not re-measure cancel with that tool’s
-request form and conclude “unsupported.”
+**Committed probe tool:** `apps/convergence/tools/probe-cursor-acp.mjs`, with its
+side-effect-free half in `probe-cursor-acp.pure.mjs` (message builders, arg
+parsing, redaction, the transcript). Since MAR-3239 it sends `session/cancel` as
+a **notification**, takes a repeatable `--prompt` that runs every prompt in order
+on one process and one session, and writes a scrubbed transcript with `--out`.
+The tool spawns a real `cursor-agent` at import time — never import it from a
+test; import the `.pure.mjs` half instead.
 
 This document states what was **seen on the wire**, not what the app currently
 assumes. Anything inferred is labeled _inferred_.
 
-## Six answers
+## Six answers (CP0, 2026-09-17)
 
 | #   | Question                                                                                                                    | Answer                                                                                                                                                                                                                                                                                                               | Wire evidence (scrubbed)                                                                                                                                                                                                                                                                        |
 | --- | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -129,6 +131,106 @@ config/credential home. Auth is `agent login` / `--api-key` /
 `CURSOR_API_KEY`. Workspace is `--workspace`. Worktrees nest under
 `~/.cursor/worktrees/…` but that is not a home relocate.
 
+## Probe 2 — five answers (MAR-3239)
+
+**Date:** 2026-09-20 · same CLI build `2026.06.03-0bbb28e` · **default model** ·
+**7** one-line prompts (ceiling 8), across two ACP processes, plus one
+**zero-prompt** run that only read the command catalog. Workspace was a
+throwaway git repo under `/tmp`, never a real checkout. Permission requests were
+auto-approved with the new `--permission-response first-allow`.
+
+| #   | Question                                      | Answer                                                                                                                                                                                                                                                 | Wire evidence (scrubbed)                                                                                                                                                                                      |
+| --- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | The dying turn (`WritableIterable is closed`) | **not reproduced** in 3 attempts. All 7 turns ended `stopReason: "end_turn"`, the process stayed alive after every one, and the next prompt always worked. Zero bytes on stderr.                                                                       | No `WritableIterable`, no `"stopReason":"error"`, no `child-exit` entry in either transcript. Long chained `sleep`/`echo` command, permission allowed ~1 ms after the request, 3 times.                       |
+| 2   | `/compress` on a live session                 | **no** — it is not a server-side command. Sent as `session/prompt` it round-trips as ordinary user text: the model wrote a prose "Conversation summary" and the turn ended `end_turn`. No compaction signal on the wire. The next prompt still worked. | Full `available_commands_update` catalog (**86** entries, read with **0** prompts) has no `compress` / `compact` / `summar*` / `context*` entry. Result: `{"stopReason":"end_turn"}`.                         |
+| 3   | The permission `options`                      | **yes, there is an allow-always.** Three options, identical on all 7 requests: `allow-once` (`allow_once`), `allow-always` (`allow_always`), `reject-once` (`reject_once`).                                                                            | `[{"optionId":"allow-once","name":"Allow once","kind":"allow_once"},{"optionId":"allow-always","name":"Allow always","kind":"allow_always"},{"optionId":"reject-once","name":"Reject","kind":"reject_once"}]` |
+| 4   | Todos and tasks                               | **yes** — both, as JSON-RPC **server requests** (they carry an `id`), not `session/update` payloads. `cursor/update_todos` ×3 and `cursor/task` ×1 on one turn. No `plan` update.                                                                      | See [Todos and tasks](#todos-and-tasks). Inbound methods across probe 2: `session/update`, `session/request_permission`, `cursor/update_todos`, `cursor/task`.                                                |
+| 5   | `cursor-agent status` shape (logged in)       | exit **0**, stderr empty, stdout a single 35-byte line: `✓ Logged in as <account-email>\n`.                                                                                                                                                            | Captured through a masker; the identifier was never printed, logged or written. Logged-out behaviour remains **unknown**.                                                                                     |
+
+### The dying turn (question 1)
+
+The provocation from the brief — one long chained shell command
+(`sleep 1 && echo a && … && echo d`), permission answered _allow_ immediately,
+as the app's auto-approve does — did **not** kill the turn. Three attempts:
+one on a fresh session, two more on a second fresh process. Every attempt:
+
+- `session/request_permission` arrived with `kind: "execute"` and the content
+  `"Not in allowlist: sleep 1, echo a, …"`;
+- the probe answered `allow-once` within ~1 ms;
+- the tool ran, the agent printed `a b c d`, and the prompt resolved
+  `{"stopReason":"end_turn"}`;
+- the child process was still alive afterwards, and the following prompt
+  succeeded.
+
+_Inferred for MAR-3159:_ the reported death is **not** a plain consequence of
+allowing a long chained command on this CLI build. Something else in the app's
+path — how it writes to the child, or a teardown racing the answer — remains the
+likely cause. `WritableIterable` is a name from the **Cursor CLI's own**
+internals, and it never surfaced when a minimal client drove the same shape.
+
+### `/compress` (question 2)
+
+Not in the catalog, so nothing server-side consumes it. The interesting part is
+the failure mode: because the CLI forwards it as plain text, the **model** tries
+to honour it. In this probe it searched the machine for a `compress` skill and
+then improvised a summary in chat. A client that shows `/compress` as a working
+command would be showing a model's improvisation, not a compacted context.
+
+_Inferred for MAR-3153:_ there is no `/compress` to forward. Compaction for
+Cursor has to be built, or the command has to be absent from the UI.
+
+### Permission options (question 3)
+
+`allow-always` exists as a real option id. MAR-3146 does not need a client-side
+simulation of "always allow": it can send `allow-always` and let the CLI keep
+the allowlist. The `toolCall.content` text names exactly which command segments
+were not in the allowlist, which is usable as the reason shown to the user.
+
+### Todos and tasks
+
+Both are `cursor/*` **server requests**. The probe answered every one with
+`-32601 Method not found` and **the turns still completed `end_turn`** — the CLI
+does not require a client to implement them, so adopting them is optional and
+safe to do incrementally.
+
+`cursor/update_todos` params:
+
+```json
+{
+  "toolCallId": "…",
+  "todos": [{ "id": "1", "content": "…", "status": "in_progress" }],
+  "merge": false
+}
+```
+
+`merge` is load-bearing. The first call of a turn carried `merge: false` and the
+**complete** list; the two later calls carried `merge: true` and **only the
+todos that changed**. Rendering a `merge: true` payload as the whole list would
+silently drop every unchanged item. Statuses seen: `pending`, `in_progress`,
+`completed`.
+
+`cursor/task` params:
+
+```json
+{
+  "toolCallId": "…",
+  "description": "Write repo README",
+  "prompt": "…full subagent instruction…",
+  "subagentType": { "custom": { "unspecified": {} } },
+  "model": "default",
+  "agentId": "…",
+  "durationMs": 15976
+}
+```
+
+It arrived **once, after** the subagent had finished (it carries `durationMs`),
+so it is a completion record, not a start event — a UI cannot use it to show a
+task running. `prompt` carries the full subagent instruction, including
+workspace content: treat it as sensitive.
+
+No top-level `plan` `sessionUpdate` appeared, and `user_message_chunk` — seen in
+CP0 — did **not** recur in probe 2.
+
 ## Not checked / STOP notes
 
 - Logged-out `authenticate` behaviour: **unknown** (STOP on that sub-question
@@ -137,3 +239,10 @@ config/credential home. Auth is `agent login` / `--api-key` /
   an account identifier was not persisted into the transcript or this doc.
 - Prompt count: **7** in lap 1; **0** additional in lap 2 (under the eight-prompt
   ceiling).
+- Probe 2 prompt count: **7** of a ceiling of 8 (3 dying-turn attempts, 1 todo /
+  subagent prompt, `/compress`, and 2 "reply with exactly: …" follow-ups). The
+  86-command catalog read and `cursor-agent status` cost **0** prompts.
+- Probe 2's `cursor-agent status` was captured through a masker: the account
+  identifier was never printed, logged or written anywhere.
+- Probe 2 transcripts live under `/tmp` and are **not** committed. The committed
+  record is `cursor-acp.recorded.fixture.ts`, pinned by its test.

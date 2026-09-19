@@ -1,30 +1,36 @@
 #!/usr/bin/env node
+/**
+ * Cursor ACP probe. Spawns a real `cursor-agent acp` and speaks Convergence's
+ * ACP envelope at it, so the wire can be measured instead of guessed.
+ *
+ * This module runs on import — keep every testable part in
+ * `probe-cursor-acp.pure.mjs`, which a test may import without spending
+ * Marcin's Cursor plan.
+ */
 import { spawn, spawnSync } from 'node:child_process'
 import { createInterface } from 'node:readline'
+import { writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import process from 'node:process'
-
-const HELP = `Usage:
-  node tools/probe-cursor-acp.mjs [options]
-
-Options:
-  --binary <path>                      Cursor CLI binary. Defaults to agent, then cursor-agent.
-  --cwd <path>                         Working directory for the ACP session. Defaults to process cwd.
-  --prompt <text>                      Send a session/prompt request after session/new.
-  --mode <agent|plan|ask>              Set mode through session/set_mode after session/new.
-  --model <acp-model-id>               Probe model selection through session/set_config_option.
-  --allow-model-config-mutation        Required with --model because Cursor model config can persist globally.
-  --permission-response <option-id>    Permission option to return. Defaults to reject-once.
-  --probe-load                         Call session/list and session/load after session creation.
-  --probe-cancel                       Send session/cancel while a prompt is running.
-  --cancel-after-ms <number>           Delay before session/cancel. Defaults to 500.
-  --timeout-ms <number>                Per-request timeout. Defaults to 30000.
-  --json                               Print the full redacted probe summary as JSON.
-  --help                               Show this help.
-
-Safe default:
-  Without --prompt or --model this only initializes ACP, authenticates, creates a session,
-  and prints redacted capability/config summaries.
-`
+import {
+  HELP,
+  buildCancelNotification,
+  buildMethodNotFoundResponse,
+  buildPermissionResponse,
+  buildPromptRequest,
+  buildRequestMessage,
+  createTranscript,
+  encodeMessage,
+  isResponse,
+  isServerRequest,
+  parseArgs,
+  readConfigCurrentValue,
+  readRecord,
+  readString,
+  redactPayload,
+  selectPermissionOptionId,
+  summarizeOptions,
+} from './probe-cursor-acp.pure.mjs'
 
 const args = parseArgs(process.argv.slice(2))
 
@@ -47,6 +53,9 @@ if (!binary) {
 }
 
 const cwd = args.cwd ?? process.cwd()
+const startedAt = Date.now()
+const transcript = createTranscript({ homeDir: homedir() })
+
 const child = spawn(binary, ['acp'], {
   cwd,
   stdio: ['pipe', 'pipe', 'pipe'],
@@ -60,20 +69,24 @@ const client = createJsonRpcClient(child, {
 const summary = {
   binary,
   cwd,
+  permissionResponse: args.permissionResponse,
+  idleMs: args.idleMs,
+  promptsSent: 0,
   initialized: null,
   authenticated: null,
   session: null,
   selectedMode: null,
   selectedModel: null,
-  promptResult: null,
-  promptError: null,
+  prompts: [],
   listResult: null,
   loadResult: null,
-  cancelResult: null,
-  cancelError: null,
+  cancelSent: null,
+  permissionAnswers: client.permissionAnswers,
   notifications: client.notifications,
   serverRequests: client.serverRequests,
   stderr: client.stderr,
+  processAliveAtEnd: null,
+  childExit: null,
 }
 
 try {
@@ -133,34 +146,39 @@ try {
     }
   }
 
-  if (args.prompt) {
-    const promptPromise = client
-      .request('session/prompt', {
-        sessionId,
-        prompt: [{ type: 'text', text: args.prompt }],
-      })
-      .catch((error) => {
-        summary.promptError =
-          error instanceof Error ? error.message : String(error)
-        return null
-      })
+  // Every --prompt runs in order on this one process and this one session.
+  for (let index = 0; index < args.prompts.length; index += 1) {
+    if (index > 0 && args.idleMs > 0) await delay(args.idleMs)
 
-    if (args.probeCancel) {
+    const text = args.prompts[index]
+    const record = {
+      index,
+      prompt: text,
+      notificationsBefore: client.notifications.length,
+      serverRequestsBefore: client.serverRequests.length,
+      result: null,
+      error: null,
+      processAliveAfter: null,
+    }
+    summary.prompts.push(record)
+    summary.promptsSent += 1
+
+    const promptPromise = client.prompt(sessionId, text).catch((error) => {
+      record.error = error instanceof Error ? error.message : String(error)
+      return null
+    })
+
+    // --probe-cancel fires during the first prompt only.
+    if (args.probeCancel && index === 0) {
       await delay(args.cancelAfterMs)
-      try {
-        summary.cancelResult = await client.request('session/cancel', {
-          sessionId,
-        })
-      } catch (error) {
-        summary.cancelError =
-          error instanceof Error ? error.message : String(error)
-      }
+      client.notify(buildCancelNotification(sessionId))
+      summary.cancelSent = 'notification'
     }
 
-    summary.promptResult = await promptPromise
-    if (!summary.promptResult && summary.promptError && !args.probeCancel) {
-      throw new Error(summary.promptError)
-    }
+    record.result = await promptPromise
+    record.notificationsAfter = client.notifications.length
+    record.serverRequestsAfter = client.serverRequests.length
+    record.processAliveAfter = isChildAlive()
   }
 
   if (args.probeLoad) {
@@ -172,9 +190,17 @@ try {
     })
   }
 
+  if (args.lingerMs > 0) await delay(args.lingerMs)
+
+  summary.processAliveAtEnd = isChildAlive()
+  summary.childExit = { code: child.exitCode, signal: child.signalCode }
+  writeTranscript()
   printSummary(summary, args.json)
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error))
+  summary.processAliveAtEnd = isChildAlive()
+  summary.childExit = { code: child.exitCode, signal: child.signalCode }
+  writeTranscript()
   printSummary(summary, true)
   process.exitCode = 1
 } finally {
@@ -182,11 +208,36 @@ try {
   child.kill()
 }
 
+function isChildAlive() {
+  return child.exitCode === null && child.signalCode === null
+}
+
+/**
+ * `--out` writes the transcript the collection already redacted on append, plus
+ * a redacted summary. Nothing raw is in scope here to write by mistake.
+ */
+function writeTranscript() {
+  if (!args.out) return
+  const payload = {
+    startedAt: new Date(startedAt).toISOString(),
+    binary,
+    cwd,
+    promptsSent: summary.promptsSent,
+    summary: redactPayload(summary, { homeDir: homedir() }),
+    entries: transcript.entries(),
+  }
+  writeFileSync(args.out, `${JSON.stringify(payload, null, 2)}\n`, 'utf8')
+  console.log(
+    `transcript (redacted): ${args.out} · ${transcript.length} entries`,
+  )
+}
+
 function createJsonRpcClient(childProcess, options) {
   let nextId = 1
   const pending = new Map()
   const notifications = []
   const serverRequests = []
+  const permissionAnswers = []
   const stderr = []
 
   const rl = createInterface({ input: childProcess.stdout })
@@ -197,9 +248,13 @@ function createJsonRpcClient(childProcess, options) {
     try {
       message = JSON.parse(line)
     } catch {
-      notifications.push({ type: 'non-json-line', line })
+      const entry = { type: 'non-json-line', line }
+      transcript.record({ at: elapsed(), direction: 'in', message: entry })
+      notifications.push(redactPayload(entry, { homeDir: homedir() }))
       return
     }
+
+    transcript.record({ at: elapsed(), direction: 'in', message })
 
     if (isResponse(message)) {
       const waiter = pending.get(message.id)
@@ -207,25 +262,40 @@ function createJsonRpcClient(childProcess, options) {
       clearTimeout(waiter.timeout)
       pending.delete(message.id)
       message.error
-        ? waiter.reject(new Error(message.error.message ?? 'ACP error'))
+        ? waiter.reject(
+            Object.assign(new Error(message.error.message ?? 'ACP error'), {
+              rpcError: redactPayload(message.error, { homeDir: homedir() }),
+            }),
+          )
         : waiter.resolve(message.result)
       return
     }
 
     if (isServerRequest(message)) {
-      serverRequests.push(redactPayload(message))
-      handleServerRequest(childProcess, message, options)
+      serverRequests.push(redactPayload(message, { homeDir: homedir() }))
+      handleServerRequest(message)
       return
     }
 
-    notifications.push(redactPayload(message))
+    notifications.push(redactPayload(message, { homeDir: homedir() }))
   })
 
   childProcess.stderr.on('data', (chunk) => {
-    stderr.push(chunk.toString())
+    const text = chunk.toString()
+    transcript.record({
+      at: elapsed(),
+      direction: 'stderr',
+      message: { text },
+    })
+    stderr.push(redactPayload(text, { homeDir: homedir() }))
   })
 
   childProcess.on('exit', (code, signal) => {
+    transcript.record({
+      at: elapsed(),
+      direction: 'event',
+      message: { type: 'child-exit', code, signal },
+    })
     for (const [, waiter] of pending) {
       clearTimeout(waiter.timeout)
       waiter.reject(
@@ -237,67 +307,80 @@ function createJsonRpcClient(childProcess, options) {
     pending.clear()
   })
 
+  function send(message) {
+    transcript.record({ at: elapsed(), direction: 'out', message })
+    childProcess.stdin.write(encodeMessage(message))
+  }
+
+  function awaitResponse(id, method) {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        pending.delete(id)
+        reject(new Error(`Timed out waiting for ${method}`))
+      }, options.timeoutMs)
+
+      pending.set(id, { resolve, reject, timeout })
+    })
+  }
+
+  function handleServerRequest(message) {
+    if (message.method === 'session/request_permission') {
+      const { optionId, reason } = selectPermissionOptionIdFor(message)
+      permissionAnswers.push({
+        toolCallId: readString(
+          readRecord(message.params)?.toolCall,
+          'toolCallId',
+        ),
+        optionId,
+        reason,
+        options: redactPayload(readRecord(message.params)?.options, {
+          homeDir: homedir(),
+        }),
+      })
+      send(buildPermissionResponse(message.id, optionId))
+      return
+    }
+
+    send(
+      buildMethodNotFoundResponse(
+        message.id,
+        `Probe does not implement ${message.method}`,
+      ),
+    )
+  }
+
+  function selectPermissionOptionIdFor(message) {
+    const offered = readRecord(message.params)?.options
+    return selectPermissionOptionId(offered, options.permissionResponse)
+  }
+
   return {
     notifications,
     serverRequests,
+    permissionAnswers,
     stderr,
+    notify(message) {
+      send(message)
+    },
     request(method, params) {
       const id = nextId++
-      childProcess.stdin.write(
-        JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n',
-      )
-
-      return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          pending.delete(id)
-          reject(new Error(`Timed out waiting for ${method}`))
-        }, options.timeoutMs)
-
-        pending.set(id, { resolve, reject, timeout })
-      })
+      send(buildRequestMessage(id, method, params))
+      return awaitResponse(id, method)
+    },
+    prompt(sessionId, text) {
+      const id = nextId++
+      send(buildPromptRequest(id, sessionId, text))
+      return awaitResponse(id, 'session/prompt')
     },
   }
 }
 
-function handleServerRequest(childProcess, message, options) {
-  if (message.method === 'session/request_permission') {
-    respond(childProcess, message.id, {
-      outcome: {
-        outcome: 'selected',
-        optionId: options.permissionResponse,
-      },
-    })
-    return
-  }
-
-  respondError(
-    childProcess,
-    message.id,
-    `Probe does not implement ${message.method}`,
-  )
-}
-
-function respond(childProcess, id, result) {
-  childProcess.stdin.write(
-    JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n',
-  )
-}
-
-function respondError(childProcess, id, message) {
-  childProcess.stdin.write(
-    JSON.stringify({
-      jsonrpc: '2.0',
-      id,
-      error: {
-        code: -32601,
-        message,
-      },
-    }) + '\n',
-  )
+function elapsed() {
+  return Date.now() - startedAt
 }
 
 function printSummary(summary, asJson) {
-  const redacted = redactPayload(summary)
+  const redacted = redactPayload(summary, { homeDir: homedir() })
 
   if (asJson) {
     console.log(JSON.stringify(redacted, null, 2))
@@ -319,107 +402,19 @@ function printSummary(summary, asJson) {
   console.log(
     `models: ${summarizeOptions(readRecord(summary.session)?.models?.availableModels)}`,
   )
+  console.log(`prompts sent: ${summary.promptsSent}`)
   console.log(`notifications: ${summary.notifications.length}`)
   console.log(`server requests: ${summary.serverRequests.length}`)
+  console.log(`permission answers: ${summary.permissionAnswers.length}`)
+  console.log(`process alive at end: ${summary.processAliveAtEnd}`)
 
-  if (summary.promptResult) {
+  for (const record of summary.prompts) {
     console.log(
-      `prompt stopReason: ${readString(summary.promptResult, 'stopReason') ?? 'unknown'}`,
+      `prompt[${record.index}] stopReason: ${
+        readString(record.result, 'stopReason') ?? 'none'
+      }${record.error ? ` error: ${record.error}` : ''} alive: ${record.processAliveAfter}`,
     )
   }
-}
-
-function summarizeOptions(value) {
-  const items = Array.isArray(value) ? value : []
-  if (items.length === 0) return 'none'
-
-  const names = items.slice(0, 8).map((item) => {
-    if (typeof item === 'string') return item
-    const record = readRecord(item)
-    return (
-      readString(record, 'id') ??
-      readString(record, 'value') ??
-      readString(record, 'modelId') ??
-      readString(record, 'name') ??
-      'unknown'
-    )
-  })
-
-  return `${items.length} (${names.join(', ')}${items.length > 8 ? ', ...' : ''})`
-}
-
-function parseArgs(argv) {
-  const parsed = {
-    binary: null,
-    cwd: null,
-    prompt: null,
-    mode: null,
-    model: null,
-    allowModelConfigMutation: false,
-    permissionResponse: 'reject-once',
-    probeLoad: false,
-    probeCancel: false,
-    cancelAfterMs: 500,
-    timeoutMs: 30000,
-    json: false,
-    help: false,
-  }
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index]
-    switch (arg) {
-      case '--binary':
-        parsed.binary = readArgValue(argv, ++index, arg)
-        break
-      case '--cwd':
-        parsed.cwd = readArgValue(argv, ++index, arg)
-        break
-      case '--prompt':
-        parsed.prompt = readArgValue(argv, ++index, arg)
-        break
-      case '--mode':
-        parsed.mode = readArgValue(argv, ++index, arg)
-        break
-      case '--model':
-        parsed.model = readArgValue(argv, ++index, arg)
-        break
-      case '--allow-model-config-mutation':
-        parsed.allowModelConfigMutation = true
-        break
-      case '--permission-response':
-        parsed.permissionResponse = readArgValue(argv, ++index, arg)
-        break
-      case '--probe-load':
-        parsed.probeLoad = true
-        break
-      case '--probe-cancel':
-        parsed.probeCancel = true
-        break
-      case '--cancel-after-ms':
-        parsed.cancelAfterMs = Number(readArgValue(argv, ++index, arg))
-        break
-      case '--timeout-ms':
-        parsed.timeoutMs = Number(readArgValue(argv, ++index, arg))
-        break
-      case '--json':
-        parsed.json = true
-        break
-      case '--help':
-      case '-h':
-        parsed.help = true
-        break
-      default:
-        throw new Error(`Unknown argument: ${arg}`)
-    }
-  }
-
-  return parsed
-}
-
-function readArgValue(argv, index, name) {
-  const value = argv[index]
-  if (!value) throw new Error(`${name} requires a value`)
-  return value
 }
 
 function findBinary(names) {
@@ -432,119 +427,6 @@ function findBinary(names) {
   }
 
   return null
-}
-
-function readConfigCurrentValue(value, configId) {
-  const configOptions = readRecord(value)?.configOptions
-  if (!Array.isArray(configOptions)) return null
-
-  for (const option of configOptions) {
-    const record = readRecord(option)
-    if (readString(record, 'id') !== configId) continue
-    return (
-      readString(record, 'currentValue') ??
-      readString(record, 'value') ??
-      readString(record, 'current')
-    )
-  }
-
-  return null
-}
-
-function redactPayload(value, depth = 0, key = null) {
-  if (key && isSensitiveKey(key)) return '[redacted]'
-  if (key && isRawToolPayloadKey(key)) return summarizeRawPayload(value)
-  if (typeof value === 'string') return truncate(value)
-  if (typeof value !== 'object' || value === null) return value
-  if (depth > 8) return '[truncated object]'
-
-  if (Array.isArray(value)) {
-    const items = value
-      .slice(0, 20)
-      .map((item) => redactPayload(item, depth + 1, key))
-    if (value.length > 20) items.push(`[truncated ${value.length - 20} items]`)
-    return items
-  }
-
-  const output = {}
-  for (const [entryKey, entryValue] of Object.entries(value)) {
-    output[entryKey] = redactPayload(entryValue, depth + 1, entryKey)
-  }
-  return output
-}
-
-function summarizeRawPayload(value) {
-  const record = readRecord(value)
-  if (!record) return redactPayload(value, 1)
-
-  const summary = {}
-  for (const key of ['type', 'kind', 'title', 'status', 'command']) {
-    const field = record[key]
-    if (field !== undefined) summary[key] = redactPayload(field, 1, key)
-  }
-
-  if (typeof record.content === 'string') {
-    summary.contentPreview = truncate(record.content)
-    summary.contentBytes = Buffer.byteLength(record.content)
-  }
-
-  return Object.keys(summary).length > 0
-    ? summary
-    : '[redacted raw tool payload]'
-}
-
-function truncate(value) {
-  if (value.length <= 240) return value
-  return `${value.slice(0, 240)}... [truncated ${value.length - 240} chars]`
-}
-
-function isResponse(message) {
-  return (
-    message &&
-    typeof message === 'object' &&
-    'id' in message &&
-    !('method' in message) &&
-    ('result' in message || 'error' in message)
-  )
-}
-
-function isServerRequest(message) {
-  return (
-    message &&
-    typeof message === 'object' &&
-    'id' in message &&
-    typeof message.method === 'string'
-  )
-}
-
-function readRecord(value) {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value
-    : null
-}
-
-function readString(value, key) {
-  const record = readRecord(value)
-  const field = record?.[key]
-  if (typeof field === 'number') return String(field)
-  return typeof field === 'string' && field.trim() ? field.trim() : null
-}
-
-function isSensitiveKey(key) {
-  const normalized = key.toLowerCase()
-  return (
-    normalized.includes('token') ||
-    normalized.includes('apikey') ||
-    normalized.includes('api_key') ||
-    normalized.includes('authorization') ||
-    normalized.includes('email') ||
-    normalized === 'account'
-  )
-}
-
-function isRawToolPayloadKey(key) {
-  const normalized = key.toLowerCase()
-  return normalized === 'rawoutput' || normalized === 'rawinput'
 }
 
 function delay(ms) {
