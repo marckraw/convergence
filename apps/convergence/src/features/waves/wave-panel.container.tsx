@@ -37,6 +37,7 @@ import {
 import { useWaveColumnResize } from './use-wave-column-resize'
 import { useWaveBoard } from './use-wave-board'
 import { LoomRefresh } from './loom-refresh.container'
+import { LoomOutside } from './loom-outside.container'
 
 interface WavePanelProps {
   onOpenSession?: (session: SessionSummary) => void
@@ -494,6 +495,12 @@ export const WavePanel: FC<WavePanelProps> = ({
           crewId={board.selectedCrewId}
           lastOkAt={board.lastOkAtOf(board.selectedCrewId)}
         />
+      ) : null,
+    // The crew on screen's issues outside the loop (MAR-3236), keyed by the
+    // crew so a switch is a fresh, folded group reading that crew's list.
+    outside:
+      board.selectedCrewId !== null ? (
+        <LoomOutside key={board.selectedCrewId} crewId={board.selectedCrewId} />
       ) : null,
     subline: {
       text: loomSubline(

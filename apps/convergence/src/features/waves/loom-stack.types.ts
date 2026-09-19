@@ -83,6 +83,11 @@ export interface LoomStackProps {
    * an outage the header is already naming.
    */
   refresh?: ReactNode
+  /**
+   * "Not in the loop" for the crew on screen (MAR-3236), drawn last in Plan,
+   * or absent where there is no crew to read it for.
+   */
+  outside?: ReactNode
   /** `convergence development · All waves` -- which ledger this is. */
   subline: LoomSubline
   open: LoomSheet
