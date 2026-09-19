@@ -17,10 +17,14 @@ import { ProviderRegistry } from '../provider/provider-registry'
 import { LocalExecutionHost } from '../provider/execution-host/local-execution-host'
 import {
   buildFallbackCodexDescriptor,
+  buildFallbackCursorDescriptor,
   buildFallbackPiDescriptor,
   buildClaudeDescriptor,
 } from '../provider/provider-descriptor.pure'
-import type { SessionStartConfig } from '../provider/provider.types'
+import {
+  ProviderBusyError,
+  type SessionStartConfig,
+} from '../provider/provider.types'
 import type { SessionDelta } from './conversation-item.types'
 import { ProjectContextService } from '../project-context/project-context.service'
 import { SessionContextInjectionService } from './context-injection/session-context-injection.service'
@@ -48,6 +52,10 @@ describe('Codex reset through the composer door', () => {
   let context: ProjectContextService
   let emit: (delta: SessionDelta) => void
   let starts: SessionStartConfig[]
+  /** What the resident Cursor handle was sent after its start (MAR-3216). */
+  let cursorSends: string[]
+  /** The Cursor adapter's own "not now", which the record cannot see. */
+  let cursorBusy: boolean
   let attachments: AttachmentsService
   beforeEach(() => {
     const db = getDatabase()
@@ -58,7 +66,9 @@ describe('Codex reset through the composer door', () => {
     ).run('reset-project', 'Reset', directory)
     const registry = new ProviderRegistry()
     starts = []
-    for (const providerId of ['codex', 'claude-code', 'pi']) {
+    cursorSends = []
+    cursorBusy = false
+    for (const providerId of ['codex', 'claude-code', 'pi', 'cursor']) {
       registry.register({
         id: providerId,
         name: 'Codex',
@@ -68,9 +78,38 @@ describe('Codex reset through the composer door', () => {
             ? buildFallbackCodexDescriptor()
             : providerId === 'pi'
               ? buildFallbackPiDescriptor()
-              : buildClaudeDescriptor(),
+              : providerId === 'cursor'
+                ? buildFallbackCursorDescriptor()
+                : buildClaudeDescriptor(),
         start(config) {
           starts.push(config)
+          if (providerId === 'cursor') {
+            // Resident, as the real Cursor handle is (MAR-3142 R1): it
+            // outlives its turn, so a /clear reaches it through sendMessage.
+            return {
+              resident: true,
+              onDelta: (cb) => {
+                emit = cb
+              },
+              onStatusChange: () => {},
+              onAttentionChange: () => {},
+              onContinuationToken: () => {},
+              onContextWindowChange: () => {},
+              onActivityChange: () => {},
+              sendMessage: (text) => {
+                if (text === '/clear' && cursorBusy) {
+                  throw new ProviderBusyError(
+                    'Wait for the current turn to finish before clearing the conversation.',
+                  )
+                }
+                cursorSends.push(text)
+              },
+              approve: () => {},
+              deny: () => {},
+              stop: () => {},
+              dispose: () => {},
+            }
+          }
           return {
             onDelta: (cb) => {
               emit = cb
@@ -461,6 +500,88 @@ describe('Codex reset through the composer door', () => {
     }).toEqual({
       opener: { text: '/clear', resumes: '/pi/before.jsonl' },
       payload: { text: 'payload', resumes: '/pi/fresh.jsonl' },
+      remaining: 0,
+    })
+  })
+  function createCursorSession(): string {
+    return service.create({
+      projectId: 'reset-project',
+      workspaceId: null,
+      providerId: 'cursor',
+      name: 'Grok',
+      model: 'grok-4.6',
+      effort: null,
+    }).id
+  }
+
+  it('hands Cursor /clear to the resident handle unwrapped — revert the Cursor reset capability turns red (MAR-3216)', async () => {
+    const cursor = createCursorSession()
+    await service.start(cursor, {
+      text: 'before',
+      contextItemIds: [contextId],
+    })
+    emit({
+      kind: 'session.patch',
+      patch: { continuationToken: 'cursor-before', status: 'completed' },
+    })
+    await service.sendMessage(cursor, { text: '/clear' })
+    expect({ starts: starts.length, sends: cursorSends }).toEqual({
+      starts: 1,
+      sends: ['/clear'],
+    })
+  })
+
+  it('queues a Cursor reset opener the adapter calls busy, then delivers the payload after the boundary (MAR-3216)', async () => {
+    const cursor = createCursorSession()
+    await service.start(cursor, { text: 'before' })
+    emit({
+      kind: 'session.patch',
+      patch: { continuationToken: 'cursor-before', status: 'completed' },
+    })
+    // The record says idle; the adapter knows better (a respawn connecting).
+    cursorBusy = true
+    const receipt = await service.sendMessageWithOpener(cursor, {
+      opener: '/clear',
+      text: 'payload',
+    })
+    const queued = service
+      .getQueuedInputs(cursor)
+      .map((item) => [item.text, item.state])
+    cursorBusy = false
+    emit({ kind: 'session.patch', patch: { status: 'completed' } })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const afterOpener = [...cursorSends]
+    // What the Cursor adapter does with the opener: a new session id, the
+    // boundary, and a completed turn that drains the payload behind it.
+    const boundary = new ProviderSessionEmitter({
+      providerId: 'cursor',
+      emitDelta: (delta) => emit(delta),
+      now: () => new Date().toISOString(),
+    })
+    boundary.patchSession({ continuationToken: 'cursor-fresh' })
+    boundary.addNote({
+      text: CONTEXT_RESTARTED_NOTE_TEXT,
+      level: 'warning',
+      providerEventType: SESSION_RESTARTED_EVENT_TYPE,
+    })
+    emit({ kind: 'session.patch', patch: { status: 'completed' } })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect({
+      openerQueued: receipt.openerQueued,
+      queued,
+      afterOpener,
+      sends: cursorSends,
+      starts: starts.length,
+      remaining: service.getQueuedInputs(cursor).length,
+    }).toEqual({
+      openerQueued: true,
+      queued: [
+        ['/clear', 'queued'],
+        ['payload', 'queued'],
+      ],
+      afterOpener: ['/clear'],
+      sends: ['/clear', 'payload'],
+      starts: 1,
       remaining: 0,
     })
   })

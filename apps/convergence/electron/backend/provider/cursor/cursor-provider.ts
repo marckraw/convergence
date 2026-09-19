@@ -35,6 +35,12 @@ import type {
   SessionStartConfig,
   SessionStatus,
 } from '../provider.types'
+import { ProviderBusyError } from '../provider.types'
+import { CONVERSATION_RESET_COMMAND } from '../../../../src/shared/lib/conversation-reset.pure'
+import {
+  CONTEXT_RESTARTED_NOTE_TEXT,
+  SESSION_RESTARTED_EVENT_TYPE,
+} from '../session-restart.pure'
 import {
   buildCursorAcpInitializeParams,
   buildCursorAcpSessionParams,
@@ -96,6 +102,24 @@ interface CursorSkillCatalogAdapter {
     projectPath: string,
     options?: { forceReload?: boolean },
   ): Promise<ProviderSkillCatalog>
+}
+
+/**
+ * How a spawn opens its ACP session. `resume` is every start and respawn:
+ * load the stored session, or open one when there is none. `fresh` is a
+ * `/clear` with no live process (MAR-3216): open a new session even though a
+ * stored id exists — never `session/load` the old one just to abandon it.
+ */
+type CursorSessionOpening = 'resume' | 'fresh'
+
+type CursorResetOutcome =
+  | { kind: 'restarted' }
+  | { kind: 'nothing-to-clear' }
+  | { kind: 'failed'; reason: string }
+
+function describeCursorResetError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  return /[.!?]$/.test(message) ? message : `${message}.`
 }
 
 interface CursorProviderOptions {
@@ -441,7 +465,12 @@ export class CursorProvider implements Provider {
      */
     let resolveReady: (() => void) | null = null
     let readyPromise: Promise<void> = Promise.resolve()
-    let spawnedOnce = false
+    /** The start's own turn, between `start()` and its timer (MAR-3216). */
+    let startScheduled = true
+    /** A spawn whose initialize, authenticate and session open have not settled. */
+    let connecting = false
+    /** A `/clear` under way (MAR-3216). */
+    let resetting = false
     let initialMessageDelivered = false
     /** A `session/prompt` has been issued and has not settled yet. */
     let promptInFlight = false
@@ -1340,9 +1369,19 @@ export class CursorProvider implements Provider {
       }
     }
 
-    async function initializeAndStart(): Promise<void> {
+    /**
+     * A `resume` start reports its own failure and never rejects. A `fresh`
+     * start is a reset's (MAR-3216): it cleans up the same way but rejects, so
+     * the reset says what went wrong once, in its own words.
+     */
+    async function initializeAndStart(
+      opening: CursorSessionOpening,
+    ): Promise<void> {
       const activeRpc = rpc
-      if (!activeRpc || stopped) return
+      if (!activeRpc || stopped) {
+        connecting = false
+        return
+      }
 
       try {
         await activeRpc.request(
@@ -1353,12 +1392,15 @@ export class CursorProvider implements Provider {
           methodId: CURSOR_ACP_LOGIN_METHOD_ID,
         })
 
-        if (cursorSessionId) {
+        if (opening === 'fresh') {
+          await startNewSession(activeRpc)
+        } else if (cursorSessionId) {
           await loadStoredSession(activeRpc, cursorSessionId)
         } else {
           await startNewSession(activeRpc)
         }
 
+        connecting = false
         resolveReady?.()
         // A respawn resumes the stored session; only the first start owes the
         // session its opening message (MAR-3142 R1).
@@ -1372,25 +1414,29 @@ export class CursorProvider implements Provider {
           )
         }
       } catch (error) {
+        connecting = false
         if (stopped) return
         suppressReplayUpdates = false
         resolveReady?.()
-        recordTeardown('the initialization failure note', () =>
-          sessionEmitter.addNote({
-            text: `Cursor initialization failed: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            level: 'error',
-          }),
-        )
-        recordFailedTurnState()
-        recordTeardown('the cleared activity', () => setActivity(null))
+        if (opening === 'resume') {
+          recordTeardown('the initialization failure note', () =>
+            sessionEmitter.addNote({
+              text: `Cursor initialization failed: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              level: 'error',
+            }),
+          )
+          recordFailedTurnState()
+          recordTeardown('the cleared activity', () => setActivity(null))
+        }
         rpc?.destroy()
         rpc = null
         if (child && !child.killed) {
           child.kill('SIGTERM')
         }
         child = null
+        if (opening === 'fresh') throw error
       }
     }
 
@@ -1403,14 +1449,24 @@ export class CursorProvider implements Provider {
      */
     function reconnectIfIdleProcessDied(): void {
       if (stopped || child || rpc) return
-      if (!spawnedOnce || status !== 'completed') return
+      // Before the start timer fires, the start itself spawns. After it, a
+      // start that spawned nothing — a `/clear` with nothing to clear
+      // (MAR-3216) — is brought up here like any idle respawn.
+      if (startScheduled || status !== 'completed') return
       armReadyGate()
-      spawnCursor()
+      void spawnCursor()
     }
 
-    function spawnCursor(): void {
-      if (stopped || child || rpc) return
-      spawnedOnce = true
+    /**
+     * Resolves when the spawn's start settles. Only a `fresh` opening can
+     * reject; a `resume` start reports its own failures (see
+     * `initializeAndStart`).
+     */
+    function spawnCursor(
+      opening: CursorSessionOpening = 'resume',
+    ): Promise<void> {
+      if (stopped || child || rpc) return Promise.resolve()
+      connecting = true
 
       child = spawn(binaryPath, ['acp'], {
         cwd: config.workingDirectory,
@@ -1419,7 +1475,13 @@ export class CursorProvider implements Provider {
       })
 
       if (!child.stdin || !child.stdout) {
+        connecting = false
         resolveReady?.()
+        child.kill('SIGTERM')
+        if (opening === 'fresh') {
+          child = null
+          return Promise.reject(new Error('Failed to open Cursor ACP stdio'))
+        }
         recordTeardown('the stdio failure note', () =>
           sessionEmitter.addNote({
             text: 'Failed to open Cursor ACP stdio',
@@ -1427,8 +1489,7 @@ export class CursorProvider implements Provider {
           }),
         )
         recordFailedTurnState()
-        child.kill('SIGTERM')
-        return
+        return Promise.resolve()
       }
 
       rpc = new CursorAcpJsonRpcClient(child.stdin, child.stdout, {
@@ -1507,11 +1568,135 @@ export class CursorProvider implements Provider {
         recordTeardown('the cleared activity', () => setActivity(null))
       })
 
-      void initializeAndStart()
+      return initializeAndStart(opening)
+    }
+
+    /** A turn is running, settling, or on its way in: a reset must wait. */
+    function turnUnderWayOrArriving(): boolean {
+      return (
+        startScheduled ||
+        connecting ||
+        resetting ||
+        promptStarting ||
+        promptInFlight
+      )
+    }
+
+    /**
+     * A live, idle process opens the new session on its own connection, with
+     * the same function a first start uses — so the model the session was
+     * given is applied to the new session too (R6).
+     */
+    async function resetLiveSession(
+      activeRpc: CursorAcpJsonRpcClient,
+    ): Promise<CursorResetOutcome> {
+      try {
+        await startNewSession(activeRpc)
+      } catch (error) {
+        return { kind: 'failed', reason: describeCursorResetError(error) }
+      }
+      return { kind: 'restarted' }
+    }
+
+    /**
+     * No live process: after an app restart, or after the idle process died.
+     * The record keeps a token that a patch leaves blank, so a reset cannot
+     * just drop it — it has to REPLACE it. Starts the process through the
+     * new-session branch and sends no prompt; the old session is never
+     * loaded. A conversation that never had a session has nothing to clear,
+     * so nothing is opened and no boundary is written, as Codex's thread-less
+     * reset (`codex-provider.ts`, `oldThreadId !== null`).
+     */
+    async function resetDormantSession(
+      previousSessionId: string | null,
+    ): Promise<CursorResetOutcome> {
+      if (!previousSessionId) return { kind: 'nothing-to-clear' }
+      if (child) {
+        return {
+          kind: 'failed',
+          reason: 'the Cursor ACP process is still shutting down.',
+        }
+      }
+      // Whatever the handle still owed its first start — a start whose
+      // initialization failed never delivered it — the reset replaces it: the
+      // fresh session opens with no prompt.
+      initialMessageDelivered = true
+      armReadyGate()
+      try {
+        await spawnCursor('fresh')
+      } catch (error) {
+        return { kind: 'failed', reason: describeCursorResetError(error) }
+      }
+      return { kind: 'restarted' }
+    }
+
+    /**
+     * `/clear`: a command, never a prompt (MAR-3216). The same contract as
+     * Codex's reset (`codex-provider.ts`, `sendCodexTurn`) and Pi's: no user
+     * message, no `session/prompt`, one boundary on success and none
+     * otherwise, a turn that settles `completed` or `failed`. The process
+     * stays resident, so the next message prompts into the new session.
+     */
+    async function resetConversation(): Promise<void> {
+      resetting = true
+      const previousSessionId = cursorSessionId
+      try {
+        setStatus('running')
+        setAttention('none')
+        const activeRpc = rpc
+        const outcome = activeRpc
+          ? await resetLiveSession(activeRpc)
+          : await resetDormantSession(previousSessionId)
+        if (stopped) return
+        if (outcome.kind === 'failed') {
+          // `startNewSession` adopts the new id before it applies the model;
+          // a reset that failed after that point must not leave the record
+          // naming a session the conversation never moved into.
+          if (previousSessionId && cursorSessionId !== previousSessionId) {
+            setContinuationToken(previousSessionId)
+          }
+          sessionEmitter.addNote({
+            text: `Could not clear the conversation: ${outcome.reason} The previous conversation is still active; your next message will resume it.`,
+            level: 'error',
+          })
+          setStatus('failed')
+          setAttention('failed')
+          return
+        }
+        if (outcome.kind === 'restarted') {
+          sessionEmitter.addNote({
+            text: CONTEXT_RESTARTED_NOTE_TEXT,
+            level: 'warning',
+            providerEventType: SESSION_RESTARTED_EVENT_TYPE,
+          })
+        }
+        setStatus('completed')
+        setAttention('finished')
+      } finally {
+        resetting = false
+      }
+    }
+
+    function handleResetFailure(error: unknown): void {
+      if (stopped) return
+      recordTeardown('the reset failure note', () =>
+        sessionEmitter.addNote({
+          text: `Could not clear the conversation: ${describeCursorResetError(error)}`,
+          level: 'error',
+        }),
+      )
+      recordFailedTurnState()
     }
 
     const startTimer = setTimeout(() => {
-      spawnCursor()
+      startScheduled = false
+      if (config.initialMessage === CONVERSATION_RESET_COMMAND) {
+        // The reset IS the opening message: a later respawn owes it nothing.
+        initialMessageDelivered = true
+        void resetConversation().catch(handleResetFailure)
+        return
+      }
+      void spawnCursor()
     }, 10)
 
     function disposeRuntime(): void {
@@ -1520,6 +1705,7 @@ export class CursorProvider implements Provider {
       stopped = true
       promptInFlight = false
       promptStarting = false
+      connecting = false
       interruptRequested = false
       resolveReady?.()
       clearTimeout(startTimer)
@@ -1660,6 +1846,22 @@ export class CursorProvider implements Provider {
       },
       sendMessage: (text, attachments, skillSelections, options) => {
         if (stopped) return
+        if (text === CONVERSATION_RESET_COMMAND) {
+          if (turnUnderWayOrArriving()) {
+            // Typed, as Codex's and Pi's are (MAR-2888): "not now" is a fact
+            // about timing that a relay answers by queueing. Never a
+            // `session/cancel` to make room — the running turn is the user's.
+            throw new ProviderBusyError(
+              'Wait for the current turn to finish before clearing the conversation.',
+            )
+          }
+          void resetConversation().catch(handleResetFailure)
+          return
+        }
+        // A message sent while the reset is under way would race it for the
+        // session id; it belongs to the turn after the boundary, which the
+        // app queue delivers when the reset settles (R3's deferral).
+        if (resetting) return 'queue-follow-up'
         const pendingInteraction = findPendingInteraction(pendingInteractions)
         if (rpc && pendingInteraction && options?.deliveryMode === 'answer') {
           const [id, interaction] = pendingInteraction

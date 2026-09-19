@@ -15,12 +15,14 @@ import {
 } from './provider-descriptor.pure'
 
 describe('provider-descriptor', () => {
-  it('advertises Codex and Pi reset and keeps Cursor unsupported — disable Codex or Pi, or enable Cursor, turns red', () => {
+  it('advertises Codex, Pi and Cursor reset and keeps Antigravity unsupported — disable Codex, Pi or Cursor, or enable Antigravity, turns red', () => {
     expect({
       codex: buildFallbackCodexDescriptor().supportsConversationReset,
       pi: buildFallbackPiDescriptor().supportsConversationReset,
       cursor: buildFallbackCursorDescriptor().supportsConversationReset,
-    }).toEqual({ codex: true, pi: true, cursor: false })
+      antigravity:
+        buildFallbackAntigravityDescriptor().supportsConversationReset,
+    }).toEqual({ codex: true, pi: true, cursor: true, antigravity: false })
   })
   it('builds labeled effort options', () => {
     expect(
@@ -192,7 +194,7 @@ describe('provider-descriptor', () => {
       id: 'cursor',
       name: 'Cursor',
       supportsContinuation: true,
-      supportsConversationReset: false,
+      supportsConversationReset: true,
       defaultModelId: 'default[]',
       attachments: {
         supportsImage: true,
