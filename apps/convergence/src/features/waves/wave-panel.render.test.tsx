@@ -3316,6 +3316,16 @@ describe('MAR-3097: through the containers and the real stores', () => {
       expect(document.body.textContent).toContain('tracker unreachable')
       expect(issuesOnEverySheet()).toEqual(['NS-1', 'NS-2', 'NS-3'])
 
+      // A switch with NO detail open: nothing restores the sheet on the
+      // way, so the live body itself must go back to the top. Mutation:
+      // zero the saved offsets but not the element -> 80, red.
+      fireEvent.click(screen.getByRole('button', { name: /^Plan · / }))
+      fireEvent.scroll(body('plan'), { target: { scrollTop: 80 } })
+      await pickCrew('Loom')
+      expect(document.querySelector('[data-loom-detail]')).toBeNull()
+      expect(body('plan').scrollTop).toBe(0)
+      await pickCrew('Night shift')
+
       // Remembered. Mutation: do not persist -> the remount opens on Loom,
       // red twice.
       expect(localStorage.getItem('convergence-loom-crew')).toBe('crew-2')
