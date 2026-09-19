@@ -2120,20 +2120,31 @@ describe('MAR-3097: through the containers and the real stores', () => {
     it('R7: compact and expanded say the same thing', async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true })
       await openBefore([doneAt('EX-1', 'w', 1), doneAt('EX-2', 'x', 2)])
-      const compact = (
-        document.querySelector('[data-loom-sheet="before"]') as HTMLElement
-      ).textContent
+      // Text alone is blind to folding -- a closed <details> keeps its rows
+      // in the DOM -- so the shape of the sheet is read too.
+      const readBefore = () => {
+        const body = document.querySelector(
+          '[data-loom-sheet="before"]',
+        ) as HTMLElement
+        return {
+          text: body.textContent,
+          folded: [...body.querySelectorAll('[data-wave-group]')].map((g) => [
+            g.getAttribute('data-wave-group'),
+            g.hasAttribute('open'),
+          ]),
+        }
+      }
+      const compact = readBefore()
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
       })
-      const expanded = (
-        document.querySelector('[data-loom-sheet="before"]') as HTMLElement
-      ).textContent
-      expect(expanded).toBe(compact)
-      // Not vacuous: both groups are in that text, the second folded.
-      expect(compact).toContain('w · 1')
-      expect(compact).toContain('x · 1')
-      expect(compact).toContain('EX-1')
+      expect(readBefore()).toEqual(compact)
+      // Not vacuous: both groups are there, the second one folded.
+      expect(compact.folded).toEqual([
+        ['w', true],
+        ['x', false],
+      ])
+      expect(compact.text).toContain('EX-1')
     })
   })
 
