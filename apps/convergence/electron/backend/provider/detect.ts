@@ -1,4 +1,6 @@
 import { execFile } from 'child_process'
+import { get } from 'https'
+import { parseCursorLatestVersion } from './cursor/cursor-latest-version.pure'
 import { join } from 'path'
 import { realpathSync } from 'fs'
 import type { ProviderInstallInfo, ProviderStatusInfo } from './provider.types'
@@ -129,7 +131,70 @@ async function findProviderBinary(
   return null
 }
 
-function fetchLatestProviderVersion(provider: KnownProvider) {
+function fetchCursorLatestVersion(): Promise<{
+  version: string | null
+  error: string | null
+}> {
+  return new Promise((resolve) => {
+    const fail = (error: Error) =>
+      resolve({ version: null, error: error.message })
+    try {
+      const request = get(
+        'https://cursor.com/install',
+        {
+          headers: {
+            Accept: 'text/plain',
+            'User-Agent': 'Convergence provider status',
+          },
+          timeout: 5_000,
+        },
+        (response) => {
+          const chunks: Buffer[] = []
+          response.on('data', (chunk: Buffer) => chunks.push(chunk))
+          response.on('error', fail)
+          response.on('end', () => {
+            if (
+              !response.statusCode ||
+              response.statusCode < 200 ||
+              response.statusCode >= 300
+            ) {
+              resolve({
+                version: null,
+                error: `Cursor installer returned HTTP ${response.statusCode ?? 'unknown'}`,
+              })
+              return
+            }
+            const version = parseCursorLatestVersion(
+              Buffer.concat(chunks).toString('utf8'),
+            )
+            resolve({
+              version,
+              error: version
+                ? null
+                : 'Cursor installer did not include a recognized version',
+            })
+          })
+        },
+      )
+      request.on('timeout', () =>
+        request.destroy(new Error('Cursor installer request timed out')),
+      )
+      request.on('error', fail)
+    } catch (error) {
+      fail(
+        error instanceof Error
+          ? error
+          : new Error('Failed to fetch Cursor installer'),
+      )
+    }
+  })
+}
+
+export function fetchLatestProviderVersion(provider: KnownProvider) {
+  if (provider.latestVersionSource?.type === 'cursor-install-script') {
+    return fetchCursorLatestVersion()
+  }
+
   if (provider.latestVersionSource?.type === 'github-release') {
     return fetchGithubLatestReleaseVersion(provider.latestVersionSource)
   }

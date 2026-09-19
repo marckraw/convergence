@@ -46,7 +46,6 @@ export interface CursorAcpSessionParams {
 }
 
 export interface CursorAcpCommandDiscoveryOptions {
-  forceReload?: boolean
   waitMs?: number
 }
 

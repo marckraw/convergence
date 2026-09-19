@@ -9,7 +9,10 @@ import { markSkillSelectionsStatus } from '../../skills/skill-invocation.pure'
 import { CursorSkillsService } from '../../skills/cursor-skills.service'
 import type { SkillSelection } from '../../skills/skills.types'
 import type { ProviderSkillCatalog } from '../../skills/skills.types'
-import { summarizeCursorCommandCatalogUpdate } from '../../skills/cursor-skills.mapper.pure'
+import {
+  mapCursorCommandCatalog,
+  summarizeCursorCommandCatalogUpdate,
+} from '../../skills/cursor-skills.mapper.pure'
 import type {
   InteractionResponse,
   SessionDelta,
@@ -98,10 +101,7 @@ interface PendingCursorInteraction extends CursorAcpInputRequest {
 }
 
 interface CursorSkillCatalogAdapter {
-  list(
-    projectPath: string,
-    options?: { forceReload?: boolean },
-  ): Promise<ProviderSkillCatalog>
+  list(projectPath: string): Promise<ProviderSkillCatalog>
 }
 
 /**
@@ -478,6 +478,16 @@ export class CursorProvider implements Provider {
     let promptStarting = false
     /** The user asked for this turn to be cancelled, so it ends stopped. */
     let interruptRequested = false
+    /**
+     * Latest `available_commands_update` params from the live ACP session
+     * (MAR-3240). Replaced by each newer update; cleared when the process or
+     * session is replaced so a respawn or `/clear` starts empty.
+     */
+    let liveCommandCatalogPayload: unknown | null = null
+
+    function clearLiveCommandCatalog(): void {
+      liveCommandCatalogPayload = null
+    }
 
     function armReadyGate(): void {
       readyPromise = new Promise<void>((resolve) => {
@@ -800,6 +810,7 @@ export class CursorProvider implements Provider {
           break
         }
         case 'available_commands_update':
+          liveCommandCatalogPayload = params
           recordDebug({
             direction: 'in',
             channel: 'notification',
@@ -1015,11 +1026,26 @@ export class CursorProvider implements Provider {
       }
 
       try {
+        if (liveCommandCatalogPayload != null) {
+          const liveCatalog = mapCursorCommandCatalog(liveCommandCatalogPayload)
+          const knownIds = new Set(liveCatalog.skills.map((skill) => skill.id))
+          const allKnown = selections.every((selection) =>
+            knownIds.has(selection.id),
+          )
+          if (allKnown) {
+            return resolveNativeSkillInvocation({
+              providerId: 'cursor',
+              providerName: 'Cursor',
+              catalog: liveCatalog,
+              selections,
+              syntax: 'plain-slash',
+              text,
+            })
+          }
+        }
+
         const catalog = await thisProviderSkillsService.list(
           config.workingDirectory,
-          {
-            forceReload: true,
-          },
         )
         return resolveNativeSkillInvocation({
           providerId: 'cursor',
@@ -1354,6 +1380,7 @@ export class CursorProvider implements Provider {
     async function startNewSession(
       activeRpc: CursorAcpJsonRpcClient,
     ): Promise<void> {
+      clearLiveCommandCatalog()
       const sessionResult = await activeRpc.request(
         'session/new',
         buildCursorAcpSessionParams(config.workingDirectory),
@@ -1498,6 +1525,7 @@ export class CursorProvider implements Provider {
     ): Promise<void> {
       if (stopped || child || rpc) return Promise.resolve()
       connecting = true
+      clearLiveCommandCatalog()
 
       child = spawn(binaryPath, ['acp'], {
         cwd: config.workingDirectory,
@@ -1582,6 +1610,7 @@ export class CursorProvider implements Provider {
       child.once('exit', (code, signal) => {
         if (stopped) return
         resolveReady?.()
+        clearLiveCommandCatalog()
         rpc?.destroy('Cursor ACP process exited')
         rpc = null
         child = null
@@ -1738,6 +1767,7 @@ export class CursorProvider implements Provider {
       promptStarting = false
       connecting = false
       interruptRequested = false
+      clearLiveCommandCatalog()
       resolveReady?.()
       clearTimeout(startTimer)
       pendingApprovals.clear()
