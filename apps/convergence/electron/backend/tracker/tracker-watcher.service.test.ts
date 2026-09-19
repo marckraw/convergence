@@ -1435,19 +1435,20 @@ describe('MAR-3236: the issues outside the loop, read beside the ledger', () => 
   it('R4: a crew backing off reads nothing outside, not even for a Refresh', async () => {
     const { service, outside } = watcher({
       list: async () => {
-        if (at() >= 60) throw refusal('rate-limited', null)
+        // Refused on the very tick the outside read falls due.
+        if (at() >= 600) throw refusal('rate-limited', null)
         return [ISSUE]
       },
     })
     handle = service.start()
-    await until(60)
+    await until(600)
     expect(service.trackerHealth(crewId)?.state).toBe('rate-limited')
+    await until(610)
     expect(service.refresh(crewId).outcome).toBe('backing-off')
-    // Well past the outside beat, still inside the default 5-minute backoff
-    // from 60 s -- and then the labeled read is refused again.
-    await until(700)
-    // Mutation: read outside before (or whatever) the labeled read -> a
-    // read at 60, red.
+    // Inside the default 5-minute backoff from 600 s.
+    await until(890)
+    // Mutation: read outside whether or not the labeled read succeeded ->
+    // a read at 600, red.
     expect(outside['project-1']).toEqual([0])
   })
 
