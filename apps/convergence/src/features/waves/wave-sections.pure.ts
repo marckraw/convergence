@@ -121,6 +121,27 @@ export function waveLapLabel(lap: number, cap: number | null): string {
   return cap === null ? `lap ${lap}` : `lap ${lap} of ${cap}`
 }
 
+/** The card's facts in reading order; unstarted work has no lap (MAR-3199). */
+export function waveRowMetaWords(row: WaveRow): string[] {
+  const { entry } = row
+  const state =
+    entry.state === 'assigned'
+      ? entry.seat === null
+        ? 'in preparation'
+        : 'queued'
+      : entry.state
+  return [
+    row.crewName,
+    entry.seat ?? 'no seat',
+    state,
+    entry.state === 'assigned' || entry.state === 'unassigned'
+      ? null
+      : row.lapLabel,
+    entry.verdict,
+    entry.pr ? `PR #${entry.pr.number} ${entry.pr.state}` : null,
+  ].filter((word): word is string => Boolean(word))
+}
+
 /**
  * The rows into the four sections (R1): a pure function of the rows.
  *

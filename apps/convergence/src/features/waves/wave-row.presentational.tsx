@@ -3,7 +3,11 @@ import type { FC } from 'react'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
-import { waveRowKey, type WaveRow } from './wave-sections.pure'
+import {
+  waveRowKey,
+  waveRowMetaWords,
+  type WaveRow,
+} from './wave-sections.pure'
 import {
   WAVE_ROW_ACTION_CLASS,
   WAVE_ROW_CLASS,
@@ -31,7 +35,7 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
   inertReason,
   onOpen,
 }) => {
-  const { entry, action, hostMarker, crewName, lapLabel } = row
+  const { entry, action, hostMarker } = row
   const key = waveRowKey(entry)
   const loom = appearance === 'loom'
   const cardClass = loom
@@ -76,22 +80,12 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
           loom && 'max-w-full whitespace-normal break-words',
         )}
       >
-        {[
-          crewName,
-          entry.seat ?? 'no seat',
-          entry.state,
-          // Which lap, against the crew's cap, and the ruling that set it
-          // (MAR-3085 R7).
-          lapLabel,
-          entry.verdict,
-          entry.pr ? `PR #${entry.pr.number} ${entry.pr.state}` : null,
-        ]
-          .filter(Boolean)
-          .join(' · ')}
+        {waveRowMetaWords(row).join(' · ')}
       </span>
       {loom ? (
         <span className="flex max-w-full flex-wrap gap-1.5 text-[11px] text-muted-foreground">
           <span
+            data-loom-chip="status"
             className={cn(
               'rounded bg-foreground/5 px-1.5 py-0.5',
               entry.state === 'done' && 'text-emerald-500',
@@ -100,7 +94,11 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
             Linear: {entry.trackerStatus || 'not seen'}
           </span>
           {entry.fact.labels?.map((label) => (
-            <span key={label} className="rounded bg-foreground/5 px-1.5 py-0.5">
+            <span
+              key={label}
+              data-loom-chip="label"
+              className="rounded bg-foreground/5 px-1.5 py-0.5"
+            >
               {label}
             </span>
           ))}
