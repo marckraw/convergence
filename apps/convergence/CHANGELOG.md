@@ -1,5 +1,11 @@
 # convergence
 
+## 0.74.0
+
+### Minor Changes
+
+- b50b647: Loom's Plan sheet shows the issues still being prepared by stage — define, ground in code, assign — with what each one lacks and how old its grounding is. Read-only.
+
 ## 0.73.0
 
 ### Minor Changes
