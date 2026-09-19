@@ -419,6 +419,24 @@ describe('ProviderAccountMcpService', () => {
       ])
     })
 
+    it('MAR-3205: surfaces a heavy-check Connected server through listConnectors', async () => {
+      const stdout = [
+        'linear: https://mcp.linear.app/sse - ✔ Connected',
+        'plugin:figma:figma: https://mcp.figma.com/mcp (HTTP) - ✔ Connected',
+      ].join('\n')
+
+      const result = await service({
+        run: fakeRunner(stdout).run,
+      }).listConnectors('acct-a')
+
+      expect(
+        result.connectors.map((c) => [c.name, c.status, c.needsAuthorization]),
+      ).toEqual([
+        ['linear', 'ready', false],
+        ['plugin:figma:figma', 'ready', false],
+      ])
+    })
+
     it('reads the ambient default without touching its environment', async () => {
       const runner = fakeRunner()
 
