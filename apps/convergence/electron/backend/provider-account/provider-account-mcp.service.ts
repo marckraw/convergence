@@ -10,6 +10,7 @@ export type {
   ProviderAccountConnectorsResult,
 } from './provider-account-mcp.types'
 import {
+  buildClaudeMcpAddCommand,
   buildClaudeMcpListCommand,
   buildClaudeMcpLoginCommand,
   interpretClaudeMcpLoginOutcome,
@@ -28,6 +29,15 @@ import { resolveAccountForTurn } from './provider-account-resolution.pure'
 import { resolveCodexAccountForTurn } from './provider-account-resolution.pure'
 import type { CodexAccountEnvTarget } from './provider-account-codex-env.pure'
 import type { ProviderAccountRepository } from './provider-account.repository'
+import {
+  readSharedClaudeMcpServerNames,
+  reconcileClaudeAccountConfigNow,
+  type ClaudeConfigIo,
+} from './provider-account-env.service'
+import { summarizeTerminalOutput } from './provider-account-pty-runner.pure'
+
+const LINEAR_SERVER_NAME = 'linear'
+const LINEAR_SERVER_URL = 'https://mcp.linear.app/mcp'
 
 /**
  * Per-account connector authorization (ADR 0007, PA11).
@@ -89,6 +99,13 @@ export interface ProviderAccountMcpDeps {
   codexMaintenance?: {
     run<T>(account: CodexAccountEnvTarget, work: () => Promise<T>): Promise<T>
   }
+  /**
+   * Where the shared `~/.claude.json` lives and how it is read, for Claude's
+   * Connect Linear. Seams for tests; production takes the env service's
+   * defaults, the same ones every spawn uses.
+   */
+  homeDir?: string
+  claudeConfigIo?: ClaudeConfigIo
 }
 
 export class ProviderAccountMcpService {
@@ -101,8 +118,12 @@ export class ProviderAccountMcpService {
   private readonly accountMaintenance: ClaudeAccountMaintenance
   private codexBinaryPath: string | null
   private readonly codexMaintenance: ProviderAccountMcpDeps['codexMaintenance']
+  private readonly homeDir: string | undefined
+  private readonly claudeConfigIo: ClaudeConfigIo | undefined
 
   constructor(deps: ProviderAccountMcpDeps) {
+    this.homeDir = deps.homeDir
+    this.claudeConfigIo = deps.claudeConfigIo
     this.codexBinaryPath = deps.codexBinaryPath ?? null
     this.codexMaintenance = deps.codexMaintenance
     this.repository = deps.repository
@@ -201,9 +222,12 @@ export class ProviderAccountMcpService {
     return this.codexMaintenance.run(account, work)
   }
 
-  async connectLinear(accountId: string): Promise<InteractiveCommandResult> {
+  async connectLinear(
+    accountId: string,
+    options: { canOpenBrowser?: boolean } = {},
+  ): Promise<InteractiveCommandResult> {
     const account = this.codexAccount(accountId)
-    if (!account) throw new Error('Connect Linear requires a Codex account.')
+    if (!account) return this.connectClaudeLinear(accountId, options)
     const connectors = await this.listCodexConnectors(account)
     return this.withCodexMaintenance(account, async () => {
       if (!connectors.some((connector) => connector.name === 'linear')) {
@@ -222,6 +246,81 @@ export class ProviderAccountMcpService {
       }
       return this.runCodexLogin(account, 'linear')
     })
+  }
+
+  /**
+   * Connect Linear for a Claude Code account (MAR-3185). Two halves with two
+   * homes (ADR 0007): the server belongs to the shared `~/.claude.json`, which
+   * every Claude account is reconciled from at spawn; the authorization belongs
+   * to this account's credential slot.
+   *
+   * 1. Add `linear` to the shared profile, only when its `mcpServers` lacks it
+   *    — the CLI refuses an existing name, and the guard is what protects one.
+   * 2. Reconcile this account's copy now, with the spawn's own reconciliation,
+   *    so the login below finds the server in the account's file.
+   * 3. Authorize through the existing Claude door (`authorizeConnector`: the
+   *    account's environment, a terminal, `--no-browser` when asked).
+   *
+   * The caller reads the list back; nothing here claims the result. Every
+   * other Claude account picks the server up at its next spawn and shows it as
+   * needing authentication, with its own Authorize button.
+   */
+  private async connectClaudeLinear(
+    accountId: string,
+    options: { canOpenBrowser?: boolean },
+  ): Promise<InteractiveCommandResult> {
+    const binaryPath = this.binaryPath
+    if (!binaryPath) {
+      throw new Error(
+        'Claude Code is not available on PATH, so Linear cannot be connected.',
+      )
+    }
+    const account = this.resolveAccount(accountId)
+    if (!account) throw new Error('Connect Linear requires an account.')
+
+    const release = await this.accountMaintenance.admit(accountId)
+    try {
+      const shared = await readSharedClaudeMcpServerNames({
+        homeDir: this.homeDir,
+        io: this.claudeConfigIo,
+      })
+      if (!shared.includes(LINEAR_SERVER_NAME)) {
+        const added = await this.runCommand(
+          buildClaudeMcpAddCommand({
+            binaryPath,
+            serverName: LINEAR_SERVER_NAME,
+            url: LINEAR_SERVER_URL,
+            baseEnv: this.baseEnv,
+            workingDirectory: this.workingDirectory(),
+          }),
+        )
+        if (added.code !== 0) {
+          const said = summarizeTerminalOutput(added.stderr || added.stdout)
+          throw new Error(
+            `Claude Code could not add Linear to the shared profile (exit code ${added.code})${said ? `: ${said}` : '.'}`,
+          )
+        }
+      }
+
+      const reconciled = await reconcileClaudeAccountConfigNow({
+        account,
+        homeDir: this.homeDir,
+        io: this.claudeConfigIo,
+      })
+      if (reconciled.kind === 'unreadable' || reconciled.write === 'failed') {
+        throw new Error(
+          'Linear is in the shared Claude profile, but this account’s config could not be updated, so it was not authorized. The account picks Linear up when its next conversation starts; authorize it then.',
+        )
+      }
+
+      return await this.authorizeConnector({
+        accountId,
+        serverName: LINEAR_SERVER_NAME,
+        canOpenBrowser: options.canOpenBrowser,
+      })
+    } finally {
+      release()
+    }
   }
 
   /**

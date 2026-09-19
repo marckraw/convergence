@@ -1,5 +1,12 @@
 import type { ProviderAccountLoginAttempt } from '@/shared/types/provider-account-login.types'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   ProviderAccount,
@@ -821,6 +828,81 @@ describe('ProviderAccountsContainer', () => {
         screen.getByRole('button', { name: 'Authorize' }),
       ).toBeInTheDocument()
     })
+    it('MAR-3185 R5 offers Connect Linear on a Claude account without linear, and shows the read-back', async () => {
+      providerAccounts.listConnectors.mockResolvedValue({
+        providerAccountId: 'acct-a',
+        connectors: [],
+        error: null,
+      })
+      providerAccounts.connectLinear.mockResolvedValue({
+        providerAccountId: 'acct-a',
+        connectors: [
+          {
+            name: 'linear',
+            status: 'ready',
+            statusLabel: '✔ Connected',
+            description: 'https://mcp.linear.app/mcp (HTTP)',
+            needsAuthorization: false,
+          },
+        ],
+        error: null,
+      })
+      render(<ProviderAccountsContainer />)
+      await screen.findByText('a@example.com')
+      fireEvent.click(screen.getByRole('button', { name: /Connectors/ }))
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Connect Linear' }),
+      )
+
+      expect(await screen.findByText('✔ Connected')).toBeInTheDocument()
+      expect(providerAccounts.connectLinear).toHaveBeenCalledWith('acct-a')
+      expect(
+        screen.queryByRole('button', { name: 'Connect Linear' }),
+      ).not.toBeInTheDocument()
+      // The row is the read-back; the message claims nothing beyond it.
+      expect(
+        screen.getByText('Connector status refreshed.'),
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByText(/linear authorized for this account/),
+      ).not.toBeInTheDocument()
+    })
+
+    it('MAR-3185 R5 a Claude account whose linear needs authentication gets Authorize, not Connect Linear', async () => {
+      render(<ProviderAccountsContainer />)
+      await screen.findByText('a@example.com')
+      fireEvent.click(screen.getByRole('button', { name: /Connectors/ }))
+      await screen.findByText('! Needs authentication')
+
+      expect(
+        screen.getByRole('button', { name: 'Authorize' }),
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Connect Linear' }),
+      ).not.toBeInTheDocument()
+    })
+
+    it('MAR-3185 R5 names the two homes for a Claude account, beside the CLI-view sentence, and not for Codex', async () => {
+      const homes =
+        'Linear is added for every Claude account on this Mac; authorization is per account.'
+      render(<ProviderAccountsContainer />)
+      await screen.findByText('a@example.com')
+      fireEvent.click(screen.getByRole('button', { name: /Connectors/ }))
+
+      expect(await screen.findByText(homes)).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          /This is what the Claude CLI reports for this account/,
+        ),
+      ).toBeInTheDocument()
+
+      cleanup()
+      await openCodex()
+      await screen.findByRole('button', { name: 'Connect Linear' })
+      expect(screen.queryByText(homes)).not.toBeInTheDocument()
+    })
+
     it('asks this account what it can reach, not the machine', async () => {
       // MCP tokens are per credential slot, so the answer is account-shaped.
       render(<ProviderAccountsContainer />)

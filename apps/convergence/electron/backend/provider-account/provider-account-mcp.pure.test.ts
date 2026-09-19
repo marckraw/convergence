@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildClaudeMcpAddCommand,
   buildClaudeMcpListCommand,
   buildClaudeMcpLoginCommand,
   describeMcpAuthorizationNote,
@@ -93,6 +94,58 @@ describe('buildClaudeMcpListCommand', () => {
     expect(command.args).toEqual(['mcp', 'list'])
     expect(command.env.CLAUDE_CONFIG_DIR).toBe(ACCOUNT.configDir)
     expect(command.cwd).toBe('/repo')
+  })
+})
+
+describe('buildClaudeMcpAddCommand (MAR-3185 R1)', () => {
+  it('R1 adds to the shared profile: exact args, and no account directory in the env even when the app inherited one', () => {
+    // An app launched from a shell inside a Claude account inherits both
+    // variables; left in, the add would land in that account's file, which the
+    // next spawn overwrites from the shared profile.
+    const command = buildClaudeMcpAddCommand({
+      binaryPath: '/usr/local/bin/claude',
+      serverName: 'linear',
+      url: 'https://mcp.linear.app/mcp',
+      baseEnv: {
+        ...BASE_ENV,
+        CLAUDE_CONFIG_DIR: ACCOUNT.configDir,
+        CLAUDE_SECURESTORAGE_CONFIG_DIR: ACCOUNT.credentialDir,
+      },
+      workingDirectory: '/repo',
+    })
+
+    expect(command.command).toBe('/usr/local/bin/claude')
+    expect(command.args).toEqual([
+      'mcp',
+      'add',
+      '-s',
+      'user',
+      '--transport',
+      'http',
+      'linear',
+      'https://mcp.linear.app/mcp',
+    ])
+    expect(command.env).not.toHaveProperty('CLAUDE_CONFIG_DIR')
+    expect(command.env).not.toHaveProperty('CLAUDE_SECURESTORAGE_CONFIG_DIR')
+    // Otherwise the ambient environment, untouched by the account allowlist.
+    expect(command.env).toEqual(BASE_ENV)
+    expect(command.cwd).toBe('/repo')
+  })
+
+  it('refuses a blank name or URL', () => {
+    for (const [serverName, url] of [
+      [' ', 'https://mcp.linear.app/mcp'],
+      ['linear', ' '],
+    ]) {
+      expect(() =>
+        buildClaudeMcpAddCommand({
+          binaryPath: '/usr/local/bin/claude',
+          serverName,
+          url,
+          baseEnv: BASE_ENV,
+        }),
+      ).toThrow('Adding a connector requires a name and URL.')
+    }
   })
 })
 
