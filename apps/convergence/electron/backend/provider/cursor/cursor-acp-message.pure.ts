@@ -474,11 +474,15 @@ export function buildCursorAcpPassiveUpdateNote(
   method: string,
   params: unknown,
   currentTodos?: readonly CursorAcpTodo[],
+  previousTodos?: readonly CursorAcpTodo[],
 ): CursorAcpPassiveUpdateNote | null {
   if (method === 'cursor/update_todos') {
     if (!isRecord(params)) return null
     if (currentTodos) {
-      const changedIds = getCursorTodoUpdateChangedIds(params)
+      const changedIds = getCursorTodoUpdateChangedIds(
+        params,
+        previousTodos ?? [],
+      )
       const text = renderCursorTodoNote(currentTodos, changedIds)
       return {
         text,

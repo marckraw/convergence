@@ -717,6 +717,7 @@ export class CursorProvider implements Provider {
         'cursor/update_todos',
         params,
         updatedTodos,
+        liveTodos,
       )
       liveTodos = updatedTodos
       if (note) {

@@ -68,17 +68,34 @@ export function applyCursorTodoUpdate(
 
 /**
  * Returns the set of todo `id`s that an update payload changed or added.
- * For a `merge: false` payload every incoming id counts as changed; for a
- * `merge: true` payload only the ids in the payload are changes.
+ *
+ * F2: a todo is in the returned set iff its `id` was not in the previous
+ * list or its `status` / `content` differs from the previous list. When
+ * there was no previous list (empty `previous`) nothing is marked — the
+ * first list a person sees shows the state as-it-is, not as a diff.
  */
 export function getCursorTodoUpdateChangedIds(
   params: CursorAcpTodoUpdateParams | null | undefined,
+  previous: readonly CursorAcpTodo[],
 ): Set<string> {
   if (!params || typeof params !== 'object') return new Set()
   const incoming = normalizeTodoArray(params.todos)
+
+  // When there is no previous list, nothing is marked (F2).
+  if (previous.length === 0) return new Set()
+
+  const previousMap = new Map<string, CursorAcpTodo>()
+  for (const todo of previous) {
+    if (todo.id) previousMap.set(todo.id, todo)
+  }
+
   const changed = new Set<string>()
   for (const todo of incoming) {
-    if (typeof todo.id === 'string' && todo.id) {
+    if (typeof todo.id !== 'string' || !todo.id) continue
+    const prev = previousMap.get(todo.id)
+    if (!prev) {
+      changed.add(todo.id)
+    } else if (prev.status !== todo.status || prev.content !== todo.content) {
       changed.add(todo.id)
     }
   }

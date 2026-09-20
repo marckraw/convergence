@@ -152,18 +152,66 @@ describe('applyCursorTodoUpdate', () => {
 })
 
 describe('getCursorTodoUpdateChangedIds', () => {
-  it('returns ids from a full-replace payload', () => {
-    const ids = getCursorTodoUpdateChangedIds(fullParams())
+  it('returns ids not in the previous list (full-replace payload against different previous)', () => {
+    const previous = todosWithIds('x')
+    const ids = getCursorTodoUpdateChangedIds(fullParams(), previous)
     expect(ids).toEqual(new Set(['1', '2', '3']))
   })
 
-  it('returns ids from a merge payload', () => {
-    const ids = getCursorTodoUpdateChangedIds(mergeParams())
+  it('returns only ids whose status or content changed (merge vs post-full previous)', () => {
+    const afterFull = applyCursorTodoUpdate([], fullParams())
+    const ids = getCursorTodoUpdateChangedIds(mergeParams(), afterFull)
+    // merge payload has 1 (status now completed) and 2 (status now in_progress).
+    // 3 is in the previous list but NOT in the payload, so it is unmarked.
     expect(ids).toEqual(new Set(['1', '2']))
   })
 
   it('returns an empty set for no todos', () => {
-    const ids = getCursorTodoUpdateChangedIds({})
+    const ids = getCursorTodoUpdateChangedIds({}, [])
+    expect(ids.size).toBe(0)
+  })
+
+  // F2: when there is no previous list, nothing is marked.
+  it('first full list has no markers', () => {
+    const ids = getCursorTodoUpdateChangedIds(fullParams(), [])
+    expect(ids.size).toBe(0)
+  })
+
+  it('a merge that changes one status marks exactly that one', () => {
+    const previous: CursorAcpTodo[] = [
+      { id: '1', content: 'a', status: 'pending' },
+      { id: '2', content: 'b', status: 'pending' },
+    ]
+    const params: CursorAcpTodoUpdateParams = {
+      todos: [
+        { id: '1', content: 'a', status: 'completed' },
+        { id: '2', content: 'b', status: 'pending' },
+      ],
+      merge: true,
+    }
+    const ids = getCursorTodoUpdateChangedIds(params, previous)
+    expect(ids).toEqual(new Set(['1']))
+  })
+
+  it('a second full list identical but for one status marks exactly that one', () => {
+    const previous: CursorAcpTodo[] = [
+      { id: '1', content: 'a', status: 'pending' },
+      { id: '2', content: 'b', status: 'pending' },
+    ]
+    const params: CursorAcpTodoUpdateParams = {
+      todos: [
+        { id: '1', content: 'a', status: 'completed' },
+        { id: '2', content: 'b', status: 'pending' },
+      ],
+      merge: false,
+    }
+    const ids = getCursorTodoUpdateChangedIds(params, previous)
+    expect(ids).toEqual(new Set(['1']))
+  })
+
+  // MUTATION: mark every incoming id again (ignore previous) → first-full-list test red.
+  it('MUTATION: first full list has NO markers (previous is empty)', () => {
+    const ids = getCursorTodoUpdateChangedIds(fullParams(), [])
     expect(ids.size).toBe(0)
   })
 })
@@ -190,7 +238,7 @@ describe('renderCursorTodoNote', () => {
   it('after full + merge, only merged ones carry the marker', () => {
     const afterFull = applyCursorTodoUpdate([], fullParams())
     const afterMerge = applyCursorTodoUpdate(afterFull, mergeParams())
-    const changedIds = getCursorTodoUpdateChangedIds(mergeParams())
+    const changedIds = getCursorTodoUpdateChangedIds(mergeParams(), afterFull)
 
     const note = renderCursorTodoNote(afterMerge, changedIds)
 
@@ -220,7 +268,7 @@ describe('renderCursorTodoNote', () => {
   it('MUTATION: note has every item of the full list, not just the payload', () => {
     const afterFull = applyCursorTodoUpdate([], fullParams())
     const afterMerge = applyCursorTodoUpdate(afterFull, mergeParams())
-    const changedIds = getCursorTodoUpdateChangedIds(mergeParams())
+    const changedIds = getCursorTodoUpdateChangedIds(mergeParams(), afterFull)
 
     const note = renderCursorTodoNote(afterMerge, changedIds)
 
