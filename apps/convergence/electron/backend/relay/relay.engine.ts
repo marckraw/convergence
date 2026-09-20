@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import { composeErrandBrief } from './errand-brief.pure'
-import type { SessionStatus } from '../provider/provider.types'
+import type { BusyWaitReason, SessionStatus } from '../provider/provider.types'
 import type {
   CreateSessionInput,
   DispatchRedeliveredEvent,
@@ -93,6 +93,8 @@ export interface RelaySessionGateway {
     openerDispatchId: string
     payloadDispatchId: string
     openerQueued: boolean
+    /** Which wait it is, when it waits (MAR-3020). Absent reads as a turn. */
+    waitingOn?: BusyWaitReason
   }>
   /**
    * The relay's delivery door: a target that is mid-turn answers with the
@@ -101,7 +103,12 @@ export interface RelaySessionGateway {
   deliverRelayMessage(
     sessionId: string,
     input: { text: string; providerAccountId?: string | null },
-  ): Promise<{ dispatchId: string; queued: boolean }>
+  ): Promise<{
+    dispatchId: string
+    queued: boolean
+    /** Which wait it is, when it waits (MAR-3020). Absent reads as a turn. */
+    waitingOn?: BusyWaitReason
+  }>
   create(input: CreateSessionInput): { id: string }
   start(
     sessionId: string,
@@ -1277,7 +1284,11 @@ export class RelayEngine {
           // Why it waits, when it is waiting on a turn (MAR-2888). `queued`
           // alone left the canvas to be read as "sent, pending" whether the
           // opener had gone out or was itself sitting behind somebody's turn.
-          error: receipt.openerQueued ? busyTargetReason() : undefined,
+          // The door says WHICH wait since MAR-3020 -- a turn, or a
+          // compaction -- and this passes its word on rather than assuming.
+          error: receipt.openerQueued
+            ? busyTargetReason(receipt.waitingOn)
+            : undefined,
         })
         return true
       }
@@ -1301,8 +1312,15 @@ export class RelayEngine {
         payloadPreview,
         roleCardCarried: carriesCard,
         dispatchId: delivery.dispatchId,
+        // `targetWasRunning` is the record's own reading and it can only ever
+        // mean a turn, so it keeps the turn sentence; the door's `waitingOn`
+        // is consulted only when the door is the one that said wait.
         error:
-          targetWasRunning || delivery.queued ? busyTargetReason() : undefined,
+          targetWasRunning || delivery.queued
+            ? busyTargetReason(
+                targetWasRunning ? undefined : delivery.waitingOn,
+              )
+            : undefined,
       })
     } catch (error) {
       record('error', {

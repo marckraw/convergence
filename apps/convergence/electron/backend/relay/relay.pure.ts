@@ -6,6 +6,7 @@ export {
 } from '../../../src/shared/lib/spawn-spec.pure'
 import { namesThisMachine } from '../../../src/shared/lib/execution-host-id.pure'
 import { normalizeCrewBatonName } from '../crew/crew.pure'
+import type { BusyWaitReason } from '../provider/provider.types'
 import { decodeSessionWorkAddress } from '../../../src/shared/lib/work-address.pure'
 import type {
   RelaySeat,
@@ -921,9 +922,20 @@ export function roundBudgetMessage(cap: number): string {
  * It does not name the target: the hop row already renders which session the
  * hop landed in, and reaching for the name here would widen the engine's view
  * of a session for a word the canvas is already showing.
+ *
+ * Since MAR-3020 it also names WHICH wait. A compacting target and a busy
+ * one are both "not now", but they end differently -- one in a minute of its
+ * own accord, one when somebody else's turn finishes -- and a reader who
+ * cannot tell them apart cannot tell whether to wait or to go look.
  */
-export function busyTargetReason(): string {
-  return 'Waiting behind a running turn at the target.'
+export function busyTargetReason(waitingOn?: BusyWaitReason): string {
+  // Absent reads as a turn, deliberately: every caller that predates
+  // MAR-3020 meant a turn, and a door that cannot say which wait it is has
+  // not learned about compaction -- so the old sentence is the honest one
+  // rather than a hedge naming both.
+  return waitingOn === 'compaction'
+    ? 'Waiting for the target to finish compacting.'
+    : 'Waiting behind a running turn at the target.'
 }
 
 /**

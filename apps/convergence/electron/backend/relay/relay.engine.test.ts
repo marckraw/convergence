@@ -54,6 +54,12 @@ function createGateway(overrides: {
   openerQueued?: boolean
   /** The plain delivery was queued because the provider said it was busy. */
   deliveryQueued?: boolean
+  /**
+   * Which wait the DOOR reported (MAR-3020). Left unset, the door says
+   * nothing -- the shape every caller had before this ticket, and the one
+   * that must keep reading as a turn.
+   */
+  waitingOn?: 'turn' | 'compaction'
   create?: () => { id: string }
   start?: (sessionId: string) => Promise<void>
 }): FakeGateway {
@@ -114,6 +120,7 @@ function createGateway(overrides: {
         openerDispatchId,
         payloadDispatchId,
         openerQueued: overrides.openerQueued ?? false,
+        ...(overrides.waitingOn ? { waitingOn: overrides.waitingOn } : {}),
       }
     },
     // The relay's delivery door: a busy target answers with the queue rather
@@ -129,7 +136,11 @@ function createGateway(overrides: {
         providerAccountId: input.providerAccountId,
         dispatchId,
       })
-      return { dispatchId, queued: overrides.deliveryQueued ?? false }
+      return {
+        dispatchId,
+        queued: overrides.deliveryQueued ?? false,
+        ...(overrides.waitingOn ? { waitingOn: overrides.waitingOn } : {}),
+      }
     },
     create: (input) => {
       created.push(input as unknown as Record<string, unknown>)
@@ -1818,6 +1829,68 @@ describe('RelayEngine', () => {
     const gateway = createGateway({
       statuses: { s2: 'completed' },
       openerQueued: true,
+    })
+
+    await createEngine(gateway).handleSettle(settled('s1'))
+
+    expect(relays.listHops('c1')[0]).toMatchObject({
+      outcome: 'queued',
+      error: 'Waiting behind a running turn at the target.',
+    })
+  })
+
+  it('says the hop is waiting for compaction, and raises no hail (R5, MAR-3020)', async () => {
+    // The plain door. A compacting target is a WAIT, not a break: the hop
+    // used to be recorded `error` here, hail a chair, and never retry -- an
+    // automatic compaction during a night wave ate the horse's return.
+    wire()
+    const gateway = createGateway({
+      statuses: { s2: 'completed' },
+      deliveryQueued: true,
+      waitingOn: 'compaction',
+    })
+
+    await createEngine(gateway).handleSettle(settled('s1'))
+
+    expect(relays.listHops('c1')[0]).toMatchObject({
+      outcome: 'queued',
+      error: 'Waiting for the target to finish compacting.',
+    })
+    // Nobody is called for a wait that ends on its own. This follows from
+    // the outcome being `queued` rather than `error`, and it is asserted
+    // because that is the half a reader actually feels at 3am.
+    expect(hails.listOpen()).toEqual([])
+  })
+
+  it('says the OPENER is waiting for compaction, and raises no hail (R5, MAR-3020)', async () => {
+    // The hail path's door. Both beats wait together: the opener is queued
+    // rather than sent, so the payload behind it is waiting on the
+    // compaction and not merely on its own opener.
+    wire('s1', 's2', true, null, '/clear')
+    const gateway = createGateway({
+      statuses: { s2: 'completed' },
+      openerQueued: true,
+      waitingOn: 'compaction',
+    })
+
+    await createEngine(gateway).handleSettle(settled('s1'))
+
+    expect(relays.listHops('c1')[0]).toMatchObject({
+      outcome: 'queued',
+      error: 'Waiting for the target to finish compacting.',
+    })
+    expect(hails.listOpen()).toEqual([])
+  })
+
+  it('keeps the turn sentence for a door that names no wait (R5, MAR-3020)', async () => {
+    // The compatibility half, and the reason `busyTargetReason` treats an
+    // absent reason as a turn rather than hedging about both: a door that
+    // cannot say which wait it is has not learned about compaction, and
+    // every such caller predating MAR-3020 meant a turn.
+    wire()
+    const gateway = createGateway({
+      statuses: { s2: 'completed' },
+      deliveryQueued: true,
     })
 
     await createEngine(gateway).handleSettle(settled('s1'))
