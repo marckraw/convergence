@@ -2624,17 +2624,26 @@ export class SessionService {
         'Manual context management is not supported on remote execution hosts yet',
       )
     }
-    // The same question the reset door asks, and for the same reason
-    // (MAR-3243). This door used to ask whether a handle was ATTACHED, which
-    // is not "is the session busy": a resident handle -- Claude's is
-    // `resident: true` -- is not released when its turn completes, so for the
-    // whole of its idle window an idle Claude conversation read as busy and
-    // the compact button was refused on the provider that made compaction
-    // popular. `isTurnUnderWayOrArriving` covers the two cases that really
-    // are a turn: a dispatch on its way up, and a handle whose turn has not
-    // ended yet -- which still refuses `running`, and refuses `answered`
-    // until the real settle (MAR-2896).
-    if (this.isTurnUnderWayOrArriving(session)) {
+    // Two questions, and only the second one changed (MAR-3243).
+    //
+    // The first is the record's: a session this process has not settled to
+    // `completed` -- `failed`, or a stale `running` whose process is gone --
+    // is not an idle conversation, and compacting one is a behaviour nobody
+    // has ruled. It stays refused exactly as before.
+    //
+    // The second used to ask whether a handle was ATTACHED, which is not "is
+    // the session busy": a resident handle -- Claude's is `resident: true` --
+    // is not released when its turn completes, so for the whole of its idle
+    // window an idle Claude conversation read as busy and the compact button
+    // was refused on the provider that made compaction popular.
+    // `isTurnUnderWayOrArriving` covers the two cases that really are a turn:
+    // a dispatch on its way up, and a handle whose turn has not ended yet --
+    // which still refuses `running`, and refuses `answered` until the real
+    // settle (MAR-2896).
+    if (
+      session.status !== 'completed' ||
+      this.isTurnUnderWayOrArriving(session)
+    ) {
       throw new Error('Context can only be compacted while the session is idle')
     }
     if (

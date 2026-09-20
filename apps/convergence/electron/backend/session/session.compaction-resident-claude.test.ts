@@ -209,6 +209,30 @@ describe('compacting a Claude session whose resident handle is still attached', 
     expect(fixture.manageContext).not.toHaveBeenCalled()
   })
 
+  /**
+   * The other half of the door, which is NOT about handles at all (MAR-3243
+   * F1).
+   *
+   * A `failed` settle releases even a resident handle, so this session has no
+   * handle at all -- `isTurnUnderWayOrArriving` alone says "idle" here. But a
+   * failed conversation is not an idle one, and compacting it was never
+   * ruled: it is a state the door has always refused, and only the handle
+   * half of that question was meant to change.
+   */
+  it('refuses a failed session that has no handle left to ask about (MAR-3243 F1)', async () => {
+    settle('failed')
+    expect(service.getSummaryById(sessionId)?.hasActiveHandle).toBe(false)
+    expect(service.getSummaryById(sessionId)?.status).toBe('failed')
+    expect(service.getSummaryById(sessionId)?.continuationToken).toBe(
+      'claude-session-1',
+    )
+
+    await expect(service.compactContext(sessionId)).rejects.toThrow(
+      'Context can only be compacted while the session is idle',
+    )
+    expect(fixture.manageContext).not.toHaveBeenCalled()
+  })
+
   it('disposes the idle resident process before it compacts (MAR-3243 R2)', async () => {
     settle('completed')
 
