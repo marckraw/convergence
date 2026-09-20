@@ -2,6 +2,7 @@ import type { FC, ReactNode } from 'react'
 import type { AppSettingsDialogSection } from '@/entities/dialog'
 import type {
   CommandCenterShortcutPrefs,
+  ContextAlertSettings,
   DebugLoggingPrefs,
 } from '@/entities/app-settings'
 import type {
@@ -36,6 +37,7 @@ import type {
   ExecutionHostEndpointDraft,
   ExecutionHostSessionCounts,
 } from './execution-host-settings.pure'
+import { ContextAlertFields } from './context-alert-fields.presentational'
 import { NotificationsFields } from './notifications-fields.presentational'
 import { UpdatesFields } from './updates-fields.presentational'
 import { DebugLoggingFields } from './debug-logging-fields.presentational'
@@ -62,6 +64,7 @@ interface AppSettingsDialogProps {
   executionHostSessionCounts: ExecutionHostSessionCounts
   /** Why the environment override serves nobody, or null. */
   executionHostEnvironmentOverrideWarning: string | null
+  contextAlertDraft: ContextAlertSettings
   notificationsDraft: NotificationPrefs
   updatesDraft: UpdatePrefs
   debugLoggingDraft: DebugLoggingPrefs
@@ -83,6 +86,7 @@ interface AppSettingsDialogProps {
   onExecutionHostLabelChange: (endpointId: string, value: string) => void
   onExecutionHostBaseUrlChange: (endpointId: string, value: string) => void
   onRemoveExecutionHostEndpoint: (endpointId: string) => void
+  onContextAlertChange: (next: ContextAlertSettings) => void
   onNotificationsChange: (prefs: NotificationPrefs) => void
   onTestFireNotification: (severity: NotificationSeverity) => void
   onToggleBackgroundUpdates: (next: boolean) => void
@@ -126,6 +130,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   executionHostSavedEndpoints,
   executionHostSessionCounts,
   executionHostEnvironmentOverrideWarning,
+  contextAlertDraft,
   notificationsDraft,
   updatesDraft,
   debugLoggingDraft,
@@ -147,6 +152,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   onExecutionHostLabelChange,
   onExecutionHostBaseUrlChange,
   onRemoveExecutionHostEndpoint,
+  onContextAlertChange,
   onNotificationsChange,
   onTestFireNotification,
   onToggleBackgroundUpdates,
@@ -307,6 +313,17 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
                 providers={providers}
                 extractionDraft={extractionDraft}
                 onExtractionModelChange={onExtractionModelChange}
+              />
+            </SettingsSubsection>
+            <SettingsSubsection
+              withDivider
+              title="Context alert"
+              description="When to warn you that a conversation is filling its context window, so you can seal and compact before it runs out."
+            >
+              <ContextAlertFields
+                alert={contextAlertDraft}
+                isSaving={isSaving}
+                onChange={onContextAlertChange}
               />
             </SettingsSubsection>
             <SettingsSubsection

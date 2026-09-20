@@ -18,6 +18,7 @@ import {} from '../provider/provider-descriptor.pure'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
+  DEFAULT_CONTEXT_ALERT,
   DEFAULT_LANES_PREFS,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,
@@ -139,6 +140,7 @@ describe('app-settings pure helpers', () => {
       piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       lanes: DEFAULT_LANES_PREFS,
+      contextAlert: DEFAULT_CONTEXT_ALERT,
       claude: { residentIdleMinutes: 30 },
     })
   })
@@ -204,6 +206,60 @@ describe('app-settings pure helpers', () => {
         buildDescriptors(),
       ),
     ).toEqual({ additionalModelIds: ['github-copilot/gpt-5.5'] })
+  })
+
+  it('defaults the context alert', () => {
+    expect(parseAppSettings(JSON.stringify({})).contextAlert).toEqual({
+      enabled: true,
+      percent: 75,
+      tokens: 400000,
+    })
+    expect(parseAppSettings(null).contextAlert).toEqual({
+      enabled: true,
+      percent: 75,
+      tokens: 400000,
+    })
+  })
+
+  it('keeps a null token cap', () => {
+    expect(
+      parseAppSettings(
+        JSON.stringify({
+          contextAlert: { enabled: true, percent: 90, tokens: null },
+        }),
+      ).contextAlert,
+    ).toEqual({ enabled: true, percent: 90, tokens: null })
+  })
+
+  it('repairs an out-of-range percent', () => {
+    expect(
+      parseAppSettings(
+        JSON.stringify({
+          contextAlert: { enabled: true, percent: 120, tokens: 400000 },
+        }),
+      ).contextAlert.percent,
+    ).toBe(75)
+  })
+
+  it('repairs a non-numeric token cap', () => {
+    expect(
+      parseAppSettings(
+        JSON.stringify({
+          contextAlert: { enabled: false, percent: 60, tokens: 'plenty' },
+        }),
+      ).contextAlert,
+    ).toEqual({ enabled: false, percent: 60, tokens: 400000 })
+  })
+
+  it('carries the context alert through validation', () => {
+    const settings = parseAppSettings(
+      JSON.stringify({
+        contextAlert: { enabled: false, percent: 42, tokens: null },
+      }),
+    )
+    expect(
+      validateAppSettings(settings, buildDescriptors()).contextAlert,
+    ).toEqual({ enabled: false, percent: 42, tokens: null })
   })
 
   it('resolves session defaults from validated settings', () => {

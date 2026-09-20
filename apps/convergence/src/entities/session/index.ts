@@ -144,3 +144,5 @@ export type {
   ForkInput,
   ForkResult,
 } from './session-fork.types'
+export { readContextAlert } from './context-alert.pure'
+export type { ContextAlertReading } from './context-alert.pure'

@@ -16,15 +16,18 @@ import { useSessionRelayStore } from '@/entities/session-relay'
 import { App } from './App.container'
 import { DEFAULT_PROJECT_SETTINGS } from '@/entities/project'
 
+// Sonner's `toast` is a callable with methods hung off it, and the context
+// alert host calls the bare form. A plain object here would make any mounted
+// host that uses `toast(...)` throw mid-render and take the whole shell down.
 vi.mock('sonner', () => ({
   Toaster: () => null,
-  toast: {
+  toast: Object.assign(vi.fn(), {
     error: vi.fn(),
     info: vi.fn(),
     loading: vi.fn(),
     success: vi.fn(),
     dismiss: vi.fn(),
-  },
+  }),
 }))
 
 const mockProject = {
@@ -236,6 +239,7 @@ const mockElectronAPI = {
       updates: { backgroundCheckEnabled: true },
       debugLogging: { enabled: false },
       lanes: { root: null },
+      contextAlert: { enabled: true, percent: 75, tokens: 400000 },
       piModelVisibility: { additionalModelIds: [] },
       favoriteModels: { items: [] },
     }),

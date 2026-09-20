@@ -11,10 +11,15 @@ import type { ReasoningEffort } from '../session'
 import type { UpdatePrefs } from '../updates'
 import type { KeyboardShortcutBinding } from '@/shared/lib/keyboard-shortcut.pure'
 import { DEFAULT_COMMAND_CENTER_SHORTCUT } from '@/shared/lib/keyboard-shortcut.pure'
+import type { ContextAlertSettings } from '@/shared/lib/context-alert-settings.pure'
+import { DEFAULT_CONTEXT_ALERT } from '@/shared/lib/context-alert-settings.pure'
 
 export type CommandCenterShortcutPrefs = KeyboardShortcutBinding
 
 export { DEFAULT_COMMAND_CENTER_SHORTCUT }
+
+export type { ContextAlertSettings }
+export { DEFAULT_CONTEXT_ALERT }
 
 export type { NotificationEventPrefs, NotificationPrefs, UpdatePrefs }
 export { DEFAULT_NOTIFICATION_PREFS } from '../notifications'
@@ -87,6 +92,8 @@ export interface AppSettings {
   piModelVisibility: PiModelVisibilityPrefs
   favoriteModels: FavoriteModelsPrefs
   lanes: LanesPrefs
+  /** When to warn that a conversation is filling its window (MAR-3250). */
+  contextAlert: ContextAlertSettings
 }
 
 export type AppSettingsInput = Omit<
@@ -102,6 +109,7 @@ export type AppSettingsInput = Omit<
   | 'piModelVisibility'
   | 'favoriteModels'
   | 'lanes'
+  | 'contextAlert'
 > & {
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
@@ -114,6 +122,7 @@ export type AppSettingsInput = Omit<
   piModelVisibility?: PiModelVisibilityPrefs
   favoriteModels?: FavoriteModelsPrefs
   lanes?: LanesPrefs
+  contextAlert?: ContextAlertSettings
 }
 
 export interface OpenRouterCredentialStatus {

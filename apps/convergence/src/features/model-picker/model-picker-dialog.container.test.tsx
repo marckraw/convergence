@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderInfo } from '@/entities/session'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
+  DEFAULT_CONTEXT_ALERT,
   DEFAULT_LANES_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
   DEFAULT_NOTIFICATION_PREFS,
@@ -114,6 +115,7 @@ function primeSettings(favoriteModels = DEFAULT_FAVORITE_MODELS_PREFS): void {
       updates: DEFAULT_UPDATE_PREFS,
       debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       lanes: DEFAULT_LANES_PREFS,
+      contextAlert: DEFAULT_CONTEXT_ALERT,
       piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       favoriteModels,
     },

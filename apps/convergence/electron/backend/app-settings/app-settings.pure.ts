@@ -26,6 +26,10 @@ import {
   parseCommandCenterShortcut,
   validateCommandCenterShortcut,
 } from '../../../src/shared/lib/keyboard-shortcut.pure'
+import {
+  DEFAULT_CONTEXT_ALERT,
+  parseContextAlertSettings,
+} from '../../../src/shared/lib/context-alert-settings.pure'
 
 export function parseModelMap(value: unknown): Record<string, string> {
   if (!value || typeof value !== 'object') return {}
@@ -188,6 +192,7 @@ export function parseFavoriteModelsPrefs(value: unknown): FavoriteModelsPrefs {
 }
 
 export { parseCommandCenterShortcut, validateCommandCenterShortcut }
+export { parseContextAlertSettings }
 
 function emptyAppSettings(): StoredAppSettings {
   return {
@@ -204,6 +209,7 @@ function emptyAppSettings(): StoredAppSettings {
     piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
     favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
     lanes: DEFAULT_LANES_PREFS,
+    contextAlert: DEFAULT_CONTEXT_ALERT,
     claude: { residentIdleMinutes: 30 },
   }
 }
@@ -241,6 +247,7 @@ export function parseAppSettings(raw: string | null): StoredAppSettings {
       piModelVisibility: parsePiModelVisibilityPrefs(parsed.piModelVisibility),
       favoriteModels: parseFavoriteModelsPrefs(parsed.favoriteModels),
       lanes: parseLanesPrefs(parsed.lanes),
+      contextAlert: parseContextAlertSettings(parsed.contextAlert),
       claude: {
         residentIdleMinutes:
           typeof parsed.claude?.residentIdleMinutes === 'number' &&
@@ -315,6 +322,7 @@ export function validateAppSettings(
       ),
       favoriteModels,
       lanes: settings.lanes,
+      contextAlert: settings.contextAlert,
       claude: settings.claude,
     }
   }
@@ -340,6 +348,7 @@ export function validateAppSettings(
       ),
       favoriteModels,
       lanes: settings.lanes,
+      contextAlert: settings.contextAlert,
       claude: settings.claude,
     }
   }
@@ -364,6 +373,7 @@ export function validateAppSettings(
     ),
     favoriteModels,
     lanes: settings.lanes,
+    contextAlert: settings.contextAlert,
     claude: settings.claude,
   }
 }
