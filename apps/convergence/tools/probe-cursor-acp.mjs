@@ -16,10 +16,13 @@ import {
   HELP,
   buildCancelNotification,
   buildMethodNotFoundResponse,
+  buildGuardTranscriptEntry,
   buildPermissionResponse,
   buildPromptRequest,
   buildRequestMessage,
+  countGuardedAnswers,
   createTranscript,
+  decidePermissionAnswer,
   encodeMessage,
   isResponse,
   isServerRequest,
@@ -28,7 +31,6 @@ import {
   readRecord,
   readString,
   redactPayload,
-  selectPermissionOptionId,
   summarizeOptions,
 } from './probe-cursor-acp.pure.mjs'
 
@@ -81,6 +83,7 @@ const summary = {
   listResult: null,
   loadResult: null,
   cancelSent: null,
+  guardedRequests: 0,
   permissionAnswers: client.permissionAnswers,
   notifications: client.notifications,
   serverRequests: client.serverRequests,
@@ -192,14 +195,12 @@ try {
 
   if (args.lingerMs > 0) await delay(args.lingerMs)
 
-  summary.processAliveAtEnd = isChildAlive()
-  summary.childExit = { code: child.exitCode, signal: child.signalCode }
+  finalizeSummary()
   writeTranscript()
   printSummary(summary, args.json)
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error))
-  summary.processAliveAtEnd = isChildAlive()
-  summary.childExit = { code: child.exitCode, signal: child.signalCode }
+  finalizeSummary()
   writeTranscript()
   printSummary(summary, true)
   process.exitCode = 1
@@ -210,6 +211,12 @@ try {
 
 function isChildAlive() {
   return child.exitCode === null && child.signalCode === null
+}
+
+function finalizeSummary() {
+  summary.processAliveAtEnd = isChildAlive()
+  summary.childExit = { code: child.exitCode, signal: child.signalCode }
+  summary.guardedRequests = countGuardedAnswers(summary.permissionAnswers)
 }
 
 /**
@@ -323,21 +330,36 @@ function createJsonRpcClient(childProcess, options) {
     })
   }
 
+  /**
+   * The ONE place the probe answers a permission request. Every answer is the
+   * verdict of `decidePermissionAnswer`, which refuses anything naming a
+   * private folder or a secrets file — there is no flag that switches that
+   * off. `probe-cursor-acp.test.mjs` pins this as the only
+   * `buildPermissionResponse(` call site in the file.
+   */
   function handleServerRequest(message) {
     if (message.method === 'session/request_permission') {
-      const { optionId, reason } = selectPermissionOptionIdFor(message)
+      const decision = decidePermissionAnswerFor(message)
+      if (decision.guarded) {
+        transcript.record({
+          at: elapsed(),
+          direction: 'event',
+          message: buildGuardTranscriptEntry(decision),
+        })
+      }
       permissionAnswers.push({
         toolCallId: readString(
           readRecord(message.params)?.toolCall,
           'toolCallId',
         ),
-        optionId,
-        reason,
+        optionId: decision.optionId,
+        reason: decision.reason,
+        guarded: decision.guarded,
         options: redactPayload(readRecord(message.params)?.options, {
           homeDir: homedir(),
         }),
       })
-      send(buildPermissionResponse(message.id, optionId))
+      send(buildPermissionResponse(message.id, decision.optionId))
       return
     }
 
@@ -349,9 +371,12 @@ function createJsonRpcClient(childProcess, options) {
     )
   }
 
-  function selectPermissionOptionIdFor(message) {
-    const offered = readRecord(message.params)?.options
-    return selectPermissionOptionId(offered, options.permissionResponse)
+  function decidePermissionAnswerFor(message) {
+    return decidePermissionAnswer(
+      readRecord(message.params),
+      options.permissionResponse,
+      { homeDir: homedir() },
+    )
   }
 
   return {
@@ -406,6 +431,7 @@ function printSummary(summary, asJson) {
   console.log(`notifications: ${summary.notifications.length}`)
   console.log(`server requests: ${summary.serverRequests.length}`)
   console.log(`permission answers: ${summary.permissionAnswers.length}`)
+  console.log(`guarded requests: ${summary.guardedRequests}`)
   console.log(`process alive at end: ${summary.processAliveAtEnd}`)
 
   for (const record of summary.prompts) {

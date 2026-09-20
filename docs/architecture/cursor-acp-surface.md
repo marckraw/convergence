@@ -15,7 +15,14 @@ parsing, redaction, the transcript). Since MAR-3239 it sends `session/cancel` as
 a **notification**, takes a repeatable `--prompt` that runs every prompt in order
 on one process and one session, and writes a scrubbed transcript with `--out`.
 The tool spawns a real `cursor-agent` at import time — never import it from a
-test; import the `.pure.mjs` half instead.
+test; import the `.pure.mjs` half instead. Since MAR-3246 every permission
+answer passes through one guard (`decidePermissionAnswer`) that refuses — with
+a `reject_once`, or `cancelled` when no reject option is offered — any request
+naming `~/.cursor`, `~/.claude`, `~/.codex`, `~/.convergence` (spelled with
+`~`, `$HOME` or the absolute home path), a `.env` / `.env.*` path segment,
+`auth.json`, `credentials`, `.ssh`, `.aws`, `.npmrc`, `.netrc`, `Keychain` or
+`security find-`, whatever the probed model asks for and whatever
+`--permission-response` says; there is no flag that switches it off.
 
 This document states what was **seen on the wire**, not what the app currently
 assumes. Anything inferred is labeled _inferred_.
