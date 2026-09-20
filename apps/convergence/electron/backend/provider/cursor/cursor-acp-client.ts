@@ -4,6 +4,12 @@ import {
   CURSOR_ACP_MODEL_CONFIG_ID,
 } from './cursor-acp-contract.pure'
 import {
+  formatCursorAcpProtocolVersionNote,
+  parseCursorAcpHandshake,
+  readCursorAcpLoginDecision,
+  type CursorAcpHandshake,
+} from './cursor-acp-handshake.pure'
+import {
   CursorAcpJsonRpcClient,
   type CursorAcpTransportDebugHandler,
 } from './cursor-acp-jsonrpc'
@@ -112,6 +118,51 @@ function truncateForError(value: string): string {
     : value
 }
 
+/** Anything that can speak JSON-RPC to a Cursor ACP process. */
+export interface CursorAcpHandshakeRpc {
+  request(method: string, params?: unknown): Promise<unknown>
+}
+
+export interface CursorAcpHandshakeOptions {
+  /** Reported to Cursor as `clientInfo.version` (MAR-3145 R4). */
+  appVersion?: string | null
+  /** Receives at most one line per handshake, for the provider debug log. */
+  onDebugNote?: (note: string) => void
+}
+
+/**
+ * The one Cursor ACP handshake (MAR-3145 R1). `initialize` -> parse ->
+ * `authenticate`, shared by every path that opens a connection: the disposable
+ * client, the provider's one-shot and its resident session.
+ *
+ * It exists so that no caller can discard what the CLI said again — which is
+ * why `cursor-provider.handshake.test.ts` fails if the `initialize` request
+ * literal appears anywhere but here.
+ */
+export async function performCursorAcpHandshake(
+  rpc: CursorAcpHandshakeRpc,
+  options: CursorAcpHandshakeOptions = {},
+): Promise<CursorAcpHandshake> {
+  const result = await rpc.request(
+    'initialize',
+    buildCursorAcpInitializeParams(options.appVersion ?? null),
+  )
+  const handshake = parseCursorAcpHandshake(result)
+
+  const versionNote = formatCursorAcpProtocolVersionNote(handshake)
+  if (versionNote) options.onDebugNote?.(versionNote)
+
+  const login = readCursorAcpLoginDecision(handshake)
+  if (login.kind === 'refuse') throw new Error(login.message)
+  if (login.note) options.onDebugNote?.(login.note)
+
+  await rpc.request('authenticate', {
+    methodId: CURSOR_ACP_LOGIN_METHOD_ID,
+  })
+
+  return handshake
+}
+
 export class CursorAcpProcessClient {
   private requestTimeoutMs: number
   private operationTimeoutMs: number
@@ -211,12 +262,10 @@ export class CursorAcpProcessClient {
     run: (rpc: CursorAcpJsonRpcClient) => Promise<T>,
   ): Promise<T> {
     return this.withConnection(cwd, async (rpc) => {
-      await rpc.request(
-        'initialize',
-        buildCursorAcpInitializeParams(this.appVersion),
-      )
-      await rpc.request('authenticate', {
-        methodId: CURSOR_ACP_LOGIN_METHOD_ID,
+      await performCursorAcpHandshake(rpc, {
+        appVersion: this.appVersion,
+        onDebugNote: (note) =>
+          this.onDebug?.({ direction: 'in', channel: 'lifecycle', note }),
       })
       return run(rpc)
     })
