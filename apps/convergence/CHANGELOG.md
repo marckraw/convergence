@@ -1,5 +1,20 @@
 # convergence
 
+## 0.78.1
+
+### Patch Changes
+
+- f97c7a8: Cursor: the compact button now says plainly that Cursor has no compaction command, instead of promising it will return.
+- bc2619a: Cursor: sending a message with a skill no longer starts a second Cursor process first.
+- 3bb3594: Cursor: file edits show their diff in the transcript instead of 'Status: completed'; plans read as a list.
+- 435a5f7: MAR-3244 (R2): Check Cursor Agent's latest version from its public installer and compare release dates safely.
+- 92dd725: Cursor: a turn the model refused or that was cut short now says so instead of looking finished.
+- df8e11c: Cursor: a model list that failed to load is retried instead of staying at one fallback model until restart.
+- 104225b: Cursor: a turn that ends while an approval is still open no longer switches off the silence timeout for the turns after it.
+- 4d33c20: Cursor: a todo update shows the whole list as it stands, not only the items that just changed.
+- 4ec31a0: Claude: the compact button works right after an answer, not only after the conversation has been idle for half an hour.
+- fbd647f: Cursor: a relay that clears the conversation before delivery now delivers its message instead of stopping after the clear.
+
 ## 0.78.0
 
 ### Minor Changes
