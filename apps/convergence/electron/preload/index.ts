@@ -348,6 +348,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   contextDrill: {
     run: (sessionId: string) =>
       ipcRenderer.invoke('contextDrill:run', sessionId),
+    cancel: (sessionId: string) =>
+      ipcRenderer.invoke('contextDrill:cancel', sessionId),
     describe: (sessionId: string) =>
       ipcRenderer.invoke('contextDrill:describe', sessionId),
     onChanged: (callback: (change: unknown) => void) => {

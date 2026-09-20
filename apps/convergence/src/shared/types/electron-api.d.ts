@@ -1685,6 +1685,11 @@ export interface ContextDrillChangeData {
   reason?: string
 }
 
+/** A refusal is a value here too (MAR-3255 R8). */
+export type ContextDrillCancelResultData =
+  | { ok: true }
+  | { ok: false; reason: string }
+
 interface ElectronAPI {
   system: {
     getInfo: () => SystemInfo
@@ -1949,6 +1954,14 @@ interface ElectronAPI {
     ) => () => void
     onHopAppended: (callback: (hop: RelayHopData) => void) => () => void
     onHopsCleared: (callback: (crewId: string) => void) => () => void
+  }
+  contextDrill: {
+    run: (sessionId: string) => Promise<ContextDrillOutcomeData>
+    cancel: (sessionId: string) => Promise<ContextDrillCancelResultData>
+    describe: (sessionId: string) => Promise<ContextDrillDescriptionData>
+    onChanged: (
+      callback: (change: ContextDrillChangeData) => void,
+    ) => () => void
   }
   crewHail: {
     listOpen: () => Promise<CrewHailData[]>

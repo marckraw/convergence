@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerContextDrillIpcHandlers } from './context-drill.ipc'
-import { ContextDrillService } from './context-drill.service'
+import { ContextDrillService, DRILL_NOT_RUNNING } from './context-drill.service'
 import type { ContextDrillSessionGateway } from './context-drill.types'
 
 const handlers = new Map<
@@ -112,5 +112,24 @@ describe('contextDrill:run (MAR-3255 R6)', () => {
     await expect(
       invoke<Promise<unknown>>('contextDrill:run', 's'),
     ).resolves.toMatchObject({ ok: false, beat: 'sealing' })
+  })
+})
+
+describe('contextDrill:cancel (MAR-3255 R8)', () => {
+  it('ends a routine that is waiting, through the channel', async () => {
+    const run = invoke<Promise<unknown>>('contextDrill:run', 's')
+    await vi.waitFor(() => expect(sessions.sent).toHaveLength(1))
+
+    expect(invoke('contextDrill:cancel', 's')).toEqual({ ok: true })
+    sessions.release?.()
+    await expect(run).resolves.toMatchObject({ ok: false, beat: 'sealing' })
+    expect(invoke('contextDrill:describe', 's')).toMatchObject({ beat: null })
+  })
+
+  it('answers a refusal as a value here too', () => {
+    expect(invoke('contextDrill:cancel', 's')).toEqual({
+      ok: false,
+      reason: DRILL_NOT_RUNNING,
+    })
   })
 })

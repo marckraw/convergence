@@ -44,6 +44,7 @@ const registered: string[] = []
 
 interface DrillBridge {
   run: (sessionId: string) => unknown
+  cancel: (sessionId: string) => unknown
   describe: (sessionId: string) => unknown
   onChanged: (callback: (change: unknown) => void) => () => void
 }
@@ -65,6 +66,7 @@ describe('the contextDrill preload bridge (MAR-3255 R6)', () => {
   it('exposes the drill to the renderer at all', () => {
     expect(bridge).toBeDefined()
     expect(typeof bridge.run).toBe('function')
+    expect(typeof bridge.cancel).toBe('function')
     expect(typeof bridge.describe).toBe('function')
     expect(typeof bridge.onChanged).toBe('function')
   })
@@ -75,20 +77,27 @@ describe('the contextDrill preload bridge (MAR-3255 R6)', () => {
     registerContextDrillIpcHandlers({
       service: {
         run: vi.fn(),
+        cancel: vi.fn(),
         describe: vi.fn(),
       } as never,
     })
 
     await bridge.run('session-1')
+    await bridge.cancel('session-1')
     await bridge.describe('session-1')
 
     // The artifact on both sides: what the bridge asked for, and what the
     // main process is listening to. A rename on one side leaves this red.
     expect(hoisted.invoke.mock.calls).toEqual([
       ['contextDrill:run', 'session-1'],
+      ['contextDrill:cancel', 'session-1'],
       ['contextDrill:describe', 'session-1'],
     ])
-    expect(registered).toEqual(['contextDrill:run', 'contextDrill:describe'])
+    expect(registered).toEqual([
+      'contextDrill:run',
+      'contextDrill:cancel',
+      'contextDrill:describe',
+    ])
   })
 
   it('subscribes and unsubscribes on the broadcast channel', async () => {

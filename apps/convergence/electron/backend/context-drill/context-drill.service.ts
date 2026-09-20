@@ -22,6 +22,54 @@ export const DRILL_SEAL_TURN_FAILED =
 export const DRILL_SEAL_ABSENT = 'The agent did not confirm the seal.'
 export const DRILL_RESUME_TURN_FAILED =
   'The context was compacted, but the conversation failed while it was waking up.'
+export const DRILL_NOT_RUNNING = 'No drill is running for this conversation.'
+export const DRILL_COMPACTION_UNINTERRUPTIBLE =
+  'Compaction cannot be interrupted; it finishes on its own.'
+export const DRILL_ALREADY_CANCELLING = 'The drill is already stopping.'
+export const DRILL_CANCELLED = 'The drill was cancelled.'
+export const DRILL_CANCELLED_AFTER_COMPACTION =
+  'The context was compacted; the drill was cancelled before the conversation confirmed it woke up.'
+
+/** What a cancelled run is told, which depends on what it had already done. */
+function cancelReason(beat: DrillBeat): string {
+  return beat === 'resuming'
+    ? DRILL_CANCELLED_AFTER_COMPACTION
+    : DRILL_CANCELLED
+}
+
+/**
+ * The end of a wait nobody was ever going to end (MAR-3255 R8).
+ *
+ * Carries the beat it interrupted, read at the moment the person asked
+ * rather than at the moment the routine notices, because those are the same
+ * beat and saying so here is what keeps them the same.
+ */
+class DrillCancelled extends Error {
+  constructor(readonly beat: DrillBeat) {
+    super(cancelReason(beat))
+    this.name = 'DrillCancelled'
+  }
+}
+
+/** Resolves a settle wait with "stop waiting" rather than with a settle. */
+const CANCELLED = Symbol('drill-cancelled')
+
+/** One running routine, and everything that can end it. */
+interface DrillRun {
+  beat: DrillBeat
+  /**
+   * The beat a cancel arrived on, or null. Set once: a routine that is
+   * already stopping cannot be stopped again, and the second caller is owed
+   * that answer rather than a silent success.
+   */
+  cancelledAt: DrillBeat | null
+  /**
+   * Ends the wait currently in progress, when there is one. Null in the gaps
+   * between beats and for the whole of `compacting`, which is why a cancel
+   * also leaves `cancelledAt` behind: the checkpoints read it.
+   */
+  abandonWait: (() => void) | null
+}
 
 /** What the transcript note says. One sentence, one shape (R5). */
 export function describeDrillFailure(beat: DrillBeat, reason: string): string {
@@ -47,10 +95,10 @@ export function describeDrillFailure(beat: DrillBeat, reason: string): string {
 export class ContextDrillService {
   private readonly sessions: ContextDrillSessionGateway
   /**
-   * The beat each running routine is on. Doubles as the "is one running"
+   * The routine running on each session. Doubles as the "is one running"
    * question, so the two answers cannot disagree.
    */
-  private readonly beats = new Map<string, DrillBeat>()
+  private readonly runs = new Map<string, DrillRun>()
   private readonly listeners = new Set<(change: DrillChange) => void>()
 
   constructor(deps: { sessions: ContextDrillSessionGateway }) {
@@ -65,7 +113,7 @@ export class ContextDrillService {
   }
 
   describe(sessionId: string): DrillDescription {
-    const beat = this.beats.get(sessionId) ?? null
+    const beat = this.runs.get(sessionId)?.beat ?? null
     if (!this.sessions.isMastermindSeat(sessionId))
       return { offered: false, reason: DRILL_NOT_A_MASTERMIND, beat }
     const readiness = this.sessions.describeCompactionReadiness(sessionId)
@@ -82,7 +130,7 @@ export class ContextDrillService {
    * and the caller is told so in the same breath it asked.
    */
   async run(sessionId: string): Promise<DrillOutcome> {
-    if (this.beats.has(sessionId))
+    if (this.runs.has(sessionId))
       return { ok: false, beat: 'sealing', reason: DRILL_ALREADY_RUNNING }
     if (!this.sessions.isMastermindSeat(sessionId))
       return { ok: false, beat: 'sealing', reason: DRILL_NOT_A_MASTERMIND }
@@ -100,19 +148,26 @@ export class ContextDrillService {
     try {
       outcome = await this.runBeats(sessionId)
     } catch (error) {
-      // A gateway threw where the routine did not expect one. It is still a
-      // failure of the beat that was running, told in the same shape.
-      outcome = {
-        ok: false,
-        beat: this.beatOf(sessionId),
-        reason: messageOf(error),
-      }
+      // A cancel is not an error the routine survived -- it is how the person
+      // ended it -- but it arrives on the same path, because ending a wait by
+      // throwing is what guarantees no line below the wait can run.
+      outcome =
+        error instanceof DrillCancelled
+          ? { ok: false, beat: error.beat, reason: error.message }
+          : {
+              // A gateway threw where the routine did not expect one. It is
+              // still a failure of the beat that was running, told in the
+              // same shape.
+              ok: false,
+              beat: this.beatOf(sessionId),
+              reason: messageOf(error),
+            }
     } finally {
-      // Every exit, including a throw from any gateway call. A routine that
-      // ended without releasing is a conversation nobody can send to again
-      // until the app restarts.
+      // Every exit, including a throw from any gateway call and including a
+      // cancel. A routine that ended without releasing is a conversation
+      // nobody can send to again until the app restarts.
       this.sessions.releaseQueue(sessionId)
-      this.beats.delete(sessionId)
+      this.runs.delete(sessionId)
     }
     // After the release, and in ONE place: every failure writes exactly one
     // note and every run emits exactly one ending, whichever beat stopped it.
@@ -128,6 +183,43 @@ export class ContextDrillService {
       ...(outcome.ok ? {} : { reason: outcome.reason }),
     })
     return outcome
+  }
+
+  /**
+   * The way out (MAR-3255 R8).
+   *
+   * The routine waits for a settle, and there are shapes where no settle is
+   * coming: a turn parked on a question nobody answers, a provider that
+   * stopped talking, a Stop that left no terminal status behind. Without
+   * this, every one of them holds the conversation's queue shut until the
+   * app restarts -- in the one feature built for the nights nobody is
+   * watching.
+   *
+   * It ends the ROUTINE, not the turn. Stopping a provider mid-sentence is
+   * the person's own Stop button and has its own consequences; what this
+   * does is stop waiting, release the queue and say so. The turn it leaves
+   * behind finishes on its own, and `releaseQueue` already declines to drain
+   * into a running one.
+   *
+   * `compacting` is refused, and that refusal is the honest one: nothing
+   * here can abort a provider's compaction, so a cancel that claimed to
+   * would release the queue INTO a context being rewritten -- the exact
+   * accident the hold exists to prevent.
+   */
+  cancel(sessionId: string): { ok: true } | { ok: false; reason: string } {
+    const run = this.runs.get(sessionId)
+    if (!run) return { ok: false, reason: DRILL_NOT_RUNNING }
+    if (run.beat === 'compacting')
+      return { ok: false, reason: DRILL_COMPACTION_UNINTERRUPTIBLE }
+    if (run.cancelledAt) return { ok: false, reason: DRILL_ALREADY_CANCELLING }
+
+    run.cancelledAt = run.beat
+    // Both halves, and they cover different moments rather than each other:
+    // the mark is what the checkpoints between beats read, and this ends a
+    // wait already in progress -- which is where a cancel almost always
+    // lands, and where nothing else would ever look at the mark again.
+    run.abandonWait?.()
+    return { ok: true }
   }
 
   private async runBeats(sessionId: string): Promise<DrillOutcome> {
@@ -154,6 +246,11 @@ export class ContextDrillService {
     if (declaration.kind === 'absent')
       return { ok: false, beat: 'sealing', reason: DRILL_SEAL_ABSENT }
 
+    // The last line before the irreversible one. A cancel that landed in the
+    // gap -- after the settle resolved the wait, before this beat began --
+    // found no wait to end, and this is where it is read.
+    this.throwIfCancelled(sessionId)
+
     this.enter(sessionId, 'compacting')
     try {
       await this.sessions.compactContext(sessionId)
@@ -166,6 +263,10 @@ export class ContextDrillService {
     try {
       resuming = await this.sendAndAwaitSettle(sessionId, DRILL_AFTER_MESSAGE)
     } catch (error) {
+      // A cancel is not a failure of the send, and it already carries the
+      // sentence this beat owes (which says the context was compacted, for
+      // the same reason the one below does).
+      if (error instanceof DrillCancelled) throw error
       // The context WAS compacted, and the sentence has to say so: the
       // conversation the user comes back to has already lost its old memory,
       // and a failure that read like "nothing happened" would send them
@@ -206,11 +307,13 @@ export class ContextDrillService {
     let dispatchId: string | null = null
     // Definitely assigned: a promise executor runs synchronously, so `settle`
     // is set before this function's next statement.
-    let settle!: (event: DrillSettleEvent) => void
+    let settle!: (event: DrillSettleEvent | typeof CANCELLED) => void
     const early: DrillSettleEvent[] = []
-    const settled = new Promise<DrillSettleEvent>((resolve) => {
-      settle = resolve
-    })
+    const settled = new Promise<DrillSettleEvent | typeof CANCELLED>(
+      (resolve) => {
+        settle = resolve
+      },
+    )
 
     const unsubscribe = this.sessions.onSessionSettled((event) => {
       if (event.sessionId !== sessionId) return
@@ -222,6 +325,12 @@ export class ContextDrillService {
       settle(event)
     })
 
+    const run = this.runs.get(sessionId)
+    // Armed BEFORE the send, like the subscription and for the mirror-image
+    // reason: a cancel can land while `sendDrillBeat` is still awaiting the
+    // provider, and a hook installed afterwards would miss it and wait on.
+    if (run) run.abandonWait = () => settle(CANCELLED)
+
     try {
       dispatchId = await this.sessions.sendDrillBeat(sessionId, text)
       const id = dispatchId
@@ -229,6 +338,11 @@ export class ContextDrillService {
         if (event.dispatchIds.includes(id)) settle(event)
       }
       const event = await settled
+      // A promise resolves once, so this is also what makes a settle arriving
+      // AFTER a cancel inert: it finds the wait already ended, and the beat
+      // below it -- the compaction -- is never reached by a reply nobody is
+      // listening for any more.
+      if (event === CANCELLED) throw this.cancellation(sessionId)
       return {
         status: event.status,
         // The relay engine's own read (`relay.engine.ts:396`): a present
@@ -241,16 +355,32 @@ export class ContextDrillService {
       }
     } finally {
       unsubscribe()
+      const current = this.runs.get(sessionId)
+      if (current) current.abandonWait = null
     }
   }
 
+  /** The cancel a wait was ended by, told in that beat's words. */
+  private cancellation(sessionId: string): DrillCancelled {
+    const run = this.runs.get(sessionId)
+    return new DrillCancelled(run?.cancelledAt ?? this.beatOf(sessionId))
+  }
+
+  private throwIfCancelled(sessionId: string): void {
+    const run = this.runs.get(sessionId)
+    if (run?.cancelledAt) throw new DrillCancelled(run.cancelledAt)
+  }
+
   private enter(sessionId: string, beat: DrillBeat): void {
-    this.beats.set(sessionId, beat)
+    const run = this.runs.get(sessionId)
+    if (run) run.beat = beat
+    else
+      this.runs.set(sessionId, { beat, cancelledAt: null, abandonWait: null })
     this.emit({ sessionId, beat })
   }
 
   private beatOf(sessionId: string): DrillBeat {
-    return this.beats.get(sessionId) ?? 'sealing'
+    return this.runs.get(sessionId)?.beat ?? 'sealing'
   }
 
   private emit(change: DrillChange): void {

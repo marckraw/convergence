@@ -2081,7 +2081,11 @@ export class SessionService {
     options: DispatchDoorOptions = {},
   ): Promise<T> {
     this.assertNotCompacting(sessionId)
-    if (!options.passesQueueHold) this.assertQueueNotHeld(sessionId)
+    if (
+      !options.passesQueueHold &&
+      !this.isAnswerToAPendingQuestion(sessionId, input)
+    )
+      this.assertQueueNotHeld(sessionId)
     this.assertNoPendingAccountHandoff(sessionId)
     const handoffSession = this.getById(sessionId)
     const queuesFollowUp =
@@ -2741,14 +2745,20 @@ export class SessionService {
    * seal its memory -- must never be told yes by a reader the compaction
    * itself would then refuse.
    *
-   * It does not ask whether a compaction is already in flight. That question
-   * is `compactContext`'s own first line and stays there, so extracting these
-   * guards could not reorder which of two refusals a session is told.
+   * A compaction already in flight is asked about HERE and not inside the
+   * shared method (MAR-3255 R9). `compactContext` runs `assertNotCompacting`
+   * as its own first line and it stays there, unmoved -- so no refusal
+   * changed places for the compaction itself -- but a reader that skipped
+   * the question answered "yes, compactable" during a person's own Compact,
+   * and a drill started on that answer would hold the queue, send a beat,
+   * be refused by the compaction door and fail. The first line of both
+   * callers is now the same question, asked in each one's own idiom.
    */
   describeCompactionReadiness(
     id: string,
   ): { ready: true } | { ready: false; reason: string } {
     try {
+      this.assertNotCompacting(id)
       this.assertCompactionReady(id)
       return { ready: true }
     } catch (error) {
@@ -3076,6 +3086,35 @@ export class SessionService {
         'This conversation is compacting. Wait for it to finish before sending another message.',
       )
     }
+  }
+
+  /**
+   * Whether this send is the answer to a question the provider is asking
+   * RIGHT NOW (MAR-3255 R7) -- the one message a hold must never turn away.
+   *
+   * A held conversation differs from a compacting one in the way that
+   * matters here: a compaction has no live turn, so nothing inside it can
+   * ever be waiting on the user. A held one is mid-turn by construction, and
+   * a turn that parks on `needs-input` ends only when somebody answers it.
+   * Refusing the answer would leave the routine waiting for a settle that
+   * cannot arrive, with the queue held, until the app restarts -- and the
+   * party it locked out is the only party who could have freed it.
+   *
+   * BOTH conditions, and neither alone. `interactionResponse` alone is a
+   * property any caller can set, so it would be a key to the hold rather
+   * than an answer to a question. `needs-input` alone would let an ordinary
+   * message walk in beside the answer, which is exactly what the hold is for.
+   *
+   * `approve` and `deny` never reach this door at all -- they go straight to
+   * the handle -- so a permission prompt raised mid-routine was always
+   * answerable; this is the free-text half catching up with it.
+   */
+  private isAnswerToAPendingQuestion(
+    sessionId: string,
+    input: SendMessageInput,
+  ): boolean {
+    if (!input.interactionResponse) return false
+    return this.getById(sessionId)?.attention === 'needs-input'
   }
 
   /**

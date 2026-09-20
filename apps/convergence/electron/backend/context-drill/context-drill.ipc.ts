@@ -41,6 +41,12 @@ export function registerContextDrillIpcHandlers(deps: {
   )
 
   ipcMain.handle(
+    'contextDrill:cancel',
+    (_event, sessionId: string): { ok: true } | { ok: false; reason: string } =>
+      service.cancel(sessionId),
+  )
+
+  ipcMain.handle(
     'contextDrill:describe',
     (_event, sessionId: string): DrillDescription =>
       service.describe(sessionId),

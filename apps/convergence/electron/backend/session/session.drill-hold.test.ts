@@ -29,6 +29,12 @@ let service: SessionService
 let sessionId: string
 let queue: SessionQueuedInputService
 let server: FakeCodexServer
+/**
+ * The server's options, read on every request rather than at construction --
+ * so a test can decide mid-file that the next turn stays open, which is the
+ * only way to hold a conversation in the state a question is asked from.
+ */
+let serverOptions: { autoCompleteTurns?: boolean }
 let settles: SessionSettledEvent[]
 let cleanup: (() => Promise<void>) | undefined
 
@@ -37,7 +43,8 @@ beforeEach(async () => {
   const db = getDatabase()
   queue = new SessionQueuedInputService(db)
   settles = []
-  server = new FakeCodexServer({})
+  serverOptions = {}
+  server = new FakeCodexServer(serverOptions)
   const hosts = new CodexServerHostRegistry({
     cwd: dir,
     spawnProcess: () => {
@@ -100,6 +107,53 @@ async function startConversation(): Promise<void> {
   await service.start(sessionId, { text: 'first', providerAccountId: null })
   await vi.waitFor(() =>
     expect(service.getById(sessionId)?.status).toBe('completed'),
+  )
+}
+
+/** The JSON-RPC id the fake server asks its question under. */
+const PENDING_QUESTION_ID = 4100
+
+/**
+ * Makes the provider actually ask the user something (MAR-3255 R7).
+ *
+ * The real shape, not a row edited into `needs-input`: Codex raises
+ * `item/tool/requestUserInput` on the connection, the adapter records the
+ * request and flips attention, and the answer is only deliverable while that
+ * request is still pending -- which is the state the door is supposed to
+ * read.
+ */
+async function askTheUserAQuestion(): Promise<void> {
+  // The connection first: `pushRaw` goes to the newest one and drops the
+  // line when there is none, so pushing before the turn has reached the
+  // server is a question nobody is ever asked, silently.
+  await vi.waitFor(() =>
+    expect(
+      server.requests.some((request) => request.method === 'turn/start'),
+    ).toBe(true),
+  )
+  server.pushRaw(
+    JSON.stringify({
+      jsonrpc: '2.0',
+      id: PENDING_QUESTION_ID,
+      method: 'item/tool/requestUserInput',
+      params: {
+        questions: [
+          {
+            id: 'working_dir',
+            question: 'Where should scripts run?',
+            header: 'Working dir',
+            multiSelect: false,
+            options: [
+              { label: 'Project root only', description: 'the main repo' },
+              { label: 'Active workspace', description: 'the worktree' },
+            ],
+          },
+        ],
+      },
+    }) + '\n',
+  )
+  await vi.waitFor(() =>
+    expect(service.getById(sessionId)?.attention).toBe('needs-input'),
   )
 }
 
@@ -262,26 +316,70 @@ describe('a held queue (MAR-3255 R2)', () => {
     expect(service.getQueuedInputs(sessionId)).toEqual([])
   })
 
-  it("refuses the answer to a provider's question, which approvals do not need", async () => {
-    // Today's behaviour, pinned because it is the hold's sharpest edge and
-    // the reason S2b owes a ruling before there is a button (MAR-3255).
+  it("lets the answer to a provider's question through a hold", async () => {
+    // The hold's sharpest edge, ruled in lap 2 (MAR-3255 R7).
     //
     // `approve` and `deny` go straight to the handle and never meet this
-    // door, so a permission prompt raised mid-drill can still be answered.
-    // A free-text ANSWER cannot: it travels as an ordinary `sendMessage`
-    // with an `interactionResponse`, so the hold refuses it -- and a beat
-    // that parks on `needs-input` therefore has no settle coming and no way
-    // for the person to produce one.
-    //
-    // The routine holds nothing forever by ITSELF: every other ending
-    // releases. This is the one shape where the release waits on a turn only
-    // the user can end, and the user is the party the hold is shutting out.
-    await startConversation()
+    // door. A free-text ANSWER does: it travels as an ordinary `sendMessage`
+    // carrying an `interactionResponse`. Refused, a beat that parks on
+    // `needs-input` has no settle coming and no way for the person to
+    // produce one -- the routine would wait with the queue held until the
+    // app restarts, locking out the only party who could have freed it.
+    // A turn that stays open, because that is the only state this question
+    // is ever asked from: Codex raises it mid-turn and the turn ends when
+    // somebody answers. It is also exactly the shape the drill's sealing
+    // beat is in when it parks.
+    serverOptions.autoCompleteTurns = false
+    await service.start(sessionId, {
+      text: 'You know the drill.',
+      providerAccountId: null,
+    })
+    await askTheUserAQuestion()
     service.holdQueue(sessionId)
+
+    const answeredAt = server.responses.length
+    await service.sendMessage(sessionId, {
+      text: 'Active workspace',
+      deliveryMode: 'answer',
+      interactionResponse: {
+        kind: 'choice',
+        answers: [{ questionId: 'working_dir', values: ['Active workspace'] }],
+      },
+      providerAccountId: null,
+    })
+
+    // The artifact, on the far side: the provider's own question got its
+    // answer back. Not "the door did not throw" -- a send that returned and
+    // went nowhere is the failure this test is about.
+    await vi.waitFor(() =>
+      expect(server.responses.slice(answeredAt)).toContainEqual(
+        expect.objectContaining({ id: PENDING_QUESTION_ID }),
+      ),
+    )
+    // And it is a door, not a lift: the hold is still on afterwards, so the
+    // next ordinary message still waits.
+    expect(service.isQueueHeld(sessionId)).toBe(true)
+    service.releaseQueue(sessionId)
+  })
+
+  it('still refuses an interactionResponse when nothing is asked', async () => {
+    // Both halves of R7, and the second one is why the first is not a key
+    // any caller can cut for itself: `interactionResponse` is a property on
+    // an ordinary send, so without this the hold would be open to anybody
+    // who set it. Nothing else in `SessionService` refuses an answer to a
+    // question nobody asked -- the provider silently turns it into an
+    // ordinary turn -- so this door is the only one that reads the pair.
+    await startConversation()
+    expect(service.getById(sessionId)?.attention).not.toBe('needs-input')
+    service.holdQueue(sessionId)
+
     const refusal = await service
       .sendMessage(sessionId, {
-        text: 'the second one',
-        deliveryMode: 'answer',
+        text: 'let me in',
+        interactionResponse: {
+          kind: 'choice',
+          answers: [{ questionId: 'working_dir', values: ['anything'] }],
+        },
         providerAccountId: null,
       })
       .then(
@@ -289,6 +387,7 @@ describe('a held queue (MAR-3255 R2)', () => {
         (error: unknown) => error as Error,
       )
     expect(refusal?.message).toMatch(/compacting/)
+    expect(isProviderBusyError(refusal)).toBe(true)
     service.releaseQueue(sessionId)
   })
 
@@ -460,6 +559,30 @@ describe('the readiness answer is the refusal (MAR-3255 R3)', () => {
     await vi.waitFor(() =>
       expect(service.getById(sessionId)?.status).toBe('completed'),
     )
+  })
+
+  it('agrees with the refusal while a plain compaction is already running', async () => {
+    // R9. The shared guards do not ask this question -- it is
+    // `compactContext`'s own first line and stays there -- so a reader that
+    // skipped it answered "yes, compactable" during a person's own Compact,
+    // and a drill started on that answer would hold the queue, send a beat
+    // into a context being rewritten, and be refused by the very door that
+    // was already busy.
+    await startConversation()
+    const compaction = service.compactContext(sessionId).catch(() => null)
+
+    const readiness = service.describeCompactionReadiness(sessionId)
+    expect(readiness).toEqual({
+      ready: false,
+      reason:
+        'This conversation is compacting. Wait for it to finish before sending another message.',
+    })
+    const error = await service.compactContext(sessionId).then(
+      () => null,
+      (thrown: unknown) => thrown as Error,
+    )
+    expect(error?.message).toBe((readiness as { reason: string }).reason)
+    await compaction
   })
 
   it('agrees with the refusal when a row is waiting and nothing is held', async () => {
