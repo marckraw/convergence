@@ -23,6 +23,7 @@ import {
   parseDebugLoggingPrefs,
   parseFavoriteModelsPrefs,
   parseLanesPrefs,
+  parseContextAlertSettings,
   parseNotificationPrefs,
   parseOnboardingPrefs,
   parsePiModelVisibilityPrefs,
@@ -296,6 +297,10 @@ export class AppSettingsService {
           )
     const lanes =
       input.lanes === undefined ? existing.lanes : parseLanesPrefs(input.lanes)
+    const contextAlert =
+      input.contextAlert === undefined
+        ? existing.contextAlert
+        : parseContextAlertSettings(input.contextAlert)
     const commandCenterShortcut =
       input.commandCenterShortcut === undefined
         ? existing.commandCenterShortcut
@@ -327,6 +332,7 @@ export class AppSettingsService {
       piModelVisibility,
       favoriteModels,
       lanes,
+      contextAlert,
       claude:
         input.claude === undefined
           ? existing.claude

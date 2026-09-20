@@ -31,6 +31,7 @@ import { SpaceSessionLinkDialogContainer } from '@/features/space-session-link'
 import { SessionForkDialogContainer } from '@/features/session-fork'
 import { SessionIntentDialogContainer } from '@/features/session-intent-dialog'
 import { NotificationsToastHostContainer } from '@/features/notifications-toast-host'
+import { ContextAlertHostContainer } from '@/features/context-alert'
 import { UpdatesToastContainer } from '@/features/updates-toast'
 import { ProviderUpdatesToastContainer } from '@/features/provider-updates-toast'
 import { FeedbackButtonContainer } from '@/features/feedback-button'
@@ -515,6 +516,7 @@ export function App({
         onSelectCodeSession={onSelectCodeSession}
       />
       <NotificationsToastHostContainer onFocusSession={onSelectAnySession} />
+      <ContextAlertHostContainer onFocusSession={onSelectAnySession} />
       <UpdatesToastContainer />
       <ProviderUpdatesToastContainer />
       <FeedbackButtonContainer />

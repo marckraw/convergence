@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppSettingsStore } from './app-settings.model'
 import {
+  DEFAULT_CONTEXT_ALERT,
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_LANES_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
@@ -26,6 +27,7 @@ const EMPTY: AppSettings = {
   lanes: DEFAULT_LANES_PREFS,
   piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
   favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
+  contextAlert: DEFAULT_CONTEXT_ALERT,
 }
 
 type BroadcastCallback = (settings: AppSettings) => void
@@ -86,6 +88,7 @@ describe('useAppSettingsStore', () => {
       updates: DEFAULT_UPDATE_PREFS,
       debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       lanes: DEFAULT_LANES_PREFS,
+      contextAlert: DEFAULT_CONTEXT_ALERT,
       piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
     }
@@ -122,6 +125,7 @@ describe('useAppSettingsStore', () => {
       updates: DEFAULT_UPDATE_PREFS,
       debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       lanes: DEFAULT_LANES_PREFS,
+      contextAlert: DEFAULT_CONTEXT_ALERT,
       piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
     }
@@ -152,6 +156,7 @@ describe('useAppSettingsStore', () => {
       updates: DEFAULT_UPDATE_PREFS,
       debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       lanes: DEFAULT_LANES_PREFS,
+      contextAlert: DEFAULT_CONTEXT_ALERT,
       piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
     }

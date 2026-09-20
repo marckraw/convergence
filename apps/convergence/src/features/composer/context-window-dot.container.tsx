@@ -6,8 +6,14 @@ import type {
 } from '@/entities/session'
 import { Button } from '@/shared/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
+import { useAppSettingsStore } from '@/entities/app-settings'
 import { cn } from '@/shared/lib/cn.pure'
 import { resolveContextCompactionAction } from './context-compaction.pure'
+import {
+  describeContextAlert,
+  getContextTone,
+  type ContextWindowTone,
+} from './context-window-tone.pure'
 
 interface ContextWindowDotProps {
   contextWindow: SessionContextWindow | null | undefined
@@ -16,8 +22,6 @@ interface ContextWindowDotProps {
   onCompact: () => Promise<void>
   hasPendingQueuedInput?: boolean
 }
-
-type ContextWindowTone = 'green' | 'amber' | 'red' | 'muted'
 
 const dotClass: Record<ContextWindowTone, string> = {
   green: 'bg-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,0.16)]',
@@ -37,18 +41,6 @@ const buttonClass: Record<ContextWindowTone, string> = {
 
 function formatFullTokens(value: number): string {
   return new Intl.NumberFormat('en-US').format(value)
-}
-
-function getContextTone(
-  contextWindow: SessionContextWindow | null | undefined,
-): ContextWindowTone {
-  if (!contextWindow || contextWindow.availability === 'unavailable') {
-    return 'muted'
-  }
-
-  if (contextWindow.remainingPercentage <= 15) return 'red'
-  if (contextWindow.remainingPercentage <= 35) return 'amber'
-  return 'green'
 }
 
 function getAriaLabel(
@@ -75,7 +67,12 @@ export function ContextWindowDot({
     text: string
   } | null>(null)
   const closeTimerRef = useRef<number | null>(null)
-  const tone = getContextTone(contextWindow)
+  // Read from the store rather than passed down: the store is refreshed by the
+  // `appSettings:updated` broadcast, so changing the threshold recolours an
+  // already-open conversation's dot without a reload.
+  const contextAlert = useAppSettingsStore((s) => s.settings.contextAlert)
+  const tone = getContextTone(contextWindow, contextAlert)
+  const alertLine = describeContextAlert(contextWindow, contextAlert)
   const compaction = resolveContextCompactionAction(session, provider, {
     hasPendingQueuedInput,
   })
@@ -208,6 +205,11 @@ export function ContextWindowDot({
                   : 'Estimated'}
               </span>
             </div>
+            {alertLine ? (
+              <p className="text-[11px] leading-relaxed text-amber-400">
+                {alertLine}
+              </p>
+            ) : null}
           </div>
         )}
 

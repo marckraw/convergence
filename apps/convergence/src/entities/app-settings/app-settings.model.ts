@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { appSettingsApi } from './app-settings.api'
 import {
   DEFAULT_COMMAND_CENTER_SHORTCUT,
+  DEFAULT_CONTEXT_ALERT,
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
   DEFAULT_LANES_PREFS,
@@ -28,6 +29,7 @@ const EMPTY: AppSettings = {
   piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
   favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
   lanes: DEFAULT_LANES_PREFS,
+  contextAlert: DEFAULT_CONTEXT_ALERT,
 }
 
 interface AppSettingsState {

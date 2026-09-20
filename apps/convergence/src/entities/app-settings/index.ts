@@ -2,6 +2,7 @@ export type {
   AppSettings,
   AppSettingsInput,
   CommandCenterShortcutPrefs,
+  ContextAlertSettings,
   DebugLoggingPrefs,
   ExecutionHostDaemonCredentialStatus,
   ExecutionHostDaemonEnvironmentOverride,
@@ -22,6 +23,7 @@ export type {
 } from './app-settings.types'
 export {
   DEFAULT_COMMAND_CENTER_SHORTCUT,
+  DEFAULT_CONTEXT_ALERT,
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
   DEFAULT_LANES_PREFS,

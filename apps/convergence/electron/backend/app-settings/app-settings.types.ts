@@ -5,6 +5,8 @@ import type {
 import type { NotificationPrefs } from '../notifications/notifications.types'
 import type { ReasoningEffort } from '../provider/provider.types'
 import type { UpdatePrefs } from '../updates/updates.types'
+import type { ContextAlertSettings } from '../../../src/shared/lib/context-alert-settings.pure'
+import { DEFAULT_CONTEXT_ALERT } from '../../../src/shared/lib/context-alert-settings.pure'
 
 export interface OnboardingPrefs {
   notificationsCardDismissed: boolean
@@ -69,6 +71,9 @@ export const DEFAULT_LANES_PREFS: LanesPrefs = {
   root: null,
 }
 
+export type { ContextAlertSettings }
+export { DEFAULT_CONTEXT_ALERT }
+
 export interface AppSettings {
   claude?: { residentIdleMinutes: number }
   defaultProviderId: string | null
@@ -93,6 +98,8 @@ export interface AppSettings {
   piModelVisibility: PiModelVisibilityPrefs
   favoriteModels: FavoriteModelsPrefs
   lanes: LanesPrefs
+  /** When to warn that a conversation is filling its window (MAR-3250). */
+  contextAlert: ContextAlertSettings
 }
 
 /**
@@ -117,6 +124,7 @@ export type AppSettingsInput = Omit<
   | 'piModelVisibility'
   | 'favoriteModels'
   | 'lanes'
+  | 'contextAlert'
 > & {
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
@@ -129,6 +137,7 @@ export type AppSettingsInput = Omit<
   piModelVisibility?: PiModelVisibilityPrefs
   favoriteModels?: FavoriteModelsPrefs
   lanes?: LanesPrefs
+  contextAlert?: ContextAlertSettings
 }
 
 export interface ResolvedSessionDefaults {

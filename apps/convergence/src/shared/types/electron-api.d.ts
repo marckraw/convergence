@@ -2418,6 +2418,13 @@ interface LanesPrefsData {
   root: string | null
 }
 
+/** The context alert's threshold as it crosses the preload bridge (MAR-3250). */
+interface ContextAlertSettingsData {
+  enabled: boolean
+  percent: number
+  tokens: number | null
+}
+
 interface FavoriteModelRefData {
   providerId: string
   modelId: string
@@ -2470,6 +2477,7 @@ interface AppSettingsData {
     items: FavoriteModelRefData[]
   }
   lanes: LanesPrefsData
+  contextAlert: ContextAlertSettingsData
 }
 
 type AppSettingsInputData = Omit<
@@ -2485,6 +2493,7 @@ type AppSettingsInputData = Omit<
   | 'piModelVisibility'
   | 'favoriteModels'
   | 'lanes'
+  | 'contextAlert'
 > & {
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
@@ -2501,6 +2510,7 @@ type AppSettingsInputData = Omit<
     items: FavoriteModelRefData[]
   }
   lanes?: LanesPrefsData
+  contextAlert?: ContextAlertSettingsData
 }
 
 type LocalModelTunnelStateData =
