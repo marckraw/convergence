@@ -7,8 +7,10 @@ import type {
 import { Button } from '@/shared/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { useAppSettingsStore } from '@/entities/app-settings'
+import { useContextDrillStore } from '@/entities/context-drill'
 import { cn } from '@/shared/lib/cn.pure'
 import { resolveContextCompactionAction } from './context-compaction.pure'
+import { resolveContextDrillAction } from './context-drill-action.pure'
 import {
   describeContextAlert,
   getContextTone,
@@ -77,6 +79,36 @@ export function ContextWindowDot({
     hasPendingQueuedInput,
   })
 
+  const drillDescription = useContextDrillStore(
+    (s) => s.descriptions[session.id],
+  )
+  const drillBeat = useContextDrillStore((s) => s.beats[session.id]) ?? null
+  const refreshDrill = useContextDrillStore((s) => s.refresh)
+  const drill = resolveContextDrillAction(drillDescription, drillBeat)
+  const [cancelRefusal, setCancelRefusal] = useState<string | null>(null)
+
+  /**
+   * Re-ask the backend whenever something it would answer differently about
+   * has moved: the conversation itself, its turn, what it is waiting for, and
+   * whether a send is queued behind it.
+   *
+   * Every one of those is a value this component already re-renders on, which
+   * is the whole reason there is no interval here. A beat starting or ending
+   * arrives separately, on `contextDrill:changed`, and the ending re-asks on
+   * its own (the store's `handleChange`) -- so the two halves of "is it
+   * offered" are both pushed, and nothing is polled.
+   */
+  useEffect(() => {
+    void refreshDrill(session.id)
+  }, [
+    refreshDrill,
+    session.id,
+    session.status,
+    session.attention,
+    session.activity,
+    hasPendingQueuedInput,
+  ])
+
   const clearCloseTimer = useCallback(() => {
     if (closeTimerRef.current === null) return
     window.clearTimeout(closeTimerRef.current)
@@ -97,7 +129,10 @@ export function ContextWindowDot({
   }, [clearCloseTimer])
 
   useEffect(() => clearCloseTimer, [clearCloseTimer])
-  useEffect(() => setActionMessage(null), [session.id])
+  useEffect(() => {
+    setActionMessage(null)
+    setCancelRefusal(null)
+  }, [session.id])
 
   const compact = useCallback(async () => {
     clearCloseTimer()
@@ -115,6 +150,28 @@ export function ContextWindowDot({
       setIsCompacting(false)
     }
   }, [clearCloseTimer, onCompact])
+
+  /**
+   * Started, not awaited.
+   *
+   * The routine takes minutes and this popover closes when the pointer
+   * leaves it, so there is nothing here to await into. The store owns the
+   * promise and records the ending; what this component shows next is the
+   * beat, which arrives on `contextDrill:changed`.
+   */
+  const runDrill = useCallback(() => {
+    clearCloseTimer()
+    setCancelRefusal(null)
+    void useContextDrillStore.getState().run(session.id)
+  }, [clearCloseTimer, session.id])
+
+  const cancelDrill = useCallback(() => {
+    clearCloseTimer()
+    void useContextDrillStore
+      .getState()
+      .cancel(session.id)
+      .then(setCancelRefusal)
+  }, [clearCloseTimer, session.id])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -219,7 +276,9 @@ export function ContextWindowDot({
               type="button"
               size="sm"
               className="w-full"
-              disabled={!compaction.enabled || isCompacting}
+              disabled={
+                !compaction.enabled || isCompacting || drillBeat !== null
+              }
               onClick={(event) => {
                 event.preventDefault()
                 event.stopPropagation()
@@ -251,6 +310,55 @@ export function ContextWindowDot({
                 )}
               >
                 {actionMessage.text}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {drill.visible ? (
+          <div className="space-y-2 border-t border-border/70 pt-3">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="w-full"
+              disabled={!drill.enabled}
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                runDrill()
+              }}
+            >
+              {drill.label}
+            </Button>
+            {drill.cancel.visible ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="w-full"
+                disabled={!drill.cancel.enabled}
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  cancelDrill()
+                }}
+              >
+                Cancel
+              </Button>
+            ) : null}
+            {drill.cancel.visible && drill.cancel.reason ? (
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                {drill.cancel.reason}
+              </p>
+            ) : !drill.enabled && drill.reason ? (
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                {drill.reason}
+              </p>
+            ) : null}
+            {cancelRefusal ? (
+              <p className="text-[11px] leading-relaxed text-destructive">
+                {cancelRefusal}
               </p>
             ) : null}
           </div>

@@ -27,6 +27,24 @@ export interface DrillChange {
 
 /** What the surface needs to decide whether to offer the drill at all (R6). */
 export interface DrillDescription {
+  /**
+   * Whether this conversation is the KIND that can ever run the drill: a
+   * crew's mastermind seat (MAR-3256 R1).
+   *
+   * Separate from `offered` because the two answer different questions and
+   * the surface needs both. `offered` is "can it start right now", which
+   * flickers false all day long -- mid-turn, awaiting an approval, queued
+   * input pending -- and a control that vanished every time a turn ran would
+   * be a control nobody trusts. `eligible` is the stable half: false means
+   * the control is not this conversation's business at all and is never
+   * drawn; true with `offered: false` means drawn, disabled, and saying why.
+   *
+   * It exists as a field rather than being inferred from `reason` because the
+   * alternative is a renderer matching on an English sentence, and a sentence
+   * is copy: the day somebody rewords the refusal, a string comparison starts
+   * silently answering the wrong question.
+   */
+  eligible: boolean
   /** A mastermind seat AND a conversation that could be compacted now. */
   offered: boolean
   /** Why it is not offered, or null when it is. */

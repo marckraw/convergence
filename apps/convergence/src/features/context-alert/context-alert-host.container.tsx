@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { useAppSettingsStore } from '@/entities/app-settings'
+import { contextDrillApi, useContextDrillStore } from '@/entities/context-drill'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import {
   formatTokenCap,
@@ -53,22 +54,52 @@ export function ContextAlertHostContainer({
       globalSessions,
       contextAlert,
     )
+    // Committed BEFORE anything below can wait (MAR-3256 R5). The telling now
+    // asks the backend whether the drill is available, and a store update
+    // landing inside that await re-runs this effect: if the crossing map were
+    // committed after the wait, the second pass would still see the crossing
+    // as untold and raise a second toast for one crossing. The commit is what
+    // makes "once per crossing" true, so it happens first and unconditionally.
     crossingsRef.current = state
+    if (toTell.length === 0) return
 
-    for (const crossing of toTell) {
-      const { session, usedPercentage, by } = crossing
-      toast(`Context at ${usedPercentage} % — ${session.name}`, {
-        description: `${describeLimit(by, contextAlert)} · time to seal and compact`,
-        ...(onFocusSession
-          ? {
-              action: {
-                label: 'Open',
-                onClick: () => onFocusSession(session),
-              },
-            }
-          : {}),
-      })
-    }
+    void (async () => {
+      for (const crossing of toTell) {
+        const { session, usedPercentage, by } = crossing
+        // A refusal, a provider with no drill, or a main process that cannot
+        // answer all come out the same way: today's toast, with no second
+        // button. The alert is the point; the drill is an offer on top of it,
+        // and an offer that cannot be checked is simply not made.
+        let offered: boolean
+        try {
+          offered = (await contextDrillApi.describe(session.id)).offered
+        } catch {
+          offered = false
+        }
+
+        toast(`Context at ${usedPercentage} % — ${session.name}`, {
+          description: `${describeLimit(by, contextAlert)} · time to seal and compact`,
+          ...(onFocusSession
+            ? {
+                action: {
+                  label: 'Open',
+                  onClick: () => onFocusSession(session),
+                },
+              }
+            : {}),
+          ...(offered
+            ? {
+                cancel: {
+                  label: 'Run the drill',
+                  onClick: () => {
+                    void useContextDrillStore.getState().run(session.id)
+                  },
+                },
+              }
+            : {}),
+        })
+      }
+    })()
   }, [globalSessions, contextAlert, onFocusSession])
 
   return null

@@ -74,6 +74,7 @@ describe('contextDrill:describe (MAR-3255 R6)', () => {
   it('does not offer the drill on a seat that is not a mastermind', () => {
     sessions.mastermind = false
     expect(invoke('contextDrill:describe', 's')).toMatchObject({
+      eligible: false,
       offered: false,
       beat: null,
     })
@@ -82,6 +83,7 @@ describe('contextDrill:describe (MAR-3255 R6)', () => {
   it('does not offer the drill on a conversation that cannot compact', () => {
     sessions.readiness = { ready: false, reason: 'Wait for the pending send' }
     expect(invoke('contextDrill:describe', 's')).toEqual({
+      eligible: true,
       offered: false,
       reason: 'Wait for the pending send',
       beat: null,
@@ -90,6 +92,7 @@ describe('contextDrill:describe (MAR-3255 R6)', () => {
 
   it('offers the drill on a ready mastermind conversation', () => {
     expect(invoke('contextDrill:describe', 's')).toEqual({
+      eligible: true,
       offered: true,
       reason: null,
       beat: null,

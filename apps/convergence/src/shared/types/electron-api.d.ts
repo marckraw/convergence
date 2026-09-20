@@ -1674,6 +1674,9 @@ export type ContextDrillOutcomeData =
   | { ok: false; beat: ContextDrillBeatData; reason: string }
 
 export interface ContextDrillDescriptionData {
+  /** A crew's mastermind seat: the kind of conversation the drill is for. */
+  eligible: boolean
+  /** Eligible AND able to start right now (MAR-3256 R1). */
   offered: boolean
   reason: string | null
   beat: ContextDrillBeatData | null
