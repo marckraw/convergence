@@ -121,6 +121,18 @@ interface AttentionRequestRow extends AttentionRequestRowLike {
   session_id: string
 }
 
+/**
+ * What a send door is allowed to walk past (MAR-3255 R2).
+ *
+ * Separate from `SendMessageInput` on purpose: this is not a property of the
+ * message, it is a statement about WHO is sending -- and the one caller that
+ * may say it is a method on this service, not anything a renderer can reach.
+ */
+interface DispatchDoorOptions {
+  /** Only `sendDrillBeat`. The drill's own beats run inside its own hold. */
+  passesQueueHold?: boolean
+}
+
 export interface SendMessageInput {
   text: string
   attachmentIds?: string[]
@@ -331,6 +343,23 @@ export class SessionService {
   private quitting = false
   private readonly retainingStoppedInputs = new Set<string>()
   private readonly compactingSessions = new Set<string>()
+  /**
+   * Conversations whose queue is being held open by a routine (MAR-3255 R2).
+   *
+   * A second reason for the same door compaction already uses, and
+   * deliberately a SEPARATE set: a hold lasts across three beats -- a turn,
+   * a compaction, another turn -- and during the middle one the session is
+   * compacting too. One set could not say which of the two is over.
+   *
+   * In memory only, and it fails OPEN: if the app quits mid-drill the hold is
+   * gone on the next start while the rows it was holding are still `queued`.
+   * Nothing drains them at boot -- `recoverDispatching` only rewrites rows
+   * caught `dispatching` -- so they wait exactly as any queued row that
+   * outlived a quit does, and the next drain on that session delivers them:
+   * its next settle, or the next message sent into it. The other direction
+   * would be a hold nobody can lift.
+   */
+  private readonly heldSessions = new Set<string>()
   private readonly pendingAccountHandoffs = new Set<string>()
   /**
    * True only while the constructor heals running/answered sessions left by
@@ -2049,8 +2078,10 @@ export class SessionService {
     sessionId: string,
     input: SendMessageInput,
     dispatch: (inFlight: SessionDispatch) => Promise<T>,
+    options: DispatchDoorOptions = {},
   ): Promise<T> {
     this.assertNotCompacting(sessionId)
+    if (!options.passesQueueHold) this.assertQueueNotHeld(sessionId)
     this.assertNoPendingAccountHandoff(sessionId)
     const handoffSession = this.getById(sessionId)
     const queuesFollowUp =
@@ -2247,9 +2278,49 @@ export class SessionService {
 
   /** Returns the input's dispatch id -- the delivery receipt (MAR-2759). */
   async sendMessage(id: string, input: SendMessageInput): Promise<string> {
+    return this.deliverSendMessage(id, input, {})
+  }
+
+  /**
+   * One beat of the context drill, and the only send that passes a queue hold
+   * (MAR-3255 R2).
+   *
+   * The hold exists to keep everybody ELSE out of this conversation while the
+   * routine seals it, compacts it and wakes it again -- so the routine's own
+   * two messages need a door of their own. A method rather than a flag on
+   * `SendMessageInput`: the bypass must not be something any caller can ask
+   * for by setting a property, and the two beats never carry attachments, a
+   * delivery mode or an account of their own.
+   *
+   * Always quiet and always uninjected. Quiet because a sealing reply ENDS in
+   * a `BATON:` line by convention and a wire firing on it would dispatch a
+   * lap nobody asked for; uninjected because the project-context block would
+   * be prepended to a message whose exact four words the agent's protocol
+   * answers to.
+   *
+   * It does NOT pass a compaction: `assertNotCompacting` still refuses here,
+   * because a beat sent into a context being rewritten is the failure the
+   * compaction door exists for, drill or not.
+   */
+  async sendDrillBeat(id: string, text: string): Promise<string> {
+    return this.deliverSendMessage(
+      id,
+      { text, muteRelays: true, skipContextInjection: true },
+      { passesQueueHold: true },
+    )
+  }
+
+  private async deliverSendMessage(
+    id: string,
+    input: SendMessageInput,
+    options: DispatchDoorOptions,
+  ): Promise<string> {
     const dispatchId = randomUUID()
-    const receipt = await this.withDispatchInFlight(id, input, () =>
-      this.deliverMessage(id, input, dispatchId),
+    const receipt = await this.withDispatchInFlight(
+      id,
+      input,
+      () => this.deliverMessage(id, input, dispatchId),
+      options,
     )
     if (receipt)
       this.recordAcceptedTurn(id, dispatchId, 'the turn publication', () =>
@@ -2519,7 +2590,12 @@ export class SessionService {
     // releases the handle before it starts, so a compacting session reads as
     // carrying no turn, and the `else` would send the opener straight into a
     // conversation whose context is being rewritten underneath it.
-    if (this.compactingSessions.has(id)) {
+    //
+    // A HELD queue waits here for the same reason (MAR-3255 R2): the drill
+    // is a compaction with two turns strapped to it, and the opener that
+    // arrives mid-routine is owed the same wait rather than a thrown-away
+    // delivery.
+    if (this.compactingSessions.has(id) || this.heldSessions.has(id)) {
       openerDispatchId = queueOpener()
       waitingOn = 'compaction'
     } else if (this.isCarryingATurn(session)) {
@@ -2655,11 +2731,53 @@ export class SessionService {
     }
   }
 
-  async compactContext(
+  /**
+   * Whether this conversation could be compacted right now, and in the words
+   * it would be refused with (MAR-3255 R3).
+   *
+   * The SAME guards `compactContext` runs, because it is the same method: a
+   * second reading of the same questions would drift, and the party that asks
+   * this one -- the context drill, before it spends a turn asking an agent to
+   * seal its memory -- must never be told yes by a reader the compaction
+   * itself would then refuse.
+   *
+   * It does not ask whether a compaction is already in flight. That question
+   * is `compactContext`'s own first line and stays there, so extracting these
+   * guards could not reorder which of two refusals a session is told.
+   */
+  describeCompactionReadiness(
     id: string,
-    instructions?: string,
-  ): Promise<ProviderContextManagementResult> {
-    this.assertNotCompacting(id)
+  ): { ready: true } | { ready: false; reason: string } {
+    try {
+      this.assertCompactionReady(id)
+      return { ready: true }
+    } catch (error) {
+      return {
+        ready: false,
+        reason: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  /**
+   * Every question asked before a compaction is allowed to mark the session,
+   * in one place (MAR-3255 R3), returning what it had to read to ask them.
+   *
+   * Order is the contract: a session that fails two of these is told about
+   * the first, and both callers have to hear the same one.
+   */
+  private assertCompactionReady(id: string): {
+    session: Session
+    continuationToken: string
+    execution: { host: ProviderExecutionHost; providerId: string }
+    /**
+     * The host's own `manageContext`, bound to it. Handed back rather than
+     * re-read at the call site because the guard below is what proves it is
+     * there, and a caller re-reading the optional property would need an
+     * assertion this method has already earned.
+     */
+    manageContext: NonNullable<ProviderExecutionHost['manageContext']>
+  } {
     if (this.dispatches.isDispatching(id)) {
       throw new Error('Wait for the pending send before compacting context')
     }
@@ -2703,9 +2821,19 @@ export class SessionService {
         'Resolve the pending provider request before compacting context',
       )
     }
+    // A row WAITING is what a hold is for (MAR-3255 R2). The drill holds this
+    // queue precisely so the horses' returns pile up behind the three beats,
+    // and then compacts -- so `queued` cannot be a refusal inside a hold or
+    // the routine would refuse itself the moment anyone answered it. A row
+    // mid-flight to the provider still refuses, held or not: that one is a
+    // turn arriving, not a message waiting.
+    //
+    // Unheld, both operands stand exactly as they always have.
+    const held = this.heldSessions.has(id)
     if (
       this.getQueuedInputs(id).some(
-        (item) => item.state === 'queued' || item.state === 'dispatching',
+        (item) =>
+          (!held && item.state === 'queued') || item.state === 'dispatching',
       )
     ) {
       throw new Error('Send or cancel queued input before compacting context')
@@ -2717,14 +2845,27 @@ export class SessionService {
     }
     const execution = this.resolveExecution(session)
     const capability = execution.host.capabilitiesFor(execution.providerId)
-    if (
-      !capability?.supportsContextManagement ||
-      !execution.host.manageContext
-    ) {
+    const manageContext = execution.host.manageContext
+    if (!capability?.supportsContextManagement || !manageContext) {
       throw new Error(
         `${session.providerId} does not support manual context compaction`,
       )
     }
+    return {
+      session,
+      continuationToken,
+      execution,
+      manageContext: manageContext.bind(execution.host),
+    }
+  }
+
+  async compactContext(
+    id: string,
+    instructions?: string,
+  ): Promise<ProviderContextManagementResult> {
+    this.assertNotCompacting(id)
+    const { session, continuationToken, execution, manageContext } =
+      this.assertCompactionReady(id)
 
     this.compactingSessions.add(id)
     try {
@@ -2750,7 +2891,7 @@ export class SessionService {
       // above proved no turn is under way, and the next message respawns
       // with `--resume`, which reads what compaction left behind.
       await this.releaseHandle(id)
-      const result = await execution.host.manageContext(
+      const result = await manageContext(
         execution.providerId,
         {
           sessionId: session.id,
@@ -2911,6 +3052,107 @@ export class SessionService {
       throw new SessionCompactingError(
         'This conversation is compacting. Wait for it to finish before sending another message.',
       )
+    }
+  }
+
+  /**
+   * The hold's door (MAR-3255 R2), and deliberately not part of
+   * `assertNotCompacting`.
+   *
+   * `compactContext` runs that assertion as its own first line, so a hold
+   * folded into it would make the drill refuse the very compaction it is
+   * holding the queue for. This one is asked by the two SEND doors only.
+   *
+   * The same class and the same sentence as a compaction, because it is the
+   * same answer: not now, ask again in a moment. That is what lets
+   * `deliverRelayMessage` queue a horse's return with `waitingOn:
+   * 'compaction'` instead of recording an error and hailing a chair -- the
+   * drill is a minute of compaction wearing two extra turns, and the wait it
+   * asks for is the wait the queue already knows how to serve.
+   */
+  private assertQueueNotHeld(sessionId: string): void {
+    if (this.heldSessions.has(sessionId)) {
+      throw new SessionCompactingError(
+        'This conversation is compacting. Wait for it to finish before sending another message.',
+      )
+    }
+  }
+
+  /**
+   * Holds this conversation's queue open for a routine (MAR-3255 R2).
+   *
+   * Arrivals queue and the drain refuses for as long as it is held. Idempotent:
+   * the routine that took it is the routine that releases it.
+   */
+  holdQueue(sessionId: string): void {
+    this.heldSessions.add(sessionId)
+  }
+
+  /**
+   * Writes the drill's one transcript note (MAR-3255 R5).
+   *
+   * Narrow by design: `addConversationItem` is private and stays private, so
+   * the routine cannot invent an item shape -- it hands over a sentence and
+   * this decides everything else. A warning, because the drill stopping is
+   * something the person who pressed the button has to see in the place they
+   * are already looking; silent on a session that no longer exists, because a
+   * note about a deleted conversation has nobody to tell.
+   */
+  addContextDrillNote(sessionId: string, text: string): void {
+    const session = this.getById(sessionId)
+    if (!session) return
+    const at = new Date().toISOString()
+    const note = this.addConversationItem(sessionId, {
+      id: randomUUID(),
+      turnId: null,
+      kind: 'note',
+      state: 'complete',
+      level: 'warning',
+      text,
+      createdAt: at,
+      updatedAt: at,
+      providerMeta: {
+        providerId: session.providerId,
+        providerItemId: null,
+        providerEventType: 'context-drill',
+      },
+    })
+    this.notifySessionChange(
+      sessionId,
+      note ? { sessionId, op: 'add', item: note } : undefined,
+    )
+  }
+
+  isQueueHeld(sessionId: string): boolean {
+    return this.heldSessions.has(sessionId)
+  }
+
+  /**
+   * Lifts the hold and delivers what waited (MAR-3255 R2).
+   *
+   * The delete comes FIRST and the drain second, for the reason
+   * `compactContext`'s `finally` spells out: the other order is a deadlock
+   * dressed as a retry, because `dispatchNextQueuedInput` would meet a
+   * session still marked held, refuse at its own door, and nothing would ever
+   * drain the row again.
+   *
+   * A no-op when nothing is held, so every exit of a routine can call it
+   * without asking -- including the exits that never reached the hold.
+   */
+  releaseQueue(sessionId: string): void {
+    if (!this.heldSessions.delete(sessionId)) return
+    // The same guard the compaction drain uses, and the session is re-read
+    // for it: the routine held this queue across a compaction and two turns,
+    // so nothing read before them is still true.
+    const settled = this.getById(sessionId)
+    if (
+      settled &&
+      settled.status !== 'running' &&
+      !this.dispatches.isDispatching(sessionId)
+    ) {
+      void this.dispatchNextQueuedInput(sessionId).catch((error) => {
+        console.error('[session] Could not dispatch queued input', error)
+      })
     }
   }
 
@@ -4554,7 +4796,16 @@ export class SessionService {
     // would still be a state the queue has to unwind, and the row is not
     // failing -- it is waiting, and the drain in `compactContext`'s `finally`
     // (which runs AFTER the compacting mark is deleted) delivers it.
-    if (this.compactingSessions.has(sessionId)) return
+    //
+    // A held queue is the second reason, and it reaches this door the same
+    // way (MAR-3255 R2): a routine is mid-drill, and every row that arrived
+    // while it runs is waiting for `releaseQueue` to send it -- which is the
+    // drain that does deliver them.
+    if (
+      this.compactingSessions.has(sessionId) ||
+      this.heldSessions.has(sessionId)
+    )
+      return
     const item = this.queuedInputs.nextQueued(sessionId)
     if (!item) return
 

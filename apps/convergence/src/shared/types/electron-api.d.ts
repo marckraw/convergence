@@ -1666,6 +1666,25 @@ interface AnalyticsOverviewData {
   generatedProfile: GeneratedWorkProfileSnapshotData | null
 }
 
+/** The drill's three beats, mirrored for the renderer (MAR-3255). */
+export type ContextDrillBeatData = 'sealing' | 'compacting' | 'resuming'
+
+export type ContextDrillOutcomeData =
+  | { ok: true }
+  | { ok: false; beat: ContextDrillBeatData; reason: string }
+
+export interface ContextDrillDescriptionData {
+  offered: boolean
+  reason: string | null
+  beat: ContextDrillBeatData | null
+}
+
+export interface ContextDrillChangeData {
+  sessionId: string
+  beat: ContextDrillBeatData | null
+  reason?: string
+}
+
 interface ElectronAPI {
   system: {
     getInfo: () => SystemInfo

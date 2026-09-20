@@ -128,6 +128,11 @@ import {
   broadcastCrews,
   registerCrewIpcHandlers,
 } from '../backend/crew/crew.ipc'
+import { ContextDrillService } from '../backend/context-drill/context-drill.service'
+import {
+  broadcastContextDrillChange,
+  registerContextDrillIpcHandlers,
+} from '../backend/context-drill/context-drill.ipc'
 import { RelayService } from '../backend/relay/relay.service'
 import { RelayEngine } from '../backend/relay/relay.engine'
 import { CrewHailService } from '../backend/relay/crew-hail.service'
@@ -877,6 +882,40 @@ async function startApp(): Promise<void> {
   sessionService.onDispatchRedelivered((event) => {
     relayEngine.handleDispatchRedelivered(event)
   })
+  // The context drill (MAR-3255): seal, compact, resurrect, with the queue
+  // held shut around all three. Built after the crew service because the
+  // routine only runs on a MASTERMIND seat, and that is a question only the
+  // crew can answer -- passed as a function rather than as the service, so
+  // the drill can see exactly one fact about a crew and no more.
+  const contextDrill = new ContextDrillService({
+    sessions: {
+      isMastermindSeat: (sessionId) =>
+        crewService
+          .crewIdsForSession(sessionId)
+          .some(
+            (crewId) =>
+              crewService
+                .getById(crewId)
+                ?.members.find((member) => member.sessionId === sessionId)
+                ?.role === 'mastermind',
+          ),
+      describeCompactionReadiness: (sessionId) =>
+        sessionService.describeCompactionReadiness(sessionId),
+      onSessionSettled: (listener) => sessionService.onSessionSettled(listener),
+      holdQueue: (sessionId) => sessionService.holdQueue(sessionId),
+      releaseQueue: (sessionId) => sessionService.releaseQueue(sessionId),
+      sendDrillBeat: (sessionId, text) =>
+        sessionService.sendDrillBeat(sessionId, text),
+      getLastAssistantMessageText: (sessionId) =>
+        sessionService.getLastAssistantMessageText(sessionId),
+      compactContext: (sessionId) => sessionService.compactContext(sessionId),
+      addContextDrillNote: (sessionId, text) =>
+        sessionService.addContextDrillNote(sessionId, text),
+    },
+  })
+  contextDrill.onDrillChanged(broadcastContextDrillChange)
+  registerContextDrillIpcHandlers({ service: contextDrill })
+
   // The stall hail's clock. A station that hangs produces no settle, so the
   // one event that would notice never arrives -- the check has to be driven by
   // time or not at all. Its own module so the timer is testable rather than an
