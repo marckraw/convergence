@@ -1,5 +1,15 @@
 # convergence
 
+## 0.79.0
+
+### Minor Changes
+
+- ddada73: A context alert: set a threshold in percent and in tokens — the context dot turns amber and a toast tells you when a turn ends above it.
+
+### Patch Changes
+
+- d603463: A relay message that arrives while a conversation is compacting now waits and is delivered afterwards instead of failing.
+
 ## 0.78.1
 
 ### Patch Changes
