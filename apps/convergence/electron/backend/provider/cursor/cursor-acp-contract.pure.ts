@@ -70,6 +70,7 @@ export function formatCursorAcpSilenceBudgetNote(
 export const CURSOR_ACP_SESSION_UPDATES = [
   'agent_message_chunk',
   'agent_thought_chunk',
+  'user_message_chunk',
   'tool_call',
   'tool_call_update',
   'available_commands_update',
@@ -203,6 +204,7 @@ export type CursorAcpMessageKind =
   | 'session-info-update'
   | 'current-mode-update'
   | 'current-model-update'
+  | 'user-message-chunk'
   | 'unknown'
 
 export function parseCursorAcpModelId(id: string): CursorAcpModelIdParts {
@@ -532,6 +534,8 @@ export function classifyCursorAcpSessionUpdate(
       return 'current-mode-update'
     case 'current_model_update':
       return 'current-model-update'
+    case 'user_message_chunk':
+      return 'user-message-chunk'
     default:
       return 'unknown'
   }

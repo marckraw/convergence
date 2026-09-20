@@ -24,7 +24,7 @@ describe('cursor ACP recorded fixture vs contract', () => {
       (kind) => !appKinds.has(kind),
     )
 
-    expect(gap).toEqual(['user_message_chunk'])
+    expect(gap).toEqual([])
   })
 
   it('matches the initialize protocolVersion the app sends', () => {
