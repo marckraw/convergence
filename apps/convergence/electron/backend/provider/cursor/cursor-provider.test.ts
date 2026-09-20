@@ -178,7 +178,10 @@ afterEach(() => {
 })
 
 describe('CursorProvider', () => {
-  it('does not expose manageContext while compaction rides a one-off client (lap 2, C)', () => {
+  // Probe 2 (MAR-3239) measured it: `/compress` is not one of the CLI's 86
+  // commands — the CLI forwards it as plain text and the model improvises a
+  // summary. There is nothing for a manageContext here to call (MAR-3153).
+  it("does not expose manageContext — Cursor's CLI has no compaction command (MAR-3239)", () => {
     const provider = new CursorProvider('agent')
     expect('manageContext' in provider).toBe(false)
     expect(

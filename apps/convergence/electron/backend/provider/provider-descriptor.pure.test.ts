@@ -237,6 +237,24 @@ describe('provider-descriptor', () => {
     )
   })
 
+  // The renderer shows this exact string as the disabled Compact control's
+  // reason (src/features/composer/context-compaction.pure.ts), so this reads
+  // the descriptor a session is built from, not the module constant beside it.
+  it('tells a Cursor conversation that compaction does not exist rather than promising its return (MAR-3153)', () => {
+    const compact = buildFallbackCursorDescriptor().contextManagement?.compact
+
+    expect(compact).toEqual({
+      availability: 'unavailable',
+      method: 'unsupported',
+      supportsInstructions: false,
+      notes:
+        "Cursor's CLI has no compaction command, so Convergence cannot compact a Cursor conversation. Use /clear to start fresh when the context is full.",
+    })
+    // A promise of a comeback is the defect this pins, in any wording.
+    expect(compact?.notes).not.toMatch(/temporarily/i)
+    expect(compact?.notes).not.toMatch(/follow-up/i)
+  })
+
   it('exposes pi-compatible effort options on the pi fallback descriptor', () => {
     const descriptor = buildFallbackPiDescriptor()
     const effortIds = descriptor.modelOptions[0]?.effortOptions.map(
