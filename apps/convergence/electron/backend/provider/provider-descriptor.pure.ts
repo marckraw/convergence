@@ -116,14 +116,18 @@ export const PI_CONTEXT_MANAGEMENT_CAPABILITY: ProviderContextManagementCapabili
 export const CURSOR_CONTEXT_MANAGEMENT_CAPABILITY: ProviderContextManagementCapability =
   {
     compact: {
-      // Off while the session keeps a resident ACP process: the one-off
-      // `/compress` client would race it. MAR-3153 brings compaction back
-      // through the live RPC (MAR-3142 lap 2, C).
+      // Not "off for now": Cursor's CLI has no compaction command at all.
+      // Probe 2 (MAR-3239) read the CLI's full 86-command catalog and
+      // `/compress` is absent from it; sent as a prompt it round-trips as
+      // ordinary text and the model improvises a prose summary, which
+      // compacts nothing (docs/architecture/cursor-acp-surface.md, Probe 2).
+      // So there is no live RPC to route this through, and the note below
+      // must promise no comeback (MAR-3153).
       availability: 'unavailable',
       method: 'unsupported',
       supportsInstructions: false,
       notes:
-        'Manual context compaction is temporarily unavailable for Cursor while the conversation keeps its process across turns. It returns through the resident session in a follow-up.',
+        "Cursor's CLI has no compaction command, so Convergence cannot compact a Cursor conversation. Use /clear to start fresh when the context is full.",
     },
   }
 
