@@ -15,6 +15,11 @@ import {
   mapCursorApprovalToAcpOptionId,
   redactCursorAcpPayload,
 } from './cursor-acp-contract.pure'
+import {
+  getCursorTodoUpdateChangedIds,
+  renderCursorTodoNote,
+  type CursorAcpTodo,
+} from './cursor-acp-todos.pure'
 
 type UnknownRecord = Record<string, unknown>
 
@@ -468,17 +473,27 @@ export function buildCursorAcpInteractionResponse(
 export function buildCursorAcpPassiveUpdateNote(
   method: string,
   params: unknown,
+  currentTodos?: readonly CursorAcpTodo[],
+  previousTodos?: readonly CursorAcpTodo[],
 ): CursorAcpPassiveUpdateNote | null {
   if (method === 'cursor/update_todos') {
     if (!isRecord(params)) return null
+    if (currentTodos) {
+      const changedIds = getCursorTodoUpdateChangedIds(
+        params,
+        previousTodos ?? [],
+      )
+      const text = renderCursorTodoNote(currentTodos, changedIds)
+      return {
+        text,
+        level: 'info',
+        providerItemId: readStringField(params, 'toolCallId'),
+      }
+    }
+    // One-shot path: render the incoming todos without session state.
     const todosText = formatCursorTodos(readField(params, 'todos'), 'Todos')
-    const merge = readField(params, 'merge')
     return {
-      text: buildCursorAcpDescription([
-        'Cursor todos updated',
-        typeof merge === 'boolean' ? `Merge: ${merge ? 'yes' : 'no'}` : null,
-        todosText,
-      ]),
+      text: buildCursorAcpDescription(['Cursor todos updated', todosText]),
       level: 'info',
       providerItemId: readStringField(params, 'toolCallId'),
     }

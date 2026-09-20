@@ -78,6 +78,11 @@ import {
   type CursorAcpPermissionRequest,
 } from './cursor-acp-message.pure'
 import {
+  applyCursorTodoUpdate,
+  type CursorAcpTodo,
+  type CursorAcpTodoUpdateParams,
+} from './cursor-acp-todos.pure'
+import {
   CursorAcpJsonRpcClient,
   CursorAcpSilenceBudgetError,
   type CursorAcpJsonRpcId,
@@ -562,9 +567,12 @@ export class CursorProvider implements Provider {
      * session is replaced so a respawn or `/clear` starts empty.
      */
     let liveCommandCatalogPayload: unknown | null = null
+    let liveTodos: CursorAcpTodo[] = []
 
-    function clearLiveCommandCatalog(): void {
+    /** Resets everything the live session remembers: catalog and todos (MAR-3241 R3). */
+    function clearLiveSessionState(): void {
       liveCommandCatalogPayload = null
+      liveTodos = []
     }
 
     function armReadyGate(): void {
@@ -690,6 +698,46 @@ export class CursorProvider implements Provider {
     function recordFailedTurnState(): void {
       recordTeardown('the failed status', () => setStatus('failed'))
       recordTeardown('the failed attention', () => setAttention('failed'))
+    }
+
+    /**
+     * One function the two passive-update sites share for `cursor/update_todos`
+     * (MAR-3241 R3 grounding override). Applies the reducer, renders the full
+     * list with changed items marked, records the note, and updates liveTodos.
+     */
+    function recordCursorTodoUpdate(
+      params: unknown,
+      rpcId?: CursorAcpJsonRpcId,
+    ): void {
+      const updatedTodos = applyCursorTodoUpdate(
+        liveTodos,
+        params as CursorAcpTodoUpdateParams,
+      )
+      const note = buildCursorAcpPassiveUpdateNote(
+        'cursor/update_todos',
+        params,
+        updatedTodos,
+        liveTodos,
+      )
+      liveTodos = updatedTodos
+      if (note) {
+        recordTurnWrite('the flushed assistant buffer', () =>
+          flushAssistantBuffer(),
+        )
+        recordTurnWrite('the flushed thinking buffer', () =>
+          flushThinkingBuffer(),
+        )
+        recordTurnWrite('the passive update note', () =>
+          sessionEmitter.addNote({
+            text: note.text,
+            level: note.level,
+            providerItemId:
+              note.providerItemId ??
+              (rpcId !== undefined ? String(rpcId) : null),
+            providerEventType: 'cursor/update_todos',
+          }),
+        )
+      }
     }
 
     function fireHeartbeat(): void {
@@ -1087,6 +1135,16 @@ export class CursorProvider implements Provider {
             providerEventType: method,
           })
         })
+        return
+      }
+
+      if (method === 'cursor/update_todos') {
+        // Answer first — R4: byte-for-byte acknowledgement before the note.
+        activeRpc.respond(
+          id,
+          buildCursorAcpPassiveUpdateAcknowledgement(method, params),
+        )
+        recordCursorTodoUpdate(params, id)
         return
       }
 
@@ -1529,7 +1587,7 @@ export class CursorProvider implements Provider {
     async function startNewSession(
       activeRpc: CursorAcpJsonRpcClient,
     ): Promise<void> {
-      clearLiveCommandCatalog()
+      clearLiveSessionState()
       const sessionResult = await activeRpc.request(
         'session/new',
         buildCursorAcpSessionParams(config.workingDirectory),
@@ -1672,7 +1730,7 @@ export class CursorProvider implements Provider {
     ): Promise<void> {
       if (stopped || child || rpc) return Promise.resolve()
       connecting = true
-      clearLiveCommandCatalog()
+      clearLiveSessionState()
 
       child = spawn(binaryPath, ['acp'], {
         cwd: config.workingDirectory,
@@ -1706,6 +1764,11 @@ export class CursorProvider implements Provider {
         if (stopped) return
         if (method === 'session/update') {
           handleSessionUpdate(params)
+          return
+        }
+
+        if (method === 'cursor/update_todos') {
+          recordCursorTodoUpdate(params)
           return
         }
 
@@ -1757,7 +1820,7 @@ export class CursorProvider implements Provider {
       child.once('exit', (code, signal) => {
         if (stopped) return
         resolveReady?.()
-        clearLiveCommandCatalog()
+        clearLiveSessionState()
         rpc?.destroy('Cursor ACP process exited')
         rpc = null
         child = null
@@ -1934,7 +1997,7 @@ export class CursorProvider implements Provider {
       promptStarting = false
       connecting = false
       interruptRequested = false
-      clearLiveCommandCatalog()
+      clearLiveSessionState()
       resolveReady?.()
       clearTimeout(startTimer)
       pendingApprovals.clear()

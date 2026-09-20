@@ -329,7 +329,7 @@ describe('cursor ACP message helpers', () => {
         ],
       }),
     ).toEqual({
-      text: 'Cursor todos updated\n\nMerge: yes\n\nTodos:\n[in_progress] Wire interaction answer path',
+      text: 'Cursor todos updated\n\nTodos:\n[in_progress] Wire interaction answer path',
       level: 'info',
       providerItemId: 'call-3',
     })

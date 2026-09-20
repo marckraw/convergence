@@ -754,7 +754,7 @@ describe('CursorProvider', () => {
 
     await waitFor(() => {
       const rendered = JSON.stringify(deltas)
-      expect(rendered).toContain('Cursor todos updated')
+      expect(rendered).toContain('Cursor todos')
       expect(rendered).toContain('Wire Cursor interactions')
       expect(rendered).toContain('cannot render it as a shared artifact yet')
       expect(rendered).toContain('cursor/generate_image')
