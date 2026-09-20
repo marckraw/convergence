@@ -2624,7 +2624,17 @@ export class SessionService {
         'Manual context management is not supported on remote execution hosts yet',
       )
     }
-    if (session.status !== 'completed' || this.activeHandles.has(id)) {
+    // The same question the reset door asks, and for the same reason
+    // (MAR-3243). This door used to ask whether a handle was ATTACHED, which
+    // is not "is the session busy": a resident handle -- Claude's is
+    // `resident: true` -- is not released when its turn completes, so for the
+    // whole of its idle window an idle Claude conversation read as busy and
+    // the compact button was refused on the provider that made compaction
+    // popular. `isTurnUnderWayOrArriving` covers the two cases that really
+    // are a turn: a dispatch on its way up, and a handle whose turn has not
+    // ended yet -- which still refuses `running`, and refuses `answered`
+    // until the real settle (MAR-2896).
+    if (this.isTurnUnderWayOrArriving(session)) {
       throw new Error('Context can only be compacted while the session is idle')
     }
     if (
@@ -2666,6 +2676,22 @@ export class SessionService {
         updatedAt: timestamp,
       })
       this.notifySessionChange(id)
+      // BEFORE the provider compacts, never after (MAR-3243 R2).
+      //
+      // Compaction runs in its own process -- Claude spawns
+      // `claude -p --resume <token> /compact` -- while an idle resident
+      // process still holds the same provider session. That process does not
+      // re-read the session transcript: its later turns are written straight
+      // to the stdin it already has (`claude-code-provider.ts`, where
+      // `--resume` is passed only on the spawn of a new child). So it would
+      // answer the next message from its own uncompacted memory and write
+      // that memory back over the compacted transcript -- the compaction
+      // would look like it happened and then quietly undo itself.
+      //
+      // Letting the idle handle go costs nothing the record needs: the door
+      // above proved no turn is under way, and the next message respawns
+      // with `--resume`, which reads what compaction left behind.
+      await this.releaseHandle(id)
       const result = await execution.host.manageContext(
         execution.providerId,
         {
