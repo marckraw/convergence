@@ -6,7 +6,7 @@
  * `probe-cursor-acp.mjs` starts a real `cursor-agent` at import time — which
  * would spend Marcin's Cursor plan from a test run. Everything here is a pure
  * function of its arguments: argument parsing, JSON-RPC message builders,
- * permission-option selection and redaction.
+ * permission-option selection, the permission path guard and redaction.
  *
  * Node builtins are deliberately not imported here. `redactPayload` takes the
  * home directory as an argument rather than calling `os.homedir()` so the
@@ -233,6 +233,245 @@ export function selectPermissionOptionId(options, permissionResponse) {
   }
 
   return { optionId: null, reason: 'first-allow:no-allow-option-offered' }
+}
+
+// --- permission guard (MAR-3246) ----------------------------------------------
+
+/**
+ * Folders this crew never reads. The fence lives on the answering side because
+ * the probe auto-approves whatever the PROBED model asks for: during MAR-3239
+ * probe 2 the model asked twice to list file names under `~/.cursor` and
+ * `~/.claude` and `--permission-response first-allow` approved both. A brief
+ * binds a horse; it does not bind the agent on the other end of the wire.
+ */
+const GUARDED_HOME_FOLDERS = ['.cursor', '.claude', '.codex', '.convergence']
+
+/** Dot-directories and rc files that carry credentials wherever they sit. */
+const GUARDED_SEGMENTS = ['.ssh', '.aws', '.npmrc', '.netrc']
+
+/** Matched anywhere in a string rather than as a whole path segment. */
+const GUARDED_SUBSTRINGS = [
+  { pattern: 'auth.json', needle: 'auth.json' },
+  { pattern: 'credentials', needle: 'credentials' },
+  { pattern: 'Keychain', needle: 'keychain' },
+  { pattern: 'security find-', needle: 'security find-' },
+]
+
+/** Everything a path segment may hold; anything else separates two segments. */
+const TOKEN_SEPARATOR = /[^a-z0-9._~$-]+/
+
+/** The verdict on a request the fence could not inspect. Never an allow. */
+const UNREADABLE_REQUEST = 'unreadable-request'
+
+/**
+ * The single decision behind every permission answer the probe sends.
+ *
+ * Deny by default, on either of two grounds:
+ *
+ * 1. **A match.** If any string anywhere in the request — the whole object,
+ *    keys and values, not only what sits under `toolCall` — names a private
+ *    folder or a secrets file, the answer is a reject. The search is that wide
+ *    because a path that lands one key to the side of the one we watch is
+ *    exactly as readable to the shell and exactly as private.
+ * 2. **An unreadable request.** If the request carries no `toolCall` object at
+ *    all, there is no tool call to weigh, and a fence denies what it cannot
+ *    read. It is refused as `unreadable-request` before `--permission-response`
+ *    is ever consulted. A future CLI that stops sending `toolCall` therefore
+ *    stalls the probe with refusals rather than silently approving everything.
+ *
+ * A refusal takes the offered `reject_once` option, or `cancelled` when none is
+ * offered, whatever `--permission-response` says. A match outranks
+ * unreadability: both refuse, and the matched pattern is the more useful thing
+ * to write into the transcript.
+ *
+ * `homeDir` is an argument, not `os.homedir()`, so this stays pure — and it is
+ * load-bearing: it is what turns an absolute `/Users/x/.claude/skills` back
+ * into the `~/.claude` the fence names.
+ *
+ * Returns `{ optionId, reason, guarded, toolTitle }`; `guarded` is the matched
+ * pattern or `unreadable-request`, and null only when the request passed.
+ */
+export function decidePermissionAnswer(
+  request,
+  permissionResponse,
+  options = {},
+) {
+  const homeDir =
+    typeof options.homeDir === 'string' && options.homeDir
+      ? options.homeDir
+      : null
+  const toolCall = readToolCall(request)
+  const offered = readPermissionOptions(request)
+  const toolTitle = readString(toolCall, 'title')
+  const guarded =
+    matchGuardedPattern(request, homeDir) ??
+    (toolCall ? null : UNREADABLE_REQUEST)
+
+  if (guarded) {
+    return {
+      optionId: selectRejectOptionId(offered),
+      reason: `guarded:${guarded}`,
+      guarded,
+      toolTitle,
+    }
+  }
+
+  const { optionId, reason } = selectPermissionOptionId(
+    offered,
+    permissionResponse,
+  )
+  return { optionId, reason, guarded: null, toolTitle }
+}
+
+/** The transcript's record that a request was refused, before redaction. */
+export function buildGuardTranscriptEntry(decision) {
+  const record = readRecord(decision)
+  return {
+    kind: 'guard',
+    pattern: record?.guarded ?? null,
+    toolTitle: record?.toolTitle ?? null,
+  }
+}
+
+/** How many answers the guard turned into refusals, for the printed summary. */
+export function countGuardedAnswers(permissionAnswers) {
+  const items = Array.isArray(permissionAnswers) ? permissionAnswers : []
+  return items.filter((item) => Boolean(readRecord(item)?.guarded)).length
+}
+
+/**
+ * The tool call, from either the `session/request_permission` params or the
+ * whole JSON-RPC message — or null, which `decidePermissionAnswer` reads as
+ * "unreadable" and refuses. Only a real object counts: a `toolCall` that
+ * arrived as a string carries no title and no fields to weigh, so it is null
+ * here rather than a shape we pretend to understand.
+ */
+function readToolCall(request) {
+  const record = readRecord(request)
+  if (!record) return null
+  return (
+    readRecord(record.toolCall) ??
+    readRecord(readRecord(record.params)?.toolCall)
+  )
+}
+
+function readPermissionOptions(request) {
+  const record = readRecord(request)
+  if (!record) return []
+  if (Array.isArray(record.options)) return record.options
+  const nested = readRecord(record.params)?.options
+  return Array.isArray(nested) ? nested : []
+}
+
+function selectRejectOptionId(options) {
+  const items = Array.isArray(options) ? options : []
+
+  for (const item of items) {
+    const record = readRecord(item)
+    const kind = readString(record, 'kind')
+    const id = readString(record, 'optionId')
+    if (id && kind && kind.toLowerCase() === 'reject_once') return id
+  }
+
+  for (const item of items) {
+    const id = readString(readRecord(item), 'optionId')
+    if (id && id.toLowerCase() === 'reject-once') return id
+  }
+
+  return null
+}
+
+/**
+ * The matched pattern, or null. Every string anywhere in the request is
+ * searched — the tool title, content text, `rawInput` at any depth, locations,
+ * the option labels, any sibling key, and the object keys themselves — because
+ * the command segments arrived in `content` on one probe, there is no field the
+ * next CLI version has to keep using, and a private path one key to the side of
+ * `toolCall` is no less private.
+ */
+function matchGuardedPattern(request, homeDir) {
+  const strings = []
+  collectStrings(request, strings, new WeakSet())
+  const prepared = strings.map((text) => {
+    const normalized = normalizeForMatch(text, homeDir)
+    return {
+      normalized,
+      tokens: normalized.split(TOKEN_SEPARATOR).filter(Boolean),
+    }
+  })
+
+  for (const folder of GUARDED_HOME_FOLDERS) {
+    if (prepared.some(({ tokens }) => hasHomeRootedSegment(tokens, folder))) {
+      return `~/${folder}`
+    }
+  }
+
+  for (const folder of GUARDED_HOME_FOLDERS) {
+    if (prepared.some(({ tokens }) => tokens.includes(folder))) return folder
+  }
+
+  if (prepared.some(({ tokens }) => tokens.some(isDotEnvSegment))) return '.env'
+
+  for (const segment of GUARDED_SEGMENTS) {
+    if (prepared.some(({ tokens }) => tokens.includes(segment))) return segment
+  }
+
+  for (const { pattern, needle } of GUARDED_SUBSTRINGS) {
+    if (prepared.some(({ normalized }) => normalized.includes(needle))) {
+      return pattern
+    }
+  }
+
+  return null
+}
+
+function collectStrings(value, output, seen) {
+  if (typeof value === 'string') {
+    output.push(value)
+    return
+  }
+  if (!value || typeof value !== 'object') return
+  if (seen.has(value)) return
+  seen.add(value)
+
+  if (Array.isArray(value)) {
+    for (const item of value) collectStrings(item, output, seen)
+    return
+  }
+
+  for (const [key, entry] of Object.entries(value)) {
+    output.push(key)
+    collectStrings(entry, output, seen)
+  }
+}
+
+/**
+ * Lowercase, collapse runs of spaces and tabs (so `security  find-` still reads
+ * as `security find-`), and fold every spelling of the home directory — the
+ * absolute path, `$HOME`, `${HOME}` — into the single `~` the patterns name.
+ */
+function normalizeForMatch(text, homeDir) {
+  let output = text.toLowerCase()
+
+  const home = homeDir ? homeDir.toLowerCase().replace(/\/+$/, '') : ''
+  if (home) output = output.split(home).join('~')
+  output = output.split('${home}').join('~').split('$home').join('~')
+
+  return output.replace(/[ \t]+/g, ' ')
+}
+
+function hasHomeRootedSegment(tokens, folder) {
+  return tokens.some(
+    (token, index) => token === folder && tokens[index - 1] === '~',
+  )
+}
+
+/**
+ * `.env` and `.env.local` are secrets; `environment.md` and `import.meta.env`
+ * are not. The difference is the whole path segment, never a substring.
+ */
+function isDotEnvSegment(token) {
+  return token === '.env' || token.startsWith('.env.')
 }
 
 // --- redaction ----------------------------------------------------------------
