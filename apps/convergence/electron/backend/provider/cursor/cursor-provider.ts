@@ -66,9 +66,11 @@ import {
   buildCursorAcpPassiveUpdateNote,
   buildCursorAcpPrompt,
   buildCursorAcpToolView,
+  formatCursorPlanUpdate,
   getCursorAcpSessionUpdate,
   getCursorAcpSessionUpdateType,
   partFromAttachment,
+  readCursorAcpContentText,
   readCursorAcpUpdateText,
   shouldAutoApproveCursorPermissions,
   type CursorAcpMessagePart,
@@ -512,6 +514,8 @@ export class CursorProvider implements Provider {
         title: string
       }
     >()
+    /** Unknown sessionUpdate kinds already logged once (R3). */
+    const debuggedUnknownKinds = new Set<string>()
 
     /**
      * Acceptance is a property of the turn (MAR-3143 / MAR-3023): true from the
@@ -822,14 +826,50 @@ export class CursorProvider implements Provider {
         case 'session_info_update':
         case 'current_mode_update':
         case 'current_model_update':
+        case 'user_message_chunk':
           break
         default: {
-          const update = getCursorAcpSessionUpdate(params)
           if (updateType === 'plan') {
-            sessionEmitter.addThinking({
-              text: JSON.stringify(update, null, 2),
-              providerEventType: updateType,
-            })
+            const planText = formatCursorPlanUpdate(params)
+            if (planText) {
+              flushAssistantBuffer()
+              flushThinkingBuffer()
+              sessionEmitter.addThinking({
+                text: planText,
+                providerEventType: updateType,
+              })
+            } else {
+              if (!debuggedUnknownKinds.has(updateType)) {
+                debuggedUnknownKinds.add(updateType)
+                recordDebug({
+                  direction: 'in',
+                  channel: 'notification',
+                  method: `sessionUpdate:${updateType}`,
+                  note: `Unknown session update kind: ${updateType}`,
+                })
+              }
+              const rawText = readCursorAcpContentText(
+                getCursorAcpSessionUpdate(params),
+              )
+              if (rawText) {
+                flushAssistantBuffer()
+                flushThinkingBuffer()
+                sessionEmitter.addThinking({
+                  text: rawText,
+                  providerEventType: updateType,
+                })
+              }
+            }
+          } else if (updateType) {
+            if (!debuggedUnknownKinds.has(updateType)) {
+              debuggedUnknownKinds.add(updateType)
+              recordDebug({
+                direction: 'in',
+                channel: 'notification',
+                method: `sessionUpdate:${updateType}`,
+                note: `Unknown session update kind: ${updateType}`,
+              })
+            }
           }
         }
       }

@@ -9,9 +9,11 @@ import {
   buildCursorAcpPermissionRequest,
   buildCursorAcpPrompt,
   buildCursorAcpToolView,
+  formatCursorPlanUpdate,
   readCursorAcpContentText,
   shouldAutoApproveCursorPermissions,
 } from './cursor-acp-message.pure'
+import { CURSOR_ACP_RECORDED_TOOL_CALL_DIFF_UPDATE } from './cursor-acp.recorded.fixture'
 
 describe('cursor ACP message helpers', () => {
   it('builds ACP prompt content from text, image, and text attachments', () => {
@@ -359,5 +361,46 @@ describe('cursor ACP message helpers', () => {
   it('auto-approves Cursor permissions only for the yolo preset', () => {
     expect(shouldAutoApproveCursorPermissions({ preset: 'yolo' })).toBe(true)
     expect(shouldAutoApproveCursorPermissions({ preset: 'ask' })).toBe(false)
+  })
+
+  it('reads diff content blocks with path, oldText, and newText (R1)', () => {
+    const text = readCursorAcpContentText(
+      CURSOR_ACP_RECORDED_TOOL_CALL_DIFF_UPDATE.content,
+    )
+
+    expect(text).toContain('/tmp/probe-repo/note.txt')
+    expect(text).toContain('ping')
+    expect(text).not.toContain('Status: completed')
+  })
+
+  it('formats a plan session update as [status] content lines, not JSON (R4)', () => {
+    const text = formatCursorPlanUpdate({
+      update: {
+        sessionUpdate: 'plan',
+        entries: [
+          { content: 'Inspect layout', status: 'completed' },
+          { content: 'Refactor component', status: 'in_progress' },
+          { content: 'Write tests', status: 'pending' },
+        ],
+      },
+    })
+
+    expect(text).toBe(
+      '[completed] Inspect layout\n[in_progress] Refactor component\n[pending] Write tests',
+    )
+  })
+
+  it('returns null for a plan update with no recognizable entries', () => {
+    expect(
+      formatCursorPlanUpdate({
+        update: { sessionUpdate: 'plan', entries: [] },
+      }),
+    ).toBeNull()
+
+    expect(
+      formatCursorPlanUpdate({
+        update: { sessionUpdate: 'plan', entries: [{ status: 'pending' }] },
+      }),
+    ).toBeNull()
   })
 })

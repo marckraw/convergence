@@ -167,6 +167,17 @@ export function readCursorAcpContentText(value: unknown): string | null {
     return readTextField(value, 'text')
   }
 
+  if (value.type === 'diff') {
+    const path = typeof value.path === 'string' ? value.path.trim() : null
+    const oldText = typeof value.oldText === 'string' ? value.oldText : null
+    const newText = typeof value.newText === 'string' ? value.newText : null
+    const lines: string[] = []
+    if (path) lines.push(`File: ${path}`)
+    if (oldText) lines.push(`Old:\n${oldText}`)
+    if (newText) lines.push(`New:\n${newText}`)
+    return lines.length > 0 ? lines.join('\n') : null
+  }
+
   if (value.type === 'content') {
     return readCursorAcpContentText(value.content)
   }
@@ -684,6 +695,27 @@ function formatCursorTodos(value: unknown, title: string): string | null {
     .map(formatCursorTodo)
     .filter((todo): todo is string => todo !== null)
   return todos.length > 0 ? `${title}:\n${todos.join('\n')}` : null
+}
+
+export function formatCursorPlanUpdate(params: unknown): string | null {
+  const update = getCursorAcpSessionUpdate(params)
+  const entries = readArray(readField(update, 'entries'))
+    .map(formatCursorPlanEntry)
+    .filter((entry): entry is string => entry !== null)
+  return entries.length > 0 ? entries.join('\n') : null
+}
+
+function formatCursorPlanEntry(value: unknown): string | null {
+  if (!isRecord(value)) return null
+  const content =
+    readTextField(value, 'content') ??
+    readTextField(value, 'description') ??
+    readStringField(value, 'title') ??
+    readStringField(value, 'id')
+  if (!content) return null
+
+  const status = readStringField(value, 'status')
+  return `${status ? `[${status}] ` : ''}${content}`
 }
 
 function formatCursorTodo(value: unknown): string | null {
