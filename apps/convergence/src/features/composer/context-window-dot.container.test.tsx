@@ -366,6 +366,33 @@ describe('ContextWindowDot — the drill (MAR-3256 R3)', () => {
     ).toBeInTheDocument()
   })
 
+  it('a conversation opened mid-routine shows the beat and a working Cancel', async () => {
+    // Nothing is ever delivered on `contextDrill:changed` in this test. The
+    // routine started before this window existed -- reopened on macOS, or
+    // reloaded -- so `describe` is the only witness of the beat, and Cancel
+    // is the routine's whole way out.
+    drillApi.describe.mockResolvedValue({
+      eligible: true,
+      offered: false,
+      reason: 'This conversation is still working on a turn.',
+      beat: 'sealing',
+    })
+    renderDot()
+
+    await openPopover()
+
+    expect(
+      await screen.findByRole('button', { name: 'Sealing memory…' }),
+    ).toBeDisabled()
+    expect(drillApi.onChanged).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    await waitFor(() =>
+      expect(drillApi.cancel).toHaveBeenCalledWith('session-1'),
+    )
+  })
+
   it('re-asks the backend when the turn ends, without any timer', async () => {
     const { rerender } = render(
       <ContextWindowDot

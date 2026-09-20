@@ -69,6 +69,33 @@ describe('useContextDrillStore (MAR-3256 R2)', () => {
     expect(useContextDrillStore.getState().descriptions.s1).toEqual(READY)
   })
 
+  it('a refresh that finds a routine running shows its beat', async () => {
+    // The window was closed and reopened while the routine was sealing: no
+    // `changed` event will ever be delivered for a beat that started before
+    // this renderer existed, and `describe` is the only place it is told.
+    api.describe.mockResolvedValue({
+      eligible: true,
+      offered: false,
+      reason: 'This conversation is still working on a turn.',
+      beat: 'sealing',
+    })
+
+    await useContextDrillStore.getState().refresh('s1')
+
+    expect(useContextDrillStore.getState().beats.s1).toBe('sealing')
+  })
+
+  it('a refresh with no beat leaves a running beat alone', async () => {
+    api.describe.mockResolvedValue(READY)
+    useContextDrillStore
+      .getState()
+      .handleChange({ sessionId: 's1', beat: 'sealing' })
+
+    await useContextDrillStore.getState().refresh('s1')
+
+    expect(useContextDrillStore.getState().beats.s1).toBe('sealing')
+  })
+
   it('run records the outcome with a new seq', async () => {
     api.run.mockResolvedValue({ ok: true })
 

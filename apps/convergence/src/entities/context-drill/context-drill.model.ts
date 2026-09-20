@@ -79,8 +79,20 @@ export const useContextDrillStore = create<ContextDrillStore>((set, get) => ({
   refresh: async (sessionId) => {
     try {
       const description = await contextDrillApi.describe(sessionId)
+      // A `changed` event is only heard by a renderer that was already
+      // listening. A window opened -- or reopened -- while a routine is
+      // running has no other way to learn the beat, and without it the
+      // control offers "Run the drill" instead of the Cancel that is the
+      // routine's only way out (MAR-3256 R6).
+      //
+      // Seeding only, never clearing: a `describe` that raced the start of a
+      // beat answers `null` about a beat that has since begun, and the
+      // `changed` event with `beat: null` stays the one thing that ends one.
+      const beat = description.beat
       set((state) => ({
         descriptions: { ...state.descriptions, [sessionId]: description },
+        beats:
+          beat === null ? state.beats : { ...state.beats, [sessionId]: beat },
       }))
     } catch {
       // A describe that cannot be answered is not news anybody can act on,
