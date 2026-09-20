@@ -598,6 +598,27 @@ export class CursorProvider implements Provider {
     }
 
     /**
+     * Shared answer-and-clear for every approval and interaction that a turn
+     * left open (MAR-3154 R1). stop, interrupt, and endTurn share this so a
+     * fourth site cannot forget. A throw must surface to interrupt's existing
+     * try and must never escape endTurn.
+     */
+    function cancelOpenRequests(
+      activeRpc: CursorAcpJsonRpcClient | null,
+    ): void {
+      if (activeRpc) {
+        for (const [id, approval] of pendingApprovals.entries()) {
+          activeRpc.respond(id, approval.cancelResult)
+        }
+        for (const [id, interaction] of pendingInteractions.entries()) {
+          activeRpc.respond(id, interaction.cancelResult)
+        }
+      }
+      pendingApprovals.clear()
+      pendingInteractions.clear()
+    }
+
+    /**
      * Ends the turn and its acceptance together. With `closingWrites`, the
      * turn's own closing record still runs inside acceptance; without it,
      * acceptance ends at once and later writes are teardown reports.
@@ -605,12 +626,22 @@ export class CursorProvider implements Provider {
     function endTurn(closingWrites?: () => void): void {
       if (!closingWrites) {
         turnAccepted = false
+        try {
+          cancelOpenRequests(rpc)
+        } catch {
+          // Never throw out of endTurn (MAR-3154 R1).
+        }
         return
       }
       try {
         closingWrites()
       } finally {
         turnAccepted = false
+        try {
+          cancelOpenRequests(rpc)
+        } catch {
+          // Never throw out of endTurn.
+        }
       }
     }
 
@@ -1904,14 +1935,7 @@ export class CursorProvider implements Provider {
             // Answer pending human requests first so Cursor is not left blocked
             // on an unanswered permission while we cancel (MAR-3142 lap 2, E;
             // lap 3, E1 — inside the try so a throw is a note, not hard-stop).
-            for (const [id, approval] of pendingApprovals.entries()) {
-              activeRpc.respond(id, approval.cancelResult)
-            }
-            pendingApprovals.clear()
-            for (const [id, interaction] of pendingInteractions.entries()) {
-              activeRpc.respond(id, interaction.cancelResult)
-            }
-            pendingInteractions.clear()
+            cancelOpenRequests(activeRpc)
             activeRpc.notify('session/cancel', { sessionId: activeSessionId })
           } catch (error) {
             recordTeardown('the cancel failure note', () =>
@@ -2040,14 +2064,7 @@ export class CursorProvider implements Provider {
       stop: () => {
         if (stopped) return
         const hadPromptInFlight = promptInFlight || promptStarting
-        for (const [id, approval] of pendingApprovals.entries()) {
-          rpc?.respond(id, approval.cancelResult)
-        }
-        pendingApprovals.clear()
-        for (const [id, interaction] of pendingInteractions.entries()) {
-          rpc?.respond(id, interaction.cancelResult)
-        }
-        pendingInteractions.clear()
+        cancelOpenRequests(rpc)
         // End acceptance first so a refused flush is a teardown record, not an
         // announced mid-turn loss that emitDelta swallows (MAR-3143 lap 2, B).
         endTurn()

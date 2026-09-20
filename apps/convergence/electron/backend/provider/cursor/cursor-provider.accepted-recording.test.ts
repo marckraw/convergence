@@ -515,9 +515,8 @@ describe('Cursor accepted-recording boundary (MAR-3143)', () => {
     errors.mockRestore()
   })
 
-  it('deny after endTurn with a refused attention clear does not throw', async () => {
+  it('a late deny after the turn\u2019s end is a no-op', async () => {
     const { service, session, server } = await fixture({ holdPrompt: true })
-    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     await service.start(session.id, { text: 'hi' })
     await vi.waitUntil(() =>
@@ -544,6 +543,40 @@ describe('Cursor accepted-recording boundary (MAR-3143)', () => {
       () => service.getById(session.id)?.status === 'completed',
     )
 
+    const responsesFor66 = server.responses.filter((r) => r.id === 66)
+    expect(responsesFor66).toHaveLength(1)
+    expect(responsesFor66[0].result).toEqual({
+      outcome: { outcome: 'cancelled' },
+    })
+
+    expect(() => activeHandle(service, session.id).deny('66')).not.toThrow()
+    expect(server.responses.filter((r) => r.id === 66)).toHaveLength(1)
+  })
+
+  it('a refused attention clear from a mid-turn deny does not throw and is logged', async () => {
+    const { service, session, server } = await fixture({ holdPrompt: true })
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await service.start(session.id, { text: 'hi' })
+    await vi.waitUntil(() =>
+      server.requests.some((request) => request.method === 'session/prompt'),
+    )
+
+    server.send({
+      jsonrpc: '2.0',
+      id: 66,
+      method: 'session/request_permission',
+      params: {
+        sessionId: 'cursor-session-1',
+        toolCall: { title: 'Mid-turn deny', kind: 'execute' },
+        options: [{ optionId: 'allow-once', name: 'Allow once' }],
+      },
+    })
+
+    await vi.waitUntil(
+      () => service.getById(session.id)?.attention === 'needs-approval',
+    )
+
     getDatabase().exec(`CREATE TEMP TRIGGER refuse_attention_none
       BEFORE UPDATE ON sessions
       WHEN NEW.attention = 'none'
@@ -552,7 +585,9 @@ describe('Cursor accepted-recording boundary (MAR-3143)', () => {
     expect(() => activeHandle(service, session.id).deny('66')).not.toThrow()
     expect(
       errors.mock.calls.some((call) =>
-        String(call[0]).includes('Could not record the cleared attention'),
+        String(call[0]).includes(
+          'Accepted turn could not record session patch',
+        ),
       ),
     ).toBe(true)
     await vi.waitUntil(() =>
@@ -565,6 +600,10 @@ describe('Cursor accepted-recording boundary (MAR-3143)', () => {
     )
 
     getDatabase().exec('DROP TRIGGER refuse_attention_none')
+    server.resolveHeldPrompt({ stopReason: 'end_turn' })
+    await vi.waitUntil(
+      () => service.getById(session.id)?.status === 'completed',
+    )
     errors.mockRestore()
   })
 
