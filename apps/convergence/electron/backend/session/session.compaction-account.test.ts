@@ -14,6 +14,7 @@ import {
 import { LocalExecutionHost } from '../provider/execution-host/local-execution-host'
 import { isProviderBusyError } from '../provider/provider.types'
 import { ProviderRegistry } from '../provider/provider-registry'
+import { SessionQueuedInputService } from './session-queued-input.service'
 import { SessionService } from './session.service'
 import { TurnCaptureService } from './turn/turn-capture.service'
 
@@ -25,10 +26,12 @@ let disconnectedAccount: boolean
 let releaseCompaction: ((fail?: boolean) => void) | undefined
 let cleanup: (() => Promise<void>) | undefined
 let server: FakeCodexServer
+let queue: SessionQueuedInputService
 
 beforeEach(async () => {
   const dir = mkdtempSync(join(tmpdir(), 'compaction-account-'))
   const db = getDatabase()
+  queue = new SessionQueuedInputService(db)
   homes = []
   holdCompaction = false
   disconnectedAccount = false
@@ -365,3 +368,82 @@ it.each([false, true])(
     expect(delivered[0]).toContain('the horse is done')
   },
 )
+
+it('a drain fired during compaction delivers nothing until compaction ends (R1, MAR-3253)', async () => {
+  // The door, not the caller. `dispatchNextQueuedInput` never asked whether
+  // the conversation was compacting on its plain path -- it met
+  // `assertNotCompacting` only through `assertAccountHandoffEligible`, i.e.
+  // only when the row's account differed from the last turn's. So the row is
+  // on `account-b`, the SAME account the last turn used: that is the path
+  // with no guard on it, and the path a horse's return actually takes.
+  const { settled } = await heldCompaction()
+  const sentBefore = turnsSentToProvider(server).length
+
+  // "Deliver now" is the reachable public trigger, and it only exists on a
+  // FAILED row (`redeliver` refuses any other state), so the predecessor is
+  // staged through the sibling queue service exactly as
+  // `session.account-handoff.test.ts` stages one -- the shape a restart
+  // leaves behind (`recoverDispatching`) or a turn that died mid-dispatch.
+  // Only ONE row is in play on purpose: a second, separately queued row
+  // would make "exactly once" a claim about the pair rather than about the
+  // row the drain tried to take.
+  const failedRow = queue.enqueue(
+    sessionId,
+    {
+      text: 'the horse is done',
+      providerAccountId: 'account-b',
+      dispatchId: 'first-attempt',
+    },
+    'follow-up',
+  )
+  queue.patch(failedRow.id, 'failed')
+
+  const fresh = service.redeliverQueuedInput(failedRow.id)
+  const rows = () =>
+    service
+      .getQueuedInputs(sessionId)
+      .map((item) => ({ id: item.id, state: item.state }))
+
+  // The artifact, not the queue's own bookkeeping: the claim is that the
+  // PROVIDER heard nothing while its context was being rewritten.
+  //
+  // Flushed, not merely awaited, and the count is measured rather than
+  // guessed. `redeliverQueuedInput` fires its drain without awaiting it, and
+  // the unguarded path is several hops long -- compaction released the
+  // handle, so the drain has to spawn a host, connect, and open a thread
+  // before `turn/start`. Removing the guard reaches the provider in 8 of
+  // these ticks; 50 is the margin that makes this assertion refute the
+  // mutation instead of merely outrunning it.
+  for (let tick = 0; tick < 50; tick += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+  expect(turnsSentToProvider(server).length).toBe(sentBefore)
+  expect(service.getById(sessionId)?.status).not.toBe('running')
+
+  // Nothing taken and nothing changed: the refusal happens before
+  // `nextQueued` is read, so the fresh row is still `queued` -- not
+  // `dispatching`, not `failed`, not put back by the busy class. The
+  // predecessor stays beside it as the record of the first attempt, which is
+  // what "Deliver now" leaves behind by design.
+  expect(rows()).toEqual([
+    { id: failedRow.id, state: 'failed' },
+    { id: fresh.id, state: 'queued' },
+  ])
+
+  // Waiting, never lost: the drain in `compactContext`'s `finally` runs after
+  // the compacting mark is deleted, and it is what delivers the row.
+  releaseCompaction!(false)
+  expect(await settled).toBe('completed')
+
+  await vi.waitFor(() =>
+    expect(turnsSentToProvider(server).length).toBe(sentBefore + 1),
+  )
+  await vi.waitFor(() =>
+    expect(service.getById(sessionId)?.status).toBe('completed'),
+  )
+  // The fresh row left; only the first attempt's card remains.
+  expect(rows()).toEqual([{ id: failedRow.id, state: 'failed' }])
+  const delivered = turnsSentToProvider(server).slice(sentBefore)
+  expect(delivered).toHaveLength(1)
+  expect(delivered[0]).toContain('the horse is done')
+})

@@ -2809,9 +2809,13 @@ export class SessionService {
     } finally {
       // The delete comes FIRST, and the drain second (MAR-3020 R4). The
       // other order is a deadlock dressed as a retry: `dispatchNextQueuedInput`
-      // would meet a session still marked compacting, be refused by
-      // `assertNotCompacting`, put the row back in line by its busy class --
-      // and nothing would ever drain it again.
+      // would meet a session still marked compacting, be refused at its own
+      // door -- and nothing would ever drain the row again.
+      //
+      // Pinned by a test, not by this comment (MAR-3253 R2). The door's guard
+      // is synchronous, so a drain moved above the delete sees the mark,
+      // returns, and both cases of `delivers the waiting relay row exactly
+      // once when compaction ends` go red.
       this.compactingSessions.delete(id)
       // In the `finally`, so BOTH exits drain. A compaction that failed
       // still ends the wait: the row queued behind it is owed its delivery
@@ -4537,6 +4541,20 @@ export class SessionService {
 
   private async dispatchNextQueuedInput(sessionId: string): Promise<void> {
     if (this.quitting) return
+    // The door, not each caller (MAR-3253). Since MAR-3020 a horse's return
+    // WAITS in the queue while the conversation compacts, so any drain fired
+    // in that minute -- "Deliver now" on a failed row, a turn's completion --
+    // would send it into a context being rewritten underneath it. This path
+    // never asked: it met `assertNotCompacting` only through
+    // `assertAccountHandoffEligible`, i.e. only when the row's account
+    // differed from the last turn's.
+    //
+    // Before `nextQueued` and before any patch: the refusal must take
+    // nothing and change nothing. A row moved to `dispatching` and put back
+    // would still be a state the queue has to unwind, and the row is not
+    // failing -- it is waiting, and the drain in `compactContext`'s `finally`
+    // (which runs AFTER the compacting mark is deleted) delivers it.
+    if (this.compactingSessions.has(sessionId)) return
     const item = this.queuedInputs.nextQueued(sessionId)
     if (!item) return
 
