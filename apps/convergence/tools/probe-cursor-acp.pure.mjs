@@ -260,18 +260,36 @@ const GUARDED_SUBSTRINGS = [
 /** Everything a path segment may hold; anything else separates two segments. */
 const TOKEN_SEPARATOR = /[^a-z0-9._~$-]+/
 
+/** The verdict on a request the fence could not inspect. Never an allow. */
+const UNREADABLE_REQUEST = 'unreadable-request'
+
 /**
  * The single decision behind every permission answer the probe sends.
  *
- * Deny by default on a match: if any string anywhere inside the request's
- * `toolCall` names a private folder or a secrets file, the answer is a reject
- * (or `cancelled` when no reject option is offered), whatever
- * `--permission-response` says. `homeDir` is an argument, not `os.homedir()`,
- * so this stays pure — and it is load-bearing: it is what turns an absolute
- * `/Users/x/.claude/skills` back into the `~/.claude` the fence names.
+ * Deny by default, on either of two grounds:
+ *
+ * 1. **A match.** If any string anywhere in the request — the whole object,
+ *    keys and values, not only what sits under `toolCall` — names a private
+ *    folder or a secrets file, the answer is a reject. The search is that wide
+ *    because a path that lands one key to the side of the one we watch is
+ *    exactly as readable to the shell and exactly as private.
+ * 2. **An unreadable request.** If the request carries no `toolCall` object at
+ *    all, there is no tool call to weigh, and a fence denies what it cannot
+ *    read. It is refused as `unreadable-request` before `--permission-response`
+ *    is ever consulted. A future CLI that stops sending `toolCall` therefore
+ *    stalls the probe with refusals rather than silently approving everything.
+ *
+ * A refusal takes the offered `reject_once` option, or `cancelled` when none is
+ * offered, whatever `--permission-response` says. A match outranks
+ * unreadability: both refuse, and the matched pattern is the more useful thing
+ * to write into the transcript.
+ *
+ * `homeDir` is an argument, not `os.homedir()`, so this stays pure — and it is
+ * load-bearing: it is what turns an absolute `/Users/x/.claude/skills` back
+ * into the `~/.claude` the fence names.
  *
  * Returns `{ optionId, reason, guarded, toolTitle }`; `guarded` is the matched
- * pattern, or null when the request passed.
+ * pattern or `unreadable-request`, and null only when the request passed.
  */
 export function decidePermissionAnswer(
   request,
@@ -285,7 +303,9 @@ export function decidePermissionAnswer(
   const toolCall = readToolCall(request)
   const offered = readPermissionOptions(request)
   const toolTitle = readString(toolCall, 'title')
-  const guarded = matchGuardedPattern(toolCall, homeDir)
+  const guarded =
+    matchGuardedPattern(request, homeDir) ??
+    (toolCall ? null : UNREADABLE_REQUEST)
 
   if (guarded) {
     return {
@@ -320,10 +340,11 @@ export function countGuardedAnswers(permissionAnswers) {
 }
 
 /**
- * Accept either the `session/request_permission` params or the whole JSON-RPC
- * message. A caller that hands over the message and finds no `toolCall` would
- * see an empty search and an ALLOW — silence that opens the fence — so the
- * unwrap is part of the guard, not a convenience.
+ * The tool call, from either the `session/request_permission` params or the
+ * whole JSON-RPC message — or null, which `decidePermissionAnswer` reads as
+ * "unreadable" and refuses. Only a real object counts: a `toolCall` that
+ * arrived as a string carries no title and no fields to weigh, so it is null
+ * here rather than a shape we pretend to understand.
  */
 function readToolCall(request) {
   const record = readRecord(request)
@@ -361,16 +382,16 @@ function selectRejectOptionId(options) {
 }
 
 /**
- * The matched pattern, or null. Every string anywhere under `toolCall` is
- * searched — title, content text, `rawInput` at any depth, locations, and the
- * keys themselves — because the command segments arrived in `content` on one
- * probe and there is no field the next CLI version has to keep using.
+ * The matched pattern, or null. Every string anywhere in the request is
+ * searched — the tool title, content text, `rawInput` at any depth, locations,
+ * the option labels, any sibling key, and the object keys themselves — because
+ * the command segments arrived in `content` on one probe, there is no field the
+ * next CLI version has to keep using, and a private path one key to the side of
+ * `toolCall` is no less private.
  */
-function matchGuardedPattern(toolCall, homeDir) {
-  if (!toolCall) return null
-
+function matchGuardedPattern(request, homeDir) {
   const strings = []
-  collectStrings(toolCall, strings, new WeakSet())
+  collectStrings(request, strings, new WeakSet())
   const prepared = strings.map((text) => {
     const normalized = normalizeForMatch(text, homeDir)
     return {

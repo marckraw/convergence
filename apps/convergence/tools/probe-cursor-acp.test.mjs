@@ -355,6 +355,61 @@ test('the reject option is found by kind, not by a hardcoded id', () => {
   assert.equal(decision.optionId, 'deny-5f2a')
 })
 
+/**
+ * A fence denies what it cannot read (MAR-3246 lap 2). The three shapes below
+ * were each ALLOWED by lap 1, which searched only under `toolCall` and treated
+ * a missing tool call as nothing to guard. They carry the recorded `options`,
+ * so the refusal is answered with the option id the wire really offers.
+ */
+test('a request with no tool call at all is refused as unreadable', () => {
+  // Nothing anywhere in these params matches a pattern; the ONLY ground for
+  // refusing is that there is no tool call to weigh.
+  const request = recordedRequest((entry) => {
+    delete entry.toolCall
+  })
+
+  const decision = decidePermissionAnswer(request, 'first-allow', {
+    homeDir: '/Users/probeuser',
+  })
+
+  assert.equal(decision.guarded, 'unreadable-request')
+  assert.equal(decision.reason, 'guarded:unreadable-request')
+  assert.equal(decision.optionId, 'reject-once')
+})
+
+test('a tool call that arrived as a string is refused, not searched past', () => {
+  const request = recordedRequest((entry) => {
+    entry.toolCall = 'ls ~/.cursor'
+  })
+
+  const decision = decidePermissionAnswer(request, 'first-allow', {
+    homeDir: '/Users/probeuser',
+  })
+
+  // Both grounds hold here: the string is not a tool call object (unreadable)
+  // AND it names a fenced folder. The match wins, because a refusal that can
+  // name the pattern it caught is worth more in the transcript than one that
+  // can only say the shape was wrong. Either way it is never an allow.
+  assert.equal(decision.guarded, '~/.cursor')
+  assert.equal(decision.optionId, 'reject-once')
+})
+
+test('a fenced path beside the tool call is refused, not only one inside it', () => {
+  // The tool call itself is a perfectly readable object and names nothing;
+  // the path sits next to it in the params.
+  const request = recordedRequest((entry) => {
+    entry.toolCall = { title: 'x' }
+    entry.note = 'cat ~/.claude/a'
+  })
+
+  const decision = decidePermissionAnswer(request, 'first-allow', {
+    homeDir: '/Users/probeuser',
+  })
+
+  assert.equal(decision.guarded, '~/.claude')
+  assert.equal(decision.optionId, 'reject-once')
+})
+
 test('the whole JSON-RPC message is unwrapped, so no caller can slip past', () => {
   const message = {
     jsonrpc: '2.0',

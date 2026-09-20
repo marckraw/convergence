@@ -22,7 +22,10 @@ naming `~/.cursor`, `~/.claude`, `~/.codex`, `~/.convergence` (spelled with
 `~`, `$HOME` or the absolute home path), a `.env` / `.env.*` path segment,
 `auth.json`, `credentials`, `.ssh`, `.aws`, `.npmrc`, `.netrc`, `Keychain` or
 `security find-`, whatever the probed model asks for and whatever
-`--permission-response` says; there is no flag that switches it off.
+`--permission-response` says; there is no flag that switches it off. The guard
+reads the whole request, not only its `toolCall`, and a request it cannot
+inspect — one carrying no `toolCall` object at all — is refused as
+`unreadable-request` rather than approved.
 
 This document states what was **seen on the wire**, not what the app currently
 assumes. Anything inferred is labeled _inferred_.
