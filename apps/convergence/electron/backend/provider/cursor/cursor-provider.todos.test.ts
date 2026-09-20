@@ -207,6 +207,7 @@ describe('Cursor provider todo list (MAR-3241)', () => {
 
     server.resolveHeldPrompt({ stopReason: 'end_turn' })
   })
+
   /**
    * R3: the list lives with the session and dies with it. The todo request is
    * sent inside an ACCEPTED turn (held prompt), because a todo update is a

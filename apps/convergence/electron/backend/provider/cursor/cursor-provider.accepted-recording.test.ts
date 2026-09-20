@@ -793,14 +793,22 @@ describe('Cursor accepted-recording boundary (MAR-3143)', () => {
     getDatabase().exec('DROP TRIGGER refuse_assistant_complete_notify')
     errors.mockRestore()
   })
+
   /**
-   * MAR-3241 R4: the acknowledgement Cursor waits for is answered BEFORE the
-   * todo note is recorded, so a refused note never leaves the far side
-   * hanging or reading a -32603. Lives here because this file already owns
-   * the real SessionService + database + TEMP TRIGGER apparatus a refused
-   * write needs.
-   * Mutation: record the note before `respond` in the `cursor/update_todos`
+   * MAR-3241 R4, the refused-note half: a `cursor/update_todos` note the
+   * database refuses still leaves Cursor answered with today's
+   * acknowledgement — never a -32603, never an unanswered id. Lives here
+   * because this file owns the real SessionService + database + TEMP TRIGGER
+   * apparatus a refused write needs.
+   *
+   * Mutation: delete `activeRpc.respond` from the `cursor/update_todos`
    * request branch → red.
+   *
+   * This test cannot witness R4's ORDER, and no refused write can: inside an
+   * accepted turn `emitDelta` swallows the `RecordingError` and `announce()`
+   * is itself all-catching (MAR-3023 R5), so the note write never throws back
+   * and BOTH orders answer Cursor. The order is pinned on the artifacts in
+   * `cursor-provider.todos.test.ts`.
    */
   it('MAR-3241 R4: a refused todo note still answers cursor/update_todos with today acknowledgement', async () => {
     const { service, session, server } = await fixture({ holdPrompt: true })
