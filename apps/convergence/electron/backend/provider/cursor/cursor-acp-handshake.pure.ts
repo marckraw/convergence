@@ -70,24 +70,50 @@ function readAuthMethodIds(value: unknown): string[] | null {
   return ids
 }
 
-/** True when the CLI offered the one login method Convergence knows. */
-export function cursorAcpHandshakeOffersLogin(
-  handshake: CursorAcpHandshake,
-): boolean {
-  return handshake.authMethodIds?.includes(CURSOR_ACP_LOGIN_METHOD_ID) ?? false
+/**
+ * What the CLI's `authMethods` means for the one login method we know
+ * (MAR-3145 R2, corrected lap 2).
+ *
+ * Three answers, not two: silence is not a refusal. `authMethods` is optional
+ * in ACP, so a CLI that names no list — or an empty one — has told us nothing
+ * about logging in, and the app proceeds exactly as it did before this rule
+ * existed. Only a CLI that lists methods and leaves ours out has said no.
+ *
+ * The union exists so the conflation cannot come back: there is no boolean a
+ * caller could read `false` from and throw on.
+ */
+export type CursorAcpLoginDecision =
+  | { kind: 'proceed'; note: string | null }
+  | { kind: 'refuse'; message: string }
+
+/** Said once when the CLI named no login methods at all. */
+export const CURSOR_ACP_SILENT_LOGIN_NOTE =
+  'Cursor named no login methods; trying cursor_login.'
+
+function formatMissingLoginMethodMessage(offeredIds: string[]): string {
+  return `Cursor offers no login method Convergence knows (offered: ${offeredIds.join(
+    ', ',
+  )}). Update Convergence or the Cursor CLI.`
 }
 
-/**
- * Said in words, not swallowed: what the CLI offered, and who has to move
- * (MAR-3145 R2).
- */
-export function formatCursorAcpMissingLoginMethodMessage(
+export function readCursorAcpLoginDecision(
   handshake: CursorAcpHandshake,
-): string {
-  const offered = handshake.authMethodIds?.length
-    ? handshake.authMethodIds.join(', ')
-    : 'none'
-  return `Cursor offers no login method Convergence knows (offered: ${offered}). Update Convergence or the Cursor CLI.`
+): CursorAcpLoginDecision {
+  const offeredIds = handshake.authMethodIds
+
+  // No list, or an empty one: the CLI stayed silent. Proceed, and say so.
+  if (offeredIds === null || offeredIds.length === 0) {
+    return { kind: 'proceed', note: CURSOR_ACP_SILENT_LOGIN_NOTE }
+  }
+
+  if (offeredIds.includes(CURSOR_ACP_LOGIN_METHOD_ID)) {
+    return { kind: 'proceed', note: null }
+  }
+
+  return {
+    kind: 'refuse',
+    message: formatMissingLoginMethodMessage(offeredIds),
+  }
 }
 
 /**

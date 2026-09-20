@@ -414,14 +414,26 @@ export class CursorProvider implements Provider {
   private descriptorProbe: Promise<ProviderDescriptor> | null = null
   private descriptorFailedAt: number | null = null
 
+  /**
+   * The default skills service is built in the body, not as a parameter
+   * default, because it needs `options.appVersion` — a later parameter, which a
+   * default expression cannot see. Building it here is what keeps the fourth
+   * handshake path from introducing the app as `0.0.0` (MAR-3145 R4).
+   */
+  private skillsService: CursorSkillCatalogAdapter
+
   constructor(
     private binaryPath: string,
     private debugSink: ProviderDebugSink = noopDebugSink,
-    private skillsService: CursorSkillCatalogAdapter = new CursorSkillsService(
-      binaryPath,
-    ),
+    skillsService?: CursorSkillCatalogAdapter,
     private options: CursorProviderOptions = {},
-  ) {}
+  ) {
+    this.skillsService =
+      skillsService ??
+      new CursorSkillsService(binaryPath, undefined, {
+        appVersion: options.appVersion ?? null,
+      })
+  }
 
   /**
    * The model list, probed from a disposable ACP session. A probe that fails
@@ -474,9 +486,9 @@ export class CursorProvider implements Provider {
       at: Date.now(),
       direction: 'in',
       channel: 'lifecycle',
-      note: `Cursor model discovery failed: ${message}. Showing the fallback model list; retrying in at most ${Math.round(
+      note: `Cursor model discovery failed: ${message}. Showing the fallback model list; the next request after ${Math.round(
         CURSOR_DESCRIPTOR_RETRY_FLOOR_MS / 1000,
-      )}s.`,
+      )}s probes again.`,
     })
   }
 

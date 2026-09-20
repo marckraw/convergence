@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionDelta } from '../../session/conversation-item.types'
 import type { ProviderDebugSink } from '../../provider-debug/provider-debug-sink'
 import type { ProviderDebugEntry } from '../../provider-debug/provider-debug.types'
+import { mapCursorCommandCatalog } from '../../skills/cursor-skills.mapper.pure'
+import type { SkillSelection } from '../../skills/skills.types'
 import type { SessionHandle } from '../provider.types'
 import {
   createMockCursorAcp,
@@ -66,6 +68,29 @@ function recordingSink(): {
         entries.push(entry)
       },
     },
+  }
+}
+
+/** A selection the live catalog cannot satisfy, so the one-off listing runs. */
+function skillSelection(name: string): SkillSelection {
+  const catalog = mapCursorCommandCatalog({
+    availableCommands: [{ name, description: `${name} skill` }],
+  })
+  const entry = catalog.skills[0]
+  if (!entry) throw new Error(`expected a catalog entry for ${name}`)
+
+  return {
+    id: entry.id,
+    providerId: entry.providerId,
+    providerName: entry.providerName,
+    name: entry.name,
+    displayName: entry.displayName,
+    path: entry.path,
+    scope: entry.scope,
+    rawScope: entry.rawScope,
+    sourceLabel: entry.sourceLabel,
+    status: 'selected',
+    argumentText: 'now',
   }
 }
 
@@ -318,18 +343,33 @@ describe('MAR-3145 R2 · the login method comes from the CLI', () => {
     expect(methodCount(server, 'authenticate')).toBe(0)
   })
 
-  it('says "none" when the CLI offers nothing at all', async () => {
-    const { notes, handle } = startSession({
-      initializeResult: initializeResult({ authMethods: [] }),
-    })
+  // Lap 2, F1: silence is not a refusal. `authMethods` is optional in ACP, so a
+  // CLI that names none has told us nothing — the app proceeds as it did before
+  // this rule existed, and says so once.
+  it.each([
+    ['names no authMethods array at all', { protocolVersion: 1 }],
+    ['names an empty authMethods array', initializeResult({ authMethods: [] })],
+  ])(
+    'authenticates anyway when the CLI %s, and notes it once',
+    async (_label, result) => {
+      const { server, notes, entries, handle } = startSession({
+        initializeResult: result,
+      })
 
-    await waitFor(() => expect(notes.length).toBeGreaterThan(0))
+      await waitFor(() => expect(methodCount(server, 'session/prompt')).toBe(1))
 
-    expect(notes[0]).toContain(
-      'Cursor offers no login method Convergence knows (offered: none). Update Convergence or the Cursor CLI.',
-    )
-    handle.stop()
-  })
+      expect(methodCount(server, 'authenticate')).toBe(1)
+      expect(notes).toEqual([])
+      expect(
+        entries.filter(
+          (entry) =>
+            entry.note ===
+            'Cursor named no login methods; trying cursor_login.',
+        ),
+      ).toHaveLength(1)
+      handle.stop()
+    },
+  )
 
   it('notes a foreign protocol version once and carries on', async () => {
     const { server, entries, handle } = startSession({
@@ -416,6 +456,10 @@ describe('MAR-3145 R3 · a fallback is never remembered', () => {
     )
     expect(failures).toHaveLength(1)
     expect(failures[0]?.note).toContain('cursor-agent is updating')
+    // Lap 2, F3: nothing retries on a timer; the next call past the floor does.
+    expect(failures[0]?.note).toContain(
+      'the next request after 30s probes again.',
+    )
   })
 
   it('shares one in-flight probe between concurrent callers', async () => {
@@ -469,5 +513,57 @@ describe('MAR-3145 R4 · the app never introduces itself as 0.0.0', () => {
     await provider.describe()
 
     expect(initializeParams(server).clientInfo?.version).toBe(APP_VERSION)
+  })
+
+  // Lap 2, F2: the fourth construction path. The provider's own default skills
+  // service spawns its own ACP process for a one-off command listing, and it
+  // introduced the app as 0.0.0 until this lap.
+  it('names the real version on the one-off skills listing', async () => {
+    const mainChild = new MockCursorAcpChild()
+    const mainServer = createMockCursorAcp(mainChild)
+    const discoveryServers: MockCursorAcpServer[] = []
+
+    spawnMock.mockImplementation(() => {
+      if (spawnMock.mock.calls.length <= 1) return mainChild
+      const discoveryChild = new MockCursorAcpChild()
+      discoveryServers.push(createMockCursorAcp(discoveryChild))
+      return discoveryChild
+    })
+
+    const provider = new CursorProvider('agent', undefined, undefined, {
+      appVersion: APP_VERSION,
+    })
+    const handle = provider.start({
+      sessionId: 'session-skills',
+      workingDirectory: '/repo',
+      initialMessage: 'hi',
+      model: null,
+      effort: null,
+      continuationToken: null,
+    })
+    const statuses: string[] = []
+    handle.onDelta(() => {})
+    handle.onStatusChange((status) => statuses.push(status))
+    handle.onAttentionChange(() => {})
+    handle.onContinuationToken(() => {})
+
+    await waitFor(() => expect(statuses).toContain('completed'))
+    expect(methodCount(mainServer, 'initialize')).toBe(1)
+
+    // No live catalog has arrived, so this falls through to the one-off
+    // listing — a second spawn, and a second handshake.
+    handle.sendMessage('use it', undefined, [skillSelection('alpha')])
+
+    await waitFor(() => {
+      expect(discoveryServers).toHaveLength(1)
+      expect(
+        methodCount(discoveryServers[0] as MockCursorAcpServer, 'initialize'),
+      ).toBe(1)
+    }, 3000)
+
+    const discovery = discoveryServers.at(0)
+    if (!discovery) throw new Error('the one-off skills listing never spawned')
+    expect(initializeParams(discovery).clientInfo?.version).toBe(APP_VERSION)
+    handle.stop()
   })
 })

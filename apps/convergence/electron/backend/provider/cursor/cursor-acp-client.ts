@@ -4,10 +4,9 @@ import {
   CURSOR_ACP_MODEL_CONFIG_ID,
 } from './cursor-acp-contract.pure'
 import {
-  cursorAcpHandshakeOffersLogin,
-  formatCursorAcpMissingLoginMethodMessage,
   formatCursorAcpProtocolVersionNote,
   parseCursorAcpHandshake,
+  readCursorAcpLoginDecision,
   type CursorAcpHandshake,
 } from './cursor-acp-handshake.pure'
 import {
@@ -153,9 +152,9 @@ export async function performCursorAcpHandshake(
   const versionNote = formatCursorAcpProtocolVersionNote(handshake)
   if (versionNote) options.onDebugNote?.(versionNote)
 
-  if (!cursorAcpHandshakeOffersLogin(handshake)) {
-    throw new Error(formatCursorAcpMissingLoginMethodMessage(handshake))
-  }
+  const login = readCursorAcpLoginDecision(handshake)
+  if (login.kind === 'refuse') throw new Error(login.message)
+  if (login.note) options.onDebugNote?.(login.note)
 
   await rpc.request('authenticate', {
     methodId: CURSOR_ACP_LOGIN_METHOD_ID,

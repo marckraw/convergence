@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { CURSOR_ACP_RECORDED_INITIALIZE_RESULT } from './cursor-acp.recorded.fixture'
 import {
-  cursorAcpHandshakeOffersLogin,
-  formatCursorAcpMissingLoginMethodMessage,
+  CURSOR_ACP_SILENT_LOGIN_NOTE,
   formatCursorAcpProtocolVersionNote,
   parseCursorAcpHandshake,
+  readCursorAcpLoginDecision,
 } from './cursor-acp-handshake.pure'
 
 describe('parseCursorAcpHandshake', () => {
@@ -19,7 +19,10 @@ describe('parseCursorAcpHandshake', () => {
       image: true,
       authMethodIds: ['cursor_login'],
     })
-    expect(cursorAcpHandshakeOffersLogin(handshake)).toBe(true)
+    expect(readCursorAcpLoginDecision(handshake)).toEqual({
+      kind: 'proceed',
+      note: null,
+    })
   })
 
   it.each([
@@ -42,7 +45,12 @@ describe('parseCursorAcpHandshake', () => {
       image: null,
       authMethodIds: null,
     })
-    expect(cursorAcpHandshakeOffersLogin(handshake)).toBe(false)
+    // Unknown is not refused: a result we could not read named no methods,
+    // and the app proceeds exactly as it did before MAR-3145 (lap 2, F1).
+    expect(readCursorAcpLoginDecision(handshake)).toEqual({
+      kind: 'proceed',
+      note: CURSOR_ACP_SILENT_LOGIN_NOTE,
+    })
   })
 
   it('separates a CLI that named no auth methods from one that named none', () => {
@@ -86,28 +94,41 @@ describe('parseCursorAcpHandshake', () => {
   })
 })
 
-describe('formatCursorAcpMissingLoginMethodMessage', () => {
-  it('names what the CLI offered', () => {
+describe('readCursorAcpLoginDecision (MAR-3145 R2, corrected lap 2)', () => {
+  it('refuses only a list that names other methods and not ours', () => {
     expect(
-      formatCursorAcpMissingLoginMethodMessage(
+      readCursorAcpLoginDecision(
         parseCursorAcpHandshake({
           authMethods: [{ id: 'other' }, { id: 'another' }],
         }),
       ),
-    ).toBe(
-      'Cursor offers no login method Convergence knows (offered: other, another). Update Convergence or the Cursor CLI.',
-    )
+    ).toEqual({
+      kind: 'refuse',
+      message:
+        'Cursor offers no login method Convergence knows (offered: other, another). Update Convergence or the Cursor CLI.',
+    })
   })
 
   it.each([
-    ['an empty list', { authMethods: [] }],
-    ['no list at all', {}],
-  ])('says "none" for %s', (_label, result) => {
-    expect(
-      formatCursorAcpMissingLoginMethodMessage(parseCursorAcpHandshake(result)),
-    ).toBe(
-      'Cursor offers no login method Convergence knows (offered: none). Update Convergence or the Cursor CLI.',
+    ['no authMethods array at all', { protocolVersion: 1 }],
+    ['an empty authMethods array', { protocolVersion: 1, authMethods: [] }],
+  ])('proceeds with one note when the CLI named %s', (_label, result) => {
+    expect(readCursorAcpLoginDecision(parseCursorAcpHandshake(result))).toEqual(
+      {
+        kind: 'proceed',
+        note: 'Cursor named no login methods; trying cursor_login.',
+      },
     )
+  })
+
+  it('proceeds silently when our method is among the offered ones', () => {
+    expect(
+      readCursorAcpLoginDecision(
+        parseCursorAcpHandshake({
+          authMethods: [{ id: 'other' }, { id: 'cursor_login' }],
+        }),
+      ),
+    ).toEqual({ kind: 'proceed', note: null })
   })
 })
 
