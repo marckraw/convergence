@@ -16,6 +16,7 @@ import {
   createMockCursorAcp,
   MockCursorAcpChild,
 } from './cursor-acp-server.fixture'
+import { CURSOR_ACP_RECORDED_UPDATE_TODOS_FULL_REQUEST } from './cursor-acp.recorded.fixture'
 
 /**
  * Cursor accepted-recording boundary through SessionService (MAR-3143 / CP2).
@@ -790,6 +791,63 @@ describe('Cursor accepted-recording boundary (MAR-3143)', () => {
     )
 
     getDatabase().exec('DROP TRIGGER refuse_assistant_complete_notify')
+    errors.mockRestore()
+  })
+  /**
+   * MAR-3241 R4: the acknowledgement Cursor waits for is answered BEFORE the
+   * todo note is recorded, so a refused note never leaves the far side
+   * hanging or reading a -32603. Lives here because this file already owns
+   * the real SessionService + database + TEMP TRIGGER apparatus a refused
+   * write needs.
+   * Mutation: record the note before `respond` in the `cursor/update_todos`
+   * request branch → red.
+   */
+  it('MAR-3241 R4: a refused todo note still answers cursor/update_todos with today acknowledgement', async () => {
+    const { service, session, server } = await fixture({ holdPrompt: true })
+    const failures: AcceptedRecordingFailureEvent[] = []
+    service.onAcceptedRecordingFailure((event) => failures.push(event))
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await service.start(session.id, { text: 'hi' })
+    await vi.waitUntil(() =>
+      server.requests.some((request) => request.method === 'session/prompt'),
+    )
+
+    getDatabase().exec(`CREATE TEMP TRIGGER refuse_todo_note
+      BEFORE INSERT ON session_conversation_items
+      WHEN NEW.kind = 'note'
+           AND NEW.provider_event_type = 'cursor/update_todos'
+      BEGIN SELECT RAISE(ABORT, 'fixture todo note refused'); END`)
+
+    server.send({
+      jsonrpc: '2.0',
+      id: 91,
+      method: 'cursor/update_todos',
+      params: CURSOR_ACP_RECORDED_UPDATE_TODOS_FULL_REQUEST,
+    })
+
+    await vi.waitUntil(() =>
+      server.responses.some((response) => response.id === 91),
+    )
+    const response = server.responses.find((response) => response.id === 91)
+    expect(response).not.toMatchObject({ error: expect.anything() })
+    // Byte-for-byte today's acknowledgement, written out rather than rebuilt
+    // from the builder the production path uses.
+    expect(response?.result).toEqual({
+      outcome: {
+        outcome: 'accepted',
+        todos: CURSOR_ACP_RECORDED_UPDATE_TODOS_FULL_REQUEST.todos,
+      },
+    })
+    // The note really was refused, so the acknowledgement above is the
+    // answer of a turn whose local write failed.
+    expect(
+      failures.length + recordingFailedNotes(service, session.id).length,
+    ).toBeGreaterThanOrEqual(1)
+
+    server.resolveHeldPrompt({ stopReason: 'end_turn' })
+    await vi.waitUntil(() => service.getById(session.id)?.status !== 'running')
+    getDatabase().exec('DROP TRIGGER refuse_todo_note')
     errors.mockRestore()
   })
 })
