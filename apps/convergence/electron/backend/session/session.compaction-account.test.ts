@@ -12,6 +12,7 @@ import {
   FAKE_CODEX_NO_RESPONSE,
 } from '../provider/codex/codex-server-host.fixture'
 import { LocalExecutionHost } from '../provider/execution-host/local-execution-host'
+import { isProviderBusyError } from '../provider/provider.types'
 import { ProviderRegistry } from '../provider/provider-registry'
 import { SessionService } from './session.service'
 import { TurnCaptureService } from './turn/turn-capture.service'
@@ -23,6 +24,7 @@ let holdCompaction: boolean
 let disconnectedAccount: boolean
 let releaseCompaction: ((fail?: boolean) => void) | undefined
 let cleanup: (() => Promise<void>) | undefined
+let server: FakeCodexServer
 
 beforeEach(async () => {
   const dir = mkdtempSync(join(tmpdir(), 'compaction-account-'))
@@ -31,7 +33,7 @@ beforeEach(async () => {
   holdCompaction = false
   disconnectedAccount = false
   releaseCompaction = undefined
-  const server = new FakeCodexServer({
+  server = new FakeCodexServer({
     onRequest: (message, connection) => {
       if (message.method === 'thread/compact/start' && holdCompaction) {
         releaseCompaction = (fail = false) => {
@@ -134,27 +136,72 @@ it.each([false, true])(
     )
     await vi.waitFor(() => expect(releaseCompaction).toBeTypeOf('function'))
     const before = service.getConversation(sessionId)
-    await expect(
-      service.sendMessage(sessionId, {
+    // The USER's door stays loud, and says the same words (MAR-3020 R3).
+    // What changed underneath is the TYPE: it is a busy refusal now, which
+    // is what lets the relay's door queue instead of losing the hop. The
+    // person still gets told no, now.
+    const refusal = await service
+      .sendMessage(sessionId, {
         text: 'too early',
         providerAccountId: 'account-b',
-      }),
-    ).rejects.toThrow(/compacting/)
+      })
+      .then(
+        () => null,
+        (error: unknown) => error,
+      )
+    expect(refusal).toBeInstanceOf(Error)
+    expect((refusal as Error).message).toMatch(/compacting/)
+    expect(isProviderBusyError(refusal)).toBe(true)
     await expect(service.compactContext(sessionId)).rejects.toThrow(
       /compacting/,
     )
-    await expect(
-      service.sendMessageWithOpener(sessionId, {
+    // The OPENER door waits instead of throwing (MAR-3020 R3). It used to
+    // reject here and queue nothing, which threw a whole hail away -- opener
+    // and payload -- for a wait that ends on its own in a minute.
+    const opened = await service.sendMessageWithOpener(sessionId, {
+      text: 'payload',
+      opener: '/clear',
+      providerAccountId: 'account-b',
+    })
+    expect(opened).toMatchObject({
+      openerQueued: true,
+      waitingOn: 'compaction',
+    })
+    // Both beats, in order: an opener is never sent as its own turn here, so
+    // the payload must be behind it and not merely present.
+    expect(
+      service.getQueuedInputs(sessionId).map((item) => ({
+        text: item.text,
+        relaysMuted: item.relaysMuted,
+        skipContextInjection: item.skipContextInjection,
+        state: item.state,
+      })),
+    ).toEqual([
+      {
+        text: '/clear',
+        relaysMuted: true,
+        skipContextInjection: true,
+        state: 'queued',
+      },
+      {
         text: 'payload',
-        opener: '/clear',
-        providerAccountId: 'account-b',
-      }),
-    ).rejects.toThrow(/compacting/)
-    expect(service.getQueuedInputs(sessionId)).toEqual([])
+        relaysMuted: false,
+        skipContextInjection: false,
+        state: 'queued',
+      },
+    ])
+    // Queued, not sent: nothing reached the provider while it compacted.
     expect(service.getConversation(sessionId)).toEqual(before)
     releaseCompaction!(fail)
     expect(await result).toBe(fail ? 'failed' : 'completed')
     expect(service.getById(sessionId)?.activity).toBeNull()
+    // The end of compaction drains what waited, on BOTH exits (R4).
+    await vi.waitFor(() =>
+      expect(service.getQueuedInputs(sessionId)).toEqual([]),
+    )
+    await vi.waitFor(() =>
+      expect(service.getById(sessionId)?.status).toBe('completed'),
+    )
     await service.sendMessage(sessionId, {
       text: 'after compaction',
       providerAccountId: 'account-b',
@@ -206,3 +253,115 @@ it('keeps an unassigned conversation on the ambient host during compaction', asy
   await service.compactContext(sessionId)
   expect(homes).toEqual([undefined])
 })
+
+/**
+ * Everything the Codex server was actually asked to run a turn on.
+ *
+ * The artifact, not the intent (MAR-3020): the claim these tests make is
+ * "the provider received it exactly once", and the queue's own bookkeeping
+ * is the layer being tested -- reading it back to prove itself would pass
+ * for a row that never left the app.
+ */
+function turnsSentToProvider(server: FakeCodexServer): string[] {
+  return server.requests
+    .filter((request) => request.method === 'turn/start')
+    .map((request) => JSON.stringify(request.params?.input ?? null))
+}
+
+async function heldCompaction() {
+  await startConversation()
+  holdCompaction = true
+  const compact = service.compactContext(sessionId)
+  const settled = compact.then(
+    () => 'completed',
+    () => 'failed',
+  )
+  await vi.waitFor(() => expect(releaseCompaction).toBeTypeOf('function'))
+  // Wrapped, never returned bare: an async function that returns a promise
+  // flattens it, so `await heldCompaction()` would wait for the compaction
+  // this helper exists to hold open.
+  return { settled }
+}
+
+it('queues a relay delivery that arrives during compaction (R2, MAR-3020)', async () => {
+  // The shape that ate a horse's return: the mastermind's conversation is
+  // compacting, the horse finishes, and the hop used to be recorded as an
+  // `error` with a hail and no retry. Compaction is a wait, not a failure.
+  const { settled } = await heldCompaction()
+  const before = service.getConversation(sessionId)
+
+  const delivery = await service.deliverRelayMessage(sessionId, {
+    text: 'the horse is done',
+    providerAccountId: 'account-b',
+    muteRelays: true,
+    skipContextInjection: true,
+  })
+
+  expect(delivery).toMatchObject({ queued: true, waitingOn: 'compaction' })
+  expect(delivery.dispatchId).toBeTruthy()
+  // ONE row, carrying the WHOLE input. The three fields beyond the text are
+  // named because a hand-copied enqueue here once dropped exactly them, and
+  // a row that loses its mute is a row that fires wires it was told not to.
+  expect(
+    service.getQueuedInputs(sessionId).map((item) => ({
+      text: item.text,
+      providerAccountId: item.providerAccountId,
+      relaysMuted: item.relaysMuted,
+      skipContextInjection: item.skipContextInjection,
+      state: item.state,
+      dispatchId: item.dispatchId,
+    })),
+  ).toEqual([
+    {
+      text: 'the horse is done',
+      providerAccountId: 'account-b',
+      relaysMuted: true,
+      skipContextInjection: true,
+      state: 'queued',
+      dispatchId: delivery.dispatchId,
+    },
+  ])
+  // Waiting, not sent: the provider heard nothing while it compacted.
+  expect(service.getConversation(sessionId)).toEqual(before)
+
+  releaseCompaction!(false)
+  await settled
+})
+
+it.each([false, true])(
+  'delivers the waiting relay row exactly once when compaction ends (failure=%s) (R4, MAR-3020)',
+  async (fail) => {
+    // Queuing a row that nothing drains is a slower way to lose it. The end
+    // of compaction is the drain, and a compaction that FAILED still ends
+    // the wait -- the row behind it is owed its delivery either way.
+    const { settled } = await heldCompaction()
+    const sentBefore = turnsSentToProvider(server).length
+
+    const delivery = await service.deliverRelayMessage(sessionId, {
+      text: 'the horse is done',
+      providerAccountId: 'account-b',
+    })
+    expect(delivery.queued).toBe(true)
+
+    releaseCompaction!(fail)
+    expect(await settled).toBe(fail ? 'failed' : 'completed')
+
+    // Waited for at the PROVIDER, not in the queue: the row is stamped
+    // `sent` when the dispatch is handed over, which is before the RPC
+    // reaches Codex -- asserting on the queue's own bookkeeping here passed
+    // while nothing had actually been delivered.
+    await vi.waitFor(() =>
+      expect(turnsSentToProvider(server).length).toBe(sentBefore + 1),
+    )
+    await vi.waitFor(() =>
+      expect(service.getById(sessionId)?.status).toBe('completed'),
+    )
+    expect(service.getQueuedInputs(sessionId)).toEqual([])
+    // EXACTLY once, read after the session settled: a drain that fired twice
+    // -- once per exit, or once per queue re-entry -- would show a second
+    // turn here, and duplicating a baton is the failure this rule guards.
+    const delivered = turnsSentToProvider(server).slice(sentBefore)
+    expect(delivered).toHaveLength(1)
+    expect(delivered[0]).toContain('the horse is done')
+  },
+)

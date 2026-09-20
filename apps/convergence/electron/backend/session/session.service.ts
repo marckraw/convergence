@@ -47,7 +47,9 @@ import type {
 import {
   isProviderBusyError,
   ProviderBusyError,
+  SessionCompactingError,
 } from '../provider/provider.types'
+import type { BusyWaitReason } from '../provider/provider.types'
 import {
   getMidRunInputCapabilityForProviderId,
   providerSupportsConversationReset,
@@ -2480,8 +2482,9 @@ export class SessionService {
     payloadDispatchId: string
     /** True when the opener is WAITING behind a turn rather than under way. */
     openerQueued: boolean
+    /** Why it waits, when it waits. Absent when the opener went out. */
+    waitingOn?: BusyWaitReason
   }> {
-    this.assertNotCompacting(id)
     this.assertNoPendingAccountHandoff(id)
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
@@ -2504,7 +2507,22 @@ export class SessionService {
 
     let openerDispatchId: string
     let openerQueued = true
-    if (this.isCarryingATurn(session)) {
+    let waitingOn: BusyWaitReason | undefined = 'turn'
+    // A compacting target waits exactly as a busy one does (MAR-3020). This
+    // door used to let `assertNotCompacting` leave from the top, which threw
+    // the whole delivery away -- opener and payload both -- for a wait that
+    // ends on its own in a minute. Queue BOTH beats, in order, and the drain
+    // at the end of compaction sends them.
+    //
+    // Asked before `isCarryingATurn` rather than after, because the two can
+    // both be false-ish here and only one of them is true: compaction
+    // releases the handle before it starts, so a compacting session reads as
+    // carrying no turn, and the `else` would send the opener straight into a
+    // conversation whose context is being rewritten underneath it.
+    if (this.compactingSessions.has(id)) {
+      openerDispatchId = queueOpener()
+      waitingOn = 'compaction'
+    } else if (this.isCarryingATurn(session)) {
       openerDispatchId = queueOpener()
     } else {
       // TWO parties know whether this target is busy and they can disagree
@@ -2526,6 +2544,7 @@ export class SessionService {
           muteRelays: true,
         })
         openerQueued = false
+        waitingOn = undefined
       } catch (error) {
         if (!isProviderBusyError(error)) throw error
         openerDispatchId = queueOpener()
@@ -2543,8 +2562,14 @@ export class SessionService {
       'follow-up',
     )
     // Whether the opener is WAITING rather than under way, so the ledger can
-    // say why the hop is queued instead of leaving the reason to be guessed.
-    return { openerDispatchId, payloadDispatchId, openerQueued }
+    // say why the hop is queued instead of leaving the reason to be guessed,
+    // and since MAR-3020 which of the two waits it is.
+    return {
+      openerDispatchId,
+      payloadDispatchId,
+      openerQueued,
+      ...(waitingOn ? { waitingOn } : {}),
+    }
   }
 
   /**
@@ -2576,11 +2601,27 @@ export class SessionService {
    * where a `/clear` hail at an idle Claude session was turned away, which is
    * why its predicate had to become "a turn is under way or arriving" rather
    * than "a handle is attached" (lap 2).
+   *
+   * A COMPACTING target waits here too (MAR-3020). Compaction is the same
+   * answer as a running turn -- "not now" -- from a different party:
+   * Convergence's own door rather than the provider's. It arrives typed, as
+   * a `SessionCompactingError`, so it lands in the catch below without a new
+   * branch, and `waitingOn` carries which of the two it was. Before this it
+   * left here as a plain error: the hop was recorded `error`, a chair was
+   * hailed, and nothing retried -- so an automatic compaction during a night
+   * wave ate the horse's return. The other half of the fix is the drain at
+   * the END of compaction (`compactContext`'s `finally`); queuing a row that
+   * nothing ever drains is just a slower way to lose it.
    */
   async deliverRelayMessage(
     id: string,
     input: SendMessageInput,
-  ): Promise<{ dispatchId: string; queued: boolean }> {
+  ): Promise<{
+    dispatchId: string
+    queued: boolean
+    /** Why it waits, when it waits. Absent when the delivery went out. */
+    waitingOn?: BusyWaitReason
+  }> {
     try {
       return { dispatchId: await this.sendMessage(id, input), queued: false }
     } catch (error) {
@@ -2602,7 +2643,15 @@ export class SessionService {
         },
         'follow-up',
       )
-      return { dispatchId, queued: true }
+      // WHICH refusal this was, so the ledger can say the true sentence
+      // rather than the likely one (MAR-3020 R5). Read from the class, not
+      // from the message: the words are user-facing and get reworded.
+      return {
+        dispatchId,
+        queued: true,
+        waitingOn:
+          error instanceof SessionCompactingError ? 'compaction' : 'turn',
+      }
     }
   }
 
@@ -2758,7 +2807,38 @@ export class SessionService {
       this.notifySessionChange(id)
       throw error
     } finally {
+      // The delete comes FIRST, and the drain second (MAR-3020 R4). The
+      // other order is a deadlock dressed as a retry: `dispatchNextQueuedInput`
+      // would meet a session still marked compacting, be refused by
+      // `assertNotCompacting`, put the row back in line by its busy class --
+      // and nothing would ever drain it again.
       this.compactingSessions.delete(id)
+      // In the `finally`, so BOTH exits drain. A compaction that failed
+      // still ends the wait: the row queued behind it is owed its delivery
+      // either way, and hanging it on the success path would have made a
+      // provider error eat a horse's return just as quietly as the bug this
+      // ticket closes.
+      //
+      // Safe to send now, and not by luck: compaction does not mint a new
+      // resume state for the drained row to race. The continuation token is
+      // a PRECONDITION of compacting -- read at the top, refused if absent --
+      // and `ProviderContextManagementResult` carries only a context window
+      // back, so nothing rewrites it here. The handle was released before
+      // the provider ran and is not re-established; the drained row respawns
+      // with `--resume <token>` and reads exactly what compaction left.
+      //
+      // The same guard the "Deliver now" path uses, and the session is
+      // re-read for it: the one in scope was read before the provider ran.
+      const settled = this.getById(id)
+      if (
+        settled &&
+        settled.status !== 'running' &&
+        !this.dispatches.isDispatching(id)
+      ) {
+        void this.dispatchNextQueuedInput(id).catch((error) => {
+          console.error('[session] Could not dispatch queued input', error)
+        })
+      }
     }
   }
 
@@ -2807,9 +2887,24 @@ export class SessionService {
     }
   }
 
+  /**
+   * The compaction door (MAR-3020).
+   *
+   * The sentence is unchanged and still user-facing; what changed is its
+   * TYPE. `SessionCompactingError` is a `ProviderBusyError`, so the three
+   * busy-aware catches downstream -- the delivery door, the dispatch
+   * terminal, the drain -- now treat a compaction the way they already treat
+   * a running turn: as "ask again in a moment", which the queue can answer.
+   * Before this, a relay hop that arrived mid-compaction was recorded as an
+   * `error`, hailed a chair, and was never retried: a baton on the floor.
+   *
+   * Still a throw, and still loud for the user: `sendMessage` does not catch
+   * it, so a person sending into a compacting conversation is refused now,
+   * with the same words, rather than having it happen later.
+   */
   private assertNotCompacting(sessionId: string): void {
     if (this.compactingSessions.has(sessionId)) {
-      throw new Error(
+      throw new SessionCompactingError(
         'This conversation is compacting. Wait for it to finish before sending another message.',
       )
     }

@@ -16,6 +16,7 @@ import {
   readEmittedDeclaration,
   relayConditionMatches,
   resolveRoundCap,
+  busyTargetReason,
   roundBudgetMessage,
   roundNumber,
   RELAY_OPENER_PREVIEW_LENGTH,
@@ -1048,4 +1049,27 @@ describe('MAR-3085 R1: the verdict line', () => {
       readEmittedVerdict('I mention VERDICT: PASS · lap 1 mid-sentence here.'),
     ).toEqual({ kind: 'none' })
   })
+})
+
+describe('busyTargetReason (MAR-3020)', () => {
+  it('names the compaction when that is what the hop waits for', () => {
+    // The two waits end differently -- one of its own accord in a minute,
+    // one when somebody else's turn finishes -- so a reader who cannot tell
+    // them apart cannot tell whether to wait or to go look.
+    expect(busyTargetReason('compaction')).toBe(
+      'Waiting for the target to finish compacting.',
+    )
+  })
+
+  it.each([['turn' as const], [undefined]])(
+    'keeps the turn sentence for %s',
+    (waitingOn) => {
+      // Absent reads as a turn deliberately: every caller predating
+      // MAR-3020 meant a turn, so the old sentence is the honest default
+      // rather than a hedge that names both.
+      expect(busyTargetReason(waitingOn)).toBe(
+        'Waiting behind a running turn at the target.',
+      )
+    },
+  )
 })

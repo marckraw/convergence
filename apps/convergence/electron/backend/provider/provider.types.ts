@@ -567,3 +567,37 @@ export class ProviderBusyError extends Error {
 export function isProviderBusyError(error: unknown): boolean {
   return error instanceof ProviderBusyError
 }
+
+/**
+ * Convergence's own "not now": the conversation is compacting (MAR-3020).
+ *
+ * A subclass rather than a sibling, because every caller that already knows
+ * how to answer "the target is mid-turn" gives the RIGHT answer to this one
+ * too, and gives it by class instead of by matching a sentence: the queue
+ * holds the row (`deliverRelayMessage`), the terminal does not fire
+ * (`withDispatchInFlight`), and a drained row goes back in line rather than
+ * dying (`dispatchNextQueuedInput`). Adding a second, unrelated error type
+ * would have meant teaching each of those three sites a new name, and the
+ * fourth site added later would have been the one that forgot.
+ *
+ * The distinction from a plain busy refusal is kept because the two want
+ * different WORDS on the canvas -- a reader waiting on a turn and a reader
+ * waiting on a compaction need different patience -- not because they want
+ * different handling. `waitingOn` carries that word; the class carries the
+ * handling.
+ */
+export class SessionCompactingError extends ProviderBusyError {
+  constructor(message: string) {
+    super(message)
+    this.name = 'SessionCompactingError'
+  }
+}
+
+/**
+ * Why an input is waiting rather than under way (MAR-3020).
+ *
+ * One vocabulary shared by the door that answers "not now" and the ledger
+ * that has to say so, rather than a union rewritten at each of the three
+ * boundaries it crosses. Absent means nothing waited.
+ */
+export type BusyWaitReason = 'turn' | 'compaction'
