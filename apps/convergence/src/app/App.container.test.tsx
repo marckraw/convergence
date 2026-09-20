@@ -150,6 +150,21 @@ const mockElectronAPI = {
     onHopAppended: vi.fn().mockReturnValue(() => {}),
     onHopsCleared: vi.fn().mockReturnValue(() => {}),
   },
+  // The preload exposes one object; `contextDrill` is present exactly when
+  // `electronAPI` is (`electron/preload/index.ts`). The drill's host
+  // subscribes to `contextDrill:changed` on mount, so a stub missing it is a
+  // shape the real app never has.
+  contextDrill: {
+    run: vi.fn(),
+    cancel: vi.fn(),
+    describe: vi.fn().mockResolvedValue({
+      eligible: false,
+      offered: false,
+      reason: "The drill only runs on a crew's mastermind conversation.",
+      beat: null,
+    }),
+    onChanged: vi.fn().mockReturnValue(() => {}),
+  },
   git: {
     getBranches: vi.fn().mockResolvedValue([]),
     getCurrentBranch: vi.fn().mockResolvedValue('main'),
@@ -446,6 +461,20 @@ describe('App', () => {
     // Subscribed too: a list loaded once and never updated would go stale the
     // first time a wire is armed anywhere else in the app.
     expect(mockElectronAPI.relay.onUpdated).toHaveBeenCalled()
+  })
+
+  /**
+   * The drill's host renders nothing, so nothing on screen would miss it: a
+   * deleted mount leaves every other gate green and silently costs every
+   * drill outcome its toast. Its subscription is the observable proof that
+   * it is mounted (MAR-3256 R4).
+   */
+  it('mounts the context drill host at startup', async () => {
+    render(<App />)
+
+    await waitFor(() => {
+      expect(mockElectronAPI.contextDrill.onChanged).toHaveBeenCalled()
+    })
   })
 
   it('shows welcome message when no project', async () => {

@@ -1,6 +1,10 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppSettingsStore } from '@/entities/app-settings'
+import {
+  useContextDrillStore,
+  type DrillDescription,
+} from '@/entities/context-drill'
 import type { ProviderInfo, SessionSummary } from '@/entities/session'
 import type { ContextAlertSettings } from '@/shared/lib/context-alert-settings.pure'
 import { ContextWindowDot } from './context-window-dot.container'
@@ -222,5 +226,193 @@ describe('ContextWindowDot', () => {
     act(() => setContextAlert({ enabled: true, percent: 5, tokens: null }))
 
     expect(dot().className).toContain('bg-amber-400')
+  })
+})
+
+const drillApi = {
+  run: vi.fn(async () => ({ ok: true as const })),
+  cancel: vi.fn(async () => ({ ok: true as const })),
+  describe: vi.fn(async (): Promise<DrillDescription> => READY_DRILL),
+  onChanged: vi.fn(() => () => {}),
+}
+
+const READY_DRILL: DrillDescription = {
+  eligible: true,
+  offered: true,
+  reason: null,
+  beat: null,
+}
+
+function installDrillApi() {
+  ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+    contextDrill: drillApi,
+  }
+}
+
+function resetDrillStore() {
+  useContextDrillStore.setState({
+    descriptions: {},
+    beats: {},
+    outcomes: {},
+    cancelRequested: {},
+    unsubscribe: null,
+  })
+}
+
+async function openPopover() {
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Context window unavailable' }),
+  )
+  await screen.findByRole('button', { name: 'Compact context' })
+}
+
+function renderDot() {
+  return render(
+    <ContextWindowDot
+      contextWindow={null}
+      session={session}
+      provider={provider}
+      onCompact={vi.fn(async () => {})}
+    />,
+  )
+}
+
+describe('ContextWindowDot — the drill (MAR-3256 R3)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    drillApi.describe.mockResolvedValue(READY_DRILL)
+    resetDrillStore()
+    installDrillApi()
+  })
+
+  afterEach(() => {
+    delete (window as unknown as { electronAPI?: unknown }).electronAPI
+    resetDrillStore()
+  })
+
+  it('offers no drill control on a conversation that is not a mastermind seat', async () => {
+    drillApi.describe.mockResolvedValue({
+      eligible: false,
+      offered: false,
+      reason: "The drill only runs on a crew's mastermind conversation.",
+      beat: null,
+    })
+    renderDot()
+
+    await openPopover()
+
+    await waitFor(() => expect(drillApi.describe).toHaveBeenCalled())
+    expect(
+      screen.queryByRole('button', { name: 'Run the drill' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('runs the drill once when the button is clicked', async () => {
+    renderDot()
+    await openPopover()
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Run the drill' }),
+    )
+
+    await waitFor(() => expect(drillApi.run).toHaveBeenCalledTimes(1))
+    expect(drillApi.run).toHaveBeenCalledWith('session-1')
+  })
+
+  it('shows the beat, disables Compact, and cancels while sealing', async () => {
+    renderDot()
+    await openPopover()
+    await screen.findByRole('button', { name: 'Run the drill' })
+
+    act(() =>
+      useContextDrillStore
+        .getState()
+        .handleChange({ sessionId: 'session-1', beat: 'sealing' }),
+    )
+
+    expect(
+      await screen.findByRole('button', { name: 'Sealing memory…' }),
+    ).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Compact context' }),
+    ).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    await waitFor(() =>
+      expect(drillApi.cancel).toHaveBeenCalledWith('session-1'),
+    )
+  })
+
+  it('greys out Cancel during the compaction and says why', async () => {
+    renderDot()
+    await openPopover()
+    await screen.findByRole('button', { name: 'Run the drill' })
+
+    act(() =>
+      useContextDrillStore
+        .getState()
+        .handleChange({ sessionId: 'session-1', beat: 'compacting' }),
+    )
+
+    expect(
+      await screen.findByRole('button', { name: 'Compacting…' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    expect(
+      screen.getByText(
+        'Compaction cannot be interrupted; it finishes on its own.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('a conversation opened mid-routine shows the beat and a working Cancel', async () => {
+    // Nothing is ever delivered on `contextDrill:changed` in this test. The
+    // routine started before this window existed -- reopened on macOS, or
+    // reloaded -- so `describe` is the only witness of the beat, and Cancel
+    // is the routine's whole way out.
+    drillApi.describe.mockResolvedValue({
+      eligible: true,
+      offered: false,
+      reason: 'This conversation is still working on a turn.',
+      beat: 'sealing',
+    })
+    renderDot()
+
+    await openPopover()
+
+    expect(
+      await screen.findByRole('button', { name: 'Sealing memory…' }),
+    ).toBeDisabled()
+    expect(drillApi.onChanged).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    await waitFor(() =>
+      expect(drillApi.cancel).toHaveBeenCalledWith('session-1'),
+    )
+  })
+
+  it('re-asks the backend when the turn ends, without any timer', async () => {
+    const { rerender } = render(
+      <ContextWindowDot
+        contextWindow={null}
+        session={{ ...session, status: 'running' } as SessionSummary}
+        provider={provider}
+        onCompact={vi.fn(async () => {})}
+      />,
+    )
+    await waitFor(() => expect(drillApi.describe).toHaveBeenCalledTimes(1))
+
+    rerender(
+      <ContextWindowDot
+        contextWindow={null}
+        session={session}
+        provider={provider}
+        onCompact={vi.fn(async () => {})}
+      />,
+    )
+
+    await waitFor(() => expect(drillApi.describe).toHaveBeenCalledTimes(2))
   })
 })

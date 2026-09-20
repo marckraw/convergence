@@ -706,6 +706,7 @@ describe('what the surface is told (R6)', () => {
   it('does not offer the drill on a seat that is not a mastermind', () => {
     sessions.mastermind = false
     expect(drill.describe(SESSION)).toEqual({
+      eligible: false,
       offered: false,
       reason: DRILL_NOT_A_MASTERMIND,
       beat: null,
@@ -717,7 +718,10 @@ describe('what the surface is told (R6)', () => {
       ready: false,
       reason: 'Wait for the pending send before compacting context',
     }
+    // Eligible and not offered: the seat is right, the moment is not. The
+    // control stays on screen and says why (MAR-3256 R1).
     expect(drill.describe(SESSION)).toEqual({
+      eligible: true,
       offered: false,
       reason: 'Wait for the pending send before compacting context',
       beat: null,
@@ -726,6 +730,7 @@ describe('what the surface is told (R6)', () => {
 
   it('offers the drill on a ready mastermind conversation', () => {
     expect(drill.describe(SESSION)).toEqual({
+      eligible: true,
       offered: true,
       reason: null,
       beat: null,
@@ -744,6 +749,7 @@ describe('what the surface is told (R6)', () => {
     }
     await drill.run(SESSION)
     expect(duringCompaction).toEqual({
+      eligible: true,
       offered: true,
       reason: null,
       beat: 'compacting',

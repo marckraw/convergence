@@ -114,12 +114,21 @@ export class ContextDrillService {
 
   describe(sessionId: string): DrillDescription {
     const beat = this.runs.get(sessionId)?.beat ?? null
+    // The seat decides `eligible`; everything after it can only decide
+    // `offered` (MAR-3256 R1). Readiness is a passing condition of a
+    // conversation that IS the drill's business, so a mastermind waiting for
+    // its own turn to end stays eligible and keeps its control on screen.
     if (!this.sessions.isMastermindSeat(sessionId))
-      return { offered: false, reason: DRILL_NOT_A_MASTERMIND, beat }
+      return {
+        eligible: false,
+        offered: false,
+        reason: DRILL_NOT_A_MASTERMIND,
+        beat,
+      }
     const readiness = this.sessions.describeCompactionReadiness(sessionId)
     if (!readiness.ready)
-      return { offered: false, reason: readiness.reason, beat }
-    return { offered: true, reason: null, beat }
+      return { eligible: true, offered: false, reason: readiness.reason, beat }
+    return { eligible: true, offered: true, reason: null, beat }
   }
 
   /**

@@ -32,6 +32,7 @@ import { SessionForkDialogContainer } from '@/features/session-fork'
 import { SessionIntentDialogContainer } from '@/features/session-intent-dialog'
 import { NotificationsToastHostContainer } from '@/features/notifications-toast-host'
 import { ContextAlertHostContainer } from '@/features/context-alert'
+import { ContextDrillHostContainer } from '@/features/context-drill-host'
 import { UpdatesToastContainer } from '@/features/updates-toast'
 import { ProviderUpdatesToastContainer } from '@/features/provider-updates-toast'
 import { FeedbackButtonContainer } from '@/features/feedback-button'
@@ -517,6 +518,7 @@ export function App({
       />
       <NotificationsToastHostContainer onFocusSession={onSelectAnySession} />
       <ContextAlertHostContainer onFocusSession={onSelectAnySession} />
+      <ContextDrillHostContainer onFocusSession={onSelectAnySession} />
       <UpdatesToastContainer />
       <ProviderUpdatesToastContainer />
       <FeedbackButtonContainer />
