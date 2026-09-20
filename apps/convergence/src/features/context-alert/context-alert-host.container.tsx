@@ -7,9 +7,10 @@ import {
   type ContextAlertSettings,
 } from '@/shared/lib/context-alert-settings.pure'
 import {
+  initialCrossingsState,
   nextCrossings,
   type ContextAlertCrossing,
-  type CrossingState,
+  type CrossingsState,
 } from './context-alert-crossings.pure'
 
 interface ContextAlertHostContainerProps {
@@ -35,30 +36,22 @@ export function ContextAlertHostContainer({
   const globalSessions = useSessionStore((s) => s.globalSessions)
   const contextAlert = useAppSettingsStore((s) => s.settings.contextAlert)
 
-  const crossingsRef = useRef<Map<string, CrossingState>>(new Map())
   /**
-   * Whether the conversations that existed before this host started are still
-   * unaccounted for.
+   * Everything this host remembers between passes: the crossing map and the
+   * threshold it was read against.
    *
-   * Not "is this the first effect run": the session store begins empty and
-   * fills asynchronously, so the first run is an empty list that proves
-   * nothing, and consuming it as the first observation would leave the real
-   * list to raise a toast for every old conversation. An empty list can hold
-   * nobody over the line, so it is not an observation at all.
+   * There is no second "have I seen the list yet?" flag. A conversation earns
+   * its toast by being seen working and then settling over the line, so the
+   * store starting empty, filling in batches, or the settings arriving after
+   * the sessions all come out the same way on their own.
    */
-  const awaitingFirstObservationRef = useRef(true)
+  const crossingsRef = useRef<CrossingsState>(initialCrossingsState())
 
   useEffect(() => {
-    if (globalSessions.length === 0) return
-
-    const firstObservation = awaitingFirstObservationRef.current
-    awaitingFirstObservationRef.current = false
-
     const { state, toTell } = nextCrossings(
       crossingsRef.current,
       globalSessions,
       contextAlert,
-      firstObservation,
     )
     crossingsRef.current = state
 

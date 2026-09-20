@@ -41,6 +41,16 @@ function setSessions(sessions: SessionSummary[]) {
   useSessionStore.setState({ globalSessions: sessions })
 }
 
+/**
+ * A turn of conversation `id` that ends at `usedPercentage`. Nothing is told
+ * about a conversation that was never seen working, so this is the shape every
+ * telling case needs.
+ */
+function runATurn(id: string, usedPercentage: number) {
+  act(() => setSessions([session(id, usedPercentage, 'running')]))
+  act(() => setSessions([session(id, usedPercentage, 'completed')]))
+}
+
 describe('ContextAlertHostContainer', () => {
   beforeEach(() => {
     toastMock.mockClear()
@@ -53,12 +63,12 @@ describe('ContextAlertHostContainer', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('tells once when a store update crosses the threshold', () => {
+  it('tells once when a turn ends over the threshold', () => {
     setSessions([session('a', 20)])
     render(<ContextAlertHostContainer />)
     expect(toastMock).not.toHaveBeenCalled()
 
-    act(() => setSessions([session('a', 80)]))
+    runATurn('a', 80)
 
     expect(toastMock).toHaveBeenCalledTimes(1)
     expect(toastMock.mock.calls[0]![0]).toBe('Context at 80 % — Session a')
@@ -71,8 +81,8 @@ describe('ContextAlertHostContainer', () => {
     setSessions([session('a', 20)])
     render(<ContextAlertHostContainer />)
 
-    act(() => setSessions([session('a', 80)]))
-    act(() => setSessions([session('a', 82)]))
+    runATurn('a', 80)
+    runATurn('a', 82)
 
     expect(toastMock).toHaveBeenCalledTimes(1)
   })
@@ -86,8 +96,8 @@ describe('ContextAlertHostContainer', () => {
 
   it('does not storm when the first list arrives after an empty one', () => {
     // The app's real order: the store is empty at mount and the conversations
-    // land a tick later. That later list is still the first observation, so an
-    // existing over-threshold conversation must not raise a toast.
+    // land a tick later, already over the line. None of them ended a turn in
+    // front of us, so none of them is told.
     render(<ContextAlertHostContainer />)
     expect(toastMock).not.toHaveBeenCalled()
 
@@ -96,12 +106,35 @@ describe('ContextAlertHostContainer', () => {
     expect(toastMock).not.toHaveBeenCalled()
   })
 
+  it('stays quiet when the threshold is lowered onto idle conversations', () => {
+    // Two conversations that worked under our watch and then went quiet, well
+    // under the line. This is QA step 2: lowering the threshold colours their
+    // dots and says nothing.
+    setSessions([session('a', 30), session('b', 40)])
+    render(<ContextAlertHostContainer />)
+    act(() => setSessions([session('a', 30, 'running'), session('b', 40)]))
+    act(() => setSessions([session('a', 30), session('b', 40, 'running')]))
+    act(() => setSessions([session('a', 30), session('b', 40)]))
+    expect(toastMock).not.toHaveBeenCalled()
+
+    act(() => setAlert({ enabled: true, percent: 5, tokens: 400000 }))
+
+    expect(toastMock).not.toHaveBeenCalled()
+
+    // And the next turn that ends above the new line is told about.
+    runATurn('a', 30)
+    expect(toastMock).toHaveBeenCalledTimes(1)
+  })
+
   it('names the token cap when the cap was the limit reached first', () => {
-    const big = (usedTokens: number) =>
+    const big = (
+      usedTokens: number,
+      status: SessionSummary['status'] = 'completed',
+    ) =>
       ({
         id: 'big',
         name: 'Big window',
-        status: 'completed',
+        status,
         contextWindow: {
           availability: 'available',
           source: 'provider',
@@ -115,6 +148,7 @@ describe('ContextAlertHostContainer', () => {
     setSessions([big(100000)])
     render(<ContextAlertHostContainer />)
 
+    act(() => setSessions([big(410000, 'running')]))
     act(() => setSessions([big(410000)]))
 
     expect(toastMock).toHaveBeenCalledTimes(1)
@@ -139,7 +173,7 @@ describe('ContextAlertHostContainer', () => {
     setSessions([session('a', 20)])
     render(<ContextAlertHostContainer />)
 
-    act(() => setSessions([session('a', 80)]))
+    runATurn('a', 80)
     expect(toastMock).toHaveBeenCalledTimes(1)
 
     act(() => setSessions([session('a', 15)]))
@@ -153,7 +187,7 @@ describe('ContextAlertHostContainer', () => {
     setSessions([session('a', 20)])
     render(<ContextAlertHostContainer />)
 
-    act(() => setSessions([session('a', 90)]))
+    runATurn('a', 90)
 
     expect(toastMock).not.toHaveBeenCalled()
   })
@@ -163,7 +197,7 @@ describe('ContextAlertHostContainer', () => {
     setSessions([session('a', 20)])
     render(<ContextAlertHostContainer onFocusSession={onFocusSession} />)
 
-    act(() => setSessions([session('a', 80)]))
+    runATurn('a', 80)
 
     const options = toastMock.mock.calls[0]![1] as {
       action: { label: string; onClick: () => void }
@@ -179,7 +213,7 @@ describe('ContextAlertHostContainer', () => {
     setSessions([session('a', 20)])
     render(<ContextAlertHostContainer />)
 
-    act(() => setSessions([session('a', 80)]))
+    runATurn('a', 80)
 
     expect(toastMock.mock.calls[0]![1]).not.toHaveProperty('action')
   })
