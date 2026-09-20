@@ -1666,6 +1666,30 @@ interface AnalyticsOverviewData {
   generatedProfile: GeneratedWorkProfileSnapshotData | null
 }
 
+/** The drill's three beats, mirrored for the renderer (MAR-3255). */
+export type ContextDrillBeatData = 'sealing' | 'compacting' | 'resuming'
+
+export type ContextDrillOutcomeData =
+  | { ok: true }
+  | { ok: false; beat: ContextDrillBeatData; reason: string }
+
+export interface ContextDrillDescriptionData {
+  offered: boolean
+  reason: string | null
+  beat: ContextDrillBeatData | null
+}
+
+export interface ContextDrillChangeData {
+  sessionId: string
+  beat: ContextDrillBeatData | null
+  reason?: string
+}
+
+/** A refusal is a value here too (MAR-3255 R8). */
+export type ContextDrillCancelResultData =
+  | { ok: true }
+  | { ok: false; reason: string }
+
 interface ElectronAPI {
   system: {
     getInfo: () => SystemInfo
@@ -1930,6 +1954,14 @@ interface ElectronAPI {
     ) => () => void
     onHopAppended: (callback: (hop: RelayHopData) => void) => () => void
     onHopsCleared: (callback: (crewId: string) => void) => () => void
+  }
+  contextDrill: {
+    run: (sessionId: string) => Promise<ContextDrillOutcomeData>
+    cancel: (sessionId: string) => Promise<ContextDrillCancelResultData>
+    describe: (sessionId: string) => Promise<ContextDrillDescriptionData>
+    onChanged: (
+      callback: (change: ContextDrillChangeData) => void,
+    ) => () => void
   }
   crewHail: {
     listOpen: () => Promise<CrewHailData[]>

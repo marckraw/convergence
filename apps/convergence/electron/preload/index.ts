@@ -345,6 +345,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
       }
     },
   },
+  contextDrill: {
+    run: (sessionId: string) =>
+      ipcRenderer.invoke('contextDrill:run', sessionId),
+    cancel: (sessionId: string) =>
+      ipcRenderer.invoke('contextDrill:cancel', sessionId),
+    describe: (sessionId: string) =>
+      ipcRenderer.invoke('contextDrill:describe', sessionId),
+    onChanged: (callback: (change: unknown) => void) => {
+      const handler = (_: unknown, change: unknown) => callback(change)
+      ipcRenderer.on('contextDrill:changed', handler)
+      return () => {
+        ipcRenderer.removeListener('contextDrill:changed', handler)
+      }
+    },
+  },
   crewHail: {
     listOpen: () => ipcRenderer.invoke('crewHails:listOpen'),
     acknowledge: (id: string) =>
