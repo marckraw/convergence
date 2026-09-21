@@ -81,9 +81,11 @@ export function dispatchWordSentence(
       return `${word.identifier} is still with this seat`
     case 'lane':
       return {
-        dirty: 'lane has uncommitted changes',
-        unpushed: 'lane has unpushed commits',
+        dirty: `lane has uncommitted changes${word.path ? ` · ${word.path.replace(/^(?:\/Users|\/home)\/[^/]+(?=\/|$)/, '~')}` : ''}`,
+        unpushed: `lane has unpushed commits${word.path ? ` · ${word.path.replace(/^(?:\/Users|\/home)\/[^/]+(?=\/|$)/, '~')}` : ''}`,
         unknown: 'lane not checked',
+        unset:
+          "this seat's worktree path is not set — set it in the seat's settings",
       }[word.state]
     case 'queued-behind':
       return `queued behind ${word.identifier}`

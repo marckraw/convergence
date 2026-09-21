@@ -13,6 +13,7 @@ export interface DispatchSeat extends Pick<
   'batonName' | 'sessionId' | 'role' | 'wipLimit'
 > {
   availability: SeatAvailability
+  lanePath: string | null
   lane: DispatchLane
   wire: { id: string; opener: string | null } | null
 }
@@ -80,7 +81,8 @@ export function planAutoDispatch(input: AutoDispatchInput): DispatchPlan {
       word = { kind: 'seat-busy', why: seat.availability }
     else if (held.length >= seat.wipLimit && held.length > 0)
       word = { kind: 'seat-holds', identifier: held[0].issueIdentifier }
-    else if (seat.lane !== 'clean') word = { kind: 'lane', state: seat.lane }
+    else if (seat.lane !== 'clean')
+      word = { kind: 'lane', state: seat.lane, path: seat.lanePath }
     else if (candidates.length > Math.max(0, seat.wipLimit - held.length)) {
       const ahead = ordered.find(
         (e) => e.issueId === candidates[candidates.length - 2],

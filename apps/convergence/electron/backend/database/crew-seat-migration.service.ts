@@ -93,16 +93,17 @@ function relaxSessionIdNullability(db: Database.Database): void {
       host_policy TEXT,
       lane_policy TEXT,
       wip_limit INTEGER,
+      lane_path TEXT,
       provider_id TEXT,
       model TEXT,
       UNIQUE (crew_id, session_id)
     )`,
     `INSERT INTO session_crew_members_rebuilt
       (crew_id, session_id, baton_name, canvas_x, canvas_y, added_at,
-       role, kind, role_card, host_policy, lane_policy, wip_limit,
+       role, kind, role_card, host_policy, lane_policy, wip_limit, lane_path,
        provider_id, model)
       SELECT crew_id, session_id, baton_name, canvas_x, canvas_y, added_at,
-             role, kind, role_card, host_policy, lane_policy, wip_limit,
+             role, kind, role_card, host_policy, lane_policy, wip_limit, lane_path,
              provider_id, model
         FROM session_crew_members
         ORDER BY added_at ASC, rowid ASC`,

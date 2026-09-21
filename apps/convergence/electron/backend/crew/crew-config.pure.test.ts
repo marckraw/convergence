@@ -68,6 +68,18 @@ const project = {
 }
 
 describe('crew config export', () => {
+  it('Item A never exports a machine-local lane path', () => {
+    const config = crewToConfig(
+      crew,
+      [{ ...member, lanePath: '/private/horse-worktree' }],
+      [session],
+      [project],
+      [],
+    )
+    expect(JSON.stringify(config)).not.toContain('lanePath')
+    expect(JSON.stringify(config)).not.toContain('lane_path')
+    expect(JSON.stringify(config)).not.toContain('/private/horse-worktree')
+  })
   it('exports a role without database identity (mutation: emit session id)', () => {
     const config = crewToConfig(crew, [member], [session], [project], [])
     expect(config).toEqual({

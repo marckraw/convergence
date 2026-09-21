@@ -252,7 +252,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
       plannedAt: AT,
       warnings: [],
       order: { opus: [entry.issueId] },
-      words: { [entry.issueId]: { kind: 'lane', state: 'dirty' } },
+      words: { [entry.issueId]: { kind: 'lane', state: 'dirty', path: null } },
     }
     await mount(<WavePanel />)
     fireEvent.click(screen.getByRole('button', { name: /^Next · / }))
@@ -3482,6 +3482,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
           crewId: 'crew-1',
           entries: [ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' })],
           trackerHealth: health('ok'),
+          dispatchPlan: null,
         },
         'crew-2': {
           crewId: 'crew-2',
@@ -3495,6 +3496,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
             }),
           ],
           trackerHealth: health('ok'),
+          dispatchPlan: null,
         },
       }
       // Counted at the storage itself, not at a spy on our own writer: what

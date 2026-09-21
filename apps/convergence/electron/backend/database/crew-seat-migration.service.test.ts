@@ -98,8 +98,14 @@ describe('the seat migration', () => {
         roleCard: null,
         hostPolicy: null,
         lanePolicy: null,
+        lanePath: null,
       })
 
+      new CrewService(db).setMemberSeat(
+        'c1',
+        { sessionId: 's1' },
+        { lanePath: '/tmp/horse-lane' },
+      )
       closeDatabase()
       resetDatabase()
       db = getDatabase(path)
@@ -116,11 +122,15 @@ describe('the seat migration', () => {
           'host_policy',
           'lane_policy',
           'wip_limit',
+          'lane_path',
           'provider_id',
           'model',
         ]),
       )
       expect(new CrewService(db).getById('c1')!.members[0]!.role).toBe('horse')
+      expect(new CrewService(db).getById('c1')!.members[0]!.lanePath).toBe(
+        '/tmp/horse-lane',
+      )
     } finally {
       closeDatabase()
       resetDatabase()
@@ -189,6 +199,7 @@ describe('the seat migration', () => {
         'host_policy TEXT',
         'lane_policy TEXT',
         'wip_limit INTEGER',
+        'lane_path TEXT',
         'provider_id TEXT',
         'model TEXT',
       ]) {

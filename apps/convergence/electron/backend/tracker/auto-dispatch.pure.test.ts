@@ -41,6 +41,7 @@ const horse = (patch: Partial<DispatchSeat> = {}): DispatchSeat => ({
   wipLimit: 1,
   availability: 'idle',
   lane: 'clean',
+  lanePath: null,
   wire: { id: 'wire', opener: '/clear' },
   ...patch,
 })
@@ -123,7 +124,7 @@ describe('MAR-3293 dispatch decisions', () => {
     )
     expect(
       plan(entries.slice(0, 2), horse({ lane: 'dirty' })).words['2'],
-    ).toEqual({ kind: 'lane', state: 'dirty' })
+    ).toEqual({ kind: 'lane', state: 'dirty', path: null })
   })
   it('R2 returned work occupies capacity; vacant limits one and two', () => {
     const entries = [row('1'), row('2')]
@@ -186,4 +187,15 @@ describe('MAR-3293 dispatch decisions', () => {
       ]).words,
     ).toEqual({})
   })
+})
+
+it('Item A unset lane keeps precedence below busy and above queue', () => {
+  expect(plan([row('1')], horse({ lane: 'unset' })).words['1']).toEqual({
+    kind: 'lane',
+    state: 'unset',
+    path: null,
+  })
+  expect(
+    plan([row('1')], horse({ lane: 'unset', availability: 'turn' })).words['1'],
+  ).toEqual({ kind: 'seat-busy', why: 'turn' })
 })

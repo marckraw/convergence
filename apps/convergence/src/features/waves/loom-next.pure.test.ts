@@ -404,7 +404,11 @@ describe('MAR-3293 backend dispatch plan', () => {
           wire: { id: 'w', opener: null },
         },
         'issue-MAR-1': { kind: 'queued-behind' as const, identifier: 'MAR-2' },
-        'issue-MAR-3': { kind: 'lane' as const, state: 'dirty' as const },
+        'issue-MAR-3': {
+          kind: 'lane' as const,
+          state: 'dirty' as const,
+          path: null,
+        },
       },
     }
     const next = loomNext(rows, [horse()], plan)
@@ -449,9 +453,15 @@ it.each<[DispatchWord, string]>([
     { kind: 'seat-holds', identifier: 'MAR-2' },
     'MAR-2 is still with this seat',
   ],
-  [{ kind: 'lane', state: 'dirty' }, 'lane has uncommitted changes'],
-  [{ kind: 'lane', state: 'unpushed' }, 'lane has unpushed commits'],
-  [{ kind: 'lane', state: 'unknown' }, 'lane not checked'],
+  [
+    { kind: 'lane', state: 'dirty', path: null },
+    'lane has uncommitted changes',
+  ],
+  [
+    { kind: 'lane', state: 'unpushed', path: null },
+    'lane has unpushed commits',
+  ],
+  [{ kind: 'lane', state: 'unknown', path: null }, 'lane not checked'],
   [{ kind: 'queued-behind', identifier: 'MAR-2' }, 'queued behind MAR-2'],
   [{ kind: 'would-start', wire: { id: 'w', opener: null } }, 'would start now'],
 ])('R8 translates %j into the specified sentence', (word, sentence) => {

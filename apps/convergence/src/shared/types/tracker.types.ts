@@ -328,7 +328,7 @@ export type SeatAvailability =
   | 'drill'
   | 'waiting-on-you'
   | 'unknown'
-export type DispatchLane = 'clean' | 'dirty' | 'unpushed' | 'unknown'
+export type DispatchLane = 'clean' | 'dirty' | 'unpushed' | 'unknown' | 'unset'
 export type DispatchWord =
   | { kind: 'needs-labels'; missing: string[] }
   | { kind: 'blocked' }
@@ -338,7 +338,7 @@ export type DispatchWord =
   | { kind: 'no-wire' }
   | { kind: 'seat-busy'; why: Exclude<SeatAvailability, 'idle' | 'unknown'> }
   | { kind: 'seat-holds'; identifier: string }
-  | { kind: 'lane'; state: Exclude<DispatchLane, 'clean'> }
+  | { kind: 'lane'; state: Exclude<DispatchLane, 'clean'>; path: string | null }
   | { kind: 'queued-behind'; identifier: string }
   | { kind: 'would-start'; wire: { id: string; opener: string | null } }
 

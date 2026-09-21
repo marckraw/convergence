@@ -1008,6 +1008,7 @@ describe('database', () => {
         'host_policy',
         'lane_policy',
         'wip_limit',
+        'lane_path',
         'provider_id',
         'model',
         'baton_name',

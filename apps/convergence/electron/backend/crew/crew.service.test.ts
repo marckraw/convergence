@@ -46,6 +46,24 @@ describe('CrewService', () => {
     expect(service.getById(night.id)!.sessionIds).toEqual(['s1'])
   })
 
+  it('R10 stores trimmed absolute paths, refuses relative paths without losing the saved value, and clears empty paths', () => {
+    const crew = service.create({ name: 'Lane crew', sessionIds: ['s1'] })
+    expect(crew.members[0].lanePath).toBeNull()
+    const ref = { sessionId: 's1' }
+    expect(
+      service.setMemberSeat(crew.id, ref, { lanePath: '  /tmp/horse  ' })
+        .members[0].lanePath,
+    ).toBe('/tmp/horse')
+    expect(() =>
+      service.setMemberSeat(crew.id, ref, { lanePath: '../horse' }),
+    ).toThrow('A worktree path must be absolute')
+    expect(service.getById(crew.id)!.members[0].lanePath).toBe('/tmp/horse')
+    expect(
+      service.setMemberSeat(crew.id, ref, { lanePath: '  ' }).members[0]
+        .lanePath,
+    ).toBeNull()
+  })
+
   it('lets the same crew re-add a member it already has', () => {
     const crew = service.create({ name: 'Night shift', sessionIds: ['s1'] })
 

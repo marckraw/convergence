@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   nextCrewPosition,
+  normalizeLanePath,
   normalizeCrewAccentColor,
   normalizeCrewBatonName,
   normalizeCrewEmoji,
@@ -121,4 +122,14 @@ describe('nextCrewPosition', () => {
   it('appends after the highest existing position', () => {
     expect(nextCrewPosition([0, 4, 2])).toBe(5)
   })
+})
+
+it('R10 normalizes worktree paths and refuses relative paths with the field sentence', () => {
+  expect(normalizeLanePath(' /tmp/horse ')).toBe('/tmp/horse')
+  for (const empty of ['', '  ', null, undefined])
+    expect(normalizeLanePath(empty)).toBeNull()
+  for (const relative of ['horse', '../horse', '~/horse'])
+    expect(() => normalizeLanePath(relative)).toThrow(
+      'A worktree path must be absolute',
+    )
 })

@@ -355,6 +355,8 @@ interface SessionCrewMemberData {
   /** `local` or an execution-host endpoint id. */
   hostPolicy: string | null
   lanePolicy: 'main' | 'own-worktree' | null
+  /** Absolute worktree path on this machine; never exported. */
+  lanePath: string | null
   /** How many issues this seat may hold at once; an older member holds one. */
   wipLimit: number
   /** A dynamic seat's recipe; null on a resident seat. */
@@ -1875,6 +1877,7 @@ interface ElectronAPI {
         role?: string | null
         roleCard?: string | null
         lanePolicy?: string | null
+        lanePath?: string | null
         wipLimit?: number | null
       },
     ) => Promise<SessionCrewData>
@@ -1887,6 +1890,7 @@ interface ElectronAPI {
         roleCard?: string | null
         hostPolicy?: string | null
         lanePolicy?: string | null
+        lanePath?: string | null
         wipLimit?: number | null
       },
     ) => Promise<SessionCrewData>

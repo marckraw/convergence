@@ -49,6 +49,7 @@ export function crewMember(
     roleCard: null,
     hostPolicy: null,
     lanePolicy: null,
+    lanePath: null,
     wipLimit: 1,
     providerId: null,
     model: null,

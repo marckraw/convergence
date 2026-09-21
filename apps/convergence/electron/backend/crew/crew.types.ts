@@ -32,6 +32,7 @@ export const DEFAULT_CREW_MEMBER_SEAT = {
   roleCard: null,
   hostPolicy: null,
   lanePolicy: null,
+  lanePath: null,
   wipLimit: DEFAULT_CREW_MEMBER_WIP_LIMIT,
   providerId: null,
   model: null,
@@ -77,6 +78,8 @@ export interface SessionCrewMember {
   /** `local` or an execution-host endpoint id; null takes the app's default. */
   hostPolicy: string | null
   lanePolicy: SessionCrewMemberLane | null
+  /** Absolute worktree path on this machine; never exported. */
+  lanePath: string | null
   /** How many issues this seat may hold at once; an older row holds one. */
   wipLimit: number
   /** A dynamic seat's recipe. Null on a resident seat, which has a session. */

@@ -45,19 +45,30 @@ export class AutoDispatchPlanService {
       (m) => m.role === 'mastermind' && m.sessionId,
     )
     const seats = await Promise.all(
-      crew.members.map(async (member) => ({
-        ...member,
-        availability: member.sessionId
-          ? this.deps.describeSeatAvailability(member.sessionId)
-          : ('unknown' as const),
-        lane: member.localWorkingDirectory
-          ? await this.deps.describeLane(member.localWorkingDirectory)
-          : ('unknown' as const),
-        wire:
-          master?.sessionId && member.sessionId
-            ? this.deps.findWire(crewId, master.sessionId, member.sessionId)
-            : null,
-      })),
+      crew.members.map(async (member) => {
+        const lanePath =
+          member.lanePath ??
+          (member.lanePolicy !== 'own-worktree'
+            ? member.localWorkingDirectory
+            : null)
+        return {
+          ...member,
+          availability: member.sessionId
+            ? this.deps.describeSeatAvailability(member.sessionId)
+            : ('unknown' as const),
+          lanePath,
+          lane:
+            member.lanePolicy === 'own-worktree' && !member.lanePath
+              ? ('unset' as const)
+              : member.localWorkingDirectory && lanePath
+                ? await this.deps.describeLane(lanePath)
+                : ('unknown' as const),
+          wire:
+            master?.sessionId && member.sessionId
+              ? this.deps.findWire(crewId, master.sessionId, member.sessionId)
+              : null,
+        }
+      }),
     )
     const plan = planAutoDispatch({
       plannedAt,

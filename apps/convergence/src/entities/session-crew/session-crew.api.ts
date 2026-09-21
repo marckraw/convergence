@@ -67,6 +67,7 @@ export const sessionCrewApi = {
       role?: string | null
       roleCard?: string | null
       lanePolicy?: string | null
+      lanePath?: string | null
       wipLimit?: number | null
     },
   ): Promise<SessionCrew> =>
@@ -81,6 +82,7 @@ export const sessionCrewApi = {
       roleCard?: string | null
       hostPolicy?: string | null
       lanePolicy?: string | null
+      lanePath?: string | null
       wipLimit?: number | null
     },
   ): Promise<SessionCrew> =>

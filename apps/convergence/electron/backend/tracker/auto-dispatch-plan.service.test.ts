@@ -201,6 +201,7 @@ function bench() {
     roleCard: null,
     hostPolicy: null,
     lanePolicy: null,
+    lanePath: null,
     wipLimit: 1,
     providerId: null,
     model: null,
@@ -267,7 +268,7 @@ it('R6 remote or missing local lane never calls local git and stays unknown', as
   deps.listCrews = () => crews
   deps.describeLane = vi.fn(async () => 'clean' as const)
   const result = await new AutoDispatchPlanService(deps).refresh(crewId, at(1))
-  expect(result.words.i).toEqual({ kind: 'lane', state: 'unknown' })
+  expect(result.words.i).toEqual({ kind: 'lane', state: 'unknown', path: null })
   expect(deps.describeLane).not.toHaveBeenCalled()
 })
 describe('R7 watcher plan snapshot', () => {
@@ -329,4 +330,77 @@ describe('R7 watcher plan snapshot', () => {
       expect.any(Error),
     )
   })
+})
+
+it('Item A judges the configured lane in two real repos and never substitutes an unset worktree', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dispatch-two-repos-'))
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync('git', args, { cwd, stdio: 'pipe' })
+  try {
+    git(root, 'init', 'source')
+    const source = join(root, 'source'),
+      conversation = join(root, 'conversation'),
+      lane = join(root, 'lane')
+    git(
+      source,
+      '-c',
+      'user.name=Fixture',
+      '-c',
+      'user.email=fixture@example.test',
+      'commit',
+      '--allow-empty',
+      '-m',
+      'base',
+    )
+    git(root, 'clone', source, conversation)
+    git(root, 'clone', source, lane)
+    const { deps, crewId } = bench()
+    deps.currentView = () =>
+      diffTrackerSnapshot({
+        crewId,
+        current: [],
+        issues: [issue],
+        seenAt: at(1),
+      }).map((e) => ({ ...e, id: 'r' }))
+    const crews = deps.listCrews()
+    const seat = crews[0].members[1]
+    seat.localWorkingDirectory = conversation
+    seat.lanePath = lane
+    seat.lanePolicy = 'own-worktree'
+    deps.listCrews = () => crews
+    const gitService = new GitService()
+    deps.describeLane = vi.fn((path) => gitService.describeLane(path))
+    const planner = new AutoDispatchPlanService(deps)
+    writeFileSync(join(conversation, 'dirt'), 'dirty conversation')
+    expect((await planner.refresh(crewId, at(1))).words.i.kind).toBe(
+      'would-start',
+    )
+    rmSync(join(conversation, 'dirt'))
+    writeFileSync(join(lane, 'dirt'), 'dirty lane')
+    expect((await planner.refresh(crewId, at(2))).words.i).toEqual({
+      kind: 'lane',
+      state: 'dirty',
+      path: lane,
+    })
+    seat.lanePath = null
+    crews[0].members[0].localWorkingDirectory = null
+    vi.mocked(deps.describeLane).mockClear()
+    expect((await planner.refresh(crewId, at(3))).words.i).toEqual({
+      kind: 'lane',
+      state: 'unset',
+      path: null,
+    })
+    expect(deps.describeLane).not.toHaveBeenCalled()
+    seat.lanePath = lane
+    seat.localWorkingDirectory = null
+    vi.mocked(deps.describeLane).mockClear()
+    expect((await planner.refresh(crewId, at(4))).words.i).toEqual({
+      kind: 'lane',
+      state: 'unknown',
+      path: lane,
+    })
+    expect(deps.describeLane).not.toHaveBeenCalledWith(lane)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })

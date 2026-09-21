@@ -1,3 +1,4 @@
+import { planAutoDispatch } from '../../../electron/backend/tracker/auto-dispatch.pure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { LoomSheetView } from './loom-sheet.presentational'
@@ -132,3 +133,47 @@ describe('R8 rendered Next', () => {
     ).toBe(0)
   })
 })
+
+it.each([
+  ['dirty', '/Users/marc/lane', 'lane has uncommitted changes · ~/lane'],
+  ['unpushed', '/home/marc/lane', 'lane has unpushed commits · ~/lane'],
+  ['unknown', null, 'lane not checked'],
+  [
+    'unset',
+    null,
+    "this seat's worktree path is not set — set it in the seat's settings",
+  ],
+] as const)(
+  'Item A renders lane %s with its judged path',
+  (state, path, sentence) => {
+    const dispatchPlan = planAutoDispatch({
+      plannedAt: plan.plannedAt,
+      entries: [entry],
+      firstSeen: new Map(),
+      seats: [
+        {
+          batonName: 'fable',
+          sessionId: 'm',
+          role: 'mastermind',
+          wipLimit: 1,
+          availability: 'idle',
+          lane: 'clean',
+          lanePath: null,
+          wire: null,
+        },
+        {
+          batonName: entry.seat,
+          sessionId: 's',
+          role: 'horse',
+          wipLimit: 1,
+          availability: 'idle',
+          lane: state,
+          lanePath: path,
+          wire: { id: 'wire', opener: null },
+        },
+      ],
+    })
+    render(<LoomSheetView {...base} sheet="next" dispatchPlan={dispatchPlan} />)
+    expect(screen.getByText(sentence)).toBeTruthy()
+  },
+)
