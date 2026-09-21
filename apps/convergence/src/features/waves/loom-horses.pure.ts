@@ -1,5 +1,11 @@
 import type { SessionCrew, SessionCrewMember } from '@/entities/session-crew'
-import type { AttentionState, SessionStatus } from '@/entities/session'
+import {
+  COMPACTING_CONTEXT_LABEL,
+  isSessionCompacting,
+  type ActivitySignal,
+  type AttentionState,
+  type SessionStatus,
+} from '@/entities/session'
 import type { WorkLedgerState } from '@/entities/work-ledger'
 import type { LoomSheets } from './loom-sheets.pure'
 import type { WaveRow } from './wave-sections.pure'
@@ -57,6 +63,22 @@ export interface LoomHorse {
   conversationMissing: boolean
   /** A `returned` row of this seat, named here AND left under Fable's turn. */
   returned: WaveRow | null
+  /**
+   * The seat's conversation is compacting its context right now (MAR-3289 R1).
+   *
+   * Carried BESIDE `runtime` rather than as a fifth runtime value: a compacting
+   * seat IS working -- it is busy, and auto-dispatch (MAR-3293) reads the four
+   * words to decide who is free -- so every consumer that switches on the four
+   * (the tint map, the icon map, `loomSeatCapacity`) keeps answering correctly
+   * without knowing this word exists. Only the LABEL is finer, and only the
+   * label reads this.
+   *
+   * True exactly when the compacting witness is what decided the runtime, so
+   * it can never disagree with the runtime beside it: both come out of one
+   * `runtimeFor` call, and a seat silenced by a dead host is `not-seen` and
+   * NOT compacting, whatever its last-heard activity said.
+   */
+  compacting: boolean
 }
 
 /** The runtime a session's status IS (R2). */
@@ -82,17 +104,44 @@ function runtimeForStatus(status: SessionStatus): LoomHorseRuntime {
  * a dead host reading *Idle* whenever its row happened to sit elsewhere.
  *
  * No session at all is the same ignorance by a different road.
+ *
+ * A compaction is read AFTER all four (MAR-3289 R1) and before the status: it
+ * is a thing the app watched the seat START, so it outranks the stale `status`
+ * the last turn left -- but a dead wire outranks it in turn, because `activity`
+ * is just as much a last-heard word as `status`, and a seat nobody can reach
+ * is not observably doing anything.
+ *
+ * The answer carries BOTH facts so they cannot drift: `compacting` is true
+ * exactly on the branch that read the predicate.
  */
 function runtimeFor(input: {
   session: LoomHorseSession | null
   held: WaveRow | null
   returned: WaveRow | null
-}): LoomHorseRuntime {
-  if (input.held?.hostMarker) return 'not-seen'
-  if (input.returned?.hostMarker) return 'not-seen'
-  if (input.session?.attention === 'host-unreachable') return 'not-seen'
-  if (input.session === null) return 'not-seen'
-  return runtimeForStatus(input.session.status)
+}): SeatRuntime {
+  if (input.held?.hostMarker) return plainly('not-seen')
+  if (input.returned?.hostMarker) return plainly('not-seen')
+  if (input.session?.attention === 'host-unreachable')
+    return plainly('not-seen')
+  if (input.session === null) return plainly('not-seen')
+  // Busy, whatever the last turn left behind: `status` still reads `completed`
+  // (or `failed`) for the whole compaction window, and both of those words
+  // mean "not riding" to `runtimeForStatus`.
+  if (isSessionCompacting(input.session)) {
+    return { runtime: 'working', compacting: true }
+  }
+  return plainly(runtimeForStatus(input.session.status))
+}
+
+/** What a seat's runtime is, and whether a compaction is what made it so. */
+interface SeatRuntime {
+  runtime: LoomHorseRuntime
+  compacting: boolean
+}
+
+/** A runtime reached without reading the compaction witness. */
+function plainly(runtime: LoomHorseRuntime): SeatRuntime {
+  return { runtime, compacting: false }
 }
 
 /** The seat's own session, as `loomHorses` needs to read it. */
@@ -104,6 +153,12 @@ export interface LoomHorseSession {
    * the backend derives it from the same liveness a row's marker reports.
    */
   attention?: AttentionState
+  /**
+   * What the conversation is doing right now, for `isSessionCompacting`
+   * (MAR-3289 R1). Optional because a seat's summary may predate the field;
+   * absent reads exactly as it did before this rule.
+   */
+  activity?: ActivitySignal
   executionHost?: string | null
 }
 
@@ -230,6 +285,7 @@ export function loomHorses(input: {
         member.sessionId === null
           ? member.hostPolicy
           : (session?.executionHost ?? member.hostPolicy)
+      const seatRuntime = runtimeFor({ session, held, returned })
       horses.push({
         // The conversation is the seat's identity where it has one (lap 2,
         // B); a recipe's name is unique by the migration's own rule; an
@@ -242,7 +298,7 @@ export function loomHorses(input: {
         crewName: crew.name,
         seat: member.batonName,
         kind: member.kind,
-        runtime: runtimeFor({ session, held, returned }),
+        runtime: seatRuntime.runtime,
         hostLabel: input.hostLabelOf(hostId),
         hostMarker: held?.hostMarker ?? null,
         sessionId: member.sessionId,
@@ -251,6 +307,7 @@ export function loomHorses(input: {
         held,
         heldFrom: working?.group ?? null,
         returned,
+        compacting: seatRuntime.compacting,
       })
     }
   }
@@ -271,14 +328,21 @@ const RUNTIME_WORDS: Readonly<Record<LoomHorseRuntime, string>> = {
 /**
  * The words on a card where the runtime goes.
  *
+ * Finer than `runtime` on purpose (MAR-3289 R1): a compacting seat is a
+ * WORKING seat everywhere a decision is made, and says which kind of working
+ * only here, where a person reads it.
+ *
  * A recipe seat says what it is instead: it is not `not-seen` -- nothing is
  * missing -- it simply has no conversation yet, and the four runtime words
  * are all about one.
  */
 export function loomHorseRuntimeLabel(horse: LoomHorse): string {
-  return horse.kind === 'dynamic'
-    ? LOOM_RECIPE_LINE
-    : RUNTIME_WORDS[horse.runtime]
+  if (horse.kind === 'dynamic') return LOOM_RECIPE_LINE
+  // The finer word for a working seat (MAR-3289 R1). The same sentence every
+  // other surface says while a conversation compacts, from the session
+  // entity's own constant, so Loom cannot come to word it differently.
+  if (horse.compacting) return COMPACTING_CONTEXT_LABEL
+  return RUNTIME_WORDS[horse.runtime]
 }
 
 /**

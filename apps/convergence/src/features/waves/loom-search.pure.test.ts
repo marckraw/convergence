@@ -304,6 +304,7 @@ describe('R4: a horse is not an issue', () => {
     heldFrom: held ? 'in-flight' : null,
     conversationMissing: false,
     returned: null,
+    compacting: false,
   })
   const HORSES = [
     horse('opus', entry('MAR-3233', 'Retire the Waves tab')),
