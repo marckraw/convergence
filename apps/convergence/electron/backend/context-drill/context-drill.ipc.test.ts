@@ -31,8 +31,14 @@ class StubSessions implements ContextDrillSessionGateway {
   sent: string[] = []
   release: (() => void) | null = null
 
-  isMastermindSeat(): boolean {
-    return this.mastermind
+  /**
+   * The roles this seat holds, one per crew (MAR-3287 R1). Null means "follow
+   * `mastermind`": a mastermind of one crew, or no seat at all.
+   */
+  roles: Array<string | null> | null = null
+
+  seatRolesOf(): ReadonlyArray<string | null> {
+    return this.roles ?? (this.mastermind ? ['mastermind'] : [])
   }
   describeCompactionReadiness() {
     return this.readiness
@@ -74,6 +80,7 @@ describe('contextDrill:describe (MAR-3255 R6)', () => {
   it('does not offer the drill on a seat that is not a mastermind', () => {
     sessions.mastermind = false
     expect(invoke('contextDrill:describe', 's')).toMatchObject({
+      seat: 'none',
       eligible: false,
       offered: false,
       beat: null,
@@ -83,6 +90,7 @@ describe('contextDrill:describe (MAR-3255 R6)', () => {
   it('does not offer the drill on a conversation that cannot compact', () => {
     sessions.readiness = { ready: false, reason: 'Wait for the pending send' }
     expect(invoke('contextDrill:describe', 's')).toEqual({
+      seat: 'mastermind',
       eligible: true,
       offered: false,
       reason: 'Wait for the pending send',
@@ -92,6 +100,7 @@ describe('contextDrill:describe (MAR-3255 R6)', () => {
 
   it('offers the drill on a ready mastermind conversation', () => {
     expect(invoke('contextDrill:describe', 's')).toEqual({
+      seat: 'mastermind',
       eligible: true,
       offered: true,
       reason: null,

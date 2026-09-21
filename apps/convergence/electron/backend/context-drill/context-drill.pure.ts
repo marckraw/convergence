@@ -6,6 +6,8 @@
  * a string, where it can be tested without either.
  */
 
+import type { DrillSeat } from './context-drill.types'
+
 /**
  * Beat 1, said to a mastermind conversation verbatim.
  *
@@ -110,4 +112,21 @@ export function readSealDeclaration(message: string | null): SealDeclaration {
     return { kind: 'sealed', detail: seal.slice(SEALED_PREFIX.length).trim() }
 
   return { kind: 'absent' }
+}
+
+/**
+ * Which seat a conversation sits on, from the role it holds in each crew it
+ * belongs to (MAR-3287 R1).
+ *
+ * No seat anywhere is `none`. Mastermind in ANY crew is `mastermind`, so a
+ * session that is a horse in one crew and the mastermind of another can run
+ * the drill. Everything else that is still a seat -- another role, or a role
+ * never chosen (`null`) -- is `other-role`, because a seat without a role is
+ * exactly the seat that needs to be told where to set one.
+ */
+export function resolveDrillSeat(
+  roles: ReadonlyArray<string | null>,
+): DrillSeat {
+  if (roles.length === 0) return 'none'
+  return roles.includes('mastermind') ? 'mastermind' : 'other-role'
 }

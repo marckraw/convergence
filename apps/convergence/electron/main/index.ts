@@ -889,15 +889,17 @@ async function startApp(): Promise<void> {
   // the drill can see exactly one fact about a crew and no more.
   const contextDrill = new ContextDrillService({
     sessions: {
-      isMastermindSeat: (sessionId) =>
+      // One entry per crew this session has a seat in (MAR-3287 R1); the
+      // drill turns the list into none / other-role / mastermind itself.
+      seatRolesOf: (sessionId) =>
         crewService
           .crewIdsForSession(sessionId)
-          .some(
+          .map(
             (crewId) =>
               crewService
                 .getById(crewId)
                 ?.members.find((member) => member.sessionId === sessionId)
-                ?.role === 'mastermind',
+                ?.role ?? null,
           ),
       describeCompactionReadiness: (sessionId) =>
         sessionService.describeCompactionReadiness(sessionId),

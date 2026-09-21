@@ -2,6 +2,7 @@ import {
   DRILL_AFTER_MESSAGE,
   DRILL_BEFORE_MESSAGE,
   readSealDeclaration,
+  resolveDrillSeat,
 } from './context-drill.pure'
 import type {
   ContextDrillSessionGateway,
@@ -17,6 +18,13 @@ export const DRILL_ALREADY_RUNNING =
   'A drill is already running for this conversation.'
 export const DRILL_NOT_A_MASTERMIND =
   "The drill only runs on a crew's mastermind conversation."
+/**
+ * What a crew seat that is not the mastermind is told (MAR-3287 R2): not
+ * only that the drill is unavailable, but where the one setting that would
+ * change that lives. Written once, here; the renderer quotes it.
+ */
+export const DRILL_SET_MASTERMIND_ROLE =
+  "The drill runs on a crew's mastermind seat. Set this seat's role to Mastermind in the crew's settings (Mission Control)."
 export const DRILL_SEAL_TURN_FAILED =
   'The conversation failed while it was sealing.'
 export const DRILL_SEAL_ABSENT = 'The agent did not confirm the seal.'
@@ -118,17 +126,31 @@ export class ContextDrillService {
     // `offered` (MAR-3256 R1). Readiness is a passing condition of a
     // conversation that IS the drill's business, so a mastermind waiting for
     // its own turn to end stays eligible and keeps its control on screen.
-    if (!this.sessions.isMastermindSeat(sessionId))
+    //
+    // The seat is asked ONCE (MAR-3287 R1), and `eligible` is derived from
+    // that one answer, so the two fields cannot describe different seats.
+    const seat = resolveDrillSeat(this.sessions.seatRolesOf(sessionId))
+    if (seat !== 'mastermind')
       return {
+        seat,
         eligible: false,
         offered: false,
-        reason: DRILL_NOT_A_MASTERMIND,
+        reason:
+          seat === 'other-role'
+            ? DRILL_SET_MASTERMIND_ROLE
+            : DRILL_NOT_A_MASTERMIND,
         beat,
       }
     const readiness = this.sessions.describeCompactionReadiness(sessionId)
     if (!readiness.ready)
-      return { eligible: true, offered: false, reason: readiness.reason, beat }
-    return { eligible: true, offered: true, reason: null, beat }
+      return {
+        seat,
+        eligible: true,
+        offered: false,
+        reason: readiness.reason,
+        beat,
+      }
+    return { seat, eligible: true, offered: true, reason: null, beat }
   }
 
   /**
@@ -141,7 +163,7 @@ export class ContextDrillService {
   async run(sessionId: string): Promise<DrillOutcome> {
     if (this.runs.has(sessionId))
       return { ok: false, beat: 'sealing', reason: DRILL_ALREADY_RUNNING }
-    if (!this.sessions.isMastermindSeat(sessionId))
+    if (resolveDrillSeat(this.sessions.seatRolesOf(sessionId)) !== 'mastermind')
       return { ok: false, beat: 'sealing', reason: DRILL_NOT_A_MASTERMIND }
     // Asked BEFORE beat 1, so a seal is never spent on a conversation that
     // could not have been compacted anyway (R3). The agent's sealing work is

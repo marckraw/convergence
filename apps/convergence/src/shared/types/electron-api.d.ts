@@ -1673,7 +1673,11 @@ export type ContextDrillOutcomeData =
   | { ok: true }
   | { ok: false; beat: ContextDrillBeatData; reason: string }
 
+export type ContextDrillSeatData = 'none' | 'other-role' | 'mastermind'
+
 export interface ContextDrillDescriptionData {
+  /** Which seat this is; the surface draws from this, never from `reason` (MAR-3287 R1). */
+  seat: ContextDrillSeatData
   /** A crew's mastermind seat: the kind of conversation the drill is for. */
   eligible: boolean
   /** Eligible AND able to start right now (MAR-3256 R1). */

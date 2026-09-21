@@ -13,7 +13,18 @@ export type DrillOutcome =
   | { ok: true }
   | { ok: false; beat: DrillBeat; reason: string }
 
+/**
+ * Which of three seats a conversation sits on (MAR-3287 R1): in no crew, a
+ * crew seat with another role (or none chosen), or a crew's mastermind.
+ */
+export type DrillSeat = 'none' | 'other-role' | 'mastermind'
+
 export interface DrillDescription {
+  /**
+   * Which seat this is. What the popover draws is decided from this and
+   * never from `reason`: the sentence is copy, and copy gets reworded.
+   */
+  seat: DrillSeat
   /** A crew's mastermind seat: the kind of conversation the drill is for. */
   eligible: boolean
   /** Eligible AND able to start right now. */

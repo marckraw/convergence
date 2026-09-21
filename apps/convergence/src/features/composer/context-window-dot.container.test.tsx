@@ -237,6 +237,7 @@ const drillApi = {
 }
 
 const READY_DRILL: DrillDescription = {
+  seat: 'mastermind',
   eligible: true,
   offered: true,
   reason: null,
@@ -290,8 +291,13 @@ describe('ContextWindowDot — the drill (MAR-3256 R3)', () => {
     resetDrillStore()
   })
 
-  it('offers no drill control on a conversation that is not a mastermind seat', async () => {
+  // Amended by MAR-3287: this was "offers no drill control on a conversation
+  // that is not a mastermind seat" (MAR-3256 R3). Nothing is now drawn only
+  // for a conversation in no crew; a crew seat with another role is drawn
+  // disabled, saying where to set the role (below).
+  it('offers no drill control on a conversation in no crew', async () => {
     drillApi.describe.mockResolvedValue({
+      seat: 'none',
       eligible: false,
       offered: false,
       reason: "The drill only runs on a crew's mastermind conversation.",
@@ -372,6 +378,7 @@ describe('ContextWindowDot — the drill (MAR-3256 R3)', () => {
     // reloaded -- so `describe` is the only witness of the beat, and Cancel
     // is the routine's whole way out.
     drillApi.describe.mockResolvedValue({
+      seat: 'mastermind',
       eligible: true,
       offered: false,
       reason: 'This conversation is still working on a turn.',
@@ -414,5 +421,123 @@ describe('ContextWindowDot — the drill (MAR-3256 R3)', () => {
     )
 
     await waitFor(() => expect(drillApi.describe).toHaveBeenCalledTimes(2))
+  })
+})
+
+const ROLE_SENTENCE =
+  "The drill runs on a crew's mastermind seat. Set this seat's role to Mastermind in the crew's settings (Mission Control)."
+
+const OTHER_ROLE_DRILL: DrillDescription = {
+  seat: 'other-role',
+  eligible: false,
+  offered: false,
+  reason: ROLE_SENTENCE,
+  beat: null,
+}
+
+describe('ContextWindowDot — a seat without the mastermind role (MAR-3287)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    drillApi.describe.mockResolvedValue(READY_DRILL)
+    resetDrillStore()
+    installDrillApi()
+  })
+
+  afterEach(() => {
+    delete (window as unknown as { electronAPI?: unknown }).electronAPI
+    resetDrillStore()
+  })
+
+  it('draws Run the drill disabled, with the role sentence (R3)', async () => {
+    drillApi.describe.mockResolvedValue(OTHER_ROLE_DRILL)
+    renderDot()
+
+    await openPopover()
+
+    expect(
+      await screen.findByRole('button', { name: 'Run the drill' }),
+    ).toBeDisabled()
+    expect(screen.getByText(ROLE_SENTENCE)).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Cancel' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('draws neither the button nor the sentence in no crew (R3)', async () => {
+    drillApi.describe.mockResolvedValue({
+      ...OTHER_ROLE_DRILL,
+      seat: 'none',
+    })
+    renderDot()
+
+    await openPopover()
+    await waitFor(() => expect(drillApi.describe).toHaveBeenCalled())
+
+    expect(
+      screen.queryByRole('button', { name: 'Run the drill' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(ROLE_SENTENCE)).not.toBeInTheDocument()
+  })
+
+  it('re-asks once per opening, and not on a re-render while open (R4)', async () => {
+    const onCompact = vi.fn(async () => {})
+    const { rerender } = render(
+      <ContextWindowDot
+        contextWindow={null}
+        session={session}
+        provider={provider}
+        onCompact={onCompact}
+      />,
+    )
+    await waitFor(() => expect(drillApi.describe).toHaveBeenCalledTimes(1))
+
+    await openPopover()
+    await waitFor(() => expect(drillApi.describe).toHaveBeenCalledTimes(2))
+
+    // Closed the way a person closes it: Escape, through the popover.
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    })
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: 'Compact context' }),
+      ).not.toBeInTheDocument(),
+    )
+    expect(drillApi.describe).toHaveBeenCalledTimes(2)
+
+    await openPopover()
+    await waitFor(() => expect(drillApi.describe).toHaveBeenCalledTimes(3))
+
+    rerender(
+      <ContextWindowDot
+        contextWindow={null}
+        session={session}
+        provider={provider}
+        onCompact={vi.fn(async () => {})}
+      />,
+    )
+    // Give a stray effect every chance to fire before counting.
+    await act(async () => {})
+    expect(
+      screen.getByRole('button', { name: 'Compact context' }),
+    ).toBeVisible()
+    expect(drillApi.describe).toHaveBeenCalledTimes(3)
+  })
+
+  it('shows a role set elsewhere the next time it opens, with no turn (R4)', async () => {
+    drillApi.describe
+      .mockResolvedValueOnce(OTHER_ROLE_DRILL)
+      .mockResolvedValueOnce(READY_DRILL)
+    renderDot()
+    await waitFor(() => expect(drillApi.describe).toHaveBeenCalledTimes(1))
+
+    await openPopover()
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Run the drill' }),
+      ).toBeEnabled(),
+    )
+    expect(screen.queryByText(ROLE_SENTENCE)).not.toBeInTheDocument()
   })
 })
