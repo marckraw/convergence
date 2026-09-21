@@ -1,4 +1,4 @@
-import type { FC } from 'react'
+import type { CSSProperties, FC } from 'react'
 import { Search, X } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
@@ -23,11 +23,15 @@ import {
 export const LoomSearchFieldView: FC<{
   field: LoomSearchField
   className?: string
-}> = ({ field, className }) => (
+  /** Expanded Loom's header is a window-drag strip; this field is not
+      (MAR-3284 R1). */
+  style?: CSSProperties
+}> = ({ field, className, style }) => (
   <div
     role="search"
     data-loom-search=""
     className={cn(LOOM_SEARCH_FIELD_CLASS, className)}
+    style={style}
   >
     <Search aria-hidden="true" className={LOOM_SEARCH_ICON_CLASS} />
     <Input

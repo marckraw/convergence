@@ -281,7 +281,8 @@ describe('MAR-3234 R7: both shapes', () => {
     const header = loom.firstElementChild as HTMLElement
     const kids = [...header.children]
     const at = (node: Element | null) => kids.indexOf(node as Element)
-    const subline = header.querySelector('p')
+    // MAR-3284 R4: the subline is a `<div>`, not a `<p>`.
+    const subline = header.querySelector('[data-loom-subline]')
     const search = header.querySelector('[data-loom-search]')
     const guide = [...header.querySelectorAll('button')].find((button) =>
       /How Loom works/.test(button.textContent ?? ''),

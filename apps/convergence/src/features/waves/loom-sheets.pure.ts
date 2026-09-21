@@ -253,29 +253,27 @@ export function loomSheetNote(
 }
 
 /**
- * Which ledger this is, under Loom's name (MAR-3189).
+ * Which ledger this is, under Loom's name (MAR-3189, MAR-3284).
  *
- * r4 asks for `<project> · All waves`. The app does not hold a tracker
- * project's NAME -- a binding carries `projectId` and nothing else
- * (`TrackerBinding`) -- so the honest stand-in is the crew whose tracker
- * these rows came from, which is the same word the header already uses for an
- * outage. `All waves` is a statement of fact until LV3 gives Before its wave
- * grouping: nothing here is filtered.
+ * The crew whose tracker these rows came from, and nothing else. The app does
+ * not hold a tracker project's NAME -- a binding carries `projectId` and
+ * nothing else (`TrackerBinding`) -- so the crew's name stands in, the same
+ * word the header already uses for an outage.
+ *
+ * r4 asked for `<project> · All waves` and MAR-3284 took the tail back off:
+ * `All waves` was true and said nothing (nothing here has ever been
+ * filtered), and the sentence it made turned the crew picker into a control
+ * sitting inside a paragraph.
  *
  * One crew, always (MAR-3225): Loom shows the selected crew's ledger and no
  * other, so the `N crews` count had nothing left to describe.
+ *
+ * No crew: the empty string, not a stand-in phrase. A subline with nothing to
+ * name says nothing; the shells keep its box and its spacing either way.
  */
 export function loomSubline(crewName: string | null): string {
-  return crewName === null
-    ? LOOM_SUBLINE_TAIL
-    : `${crewName} · ${LOOM_SUBLINE_TAIL}`
+  return crewName ?? ''
 }
-
-/**
- * The subline's tail, as text beside the crew picker too (MAR-3225 R3): the
- * picker replaces the crew's NAME, never the sentence it sits in.
- */
-export const LOOM_SUBLINE_TAIL = 'All waves'
 
 /**
  * Now's in-flight list with the cards' own rows taken out (MAR-3191 R4).

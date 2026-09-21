@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { LoomHorseRuntime } from './loom-horses.pure'
 
 /**
@@ -51,6 +52,31 @@ export const LOOM_COMPACT_CLASS =
  */
 export const LOOM_EXPANDED_CLASS =
   'absolute inset-0 z-20 flex h-full w-full flex-col bg-background'
+
+/**
+ * The window-drag regions Loom declares for itself (MAR-3284).
+ *
+ * Electron builds its draggable region from the DOM in tree order and knows
+ * nothing about stacking: a `drag` strip belonging to a view expanded Loom
+ * COVERS still takes the mouse through the cover. Loom therefore cannot stay
+ * silent about the question -- silence is not "no opinion", it is "whatever
+ * is underneath decides", and underneath is `chat-surface`'s or
+ * `session-view`'s title strip. So the cover declares `no-drag` over its
+ * whole area, its header re-declares `drag`, and each control in that header
+ * declares `no-drag` again. Later in the tree wins, which is the same
+ * drag-outside / no-drag-inside nesting `session-view.container.tsx:299/303`
+ * already uses.
+ *
+ * Inline styles, not classes: this is the one property a class cannot carry
+ * here, because a rendered test can only read what an element declares.
+ */
+export const LOOM_DRAG_STYLE = {
+  WebkitAppRegion: 'drag',
+} as CSSProperties
+
+export const LOOM_NO_DRAG_STYLE = {
+  WebkitAppRegion: 'no-drag',
+} as CSSProperties
 
 /**
  * A sheet's title: a button in both shapes, because it does the same thing in
