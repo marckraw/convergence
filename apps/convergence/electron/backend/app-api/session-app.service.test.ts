@@ -46,7 +46,7 @@ function createSessionBackend(
     unarchive: vi.fn(),
     delete: vi.fn(),
     start: vi.fn(),
-    sendMessage: vi.fn(),
+    sendPersonMessage: vi.fn(async () => ({ dispatchId: 'd', queued: false })),
     compactContext: vi.fn(),
     getQueuedInputs: vi.fn(() => []),
     cancelQueuedInput: vi.fn(),
@@ -136,7 +136,7 @@ describe('SessionAppService', () => {
     app.approveAttentionRequest('session-1', 'approval-1')
     app.stopSession('session-1')
 
-    expect(sessions.sendMessage).toHaveBeenCalledWith('session-1', input)
+    expect(sessions.sendPersonMessage).toHaveBeenCalledWith('session-1', input)
     expect(sessions.approve).toHaveBeenCalledWith('session-1', 'approval-1')
     expect(sessions.stop).toHaveBeenCalledWith('session-1')
   })

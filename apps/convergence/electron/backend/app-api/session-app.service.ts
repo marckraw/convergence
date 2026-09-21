@@ -28,7 +28,7 @@ export type SessionAppBackend = Pick<
   | 'unarchive'
   | 'delete'
   | 'start'
-  | 'sendMessage'
+  | 'sendPersonMessage'
   | 'compactContext'
   | 'getQueuedInputs'
   | 'cancelQueuedInput'
@@ -105,7 +105,9 @@ export class SessionAppService {
     sessionId: string,
     input: SessionAppCommandInput,
   ): Promise<void> {
-    await this.sessions.sendMessage(sessionId, input)
+    // The person's door (MAR-3288): a message sent into a compacting or
+    // drill-held conversation is queued rather than refused.
+    await this.sessions.sendPersonMessage(sessionId, input)
   }
 
   async compactSessionContext(

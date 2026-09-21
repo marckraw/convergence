@@ -2286,6 +2286,53 @@ export class SessionService {
   }
 
   /**
+   * A PERSON's send door (MAR-3288) -- the one the composer and every
+   * app-api client reach, through `SessionAppService.sendSessionMessage`.
+   *
+   * A compaction, or the hold a drill takes around one, is a wait that ends
+   * on its own in a minute. A horse's return already waits it out in the
+   * queue (MAR-3020); a person's message used to be refused with a toast
+   * instead, which Marcin ruled against on the first live drill: "lets queue
+   * them if possible like it do for horses". So this door answers that ONE
+   * refusal the way `deliverRelayMessage` does -- one `follow-up` row
+   * carrying the whole input -- and the drain at the end of the compaction
+   * (or `releaseQueue` at the end of the drill) sends it.
+   *
+   * Only `SessionCompactingError`, and not every busy refusal. "The target is
+   * mid-turn" still reaches the person as it always has: that one has a
+   * delivery mode of its own the composer chooses, and swallowing it here
+   * would quietly change what Steer and Normal mean.
+   *
+   * A door of its own rather than a catch inside `sendMessage`: the internal
+   * callers -- `sendMessageWithOpener`, `deliverRelayMessage` -- must still
+   * SEE the refusal, because its class is what the hop ledger reads to say
+   * `waitingOn: 'compaction'` (R4).
+   */
+  async sendPersonMessage(
+    id: string,
+    input: SendMessageInput,
+  ): Promise<{ dispatchId: string; queued: boolean }> {
+    try {
+      return { dispatchId: await this.sendMessage(id, input), queued: false }
+    } catch (error) {
+      if (!(error instanceof SessionCompactingError)) throw error
+      const dispatchId = randomUUID()
+      // The WHOLE input, as `deliverRelayMessage` writes it: attachments,
+      // skills, the account (null when absent) and every flag the row keeps.
+      this.queuedInputs.enqueue(
+        id,
+        {
+          ...input,
+          providerAccountId: input.providerAccountId ?? null,
+          dispatchId,
+        },
+        'follow-up',
+      )
+      return { dispatchId, queued: true }
+    }
+  }
+
+  /**
    * One beat of the context drill, and the only send that passes a queue hold
    * (MAR-3255 R2).
    *
