@@ -1,3 +1,4 @@
+import { isSessionCompacting } from '@/entities/session'
 import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import type { FC } from 'react'
 import type { SessionSummary } from '@/entities/session'
@@ -114,6 +115,7 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
             className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
           >
             <SessionBadge
+              compacting={isSessionCompacting(session)}
               attention={session.attention}
               status={session.status}
               parallelWork={session.parallelWork}
@@ -312,6 +314,9 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
                                   className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
                                 >
                                   <SessionBadge
+                                    compacting={isSessionCompacting(
+                                      attempt.session,
+                                    )}
                                     status={attempt.session?.status}
                                     parallelWork={attempt.session?.parallelWork}
                                     attention={

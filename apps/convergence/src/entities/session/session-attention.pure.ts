@@ -1,5 +1,9 @@
 import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import type { SessionSummary } from './session.types'
+import {
+  COMPACTING_CONTEXT_LABEL,
+  isSessionCompacting,
+} from './session-compacting.pure'
 
 export function formatSessionAttentionLabel(session: SessionSummary): string {
   if (session.attention === 'needs-approval') {
@@ -30,6 +34,9 @@ export function formatSessionAttentionLabel(session: SessionSummary): string {
   if (session.attention === 'host-unreachable') {
     return 'Host unreachable'
   }
+
+  // Busy, and saying so, before a stale `finished` can (MAR-3288 R5).
+  if (isSessionCompacting(session)) return COMPACTING_CONTEXT_LABEL
 
   const parallel = parallelWorkStatus(session)
   if (parallel) return parallel

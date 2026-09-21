@@ -149,6 +149,26 @@ describe('buildCuratedSections', () => {
     expect(ids).toEqual(['s-fail', 's-fin'])
   })
 
+  it('MAR-3288 R5 keeps a compacting conversation out of needs-review — mutation drop the predicate turns red', () => {
+    const items = buildItems({
+      projects: [project('p1', 'alpha')],
+      workspaces: [],
+      sessions: [
+        session('s-compacting', 'p1', {
+          status: 'completed',
+          attention: 'finished',
+          activity: 'compacting',
+        }),
+        session('s-fin', 'p1', { attention: 'finished' }),
+      ],
+    })
+    const sections = buildCuratedSections(items, {}, [])
+    const review = sections.find((s) => s.id === 'needs-review')!
+    expect(
+      review.items.map((item) => (item as SessionPaletteItem).sessionId),
+    ).toEqual(['s-fin'])
+  })
+
   it('excludes dismissed sessions whose updatedAt matches dismissal', () => {
     const items = buildItems({
       projects: [project('p1', 'alpha')],

@@ -111,7 +111,10 @@ export function buildCuratedSections(
   const review = sessionItems
     .filter(
       (session) =>
-        (session.attention === 'failed' || session.attention === 'finished') &&
+        (session.attention === 'failed' ||
+          // A compacting conversation still reads `finished`; it is busy,
+          // not waiting for review (MAR-3288 R5).
+          (session.attention === 'finished' && !session.compacting)) &&
         !isDismissed(session, dismissals),
     )
     .sort(compareSessionsForAttention)

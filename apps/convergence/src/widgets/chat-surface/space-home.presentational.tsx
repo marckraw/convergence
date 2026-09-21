@@ -1,3 +1,4 @@
+import { isSessionCompacting } from '@/entities/session'
 import type { FC, ReactNode } from 'react'
 import type { SessionSummary } from '@/entities/session'
 import type {
@@ -287,6 +288,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                         disabled={!session}
                       >
                         <SessionBadge
+                          compacting={isSessionCompacting(session)}
                           attention={session?.attention ?? 'none'}
                         />
                         <div className="min-w-0 flex-1">

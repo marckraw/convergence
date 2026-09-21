@@ -51,6 +51,19 @@ it('R5 global activity includes answered background work and excludes it from fi
   }).toEqual({ running: ['session-1'], completed: null })
 })
 
+it('MAR-3288 R5 a compacting conversation counts as running and is never the last completed — mutation drop the predicate turns red', () => {
+  const session = makeSession({
+    status: 'completed',
+    attention: 'finished',
+    activity: 'compacting',
+  })
+  const result = selectGlobalStatus([session], {}, [])
+  expect({
+    running: result.running.map((row) => row.id),
+    completed: result.lastCompleted,
+  }).toEqual({ running: ['session-1'], completed: null })
+})
+
 function makeProject(overrides: Partial<Project>): Project {
   return {
     id: 'project-1',

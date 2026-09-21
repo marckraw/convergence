@@ -78,3 +78,17 @@ describe('session attention labels', () => {
     ).toBe('1 approval, 2 forms')
   })
 })
+
+describe('formatSessionAttentionLabel while compacting (MAR-3288 R5)', () => {
+  it('says Compacting context… where it said Finished — mutation drop the predicate turns red', () => {
+    const compacting = makeSession({
+      status: 'completed',
+      attention: 'finished',
+      activity: 'compacting',
+    })
+    expect(formatSessionAttentionLabel(compacting)).toBe('Compacting context…')
+    expect(formatSessionAttentionLabel({ ...compacting, activity: null })).toBe(
+      'Finished',
+    )
+  })
+})

@@ -6,7 +6,10 @@ import { ProviderModel } from '@/shared/ui/provider-model.presentational'
 import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import type { FC, ReactNode } from 'react'
 import { Cable, Loader2, Radio } from 'lucide-react'
-import { formatSessionAttentionLabel } from '@/entities/session'
+import {
+  formatSessionAttentionLabel,
+  isSessionCompacting,
+} from '@/entities/session'
 import { Button } from '@/shared/ui/button'
 import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { cn } from '@/shared/lib/cn.pure'
@@ -84,6 +87,7 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
               title={formatSessionAttentionLabel(session)}
             >
               <SessionBadge
+                compacting={isSessionCompacting(session)}
                 attention={session.attention}
                 status={session.status}
                 parallelWork={session.parallelWork}

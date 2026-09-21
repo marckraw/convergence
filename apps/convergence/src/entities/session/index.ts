@@ -128,6 +128,10 @@ export type {
 } from './mid-run-input.pure'
 export type { GlobalStatus, ProjectActivity } from './session.selectors.pure'
 export { formatActivityLabel } from './session.activity.pure'
+export {
+  COMPACTING_CONTEXT_LABEL,
+  isSessionCompacting,
+} from './session-compacting.pure'
 export { providerApi, sessionApi } from './session.api'
 export { sessionForkApi } from './session-fork.api'
 export type {

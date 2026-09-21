@@ -8,11 +8,11 @@ import {
   type SpaceSource,
 } from '@/entities/space'
 import type { SessionSummary } from '@/entities/session'
+import { AttentionIndicator, useSessionStore } from '@/entities/session'
 import {
-  AttentionIndicator,
-  formatActivityLabel,
-  useSessionStore,
-} from '@/entities/session'
+  resolveSessionActivityLabel,
+  useContextDrillStore,
+} from '@/entities/context-drill'
 import { switchToSession } from '@/features/command-center'
 import { ComposerContainer } from '@/features/composer'
 import {
@@ -174,7 +174,14 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
     activeSpaceId === null
       ? EMPTY_SPACE_SOURCES
       : (sourcesBySpaceId[activeSpaceId] ?? EMPTY_SPACE_SOURCES)
-  const activityLabel = formatActivityLabel(session?.activity)
+  // The drill's beat, when one runs, replaces the activity pill (MAR-3288 R8).
+  const drillBeat = useContextDrillStore((s) =>
+    session ? s.beats[session.id] : undefined,
+  )
+  const activityLabel = resolveSessionActivityLabel(
+    session?.activity,
+    drillBeat,
+  )
   const sessionLookup = useMemo(() => {
     const next = new Map<string, SessionSummary>()
     for (const entry of globalSessions) next.set(entry.id, entry)
@@ -659,6 +666,7 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
             parallelWork={session.parallelWork}
             attention={session.attention}
             status={session.status}
+            activity={session.activity}
           />
           {session.archivedAt ? (
             <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">

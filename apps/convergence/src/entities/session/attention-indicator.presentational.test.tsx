@@ -175,3 +175,28 @@ describe('AttentionIndicator', () => {
     })
   })
 })
+
+describe('AttentionIndicator while compacting (MAR-3288 R5)', () => {
+  it('says Compacting context… and never Finished — mutation drop the predicate turns red', () => {
+    const { rerender } = render(
+      <AttentionIndicator
+        attention="finished"
+        status="completed"
+        activity="compacting"
+      />,
+    )
+    expect(screen.getByText('Compacting context…')).toBeInTheDocument()
+    expect(screen.queryByText('Finished')).toBeNull()
+
+    // The activity clears, and the same record is Finished again.
+    rerender(
+      <AttentionIndicator
+        attention="finished"
+        status="completed"
+        activity={null}
+      />,
+    )
+    expect(screen.getByText('Finished')).toBeInTheDocument()
+    expect(screen.queryByText('Compacting context…')).toBeNull()
+  })
+})

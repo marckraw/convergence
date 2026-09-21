@@ -320,3 +320,17 @@ it.each(['host-unreachable', 'finished'] as const)(
     }
   },
 )
+it('renders Compacting context… and no Finished or Acknowledge while compacting (MAR-3288 R5)', () => {
+  const card = needsYouCardModel(
+    cardSession({
+      status: 'completed',
+      attention: 'finished',
+      activity: 'compacting',
+    }),
+    cardContext,
+  )
+  render(<NeedsYouCard card={card} {...actions()} />)
+  expect(screen.getByText('Compacting context…')).toBeInTheDocument()
+  expect(screen.queryByText(/Finished/)).toBeNull()
+  expect(screen.queryByText('Acknowledge')).toBeNull()
+})

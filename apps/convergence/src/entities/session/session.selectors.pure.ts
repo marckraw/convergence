@@ -1,3 +1,4 @@
+import { isSessionCompacting } from './session-compacting.pure'
 import type { Project } from '../project/project.types'
 import type {
   ConversationItem,
@@ -57,8 +58,15 @@ export function selectGlobalStatus(
   dismissals: NeedsYouDismissals,
   projects: Project[],
 ): GlobalStatus {
+  // A compacting conversation is busy (MAR-3288 R5). Its status still reads
+  // the last turn's `completed`, so without this it left the running count and
+  // came back as the "last completed" badge, green check and all, while its
+  // context was being rewritten.
   const running = sessions.filter(
-    (session) => session.status === 'running' || session.status === 'answered',
+    (session) =>
+      session.status === 'running' ||
+      session.status === 'answered' ||
+      isSessionCompacting(session),
   )
   const needsAttention = sessions.filter((session) =>
     isAttentionSession(session, dismissals),

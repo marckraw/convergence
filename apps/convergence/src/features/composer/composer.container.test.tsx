@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ComposerContainer } from './composer.container'
 import {
@@ -16,6 +16,7 @@ import {
 import { normalizeProjectSettings, useProjectStore } from '@/entities/project'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useSessionRelayStore } from '@/entities/session-relay'
+import { useContextDrillStore } from '@/entities/context-drill'
 import { useAttachmentStore } from '@/entities/attachment'
 import { useDialogStore } from '@/entities/dialog'
 import type { TurnDelta } from '@/entities/turn'
@@ -3946,6 +3947,117 @@ describe('ComposerContainer', () => {
     expect(card).toHaveTextContent('Waiting for the next turn')
     // "Queued" was the old word and it said nothing about when.
     expect(card).not.toHaveTextContent('Queued')
+  })
+
+  describe('a wait the composer names before he types (MAR-3288 R6/R7)', () => {
+    function setSession(overrides: Record<string, unknown>) {
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) =>
+          session.id === 'session-1'
+            ? ({ ...session, ...overrides } as typeof session)
+            : session,
+        ),
+      }))
+    }
+
+    function renderComposer() {
+      return render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+    }
+
+    afterEach(() => {
+      useContextDrillStore.setState({ beats: {} })
+    })
+
+    it.each([
+      [
+        'compaction',
+        { activity: 'compacting' },
+        {},
+        'Compacting context — messages you send now are queued and delivered after.',
+      ],
+      [
+        'a drill',
+        { activity: null },
+        { 'session-1': 'sealing' as const },
+        'The drill is running — messages you send now are queued and delivered after.',
+      ],
+    ])(
+      'says a message sent during %s is queued, and keeps the input and send enabled — mutation remove the condition turns red',
+      async (_name, activity, beats, notice) => {
+        setSession({ status: 'completed', attention: 'finished', ...activity })
+        useContextDrillStore.setState({ beats })
+        renderComposer()
+
+        expect(
+          await screen.findByTestId('composer-wait-notice'),
+        ).toHaveTextContent(notice)
+        const textbox = screen.getByRole('textbox')
+        expect(textbox).not.toBeDisabled()
+        fireEvent.change(textbox, { target: { value: 'test one' } })
+        expect(
+          screen.getByRole('button', { name: 'Send message' }),
+        ).not.toBeDisabled()
+      },
+    )
+
+    it('says nothing when there is no wait', async () => {
+      setSession({ status: 'completed', attention: 'finished', activity: null })
+      renderComposer()
+      await screen.findByRole('textbox')
+      expect(screen.queryByTestId('composer-wait-notice')).toBeNull()
+    })
+
+    it('labels a waiting row Waits for compaction only while there is a wait — mutation always the plain label turns red', async () => {
+      seedQueuedInputs([queuedInput({ text: 'test one' })])
+      setSession({
+        status: 'completed',
+        attention: 'finished',
+        activity: 'compacting',
+      })
+      const view = renderComposer()
+      const card = await screen.findByTestId('queued-inputs')
+      expect(card).toHaveTextContent('Waits for compaction')
+      expect(card).not.toHaveTextContent('Waiting for the next turn')
+
+      act(() => {
+        setSession({ activity: null })
+      })
+      view.rerender(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+      expect(screen.getByTestId('queued-inputs')).toHaveTextContent(
+        'Waiting for the next turn',
+      )
+      expect(screen.getByTestId('queued-inputs')).not.toHaveTextContent(
+        'Waits for compaction',
+      )
+    })
+
+    it('labels a waiting row Waits for compaction during a drill beat', async () => {
+      seedQueuedInputs([queuedInput({ text: 'test two' })])
+      setSession({ status: 'running', attention: 'none', activity: null })
+      useContextDrillStore.setState({ beats: { 'session-1': 'sealing' } })
+      renderComposer()
+      expect(await screen.findByTestId('queued-inputs')).toHaveTextContent(
+        'Waits for compaction',
+      )
+    })
   })
 
   it('offers Deliver now on a failed follow-up, and a dismiss that is not disabled', async () => {

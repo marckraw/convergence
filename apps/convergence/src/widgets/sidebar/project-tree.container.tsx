@@ -1,3 +1,4 @@
+import { isSessionCompacting } from '@/entities/session'
 import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import { isRemoteExecutionHost } from '@/entities/execution-host'
 import { useEffect, useState } from 'react'
@@ -359,6 +360,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
               />
             ) : (
               <SessionBadge
+                compacting={isSessionCompacting(session)}
                 attention={session.attention}
                 status={session.status}
                 parallelWork={session.parallelWork}
@@ -399,6 +401,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                   />
                 ) : (
                   <SessionBadge
+                    compacting={isSessionCompacting(session)}
                     attention={session.attention}
                     status={session.status}
                     parallelWork={session.parallelWork}

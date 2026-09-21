@@ -1,5 +1,6 @@
 import type { Project } from '@/entities/project'
 import type { Workspace } from '@/entities/workspace'
+import { isSessionCompacting } from '@/entities/session'
 import type {
   SessionSummary,
   AttentionState,
@@ -193,6 +194,7 @@ export function buildPaletteIndex(
       branchName,
       providerId: session.providerId,
       attention: session.attention,
+      compacting: isSessionCompacting(session),
       updatedAt: session.updatedAt,
       search: {
         sessionName: session.name,

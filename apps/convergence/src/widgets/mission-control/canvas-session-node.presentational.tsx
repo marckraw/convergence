@@ -2,7 +2,10 @@ import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import type { FC } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { formatSessionAttentionLabel } from '@/entities/session'
+import {
+  formatSessionAttentionLabel,
+  isSessionCompacting,
+} from '@/entities/session'
 import {
   CANVAS_NODE_HEIGHT,
   CANVAS_NODE_WIDTH,
@@ -121,6 +124,7 @@ export const CanvasSessionNode: FC<NodeProps> = ({ data }) => {
               title={formatSessionAttentionLabel(session)}
             >
               <SessionBadge
+                compacting={isSessionCompacting(session)}
                 attention={session.attention}
                 status={session.status}
                 parallelWork={session.parallelWork}

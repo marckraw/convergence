@@ -1,3 +1,4 @@
+import { isSessionCompacting } from '@/entities/session'
 import type { CSSProperties, ReactNode } from 'react'
 import {
   ClipboardList,
@@ -98,6 +99,7 @@ export function SessionActivityCard({
             <span className="flex items-start gap-1 text-xs font-medium">
               {compact && !card.hostUnreachable && (
                 <SessionBadge
+                  compacting={isSessionCompacting(session)}
                   attention={session.attention}
                   status={session.status}
                   parallelWork={session.parallelWork}
