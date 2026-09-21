@@ -1,8 +1,14 @@
+import type { DispatchPlan } from '@/shared/types/tracker.types'
 import type { ReactNode, UIEvent } from 'react'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
-import { loomNowRows, loomSheetNote, type LoomSheets } from './loom-sheets.pure'
+import {
+  loomNowRows,
+  loomSheetCounts,
+  loomSheetNote,
+  type LoomSheets,
+} from './loom-sheets.pure'
 import {
   loomBefore,
   loomBeforeOlder,
@@ -25,7 +31,7 @@ import {
 } from './loom-search.pure'
 import type { LoomSheetSearch } from './loom-stack.types'
 import {
-  loomNext,
+  LOOM_DISPATCH_ORDER_LINE,
   LOOM_NEXT_ORDER_LINE,
   LOOM_NEXT_UNSEATED_TITLE,
 } from './loom-next.pure'
@@ -53,6 +59,7 @@ import {
 const QA_SECTION_ID = 'loom-awaiting-qa'
 
 interface LoomSheetViewProps<TSession = unknown> {
+  dispatchPlan?: DispatchPlan | null
   sheet: LoomSheet
   sheets: LoomSheets
   /** The board's clock; Before's window is judged against it (MAR-3192). */
@@ -117,6 +124,7 @@ export const LoomSheetView = <TSession,>({
   sheets,
   now,
   horses,
+  dispatchPlan = null,
   qaExpanded,
   onToggleQa,
   onOpenSeat,
@@ -162,7 +170,7 @@ export const LoomSheetView = <TSession,>({
   const plan = loomPlan(sheets.plan, loomUtcDay(now))
   // The same one derivation for the queues and (through `loomSheetCounts`)
   // the title above them (MAR-3193 R5).
-  const next = loomNext(sheets.next, horses)
+  const next = loomSheetCounts(sheets, now, horses, dispatchPlan).nextQueue
   const leftLine = loomPlanLeftLine(plan.left)
   const qa = sheets.now.awaitingQa
   const qaShown = qaExpanded ? qa : qa.slice(0, LOOM_QA_PREVIEW)
@@ -358,8 +366,25 @@ export const LoomSheetView = <TSession,>({
                   onOpen={onOpen}
                 />
               </div>
-              {next.seats.length > 0 || next.unseated.length > 0 ? (
-                <p className={LOOM_SHEET_NOTE_CLASS}>{LOOM_NEXT_ORDER_LINE}</p>
+              {dispatchPlan ||
+              next.seats.length > 0 ||
+              next.unseated.length > 0 ? (
+                <p className={LOOM_SHEET_NOTE_CLASS}>
+                  {dispatchPlan
+                    ? LOOM_DISPATCH_ORDER_LINE
+                    : LOOM_NEXT_ORDER_LINE}
+                </p>
+              ) : null}
+              {dispatchPlan ? (
+                <p className={LOOM_SHEET_NOTE_CLASS}>
+                  Planned{' '}
+                  {new Date(dispatchPlan.plannedAt).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false,
+                  })}{' '}
+                  · nothing is sent yet — auto-dispatch is not built
+                </p>
               ) : null}
             </>
           ) : null}

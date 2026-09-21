@@ -1,3 +1,5 @@
+import type { DispatchWord } from '@/shared/types/tracker.types'
+import { dispatchWordSentence } from './loom-next.pure'
 import { describe, expect, it } from 'vitest'
 import {
   loomMissingLabels,
@@ -387,4 +389,81 @@ describe('MAR-3193 R5: the title counts from the same derivation', () => {
       loomSheetTitle('next', loomSheetCounts(sheets, NOW, [horse()])),
     ).toBe('Next · 1 ready')
   })
+})
+
+describe('MAR-3293 backend dispatch plan', () => {
+  it('R8 uses the supplied order and words instead of the legacy issue-number order', () => {
+    const rows = [queued('MAR-1'), queued('MAR-2'), queued('MAR-3')]
+    const plan = {
+      plannedAt: '2026-09-21T12:00:00Z',
+      warnings: [],
+      order: { opus: ['issue-MAR-2', 'issue-MAR-1', 'issue-MAR-3'] },
+      words: {
+        'issue-MAR-2': {
+          kind: 'would-start' as const,
+          wire: { id: 'w', opener: null },
+        },
+        'issue-MAR-1': { kind: 'queued-behind' as const, identifier: 'MAR-2' },
+        'issue-MAR-3': {
+          kind: 'lane' as const,
+          state: 'dirty' as const,
+          path: null,
+        },
+      },
+    }
+    const next = loomNext(rows, [horse()], plan)
+    expect(identifiers(next.seats[0].ready)).toEqual(['MAR-2', 'MAR-1'])
+    expect(next.seats[0].ready.map((r) => r.action)).toEqual([
+      'would start now',
+      'queued behind MAR-2',
+    ])
+    expect(next.seats[0].preparing[0].action).toBe(
+      'lane has uncommitted changes',
+    )
+    const counts = loomSheetCounts(
+      loomSheets(
+        rows.map((r) => r.entry),
+        NOW,
+      ),
+      NOW,
+      [horse()],
+      plan,
+    )
+    expect([counts.nextReady, counts.nextPreparing, counts.next]).toEqual([
+      2, 1, 3,
+    ])
+  })
+})
+
+it.each<[DispatchWord, string]>([
+  [
+    { kind: 'needs-labels', missing: ['grounded', 'dispatch'] },
+    'needs grounded · dispatch',
+  ],
+  [{ kind: 'blocked' }, 'blocked'],
+  [{ kind: 'seat-not-in-crew' }, 'seat "opus" not in the crew'],
+  [{ kind: 'seat-no-conversation' }, 'seat has no conversation'],
+  [{ kind: 'no-mastermind' }, 'no mastermind seat in this crew'],
+  [{ kind: 'no-wire' }, 'no wire from the mastermind to this seat'],
+  [{ kind: 'seat-busy', why: 'turn' }, 'seat busy · turn running'],
+  [{ kind: 'seat-busy', why: 'compacting' }, 'seat busy · compacting'],
+  [{ kind: 'seat-busy', why: 'drill' }, 'seat busy · drill running'],
+  [{ kind: 'seat-busy', why: 'waiting-on-you' }, 'seat busy · waiting on you'],
+  [
+    { kind: 'seat-holds', identifier: 'MAR-2' },
+    'MAR-2 is still with this seat',
+  ],
+  [
+    { kind: 'lane', state: 'dirty', path: null },
+    'lane has uncommitted changes',
+  ],
+  [
+    { kind: 'lane', state: 'unpushed', path: null },
+    'lane has unpushed commits',
+  ],
+  [{ kind: 'lane', state: 'unknown', path: null }, 'lane not checked'],
+  [{ kind: 'queued-behind', identifier: 'MAR-2' }, 'queued behind MAR-2'],
+  [{ kind: 'would-start', wire: { id: 'w', opener: null } }, 'would start now'],
+])('R8 translates %j into the specified sentence', (word, sentence) => {
+  expect(dispatchWordSentence(word, 'opus')).toBe(sentence)
 })

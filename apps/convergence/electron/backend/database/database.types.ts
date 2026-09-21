@@ -269,6 +269,7 @@ export interface SessionCrewMemberRow {
   /** `main | own-worktree`. */
   lane_policy: string | null
   /** How many issues this seat may hold at once; null reads as 1. */
+  lane_path: string | null
   wip_limit: number | null
   /** A dynamic seat's provider and model; null on a resident seat. */
   provider_id: string | null

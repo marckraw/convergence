@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path'
 import {
   hasEdgeFormattingMark,
   hasNameableCharacter,
@@ -252,4 +253,13 @@ export function normalizeCrewRecipeField(
   if (value === undefined || value === null) return null
   const trimmed = value.trim()
   return trimmed.length === 0 ? null : trimmed
+}
+
+export function normalizeLanePath(
+  value: string | null | undefined,
+): string | null {
+  const path = value?.trim() || null
+  if (path !== null && !isAbsolute(path))
+    throw new Error('A worktree path must be absolute')
+  return path
 }

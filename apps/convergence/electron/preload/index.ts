@@ -262,6 +262,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         role?: string | null
         roleCard?: string | null
         lanePolicy?: string | null
+        lanePath?: string | null
         wipLimit?: number | null
       },
     ) => ipcRenderer.invoke('crew:addRecipeMember', crewId, input),
@@ -274,6 +275,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         roleCard?: string | null
         hostPolicy?: string | null
         lanePolicy?: string | null
+        lanePath?: string | null
         wipLimit?: number | null
       },
     ) => ipcRenderer.invoke('crew:setMemberSeat', crewId, member, patch),

@@ -135,10 +135,16 @@ beforeEach(() => {
     ]),
   ]
   ledgers = {
-    'crew-1': { crewId: 'crew-1', entries: ROWS, trackerHealth: null },
+    'crew-1': {
+      crewId: 'crew-1',
+      entries: ROWS,
+      dispatchPlan: null,
+      trackerHealth: null,
+    },
     'crew-2': {
       crewId: 'crew-2',
       entries: [row('NS-1', 'Other crew work', { crewId: 'crew-2' })],
+      dispatchPlan: null,
       trackerHealth: null,
     },
   }
@@ -644,6 +650,7 @@ describe('MAR-3234 R10: typing is cheap', () => {
           sessionId: null,
         }),
       ],
+      dispatchPlan: null,
       trackerHealth: null,
     }
     await mount('compact')

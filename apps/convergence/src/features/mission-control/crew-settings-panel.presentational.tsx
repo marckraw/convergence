@@ -252,6 +252,11 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
             member={member}
             nameValue={batonNameDrafts[key] ?? member.batonName ?? ''}
             cardDraft={seatDrafts[key]?.roleCard}
+            lanePathValue={seatDrafts[key]?.lanePath ?? member.lanePath ?? ''}
+            onLanePathChange={(value) =>
+              onSeatDraftEdit(key, 'lanePath', value)
+            }
+            onLanePathCommit={() => onSeatDraftCommit(ref, 'lanePath')}
             wipValue={seatDrafts[key]?.wipLimit ?? String(member.wipLimit)}
             facts={factsFor(member)}
             factsHeading={

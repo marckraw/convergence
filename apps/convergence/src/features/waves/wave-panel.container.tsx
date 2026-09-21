@@ -542,6 +542,7 @@ export const WavePanel: FC<WavePanelProps> = ({
         }
 
   const stack = {
+    dispatchPlan: board.dispatchPlan,
     sheets: board.sheets,
     now: board.now,
     horses: board.horses,
@@ -704,6 +705,7 @@ export const WavePanel: FC<WavePanelProps> = ({
   if (decision.mode === 'strip') {
     return withGuide(
       <LoomStripView
+        dispatchPlan={board.dispatchPlan}
         sheets={board.sheets}
         now={board.now}
         horses={board.horses}

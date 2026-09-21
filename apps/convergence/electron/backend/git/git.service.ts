@@ -449,6 +449,25 @@ export class GitService {
     )
   }
 
+  async describeLane(
+    repoPath: string,
+  ): Promise<'clean' | 'dirty' | 'unpushed' | 'unknown'> {
+    if (!repoPath) return 'unknown'
+    try {
+      if ((await exec('git', ['status', '--porcelain', '-u'], repoPath)).trim())
+        return 'dirty'
+      if (
+        !(
+          await exec('git', ['branch', '-r', '--contains', 'HEAD'], repoPath)
+        ).trim()
+      )
+        return 'unpushed'
+      return 'clean'
+    } catch {
+      return 'unknown'
+    }
+  }
+
   async getStatus(
     repoPath: string,
   ): Promise<Array<{ status: string; file: string }>> {

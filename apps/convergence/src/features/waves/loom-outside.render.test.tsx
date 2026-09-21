@@ -113,7 +113,12 @@ beforeEach(() => {
   vi.setSystemTime(NOW)
   crews = [boundCrew('crew-1', 'Loom')]
   ledgers = {
-    'crew-1': { crewId: 'crew-1', entries: [DEFINE], trackerHealth: null },
+    'crew-1': {
+      crewId: 'crew-1',
+      entries: [DEFINE],
+      dispatchPlan: null,
+      trackerHealth: null,
+    },
   }
   outside = { 'crew-1': read('crew-1', THREE) }
   pushOutside = () => {}

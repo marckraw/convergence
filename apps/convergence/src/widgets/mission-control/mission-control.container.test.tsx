@@ -1664,6 +1664,51 @@ describe('MissionControl', () => {
      * was dropped before the door answered, so a card over the limit vanished
      * along with the sentence explaining why.
      */
+    it('R10 keeps a refused worktree path under its field, then saves a valid path and clears to null', async () => {
+      const member = {
+        ...DEFAULT_CREW_MEMBER_SEAT,
+        sessionId: 'a',
+        batonName: 'opus',
+        canvasX: null,
+        canvasY: null,
+        lanePolicy: 'own-worktree' as const,
+      }
+      const api = await openCrewSettings('Night shift', [member])
+      let savedMember = member as SessionCrew['members'][number]
+      api.setMemberSeat = vi.fn(async (_id, _ref, patch) => {
+        if (patch.lanePath && !patch.lanePath.startsWith('/'))
+          throw new Error('A worktree path must be absolute')
+        savedMember = { ...savedMember, ...patch } as typeof savedMember
+        const saved = makeCrew({
+          id: 'crew-1',
+          name: 'Night shift',
+          sessionIds: ['a'],
+          members: [savedMember],
+        })
+        listCrews.mockResolvedValue([saved])
+        return saved
+      })
+      fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
+      const field = screen.getByLabelText('Worktree path')
+      fireEvent.change(field, { target: { value: '../horse' } })
+      fireEvent.blur(field)
+      const refusal = await screen.findByText(
+        'A worktree path must be absolute',
+      )
+      expect(field).toHaveValue('../horse')
+      expect(refusal.closest('[data-seat-lane-path]')).toContainElement(field)
+      fireEvent.change(field, { target: { value: '/tmp/horse' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Close opus' }))
+      await waitFor(() => expect(savedMember.lanePath).toBe('/tmp/horse'))
+      fireEvent.click(screen.getByRole('button', { name: /^opus — / }))
+      expect(screen.getByLabelText('Worktree path')).toHaveValue('/tmp/horse')
+      fireEvent.change(screen.getByLabelText('Worktree path'), {
+        target: { value: '' },
+      })
+      fireEvent.blur(screen.getByLabelText('Worktree path'))
+      await waitFor(() => expect(savedMember.lanePath).toBeNull())
+    })
+
     it('keeps an over-long role card draft and shows why it was refused (mutation: drop the draft first)', async () => {
       const api = await openCrewSettings('Night shift', [
         {

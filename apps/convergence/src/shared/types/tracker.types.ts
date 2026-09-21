@@ -321,8 +321,37 @@ export interface TrackerHealth {
   backoffUntil: string | null
 }
 
+export type SeatAvailability =
+  | 'idle'
+  | 'turn'
+  | 'compacting'
+  | 'drill'
+  | 'waiting-on-you'
+  | 'unknown'
+export type DispatchLane = 'clean' | 'dirty' | 'unpushed' | 'unknown' | 'unset'
+export type DispatchWord =
+  | { kind: 'needs-labels'; missing: string[] }
+  | { kind: 'blocked' }
+  | { kind: 'seat-not-in-crew' }
+  | { kind: 'seat-no-conversation' }
+  | { kind: 'no-mastermind' }
+  | { kind: 'no-wire' }
+  | { kind: 'seat-busy'; why: Exclude<SeatAvailability, 'idle' | 'unknown'> }
+  | { kind: 'seat-holds'; identifier: string }
+  | { kind: 'lane'; state: Exclude<DispatchLane, 'clean'>; path: string | null }
+  | { kind: 'queued-behind'; identifier: string }
+  | { kind: 'would-start'; wire: { id: string; opener: string | null } }
+
+export interface DispatchPlan {
+  plannedAt: string
+  words: Record<string, DispatchWord>
+  order: Record<string, string[]>
+  warnings: string[]
+}
+
 /** The one shape `workLedger:list` answers and `workLedger:updated` sends. */
 export interface WorkLedgerSnapshot {
+  dispatchPlan: DispatchPlan | null
   crewId: string
   entries: WorkLedgerEntry[]
   trackerHealth: TrackerHealth | null

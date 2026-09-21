@@ -184,6 +184,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
       'crew-1': {
         crewId: 'crew-1',
         entries: rows,
+        dispatchPlan: null,
         trackerHealth: health('ok'),
       },
     }
@@ -230,6 +231,35 @@ describe('MAR-3097: through the containers and the real stores', () => {
       render(ui)
     })
   }
+
+  it('MAR-3293 carries the selected crew plan through the real board and container into Next', async () => {
+    setWindowWidth(1600)
+    const entry = ledgerEntry({
+      issueIdentifier: 'MAR-3293',
+      state: 'assigned',
+      fact: {
+        logicalStatus: null,
+        branchName: null,
+        updatedAt: null,
+        groomed: true,
+        grounded: true,
+        dispatch: true,
+      },
+    })
+    crews[0].members = [residentSeat('opus')]
+    snapshots['crew-1'].entries = [entry]
+    snapshots['crew-1'].dispatchPlan = {
+      plannedAt: AT,
+      warnings: [],
+      order: { opus: [entry.issueId] },
+      words: { [entry.issueId]: { kind: 'lane', state: 'dirty', path: null } },
+    }
+    await mount(<WavePanel />)
+    fireEvent.click(screen.getByRole('button', { name: /^Next · / }))
+    expect(screen.getByText('Next · 0 ready · 1 preparing')).toBeTruthy()
+    expect(screen.getByText('lane has uncommitted changes')).toBeTruthy()
+    expect(screen.getByText(/nothing is sent yet/)).toBeTruthy()
+  })
 
   it('B: no bound crew -> no column at all', async () => {
     crews = [{ ...boundCrew('crew-1', 'Loom'), trackerBinding: null }]
@@ -845,6 +875,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
             verdict: 'return',
           }),
         ],
+        dispatchPlan: null,
         trackerHealth: health('ok'),
       },
     }
@@ -889,6 +920,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
             lap: 2,
           }),
         ],
+        dispatchPlan: null,
         trackerHealth: health('ok'),
       },
     }
@@ -942,6 +974,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
             sessionId: 'session-opus',
           }),
         ],
+        dispatchPlan: null,
         trackerHealth: health('ok'),
       },
     }
@@ -967,6 +1000,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
             seat: null,
           }),
         ),
+        dispatchPlan: null,
         trackerHealth: health('ok'),
       },
     }
@@ -1007,7 +1041,12 @@ describe('MAR-3097: through the containers and the real stores', () => {
       ],
     })
     snapshots = {
-      'crew-1': { crewId: 'crew-1', entries: [], trackerHealth: health('ok') },
+      'crew-1': {
+        crewId: 'crew-1',
+        entries: [],
+        dispatchPlan: null,
+        trackerHealth: health('ok'),
+      },
     }
 
     await mount(
@@ -1060,6 +1099,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
             sessionId: 'session-opus',
           }),
         ],
+        dispatchPlan: null,
         trackerHealth: health('ok'),
       },
     }
@@ -1107,6 +1147,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
             },
           }),
         ],
+        dispatchPlan: null,
         trackerHealth: health('ok'),
       },
     }
@@ -1142,7 +1183,12 @@ describe('MAR-3097: through the containers and the real stores', () => {
     ]
     useSessionStore.setState({ globalSessions: [] })
     snapshots = {
-      'crew-1': { crewId: 'crew-1', entries: [], trackerHealth: health('ok') },
+      'crew-1': {
+        crewId: 'crew-1',
+        entries: [],
+        dispatchPlan: null,
+        trackerHealth: health('ok'),
+      },
     }
 
     await mount(<WavePanel reservedWidth={RESERVED} />)
@@ -1164,6 +1210,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
             seat: null,
           }),
         ),
+        dispatchPlan: null,
         trackerHealth: health('ok'),
       },
     }
@@ -1187,7 +1234,12 @@ describe('MAR-3097: through the containers and the real stores', () => {
   it('MAR-3191 lap 2, E: a crew with no horse seats says so', async () => {
     crews = [{ ...boundCrew('crew-1', 'Loom'), members: [] }]
     snapshots = {
-      'crew-1': { crewId: 'crew-1', entries: [], trackerHealth: health('ok') },
+      'crew-1': {
+        crewId: 'crew-1',
+        entries: [],
+        dispatchPlan: null,
+        trackerHealth: health('ok'),
+      },
     }
 
     await mount(<WavePanel reservedWidth={RESERVED} />)
@@ -1217,6 +1269,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
                 ? { ...row, trackerStatus: 'In Review', state: 'returned' }
                 : row,
             ),
+            dispatchPlan: null,
             trackerHealth: health('ok'),
           },
         },
@@ -1233,6 +1286,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
           'crew-1': {
             crewId: 'crew-1',
             entries: rows.filter((row) => row.issueIdentifier !== 'EX-2'),
+            dispatchPlan: null,
             trackerHealth: health('ok'),
           },
         },
@@ -1254,6 +1308,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
             seat: 'opus',
           }),
         ],
+        dispatchPlan: null,
         trackerHealth: health('ok'),
       },
     }
@@ -1362,6 +1417,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
             sessionId: null,
           }),
         ],
+        dispatchPlan: null,
         trackerHealth: health('ok'),
       },
     }
@@ -1435,6 +1491,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
           'crew-1': {
             crewId: 'crew-1',
             entries: rows.filter((row) => row.issueIdentifier !== 'EX-2'),
+            dispatchPlan: null,
             trackerHealth: health('ok'),
           },
         },
@@ -1460,6 +1517,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
           'crew-1': {
             crewId: 'crew-1',
             entries: rows,
+            dispatchPlan: null,
             trackerHealth: health('ok'),
           },
         },
@@ -1488,6 +1546,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
             sessionId: 'session-opus',
           }),
         ],
+        dispatchPlan: null,
         trackerHealth: health('ok'),
       },
     }
@@ -1534,6 +1593,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
             sessionId: 'session-opus',
           }),
         ],
+        dispatchPlan: null,
         trackerHealth: health('ok'),
       },
     }
@@ -1588,6 +1648,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
               }
             : row,
         ),
+        dispatchPlan: null,
         trackerHealth: health('ok'),
       },
     }
@@ -1668,6 +1729,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
             sessionId: 'session-opus',
           }),
         ],
+        dispatchPlan: null,
         trackerHealth: health('ok'),
       },
     }
@@ -1722,6 +1784,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
             sessionId: 'session-remote',
           }),
         ],
+        dispatchPlan: null,
         trackerHealth: health('ok'),
       },
     }
@@ -1770,7 +1833,12 @@ describe('MAR-3097: through the containers and the real stores', () => {
         { ...boundCrew('crew-1', 'Loom'), members: [residentSeat('opus')] },
       ]
       snapshots = {
-        'crew-1': { crewId: 'crew-1', entries, trackerHealth: health('ok') },
+        'crew-1': {
+          crewId: 'crew-1',
+          entries,
+          dispatchPlan: null,
+          trackerHealth: health('ok'),
+        },
       }
       await mount(<WavePanel reservedWidth={RESERVED} />)
       await screen.findByLabelText('Loom')
@@ -1915,6 +1983,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
         'crew-1': {
           crewId: 'crew-1',
           entries: [queued('MAR-5', READY, 'opus', null)],
+          dispatchPlan: null,
           trackerHealth: health('ok'),
         },
       }
@@ -1990,7 +2059,12 @@ describe('MAR-3097: through the containers and the real stores', () => {
     const openPlan = async (entries: WorkLedgerEntry[]) => {
       vi.setSystemTime(PLAN_NOW)
       snapshots = {
-        'crew-1': { crewId: 'crew-1', entries, trackerHealth: health('ok') },
+        'crew-1': {
+          crewId: 'crew-1',
+          entries,
+          dispatchPlan: null,
+          trackerHealth: health('ok'),
+        },
       }
       await mount(<WavePanel reservedWidth={RESERVED} />)
       await screen.findByLabelText('Loom')
@@ -2159,7 +2233,12 @@ describe('MAR-3097: through the containers and the real stores', () => {
     const openBefore = async (entries: ReturnType<typeof ledgerEntry>[]) => {
       vi.setSystemTime(BEFORE_NOW)
       snapshots = {
-        'crew-1': { crewId: 'crew-1', entries, trackerHealth: health('ok') },
+        'crew-1': {
+          crewId: 'crew-1',
+          entries,
+          dispatchPlan: null,
+          trackerHealth: health('ok'),
+        },
       }
       await mount(<WavePanel reservedWidth={RESERVED} />)
       await screen.findByLabelText('Loom')
@@ -2552,6 +2631,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
               seat: 'opus',
             }),
           ],
+          dispatchPlan: null,
           trackerHealth: health('ok'),
         },
       }
@@ -2603,6 +2683,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
               seat: 'opus',
             }),
           ],
+          dispatchPlan: null,
           trackerHealth: health('ok'),
         },
       }
@@ -2643,6 +2724,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
             ledgerEntry({ issueIdentifier: 'EX-1', state: 'done' }),
             ledgerEntry({ issueIdentifier: 'EX-2', state: 'done' }),
           ],
+          dispatchPlan: null,
           trackerHealth: health('ok'),
         },
       }
@@ -2673,6 +2755,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
         'crew-1': {
           crewId: 'crew-1',
           entries: [],
+          dispatchPlan: null,
           trackerHealth: health('ok'),
         },
       }
@@ -2785,6 +2868,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
               sessionId: null,
             }),
           ],
+          dispatchPlan: null,
           trackerHealth: health('ok'),
         },
         'crew-2': {
@@ -2812,6 +2896,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
               sessionId: null,
             }),
           ],
+          dispatchPlan: null,
           trackerHealth: {
             ...health('unreachable'),
             since: new Date(Date.now() - 10 * 60_000).toISOString(),
@@ -3232,6 +3317,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
         vi.setSystemTime(FROZEN)
         snapshots['crew-1'] = {
           ...snapshots['crew-1']!,
+          dispatchPlan: null,
           trackerHealth: { ...health('ok'), lastOkAt: iso(-42_000) },
         }
         refresh = vi.fn(async () => ({
@@ -3319,7 +3405,11 @@ describe('MAR-3097: through the containers and the real stores', () => {
       })
 
       it('never read: says so', async () => {
-        snapshots['crew-1'] = { ...snapshots['crew-1']!, trackerHealth: null }
+        snapshots['crew-1'] = {
+          ...snapshots['crew-1']!,
+          dispatchPlan: null,
+          trackerHealth: null,
+        }
         await mount(<WavePanel reservedWidth={RESERVED} />)
         await screen.findByLabelText('Loom')
         expect(refreshLine()).toBe('Refreshnever read')
@@ -3392,6 +3482,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
           crewId: 'crew-1',
           entries: [ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' })],
           trackerHealth: health('ok'),
+          dispatchPlan: null,
         },
         'crew-2': {
           crewId: 'crew-2',
@@ -3405,6 +3496,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
             }),
           ],
           trackerHealth: health('ok'),
+          dispatchPlan: null,
         },
       }
       // Counted at the storage itself, not at a spy on our own writer: what
@@ -3774,6 +3866,7 @@ describe('MAR-3148 R3: the clock ticks only for an age on screen', () => {
       await mountBoard({
         crewId: 'crew-1',
         entries: [],
+        dispatchPlan: null,
         trackerHealth: { ...health('ok'), lastOkAt: null },
       }),
     ).toBe(0)
@@ -3784,6 +3877,7 @@ describe('MAR-3148 R3: the clock ticks only for an age on screen', () => {
       await mountBoard({
         crewId: 'crew-1',
         entries: [ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' })],
+        dispatchPlan: null,
         trackerHealth: { ...health('ok'), lastOkAt: null },
       }),
     ).toBeGreaterThan(0)
@@ -3794,6 +3888,7 @@ describe('MAR-3148 R3: the clock ticks only for an age on screen', () => {
       await mountBoard({
         crewId: 'crew-1',
         entries: [],
+        dispatchPlan: null,
         trackerHealth: null,
       }),
     ).toBe(0)
@@ -3805,6 +3900,7 @@ describe('MAR-3148 R3: the clock ticks only for an age on screen', () => {
       await mountBoard({
         crewId: 'crew-1',
         entries: [],
+        dispatchPlan: null,
         trackerHealth: health('unreachable'),
       }),
     ).toBeGreaterThan(0)

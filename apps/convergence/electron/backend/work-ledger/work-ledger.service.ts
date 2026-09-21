@@ -100,6 +100,17 @@ export class WorkLedgerService {
     return record
   }
 
+  firstDispatchSeenAt(crewId: string): Map<string, string> {
+    const rows = this.db
+      .prepare(
+        `SELECT issue_id, MIN(seen_at) AS first_seen
+      FROM work_ledger WHERE crew_id = ? AND json_extract(fact_json, '$.dispatch') = 1
+      GROUP BY issue_id`,
+      )
+      .all(crewId) as { issue_id: string; first_seen: string }[]
+    return new Map(rows.map((row) => [row.issue_id, row.first_seen]))
+  }
+
   currentView(crewId: string): WorkLedgerRecord[] {
     const rows = this.db
       .prepare(`${WORK_LEDGER_CURRENT_VIEW_SQL} ${CURRENT_VIEW_ORDER}`)

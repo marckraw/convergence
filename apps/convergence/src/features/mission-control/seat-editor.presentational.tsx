@@ -48,6 +48,10 @@ interface SeatEditorProps {
   nameValue: string
   /** What is typed in the card, or undefined when nothing is being written. */
   cardDraft: string | undefined
+  /** What is typed in the worktree path field, including a refused draft. */
+  lanePathValue: string
+  onLanePathChange: (value: string) => void
+  onLanePathCommit: () => void
   /** What is typed in the WIP field (the draft, else the stored limit). */
   wipValue: string
   facts: readonly SeatFact[]
@@ -86,6 +90,9 @@ export const SeatEditor: FC<SeatEditorProps> = ({
   member,
   nameValue,
   cardDraft,
+  lanePathValue,
+  onLanePathChange,
+  onLanePathCommit,
   wipValue,
   facts,
   factsHeading,
@@ -361,6 +368,24 @@ export const SeatEditor: FC<SeatEditorProps> = ({
           </p>
           {refusalFor('lanePolicy')}
         </div>
+        {member.lanePolicy === 'own-worktree' ? (
+          <div className="flex flex-col gap-1" data-seat-lane-path>
+            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+              Worktree path
+              <Input
+                value={lanePathValue}
+                placeholder="/Users/…/my-repo-lane-name"
+                onChange={(event) => onLanePathChange(event.target.value)}
+                onBlur={onLanePathCommit}
+                className={cn(
+                  'h-8 text-xs',
+                  problems.lanePath !== undefined && 'border-amber-500/70',
+                )}
+              />
+            </label>
+            {refusalFor('lanePath')}
+          </div>
+        ) : null}
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <div className="flex flex-1 flex-col">

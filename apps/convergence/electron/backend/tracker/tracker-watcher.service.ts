@@ -1,3 +1,4 @@
+import type { AutoDispatchPlanService } from './auto-dispatch-plan.service'
 import type { SessionCrew } from '../crew/crew.types'
 import type { WorkLedgerService } from '../work-ledger/work-ledger.service'
 import type {
@@ -69,6 +70,7 @@ const LOOKUP_ONLY_BINDING: TrackerBinding = {
 }
 
 export interface TrackerWatcherDeps {
+  dispatchPlanner?: Pick<AutoDispatchPlanService, 'refresh' | 'cached'>
   crews: { list(): SessionCrew[] }
   ledger: Pick<WorkLedgerService, 'append' | 'currentView' | 'list'>
   resolveKey: (crewId: string) => Promise<string | null>
@@ -240,6 +242,7 @@ export class TrackerWatcherService {
       crewId,
       entries: this.deps.ledger.list(crewId),
       trackerHealth: this.trackerHealth(crewId),
+      dispatchPlan: this.deps.dispatchPlanner?.cached(crewId) ?? null,
     }
   }
 
@@ -471,6 +474,8 @@ export class TrackerWatcherService {
 
     const adapter = this.deps.createAdapter({ apiKey, binding })
     const previous = this.trackerHealth(crewId)
+    let planChanged = false
+    let planFailed = false
     let appended = 0
     let labeledOk = false
     let next: TrackerHealth
@@ -542,6 +547,21 @@ export class TrackerWatcherService {
       })
       this.deps.ledger.append(rows)
       appended = rows.length
+      if (this.deps.dispatchPlanner) {
+        const before = this.deps.dispatchPlanner.cached(crewId)
+        try {
+          const after = await this.deps.dispatchPlanner.refresh(
+            crewId,
+            now.toISOString(),
+          )
+          planChanged =
+            JSON.stringify(before && { ...before, plannedAt: null }) !==
+            JSON.stringify({ ...after, plannedAt: null })
+        } catch (error) {
+          planFailed = true
+          this.log('Dispatch planning failed', error)
+        }
+      }
       labeledOk = true
       next = trackerHealthAfter({ previous, outcome: { ok: true }, now })
     } catch (error) {
@@ -572,8 +592,16 @@ export class TrackerWatcherService {
     }
     // Only news goes to the windows (lap 2, F): rows appended, or a health
     // that changed state or backoff. `workLedger:list` always answers fresh.
-    if (appended > 0 || trackerHealthChanged(previous, next)) {
-      this.deps.broadcast(this.snapshot(crewId))
+    if (
+      appended > 0 ||
+      planChanged ||
+      planFailed ||
+      trackerHealthChanged(previous, next)
+    ) {
+      const snapshot = this.snapshot(crewId)
+      this.deps.broadcast(
+        planFailed ? { ...snapshot, dispatchPlan: null } : snapshot,
+      )
     }
     // The outside read rides this tick (MAR-3236 R4), and only behind a
     // labeled read that succeeded: the health gate, the floor and the

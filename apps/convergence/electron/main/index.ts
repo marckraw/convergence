@@ -1,3 +1,5 @@
+import { AutoDispatchPlanService } from '../backend/tracker/auto-dispatch-plan.service'
+import { isLocalExecutionHost } from '../backend/execution-host-endpoint/execution-host-endpoint.pure'
 import { CodexAccountHistoryService } from '../backend/provider-account/provider-account-codex-history.service'
 import { CrewImportService } from '../backend/crew/crew-import.service'
 import { registerCrewImportIpc } from '../backend/crew/crew-import.ipc'
@@ -789,7 +791,34 @@ async function startApp(): Promise<void> {
   // stays in the Keychain and only the main process reads it. Built before
   // the engine, because a delivered hop is one of the moments it is told the
   // tracker is about to change (MAR-3227 R2).
+  const dispatchPlanner = new AutoDispatchPlanService({
+    listCrews: () =>
+      crewService.list().map((crew) => ({
+        ...crew,
+        members: crew.members.map((member) => {
+          const session = member.sessionId
+            ? sessionService.getById(member.sessionId)
+            : null
+          return {
+            ...member,
+            localWorkingDirectory:
+              session && isLocalExecutionHost(session.executionHost)
+                ? session.workingDirectory
+                : null,
+          }
+        }),
+      })),
+    currentView: (crewId) => workLedgerService.currentView(crewId),
+    firstDispatchSeenAt: (crewId) =>
+      workLedgerService.firstDispatchSeenAt(crewId),
+    describeSeatAvailability: (sessionId) =>
+      sessionService.describeSeatAvailability(sessionId),
+    findWire: (crewId, source, target) =>
+      relayService.findWire(crewId, source, target),
+    describeLane: (path) => gitService.describeLane(path),
+  })
   const trackerWatcher = new TrackerWatcherService({
+    dispatchPlanner,
     crews: crewService,
     ledger: workLedgerService,
     resolveKey: (crewId) => trackerCredentials.resolveKey(crewId),

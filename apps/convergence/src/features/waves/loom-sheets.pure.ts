@@ -1,3 +1,4 @@
+import type { DispatchPlan } from '@/shared/types/tracker.types'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
 import { loomBefore, loomBeforeOlderLine } from './loom-before.pure'
 import {
@@ -11,7 +12,7 @@ import {
 import { LOOM_SHEET_NAMES, type LoomSheet } from './wave-panel-sheet.pure'
 import { loomPlan, loomPlanLeftLine, loomUtcDay } from './loom-plan.pure'
 import type { LoomHorse } from './loom-horses.pure'
-import { loomNext } from './loom-next.pure'
+import { loomNext, type LoomNext } from './loom-next.pure'
 
 /**
  * What is on Now, in the four groups the sheet draws (MAR-3189 R2).
@@ -147,11 +148,12 @@ export function loomSheetCounts(
   sheets: LoomSheets,
   now: number,
   horses: readonly LoomHorse[],
-): LoomSheetCounts {
+  dispatchPlan: DispatchPlan | null = null,
+): LoomSheetCounts & { nextQueue: LoomNext } {
   // Next's split is a fact about SEATS, not only labels (MAR-3193 R5): a row
   // whose `horse ›` label names nobody cannot run however it is labelled, so
   // the horses decide the number as much as the facts do.
-  const next = loomNext(sheets.next, horses)
+  const next = loomNext(sheets.next, horses, dispatchPlan)
   return {
     // What the sheet SHOWS, from the sheet's own derivation (MAR-3192 R4).
     // `sheets.before` keeps every finished row the ledger ever wrote -- the
@@ -163,7 +165,8 @@ export function loomSheetCounts(
       sheets.now.fablesTurn.length +
       sheets.now.decide.length,
     awaitingQa: sheets.now.awaitingQa.length,
-    next: sheets.next.length,
+    nextQueue: next,
+    next: next.ready + next.preparing,
     nextReady: next.ready,
     nextPreparing: next.preparing,
     // What is being PREPARED (MAR-3194 R5). `sheets.plan` also holds the rows

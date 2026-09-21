@@ -9,6 +9,7 @@ export type SeatRefusalField =
   | 'role'
   | 'roleCard'
   | 'lanePolicy'
+  | 'lanePath'
   | 'hostPolicy'
   | 'wipLimit'
 
@@ -21,6 +22,7 @@ export type SeatPatch =
   | { roleCard: string | null }
   | { hostPolicy: string | null }
   | { lanePolicy: SessionCrewMember['lanePolicy'] }
+  | { lanePath: string | null }
   | { wipLimit: number | null }
 
 /** The field a seat edit carries — where its refusal is drawn. */
@@ -29,6 +31,7 @@ export function seatPatchField(patch: SeatPatch): SeatRefusalField {
   if ('roleCard' in patch) return 'roleCard'
   if ('hostPolicy' in patch) return 'hostPolicy'
   if ('lanePolicy' in patch) return 'lanePolicy'
+  if ('lanePath' in patch) return 'lanePath'
   return 'wipLimit'
 }
 
@@ -147,6 +150,10 @@ export function refusalKeptLine(
       return member.batonName
         ? `Still named “${member.batonName}” — your text stays until a name is accepted.`
         : 'Still unnamed — your text stays until a name is accepted.'
+    case 'lanePath':
+      return member.lanePath
+        ? `Worktree path stays ${member.lanePath}.`
+        : 'Worktree path is still not set.'
     case 'wipLimit':
       return `Still saved as ${member.wipLimit}. WIP stays ${member.wipLimit}.`
     case 'roleCard':

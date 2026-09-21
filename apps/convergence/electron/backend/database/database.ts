@@ -1037,6 +1037,7 @@ function ensureRelayColumns(database: Database.Database): void {
     ['host_policy', 'TEXT'],
     ['lane_policy', 'TEXT'],
     ['wip_limit', 'INTEGER'],
+    ['lane_path', 'TEXT'],
     ['provider_id', 'TEXT'],
     ['model', 'TEXT'],
   ] as const) {

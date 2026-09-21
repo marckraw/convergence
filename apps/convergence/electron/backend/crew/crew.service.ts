@@ -8,6 +8,7 @@ import {
   normalizeCrewEmoji,
   normalizeCrewHostPolicy,
   normalizeCrewLimit,
+  normalizeLanePath,
   normalizeCrewMemberKind,
   normalizeCrewMemberLane,
   normalizeCrewMemberRole,
@@ -50,6 +51,7 @@ export interface UpdateCrewSeatInput {
   roleCard?: string | null
   hostPolicy?: string | null
   lanePolicy?: SessionCrewMemberLane | null
+  lanePath?: string | null
   wipLimit?: number | null
   providerId?: string | null
   model?: string | null
@@ -64,6 +66,7 @@ export interface CreateCrewRecipeSeatInput {
   role?: SessionCrewMemberRole | null
   roleCard?: string | null
   lanePolicy?: SessionCrewMemberLane | null
+  lanePath?: string | null
   wipLimit?: number | null
 }
 
@@ -414,8 +417,8 @@ export class CrewService {
       .prepare(
         `INSERT INTO session_crew_members
            (crew_id, session_id, baton_name, role, kind, role_card,
-            host_policy, lane_policy, wip_limit, provider_id, model)
-         VALUES (?, NULL, ?, ?, 'dynamic', ?, ?, ?, ?, ?, ?)`,
+            host_policy, lane_policy, wip_limit, lane_path, provider_id, model)
+         VALUES (?, NULL, ?, ?, 'dynamic', ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         crewId,
@@ -425,6 +428,7 @@ export class CrewService {
         hostPolicy,
         normalizeCrewMemberLane(input.lanePolicy),
         normalizeCrewLimit(input.wipLimit, 'A WIP limit'),
+        normalizeLanePath(input.lanePath),
         providerId,
         normalizeCrewRecipeField(input.model),
       )
@@ -521,6 +525,8 @@ export class CrewService {
       set('host_policy', normalizeCrewHostPolicy(patch.hostPolicy))
     if (patch.lanePolicy !== undefined)
       set('lane_policy', normalizeCrewMemberLane(patch.lanePolicy))
+    if (patch.lanePath !== undefined)
+      set('lane_path', normalizeLanePath(patch.lanePath))
     if (patch.wipLimit !== undefined)
       set('wip_limit', normalizeCrewLimit(patch.wipLimit, 'A WIP limit'))
     if (patch.providerId !== undefined)
@@ -571,6 +577,7 @@ export class CrewService {
         roleCard: row.role_card ?? null,
         hostPolicy: row.host_policy ?? null,
         lanePolicy: readSeatWord(row, 'lane_policy', normalizeCrewMemberLane),
+        lanePath: row.lane_path ?? null,
         wipLimit:
           typeof row.wip_limit === 'number' && Number.isInteger(row.wip_limit)
             ? row.wip_limit
@@ -684,7 +691,7 @@ function readSeatWord<T>(
 const MEMBER_SELECT = `SELECT members.crew_id, members.session_id, members.baton_name,
           members.canvas_x, members.canvas_y, members.role, members.kind,
           members.role_card, members.host_policy, members.lane_policy,
-          members.wip_limit, members.provider_id, members.model,
+          members.wip_limit, members.lane_path, members.provider_id, members.model,
           (members.session_id IS NOT NULL AND sessions.id IS NULL) AS conversation_missing
      FROM session_crew_members members
      LEFT JOIN sessions ON sessions.id = members.session_id
@@ -702,6 +709,7 @@ interface MemberReadRow {
   role_card: string | null
   host_policy: string | null
   lane_policy: string | null
+  lane_path: string | null
   wip_limit: number | null
   provider_id: string | null
   model: string | null

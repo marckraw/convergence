@@ -129,6 +129,7 @@ interface CrewCanvasProps {
 function seatDraftPatch(field: SeatDraftField, typed: string): SeatPatch {
   if (field === 'wipLimit')
     return { wipLimit: typed.trim() === '' ? null : Number(typed) }
+  if (field === 'lanePath') return { lanePath: typed.trim() || null }
   if (field === 'roleCard') return { roleCard: typed.trim() || null }
   return { hostPolicy: typed.trim() || null }
 }
@@ -977,7 +978,12 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
       if (leaving !== null) {
         const ref = memberRefFor(leaving)
         if (ref) {
-          for (const field of ['roleCard', 'wipLimit', 'hostPolicy'] as const)
+          for (const field of [
+            'roleCard',
+            'wipLimit',
+            'hostPolicy',
+            'lanePath',
+          ] as const)
             if (seatDrafts[leaving]?.[field] !== undefined)
               void commitSeatDraft(ref, field)
         }

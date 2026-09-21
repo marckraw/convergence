@@ -3227,6 +3227,31 @@ export class SessionService {
     )
   }
 
+  describeSeatAvailability(
+    sessionId: string,
+  ): 'idle' | 'turn' | 'compacting' | 'drill' | 'waiting-on-you' | 'unknown' {
+    const session = this.getById(sessionId)
+    if (!session) return 'unknown'
+    if (
+      this.isTurnUnderWayOrArriving(session) ||
+      this.isCarryingATurn(session) ||
+      this.queuedInputs
+        .list(sessionId)
+        .some(
+          (input) => input.state === 'queued' || input.state === 'dispatching',
+        )
+    )
+      return 'turn'
+    if (this.compactingSessions.has(sessionId)) return 'compacting'
+    if (this.heldSessions.has(sessionId)) return 'drill'
+    if (
+      session.attention === 'needs-approval' ||
+      session.attention === 'needs-input'
+    )
+      return 'waiting-on-you'
+    return 'idle'
+  }
+
   isQueueHeld(sessionId: string): boolean {
     return this.heldSessions.has(sessionId)
   }
