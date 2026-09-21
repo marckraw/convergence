@@ -1,5 +1,16 @@
 # convergence
 
+## 0.80.0
+
+### Minor Changes
+
+- 1bb4a39: Run the drill: for a crew's mastermind conversation, one button asks the agent to seal its memory, compacts the context and wakes it up again — with the three steps shown, a Cancel, and a toast that tells you how it ended.
+
+### Patch Changes
+
+- 84bdba4: Backend for the context drill: a routine that asks a mastermind conversation to seal its memory, compacts it and wakes it again, holding waiting messages until it is done. The routine can be cancelled while it waits, and an answer to a question the provider is asking still gets through.
+- d7edf5f: "Deliver now" during a context compaction no longer sends the message into the compacting conversation; it is delivered when compaction ends.
+
 ## 0.79.0
 
 ### Minor Changes
