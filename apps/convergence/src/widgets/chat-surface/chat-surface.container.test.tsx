@@ -292,9 +292,55 @@ describe('ChatSurface', () => {
     },
   )
 
-  it('MAR-3288 R8 shows today’s pill when no drill runs', () => {
+  it('MAR-3288 lap 2 A says compacting exactly ONCE in the header during a plain compaction — mutation always render the grey pill turns red', () => {
     useSessionStore.setState({
-      globalChatSessions: [{ ...globalSession, activity: 'compacting' }],
+      globalChatSessions: [
+        {
+          ...globalSession,
+          status: 'completed',
+          attention: 'finished',
+          activity: 'compacting',
+        },
+      ],
+      activeGlobalSessionId: globalSession.id,
+      activeGlobalConversation: [],
+    })
+    useContextDrillStore.setState({ beats: {} })
+    render(<ChatSurface selectedSpaceId={null} />)
+    expect(screen.getAllByText(/compacting context…/i)).toHaveLength(1)
+    expect(screen.getByText('Compacting context…')).toBeInTheDocument()
+    expect(
+      screen.queryByTestId('chat-session-activity-indicator'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('MAR-3288 lap 2 A keeps drill · compacting beside the attention pill — it names the stage', () => {
+    useSessionStore.setState({
+      globalChatSessions: [
+        {
+          ...globalSession,
+          status: 'completed',
+          attention: 'finished',
+          activity: 'compacting',
+        },
+      ],
+      activeGlobalSessionId: globalSession.id,
+      activeGlobalConversation: [],
+    })
+    useContextDrillStore.setState({
+      beats: { [globalSession.id]: 'compacting' },
+    })
+    render(<ChatSurface selectedSpaceId={null} />)
+    expect(screen.getByText('Compacting context…')).toBeInTheDocument()
+    expect(
+      screen.getByTestId('chat-session-activity-indicator'),
+    ).toHaveTextContent('drill · compacting')
+    useContextDrillStore.setState({ beats: {} })
+  })
+
+  it('MAR-3288 R8 shows today’s pill for any other activity when no drill runs', () => {
+    useSessionStore.setState({
+      globalChatSessions: [{ ...globalSession, activity: 'thinking' }],
       activeGlobalSessionId: globalSession.id,
       activeGlobalConversation: [],
     })
@@ -302,7 +348,7 @@ describe('ChatSurface', () => {
     render(<ChatSurface selectedSpaceId={null} />)
     expect(
       screen.getByTestId('chat-session-activity-indicator'),
-    ).toHaveTextContent('compacting context…')
+    ).toHaveTextContent('thinking…')
   })
 
   it('renders a selected Space home when no chat session is active', () => {

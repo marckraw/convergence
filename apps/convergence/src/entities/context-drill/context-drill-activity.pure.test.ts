@@ -15,10 +15,13 @@ describe('resolveSessionActivityLabel (MAR-3288 R8)', () => {
     )
   })
 
-  it('is exactly the activity label when no drill runs', () => {
-    expect(resolveSessionActivityLabel('compacting', null)).toBe(
-      'compacting context…',
-    )
+  it('withholds a plain compaction: the attention pill already says it (lap 2 A)', () => {
+    expect(resolveSessionActivityLabel('compacting', null)).toBeNull()
+    expect(resolveSessionActivityLabel('compacting', undefined)).toBeNull()
+  })
+
+  it('is exactly the activity label for every other activity', () => {
+    expect(resolveSessionActivityLabel('streaming', null)).toBe('streaming…')
     expect(resolveSessionActivityLabel('thinking', undefined)).toBe('thinking…')
     expect(resolveSessionActivityLabel(null, null)).toBeNull()
   })

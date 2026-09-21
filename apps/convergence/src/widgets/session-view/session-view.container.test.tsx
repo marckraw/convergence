@@ -506,7 +506,7 @@ describe('SessionView', () => {
       ...state,
       sessions: state.sessions.map((session) =>
         session.id === 'session-1'
-          ? { ...session, status: 'running', activity: 'compacting' }
+          ? { ...session, status: 'running', activity: 'thinking' }
           : session,
       ),
     }))
@@ -518,8 +518,62 @@ describe('SessionView', () => {
     )
 
     expect(screen.getByTestId('session-activity-indicator')).toHaveTextContent(
-      'compacting context…',
+      'thinking…',
     )
+  })
+
+  it('MAR-3288 lap 2 A says compacting exactly ONCE in the header during a plain compaction — mutation always render the grey pill turns red', () => {
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? {
+              ...session,
+              status: 'completed',
+              attention: 'finished',
+              activity: 'compacting',
+            }
+          : session,
+      ),
+    }))
+    useContextDrillStore.setState({ beats: {} })
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    expect(screen.getAllByText(/compacting context…/i)).toHaveLength(1)
+    expect(screen.getByText('Compacting context…')).toBeInTheDocument()
+    expect(
+      screen.queryByTestId('session-activity-indicator'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('MAR-3288 lap 2 A keeps drill · compacting beside the attention pill — it names the stage', () => {
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? {
+              ...session,
+              status: 'completed',
+              attention: 'finished',
+              activity: 'compacting',
+            }
+          : session,
+      ),
+    }))
+    useContextDrillStore.setState({ beats: { 'session-1': 'compacting' } })
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    expect(screen.getByText('Compacting context…')).toBeInTheDocument()
+    expect(screen.getByTestId('session-activity-indicator')).toHaveTextContent(
+      'drill · compacting',
+    )
+    useContextDrillStore.setState({ beats: {} })
   })
 
   /**
