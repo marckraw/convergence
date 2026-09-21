@@ -84,6 +84,7 @@ const horse = (overrides: Partial<LoomHorse> = {}): LoomHorse => ({
   heldFrom: null,
   conversationMissing: false,
   returned: null,
+  compacting: false,
   ...overrides,
 })
 

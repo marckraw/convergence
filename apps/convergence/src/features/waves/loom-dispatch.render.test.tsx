@@ -39,6 +39,7 @@ const horse = {
   heldFrom: null,
   conversationMissing: false,
   returned: null,
+  compacting: false,
 }
 const base = {
   sheets,

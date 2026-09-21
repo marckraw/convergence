@@ -9,6 +9,7 @@ import {
   LOOM_RECIPE_LINE,
   type LoomHorseSession,
 } from './loom-horses.pure'
+import { loomSeatCapacity } from './loom-next.pure'
 import { loomNowRows, loomSheets } from './loom-sheets.pure'
 import {
   boundCrewWith,
@@ -659,5 +660,96 @@ describe('MAR-3191 lap 3, F: a card holds the issue the horse is WORKING', () =>
     // would take it. Mutation: sort then filter -> MAR-QA on the card, red.
     expect(horse.held?.entry.issueIdentifier).toBe('MAR-WORK')
     expect(horse.heldFrom).toBe('in-flight')
+  })
+})
+
+describe('MAR-3289: a compacting seat is working, and says which kind', () => {
+  const seatWith = (session: LoomHorseSession) =>
+    loomHorses({
+      crews: [boundCrewWith('crew-1', 'Loom', [residentSeat('opus-mac')])],
+      sessionsById: new Map([['session-opus-mac', session]]),
+      sheets: noSheets,
+      hostLabelOf,
+    })[0]!
+
+  const compacting = (
+    status: SessionStatus,
+    rest: Partial<LoomHorseSession> = {},
+  ): LoomHorseSession => ({ status, activity: 'compacting', ...rest })
+
+  it('R1: a compacting conversation is Working, and says which kind', () => {
+    // The whole compaction window leaves `status` reading what the last turn
+    // left -- `completed` -- so the status alone calls a busy seat Idle, which
+    // is exactly the word auto-dispatch (MAR-3293) reads as "free for the next
+    // issue". Mutation: drop the `isSessionCompacting` branch from
+    // `runtimeFor` -> this seat reads `idle` / 'Idle' -> red.
+    const horse = seatWith(compacting('completed'))
+    expect(horse.runtime).toBe('working')
+    expect(horse.compacting).toBe(true)
+    expect(loomHorseRuntimeLabel(horse)).toBe('Compacting context…')
+  })
+
+  it('R1: a dead host still outranks it — Not seen, and not compacting', () => {
+    // `activity` is a last-HEARD word exactly as `status` is: a host that
+    // stopped answering may have finished compacting an hour ago. Mutation:
+    // ask the compaction witness BEFORE the three silence witnesses -> this
+    // card says 'Compacting context…' about a seat nobody can reach -> red,
+    // and `compacting` reads true beside a `not-seen` runtime.
+    const horse = seatWith(
+      compacting('completed', { attention: 'host-unreachable' }),
+    )
+    expect(horse.runtime).toBe('not-seen')
+    expect(horse.compacting).toBe(false)
+    expect(loomHorseRuntimeLabel(horse)).toBe('Not seen')
+  })
+
+  it('R1: a failed last turn compacting now is Working — it is busy NOW', () => {
+    // `failed` is the same kind of stale as `completed`: it is what the last
+    // turn left behind, and the seat is moving anyway.
+    const horse = seatWith(compacting('failed'))
+    expect(horse.runtime).toBe('working')
+    expect(horse.compacting).toBe(true)
+    expect(loomHorseRuntimeLabel(horse)).toBe('Compacting context…')
+  })
+
+  it('R1: a seat with no activity reads exactly as it did before', () => {
+    const horse = seatWith({ status: 'completed' })
+    expect(horse.runtime).toBe('idle')
+    expect(horse.compacting).toBe(false)
+    expect(loomHorseRuntimeLabel(horse)).toBe('Idle')
+  })
+
+  it('R2: the header line counts it as working, never as idle', () => {
+    const horses = loomHorses({
+      crews: [
+        boundCrewWith('crew-1', 'Loom', [
+          residentSeat('a'),
+          residentSeat('b'),
+          residentSeat('c'),
+        ]),
+      ],
+      sessionsById: new Map([
+        ['session-a', session('running')],
+        ['session-b', compacting('completed')],
+        ['session-c', session('idle')],
+      ]),
+      sheets: noSheets,
+      hostLabelOf,
+    })
+    // Mutation: drop the compaction branch -> '1 working · 2 idle' -> red, and
+    // the line above the cards tells a person two seats are free.
+    expect(loomHorsesLine(horses)).toBe(
+      '3 horses · 2 working · 1 idle · 0 failed · 0 not seen',
+    )
+  })
+
+  it('R4: Next’s seat line says Working for it, with no edit to loom-next', () => {
+    // `loom-next.pure.ts` switches on the four runtime words and is another
+    // horse's file today; this rule must reach it through `runtime` alone.
+    // Mutation: give compacting its own runtime value, or map it to `idle` and
+    // fix only the label -> this line reads 'Idle' -> red.
+    expect(loomSeatCapacity(seatWith(compacting('completed')), 2)).toBe(
+      'This Mac · Working · 2 queued',
+    )
   })
 })
