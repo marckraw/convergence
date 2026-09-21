@@ -71,6 +71,15 @@ export interface LoomSubline {
     options: readonly LoomCrewOption[]
     selectedId: string
     onSelect: (crewId: string) => void
+    /**
+     * Follow the open conversation (MAR-3291 R3): INSIDE the picker, not
+     * beside it, because "shown whenever the picker is shown" is then true
+     * by construction rather than by two conditions agreeing.
+     */
+    follow: {
+      on: boolean
+      onToggle: (on: boolean) => void
+    }
   } | null
 }
 

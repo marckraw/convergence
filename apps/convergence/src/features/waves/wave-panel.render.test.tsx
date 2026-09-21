@@ -7,6 +7,7 @@ import {
   screen,
   within,
 } from '@testing-library/react'
+import { useAppSurfaceStore } from '@/entities/app-surface'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import { useSessionCrewStore, type SessionCrew } from '@/entities/session-crew'
 import {
@@ -3343,6 +3344,314 @@ describe('MAR-3097: through the containers and the real stores', () => {
         })
         expect(refreshButton()!.closest('[data-loom="expanded"]')).toBeTruthy()
       })
+    })
+  })
+
+  /**
+   * Loom follows the open conversation (MAR-3291), through the containers and
+   * the real stores: two bound crews working in two projects, and a person
+   * walking between conversations.
+   */
+  describe('MAR-3291: Loom follows the open conversation', () => {
+    const OPUS = 'session-opus'
+    const NIGHT = 'session-night'
+    const A2 = 'session-a2'
+    const B2 = 'session-b2'
+    const LONELY = 'session-lonely'
+
+    const conversation = (id: string, projectId: string | null) =>
+      ({ ...SESSION, id, name: id, projectId }) as SessionSummary
+
+    /** Every localStorage key written since the test began, in order. */
+    let writes: string[]
+    let restoreWrites: () => void
+
+    beforeEach(() => {
+      crews = [
+        { ...boundCrew('crew-1', 'Loom'), members: [residentSeat('opus')] },
+        {
+          ...boundCrew('crew-2', 'Night shift'),
+          sessionIds: [NIGHT],
+          members: [residentSeat('night')],
+        },
+      ]
+      useSessionStore.setState({
+        globalSessions: [
+          conversation(OPUS, 'project-a'),
+          conversation(NIGHT, 'project-b'),
+          conversation(A2, 'project-a'),
+          conversation(B2, 'project-b'),
+          conversation(LONELY, 'project-nobody'),
+        ],
+        activeSessionId: null,
+        activeGlobalSessionId: null,
+      })
+      useAppSurfaceStore.setState({ activeSurface: 'code' })
+      snapshots = {
+        'crew-1': {
+          crewId: 'crew-1',
+          entries: [ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' })],
+          trackerHealth: health('ok'),
+        },
+        'crew-2': {
+          crewId: 'crew-2',
+          entries: [
+            ledgerEntry({
+              issueIdentifier: 'NS-1',
+              crewId: 'crew-2',
+              state: 'working',
+              seat: 'night',
+              sessionId: NIGHT,
+            }),
+          ],
+          trackerHealth: health('ok'),
+        },
+      }
+      // Counted at the storage itself, not at a spy on our own writer: what
+      // R2 promises is that nothing is WRITTEN, and the delegate keeps the
+      // preference really stored so a remount can still read it.
+      writes = []
+      const real = Storage.prototype.setItem
+      Storage.prototype.setItem = function (
+        this: Storage,
+        key: string,
+        value: string,
+      ) {
+        writes.push(key)
+        real.call(this, key, value)
+      }
+      restoreWrites = () => {
+        Storage.prototype.setItem = real
+      }
+    })
+
+    afterEach(() => {
+      restoreWrites()
+      useSessionStore.setState({
+        activeSessionId: null,
+        activeGlobalSessionId: null,
+      })
+      useAppSurfaceStore.setState({ activeSurface: 'code' })
+    })
+
+    const crewPicker = () => screen.getByRole('combobox', { name: 'Crew' })
+    const followToggle = () =>
+      screen.getByRole('button', { name: 'Follow the conversation' })
+    const crewWrites = () =>
+      writes.filter((key) => key === 'convergence-loom-crew').length
+
+    /** Opens a project conversation, as selecting one in the sidebar does. */
+    const open = async (id: string | null) => {
+      await act(async () => {
+        useSessionStore.setState({ activeSessionId: id })
+      })
+    }
+
+    const pickCrew = async (name: string) => {
+      await act(async () => {
+        fireEvent.keyDown(crewPicker(), { key: 'Enter' })
+      })
+      await act(async () => {
+        fireEvent.keyDown(screen.getByRole('option', { name }), {
+          key: 'Enter',
+        })
+      })
+    }
+
+    /** The app-region an element is IN, exactly as MAR-3284's tests read it. */
+    const region = (node: Element | null) => {
+      for (let at: Element | null = node; at !== null; at = at.parentElement) {
+        const said = (
+          (at as HTMLElement).style as CSSStyleDeclaration & {
+            WebkitAppRegion?: string
+          }
+        )?.WebkitAppRegion
+        if (said) return said
+      }
+      return null
+    }
+
+    it('R2: following is an EVENT -- the open conversation changed', async () => {
+      localStorage.setItem('convergence-loom-follow', '1')
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      // Nothing is open yet, so nothing has been followed: the first bound
+      // crew, exactly as MAR-3225 R2 leaves it.
+      expect(crewPicker().textContent).toBe('Loom')
+      expect(crewWrites()).toBe(0)
+
+      // A conversation that IS a seat of the other crew (R1a).
+      await open(NIGHT)
+      expect(crewPicker().textContent).toBe('Night shift')
+      expect(crewWrites()).toBe(1)
+
+      await pickCrew('Loom')
+      expect(crewPicker().textContent).toBe('Loom')
+      expect(crewWrites()).toBe(2)
+
+      // A ledger broadcast and a roster reload: the board re-renders and the
+      // follow effect re-runs on both. Mutation: derive the crew from the
+      // open conversation instead of acting on its CHANGE -> the hand-pick
+      // snaps back to Night shift here, red.
+      await act(async () => {
+        useWorkLedgerStore.setState({ snapshots: { ...snapshots } })
+        useSessionCrewStore.setState({ crews: [...crews] })
+      })
+      expect(crewPicker().textContent).toBe('Loom')
+      expect(crewWrites()).toBe(2)
+
+      // No seat of any crew, but its project is where Night shift's seat
+      // works (R1b).
+      await open(B2)
+      expect(crewPicker().textContent).toBe('Night shift')
+      expect(crewWrites()).toBe(3)
+
+      // A project no crew works in: Loom stays on the latest one, and says
+      // nothing to storage. Mutation: treat R1's `null` as "clear it" or as
+      // "fall to the first crew" -> Loom, red.
+      await open(LONELY)
+      expect(crewPicker().textContent).toBe('Night shift')
+      expect(crewWrites()).toBe(3)
+    })
+
+    it('R2: the conversation on screen is the SURFACE’s, not whichever id moved last', async () => {
+      localStorage.setItem('convergence-loom-follow', '1')
+      // A project conversation left behind on the other surface.
+      useSessionStore.setState({ activeSessionId: OPUS })
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      expect(crewPicker().textContent).toBe('Loom')
+
+      // Reading a global chat that is a seat of the other crew.
+      useAppSurfaceStore.setState({ activeSurface: 'chat' })
+      await act(async () => {
+        useSessionStore.setState({ activeGlobalSessionId: NIGHT })
+      })
+      // Mutation: read `activeSessionId` whatever the surface -> the open
+      // conversation never changed, and Loom is still Loom, red.
+      expect(crewPicker().textContent).toBe('Night shift')
+
+      // ...and the project conversation moving underneath the chat surface
+      // is not a conversation anybody opened.
+      await open(A2)
+      // Mutation: read whichever id changed last -> Loom, red.
+      expect(crewPicker().textContent).toBe('Night shift')
+    })
+
+    it('R3 + R4: off by default, and off means today', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      // Mutation: default the preference on -> red here, and at the crew
+      // below.
+      expect(followToggle().getAttribute('aria-pressed')).toBe('false')
+      expect(localStorage.getItem('convergence-loom-follow')).toBeNull()
+
+      await open(NIGHT)
+      expect(crewPicker().textContent).toBe('Loom')
+      expect(crewWrites()).toBe(0)
+    })
+
+    it('R3: a stored value this feature never wrote reads as off', async () => {
+      localStorage.setItem('convergence-loom-follow', 'true')
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      // Mutation: any non-null string reads as on -> red here and at the
+      // crew below.
+      expect(followToggle().getAttribute('aria-pressed')).toBe('false')
+      await open(NIGHT)
+      expect(crewPicker().textContent).toBe('Loom')
+    })
+
+    it('R3: switching it on follows at once and is remembered; off stops it', async () => {
+      useSessionStore.setState({ activeSessionId: NIGHT })
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      expect(crewPicker().textContent).toBe('Loom')
+
+      await act(async () => {
+        fireEvent.click(followToggle())
+      })
+      expect(followToggle().getAttribute('aria-pressed')).toBe('true')
+      expect(localStorage.getItem('convergence-loom-follow')).toBe('1')
+      // Mutation: store the preference without acting on the conversation
+      // that is open NOW -> still Loom, red.
+      expect(crewPicker().textContent).toBe('Night shift')
+
+      await act(async () => {
+        fireEvent.click(followToggle())
+      })
+      expect(followToggle().getAttribute('aria-pressed')).toBe('false')
+      // Off is the absence of the key, never a stored `'0'`.
+      expect(localStorage.getItem('convergence-loom-follow')).toBeNull()
+      const written = crewWrites()
+      await open(A2)
+      // Mutation: keep following once it has been switched off -> Loom, red.
+      expect(crewPicker().textContent).toBe('Night shift')
+      expect(crewWrites()).toBe(written)
+    })
+
+    it('R3: turning it on follows the conversation open NOW, every time', async () => {
+      useSessionStore.setState({ activeSessionId: NIGHT })
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await act(async () => {
+        fireEvent.click(followToggle())
+      })
+      expect(crewPicker().textContent).toBe('Night shift')
+
+      // Off, and a crew chosen by hand while it is off -- the conversation
+      // never changes through any of it.
+      await act(async () => {
+        fireEvent.click(followToggle())
+      })
+      await pickCrew('Loom')
+      expect(crewPicker().textContent).toBe('Loom')
+
+      // On again: "follows at once for the conversation that is open now" is
+      // every time it is switched on, not only the first. Mutation: leave the
+      // followed mark standing while the preference is off -> this second
+      // switch-on sees the same conversation it already followed and does
+      // nothing, red.
+      await act(async () => {
+        fireEvent.click(followToggle())
+      })
+      expect(crewPicker().textContent).toBe('Night shift')
+    })
+
+    it('R3: the toggle is wherever the picker is, in both shells, and says no words', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      expect(followToggle().closest('[data-loom="compact"]')).toBeTruthy()
+      // MAR-3284 R3's law survives it: the subline is still the crew's name
+      // and nothing else. Mutation: label the control with its words on the
+      // line -> red.
+      expect(followToggle().closest('[data-loom-subline]')?.textContent).toBe(
+        'Loom',
+      )
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+      })
+      const loom = document.querySelector(
+        '[data-loom="expanded"]',
+      ) as HTMLElement
+      expect(loom.contains(followToggle())).toBe(true)
+      // MAR-3284 R1: a control inside the window's drag strip is not a
+      // control. Mutation: drop its `no-drag` -> it resolves to the header's
+      // `drag`, red.
+      expect(region(followToggle())).toBe('no-drag')
+    })
+
+    it('R3: one bound crew -> no picker, and no toggle beside it', async () => {
+      crews = [crews[0]!]
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      expect(screen.queryByRole('combobox', { name: 'Crew' })).toBeNull()
+      // Mutation: draw the toggle whatever the crews -> a control for a
+      // choice that does not exist, red.
+      expect(
+        screen.queryByRole('button', { name: 'Follow the conversation' }),
+      ).toBeNull()
     })
   })
 })
