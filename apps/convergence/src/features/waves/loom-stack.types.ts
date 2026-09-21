@@ -123,7 +123,7 @@ export interface LoomStackProps {
    * or absent where there is no crew to read it for.
    */
   outside?: ReactNode
-  /** `convergence development · All waves` -- which ledger this is. */
+  /** `convergence development` -- which crew's ledger this is (MAR-3284). */
   subline: LoomSubline
   /** The search field (MAR-3234), in the header of both shapes. */
   field: LoomSearchField

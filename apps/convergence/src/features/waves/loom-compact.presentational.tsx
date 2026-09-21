@@ -50,9 +50,13 @@ export const LoomCompactView: FC<
     </div>
     <div className="shrink-0 px-3 pb-4 text-xs text-muted-foreground">
       <div className={LOOM_SEARCH_SUBLINE_ROW_CLASS}>
-        <p className="min-w-0 flex-1 break-words">
+        {/* A box, not a paragraph (MAR-3284 R4): with more than one crew
+            this holds the crew picker, and a control does not belong inside
+            a sentence. Empty of words it still holds its place, so the
+            search icon does not walk left when no crew is on screen. */}
+        <div data-loom-subline className="min-w-0 flex-1 break-words">
           <LoomSublineContent subline={props.subline} />
-        </p>
+        </div>
         <LoomSearchToggleView
           revealed={props.field.revealed}
           onToggle={props.field.onToggleReveal}

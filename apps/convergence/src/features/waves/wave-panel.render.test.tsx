@@ -2910,13 +2910,19 @@ describe('MAR-3097: through the containers and the real stores', () => {
       ).toContain('EX-1')
     })
 
-    it('R3: two crews -> a control named Crew, in both shells; the tail stays text', async () => {
+    it('R3: two crews -> a control named Crew, in both shells; nothing else on the line', async () => {
       await mount(<WavePanel reservedWidth={RESERVED} />)
       await screen.findByLabelText('Loom')
-      const subline = () => crewPicker().closest('p') as HTMLElement
+      // MAR-3284 R4: the subline is a box, not a paragraph -- `closest('p')`
+      // used to be how this test found it, and finding nothing is now the
+      // point of its own assertion below.
+      const subline = () =>
+        crewPicker().closest('[data-loom-subline]') as HTMLElement
 
       expect(crewPicker().textContent).toBe('Loom')
-      expect(subline().textContent).toContain(' · All waves')
+      // MAR-3284 R3: the picker alone, with no trailing text node beside it.
+      // Mutation: keep ` · All waves` after the trigger -> red.
+      expect(subline().textContent).toBe('Loom')
       await openPicker()
       // Every bound crew by name, in crew order.
       expect(
@@ -2932,7 +2938,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
       })
       expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
       expect(crewPicker().textContent).toBe('Loom')
-      expect(subline().textContent).toContain(' · All waves')
+      expect(subline().textContent).toBe('Loom')
       expect(subline().closest('[data-loom="expanded"]')).toBeTruthy()
 
       // The portalled list's Escape must not bubble into the shell and fold
@@ -2944,14 +2950,15 @@ describe('MAR-3097: through the containers and the real stores', () => {
       expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
     })
 
-    it('R3: one crew -> the subline is the text it always was, no control, in both shells', async () => {
+    it('R3: one crew -> the subline is the crew’s name, no control, in both shells', async () => {
       crews = [crews[0]!]
       await mount(<WavePanel reservedWidth={RESERVED} />)
       await screen.findByLabelText('Loom')
+      // MAR-3284 R3: the crew's name and nothing after it.
       const line = () =>
-        [...document.querySelectorAll('[data-loom] p')].find(
-          (node) => node.textContent === 'Loom · All waves',
-        )
+        [
+          ...document.querySelectorAll('[data-loom] [data-loom-subline] p'),
+        ].find((node) => node.textContent === 'Loom')
       // Mutation: draw the control for one crew -> a combobox, and no plain
       // line reading exactly this, red.
       expect(screen.queryByRole('combobox', { name: 'Crew' })).toBeNull()
@@ -2962,6 +2969,158 @@ describe('MAR-3097: through the containers and the real stores', () => {
       })
       expect(screen.queryByRole('combobox', { name: 'Crew' })).toBeNull()
       expect(line()?.children).toHaveLength(0)
+    })
+
+    /**
+     * MAR-3284: expanded Loom is an opaque cover over views that declare the
+     * window's drag strip at their top (`chat-surface`, `session-view`,
+     * `space-home`). Electron builds its draggable region from the DOM and
+     * knows nothing about stacking, so a covered `drag` strip still takes the
+     * mouse -- Loom's header controls were clickable only where the view
+     * underneath happened to have punched its own `no-drag` hole. Loom has to
+     * answer the question for its whole area.
+     */
+    describe('MAR-3284: the header is a title strip, its controls are not', () => {
+      /**
+       * The app-region an element is IN: the nearest ancestor-or-self that
+       * says, exactly as Electron resolves it -- later in the tree wins.
+       *
+       * Read off the style object's own property, not
+       * `getPropertyValue('-webkit-app-region')`: jsdom's CSS parser does not
+       * know the property and drops the declaration, while the assignment
+       * React makes survives on the object. It is still the emitted
+       * element's own style that is read here, never the prop that asked
+       * for it.
+       */
+      const region = (node: Element | null) => {
+        for (
+          let at: Element | null = node;
+          at !== null;
+          at = at.parentElement
+        ) {
+          const said = (
+            (at as HTMLElement).style as CSSStyleDeclaration & {
+              WebkitAppRegion?: string
+            }
+          )?.WebkitAppRegion
+          if (said) return said
+        }
+        return null
+      }
+
+      const expand = async () => {
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+        })
+        return document.querySelector('[data-loom="expanded"]') as HTMLElement
+      }
+
+      it('R1: the expanded header drags the window and its controls do not', async () => {
+        await mount(<WavePanel reservedWidth={RESERVED} />)
+        await screen.findByLabelText('Loom')
+        const loom = await expand()
+        const header = loom.querySelector('[data-loom-header]') as HTMLElement
+
+        // The strip itself moves the window -- and the name beside it, and
+        // the empty space, because neither says otherwise.
+        expect(region(header)).toBe('drag')
+        expect(region(header.querySelector('h2'))).toBe('drag')
+
+        // Mutation M1: drop `style={LOOM_NO_DRAG_STYLE}` from any of these
+        // four -> that one resolves to `drag` and is red. This is the whole
+        // defect: a control inside a drag strip is not a control.
+        for (const control of [
+          crewPicker(),
+          screen.getByRole('searchbox', { name: 'Search Loom' }),
+          screen.getByRole('button', { name: /How Loom works/ }),
+          screen.getByRole('button', { name: 'Fold Loom' }),
+        ]) {
+          expect(header.contains(control)).toBe(true)
+          expect(region(control)).toBe('no-drag')
+        }
+      })
+
+      it('R1: the expanded body is no-drag, so no covered strip reaches into it', async () => {
+        await mount(<WavePanel reservedWidth={RESERVED} />)
+        await screen.findByLabelText('Loom')
+        const loom = await expand()
+
+        // Mutation M2: drop the section's `no-drag` -> the cover says
+        // nothing about its own area, the covered view's `drag` strip
+        // decides, and this is red.
+        expect(region(loom)).toBe('no-drag')
+        const body = loom.querySelector('[data-loom-sheet]')
+        expect(body).toBeTruthy()
+        expect(region(body)).toBe('no-drag')
+      })
+
+      it('R2: the opened crew list is no-drag, portalled clear of the cover', async () => {
+        await mount(<WavePanel reservedWidth={RESERVED} />)
+        await screen.findByLabelText('Loom')
+        const loom = await expand()
+        await openPicker()
+
+        const list = screen.getByRole('listbox')
+        const content = list.closest(
+          '[data-slot="select-content"]',
+        ) as HTMLElement
+        // It is outside Loom: it inherits none of the cover's no-drag, and
+        // it opens exactly over a covered view's own drag strip.
+        expect(loom.contains(content)).toBe(false)
+        // Mutation M3: remove the content's `no-drag` -> red, and the items
+        // nearest the header belong to the window instead of the list.
+        expect(region(content)).toBe('no-drag')
+      })
+
+      it('R4: the crew picker is not inside a paragraph, in either shape', async () => {
+        await mount(<WavePanel reservedWidth={RESERVED} />)
+        await screen.findByLabelText('Loom')
+
+        // Mutation M5: put the `<p>` back around the subline in either
+        // shell -> red there.
+        expect(crewPicker().closest('p')).toBeNull()
+        expect(crewPicker().closest('[data-loom="compact"]')).toBeTruthy()
+
+        await expand()
+        expect(crewPicker().closest('p')).toBeNull()
+        expect(crewPicker().closest('[data-loom="expanded"]')).toBeTruthy()
+      })
+
+      /**
+       * Both shapes, both shells. Mutation M4 -- keep the tail in the picker
+       * form only -- is red in the two-crew test and green in the one-crew
+       * one, which is exactly why the pair is written out rather than
+       * looped: one of them alone would let half the tail survive.
+       */
+      const nothingSaysAllWaves = async () => {
+        await mount(<WavePanel reservedWidth={RESERVED} />)
+        await screen.findByLabelText('Loom')
+        const compact = document.querySelector(
+          '[data-loom="compact"]',
+        ) as HTMLElement
+        // The search icon is still drawn beside the subline either way.
+        expect(
+          within(compact).getByRole('button', { name: 'Search Loom' }),
+        ).toBeTruthy()
+        expect(compact.textContent).not.toMatch(/All waves/)
+
+        const loom = await expand()
+        expect(loom.textContent).not.toMatch(/All waves/)
+        // The subline keeps its box, so the header keeps its spacing.
+        const subline = loom.querySelector('[data-loom-subline]') as HTMLElement
+        expect(subline.className).toMatch(/flex-1/)
+      }
+
+      it('R3: with a picker, nothing on the header says "All waves"', async () => {
+        await nothingSaysAllWaves()
+        expect(screen.getByRole('combobox', { name: 'Crew' })).toBeTruthy()
+      })
+
+      it('R3: without a picker, nothing on the header says "All waves"', async () => {
+        crews = [crews[0]!]
+        await nothingSaysAllWaves()
+        expect(screen.queryByRole('combobox', { name: 'Crew' })).toBeNull()
+      })
     })
 
     it('R4: switching swaps everything and keeps the sheet, the mode and the width', async () => {

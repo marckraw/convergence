@@ -3,7 +3,6 @@ import type { WorkLedgerState } from '@/entities/work-ledger'
 import {
   loomNowRows,
   loomSubline,
-  LOOM_SUBLINE_TAIL,
   loomSheetCounts,
   loomSheetNote,
   loomSheets,
@@ -267,16 +266,31 @@ describe('MAR-3189: the titles say what their numbers mean', () => {
 })
 
 describe('MAR-3189: the subline names the ledger on screen', () => {
-  it('the crew on screen by name; none at all still says what is shown', () => {
+  it('the crew on screen by name, and nothing else; none at all says nothing', () => {
     // r4 asks for the tracker PROJECT's name, which a binding does not carry
     // (`projectId` only), so the crew's name stands in -- the same word the
     // outage header uses. MAR-3225 retired the `N crews` branch: Loom shows
     // one crew at a time, so the subline names that crew and only that crew.
+    // MAR-3284 R3 took the ` · All waves` tail off both branches: it was true
+    // of everything and so described nothing, and it made a sentence for the
+    // crew picker to sit inside.
     expect(loomSubline('convergence development')).toBe(
-      'convergence development · All waves',
+      'convergence development',
     )
-    expect(loomSubline(null)).toBe('All waves')
-    expect(`x · ${LOOM_SUBLINE_TAIL}`).toBe('x · All waves')
+    // Mutation: return a stand-in phrase with no crew -> red. Nothing to
+    // name is an empty line, not a word about waves.
+    expect(loomSubline(null)).toBe('')
+  })
+
+  it('MAR-3284 R3: no form of the subline says "All waves"', () => {
+    // Mutation: put the tail back on either branch -> red.
+    for (const line of [
+      loomSubline('convergence development'),
+      loomSubline(null),
+    ]) {
+      expect(line).not.toMatch(/All waves/)
+      expect(line).not.toContain('·')
+    }
   })
 })
 
