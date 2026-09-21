@@ -13,9 +13,16 @@ export const broadcastWorkLedger = (snapshot: WorkLedgerSnapshot): void => {
 
 /** One read-only list; the watcher's broadcast carries the same shape. */
 export function registerWorkLedgerIpcHandlers(deps: {
-  snapshot: (crewId: string) => WorkLedgerSnapshot
+  snapshot: (
+    crewId: string,
+  ) => Omit<WorkLedgerSnapshot, 'dispatchPlan'> &
+    Partial<Pick<WorkLedgerSnapshot, 'dispatchPlan'>>
 }): void {
-  ipcMain.handle('workLedger:list', (_event, crewId: string) =>
-    deps.snapshot(crewId),
+  ipcMain.handle(
+    'workLedger:list',
+    (_event, crewId: string): WorkLedgerSnapshot => {
+      const snapshot = deps.snapshot(crewId)
+      return { ...snapshot, dispatchPlan: snapshot.dispatchPlan ?? null }
+    },
   )
 }

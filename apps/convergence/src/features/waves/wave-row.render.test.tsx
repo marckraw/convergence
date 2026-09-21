@@ -158,6 +158,7 @@ describe('MAR-3169 R4: a project the key cannot see, through the real Loom', () 
         ledgerEntry({ issueIdentifier: 'EX-1', state: 'working' }),
         ledgerEntry({ issueIdentifier: 'EX-2', state: 'reviewed' }),
       ],
+      dispatchPlan: null,
       trackerHealth: health('project-not-visible'),
     }
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {

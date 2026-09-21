@@ -1,3 +1,4 @@
+import type { DispatchPlan } from '@/shared/types/tracker.types'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import { useSessionCrewStore } from '@/entities/session-crew'
@@ -48,6 +49,7 @@ export const LOOM_LOCAL_HOST_LABEL = 'This Mac'
  * MAR-3233 retired it.)
  */
 export interface WaveBoard {
+  dispatchPlan: DispatchPlan | null
   /** How many crews read a tracker; zero means the column is not mounted. */
   boundCrewCount: number
   /** Every bound crew, in crew order: what Loom's crew picker lists. */
@@ -325,6 +327,9 @@ export function useWaveBoard(query: string | null): WaveBoard {
   )
 
   return {
+    dispatchPlan: selectedCrewId
+      ? (snapshots[selectedCrewId]?.dispatchPlan ?? null)
+      : null,
     boundCrewCount: boundCrewIds.length,
     crewOptions,
     selectedCrewId,

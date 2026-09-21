@@ -1,3 +1,4 @@
+import type { DispatchPlan } from '@/shared/types/tracker.types'
 import type { ReactNode, UIEvent } from 'react'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
 import type { LoomHorse } from './loom-horses.pure'
@@ -90,6 +91,7 @@ export interface LoomSubline {
  * needing different facts -- they are the same panel at two sizes.
  */
 export interface LoomStackProps {
+  dispatchPlan?: DispatchPlan | null
   sheets: LoomSheets
   /**
    * The board's clock (MAR-3192 R2).

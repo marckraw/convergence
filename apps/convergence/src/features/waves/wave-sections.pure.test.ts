@@ -313,6 +313,7 @@ describe('MAR-3097 lap 2, E: crews on rows', () => {
     const snapshot = (crewId: string, identifier: string) => ({
       crewId,
       entries: [ledgerEntry({ issueIdentifier: identifier, crewId })],
+      dispatchPlan: null,
       trackerHealth: null,
     })
     expect(

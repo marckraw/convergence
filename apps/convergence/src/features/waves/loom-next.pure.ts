@@ -1,3 +1,5 @@
+import type { DispatchPlan, DispatchWord } from '@/shared/types/tracker.types'
+import { dispatchQueueCompare } from '@/shared/lib/dispatch-order.pure'
 import { rowBelongsToSeat, type LoomHorse } from './loom-horses.pure'
 import type { WaveRow } from './wave-sections.pure'
 
@@ -45,48 +47,49 @@ export function loomMissingLabels(fact: LoomQueueFact): string[] {
   return READY_LABELS.filter((label) => fact[label] !== true)
 }
 
-/** Linear's priority as a sort rank: 1 urgent … 4 low, then none, last. */
-function priorityRank(priority: number | null | undefined): number {
-  // 0 is Linear's own word for "no priority", and null is "the tracker did
-  // not say". Neither is an ordering claim, so both sit after every issue
-  // somebody did rank -- together, not as two tiers.
-  if (priority === null || priority === undefined || priority === 0) return 5
-  return priority
-}
-
-/**
- * The number in an issue identifier (`MAR-3189` -> 3189), or null.
- *
- * Read as a NUMBER, not as text: `MAR-999` and `MAR-1000` are one character
- * apart in length and in the wrong order in every string comparison.
- */
-function issueNumber(identifier: string): number | null {
-  const match = /(\d+)$/.exec(identifier)
-  return match ? Number(match[1]) : null
-}
-
-/**
- * The queue order (MAR-3193 R3) -- the one function P4a replaces.
- *
- * It is exported and used by both halves of a seat's queue so that when the
- * dispatcher's rule is ratified there is a single place where the order
- * lives, and the sheet's footer keeps describing what the sort does.
- */
+/** Legacy rows have no first-seen fact; the shared comparison preserves their order. */
 export function loomQueueCompare(a: WaveRow, b: WaveRow): number {
-  const byPriority =
-    priorityRank(a.entry.fact.priority) - priorityRank(b.entry.fact.priority)
-  if (byPriority !== 0) return byPriority
+  return dispatchQueueCompare(
+    { priority: a.entry.fact.priority, identifier: a.entry.issueIdentifier },
+    { priority: b.entry.fact.priority, identifier: b.entry.issueIdentifier },
+  )
+}
 
-  const aNumber = issueNumber(a.entry.issueIdentifier)
-  const bNumber = issueNumber(b.entry.issueIdentifier)
-  if (aNumber !== null && bNumber !== null && aNumber !== bNumber) {
-    return aNumber - bNumber
+export const LOOM_DISPATCH_ORDER_LINE =
+  'Order: priority, then first labeled for dispatch · running work stays in Now'
+
+export function dispatchWordSentence(
+  word: DispatchWord,
+  seat: string | null,
+): string {
+  switch (word.kind) {
+    case 'needs-labels':
+      return `needs ${word.missing.join(' · ')}`
+    case 'blocked':
+      return 'blocked'
+    case 'seat-not-in-crew':
+      return `seat "${seat ?? ''}" not in the crew`
+    case 'seat-no-conversation':
+      return LOOM_NEXT_NO_CONVERSATION
+    case 'no-mastermind':
+      return 'no mastermind seat in this crew'
+    case 'no-wire':
+      return 'no wire from the mastermind to this seat'
+    case 'seat-busy':
+      return `seat busy · ${{ turn: 'turn running', compacting: 'compacting', drill: 'drill running', 'waiting-on-you': 'waiting on you' }[word.why]}`
+    case 'seat-holds':
+      return `${word.identifier} is still with this seat`
+    case 'lane':
+      return {
+        dirty: 'lane has uncommitted changes',
+        unpushed: 'lane has unpushed commits',
+        unknown: 'lane not checked',
+      }[word.state]
+    case 'queued-behind':
+      return `queued behind ${word.identifier}`
+    case 'would-start':
+      return 'would start now'
   }
-  // An identifier with no number cannot be ranked by one; it falls to the
-  // text, which is at least stable.
-  if (aNumber === null && bNumber !== null) return 1
-  if (aNumber !== null && bNumber === null) return -1
-  return a.entry.issueIdentifier.localeCompare(b.entry.issueIdentifier)
 }
 
 /** One horse's queue, as Next draws it. */
@@ -150,6 +153,7 @@ function preparingAction(row: WaveRow): string {
 export function loomNext(
   rows: readonly WaveRow[],
   horses: readonly LoomHorse[],
+  dispatchPlan: DispatchPlan | null = null,
 ): LoomNext {
   const claimed = new Set<WaveRow>()
   const mine = new Map<string, WaveRow[]>()
@@ -218,7 +222,18 @@ export function loomNext(
       // A seat with no conversation cannot start anything, so its rows are
       // never Ready and never numbered -- the number is a promise about
       // what runs next, and nothing runs through a door that is gone.
-      if (nameOnly.has(row)) {
+      const word = dispatchPlan?.words[row.entry.issueId]
+      if (dispatchPlan) {
+        const planned = {
+          ...row,
+          action: word
+            ? dispatchWordSentence(word, row.entry.seat)
+            : 'lane not checked',
+        }
+        if (word?.kind === 'would-start' || word?.kind === 'queued-behind')
+          ready.push(planned)
+        else preparing.push(planned)
+      } else if (nameOnly.has(row)) {
         preparing.push({ ...row, action: LOOM_NEXT_NO_CONVERSATION })
       } else if (loomMissingLabels(row.entry.fact).length === 0) {
         ready.push(row)
@@ -226,8 +241,19 @@ export function loomNext(
         preparing.push({ ...row, action: preparingAction(row) })
       }
     }
-    ready.sort(loomQueueCompare)
-    preparing.sort(loomQueueCompare)
+    const order = dispatchPlan?.order[horse.seat ?? ''] ?? []
+    const compare = dispatchPlan
+      ? (a: WaveRow, b: WaveRow) => {
+          const ai = order.indexOf(a.entry.issueId),
+            bi = order.indexOf(b.entry.issueId)
+          return (
+            (ai < 0 ? Infinity : ai) - (bi < 0 ? Infinity : bi) ||
+            loomQueueCompare(a, b)
+          )
+        }
+      : loomQueueCompare
+    ready.sort(compare)
+    preparing.sort(compare)
 
     seats.push({
       key: horse.key,
@@ -235,7 +261,9 @@ export function loomNext(
       capacity: loomSeatCapacity(horse, ready.length + preparing.length),
       // The position is said in the row's own word, so the queue can be
       // numbered without `WaveRowView` learning what a queue is.
-      ready: ready.map((row, at) => ({ ...row, action: `${at + 1} · ready` })),
+      ready: dispatchPlan
+        ? ready
+        : ready.map((row, at) => ({ ...row, action: `${at + 1} · ready` })),
       preparing,
     })
   }
@@ -245,7 +273,12 @@ export function loomNext(
     .sort(loomQueueCompare)
     .map((row) => ({
       ...row,
-      action: `seat "${row.entry.seat ?? ''}" not in the crew`,
+      action: dispatchPlan?.words[row.entry.issueId]
+        ? dispatchWordSentence(
+            dispatchPlan.words[row.entry.issueId],
+            row.entry.seat,
+          )
+        : `seat "${row.entry.seat ?? ''}" not in the crew`,
     }))
 
   return {

@@ -41,7 +41,12 @@ export function LoomStackView({
   wide = false,
   ...props
 }: LoomStackProps & { wide?: boolean }) {
-  const counts = loomSheetCounts(props.sheets, props.now, props.horses)
+  const counts = loomSheetCounts(
+    props.sheets,
+    props.now,
+    props.horses,
+    props.dispatchPlan,
+  )
   const selected = LOOM_SHEETS.indexOf(props.open)
   return (
     <div

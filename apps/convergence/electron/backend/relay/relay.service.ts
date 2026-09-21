@@ -120,6 +120,23 @@ export class RelayService {
     return rows.map(sessionRelayFromRow)
   }
 
+  findWire(
+    crewId: string,
+    sourceSessionId: string,
+    targetSessionId: string,
+  ): SessionRelay | null {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM session_relays
+      WHERE crew_id = ? AND source_session_id = ? AND target_session_id = ? AND armed = 1
+      ORDER BY created_at ASC, rowid ASC LIMIT 1`,
+      )
+      .get(crewId, sourceSessionId, targetSessionId) as
+      | SessionRelayRow
+      | undefined
+    return row ? sessionRelayFromRow(row) : null
+  }
+
   create(input: CreateSessionRelayInput): SessionRelay {
     const id = randomUUID()
     const crewId = normalizeRelayCrewId(input.crewId)

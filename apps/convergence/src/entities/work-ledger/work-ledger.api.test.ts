@@ -35,6 +35,7 @@ describe('the ledger store', () => {
         list: vi.fn(async (crewId: string) => ({
           crewId,
           entries: [],
+          dispatchPlan: null,
           trackerHealth: null,
         })),
         onUpdated,
@@ -51,6 +52,7 @@ describe('the ledger store', () => {
     push({
       crewId: 'a',
       entries: [],
+      dispatchPlan: null,
       trackerHealth: {
         state: 'unreachable',
         since: '2026-09-17T12:00:00.000Z',
@@ -83,6 +85,7 @@ describe('the ledger store', () => {
     const snapshot = (since: string): WorkLedgerSnapshot => ({
       crewId: 'a',
       entries: [],
+      dispatchPlan: null,
       trackerHealth: {
         state: 'ok',
         since,
@@ -108,6 +111,7 @@ describe('the ledger store', () => {
         list: vi.fn(async (crewId: string) => ({
           crewId,
           entries: [],
+          dispatchPlan: null,
           trackerHealth: null,
         })),
         onUpdated: vi.fn(() => () => {}),
