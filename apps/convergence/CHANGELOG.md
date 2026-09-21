@@ -1,5 +1,12 @@
 # convergence
 
+## 0.80.1
+
+### Patch Changes
+
+- 2e2f879: Run the drill no longer switches the conversation to the default login — its messages ride on the account the conversation was already using.
+- 7f8e963: Expanded Loom's header controls — the crew picker, search, the guide and Fold — are clickable everywhere again, the window can be dragged by Loom's header, and the "All waves" label is gone.
+
 ## 0.80.0
 
 ### Minor Changes
