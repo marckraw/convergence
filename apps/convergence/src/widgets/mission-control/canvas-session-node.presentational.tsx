@@ -4,7 +4,7 @@ import type { FC } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import {
   formatSessionAttentionLabel,
-  isSessionCompacting,
+  SessionStateBadge,
 } from '@/entities/session'
 import {
   CANVAS_NODE_HEIGHT,
@@ -13,7 +13,6 @@ import {
   STATUS_DOT_STYLES,
 } from '@/features/mission-control'
 import { cn } from '@/shared/lib/cn.pure'
-import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { CANVAS_HANDLE, CANVAS_SIDE_HANDLE } from './session-canvas.types'
 import type { CanvasSessionNodeData } from './session-canvas.types'
 
@@ -123,12 +122,7 @@ export const CanvasSessionNode: FC<NodeProps> = ({ data }) => {
               className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground"
               title={formatSessionAttentionLabel(session)}
             >
-              <SessionBadge
-                compacting={isSessionCompacting(session)}
-                attention={session.attention}
-                status={session.status}
-                parallelWork={session.parallelWork}
-              />
+              <SessionStateBadge session={session} />
             </span>
           ) : (
             <span

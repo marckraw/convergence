@@ -49,6 +49,8 @@ export type {
   CreateAndStartGlobalSessionRequest,
 } from './session.types'
 export { AttentionIndicator } from './attention-indicator.presentational'
+export { SessionStateBadge } from './session-state-badge.presentational'
+export type { SessionStateBadgeSession } from './session-state-badge.presentational'
 export { selectLocalProviders, useSessionStore } from './session.model'
 export type { SessionStore } from './session.model'
 export {

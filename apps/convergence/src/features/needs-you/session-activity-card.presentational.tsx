@@ -1,4 +1,4 @@
-import { isSessionCompacting } from '@/entities/session'
+import { SessionStateBadge } from '@/entities/session'
 import type { CSSProperties, ReactNode } from 'react'
 import {
   ClipboardList,
@@ -12,7 +12,6 @@ import { isLocalExecutionHost } from '@/entities/execution-host'
 import { Button } from '@/shared/ui/button'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import { resolveProviderIcon } from '@/shared/ui/provider-icon.pure'
-import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { cn } from '@/shared/lib/cn.pure'
 import { NeedsYouCardIcon } from './needs-you-card-icon.presentational'
@@ -98,13 +97,7 @@ export function SessionActivityCard({
           <span className="block min-w-0 w-full space-y-1">
             <span className="flex items-start gap-1 text-xs font-medium">
               {compact && !card.hostUnreachable && (
-                <SessionBadge
-                  compacting={isSessionCompacting(session)}
-                  attention={session.attention}
-                  status={session.status}
-                  parallelWork={session.parallelWork}
-                  className="mt-0.5"
-                />
+                <SessionStateBadge session={session} className="mt-0.5" />
               )}
               <span
                 className={compact ? 'min-w-0 truncate' : 'min-w-0 break-words'}

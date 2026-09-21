@@ -1,4 +1,4 @@
-import { isSessionCompacting } from '@/entities/session'
+import { SessionStateBadge } from '@/entities/session'
 import type { FC, ReactNode } from 'react'
 import type { SessionSummary } from '@/entities/session'
 import type {
@@ -31,7 +31,6 @@ import {
   fromSelectValue,
   toSelectValue,
 } from '@/shared/lib/select-value.pure'
-import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { cn } from '@/shared/lib/cn.pure'
 import {
   Box,
@@ -287,10 +286,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                         className="flex h-auto w-full min-w-0 items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-accent"
                         disabled={!session}
                       >
-                        <SessionBadge
-                          compacting={isSessionCompacting(session)}
-                          attention={session?.attention ?? 'none'}
-                        />
+                        <SessionStateBadge session={session} />
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm font-medium">
                             {session?.name ?? 'Unknown session'}

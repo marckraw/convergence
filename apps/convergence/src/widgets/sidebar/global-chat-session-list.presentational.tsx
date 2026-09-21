@@ -1,10 +1,9 @@
-import { isSessionCompacting } from '@/entities/session'
+import { SessionStateBadge } from '@/entities/session'
 import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import type { FC } from 'react'
 import type { SessionSummary } from '@/entities/session'
 import type { SpaceAttemptRole } from '@/entities/space'
 import { Button } from '@/shared/ui/button'
-import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import {
   DropdownMenu,
@@ -114,12 +113,7 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
             aria-label={`Open chat session ${session.name}`}
             className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
           >
-            <SessionBadge
-              compacting={isSessionCompacting(session)}
-              attention={session.attention}
-              status={session.status}
-              parallelWork={session.parallelWork}
-            />
+            <SessionStateBadge session={session} />
             <span className="min-w-0 text-left">
               <span className="block truncate">{session.name}</span>
               {parallelWorkStatus(session) && (
@@ -313,15 +307,8 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
                                   aria-label={`Open Space attempt ${attempt.sessionName}`}
                                   className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
                                 >
-                                  <SessionBadge
-                                    compacting={isSessionCompacting(
-                                      attempt.session,
-                                    )}
-                                    status={attempt.session?.status}
-                                    parallelWork={attempt.session?.parallelWork}
-                                    attention={
-                                      attempt.session?.attention ?? 'none'
-                                    }
+                                  <SessionStateBadge
+                                    session={attempt.session}
                                   />
                                   <span className="truncate">
                                     {attempt.sessionName}
