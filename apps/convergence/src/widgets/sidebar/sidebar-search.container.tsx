@@ -6,9 +6,9 @@ import { SidebarSearchToggle } from './sidebar-search-toggle.presentational'
 
 /**
  * Owns the sidebar conversation-name search query (never persisted) and
- * narrows both session lists together before Activity cards or the project
- * tree are built — R2/R7 wiring lives here so deleting either filter turns
- * the hook test red.
+ * narrows both session lists together. Used only by SidebarConversations —
+ * the production container that feeds Activity and the project tree — so
+ * deleting either filter turns that container's tests red (R2/R7).
  */
 export function useSidebarConversationSearch(options: {
   globalSessions: readonly SessionSummary[]

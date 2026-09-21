@@ -30,12 +30,8 @@ import {
 } from '@/features'
 import { switchToSession } from '@/features/command-center'
 import { useDialogStore } from '@/entities/dialog'
-import { NeedsYou } from './needs-you.container'
-import { groupNeedsYou, needsYouCardModel } from '@/features/needs-you'
 import { useAppSettingsStore } from '@/entities/app-settings'
-import { TerminalIdleSection } from './terminal-idle-section.presentational'
-import { ProjectTree } from './project-tree.container'
-import { ProjectSwitcher } from './project-switcher.presentational'
+import { groupNeedsYou, needsYouCardModel } from '@/features/needs-you'
 import { Button } from '@/shared/ui/button'
 import type { AppSurface } from '@/shared/types/app-surface.types'
 import { cn } from '@/shared/lib/cn.pure'
@@ -52,12 +48,9 @@ import {
   Satellite,
   Settings,
 } from 'lucide-react'
-import {
-  GlobalChatSessionList,
-  type ChatSidebarSpace,
-} from './global-chat-session-list.presentational'
+import { type ChatSidebarSpace } from './global-chat-session-list.presentational'
+import { SidebarConversations } from './sidebar-conversations.container'
 import { SidebarToolsMenu } from './sidebar-tools-menu.presentational'
-import { useSidebarConversationSearch } from './sidebar-search.container'
 import { toast } from 'sonner'
 import { useFeedClock } from './use-feed-clock'
 
@@ -298,25 +291,26 @@ export const Sidebar: FC<SidebarProps> = ({
   )
   const setPinned = useSessionStore((s) => s.setPinned)
   const [cardNow, setCardNow] = useState(() => Date.now())
-  const conversationSearch = useSidebarConversationSearch({
-    globalSessions,
-    sessions,
-    collapsed,
-  })
-  const cardGroups = groupNeedsYou(
-    conversationSearch.searchedGlobalSessions.map((session) =>
-      needsYouCardModel(session, {
-        projectName:
-          session.contextKind === 'global'
-            ? 'Convergence'
-            : (projects.find((project) => project.id === session.projectId)
-                ?.name ?? 'Unknown project'),
-        endpoints,
-        now: cardNow,
-        dismissed:
-          needsYouDismissals[session.id]?.updatedAt === session.updatedAt,
-      }),
-    ),
+  // Collapsed-rail badges and the feed clock need the full Activity set —
+  // name search lives in SidebarConversations and never reaches this rail.
+  const cardGroups = useMemo(
+    () =>
+      groupNeedsYou(
+        globalSessions.map((session) =>
+          needsYouCardModel(session, {
+            projectName:
+              session.contextKind === 'global'
+                ? 'Convergence'
+                : (projects.find((project) => project.id === session.projectId)
+                    ?.name ?? 'Unknown project'),
+            endpoints,
+            now: cardNow,
+            dismissed:
+              needsYouDismissals[session.id]?.updatedAt === session.updatedAt,
+          }),
+        ),
+      ),
+    [globalSessions, projects, endpoints, cardNow, needsYouDismissals],
   )
 
   const selectedProjectSession =
@@ -907,51 +901,54 @@ export const Sidebar: FC<SidebarProps> = ({
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-2 px-3 pt-3">
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant={activeSurface === 'code' ? 'secondary' : 'ghost'}
-            size="icon"
-            className="h-8 w-8"
-            title="Code"
-            aria-label="Show code surface"
-            aria-pressed={activeSurface === 'code'}
-            onClick={() => onSelectSurface('code')}
-          >
-            <Code2 className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant={activeSurface === 'chat' ? 'secondary' : 'ghost'}
-            size="icon"
-            className="h-8 w-8"
-            title="Chat"
-            aria-label="Show chat surface"
-            aria-pressed={activeSurface === 'chat'}
-            onClick={() => onSelectSurface('chat')}
-          >
-            <MessageSquareText className="h-4 w-4" />
-          </Button>
-          {onShowMissionControl ? (
+      <SidebarConversations
+        collapsed={collapsed}
+        globalSessions={globalSessions}
+        sessions={sessions}
+        headerStart={
+          <>
             <Button
               type="button"
-              variant={missionControlActive ? 'secondary' : 'ghost'}
+              variant={activeSurface === 'code' ? 'secondary' : 'ghost'}
               size="icon"
               className="h-8 w-8"
-              title="Mission Control"
-              aria-label="Show Mission Control"
-              aria-pressed={missionControlActive}
-              onClick={onShowMissionControl}
+              title="Code"
+              aria-label="Show code surface"
+              aria-pressed={activeSurface === 'code'}
+              onClick={() => onSelectSurface('code')}
             >
-              <Satellite className="h-4 w-4" />
+              <Code2 className="h-4 w-4" />
             </Button>
-          ) : null}
-        </div>
-
-        <div className="flex items-center gap-1">
-          {conversationSearch.toggleControl}
-          {peek ? (
+            <Button
+              type="button"
+              variant={activeSurface === 'chat' ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-8 w-8"
+              title="Chat"
+              aria-label="Show chat surface"
+              aria-pressed={activeSurface === 'chat'}
+              onClick={() => onSelectSurface('chat')}
+            >
+              <MessageSquareText className="h-4 w-4" />
+            </Button>
+            {onShowMissionControl ? (
+              <Button
+                type="button"
+                variant={missionControlActive ? 'secondary' : 'ghost'}
+                size="icon"
+                className="h-8 w-8"
+                title="Mission Control"
+                aria-label="Show Mission Control"
+                aria-pressed={missionControlActive}
+                onClick={onShowMissionControl}
+              >
+                <Satellite className="h-4 w-4" />
+              </Button>
+            ) : null}
+          </>
+        }
+        headerEnd={
+          peek ? (
             <Button
               type="button"
               variant="ghost"
@@ -975,121 +972,75 @@ export const Sidebar: FC<SidebarProps> = ({
             >
               <PanelLeftClose className="h-4 w-4" />
             </Button>
-          )}
-        </div>
-      </div>
-
-      {conversationSearch.field}
-
-      <div className="app-scrollbar flex-1 overflow-x-hidden overflow-y-auto py-3">
-        <NeedsYou
-          groups={cardGroups}
-          nameSearchQuery={conversationSearch.query}
-          onPin={(id, pinned) =>
-            void setPinned(id, pinned).catch((error) =>
-              toast.error(
-                error instanceof Error ? error.message : String(error),
-              ),
-            )
-          }
-          activeSessionId={
-            activeSurface === 'chat' ? activeGlobalSessionId : activeSessionId
-          }
-          pulsingSessionIds={pulsingSessionIds}
-          onSelect={handleSelectNeedsYouSession}
-          onDismiss={dismissNeedsYouSession}
-          onArchive={archiveSession}
-        />
-
-        <TerminalIdleSection
-          notices={terminalIdleNotices}
-          onSelect={handleSelectTerminalIdleNotice}
-          onDismiss={dismissTerminalIdleNotice}
-        />
-
-        {(cardGroups.length > 0 || terminalIdleNotices.length > 0) && (
-          <div className="mx-3 mb-3 border-t border-border/50" />
-        )}
-
-        {activeSurface === 'chat' ? (
-          <GlobalChatSessionList
-            spaces={chatSpaces}
-            sessions={ungroupedGlobalChatSessions}
-            nameSearchQuery={conversationSearch.query}
-            activeSessionId={activeGlobalSessionId}
-            selectedSpaceId={selectedSpaceId}
-            expandedSpaceIds={expandedSpaceIds}
-            archivedSpacesExpanded={archivedSpacesExpanded}
-            onNewSession={onNewGlobalSession}
-            onNewSpace={() => openDialog('space-create')}
-            onSelectSpace={onSelectSpace}
-            onToggleSpace={toggleSpace}
-            onToggleArchivedSpaces={toggleArchivedSpaces}
-            onArchiveSpace={handleArchiveSpace}
-            onUnarchiveSpace={handleUnarchiveSpace}
-            onSelectSpaceAttempt={handleSelectSpaceAttempt}
-            onSelectSession={onSelectGlobalSession}
-            onManageSessionSpaces={handleManageSessionSpaces}
-            onDetachSpaceAttempt={handleDetachSpaceAttempt}
-            onArchiveSession={archiveSession}
-            onUnarchiveSession={unarchiveSession}
-            onDeleteSession={handleDeleteGlobalChatSession}
-          />
-        ) : (
-          <>
-            {projects.length > 0 && (
-              <ProjectSwitcher
-                projects={projects}
-                activeProjectId={activeProject?.id ?? null}
-                onSelectProject={handleSelectProject}
-                onCreateProject={openProjectDialog}
-              />
-            )}
-
-            {activeProject ? (
-              <ProjectTree
-                cardContext={{
-                  projectName: activeProject.name,
-                  endpoints,
-                  now: cardNow,
-                }}
-                baseBranchName={currentBranch}
-                workspaces={workspaces}
-                sessions={conversationSearch.searchedSessions}
-                nameSearchQuery={conversationSearch.query}
-                activeSessionId={activeSessionId}
-                pullRequestsByWorkspaceId={pullRequestsByWorkspaceId}
-                pulsingSessionIds={pulsingSessionIds}
-                expandedWorkspaces={expandedWorkspaces}
-                onToggleWorkspace={toggleWorkspace}
-                onSelectSession={onSelectSession}
-                onArchiveSession={archiveSession}
-                onUnarchiveSession={unarchiveSession}
-                onDeleteSession={(sessionId: string) =>
-                  deleteSession(sessionId, activeProject.id)
-                }
-                onRenameSession={(sessionId: string, name: string) =>
-                  sessionApi.rename(sessionId, name).catch(() => undefined)
-                }
-                regeneratingSessionIds={regeneratingSessionIds}
-                onRegenerateSessionName={handleRegenerateSessionName}
-                onArchiveWorkspace={handleArchiveWorkspace}
-                onUnarchiveWorkspace={handleUnarchiveWorkspace}
-                onRemoveWorkspaceWorktree={handleRemoveWorkspaceWorktree}
-                onSyncWorkspaceEnvFiles={handleSyncWorkspaceEnvFiles}
-                onDeleteWorkspace={handleDeleteWorkspace}
-                onOpenCreateWorkspace={() => openDialog('workspace-create')}
-              />
-            ) : (
-              <div className="px-3 text-center">
-                <p className="mb-3 text-sm text-muted-foreground">
-                  No project loaded
-                </p>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+          )
+        }
+        projects={projects}
+        activeProject={activeProject}
+        endpoints={endpoints}
+        cardNow={cardNow}
+        needsYouDismissals={needsYouDismissals}
+        activeSurface={activeSurface}
+        activeSessionId={activeSessionId}
+        activeGlobalSessionId={activeGlobalSessionId}
+        pulsingSessionIds={pulsingSessionIds}
+        terminalIdleNotices={terminalIdleNotices}
+        onPin={(id, pinned) =>
+          void setPinned(id, pinned).catch((error) =>
+            toast.error(error instanceof Error ? error.message : String(error)),
+          )
+        }
+        onSelectNeedsYou={handleSelectNeedsYouSession}
+        onDismissNeedsYou={dismissNeedsYouSession}
+        onArchiveSession={archiveSession}
+        onSelectTerminalIdle={handleSelectTerminalIdleNotice}
+        onDismissTerminalIdle={dismissTerminalIdleNotice}
+        chatSpaces={chatSpaces}
+        ungroupedGlobalChatSessions={ungroupedGlobalChatSessions}
+        selectedSpaceId={selectedSpaceId}
+        expandedSpaceIds={expandedSpaceIds}
+        archivedSpacesExpanded={archivedSpacesExpanded}
+        onNewGlobalSession={onNewGlobalSession}
+        onNewSpace={() => openDialog('space-create')}
+        onSelectSpace={onSelectSpace}
+        onToggleSpace={toggleSpace}
+        onToggleArchivedSpaces={toggleArchivedSpaces}
+        onArchiveSpace={handleArchiveSpace}
+        onUnarchiveSpace={handleUnarchiveSpace}
+        onSelectSpaceAttempt={handleSelectSpaceAttempt}
+        onSelectGlobalSession={onSelectGlobalSession}
+        onManageSessionSpaces={handleManageSessionSpaces}
+        onDetachSpaceAttempt={handleDetachSpaceAttempt}
+        onUnarchiveSession={unarchiveSession}
+        onDeleteGlobalChatSession={handleDeleteGlobalChatSession}
+        onSelectProject={handleSelectProject}
+        onCreateProject={openProjectDialog}
+        cardContext={{
+          projectName: activeProject?.name ?? 'Project',
+          endpoints,
+          now: cardNow,
+        }}
+        baseBranchName={currentBranch}
+        workspaces={workspaces}
+        pullRequestsByWorkspaceId={pullRequestsByWorkspaceId}
+        expandedWorkspaces={expandedWorkspaces}
+        onToggleWorkspace={toggleWorkspace}
+        onSelectSession={onSelectSession}
+        onDeleteSession={(sessionId: string) => {
+          if (!activeProject) return
+          void deleteSession(sessionId, activeProject.id)
+        }}
+        onRenameSession={(sessionId: string, name: string) =>
+          sessionApi.rename(sessionId, name).catch(() => undefined)
+        }
+        regeneratingSessionIds={regeneratingSessionIds}
+        onRegenerateSessionName={handleRegenerateSessionName}
+        onArchiveWorkspace={handleArchiveWorkspace}
+        onUnarchiveWorkspace={handleUnarchiveWorkspace}
+        onRemoveWorkspaceWorktree={handleRemoveWorkspaceWorktree}
+        onSyncWorkspaceEnvFiles={handleSyncWorkspaceEnvFiles}
+        onDeleteWorkspace={handleDeleteWorkspace}
+        onOpenCreateWorkspace={() => openDialog('workspace-create')}
+      />
 
       <div className="app-sidebar-footer border-t border-white/10 p-3">
         {activeSurface === 'code' ? (

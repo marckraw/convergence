@@ -24,8 +24,9 @@ export function filterByNameSearch<T extends { name?: string | null }>(
 }
 
 /**
- * Narrow both sidebar session lists together. The root must call this once so
- * Activity and the project tree always describe the same searched set (R2/R7).
+ * Narrow both sidebar session lists together. SidebarConversations must call
+ * this once so Activity and the project tree always describe the same
+ * searched set (R2/R7).
  */
 export function narrowSidebarSessionLists<T extends { name?: string | null }>(
   globalSessions: readonly T[],
