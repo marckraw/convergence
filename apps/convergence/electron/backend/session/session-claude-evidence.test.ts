@@ -66,7 +66,7 @@ it('records attributed calls, links, tasks and cost through the real service —
     name: 'fixture',
   })
   cleanups.push(async () => {
-    service.disposeAll()
+    await service.disposeAll()
     await capture.flushPendingEnd(session.id)
     rmSync(dir, { recursive: true, force: true })
   })

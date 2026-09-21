@@ -150,8 +150,8 @@ describe('Codex reset through the composer door', () => {
       effort: 'high',
     }).id
   })
-  afterEach(() => {
-    service.disposeAll()
+  afterEach(async () => {
+    await service.disposeAll()
     closeDatabase()
     resetDatabase()
     rmSync(directory, { recursive: true, force: true })

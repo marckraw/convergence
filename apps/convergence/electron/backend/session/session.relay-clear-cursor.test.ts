@@ -94,8 +94,8 @@ describe('A relay that clears a Cursor conversation before delivering (MAR-3245)
     }).id
   })
 
-  afterEach(() => {
-    service.disposeAll()
+  afterEach(async () => {
+    await service.disposeAll()
     closeDatabase()
     resetDatabase()
     spawnMock.mockReset()

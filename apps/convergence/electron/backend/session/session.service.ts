@@ -3738,11 +3738,21 @@ export class SessionService {
 
   async disposeAll(): Promise<void> {
     this.quitting = true
+    // Pending transcript patches land before anything is awaited (MAR-3274).
+    // A provider that hangs past disposeAllForQuit's deadline must not cost
+    // the last streamed words that were already coalesced when quit began.
+    let dropped = this.flushAllPendingConversationPatches()
     for (const sessionId of Array.from(this.activeHandles.keys()))
       this.releaseHandle(sessionId, 'quit')
     await Promise.all(this.pendingHandleDisposals)
-    for (const key of this.pendingConversationPatches.keys())
-      this.flushPendingConversationPatchByKey(key)
+    // A provider may enqueue one last coalesced patch while its dispose runs;
+    // write those while the database is still open (MAR-3274 R2).
+    dropped += this.flushAllPendingConversationPatches()
+    if (dropped > 0) {
+      console.error(
+        `[session] ${dropped} conversation patch(es) dropped at teardown: the database was already closed`,
+      )
+    }
     for (const timer of this.evidenceUpdateTimers.values()) clearTimeout(timer)
     this.evidenceUpdateTimers.clear()
     this.parallelWorkCounts.clear()
@@ -4011,9 +4021,26 @@ export class SessionService {
     return pending
   }
 
-  private flushPendingConversationPatchByKey(key: string): void {
+  /**
+   * Writes every coalesced conversation patch that is still waiting.
+   * Returns how many were dropped because the database handle was already
+   * closed — a counted teardown outcome, never a throw (MAR-3274 R3).
+   */
+  private flushAllPendingConversationPatches(): number {
+    let dropped = 0
+    for (const key of Array.from(this.pendingConversationPatches.keys())) {
+      if (this.flushPendingConversationPatchByKey(key)) dropped += 1
+    }
+    return dropped
+  }
+
+  /**
+   * Flushes one pending conversation patch.
+   * @returns `true` when the patch was dropped because `this.db` was closed.
+   */
+  private flushPendingConversationPatchByKey(key: string): boolean {
     const pending = this.pendingConversationPatches.get(key)
-    if (!pending) return
+    if (!pending) return false
 
     this.pendingConversationPatches.delete(key)
     const timer = this.pendingConversationPatchTimers.get(key)
@@ -4021,6 +4048,10 @@ export class SessionService {
       clearTimeout(timer)
       this.pendingConversationPatchTimers.delete(key)
     }
+
+    // Closed handle only: write nothing, throw nothing, count the drop at
+    // disposeAll. Every other error keeps today's handling (MAR-3274 R3).
+    if (!this.db.open) return true
 
     let item: ConversationItem | null
     try {
@@ -4037,14 +4068,15 @@ export class SessionService {
       // status from landing (MAR-3023 B).
       if (!(error instanceof RecordingError)) throw error
       error.announce()
-      return
+      return false
     }
-    if (!item) return
+    if (!item) return false
     this.notifyConversationPatch({
       sessionId: pending.sessionId,
       op: 'patch',
       item,
     })
+    return false
   }
 
   private flushPendingConversationPatchesForSession(sessionId: string): void {
