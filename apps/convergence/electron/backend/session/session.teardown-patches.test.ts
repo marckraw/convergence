@@ -7,6 +7,7 @@ import { LocalExecutionHost } from '../provider/execution-host/local-execution-h
 import { ProviderRegistry } from '../provider/provider-registry'
 import { ProviderSessionEmitter } from '../provider/provider-session.emitter'
 import type { SessionHandle } from '../provider/provider.types'
+import { CONVERSATION_PATCH_FLUSH_MS } from './session.constants'
 import { SessionService } from './session.service'
 
 /**
@@ -247,5 +248,91 @@ describe('MAR-3274: pending transcript patches at quit and teardown', () => {
     // orphaned disposeAll can finish and afterEach does not hang.
     releaseDispose()
     await Promise.resolve()
+  })
+
+  it('Item A Test 1: a timer flush against a closed database announces the drop — mute the timer announcement turns red', () => {
+    vi.useFakeTimers()
+    const handle = emptyHandle()
+    internals().activeHandles.set(id, handle)
+
+    const emitter = emitterFor(handle)
+    const itemId = emitter.addAssistantMessage({
+      text: '',
+      state: 'streaming',
+    })
+    emitter.patchMessage(itemId, {
+      text: 'words lost to a silent timer',
+      state: 'streaming',
+    })
+    expect(pendingCounts()).toEqual({ patches: 1, timers: 1 })
+
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    closeDatabase()
+    vi.advanceTimersByTime(CONVERSATION_PATCH_FLUSH_MS)
+
+    expect(pendingCounts()).toEqual({ patches: 0, timers: 0 })
+    expect(
+      errors.mock.calls.some(
+        (call) =>
+          String(call[0]) ===
+          '[session] 1 conversation patch(es) dropped: the database was already closed (timer)',
+      ),
+    ).toBe(true)
+    errors.mockRestore()
+  })
+
+  it('Item A Test 2: a session flush against a closed database announces the drop', () => {
+    const handle = emptyHandle()
+    internals().activeHandles.set(id, handle)
+
+    const emitter = emitterFor(handle)
+    const itemId = emitter.addAssistantMessage({
+      text: '',
+      state: 'streaming',
+    })
+    emitter.patchMessage(itemId, {
+      text: 'words lost to a silent session flush',
+      state: 'streaming',
+    })
+    expect(pendingCounts()).toEqual({ patches: 1, timers: 1 })
+
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    closeDatabase()
+
+    let thrown: unknown
+    try {
+      internals().applyDelta(
+        id,
+        {
+          kind: 'harness.evidence',
+          evidence: {
+            kind: 'agent.identified',
+            spawnedByItemId: itemId,
+            id: 'agent',
+            agentType: null,
+            description: null,
+            depth: 1,
+            transcriptPath: null,
+          },
+        },
+        handle,
+      )
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(pendingCounts()).toEqual({ patches: 0, timers: 0 })
+    expect(
+      errors.mock.calls.some(
+        (call) =>
+          String(call[0]) ===
+          '[session] 1 conversation patch(es) dropped: the database was already closed (session flush)',
+      ),
+    ).toBe(true)
+    // The harness.evidence path flushes first, then writes evidence to the same
+    // closed database — that write throws after the announcement.
+    expect(thrown).toBeInstanceOf(TypeError)
+    expect(String(thrown)).toMatch(/database connection is not open/i)
+    errors.mockRestore()
   })
 })
