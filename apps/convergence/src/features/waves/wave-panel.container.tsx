@@ -639,6 +639,12 @@ export const WavePanel: FC<WavePanelProps> = ({
               // and lap 2, C's effect clears it. A second close here was
               // proven redundant by mutation, so it is not written.
               onSelect: board.selectCrew,
+              // Shown with the picker and never on its own (MAR-3291 R3):
+              // with one bound crew there is nothing to follow TO.
+              follow: {
+                on: board.followsConversation,
+                onToggle: board.setFollowsConversation,
+              },
             }
           : null,
     },

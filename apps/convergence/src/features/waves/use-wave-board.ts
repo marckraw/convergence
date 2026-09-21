@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import { useSessionCrewStore } from '@/entities/session-crew'
 import {
@@ -6,6 +6,7 @@ import {
   isLocalExecutionHost,
 } from '@/entities/execution-host'
 import { useAppSettingsStore } from '@/entities/app-settings'
+import { useAppSurfaceStore } from '@/entities/app-surface'
 import {
   useWorkLedgerStore,
   type WorkLedgerEntry,
@@ -14,7 +15,13 @@ import { useFeedClock } from '@/shared/hooks/use-feed-clock'
 import { loomHorses, type LoomHorse } from './loom-horses.pure'
 import { loomSheets, type LoomSheets } from './loom-sheets.pure'
 import { loomSearchHorses, loomSearchRows } from './loom-search.pure'
-import { loadLoomCrew, saveLoomCrew } from './wave-panel-crew.api'
+import {
+  loadLoomCrew,
+  loadLoomFollow,
+  saveLoomCrew,
+  saveLoomFollow,
+} from './wave-panel-crew.api'
+import { loomCrewForConversation, openConversationId } from './loom-follow.pure'
 import { resolveLoomCrew, type LoomCrewOption } from './wave-panel-crew.pure'
 import {
   resolveWaveRow,
@@ -52,6 +59,10 @@ export interface WaveBoard {
   selectedCrewId: string | null
   /** Picks the crew Loom shows and remembers it (MAR-3225 R4). */
   selectCrew: (crewId: string) => void
+  /** Whether Loom follows the open conversation (MAR-3291 R3). */
+  followsConversation: boolean
+  /** Turns following on or off, and remembers it (MAR-3291 R3). */
+  setFollowsConversation: (on: boolean) => void
   /**
    * The same rows in Loom's four sheets (MAR-3189 R2) -- the rows that match
    * the search while there is one (MAR-3234 R2), so every title and every
@@ -109,6 +120,13 @@ export function useWaveBoard(query: string | null): WaveBoard {
   // The crew Loom is on screen for (MAR-3225 R2): the stored choice while it
   // is bound, else the first bound crew.
   const [storedCrew, setStoredCrew] = useState<string | null>(loadLoomCrew)
+  // Follow the open conversation (MAR-3291 R3), off until somebody asks.
+  const [followsConversation, setFollows] = useState<boolean>(loadLoomFollow)
+  const surface = useAppSurfaceStore((state) => state.activeSurface)
+  const activeSessionId = useSessionStore((state) => state.activeSessionId)
+  const activeGlobalSessionId = useSessionStore(
+    (state) => state.activeGlobalSessionId,
+  )
 
   useEffect(() => {
     void loadCrews()
@@ -156,6 +174,60 @@ export function useWaveBoard(query: string | null): WaveBoard {
     setStoredCrew(crewId)
     saveLoomCrew(crewId)
   }, [])
+  const setFollowsConversation = useCallback((on: boolean) => {
+    setFollows(on)
+    saveLoomFollow(on)
+  }, [])
+
+  // Which conversation is being read right now (MAR-3291 R2).
+  const openConversation = openConversationId({
+    surface,
+    activeSessionId,
+    activeGlobalSessionId,
+  })
+  /**
+   * The conversation this board has already followed FROM.
+   *
+   * Following is an EVENT -- the open conversation changed -- and not a state
+   * the crew is derived from (R2). Derived, a pick from the crew picker would
+   * be undone by the next render, which is every broadcast: the control would
+   * be a control that does not hold. A ref is what makes the difference
+   * visible to the effect, which re-runs on every roster reload and ledger
+   * broadcast in its dependencies and must do nothing on all of them.
+   *
+   * Cleared while following is off, so switching it ON follows at once for
+   * the conversation that is open then (R3).
+   */
+  const followedFrom = useRef<string | null>(null)
+  useEffect(() => {
+    if (!followsConversation) {
+      followedFrom.current = null
+      return
+    }
+    if (followedFrom.current === openConversation) return
+    // Consumed whatever the answer is: a conversation with no Loom of its own
+    // leaves Loom where it was, and does not leave the change pending for the
+    // next broadcast to act on.
+    followedFrom.current = openConversation
+    const next = loomCrewForConversation({
+      session: sessions.find((entry) => entry.id === openConversation) ?? null,
+      crews: crews.map((crew) => ({
+        id: crew.id,
+        bound: crew.trackerBinding !== null,
+        members: crew.members,
+      })),
+      sessions,
+      current: selectedCrewId,
+    })
+    if (next !== null && next !== selectedCrewId) selectCrew(next)
+  }, [
+    followsConversation,
+    openConversation,
+    crews,
+    sessions,
+    selectedCrewId,
+    selectCrew,
+  ])
 
   const rows = useMemo(
     () => waveRowsFromSnapshots(snapshots, shownCrewIds),
@@ -257,6 +329,8 @@ export function useWaveBoard(query: string | null): WaveBoard {
     crewOptions,
     selectedCrewId,
     selectCrew,
+    followsConversation,
+    setFollowsConversation,
     sheets,
     allSheets,
     horses,
