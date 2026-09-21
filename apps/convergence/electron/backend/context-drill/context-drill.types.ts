@@ -25,11 +25,33 @@ export interface DrillChange {
   reason?: string
 }
 
+/**
+ * Which of three seats a conversation sits on, as the drill sees it
+ * (MAR-3287 R1).
+ *
+ * - `none`: in no crew at all. The drill is not this conversation's business.
+ * - `other-role`: a seat in at least one crew, mastermind in none. A seat
+ *   whose role was never chosen (a NULL role, written before seats had
+ *   roles) is here, because it IS a seat, and the person needs to be told
+ *   where to change it.
+ * - `mastermind`: the mastermind of at least one crew.
+ *
+ * One three-valued answer rather than two booleans ("in a crew?", "a
+ * mastermind?"), so the two can never disagree about the same seat.
+ */
+export type DrillSeat = 'none' | 'other-role' | 'mastermind'
+
 /** What the surface needs to decide whether to offer the drill at all (R6). */
 export interface DrillDescription {
   /**
+   * Which seat this is (MAR-3287 R1). The surface decides what to DRAW from
+   * this and never from `reason`: `none` draws nothing, `other-role` draws a
+   * disabled control that says where to set the role.
+   */
+  seat: DrillSeat
+  /**
    * Whether this conversation is the KIND that can ever run the drill: a
-   * crew's mastermind seat (MAR-3256 R1).
+   * crew's mastermind seat (MAR-3256 R1). Exactly `seat === 'mastermind'`.
    *
    * Separate from `offered` because the two answer different questions and
    * the surface needs both. `offered` is "can it start right now", which
@@ -75,8 +97,13 @@ export interface DrillSettleEvent {
  * so its tests substitute this and can never accidentally do either.
  */
 export interface ContextDrillSessionGateway {
-  /** Whether this session is a crew's mastermind seat (R4, step 1). */
-  isMastermindSeat(sessionId: string): boolean
+  /**
+   * The role this session holds in each crew it has a seat in, one entry per
+   * crew; empty when it has no seat at all (MAR-3287 R1). `null` is a role
+   * nobody ever chose. The service turns this into a `DrillSeat` with
+   * `resolveDrillSeat`, the one place that mapping is written.
+   */
+  seatRolesOf(sessionId: string): ReadonlyArray<string | null>
   describeCompactionReadiness(
     sessionId: string,
   ): { ready: true } | { ready: false; reason: string }

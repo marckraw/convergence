@@ -90,10 +90,24 @@ export function resolveContextDrillAction(
     }
   }
 
-  // Not a mastermind seat, or nothing known about this conversation yet: the
+  // In no crew at all, or nothing known about this conversation yet: the
   // drill is not this conversation's business and the popover says nothing
   // about it at all.
-  if (!description || !description.eligible) return HIDDEN
+  if (!description || description.seat === 'none') return HIDDEN
+
+  // A crew seat that is not the mastermind (MAR-3287 R3). Drawn, disabled,
+  // and quoting the backend's sentence about where to set the role -- decided
+  // from `seat`, never by recognising the sentence, so rewording it can never
+  // change what is drawn.
+  if (description.seat === 'other-role') {
+    return {
+      visible: true,
+      enabled: false,
+      label: DRILL_RUN_LABEL,
+      reason: description.reason,
+      cancel: HIDDEN_CANCEL,
+    }
+  }
 
   if (description.offered) {
     return {

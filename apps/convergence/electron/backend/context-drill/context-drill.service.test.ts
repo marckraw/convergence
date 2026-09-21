@@ -12,6 +12,7 @@ import {
   DRILL_RESUME_TURN_FAILED,
   DRILL_SEAL_ABSENT,
   DRILL_SEAL_TURN_FAILED,
+  DRILL_SET_MASTERMIND_ROLE,
 } from './context-drill.service'
 import type {
   ContextDrillSessionGateway,
@@ -80,8 +81,14 @@ class FakeSessions implements ContextDrillSessionGateway {
   private readonly listeners = new Set<(event: DrillSettleEvent) => void>()
   private nextDispatch = 0
 
-  isMastermindSeat(): boolean {
-    return this.mastermind
+  /**
+   * The roles this seat holds, one per crew (MAR-3287 R1). Null means "follow
+   * `mastermind`": a mastermind of one crew, or no seat at all.
+   */
+  roles: Array<string | null> | null = null
+
+  seatRolesOf(): ReadonlyArray<string | null> {
+    return this.roles ?? (this.mastermind ? ['mastermind'] : [])
   }
 
   describeCompactionReadiness() {
@@ -706,6 +713,7 @@ describe('what the surface is told (R6)', () => {
   it('does not offer the drill on a seat that is not a mastermind', () => {
     sessions.mastermind = false
     expect(drill.describe(SESSION)).toEqual({
+      seat: 'none',
       eligible: false,
       offered: false,
       reason: DRILL_NOT_A_MASTERMIND,
@@ -721,6 +729,7 @@ describe('what the surface is told (R6)', () => {
     // Eligible and not offered: the seat is right, the moment is not. The
     // control stays on screen and says why (MAR-3256 R1).
     expect(drill.describe(SESSION)).toEqual({
+      seat: 'mastermind',
       eligible: true,
       offered: false,
       reason: 'Wait for the pending send before compacting context',
@@ -730,6 +739,7 @@ describe('what the surface is told (R6)', () => {
 
   it('offers the drill on a ready mastermind conversation', () => {
     expect(drill.describe(SESSION)).toEqual({
+      seat: 'mastermind',
       eligible: true,
       offered: true,
       reason: null,
@@ -749,11 +759,86 @@ describe('what the surface is told (R6)', () => {
     }
     await drill.run(SESSION)
     expect(duringCompaction).toEqual({
+      seat: 'mastermind',
       eligible: true,
       offered: true,
       reason: null,
       beat: 'compacting',
     })
     expect(drill.describe(SESSION).beat).toBeNull()
+  })
+})
+
+describe('which seat this is (MAR-3287 R1, R2)', () => {
+  it('a conversation in no crew is no seat, told as before', () => {
+    sessions.roles = []
+    expect(drill.describe(SESSION)).toMatchObject({
+      seat: 'none',
+      eligible: false,
+      offered: false,
+      reason: DRILL_NOT_A_MASTERMIND,
+    })
+  })
+
+  it('a seat with another role is told where to set the role', () => {
+    sessions.roles = ['horse']
+    expect(drill.describe(SESSION)).toEqual({
+      seat: 'other-role',
+      eligible: false,
+      offered: false,
+      reason: DRILL_SET_MASTERMIND_ROLE,
+      beat: null,
+    })
+  })
+
+  it('a seat whose role was never chosen is still a seat', () => {
+    sessions.roles = [null]
+    expect(drill.describe(SESSION)).toMatchObject({
+      seat: 'other-role',
+      eligible: false,
+      reason: DRILL_SET_MASTERMIND_ROLE,
+    })
+  })
+
+  it('the mastermind of a crew is the mastermind seat', () => {
+    sessions.roles = ['mastermind']
+    expect(drill.describe(SESSION)).toMatchObject({
+      seat: 'mastermind',
+      eligible: true,
+      offered: true,
+    })
+  })
+
+  it('a horse in one crew and the mastermind of another is a mastermind', () => {
+    sessions.roles = ['horse', 'mastermind']
+    expect(drill.describe(SESSION)).toMatchObject({
+      seat: 'mastermind',
+      eligible: true,
+    })
+  })
+
+  it('no role in one crew and a horse in another is another role', () => {
+    sessions.roles = [null, 'horse']
+    expect(drill.describe(SESSION)).toMatchObject({
+      seat: 'other-role',
+      eligible: false,
+      reason: DRILL_SET_MASTERMIND_ROLE,
+    })
+  })
+
+  it('says the role sentence word for word', () => {
+    expect(DRILL_SET_MASTERMIND_ROLE).toBe(
+      "The drill runs on a crew's mastermind seat. Set this seat's role to Mastermind in the crew's settings (Mission Control).",
+    )
+  })
+
+  it('refuses to run on another role exactly as before (R5)', async () => {
+    sessions.roles = [null]
+    await expect(drill.run(SESSION)).resolves.toEqual({
+      ok: false,
+      beat: 'sealing',
+      reason: DRILL_NOT_A_MASTERMIND,
+    })
+    expect(sessions.log).not.toContain('hold')
   })
 })

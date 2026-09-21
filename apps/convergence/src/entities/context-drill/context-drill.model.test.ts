@@ -16,6 +16,7 @@ vi.mock('./context-drill.api', () => ({
 const api = vi.mocked(contextDrillApi)
 
 const READY: DrillDescription = {
+  seat: 'mastermind',
   eligible: true,
   offered: true,
   reason: null,
@@ -74,6 +75,7 @@ describe('useContextDrillStore (MAR-3256 R2)', () => {
     // `changed` event will ever be delivered for a beat that started before
     // this renderer existed, and `describe` is the only place it is told.
     api.describe.mockResolvedValue({
+      seat: 'mastermind',
       eligible: true,
       offered: false,
       reason: 'This conversation is still working on a turn.',

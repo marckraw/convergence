@@ -109,6 +109,23 @@ export function ContextWindowDot({
     hasPendingQueuedInput,
   ])
 
+  /**
+   * Opening the popover re-asks, once per closed-to-open transition
+   * (MAR-3287 R4).
+   *
+   * An EVENT, not a state: the ref remembers whether the popover was already
+   * open, so a re-render while it stays open asks nothing. This is what makes
+   * a role set in Mission Control visible the next time the popover opens,
+   * with no turn in between -- the crew is not a value this component
+   * re-renders on, and subscribing to it here would be a second copy of a
+   * question the backend already answers.
+   */
+  const wasOpenRef = useRef(false)
+  useEffect(() => {
+    if (open && !wasOpenRef.current) void refreshDrill(session.id)
+    wasOpenRef.current = open
+  }, [open, refreshDrill, session.id])
+
   const clearCloseTimer = useCallback(() => {
     if (closeTimerRef.current === null) return
     window.clearTimeout(closeTimerRef.current)

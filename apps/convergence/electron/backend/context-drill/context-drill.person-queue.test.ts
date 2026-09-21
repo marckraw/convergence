@@ -94,7 +94,7 @@ beforeEach(() => {
   }).id
   drill = new ContextDrillService({
     sessions: {
-      isMastermindSeat: () => true,
+      seatRolesOf: () => ['mastermind'],
       describeCompactionReadiness: (id) =>
         service.describeCompactionReadiness(id),
       onSessionSettled: (listener) => service.onSessionSettled(listener),

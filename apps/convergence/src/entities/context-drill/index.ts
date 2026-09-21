@@ -5,6 +5,7 @@ export type {
   DrillDescription,
   DrillOutcome,
   DrillOutcomeRecord,
+  DrillSeat,
 } from './context-drill.types'
 export { contextDrillApi } from './context-drill.api'
 export { useContextDrillStore } from './context-drill.model'

@@ -87,6 +87,7 @@ describe('ContextAlertHostContainer', () => {
     // The app's ordinary conversation: eligible for nothing, so the toast is
     // exactly the one that shipped before this ticket.
     describeDrill.mockResolvedValue({
+      seat: 'none',
       eligible: false,
       offered: false,
       reason: "The drill only runs on a crew's mastermind conversation.",
@@ -268,6 +269,7 @@ describe('ContextAlertHostContainer', () => {
   describe('the drill, offered beside the alert (MAR-3256 R5)', () => {
     function offerTheDrill() {
       describeDrill.mockResolvedValue({
+        seat: 'mastermind',
         eligible: true,
         offered: true,
         reason: null,
@@ -329,6 +331,7 @@ describe('ContextAlertHostContainer', () => {
      */
     it('still tells once when the store updates twice during the await', async () => {
       let answer: (value: {
+        seat: 'none'
         eligible: boolean
         offered: boolean
         reason: string | null
@@ -350,7 +353,13 @@ describe('ContextAlertHostContainer', () => {
       expect(toastMock).not.toHaveBeenCalled()
 
       act(() =>
-        answer({ eligible: false, offered: false, reason: null, beat: null }),
+        answer({
+          seat: 'none',
+          eligible: false,
+          offered: false,
+          reason: null,
+          beat: null,
+        }),
       )
       await flush()
 
