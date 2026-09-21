@@ -4,7 +4,15 @@ import {
 } from '@/shared/lib/parallel-work.pure'
 import type { FC } from 'react'
 import { Loader2 } from 'lucide-react'
-import type { AttentionState, SessionStatus } from './session.types'
+import type {
+  ActivitySignal,
+  AttentionState,
+  SessionStatus,
+} from './session.types'
+import {
+  COMPACTING_CONTEXT_LABEL,
+  isSessionCompacting,
+} from './session-compacting.pure'
 import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 
 /**
@@ -59,6 +67,11 @@ interface AttentionIndicatorProps {
   parallelWork?: ParallelWorkCounts
   attention: AttentionState
   status: SessionStatus
+  /**
+   * The live activity, so a compacting conversation is not called Finished
+   * (MAR-3288 R5). Optional only for callers that have no session record.
+   */
+  activity?: ActivitySignal
 }
 
 /**
@@ -78,7 +91,19 @@ export const AttentionIndicator: FC<AttentionIndicatorProps> = ({
   attention,
   status,
   parallelWork,
+  activity,
 }) => {
+  // Compacting is a state, and it is busy (MAR-3288 R5). For its whole window
+  // the record still reads the last turn's `completed` / `finished`, so this
+  // pill said Finished right beside the grey "compacting context…" one.
+  // Nothing can be waiting on a human here: a compaction runs no turn.
+  if (isSessionCompacting({ activity }))
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground [&_svg]:size-3">
+        <Loader2 className="animate-spin" />
+        {COMPACTING_CONTEXT_LABEL}
+      </span>
+    )
   const parallelLabel = parallelWorkStatus({ status, attention, parallelWork })
   if (parallelLabel)
     return (

@@ -49,6 +49,8 @@ export type {
   CreateAndStartGlobalSessionRequest,
 } from './session.types'
 export { AttentionIndicator } from './attention-indicator.presentational'
+export { SessionStateBadge } from './session-state-badge.presentational'
+export type { SessionStateBadgeSession } from './session-state-badge.presentational'
 export { selectLocalProviders, useSessionStore } from './session.model'
 export type { SessionStore } from './session.model'
 export {
@@ -128,6 +130,10 @@ export type {
 } from './mid-run-input.pure'
 export type { GlobalStatus, ProjectActivity } from './session.selectors.pure'
 export { formatActivityLabel } from './session.activity.pure'
+export {
+  COMPACTING_CONTEXT_LABEL,
+  isSessionCompacting,
+} from './session-compacting.pure'
 export { providerApi, sessionApi } from './session.api'
 export { sessionForkApi } from './session-fork.api'
 export type {

@@ -1,7 +1,9 @@
 import type { FC } from 'react'
 import {
+  COMPACTING_CONTEXT_LABEL,
   formatActivityLabel,
   formatSessionAttentionLabel,
+  isSessionCompacting,
   type ProjectActivity,
 } from '@/entities/session'
 import { cn } from '@/shared/lib/cn.pure'
@@ -23,7 +25,10 @@ export const ProjectSummary: FC<ProjectSummaryProps> = ({
         {project.projectName}
       </p>
       {rows.map((session) => {
-        const activityLabel = formatActivityLabel(session.activity)
+        // The shared words for the shared state (MAR-3288 R5).
+        const activityLabel = isSessionCompacting(session)
+          ? COMPACTING_CONTEXT_LABEL
+          : formatActivityLabel(session.activity)
         const attentionLabel =
           session.attention === 'needs-approval' ||
           session.attention === 'needs-input'

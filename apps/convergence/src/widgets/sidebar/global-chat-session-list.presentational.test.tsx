@@ -87,6 +87,13 @@ function renderList(
 }
 
 describe('GlobalChatSessionList', () => {
+  it('MAR-3288 R5 badges a compacting chat as busy, not finished — mutation drop the compacting prop turns red', () => {
+    renderList({
+      sessions: [{ ...baseSession, activity: 'compacting' }],
+    })
+    expect(screen.getByLabelText('Compacting context…')).toBeInTheDocument()
+  })
+
   it.each(['chat', 'space'] as const)(
     'R5 %s reads the same answered count — mutation omit parallel summary from the row turns red',
     (kind) => {

@@ -194,3 +194,28 @@ it('says Host unreachable for a blind viewer, and treats it as neither failed no
   expect(row.canArchive).toBe(false)
   expect(row.working).toBe(true)
 })
+it('a compacting conversation is Working and says so, never Finished (MAR-3288 R5; mutation: drop the predicate)', () => {
+  const compacting = cardSession({
+    status: 'completed',
+    attention: 'finished',
+    activity: 'compacting',
+    turnTiming: {
+      turnId: 'turn-1',
+      status: 'completed',
+      startedAt: '2026-09-12T11:50:00Z',
+      endedAt: '2026-09-12T11:55:00Z',
+    },
+  })
+  const card = model(compacting)
+  expect(card.summary).toBe('Compacting context…')
+  expect(card.working).toBe(true)
+  expect(card.dismissLabel).toBeNull()
+  expect(card.attentionGroup).toBeNull()
+  expect(card.canArchive).toBe(false)
+  expect(card.timing.label).toBeNull()
+  expect(groupNeedsYou([card]).map((group) => group.title)).toEqual(['Working'])
+  // The moment the activity clears, the same record is Finished again.
+  const settled = model({ ...compacting, activity: null })
+  expect(settled.summary).toBe('Finished')
+  expect(settled.dismissLabel).toBe('Acknowledge')
+})

@@ -1,3 +1,4 @@
+import { SessionStateBadge } from '@/entities/session'
 import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import { isRemoteExecutionHost } from '@/entities/execution-host'
 import { useEffect, useState } from 'react'
@@ -20,7 +21,6 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
 import { Input } from '@/shared/ui/input'
-import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { cn } from '@/shared/lib/cn.pure'
 import {
@@ -358,11 +358,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                 aria-label="Terminal session"
               />
             ) : (
-              <SessionBadge
-                attention={session.attention}
-                status={session.status}
-                parallelWork={session.parallelWork}
-              />
+              <SessionStateBadge session={session} />
             )}
             <Input
               value={renameDraft}
@@ -398,11 +394,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                     aria-label="Terminal session"
                   />
                 ) : (
-                  <SessionBadge
-                    attention={session.attention}
-                    status={session.status}
-                    parallelWork={session.parallelWork}
-                  />
+                  <SessionStateBadge session={session} />
                 )}
                 <span className="min-w-0 text-left">
                   <span className="block truncate">{session.name}</span>

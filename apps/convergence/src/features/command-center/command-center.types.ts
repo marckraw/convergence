@@ -44,6 +44,8 @@ export type SessionPaletteItem = {
   branchName: string | null
   providerId: string
   attention: AttentionState
+  /** Compacting its context right now (MAR-3288 R5): busy, not for review. */
+  compacting: boolean
   updatedAt: string
   search: PaletteSearchFields
 }

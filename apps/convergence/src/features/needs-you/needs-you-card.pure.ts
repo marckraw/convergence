@@ -1,6 +1,8 @@
 import { hostLivenessLabel } from '@/shared/lib/host-liveness.pure'
 import {
+  COMPACTING_CONTEXT_LABEL,
   formatSessionAttentionLabel,
+  isSessionCompacting,
   type SessionSummary,
 } from '@/entities/session'
 import {
@@ -45,10 +47,17 @@ export function needsYouCardModel(
   const failed =
     !hostUnreachable &&
     (session.attention === 'failed' || session.status === 'failed')
+  // Compacting is working (MAR-3288 R5): the status still reads the last
+  // turn's `completed` and the attention its `finished`, so without this the
+  // card said "Finished" and offered Acknowledge while the context was being
+  // rewritten underneath it.
+  const compacting = !waiting && !failed && isSessionCompacting(session)
   const working =
     !waiting &&
     !failed &&
-    (session.status === 'running' || session.status === 'answered')
+    (compacting ||
+      session.status === 'running' ||
+      session.status === 'answered')
   const review = failed || (session.attention === 'finished' && !working)
   return {
     session,
@@ -58,7 +67,15 @@ export function needsYouCardModel(
       session.executionHostLastEventAt,
       context.now,
     ),
-    timing: needsYouTiming(session, context.now),
+    // No "in 3m 20s": that is the last turn's duration, and it read as the
+    // length of a finished run beside a conversation that is still busy.
+    timing: compacting
+      ? {
+          label: null,
+          live: false,
+          tooltip: 'Compacting context. Its duration is not recorded.',
+        }
+      : needsYouTiming(session, context.now),
     projectName: context.projectName,
     host: isLocalExecutionHost(session.executionHost)
       ? 'laptop'
@@ -81,12 +98,14 @@ export function needsYouCardModel(
         ? 'Failed'
         : waiting
           ? formatSessionAttentionLabel(session)
-          : working
-            ? session.status === 'running'
-              ? 'Working'
-              : parallelSummary
-            : (parallelSummary ??
-              (review || session.status === 'completed' ? 'Finished' : null)),
+          : compacting
+            ? COMPACTING_CONTEXT_LABEL
+            : working
+              ? session.status === 'running'
+                ? 'Working'
+                : parallelSummary
+              : (parallelSummary ??
+                (review || session.status === 'completed' ? 'Finished' : null)),
     dismissLabel: waiting ? 'Snooze' : review ? 'Acknowledge' : null,
     attentionGroup: waiting ? 'Waiting on you' : review ? 'Needs review' : null,
     dismissed: context.dismissed ?? false,

@@ -303,3 +303,20 @@ describe('the breathing glow under prefers-reduced-motion', () => {
     expect(declaredValue(base, 'opacity')).toBe('var(--breathe-max)')
   })
 })
+
+describe('a compacting session card (MAR-3288 R5)', () => {
+  it('says Compacting context… and never Finished — mutation drop the predicate or the badge prop turns red', () => {
+    const card = makeCard('completed')
+    card.session = {
+      ...card.session,
+      attention: 'finished',
+      activity: 'compacting',
+    }
+    const root = renderCard(card)
+    expect(root).toHaveTextContent('Compacting context…')
+    expect(root).not.toHaveTextContent('Finished')
+    expect(
+      root.querySelector('[aria-label="Compacting context…"]'),
+    ).not.toBeNull()
+  })
+})

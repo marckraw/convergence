@@ -22,7 +22,9 @@ beforeEach(() => {
   sendMessage.mockReset().mockResolvedValue('dispatch-id')
   const args = Array.from({ length: 18 }, () => ({}))
   args[7] = {
-    sendMessage,
+    // The person's door since MAR-3288; `sessionApp.sendSessionMessage`
+    // calls it, so the handler under test still reaches this stub.
+    sendPersonMessage: sendMessage,
     setSummaryUpdateListener: vi.fn(),
     setEvidenceUpdateListener: vi.fn(),
     setConversationPatchListener: vi.fn(),

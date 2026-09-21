@@ -17,6 +17,12 @@ interface SessionBadgeProps {
   status?: string
   attention: string
   className?: string
+  /**
+   * The conversation is compacting its context (MAR-3288 R5). The caller
+   * answers it with the session entity's `isSessionCompacting`, so this
+   * shared glyph never learns what compacting looks like on the record.
+   */
+  compacting?: boolean
 }
 
 export const SessionBadge: FC<SessionBadgeProps> = ({
@@ -24,8 +30,19 @@ export const SessionBadge: FC<SessionBadgeProps> = ({
   parallelWork,
   status = 'completed',
   className,
+  compacting = false,
 }) => {
   const iconClassName = cn('size-3 shrink-0', className)
+
+  // Busy, not finished: the record's attention still reads the last turn's
+  // `finished` for the whole compaction.
+  if (compacting)
+    return (
+      <Loader2
+        aria-label="Compacting context…"
+        className={cn(iconClassName, 'animate-spin text-muted-foreground')}
+      />
+    )
 
   const parallel = parallelWorkStatus({ status, attention, parallelWork })
   if (parallel)

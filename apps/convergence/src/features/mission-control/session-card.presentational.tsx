@@ -6,9 +6,11 @@ import { ProviderModel } from '@/shared/ui/provider-model.presentational'
 import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
 import type { FC, ReactNode } from 'react'
 import { Cable, Loader2, Radio } from 'lucide-react'
-import { formatSessionAttentionLabel } from '@/entities/session'
+import {
+  formatSessionAttentionLabel,
+  SessionStateBadge,
+} from '@/entities/session'
 import { Button } from '@/shared/ui/button'
-import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { cn } from '@/shared/lib/cn.pure'
 import type { SessionCard } from './mission-control.types'
 import type { SessionWireHint } from './relay-hop.pure'
@@ -83,11 +85,7 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
               className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground"
               title={formatSessionAttentionLabel(session)}
             >
-              <SessionBadge
-                attention={session.attention}
-                status={session.status}
-                parallelWork={session.parallelWork}
-              />
+              <SessionStateBadge session={session} />
               {formatSessionAttentionLabel(session)}
             </span>
           ) : (

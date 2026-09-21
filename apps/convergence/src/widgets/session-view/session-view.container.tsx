@@ -9,10 +9,13 @@ import type { FC } from 'react'
 import { useProjectStore } from '@/entities/project'
 import {
   AttentionIndicator,
-  formatActivityLabel,
   useSessionStore,
   type SessionContextWindow,
 } from '@/entities/session'
+import {
+  resolveSessionActivityLabel,
+  useContextDrillStore,
+} from '@/entities/context-drill'
 import { useDialogStore } from '@/entities/dialog'
 import { useSpaceStore } from '@/entities/space'
 import { useSessionPullRequest } from './pull-request-session.container'
@@ -197,7 +200,14 @@ export const SessionView: FC = () => {
             : null,
         })
       : null
-  const activityLabel = formatActivityLabel(session?.activity)
+  // The drill's beat, when one runs, replaces the activity pill (MAR-3288 R8).
+  const drillBeat = useContextDrillStore((s) =>
+    session ? s.beats[session.id] : undefined,
+  )
+  const activityLabel = resolveSessionActivityLabel(
+    session?.activity,
+    drillBeat,
+  )
   const totalDurationLabel = useMemo(
     () => formatConversationTotalDuration(activeConversation),
     [activeConversation],
@@ -402,6 +412,7 @@ export const SessionView: FC = () => {
               parallelWork={session.parallelWork}
               attention={session.attention}
               status={session.status}
+              activity={session.activity}
             />
             {isRemoteExecutionHost(session.executionHost) && (
               <span

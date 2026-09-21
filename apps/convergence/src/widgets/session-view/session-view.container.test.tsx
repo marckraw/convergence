@@ -4,6 +4,7 @@ import { DEFAULT_PROJECT_SETTINGS, useProjectStore } from '@/entities/project'
 import { useDialogStore } from '@/entities/dialog'
 import { useSpaceStore } from '@/entities/space'
 import { useSessionStore } from '@/entities/session'
+import { useContextDrillStore } from '@/entities/context-drill'
 import { useSessionRelayStore } from '@/entities/session-relay'
 import { useProjectScriptStore } from '@/entities/project-script'
 import { useWorkspaceStore } from '@/entities/workspace'
@@ -448,12 +449,64 @@ describe('SessionView', () => {
     vi.restoreAllMocks()
   })
 
+  it('MAR-3288 R5 says Compacting context… and never Finished while compacting — mutation drop the activity prop turns red', () => {
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? {
+              ...session,
+              status: 'completed',
+              attention: 'finished',
+              activity: 'compacting',
+            }
+          : session,
+      ),
+    }))
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    expect(screen.getByText('Compacting context…')).toBeInTheDocument()
+    expect(screen.queryByText('Finished')).not.toBeInTheDocument()
+  })
+
+  it.each(['sealing', 'compacting', 'resuming'] as const)(
+    'MAR-3288 R8 names the drill beat %s in ONE activity pill — mutation ignore the beat turns red',
+    (beat) => {
+      useSessionStore.setState((state) => ({
+        ...state,
+        sessions: state.sessions.map((session) =>
+          session.id === 'session-1'
+            ? {
+                ...session,
+                status: beat === 'compacting' ? 'completed' : 'running',
+                activity: beat === 'compacting' ? 'compacting' : null,
+              }
+            : session,
+        ),
+      }))
+      useContextDrillStore.setState({ beats: { 'session-1': beat } })
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+      const pills = screen.getAllByTestId('session-activity-indicator')
+      expect(pills).toHaveLength(1)
+      expect(pills[0]).toHaveTextContent(`drill · ${beat}`)
+      expect(screen.queryByText('compacting context…')).not.toBeInTheDocument()
+      useContextDrillStore.setState({ beats: {} })
+    },
+  )
+
   it('shows the live session activity in the header', async () => {
     useSessionStore.setState((state) => ({
       ...state,
       sessions: state.sessions.map((session) =>
         session.id === 'session-1'
-          ? { ...session, status: 'running', activity: 'compacting' }
+          ? { ...session, status: 'running', activity: 'thinking' }
           : session,
       ),
     }))
@@ -465,8 +518,62 @@ describe('SessionView', () => {
     )
 
     expect(screen.getByTestId('session-activity-indicator')).toHaveTextContent(
-      'compacting context…',
+      'thinking…',
     )
+  })
+
+  it('MAR-3288 lap 2 A says compacting exactly ONCE in the header during a plain compaction — mutation always render the grey pill turns red', () => {
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? {
+              ...session,
+              status: 'completed',
+              attention: 'finished',
+              activity: 'compacting',
+            }
+          : session,
+      ),
+    }))
+    useContextDrillStore.setState({ beats: {} })
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    expect(screen.getAllByText(/compacting context…/i)).toHaveLength(1)
+    expect(screen.getByText('Compacting context…')).toBeInTheDocument()
+    expect(
+      screen.queryByTestId('session-activity-indicator'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('MAR-3288 lap 2 A keeps drill · compacting beside the attention pill — it names the stage', () => {
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? {
+              ...session,
+              status: 'completed',
+              attention: 'finished',
+              activity: 'compacting',
+            }
+          : session,
+      ),
+    }))
+    useContextDrillStore.setState({ beats: { 'session-1': 'compacting' } })
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    expect(screen.getByText('Compacting context…')).toBeInTheDocument()
+    expect(screen.getByTestId('session-activity-indicator')).toHaveTextContent(
+      'drill · compacting',
+    )
+    useContextDrillStore.setState({ beats: {} })
   })
 
   /**

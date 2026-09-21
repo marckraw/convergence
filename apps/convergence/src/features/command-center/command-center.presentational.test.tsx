@@ -31,6 +31,7 @@ const session: SessionPaletteItem = {
   branchName: 'feat/login',
   providerId: 'claude-code',
   attention: 'none',
+  compacting: false,
   updatedAt: '2026-04-01T00:00:00.000Z',
   search: {
     sessionName: 'fix login bug',

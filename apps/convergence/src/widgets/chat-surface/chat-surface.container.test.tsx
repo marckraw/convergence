@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { selectOption } from '@/shared/testing/select-option'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { useContextDrillStore } from '@/entities/context-drill'
 import type {
   ConversationItem,
   Session,
@@ -247,6 +248,107 @@ describe('ChatSurface', () => {
     render(<ChatSurface selectedSpaceId={null} />)
 
     expect(screen.getByText('Running')).toBeInTheDocument()
+  })
+
+  it('MAR-3288 R5 says Compacting context… and never Finished while compacting — mutation drop the activity prop turns red', () => {
+    useSessionStore.setState({
+      globalChatSessions: [
+        {
+          ...globalSession,
+          status: 'completed',
+          attention: 'finished',
+          activity: 'compacting',
+        },
+      ],
+      activeGlobalSessionId: globalSession.id,
+      activeGlobalConversation: [],
+    })
+    render(<ChatSurface selectedSpaceId={null} />)
+    expect(screen.getByText('Compacting context…')).toBeInTheDocument()
+    expect(screen.queryByText('Finished')).not.toBeInTheDocument()
+  })
+
+  it.each(['sealing', 'compacting', 'resuming'] as const)(
+    'MAR-3288 R8 names the drill beat %s in ONE activity pill — mutation ignore the beat turns red',
+    (beat) => {
+      useSessionStore.setState({
+        globalChatSessions: [
+          {
+            ...globalSession,
+            status: beat === 'compacting' ? 'completed' : 'running',
+            activity: beat === 'compacting' ? 'compacting' : null,
+          },
+        ],
+        activeGlobalSessionId: globalSession.id,
+        activeGlobalConversation: [],
+      })
+      useContextDrillStore.setState({ beats: { [globalSession.id]: beat } })
+      render(<ChatSurface selectedSpaceId={null} />)
+      const pills = screen.getAllByTestId('chat-session-activity-indicator')
+      expect(pills).toHaveLength(1)
+      expect(pills[0]).toHaveTextContent(`drill · ${beat}`)
+      expect(screen.queryByText('compacting context…')).not.toBeInTheDocument()
+      useContextDrillStore.setState({ beats: {} })
+    },
+  )
+
+  it('MAR-3288 lap 2 A says compacting exactly ONCE in the header during a plain compaction — mutation always render the grey pill turns red', () => {
+    useSessionStore.setState({
+      globalChatSessions: [
+        {
+          ...globalSession,
+          status: 'completed',
+          attention: 'finished',
+          activity: 'compacting',
+        },
+      ],
+      activeGlobalSessionId: globalSession.id,
+      activeGlobalConversation: [],
+    })
+    useContextDrillStore.setState({ beats: {} })
+    render(<ChatSurface selectedSpaceId={null} />)
+    expect(screen.getAllByText(/compacting context…/i)).toHaveLength(1)
+    expect(screen.getByText('Compacting context…')).toBeInTheDocument()
+    expect(
+      screen.queryByTestId('chat-session-activity-indicator'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('MAR-3288 lap 2 A keeps drill · compacting beside the attention pill — it names the stage', () => {
+    useSessionStore.setState({
+      globalChatSessions: [
+        {
+          ...globalSession,
+          status: 'completed',
+          attention: 'finished',
+          activity: 'compacting',
+        },
+      ],
+      activeGlobalSessionId: globalSession.id,
+      activeGlobalConversation: [],
+    })
+    useContextDrillStore.setState({
+      beats: { [globalSession.id]: 'compacting' },
+    })
+    render(<ChatSurface selectedSpaceId={null} />)
+    expect(screen.getByText('Compacting context…')).toBeInTheDocument()
+    expect(
+      screen.getByTestId('chat-session-activity-indicator'),
+    ).toHaveTextContent('drill · compacting')
+    useContextDrillStore.setState({ beats: {} })
+  })
+
+  it('MAR-3288 R8 shows today’s pill for any other activity when no drill runs', () => {
+    useSessionStore.setState({
+      globalChatSessions: [{ ...globalSession, activity: 'thinking' }],
+      activeGlobalSessionId: globalSession.id,
+      activeGlobalConversation: [],
+    })
+    useContextDrillStore.setState({ beats: {} })
+    render(<ChatSurface selectedSpaceId={null} />)
+    expect(
+      screen.getByTestId('chat-session-activity-indicator'),
+    ).toHaveTextContent('thinking…')
   })
 
   it('renders a selected Space home when no chat session is active', () => {

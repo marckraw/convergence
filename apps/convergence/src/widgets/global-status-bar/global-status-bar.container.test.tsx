@@ -192,6 +192,29 @@ describe('GlobalStatusBar container', () => {
     )
   })
 
+  it('MAR-3288 R5 does not badge a compacting conversation as completed', () => {
+    useSessionStore.setState({
+      globalSessions: [
+        makeSession({
+          id: 's-compacting',
+          projectId: 'project-one',
+          status: 'completed',
+          attention: 'finished',
+          activity: 'compacting',
+          name: 'Mastermind',
+        }),
+      ],
+    } as Partial<ReturnType<typeof useSessionStore.getState>>)
+
+    renderBar()
+
+    expect(screen.queryByTestId('global-status-recency')).toBeNull()
+    expect(screen.queryByText(/no agents running/i)).toBeNull()
+    expect(
+      screen.getByTestId('global-status-chip-project-one'),
+    ).toBeInTheDocument()
+  })
+
   it('invokes project switching when a chip is clicked', () => {
     const setActiveProject = vi.fn().mockResolvedValue(undefined)
     const prepareForProject = vi.fn()

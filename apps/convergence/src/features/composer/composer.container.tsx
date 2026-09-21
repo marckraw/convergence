@@ -16,7 +16,14 @@ import {
   withClaudeCodePermissionMode,
   withCodexApprovalPolicy,
   withCodexSandbox,
+  isSessionCompacting,
 } from '@/entities/session'
+import { useContextDrillStore } from '@/entities/context-drill'
+import {
+  COMPOSER_WAIT_NOTICES,
+  composerWaitReason,
+  WAITS_FOR_COMPACTION_LABEL,
+} from './composer-wait.pure'
 import {
   catalogInForce,
   providerCatalogHostLabel,
@@ -354,6 +361,17 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const activeSession =
     sessionList.find((s) => s.id === activeSessionId) ??
     globalSessions.find((s) => s.id === activeSessionId)
+  /**
+   * Whether a message sent now waits, and why (MAR-3288 R6/R7). The input
+   * and the send button stay enabled: the backend queues the message.
+   */
+  const drillRunning = useContextDrillStore((s) =>
+    activeSessionId ? s.beats[activeSessionId] !== undefined : false,
+  )
+  const waitReason = composerWaitReason({
+    compacting: isSessionCompacting(activeSession),
+    drillRunning,
+  })
   const annotations = useSessionAnnotations(activeSessionId)
   const markPendingAnnotationsAsSent = useResponseAnnotationStore(
     (s) => s.markPendingAsSent,
@@ -1813,6 +1831,15 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
 
   return (
     <>
+      {waitReason ? (
+        <div
+          role="status"
+          className="mx-auto mb-2 w-full max-w-2xl rounded-md border border-border bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground"
+          data-testid="composer-wait-notice"
+        >
+          {COMPOSER_WAIT_NOTICES[waitReason]}
+        </div>
+      ) : null}
       <Composer
         accountNotice={
           awaitingAccountSend
@@ -2010,7 +2037,12 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
                       {DELIVERY_MODE_LABELS[input.deliveryMode] ??
                         input.deliveryMode}
                     </span>
-                    <span>{QUEUED_INPUT_STATE_LABELS[input.state]}</span>
+                    <span>
+                      {/* Why it waits, when it waits (MAR-3288 R7). */}
+                      {input.state === 'queued' && waitReason
+                        ? WAITS_FOR_COMPACTION_LABEL
+                        : QUEUED_INPUT_STATE_LABELS[input.state]}
+                    </span>
                   </div>
                   <div className="truncate text-foreground">
                     {getQueuedInputPreview(input)}
