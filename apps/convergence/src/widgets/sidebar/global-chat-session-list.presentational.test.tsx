@@ -359,3 +359,75 @@ it('RUN64 round2 alive is current in header and sidebar — mutations window run
     resetDatabase()
   }
 })
+
+it('R5 narrows sessions by name and spaces by title or matching attempt', () => {
+  const matching = { ...baseSession, id: 'match', name: 'Fable chat' }
+  const other = { ...baseSession, id: 'other', name: 'Other chat' }
+  const spaceWithMatch: ChatSidebarSpace = {
+    id: 'space-match',
+    title: 'Launch plan',
+    archivedAt: null,
+    attempts: [
+      {
+        attemptId: 'a1',
+        sessionId: matching.id,
+        sessionName: matching.name,
+        role: 'seed',
+        session: matching,
+      },
+      {
+        attemptId: 'a2',
+        sessionId: other.id,
+        sessionName: other.name,
+        role: 'seed',
+        session: other,
+      },
+    ],
+  }
+  const spaceByTitle: ChatSidebarSpace = {
+    id: 'space-title',
+    title: 'Fable board',
+    archivedAt: null,
+    attempts: [
+      {
+        attemptId: 'a3',
+        sessionId: 'plain',
+        sessionName: 'Plain attempt',
+        role: 'seed',
+        session: { ...baseSession, id: 'plain', name: 'Plain attempt' },
+      },
+    ],
+  }
+
+  renderList({
+    spaces: [spaceWithMatch, spaceByTitle],
+    sessions: [matching, other],
+    nameSearchQuery: 'fable',
+    expandedSpaceIds: new Set(['space-match', 'space-title']),
+  })
+
+  expect(screen.getAllByText('Fable chat').length).toBeGreaterThanOrEqual(1)
+  expect(screen.getByText('Fable board')).toBeInTheDocument()
+  expect(screen.getByText('Launch plan')).toBeInTheDocument()
+  expect(screen.getByText('Plain attempt')).toBeInTheDocument()
+  expect(screen.queryByText('Other chat')).toBeNull()
+})
+
+it('R5 mutation: matching spaces only would hide a matching chat session → red', () => {
+  renderList({
+    spaces: [],
+    sessions: [{ ...baseSession, name: 'Fable chat' }],
+    nameSearchQuery: 'fable',
+  })
+  expect(screen.getByText('Fable chat')).toBeInTheDocument()
+})
+
+it('R6 shows the no-match line on the chat list', () => {
+  renderList({
+    spaces: [linkedSpace],
+    sessions: [baseSession],
+    nameSearchQuery: 'zzzz',
+  })
+  expect(screen.getByText('No conversation matches "zzzz"')).toBeInTheDocument()
+  expect(screen.queryByText('Planning chat')).toBeNull()
+})

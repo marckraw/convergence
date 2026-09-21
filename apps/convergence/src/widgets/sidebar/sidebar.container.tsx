@@ -57,6 +57,7 @@ import {
   type ChatSidebarSpace,
 } from './global-chat-session-list.presentational'
 import { SidebarToolsMenu } from './sidebar-tools-menu.presentational'
+import { useSidebarConversationSearch } from './sidebar-search.container'
 import { toast } from 'sonner'
 import { useFeedClock } from './use-feed-clock'
 
@@ -297,8 +298,13 @@ export const Sidebar: FC<SidebarProps> = ({
   )
   const setPinned = useSessionStore((s) => s.setPinned)
   const [cardNow, setCardNow] = useState(() => Date.now())
+  const conversationSearch = useSidebarConversationSearch({
+    globalSessions,
+    sessions,
+    collapsed,
+  })
   const cardGroups = groupNeedsYou(
-    globalSessions.map((session) =>
+    conversationSearch.searchedGlobalSessions.map((session) =>
       needsYouCardModel(session, {
         projectName:
           session.contextKind === 'global'
@@ -943,36 +949,42 @@ export const Sidebar: FC<SidebarProps> = ({
           ) : null}
         </div>
 
-        {peek ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            title="Pin sidebar"
-            aria-label="Pin sidebar"
-            onClick={onPinPeek}
-          >
-            <Pin className="h-4 w-4" />
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            title="Collapse sidebar"
-            aria-label="Collapse sidebar"
-            onClick={onCollapse}
-          >
-            <PanelLeftClose className="h-4 w-4" />
-          </Button>
-        )}
+        <div className="flex items-center gap-1">
+          {conversationSearch.toggleControl}
+          {peek ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              title="Pin sidebar"
+              aria-label="Pin sidebar"
+              onClick={onPinPeek}
+            >
+              <Pin className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              title="Collapse sidebar"
+              aria-label="Collapse sidebar"
+              onClick={onCollapse}
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
+
+      {conversationSearch.field}
 
       <div className="app-scrollbar flex-1 overflow-x-hidden overflow-y-auto py-3">
         <NeedsYou
           groups={cardGroups}
+          nameSearchQuery={conversationSearch.query}
           onPin={(id, pinned) =>
             void setPinned(id, pinned).catch((error) =>
               toast.error(
@@ -1003,6 +1015,7 @@ export const Sidebar: FC<SidebarProps> = ({
           <GlobalChatSessionList
             spaces={chatSpaces}
             sessions={ungroupedGlobalChatSessions}
+            nameSearchQuery={conversationSearch.query}
             activeSessionId={activeGlobalSessionId}
             selectedSpaceId={selectedSpaceId}
             expandedSpaceIds={expandedSpaceIds}
@@ -1042,7 +1055,8 @@ export const Sidebar: FC<SidebarProps> = ({
                 }}
                 baseBranchName={currentBranch}
                 workspaces={workspaces}
-                sessions={sessions}
+                sessions={conversationSearch.searchedSessions}
+                nameSearchQuery={conversationSearch.query}
                 activeSessionId={activeSessionId}
                 pullRequestsByWorkspaceId={pullRequestsByWorkspaceId}
                 pulsingSessionIds={pulsingSessionIds}
