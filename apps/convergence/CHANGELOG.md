@@ -1,5 +1,18 @@
 # convergence
 
+## 0.81.0
+
+### Minor Changes
+
+- add848b: Loom's Next sheet now shows the dispatcher's own plan: which issue would start now on each seat, and for every other waiting issue the one reason it would not — seat busy, lane not clean, no wire, queued behind. Nothing is sent yet.
+- 26d4146: Loom can follow you: with Follow the conversation on, opening a conversation switches Loom to that conversation's crew.
+- 9093cde: Search the sidebar: one field filters Pinned, Review, every Activity group and the open project's conversations by name.
+
+### Patch Changes
+
+- 238e83f: Loom's horse card says Compacting context… while its seat compacts, instead of Idle.
+- 58e658c: Quitting the app no longer risks losing the last streamed words of a reply.
+
 ## 0.80.3
 
 ### Patch Changes
