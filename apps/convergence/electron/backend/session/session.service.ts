@@ -2293,8 +2293,21 @@ export class SessionService {
    * routine seals it, compacts it and wakes it again -- so the routine's own
    * two messages need a door of their own. A method rather than a flag on
    * `SendMessageInput`: the bypass must not be something any caller can ask
-   * for by setting a property, and the two beats never carry attachments, a
-   * delivery mode or an account of their own.
+   * for by setting a property, and the two beats never carry attachments or a
+   * delivery mode of their own.
+   *
+   * The ACCOUNT is not the routine's to choose either, and absent is a third
+   * value here (MAR-3285). `isAccountHandoff` reads a missing
+   * `providerAccountId` as `null`, so a beat that named no account was read as
+   * a HANDOFF to the default login: the resident connection ended with
+   * "account changed" and the seal turn failed to authenticate against a
+   * credential this conversation had never been using. So the beat rides the
+   * account the conversation's last turn actually ran on -- the raw
+   * `getLastTurnProviderAccountId`, which is the very value that comparison is
+   * made against, and the one `compactContext` already passes. Raw and not the
+   * relay engine's `resolveAccountForAutomaticTurn`: any substitution, however
+   * reasonable, names an account the last turn did not run on and is therefore
+   * a handoff again.
    *
    * Always quiet and always uninjected. Quiet because a sealing reply ENDS in
    * a `BATON:` line by convention and a wire firing on it would dispatch a
@@ -2309,7 +2322,12 @@ export class SessionService {
   async sendDrillBeat(id: string, text: string): Promise<string> {
     return this.deliverSendMessage(
       id,
-      { text, muteRelays: true, skipContextInjection: true },
+      {
+        text,
+        muteRelays: true,
+        skipContextInjection: true,
+        providerAccountId: this.getLastTurnProviderAccountId(id),
+      },
       { passesQueueHold: true },
     )
   }

@@ -29,6 +29,17 @@ let service: SessionService
 let sessionId: string
 let queue: SessionQueuedInputService
 let server: FakeCodexServer
+let capture: TurnCaptureService
+let dir: string
+/**
+ * The `CODEX_HOME` of every host this fixture actually spawned (MAR-3285).
+ *
+ * The artifact for "which account ran this turn": Codex fixes a turn's
+ * credential by the config directory its process is given, so a beat that
+ * named no account shows up here as `ambient` no matter what the app's own
+ * bookkeeping says.
+ */
+let spawnedHomes: string[]
 /**
  * The server's options, read on every request rather than at construction --
  * so a test can decide mid-file that the next turn stays open, which is the
@@ -39,15 +50,17 @@ let settles: SessionSettledEvent[]
 let cleanup: (() => Promise<void>) | undefined
 
 beforeEach(async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'drill-hold-'))
+  dir = mkdtempSync(join(tmpdir(), 'drill-hold-'))
   const db = getDatabase()
   queue = new SessionQueuedInputService(db)
   settles = []
+  spawnedHomes = []
   serverOptions = {}
   server = new FakeCodexServer(serverOptions)
   const hosts = new CodexServerHostRegistry({
     cwd: dir,
-    spawnProcess: () => {
+    spawnProcess: (_binary, _args, options) => {
+      spawnedHomes.push(options.env?.CODEX_HOME ?? 'ambient')
       const child = new FakeCodexChildProcess()
       setTimeout(() => child.announceListening('ws://127.0.0.1:5150'), 0)
       return child.asChildProcess()
@@ -58,23 +71,44 @@ beforeEach(async () => {
   })
   hosts.setBinary('/fixture/codex', '0.154.0')
   const providers = new ProviderRegistry()
-  providers.register(new CodexProvider(hosts, null, undefined, () => null))
+  // The account fixture from `session.account-handoff.test.ts`: without it no
+  // session here can have a last-turn account, and a handoff is invisible --
+  // which is how MAR-3285 passed review on MAR-3255.
+  providers.register(
+    new CodexProvider(hosts, null, undefined, (accountId) =>
+      accountId
+        ? {
+            configDir: join(dir, accountId),
+            executionHostId: 'local',
+            label: accountId,
+          }
+        : null,
+    ),
+  )
   service = new SessionService(db, new LocalExecutionHost(providers), dir)
   service.onSessionSettled((event) => settles.push(event))
-  const capture = new TurnCaptureService(new GitService(), db, {
+  capture = new TurnCaptureService(new GitService(), db, {
     debounceMs: 0,
   })
   service.setTurnCaptureService(capture)
   db.prepare(
     "INSERT INTO projects(id,name,repository_path) VALUES ('p','fixture',?)",
   ).run(dir)
+  // Deliberately none of the defaults (MAR-3285 R5): a beat that reset one of
+  // these to what the column would hold anyway is invisible against a session
+  // created with the defaults.
   sessionId = service.create({
     projectId: 'p',
     workspaceId: null,
     providerId: 'codex',
     name: 'the drill',
     model: 'gpt-5.4',
-    effort: null,
+    effort: 'high',
+    serviceTier: 'priority',
+    permissionConfig: {
+      preset: 'custom',
+      codex: { approvalPolicy: 'untrusted', sandbox: 'read-only' },
+    },
   }).id
   cleanup = async () => {
     await service.disposeAll()
@@ -103,11 +137,38 @@ function turnsSentToProvider(): string[] {
     .map((request) => JSON.stringify(request.params?.input ?? null))
 }
 
-async function startConversation(): Promise<void> {
-  await service.start(sessionId, { text: 'first', providerAccountId: null })
+async function startConversation(
+  providerAccountId: string | null = null,
+): Promise<void> {
+  await service.start(sessionId, { text: 'first', providerAccountId })
   await vi.waitFor(() =>
     expect(service.getById(sessionId)?.status).toBe('completed'),
   )
+}
+
+/** The account each spawned Codex process was actually given credentials for. */
+function accountsCodexRanUnder(): string[] {
+  return spawnedHomes.map((home) => home.split('/').at(-1) ?? home)
+}
+
+/** The account stamped on each turn this conversation actually recorded. */
+function accountsOnRecordedTurns(): Array<string | null> {
+  return capture.listTurns(sessionId).map((turn) => turn.providerAccountId)
+}
+
+/** The parameters of the last turn the provider was asked to run. */
+function lastRequestParams(
+  method: string,
+): Record<string, unknown> | undefined {
+  return server.requests.filter((request) => request.method === method).at(-1)
+    ?.params
+}
+
+/** Everything the conversation says out loud that is not a message. */
+function noteTexts(): string[] {
+  return service
+    .getConversation(sessionId)
+    .flatMap((item) => (item.kind === 'note' ? [item.text] : []))
 }
 
 /** The JSON-RPC id the fake server asks its question under. */
@@ -455,6 +516,154 @@ describe('the drill beat passes the hold (MAR-3255 R2)', () => {
       )
     expect((refusal as Error | null)?.message).toMatch(/compacting/)
     await compacting
+  })
+})
+
+describe('the drill beat rides the conversation (MAR-3285)', () => {
+  /**
+   * The claim layer for "no handoff happened".
+   *
+   * Not `pendingAccountHandoffs`, which is private and empty again by the time
+   * anything can read it: the observable consequences of a handoff are that a
+   * host comes up on somebody else's credentials, that the conversation says
+   * the account changed, and that the record stamps the new account on the
+   * turn. All three are read here.
+   */
+  function expectEveryTurnRanOn(account: string | null): void {
+    const home = account ?? 'ambient'
+    // A handoff ENDS the resident connection and brings another host up on the
+    // other credential, so one distinct home means no handoff ever happened --
+    // and the length guard keeps that from passing on nothing at all.
+    expect(accountsCodexRanUnder().length).toBeGreaterThanOrEqual(1)
+    expect([...new Set(accountsCodexRanUnder())]).toEqual([home])
+    expect(accountsOnRecordedTurns().length).toBeGreaterThan(1)
+    expect([...new Set(accountsOnRecordedTurns())]).toEqual([account])
+    expect(noteTexts().join('\n')).not.toMatch(/account/i)
+    // One thread, start to finish: a handoff re-opens the conversation on the
+    // other account rather than starting a second one, so this is the pin that
+    // the beat did not quietly become a new conversation either.
+    expect(
+      server.methodsCalled().filter((method) => method === 'thread/start'),
+    ).toHaveLength(1)
+  }
+
+  /**
+   * A beat, waited out at the provider rather than at the session row.
+   *
+   * `sendDrillBeat` returns its receipt long before the turn runs, and the row
+   * still reads `completed` from the turn before -- so waiting on the status
+   * alone asserts the account of a turn that has not happened yet.
+   */
+  async function sendBeatAndWait(text: string): Promise<string> {
+    const sentBefore = turnsSentToProvider().length
+    const recordedBefore = capture.listTurns(sessionId).length
+    const dispatchId = await service.sendDrillBeat(sessionId, text)
+    await vi.waitFor(() =>
+      expect(turnsSentToProvider()).toHaveLength(sentBefore + 1),
+    )
+    await vi.waitFor(() =>
+      expect(capture.listTurns(sessionId)).toHaveLength(recordedBefore + 1),
+    )
+    await vi.waitFor(() =>
+      expect(service.getById(sessionId)?.status).toBe('completed'),
+    )
+    return dispatchId
+  }
+
+  it('a drill beat rides on the account of the last turn', async () => {
+    await startConversation('account-a')
+    expect(accountsCodexRanUnder()).toEqual(['account-a'])
+    service.holdQueue(sessionId)
+
+    const dispatchId = await sendBeatAndWait('You know the drill.')
+
+    expect(dispatchId).toBeTruthy()
+    expectEveryTurnRanOn('account-a')
+    // One host, reused: the beat did not even reach for a second process.
+    expect(accountsCodexRanUnder()).toEqual(['account-a'])
+    service.releaseQueue(sessionId)
+  })
+
+  it('a drill beat on a conversation with no account stays on none', async () => {
+    // Absent is a third value: the fix must pass the `null` it read, not fall
+    // back to anything, or every conversation on the ambient login becomes a
+    // handoff in the other direction.
+    await startConversation(null)
+    expect(accountsCodexRanUnder()).toEqual(['ambient'])
+    service.holdQueue(sessionId)
+
+    await sendBeatAndWait('You know the drill.')
+
+    expectEveryTurnRanOn(null)
+    expect(accountsCodexRanUnder()).toEqual(['ambient'])
+    service.releaseQueue(sessionId)
+  })
+
+  it('the after-beat rides the same account across the compaction', async () => {
+    // R4. Both beats go through the one method, but the routine's shape is
+    // send / compact / send and the compaction RELEASES the handle -- so the
+    // after-message is a cold start, the exact beat that had nothing left to
+    // inherit from and the one his live run died on.
+    await startConversation('account-a')
+    service.holdQueue(sessionId)
+
+    await sendBeatAndWait('You know the drill.')
+    await service.compactContext(sessionId)
+    await sendBeatAndWait('The memory was rewritten.')
+
+    expectEveryTurnRanOn('account-a')
+    expect(accountsOnRecordedTurns()).toHaveLength(3)
+    service.releaseQueue(sessionId)
+  })
+
+  it('a drill beat changes nothing else about the conversation', async () => {
+    // R5, his word: "the same account, the same everything". The other four
+    // per-turn facts are columns on the session row, so this asserts both
+    // halves -- the row is untouched, AND the turn the provider was asked to
+    // run used those values rather than the provider's defaults.
+    await startConversation('account-a')
+    const before = service.getById(sessionId)!
+    const settings = {
+      model: before.model,
+      effort: before.effort,
+      serviceTier: before.serviceTier,
+      permissionConfig: before.permissionConfig,
+    }
+    expect(settings).toEqual({
+      model: 'gpt-5.4',
+      effort: 'high',
+      serviceTier: 'priority',
+      permissionConfig: {
+        preset: 'custom',
+        codex: { approvalPolicy: 'untrusted', sandbox: 'read-only' },
+      },
+    })
+    service.holdQueue(sessionId)
+
+    await sendBeatAndWait('You know the drill.')
+
+    const after = service.getById(sessionId)!
+    expect({
+      model: after.model,
+      effort: after.effort,
+      serviceTier: after.serviceTier,
+      permissionConfig: after.permissionConfig,
+    }).toEqual(settings)
+    expect(lastRequestParams('turn/start')).toMatchObject({
+      model: 'gpt-5.4',
+      effort: 'high',
+      serviceTier: 'priority',
+    })
+    // The permission config travels when the thread is opened or resumed
+    // rather than per turn, and the beat resumed the live thread -- so this
+    // `thread/resume` is the beat's own, and it re-stated this conversation's
+    // permissions rather than the provider's defaults.
+    expect(lastRequestParams('thread/resume')).toMatchObject({
+      approvalPolicy: 'untrusted',
+      sandbox: 'read-only',
+      serviceTier: 'priority',
+    })
+    service.releaseQueue(sessionId)
   })
 })
 
