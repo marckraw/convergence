@@ -22,6 +22,10 @@ import {
 } from '@/features/needs-you'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/lib/cn.pure'
+import {
+  noConversationMatchesLine,
+  normalizeNameQuery,
+} from '@/shared/lib/name-search.pure'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { FilterChoice } from './activity-filter-choice.presentational'
@@ -34,6 +38,7 @@ interface Props {
   onCollapse: () => void
   view: FeedView
   result: ReturnType<typeof buildFeedView>
+  nameSearchQuery?: string
   onChange: (view: FeedView) => void
   onReset: () => void
 }
@@ -50,10 +55,12 @@ export function NeedsYouControls({
   onCollapse,
   view,
   result,
+  nameSearchQuery = '',
   onChange,
   onReset,
 }: Props) {
   const summary = buildFeedFilterSummary(view)
+  const activeNameSearch = normalizeNameQuery(nameSearchQuery)
   return (
     <TooltipProvider delayDuration={250}>
       <div
@@ -290,9 +297,11 @@ export function NeedsYouControls({
             role="status"
             className="rounded-lg border border-dashed border-border p-3 text-muted-foreground"
           >
-            {result.filtered
-              ? 'No activity matches these filters. Edit or clear filters to see your activity.'
-              : 'No activity cards yet.'}
+            {activeNameSearch.length > 0
+              ? noConversationMatchesLine(nameSearchQuery.trim())
+              : result.filtered
+                ? 'No activity matches these filters. Edit or clear filters to see your activity.'
+                : 'No activity cards yet.'}
           </p>
         )}
       </div>

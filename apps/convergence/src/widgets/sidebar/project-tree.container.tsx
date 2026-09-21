@@ -1,5 +1,9 @@
 import { SessionStateBadge } from '@/entities/session'
 import { parallelWorkStatus } from '@/shared/lib/parallel-work.pure'
+import {
+  noConversationMatchesLine,
+  normalizeNameQuery,
+} from '@/shared/lib/name-search.pure'
 import { isRemoteExecutionHost } from '@/entities/execution-host'
 import { useEffect, useState } from 'react'
 import type { FC } from 'react'
@@ -46,6 +50,7 @@ interface ProjectTreeProps {
   workspaces: Workspace[]
   sessions: SessionSummary[]
   activeSessionId: string | null
+  nameSearchQuery?: string
   pullRequestsByWorkspaceId?: Readonly<Record<string, WorkspacePullRequest>>
   regeneratingSessionIds?: ReadonlySet<string>
   pulsingSessionIds?: Readonly<Record<string, true>>
@@ -71,6 +76,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   workspaces,
   sessions,
   activeSessionId,
+  nameSearchQuery = '',
   pullRequestsByWorkspaceId,
   regeneratingSessionIds,
   pulsingSessionIds,
@@ -145,6 +151,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
     ? activeSessionId
     : null
   const rootSessions = sessions.filter((s) => !s.workspaceId && !s.archivedAt)
+  const searching = normalizeNameQuery(nameSearchQuery).length > 0
   const getActiveWorkspaceSessions = (wsId: string) =>
     sessions.filter((s) => s.workspaceId === wsId && !s.archivedAt)
   const getWorkspaceSessions = (wsId: string) =>
@@ -432,28 +439,42 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
 
   return (
     <div className="px-3">
+      {searching && sessions.length === 0 ? (
+        <p
+          role="status"
+          className="mb-3 rounded-lg border border-dashed border-border p-3 text-[11px] text-muted-foreground"
+        >
+          {noConversationMatchesLine(nameSearchQuery.trim())}
+        </p>
+      ) : null}
+
       {/* Root sessions (on main branch) */}
-      <div className="mb-1 ml-2 border-l border-border pl-2">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <p className="mb-0.5 truncate text-xs text-muted-foreground">
-              {(baseBranchName || 'main') +
-                (rootSessions.length > 0 ? ` (${rootSessions.length})` : '')}
-            </p>
-          </TooltipTrigger>
-          <TooltipContent side="right">
-            {baseBranchName || 'main'}
-          </TooltipContent>
-        </Tooltip>
-        {rootSessions.map(renderSessionRow)}
-        <div className="mt-1">
-          <SessionCreateInline workspaceId={null} />
+      {!searching || rootSessions.length > 0 ? (
+        <div className="mb-1 ml-2 border-l border-border pl-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <p className="mb-0.5 truncate text-xs text-muted-foreground">
+                {(baseBranchName || 'main') +
+                  (rootSessions.length > 0 ? ` (${rootSessions.length})` : '')}
+              </p>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {baseBranchName || 'main'}
+            </TooltipContent>
+          </Tooltip>
+          {rootSessions.map(renderSessionRow)}
+          {!searching ? (
+            <div className="mt-1">
+              <SessionCreateInline workspaceId={null} />
+            </div>
+          ) : null}
         </div>
-      </div>
+      ) : null}
 
       {/* Active workspaces */}
       {activeWorkspaces.map((ws) => {
         const wsSessions = getActiveWorkspaceSessions(ws.id)
+        if (searching && wsSessions.length === 0) return null
         const isExpanded = effectiveExpanded.has(ws.id)
         const pullRequest = pullRequestsByWorkspaceId?.[ws.id] ?? null
         const isMerged = pullRequest?.state === 'merged'
@@ -502,16 +523,24 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
             {isExpanded && (
               <div className="ml-4 space-y-0.5">
                 {wsSessions.map(renderSessionRow)}
-                <div className="mt-1">
-                  <SessionCreateInline workspaceId={ws.id} />
-                </div>
+                {!searching ? (
+                  <div className="mt-1">
+                    <SessionCreateInline workspaceId={ws.id} />
+                  </div>
+                ) : null}
               </div>
             )}
           </div>
         )
       })}
 
-      {archivedWorkspaces.length > 0 || archivedRootSessions.length > 0 ? (
+      {(!searching &&
+        (archivedWorkspaces.length > 0 || archivedRootSessions.length > 0)) ||
+      (searching &&
+        (archivedWorkspaces.some(
+          (ws) => getWorkspaceSessions(ws.id).length > 0,
+        ) ||
+          archivedRootSessions.length > 0)) ? (
         <div className="mt-3 ml-2 border-l border-border pl-2">
           <div className="group/workspace flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent">
             <Tooltip>
@@ -532,7 +561,13 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                   <Archive className="h-3 w-3 shrink-0 text-muted-foreground" />
                   <span className="truncate">Archived</span>
                   <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                    {archivedWorkspaces.length + archivedRootSessions.length}
+                    {searching
+                      ? archivedWorkspaces.reduce(
+                          (count, ws) =>
+                            count + getWorkspaceSessions(ws.id).length,
+                          0,
+                        ) + archivedRootSessions.length
+                      : archivedWorkspaces.length + archivedRootSessions.length}
                   </span>
                 </Button>
               </TooltipTrigger>
@@ -546,6 +581,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
             <div className="ml-4 space-y-0.5">
               {archivedWorkspaces.map((ws) => {
                 const wsSessions = getWorkspaceSessions(ws.id)
+                if (searching && wsSessions.length === 0) return null
                 const isExpanded = effectiveExpanded.has(ws.id)
                 const pullRequest = pullRequestsByWorkspaceId?.[ws.id] ?? null
                 const isMerged = pullRequest?.state === 'merged'
@@ -608,17 +644,19 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
       ) : null}
 
       {/* New workspace */}
-      <div className="mt-2 ml-2">
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={onOpenCreateWorkspace}
-          className="h-auto items-center gap-1 px-0 py-0 text-xs font-normal text-muted-foreground hover:text-foreground"
-        >
-          <Plus className="h-3 w-3" />
-          New workspace
-        </Button>
-      </div>
+      {!searching ? (
+        <div className="mt-2 ml-2">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onOpenCreateWorkspace}
+            className="h-auto items-center gap-1 px-0 py-0 text-xs font-normal text-muted-foreground hover:text-foreground"
+          >
+            <Plus className="h-3 w-3" />
+            New workspace
+          </Button>
+        </div>
+      ) : null}
     </div>
   )
 }

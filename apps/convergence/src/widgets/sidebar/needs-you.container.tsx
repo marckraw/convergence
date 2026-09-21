@@ -15,7 +15,10 @@ import { Button } from '@/shared/ui/button'
 const preferenceKey = 'convergence:sidebar-activity-view:v1'
 const filtersExpandedKey = 'convergence:sidebar-activity-filters-expanded:v1'
 
-export function NeedsYou(props: ComponentProps<typeof NeedsYouFeed>) {
+export function NeedsYou({
+  nameSearchQuery = '',
+  ...props
+}: ComponentProps<typeof NeedsYouFeed> & { nameSearchQuery?: string }) {
   const controlsId = useId()
   const controlsTrigger = useRef<HTMLButtonElement>(null)
   const [filtersExpanded, setFiltersExpanded] = useState(() => {
@@ -83,6 +86,7 @@ export function NeedsYou(props: ComponentProps<typeof NeedsYouFeed>) {
           onCollapse={collapseFilters}
           view={view}
           result={result}
+          nameSearchQuery={nameSearchQuery}
           onChange={changeView}
           onReset={() => {
             changeView({ ...defaultFeedView(), order: view.order })
