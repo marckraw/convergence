@@ -17,6 +17,7 @@ import {
 
 interface WaveRowViewProps {
   appearance?: 'loom'
+  layout?: 'list' | 'grid'
   row: WaveRow
   /** Why the row cannot open its seat, or null when it can. */
   inertReason: string | null
@@ -31,6 +32,7 @@ interface WaveRowViewProps {
  */
 export const WaveRowView: FC<WaveRowViewProps> = ({
   appearance,
+  layout = 'list',
   row,
   inertReason,
   onOpen,
@@ -39,7 +41,10 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
   const key = waveRowKey(entry)
   const loom = appearance === 'loom'
   const cardClass = loom
-    ? 'mb-2 gap-2 rounded-lg border border-foreground/5 bg-foreground/[0.035] p-3'
+    ? cn(
+        layout === 'list' && 'mb-2',
+        'gap-2 rounded-lg border border-foreground/5 bg-foreground/[0.035] p-3',
+      )
     : undefined
   const body = (
     <>

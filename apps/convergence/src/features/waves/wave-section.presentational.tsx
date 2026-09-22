@@ -3,12 +3,14 @@ import type { WorkLedgerEntry } from '@/entities/work-ledger'
 import { waveRowKey, type WaveRow } from './wave-sections.pure'
 import { WaveRowView } from './wave-row.presentational'
 import {
+  LOOM_BEFORE_WIDE_CLASS,
   WAVE_SECTION_HINT_CLASS,
   WAVE_SECTION_TITLE_CLASS,
 } from './wave-panel.styles'
 
 interface WaveSectionViewProps {
   appearance?: 'loom'
+  layout?: 'list' | 'grid'
   title: string
   rows: WaveRow[]
   /**
@@ -43,6 +45,7 @@ interface WaveSectionViewProps {
 /** One titled section of the wave panel, with its count; empty draws nothing. */
 export const WaveSectionView: FC<WaveSectionViewProps> = ({
   appearance,
+  layout = 'list',
   title,
   rows,
   count,
@@ -59,10 +62,17 @@ export const WaveSectionView: FC<WaveSectionViewProps> = ({
       key={waveRowKey(row.entry)}
       row={row}
       appearance={appearance}
+      layout={layout}
       inertReason={inertReason(row.entry)}
       onOpen={onOpen}
     />
   ))
+  const content =
+    layout === 'grid' ? (
+      <div className={LOOM_BEFORE_WIDE_CLASS}>{list}</div>
+    ) : (
+      list
+    )
   const heading = `${title} · ${count ?? rows.length}`
   const hintLine = hint ? (
     <p data-wave-hint={title} className={WAVE_SECTION_HINT_CLASS}>
@@ -81,13 +91,13 @@ export const WaveSectionView: FC<WaveSectionViewProps> = ({
         {heading}
       </summary>
       {hintLine}
-      {list}
+      {content}
     </details>
   ) : (
     <section id={id} aria-label={title} className="flex flex-col">
       <h3 className={WAVE_SECTION_TITLE_CLASS}>{heading}</h3>
       {hintLine}
-      {list}
+      {content}
       {footer}
     </section>
   )

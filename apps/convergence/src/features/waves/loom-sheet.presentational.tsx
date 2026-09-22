@@ -223,6 +223,7 @@ export const LoomSheetView = <TSession,>({
               {before.groups.map((group, at) => (
                 <WaveSectionView
                   appearance="loom"
+                  layout={wide ? 'grid' : 'list'}
                   key={group.key}
                   title={group.title}
                   rows={group.rows}
@@ -236,6 +237,7 @@ export const LoomSheetView = <TSession,>({
               {olderRows.length > 0 ? (
                 <WaveSectionView
                   appearance="loom"
+                  layout={wide ? 'grid' : 'list'}
                   title={LOOM_SEARCH_OLDER_TITLE}
                   rows={olderRows}
                   inertReason={inertReason}
