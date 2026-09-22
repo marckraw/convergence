@@ -39,7 +39,7 @@ function joined(
     verdict: null,
     verdict_settle_id: null,
     verdict_note: null,
-    member_session_id: 's1',
+    seat_session_id: 's1',
     session_exists: 1,
     pull_request_json: JSON.stringify(PR),
     execution_host: 'local',

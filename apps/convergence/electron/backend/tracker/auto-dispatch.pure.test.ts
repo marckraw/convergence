@@ -283,3 +283,22 @@ it('MAR-3298 lap 2 E: terminal words are sentences — store the raw reason turn
     "the seat's conversation was deleted",
   )
 })
+
+it('MAR-3186 R1 recipes count live spawns, release ended work, and reserve WIP within the plan', () => {
+  const recipe = horse({ kind: 'dynamic', sessionId: null, liveSpawns: 1 })
+  const entries = [row('1', { state: 'returned' }), row('2'), row('3')]
+  expect(plan(entries, recipe).words['2']).toEqual({
+    kind: 'seat-busy',
+    why: 'turn',
+  })
+  recipe.liveSpawns = 0
+  expect(plan(entries, recipe).words['2'].kind).toBe('would-start')
+  expect(plan(entries, recipe).words['3'].kind).toBe('queued-behind')
+  recipe.wipLimit = 2
+  recipe.liveSpawns = 1
+  expect(plan(entries, recipe).words['2'].kind).toBe('would-start')
+  recipe.paused = true
+  expect(plan(entries, recipe).words['2'].kind).toBe('seat-paused')
+  recipe.wire = null
+  expect(plan(entries, recipe).words['2'].kind).toBe('no-wire')
+})

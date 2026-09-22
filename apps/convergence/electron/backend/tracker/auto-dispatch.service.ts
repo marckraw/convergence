@@ -1,3 +1,5 @@
+import type { ErrandSpawner } from '../relay/errand-spawner'
+import { applySeatToSpawnSpec } from '../relay/relay.pure'
 import { randomUUID } from 'crypto'
 import type Database from 'better-sqlite3'
 import type {
@@ -37,6 +39,13 @@ export type AutoDispatchGateway = Pick<
   Pick<WorkLedgerService, 'firstDispatchSeenAt'> &
   AutomaticTurnAccountSource
 
+/** Recipe capability port: session liveness, a named wire and the shared spawn lifecycle. */
+export interface AutoDispatchRecipeGateway {
+  findSpawnWire: RelayService['findSpawnWire']
+  isSessionLive(sessionId: string): boolean
+  spawn: ErrandSpawner['spawn']
+}
+
 export interface AutoDispatchCrew {
   id: string
   trackerBinding?: TrackerBinding | null
@@ -61,7 +70,8 @@ export class AutoDispatchService {
 
   constructor(
     private readonly db: Database.Database,
-    private readonly gateway: AutoDispatchGateway,
+    private readonly gateway: AutoDispatchGateway &
+      Partial<AutoDispatchRecipeGateway>,
     private readonly crews: { list(): AutoDispatchCrew[] },
     private readonly ledger: Pick<WorkLedgerService, 'currentView'>,
   ) {
@@ -83,6 +93,16 @@ export class AutoDispatchService {
       FROM auto_dispatches WHERE crew_id = ?`,
       )
       .all(crewId) as AutoDispatchRecord[]
+  }
+
+  liveSpawnCount(crewId: string, seat: string): number {
+    const rows = this.db
+      .prepare(
+        `SELECT session_id FROM auto_dispatches WHERE crew_id = ? AND seat = ?`,
+      )
+      .all(crewId, seat) as { session_id: string }[]
+    return rows.filter((row) => this.gateway.isSessionLive?.(row.session_id))
+      .length
   }
 
   async act(crewId: string, plan: DispatchPlan, at: string): Promise<boolean> {
@@ -196,11 +216,71 @@ export class AutoDispatchService {
       if (
         !master?.sessionId ||
         !master.batonName ||
-        !seat?.sessionId ||
+        !seat ||
+        (seat.kind !== 'dynamic' && !seat.sessionId) ||
         seat.paused ||
-        !seat.providerId
+        (seat.kind !== 'dynamic' && !seat.providerId)
       )
         continue
+      if (seat.kind === 'dynamic') {
+        const wire = this.gateway.findSpawnWire?.(
+          crewId,
+          master.sessionId,
+          seat.batonName!,
+        )
+        if (
+          !wire?.spawnSpec ||
+          wire.id !== word.wire.id ||
+          !this.gateway.spawn ||
+          !this.gateway.isSessionLive
+        )
+          continue
+        if (
+          this.liveSpawnCount(crewId, seat.batonName!) >= (seat.wipLimit ?? 1)
+        )
+          continue
+        const spec = {
+          ...applySeatToSpawnSpec(wire.spawnSpec, seat),
+          name: `${seat.batonName} · ${entry.issueIdentifier}`,
+        }
+        const text = autoDispatchText({
+          roleCard: spec.roleCard,
+          instruction: wire.instruction,
+          issueUrl: entry.issueUrl,
+          mastermind: master.batonName,
+        })
+        const id = randomUUID()
+        // The non-null marker names no session. Claim before create/start so another dispatcher cannot spawn twice.
+        const claimed = this.db
+          .prepare(
+            `INSERT INTO auto_dispatches
+          (id, crew_id, issue_id, lap, seat, session_id, wire_id, sent_at, delivery)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'turn') ON CONFLICT(crew_id, issue_id, lap) DO NOTHING`,
+          )
+          .run(
+            id,
+            crewId,
+            entry.issueId,
+            entry.lap,
+            entry.seat,
+            `pending:${id}`,
+            wire.id,
+            at,
+          )
+        if (claimed.changes === 0) continue
+        changed = true
+        await this.deliverRecipe(
+          id,
+          entry,
+          master.sessionId,
+          crewId,
+          spec,
+          text,
+          at,
+        )
+        continue
+      }
+      if (!seat.sessionId || !seat.providerId) continue
       const wire = this.gateway.findWire(
         crewId,
         master.sessionId,
@@ -255,6 +335,47 @@ export class AutoDispatchService {
       )
     }
     return changed
+  }
+
+  private async deliverRecipe(
+    id: string,
+    entry: WorkLedgerRecord,
+    mastermind: string,
+    crewId: string,
+    spec: Parameters<ErrandSpawner['spawn']>[0],
+    text: string,
+    at: string,
+  ): Promise<void> {
+    let error: string | null
+    try {
+      const result = await this.gateway.spawn!(spec, text, {
+        crewId,
+        returnTo: mastermind,
+        onCreated: (sessionId) => {
+          this.db
+            .prepare('UPDATE auto_dispatches SET session_id = ? WHERE id = ?')
+            .run(sessionId, id)
+        },
+      })
+      this.db
+        .prepare(
+          'UPDATE auto_dispatches SET session_id = COALESCE(?, session_id), receipt = ?, error = ? WHERE id = ?',
+        )
+        .run(result.sessionId, result.dispatchId, result.error, id)
+      if (result.dispatchId) this.reconcilePendingTerminal(result.dispatchId)
+      error = result.error
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : String(cause)
+      this.db
+        .prepare('UPDATE auto_dispatches SET error = ? WHERE id = ?')
+        .run(error, id)
+    }
+    this.gateway.addAutoDispatchNote(
+      mastermind,
+      error
+        ? `Auto-dispatch of ${entry.issueIdentifier} → ${entry.seat} failed: ${error}`
+        : `Auto-dispatched ${entry.issueIdentifier} "${entry.issueTitle}" → ${entry.seat} at ${autoDispatchTime(at)} (lap 1)`,
+    )
   }
 
   private async deliver(

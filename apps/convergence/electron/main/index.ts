@@ -1,6 +1,9 @@
+import { ErrandSpawner } from '../backend/relay/errand-spawner'
+import { isTerminalSessionStatus } from '../backend/session/session.pure'
 import {
   AutoDispatchService,
   type AutoDispatchGateway,
+  type AutoDispatchRecipeGateway,
 } from '../backend/tracker/auto-dispatch.service'
 import { AutoDispatchPlanService } from '../backend/tracker/auto-dispatch-plan.service'
 import { isLocalExecutionHost } from '../backend/execution-host-endpoint/execution-host-endpoint.pure'
@@ -806,18 +809,52 @@ async function startApp(): Promise<void> {
         const session = member.sessionId
           ? sessionService.getById(member.sessionId)
           : null
+        const master = crew.members.find(
+          (candidate) => candidate.role === 'mastermind' && candidate.sessionId,
+        )
+        const recipeSpec =
+          member.kind === 'dynamic' && member.batonName && master?.sessionId
+            ? relayService.findSpawnWire(
+                crew.id,
+                master.sessionId,
+                member.batonName,
+              )?.spawnSpec
+            : null
+        const recipeHost =
+          member.hostPolicy ?? recipeSpec?.executionHost ?? 'local'
         return {
           ...member,
           providerId: session?.providerId ?? member.providerId,
-          executionHost: session?.executionHost ?? 'local',
+          executionHost: session?.executionHost ?? recipeHost,
           localWorkingDirectory:
             session && isLocalExecutionHost(session.executionHost)
               ? session.workingDirectory
-              : null,
+              : recipeSpec?.projectId && isLocalExecutionHost(recipeHost)
+                ? (projectService.getById(recipeSpec.projectId)
+                    ?.repositoryPath ?? null)
+                : null,
         }
       }),
     }))
-  const dispatchGateway: AutoDispatchGateway = {
+  const errandSpawner = new ErrandSpawner({
+    sessions: sessionService,
+    crews: {
+      addMember: (crewId, sessionId) =>
+        crewService.addMember(crewId, sessionId),
+    },
+    relays: relayService,
+    accounts: providerAccountRepository,
+    onCrewsChanged: () => broadcastCrews(crewService.list()),
+    onRelaysChanged: () => broadcastRelays(relayService.list()),
+  })
+  const dispatchGateway: AutoDispatchGateway & AutoDispatchRecipeGateway = {
+    findSpawnWire: (crewId, master, name) =>
+      relayService.findSpawnWire(crewId, master, name),
+    isSessionLive: (id) => {
+      const session = sessionService.getById(id)
+      return session !== null && !isTerminalSessionStatus(session.status)
+    },
+    spawn: (spec, brief, context) => errandSpawner.spawn(spec, brief, context),
     firstDispatchSeenAt: (crewId) =>
       workLedgerService.firstDispatchSeenAt(crewId),
     describeSeatAvailability: (id) =>
@@ -850,6 +887,9 @@ async function startApp(): Promise<void> {
       firstDispatchSeenAt: dispatchGateway.firstDispatchSeenAt,
       describeSeatAvailability: dispatchGateway.describeSeatAvailability,
       findWire: dispatchGateway.findWire,
+      findSpawnWire: dispatchGateway.findSpawnWire,
+      liveSpawnCount: (crewId, seat) =>
+        autoDispatcher.liveSpawnCount(crewId, seat),
       describeLane: dispatchGateway.describeLane,
     },
     (id) => autoDispatcher.records(id),

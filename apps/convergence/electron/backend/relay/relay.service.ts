@@ -137,6 +137,22 @@ export class RelayService {
     return row ? sessionRelayFromRow(row) : null
   }
 
+  findSpawnWire(
+    crewId: string,
+    masterSessionId: string,
+    batonName: string,
+  ): SessionRelay | null {
+    return (
+      this.listForSourceSession(masterSessionId).find(
+        (relay) =>
+          relay.crewId === crewId &&
+          relay.armed &&
+          relay.action === 'spawn' &&
+          relay.spawnSpec?.member === batonName,
+      ) ?? null
+    )
+  }
+
   create(input: CreateSessionRelayInput): SessionRelay {
     const id = randomUUID()
     const crewId = normalizeRelayCrewId(input.crewId)

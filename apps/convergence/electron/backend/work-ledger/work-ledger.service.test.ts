@@ -579,3 +579,124 @@ it('MAR-2981 R14 measures first dispatch seen over 20,000 ledger rows across thr
     resetDatabase()
   }
 })
+
+describe('MAR-3186 R5: recipe dispatch joins in real SQLite', () => {
+  let db: Database.Database
+  let ledger: WorkLedgerService
+  beforeEach(() => {
+    db = getDatabase()
+    ledger = new WorkLedgerService(db)
+    db.prepare(
+      "INSERT INTO session_crews (id, name) VALUES ('crew-1', 'Loom')",
+    ).run()
+    new CrewService(db).addRecipeMember('crew-1', {
+      batonName: 'opus',
+      providerId: 'codex',
+      model: null,
+      hostPolicy: 'local',
+    })
+  })
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+  })
+  function session(id: string, identifier = 'EX-1') {
+    const pr = {
+      number: 800,
+      url: 'https://github.com/example/repo/pull/800',
+      state: 'open',
+      headBranch: `agent/${identifier.toLowerCase()}-recipe`,
+      checkedAt: '2026-09-22T08:00:00Z',
+      source: 'gh',
+    }
+    db.prepare(
+      "INSERT INTO sessions (id, context_kind, provider_id, name, working_directory, pull_request_json) VALUES (?, 'global', 'codex', ?, '/fixture', ?)",
+    ).run(id, id, JSON.stringify(pr))
+    return pr
+  }
+  function dispatch(
+    sessionId: string,
+    issueId = 'issue-1',
+    lap = 1,
+    seat = 'opus',
+    crew = 'crew-1',
+  ) {
+    db.prepare(
+      `INSERT INTO auto_dispatches (id, crew_id, issue_id, lap, seat, session_id, wire_id, sent_at, delivery) VALUES (?, ?, ?, ?, ?, ?, 'wire', ?, 'turn')`,
+    ).run(
+      `${crew}:${issueId}:${lap}`,
+      crew,
+      issueId,
+      lap,
+      seat,
+      sessionId,
+      `2026-09-22T08:0${lap}:00Z`,
+    )
+  }
+  it('R5-a recipe resolves its spawned session, issue PR and host liveness', () => {
+    const pr = session('spawn')
+    ledger.append([record()])
+    dispatch('spawn')
+    expect(ledger.list('crew-1')[0]).toMatchObject({
+      sessionId: 'spawn',
+      pr,
+      hostLiveness: { executionHost: 'local', hostReachable: true },
+    })
+  })
+  it('R5 issue, crew and seat isolation keep each recipe issue on its own spawn', () => {
+    session('first')
+    session('second', 'EX-2')
+    session('unrelated')
+    ledger.append([
+      record(),
+      record({ issueId: 'issue-2', issueIdentifier: 'EX-2' }),
+    ])
+    dispatch('first')
+    dispatch('second', 'issue-2')
+    dispatch('unrelated', 'issue-1', 8, 'other-seat')
+    dispatch('unrelated', 'issue-1', 9, 'opus', 'other-crew')
+    expect(
+      Object.fromEntries(
+        ledger.list('crew-1').map((e) => [e.issueId, e.sessionId]),
+      ),
+    ).toEqual({ 'issue-1': 'first', 'issue-2': 'second' })
+  })
+  it('R5-c newest dispatch wins across two laps', () => {
+    session('old')
+    session('new')
+    ledger.append([record({ lap: 2 })])
+    dispatch('old')
+    dispatch('new', 'issue-1', 2)
+    expect(ledger.list('crew-1')[0].sessionId).toBe('new')
+  })
+  it('R5-b ledger lap 3 still resolves dispatch lap 2 between RETURN and send', () => {
+    session('old')
+    session('new')
+    ledger.append([record({ lap: 3 })])
+    dispatch('old')
+    dispatch('new', 'issue-1', 2)
+    expect(ledger.list('crew-1')[0].sessionId).toBe('new')
+  })
+  it('R5 resident session wins when the dispatch points to a different id', () => {
+    session('resident')
+    session('spawn')
+    db.prepare(
+      "DELETE FROM session_crew_members WHERE crew_id = 'crew-1' AND session_id IS NULL",
+    ).run()
+    const crews = new CrewService(db)
+    crews.addMember('crew-1', 'resident')
+    crews.setMemberBatonName('crew-1', { sessionId: 'resident' }, 'opus')
+    ledger.append([record()])
+    dispatch('spawn')
+    expect(ledger.list('crew-1')[0].sessionId).toBe('resident')
+  })
+  it('R5 a deleted dispatch session has no session facts', () => {
+    ledger.append([record()])
+    dispatch('gone')
+    expect(ledger.list('crew-1')[0]).toMatchObject({
+      sessionId: null,
+      hostLiveness: null,
+      pr: null,
+    })
+  })
+})

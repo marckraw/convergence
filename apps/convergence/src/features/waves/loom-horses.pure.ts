@@ -172,7 +172,7 @@ export interface LoomHorseSession {
  * removed it from the list once, and collided their React keys.
  *
  * A recipe has no conversation, so a name is all it can be addressed by; it
- * claims its crew's rows for that seat which carry no session at all.
+ * claims its crew's rows for that seat, including their dispatched errands.
  */
 export function rowBelongsToSeat(
   row: WaveRow,
@@ -181,11 +181,7 @@ export function rowBelongsToSeat(
 ): boolean {
   if (row.entry.crewId !== crewId) return false
   if (member.sessionId !== null) return row.entry.sessionId === member.sessionId
-  return (
-    member.batonName !== null &&
-    row.entry.seat === member.batonName &&
-    row.entry.sessionId === null
-  )
+  return member.batonName !== null && row.entry.seat === member.batonName
 }
 
 /** Which of Now's four groups a row was drawn under. */

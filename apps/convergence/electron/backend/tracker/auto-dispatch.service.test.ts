@@ -25,7 +25,7 @@ import type {
   SeatAvailability,
   TrackerIssue,
 } from '../../../src/shared/types/tracker.types'
-import { autoDispatchTime } from './auto-dispatch.pure'
+import { autoDispatchText, autoDispatchTime } from './auto-dispatch.pure'
 
 const at = '2026-09-22T08:00:00.000Z'
 afterEach(() => {
@@ -845,4 +845,219 @@ it('R2 two concurrent acts using the same plan lose one durable claim and send o
   ])
   expect(b.gateway.sendMessageWithOpener).toHaveBeenCalledTimes(1)
   expect(b.service.records(b.crewId)).toHaveLength(1)
+})
+
+function recipeBench() {
+  const b = bench()
+  b.enable()
+  Object.assign(b.seat, {
+    kind: 'dynamic',
+    sessionId: null,
+    batonName: 'opus',
+    model: 'gpt-5.5',
+    hostPolicy: 'local',
+    localWorkingDirectory: '/wire-project',
+  })
+  const wire = b.relays.create({
+    crewId: b.crewId,
+    sourceSessionId: 'm',
+    action: 'spawn',
+    instruction: 'Do the work.',
+    spawnSpec: {
+      executionHost: 'local',
+      workAddress: null,
+      projectId: 'wire-project',
+      providerId: 'claude-code',
+      model: 'wire-model',
+      effort: null,
+      name: 'wire name',
+      member: 'opus',
+      roleCard: null,
+      providerAccountId: null,
+      returnWire: { instruction: 'Return to Fable.' },
+    },
+  })
+  const live = new Set<string>()
+  const spawn = vi.fn<import('../relay/errand-spawner').ErrandSpawner['spawn']>(
+    async (_spec, _brief, context) => {
+      expect(
+        b.db
+          .prepare('SELECT session_id FROM auto_dispatches WHERE crew_id = ?')
+          .all(b.crewId),
+      ).toHaveLength(1)
+      context.onCreated?.('spawn')
+      live.add('spawn')
+      return { sessionId: 'spawn', dispatchId: 'spawn-receipt', error: null }
+    },
+  )
+  Object.assign(b.gateway, {
+    findSpawnWire: b.relays.findSpawnWire.bind(b.relays),
+    isSessionLive: (id: string) => live.has(id),
+    spawn,
+  })
+  const planner = new AutoDispatchPlanService(
+    {
+      listCrews: b.roster.list,
+      currentView: (id) => b.ledger.currentView(id),
+      firstDispatchSeenAt: b.gateway.firstDispatchSeenAt,
+      describeSeatAvailability: b.gateway.describeSeatAvailability,
+      describeLane: b.gateway.describeLane,
+      findWire: b.gateway.findWire,
+      findSpawnWire: b.relays.findSpawnWire.bind(b.relays),
+      liveSpawnCount: (crewId, seat) => b.service.liveSpawnCount(crewId, seat),
+    },
+    (id) => b.service.records(id),
+  )
+  const refresh = () => planner.refresh(b.crewId, at)
+  const act = async () => {
+    b.observe()
+    await b.service.act(b.crewId, await refresh(), at)
+  }
+  return { ...b, wire, live, spawn, refresh, act }
+}
+it('MAR-3186 R2 claims before spawning once across repeated and overlapping ticks', async () => {
+  const b = recipeBench()
+  await Promise.all([b.act(), b.act()])
+  await b.act()
+  expect(b.spawn).toHaveBeenCalledTimes(1)
+  // A second service (as after restart) must respect the durable unique claim even with a stale plan.
+  const again = new AutoDispatchService(b.db, b.gateway, b.roster, b.ledger)
+  b.live.clear()
+  await again.act(
+    b.crewId,
+    {
+      ...(await b.refresh()),
+      order: { opus: ['i'] },
+      words: {
+        i: { kind: 'would-start', wire: { id: b.wire.id, opener: null } },
+      },
+    },
+    at,
+  )
+  expect(b.spawn).toHaveBeenCalledTimes(1)
+  expect(
+    b.db
+      .prepare(
+        'SELECT session_id, delivery, receipt, error FROM auto_dispatches',
+      )
+      .get(),
+  ).toEqual({
+    session_id: 'spawn',
+    delivery: 'turn',
+    receipt: 'spawn-receipt',
+    error: null,
+  })
+  again.dispose()
+})
+it('MAR-3186 R3 applies seat provider/model/host, wire project, and card precedence both ways; naming uses issue', async () => {
+  const b = recipeBench()
+  b.seat.hostPolicy = 'remote-seat'
+  await b.act()
+  expect(b.spawn.mock.calls[0][0]).toMatchObject({
+    providerId: 'codex',
+    model: 'gpt-5.5',
+    executionHost: 'remote-seat',
+    roleCard: 'You are the horse.',
+    projectId: 'wire-project',
+    name: 'opus · MAR-1',
+  })
+  expect(b.spawn.mock.calls[0][2]).toMatchObject({
+    crewId: b.crewId,
+    returnTo: 'm',
+  })
+  b.page((page) =>
+    page.map((i) => ({ ...i, id: 'second', identifier: 'MAR-2' })),
+  )
+  b.relays.update(b.wire.id, {
+    spawnSpec: { ...b.wire.spawnSpec!, roleCard: 'Wire-specific card' },
+  })
+  b.live.clear()
+  b.spawn.mockImplementation(async () => ({
+    sessionId: 'second-spawn',
+    dispatchId: 'second-receipt',
+    error: null,
+  }))
+  await b.act()
+  expect(b.spawn.mock.calls[1][0].roleCard).toBe('Wire-specific card')
+  expect(b.spawn.mock.calls[1][1]).toContain('Wire-specific card')
+})
+it('MAR-3186 R4 first message is exactly autoDispatchText including issue URL and return baton', async () => {
+  const b = recipeBench()
+  await b.act()
+  expect(b.spawn.mock.calls[0][1]).toBe(
+    autoDispatchText({
+      roleCard: b.seat.roleCard,
+      instruction: b.wire.instruction,
+      issueUrl: b.ledger.currentView(b.crewId)[0].issueUrl,
+      mastermind: 'fable',
+    }),
+  )
+  expect(b.gateway.sendMessageWithOpener).not.toHaveBeenCalled()
+  expect(b.gateway.deliverRelayMessage).not.toHaveBeenCalled()
+})
+it('MAR-3186 R1/R6 only live spawns occupy WIP, then a terminal spawn frees the seat', async () => {
+  const b = recipeBench()
+  await b.act()
+  b.page((page) => [...page, { ...page[0], id: 'second', identifier: 'MAR-2' }])
+  b.observe()
+  expect((await b.refresh()).words.second).toEqual({
+    kind: 'seat-busy',
+    why: 'turn',
+  })
+  expect(b.service.liveSpawnCount(b.crewId, 'opus')).toBe(1)
+  expect(b.service.liveSpawnCount('other-crew', 'opus')).toBe(0)
+  expect(b.service.liveSpawnCount(b.crewId, 'other-seat')).toBe(0)
+  b.live.clear()
+  expect(b.service.liveSpawnCount(b.crewId, 'opus')).toBe(0)
+  expect((await b.refresh()).words.second.kind).toBe('would-start')
+})
+it('MAR-3186 R6 persists created session on start failure and follows receipt terminal semantics', async () => {
+  const b = recipeBench()
+  b.spawn.mockImplementation(async (_spec, _brief, context) => {
+    context.onCreated?.('created')
+    throw new Error('start failed')
+  })
+  await b.act()
+  expect(
+    b.db
+      .prepare('SELECT session_id, receipt, error FROM auto_dispatches')
+      .get(),
+  ).toEqual({ session_id: 'created', receipt: null, error: 'start failed' })
+})
+it('MAR-3186 R6 reconciles a spawn terminal before its receipt is persisted', async () => {
+  const b = recipeBench()
+  b.spawn.mockImplementation(async () => {
+    b.emitTerminal({
+      sessionId: 'spawn',
+      reason: 'failed',
+      dispatchIds: ['receipt'],
+    })
+    return { sessionId: 'spawn', dispatchId: 'receipt', error: null }
+  })
+  await b.act()
+  expect(b.service.records(b.crewId)[0].error).toBe(
+    'the delivery failed before the seat took it',
+  )
+})
+it('MAR-3186 a recipe needs an armed named wire and the actual wire project must be clean', async () => {
+  const b = recipeBench()
+  b.observe()
+  b.relays.setArmed(b.wire.id, false)
+  expect((await b.refresh()).words.i.kind).toBe('no-wire')
+  b.relays.setArmed(b.wire.id, true)
+  vi.mocked(b.gateway.describeLane).mockResolvedValue('dirty')
+  expect((await b.refresh()).words.i).toEqual({
+    kind: 'lane',
+    state: 'dirty',
+    path: '/wire-project',
+  })
+  expect(b.gateway.describeLane).toHaveBeenCalledWith('/wire-project')
+})
+
+it('MAR-3186 R3 a recipe with no provider override keeps the wire provider', async () => {
+  const b = recipeBench()
+  b.seat.providerId = null
+  await b.act()
+  expect(b.spawn).toHaveBeenCalledTimes(1)
+  expect(b.spawn.mock.calls[0][0].providerId).toBe('claude-code')
 })

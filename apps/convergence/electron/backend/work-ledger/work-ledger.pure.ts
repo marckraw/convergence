@@ -107,7 +107,7 @@ export interface WorkLedgerRow {
 
 /** The row plus the facts joined in the same SELECT. */
 export interface WorkLedgerJoinedRow extends WorkLedgerRow {
-  member_session_id: string | null
+  seat_session_id: string | null
   session_exists: number | null
   pull_request_json: string | null
   execution_host: string | null
@@ -282,8 +282,8 @@ export function workLedgerEntryFromJoinedRow(
   const record = workLedgerRecordFromRow(row)
   // A resident seat whose conversation is gone has no session to join.
   const sessionId =
-    row.member_session_id !== null && row.session_exists === 1
-      ? row.member_session_id
+    row.seat_session_id !== null && row.session_exists === 1
+      ? row.seat_session_id
       : null
   return {
     ...record,

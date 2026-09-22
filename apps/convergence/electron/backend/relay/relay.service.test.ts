@@ -1450,3 +1450,47 @@ describe('RelayService.hasCarriedRoleCard', () => {
     expect(service.hasCarriedRoleCard('run-2', 's2')).toBe(false)
   })
 })
+
+describe('MAR-3186 findSpawnWire', () => {
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+  })
+  it('matches only an armed spawn naming this seat in this crew from its mastermind', () => {
+    const relays = new RelayService(getDatabase())
+    const spec = {
+      executionHost: 'local',
+      workAddress: null,
+      projectId: null,
+      providerId: 'codex',
+      model: null,
+      effort: null,
+      name: 'errand',
+      member: 'recipe',
+      roleCard: null,
+      providerAccountId: null,
+      returnWire: null,
+    }
+    const add = (crewId: string, sourceSessionId: string, member = 'recipe') =>
+      relays.create({
+        crewId,
+        sourceSessionId,
+        action: 'spawn',
+        spawnSpec: { ...spec, member },
+      })
+    add('other', 'master')
+    add('crew', 'other')
+    add('crew', 'master', 'other')
+    relays.create({
+      crewId: 'crew',
+      sourceSessionId: 'master',
+      targetSessionId: 'recipe',
+      action: 'hail',
+    })
+    expect(relays.findSpawnWire('crew', 'master', 'recipe')).toBeNull()
+    const wire = add('crew', 'master')
+    expect(relays.findSpawnWire('crew', 'master', 'recipe')?.id).toBe(wire.id)
+    relays.setArmed(wire.id, false)
+    expect(relays.findSpawnWire('crew', 'master', 'recipe')).toBeNull()
+  })
+})

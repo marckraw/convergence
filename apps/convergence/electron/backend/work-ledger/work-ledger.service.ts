@@ -129,7 +129,7 @@ export class WorkLedgerService {
     const rows = this.db
       .prepare(
         `SELECT ledger.*,
-                member.session_id AS member_session_id,
+                COALESCE(member.session_id, dispatch.session_id) AS seat_session_id,
                 CASE WHEN session.id IS NULL THEN 0 ELSE 1 END AS session_exists,
                 session.pull_request_json AS pull_request_json,
                 session.execution_host AS execution_host,
@@ -145,7 +145,15 @@ export class WorkLedgerService {
              ORDER BY candidate.rowid ASC
              LIMIT 1
            )
-         LEFT JOIN sessions AS session ON session.id = member.session_id
+         LEFT JOIN auto_dispatches AS dispatch ON dispatch.rowid = (
+           SELECT candidate.rowid FROM auto_dispatches AS candidate
+           WHERE candidate.crew_id = ledger.crew_id
+             AND candidate.issue_id = ledger.issue_id
+             AND candidate.seat = ledger.seat
+           ORDER BY candidate.lap DESC, candidate.sent_at DESC, candidate.rowid DESC
+           LIMIT 1
+         )
+         LEFT JOIN sessions AS session ON session.id = seat_session_id
          WHERE ${CURRENT_VIEW_WHERE}
          ${CURRENT_VIEW_ORDER}`,
       )
