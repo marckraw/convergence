@@ -494,10 +494,9 @@ const CODEX_FAMILY_CONTEXT_WINDOW_TOKENS = 272_000
  * The catalog Codex falls back to when `model/list` itself fails.
  *
  * Ids, their order, the effort ladders, the default efforts and the input
- * modalities all mirror the `model/list` tape probed from codex 0.153.4 on
- * 2026-09-05 (MAR-2818, `includeHidden: false`) — the CLI's own answer, not
- * OpenAI's marketing page. Hidden models stay out, and so does anything
- * OpenAI stopped serving. The effort order carries meaning: it is the ladder
+ * modalities all mirror the `model/list` tape probed from codex-cli 0.156.0 on
+ * 2026-09-22 (MAR-3320, `includeHidden: false`, `limit: 100`). Hidden models
+ * stay out, and so does anything OpenAI stopped serving. The effort order carries meaning: it is the ladder
  * Codex presents.
  */
 export function buildFallbackCodexDescriptor(): ProviderDescriptor {
@@ -515,7 +514,7 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
     // Codex moved its own default to Astra. The RPC path follows the tape's
     // `isDefault`; this path follows the same tape, so the two agree.
     defaultModelId: 'gpt-6-astra',
-    fastModelId: 'gpt-5.6-luna',
+    fastModelId: 'gpt-6-luna',
     modelOptions: [
       {
         id: 'gpt-6-astra',
@@ -530,6 +529,37 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
           'xhigh',
           'max',
           'ultra',
+        ]),
+        inputModalities: ['text', 'image'],
+      },
+      {
+        id: 'gpt-6-sol',
+        label: 'GPT-6 Sol',
+        description: 'Built to power complex coding and agentic workflows.',
+        contextWindowTokens: CODEX_FAMILY_CONTEXT_WINDOW_TOKENS,
+        defaultEffort: 'medium',
+        effortOptions: buildEffortOptions([
+          'low',
+          'medium',
+          'high',
+          'xhigh',
+          'max',
+          'ultra',
+        ]),
+        inputModalities: ['text', 'image'],
+      },
+      {
+        id: 'gpt-6-luna',
+        label: 'GPT-6 Luna',
+        description: 'Our most efficient model for focused, high-volume tasks.',
+        contextWindowTokens: CODEX_FAMILY_CONTEXT_WINDOW_TOKENS,
+        defaultEffort: 'medium',
+        effortOptions: buildEffortOptions([
+          'low',
+          'medium',
+          'high',
+          'xhigh',
+          'max',
         ]),
         inputModalities: ['text', 'image'],
       },
@@ -587,23 +617,6 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
         defaultEffort: 'medium',
         effortOptions: buildEffortOptions(['low', 'medium', 'high', 'xhigh']),
         inputModalities: ['text', 'image'],
-      },
-      {
-        id: 'gpt-5.4-mini',
-        label: 'GPT-5.4 Mini',
-        contextWindowTokens: CODEX_FAMILY_CONTEXT_WINDOW_TOKENS,
-        defaultEffort: 'medium',
-        effortOptions: buildEffortOptions(['low', 'medium', 'high', 'xhigh']),
-        inputModalities: ['text', 'image'],
-      },
-      {
-        id: 'gpt-5.3-codex-spark',
-        label: 'GPT-5.3 Codex Spark',
-        contextWindowTokens: CODEX_FAMILY_CONTEXT_WINDOW_TOKENS,
-        defaultEffort: 'high',
-        effortOptions: buildEffortOptions(['low', 'medium', 'high', 'xhigh']),
-        // Text only, as the tape reports it: Codex sends no images to spark.
-        inputModalities: ['text'],
       },
     ],
     attachments: CODEX_ATTACHMENT_CAPABILITY,

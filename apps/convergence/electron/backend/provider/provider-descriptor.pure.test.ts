@@ -307,95 +307,91 @@ describe('provider-descriptor', () => {
     ])
   })
 
-  // Fixture: `model/list` tape probed from codex 0.153.4 on 2026-09-05
-  // (MAR-2818, `includeHidden: false`). The fallback is only consulted when
-  // that RPC fails, so it mirrors the tape exactly rather than carrying models
-  // OpenAI no longer serves.
-  it('mirrors the live codex 0.153 model/list tape in the fallback catalog', () => {
+  // Fixture: `model/list` tape probed from codex-cli 0.156.0 on 2026-09-22
+  // (MAR-3320, `includeHidden: false`, `limit: 100`). No row advertises `none`.
+  // The tape has no context-window field; retain the 272k convention pending
+  // live-turn measurement in MAR-3330.
+  it('mirrors the live codex 0.156.0 model/list tape in the fallback catalog', () => {
     const descriptor = buildFallbackCodexDescriptor()
 
-    // Codex made Astra its own default, so the fallback says the same thing
-    // the RPC path would.
     expect(descriptor.defaultModelId).toBe('gpt-6-astra')
-    expect(descriptor.fastModelId).toBe('gpt-5.6-luna')
-    expect(descriptor.modelOptions.map((option) => option.id)).toEqual([
-      'gpt-6-astra',
-      'gpt-5.6-sol',
-      'gpt-5.6-terra',
-      'gpt-5.6-luna',
-      'gpt-5.5',
-      'gpt-5.4-mini',
-      'gpt-5.3-codex-spark',
-    ])
-
+    expect(descriptor.fastModelId).toBe('gpt-6-luna')
     expect(
-      descriptor.modelOptions.every(
-        (option) => option.contextWindowTokens === 272_000,
-      ),
-    ).toBe(true)
+      descriptor.modelOptions.map((option) => ({
+        id: option.id,
+        defaultEffort: option.defaultEffort,
+        efforts: option.effortOptions.map((effort) => effort.id),
+        inputModalities: option.inputModalities,
+        contextWindowTokens: option.contextWindowTokens,
+      })),
+    ).toEqual([
+      {
+        id: 'gpt-6-astra',
+        defaultEffort: 'medium',
+        efforts: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+        inputModalities: ['text', 'image'],
+        contextWindowTokens: 272_000,
+      },
+      {
+        id: 'gpt-6-sol',
+        defaultEffort: 'medium',
+        efforts: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+        inputModalities: ['text', 'image'],
+        contextWindowTokens: 272_000,
+      },
+      {
+        id: 'gpt-6-luna',
+        defaultEffort: 'medium',
+        efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+        inputModalities: ['text', 'image'],
+        contextWindowTokens: 272_000,
+      },
+      {
+        id: 'gpt-5.6-sol',
+        defaultEffort: 'low',
+        efforts: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+        inputModalities: ['text', 'image'],
+        contextWindowTokens: 272_000,
+      },
+      {
+        id: 'gpt-5.6-terra',
+        defaultEffort: 'medium',
+        efforts: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+        inputModalities: ['text', 'image'],
+        contextWindowTokens: 272_000,
+      },
+      {
+        id: 'gpt-5.6-luna',
+        defaultEffort: 'medium',
+        efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+        inputModalities: ['text', 'image'],
+        contextWindowTokens: 272_000,
+      },
+      {
+        id: 'gpt-5.5',
+        defaultEffort: 'medium',
+        efforts: ['low', 'medium', 'high', 'xhigh'],
+        inputModalities: ['text', 'image'],
+        contextWindowTokens: 272_000,
+      },
+    ])
     expect(
       descriptor.modelOptions.some((option) =>
         option.effortOptions.some((effort) => effort.id === 'none'),
       ),
     ).toBe(false)
-
     expect(descriptor.modelOptions[0]).toMatchObject({
-      id: 'gpt-6-astra',
       label: 'GPT-6 Astra',
       description: 'Our most capable model for complex, demanding work.',
-      defaultEffort: 'medium',
-      effortOptions: [
-        { id: 'low', label: 'Low' },
-        { id: 'medium', label: 'Medium' },
-        { id: 'high', label: 'High' },
-        { id: 'xhigh', label: 'Very High' },
-        { id: 'max', label: 'Max' },
-        { id: 'ultra', label: 'Ultra (multi-agent)' },
-      ],
-      inputModalities: ['text', 'image'],
     })
-
-    expect(
-      descriptor.modelOptions.find((option) => option.id === 'gpt-5.6-sol'),
-    ).toMatchObject({
-      label: 'GPT-5.6 Sol',
-      defaultEffort: 'low',
-      effortOptions: [
-        { id: 'low', label: 'Low' },
-        { id: 'medium', label: 'Medium' },
-        { id: 'high', label: 'High' },
-        { id: 'xhigh', label: 'Very High' },
-        { id: 'max', label: 'Max' },
-        { id: 'ultra', label: 'Ultra (multi-agent)' },
-      ],
-      inputModalities: ['text', 'image'],
+    expect(descriptor.modelOptions[1]).toMatchObject({
+      label: 'GPT-6 Sol',
+      description: 'Built to power complex coding and agentic workflows.',
     })
-
-    expect(
-      descriptor.modelOptions
-        .find((option) => option.id === 'gpt-5.6-terra')
-        ?.effortOptions.map((effort) => effort.id),
-    ).toEqual(['low', 'medium', 'high', 'xhigh', 'max', 'ultra'])
-    expect(
-      descriptor.modelOptions
-        .find((option) => option.id === 'gpt-5.6-luna')
-        ?.effortOptions.map((effort) => effort.id),
-    ).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
-    expect(
-      descriptor.modelOptions.find((option) => option.id === 'gpt-5.4-mini')
-        ?.defaultEffort,
-    ).toBe('medium')
-    expect(
-      descriptor.modelOptions
-        .find((option) => option.id === 'gpt-5.3-codex-spark')
-        ?.effortOptions.map((effort) => effort.id),
-    ).toEqual(['low', 'medium', 'high', 'xhigh'])
-    // Spark is the one text-only row on the tape: Codex sends it no images.
-    expect(
-      descriptor.modelOptions.find(
-        (option) => option.id === 'gpt-5.3-codex-spark',
-      )?.inputModalities,
-    ).toEqual(['text'])
+    expect(descriptor.modelOptions[2]).toMatchObject({
+      label: 'GPT-6 Luna',
+      description: 'Our most efficient model for focused, high-volume tasks.',
+    })
   })
 
   it('exposes Antigravity official models as model + effort options', () => {
