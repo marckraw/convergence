@@ -10,6 +10,7 @@ import {
   PanelLeftOpen,
 } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { loomSheetCounts, type LoomSheets } from './loom-sheets.pure'
 import type { LoomHorse } from './loom-horses.pure'
 import {
@@ -84,6 +85,17 @@ const LOOM_STRIP_ICONS: Readonly<Record<LoomSheet, LucideIcon>> = {
 }
 
 /**
+ * The two named controls' one string each (MAR-3311 R1).
+ *
+ * The accessible name and the hint a hover shows are the same fact, so they
+ * are read from the same constant: a tooltip that drifts from the label it
+ * belongs to is a control telling two stories. The sheet buttons get theirs
+ * from `stripCount` the same way.
+ */
+const OPEN_LOOM = 'Open Loom'
+const EXPAND_LOOM = 'Expand Loom'
+
+/**
  * Loom folded (MAR-3292): the four counts under their icons and the outage
  * dot, read off the same sheets the stack draws.
  *
@@ -96,6 +108,15 @@ const LOOM_STRIP_ICONS: Readonly<Record<LoomSheet, LucideIcon>> = {
  * MAR-3189's removal of the collapsed rail as a preference was reversed: the
  * old rail was a panel with no sheet in it, and this column is a door per
  * sheet.
+ *
+ * Every control wears the app's own tooltip (MAR-3311 R1), never the OS hint
+ * the native `title` attribute draws: one tooltip for the whole app, and the
+ * attribute is kept out of this file entirely so no control can whisper
+ * twice. The provider is the root's (`App.container`) -- this column never
+ * mounts outside it, so the delay and the look are the app's everywhere, and
+ * Loom needs no second copy of either. Each `TooltipContent` repeats
+ * `no-drag` because the portal lands on `document.body`, outside this aside's
+ * region and over the title strip.
  *
  * `no-drag` on the aside, with no `drag` child (MAR-3284's law): Electron
  * builds its draggable region from the DOM in tree order and knows nothing
@@ -120,18 +141,25 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
     className={WAVE_RAIL_CLASS}
     style={LOOM_NO_DRAG_STYLE}
   >
-    <Button
-      ref={openRef}
-      type="button"
-      variant="ghost"
-      size="sm"
-      aria-label="Open Loom"
-      className={LOOM_STRIP_BUTTON_CLASS}
-      style={LOOM_NO_DRAG_STYLE}
-      onClick={onOpen}
-    >
-      <PanelLeftOpen className="size-3.5" />
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          ref={openRef}
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-label={OPEN_LOOM}
+          className={LOOM_STRIP_BUTTON_CLASS}
+          style={LOOM_NO_DRAG_STYLE}
+          onClick={onOpen}
+        >
+          <PanelLeftOpen className="size-3.5" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+        {OPEN_LOOM}
+      </TooltipContent>
+    </Tooltip>
     {outage ? (
       <span
         role="status"
@@ -146,23 +174,28 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
       const count = stripCount(sheets, sheet, now, horses, dispatchPlan)
       const name = `${LOOM_SHEET_NAMES[sheet]}: ${count}`
       return (
-        <Button
-          key={sheet}
-          type="button"
-          variant="ghost"
-          size="sm"
-          data-loom-strip-sheet={sheet}
-          title={name}
-          aria-label={name}
-          className={LOOM_STRIP_SHEET_CLASS}
-          style={LOOM_NO_DRAG_STYLE}
-          onClick={() => onSelectSheet(sheet)}
-        >
-          <Icon className="size-3.5" />
-          <span data-wave-count={sheet} className={LOOM_STRIP_COUNT_CLASS}>
-            {count}
-          </span>
-        </Button>
+        <Tooltip key={sheet}>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              data-loom-strip-sheet={sheet}
+              aria-label={name}
+              className={LOOM_STRIP_SHEET_CLASS}
+              style={LOOM_NO_DRAG_STYLE}
+              onClick={() => onSelectSheet(sheet)}
+            >
+              <Icon className="size-3.5" />
+              <span data-wave-count={sheet} className={LOOM_STRIP_COUNT_CLASS}>
+                {count}
+              </span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+            {name}
+          </TooltipContent>
+        </Tooltip>
       )
     })}
     {/* Expand is LIVE here, unlike the rail this strip replaces (MAR-3148
@@ -171,16 +204,23 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
         nothing. Expand puts Loom in the content area instead -- there is no
         width left to refuse, so refusing would be the strip claiming a limit
         the mechanism no longer has. */}
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      aria-label="Expand Loom"
-      className={`mt-auto ${LOOM_STRIP_BUTTON_CLASS}`}
-      style={LOOM_NO_DRAG_STYLE}
-      onClick={onExpand}
-    >
-      <Maximize2 className="size-3.5" />
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-label={EXPAND_LOOM}
+          className={`mt-auto ${LOOM_STRIP_BUTTON_CLASS}`}
+          style={LOOM_NO_DRAG_STYLE}
+          onClick={onExpand}
+        >
+          <Maximize2 className="size-3.5" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+        {EXPAND_LOOM}
+      </TooltipContent>
+    </Tooltip>
   </aside>
 )

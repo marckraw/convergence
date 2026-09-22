@@ -1,6 +1,7 @@
 import type { FC } from 'react'
 import { Minimize2, PanelLeftClose } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { LoomStackView } from './loom-stack.presentational'
 import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
@@ -15,6 +16,12 @@ import {
 import { LEARN_LOOM_ENTRY } from './learn-loom-copy.pure'
 import { LoomSearchFieldView } from './loom-search.presentational'
 import { isLoomSearchShortcut } from './loom-search.pure'
+
+/**
+ * One string per control, the label and the hint alike (MAR-3311 R1).
+ */
+const FOLD_LOOM = 'Fold Loom'
+const COLLAPSE_LOOM = 'Collapse Loom'
 
 /**
  * Opaque cover: the transcript underneath retains its measured box.
@@ -81,32 +88,46 @@ export const LoomExpandedView: FC<
       >
         {LEARN_LOOM_ENTRY}
       </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        aria-label="Fold Loom"
-        className="h-10 shrink-0 gap-2 px-3 text-xs"
-        style={LOOM_NO_DRAG_STYLE}
-        onClick={onFold}
-      >
-        <Minimize2 className="size-3.5" />
-        Fold Loom
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label={FOLD_LOOM}
+            className="h-10 shrink-0 gap-2 px-3 text-xs"
+            style={LOOM_NO_DRAG_STYLE}
+            onClick={onFold}
+          >
+            <Minimize2 className="size-3.5" />
+            {FOLD_LOOM}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+          {FOLD_LOOM}
+        </TooltipContent>
+      </Tooltip>
       {/* Past Fold Loom, because it goes one step further (MAR-3292 R4):
           Fold gives the column back, Collapse takes it away. `no-drag` like
           every other control in this header row. */}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        aria-label="Collapse Loom"
-        className={LOOM_COLLAPSE_BUTTON_CLASS}
-        style={LOOM_NO_DRAG_STYLE}
-        onClick={onCollapse}
-      >
-        <PanelLeftClose className="size-3.5" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label={COLLAPSE_LOOM}
+            className={LOOM_COLLAPSE_BUTTON_CLASS}
+            style={LOOM_NO_DRAG_STYLE}
+            onClick={onCollapse}
+          >
+            <PanelLeftClose className="size-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+          {COLLAPSE_LOOM}
+        </TooltipContent>
+      </Tooltip>
     </div>
     <div className="shrink-0 px-6 pb-3">
       <LoomStatusView header={props.header} refresh={props.refresh} />

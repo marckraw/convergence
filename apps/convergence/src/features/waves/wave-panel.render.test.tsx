@@ -1,12 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  within,
-} from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
+import { render } from './loom-tooltip.fixture'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import { useSessionCrewStore, type SessionCrew } from '@/entities/session-crew'
@@ -2572,12 +2566,12 @@ describe('MAR-3097: through the containers and the real stores', () => {
         const button = within(folded!).getByRole('button', {
           name: new RegExp(`^${LOOM_SHEET_NAMES[sheet]}: \\d+$`),
         })
-        // The hover word is the accessible name, not a bare sheet title:
-        // QA reads "Before: 2" off the tooltip (R2).
-        // Mutation: `title={LOOM_SHEET_NAMES[sheet]}` -> red.
-        expect(button.getAttribute('title')).toBe(
-          button.getAttribute('aria-label'),
-        )
+        // The OS hint is gone (MAR-3311 R1): the hover word is the app's
+        // own tooltip now, and no control carries both -- two hints, one of
+        // them unstyled and a second late, is the defect this replaced. The
+        // hover itself is pinned in the MAR-3311 suite below.
+        // Mutation: put `title={name}` back on the sheet button -> red.
+        expect(button.getAttribute('title')).toBeNull()
         // No text labels: everything the button says out loud is the
         // number, and the number is the one the count span carries.
         // Mutation: render the sheet's name beside the count -> red.
@@ -2600,6 +2594,101 @@ describe('MAR-3097: through the containers and the real stores', () => {
       // The column stays the narrow one; the icons did not widen it.
       // Mutation: widen WAVE_RAIL_CLASS past w-11 -> red.
       expect(folded!.className).toContain('w-11')
+    })
+
+    /**
+     * The hover Radix actually listens for (MAR-3311 R1).
+     *
+     * `@testing-library/user-event` is not a dependency of this repo, so the
+     * brief's `userEvent.hover` is spelled here as the event the trigger
+     * reads: `pointermove` with a non-touch pointer. `findBy*` then waits
+     * out the provider's open delay rather than this file naming a number
+     * the app could change underneath it.
+     *
+     * Read off `screen`, not the column: the content is portalled to
+     * `document.body`, outside Loom's tree entirely.
+     */
+    const hover = async (control: Element) => {
+      await act(async () => {
+        fireEvent.pointerMove(control, { pointerType: 'mouse' })
+      })
+      return screen.findByRole('tooltip')
+    }
+
+    it('MAR-3311 R1: a folded sheet icon shows the app tooltip, not the OS hint', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await collapse()
+
+      const before = within(column()!).getByRole('button', {
+        name: /^Before: \d+$/,
+      })
+      // Mutation: keep `title={name}` beside the Tooltip -> red here and in
+      // the R3 pin. A control may not whisper twice.
+      expect(before.getAttribute('title')).toBeNull()
+
+      const tip = await hover(before)
+      // The words are the control's own name, and the number in them is the
+      // number the button draws -- one string read twice, never a copy.
+      // Mutation: give the TooltipContent its own text, or its own count ->
+      // the two disagree, red.
+      const shown = before.querySelector(
+        '[data-wave-count="before"]',
+      )?.textContent
+      expect(shown).toBeTruthy()
+      expect(tip.textContent).toBe(`Before: ${shown}`)
+      expect(tip.textContent).toBe(before.getAttribute('aria-label'))
+    })
+
+    it('MAR-3311 R2: the tooltip floats over the title bar without eating it', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await collapse()
+
+      const tip = await hover(
+        within(column()!).getByRole('button', { name: 'Open Loom' }),
+      )
+      // The content lands on `document.body`, outside the column's own
+      // no-drag region, floating over the window's title strip. Silence
+      // there is not "no opinion" -- it is "whatever is underneath
+      // decides" (MAR-3284's law), and what is underneath is a drag strip.
+      const content = tip.parentElement
+      expect(content).toBeTruthy()
+      expect(document.body.contains(content)).toBe(true)
+      expect(column()!.contains(content)).toBe(false)
+      // Mutation: drop `style={LOOM_NO_DRAG_STYLE}` from the TooltipContent
+      // -> this walk reaches <body> having found nothing, returns null, red.
+      expect(region(content)).toBe('no-drag')
+    })
+
+    it('MAR-3311 R1: the compact header names its control on hover', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+
+      const tip = await hover(
+        screen.getByRole('button', { name: 'Collapse Loom' }),
+      )
+      // Mutation: drop the Tooltip from the compact header's control -> no
+      // element with the tooltip role ever appears, red.
+      expect(tip.textContent).toBe('Collapse Loom')
+    })
+
+    it('MAR-3311 R1: the expanded header names its control on hover', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+      })
+      const loom = document.querySelector(
+        '[data-loom="expanded"]',
+      ) as HTMLElement
+      expect(loom).toBeTruthy()
+
+      const tip = await hover(
+        within(loom).getByRole('button', { name: 'Fold Loom' }),
+      )
+      // Mutation: drop the Tooltip from the expanded header's control -> red.
+      expect(tip.textContent).toBe('Fold Loom')
     })
 
     it('R3: a sheet’s icon opens Loom ON that sheet, in one act', async () => {

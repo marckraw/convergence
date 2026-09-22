@@ -1,6 +1,7 @@
 import type { FC } from 'react'
 import { Maximize2, PanelLeftClose } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { LoomStackView } from './loom-stack.presentational'
 import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
@@ -16,6 +17,12 @@ import { LEARN_LOOM_ENTRY } from './learn-loom-copy.pure'
 import { LoomSearchFieldView } from './loom-search.presentational'
 import { LoomSearchToggleView } from './loom-search-toggle.presentational'
 import { isLoomSearchShortcut } from './loom-search.pure'
+
+/**
+ * One string per control, the label and the hint alike (MAR-3311 R1).
+ */
+const EXPAND_LOOM = 'Expand Loom'
+const COLLAPSE_LOOM = 'Collapse Loom'
 
 export const LoomCompactView: FC<
   LoomStackProps & {
@@ -44,16 +51,23 @@ export const LoomCompactView: FC<
     <div className="flex shrink-0 items-center justify-between gap-2 px-3 pt-3">
       <h2 className="text-lg font-semibold tracking-tight">Loom</h2>
       <div className="flex shrink-0 items-center gap-1">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          aria-label="Expand Loom"
-          className="h-10 gap-2 px-2 text-xs"
-          onClick={onExpand}
-        >
-          Expand <Maximize2 className="size-3.5" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label={EXPAND_LOOM}
+              className="h-10 gap-2 px-2 text-xs"
+              onClick={onExpand}
+            >
+              Expand <Maximize2 className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+            {EXPAND_LOOM}
+          </TooltipContent>
+        </Tooltip>
         {/* Icon-only, and named apart from the two controls that were
             already here (MAR-3292 R4): "Expand Loom" goes wider, "Fold
             Loom" in the expanded header comes back to this column, and
@@ -61,17 +75,24 @@ export const LoomCompactView: FC<
             because a control inside a drag strip is not a control -- the
             column declares no region of its own, so this says it for
             itself rather than inheriting whatever is above it. */}
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          aria-label="Collapse Loom"
-          className={LOOM_COLLAPSE_BUTTON_CLASS}
-          style={LOOM_NO_DRAG_STYLE}
-          onClick={onCollapse}
-        >
-          <PanelLeftClose className="size-3.5" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label={COLLAPSE_LOOM}
+              className={LOOM_COLLAPSE_BUTTON_CLASS}
+              style={LOOM_NO_DRAG_STYLE}
+              onClick={onCollapse}
+            >
+              <PanelLeftClose className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+            {COLLAPSE_LOOM}
+          </TooltipContent>
+        </Tooltip>
       </div>
     </div>
     <div className="shrink-0 px-3 pb-4 text-xs text-muted-foreground">
