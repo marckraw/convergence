@@ -139,12 +139,13 @@ export function waveRowMetaWords(row: WaveRow): string[] {
       ? null
       : row.lapLabel,
     entry.verdict,
-    // The ROW keeps saying exactly what it said before MAR-3304 widened
-    // `entry.pr`: the conversation's own reading, which has a state. A
-    // tracker link has none, and a row word is not the place to explain
-    // that -- so it adds nothing here, the way no link at all added nothing.
-    entry.pr && entry.pr.source !== 'tracker'
-      ? `PR #${entry.pr.number} ${entry.pr.state}`
+    // Session reading has a state (`PR #777 open`); a tracker link has
+    // none -- nobody read one -- so the card names the number only
+    // (`PR #751`). Null adds nothing (MAR-3313).
+    entry.pr
+      ? entry.pr.source === 'tracker'
+        ? `PR #${entry.pr.number}`
+        : `PR #${entry.pr.number} ${entry.pr.state}`
       : null,
   ].filter((word): word is string => Boolean(word))
 }

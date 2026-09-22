@@ -84,6 +84,46 @@ describe('MAR-3155 R5: the identifier never breaks; the title gets the rest', ()
   })
 })
 
+describe('MAR-3313 R2: the card names a tracker-linked PR', () => {
+  it('shows PR #751 in the meta line, still one button with no anchor', () => {
+    // `done` lands on Before, not Now.inFlight (loomSheets).
+    const waveRow = loomSheets(
+      [
+        ledgerEntry({
+          issueIdentifier: 'MAR-3144',
+          state: 'done',
+          seat: 'deepseek-mac',
+          pr: {
+            source: 'tracker',
+            number: 751,
+            url: 'https://github.com/marckraw/convergence/pull/751',
+            title: 'feat: something',
+          },
+        }),
+      ],
+      NOW,
+    ).before[0]!
+    render(
+      <WaveRowView
+        appearance="loom"
+        row={waveRow}
+        inertReason={null}
+        onOpen={vi.fn()}
+      />,
+    )
+
+    const el = document.querySelector(
+      '[data-wave-row="crew-1:MAR-3144"]',
+    ) as HTMLElement
+    // Mutation: omit the tracker word from waveRowMetaWords -> red.
+    expect(el.textContent).toContain('PR #751')
+    // The card IS the button; the detail holds the link. Mutation: wrap
+    // the number in an <a> inside the row -> red.
+    expect(el.tagName).toBe('BUTTON')
+    expect(el.querySelectorAll('a')).toHaveLength(0)
+  })
+})
+
 describe('MAR-3148 C: a row that cannot open says so, and is not a button', () => {
   it('an inert row carries its reason and no control semantics', () => {
     render(
