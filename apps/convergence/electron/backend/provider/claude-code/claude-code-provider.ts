@@ -664,6 +664,7 @@ export class ClaudeCodeProvider implements Provider {
     let clearSkillInvocationTargetTimer: ReturnType<typeof setTimeout> | null =
       null
     let sawTurnOutput = false
+    let sawStreamContextWindow = false
     let sawHarnessOutput = false
     let capabilities: string[] = []
     let interruptInFlight = false
@@ -1232,6 +1233,7 @@ export class ClaudeCodeProvider implements Provider {
         deriveClaudeContextWindow(event) ??
         deriveClaudeEstimatedContextWindow(event, config.model)
       if (contextWindow) {
+        sawStreamContextWindow = true
         setContextWindow(contextWindow)
       }
 
@@ -1467,7 +1469,7 @@ export class ClaudeCodeProvider implements Provider {
           sawTurnOutput = true
           flushThinkingBuffer()
           flushAssistantBuffer()
-          refreshContextWindowFromLogs()
+          if (!sawStreamContextWindow) refreshContextWindowFromLogs()
           if (event.is_error) {
             if (shouldRecoverFromMessage(event.result)) {
               scheduleContinuationRecovery('missing-session')
@@ -1720,6 +1722,7 @@ export class ClaudeCodeProvider implements Provider {
         currentTurnHasAssistantText = false
         currentTurnHasThinkingText = false
         sawTurnOutput = false
+        sawStreamContextWindow = false
         sawHarnessOutput = false
         interruptRequested = false
         taskNotificationSinceResult = false

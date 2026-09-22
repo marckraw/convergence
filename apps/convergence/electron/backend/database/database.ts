@@ -22,6 +22,7 @@ import {
 import { migrateCrewConfig } from './crew-config-migration.service'
 import {
   migrateCrewSeatPause,
+  migrateCrewSeatDrillAuto,
   migrateCrewSeats,
 } from './crew-seat-migration.service'
 import { migrateEndedSummary } from './ended-summary-migration.service'
@@ -2291,6 +2292,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     migrateCrewTrackerBinding(database)
     migrateCrewAutoDispatch(database)
     migrateCrewSeatPause(database)
+    migrateCrewSeatDrillAuto(database)
     migrateAutoDispatches(database)
     migrateWorkLedger(database)
     // The verdict columns and the `stopped` state (MAR-3085): a rebuild, so

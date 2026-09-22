@@ -28,6 +28,20 @@ describe('CrewService', () => {
     resetDatabase()
   })
 
+  it('defaults automatic drill off and sets and clears it through the seat door', () => {
+    const crew = service.create({ name: 'Drill', sessionIds: ['s1'] })
+    expect(crew.members[0].drillAuto).toBe(false)
+    const ref = { sessionId: 's1' }
+    expect(
+      service.setMemberSeat(crew.id, ref, { drillAuto: true }).members[0]
+        .drillAuto,
+    ).toBe(true)
+    expect(
+      service.setMemberSeat(crew.id, ref, { drillAuto: false }).members[0]
+        .drillAuto,
+    ).toBe(false)
+  })
+
   /**
    * One seat, one crew (R2; constitution §6.6). Yesterday a conversation wired
    * into two crews answered another mastermind's brief, and nothing in the app

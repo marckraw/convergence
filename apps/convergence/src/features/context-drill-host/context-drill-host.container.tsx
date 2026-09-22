@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
+import { Button } from '@/shared/ui/button'
 import { useContextDrillStore } from '@/entities/context-drill'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import {
@@ -17,7 +18,7 @@ interface ContextDrillHostContainerProps {
 }
 
 /**
- * Turns every ending of the drill into a toast. Renders nothing.
+ * Turns every ending into a toast and automatic failures into a Needs-you card.
  *
  * Mounted once beside the `<Toaster>` rather than inside the popover that
  * starts the drill, because the seal beat takes minutes and the popover shuts
@@ -111,5 +112,39 @@ export function ContextDrillHostContainer({
     }
   })
 
-  return null
+  const failures = Object.entries(outcomes).filter(
+    ([, record]) => record.automatic && !record.outcome.ok,
+  )
+  if (failures.length === 0) return null
+  return (
+    <aside
+      aria-label="Needs you"
+      className="fixed bottom-4 right-4 z-50 flex max-w-sm flex-col gap-2"
+    >
+      {failures.map(
+        ([sessionId, record]) =>
+          !record.outcome.ok && (
+            <section
+              key={sessionId}
+              role="alert"
+              className="rounded-lg border border-border bg-popover p-4 text-sm shadow-lg"
+            >
+              <p className="mb-1 font-medium">Needs you</p>
+              <p>
+                The drill stopped while {record.outcome.beat}:{' '}
+                {record.outcome.reason}
+              </p>
+              <Button
+                className="mt-3"
+                onClick={() => {
+                  void useContextDrillStore.getState().run(sessionId)
+                }}
+              >
+                Run the drill
+              </Button>
+            </section>
+          ),
+      )}
+    </aside>
+  )
 }

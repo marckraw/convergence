@@ -84,6 +84,7 @@ export const sessionCrewApi = {
       lanePolicy?: string | null
       lanePath?: string | null
       paused?: boolean
+      drillAuto?: boolean
       wipLimit?: number | null
     },
   ): Promise<SessionCrew> =>

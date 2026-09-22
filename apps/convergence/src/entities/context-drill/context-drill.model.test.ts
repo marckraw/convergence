@@ -60,6 +60,41 @@ describe('useContextDrillStore (MAR-3256 R2)', () => {
     expect(useContextDrillStore.getState().descriptions.s1).toEqual(READY)
   })
 
+  it('ignores the older refresh when it answers last', async () => {
+    let older!: (answer: DrillDescription) => void
+    api.describe.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          older = resolve
+        }),
+    )
+    const pending = useContextDrillStore.getState().refresh('s1')
+    api.describe.mockResolvedValueOnce(READY)
+    await useContextDrillStore.getState().refresh('s1')
+    older({ ...READY, beat: 'sealing', offered: false })
+    await pending
+    expect(useContextDrillStore.getState().descriptions.s1).toEqual(READY)
+    expect(useContextDrillStore.getState().beats.s1).toBeUndefined()
+  })
+
+  it('a changed ending invalidates an in-flight beat answer', async () => {
+    let older!: (answer: DrillDescription) => void
+    api.describe.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          older = resolve
+        }),
+    )
+    const pending = useContextDrillStore.getState().refresh('s1')
+    api.describe.mockResolvedValueOnce(READY)
+    useContextDrillStore
+      .getState()
+      .handleChange({ sessionId: 's1', beat: null })
+    older({ ...READY, beat: 'sealing' })
+    await pending
+    expect(useContextDrillStore.getState().beats.s1).toBeUndefined()
+  })
+
   it('refresh keeps the last description when describe rejects', async () => {
     api.describe.mockResolvedValueOnce(READY)
     await useContextDrillStore.getState().refresh('s1')

@@ -135,6 +135,10 @@ import {
   registerCrewIpcHandlers,
 } from '../backend/crew/crew.ipc'
 import { ContextDrillService } from '../backend/context-drill/context-drill.service'
+import { AutoDrillService } from '../backend/context-drill/auto-drill.service'
+import { HarnessEvidenceService } from '../backend/session/harness-evidence.service'
+import { APP_SETTINGS_KEY } from '../backend/app-settings/app-settings.constants'
+import { parseAppSettings } from '../backend/app-settings/app-settings.pure'
 import {
   broadcastContextDrillChange,
   registerContextDrillIpcHandlers,
@@ -980,6 +984,36 @@ async function startApp(): Promise<void> {
   })
   contextDrill.onDrillChanged(broadcastContextDrillChange)
   registerContextDrillIpcHandlers({ service: contextDrill })
+  const drillEvidence = new HarnessEvidenceService(db)
+  new AutoDrillService(
+    {
+      onBeforeQueueDrain: (guard) => sessionService.onBeforeQueueDrain(guard),
+      onSessionSettled: (listener) => sessionService.onSessionSettled(listener),
+      read: (id) => sessionService.getById(id),
+      enabled: (id) =>
+        crewService
+          .crewIdsForSession(id)
+          .some((crewId) =>
+            crewService
+              .getById(crewId)
+              ?.members.some(
+                (member) =>
+                  member.sessionId === id &&
+                  member.role === 'mastermind' &&
+                  member.drillAuto,
+              ),
+          ),
+      // The existing read-only evidence door; no provider handle access is needed.
+      parallelWork: (id) => drillEvidence.countParallelWork([id]).get(id)!,
+      alert: () =>
+        parseAppSettings(stateService.get(APP_SETTINGS_KEY)).contextAlert,
+      holdQueue: (id) => sessionService.holdQueue(id),
+      releaseQueue: (id) => sessionService.releaseQueue(id),
+      note: (id, text) => sessionService.addAutoDispatchNote(id, text),
+      changed: broadcastContextDrillChange,
+    },
+    contextDrill,
+  )
 
   // The stall hail's clock. A station that hangs produces no settle, so the
   // one event that would notice never arrives -- the check has to be driven by

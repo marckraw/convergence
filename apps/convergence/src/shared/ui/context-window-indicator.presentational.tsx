@@ -88,10 +88,10 @@ export const ContextWindowIndicator: FC<ContextWindowIndicatorProps> = ({
               strokeDashoffset={dashOffset}
               className={cn(
                 contextWindow.usedPercentage < 50 && 'text-emerald-500',
-                contextWindow.usedPercentage >= 50 &&
+                50 <= contextWindow.usedPercentage &&
                   contextWindow.usedPercentage < 80 &&
                   'text-warning',
-                contextWindow.usedPercentage >= 80 && 'text-red-500',
+                80 <= contextWindow.usedPercentage && 'text-red-500',
               )}
             />
           </svg>

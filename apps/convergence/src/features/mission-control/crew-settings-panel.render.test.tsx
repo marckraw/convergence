@@ -171,6 +171,26 @@ describe('the member editor shows what the seat holds', () => {
     roleCard: 'You read blind.',
   }
 
+  it('shows automatic drill only for mastermind and edits the seat flag', () => {
+    const edit = vi.fn()
+    const view = renderPanel(
+      null,
+      null,
+      [{ ...seated, role: 'mastermind' }],
+      edit,
+      { openSeatKey: 's1' },
+    )
+    const label = 'Run the drill by itself when the context passes the alert'
+    expect(screen.getByLabelText(label)).not.toBeChecked()
+    fireEvent.click(screen.getByLabelText(label))
+    expect(edit).toHaveBeenCalledWith({ sessionId: 's1' }, { drillAuto: true })
+    view.unmount()
+    renderPanel(null, null, [{ ...seated, role: 'horse' }], edit, {
+      openSeatKey: 's1',
+    })
+    expect(screen.queryByLabelText(label)).not.toBeInTheDocument()
+  })
+
   it('renders the role the member holds and the card it carries', () => {
     // Mutation: drop the role control or the card from the editor and the
     // seat is back to being something only a dispatch message can say.

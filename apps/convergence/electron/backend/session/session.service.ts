@@ -287,6 +287,17 @@ export class SessionService {
   private onEvidenceUpdate: ((event: { sessionId: string }) => void) | null =
     null
   private readonly evidenceCounts: HarnessEvidenceService
+  private readonly beforeQueueDrainGuards = new Set<
+    (sessionId: string) => boolean
+  >()
+
+  /** Synchronous turn-boundary interception: true means the caller holds the queue. */
+  onBeforeQueueDrain(guard: (sessionId: string) => boolean): () => void {
+    this.beforeQueueDrainGuards.add(guard)
+    return () => {
+      this.beforeQueueDrainGuards.delete(guard)
+    }
+  }
   private parallelWorkCounts = new Map<string, ParallelWorkCounts>()
   private evidenceUpdateTimers = new Map<
     string,
@@ -4978,6 +4989,7 @@ export class SessionService {
       // and the payload IS that next message (MAR-3298 R2). MAR-2971 stands
       // — terminateQueuedInputs still only fails ATTEMPTED rows; the drain
       // below only sends what is still `queued`.
+      // Failed-reset recovery is deliberately outside the automatic drill guard.
       if (
         wasReset &&
         !source.retainQueuedInputsOnCompletion &&
@@ -5002,7 +5014,8 @@ export class SessionService {
       this.closeActiveTurn(sessionId, 'completed')
       if (
         !source.retainQueuedInputsOnCompletion &&
-        !this.retainingStoppedInputs.has(sessionId)
+        !this.retainingStoppedInputs.has(sessionId) &&
+        ![...this.beforeQueueDrainGuards].some((guard) => guard(sessionId))
       )
         void this.dispatchNextQueuedInput(sessionId).catch((error) => {
           console.error('[session] Could not dispatch queued input', error)

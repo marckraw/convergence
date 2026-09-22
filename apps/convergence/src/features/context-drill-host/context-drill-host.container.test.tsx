@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react'
+import { act, render, screen, fireEvent } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import {
@@ -72,6 +72,34 @@ describe('ContextDrillHostContainer (MAR-3256 R4)', () => {
   it('renders nothing', () => {
     const { container } = render(<ContextDrillHostContainer />)
     expect(container).toBeEmptyDOMElement()
+  })
+
+  it('shows an automatic failure card and its manual retry, never a button-failure card', () => {
+    render(<ContextDrillHostContainer />)
+    const outcome = {
+      ok: false as const,
+      beat: 'sealing' as const,
+      reason: 'No seal.',
+    }
+    land('a', outcome, 90)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    act(() =>
+      useContextDrillStore.getState().handleChange({
+        sessionId: 'a',
+        beat: null,
+        automatic: { outcome, before: 90 },
+      }),
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The drill stopped while sealing: No seal.',
+    )
+    expect(toastMock.error).toHaveBeenCalled()
+    const run = vi
+      .spyOn(useContextDrillStore.getState(), 'run')
+      .mockResolvedValue()
+    fireEvent.click(screen.getByRole('button', { name: 'Run the drill' }))
+    expect(run).toHaveBeenCalledWith('a')
+    run.mockRestore()
   })
 
   it('tells the crossing when the drill finishes', () => {
