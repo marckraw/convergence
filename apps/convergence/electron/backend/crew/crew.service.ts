@@ -257,6 +257,12 @@ export class CrewService {
       patch.stallMinutes === undefined
         ? existing.stall_minutes
         : normalizeCrewLimit(patch.stallMinutes, 'A stall window')
+    // Absent means unchanged (same shape as the other knobs): a rename must
+    // not clear the lap cap. Explicit null clears it (MAR-3149).
+    const lapCap =
+      patch.lapCap === undefined
+        ? (existing.lap_cap ?? null)
+        : normalizeCrewLimit(patch.lapCap, 'A lap cap')
 
     this.db
       .prepare(
@@ -267,10 +273,20 @@ export class CrewService {
              position = ?,
              round_cap = ?,
              stall_minutes = ?,
+             lap_cap = ?,
              updated_at = datetime('now')
          WHERE id = ?`,
       )
-      .run(name, emoji, accentColor, position, roundCap, stallMinutes, id)
+      .run(
+        name,
+        emoji,
+        accentColor,
+        position,
+        roundCap,
+        stallMinutes,
+        lapCap,
+        id,
+      )
 
     return this.requireById(id)
   }

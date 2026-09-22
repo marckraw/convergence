@@ -74,6 +74,7 @@ function renderPanel(
     resolveName: seat.resolveName ?? (() => null),
     deliveryLimit: deliveryLimit,
     attentionMinutes: null,
+    lapCap: null,
     defaultDeliveryLimit: DEFAULT_CREW_ROUND_CAP,
     defaultAttentionMinutes: DEFAULT_CREW_STALL_MINUTES,
     busy: false,
@@ -97,6 +98,7 @@ function renderPanel(
     onBatonNameCommit: noop,
     onDeliveryLimitChange: noop,
     onAttentionMinutesChange: noop,
+    onLapCapChange: noop,
     onAddConversation: noop,
     onRemoveMember: seat.onRemoveMember ?? noop,
     onClose: noop,
@@ -867,4 +869,45 @@ it('MAR-2981 R5 seat pause switch submits a seat edit beside WIP', () => {
   expect(toggle).toHaveProperty('checked', false)
   fireEvent.click(toggle)
   expect(edit).toHaveBeenCalledWith({ sessionId: 's' }, { paused: true })
+})
+
+describe('MAR-3149 R4: the lap cap field beside the delivery limit', () => {
+  it('renders the current value and calls the handler with 6 / null (mutation: wire to roundCap)', () => {
+    const onLapCapChange = vi.fn()
+    const onDeliveryLimitChange = vi.fn()
+    const { rerender, props } = renderPanel(null)
+    rerender(
+      <CrewSettingsPanel
+        {...props}
+        lapCap={null}
+        onLapCapChange={onLapCapChange}
+        onDeliveryLimitChange={onDeliveryLimitChange}
+      />,
+    )
+
+    const empty = screen.getByLabelText('Lap cap for this crew')
+    expect(empty).toHaveValue(null)
+    expect(empty).toHaveAttribute('placeholder', '6')
+
+    fireEvent.change(empty, { target: { value: '6' } })
+    expect(onLapCapChange).toHaveBeenCalledWith(6)
+    // Mutation: wire this field to onDeliveryLimitChange → both called, red.
+    expect(onDeliveryLimitChange).not.toHaveBeenCalled()
+
+    onLapCapChange.mockClear()
+    rerender(
+      <CrewSettingsPanel
+        {...props}
+        lapCap={6}
+        onLapCapChange={onLapCapChange}
+        onDeliveryLimitChange={onDeliveryLimitChange}
+      />,
+    )
+    expect(screen.getByLabelText('Lap cap for this crew')).toHaveValue(6)
+    fireEvent.change(screen.getByLabelText('Lap cap for this crew'), {
+      target: { value: '' },
+    })
+    expect(onLapCapChange).toHaveBeenCalledWith(null)
+    expect(onDeliveryLimitChange).not.toHaveBeenCalled()
+  })
 })

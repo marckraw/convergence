@@ -45,6 +45,7 @@ function crew(id: string, overrides: Partial<SessionCrew> = {}): SessionCrew {
     position: 0,
     roundCap: null,
     stallMinutes: null,
+    lapCap: null,
     members: [],
     sessionIds: [],
     createdAt: '2026-08-16T00:00:00.000Z',

@@ -40,6 +40,7 @@ function crew(overrides: Partial<SessionCrew> = {}): SessionCrew {
     position: 0,
     roundCap: null,
     stallMinutes: null,
+    lapCap: null,
     createdAt: AT,
     updatedAt: AT,
     sessionIds: [],

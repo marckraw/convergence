@@ -700,6 +700,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
     async (patch: {
       roundCap?: number | null
       stallMinutes?: number | null
+      lapCap?: number | null
     }) => {
       if (!crew) return
       setBusy(true)
@@ -1959,6 +1960,7 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               resolveName={resolveName}
               deliveryLimit={crew.roundCap}
               attentionMinutes={crew.stallMinutes}
+              lapCap={crew.lapCap}
               defaultDeliveryLimit={DEFAULT_CREW_ROUND_CAP}
               defaultAttentionMinutes={DEFAULT_CREW_STALL_MINUTES}
               busy={busy}
@@ -2007,6 +2009,9 @@ export const CrewCanvas: FC<CrewCanvasProps> = ({ groups, onOpen }) => {
               }}
               onAttentionMinutesChange={(stallMinutes) => {
                 void setLoopLimit({ stallMinutes })
+              }}
+              onLapCapChange={(lapCap) => {
+                void setLoopLimit({ lapCap })
               }}
               onAddConversation={() => {
                 setAddMenuOpen(false)

@@ -121,6 +121,11 @@ export interface SessionCrew {
    * or null to take the default.
    */
   stallMinutes: number | null
+  /**
+   * Cap on an issue's laps shown on this crew's wave rows, or null for none
+   * (MAR-3149). Distinct from roundCap, which is a hop budget for one flow run.
+   */
+  lapCap: number | null
   /** Last successful export destination; absent on older snapshots. */
   lastExportPath?: string | null
   /**
@@ -150,6 +155,7 @@ export interface UpdateSessionCrewInput {
   position?: number
   roundCap?: number | null
   stallMinutes?: number | null
+  lapCap?: number | null
 }
 
 export function sessionCrewFromRow(
@@ -166,6 +172,8 @@ export function sessionCrewFromRow(
     // some sqlite paths, and "take the default" is the honest answer for it.
     roundCap: row.round_cap ?? null,
     stallMinutes: row.stall_minutes ?? null,
+    // Defensive: a row written before the column existed has none.
+    lapCap: row.lap_cap ?? null,
     lastExportPath: row.last_export_path ?? null,
     trackerBinding: trackerBindingFromRow(row),
     createdAt: row.created_at,

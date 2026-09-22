@@ -57,6 +57,11 @@ interface CrewSettingsPanelProps {
   resolveName: (sessionId: string) => string | null
   deliveryLimit: number | null
   attentionMinutes: number | null
+  /**
+   * Cap on an issue's laps for wave rows, or null for none (MAR-3149).
+   * Empty box = none; placeholder suggests 6.
+   */
+  lapCap: number | null
   defaultDeliveryLimit: number
   defaultAttentionMinutes: number
   busy: boolean
@@ -102,6 +107,7 @@ interface CrewSettingsPanelProps {
   onBatonNameCommit: (sessionId: string) => void
   onDeliveryLimitChange: (limit: number | null) => void
   onAttentionMinutesChange: (minutes: number | null) => void
+  onLapCapChange: (cap: number | null) => void
   onAddConversation: () => void
   onRemoveMember: (member: CrewMemberRef) => void
   onClose: () => void
@@ -165,6 +171,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
   resolveName,
   deliveryLimit,
   attentionMinutes,
+  lapCap,
   defaultDeliveryLimit,
   defaultAttentionMinutes,
   busy,
@@ -182,6 +189,7 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
   onBatonNameCommit,
   onDeliveryLimitChange,
   onAttentionMinutesChange,
+  onLapCapChange,
   onAddConversation,
   onRemoveMember,
   onClose,
@@ -542,6 +550,34 @@ export const CrewSettingsPanel: FC<CrewSettingsPanelProps> = ({
             <p className="text-[10px] text-muted-foreground/70">
               The timer watches for a reply still owed. It is not a total
               run-duration limit.
+            </p>
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="crew-lap-cap"
+                className="flex-1 text-[11px] text-muted-foreground"
+              >
+                Lap cap
+              </label>
+              <Input
+                id="crew-lap-cap"
+                type="number"
+                min={1}
+                value={lapCap ?? ''}
+                placeholder="6"
+                aria-label="Lap cap for this crew"
+                disabled={busy}
+                onChange={(event) =>
+                  onLapCapChange(readLimit(event.target.value))
+                }
+                className="h-7 w-16 text-xs"
+              />
+              <span className="text-[11px] text-muted-foreground">
+                per issue
+              </span>
+            </div>
+            <p className="text-[10px] text-muted-foreground/70">
+              Shown on Loom as &ldquo;lap N of C&rdquo;. Empty means no cap on
+              the row. Distinct from the delivery limit (hop budget).
             </p>
           </div>
 

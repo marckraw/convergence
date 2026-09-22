@@ -507,6 +507,7 @@ describe('the crew dimension', () => {
       position: 0,
       roundCap: null,
       stallMinutes: null,
+      lapCap: null,
       members: [],
       createdAt: '2026-08-15T10:00:00Z',
       updatedAt: '2026-08-15T10:00:00Z',

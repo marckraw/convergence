@@ -983,6 +983,7 @@ describe('database', () => {
         'position',
         'round_cap',
         'stall_minutes',
+        'lap_cap',
         'config_path',
         'config_sha256',
         'config_applied_at',
@@ -3936,6 +3937,62 @@ it('adds the nullable last export path to an old crew and preserves it on reopen
         .prepare("SELECT last_export_path FROM session_crews WHERE id='crew'")
         .get(),
     ).toEqual({ last_export_path: '/saved/crew.yaml' })
+  } finally {
+    closeDatabase()
+    resetDatabase()
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+it('adds nullable lap_cap to session_crews and survives a second open (MAR-3149 R1; mutation: NOT NULL without default)', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'crew-lap-cap-migration-'))
+  const path = join(directory, 'app.db')
+  try {
+    const original = getDatabase(path)
+    original
+      .prepare(
+        "INSERT INTO session_crews (id,name) VALUES ('crew','Loom crew')",
+      )
+      .run()
+    if (
+      (original.pragma('table_info(session_crews)') as { name: string }[]).some(
+        (column) => column.name === 'lap_cap',
+      )
+    ) {
+      original.exec('ALTER TABLE session_crews DROP COLUMN lap_cap')
+    }
+    closeDatabase()
+
+    const migrated = getDatabase(path)
+    const columns = (
+      migrated.pragma('table_info(session_crews)') as Array<{
+        name: string
+        notnull: number
+        dflt_value: string | null
+      }>
+    ).find((column) => column.name === 'lap_cap')
+    // Mutation: ADD COLUMN lap_cap INTEGER NOT NULL (no default) → open fails.
+    expect(columns).toEqual(
+      expect.objectContaining({
+        name: 'lap_cap',
+        notnull: 0,
+        dflt_value: null,
+      }),
+    )
+    expect(
+      migrated
+        .prepare("SELECT lap_cap FROM session_crews WHERE id='crew'")
+        .get(),
+    ).toEqual({ lap_cap: null })
+    closeDatabase()
+
+    // Open again: the guarded ALTER is a no-op, never an error.
+    expect(() => getDatabase(path)).not.toThrow()
+    expect(
+      getDatabase(path)
+        .prepare("SELECT lap_cap FROM session_crews WHERE id='crew'")
+        .get(),
+    ).toEqual({ lap_cap: null })
   } finally {
     closeDatabase()
     resetDatabase()
