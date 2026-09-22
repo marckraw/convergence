@@ -1,5 +1,17 @@
 # convergence
 
+## 0.84.0
+
+### Minor Changes
+
+- a76d0ed: The drill runs by itself: a mastermind seat with the switch on holds its queue, seals, compacts and resurrects its conversation at the next turn once its context passes the alert — the queue rides after, never in a circle, and a card when it stops.
+
+### Patch Changes
+
+- e39b14d: Loom slides shut to its icon column and back open, over the same motion as the expanded sheets; instant under reduced motion.
+- e1e032d: Loom's icon-only controls show the app's own tooltip instead of the system hint.
+- 8bd559d: Loom's issue cards name the pull request Linear links to the issue, not only the detail.
+
 ## 0.83.0
 
 ### Minor Changes
