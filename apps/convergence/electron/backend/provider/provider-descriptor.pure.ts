@@ -353,8 +353,9 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
       {
         id: 'opus',
         label: 'Claude Opus',
+        description: 'Alias for the latest Opus (currently Opus 5.5).',
         contextWindowTokens: 1_000_000,
-        defaultEffort: 'high',
+        defaultEffort: 'medium',
         effortOptions: buildEffortOptions([
           'low',
           'medium',
@@ -387,6 +388,19 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
         label: 'Claude Fable 5',
         contextWindowTokens: 1_000_000,
         defaultEffort: 'high',
+        effortOptions: buildEffortOptions([
+          'low',
+          'medium',
+          'high',
+          'xhigh',
+          'max',
+        ]),
+      },
+      {
+        id: 'claude-opus-5-5',
+        label: 'Claude Opus 5.5',
+        contextWindowTokens: 1_000_000,
+        defaultEffort: 'medium',
         effortOptions: buildEffortOptions([
           'low',
           'medium',
