@@ -39,6 +39,8 @@ export interface AutoDispatchCrew {
 
 /** Durable claim-and-send use case; the relay engine and tracker writes are absent. */
 export class AutoDispatchService {
+  private readonly activeCrews = new Set<string>()
+
   constructor(
     private readonly db: Database.Database,
     private readonly gateway: AutoDispatchGateway,
@@ -55,14 +57,42 @@ export class AutoDispatchService {
       .all(crewId) as AutoDispatchRecord[]
   }
 
-  async act(crewId: string, plan: DispatchPlan, at: string): Promise<void> {
+  async act(crewId: string, plan: DispatchPlan, at: string): Promise<boolean> {
+    // An overlapping call is not a recovery tick for this crew's live send.
+    if (this.activeCrews.has(crewId)) return false
+    this.activeCrews.add(crewId)
+    try {
+      return await this.actCrew(crewId, plan, at)
+    } finally {
+      this.activeCrews.delete(crewId)
+    }
+  }
+
+  private async actCrew(
+    crewId: string,
+    plan: DispatchPlan,
+    at: string,
+  ): Promise<boolean> {
+    // Recover only claims present before this tick inserts any new rows.
+    let changed =
+      this.db
+        .prepare(
+          `UPDATE auto_dispatches SET error = ?
+      WHERE crew_id = ? AND receipt IS NULL AND error IS NULL`,
+        )
+        .run(
+          "delivery unconfirmed — the app stopped mid-send; check the seat's conversation before you set the label again",
+          crewId,
+        ).changes > 0
     const entries = this.ledger.currentView(crewId)
     // Only an observed removal releases a failed claim. Delivered facts survive forever.
     const forgetFailed = this.db.prepare(`DELETE FROM auto_dispatches
       WHERE crew_id = ? AND issue_id = ? AND lap = ? AND error IS NOT NULL`)
     for (const entry of entries) {
-      if (entry.fact.dispatch !== true)
-        forgetFailed.run(crewId, entry.issueId, entry.lap)
+      if (entry.fact.dispatch !== true) {
+        const deleted = forgetFailed.run(crewId, entry.issueId, entry.lap)
+        if (deleted.changes > 0) changed = true
+      }
     }
     const candidates = Object.values(plan.order)
       .flat()
@@ -79,7 +109,7 @@ export class AutoDispatchService {
       )
         continue
       const crew = this.crews.list().find((c) => c.id === crewId)
-      if (!crew?.trackerBinding?.autoDispatch) return
+      if (!crew?.trackerBinding?.autoDispatch) return changed
       const master = crew.members.find(
         (m) => m.role === 'mastermind' && m.sessionId,
       )
@@ -133,6 +163,7 @@ export class AutoDispatchService {
           at,
         )
       if (claimed.changes === 0) continue
+      changed = true
       await this.deliver(
         id,
         entry,
@@ -144,6 +175,7 @@ export class AutoDispatchService {
         at,
       )
     }
+    return changed
   }
 
   private async deliver(

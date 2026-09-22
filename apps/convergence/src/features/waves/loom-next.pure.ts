@@ -67,6 +67,8 @@ export function dispatchWordSentence(
       return `needs ${word.missing.join(' · ')}`
     case 'blocked':
       return 'blocked'
+    case 'later-lap':
+      return `lap ${word.lap} · waits for the mastermind's baton`
     case 'seat-not-in-crew':
       return `seat "${seat ?? ''}" not in the crew`
     case 'seat-no-conversation':

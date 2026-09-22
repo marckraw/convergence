@@ -66,7 +66,7 @@ export function planAutoDispatch(input: AutoDispatchInput): DispatchPlan {
     const sent = input.records?.find(
       (r) => r.issueId === entry.issueId && r.lap === entry.lap,
     )
-    if (missing.length === 0 && !entry.blocked && !sent) {
+    if (missing.length === 0 && !entry.blocked && entry.lap <= 1 && !sent) {
       ;(plan.order[seatName] ??= []).push(entry.issueId)
     }
     const seat = seats.find((s) => s.batonName === seatName)
@@ -89,6 +89,7 @@ export function planAutoDispatch(input: AutoDispatchInput): DispatchPlan {
           : { kind: 'sent', at: sent.sentAt }
     else if (missing.length) word = { kind: 'needs-labels', missing }
     else if (entry.blocked) word = { kind: 'blocked' }
+    else if (entry.lap > 1) word = { kind: 'later-lap', lap: entry.lap }
     else if (!seat) word = { kind: 'seat-not-in-crew' }
     else if (!seat.sessionId || seat.availability === 'unknown')
       word = { kind: 'seat-no-conversation' }

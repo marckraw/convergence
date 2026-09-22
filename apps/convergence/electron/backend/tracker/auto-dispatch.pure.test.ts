@@ -64,6 +64,22 @@ const plan = (
     firstSeen,
   })
 
+it('lap 3 A later laps wait for the mastermind after blocked and before seat checks', () => {
+  expect(plan([row('1', { lap: 2 })]).words['1']).toEqual({
+    kind: 'later-lap',
+    lap: 2,
+  })
+  expect(plan([row('1', { lap: 2, blocked: true })]).words['1']).toEqual({
+    kind: 'blocked',
+  })
+  expect(
+    plan([row('1', { lap: 2 })], horse({ sessionId: null })).words['1'],
+  ).toEqual({ kind: 'later-lap', lap: 2 })
+  const mixed = plan([row('1', { lap: 2 }), row('2', { lap: 1 })])
+  expect(mixed.order.horse).toEqual(['2'])
+  expect(mixed.words['2'].kind).toBe('would-start')
+})
+
 describe('MAR-3293 dispatch decisions', () => {
   it('R1 all eight label combinations admit exactly one candidate; absent keys are not labels', () => {
     const entries = Array.from({ length: 8 }, (_, n) =>

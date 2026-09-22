@@ -557,8 +557,13 @@ export class TrackerWatcherService {
             crewId,
             now.toISOString(),
           )
-          if (this.deps.autoDispatcher) {
-            await this.deps.autoDispatcher.act(crewId, after, now.toISOString())
+          if (
+            await this.deps.autoDispatcher?.act(
+              crewId,
+              after,
+              now.toISOString(),
+            )
+          ) {
             after = await this.deps.dispatchPlanner.refresh(
               crewId,
               now.toISOString(),

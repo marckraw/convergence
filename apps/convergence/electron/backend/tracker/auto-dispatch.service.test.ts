@@ -195,6 +195,148 @@ it('R1 watcher stays off over three ticks, then sends once and publishes the rec
   expect(b.gateway.sendMessageWithOpener).toHaveBeenCalledTimes(1)
   expect(b.planner.cached(b.crewId)?.words.i.kind).toBe('sent')
 })
+it('lap 3 B plan autoDispatch equals the persisted crew binding off and on', async () => {
+  const b = bench()
+  b.observe()
+  expect((await b.planner.refresh(b.crewId, at)).autoDispatch).toBe(false)
+  b.enable()
+  expect((await b.planner.refresh(b.crewId, at)).autoDispatch).toBe(true)
+  b.crews.setTrackerBinding(b.crewId, { projectId: 'p', autoDispatch: false })
+  expect((await b.planner.refresh(b.crewId, at)).autoDispatch).toBe(false)
+})
+
+it('lap 3 C another crew record neither marks this issue sent nor holds this seat', async () => {
+  const b = bench()
+  b.enable()
+  const other = b.crews.create({ name: 'Other crew' })
+  b.crews.setTrackerBinding(other.id, { projectId: 'p', autoDispatch: true })
+  b.db
+    .prepare(
+      `INSERT INTO auto_dispatches
+    (id, crew_id, issue_id, lap, seat, session_id, wire_id, sent_at, delivery, receipt)
+    VALUES ('other-row', ?, 'i', 1, 'opus', 'other-seat', 'other-wire', ?, 'turn', 'other-receipt')`,
+    )
+    .run(other.id, at)
+  b.observe()
+  expect(b.service.records(b.crewId)).toEqual([])
+  const plan = await b.planner.refresh(b.crewId, at)
+  expect(plan.words.i.kind).toBe('would-start')
+  await b.service.act(b.crewId, plan, at)
+  expect(b.gateway.sendMessageWithOpener).toHaveBeenCalledTimes(1)
+  expect(b.service.records(b.crewId)).toHaveLength(1)
+  expect(b.service.records(other.id)).toHaveLength(1)
+})
+
+const unconfirmedReason =
+  "delivery unconfirmed — the app stopped mid-send; check the seat's conversation before you set the label again"
+
+it('lap 3 R16 an unconfirmed claim is marked next tick and released only by the label path', async () => {
+  const b = bench()
+  b.enable()
+  const other = b.crews.create({ name: 'Other crew' })
+  const insert = b.db.prepare(`INSERT INTO auto_dispatches
+    (id, crew_id, issue_id, lap, seat, session_id, wire_id, sent_at, delivery)
+    VALUES (?, ?, 'i', 1, 'opus', 's', 'wire', ?, 'turn')`)
+  insert.run('stopped', b.crewId, at)
+  insert.run('other-stopped', other.id, at)
+  await b.tick()
+  expect(b.service.records(b.crewId)[0].error).toBe(unconfirmedReason)
+  expect(b.planner.cached(b.crewId)?.words.i).toEqual({
+    kind: 'send-failed',
+    reason: unconfirmedReason,
+  })
+  expect(b.service.records(other.id)[0].error).toBeNull()
+  await b.tick()
+  expect(b.gateway.sendMessageWithOpener).not.toHaveBeenCalled()
+  b.page((page) => page.map((i) => ({ ...i, dispatch: false })))
+  await b.tick()
+  expect(b.service.records(b.crewId)).toEqual([])
+  b.page((page) => page.map((i) => ({ ...i, dispatch: true })))
+  await b.tick()
+  expect(b.gateway.sendMessageWithOpener).toHaveBeenCalledTimes(1)
+  expect(b.service.records(b.crewId)[0].error).toBeNull()
+})
+
+it('lap 3 R16 a post-send receipt UPDATE failure becomes unconfirmed on the next tick', async () => {
+  const b = bench()
+  b.enable()
+  b.db
+    .exec(`CREATE TRIGGER fail_receipt BEFORE UPDATE OF receipt ON auto_dispatches
+    BEGIN SELECT RAISE(FAIL, 'receipt write failed'); END`)
+  await expect(b.act()).rejects.toThrow('receipt write failed')
+  expect(b.service.records(b.crewId)[0].error).toBeNull()
+  b.db.exec('DROP TRIGGER fail_receipt')
+  await b.tick()
+  expect(b.planner.cached(b.crewId)?.words.i).toEqual({
+    kind: 'send-failed',
+    reason: unconfirmedReason,
+  })
+  expect(b.gateway.sendMessageWithOpener).toHaveBeenCalledTimes(1)
+})
+
+it('lap 3 R16 rows inserted in an active tick stay unmarked, including an overlapping act', async () => {
+  const b = bench()
+  b.enable()
+  b.observe()
+  const plan = await b.planner.refresh(b.crewId, at)
+  let finish!: () => void
+  vi.mocked(b.gateway.sendMessageWithOpener).mockImplementation(async () => {
+    await new Promise<void>((resolve) => {
+      finish = resolve
+    })
+    return {
+      openerDispatchId: 'opener',
+      payloadDispatchId: 'payload',
+      openerQueued: false,
+    }
+  })
+  const active = b.service.act(b.crewId, plan, at)
+  try {
+    expect(b.service.records(b.crewId)[0].error).toBeNull()
+    await b.service.act(b.crewId, plan, at)
+    expect(b.service.records(b.crewId)[0].error).toBeNull()
+  } finally {
+    finish()
+    await active
+  }
+  expect(b.gateway.sendMessageWithOpener).toHaveBeenCalledTimes(1)
+  expect(b.service.records(b.crewId)[0].error).toBeNull()
+})
+
+it('lap 3 E quiet ticks check each lane once and sending ticks check each lane twice', async () => {
+  const b = bench()
+  const seats = b.roster.list()[0].members.length
+  await b.tick()
+  expect(b.gateway.describeLane).toHaveBeenCalledTimes(seats)
+  vi.mocked(b.gateway.describeLane).mockClear()
+  b.enable()
+  await b.tick()
+  expect(b.gateway.sendMessageWithOpener).toHaveBeenCalledTimes(1)
+  expect(b.gateway.describeLane).toHaveBeenCalledTimes(seats * 2)
+  vi.mocked(b.gateway.describeLane).mockClear()
+  await b.tick()
+  expect(b.gateway.describeLane).toHaveBeenCalledTimes(seats)
+})
+
+it('lap 3 E act reports inserts, recovery and deletion but not no-op ticks', async () => {
+  const b = bench()
+  b.observe()
+  const act = async () =>
+    b.service.act(b.crewId, await b.planner.refresh(b.crewId, at), at)
+  expect(await act()).toBe(false)
+  b.enable()
+  expect(await act()).toBe(true)
+  expect(await act()).toBe(false)
+  b.db.prepare('UPDATE auto_dispatches SET receipt = NULL').run()
+  expect(await act()).toBe(true)
+  expect(await act()).toBe(false)
+  b.page((page) => page.map((i) => ({ ...i, dispatch: false })))
+  b.observe()
+  expect(await act()).toBe(true)
+  expect(b.service.records(b.crewId)).toEqual([])
+  expect(await act()).toBe(false)
+})
+
 it('R1 migrations default to off and unpaused, with exact durable record columns and unique claim', () => {
   const b = bench()
   const crewColumn = b.db.prepare('PRAGMA table_info(session_crews)').all() as {
@@ -434,8 +576,22 @@ it('R8 missing dispatch label sends nothing; later laps stay manual', async () =
   b.page((page) => page.map((i) => ({ ...i, dispatch: true })))
   b.observe()
   b.db.prepare('UPDATE work_ledger SET lap = 2').run()
-  await b.service.act(b.crewId, await b.planner.refresh(b.crewId, at), at)
+  const plan = await b.planner.refresh(b.crewId, at)
+  expect(plan.words.i).toEqual({ kind: 'later-lap', lap: 2 })
+  await b.service.act(b.crewId, plan, at)
+  // The act still refuses a stale or incorrect promise as its second wall.
+  await b.service.act(
+    b.crewId,
+    {
+      ...plan,
+      order: { opus: ['i'] },
+      words: { i: { kind: 'would-start', wire: b.wire } },
+    },
+    at,
+  )
   expect(b.gateway.sendMessageWithOpener).not.toHaveBeenCalled()
+  expect(b.gateway.deliverRelayMessage).not.toHaveBeenCalled()
+  expect(b.service.records(b.crewId)).toEqual([])
 })
 it('R12 changing own-worktree to main judges the conversation directory despite stored path', async () => {
   const b = bench()

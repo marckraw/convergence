@@ -334,6 +334,7 @@ export type DispatchLane = 'clean' | 'dirty' | 'unpushed' | 'unknown' | 'unset'
 export type DispatchWord =
   | { kind: 'needs-labels'; missing: string[] }
   | { kind: 'blocked' }
+  | { kind: 'later-lap'; lap: number }
   | { kind: 'seat-not-in-crew' }
   | { kind: 'seat-no-conversation' }
   | { kind: 'no-mastermind' }

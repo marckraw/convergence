@@ -442,6 +442,7 @@ it.each<[DispatchWord, string]>([
     'needs grounded · dispatch',
   ],
   [{ kind: 'blocked' }, 'blocked'],
+  [{ kind: 'later-lap', lap: 2 }, "lap 2 · waits for the mastermind's baton"],
   [{ kind: 'seat-not-in-crew' }, 'seat "opus" not in the crew'],
   [{ kind: 'seat-no-conversation' }, 'seat has no conversation'],
   [{ kind: 'no-mastermind' }, 'no mastermind seat in this crew'],
