@@ -119,6 +119,7 @@ describe('provider-descriptor', () => {
       'haiku',
       'claude-fable-5-1',
       'claude-fable-5',
+      'claude-opus-5-5',
       'claude-opus-5',
       'claude-sonnet-5',
       'claude-opus-4-8',
@@ -149,6 +150,35 @@ describe('provider-descriptor', () => {
       label: 'Claude Fable 5.1',
       contextWindowTokens: 1_000_000,
       defaultEffort: 'high',
+      effortOptions: [
+        { id: 'low', label: 'Low' },
+        { id: 'medium', label: 'Medium' },
+        { id: 'high', label: 'High' },
+        { id: 'xhigh', label: 'Very High' },
+        { id: 'max', label: 'Max' },
+      ],
+    })
+    expect(
+      descriptor.modelOptions.find((option) => option.id === 'claude-opus-5-5'),
+    ).toMatchObject({
+      label: 'Claude Opus 5.5',
+      contextWindowTokens: 1_000_000,
+      defaultEffort: 'medium',
+      effortOptions: [
+        { id: 'low', label: 'Low' },
+        { id: 'medium', label: 'Medium' },
+        { id: 'high', label: 'High' },
+        { id: 'xhigh', label: 'Very High' },
+        { id: 'max', label: 'Max' },
+      ],
+    })
+    expect(
+      descriptor.modelOptions.find((option) => option.id === 'opus'),
+    ).toMatchObject({
+      label: 'Claude Opus',
+      description: 'Alias for the latest Opus (currently Opus 5.5).',
+      contextWindowTokens: 1_000_000,
+      defaultEffort: 'medium',
       effortOptions: [
         { id: 'low', label: 'Low' },
         { id: 'medium', label: 'Medium' },
