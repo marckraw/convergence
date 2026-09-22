@@ -282,59 +282,72 @@ export const LoomSheetView = <TSession,>({
               {/* The order is the order a person acts in: my eyes first, then the
               verdict I owe, then the decision somebody owes, then the work
               that needs nothing from anyone. */}
-              <div className="flex flex-col">
-                {/* The control lives INSIDE the section it reveals (lap 2, D),
+              {(() => {
+                const groups = (
+                  <>
+                    {/* The control lives INSIDE the section it reveals (lap 2, D),
                 so `aria-controls` points at an ancestor a screen reader is
                 already inside and the relationship is readable. */}
-                <WaveSectionView
-                  appearance="loom"
-                  title="Awaiting QA"
-                  count={qa.length}
-                  rows={qaShown}
-                  inertReason={inertReason}
-                  onOpen={onOpen}
-                  footer={
-                    qa.length > LOOM_QA_PREVIEW ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        aria-expanded={qaExpanded}
-                        aria-controls={QA_SECTION_ID}
-                        className={LOOM_QA_TOGGLE_CLASS}
-                        onClick={onToggleQa}
-                      >
-                        {qaExpanded
-                          ? 'Show fewer'
-                          : `Show all ${qa.length} awaiting QA`}
-                      </Button>
-                    ) : null
-                  }
-                  id={QA_SECTION_ID}
-                />
-                <WaveSectionView
-                  appearance="loom"
-                  title="Fable’s turn"
-                  rows={sheets.now.fablesTurn}
-                  inertReason={inertReason}
-                  onOpen={onOpen}
-                />
-                <WaveSectionView
-                  appearance="loom"
-                  title="Decide"
-                  rows={sheets.now.decide}
-                  inertReason={inertReason}
-                  onOpen={onOpen}
-                />
-                {/* The rows no card holds (R4): one function, both shapes. */}
-                <WaveSectionView
-                  appearance="loom"
-                  title="In flight"
-                  rows={loomNowRows(sheets, horses)}
-                  inertReason={inertReason}
-                  onOpen={onOpen}
-                />
-              </div>
+                    <WaveSectionView
+                      appearance="loom"
+                      title="Awaiting QA"
+                      hint={wide ? 'QA and say done, by name' : undefined}
+                      count={qa.length}
+                      rows={qaShown}
+                      inertReason={inertReason}
+                      onOpen={onOpen}
+                      footer={
+                        qa.length > LOOM_QA_PREVIEW ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            aria-expanded={qaExpanded}
+                            aria-controls={QA_SECTION_ID}
+                            className={LOOM_QA_TOGGLE_CLASS}
+                            onClick={onToggleQa}
+                          >
+                            {qaExpanded
+                              ? 'Show fewer'
+                              : `Show all ${qa.length} awaiting QA`}
+                          </Button>
+                        ) : null
+                      }
+                      id={QA_SECTION_ID}
+                    />
+                    <WaveSectionView
+                      appearance="loom"
+                      title="Fable’s turn"
+                      hint={wide ? 'A verdict is owed' : undefined}
+                      rows={sheets.now.fablesTurn}
+                      inertReason={inertReason}
+                      onOpen={onOpen}
+                    />
+                    <WaveSectionView
+                      appearance="loom"
+                      title="Decide"
+                      hint={wide ? 'A decision is yours' : undefined}
+                      rows={sheets.now.decide}
+                      inertReason={inertReason}
+                      onOpen={onOpen}
+                    />
+                    {/* The rows no card holds (R4): one function, both shapes. */}
+                    <WaveSectionView
+                      appearance="loom"
+                      title="In flight"
+                      hint={wide ? 'Nothing is owed to anyone' : undefined}
+                      rows={loomNowRows(sheets, horses)}
+                      inertReason={inertReason}
+                      onOpen={onOpen}
+                    />
+                  </>
+                )
+                return wide ? (
+                  groups
+                ) : (
+                  <div className="flex flex-col">{groups}</div>
+                )
+              })()}
             </div>
           ) : null}
           {sheet === 'next' ? (

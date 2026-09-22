@@ -1060,6 +1060,113 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(qaRows()).toBe(3)
   })
 
+  describe('MAR-3305: Now columns', () => {
+    const titles = ['Awaiting QA', 'Fable’s turn', 'Decide', 'In flight']
+    const hints = [
+      'QA and say done, by name',
+      'A verdict is owed',
+      'A decision is yours',
+      'Nothing is owed to anyone',
+    ]
+
+    async function showNow(wide: boolean, onlyQa = false) {
+      crews = [{ ...boundCrew('crew-1', 'Loom'), members: [] }]
+      snapshots = {
+        'crew-1': {
+          crewId: 'crew-1',
+          entries: [
+            ...Array.from({ length: 12 }, (_, at) =>
+              ledgerEntry({
+                issueIdentifier: `QA-${at + 1}`,
+                state: 'reviewed',
+                seat: null,
+              }),
+            ),
+            ...(onlyQa
+              ? []
+              : [
+                  ledgerEntry({
+                    issueIdentifier: 'RETURNED-1',
+                    state: 'returned',
+                    seat: null,
+                  }),
+                  ledgerEntry({
+                    issueIdentifier: 'BLOCKED-1',
+                    state: 'working',
+                    blocked: true,
+                    seat: null,
+                  }),
+                  ledgerEntry({
+                    issueIdentifier: 'WORKING-1',
+                    state: 'working',
+                    seat: null,
+                  }),
+                ]),
+          ],
+          dispatchPlan: null,
+          trackerHealth: health('ok'),
+        },
+      }
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      if (wide) {
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+        })
+      }
+      return screen.getByRole('region', { name: 'Horses' }).parentElement!
+    }
+
+    it('R1/R2: wide has ordered direct cells and a hint in each group', async () => {
+      const grid = await showNow(true)
+      expect(grid.classList.contains('grid')).toBe(true)
+      expect(
+        Array.from(grid.children, (cell) => cell.getAttribute('aria-label')),
+      ).toEqual(['Horses', ...titles])
+      for (const [at, title] of titles.entries()) {
+        const cell = screen.getByRole('region', { name: title })
+        expect(within(cell).getByText(hints[at]!)).toBeTruthy()
+        expect(within(cell).getByRole('heading').textContent).toBe(
+          `${title} · ${at === 0 ? 12 : 1}`,
+        )
+      }
+    })
+
+    it('R1/R2: compact keeps its wrapper and has no hints', async () => {
+      const container = await showNow(false)
+      expect(container.hasAttribute('class')).toBe(false)
+      expect(container.children).toHaveLength(2)
+      const wrapper = container.children[1]!
+      expect(wrapper.tagName).toBe('DIV')
+      expect(wrapper.className).toBe('flex flex-col')
+      expect(
+        Array.from(wrapper.children, (cell) => cell.getAttribute('aria-label')),
+      ).toEqual(titles)
+      for (const hint of hints) expect(screen.queryByText(hint)).toBeNull()
+    })
+
+    it('R3/R4: wide omits empty cells and keeps QA reveal inside its cell', async () => {
+      const grid = await showNow(true, true)
+      expect(
+        Array.from(grid.children, (cell) => cell.getAttribute('aria-label')),
+      ).toEqual(['Horses', 'Awaiting QA'])
+      const qa = screen.getByRole('region', { name: 'Awaiting QA' })
+      const rows = () => qa.querySelectorAll('[data-wave-row]').length
+      expect(rows()).toBe(3)
+      const reveal = within(qa).getByRole('button', {
+        name: 'Show all 12 awaiting QA',
+      })
+      expect(reveal.getAttribute('aria-controls')).toBe(qa.id)
+      expect(qa.id).not.toBe('')
+      expect(reveal.getAttribute('aria-expanded')).toBe('false')
+      fireEvent.click(reveal)
+      expect(rows()).toBe(12)
+      expect(reveal.getAttribute('aria-expanded')).toBe('true')
+      fireEvent.click(within(qa).getByRole('button', { name: 'Show fewer' }))
+      expect(rows()).toBe(3)
+    })
+  })
+
   it('MAR-3191 R6: a card opens the conversation the crew record names', async () => {
     const onOpenSession = vi.fn()
     crews = [
