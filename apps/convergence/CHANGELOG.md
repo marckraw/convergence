@@ -1,5 +1,11 @@
 # convergence
 
+## 0.84.1
+
+### Patch Changes
+
+- 9a60380: The sidebar's hover hints use the app's own tooltip instead of the system hint.
+
 ## 0.84.0
 
 ### Minor Changes
