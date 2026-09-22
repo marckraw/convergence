@@ -69,7 +69,7 @@ export const LEARN_LOOM_STEP_COPY: readonly LearnLoomStepCopy[] = [
     main: 'Assign a seat with the tools and host this ticket needs. Its queue appears in Next; missing preparation is named there.',
     keyHeadline: 'Ready = groomed + grounded + dispatch.',
     keyExplanation:
-      'The seat must have a conversation. Today, Fable still hands off work; the app does not automatically start a ready ticket.',
+      'The seat must have a conversation. With Auto-dispatch off, Fable still hands off work; with it on, the app sends a ready ticket into its seat.',
     yourPart: 'Agree the assignment with your mastermind or in Linear.',
     primary: 'Next: start the work →',
   },
@@ -171,7 +171,7 @@ export const LEARN_LOOM_REFERENCE_CARDS: readonly LearnLoomReferenceCard[] = [
   {
     title: 'What you can do today',
     lines: [
-      'Open a ticket, its linked PR, Linear or known conversation. Prepare through your mastermind or Linear. Queues are read-only: priority, then issue number.',
+      'Open a ticket, its linked PR, Linear or known conversation. Prepare through your mastermind or Linear. Queues are read-only: priority, then first labeled for dispatch.',
     ],
   },
 ]

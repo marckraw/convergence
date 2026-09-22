@@ -23,6 +23,7 @@ export type TrackerKind = 'linear'
  * Keychain fact filed under the crew id, never a field here (R3).
  */
 export interface TrackerBinding {
+  autoDispatch: boolean
   kind: TrackerKind
   projectId: string
   /** `horse:` -- names the label GROUP whose child is the seat. */
@@ -322,6 +323,7 @@ export interface TrackerHealth {
 }
 
 export type SeatAvailability =
+  | 'failed'
   | 'idle'
   | 'turn'
   | 'compacting'
@@ -332,17 +334,33 @@ export type DispatchLane = 'clean' | 'dirty' | 'unpushed' | 'unknown' | 'unset'
 export type DispatchWord =
   | { kind: 'needs-labels'; missing: string[] }
   | { kind: 'blocked' }
+  | { kind: 'later-lap'; lap: number }
   | { kind: 'seat-not-in-crew' }
   | { kind: 'seat-no-conversation' }
   | { kind: 'no-mastermind' }
   | { kind: 'no-wire' }
-  | { kind: 'seat-busy'; why: Exclude<SeatAvailability, 'idle' | 'unknown'> }
+  | { kind: 'seat-paused' }
+  | { kind: 'seat-failed' }
+  | { kind: 'sent'; at: string }
+  | { kind: 'send-failed'; reason: string }
+  | {
+      kind: 'seat-busy'
+      why: Exclude<SeatAvailability, 'idle' | 'unknown' | 'failed'>
+    }
   | { kind: 'seat-holds'; identifier: string }
   | { kind: 'lane'; state: Exclude<DispatchLane, 'clean'>; path: string | null }
   | { kind: 'queued-behind'; identifier: string }
   | { kind: 'would-start'; wire: { id: string; opener: string | null } }
 
+export interface AutoDispatchRecord {
+  issueId: string
+  lap: number
+  sentAt: string
+  error: string | null
+}
+
 export interface DispatchPlan {
+  autoDispatch?: boolean
   plannedAt: string
   words: Record<string, DispatchWord>
   order: Record<string, string[]>

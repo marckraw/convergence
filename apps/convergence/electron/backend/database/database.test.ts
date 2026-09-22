@@ -50,8 +50,9 @@ describe('database', () => {
     expect(tableNames).toContain('analytics_profile_snapshots')
     expect(tableNames).toContain('skill_catalog_cache')
     expect(tableNames).toContain('work_ledger')
+    expect(tableNames).toContain('auto_dispatches')
 
-    // MAR-3084 R3: a crew's tracker binding is five columns and nothing
+    // MAR-3084 R3 / MAR-2981 R1: the binding plus its opt-in, and nothing
     // secret. The API key is a Keychain fact under the crew id.
     // Mutation: add an `tracker_api_key` column -> both assertions are red.
     const crewColumns = (
@@ -65,6 +66,7 @@ describe('database', () => {
       'tracker_label_prefix',
       'tracker_wave_prefix',
       'tracker_status_map_json',
+      'tracker_auto_dispatch',
     ])
     expect(
       crewColumns.filter((name) => /key|token|secret|password/i.test(name)),
@@ -989,6 +991,7 @@ describe('database', () => {
         'tracker_label_prefix',
         'tracker_wave_prefix',
         'tracker_status_map_json',
+        'tracker_auto_dispatch',
         'created_at',
         'updated_at',
       ].sort(),
@@ -1008,6 +1011,7 @@ describe('database', () => {
         'host_policy',
         'lane_policy',
         'wip_limit',
+        'paused',
         'lane_path',
         'provider_id',
         'model',

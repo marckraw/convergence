@@ -637,6 +637,7 @@ describe('MAR-3084 R3: a crew carries its tracker binding and nothing secret', (
       statusMap: { Doing: 'in-progress' },
     })
     expect(bound.trackerBinding).toEqual({
+      autoDispatch: false,
       kind: 'linear',
       projectId: 'project-1',
       labelPrefix: 'horse:',

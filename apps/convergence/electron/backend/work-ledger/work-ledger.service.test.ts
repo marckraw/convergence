@@ -434,3 +434,39 @@ describe('MAR-3085 R3: the row is the ruling', () => {
     ).toBeNull()
   })
 })
+
+it('MAR-2981 R14 measures first dispatch seen over 20,000 ledger rows across three crews', () => {
+  const db = getDatabase()
+  try {
+    const ledger = new WorkLedgerService(db)
+    ledger.append(
+      Array.from({ length: 20_000 }, (_, n) =>
+        record({
+          crewId: `crew-${n % 3}`,
+          issueId: `issue-${n % 600}`,
+          seenAt: new Date(Date.UTC(2026, 8, 1) + n * 1000).toISOString(),
+          fact: {
+            logicalStatus: 'todo',
+            branchName: null,
+            updatedAt: null,
+            dispatch: n >= 600,
+          },
+        }),
+      ),
+    )
+    const start = performance.now()
+    const seen = ledger.firstDispatchSeenAt('crew-1')
+    const elapsed = performance.now() - start
+    process.stdout.write(
+      `MAR-2981 R14: ${elapsed.toFixed(3)} ms, 20,000 rows / 3 crews\n`,
+    )
+    expect(seen.size).toBe(200)
+    expect(seen.get('issue-1')).toBe(
+      new Date(Date.UTC(2026, 8, 1) + 601_000).toISOString(),
+    )
+    expect(elapsed).toBeLessThan(20)
+  } finally {
+    closeDatabase()
+    resetDatabase()
+  }
+})

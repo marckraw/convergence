@@ -67,6 +67,8 @@ export function dispatchWordSentence(
       return `needs ${word.missing.join(' · ')}`
     case 'blocked':
       return 'blocked'
+    case 'later-lap':
+      return `lap ${word.lap} · waits for the mastermind's baton`
     case 'seat-not-in-crew':
       return `seat "${seat ?? ''}" not in the crew`
     case 'seat-no-conversation':
@@ -75,6 +77,14 @@ export function dispatchWordSentence(
       return 'no mastermind seat in this crew'
     case 'no-wire':
       return 'no wire from the mastermind to this seat'
+    case 'seat-paused':
+      return 'seat paused'
+    case 'seat-failed':
+      return "seat's last turn failed — open it before it takes work"
+    case 'sent':
+      return `dispatched ${new Date(word.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })} · waiting for the seat`
+    case 'send-failed':
+      return `dispatch failed: ${word.reason} — remove the dispatch label and set it again to retry`
     case 'seat-busy':
       return `seat busy · ${{ turn: 'turn running', compacting: 'compacting', drill: 'drill running', 'waiting-on-you': 'waiting on you' }[word.why]}`
     case 'seat-holds':

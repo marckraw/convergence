@@ -203,6 +203,7 @@ function bench() {
     lanePolicy: null,
     lanePath: null,
     wipLimit: 1,
+    paused: false,
     providerId: null,
     model: null,
     conversationMissing: false,

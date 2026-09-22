@@ -19,6 +19,9 @@ export interface TrackerBindingDraft {
 }
 
 interface TrackerBindingFormProps {
+  autoDispatch?: boolean
+  dispatchCandidates?: readonly string[]
+  onAutoDispatchChange?: (enabled: boolean) => void
   draft: TrackerBindingDraft
   bound: boolean
   /** Whether a key exists -- the form never holds the key itself. */
@@ -52,6 +55,9 @@ const LABEL = 'text-[11px] text-muted-foreground'
  * moment the Keychain has it.
  */
 export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
+  autoDispatch = false,
+  dispatchCandidates = [],
+  onAutoDispatchChange,
   draft,
   bound,
   credential,
@@ -75,6 +81,28 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
       data-crew-tracker
       className="flex flex-col gap-2 border-t border-white/10 pt-2"
     >
+      <section aria-label="Dispatch" className="flex flex-col gap-2">
+        <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
+          Dispatch
+        </h4>
+        <label className="flex min-h-10 items-center gap-2 text-xs text-muted-foreground">
+          <Input
+            className="size-3.5 shrink-0 rounded-sm p-0"
+            type="checkbox"
+            role="switch"
+            checked={autoDispatch}
+            disabled={busy || !bound}
+            onChange={(event) => onAutoDispatchChange?.(event.target.checked)}
+          />
+          Auto-dispatch — send issues labeled groomed, grounded, their seat and
+          dispatch into their seats' conversations
+        </label>
+        <p className="text-[11px] tabular-nums text-muted-foreground">
+          {dispatchCandidates.length
+            ? `${dispatchCandidates.length} issue(s) would start now: ${dispatchCandidates.join(', ')}`
+            : 'Nothing would start now'}
+        </p>
+      </section>
       <h4 className="text-[11px] uppercase tracking-wide text-muted-foreground">
         Tracker
       </h4>
@@ -228,7 +256,8 @@ export const TrackerBindingForm: FC<TrackerBindingFormProps> = ({
       ) : null}
       <p className="text-[10px] text-muted-foreground/70">
         Read only: the app watches this project once a minute and never writes
-        to it.
+        to it; with auto-dispatch on it sends issues into your seats'
+        conversations.
       </p>
     </section>
   )

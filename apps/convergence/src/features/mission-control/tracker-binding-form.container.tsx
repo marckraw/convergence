@@ -1,3 +1,4 @@
+import { useWorkLedgerStore } from '@/entities/work-ledger'
 import { useEffect, useState, type FC } from 'react'
 import {
   sessionCrewApi,
@@ -37,6 +38,17 @@ function messageOf(error: unknown): string {
 export const TrackerBindingFormContainer: FC<{ crew: SessionCrew }> = ({
   crew,
 }) => {
+  const snapshot = useWorkLedgerStore((state) => state.snapshots[crew.id])
+  useEffect(() => {
+    void useWorkLedgerStore.getState().load([crew.id])
+  }, [crew.id])
+  const candidates =
+    snapshot?.entries
+      .filter(
+        (entry) =>
+          snapshot.dispatchPlan?.words[entry.issueId]?.kind === 'would-start',
+      )
+      .map((entry) => `${entry.issueIdentifier} → ${entry.seat}`) ?? []
   const [draft, setDraft] = useState<TrackerBindingDraft>(() => draftFrom(crew))
   const [credential, setCredential] = useState<TrackerCredentialStatus | null>(
     null,
@@ -112,6 +124,17 @@ export const TrackerBindingFormContainer: FC<{ crew: SessionCrew }> = ({
 
   return (
     <TrackerBindingForm
+      autoDispatch={crew.trackerBinding?.autoDispatch ?? false}
+      dispatchCandidates={candidates}
+      onAutoDispatchChange={(autoDispatch) =>
+        void run(async () => {
+          if (crew.trackerBinding)
+            await sessionCrewApi.setTrackerBinding(crew.id, {
+              ...crew.trackerBinding,
+              autoDispatch,
+            })
+        })
+      }
       draft={draft}
       bound={!!crew.trackerBinding}
       credential={credential}
@@ -128,6 +151,7 @@ export const TrackerBindingFormContainer: FC<{ crew: SessionCrew }> = ({
           const found = await resolveProjectId(draft.projectId)
           const saved = await sessionCrewApi.setTrackerBinding(crew.id, {
             ...draft,
+            autoDispatch: crew.trackerBinding?.autoDispatch ?? false,
             projectId: found.projectId,
           })
           setDraft(draftFrom(saved))

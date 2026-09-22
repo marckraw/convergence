@@ -1,4 +1,5 @@
 import type {
+  AutoDispatchRecord,
   DispatchLane,
   DispatchPlan,
   DispatchWord,
@@ -10,7 +11,7 @@ import type { SessionCrewMember } from '../crew/crew.types'
 
 export interface DispatchSeat extends Pick<
   SessionCrewMember,
-  'batonName' | 'sessionId' | 'role' | 'wipLimit'
+  'batonName' | 'sessionId' | 'role' | 'wipLimit' | 'paused'
 > {
   availability: SeatAvailability
   lanePath: string | null
@@ -19,6 +20,8 @@ export interface DispatchSeat extends Pick<
 }
 export interface AutoDispatchInput {
   plannedAt: string
+  autoDispatch?: boolean
+  records?: readonly AutoDispatchRecord[]
   entries: readonly WorkLedgerRecord[]
   seats: readonly DispatchSeat[]
   firstSeen: ReadonlyMap<string, string>
@@ -29,6 +32,7 @@ export function planAutoDispatch(input: AutoDispatchInput): DispatchPlan {
   const { entries, seats, firstSeen } = input
   const plan: DispatchPlan = {
     plannedAt: input.plannedAt,
+    autoDispatch: input.autoDispatch ?? false,
     words: {},
     order: {},
     warnings: [],
@@ -59,28 +63,47 @@ export function planAutoDispatch(input: AutoDispatchInput): DispatchPlan {
     const missing = (['groomed', 'grounded', 'dispatch'] as const).filter(
       (label) => !(entry.fact[label] === true),
     )
-    if (missing.length === 0 && !entry.blocked) {
+    const sent = input.records?.find(
+      (r) => r.issueId === entry.issueId && r.lap === entry.lap,
+    )
+    if (missing.length === 0 && !entry.blocked && entry.lap <= 1 && !sent) {
       ;(plan.order[seatName] ??= []).push(entry.issueId)
     }
     const seat = seats.find((s) => s.batonName === seatName)
     const held = entries.filter(
       (e) =>
         e.seat === seatName &&
-        (e.state === 'working' || e.state === 'returned'),
+        (e.state === 'working' ||
+          e.state === 'returned' ||
+          (e.state === 'assigned' &&
+            input.records?.some(
+              (r) => r.issueId === e.issueId && r.lap === e.lap,
+            ))),
     )
     const candidates = plan.order[seatName] ?? []
     let word: DispatchWord
-    if (missing.length) word = { kind: 'needs-labels', missing }
+    if (sent)
+      word =
+        sent.error !== null
+          ? { kind: 'send-failed', reason: sent.error }
+          : { kind: 'sent', at: sent.sentAt }
+    else if (missing.length) word = { kind: 'needs-labels', missing }
     else if (entry.blocked) word = { kind: 'blocked' }
+    else if (entry.lap > 1) word = { kind: 'later-lap', lap: entry.lap }
     else if (!seat) word = { kind: 'seat-not-in-crew' }
     else if (!seat.sessionId || seat.availability === 'unknown')
       word = { kind: 'seat-no-conversation' }
     else if (masters.length === 0) word = { kind: 'no-mastermind' }
     else if (!seat.wire) word = { kind: 'no-wire' }
+    else if (seat.paused) word = { kind: 'seat-paused' }
+    else if (seat.availability === 'failed') word = { kind: 'seat-failed' }
     else if (seat.availability !== 'idle')
       word = { kind: 'seat-busy', why: seat.availability }
     else if (held.length >= seat.wipLimit && held.length > 0)
-      word = { kind: 'seat-holds', identifier: held[0].issueIdentifier }
+      word = {
+        kind: held[0].state === 'assigned' ? 'queued-behind' : 'seat-holds',
+        identifier: held[0].issueIdentifier,
+      }
     else if (seat.lane !== 'clean')
       word = { kind: 'lane', state: seat.lane, path: seat.lanePath }
     else if (candidates.length > Math.max(0, seat.wipLimit - held.length)) {
@@ -92,4 +115,30 @@ export function planAutoDispatch(input: AutoDispatchInput): DispatchPlan {
     plan.words[entry.issueId] = word
   }
   return plan
+}
+
+/** MAR-3149 tracks a crew lap cap; round_cap is the unrelated hop budget. */
+export const AUTO_DISPATCH_LAP_CAP = 6
+
+export function autoDispatchText(input: {
+  roleCard: string | null
+  instruction: string | null
+  issueUrl: string
+  mastermind: string
+}): string {
+  return [
+    input.roleCard,
+    input.instruction,
+    `Issue: ${input.issueUrl}\nRead the body first; it is the whole brief. Lap 1 of ${AUTO_DISPATCH_LAP_CAP}.\nYour reply's last line is exactly: BATON: ${input.mastermind}`,
+  ]
+    .filter((part) => part !== null && part !== '')
+    .join('\n\n')
+}
+
+export function autoDispatchTime(at: string): string {
+  return new Date(at).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
 }

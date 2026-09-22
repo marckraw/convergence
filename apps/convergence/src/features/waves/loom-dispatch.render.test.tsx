@@ -82,7 +82,7 @@ describe('R8 rendered Next', () => {
     ).toBeTruthy()
     expect(
       screen.getByText(
-        /Planned \d\d:\d\d · nothing is sent yet — auto-dispatch is not built/,
+        /Planned \d\d:\d\d · Auto-dispatch is off · nothing is sent/,
       ),
     ).toBeTruthy()
     expect(screen.queryByText('1 · ready')).toBeNull()
@@ -157,6 +157,7 @@ it.each([
           sessionId: 'm',
           role: 'mastermind',
           wipLimit: 1,
+          paused: false,
           availability: 'idle',
           lane: 'clean',
           lanePath: null,
@@ -167,6 +168,7 @@ it.each([
           sessionId: 's',
           role: 'horse',
           wipLimit: 1,
+          paused: false,
           availability: 'idle',
           lane: state,
           lanePath: path,
@@ -178,3 +180,35 @@ it.each([
     expect(screen.getByText(sentence)).toBeTruthy()
   },
 )
+
+it.each([
+  [
+    { kind: 'sent' as const, at: new Date(now).toISOString() },
+    /dispatched \d\d:\d\d · waiting for the seat/,
+  ],
+  [
+    { kind: 'send-failed' as const, reason: 'offline' },
+    'dispatch failed: offline — remove the dispatch label and set it again to retry',
+  ],
+  [{ kind: 'seat-paused' as const }, 'seat paused'],
+  [
+    { kind: 'seat-failed' as const },
+    "seat's last turn failed — open it before it takes work",
+  ],
+])('MAR-2981 Next renders dispatch word %j', (word, sentence) => {
+  render(
+    <LoomSheetView
+      {...base}
+      sheet="next"
+      dispatchPlan={{
+        ...plan,
+        autoDispatch: true,
+        words: { [entry.issueId]: word },
+      }}
+    />,
+  )
+  expect(screen.getByText(sentence)).toBeTruthy()
+  expect(
+    screen.getByText(/Auto-dispatch is on · sends within a minute/),
+  ).toBeTruthy()
+})

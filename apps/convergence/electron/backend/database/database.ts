@@ -9,14 +9,21 @@ import {
 import type { TranscriptEntry } from '../provider/provider.types'
 import { conversationItemToInsertRow } from '../session/conversation-item.pure'
 import { migrateTaskObserved } from './task-observed-migration.service'
-import { migrateCrewTrackerBinding } from './crew-tracker-binding-migration.service'
+import { migrateAutoDispatches } from './auto-dispatch-migration.service'
+import {
+  migrateCrewAutoDispatch,
+  migrateCrewTrackerBinding,
+} from './crew-tracker-binding-migration.service'
 import {
   migrateWorkLedger,
   migrateWorkLedgerBlocked,
   migrateWorkLedgerVerdict,
 } from './work-ledger-migration.service'
 import { migrateCrewConfig } from './crew-config-migration.service'
-import { migrateCrewSeats } from './crew-seat-migration.service'
+import {
+  migrateCrewSeatPause,
+  migrateCrewSeats,
+} from './crew-seat-migration.service'
 import { migrateEndedSummary } from './ended-summary-migration.service'
 import { migrateHarnessEvidence } from './harness-evidence-migration.service'
 import { migrateResidentStopReason } from './resident-stop-reason-migration.service'
@@ -2282,6 +2289,9 @@ export function getDatabase(dbPath?: string): Database.Database {
     // ledger's read joins seats by baton name (MAR-3084). Both after the
     // `pull_request_json` column above, which the ledger's fact join reads.
     migrateCrewTrackerBinding(database)
+    migrateCrewAutoDispatch(database)
+    migrateCrewSeatPause(database)
+    migrateAutoDispatches(database)
     migrateWorkLedger(database)
     // The verdict columns and the `stopped` state (MAR-3085): a rebuild, so
     // it runs after the v1 table exists.

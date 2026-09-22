@@ -83,6 +83,7 @@ export const sessionCrewApi = {
       hostPolicy?: string | null
       lanePolicy?: string | null
       lanePath?: string | null
+      paused?: boolean
       wipLimit?: number | null
     },
   ): Promise<SessionCrew> =>
@@ -119,6 +120,7 @@ export const sessionCrewApi = {
     crewId: string,
     binding: {
       projectId: string
+      autoDispatch?: boolean
       labelPrefix?: string
       wavePrefix?: string
     } | null,

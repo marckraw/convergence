@@ -1,3 +1,4 @@
+import { useWorkLedgerStore } from '@/entities/work-ledger'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   act,
@@ -25,6 +26,8 @@ const KEY = 'lin_api_fixture_never_shown_back'
 const AT = '2026-09-17T08:04:00.000Z'
 
 function renderForm(overrides: {
+  dispatchCandidates?: readonly string[]
+  onAutoDispatchChange?: (enabled: boolean) => void
   credential?: 'present' | 'absent' | null
   lastProbe?: TrackerProbeReading | null
   keyDraft?: string
@@ -32,6 +35,8 @@ function renderForm(overrides: {
   const noop = vi.fn()
   return render(
     <TrackerBindingForm
+      dispatchCandidates={overrides.dispatchCandidates}
+      onAutoDispatchChange={overrides.onAutoDispatchChange}
       draft={{
         projectId: 'project-1',
         labelPrefix: 'horse:',
@@ -55,6 +60,7 @@ function renderForm(overrides: {
 }
 
 afterEach(() => {
+  useWorkLedgerStore.setState({ snapshots: {}, unsubscribeBroadcast: null })
   cleanup()
   delete (window as unknown as { electronAPI?: unknown }).electronAPI
 })
@@ -124,6 +130,7 @@ describe('MAR-3084 R9: the binding form shows facts, not the key', () => {
       members: [],
       trackerBinding: {
         kind: 'linear',
+        autoDispatch: false,
         projectId: 'project-1',
         labelPrefix: 'horse:',
         wavePrefix: 'wave:',
@@ -132,6 +139,15 @@ describe('MAR-3084 R9: the binding form shows facts, not the key', () => {
     } satisfies SessionCrew
     const setCredential = vi.fn(async () => 'present' as const)
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      workLedger: {
+        onUpdated: () => () => {},
+        list: async () => ({
+          crewId: 'c',
+          entries: [],
+          dispatchPlan: null,
+          trackerHealth: null,
+        }),
+      },
       tracker: {
         credentialStatus: vi.fn(async () => 'absent' as const),
         setCredential,
@@ -191,6 +207,7 @@ describe('MAR-3156 R3: what happens when Bind is pressed', () => {
       members: [],
       trackerBinding: {
         kind: 'linear',
+        autoDispatch: false,
         projectId,
         labelPrefix: 'horse:',
         wavePrefix: 'wave:',
@@ -215,6 +232,15 @@ describe('MAR-3156 R3: what happens when Bind is pressed', () => {
       async () => input.resolution ?? { kind: 'not-found' as const },
     )
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      workLedger: {
+        onUpdated: () => () => {},
+        list: async () => ({
+          crewId: 'c',
+          entries: [],
+          dispatchPlan: null,
+          trackerHealth: null,
+        }),
+      },
       tracker: {
         credentialStatus: vi.fn(async () => {
           if (input.credential === null) {
@@ -363,3 +389,27 @@ describe('MAR-3156 R3: what happens when Bind is pressed', () => {
     expect(screen.getByText(/No project answers to that/)).toBeTruthy()
   })
 })
+
+it.each([
+  { count: 0, candidates: [] },
+  { count: 1, candidates: ['MAR-1 → opus'] },
+  { count: 2, candidates: ['MAR-1 → opus', 'MAR-2 → astra'] },
+])(
+  'MAR-2981 R10 Dispatch previews $count candidates before enabling',
+  ({ candidates }) => {
+    const change = vi.fn()
+    renderForm({ dispatchCandidates: candidates, onAutoDispatchChange: change })
+    expect(screen.getByRole('region', { name: 'Dispatch' })).toBeTruthy()
+    expect(
+      screen.getByText(
+        candidates.length
+          ? `${candidates.length} issue(s) would start now: ${candidates.join(', ')}`
+          : 'Nothing would start now',
+      ),
+    ).toBeTruthy()
+    const toggle = screen.getByRole('switch')
+    expect(toggle).toHaveProperty('checked', false)
+    fireEvent.click(toggle)
+    expect(change).toHaveBeenCalledWith(true)
+  },
+)

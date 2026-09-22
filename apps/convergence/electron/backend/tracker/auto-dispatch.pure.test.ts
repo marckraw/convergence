@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { planAutoDispatch, type DispatchSeat } from './auto-dispatch.pure'
+import {
+  autoDispatchText,
+  planAutoDispatch,
+  type DispatchSeat,
+} from './auto-dispatch.pure'
 import type { WorkLedgerRecord } from '../../../src/shared/types/tracker.types'
 
 const ready = {
@@ -39,6 +43,7 @@ const horse = (patch: Partial<DispatchSeat> = {}): DispatchSeat => ({
   sessionId: 's',
   role: 'horse',
   wipLimit: 1,
+  paused: false,
   availability: 'idle',
   lane: 'clean',
   lanePath: null,
@@ -58,6 +63,22 @@ const plan = (
     seats: [...masters, seat],
     firstSeen,
   })
+
+it('lap 3 A later laps wait for the mastermind after blocked and before seat checks', () => {
+  expect(plan([row('1', { lap: 2 })]).words['1']).toEqual({
+    kind: 'later-lap',
+    lap: 2,
+  })
+  expect(plan([row('1', { lap: 2, blocked: true })]).words['1']).toEqual({
+    kind: 'blocked',
+  })
+  expect(
+    plan([row('1', { lap: 2 })], horse({ sessionId: null })).words['1'],
+  ).toEqual({ kind: 'later-lap', lap: 2 })
+  const mixed = plan([row('1', { lap: 2 }), row('2', { lap: 1 })])
+  expect(mixed.order.horse).toEqual(['2'])
+  expect(mixed.words['2'].kind).toBe('would-start')
+})
 
 describe('MAR-3293 dispatch decisions', () => {
   it('R1 all eight label combinations admit exactly one candidate; absent keys are not labels', () => {
@@ -199,3 +220,53 @@ it('Item A unset lane keeps precedence below busy and above queue', () => {
     plan([row('1')], horse({ lane: 'unset', availability: 'turn' })).words['1'],
   ).toEqual({ kind: 'seat-busy', why: 'turn' })
 })
+
+it('MAR-2981 R5 pause sits after no-wire and before busy; failed has its own word', () => {
+  expect(
+    plan([row('1')], horse({ paused: true, wire: null })).words['1'].kind,
+  ).toBe('no-wire')
+  expect(
+    plan([row('1')], horse({ paused: true, availability: 'turn' })).words['1']
+      .kind,
+  ).toBe('seat-paused')
+  expect(
+    plan([row('1')], horse({ availability: 'failed' })).words['1'].kind,
+  ).toBe('seat-failed')
+})
+it('MAR-2981 R6 sent-not-picked-up counts as held, including when the label was removed', () => {
+  const result = planAutoDispatch({
+    plannedAt: 'now',
+    firstSeen: new Map(),
+    seats: [master, horse()],
+    entries: [row('1', { fact: { ...ready, dispatch: false } }), row('2')],
+    records: [{ issueId: '1', lap: 0, sentAt: 'at', error: null }],
+  })
+  expect(result.words['1']).toEqual({ kind: 'sent', at: 'at' })
+  expect(result.words['2']).toEqual({
+    kind: 'queued-behind',
+    identifier: 'MAR-1',
+  })
+})
+
+it.each(['fable', 'opus-mm'])(
+  'MAR-2981 R4 brief names mastermind %s and leads with the role card',
+  (mastermind) => {
+    const text = autoDispatchText({
+      mastermind,
+      issueUrl: 'https://linear.app/example/issue/MAR-1',
+      roleCard: 'Horse card',
+      instruction: 'Wire instruction',
+    })
+    expect(text).toBe(
+      `Horse card\n\nWire instruction\n\nIssue: https://linear.app/example/issue/MAR-1\nRead the body first; it is the whole brief. Lap 1 of 6.\nYour reply's last line is exactly: BATON: ${mastermind}`,
+    )
+    expect(
+      autoDispatchText({
+        mastermind,
+        issueUrl: 'url',
+        roleCard: null,
+        instruction: null,
+      }).startsWith('Issue: url'),
+    ).toBe(true)
+  },
+)

@@ -1,4 +1,6 @@
 import type {
+  AutoDispatchRecord,
+  TrackerBinding,
   DispatchPlan,
   DispatchLane,
   SeatAvailability,
@@ -10,6 +12,7 @@ import { planAutoDispatch } from './auto-dispatch.pure'
 /** The crew read includes each resident conversation's local lane; remote or missing is null. */
 export interface DispatchCrew {
   id: string
+  trackerBinding?: TrackerBinding | null
   members: (SessionCrewMember & { localWorkingDirectory: string | null })[]
 }
 
@@ -30,7 +33,12 @@ export interface AutoDispatchPlanDeps {
 /** Read-only orchestration, with one volatile last-plan cache per crew. */
 export class AutoDispatchPlanService {
   private readonly plans = new Map<string, DispatchPlan>()
-  constructor(private readonly deps: AutoDispatchPlanDeps) {}
+  constructor(
+    private readonly deps: AutoDispatchPlanDeps,
+    private readonly records: (
+      crewId: string,
+    ) => readonly AutoDispatchRecord[] = () => [],
+  ) {}
 
   cached(crewId: string): DispatchPlan | null {
     return this.plans.get(crewId) ?? null
@@ -47,10 +55,9 @@ export class AutoDispatchPlanService {
     const seats = await Promise.all(
       crew.members.map(async (member) => {
         const lanePath =
-          member.lanePath ??
-          (member.lanePolicy !== 'own-worktree'
-            ? member.localWorkingDirectory
-            : null)
+          member.lanePolicy === 'own-worktree'
+            ? member.lanePath
+            : member.localWorkingDirectory
         return {
           ...member,
           availability: member.sessionId
@@ -72,6 +79,8 @@ export class AutoDispatchPlanService {
     )
     const plan = planAutoDispatch({
       plannedAt,
+      autoDispatch: crew.trackerBinding?.autoDispatch ?? false,
+      records: this.records(crewId),
       seats,
       entries: this.deps.currentView(crewId),
       firstSeen: this.deps.firstDispatchSeenAt(crewId),

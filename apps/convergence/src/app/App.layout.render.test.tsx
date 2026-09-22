@@ -46,6 +46,7 @@ function crew(overrides: Partial<SessionCrew> = {}): SessionCrew {
     members: [],
     trackerBinding: {
       kind: 'linear',
+      autoDispatch: false,
       projectId: 'project-1',
       labelPrefix: 'horse:',
       wavePrefix: 'wave:',

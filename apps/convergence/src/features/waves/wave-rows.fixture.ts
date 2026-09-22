@@ -51,6 +51,7 @@ export function crewMember(
     lanePolicy: null,
     lanePath: null,
     wipLimit: 1,
+    paused: false,
     providerId: null,
     model: null,
     conversationMissing: false,
@@ -93,6 +94,7 @@ export function boundCrewWith(
     members,
     trackerBinding: {
       kind: 'linear',
+      autoDispatch: false,
       projectId: `project-${id}`,
       labelPrefix: 'horse:',
       wavePrefix: 'wave:',

@@ -59,6 +59,7 @@ function boundCrew(id: string, name: string): SessionCrew {
     members: [],
     trackerBinding: {
       kind: 'linear',
+      autoDispatch: false,
       projectId: `project-${id}`,
       labelPrefix: 'horse:',
       wavePrefix: 'wave:',
@@ -258,7 +259,9 @@ describe('MAR-3097: through the containers and the real stores', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Next · / }))
     expect(screen.getByText('Next · 0 ready · 1 preparing')).toBeTruthy()
     expect(screen.getByText('lane has uncommitted changes')).toBeTruthy()
-    expect(screen.getByText(/nothing is sent yet/)).toBeTruthy()
+    expect(
+      screen.getByText(/Auto-dispatch is off · nothing is sent/),
+    ).toBeTruthy()
   })
 
   it('B: no bound crew -> no column at all', async () => {

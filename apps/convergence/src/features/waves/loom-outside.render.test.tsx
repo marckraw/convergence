@@ -39,6 +39,7 @@ function boundCrew(id: string, name: string): SessionCrew {
     members: [],
     trackerBinding: {
       kind: 'linear',
+      autoDispatch: false,
       projectId: `project-${id}`,
       labelPrefix: 'horse:',
       wavePrefix: 'wave:',
