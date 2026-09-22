@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  autoDispatchTerminalError,
   autoDispatchText,
   planAutoDispatch,
   type DispatchSeat,
@@ -270,3 +271,15 @@ it.each(['fable', 'opus-mm'])(
     ).toBe(true)
   },
 )
+
+it('MAR-3298 lap 2 E: terminal words are sentences — store the raw reason turns red', () => {
+  expect(autoDispatchTerminalError('failed')).toBe(
+    'the delivery failed before the seat took it',
+  )
+  expect(autoDispatchTerminalError('cancelled')).toBe(
+    'the queued delivery was cancelled',
+  )
+  expect(autoDispatchTerminalError('abandoned')).toBe(
+    "the seat's conversation was deleted",
+  )
+})

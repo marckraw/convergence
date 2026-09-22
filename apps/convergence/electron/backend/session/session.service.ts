@@ -4954,6 +4954,13 @@ export class SessionService {
       executionHostSeq !== undefined &&
       this.handlesAwaitingTheirRun.has(source)
     ) {
+      // A replayed settle still ends the reset-in-flight memory: leaving the
+      // flag would make the next plain failed turn drain the queue
+      // (MAR-3298 lap 2 A). Cleared here, before the early return, because
+      // every turn-ending lifecycle of this session clears it — guard or not.
+      if (status === 'failed' || status === 'completed') {
+        this.resetsInFlight.delete(sessionId)
+      }
       return
     }
     if (status === 'failed') {

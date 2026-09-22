@@ -1138,6 +1138,7 @@ async function startApp(): Promise<void> {
   }
 
   app.on('before-quit', () => {
+    autoDispatcher.dispose()
     systemNotifications.dispose()
     systemCoalescer.dispose()
     updatesScheduler?.stop()

@@ -505,6 +505,53 @@ describe('PiProvider /clear with no live process (MAR-3215)', () => {
     handle.stop()
   })
 
+  it('MAR-3298 lap 2 C: a first probe that exits is retried; the second naming the file restarts — ME retry on timeout only turns red', async () => {
+    vi.useFakeTimers()
+    try {
+      const spawned: FakePi[] = []
+      let probeCount = 0
+      spawnMock.mockImplementation(() => {
+        probeCount += 1
+        if (probeCount === 1) {
+          const exiting = new FakePi({
+            sessionFile: null,
+            nextSessionFiles: [],
+            newSession: 'switch',
+            holdPrompts: true,
+          })
+          exiting.stdin.removeAllListeners('data')
+          spawned.push(exiting)
+          // Exit before naming a session — not a timeout (MAR-3298 lap 2 C).
+          setTimeout(() => exiting.emitExit(1), 0)
+          return exiting
+        }
+        const child = new FakePi({
+          sessionFile: '/s/fresh.jsonl',
+          nextSessionFiles: [],
+          newSession: 'switch',
+          holdPrompts: false,
+        })
+        spawned.push(child)
+        return child
+      })
+      const handle = start('/clear', '/s/old.jsonl')
+      const seen = observe(handle)
+      await vi.advanceTimersByTimeAsync(10)
+      await vi.advanceTimersByTimeAsync(50)
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(seen.statuses.at(-1)).toBe('completed')
+      expect(spawned).toHaveLength(2)
+      expect(seen.boundaries()).toHaveLength(1)
+      expect(
+        seen.notes.some((note) => note.text.includes('Could not clear')),
+      ).toBe(false)
+      handle.dispose?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('refuses a message while the reset is under way rather than racing it', () => {
     setup()
     const handle = start('/clear', '/s/old.jsonl')

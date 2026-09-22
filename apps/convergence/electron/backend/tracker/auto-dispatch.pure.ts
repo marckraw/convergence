@@ -142,3 +142,20 @@ export function autoDispatchTime(at: string): string {
     hour12: false,
   })
 }
+
+/**
+ * Loom's send-failed word is a sentence, not the raw terminal token
+ * (MAR-3298 lap 2 E). Mapped once so the row and the Next chip agree.
+ */
+export function autoDispatchTerminalError(
+  reason: 'failed' | 'cancelled' | 'abandoned',
+): string {
+  switch (reason) {
+    case 'failed':
+      return 'the delivery failed before the seat took it'
+    case 'cancelled':
+      return 'the queued delivery was cancelled'
+    case 'abandoned':
+      return "the seat's conversation was deleted"
+  }
+}

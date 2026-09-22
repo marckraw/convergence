@@ -256,4 +256,121 @@ describe('clear-then-deliver: failed reset drains the brief (MAR-3298 R2)', () =
     ])
     expect(starts.map((c) => c.initialMessage)).toEqual(['horse turn'])
   })
+
+  /** Codex seat: reset + app-queued follow-up on the same session (lap 2 A). */
+  function createCodexSeat(): string {
+    return service.create({
+      projectId: 'reset-project',
+      workspaceId: null,
+      providerId: 'codex',
+      name: 'codex-flag-lifecycle',
+      model: 'gpt-5',
+      effort: 'high',
+    }).id
+  }
+
+  /**
+   * On the current session: a new turn, a queued follow-up, then a plain
+   * `failed`. The row must stay `queued` — a stale `resetsInFlight` flag
+   * would drain it (MAR-3298 lap 2 A / MAR-2971).
+   */
+  async function assertPlainFailedDoesNotDrain(): Promise<void> {
+    providerLog.length = 0
+    starts.length = 0
+    await service.start(sessionId, { text: 'plain turn' })
+    emit({ kind: 'session.patch', patch: { status: 'running' } })
+    const queuedId = await service.sendMessage(sessionId, {
+      text: 'must stay queued',
+      deliveryMode: 'follow-up',
+    })
+    emit({ kind: 'session.patch', patch: { status: 'failed' } })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(service.getQueuedInputs(sessionId)).toMatchObject([
+      { dispatchId: queuedId, state: 'queued', error: null },
+    ])
+    expect(starts.map((c) => c.initialMessage)).toEqual(['plain turn'])
+    expect(
+      providerLog.some((entry) => entry.includes('must stay queued')),
+    ).toBe(false)
+  }
+
+  it('A1: after hand Stop during a reset, a plain failed turn does not drain — MA keeps the flag turns red', async () => {
+    sessionId = createCodexSeat()
+    await seedCompletedTurn()
+    await service.sendMessage(sessionId, { text: '/clear' })
+    expect(starts.map((c) => c.initialMessage)).toEqual(['/clear'])
+    service.stop(sessionId)
+    await assertPlainFailedDoesNotDrain()
+  })
+
+  it('A2: after a successful reset, a plain failed turn does not drain — MF leaves the flag turns red', async () => {
+    sessionId = createCodexSeat()
+    await seedCompletedTurn()
+    await service.sendMessage(sessionId, { text: '/clear' })
+    emit({ kind: 'session.patch', patch: { status: 'completed' } })
+    await Promise.resolve()
+    await Promise.resolve()
+    await assertPlainFailedDoesNotDrain()
+  })
+
+  it('A3: after a busy refusal of /clear, a plain failed turn does not drain — MB sets flag before busy turns red', async () => {
+    sessionId = createCodexSeat()
+    await seedCompletedTurn()
+    await service.start(sessionId, { text: 'busy turn' })
+    emit({ kind: 'session.patch', patch: { status: 'running' } })
+    await expect(
+      service.sendMessage(sessionId, { text: '/clear' }),
+    ).rejects.toThrow(
+      'Wait for the current turn to finish before clearing the conversation.',
+    )
+    const queuedId = await service.sendMessage(sessionId, {
+      text: 'must stay queued',
+      deliveryMode: 'follow-up',
+    })
+    emit({ kind: 'session.patch', patch: { status: 'failed' } })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(service.getQueuedInputs(sessionId)).toMatchObject([
+      { dispatchId: queuedId, state: 'queued', error: null },
+    ])
+    expect(starts.some((c) => c.initialMessage === 'must stay queued')).toBe(
+      false,
+    )
+  })
+
+  it('A4: a replay-guarded reset terminal still clears the flag — drop the guard clear turns red', async () => {
+    sessionId = createCodexSeat()
+    await seedCompletedTurn()
+    const receipt = await service.sendMessageWithOpener(sessionId, {
+      opener: '/clear',
+      text: 'must stay queued',
+    })
+    const internals = service as unknown as {
+      activeHandles: Map<string, object>
+      handlesAwaitingTheirRun: WeakSet<object>
+      resetsInFlight: Set<string>
+    }
+    const handle = internals.activeHandles.get(sessionId)
+    expect(handle).toBeTruthy()
+    internals.handlesAwaitingTheirRun.add(handle!)
+    // Replayed settle: lifecycle returns early. Flag must still clear.
+    emit({
+      kind: 'session.patch',
+      executionHostSeq: 1,
+      patch: { status: 'failed' },
+    })
+    await Promise.resolve()
+    expect(internals.resetsInFlight.has(sessionId)).toBe(false)
+    // Unguarded failed (no seq): a stale flag would drain the payload.
+    emit({ kind: 'session.patch', patch: { status: 'failed' } })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(service.getQueuedInputs(sessionId)).toMatchObject([
+      { dispatchId: receipt.payloadDispatchId, state: 'queued', error: null },
+    ])
+    expect(starts.some((c) => c.initialMessage === 'must stay queued')).toBe(
+      false,
+    )
+  })
 })

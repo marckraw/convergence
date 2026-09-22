@@ -608,11 +608,13 @@ it('MAR-3298 R4 a failed terminal for a sent receipt stamps send-failed; label p
     reason: 'failed',
     dispatchIds: ['payload'],
   })
-  expect(b.service.records(b.crewId)[0].error).toBe('failed')
+  expect(b.service.records(b.crewId)[0].error).toBe(
+    'the delivery failed before the seat took it',
+  )
   await b.tick()
   expect(b.planner.cached(b.crewId)?.words.i).toEqual({
     kind: 'send-failed',
-    reason: 'failed',
+    reason: 'the delivery failed before the seat took it',
   })
   expect(b.gateway.sendMessageWithOpener).toHaveBeenCalledTimes(1)
   b.page((page) => page.map((i) => ({ ...i, dispatch: false })))
@@ -632,13 +634,17 @@ it('MAR-3298 R4 a cancelled terminal stamps cancelled; an unknown receipt is ign
     reason: 'cancelled',
     dispatchIds: ['payload'],
   })
-  expect(b.service.records(b.crewId)[0].error).toBe('cancelled')
+  expect(b.service.records(b.crewId)[0].error).toBe(
+    'the queued delivery was cancelled',
+  )
   b.emitTerminal({
     sessionId: 's',
     reason: 'failed',
     dispatchIds: ['unknown-receipt'],
   })
-  expect(b.service.records(b.crewId)[0].error).toBe('cancelled')
+  expect(b.service.records(b.crewId)[0].error).toBe(
+    'the queued delivery was cancelled',
+  )
 })
 
 it('MAR-3298 R4 a settled row with an error already set is not overwritten', async () => {
@@ -655,7 +661,49 @@ it('MAR-3298 R4 a settled row with an error already set is not overwritten', asy
     reason: 'abandoned',
     dispatchIds: ['payload'],
   })
-  expect(b.service.records(b.crewId)[0].error).toBe('failed')
+  expect(b.service.records(b.crewId)[0].error).toBe(
+    'the delivery failed before the seat took it',
+  )
+})
+
+it('MAR-3298 lap 2 B: a terminal before the receipt UPDATE is reconciled — drop the reconcile turns red', async () => {
+  const b = bench()
+  b.enable()
+  b.observe()
+  const plan = await b.planner.refresh(b.crewId, at)
+  vi.mocked(b.gateway.sendMessageWithOpener).mockImplementation(async () => {
+    b.emitTerminal({
+      sessionId: 's',
+      reason: 'failed',
+      dispatchIds: ['early-payload'],
+    })
+    return {
+      openerDispatchId: 'opener',
+      payloadDispatchId: 'early-payload',
+      openerQueued: false,
+    }
+  })
+  await b.service.act(b.crewId, plan, at)
+  expect(b.service.records(b.crewId)[0].error).toBe(
+    'the delivery failed before the seat took it',
+  )
+})
+
+it('MAR-3298 lap 2 E: each terminal word is a sentence — store the raw reason turns red', async () => {
+  const b = bench()
+  b.enable()
+  await b.act()
+  b.emitTerminal({
+    sessionId: 's',
+    reason: 'abandoned',
+    dispatchIds: ['payload'],
+  })
+  expect(b.service.records(b.crewId)[0].error).toBe(
+    "the seat's conversation was deleted",
+  )
+  expect(b.service.records(b.crewId)[0].error).not.toBe('abandoned')
+  expect(b.service.records(b.crewId)[0].error).not.toBe('failed')
+  expect(b.service.records(b.crewId)[0].error).not.toBe('cancelled')
 })
 it('R8 missing dispatch label sends nothing; later laps stay manual', async () => {
   const b = bench()
