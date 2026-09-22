@@ -105,6 +105,26 @@ describe('context-window.pure', () => {
     ).toBeNull()
   })
 
+  it("refuses a subagent assistant event, whose usage is the subagent's context", () => {
+    expect(
+      deriveClaudeEstimatedContextWindow(
+        {
+          type: 'assistant',
+          parent_tool_use_id: 'toolu_task_1',
+          message: {
+            model: 'claude-opus-5',
+            usage: {
+              input_tokens: 12,
+              cache_creation_input_tokens: 20_000,
+              cache_read_input_tokens: 380_000,
+            },
+          },
+        },
+        'fable',
+      ),
+    ).toBeNull()
+  })
+
   it('keeps the last assistant request as the context when a turn ends', () => {
     // The exact expression claude-code-provider.ts runs on every stream event,
     // keeping the last non-null answer as the session's context window.
@@ -121,6 +141,20 @@ describe('context-window.pure', () => {
             input_tokens: 32,
             cache_creation_input_tokens: 4_127,
             cache_read_input_tokens: 120_863,
+          },
+        },
+      },
+      {
+        // A Task subagent's request, forwarded mid-turn with a LARGER context
+        // than the main thread's (12 + 20,000 + 380,000 = 400,012).
+        type: 'assistant',
+        parent_tool_use_id: 'toolu_task_1',
+        message: {
+          model: 'claude-opus-5',
+          usage: {
+            input_tokens: 12,
+            cache_creation_input_tokens: 20_000,
+            cache_read_input_tokens: 380_000,
           },
         },
       },
