@@ -1012,6 +1012,7 @@ describe('database', () => {
         'lane_policy',
         'wip_limit',
         'paused',
+        'drill_auto',
         'lane_path',
         'provider_id',
         'model',

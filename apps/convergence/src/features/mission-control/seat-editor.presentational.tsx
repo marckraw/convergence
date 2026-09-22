@@ -456,6 +456,23 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             Pause automatic dispatch to this seat
           </label>
           {refusalFor('paused')}
+          {member.role === 'mastermind' && (
+            <>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Input
+                  className="size-3.5 shrink-0 rounded-sm p-0"
+                  type="checkbox"
+                  checked={member.drillAuto}
+                  disabled={busy}
+                  onChange={(event) =>
+                    onSeatEdit({ drillAuto: event.target.checked })
+                  }
+                />
+                Run the drill by itself when the context passes the alert
+              </label>
+              {refusalFor('drillAuto')}
+            </>
+          )}
         </div>
       </section>
 

@@ -37,6 +37,7 @@ export interface DrillChange {
   sessionId: string
   beat: DrillBeat | null
   reason?: string
+  automatic?: { outcome: DrillOutcome; before: number }
 }
 
 export type DrillCancelResult = { ok: true } | { ok: false; reason: string }
@@ -59,4 +60,5 @@ export interface DrillOutcomeRecord {
   seq: number
   outcome: DrillOutcome
   before: number | null
+  automatic?: boolean
 }

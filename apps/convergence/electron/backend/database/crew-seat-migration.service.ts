@@ -255,3 +255,21 @@ export function migrateCrewSeatPause(db: Database.Database): void {
     ).run()
   })()
 }
+
+/** Automatic drilling is opt-in per seat, including seats that already exist. */
+export function migrateCrewSeatDrillAuto(db: Database.Database): void {
+  if (
+    db
+      .prepare("SELECT 1 FROM app_state WHERE key='crew_seat_drill_auto_v1'")
+      .get()
+  )
+    return
+  db.transaction(() => {
+    db.prepare(
+      'ALTER TABLE session_crew_members ADD COLUMN drill_auto INTEGER NOT NULL DEFAULT 0',
+    ).run()
+    db.prepare(
+      "INSERT INTO app_state(key,value) VALUES ('crew_seat_drill_auto_v1','1')",
+    ).run()
+  })()
+}

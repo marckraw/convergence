@@ -23,6 +23,7 @@ export interface DrillChange {
   sessionId: string
   beat: DrillBeat | null
   reason?: string
+  automatic?: { outcome: DrillOutcome; before: number }
 }
 
 /**

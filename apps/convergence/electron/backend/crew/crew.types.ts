@@ -30,6 +30,7 @@ export const DEFAULT_CREW_MEMBER_SEAT = {
   role: DEFAULT_CREW_MEMBER_ROLE,
   kind: DEFAULT_CREW_MEMBER_KIND,
   paused: false,
+  drillAuto: false,
   roleCard: null,
   hostPolicy: null,
   lanePolicy: null,
@@ -85,6 +86,7 @@ export interface SessionCrewMember {
   wipLimit: number
   /** Gates future automatic dispatches without touching a running turn. */
   paused: boolean
+  drillAuto: boolean
   /** A dynamic seat's recipe. Null on a resident seat, which has a session. */
   providerId: string | null
   model: string | null

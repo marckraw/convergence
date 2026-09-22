@@ -13,6 +13,7 @@ export type SeatRefusalField =
   | 'hostPolicy'
   | 'wipLimit'
   | 'paused'
+  | 'drillAuto'
 
 /**
  * One seat edit carries exactly one field (MAR-3118 lap 2, F3), so the field a
@@ -26,10 +27,12 @@ export type SeatPatch =
   | { lanePath: string | null }
   | { wipLimit: number | null }
   | { paused: boolean }
+  | { drillAuto: boolean }
 
 /** The field a seat edit carries — where its refusal is drawn. */
 export function seatPatchField(patch: SeatPatch): SeatRefusalField {
   if ('paused' in patch) return 'paused'
+  if ('drillAuto' in patch) return 'drillAuto'
   if ('role' in patch) return 'role'
   if ('roleCard' in patch) return 'roleCard'
   if ('hostPolicy' in patch) return 'hostPolicy'
@@ -159,6 +162,10 @@ export function refusalKeptLine(
         : 'Worktree path is still not set.'
     case 'paused':
       return member.paused ? 'Seat is still paused.' : 'Seat is still unpaused.'
+    case 'drillAuto':
+      return member.drillAuto
+        ? 'Automatic drill is still on.'
+        : 'Automatic drill is still off.'
     case 'wipLimit':
       return `Still saved as ${member.wipLimit}. WIP stays ${member.wipLimit}.`
     case 'roleCard':

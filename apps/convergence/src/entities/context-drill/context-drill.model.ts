@@ -36,6 +36,7 @@ export type ContextDrillStore = ContextDrillState & ContextDrillActions
  * conversations, so no two records this process produces can collide.
  */
 let outcomeSeq = 0
+const refreshSeq = new Map<string, number>()
 
 function omit<T>(map: Record<string, T>, key: string): Record<string, T> {
   if (!(key in map)) return map
@@ -77,8 +78,11 @@ export const useContextDrillStore = create<ContextDrillStore>((set, get) => ({
   unsubscribe: null,
 
   refresh: async (sessionId) => {
+    const seq = (refreshSeq.get(sessionId) ?? 0) + 1
+    refreshSeq.set(sessionId, seq)
     try {
       const description = await contextDrillApi.describe(sessionId)
+      if (refreshSeq.get(sessionId) !== seq) return
       // A `changed` event is only heard by a renderer that was already
       // listening. A window opened -- or reopened -- while a routine is
       // running has no other way to learn the beat, and without it the
@@ -129,6 +133,24 @@ export const useContextDrillStore = create<ContextDrillStore>((set, get) => ({
   },
 
   handleChange: (change) => {
+    refreshSeq.set(
+      change.sessionId,
+      (refreshSeq.get(change.sessionId) ?? 0) + 1,
+    )
+    if (change.automatic) {
+      const { outcome, before } = change.automatic
+      set((state) => ({
+        outcomes: {
+          ...state.outcomes,
+          [change.sessionId]: {
+            seq: ++outcomeSeq,
+            outcome,
+            before,
+            automatic: true,
+          },
+        },
+      }))
+    }
     if (change.beat !== null) {
       set((state) => ({
         beats: { ...state.beats, [change.sessionId]: change.beat as DrillBeat },

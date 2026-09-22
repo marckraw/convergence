@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'fs'
+import { mkdtempSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -17,6 +17,7 @@ import { SessionQueuedInputService } from './session-queued-input.service'
 import { SessionService } from './session.service'
 import type { SessionSettledEvent } from './session.types'
 import { TurnCaptureService } from './turn/turn-capture.service'
+import { AutoDrillService } from '../context-drill/auto-drill.service'
 
 /**
  * The queue hold, against the real `SessionService` (MAR-3255 R2).
@@ -226,6 +227,196 @@ async function letAnUnguardedDrainRun(): Promise<void> {
 }
 
 describe('a held queue (MAR-3255 R2)', () => {
+  it.each([true, false])(
+    'consults the synchronous guard before any row dispatches (hold=%s)',
+    async (takeHold) => {
+      serverOptions.autoCompleteTurns = false
+      await service.start(sessionId, { text: 'first', providerAccountId: null })
+      await vi.waitFor(() => expect(turnsSentToProvider()).toHaveLength(1))
+      queue.enqueue(
+        sessionId,
+        { text: 'waiting', providerAccountId: null, dispatchId: 'waiting' },
+        'follow-up',
+      )
+      const guard = vi.fn(() => {
+        if (takeHold) service.holdQueue(sessionId)
+        return true
+      })
+      const unsubscribe = service.onBeforeQueueDrain(guard)
+      server.pushRaw(
+        JSON.stringify({
+          method: 'turn/completed',
+          params: { turn: { id: 'turn-1', status: 'completed' } },
+        }),
+      )
+      await vi.waitFor(() => expect(guard).toHaveBeenCalledWith(sessionId))
+      expect(
+        service.getQueuedInputs(sessionId).map((row) => row.state),
+      ).toEqual(['queued'])
+      expect(service.isQueueHeld(sessionId)).toBe(takeHold)
+      expect(turnsSentToProvider()).toHaveLength(1)
+      unsubscribe()
+    },
+  )
+
+  it('the real completion seam leaves three rows queued when automatic run starts', async () => {
+    serverOptions.autoCompleteTurns = false
+    await service.start(sessionId, { text: 'first', providerAccountId: null })
+    await vi.waitFor(() => expect(turnsSentToProvider()).toHaveLength(1))
+    for (let i = 0; i < 3; i++)
+      queue.enqueue(
+        sessionId,
+        {
+          text: `waiting-${i}`,
+          providerAccountId: null,
+          dispatchId: `waiting-${i}`,
+        },
+        'follow-up',
+      )
+    let witnessed: { held: boolean; rows: string[] } | undefined
+    const run = vi.fn(async () => {
+      witnessed = {
+        held: service.isQueueHeld(sessionId),
+        rows: service.getQueuedInputs(sessionId).map((row) => row.state),
+      }
+      service.releaseQueue(sessionId)
+      return { ok: true as const }
+    })
+    const auto = new AutoDrillService(
+      {
+        onBeforeQueueDrain: (guard) => service.onBeforeQueueDrain(guard),
+        onSessionSettled: (listener) => service.onSessionSettled(listener),
+        read: () => ({
+          attention: 'finished',
+          contextWindow: {
+            availability: 'available',
+            source: 'provider',
+            usedPercentage: 90,
+            remainingPercentage: 10,
+            usedTokens: 90000,
+            windowTokens: 100000,
+          },
+        }),
+        enabled: () => true,
+        parallelWork: () => ({ running: 0, unknown: 0 }),
+        alert: () => ({ enabled: true, percent: 75, tokens: null }),
+        holdQueue: (id) => service.holdQueue(id),
+        releaseQueue: (id) => service.releaseQueue(id),
+        note: vi.fn(),
+        changed: vi.fn(),
+      },
+      {
+        run,
+        describe: () => ({
+          seat: 'mastermind',
+          eligible: true,
+          offered: true,
+          beat: null,
+          reason: null,
+        }),
+        onDrillChanged: () => () => {},
+      },
+    )
+    server.pushRaw(
+      JSON.stringify({
+        method: 'turn/completed',
+        params: { turn: { id: 'turn-1', status: 'completed' } },
+      }),
+    )
+    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+    expect(witnessed).toEqual({
+      held: true,
+      rows: ['queued', 'queued', 'queued'],
+    })
+    await vi.waitFor(() => expect(turnsSentToProvider()).toHaveLength(2))
+    expect(turnsSentToProvider()[1]).toContain('waiting-0')
+    auto.dispose()
+  })
+
+  it('a failed lifecycle never consults the guard and leaves its row queued (MAR-2971)', async () => {
+    serverOptions.autoCompleteTurns = false
+    await service.start(sessionId, { text: 'first', providerAccountId: null })
+    await vi.waitFor(() => expect(turnsSentToProvider()).toHaveLength(1))
+    queue.enqueue(
+      sessionId,
+      { text: 'waiting', providerAccountId: null, dispatchId: 'waiting' },
+      'follow-up',
+    )
+    const guard = vi.fn(() => true)
+    const unsubscribe = service.onBeforeQueueDrain(guard)
+    server.pushRaw(
+      JSON.stringify({
+        method: 'turn/completed',
+        params: {
+          turn: {
+            id: 'turn-1',
+            status: 'failed',
+            error: { message: 'fixture failure' },
+          },
+        },
+      }),
+    )
+    await vi.waitFor(() =>
+      expect(service.getById(sessionId)?.status).toBe('failed'),
+    )
+    await letAnUnguardedDrainRun()
+    expect(guard).not.toHaveBeenCalled()
+    expect(service.getQueuedInputs(sessionId).map((row) => row.state)).toEqual([
+      'queued',
+    ])
+    expect(turnsSentToProvider()).toHaveLength(1)
+    unsubscribe()
+  })
+
+  it('records the automatic note as an info context-drill event through the main note door', () => {
+    // Pin the composition callback too: changing only main back to the dispatch
+    // door must fail even while the dedicated service method remains correct.
+    const main = readFileSync(
+      new URL('../../main/index.ts', import.meta.url),
+      'utf8',
+    )
+    expect(main).toMatch(
+      /note: \(id, text\) => sessionService\.addContextDrillInfoNote\(id, text\)/,
+    )
+    const text = 'Context compacted automatically at 90% → 20%'
+    service.addContextDrillInfoNote(sessionId, text)
+    expect(service.getConversation(sessionId)).toEqual([
+      expect.objectContaining({
+        kind: 'note',
+        text,
+        level: 'info',
+        providerMeta: expect.objectContaining({
+          providerEventType: 'context-drill',
+        }),
+      }),
+    ])
+    expect(turnsSentToProvider()).toHaveLength(0)
+  })
+
+  it('never asks the automatic guard on a failed turn', async () => {
+    serverOptions.autoCompleteTurns = false
+    await service.start(sessionId, { text: 'first', providerAccountId: null })
+    await vi.waitFor(() => expect(turnsSentToProvider()).toHaveLength(1))
+    const guard = vi.fn(() => true)
+    const unsubscribe = service.onBeforeQueueDrain(guard)
+    server.pushRaw(
+      JSON.stringify({
+        method: 'turn/completed',
+        params: {
+          turn: {
+            id: 'turn-1',
+            status: 'failed',
+            error: { message: 'fixture failure' },
+          },
+        },
+      }),
+    )
+    await vi.waitFor(() =>
+      expect(service.getById(sessionId)?.status).toBe('failed'),
+    )
+    expect(guard).not.toHaveBeenCalled()
+    unsubscribe()
+  })
   it('queues a relay delivery and delivers it on release', async () => {
     await startConversation()
     const sentBefore = turnsSentToProvider().length

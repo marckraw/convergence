@@ -15,6 +15,7 @@ const WORKSPACE = fileURLToPath(new URL('../', import.meta.url))
  * `readdirSync` is a tree and which is one folder.
  */
 const TREE_WALKING_TESTS = [
+  'electron/backend/context-drill/context-alert-boundary.test.ts',
   'electron/backend/crew/ajv-import-guard.test.ts',
   'src/features/command-center/command-palette-orphans.test.ts',
   'workspace-import-ownership.test.ts',

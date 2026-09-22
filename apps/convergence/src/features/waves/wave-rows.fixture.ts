@@ -52,6 +52,7 @@ export function crewMember(
     lanePath: null,
     wipLimit: 1,
     paused: false,
+    drillAuto: false,
     providerId: null,
     model: null,
     conversationMissing: false,

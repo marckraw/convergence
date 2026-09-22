@@ -361,6 +361,7 @@ interface SessionCrewMemberData {
   wipLimit: number
   /** Gates future automatic dispatches without touching a running turn. */
   paused: boolean
+  drillAuto: boolean
   /** A dynamic seat's recipe; null on a resident seat. */
   providerId: string | null
   model: string | null
@@ -650,7 +651,7 @@ type ActivitySignal =
   | `tool:${string}`
 type MidRunInputMode = 'normal' | 'answer' | 'follow-up' | 'steer' | 'interrupt'
 type ContextWindowSource = 'provider' | 'estimated'
-type SessionContextWindow =
+export type SessionContextWindow =
   | {
       availability: 'available'
       source: ContextWindowSource
@@ -1694,6 +1695,7 @@ export interface ContextDrillChangeData {
   sessionId: string
   beat: ContextDrillBeatData | null
   reason?: string
+  automatic?: { outcome: ContextDrillOutcomeData; before: number }
 }
 
 /** A refusal is a value here too (MAR-3255 R8). */
@@ -1894,6 +1896,7 @@ interface ElectronAPI {
         lanePolicy?: string | null
         lanePath?: string | null
         paused?: boolean
+        drillAuto?: boolean
         wipLimit?: number | null
       },
     ) => Promise<SessionCrewData>

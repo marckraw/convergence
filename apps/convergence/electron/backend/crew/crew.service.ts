@@ -53,6 +53,7 @@ export interface UpdateCrewSeatInput {
   lanePolicy?: SessionCrewMemberLane | null
   lanePath?: string | null
   paused?: boolean
+  drillAuto?: boolean
   wipLimit?: number | null
   providerId?: string | null
   model?: string | null
@@ -531,6 +532,8 @@ export class CrewService {
     if (patch.lanePath !== undefined)
       set('lane_path', normalizeLanePath(patch.lanePath))
     if (patch.paused !== undefined) set('paused', patch.paused === true ? 1 : 0)
+    if (patch.drillAuto !== undefined)
+      set('drill_auto', patch.drillAuto === true ? 1 : 0)
     if (patch.wipLimit !== undefined)
       set('wip_limit', normalizeCrewLimit(patch.wipLimit, 'A WIP limit'))
     if (patch.providerId !== undefined)
@@ -583,6 +586,7 @@ export class CrewService {
         lanePolicy: readSeatWord(row, 'lane_policy', normalizeCrewMemberLane),
         lanePath: row.lane_path ?? null,
         paused: row.paused === 1,
+        drillAuto: row.drill_auto === 1,
         wipLimit:
           typeof row.wip_limit === 'number' && Number.isInteger(row.wip_limit)
             ? row.wip_limit
@@ -696,7 +700,7 @@ function readSeatWord<T>(
 const MEMBER_SELECT = `SELECT members.crew_id, members.session_id, members.baton_name,
           members.canvas_x, members.canvas_y, members.role, members.kind,
           members.role_card, members.host_policy, members.lane_policy,
-          members.paused, members.wip_limit, members.lane_path, members.provider_id, members.model,
+          members.paused, members.drill_auto, members.wip_limit, members.lane_path, members.provider_id, members.model,
           (members.session_id IS NOT NULL AND sessions.id IS NULL) AS conversation_missing
      FROM session_crew_members members
      LEFT JOIN sessions ON sessions.id = members.session_id
@@ -716,6 +720,7 @@ interface MemberReadRow {
   lane_policy: string | null
   lane_path: string | null
   paused: number
+  drill_auto: number
   wip_limit: number | null
   provider_id: string | null
   model: string | null
