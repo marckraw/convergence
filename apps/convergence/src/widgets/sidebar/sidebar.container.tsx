@@ -52,6 +52,7 @@ import { type ChatSidebarSpace } from './global-chat-session-list.presentational
 import { SidebarConversations } from './sidebar-conversations.container'
 import { SidebarToolsMenu } from './sidebar-tools-menu.presentational'
 import { toast } from 'sonner'
+import { useSidebarSearchShortcut } from './sidebar-search.container'
 import { useFeedClock } from './use-feed-clock'
 
 interface SidebarProps {
@@ -97,6 +98,13 @@ export const Sidebar: FC<SidebarProps> = ({
   onPeek,
   onPinPeek,
 }) => {
+  const [searchRequest, setSearchRequest] = useState(0)
+  const requestSearch = useCallback(() => setSearchRequest((n) => n + 1), [])
+  useSidebarSearchShortcut({
+    collapsed,
+    expand: onExpand,
+    onRequest: requestSearch,
+  })
   const projects = useProjectStore((s) => s.projects)
   const activeProject = useProjectStore((s) => s.activeProject)
   const setActiveProject = useProjectStore((s) => s.setActiveProject)
@@ -902,6 +910,7 @@ export const Sidebar: FC<SidebarProps> = ({
       </div>
 
       <SidebarConversations
+        searchRequest={searchRequest}
         collapsed={collapsed}
         globalSessions={globalSessions}
         sessions={sessions}

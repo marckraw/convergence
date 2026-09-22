@@ -1,4 +1,14 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { Sidebar } from './sidebar.container'
+import { useState } from 'react'
+import { useSidebarSearchShortcut } from './sidebar-search.container'
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  within,
+} from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PROJECT_SETTINGS, type Project } from '@/entities/project'
 import type { SessionSummary } from '@/entities/session'
@@ -323,4 +333,235 @@ describe('SidebarConversations (production search wiring)', () => {
     ).toBeGreaterThanOrEqual(2)
     expect(screen.queryByText(/^master/)).toBeNull()
   })
+})
+
+function ShortcutSidebar({ initiallyCollapsed = false, expand = vi.fn() }) {
+  const [collapsed, setCollapsed] = useState(initiallyCollapsed)
+  const [searchRequest, setSearchRequest] = useState(0)
+  useSidebarSearchShortcut({
+    collapsed,
+    expand: () => {
+      expand()
+      setCollapsed(false)
+    },
+    onRequest: () => setSearchRequest((n) => n + 1),
+  })
+  return (
+    <TooltipProvider>
+      <textarea aria-label="Composer" />
+      {!collapsed && (
+        <SidebarConversations {...conversationProps({ searchRequest })} />
+      )}
+    </TooltipProvider>
+  )
+}
+
+function cmdF(target: EventTarget = window) {
+  const event = new KeyboardEvent('keydown', {
+    key: 'f',
+    metaKey: true,
+    bubbles: true,
+    cancelable: true,
+  })
+  act(() => {
+    target.dispatchEvent(event)
+  })
+  return event
+}
+
+describe('Sidebar search shortcut requests', () => {
+  it('Cmd+F on a focused dialog button does not expand or request search', () => {
+    const expand = vi.fn()
+    const onRequest = vi.fn()
+    function DialogShortcut() {
+      useSidebarSearchShortcut({ collapsed: true, expand, onRequest })
+      return (
+        <div role="dialog">
+          <button>Dialog action</button>
+        </div>
+      )
+    }
+    render(<DialogShortcut />)
+    const button = screen.getByRole('button', { name: 'Dialog action' })
+    button.focus()
+    expect(cmdF(button).defaultPrevented).toBe(false)
+    expect(button).toHaveFocus()
+    expect(expand).not.toHaveBeenCalled()
+    expect(onRequest).not.toHaveBeenCalled()
+  })
+  it('Cmd+F closed opens and focuses; open search selects text inside its marked field', () => {
+    render(<ShortcutSidebar />)
+    expect(screen.queryByRole('searchbox')).toBeNull()
+    expect(cmdF().defaultPrevented).toBe(true)
+    const field = screen.getByRole('searchbox') as HTMLInputElement
+    expect(field).toHaveFocus()
+    fireEvent.change(field, { target: { value: 'Fable' } })
+    field.setSelectionRange(5, 5)
+    expect(cmdF(field).defaultPrevented).toBe(true)
+    expect(field).toHaveFocus()
+    expect(field.selectionStart).toBe(0)
+    expect(field.selectionEnd).toBe(5)
+  })
+  it('Cmd+F while the target is the composer textarea does nothing', () => {
+    render(<ShortcutSidebar />)
+    const composer = screen.getByRole('textbox', { name: 'Composer' })
+    composer.focus()
+    expect(cmdF(composer).defaultPrevented).toBe(false)
+    expect(composer).toHaveFocus()
+    expect(screen.queryByRole('searchbox')).toBeNull()
+  })
+  it('collapsed calls expand once and mounts the field open and focused', () => {
+    const expand = vi.fn()
+    render(<ShortcutSidebar initiallyCollapsed expand={expand} />)
+    expect(
+      screen.queryByRole('button', { name: 'Search conversations' }),
+    ).toBeNull()
+    cmdF()
+    expect(expand).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('searchbox')).toHaveFocus()
+  })
+  it('Escape closes the field and the next render keeps it closed', () => {
+    const view = render(<ShortcutSidebar />)
+    cmdF()
+    fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Escape' })
+    expect(screen.queryByRole('searchbox')).toBeNull()
+    view.rerender(<ShortcutSidebar />)
+    expect(screen.queryByRole('searchbox')).toBeNull()
+    cmdF()
+    expect(screen.getByRole('searchbox')).toHaveFocus()
+  })
+  it.each([
+    ['meta', { metaKey: true }, true],
+    ['ctrl', { ctrlKey: true }, true],
+    ['shift-blocked', { metaKey: true, shiftKey: true }, false],
+    ['alt-blocked', { metaKey: true, altKey: true }, false],
+  ] as const)(
+    'shortcut shape %s and defaultPrevented',
+    (_name, modifiers, handled) => {
+      const onRequest = vi.fn()
+      const { unmount } = renderHook(() =>
+        useSidebarSearchShortcut({
+          collapsed: false,
+          expand: vi.fn(),
+          onRequest,
+        }),
+      )
+      const event = new KeyboardEvent('keydown', {
+        key: 'f',
+        cancelable: true,
+        ...modifiers,
+      })
+      act(() => {
+        window.dispatchEvent(event)
+      })
+      expect(event.defaultPrevented).toBe(handled)
+      expect(onRequest).toHaveBeenCalledTimes(handled ? 1 : 0)
+      unmount()
+      cmdF()
+      expect(onRequest).toHaveBeenCalledTimes(handled ? 1 : 0)
+    },
+  )
+})
+
+vi.mock('@/features', () => {
+  const Dialog = ({ trigger }: { trigger?: import('react').ReactNode }) =>
+    trigger ?? null
+  return {
+    AppSettingsDialogContainer: Dialog,
+    SpaceWorkboardDialogContainer: Dialog,
+    McpServersDialogContainer: Dialog,
+    ProjectContextSettings: Dialog,
+    ProjectCreateDialogContainer: Dialog,
+    ProjectSettingsDialogContainer: Dialog,
+    PromptLibraryBrowserDialogContainer: Dialog,
+    ProviderStatusDialogContainer: Dialog,
+    ReleaseNotesDialogContainer: Dialog,
+    SkillsBrowserDialogContainer: Dialog,
+    SpaceCreateDialogContainer: Dialog,
+    ThemeToggleButton: Dialog,
+    WorkspaceCreateDialogContainer: Dialog,
+    LaneCreateDialogContainer: Dialog,
+  }
+})
+
+it('real Sidebar keeps one keydown listener across three unrelated prop re-renders', () => {
+  const addListener = vi.spyOn(window, 'addEventListener')
+  const removeListener = vi.spyOn(window, 'removeEventListener')
+  function LivingSidebar({
+    activeSessionId,
+  }: {
+    activeSessionId: string | null
+  }) {
+    return (
+      <TooltipProvider>
+        <Sidebar
+          activeSurface="code"
+          onSelectSurface={noop}
+          onSelectSession={noop}
+          activeSessionId={activeSessionId}
+          onSelectGlobalSession={noop}
+          onNewGlobalSession={noop}
+          selectedSpaceId={null}
+          onSelectSpace={noop}
+          activeGlobalSessionId={null}
+          collapsed
+          peek={false}
+          onCollapse={noop}
+          onExpand={noop}
+          onPeek={noop}
+          onPinPeek={noop}
+        />
+      </TooltipProvider>
+    )
+  }
+  const view = render(<LivingSidebar activeSessionId={null} />)
+  for (const activeSessionId of ['one', 'two', 'three']) {
+    view.rerender(<LivingSidebar activeSessionId={activeSessionId} />)
+  }
+  expect(
+    addListener.mock.calls.filter(([type]) => type === 'keydown'),
+  ).toHaveLength(1)
+  expect(
+    removeListener.mock.calls.filter(([type]) => type === 'keydown'),
+  ).toHaveLength(0)
+  view.unmount()
+  expect(
+    removeListener.mock.calls.filter(([type]) => type === 'keydown'),
+  ).toHaveLength(1)
+})
+
+it('real Sidebar passes the collapsed shortcut request through to the mounted field', () => {
+  const expand = vi.fn()
+  function LivingSidebar() {
+    const [collapsed, setCollapsed] = useState(true)
+    return (
+      <TooltipProvider>
+        <Sidebar
+          activeSurface="code"
+          onSelectSurface={noop}
+          onSelectSession={noop}
+          activeSessionId={null}
+          onSelectGlobalSession={noop}
+          onNewGlobalSession={noop}
+          selectedSpaceId={null}
+          onSelectSpace={noop}
+          activeGlobalSessionId={null}
+          collapsed={collapsed}
+          peek={false}
+          onCollapse={() => setCollapsed(true)}
+          onExpand={() => {
+            expand()
+            setCollapsed(false)
+          }}
+          onPeek={noop}
+          onPinPeek={noop}
+        />
+      </TooltipProvider>
+    )
+  }
+  render(<LivingSidebar />)
+  expect(screen.queryByRole('searchbox')).toBeNull()
+  cmdF()
+  expect(expand).toHaveBeenCalledTimes(1)
+  expect(screen.getByRole('searchbox')).toHaveFocus()
 })

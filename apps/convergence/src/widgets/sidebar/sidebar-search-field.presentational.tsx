@@ -22,6 +22,7 @@ export const SidebarSearchField: FC<SidebarSearchFieldProps> = ({
   className,
 }) => (
   <div
+    data-sidebar-search
     role="search"
     aria-label="Search conversations"
     className={cn('relative px-3 pt-2', className)}
