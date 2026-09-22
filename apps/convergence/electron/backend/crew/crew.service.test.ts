@@ -547,6 +547,28 @@ describe('CrewService', () => {
     expect(undecorated.name).toBe('Stable')
   })
 
+  it('round-trips lapCap and refuses a non-positive value (MAR-3149 R2; mutation: skip the write)', () => {
+    const crew = service.create({ name: 'Loom' })
+    expect(crew.lapCap).toBeNull()
+
+    const set = service.update(crew.id, { lapCap: 6 })
+    expect(set.lapCap).toBe(6)
+    expect(service.list().find((entry) => entry.id === crew.id)?.lapCap).toBe(6)
+
+    // A rename must not clear the cap (absent-means-unchanged).
+    expect(service.update(crew.id, { name: 'Loom 2' }).lapCap).toBe(6)
+
+    const cleared = service.update(crew.id, { lapCap: null })
+    expect(cleared.lapCap).toBeNull()
+
+    expect(() => service.update(crew.id, { lapCap: 0 })).toThrow(
+      /A lap cap must be a whole number of at least 1/,
+    )
+    expect(() => service.update(crew.id, { lapCap: 1.5 as number })).toThrow(
+      /A lap cap must be a whole number of at least 1/,
+    )
+  })
+
   it('rejects a blank rename', () => {
     const crew = service.create({ name: 'Convoy' })
     expect(() => service.update(crew.id, { name: '  ' })).toThrow(

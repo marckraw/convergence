@@ -167,6 +167,7 @@ describe('MAR-3169 R4: a project the key cannot see, through the real Loom', () 
       position: 0,
       roundCap: null,
       stallMinutes: null,
+      lapCap: null,
       createdAt: AT,
       updatedAt: AT,
       sessionIds: ['session-opus'],

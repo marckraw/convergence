@@ -87,6 +87,7 @@ export function boundCrewWith(
     position: 0,
     roundCap: null,
     stallMinutes: null,
+    lapCap: null,
     createdAt: '2026-09-17T08:00:00.000Z',
     updatedAt: '2026-09-17T08:00:00.000Z',
     sessionIds: members.flatMap((member) =>

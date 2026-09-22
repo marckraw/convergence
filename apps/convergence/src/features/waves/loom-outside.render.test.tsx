@@ -34,6 +34,7 @@ function boundCrew(id: string, name: string): SessionCrew {
     position: 0,
     roundCap: null,
     stallMinutes: null,
+    lapCap: null,
     createdAt: AT,
     updatedAt: AT,
     sessionIds: ['session-opus'],

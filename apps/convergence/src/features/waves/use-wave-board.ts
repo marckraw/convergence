@@ -144,12 +144,14 @@ export function useWaveBoard(query: string | null): WaveBoard {
     () => (boundKey ? boundKey.split('\n') : []),
     [boundKey],
   )
-  // The crew's name, and no cap (MAR-3085 lap 2, E): `roundCap` is a HOP
-  // budget for one crew's flow run, while a lap is per issue across runs.
-  // Showing it as `lap 3 of 12` would put a bound on screen that the machine
-  // does not enforce in that unit. A true lap cap rides MAR-3149.
+  // The crew's name and its lap cap (MAR-3149): `roundCap` is a HOP budget
+  // for one crew's flow run, while a lap is per issue across runs. The board
+  // passes `lapCap` into `crewFacts.cap` so the row can say `lap N of C`.
   const crewFacts = useMemo(
-    () => new Map(crews.map((crew) => [crew.id, { name: crew.name }])),
+    () =>
+      new Map(
+        crews.map((crew) => [crew.id, { name: crew.name, cap: crew.lapCap }]),
+      ),
     [crews],
   )
 
@@ -235,6 +237,16 @@ export function useWaveBoard(query: string | null): WaveBoard {
     () => waveRowsFromSnapshots(snapshots, shownCrewIds),
     [snapshots, shownCrewIds],
   )
+  const crewOf = useCallback(
+    (crewId: string) => ({
+      // Loom is one crew at a time (MAR-3225 R5): the row does not repeat the
+      // crew name. The lap cap is the fact this board was waiting for
+      // (MAR-3149).
+      name: null as string | null,
+      cap: crewFacts.get(crewId)?.cap ?? null,
+    }),
+    [crewFacts],
+  )
   const headerCrews = useMemo(
     () =>
       shownCrewIds.map((id) => ({
@@ -244,7 +256,10 @@ export function useWaveBoard(query: string | null): WaveBoard {
     [snapshots, shownCrewIds, crewFacts],
   )
 
-  const allSheets = useMemo(() => loomSheets(rows, now), [rows, now])
+  const allSheets = useMemo(
+    () => loomSheets(rows, now, crewOf),
+    [rows, now, crewOf],
+  )
   // The search (MAR-3234 R2, R10): one filter over the rows, run once per
   // settled query -- never per keystroke, and never at all with no query, so
   // an unsearched Loom is today's Loom by identity.
@@ -253,8 +268,9 @@ export function useWaveBoard(query: string | null): WaveBoard {
     [rows, query],
   )
   const sheets = useMemo(
-    () => (searchedRows === null ? allSheets : loomSheets(searchedRows, now)),
-    [allSheets, searchedRows, now],
+    () =>
+      searchedRows === null ? allSheets : loomSheets(searchedRows, now, crewOf),
+    [allSheets, searchedRows, now, crewOf],
   )
   const header = useMemo(
     () => waveHeader({ crews: headerCrews, rowCount: rows.length, now }),

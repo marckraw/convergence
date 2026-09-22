@@ -93,6 +93,11 @@ export interface SessionCrew {
   roundCap: number | null
   /** How long a station may hold the loop before it hails; null is default. */
   stallMinutes: number | null
+  /**
+   * Cap on an issue's laps shown on this crew's wave rows, or null for none
+   * (MAR-3149). Distinct from roundCap (hop budget).
+   */
+  lapCap: number | null
   /** Last successful export destination; absent on older snapshots. */
   lastExportPath?: string | null
   /**
@@ -121,4 +126,5 @@ export interface UpdateSessionCrewInput {
   position?: number
   roundCap?: number | null
   stallMinutes?: number | null
+  lapCap?: number | null
 }

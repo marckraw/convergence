@@ -53,6 +53,7 @@ function boundCrew(id: string, name: string): SessionCrew {
     position: 0,
     roundCap: null,
     stallMinutes: null,
+    lapCap: null,
     createdAt: AT,
     updatedAt: AT,
     sessionIds: ['session-opus'],
@@ -893,7 +894,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(rows.length).toBeGreaterThan(0)
   })
 
-  it('lap 2, E: the board passes no cap, so a row reads the lap alone', async () => {
+  it('lap 2, E: roundCap is not a lap cap, so a row reads the lap alone', async () => {
     // Through the container and the crew store: `roundCap` is a hop budget
     // for a flow run, not a lap cap, so it must not reach the row (MAR-3149).
     crews = [{ ...boundCrew('crew-1', 'Loom'), roundCap: 12 }]
@@ -921,6 +922,33 @@ describe('MAR-3097: through the containers and the real stores', () => {
     // Mutation: pass the crew's `roundCap` -> "lap 3 of 12", red.
     expect(rowOf('crew-1:EX-9').getByText(/lap 3 ·/)).toBeTruthy()
     expect(document.body.textContent).not.toContain('of 12')
+  })
+
+  it('MAR-3149 R3: a crew lapCap reaches the row as "lap N of C"', async () => {
+    crews = [{ ...boundCrew('crew-1', 'Loom'), lapCap: 6 }]
+    snapshots = {
+      'crew-1': {
+        crewId: 'crew-1',
+        entries: [
+          ledgerEntry({
+            issueIdentifier: 'EX-10',
+            state: 'working',
+            lap: 2,
+            verdict: 'return',
+          }),
+        ],
+        dispatchPlan: null,
+        trackerHealth: health('ok'),
+      },
+    }
+
+    await act(async () => {
+      render(<WavePanel reservedWidth={RESERVED} />)
+    })
+    await screen.findByLabelText('Loom')
+
+    // Mutation: pass cap: null regardless → no "of 6", red.
+    expect(rowOf('crew-1:EX-10').getByText(/lap 2 of 6/)).toBeTruthy()
   })
 
   it('MAR-3191 R3: runtime and tracker status are two facts on two lines', async () => {

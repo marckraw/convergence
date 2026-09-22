@@ -336,6 +336,9 @@ const SCHEMA = `
     -- existed, and a stored 0 would be a cap nobody could have meant.
     round_cap INTEGER,
     stall_minutes INTEGER,
+    -- Null = no lap cap shown on the wave row (MAR-3149). Distinct from
+    -- round_cap, which is a hop budget for one flow run.
+    lap_cap INTEGER,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -1013,6 +1016,9 @@ function ensureRelayColumns(database: Database.Database): void {
   }
   if (!crewColumns.has('stall_minutes')) {
     database.exec('ALTER TABLE session_crews ADD COLUMN stall_minutes INTEGER')
+  }
+  if (!crewColumns.has('lap_cap')) {
+    database.exec('ALTER TABLE session_crews ADD COLUMN lap_cap INTEGER')
   }
 
   const memberColumns = getTableColumnNames(database, 'session_crew_members')

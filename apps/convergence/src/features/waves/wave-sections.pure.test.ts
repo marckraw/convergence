@@ -726,11 +726,8 @@ describe('MAR-3085 R7: the lap, the cap and the ruling on the row', () => {
     expect(sections.inTheWave[0]!.lapLabel).toBe('lap 3 of 6')
   })
 
-  it('a row says the lap alone; the `of N` form waits for a real lap cap', () => {
+  it('a row says the lap alone without a cap, and "of N" when one is set', () => {
     expect(waveLapLabel(3, null)).toBe('lap 3')
-    // The only form on screen today (lap 2, E): the board passes no cap.
-    // `of N` is pinned here rather than in a rendered case, because no
-    // rendered path can reach it until a true lap cap exists (MAR-3149).
     expect(waveLapLabel(3, 6)).toBe('lap 3 of 6')
     expect(waveLapLabel(1, 24)).toBe('lap 1 of 24')
     expect(
