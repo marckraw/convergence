@@ -313,6 +313,10 @@ async function startApp(): Promise<void> {
     executionHost,
     globalSessionsRoot,
   )
+  // SessionService has recovered stale sessions; clean legacy wires and seats
+  // before the engine or renderer can read them (MAR-3254).
+  relayService.removeOrphans()
+  crewService.removeOrphanMemberships()
   const providerAccountRepository = new ProviderAccountRepository(db)
 
   const attachmentsService = new AttachmentsService(db, attachmentsRoot)
@@ -1098,6 +1102,8 @@ async function startApp(): Promise<void> {
     attachmentsService,
     turnCaptureService,
     projectContextService,
+    crewService,
+    relayService,
     spaceSynthesisService,
     (prefs) => updatesScheduler?.onPrefsChanged(prefs),
     {

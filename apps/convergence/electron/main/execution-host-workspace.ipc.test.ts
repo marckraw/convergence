@@ -71,8 +71,8 @@ const DAEMON_B = { id: 'daemon-b', baseUrl: 'https://daemon-b.test' }
  * missing, or registration throws — rather than quietly proving nothing.
  */
 const SESSION_SERVICE_ARGUMENT = 7
-const EXECUTION_HOST_REMOTE_ARGUMENT = 22
-const ARGUMENT_COUNT = 23
+const EXECUTION_HOST_REMOTE_ARGUMENT = 24
+const ARGUMENT_COUNT = 25
 
 describe('the executionHost:getSessionWorkspace ipc handler', () => {
   let db: Database.Database

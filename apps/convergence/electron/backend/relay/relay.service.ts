@@ -78,9 +78,8 @@ interface RelayHopCursor {
 /**
  * Repository + use-case boundary for relays and their ledger.
  *
- * Like crews, neither table declares a foreign key: a relay whose source or
- * target session was deleted must survive as a visibly broken wire the user
- * can see and remove, and its hops must stay auditable forever. Reads join
+ * Like crews, neither table declares a foreign key: session deletion cleans
+ * up wires explicitly, while their hops stay auditable forever. Reads join
  * against `sessions` only where a live wire is wanted; the ledger never does,
  * because history about a deleted session is the whole point of a ledger.
  */
@@ -353,6 +352,33 @@ export class RelayService {
    */
   delete(id: string): void {
     this.db.prepare('DELETE FROM session_relays WHERE id = ?').run(id)
+  }
+
+  /** One atomic delete of both directions; the hop ledger stays intact. */
+  removeForSession(sessionId: string): number {
+    return this.db
+      .prepare(
+        'DELETE FROM session_relays WHERE source_session_id = ? OR target_session_id = ?',
+      )
+      .run(sessionId, sessionId).changes
+  }
+
+  /** Spawn wires intentionally have no target until they create a session. */
+  removeOrphans(): number {
+    const removed = this.db
+      .prepare(
+        `DELETE FROM session_relays
+       WHERE NOT EXISTS (SELECT 1 FROM sessions WHERE id = source_session_id)
+          OR (target_session_id IS NOT NULL AND
+              NOT EXISTS (SELECT 1 FROM sessions WHERE id = target_session_id))`,
+      )
+      .run().changes
+    if (removed > 0) {
+      console.info(
+        `[relay] removed ${removed} relays whose conversation is gone`,
+      )
+    }
+    return removed
   }
 
   appendHop(input: AppendRelayHopInput): RelayHop {

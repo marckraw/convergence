@@ -81,6 +81,29 @@ export interface CreateCrewRecipeSeatInput {
 export class CrewService {
   constructor(private db: Database.Database) {}
 
+  removeMembershipsForSession(sessionId: string): number {
+    return this.db
+      .prepare('DELETE FROM session_crew_members WHERE session_id = ?')
+      .run(sessionId).changes
+  }
+
+  /** Recipe seats have no session, and must survive the orphan sweep. */
+  removeOrphanMemberships(): number {
+    const removed = this.db
+      .prepare(
+        `DELETE FROM session_crew_members
+       WHERE session_id IS NOT NULL AND
+             NOT EXISTS (SELECT 1 FROM sessions WHERE id = session_id)`,
+      )
+      .run().changes
+    if (removed > 0) {
+      console.info(
+        `[crew] removed ${removed} memberships whose conversation is gone`,
+      )
+    }
+    return removed
+  }
+
   list(): SessionCrew[] {
     const rows = this.db
       .prepare(

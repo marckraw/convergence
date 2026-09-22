@@ -1211,6 +1211,8 @@ export class RelayEngine {
     const targetSessionId = relay.targetSessionId
     if (!targetSessionId) {
       record('error', { payloadPreview, error: 'This relay has no target.' })
+      this.relays.setArmed(relay.id, false)
+      this.onRelaysChanged?.()
       return true
     }
 
@@ -1220,6 +1222,8 @@ export class RelayEngine {
         payloadPreview,
         error: 'The target session no longer exists.',
       })
+      this.relays.setArmed(relay.id, false)
+      this.onRelaysChanged?.()
       return true
     }
 

@@ -22,7 +22,7 @@ it.each(['session', 'workspace', 'project'])(
   async (kind) => {
     const calls: string[] = []
     const args = Array.from(
-      { length: 18 },
+      { length: 20 },
       () => new Proxy({}, { get: () => vi.fn() }),
     )
     const deleteRow = vi.fn(() => {
