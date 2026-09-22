@@ -2609,6 +2609,110 @@ describe('MAR-3097: through the containers and the real stores', () => {
       ).toBe('no-drag')
     })
 
+    it('lap 2, B: folded and too narrow at once — both reasons true, and every way out still leads somewhere', async () => {
+      // The case `columnFitsHere` exists for, and the only one that tells it
+      // apart from the literal `stored === 'folded'`: a person who chose the
+      // fold AND has a window that could not hold a column anyway. Asking
+      // "was this chosen" would answer `compact`, which this window redraws
+      // as the same strip -- the control would look broken.
+      // Mutation: `const columnFitsHere = stored === 'folded'` -> both
+      // halves below red, and nothing else in this file moves.
+      localStorage.setItem('convergence-wave-panel-mode', 'folded')
+      setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom strip')
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Open Loom' }))
+      })
+      expect(storedMode()).toBe('expanded')
+      expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
+      cleanup()
+
+      localStorage.setItem('convergence-wave-panel-mode', 'folded')
+      setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom strip')
+      await act(async () => {
+        fireEvent.click(
+          within(column()!).getByRole('button', { name: /^Next: / }),
+        )
+      })
+      expect(storedMode()).toBe('expanded')
+      expect(localStorage.getItem('convergence-loom-sheet')).toBe('next')
+      expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
+      expect(
+        screen
+          .getByRole('button', { name: /^Next · / })
+          .getAttribute('aria-expanded'),
+      ).toBe('true')
+    })
+
+    it('lap 2, A: Collapse and Open carry the focus with the shape', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await collapse()
+      // The column's titles went away with the column, so the keyboard would
+      // be left on `<body>`; the folded column's way back is where it lands.
+      // Mutation: guard the effect with `decision.mode !== 'strip'` on both
+      // sides -> `<body>` here, red.
+      const open = within(column()!).getByRole('button', { name: 'Open Loom' })
+      expect(document.activeElement).toBe(open)
+
+      await act(async () => {
+        fireEvent.click(open)
+      })
+      const title = await screen.findByRole('button', { name: /^Now · / })
+      expect(title.getAttribute('aria-expanded')).toBe('true')
+      // Mutation: the same guard -> `<body>`, red.
+      expect(document.activeElement).toBe(title)
+    })
+
+    it('lap 2, A: Collapse from expanded, and an icon, land where the shape does', async () => {
+      localStorage.setItem('convergence-wave-panel-mode', 'expanded')
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
+      await collapse()
+      // Mutation: the same guard -> `<body>`, red. (Before this lap the
+      // effect watched the `expanded` boolean, so this transition — expanded
+      // to a shape that is still not `expanded` — never fired at all.)
+      expect(document.activeElement).toBe(
+        within(column()!).getByRole('button', { name: 'Open Loom' }),
+      )
+
+      await act(async () => {
+        fireEvent.click(
+          within(column()!).getByRole('button', { name: /^Next: / }),
+        )
+      })
+      // The sheet the icon named is open AND holds the focus: one act, one
+      // place to carry on from.
+      const next = await screen.findByRole('button', { name: /^Next · / })
+      expect(next.getAttribute('aria-expanded')).toBe('true')
+      expect(document.activeElement).toBe(next)
+    })
+
+    it('lap 2, A (departure): a shape the WINDOW changed takes nobody’s focus', async () => {
+      // Keying on the decision means a drag of the window edge changes the
+      // shape too — and then the person is somewhere else entirely with
+      // their focus still under their hands. Only focus that was LOST with
+      // the shape (the fact on screen: `<body>`) is given back.
+      // Mutation: drop the `lost` guard -> `Open Loom` steals it, red.
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      const elsewhere = document.createElement('button')
+      document.body.appendChild(elsewhere)
+      elsewhere.focus()
+      expect(document.activeElement).toBe(elsewhere)
+
+      setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
+      await act(async () => {
+        window.dispatchEvent(new Event('resize'))
+      })
+      expect(await screen.findByLabelText('Loom strip')).toBeTruthy()
+      expect(document.activeElement).toBe(elsewhere)
+      elsewhere.remove()
+    })
+
     it('R5: folded survives a remount, and no bound crew shows nothing at all', async () => {
       await mount(<WavePanel reservedWidth={RESERVED} />)
       await screen.findByLabelText('Loom')

@@ -41,6 +41,15 @@ interface LoomStripViewProps {
    */
   horses: readonly LoomHorse[]
   outage: boolean
+  /**
+   * Where focus lands when the fold takes the shape that held it away
+   * (MAR-3292 lap 2, A).
+   *
+   * The strip has no sheet title, so it cannot reuse the column's landing
+   * place; `Open Loom` is the first control and the way back, which makes it
+   * the one stop a keyboard should arrive on.
+   */
+  openRef?: (element: HTMLButtonElement | null) => void
   /** Back to Loom without choosing a sheet: the top control (MAR-3292 R2). */
   onOpen: () => void
   onExpand: () => void
@@ -100,6 +109,7 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
   horses,
   dispatchPlan = null,
   outage,
+  openRef,
   onOpen,
   onExpand,
   onSelectSheet,
@@ -111,6 +121,7 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
     style={LOOM_NO_DRAG_STYLE}
   >
     <Button
+      ref={openRef}
       type="button"
       variant="ghost"
       size="sm"

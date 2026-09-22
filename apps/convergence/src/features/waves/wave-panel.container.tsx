@@ -449,6 +449,12 @@ export const WavePanel: FC<WavePanelProps> = ({
    * prevent. Answering the other question instead would send a folded person
    * in a narrow window from the strip to `compact` -- which redraws the same
    * strip, so the control they pressed would look broken.
+   *
+   * The case this departure exists for is folded AND narrow, and it has its
+   * own witness (MAR-3292 lap 2, B): `R3: folded and too narrow at once --
+   * both reasons true, and every way out still leads somewhere` in
+   * `wave-panel.render.test.tsx`. Write `stored === 'folded'` here instead
+   * and that test goes red; nothing else does.
    */
   const columnFitsHere =
     effectiveWavePanelMode({
@@ -491,21 +497,42 @@ export const WavePanel: FC<WavePanelProps> = ({
   }, [expanded, onExpandedChange])
 
   /**
-   * Focus follows the shape, in BOTH directions (R7; lap 2, C).
+   * Focus follows the shape, in EVERY direction (MAR-3189 R7; MAR-3292 lap
+   * 2, A).
    *
-   * Whichever control was pressed -- `Expand`, `Fold Loom`, or Esc on the
-   * stack -- leaves the document with the shape it belonged to, so without
-   * this the focus ring falls to `<body>` and the keyboard has lost its
-   * place. On a fold that only costs a tab stop; on an EXPAND it costs the
-   * Esc key itself, because the stack's handler never sees a keypress that
-   * was never aimed at it.
+   * Whichever control was pressed -- `Expand`, `Fold Loom`, `Collapse`,
+   * `Open Loom`, a folded icon, or Esc on the stack -- leaves the document
+   * with the shape it belonged to, so without this the focus ring falls to
+   * `<body>` and the keyboard has lost its place. On a fold that only costs
+   * a tab stop; on an EXPAND it costs the Esc key itself, because the
+   * stack's handler never sees a keypress that was never aimed at it.
+   *
+   * Keyed on the DECISION's mode, not on the `expanded` boolean it used to
+   * watch: there are three shapes, not two, and keying on two of them left
+   * three of the fold's four transitions stranded at `<body>` -- and the
+   * strip is a shape with no title, so it names its own landing place.
    */
   const titleElement = useRef<HTMLButtonElement | null>(null)
-  const wasExpanded = useRef(expanded)
+  const stripOpenElement = useRef<HTMLButtonElement | null>(null)
+  const wasMode = useRef(decision.mode)
   useEffect(() => {
-    if (wasExpanded.current !== expanded) titleElement.current?.focus()
-    wasExpanded.current = expanded
-  }, [expanded])
+    if (wasMode.current !== decision.mode) {
+      // Only what was LOST is given back (MAR-3292 lap 2, A, departure): the
+      // shape can also change because the window was dragged narrow, and
+      // then the person is somewhere else entirely -- the composer, the
+      // sidebar -- with their focus still under their hands. `<body>` is the
+      // measurable fact that the element holding focus went away with the
+      // shape; anything else is a place someone is still standing.
+      const lost =
+        document.activeElement === null ||
+        document.activeElement === document.body
+      if (lost) {
+        if (decision.mode === 'strip') stripOpenElement.current?.focus()
+        else titleElement.current?.focus()
+      }
+    }
+    wasMode.current = decision.mode
+  }, [decision.mode])
   // The guide's own open/closed, and the control that opened it. Closing
   // puts focus back where it was, because a modal that returns a person to
   // nowhere has moved them without asking (MAR-3201 R6).
@@ -539,6 +566,13 @@ export const WavePanel: FC<WavePanelProps> = ({
 
   const titleRef = useCallback((element: HTMLButtonElement | null) => {
     titleElement.current = element
+  }, [])
+
+  // Stable for the same reason `guideRef` is: an inline callback is a new
+  // function every render, so React detaches it with `null` and re-attaches
+  // it -- and one of those renders is the one the focus effect runs after.
+  const stripOpenRef = useCallback((element: HTMLButtonElement | null) => {
+    stripOpenElement.current = element
   }, [])
 
   if (columnAbsent) return null
@@ -733,6 +767,7 @@ export const WavePanel: FC<WavePanelProps> = ({
         now={board.now}
         horses={board.horses}
         outage={board.header.kind === 'outage'}
+        openRef={stripOpenRef}
         onOpen={openLoom}
         onExpand={() => changeMode('expanded')}
         // One act, not two halves a person can land between: the sheet
