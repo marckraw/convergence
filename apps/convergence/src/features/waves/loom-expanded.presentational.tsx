@@ -1,11 +1,12 @@
 import type { FC } from 'react'
-import { Minimize2 } from 'lucide-react'
+import { Minimize2, PanelLeftClose } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { LoomStackView } from './loom-stack.presentational'
 import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
 import type { LoomStackProps } from './loom-stack.types'
 import {
+  LOOM_COLLAPSE_BUTTON_CLASS,
   LOOM_DRAG_STYLE,
   LOOM_EXPANDED_CLASS,
   LOOM_NO_DRAG_STYLE,
@@ -25,10 +26,9 @@ import { isLoomSearchShortcut } from './loom-search.pure'
  * other title strip in the app; `no-drag` once more on each control in that
  * row, so none of them is a place to pick the window up instead.
  */
-export const LoomExpandedView: FC<LoomStackProps & { onFold: () => void }> = ({
-  onFold,
-  ...props
-}) => (
+export const LoomExpandedView: FC<
+  LoomStackProps & { onFold: () => void; onCollapse: () => void }
+> = ({ onFold, onCollapse, ...props }) => (
   <section
     aria-label="Loom"
     data-loom="expanded"
@@ -92,6 +92,20 @@ export const LoomExpandedView: FC<LoomStackProps & { onFold: () => void }> = ({
       >
         <Minimize2 className="size-3.5" />
         Fold Loom
+      </Button>
+      {/* Past Fold Loom, because it goes one step further (MAR-3292 R4):
+          Fold gives the column back, Collapse takes it away. `no-drag` like
+          every other control in this header row. */}
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        aria-label="Collapse Loom"
+        className={LOOM_COLLAPSE_BUTTON_CLASS}
+        style={LOOM_NO_DRAG_STYLE}
+        onClick={onCollapse}
+      >
+        <PanelLeftClose className="size-3.5" />
       </Button>
     </div>
     <div className="shrink-0 px-6 pb-3">

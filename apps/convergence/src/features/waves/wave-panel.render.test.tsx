@@ -80,6 +80,32 @@ const rowOf = (key: string) =>
   within(document.querySelector(`[data-wave-row="${key}"]`) as HTMLElement)
 
 /**
+ * The app-region an element is IN: the nearest ancestor-or-self that says,
+ * exactly as Electron resolves it -- later in the tree wins.
+ *
+ * Read off the style object's own property, not
+ * `getPropertyValue('-webkit-app-region')`: jsdom's CSS parser does not know
+ * the property and drops the declaration, while the assignment React makes
+ * survives on the object. It is still the emitted element's own style that is
+ * read here, never the prop that asked for it.
+ *
+ * Module scope, and one copy (MAR-3292): this reader was written twice for
+ * MAR-3284 and MAR-3291, and MAR-3292's folded column is the third caller --
+ * three copies of one resolution rule is the class, not three sites.
+ */
+const region = (node: Element | null) => {
+  for (let at: Element | null = node; at !== null; at = at.parentElement) {
+    const said = (
+      (at as HTMLElement).style as CSSStyleDeclaration & {
+        WebkitAppRegion?: string
+      }
+    )?.WebkitAppRegion
+    if (said) return said
+  }
+  return null
+}
+
+/**
  * A window whose room for the column is one pixel under its floor: the
  * narrowest thing the panel can show is the rail (MAR-3155 R1). Derived from
  * the constants so it cannot drift away from them the way `260 + 280 + 479`
@@ -118,7 +144,9 @@ describe('MAR-3189 R4: the strip is the same model', () => {
         now={NOW}
         horses={[]}
         outage
+        onOpen={vi.fn()}
         onExpand={vi.fn()}
+        onSelectSheet={vi.fn()}
       />,
     )
 
@@ -146,7 +174,9 @@ describe('MAR-3189 R4: the strip is the same model', () => {
         sheets={loomSheets([], NOW)}
         now={NOW}
         outage={false}
+        onOpen={vi.fn()}
         onExpand={onExpand}
+        onSelectSheet={vi.fn()}
       />,
     )
     const expand = screen.getByRole('button', { name: 'Expand Loom' })
@@ -2390,6 +2420,319 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(document.querySelector('[data-loom="expanded"]')).toBeNull()
   })
 
+  describe('MAR-3292: Loom folds to a narrow column of icons', () => {
+    const column = () =>
+      document.querySelector('[data-loom="strip"]') as HTMLElement | null
+
+    const collapse = async () => {
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Collapse Loom' }))
+      })
+    }
+
+    const storedMode = () => localStorage.getItem('convergence-wave-panel-mode')
+
+    it('R2: the folded column is two ways out, the outage dot, and four sheets', async () => {
+      snapshots['crew-1']!.trackerHealth = health('unreachable')
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await collapse()
+
+      const folded = column()
+      expect(folded).toBeTruthy()
+      // R5: an outage keeps its dot and both ways out on the folded column.
+      expect(
+        within(folded!).getByLabelText('Tracker not answering'),
+      ).toBeTruthy()
+      expect(
+        within(folded!).getByRole('button', { name: 'Open Loom' }),
+      ).toBeTruthy()
+      expect(
+        within(folded!).getByRole('button', { name: 'Expand Loom' }),
+      ).toBeTruthy()
+
+      // One button per sheet, in the sheets' own order, each named with its
+      // count. Mutation: draw the sheets from a list of this file's own ->
+      // the order or a name drifts from LOOM_SHEETS, red.
+      const sheetButtons = Array.from(
+        folded!.querySelectorAll('[data-loom-strip-sheet]'),
+      )
+      expect(
+        sheetButtons.map((node) => node.getAttribute('data-loom-strip-sheet')),
+      ).toEqual([...LOOM_SHEETS])
+      const seen: Record<string, string> = {}
+      for (const sheet of LOOM_SHEETS) {
+        const button = within(folded!).getByRole('button', {
+          name: new RegExp(`^${LOOM_SHEET_NAMES[sheet]}: \\d+$`),
+        })
+        // The hover word is the accessible name, not a bare sheet title:
+        // QA reads "Before: 2" off the tooltip (R2).
+        // Mutation: `title={LOOM_SHEET_NAMES[sheet]}` -> red.
+        expect(button.getAttribute('title')).toBe(
+          button.getAttribute('aria-label'),
+        )
+        // No text labels: everything the button says out loud is the
+        // number, and the number is the one the count span carries.
+        // Mutation: render the sheet's name beside the count -> red.
+        const shown = button.querySelector(
+          `[data-wave-count="${sheet}"]`,
+        )?.textContent
+        expect(shown).toBeTruthy()
+        expect(button.textContent).toBe(shown)
+        expect(button.getAttribute('aria-label')).toBe(
+          `${LOOM_SHEET_NAMES[sheet]}: ${shown}`,
+        )
+        seen[sheet] = shown as string
+      }
+      // The board's own numbers, not four zeroes: of this fixture's four
+      // rows three are Now's (the reviewed one among them -- Before is a
+      // window over the live clock, and these rows were stamped in the
+      // past) and one is Next's.
+      // Mutation: hand the strip an empty `sheets` -> four zeroes, red.
+      expect(seen).toEqual({ before: '0', now: '3', next: '1', plan: '0' })
+      // The column stays the narrow one; the icons did not widen it.
+      // Mutation: widen WAVE_RAIL_CLASS past w-11 -> red.
+      expect(folded!.className).toContain('w-11')
+    })
+
+    it('R3: a sheet’s icon opens Loom ON that sheet, in one act', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await collapse()
+      await act(async () => {
+        fireEvent.click(
+          within(column()!).getByRole('button', { name: /^Next: / }),
+        )
+      })
+      // Both halves of the one act, read off storage and off the screen.
+      // Mutation: change the mode without selecting the sheet -> the stored
+      // sheet stays `now` and Now is the open title, red.
+      expect(storedMode()).toBe('compact')
+      expect(localStorage.getItem('convergence-loom-sheet')).toBe('next')
+      expect(await screen.findByLabelText('Loom')).toBeTruthy()
+      expect(
+        screen
+          .getByRole('button', { name: /^Next · / })
+          .getAttribute('aria-expanded'),
+      ).toBe('true')
+    })
+
+    it('R3: in a window too narrow for a column the same icon opens expanded Loom', async () => {
+      setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom strip')
+      await act(async () => {
+        fireEvent.click(
+          within(column()!).getByRole('button', { name: /^Next: / }),
+        )
+      })
+      // Mutation: send it to `compact` whatever the window -> the same strip
+      // is redrawn and the control looks broken, red.
+      expect(storedMode()).toBe('expanded')
+      expect(localStorage.getItem('convergence-loom-sheet')).toBe('next')
+      expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
+      expect(
+        screen
+          .getByRole('button', { name: /^Next · / })
+          .getAttribute('aria-expanded'),
+      ).toBe('true')
+    })
+
+    it('R3: Open Loom follows the same rule as the icons', async () => {
+      setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom strip')
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Open Loom' }))
+      })
+      // Mutation: `changeMode('compact')` unconditionally -> the strip is
+      // still on screen after the click, red.
+      expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
+    })
+
+    it('R4: Collapse folds from the column and from expanded alike', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await collapse()
+      expect(storedMode()).toBe('folded')
+      expect(column()).toBeTruthy()
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+      })
+      expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
+      // The expanded header keeps Fold Loom AND gains Collapse Loom: two
+      // different distances, two controls (R4).
+      expect(screen.getByRole('button', { name: 'Fold Loom' })).toBeTruthy()
+      await collapse()
+      // Mutation: wire the expanded Collapse to `compact` -> the column, red.
+      expect(storedMode()).toBe('folded')
+      expect(column()).toBeTruthy()
+    })
+
+    it('R4: the folded column never eats a click meant for the window', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await collapse()
+      const folded = column()!
+      // Mutation: drop `style={LOOM_NO_DRAG_STYLE}` from the aside -> the
+      // column resolves to whatever a covered view declared and the icons
+      // become a place to pick the window up, red.
+      expect(region(folded)).toBe('no-drag')
+      // And nothing inside it re-declares `drag` (MAR-3284's law).
+      // Mutation: a `drag` header on the column -> red.
+      for (const node of Array.from(folded.querySelectorAll('*'))) {
+        expect(region(node)).toBe('no-drag')
+      }
+    })
+
+    it('R4: neither header’s Collapse control is part of a drag strip', async () => {
+      localStorage.setItem('convergence-wave-panel-mode', 'expanded')
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      const header = document.querySelector('[data-loom-header]') as HTMLElement
+      const control = screen.getByRole('button', { name: 'Collapse Loom' })
+      expect(header.contains(control)).toBe(true)
+      // Mutation: drop its `no-drag` -> it resolves to the header's `drag`
+      // and a control inside a drag strip is not a control, red.
+      expect(region(control)).toBe('no-drag')
+      cleanup()
+
+      // The compact column declares no region of its own, so its Collapse
+      // has to say `no-drag` for itself rather than inherit it -- the same
+      // control, and the covered view underneath is the same threat.
+      // Mutation: drop the compact control's `no-drag` -> `null` here, red.
+      localStorage.setItem('convergence-wave-panel-mode', 'compact')
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      expect(
+        region(screen.getByRole('button', { name: 'Collapse Loom' })),
+      ).toBe('no-drag')
+    })
+
+    it('lap 2, B: folded and too narrow at once — both reasons true, and every way out still leads somewhere', async () => {
+      // The case `columnFitsHere` exists for, and the only one that tells it
+      // apart from the literal `stored === 'folded'`: a person who chose the
+      // fold AND has a window that could not hold a column anyway. Asking
+      // "was this chosen" would answer `compact`, which this window redraws
+      // as the same strip -- the control would look broken.
+      // Mutation: `const columnFitsHere = stored === 'folded'` -> both
+      // halves below red, and nothing else in this file moves.
+      localStorage.setItem('convergence-wave-panel-mode', 'folded')
+      setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom strip')
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Open Loom' }))
+      })
+      expect(storedMode()).toBe('expanded')
+      expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
+      cleanup()
+
+      localStorage.setItem('convergence-wave-panel-mode', 'folded')
+      setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom strip')
+      await act(async () => {
+        fireEvent.click(
+          within(column()!).getByRole('button', { name: /^Next: / }),
+        )
+      })
+      expect(storedMode()).toBe('expanded')
+      expect(localStorage.getItem('convergence-loom-sheet')).toBe('next')
+      expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
+      expect(
+        screen
+          .getByRole('button', { name: /^Next · / })
+          .getAttribute('aria-expanded'),
+      ).toBe('true')
+    })
+
+    it('lap 2, A: Collapse and Open carry the focus with the shape', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await collapse()
+      // The column's titles went away with the column, so the keyboard would
+      // be left on `<body>`; the folded column's way back is where it lands.
+      // Mutation: guard the effect with `decision.mode !== 'strip'` on both
+      // sides -> `<body>` here, red.
+      const open = within(column()!).getByRole('button', { name: 'Open Loom' })
+      expect(document.activeElement).toBe(open)
+
+      await act(async () => {
+        fireEvent.click(open)
+      })
+      const title = await screen.findByRole('button', { name: /^Now · / })
+      expect(title.getAttribute('aria-expanded')).toBe('true')
+      // Mutation: the same guard -> `<body>`, red.
+      expect(document.activeElement).toBe(title)
+    })
+
+    it('lap 2, A: Collapse from expanded, and an icon, land where the shape does', async () => {
+      localStorage.setItem('convergence-wave-panel-mode', 'expanded')
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      expect(document.querySelector('[data-loom="expanded"]')).toBeTruthy()
+      await collapse()
+      // Mutation: the same guard -> `<body>`, red. (Before this lap the
+      // effect watched the `expanded` boolean, so this transition — expanded
+      // to a shape that is still not `expanded` — never fired at all.)
+      expect(document.activeElement).toBe(
+        within(column()!).getByRole('button', { name: 'Open Loom' }),
+      )
+
+      await act(async () => {
+        fireEvent.click(
+          within(column()!).getByRole('button', { name: /^Next: / }),
+        )
+      })
+      // The sheet the icon named is open AND holds the focus: one act, one
+      // place to carry on from.
+      const next = await screen.findByRole('button', { name: /^Next · / })
+      expect(next.getAttribute('aria-expanded')).toBe('true')
+      expect(document.activeElement).toBe(next)
+    })
+
+    it('lap 2, A (departure): a shape the WINDOW changed takes nobody’s focus', async () => {
+      // Keying on the decision means a drag of the window edge changes the
+      // shape too — and then the person is somewhere else entirely with
+      // their focus still under their hands. Only focus that was LOST with
+      // the shape (the fact on screen: `<body>`) is given back.
+      // Mutation: drop the `lost` guard -> `Open Loom` steals it, red.
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      const elsewhere = document.createElement('button')
+      document.body.appendChild(elsewhere)
+      elsewhere.focus()
+      expect(document.activeElement).toBe(elsewhere)
+
+      setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
+      await act(async () => {
+        window.dispatchEvent(new Event('resize'))
+      })
+      expect(await screen.findByLabelText('Loom strip')).toBeTruthy()
+      expect(document.activeElement).toBe(elsewhere)
+      elsewhere.remove()
+    })
+
+    it('R5: folded survives a remount, and no bound crew shows nothing at all', async () => {
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+      await collapse()
+      cleanup()
+
+      // Mutation: drop the `folded` arm of `parseWavePanelMode` -> the
+      // column comes back on every restart, red.
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      expect(await screen.findByLabelText('Loom strip')).toBeTruthy()
+      cleanup()
+
+      crews = [{ ...boundCrew('crew-1', 'Loom'), trackerBinding: null }]
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      // Mutation: mount the folded column whatever the crews -> red.
+      expect(screen.queryByLabelText('Loom strip')).toBeNull()
+      expect(screen.queryByLabelText('Loom')).toBeNull()
+    })
+  })
+
   it('MAR-3189 R1: four titles, one sheet’s rows, and the others a click away', async () => {
     await mount(<WavePanel reservedWidth={RESERVED} />)
     await screen.findByLabelText('Loom')
@@ -3070,33 +3413,6 @@ describe('MAR-3097: through the containers and the real stores', () => {
      * answer the question for its whole area.
      */
     describe('MAR-3284: the header is a title strip, its controls are not', () => {
-      /**
-       * The app-region an element is IN: the nearest ancestor-or-self that
-       * says, exactly as Electron resolves it -- later in the tree wins.
-       *
-       * Read off the style object's own property, not
-       * `getPropertyValue('-webkit-app-region')`: jsdom's CSS parser does not
-       * know the property and drops the declaration, while the assignment
-       * React makes survives on the object. It is still the emitted
-       * element's own style that is read here, never the prop that asked
-       * for it.
-       */
-      const region = (node: Element | null) => {
-        for (
-          let at: Element | null = node;
-          at !== null;
-          at = at.parentElement
-        ) {
-          const said = (
-            (at as HTMLElement).style as CSSStyleDeclaration & {
-              WebkitAppRegion?: string
-            }
-          )?.WebkitAppRegion
-          if (said) return said
-        }
-        return null
-      }
-
       const expand = async () => {
         await act(async () => {
           fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
@@ -3553,19 +3869,6 @@ describe('MAR-3097: through the containers and the real stores', () => {
       })
     }
 
-    /** The app-region an element is IN, exactly as MAR-3284's tests read it. */
-    const region = (node: Element | null) => {
-      for (let at: Element | null = node; at !== null; at = at.parentElement) {
-        const said = (
-          (at as HTMLElement).style as CSSStyleDeclaration & {
-            WebkitAppRegion?: string
-          }
-        )?.WebkitAppRegion
-        if (said) return said
-      }
-      return null
-    }
-
     it('R2: following is an EVENT -- the open conversation changed', async () => {
       localStorage.setItem('convergence-loom-follow', '1')
       await mount(<WavePanel reservedWidth={RESERVED} />)
@@ -3768,7 +4071,9 @@ describe('MAR-3138 R4: a blocked working row is counted once, under Now', () => 
         )}
         now={NOW}
         outage={false}
+        onOpen={vi.fn()}
         onExpand={vi.fn()}
+        onSelectSheet={vi.fn()}
       />,
     )
     // The strip reads the same sheets, so the count follows R2 for free: a
@@ -3796,7 +4101,9 @@ describe('MAR-3148: the rail, the props and the clock', () => {
         sheets={loomSheets(rows, NOW)}
         now={NOW}
         outage={false}
+        onOpen={vi.fn()}
         onExpand={onExpand}
+        onSelectSheet={vi.fn()}
       />,
     )
     const expand = screen.getByRole('button', { name: 'Expand Loom' })
