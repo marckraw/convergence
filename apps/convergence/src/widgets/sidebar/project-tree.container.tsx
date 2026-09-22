@@ -25,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
 import { Input } from '@/shared/ui/input'
+import { LOOM_NO_DRAG_STYLE } from '@/shared/ui/no-drag.styles'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { cn } from '@/shared/lib/cn.pure'
 import {
@@ -43,6 +44,10 @@ import {
   Undo2,
 } from 'lucide-react'
 import { useFormSubmitShortcut } from '@/shared/lib/use-form-submit-shortcut.pure'
+
+/** Shown on branch-row tooltips while search keeps every branch open. */
+export const BRANCHES_STAY_OPEN_WHILE_YOU_SEARCH =
+  'Branches stay open while you search'
 
 interface ProjectTreeProps {
   cardContext: CardContext
@@ -171,23 +176,29 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
 
     return (
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className={
-              card
-                ? 'h-10 w-10 shrink-0 rounded-lg text-muted-foreground hover:text-foreground'
-                : 'h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/session:opacity-100 focus-visible:opacity-100'
-            }
-            aria-label={`Session actions ${session.name}`}
-            title="Session actions"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </Button>
-        </DropdownMenuTrigger>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={
+                  card
+                    ? 'h-10 w-10 shrink-0 rounded-lg text-muted-foreground hover:text-foreground'
+                    : 'h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/session:opacity-100 focus-visible:opacity-100'
+                }
+                aria-label={`Session actions ${session.name}`}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="left" style={LOOM_NO_DRAG_STYLE}>
+            {`Session actions ${session.name}`}
+          </TooltipContent>
+        </Tooltip>
         <DropdownMenuContent align="end">
           <DropdownMenuItem
             className="gap-2"
@@ -255,19 +266,25 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
 
     return (
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/workspace:opacity-100 focus-visible:opacity-100"
-            aria-label={`Workspace actions ${workspace.branchName}`}
-            title="Workspace actions"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </Button>
-        </DropdownMenuTrigger>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/workspace:opacity-100 focus-visible:opacity-100"
+                aria-label={`Workspace actions ${workspace.branchName}`}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="left" style={LOOM_NO_DRAG_STYLE}>
+            {`Workspace actions ${workspace.branchName}`}
+          </TooltipContent>
+        </Tooltip>
         <DropdownMenuContent align="end">
           {isArchived ? (
             <DropdownMenuItem
@@ -426,7 +443,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                 )}
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right">
+            <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
               {isRegeneratingName
                 ? `${session.name} (regenerating name…)`
                 : session.name}
@@ -459,7 +476,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                   (rootSessions.length > 0 ? ` (${rootSessions.length})` : '')}
               </p>
             </TooltipTrigger>
-            <TooltipContent side="right">
+            <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
               {baseBranchName || 'main'}
             </TooltipContent>
           </Tooltip>
@@ -489,11 +506,6 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                     type="button"
                     variant="ghost"
                     disabled={searching}
-                    title={
-                      searching
-                        ? 'Branches stay open while you search'
-                        : undefined
-                    }
                     onClick={() => {
                       if (!searching) toggleWorkspace(ws.id)
                     }}
@@ -524,7 +536,12 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                     )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="right">{ws.branchName}</TooltipContent>
+                <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+                  <p>{ws.branchName}</p>
+                  {searching ? (
+                    <p>{BRANCHES_STAY_OPEN_WHILE_YOU_SEARCH}</p>
+                  ) : null}
+                </TooltipContent>
               </Tooltip>
               {renderWorkspaceActions(ws)}
             </div>
@@ -559,11 +576,6 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                   variant="ghost"
                   aria-label={`${archivedExpanded ? 'Collapse' : 'Expand'} archived workspaces and sessions`}
                   disabled={searching}
-                  title={
-                    searching
-                      ? 'Branches stay open while you search'
-                      : undefined
-                  }
                   onClick={() => {
                     if (!searching) setShowArchived((current) => !current)
                   }}
@@ -588,8 +600,11 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                   </span>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="right">
-                Archived workspaces and sessions
+              <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+                <p>Archived workspaces and sessions</p>
+                {searching ? (
+                  <p>{BRANCHES_STAY_OPEN_WHILE_YOU_SEARCH}</p>
+                ) : null}
               </TooltipContent>
             </Tooltip>
           </div>
@@ -612,11 +627,6 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                             type="button"
                             variant="ghost"
                             disabled={searching}
-                            title={
-                              searching
-                                ? 'Branches stay open while you search'
-                                : undefined
-                            }
                             onClick={() => {
                               if (!searching) toggleWorkspace(ws.id)
                             }}
@@ -647,8 +657,11 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                             )}
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent side="right">
-                          {ws.branchName}
+                        <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+                          <p>{ws.branchName}</p>
+                          {searching ? (
+                            <p>{BRANCHES_STAY_OPEN_WHILE_YOU_SEARCH}</p>
+                          ) : null}
                         </TooltipContent>
                       </Tooltip>
                       {renderWorkspaceActions(ws)}

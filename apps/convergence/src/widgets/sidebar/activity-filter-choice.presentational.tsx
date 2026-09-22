@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
+import { LOOM_NO_DRAG_STYLE } from '@/shared/ui/no-drag.styles'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
 export function FilterChoice({
@@ -51,7 +52,7 @@ export function FilterChoice({
   return tooltip ? (
     <Tooltip>
       <TooltipTrigger asChild>{control}</TooltipTrigger>
-      <TooltipContent>{tooltip}</TooltipContent>
+      <TooltipContent style={LOOM_NO_DRAG_STYLE}>{tooltip}</TooltipContent>
     </Tooltip>
   ) : (
     control

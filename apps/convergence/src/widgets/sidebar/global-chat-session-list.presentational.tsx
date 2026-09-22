@@ -9,6 +9,7 @@ import type { FC } from 'react'
 import type { SessionSummary } from '@/entities/session'
 import type { SpaceAttemptRole } from '@/entities/space'
 import { Button } from '@/shared/ui/button'
+import { LOOM_NO_DRAG_STYLE } from '@/shared/ui/no-drag.styles'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import {
   DropdownMenu,
@@ -164,23 +165,31 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
             </span>
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="right">{session.name}</TooltipContent>
+        <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+          {session.name}
+        </TooltipContent>
       </Tooltip>
 
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/session:opacity-100 focus-visible:opacity-100"
-            aria-label={`Chat session actions ${session.name}`}
-            title="Session actions"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </Button>
-        </DropdownMenuTrigger>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/session:opacity-100 focus-visible:opacity-100"
+                aria-label={`Chat session actions ${session.name}`}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="left" style={LOOM_NO_DRAG_STYLE}>
+            {`Chat session actions ${session.name}`}
+          </TooltipContent>
+        </Tooltip>
         <DropdownMenuContent align="end">
           {!session.archivedAt ? (
             <DropdownMenuItem
@@ -306,24 +315,36 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
                               ) : null}
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent side="right">
+                          <TooltipContent
+                            side="right"
+                            style={LOOM_NO_DRAG_STYLE}
+                          >
                             {space.title}
                           </TooltipContent>
                         </Tooltip>
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/space:opacity-100 focus-visible:opacity-100"
-                              aria-label={`Space actions ${space.title}`}
-                              title="Space actions"
-                              onClick={(event) => event.stopPropagation()}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/space:opacity-100 focus-visible:opacity-100"
+                                  aria-label={`Space actions ${space.title}`}
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  <MoreHorizontal className="h-3.5 w-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent
+                              side="left"
+                              style={LOOM_NO_DRAG_STYLE}
                             >
-                              <MoreHorizontal className="h-3.5 w-3.5" />
-                            </Button>
-                          </DropdownMenuTrigger>
+                              {`Space actions ${space.title}`}
+                            </TooltipContent>
+                          </Tooltip>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
                               className="gap-2"
@@ -377,27 +398,39 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
                                       </span>
                                     </Button>
                                   </TooltipTrigger>
-                                  <TooltipContent side="right">
+                                  <TooltipContent
+                                    side="right"
+                                    style={LOOM_NO_DRAG_STYLE}
+                                  >
                                     {attempt.sessionName}
                                   </TooltipContent>
                                 </Tooltip>
 
                                 <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/attempt:opacity-100 focus-visible:opacity-100"
-                                      aria-label={`Space attempt actions ${attempt.sessionName}`}
-                                      title="Attempt actions"
-                                      onClick={(event) =>
-                                        event.stopPropagation()
-                                      }
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/attempt:opacity-100 focus-visible:opacity-100"
+                                          aria-label={`Space attempt actions ${attempt.sessionName}`}
+                                          onClick={(event) =>
+                                            event.stopPropagation()
+                                          }
+                                        >
+                                          <MoreHorizontal className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                      side="left"
+                                      style={LOOM_NO_DRAG_STYLE}
                                     >
-                                      <MoreHorizontal className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
+                                      {`Space attempt actions ${attempt.sessionName}`}
+                                    </TooltipContent>
+                                  </Tooltip>
                                   <DropdownMenuContent align="end">
                                     <DropdownMenuItem
                                       className="gap-2"
@@ -533,24 +566,33 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
                             <span className="truncate">{space.title}</span>
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent side="right">
+                        <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
                           {space.title}
                         </TooltipContent>
                       </Tooltip>
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/space:opacity-100 focus-visible:opacity-100"
-                            aria-label={`Archived Space actions ${space.title}`}
-                            title="Space actions"
-                            onClick={(event) => event.stopPropagation()}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/space:opacity-100 focus-visible:opacity-100"
+                                aria-label={`Archived Space actions ${space.title}`}
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <MoreHorizontal className="h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side="left"
+                            style={LOOM_NO_DRAG_STYLE}
                           >
-                            <MoreHorizontal className="h-3.5 w-3.5" />
-                          </Button>
-                        </DropdownMenuTrigger>
+                            {`Archived Space actions ${space.title}`}
+                          </TooltipContent>
+                        </Tooltip>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem
                             className="gap-2"

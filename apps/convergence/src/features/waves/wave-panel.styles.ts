@@ -1,5 +1,6 @@
-import type { CSSProperties } from 'react'
 import type { LoomHorseRuntime } from './loom-horses.pure'
+
+export { LOOM_DRAG_STYLE, LOOM_NO_DRAG_STYLE } from '@/shared/ui/no-drag.styles'
 
 /**
  * Every visual knob of the wave panel (MAR-3097), so "narrower" or "quieter"
@@ -147,16 +148,10 @@ export const LOOM_EXPANDED_CLASS =
  * drag-outside / no-drag-inside nesting `session-view.container.tsx:299/303`
  * already uses.
  *
- * Inline styles, not classes: this is the one property a class cannot carry
- * here, because a rendered test can only read what an element declares.
+ * Inline styles live in `@/shared/ui/no-drag.styles` (re-exported above) so
+ * the sidebar's tooltips and Loom's share one constant a pin can count
+ * (MAR-3314).
  */
-export const LOOM_DRAG_STYLE = {
-  WebkitAppRegion: 'drag',
-} as CSSProperties
-
-export const LOOM_NO_DRAG_STYLE = {
-  WebkitAppRegion: 'no-drag',
-} as CSSProperties
 
 /**
  * A sheet's title: a button in both shapes, because it does the same thing in
