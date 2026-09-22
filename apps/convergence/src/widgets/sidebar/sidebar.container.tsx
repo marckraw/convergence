@@ -99,10 +99,11 @@ export const Sidebar: FC<SidebarProps> = ({
   onPinPeek,
 }) => {
   const [searchRequest, setSearchRequest] = useState(0)
+  const requestSearch = useCallback(() => setSearchRequest((n) => n + 1), [])
   useSidebarSearchShortcut({
     collapsed,
     expand: onExpand,
-    onRequest: () => setSearchRequest((n) => n + 1),
+    onRequest: requestSearch,
   })
   const projects = useProjectStore((s) => s.projects)
   const activeProject = useProjectStore((s) => s.activeProject)

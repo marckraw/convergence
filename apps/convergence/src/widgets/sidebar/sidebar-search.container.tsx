@@ -23,6 +23,11 @@ export function useSidebarSearchShortcut({
         event.key.toLowerCase() !== 'f'
       )
         return
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[role="dialog"]') !== null
+      )
+        return
       const inSearch =
         event.target instanceof Element &&
         event.target.closest('[data-sidebar-search]') !== null

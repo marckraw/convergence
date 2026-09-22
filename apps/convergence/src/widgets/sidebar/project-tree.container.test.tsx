@@ -720,13 +720,26 @@ it.each([false, true])(
     }
     const view = render(
       <TooltipProvider>
+        <ProjectTree {...props} nameSearchQuery="" />
+      </TooltipProvider>,
+    )
+    expect(screen.queryByText('Matching conversation')).toBeNull()
+    view.rerender(
+      <TooltipProvider>
         <ProjectTree {...props} nameSearchQuery="Matching" />
       </TooltipProvider>,
     )
-    if (archived)
-      fireEvent.click(
-        screen.getByRole('button', { name: /expand archived workspaces/i }),
+    if (archived) {
+      const archivedToggle = screen.getByRole('button', {
+        name: /collapse archived workspaces/i,
+      })
+      expect(archivedToggle).toBeDisabled()
+      expect(archivedToggle).toHaveAttribute(
+        'title',
+        'Branches stay open while you search',
       )
+      fireEvent.click(archivedToggle)
+    }
     expect(screen.getByText('Matching conversation')).toBeInTheDocument()
     const chevron = screen.getByRole('button', { name: /^matching-branch/ })
     expect(chevron).toBeDisabled()
@@ -741,9 +754,18 @@ it.each([false, true])(
       </TooltipProvider>,
     )
     expect.soft(screen.queryByText('Matching conversation')).toBeNull()
-    expect(
-      screen.getByRole('button', { name: /^matching-branch/ }),
-    ).toBeEnabled()
+    if (archived) {
+      expect(
+        screen.getByRole('button', { name: /expand archived workspaces/i }),
+      ).toBeEnabled()
+      expect(
+        screen.queryByRole('button', { name: /^matching-branch/ }),
+      ).toBeNull()
+    } else {
+      expect(
+        screen.getByRole('button', { name: /^matching-branch/ }),
+      ).toBeEnabled()
+    }
     expect.soft(onToggleWorkspace).not.toHaveBeenCalled()
     expect(props.expandedWorkspaces.size).toBe(0)
   },

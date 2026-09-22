@@ -370,6 +370,25 @@ function cmdF(target: EventTarget = window) {
 }
 
 describe('Sidebar search shortcut requests', () => {
+  it('Cmd+F on a focused dialog button does not expand or request search', () => {
+    const expand = vi.fn()
+    const onRequest = vi.fn()
+    function DialogShortcut() {
+      useSidebarSearchShortcut({ collapsed: true, expand, onRequest })
+      return (
+        <div role="dialog">
+          <button>Dialog action</button>
+        </div>
+      )
+    }
+    render(<DialogShortcut />)
+    const button = screen.getByRole('button', { name: 'Dialog action' })
+    button.focus()
+    expect(cmdF(button).defaultPrevented).toBe(false)
+    expect(button).toHaveFocus()
+    expect(expand).not.toHaveBeenCalled()
+    expect(onRequest).not.toHaveBeenCalled()
+  })
   it('Cmd+F closed opens and focuses; open search selects text inside its marked field', () => {
     render(<ShortcutSidebar />)
     expect(screen.queryByRole('searchbox')).toBeNull()
@@ -463,6 +482,52 @@ vi.mock('@/features', () => {
     WorkspaceCreateDialogContainer: Dialog,
     LaneCreateDialogContainer: Dialog,
   }
+})
+
+it('real Sidebar keeps one keydown listener across three unrelated prop re-renders', () => {
+  const addListener = vi.spyOn(window, 'addEventListener')
+  const removeListener = vi.spyOn(window, 'removeEventListener')
+  function LivingSidebar({
+    activeSessionId,
+  }: {
+    activeSessionId: string | null
+  }) {
+    return (
+      <TooltipProvider>
+        <Sidebar
+          activeSurface="code"
+          onSelectSurface={noop}
+          onSelectSession={noop}
+          activeSessionId={activeSessionId}
+          onSelectGlobalSession={noop}
+          onNewGlobalSession={noop}
+          selectedSpaceId={null}
+          onSelectSpace={noop}
+          activeGlobalSessionId={null}
+          collapsed
+          peek={false}
+          onCollapse={noop}
+          onExpand={noop}
+          onPeek={noop}
+          onPinPeek={noop}
+        />
+      </TooltipProvider>
+    )
+  }
+  const view = render(<LivingSidebar activeSessionId={null} />)
+  for (const activeSessionId of ['one', 'two', 'three']) {
+    view.rerender(<LivingSidebar activeSessionId={activeSessionId} />)
+  }
+  expect(
+    addListener.mock.calls.filter(([type]) => type === 'keydown'),
+  ).toHaveLength(1)
+  expect(
+    removeListener.mock.calls.filter(([type]) => type === 'keydown'),
+  ).toHaveLength(0)
+  view.unmount()
+  expect(
+    removeListener.mock.calls.filter(([type]) => type === 'keydown'),
+  ).toHaveLength(1)
 })
 
 it('real Sidebar passes the collapsed shortcut request through to the mounted field', () => {

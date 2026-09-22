@@ -152,6 +152,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
     : null
   const rootSessions = sessions.filter((s) => !s.workspaceId && !s.archivedAt)
   const searching = normalizeNameQuery(nameSearchQuery).length > 0
+  const archivedExpanded = searching || showArchived
   const getActiveWorkspaceSessions = (wsId: string) =>
     sessions.filter((s) => s.workspaceId === wsId && !s.archivedAt)
   const getWorkspaceSessions = (wsId: string) =>
@@ -556,14 +557,22 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                 <Button
                   type="button"
                   variant="ghost"
-                  aria-label={`${showArchived ? 'Collapse' : 'Expand'} archived workspaces and sessions`}
-                  onClick={() => setShowArchived((current) => !current)}
+                  aria-label={`${archivedExpanded ? 'Collapse' : 'Expand'} archived workspaces and sessions`}
+                  disabled={searching}
+                  title={
+                    searching
+                      ? 'Branches stay open while you search'
+                      : undefined
+                  }
+                  onClick={() => {
+                    if (!searching) setShowArchived((current) => !current)
+                  }}
                   className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left text-sm font-normal hover:text-foreground"
                 >
                   <ChevronRight
                     className={cn(
                       'h-3 w-3 shrink-0 transition-transform',
-                      showArchived && 'rotate-90',
+                      archivedExpanded && 'rotate-90',
                     )}
                   />
                   <Archive className="h-3 w-3 shrink-0 text-muted-foreground" />
@@ -585,7 +594,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
             </Tooltip>
           </div>
 
-          {showArchived && (
+          {archivedExpanded && (
             <div className="ml-4 space-y-0.5">
               {archivedWorkspaces.map((ws) => {
                 const wsSessions = getWorkspaceSessions(ws.id)
