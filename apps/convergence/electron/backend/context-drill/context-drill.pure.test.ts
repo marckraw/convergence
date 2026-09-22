@@ -148,9 +148,18 @@ describe('the seal declaration (MAR-3255 R1)', () => {
 
 describe("the drill's two messages", () => {
   it('says the four words the protocol answers to', () => {
-    // Pinned as literals: the agent's revival protocol keys off these words,
+    // Pinned opening: the agent's revival protocol keys off these words,
     // and a reworded beat 1 is a drill that silently does nothing.
-    expect(DRILL_BEFORE_MESSAGE).toBe('You know the drill.')
+    expect(DRILL_BEFORE_MESSAGE).toMatch(/^You know the drill\./)
+    expect(DRILL_BEFORE_MESSAGE).not.toContain('\n')
+  })
+
+  it('names the seal contract the reader accepts (MAR-3331)', () => {
+    expect(DRILL_BEFORE_MESSAGE).toContain('SEALED: #N <sha>')
+    expect(DRILL_BEFORE_MESSAGE).toContain('NOT SEALED:')
+    expect(DRILL_BEFORE_MESSAGE).toContain('BATON')
+    expect(DRILL_BEFORE_MESSAGE).toContain('last three lines')
+    expect(DRILL_BEFORE_MESSAGE).toContain('mrck-the-drill')
   })
 
   it('tells a compacted agent where to start reading', () => {

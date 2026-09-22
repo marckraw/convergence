@@ -8,16 +8,6 @@
 
 import type { DrillSeat } from './context-drill.types'
 
-/**
- * Beat 1, said to a mastermind conversation verbatim.
- *
- * Static, and static by ruling: what the agent has to do when it hears this
- * lives in its own revival protocol, not in a message Convergence composes.
- * A drill that carried state would be a second copy of the protocol, kept in
- * an app that cannot read whether it is still true.
- */
-export const DRILL_BEFORE_MESSAGE = 'You know the drill.'
-
 /** Beat 3, said after the context has actually been compacted. */
 export const DRILL_AFTER_MESSAGE =
   'You were just compacted. Read the newest REVIVAL PROTOCOL in your memory first, end to end, then the tail of your ledger. Prove continuity, then resume at RESUME.'
@@ -46,6 +36,13 @@ const NOT_SEALED_PREFIX = 'NOT SEALED:'
  * purpose -- see `readSealDeclaration`.
  */
 const SEAL_WINDOW_LINES = 3
+
+/**
+ * Beat 1 states the reader's contract without carrying protocol state.
+ * Keep it one line with JSON-safe quotes: the person queue finds it verbatim
+ * inside the serialized provider input (MAR-3331).
+ */
+export const DRILL_BEFORE_MESSAGE = `You know the drill. Seal now (skill mrck-the-drill): write the REVIVAL PROTOCOL, ledger, index, commit and push; then end this reply with a line that starts with exactly '${SEALED_PREFIX} #N <sha>' directly above your BATON line, or '${NOT_SEALED_PREFIX} <reason>' — I read only the last ${['zero', 'one', 'two', 'three', 'four'][SEAL_WINDOW_LINES] ?? SEAL_WINDOW_LINES} lines of your reply.`
 
 /**
  * The marks a formatter puts in FRONT of a line: emphasis, code, quote.
