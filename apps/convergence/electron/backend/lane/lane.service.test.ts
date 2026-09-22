@@ -15,7 +15,6 @@ import {
 } from 'fs'
 import { mkdir, statfs } from 'fs/promises'
 import { join } from 'path'
-import * as os from 'os'
 import { tmpdir } from 'os'
 import { createServer, type Server } from 'net'
 import { execFileSync } from 'child_process'
@@ -276,10 +275,10 @@ describe('LaneService', { timeout: GIT_INTEGRATION_TEST_TIMEOUT_MS }, () => {
   // owns and against what landed — never against volume free space (sibling
   // workers and git's fsmonitor make that a measure of the machine).
   it('reports bytes when the copier really copied', async () => {
-    const sourceDir = mkdtempSync(join(os.tmpdir(), 'cvg-b-src-'))
-    const targetDir = mkdtempSync(join(os.tmpdir(), 'cvg-b-dst-'))
+    const sourceDir = mkdtempSync(join(tmpdir(), 'cvg-b-src-'))
+    const targetDir = mkdtempSync(join(tmpdir(), 'cvg-b-dst-'))
     // No test reads a byte total off a tree another process may touch (MAR-3315).
-    expect(sourceDir.startsWith(os.tmpdir())).toBe(true)
+    expect(sourceDir.startsWith(tmpdir())).toBe(true)
 
     mkdirSync(join(sourceDir, 'nested', 'deep'), { recursive: true })
     const written: string[] = []
@@ -330,6 +329,29 @@ describe('LaneService', { timeout: GIT_INTEGRATION_TEST_TIMEOUT_MS }, () => {
       rmSync(sourceDir, { recursive: true, force: true })
       rmSync(targetDir, { recursive: true, force: true })
     }
+  })
+
+  // MAR-3315 lap 2: re-pin the service's `copyMethod: 'bytes'` claim through
+  // the readFreeBytes port — fake readings, no volume, no byte count.
+  it("reports 'bytes' when the volume gave up the copied bytes", async () => {
+    const consumed = 96 * MiB
+    const freeReadings = [500 * 1024 * MiB, 500 * 1024 * MiB - consumed]
+    const readFreeBytes = async (): Promise<number> => freeReadings.shift()!
+    const byteCopying = new LaneService(
+      getDatabase(),
+      new GitService(),
+      () => lanesRoot,
+      makeByteCopier(),
+      readFreeBytes,
+    )
+
+    const { copyMethod } = await byteCopying.create({
+      rootProjectId: rootId,
+      laneName: 'copied',
+      branchName: 'feat/copied',
+    })
+
+    expect(copyMethod).toBe('bytes')
   })
 
   // M1 (MAR-2814 round 1): a project row holds `resolve()`d path, not a

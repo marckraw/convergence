@@ -334,6 +334,14 @@ export class LaneService {
      */
     private readonly resolveLanesRoot: () => string,
     private readonly copier: LaneTreeCopier = selectLaneTreeCopier(),
+    /**
+     * The volume reading, as a port (mirrors `copyLaneTree`): a canary can
+     * hand this a known drop and ask what the service made of it, without a
+     * gigabyte of real bytes (MAR-3315).
+     */
+    private readonly readFreeBytes: (
+      path: string,
+    ) => Promise<number> = freeBytesOn,
   ) {}
 
   async create(
@@ -378,6 +386,8 @@ export class LaneService {
         root.repository_path,
         targetPath,
         this.copier,
+        undefined,
+        this.readFreeBytes,
       )
       copyMethod = copied.copyMethod
       warnings.push(
