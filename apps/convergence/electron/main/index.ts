@@ -943,6 +943,12 @@ async function startApp(): Promise<void> {
   sessionService.onDispatchTerminal((event) => {
     relayEngine.handleDispatchTerminal(event)
   })
+  // Both terminal listeners are wired now: `AutoDispatchService` subscribed
+  // in its constructor above, and the relay engine on the line before. Boot
+  // recovery ran in `SessionService`'s constructor, before either existed,
+  // so it failed rows without telling. The record still holds them untold,
+  // and this tells them once (MAR-3307).
+  sessionService.tellBootEndings()
   // And a receipt handed on: Deliver now re-opens the errand on the run it
   // always belonged to, rather than letting the retry start a run of its own
   // (MAR-2971).

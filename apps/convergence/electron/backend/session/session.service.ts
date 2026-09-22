@@ -2,6 +2,12 @@ import { HandoffRefusedError } from '../provider/provider-account-handoff.pure'
 import type { InitialDispatchReceipt } from '../provider/provider.types'
 import { readSessionTurnTimings } from './session-timing.service'
 import { CONVERSATION_RESET_COMMAND } from '../../../src/shared/lib/conversation-reset.pure'
+import {
+  readStaleResetFromQueue,
+  STALE_RESET_NOTE_EVENT_TYPE,
+  STALE_RESET_ROW_ERROR,
+  staleResetNoteText,
+} from './session-stale-reset.pure'
 import { randomUUID } from 'crypto'
 import { answerWindowResult } from './answer-window.pure'
 import { HarnessEvidenceService } from './harness-evidence.service'
@@ -1185,8 +1191,17 @@ export class SessionService {
    * transient as far as this process can tell, and a quiet retry would be
    * a guess.
    */
-  private terminateQueuedInputs(sessionId: string, reason: string): void {
+  private terminateQueuedInputs(
+    sessionId: string,
+    reason: string,
+    options: { deferTellingToBoot?: boolean } = {},
+  ): void {
     const ended = this.queuedInputs.failAttemptedForSession(sessionId, reason)
+    // At boot nobody is listening yet (MAR-3307). The rows are failed now, so
+    // the failure is durable, but they stay untold. `tellBootEndings` tells
+    // them from the record once the listeners are wired. Stamping them here
+    // would mark as told an ending that nobody heard.
+    if (options.deferTellingToBoot) return
     // Emit, THEN stamp (MAR-2971 lap 3). The two orders fail differently and
     // only one of them fails safely. Stamping first, a kill between the two
     // writes leaves a row marked told that the engine never heard: its hop
@@ -5277,6 +5292,7 @@ export class SessionService {
         session,
         'Session marked failed because Convergence restarted before the provider process finished.',
         false,
+        { atBoot: true },
       )
     }
   }
@@ -5488,12 +5504,96 @@ export class SessionService {
     this.notifySessionChange(session.id)
   }
 
+  /**
+   * A reset a restart interrupted: fail the rows behind it, loudly, and say
+   * so in the transcript (MAR-3307 R2).
+   *
+   * This does NOT break MAR-2971's law ("a queued row is never failed
+   * because the turn ahead of it ended"). That law is about a turn that
+   * ENDS: its handle drains the queue next. A boot is not a turn ending.
+   * The process that would have drained these rows is gone, and a reset's
+   * rows are drained only by the reset's own lifecycle (`resetsInFlight`,
+   * in memory, lost with the process). Delivering them now would act on a
+   * stale brief in a conversation nobody is watching, so they are failed
+   * with a reason and the retry goes back to whoever sent them. Their
+   * endings are told by `tellBootEndings`, like every other boot ending.
+   */
+  private failRowsBehindStaleReset(
+    session: Session,
+    behind: readonly SessionQueuedInput[],
+  ): void {
+    if (behind.length === 0) return
+    for (const row of behind) {
+      this.queuedInputs.patch(row.id, 'failed', STALE_RESET_ROW_ERROR)
+    }
+    const timestamp = new Date().toISOString()
+    this.addConversationItem(session.id, {
+      id: randomUUID(),
+      turnId: null,
+      kind: 'note',
+      state: 'complete',
+      level: 'warning',
+      text: staleResetNoteText(behind.length),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      providerMeta: {
+        providerId: session.providerId,
+        providerItemId: null,
+        providerEventType: STALE_RESET_NOTE_EVENT_TYPE,
+      },
+    })
+  }
+
+  /**
+   * Tells the endings boot recovery wrote but could not say (MAR-3307).
+   *
+   * The constructor runs before `AutoDispatchService` and the relay engine
+   * subscribe (`main/index.ts`), so a terminal emitted there reaches nobody.
+   * Boot therefore fails rows without telling, and this runs once, right
+   * after the last listener is wired. It reads the RECORD: every `failed` row
+   * with a receipt and no `ending_told_at`. It does not use ids held in
+   * memory, because a crash between the boot and this call would lose those.
+   * The untold rows are still on disk, and the next boot tells them.
+   *
+   * One `failed` terminal per session, the same shape a turn's failure
+   * emits, then the stamp. Emit before stamp, as in `terminateQueuedInputs`:
+   * both listeners are idempotent (`auto_dispatches ... error IS NULL`,
+   * `relay_hops ... settled_at IS NULL`), so a lost stamp costs one repeated
+   * event, while a lost event would leave the receipt with no ending. A
+   * second call finds nothing.
+   */
+  tellBootEndings(): void {
+    const bySession = new Map<string, SessionQueuedInput[]>()
+    for (const row of this.queuedInputs.listFailedUntold()) {
+      const rows = bySession.get(row.sessionId)
+      if (rows) rows.push(row)
+      else bySession.set(row.sessionId, [row])
+    }
+    for (const [sessionId, rows] of bySession) {
+      this.emitDispatchTerminal(
+        sessionId,
+        'failed',
+        rows
+          .map((row) => row.dispatchId)
+          .filter((dispatchId): dispatchId is string => dispatchId !== null),
+      )
+      this.queuedInputs.markEndingTold(rows.map((row) => row.id))
+    }
+  }
+
   private markStaleRunningSessionFailed(
     session: Session,
     reason: string,
     notify: boolean,
+    options: { atBoot?: boolean } = {},
   ): Session {
     const timestamp = new Date().toISOString()
+    // Read BEFORE the queue is terminated: an opener caught `dispatching` is
+    // about to become `failed`, and then it no longer reads as the turn in
+    // flight (MAR-3307 R1).
+    const staleReset = options.atBoot
+      ? readStaleResetFromQueue(this.queuedInputs.listAllForSession(session.id))
+      : null
     const note = this.addConversationItem(session.id, {
       id: randomUUID(),
       turnId: null,
@@ -5517,7 +5617,11 @@ export class SessionService {
       updatedAt: timestamp,
     })
     // The stale run's queue ends with it, and says so (MAR-2759, design P).
-    this.terminateQueuedInputs(session.id, reason)
+    // At boot the saying waits for `tellBootEndings` (MAR-3307).
+    this.terminateQueuedInputs(session.id, reason, {
+      deferTellingToBoot: options.atBoot === true,
+    })
+    if (staleReset) this.failRowsBehindStaleReset(session, staleReset.behind)
     this.releaseHandle(session.id)
     this.closeActiveTurn(session.id, 'errored')
 
