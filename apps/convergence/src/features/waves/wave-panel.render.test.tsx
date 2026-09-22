@@ -21,6 +21,12 @@ import {
   WAVE_PANEL_MIN_MAIN_WIDTH,
   WAVE_PANEL_WIDTH_STEP,
 } from './wave-sections.pure'
+import {
+  LOOM_ENTER_MS,
+  LOOM_SHELL_CLASS,
+  LOOM_SLIDE_MS,
+  LOOM_STRIP_WIDTH_PX,
+} from './wave-panel.styles'
 import { crewMember, ledgerEntry, residentSeat } from './wave-rows.fixture'
 
 /**
@@ -2926,6 +2932,190 @@ describe('MAR-3097: through the containers and the real stores', () => {
       // Mutation: mount the folded column whatever the crews -> red.
       expect(screen.queryByLabelText('Loom strip')).toBeNull()
       expect(screen.queryByLabelText('Loom')).toBeNull()
+    })
+  })
+
+  describe('MAR-3312: the fold slides', () => {
+    const shell = () =>
+      document.querySelector('[data-loom-shell]') as HTMLElement | null
+    const motion = () => shell()?.getAttribute('data-loom-motion') ?? null
+    const compact = () =>
+      document.querySelector('[data-loom="compact"]') as HTMLElement | null
+
+    const collapse = async () => {
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Collapse Loom' }))
+      })
+    }
+    const openAgain = async () => {
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Open Loom' }))
+      })
+    }
+    /** Past the slide and the fade that follows it, on the real clock. */
+    const settle = async () => {
+      await act(async () => {
+        await new Promise((done) =>
+          setTimeout(done, LOOM_SLIDE_MS + LOOM_ENTER_MS + 50),
+        )
+      })
+    }
+
+    const wide = async () => {
+      setWindowWidth(1600)
+      await mount(<WavePanel reservedWidth={RESERVED} />)
+      await screen.findByLabelText('Loom')
+    }
+
+    it('R1: ONE shell carries the column and the strip, and travels between their widths', async () => {
+      await wide()
+      const box = shell()
+      expect(box).toBeTruthy()
+      expect(document.querySelectorAll('[data-loom-shell]')).toHaveLength(1)
+      const column = box!.style.width
+      // Not vacuous: the shell starts at the column's own width, which is
+      // not the strip's.
+      expect(column).toBe(compact()!.style.width)
+      expect(column).not.toBe(`${LOOM_STRIP_WIDTH_PX}px`)
+
+      await collapse()
+
+      // The identity case, and the whole reason the shell exists: React must
+      // MATCH this node across the change, not replace it, or the browser
+      // has no old width to interpolate from. Mutation: `key={decision.mode}`
+      // on the shell -> a fresh node, red here and only here.
+      expect(shell()).toBe(box)
+      expect(document.querySelectorAll('[data-loom-shell]')).toHaveLength(1)
+      expect(box!.style.width).toBe(`${LOOM_STRIP_WIDTH_PX}px`)
+      expect(box!.querySelector('[data-loom="strip"]')).toBeTruthy()
+      expect(box!.querySelector('[data-loom="compact"]')).toBeNull()
+
+      await settle()
+      await openAgain()
+
+      expect(shell()).toBe(box)
+      expect(box!.style.width).toBe(column)
+      expect(box!.querySelector('[data-loom="compact"]')).toBeTruthy()
+    })
+
+    it('R1: only a MODE change slides — the handle’s drag still moves the column pixel for pixel', async () => {
+      await wide()
+      // At rest the shell declares itself still, so the width the drag
+      // writes is the width the eye gets. Mutation: hard-code `slide` (a
+      // transition that is always on) -> red at the first assertion, and the
+      // handle would trail the cursor by a fifth of a second.
+      expect(motion()).toBe('still')
+
+      const handle = document.querySelector(
+        '[data-wave-resize-handle]',
+      ) as HTMLElement
+      await act(async () => {
+        fireEvent.mouseDown(handle)
+        fireEvent.mouseMove(window, { clientX: RESERVED + 360 })
+      })
+      // A width change, not a mode change.
+      expect(motion()).toBe('still')
+      expect(shell()!.style.width).toBe(compact()!.style.width)
+      expect(shell()!.style.width).toBe('360px')
+      await act(async () => {
+        fireEvent.mouseUp(window)
+      })
+      expect(motion()).toBe('still')
+
+      // A fold IS one. Mutation: drop the render-phase lap and set it in an
+      // effect instead -> the attribute is still `still` on the render that
+      // carries the new width, red.
+      await collapse()
+      expect(motion()).toBe('slide')
+      await settle()
+      expect(motion()).toBe('still')
+    })
+
+    it('R2: reduced motion is a class, and the shell’s inline style names width and the region only', async () => {
+      await wide()
+      expect(shell()!.className).toBe(LOOM_SHELL_CLASS)
+      // The law from `learn-loom.styles.ts`: inline wins over the media
+      // query, so the one person who asked for no motion would be given it
+      // anyway. Mutation: move the transition into the inline style -> red.
+      expect(LOOM_SHELL_CLASS).toContain('motion-reduce:transition-none')
+      expect(shell()!.style.transition).toBe('')
+      expect(shell()!.getAttribute('style')).not.toContain('transition')
+
+      await collapse()
+      expect(shell()!.className).toBe(LOOM_SHELL_CLASS)
+      expect(shell()!.getAttribute('style')).not.toContain('transition')
+    })
+
+    it('R3: the arriving shape fades in while the shell travels, and is plain once it has landed', async () => {
+      await wide()
+      // Nothing fades when nothing moved.
+      expect(compact()!.className).not.toContain('animate-loom-enter')
+
+      await collapse()
+      const strip = screen.getByLabelText('Loom strip')
+      // Mutation: pass the fade unconditionally -> the settled assertions
+      // below go red; drop it entirely -> these two do.
+      expect(strip.className).toContain('animate-loom-enter')
+      expect(strip.className).toContain('motion-reduce:animate-none')
+
+      await settle()
+      expect(screen.getByLabelText('Loom strip').className).not.toContain(
+        'animate-loom-enter',
+      )
+    })
+
+    it('R4: the shell declares no-drag in both shapes, so nothing eats a click mid-motion', async () => {
+      await wide()
+      // Mutation: drop `LOOM_NO_DRAG_STYLE` from the shell -> the region
+      // resolves to whatever title strip lies under the moving column, red.
+      expect(region(shell())).toBe('no-drag')
+      expect(document.querySelector('[data-wave-resize-handle]')).toBeTruthy()
+
+      await collapse()
+      expect(region(shell())).toBe('no-drag')
+      // The handle is not rendered over a strip, as before (R4).
+      expect(document.querySelector('[data-wave-resize-handle]')).toBeNull()
+
+      await settle()
+      await openAgain()
+      expect(document.querySelector('[data-wave-resize-handle]')).toBeTruthy()
+    })
+
+    it('R5: a window narrowing past the threshold slides shut through the same shell', async () => {
+      await wide()
+      const box = shell()
+
+      await act(async () => {
+        setWindowWidth(TOO_NARROW_FOR_A_COLUMN)
+        fireEvent(window, new Event('resize'))
+      })
+
+      // Folded by choice and folded by width are one shape (MAR-3292 R1), so
+      // they are one slide. Mutation: render the width-driven strip outside
+      // the shell -> the node changes, red.
+      expect(await screen.findByLabelText('Loom strip')).toBeTruthy()
+      expect(shell()).toBe(box)
+      expect(box!.style.width).toBe(`${LOOM_STRIP_WIDTH_PX}px`)
+      expect(motion()).toBe('slide')
+    })
+
+    it('R7: expanded is untouched — coming back out of the portal does not slide', async () => {
+      await wide()
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Expand Loom' }))
+      })
+      // The portal is its own shape; no shell went with it.
+      expect(shell()).toBeNull()
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Fold Loom' }))
+      })
+      // A shell that was not on screen a moment ago has no width to travel
+      // from, and a fade here would be a blank column on a path this issue
+      // promised not to touch. Mutation: count every mode change as a lap ->
+      // both assertions red.
+      expect(motion()).toBe('still')
+      expect(compact()!.className).not.toContain('animate-loom-enter')
     })
   })
 

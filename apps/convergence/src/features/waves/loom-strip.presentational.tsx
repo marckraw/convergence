@@ -10,6 +10,7 @@ import {
   PanelLeftOpen,
 } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
+import { cn } from '@/shared/lib/cn.pure'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { loomSheetCounts, type LoomSheets } from './loom-sheets.pure'
 import type { LoomHorse } from './loom-horses.pure'
@@ -28,6 +29,12 @@ import {
 } from './wave-panel.styles'
 
 interface LoomStripViewProps {
+  /**
+   * What the shell around this column adds while it is arriving (MAR-3312
+   * R3) -- the fade, and nothing else. The strip owns its own look; this is
+   * the one word its caller is allowed to add to it.
+   */
+  className?: string
   dispatchPlan?: DispatchPlan | null
   sheets: LoomSheets
   /** The board's clock; Before's count is a window over it (MAR-3192). */
@@ -125,6 +132,7 @@ const EXPAND_LOOM = 'Expand Loom'
  * column.
  */
 export const LoomStripView: FC<LoomStripViewProps> = ({
+  className,
   sheets,
   now,
   horses,
@@ -138,7 +146,7 @@ export const LoomStripView: FC<LoomStripViewProps> = ({
   <aside
     aria-label="Loom strip"
     data-loom="strip"
-    className={WAVE_RAIL_CLASS}
+    className={cn(WAVE_RAIL_CLASS, className)}
     style={LOOM_NO_DRAG_STYLE}
   >
     <Tooltip>

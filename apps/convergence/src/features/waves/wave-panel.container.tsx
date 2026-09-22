@@ -34,6 +34,14 @@ import {
   WAVE_PANEL_MAX_COLUMN_WIDTH,
   WAVE_PANEL_MIN_COLUMN_WIDTH,
 } from './wave-sections.pure'
+import {
+  LOOM_ENTER_CLASS,
+  LOOM_ENTER_MS,
+  LOOM_NO_DRAG_STYLE,
+  LOOM_SHELL_CLASS,
+  LOOM_SLIDE_MS,
+  LOOM_STRIP_WIDTH_PX,
+} from './wave-panel.styles'
 import { useWaveColumnResize } from './use-wave-column-resize'
 import { useWaveBoard } from './use-wave-board'
 import { LoomRefresh } from './loom-refresh.container'
@@ -534,6 +542,50 @@ export const WavePanel: FC<WavePanelProps> = ({
     }
     wasMode.current = decision.mode
   }, [decision.mode])
+
+  /**
+   * Whether the shell should SLIDE into this shape, or simply be it
+   * (MAR-3312 R1/R3).
+   *
+   * Derived DURING render, not in an effect: an effect runs after the DOM
+   * already carries the new width, and a transition that is switched on after
+   * the value moved has nothing left to interpolate -- the fold would snap
+   * exactly as it did before. Adjusting state while rendering makes React
+   * re-render before it commits, so the shell reaches the DOM with
+   * `data-loom-motion="slide"` and the new width in the SAME style change,
+   * which is the one arrangement the transition spec starts from.
+   *
+   * Only between the two NARROW shapes. Expanded is a portal over the content
+   * area with its own motion, and folding back out of it mounts a shell that
+   * was not on screen a moment ago -- there is no width to travel from, and a
+   * fade there would be a blank column for a fifth of a second on a path this
+   * issue promised not to touch (R7).
+   *
+   * A lap COUNTER rather than a boolean, so a second fold before the first
+   * has settled restarts the timer instead of inheriting the old one's
+   * deadline -- `setSliding(true)` over `true` is not a state change, and the
+   * effect would never re-run.
+   */
+  const [shellMode, setShellMode] = useState(decision.mode)
+  const [slideLap, setSlideLap] = useState(0)
+  if (shellMode !== decision.mode) {
+    const narrow = (mode: typeof decision.mode) => mode !== 'expanded'
+    setShellMode(decision.mode)
+    setSlideLap(
+      narrow(shellMode) && narrow(decision.mode) ? (lap) => lap + 1 : 0,
+    )
+  }
+  const sliding = slideLap > 0
+  useEffect(() => {
+    if (slideLap === 0) return
+    // The slide and the fade that follows it; after that the shell is still
+    // again, and the handle's drag moves the column pixel for pixel.
+    const timer = window.setTimeout(
+      () => setSlideLap(0),
+      LOOM_SLIDE_MS + LOOM_ENTER_MS,
+    )
+    return () => window.clearTimeout(timer)
+  }, [slideLap])
   // The guide's own open/closed, and the control that opened it. Closing
   // puts focus back where it was, because a modal that returns a person to
   // nowhere has moved them without asking (MAR-3201 R6).
@@ -756,34 +808,6 @@ export const WavePanel: FC<WavePanelProps> = ({
     </>
   )
 
-  if (decision.mode === 'strip') {
-    // Where "open it again" leads (MAR-3292 R3): the column when this window
-    // can hold one, the content area when it cannot. Both are Loom with its
-    // sheets, which is the promise the folded column makes.
-    const openLoom = () => changeMode(columnFitsHere ? 'compact' : 'expanded')
-    return withGuide(
-      <LoomStripView
-        dispatchPlan={board.dispatchPlan}
-        sheets={board.sheets}
-        now={board.now}
-        horses={board.horses}
-        outage={board.header.kind === 'outage'}
-        openRef={stripOpenRef}
-        onOpen={openLoom}
-        onExpand={() => changeMode('expanded')}
-        // One act, not two halves a person can land between: the sheet
-        // FIRST, so the shape that mounts is already reading the sheet the
-        // icon named. Changing the mode alone would open Loom wherever it
-        // was last left, which is the one thing this control promises not
-        // to do.
-        onSelectSheet={(next) => {
-          selectSheet(next)
-          openLoom()
-        }}
-      />,
-    )
-  }
-
   if (decision.mode === 'expanded') {
     const expandedStack = (
       <LoomExpandedView
@@ -799,29 +823,91 @@ export const WavePanel: FC<WavePanelProps> = ({
     )
   }
 
-  // The handle is the column's right EDGE, so it is a sibling in the shell's
-  // flex row rather than a child of the aside -- the same shape the sidebar's
-  // handle has. On this branch the decision HAS a width and a ceiling (lap 2,
-  // B), so there is no fallback to reach for.
+  // Where "open it again" leads (MAR-3292 R3): the column when this window
+  // can hold one, the content area when it cannot. Both are Loom with its
+  // sheets, which is the promise the folded column makes.
+  const openLoom = () => changeMode(columnFitsHere ? 'compact' : 'expanded')
+  // The compact shape or nothing, so the width and the ceiling this branch
+  // needs are read off the decision that HAS them (lap 2, B) rather than
+  // asserted past a boolean.
+  const column = decision.mode === 'compact' ? decision : null
+
+  /**
+   * One shell, two contents (MAR-3312 R1).
+   *
+   * The strip and the column are different components; returned side by side
+   * from two branches they share no element, so a fold had nothing to
+   * animate and the column vanished in a frame. Here they are two children
+   * of ONE `div` that React matches across the change -- same position, same
+   * type, no `key` -- and the browser interpolates its width between the
+   * stored column and the strip's 44 px.
+   *
+   * The handle stays OUTSIDE the shell, as it was outside the aside: it is
+   * the column's right EDGE, it straddles that edge with negative margins,
+   * and inside a box that clips its overflow half its grab area would be
+   * gone. It is also the second child in BOTH modes -- `null` when there is
+   * no column -- because a fragment whose first child changed shape would
+   * cost the shell the identity the whole slide rests on.
+   */
   return withGuide(
     <>
-      <LoomCompactView
-        {...stack}
-        width={decision.width}
-        onExpand={() => changeMode('expanded')}
-        onCollapse={() => changeMode('folded')}
-      />
-      <WaveResizeHandle
-        width={decision.width}
-        min={WAVE_PANEL_MIN_COLUMN_WIDTH}
-        // What this window can actually do, not what the constant allows: a
-        // separator that announces 280-400 while 320 is the most it can give
-        // is telling a screen reader something the mechanism refuses.
-        max={decision.maxWidth}
-        onMouseDown={resize.onHandleMouseDown}
-        onKeyDown={resize.onHandleKeyDown}
-        onDoubleClick={resize.onHandleDoubleClick}
-      />
+      <div
+        data-loom-shell
+        data-loom-motion={sliding ? 'slide' : 'still'}
+        className={LOOM_SHELL_CLASS}
+        // `width` and the region, nothing else (R2/R4): an inline
+        // `transition` would out-specify `motion-reduce`, and a shell that
+        // declared no region would hand the moving column to whatever strip
+        // is underneath it (MAR-3284's law).
+        style={{
+          width: column ? column.width : LOOM_STRIP_WIDTH_PX,
+          ...LOOM_NO_DRAG_STYLE,
+        }}
+      >
+        {column ? (
+          <LoomCompactView
+            {...stack}
+            className={sliding ? LOOM_ENTER_CLASS : undefined}
+            width={column.width}
+            onExpand={() => changeMode('expanded')}
+            onCollapse={() => changeMode('folded')}
+          />
+        ) : (
+          <LoomStripView
+            className={sliding ? LOOM_ENTER_CLASS : undefined}
+            dispatchPlan={board.dispatchPlan}
+            sheets={board.sheets}
+            now={board.now}
+            horses={board.horses}
+            outage={board.header.kind === 'outage'}
+            openRef={stripOpenRef}
+            onOpen={openLoom}
+            onExpand={() => changeMode('expanded')}
+            // One act, not two halves a person can land between: the sheet
+            // FIRST, so the shape that mounts is already reading the sheet
+            // the icon named. Changing the mode alone would open Loom
+            // wherever it was last left, which is the one thing this control
+            // promises not to do.
+            onSelectSheet={(next) => {
+              selectSheet(next)
+              openLoom()
+            }}
+          />
+        )}
+      </div>
+      {column ? (
+        <WaveResizeHandle
+          width={column.width}
+          min={WAVE_PANEL_MIN_COLUMN_WIDTH}
+          // What this window can actually do, not what the constant allows: a
+          // separator that announces 280-400 while 320 is the most it can give
+          // is telling a screen reader something the mechanism refuses.
+          max={column.maxWidth}
+          onMouseDown={resize.onHandleMouseDown}
+          onKeyDown={resize.onHandleKeyDown}
+          onDoubleClick={resize.onHandleDoubleClick}
+        />
+      ) : null}
     </>,
   )
 }

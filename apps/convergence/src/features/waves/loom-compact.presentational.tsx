@@ -1,6 +1,7 @@
 import type { FC } from 'react'
 import { Maximize2, PanelLeftClose } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
+import { cn } from '@/shared/lib/cn.pure'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { LoomStackView } from './loom-stack.presentational'
 import { LoomSublineContent } from './loom-crew-picker.presentational'
@@ -27,14 +28,19 @@ const COLLAPSE_LOOM = 'Collapse Loom'
 export const LoomCompactView: FC<
   LoomStackProps & {
     width: number
+    /**
+     * What the shell around this column adds while it is arriving
+     * (MAR-3312 R3) -- the fade, and nothing else.
+     */
+    className?: string
     onExpand: () => void
     onCollapse: () => void
   }
-> = ({ width, onExpand, onCollapse, ...props }) => (
+> = ({ width, className, onExpand, onCollapse, ...props }) => (
   <aside
     aria-label="Loom"
     data-loom="compact"
-    className={LOOM_COMPACT_CLASS}
+    className={cn(LOOM_COMPACT_CLASS, className)}
     style={{ width }}
     onKeyDown={(event) => {
       if (isLoomSearchShortcut(event)) {

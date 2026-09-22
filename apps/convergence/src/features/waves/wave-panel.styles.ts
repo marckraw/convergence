@@ -14,6 +14,65 @@ export const WAVE_RESIZE_HANDLE_CLASS =
   'app-resize-handle relative z-10 -mx-1.5 w-px shrink-0 cursor-col-resize border-x-[6px] border-x-transparent bg-clip-content transition-colors hover:bg-white/10 focus-visible:bg-white/20 focus-visible:outline-none'
 
 /**
+ * The ONE element Loom's two narrow shapes share (MAR-3312 R1).
+ *
+ * The column and the strip are different components, so nothing used to
+ * persist across a fold and the browser had nothing to interpolate: the
+ * column became a `w-11` rail in a single frame. This shell is the same DOM
+ * node in both modes, it owns the width, and `overflow-hidden` clips
+ * whichever shape is momentarily wider than the box travelling around it.
+ *
+ * The motion is opt-IN through `data-loom-motion`, not always on. The shell's
+ * width is also the number the resize handle drags (`use-wave-column-resize`
+ * calls `onDraft` on every mousemove) and the number a narrowing window
+ * recomputes; a standing 200 ms transition on those would make the column's
+ * edge trail the cursor instead of following it. Only a MODE change asks for
+ * `slide`; every other width change stays `still`, which is what the drag was
+ * before this existed. The attribute selector out-specifies the bare utility,
+ * so the two do not depend on Tailwind's emission order.
+ *
+ * `motion-reduce:transition-none` is a CLASS and the inline style carries
+ * `width` alone (R2): an inline `transition` out-specifies the media query,
+ * and a person who asked for no motion would be given it anyway
+ * (`learn-loom.styles.ts`).
+ */
+export const LOOM_SHELL_CLASS =
+  'flex h-full shrink-0 overflow-hidden transition-[width] duration-200 ease-out motion-reduce:transition-none data-[loom-motion=still]:transition-none'
+
+/**
+ * How long the fold takes, in the currency each half speaks (MAR-3312 R1/R3).
+ *
+ * `LOOM_SHELL_CLASS`'s `duration-200`, the `--animate-loom-enter` delay in
+ * `global.css`, and the timer that takes `slide` back off the shell are three
+ * encodings of ONE fact; `loom-motion.render.test.tsx` reads the stylesheet
+ * and refuses to let them drift apart.
+ */
+export const LOOM_SLIDE_MS = 200
+
+/** How long the arriving shape takes to fade in, once the width has landed. */
+export const LOOM_ENTER_MS = 150
+
+/**
+ * The strip's width as a number (MAR-3312 R1): `WAVE_RAIL_CLASS`'s `w-11` in
+ * the currency an inline style speaks, because a class cannot be interpolated
+ * from the column's stored pixels. The one place that knows both -- move
+ * `w-11` and move this, or the shell travels to a width the strip has not got.
+ */
+export const LOOM_STRIP_WIDTH_PX = 44
+
+/**
+ * The arriving shape, while the shell is still travelling (MAR-3312 R3).
+ *
+ * A real animation, not `animate-in fade-in-0`: those utilities come from
+ * `tailwindcss-animate`, which this app's Tailwind v4 never loads (no
+ * `@plugin` in `global.css`), so they emit nothing at all. `animate-loom-enter`
+ * is defined in `global.css` beside the app's other keyframes, and its
+ * `200ms` delay is the shell's own duration -- the icons arrive when the
+ * width has, not on top of a column still shrinking.
+ */
+export const LOOM_ENTER_CLASS = 'animate-loom-enter motion-reduce:animate-none'
+
+/**
  * Loom's strip: what a window too narrow for the column leaves, and what a
  * chosen fold looks like (MAR-3292 R2). `w-11` either way -- the folded
  * column is the same column, so widening it for the icons would make the two
