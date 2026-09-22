@@ -1,5 +1,20 @@
 # convergence
 
+## 0.83.0
+
+### Minor Changes
+
+- f2366f0: Loom folds: a narrow column of four icons with their counts, one click back to any sheet.
+
+### Patch Changes
+
+- c515a89: A dispatch whose `/clear` fails is no longer stranded: the reset is retried once and the message is delivered into the still-active conversation; a delivery that dies later is written back onto Loom's dispatch row.
+- ef07e99: Expanded Loom lays Now's groups side by side — Awaiting QA, Fable's turn, Decide, In flight — like Plan's stages.
+- fd91861: Loom's issue detail shows the pull request Linear links to the issue, even after the horse has moved on.
+- 2681e44: Parallel work cards show their state in colour at once — running, completed, failed, stopped — instead of only the card you last opened.
+- a727668: Sidebar search opens every branch that holds a match while you search, and Cmd+F puts the cursor in the search field.
+- 5a6c418: Expanded Loom lays Before's cards in a grid — as many per row as the width allows — instead of one full-width card per row.
+
 ## 0.82.0
 
 ### Minor Changes
