@@ -1,6 +1,7 @@
 import { planAutoDispatch } from '../../../electron/backend/tracker/auto-dispatch.pure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
+import { render } from './loom-tooltip.fixture'
 import { LoomSheetView } from './loom-sheet.presentational'
 import { LoomStackView } from './loom-stack.presentational'
 import { LoomStripView } from './loom-strip.presentational'

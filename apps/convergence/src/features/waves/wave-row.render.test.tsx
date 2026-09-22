@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen, within } from '@testing-library/react'
+import { act, cleanup, screen, within } from '@testing-library/react'
+import { render } from './loom-tooltip.fixture'
 import { useSessionCrewStore, type SessionCrew } from '@/entities/session-crew'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import {

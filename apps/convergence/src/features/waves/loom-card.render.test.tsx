@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup } from '@testing-library/react'
+import { render } from './loom-tooltip.fixture'
 import { useSessionStore } from '@/entities/session'
 import { useSessionCrewStore } from '@/entities/session-crew'
 import { useWorkLedgerStore } from '@/entities/work-ledger'
