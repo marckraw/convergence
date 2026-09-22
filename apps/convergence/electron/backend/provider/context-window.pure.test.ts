@@ -57,16 +57,18 @@ describe('context-window.pure', () => {
     })
   })
 
-  it('derives an estimated claude context state from turn usage', () => {
+  it("derives an estimated claude context state from the last assistant message's usage", () => {
     expect(
       deriveClaudeEstimatedContextWindow(
         {
+          type: 'assistant',
           message: {
             model: 'claude-opus-4-6',
             usage: {
               input_tokens: 1200,
               cache_creation_input_tokens: 300,
               cache_read_input_tokens: 8500,
+              output_tokens: 2500,
             },
           },
         },
@@ -75,10 +77,76 @@ describe('context-window.pure', () => {
     ).toEqual({
       availability: 'available',
       source: 'estimated',
-      usedTokens: 10000,
+      // The SDK's definition of the context: the last main-thread response's
+      // input + cache_read + cache_creation + output tokens.
+      usedTokens: 12500,
       windowTokens: 1_000_000,
       usedPercentage: 1,
       remainingPercentage: 99,
+    })
+  })
+
+  it("refuses a result event, whose root usage is the turn's summed usage", () => {
+    // The real record behind MAR-3332: session_turns seq 1295 stored a turn
+    // sum of 1,062,462 while the context was ~125k.
+    expect(
+      deriveClaudeEstimatedContextWindow(
+        {
+          type: 'result',
+          subtype: 'success',
+          usage: {
+            input_tokens: 354,
+            cache_creation_input_tokens: 43_072,
+            cache_read_input_tokens: 1_019_036,
+          },
+        },
+        'fable',
+      ),
+    ).toBeNull()
+  })
+
+  it('keeps the last assistant request as the context when a turn ends', () => {
+    // The exact expression claude-code-provider.ts runs on every stream event,
+    // keeping the last non-null answer as the session's context window.
+    const readContextWindow = (event: unknown) =>
+      deriveClaudeContextWindow(event) ??
+      deriveClaudeEstimatedContextWindow(event, 'fable')
+
+    const turn = [
+      {
+        type: 'assistant',
+        message: {
+          model: 'claude-opus-5',
+          usage: {
+            input_tokens: 32,
+            cache_creation_input_tokens: 4_127,
+            cache_read_input_tokens: 120_863,
+          },
+        },
+      },
+      {
+        type: 'result',
+        subtype: 'success',
+        usage: {
+          input_tokens: 354,
+          cache_creation_input_tokens: 43_072,
+          cache_read_input_tokens: 1_019_036,
+        },
+      },
+    ]
+
+    let contextWindow = null
+    for (const event of turn) {
+      contextWindow = readContextWindow(event) ?? contextWindow
+    }
+
+    expect(contextWindow).toEqual({
+      availability: 'available',
+      source: 'estimated',
+      usedTokens: 125_022,
+      windowTokens: 1_000_000,
+      usedPercentage: 13,
+      remainingPercentage: 87,
     })
   })
 

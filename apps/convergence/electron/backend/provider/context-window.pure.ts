@@ -22,6 +22,7 @@ interface ClaudeUsageRecord {
   input_tokens?: unknown
   cache_creation_input_tokens?: unknown
   cache_read_input_tokens?: unknown
+  output_tokens?: unknown
 }
 
 function normalizePercentage(value: number): number {
@@ -155,9 +156,22 @@ export function deriveClaudeEstimatedContextWindow(
   }
 
   const record = value as {
+    type?: unknown
     message?: { usage?: ClaudeUsageRecord | null; model?: unknown } | null
     usage?: ClaudeUsageRecord | null
     model?: unknown
+  }
+
+  // A `result` event's root `usage` is the TURN's sum over every request the
+  // turn made ("MAIN AGENT LOOP ONLY … per-turn", @anthropic-ai/claude-agent-sdk
+  // `sdk.d.ts` SDKResultSuccess.usage), never the context the next request
+  // re-sends. A result is also the LAST event of a turn, so accepting it would
+  // leave a summed value standing between turns — a long turn reading 100 % on
+  // a small context, firing the alert and letting the auto-drill compact it.
+  // Refusing it leaves the previous value standing at the `??` call sites, and
+  // that value is the last `assistant` message's, which is the context.
+  if (record.type === 'result') {
+    return null
   }
 
   const usage = record.message?.usage ?? record.usage
@@ -169,9 +183,13 @@ export function deriveClaudeEstimatedContextWindow(
   const cacheCreationInputTokens =
     readNumber(usage.cache_creation_input_tokens) ?? 0
   const cacheReadInputTokens = readNumber(usage.cache_read_input_tokens) ?? 0
+  const outputTokens = readNumber(usage.output_tokens) ?? 0
 
+  // The SDK's own definition of the context (`sdk.d.ts`, `context_tokens`):
+  // "the last main-thread response's input + cache_read + cache_creation +
+  // output tokens".
   const usedTokens =
-    inputTokens + cacheCreationInputTokens + cacheReadInputTokens
+    inputTokens + cacheCreationInputTokens + cacheReadInputTokens + outputTokens
   if (usedTokens <= 0) {
     return null
   }
