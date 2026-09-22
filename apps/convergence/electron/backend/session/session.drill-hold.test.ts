@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'fs'
+import { mkdtempSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -331,6 +331,66 @@ describe('a held queue (MAR-3255 R2)', () => {
     await vi.waitFor(() => expect(turnsSentToProvider()).toHaveLength(2))
     expect(turnsSentToProvider()[1]).toContain('waiting-0')
     auto.dispose()
+  })
+
+  it('a failed lifecycle never consults the guard and leaves its row queued (MAR-2971)', async () => {
+    serverOptions.autoCompleteTurns = false
+    await service.start(sessionId, { text: 'first', providerAccountId: null })
+    await vi.waitFor(() => expect(turnsSentToProvider()).toHaveLength(1))
+    queue.enqueue(
+      sessionId,
+      { text: 'waiting', providerAccountId: null, dispatchId: 'waiting' },
+      'follow-up',
+    )
+    const guard = vi.fn(() => true)
+    const unsubscribe = service.onBeforeQueueDrain(guard)
+    server.pushRaw(
+      JSON.stringify({
+        method: 'turn/completed',
+        params: {
+          turn: {
+            id: 'turn-1',
+            status: 'failed',
+            error: { message: 'fixture failure' },
+          },
+        },
+      }),
+    )
+    await vi.waitFor(() =>
+      expect(service.getById(sessionId)?.status).toBe('failed'),
+    )
+    await letAnUnguardedDrainRun()
+    expect(guard).not.toHaveBeenCalled()
+    expect(service.getQueuedInputs(sessionId).map((row) => row.state)).toEqual([
+      'queued',
+    ])
+    expect(turnsSentToProvider()).toHaveLength(1)
+    unsubscribe()
+  })
+
+  it('records the automatic note as an info context-drill event through the main note door', () => {
+    // Pin the composition callback too: changing only main back to the dispatch
+    // door must fail even while the dedicated service method remains correct.
+    const main = readFileSync(
+      new URL('../../main/index.ts', import.meta.url),
+      'utf8',
+    )
+    expect(main).toMatch(
+      /note: \(id, text\) => sessionService\.addContextDrillInfoNote\(id, text\)/,
+    )
+    const text = 'Context compacted automatically at 90% → 20%'
+    service.addContextDrillInfoNote(sessionId, text)
+    expect(service.getConversation(sessionId)).toEqual([
+      expect.objectContaining({
+        kind: 'note',
+        text,
+        level: 'info',
+        providerMeta: expect.objectContaining({
+          providerEventType: 'context-drill',
+        }),
+      }),
+    ])
+    expect(turnsSentToProvider()).toHaveLength(0)
   })
 
   it('never asks the automatic guard on a failed turn', async () => {

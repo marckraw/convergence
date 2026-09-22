@@ -3251,6 +3251,32 @@ export class SessionService {
     )
   }
 
+  /** Records automatic compaction as an informational drill event. */
+  addContextDrillInfoNote(sessionId: string, text: string): void {
+    const session = this.getById(sessionId)
+    if (!session) return
+    const at = new Date().toISOString()
+    const note = this.addConversationItem(sessionId, {
+      id: randomUUID(),
+      turnId: null,
+      kind: 'note',
+      state: 'complete',
+      level: 'info',
+      text,
+      createdAt: at,
+      updatedAt: at,
+      providerMeta: {
+        providerId: session.providerId,
+        providerItemId: null,
+        providerEventType: 'context-drill',
+      },
+    })
+    this.notifySessionChange(
+      sessionId,
+      note ? { sessionId, op: 'add', item: note } : undefined,
+    )
+  }
+
   /** Transcript-only dispatch receipt; starts no turn and fires no wire. */
   addAutoDispatchNote(sessionId: string, text: string): void {
     const session = this.getById(sessionId)

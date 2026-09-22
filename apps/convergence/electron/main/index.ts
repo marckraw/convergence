@@ -1009,7 +1009,7 @@ async function startApp(): Promise<void> {
         parseAppSettings(stateService.get(APP_SETTINGS_KEY)).contextAlert,
       holdQueue: (id) => sessionService.holdQueue(id),
       releaseQueue: (id) => sessionService.releaseQueue(id),
-      note: (id, text) => sessionService.addAutoDispatchNote(id, text),
+      note: (id, text) => sessionService.addContextDrillInfoNote(id, text),
       changed: broadcastContextDrillChange,
     },
     contextDrill,
