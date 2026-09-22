@@ -7,6 +7,7 @@ import type {
   WorkLedgerRecord,
 } from '../../../src/shared/types/tracker.types'
 import type { SessionCrewMember } from '../crew/crew.types'
+import type { RelayService } from '../relay/relay.service'
 import { planAutoDispatch } from './auto-dispatch.pure'
 
 /** The crew read includes each resident conversation's local lane; remote or missing is null. */
@@ -30,11 +31,18 @@ export interface AutoDispatchPlanDeps {
   describeLane(path: string): Promise<DispatchLane>
 }
 
+/** Optional recipe readers keep the resident-only planner usable without a spawn door. */
+export interface RecipeDispatchPlanDeps {
+  findSpawnWire: RelayService['findSpawnWire']
+  liveSpawnCount(crewId: string, seat: string): number
+}
+
 /** Read-only orchestration, with one volatile last-plan cache per crew. */
 export class AutoDispatchPlanService {
   private readonly plans = new Map<string, DispatchPlan>()
   constructor(
-    private readonly deps: AutoDispatchPlanDeps,
+    private readonly deps: AutoDispatchPlanDeps &
+      Partial<RecipeDispatchPlanDeps>,
     private readonly records: (
       crewId: string,
     ) => readonly AutoDispatchRecord[] = () => [],
@@ -54,26 +62,39 @@ export class AutoDispatchPlanService {
     )
     const seats = await Promise.all(
       crew.members.map(async (member) => {
+        const recipe = member.kind === 'dynamic'
         const lanePath =
-          member.lanePolicy === 'own-worktree'
+          !recipe && member.lanePolicy === 'own-worktree'
             ? member.lanePath
             : member.localWorkingDirectory
         return {
           ...member,
-          availability: member.sessionId
-            ? this.deps.describeSeatAvailability(member.sessionId)
-            : ('unknown' as const),
+          liveSpawns:
+            recipe && member.batonName
+              ? (this.deps.liveSpawnCount?.(crewId, member.batonName) ?? 0)
+              : 0,
+          availability: recipe
+            ? ('idle' as const)
+            : member.sessionId
+              ? this.deps.describeSeatAvailability(member.sessionId)
+              : ('unknown' as const),
           lanePath,
           lane:
-            member.lanePolicy === 'own-worktree' && !member.lanePath
+            !recipe && member.lanePolicy === 'own-worktree' && !member.lanePath
               ? ('unset' as const)
               : member.localWorkingDirectory && lanePath
                 ? await this.deps.describeLane(lanePath)
                 : ('unknown' as const),
           wire:
-            master?.sessionId && member.sessionId
-              ? this.deps.findWire(crewId, master.sessionId, member.sessionId)
-              : null,
+            recipe && master?.sessionId && member.batonName
+              ? (this.deps.findSpawnWire?.(
+                  crewId,
+                  master.sessionId,
+                  member.batonName,
+                ) ?? null)
+              : master?.sessionId && member.sessionId
+                ? this.deps.findWire(crewId, master.sessionId, member.sessionId)
+                : null,
         }
       }),
     )

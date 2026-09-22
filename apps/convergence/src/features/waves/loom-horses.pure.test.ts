@@ -753,3 +753,27 @@ describe('MAR-3289: a compacting seat is working, and says which kind', () => {
     )
   })
 })
+
+it('MAR-3186 R5 recipe holds its working issue after the ledger joins the spawn', () => {
+  const sheets = loomSheets(
+    [
+      ledgerEntry({
+        issueIdentifier: 'MAR-3186',
+        state: 'working',
+        seat: 'recipe',
+        sessionId: 'spawn',
+      }),
+    ],
+    NOW,
+  )
+  const horse = loomHorses({
+    crews: [
+      boundCrewWith('crew-1', 'Loom', [crewMember({ batonName: 'recipe' })]),
+    ],
+    sessionsById: new Map(),
+    sheets,
+    hostLabelOf,
+  })[0]
+  expect(horse.held?.entry.issueIdentifier).toBe('MAR-3186')
+  expect(horse.held?.entry.sessionId).toBe('spawn')
+})

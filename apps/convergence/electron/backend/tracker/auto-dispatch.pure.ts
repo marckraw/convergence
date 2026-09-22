@@ -13,6 +13,8 @@ export interface DispatchSeat extends Pick<
   SessionCrewMember,
   'batonName' | 'sessionId' | 'role' | 'wipLimit' | 'paused'
 > {
+  kind?: SessionCrewMember['kind']
+  liveSpawns?: number
   availability: SeatAvailability
   lanePath: string | null
   lane: DispatchLane
@@ -80,6 +82,9 @@ export function planAutoDispatch(input: AutoDispatchInput): DispatchPlan {
               (r) => r.issueId === e.issueId && r.lap === e.lap,
             ))),
     )
+    const recipe = seat?.kind === 'dynamic'
+    const occupied = recipe ? (seat.liveSpawns ?? 0) : held.length
+    const limit = seat?.wipLimit ?? 1
     const candidates = plan.order[seatName] ?? []
     let word: DispatchWord
     if (sent)
@@ -91,7 +96,7 @@ export function planAutoDispatch(input: AutoDispatchInput): DispatchPlan {
     else if (entry.blocked) word = { kind: 'blocked' }
     else if (entry.lap > 1) word = { kind: 'later-lap', lap: entry.lap }
     else if (!seat) word = { kind: 'seat-not-in-crew' }
-    else if (!seat.sessionId || seat.availability === 'unknown')
+    else if ((!recipe && !seat.sessionId) || seat.availability === 'unknown')
       word = { kind: 'seat-no-conversation' }
     else if (masters.length === 0) word = { kind: 'no-mastermind' }
     else if (!seat.wire) word = { kind: 'no-wire' }
@@ -99,14 +104,16 @@ export function planAutoDispatch(input: AutoDispatchInput): DispatchPlan {
     else if (seat.availability === 'failed') word = { kind: 'seat-failed' }
     else if (seat.availability !== 'idle')
       word = { kind: 'seat-busy', why: seat.availability }
-    else if (held.length >= seat.wipLimit && held.length > 0)
+    else if (recipe && occupied >= limit)
+      word = { kind: 'seat-busy', why: 'turn' }
+    else if (!recipe && held.length >= limit && held.length > 0)
       word = {
         kind: held[0].state === 'assigned' ? 'queued-behind' : 'seat-holds',
         identifier: held[0].issueIdentifier,
       }
     else if (seat.lane !== 'clean')
       word = { kind: 'lane', state: seat.lane, path: seat.lanePath }
-    else if (candidates.length > Math.max(0, seat.wipLimit - held.length)) {
+    else if (candidates.length > Math.max(0, limit - occupied)) {
       const ahead = ordered.find(
         (e) => e.issueId === candidates[candidates.length - 2],
       )!

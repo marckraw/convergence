@@ -1,3 +1,4 @@
+import { ErrandSpawner } from './errand-spawner'
 import { randomUUID } from 'crypto'
 import { composeErrandBrief } from './errand-brief.pure'
 import type { BusyWaitReason, SessionStatus } from '../provider/provider.types'
@@ -49,7 +50,6 @@ import type {
   RelayHop,
   RelayHopSettled,
   RelayHopOutcome,
-  RelaySpawnSpec,
   SessionRelay,
   RelaySeat,
 } from './relay.types'
@@ -1352,25 +1352,6 @@ export class RelayEngine {
   }
 
   /**
-   * Which account a session this wire is about to open should be born on.
-   *
-   * The wire's own choice wins; otherwise the enrolled default for the provider
-   * it names. This has to be right at birth: Codex fixes a session's credential
-   * when its first turn starts and refuses to change it afterwards, so there is
-   * no correcting a spawn that came up on the wrong account.
-   */
-  private resolveSpawnAccountId(spec: RelaySpawnSpec): string | null {
-    if (spec.executionHost === 'local' && spec.providerAccountId)
-      return spec.providerAccountId
-
-    return resolveAccountForAutomaticTurn({
-      executionHost: spec.executionHost,
-      lastTurnAccountId: null,
-      accounts: this.accounts.listByProvider(spec.providerId),
-    })
-  }
-
-  /**
    * Opens a brand new session and starts it on the payload.
    *
    * The spawned session joins the crew that owns the wire. A session that
@@ -1423,91 +1404,28 @@ export class RelayEngine {
     )
     payloadPreview = buildRelayHopPreview(null, brief)
 
-    let spawnedSessionId: string
-    try {
-      const created = this.sessions.create({
-        origin: 'spawn',
-        ...(spec.projectId
-          ? {
-              contextKind: 'project',
-              projectId: spec.projectId,
-              workspaceId: null,
-              providerId: spec.providerId,
-              model: spec.model,
-              effort: spec.effort as CreateSessionInput['effort'],
-              name: spec.name,
-            }
-          : {
-              contextKind: 'global',
-              providerId: spec.providerId,
-              model: spec.model,
-              effort: spec.effort as CreateSessionInput['effort'],
-              name: spec.name,
-            }),
-        ...(spec.executionHost === 'local'
-          ? {}
-          : {
-              executionHost: spec.executionHost,
-              workAddress: spec.workAddress,
-            }),
-      })
-      spawnedSessionId = created.id
-    } catch (error) {
-      record('error', {
+    const result = await new ErrandSpawner({
+      sessions: this.sessions,
+      crews: this.crews,
+      relays: this.relays,
+      accounts: this.accounts,
+      onCrewsChanged: this.onCrewsChanged,
+      onRelaysChanged: this.onRelaysChanged,
+    }).spawn(spec, brief, {
+      crewId: relay.crewId,
+      returnTo: relay.sourceSessionId,
+    })
+    if (result.dispatchId)
+      record('spawned', {
+        spawnedSessionId: result.sessionId,
         payloadPreview,
-        error: `Could not open the session: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        dispatchId: result.dispatchId,
       })
-      return
-    }
-
-    try {
-      this.crews.addMember(relay.crewId, spawnedSessionId)
-      this.onCrewsChanged?.()
-    } catch {
-      // Membership is a convenience, not the hop. A spawn that could not join
-      // its crew is still a spawn, and the ledger names the session either way.
-    }
-
-    try {
-      const dispatchId = await this.sessions.start(spawnedSessionId, {
-        text: brief,
-        providerAccountId: this.resolveSpawnAccountId(spec),
-      })
-      record('spawned', { spawnedSessionId, payloadPreview, dispatchId })
-    } catch (error) {
+    if (result.error)
       record('error', {
-        spawnedSessionId,
+        spawnedSessionId: result.sessionId,
         payloadPreview,
-        error: `Opened the session but could not start it: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        error: result.error,
       })
-      return
-    }
-
-    if (spec.returnWire) {
-      try {
-        this.relays.create({
-          crewId: relay.crewId,
-          sourceSessionId: spawnedSessionId,
-          targetSessionId: relay.sourceSessionId,
-          action: 'hail',
-          conditionToken: null,
-          instruction: spec.returnWire.instruction,
-          armed: true,
-        })
-        this.onRelaysChanged?.()
-      } catch (error) {
-        record('error', {
-          spawnedSessionId,
-          payloadPreview,
-          error: `Started the errand but could not draw its return wire: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        })
-      }
-    }
   }
 }
