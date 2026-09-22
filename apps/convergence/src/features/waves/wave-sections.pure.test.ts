@@ -69,6 +69,24 @@ describe('MAR-3199 R5: card words say what happened', () => {
       words: ['opus', 'reviewed', 'lap 1 of 6', 'pass', 'PR #678 open'],
     },
     {
+      // MAR-3304 R5: the ROW is untouched by the widened `entry.pr`. A
+      // tracker link has no state, and a row word is not the place to
+      // explain that -- MAR-3301 owns whatever the row eventually says.
+      // Mutation: print `PR #769 undefined` from the tracker shape -> red.
+      name: 'reviewed with a tracker link and no reading',
+      entry: {
+        state: 'reviewed',
+        verdict: 'pass',
+        pr: {
+          source: 'tracker',
+          number: 769,
+          url: 'https://github.com/marckraw/convergence/pull/769',
+          title: 'fix(loom): a title',
+        },
+      },
+      words: ['opus', 'reviewed', 'lap 1 of 6', 'pass'],
+    },
+    {
       name: 'unassigned',
       entry: { state: 'unassigned', seat: null },
       words: ['no seat', 'unassigned'],

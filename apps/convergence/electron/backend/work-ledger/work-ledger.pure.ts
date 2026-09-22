@@ -2,6 +2,8 @@ import { parseSessionPullRequest } from '../pull-request/session-pull-request.pu
 import type { SessionPullRequest } from '../../../src/shared/types/session-pull-request.types'
 import type {
   NewWorkLedgerRecord,
+  TrackerIssuePullRequest,
+  TrackerPullRequest,
   WorkLedgerEntry,
   WorkLedgerFact,
   WorkLedgerRecord,
@@ -134,6 +136,7 @@ const FACT_DEFAULTS: WorkLedgerFact = {
   dispatch: false,
   priority: null,
   labels: [],
+  pullRequests: [],
 }
 
 function readFact(raw: string): WorkLedgerFact {
@@ -152,6 +155,9 @@ function readFact(raw: string): WorkLedgerFact {
       dispatch: value?.dispatch ?? FACT_DEFAULTS.dispatch,
       priority: value?.priority ?? FACT_DEFAULTS.priority,
       labels: value?.labels ?? FACT_DEFAULTS.labels,
+      // A row written before MAR-3304 has no key at all; absent is read as
+      // "the tracker links none", so no reader downstream meets `undefined`.
+      pullRequests: value?.pullRequests ?? FACT_DEFAULTS.pullRequests,
       ...(value && 'summary' in value
         ? { summary: value.summary ?? null }
         : {}),
@@ -221,6 +227,52 @@ export function branchNamesIssue(branch: string, identifier: string): boolean {
   return new RegExp(`(?<![A-Za-z0-9])${escaped}(?![0-9])`, 'i').test(branch)
 }
 
+/**
+ * The pull request an issue HAS, best reading first (MAR-3304 R3).
+ *
+ * Two witnesses to one fact, and they answer different questions. The seat's
+ * conversation carries a PR it actually opened -- with a state, a review word
+ * and a time it was read -- but only while that conversation is still on this
+ * issue; the tracker carries a link with no state that outlives every
+ * conversation. So the conversation wins when it is talking about the SAME
+ * pull request the tracker links (or when the tracker links none at all, the
+ * case of a PR opened a minute ago), and otherwise the tracker's link is the
+ * only witness left.
+ *
+ * The union is tagged rather than flattened on purpose: a caller must decide
+ * what to do with a link whose state nobody read, and it cannot accidentally
+ * print one.
+ */
+export function resolveEntryPullRequest(input: {
+  session: SessionPullRequest | null
+  /**
+   * Absent on every fact written before MAR-3304, and normalized HERE, once:
+   * every caller reads the same optional key off a stored fact, so a default
+   * per caller is a default one of them will forget.
+   */
+  linked: readonly TrackerIssuePullRequest[] | undefined
+}): SessionPullRequest | TrackerPullRequest | null {
+  const { session } = input
+  const linked = input.linked ?? []
+  if (
+    session &&
+    (linked.length === 0 ||
+      linked.some((link) => link.number === session.number))
+  ) {
+    return session
+  }
+  // Nothing left to read from: a session PR paired with no tracker link took
+  // the branch above, so an empty list here means there was no session PR.
+  const first = linked[0]
+  if (!first) return null
+  return {
+    source: 'tracker',
+    number: first.number,
+    url: first.url,
+    title: first.title,
+  }
+}
+
 export function workLedgerEntryFromJoinedRow(
   row: WorkLedgerJoinedRow,
 ): WorkLedgerEntry {
@@ -233,10 +285,13 @@ export function workLedgerEntryFromJoinedRow(
   return {
     ...record,
     sessionId,
-    pr:
-      sessionId === null
-        ? null
-        : pullRequestForIssue(row.pull_request_json, record.issueIdentifier),
+    pr: resolveEntryPullRequest({
+      session:
+        sessionId === null
+          ? null
+          : pullRequestForIssue(row.pull_request_json, record.issueIdentifier),
+      linked: record.fact.pullRequests,
+    }),
     hostLiveness:
       sessionId === null
         ? null

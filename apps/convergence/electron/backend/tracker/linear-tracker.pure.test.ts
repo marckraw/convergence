@@ -26,6 +26,7 @@ import {
   readGroundedAt,
   readIssueLabels,
   readIssuePriority,
+  readIssuePullRequests,
   readIssueSummary,
 } from './linear-tracker.pure'
 import { DEFAULT_TRACKER_STATUS_MAP } from './tracker-binding.pure'
@@ -36,6 +37,7 @@ import {
   linearLabel,
   trackerIssue,
   RECORDED_200_WITH_ERRORS_BODY,
+  RECORDED_ATTACHMENT_PAGE,
   RECORDED_BLOCKED_LABEL_PAGE,
   RECORDED_GROUNDING_INLINE,
   RECORDED_GROUNDING_MIXED,
@@ -118,6 +120,8 @@ describe('MAR-3084 R1: the seat is a label child, read as group/child', () => {
             dispatch: false,
             priority: null,
             labels: ['grounded', 'horse › opus', 'wave › loom-p2'],
+            // The recorded page carries no link list; absent reads as none.
+            pullRequests: [],
             summary: null,
             groundedAt: null,
             branchName: 'example/ex-1-work',
@@ -443,6 +447,79 @@ describe('MAR-3190 R3: priority is Linear’s number or null, never a default', 
       ['EX-33', null],
       ['EX-34', null],
     ])
+  })
+})
+
+describe('MAR-3304 R1: the port reads the pull requests the tracker links', () => {
+  it('keeps the pull request links only, with their numbers, in order', () => {
+    const page = parseLinearIssuesPage(RECORDED_ATTACHMENT_PAGE, READ)
+    if (!page.ok) throw new Error('expected a page')
+    expect(
+      page.page.issues.map((issue) => [issue.identifier, issue.pullRequests]),
+    ).toEqual([
+      [
+        'EX-50',
+        [
+          {
+            url: 'https://github.com/marckraw/convergence/pull/769',
+            number: 769,
+            title: 'fix(loom): pending transcript patches land before teardown',
+          },
+        ],
+      ],
+      // A GitHub ISSUE under the same `sourceType: github`: the URL is what
+      // says pull request, never the integration's word for itself.
+      ['EX-51', []],
+      // No link list on the node at all -- an absent field is not a value.
+      ['EX-52', []],
+    ])
+  })
+
+  it.each([
+    ['a pull request', 'https://github.com/o/r/pull/12', 12],
+    ['a trailing path', 'https://github.com/o/r/pull/12/files', 12],
+    ['a query', 'https://github.com/o/r/pull/12?w=1', 12],
+    ['a fragment', 'https://github.com/o/r/pull/12#discussion', 12],
+    ['a GitHub issue', 'https://github.com/o/r/issues/12', null],
+    ['a Figma file', 'https://www.figma.com/design/abc/Loom', null],
+    ['a look-alike host', 'https://github.com.evil.test/o/r/pull/12', null],
+    ['a GitHub Enterprise host', 'https://git.example.com/o/r/pull/12', null],
+    ['http, not https', 'http://github.com/o/r/pull/12', null],
+    ['no number', 'https://github.com/o/r/pull/', null],
+    ['not a number', 'https://github.com/o/r/pull/abc', null],
+  ])('%s -> %s', (_case, url, expected) => {
+    const links = readIssuePullRequests({ nodes: [{ url, title: 'T' }] })
+    expect(links[0]?.number ?? null).toBe(expected)
+  })
+
+  it('a link with no usable title carries null, never an empty string', () => {
+    expect(
+      readIssuePullRequests({
+        nodes: [
+          { url: 'https://github.com/o/r/pull/1', title: '   ' },
+          { url: 'https://github.com/o/r/pull/2' },
+          { url: 'https://github.com/o/r/pull/3', title: 7 },
+        ],
+      }).map((link) => link.title),
+    ).toEqual([null, null, null])
+  })
+
+  it('an absent or malformed list reads as none, never as a refusal', () => {
+    expect(readIssuePullRequests(undefined)).toEqual([])
+    expect(readIssuePullRequests(null)).toEqual([])
+    expect(readIssuePullRequests({})).toEqual([])
+    expect(readIssuePullRequests({ nodes: 'nope' })).toEqual([])
+    expect(readIssuePullRequests({ nodes: [null, 7, { url: 5 }] })).toEqual([])
+  })
+
+  it('the labeled query asks for the link list; the outside read does not', () => {
+    expect(LINEAR_LABELED_ISSUES_QUERY).toContain(
+      'attachments { nodes { url title sourceType } }',
+    )
+    // The outside read is its OWN query with its own node shape and its own
+    // parse into `TrackerOutsideIssue` -- it shares nothing with this one,
+    // and nothing outside the loop needs a pull request.
+    expect(LINEAR_OUTSIDE_ISSUES_QUERY).not.toContain('attachments')
   })
 })
 

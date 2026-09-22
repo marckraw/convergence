@@ -31,6 +31,7 @@ export function trackerIssue(
     dispatch: false,
     priority: null,
     labels: [],
+    pullRequests: [],
     summary: null,
     groundedAt: null,
     branchName: null,
@@ -41,6 +42,23 @@ export function trackerIssue(
 
 export function linearLabel(name: string, parent: string | null) {
   return { name, parent: parent === null ? null : { name: parent } }
+}
+
+/**
+ * One `Attachment` node as the labeled query asks for it (MAR-3304 R1), in
+ * the shape the published schema gives: `url: String!`, `title: String!`,
+ * `sourceType: String` -- the integration's word for itself.
+ */
+export function linearAttachment(input: {
+  url: string
+  title?: string | null
+  sourceType?: string | null
+}) {
+  return {
+    url: input.url,
+    ...(input.title === undefined ? {} : { title: input.title }),
+    sourceType: input.sourceType ?? null,
+  }
 }
 
 export function linearIssueNode(input: {
@@ -54,6 +72,8 @@ export function linearIssueNode(input: {
   branchName?: string
   updatedAt?: string
   priority?: unknown
+  /** Omitted entirely when the caller gives none: an old page has no key. */
+  attachments?: ReturnType<typeof linearAttachment>[]
 }) {
   return {
     id: input.id,
@@ -71,6 +91,9 @@ export function linearIssueNode(input: {
       ...(input.stateType === undefined ? {} : { type: input.stateType }),
     },
     labels: { nodes: input.labels },
+    ...(input.attachments === undefined
+      ? {}
+      : { attachments: { nodes: input.attachments } }),
   }
 }
 
@@ -295,6 +318,51 @@ export const RECORDED_LOOM_MEMBERSHIP_PAGE = linearIssuesBody([
     id: 'issue-wave-blocked',
     identifier: 'EX-25',
     labels: [linearLabel('blocked', 'wave')],
+  }),
+])
+
+/**
+ * The attachments R1 reads pull requests from (MAR-3304): an issue whose
+ * links are one GitHub pull request and one Figma file, an issue whose only
+ * link is not a pull request at all, and an issue with no link list.
+ */
+export const RECORDED_ATTACHMENT_PAGE = linearIssuesBody([
+  linearIssueNode({
+    id: 'issue-with-pr',
+    identifier: 'EX-50',
+    state: 'Done',
+    labels: [linearLabel('opus-mac', 'horse')],
+    attachments: [
+      linearAttachment({
+        url: 'https://github.com/marckraw/convergence/pull/769',
+        title: 'fix(loom): pending transcript patches land before teardown',
+        sourceType: 'github',
+      }),
+      linearAttachment({
+        url: 'https://www.figma.com/design/abc123/Loom?node-id=559-48',
+        title: 'Loom — the four sheets',
+        sourceType: 'figma',
+      }),
+    ],
+  }),
+  linearIssueNode({
+    id: 'issue-with-non-pr',
+    identifier: 'EX-51',
+    labels: [linearLabel('opus-mac', 'horse')],
+    attachments: [
+      // A GitHub ISSUE, not a pull request: the same host, the same
+      // `sourceType`, a path this app must not read as a PR.
+      linearAttachment({
+        url: 'https://github.com/marckraw/convergence/issues/769',
+        title: 'A bug report',
+        sourceType: 'github',
+      }),
+    ],
+  }),
+  linearIssueNode({
+    id: 'issue-no-attachments',
+    identifier: 'EX-52',
+    labels: [linearLabel('opus-mac', 'horse')],
   }),
 ])
 

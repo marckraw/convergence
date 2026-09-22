@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   pullRequestForIssue,
+  resolveEntryPullRequest,
   workLedgerEntryFromJoinedRow,
   workLedgerRecordFromRow,
   type WorkLedgerJoinedRow,
@@ -120,6 +121,10 @@ describe('MAR-3190: a row written before the widened read still reads', () => {
       dispatch: false,
       priority: null,
       labels: [],
+      // MAR-3304 R2: absent is not a value. A row written before that slice
+      // knows of no link, which is not the same as `undefined` travelling
+      // on to a reader that has to guard it.
+      pullRequests: [],
     })
     // The one key that must NOT be defaulted (R4): its absence is how the
     // watcher knows this row has never had a body read for it.
@@ -149,6 +154,99 @@ describe('MAR-3190: a row written before the widened read still reads', () => {
     // Zero is Linear's own word, not "no priority" (R3).
     // Mutation: `value?.priority ?? null` losing 0 to a falsy check -> red.
     expect(record.fact.priority).toBe(0)
+  })
+})
+
+describe('MAR-3304 R3: one resolution, with the conversation first', () => {
+  const session = {
+    number: 769,
+    url: 'https://github.com/marckraw/convergence/pull/769',
+    state: 'merged' as const,
+    headBranch: 'agent/mar-3274-pending-transcript-patches',
+    checkedAt: '2026-09-17T08:00:00.000Z',
+    source: 'gh' as const,
+    title: 'fix(loom): pending transcript patches',
+    reviewDecision: 'APPROVED' as const,
+  }
+  const link769 = {
+    url: 'https://github.com/marckraw/convergence/pull/769',
+    number: 769,
+    title: 'fix(loom): pending transcript patches',
+  }
+
+  it('(a) the same PR in both hands: the conversation’s richer reading', () => {
+    expect(resolveEntryPullRequest({ session, linked: [link769] })).toEqual(
+      session,
+    )
+  })
+
+  it('(b) the seat has moved on: the tracker’s link', () => {
+    // The seat's conversation now reads the PR of its NEXT issue.
+    expect(
+      resolveEntryPullRequest({
+        session: { ...session, number: 777, headBranch: 'agent/mar-2981' },
+        linked: [link769],
+      }),
+    ).toEqual({
+      source: 'tracker',
+      number: 769,
+      url: link769.url,
+      title: link769.title,
+    })
+  })
+
+  it('(c) no conversation reading at all: the tracker’s link', () => {
+    expect(
+      resolveEntryPullRequest({ session: null, linked: [link769] }),
+    ).toMatchObject({ source: 'tracker', number: 769 })
+  })
+
+  it('(d) neither: null', () => {
+    expect(resolveEntryPullRequest({ session: null, linked: [] })).toBeNull()
+    // A fact written before this slice has no key at all, and the resolver
+    // is where that is answered -- once, for every caller.
+    expect(
+      resolveEntryPullRequest({ session: null, linked: undefined }),
+    ).toBeNull()
+    expect(resolveEntryPullRequest({ session, linked: undefined })).toEqual(
+      session,
+    )
+  })
+
+  it('(e) a PR opened a minute ago, before the tracker knows: the reading', () => {
+    expect(resolveEntryPullRequest({ session, linked: [] })).toEqual(session)
+  })
+
+  it('the FIRST link wins when the tracker carries several', () => {
+    expect(
+      resolveEntryPullRequest({
+        session: null,
+        linked: [
+          link769,
+          { url: 'https://github.com/o/r/pull/900', number: 900, title: null },
+        ],
+      }),
+    ).toMatchObject({ number: 769 })
+  })
+
+  it('reaches the entry, and a pre-slice row still shows the reading', () => {
+    // Through `workLedgerEntryFromJoinedRow`, which is what `list()` maps
+    // with: a stored fact with no `pullRequests` key at all.
+    expect(workLedgerEntryFromJoinedRow(joined()).pr).toMatchObject({
+      number: 7,
+      state: 'open',
+    })
+    expect(
+      workLedgerEntryFromJoinedRow(
+        joined({
+          pull_request_json: null,
+          fact_json: JSON.stringify({
+            logicalStatus: 'done',
+            pullRequests: [link769],
+          }),
+        }),
+      ).pr,
+    ).toMatchObject({ source: 'tracker', number: 769 })
   })
 })
 

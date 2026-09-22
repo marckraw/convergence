@@ -34,6 +34,33 @@ export interface TrackerBinding {
   statusMap: Record<string, TrackerLogicalStatus>
 }
 
+/**
+ * A pull request the TRACKER links to an issue (MAR-3304 R1).
+ *
+ * What the tracker's own integration filed on the issue, and nothing more: a
+ * number, the URL it links to, and whatever title that integration wrote. No
+ * state and no timestamp -- both are facts of a READ, and nothing here has
+ * opened the pull request.
+ */
+export interface TrackerIssuePullRequest {
+  url: string
+  number: number
+  /** The link's own title, or null when the tracker gave none. */
+  title: string | null
+}
+
+/**
+ * The tracker's link as a reader receives it (MAR-3304 R3).
+ *
+ * TAGGED, and deliberately not a `SessionPullRequest` with an invented
+ * `state` and `checkedAt`: a reader that cannot tell the two apart would put
+ * a state on screen that nobody looked up. The tag is what makes the lie
+ * unavailable rather than merely discouraged.
+ */
+export interface TrackerPullRequest extends TrackerIssuePullRequest {
+  source: 'tracker'
+}
+
 export interface TrackerIssue {
   id: string
   identifier: string
@@ -74,6 +101,12 @@ export interface TrackerIssue {
    * from the structure, never from this list.
    */
   labels: string[]
+  /**
+   * The pull requests the tracker links to this issue (MAR-3304 R1), in the
+   * order it gives them. Empty when it links none -- never null: "the
+   * tracker linked nothing" is an answer, and this read always has one.
+   */
+  pullRequests: TrackerIssuePullRequest[]
   /**
    * The issue's promise in a sentence, from its body (R6). Null until the
    * body has been read, and null for an issue whose body says nothing.
@@ -235,6 +268,14 @@ export interface WorkLedgerFact {
   /** Every label as a person reads it (MAR-3190). */
   labels?: string[]
   /**
+   * The pull requests the tracker links to the issue (MAR-3304 R2).
+   *
+   * Absent on every row written before this slice, which is not the same as
+   * "the tracker links none" -- so the key is optional and `readFact`
+   * answers absent with `[]` rather than letting `undefined` travel.
+   */
+  pullRequests?: TrackerIssuePullRequest[]
+  /**
    * The issue's promise (MAR-3190 R6) -- and the row's own answer to "has a
    * body ever been read for this issue?".
    *
@@ -299,7 +340,12 @@ export interface WorkLedgerHostLiveness {
  */
 export interface WorkLedgerEntry extends WorkLedgerRecord {
   sessionId: string | null
-  pr: SessionPullRequest | null
+  /**
+   * The pull request this issue has, best reading first (MAR-3304 R3): the
+   * seat conversation's own read when it is about THIS issue, otherwise the
+   * link the tracker carries -- which outlives the conversation.
+   */
+  pr: SessionPullRequest | TrackerPullRequest | null
   hostLiveness: WorkLedgerHostLiveness | null
 }
 

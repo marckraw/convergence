@@ -6,6 +6,8 @@ export type {
   NewWorkLedgerRecord,
   WorkLedgerHostLiveness,
   WorkLedgerEntry,
+  TrackerIssuePullRequest,
+  TrackerPullRequest,
   TrackerHealthState,
   TrackerHealth,
   WorkLedgerSnapshot,

@@ -1,4 +1,5 @@
 import type { SessionPullRequest } from '@/shared/types/session-pull-request.types'
+import type { TrackerPullRequest } from '@/shared/types/tracker.types'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
 import { livenessAge } from '@/shared/lib/host-liveness.pure'
 import { loomHorseRuntimeLabel, type LoomHorse } from './loom-horses.pure'
@@ -60,11 +61,35 @@ const REVIEW_WORDS: Readonly<
  */
 export const CI_NOT_SEEN = 'CI status not seen'
 
-/** The linked pull request, as the detail shows it. */
+/**
+ * What a tracker link can say about its state (MAR-3304 R4).
+ *
+ * The whole truth about a link nobody opened: the tracker says a pull
+ * request is there, and that is all anybody here knows. It replaces the
+ * session shape's `checked · review · CI` line rather than joining it,
+ * because every word in that line is the record of a read that did not
+ * happen.
+ */
+export const PR_STATE_NOT_READ = 'state not read — open it to see'
+
+/** `PR #769 · linked in Linear`: the tracker linked it, nobody opened it. */
+export const PR_LINKED_IN_TRACKER = 'linked in Linear'
+
+/**
+ * The linked pull request, as the detail shows it.
+ *
+ * Two linked shapes, TAGGED (MAR-3304 R4): the conversation's own reading
+ * carries a state, a review word and a time; the tracker's link carries
+ * none of those and has no field to put them in. A shared shape with
+ * nullable `checked`/`review`/`ci` would leave "never claim a state nobody
+ * read" as a thing every future caller must remember; this way the wrong
+ * sentence has nowhere to live.
+ */
 export type LoomDetailPr =
   | { linked: false; line: string }
   | {
       linked: true
+      source: 'session'
       /** `PR #707 · merged`. */
       headline: string
       url: string
@@ -82,19 +107,46 @@ export type LoomDetailPr =
        */
       line: string
     }
+  | {
+      linked: true
+      source: 'tracker'
+      /** `PR #769 · linked in Linear` -- never a state word. */
+      headline: string
+      url: string
+      title: string | null
+      /** Always `PR_STATE_NOT_READ`; there is nothing else to say. */
+      line: string
+    }
 
-function detailPr(pr: SessionPullRequest | null, now: number): LoomDetailPr {
+function detailPr(
+  pr: SessionPullRequest | TrackerPullRequest | null,
+  now: number,
+): LoomDetailPr {
   if (!pr) return { linked: false, line: 'No linked pull request' }
+  const title = pr.title?.trim() ? pr.title.trim() : null
+  if (pr.source === 'tracker') {
+    return {
+      linked: true,
+      source: 'tracker',
+      // `linked in Linear` sits exactly where `merged` sits on the session
+      // shape, and says what is true of it: it is linked, not read.
+      headline: `PR #${pr.number} · ${PR_LINKED_IN_TRACKER}`,
+      url: pr.url,
+      title,
+      line: PR_STATE_NOT_READ,
+    }
+  }
   const age = livenessAge(pr.checkedAt, now)
   const checked = age === null ? null : `checked ${age} ago`
   const review = pr.reviewDecision ? REVIEW_WORDS[pr.reviewDecision] : null
   return {
     linked: true,
+    source: 'session',
     headline: `PR #${pr.number} · ${pr.state}`,
     // The URL the read gave, never one built from the branch: a guessed
     // link that 404s is worse than no link.
     url: pr.url,
-    title: pr.title?.trim() ? pr.title.trim() : null,
+    title,
     checked,
     review,
     ci: CI_NOT_SEEN,
