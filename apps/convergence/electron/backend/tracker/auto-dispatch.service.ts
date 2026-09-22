@@ -6,6 +6,7 @@ import type {
   WorkLedgerRecord,
 } from '../../../src/shared/types/tracker.types'
 import type { SessionService } from '../session/session.service'
+import type { DispatchTerminalEvent } from '../session/session.types'
 import type { RelayService } from '../relay/relay.service'
 import type { WorkLedgerService } from '../work-ledger/work-ledger.service'
 import type { GitService } from '../git/git.service'
@@ -15,7 +16,11 @@ import {
   resolveAccountForAutomaticTurn,
   type AutomaticTurnAccountSource,
 } from '../provider-account/provider-account-automatic-turn.pure'
-import { autoDispatchText, autoDispatchTime } from './auto-dispatch.pure'
+import {
+  autoDispatchTerminalError,
+  autoDispatchText,
+  autoDispatchTime,
+} from './auto-dispatch.pure'
 
 /** Capability port: the four plan readers, account readers, two sends and one note. */
 export type AutoDispatchGateway = Pick<
@@ -25,6 +30,7 @@ export type AutoDispatchGateway = Pick<
   | 'sendMessageWithOpener'
   | 'deliverRelayMessage'
   | 'addAutoDispatchNote'
+  | 'onDispatchTerminal'
 > &
   Pick<RelayService, 'findWire'> &
   Pick<GitService, 'describeLane'> &
@@ -37,16 +43,38 @@ export interface AutoDispatchCrew {
   members: (SessionCrewMember & { executionHost: string })[]
 }
 
+/** How many unmatched terminal receipts to keep until their UPDATE lands. */
+const PENDING_TERMINAL_LIMIT = 64
+
 /** Durable claim-and-send use case; the relay engine and tracker writes are absent. */
 export class AutoDispatchService {
   private readonly activeCrews = new Set<string>()
+  private readonly unsubscribeTerminal: () => void
+  /**
+   * Terminals that arrived before their receipt UPDATE (MAR-3298 lap 2 B).
+   * Bounded FIFO: insertion order, evict the oldest past the limit.
+   */
+  private readonly pendingTerminals = new Map<
+    string,
+    'failed' | 'cancelled' | 'abandoned'
+  >()
 
   constructor(
     private readonly db: Database.Database,
     private readonly gateway: AutoDispatchGateway,
     private readonly crews: { list(): AutoDispatchCrew[] },
     private readonly ledger: Pick<WorkLedgerService, 'currentView'>,
-  ) {}
+  ) {
+    // A delivery that dies after the receipt was written must reach the row
+    // (MAR-3298 R4): without this the word stays `sent` forever.
+    this.unsubscribeTerminal = this.gateway.onDispatchTerminal((event) =>
+      this.applyDispatchTerminal(event),
+    )
+  }
+
+  dispose(): void {
+    this.unsubscribeTerminal()
+  }
 
   records(crewId: string): AutoDispatchRecord[] {
     return this.db
@@ -66,6 +94,57 @@ export class AutoDispatchService {
     } finally {
       this.activeCrews.delete(crewId)
     }
+  }
+
+  /**
+   * A terminal whose receipt matches an open claim stamps that claim's error
+   * (MAR-3298 R4). Only when `error IS NULL` — a delivered row with a settled
+   * turn is never touched; a prior send-failure is not overwritten.
+   *
+   * When no row matches yet, the id is kept so `deliver` can reconcile after
+   * the receipt UPDATE (MAR-3298 lap 2 B).
+   */
+  private applyDispatchTerminal(event: DispatchTerminalEvent): void {
+    const stamp = this.db.prepare(
+      `UPDATE auto_dispatches SET error = ?
+       WHERE receipt = ? AND error IS NULL`,
+    )
+    const word = autoDispatchTerminalError(event.reason)
+    for (const receipt of event.dispatchIds) {
+      const result = stamp.run(word, receipt)
+      if (result.changes === 0) {
+        this.rememberPendingTerminal(receipt, event.reason)
+      } else {
+        this.pendingTerminals.delete(receipt)
+      }
+    }
+  }
+
+  private rememberPendingTerminal(
+    receipt: string,
+    reason: 'failed' | 'cancelled' | 'abandoned',
+  ): void {
+    if (this.pendingTerminals.has(receipt))
+      this.pendingTerminals.delete(receipt)
+    this.pendingTerminals.set(receipt, reason)
+    while (this.pendingTerminals.size > PENDING_TERMINAL_LIMIT) {
+      const oldest = this.pendingTerminals.keys().next().value
+      if (oldest === undefined) break
+      this.pendingTerminals.delete(oldest)
+    }
+  }
+
+  /** Stamp a row whose terminal beat the receipt write. */
+  private reconcilePendingTerminal(receipt: string): void {
+    const reason = this.pendingTerminals.get(receipt)
+    if (reason === undefined) return
+    this.pendingTerminals.delete(receipt)
+    this.db
+      .prepare(
+        `UPDATE auto_dispatches SET error = ?
+         WHERE receipt = ? AND error IS NULL`,
+      )
+      .run(autoDispatchTerminalError(reason), receipt)
   }
 
   private async actCrew(
@@ -222,6 +301,9 @@ export class AutoDispatchService {
         'UPDATE auto_dispatches SET delivery = ?, receipt = ? WHERE id = ?',
       )
       .run(queued ? 'queued' : 'turn', receipt, id)
+    // A terminal that arrived while the send was resolving matches now
+    // (MAR-3298 lap 2 B).
+    this.reconcilePendingTerminal(receipt)
     const note = `Auto-dispatched ${entry.issueIdentifier} "${entry.issueTitle}" → ${entry.seat} at ${autoDispatchTime(at)} (lap 1)`
     // A note failure must never turn a delivered fact into a retryable send failure.
     this.gateway.addAutoDispatchNote(mastermind, note)

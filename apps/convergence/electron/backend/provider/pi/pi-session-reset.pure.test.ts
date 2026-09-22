@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildPiNewSessionTimeoutReason,
   buildPiResetFailureNote,
+  PI_NEW_SESSION_TIMEOUT_MS,
   PI_RESET_VETOED_REASON,
   readPiNewSessionVerdict,
   readPiSessionFile,
@@ -61,6 +63,18 @@ describe('buildPiResetFailureNote (MAR-3215)', () => {
   it('says the previous conversation is still the one the next message resumes', () => {
     expect(buildPiResetFailureNote(PI_RESET_VETOED_REASON)).toBe(
       'Could not clear the conversation: a Pi extension cancelled the new session. The previous conversation is still active; your next message will resume it.',
+    )
+  })
+})
+
+describe('PI_NEW_SESSION_TIMEOUT_MS (MAR-3298 R1)', () => {
+  it('names twenty seconds and the two-attempt failure sentence', () => {
+    expect(PI_NEW_SESSION_TIMEOUT_MS).toBe(20_000)
+    expect(buildPiNewSessionTimeoutReason()).toBe(
+      'Pi did not name its new session in time (2 × 20 s).',
+    )
+    expect(buildPiResetFailureNote(buildPiNewSessionTimeoutReason())).toContain(
+      '(2 × 20 s)',
     )
   })
 })

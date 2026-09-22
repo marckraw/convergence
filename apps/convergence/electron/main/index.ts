@@ -830,6 +830,8 @@ async function startApp(): Promise<void> {
       sessionService.deliverRelayMessage(id, input),
     addAutoDispatchNote: (id, text) =>
       sessionService.addAutoDispatchNote(id, text),
+    onDispatchTerminal: (listener) =>
+      sessionService.onDispatchTerminal(listener),
   }
   const autoDispatcher = new AutoDispatchService(
     db,
@@ -1136,6 +1138,7 @@ async function startApp(): Promise<void> {
   }
 
   app.on('before-quit', () => {
+    autoDispatcher.dispose()
     systemNotifications.dispose()
     systemCoalescer.dispose()
     updatesScheduler?.stop()
