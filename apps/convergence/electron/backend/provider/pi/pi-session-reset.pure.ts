@@ -49,6 +49,17 @@ export function readPiSessionFile(
 }
 
 /**
+ * How long one new-session probe may wait for Pi to name a file (MAR-3298).
+ * A silent probe is retried once; the failure note names both attempts.
+ */
+export const PI_NEW_SESSION_TIMEOUT_MS = 20_000
+
+/** The reason after two silent probes (MAR-3298 R1). */
+export function buildPiNewSessionTimeoutReason(): string {
+  return `Pi did not name its new session in time (2 × ${PI_NEW_SESSION_TIMEOUT_MS / 1000} s).`
+}
+
+/**
  * The sentence a reset that did not happen leaves in the transcript.
  *
  * Every failure keeps the previous conversation current, so every failure

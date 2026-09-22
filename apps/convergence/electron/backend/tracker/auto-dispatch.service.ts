@@ -6,6 +6,7 @@ import type {
   WorkLedgerRecord,
 } from '../../../src/shared/types/tracker.types'
 import type { SessionService } from '../session/session.service'
+import type { DispatchTerminalEvent } from '../session/session.types'
 import type { RelayService } from '../relay/relay.service'
 import type { WorkLedgerService } from '../work-ledger/work-ledger.service'
 import type { GitService } from '../git/git.service'
@@ -25,6 +26,7 @@ export type AutoDispatchGateway = Pick<
   | 'sendMessageWithOpener'
   | 'deliverRelayMessage'
   | 'addAutoDispatchNote'
+  | 'onDispatchTerminal'
 > &
   Pick<RelayService, 'findWire'> &
   Pick<GitService, 'describeLane'> &
@@ -40,13 +42,24 @@ export interface AutoDispatchCrew {
 /** Durable claim-and-send use case; the relay engine and tracker writes are absent. */
 export class AutoDispatchService {
   private readonly activeCrews = new Set<string>()
+  private readonly unsubscribeTerminal: () => void
 
   constructor(
     private readonly db: Database.Database,
     private readonly gateway: AutoDispatchGateway,
     private readonly crews: { list(): AutoDispatchCrew[] },
     private readonly ledger: Pick<WorkLedgerService, 'currentView'>,
-  ) {}
+  ) {
+    // A delivery that dies after the receipt was written must reach the row
+    // (MAR-3298 R4): without this the word stays `sent` forever.
+    this.unsubscribeTerminal = this.gateway.onDispatchTerminal((event) =>
+      this.applyDispatchTerminal(event),
+    )
+  }
+
+  dispose(): void {
+    this.unsubscribeTerminal()
+  }
 
   records(crewId: string): AutoDispatchRecord[] {
     return this.db
@@ -65,6 +78,21 @@ export class AutoDispatchService {
       return await this.actCrew(crewId, plan, at)
     } finally {
       this.activeCrews.delete(crewId)
+    }
+  }
+
+  /**
+   * A terminal whose receipt matches an open claim stamps that claim's error
+   * (MAR-3298 R4). Only when `error IS NULL` — a delivered row with a settled
+   * turn is never touched; a prior send-failure is not overwritten.
+   */
+  private applyDispatchTerminal(event: DispatchTerminalEvent): void {
+    const stamp = this.db.prepare(
+      `UPDATE auto_dispatches SET error = ?
+       WHERE receipt = ? AND error IS NULL`,
+    )
+    for (const receipt of event.dispatchIds) {
+      stamp.run(event.reason, receipt)
     }
   }
 

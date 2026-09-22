@@ -27,7 +27,9 @@ import {
   SESSION_RESTARTED_EVENT_TYPE,
 } from '../session-restart.pure'
 import {
+  buildPiNewSessionTimeoutReason,
   buildPiResetFailureNote,
+  PI_NEW_SESSION_TIMEOUT_MS,
   PI_RESET_VETOED_REASON,
   readPiNewSessionVerdict,
   readPiSessionFile,
@@ -1476,8 +1478,8 @@ export class PiProvider implements Provider {
     }
 
     /**
-     * Asks a short-lived Pi, started with no `--session`, which file its new
-     * session will live in (MAR-3215).
+     * One probe: spawn `pi --mode rpc`, ask `get_state`, race the named
+     * timeout and the process exit (MAR-3215, MAR-3298 R1).
      *
      * Why a process at all: the conversation's continuation token is the only
      * thing that decides which session the NEXT spawn resumes, and a token
@@ -1491,7 +1493,7 @@ export class PiProvider implements Provider {
      * `--session <that path>` opens it as an empty session (measured on Pi
      * 0.85.1).
      */
-    async function readFreshPiSessionFile(): Promise<string> {
+    async function probeFreshPiSessionFile(): Promise<string> {
       const childEnv = await resolveEnvironment(process.env)
       if (stopped) throw new Error('the session was stopped.')
       const probe = spawn(binaryPath, ['--mode', 'rpc'], {
@@ -1524,7 +1526,7 @@ export class PiProvider implements Provider {
             timeout = setTimeout(
               () =>
                 reject(new Error('Pi did not name its new session in time.')),
-              20_000,
+              PI_NEW_SESSION_TIMEOUT_MS,
             )
             timeout.unref?.()
           }),
@@ -1544,6 +1546,36 @@ export class PiProvider implements Provider {
         probeRpc.destroy()
         probe.kill('SIGTERM')
         if (resetProbe === probe) resetProbe = null
+      }
+    }
+
+    function isSilentProbeFailure(err: unknown): boolean {
+      const message = err instanceof Error ? err.message : String(err)
+      return (
+        message.includes('Pi did not name its new session in time') ||
+        message.includes('Pi exited before naming its new session')
+      )
+    }
+
+    /**
+     * A silent probe is tried once more; a refusal is an answer and is not
+     * retried (MAR-3298 R1).
+     */
+    async function readFreshPiSessionFile(): Promise<string> {
+      try {
+        return await probeFreshPiSessionFile()
+      } catch (first) {
+        if (!isSilentProbeFailure(first) || stopped) throw first
+        try {
+          return await probeFreshPiSessionFile()
+        } catch (second) {
+          if (isSilentProbeFailure(second)) {
+            throw new Error(buildPiNewSessionTimeoutReason(), {
+              cause: second,
+            })
+          }
+          throw second
+        }
       }
     }
 

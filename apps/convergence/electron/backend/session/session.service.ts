@@ -344,6 +344,15 @@ export class SessionService {
   private readonly retainingStoppedInputs = new Set<string>()
   private readonly compactingSessions = new Set<string>()
   /**
+   * Sessions whose current turn is a conversation reset (MAR-3298 R2).
+   *
+   * Set when `withDispatchInFlight` routes `CONVERSATION_RESET_COMMAND`;
+   * cleared on the next lifecycle (or on hand Stop, which must not drain).
+   * Distinguishes a reset's `failed` from a plain turn's without reading the
+   * provider's note text.
+   */
+  private readonly resetsInFlight = new Set<string>()
+  /**
    * Conversations whose queue is being held open by a routine (MAR-3255 R2).
    *
    * A second reason for the same door compaction already uses, and
@@ -2134,12 +2143,16 @@ export class SessionService {
           'Wait for the current turn to finish before clearing the conversation.',
         )
       }
+      // Remembered until the next lifecycle so a failed reset can drain the
+      // brief queued behind it (MAR-3298 R2). Cleared on hand Stop too.
+      this.resetsInFlight.add(sessionId)
     }
     if (handoff) this.pendingAccountHandoffs.add(sessionId)
     const inFlight = this.dispatches.begin(sessionId)
     try {
       return await dispatch(inFlight)
     } catch (error) {
+      this.resetsInFlight.delete(sessionId)
       this.dispatches.settle(inFlight)
       // A busy refusal proves a turn owns the queue (MAR-2888). Every other
       // failure leaves the session idle with rows waiting on nothing, which
@@ -3694,6 +3707,11 @@ export class SessionService {
   }
 
   stop(id: string): void {
+    // Hand Stop during a reset must not drain the queue behind it
+    // (MAR-3298 R2 STOP): Pi/Cursor `stop()` still emit `failed`, and without
+    // clearing this flag `handleLifecycle` would treat that failed as a reset
+    // outcome and deliver the brief the user just cancelled.
+    this.resetsInFlight.delete(id)
     const handle = this.activeHandles.get(id)
     if (!handle) {
       const session = this.getById(id)
@@ -4939,6 +4957,7 @@ export class SessionService {
       return
     }
     if (status === 'failed') {
+      const wasReset = this.resetsInFlight.delete(sessionId)
       this.releaseHandle(sessionId)
       this.closeActiveTurn(sessionId, 'errored')
       // A failed turn drains nothing, and the rows behind it would wait for
@@ -4947,7 +4966,22 @@ export class SessionService {
         sessionId,
         'The turn this input was waiting behind failed.',
       )
+      // A failed RESET is the one failed that still owes the brief behind
+      // the opener: the note promised "your next message will resume it",
+      // and the payload IS that next message (MAR-3298 R2). MAR-2971 stands
+      // — terminateQueuedInputs still only fails ATTEMPTED rows; the drain
+      // below only sends what is still `queued`.
+      if (
+        wasReset &&
+        !source.retainQueuedInputsOnCompletion &&
+        !this.retainingStoppedInputs.has(sessionId)
+      ) {
+        void this.dispatchNextQueuedInput(sessionId).catch((error) => {
+          console.error('[session] Could not dispatch queued input', error)
+        })
+      }
     } else if (status === 'completed') {
+      this.resetsInFlight.delete(sessionId)
       // `answered` keeps the window and queue open; only a witness drains it.
       const summary = this.getSummaryById(sessionId)
       if (

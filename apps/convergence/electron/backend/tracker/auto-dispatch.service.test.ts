@@ -74,6 +74,14 @@ function bench(dbPath?: string) {
     instruction: 'Do the work.',
   })
   let availability: SeatAvailability = 'idle'
+  const terminalListeners: Array<
+    (event: {
+      sessionId: string
+      reason: 'cancelled' | 'abandoned' | 'failed'
+      dispatchIds: string[]
+      at: string
+    }) => void
+  > = []
   const gateway: AutoDispatchGateway = {
     describeSeatAvailability: () => availability,
     describeLane: vi.fn(async () => 'clean' as const),
@@ -94,8 +102,25 @@ function bench(dbPath?: string) {
       queued: true,
     })),
     addAutoDispatchNote: vi.fn(),
+    onDispatchTerminal: (listener) => {
+      terminalListeners.push(listener)
+      return () => {
+        const index = terminalListeners.indexOf(listener)
+        if (index >= 0) terminalListeners.splice(index, 1)
+      }
+    },
   }
   const service = new AutoDispatchService(db, gateway, roster, ledger)
+  const emitTerminal = (event: {
+    sessionId: string
+    reason: 'cancelled' | 'abandoned' | 'failed'
+    dispatchIds: string[]
+    at?: string
+  }) => {
+    for (const listener of [...terminalListeners]) {
+      listener({ at: at, ...event })
+    }
+  }
   const planner = new AutoDispatchPlanService(
     {
       listCrews: roster.list,
@@ -166,6 +191,7 @@ function bench(dbPath?: string) {
     service,
     planner,
     roster,
+    emitTerminal,
     enable: () =>
       crews.setTrackerBinding(crewId, { projectId: 'p', autoDispatch: true }),
     busy: (value: SeatAvailability) => {
@@ -554,6 +580,7 @@ it('R8 gateway keys cannot grow a stop, steer, interrupt or mastermind message d
     | 'sendMessageWithOpener'
     | 'deliverRelayMessage'
     | 'addAutoDispatchNote'
+    | 'onDispatchTerminal'
   >()
   expect(Object.keys(bench().gateway).sort()).toEqual([
     'addAutoDispatchNote',
@@ -564,8 +591,71 @@ it('R8 gateway keys cannot grow a stop, steer, interrupt or mastermind message d
     'firstDispatchSeenAt',
     'getLastTurnProviderAccountId',
     'listByProvider',
+    'onDispatchTerminal',
     'sendMessageWithOpener',
   ])
+})
+
+it('MAR-3298 R4 a failed terminal for a sent receipt stamps send-failed; label path retries', async () => {
+  const b = bench()
+  b.enable()
+  await b.act()
+  expect(b.service.records(b.crewId)).toEqual([
+    { issueId: 'i', lap: 1, sentAt: at, error: null },
+  ])
+  b.emitTerminal({
+    sessionId: 's',
+    reason: 'failed',
+    dispatchIds: ['payload'],
+  })
+  expect(b.service.records(b.crewId)[0].error).toBe('failed')
+  await b.tick()
+  expect(b.planner.cached(b.crewId)?.words.i).toEqual({
+    kind: 'send-failed',
+    reason: 'failed',
+  })
+  expect(b.gateway.sendMessageWithOpener).toHaveBeenCalledTimes(1)
+  b.page((page) => page.map((i) => ({ ...i, dispatch: false })))
+  await b.tick()
+  expect(b.service.records(b.crewId)).toEqual([])
+  b.page((page) => page.map((i) => ({ ...i, dispatch: true })))
+  await b.tick()
+  expect(b.gateway.sendMessageWithOpener).toHaveBeenCalledTimes(2)
+})
+
+it('MAR-3298 R4 a cancelled terminal stamps cancelled; an unknown receipt is ignored', async () => {
+  const b = bench()
+  b.enable()
+  await b.act()
+  b.emitTerminal({
+    sessionId: 's',
+    reason: 'cancelled',
+    dispatchIds: ['payload'],
+  })
+  expect(b.service.records(b.crewId)[0].error).toBe('cancelled')
+  b.emitTerminal({
+    sessionId: 's',
+    reason: 'failed',
+    dispatchIds: ['unknown-receipt'],
+  })
+  expect(b.service.records(b.crewId)[0].error).toBe('cancelled')
+})
+
+it('MAR-3298 R4 a settled row with an error already set is not overwritten', async () => {
+  const b = bench()
+  b.enable()
+  await b.act()
+  b.emitTerminal({
+    sessionId: 's',
+    reason: 'failed',
+    dispatchIds: ['payload'],
+  })
+  b.emitTerminal({
+    sessionId: 's',
+    reason: 'abandoned',
+    dispatchIds: ['payload'],
+  })
+  expect(b.service.records(b.crewId)[0].error).toBe('failed')
 })
 it('R8 missing dispatch label sends nothing; later laps stay manual', async () => {
   const b = bench()

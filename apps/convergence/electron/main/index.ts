@@ -830,6 +830,8 @@ async function startApp(): Promise<void> {
       sessionService.deliverRelayMessage(id, input),
     addAutoDispatchNote: (id, text) =>
       sessionService.addAutoDispatchNote(id, text),
+    onDispatchTerminal: (listener) =>
+      sessionService.onDispatchTerminal(listener),
   }
   const autoDispatcher = new AutoDispatchService(
     db,

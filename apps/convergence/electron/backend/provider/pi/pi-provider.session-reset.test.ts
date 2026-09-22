@@ -411,6 +411,100 @@ describe('PiProvider /clear with no live process (MAR-3215)', () => {
     handle.stop()
   })
 
+  it('MAR-3298 R1: a silent first probe is retried; the second naming the file restarts — drop the retry turns red', async () => {
+    vi.useFakeTimers()
+    try {
+      const spawned: FakePi[] = []
+      let probeCount = 0
+      spawnMock.mockImplementation(() => {
+        probeCount += 1
+        if (probeCount === 1) {
+          const silent = new FakePi({
+            sessionFile: null,
+            nextSessionFiles: [],
+            newSession: 'switch',
+            holdPrompts: true,
+          })
+          silent.stdin.removeAllListeners('data')
+          spawned.push(silent)
+          return silent
+        }
+        const world = {
+          sessionFile: '/s/fresh.jsonl',
+          nextSessionFiles: [] as string[],
+          newSession: 'switch' as const,
+          holdPrompts: false,
+        }
+        const child = new FakePi(world)
+        spawned.push(child)
+        return child
+      })
+      const handle = start('/clear', '/s/old.jsonl')
+      const seen = observe(handle)
+      // Provider start timer (10ms), then the first silent probe's timeout.
+      await vi.advanceTimersByTimeAsync(10)
+      expect(spawned).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(20_000)
+      // Second probe answers get_state on a 0ms setTimeout inside FakePi.
+      await vi.advanceTimersByTimeAsync(50)
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(seen.statuses.at(-1)).toBe('completed')
+      expect(spawned).toHaveLength(2)
+      expect(seen.boundaries()).toHaveLength(1)
+      expect(
+        seen.notes.some((note) => note.text.includes('Could not clear')),
+      ).toBe(false)
+      handle.dispose?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('MAR-3298 R1: two silent probes fail with the two-attempt sentence — shorten the note turns red', async () => {
+    vi.useFakeTimers()
+    try {
+      const spawned: FakePi[] = []
+      spawnMock.mockImplementation(() => {
+        const silent = new FakePi({
+          sessionFile: null,
+          nextSessionFiles: [],
+          newSession: 'switch',
+          holdPrompts: true,
+        })
+        silent.stdin.removeAllListeners('data')
+        spawned.push(silent)
+        return silent
+      })
+      const handle = start('/clear', '/s/old.jsonl')
+      const seen = observe(handle)
+      await vi.advanceTimersByTimeAsync(10)
+      await vi.advanceTimersByTimeAsync(20_000)
+      await vi.advanceTimersByTimeAsync(20_000)
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(seen.statuses.at(-1)).toBe('failed')
+      expect(spawned).toHaveLength(2)
+      expect(seen.notes.at(-1)?.text).toBe(
+        'Could not clear the conversation: Pi did not name its new session in time (2 × 20 s). The previous conversation is still active; your next message will resume it.',
+      )
+      handle.dispose?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('MAR-3298 R1: a probe that answers with a refusal is not retried — retry on refusal turns red', async () => {
+    setup({ stateFails: true })
+    const handle = start('/clear', '/s/old.jsonl')
+    const seen = observe(handle)
+    await waitFor(() => expect(seen.statuses.at(-1)).toBe('failed'))
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(seen.notes.at(-1)?.text).toContain('state unavailable')
+    expect(seen.notes.at(-1)?.text).not.toContain('2 × 20 s')
+    handle.stop()
+  })
+
   it('refuses a message while the reset is under way rather than racing it', () => {
     setup()
     const handle = start('/clear', '/s/old.jsonl')
