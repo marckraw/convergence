@@ -451,10 +451,11 @@ export const WavePanel: FC<WavePanelProps> = ({
    * strip, so the control they pressed would look broken.
    *
    * The case this departure exists for is folded AND narrow, and it has its
-   * own witness (MAR-3292 lap 2, B): `R3: folded and too narrow at once --
-   * both reasons true, and every way out still leads somewhere` in
-   * `wave-panel.render.test.tsx`. Write `stored === 'folded'` here instead
-   * and that test goes red; nothing else does.
+   * own witness (MAR-3292 lap 2, B): `lap 2, B: folded and too narrow at
+   * once -- both reasons true, and every way out still leads somewhere`, in
+   * `wave-panel.render.test.tsx` under `MAR-3292: Loom folds to a narrow
+   * column of icons`. Write `stored === 'folded'` here instead and that test
+   * goes red; nothing else in the file does.
    */
   const columnFitsHere =
     effectiveWavePanelMode({
