@@ -64,3 +64,40 @@ describe('MAR-3311 R1: the app mounts the one provider, above the shell', () => 
     expect(shell).toBeGreaterThan(provider)
   })
 })
+
+/**
+ * The no-drag rule is about every tooltip, not one of them (MAR-3311 R2).
+ *
+ * `TooltipContent` renders into a portal that floats over Loom's title-bar
+ * region, where an element without `LOOM_NO_DRAG_STYLE` is draggable chrome:
+ * the click lands on the window, not on what is underneath it
+ * (MAR-3284's law). A rendered test can only read the one tooltip it opens,
+ * so six of the seven contents could lose the style and every suite would
+ * stay green -- which is how a per-site obligation quietly becomes a
+ * per-site accident.
+ *
+ * So the pin is count equality, not a named site: every `<TooltipContent`
+ * these three files write carries the style, and there is at least one.
+ * A new tooltip added without it moves one count and not the other.
+ */
+const TOOLTIP_CONTENT = /<TooltipContent\b/g
+
+// The opening tag, read to its `>`: `[^>]` crosses newlines, so a tag broken
+// over several lines still matches as one.
+const TOOLTIP_CONTENT_TAG = /<TooltipContent\b[^>]*>/g
+
+const NO_DRAG = 'style={LOOM_NO_DRAG_STYLE}'
+
+describe('MAR-3311 R2: every Loom tooltip is no-drag, not just the read one', () => {
+  it.each(FOLDED_COLUMN)('%s gives every tooltip the no-drag style', (file) => {
+    const source = readFileSync(resolve(__dirname, file), 'utf8')
+    const written = source.match(TOOLTIP_CONTENT) ?? []
+    const noDrag = (source.match(TOOLTIP_CONTENT_TAG) ?? []).filter((tag) =>
+      tag.includes(NO_DRAG),
+    )
+    // Mutation: drop the style from ANY one `TooltipContent` in any of the
+    // three files -> red here, and nowhere else.
+    expect(written.length).toBeGreaterThan(0)
+    expect(noDrag.length).toBe(written.length)
+  })
+})
