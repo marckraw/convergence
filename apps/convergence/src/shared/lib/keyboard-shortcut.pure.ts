@@ -29,6 +29,10 @@ interface ReservedShortcut {
 
 const RESERVED_SHORTCUTS: ReservedShortcut[] = [
   {
+    binding: { key: 'f', shiftKey: false, altKey: false },
+    label: 'Sidebar search',
+  },
+  {
     binding: { key: 'j', shiftKey: false, altKey: false },
     label: 'Conversation dock',
   },

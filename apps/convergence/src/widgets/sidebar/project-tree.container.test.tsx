@@ -677,3 +677,74 @@ describe('ProjectTree', () => {
     expect(onDeleteWorkspace).toHaveBeenCalledWith('workspace-1')
   })
 })
+
+it.each([false, true])(
+  'search opens a collapsed matching branch without writing stored state (archived=%s)',
+  (archived) => {
+    const onToggleWorkspace = vi.fn()
+    const props = {
+      cardContext: { projectName: 'Project', endpoints: [], now: 0 },
+      baseBranchName: 'master',
+      workspaces: [
+        {
+          id: 'match',
+          projectId: 'project-1',
+          branchName: 'matching-branch',
+          path: '/tmp/match',
+          type: 'worktree' as const,
+          archivedAt: archived ? '2026-01-01' : null,
+          worktreeRemovedAt: null,
+          createdAt: '2026-01-01',
+        },
+      ],
+      sessions: [
+        {
+          ...baseSession,
+          id: 'match-session',
+          workspaceId: 'match',
+          providerId: 'codex',
+          name: 'Matching conversation',
+        },
+      ],
+      activeSessionId: null,
+      expandedWorkspaces: new Set<string>(),
+      onToggleWorkspace,
+      onSelectSession: vi.fn(),
+      onArchiveSession: vi.fn(),
+      onUnarchiveSession: vi.fn(),
+      onDeleteSession: vi.fn(),
+      onRenameSession: vi.fn(),
+      onRegenerateSessionName: vi.fn(),
+      onDeleteWorkspace: vi.fn(),
+      onOpenCreateWorkspace: vi.fn(),
+    }
+    const view = render(
+      <TooltipProvider>
+        <ProjectTree {...props} nameSearchQuery="Matching" />
+      </TooltipProvider>,
+    )
+    if (archived)
+      fireEvent.click(
+        screen.getByRole('button', { name: /expand archived workspaces/i }),
+      )
+    expect(screen.getByText('Matching conversation')).toBeInTheDocument()
+    const chevron = screen.getByRole('button', { name: /^matching-branch/ })
+    expect(chevron).toBeDisabled()
+    expect(chevron).toHaveAttribute(
+      'title',
+      'Branches stay open while you search',
+    )
+    fireEvent.click(chevron)
+    view.rerender(
+      <TooltipProvider>
+        <ProjectTree {...props} nameSearchQuery="" />
+      </TooltipProvider>,
+    )
+    expect.soft(screen.queryByText('Matching conversation')).toBeNull()
+    expect(
+      screen.getByRole('button', { name: /^matching-branch/ }),
+    ).toBeEnabled()
+    expect.soft(onToggleWorkspace).not.toHaveBeenCalled()
+    expect(props.expandedWorkspaces.size).toBe(0)
+  },
+)

@@ -1,18 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FC, ReactNode } from 'react'
+import { isEditableTarget } from '@/shared/lib/editable-target.pure'
 import { useSessionStore } from '@/entities/session'
 import { useTerminalStore } from '@/entities/terminal'
 import { SessionView } from '@/widgets/session-view'
 import { TerminalDock } from '@/widgets/terminal-dock'
 import { ConversationDockPlaceholder } from './conversation-dock-placeholder.presentational'
 import { WorkspaceLayoutView } from './workspace-layout.presentational'
-
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false
-  const tag = target.tagName
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
-  return target.isContentEditable
-}
 
 export const WorkspaceLayoutContainer: FC = () => {
   const primarySurface = useSessionStore((s) => {

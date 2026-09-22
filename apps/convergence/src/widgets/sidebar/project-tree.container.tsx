@@ -475,7 +475,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
       {activeWorkspaces.map((ws) => {
         const wsSessions = getActiveWorkspaceSessions(ws.id)
         if (searching && wsSessions.length === 0) return null
-        const isExpanded = effectiveExpanded.has(ws.id)
+        const isExpanded = searching || effectiveExpanded.has(ws.id)
         const pullRequest = pullRequestsByWorkspaceId?.[ws.id] ?? null
         const isMerged = pullRequest?.state === 'merged'
 
@@ -487,7 +487,15 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                   <Button
                     type="button"
                     variant="ghost"
-                    onClick={() => toggleWorkspace(ws.id)}
+                    disabled={searching}
+                    title={
+                      searching
+                        ? 'Branches stay open while you search'
+                        : undefined
+                    }
+                    onClick={() => {
+                      if (!searching) toggleWorkspace(ws.id)
+                    }}
                     className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left text-sm font-normal hover:text-foreground"
                   >
                     <ChevronRight
@@ -582,7 +590,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
               {archivedWorkspaces.map((ws) => {
                 const wsSessions = getWorkspaceSessions(ws.id)
                 if (searching && wsSessions.length === 0) return null
-                const isExpanded = effectiveExpanded.has(ws.id)
+                const isExpanded = searching || effectiveExpanded.has(ws.id)
                 const pullRequest = pullRequestsByWorkspaceId?.[ws.id] ?? null
                 const isMerged = pullRequest?.state === 'merged'
 
@@ -594,7 +602,15 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                           <Button
                             type="button"
                             variant="ghost"
-                            onClick={() => toggleWorkspace(ws.id)}
+                            disabled={searching}
+                            title={
+                              searching
+                                ? 'Branches stay open while you search'
+                                : undefined
+                            }
+                            onClick={() => {
+                              if (!searching) toggleWorkspace(ws.id)
+                            }}
                             className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left text-sm font-normal hover:text-foreground"
                           >
                             <ChevronRight

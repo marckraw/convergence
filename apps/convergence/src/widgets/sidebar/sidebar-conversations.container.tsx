@@ -28,6 +28,7 @@ import { TerminalIdleSection } from './terminal-idle-section.presentational'
  * the narrowing by wiring NeedsYou / ProjectTree itself.
  */
 export interface SidebarConversationsProps {
+  searchRequest?: number
   collapsed: boolean
   globalSessions: readonly SessionSummary[]
   sessions: readonly SessionSummary[]
@@ -90,6 +91,7 @@ export interface SidebarConversationsProps {
 
 export const SidebarConversations: FC<SidebarConversationsProps> = ({
   collapsed,
+  searchRequest = 0,
   globalSessions,
   sessions,
   headerStart,
@@ -152,6 +154,7 @@ export const SidebarConversations: FC<SidebarConversationsProps> = ({
     globalSessions,
     sessions,
     collapsed,
+    searchRequest,
   })
 
   const cardGroups = useMemo(

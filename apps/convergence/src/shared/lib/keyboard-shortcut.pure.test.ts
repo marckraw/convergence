@@ -199,3 +199,10 @@ describe('bindingFromKeyEvent', () => {
     expect(bindingFromKeyEvent(ev('Enter', { metaKey: true }))).toBeNull()
   })
 })
+
+it('reserves Cmd+F for Sidebar search', () => {
+  expect(resolveShortcutRecording(ev('f', { metaKey: true }))).toEqual({
+    kind: 'conflict',
+    message: 'Already used by Sidebar search.',
+  })
+})
