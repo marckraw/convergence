@@ -2,6 +2,7 @@ import type { FC } from 'react'
 import { Check, TerminalSquare } from 'lucide-react'
 import type { TerminalIdleNotice } from '@/entities/terminal'
 import { Button } from '@/shared/ui/button'
+import { LOOM_NO_DRAG_STYLE } from '@/shared/ui/no-drag.styles'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
 interface TerminalIdleSectionProps {
@@ -54,7 +55,7 @@ export const TerminalIdleSection: FC<TerminalIdleSectionProps> = ({
                   </span>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="right">
+              <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
                 <p>{notice.sessionName}</p>
                 <p className="text-[11px] opacity-70">
                   {notice.processName} finished - {notice.projectName}
@@ -79,7 +80,7 @@ export const TerminalIdleSection: FC<TerminalIdleSectionProps> = ({
                     <Check className="h-2.5 w-2.5" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="left">
+                <TooltipContent side="left" style={LOOM_NO_DRAG_STYLE}>
                   <p>Acknowledge</p>
                 </TooltipContent>
               </Tooltip>

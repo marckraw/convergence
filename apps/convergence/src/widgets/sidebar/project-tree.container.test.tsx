@@ -734,19 +734,14 @@ it.each([false, true])(
         name: /collapse archived workspaces/i,
       })
       expect(archivedToggle).toBeDisabled()
-      expect(archivedToggle).toHaveAttribute(
-        'title',
-        'Branches stay open while you search',
-      )
+      // Searching copy lives in the shared Tooltip now (MAR-3314), not title=.
+      expect(archivedToggle.getAttribute('title')).toBeNull()
       fireEvent.click(archivedToggle)
     }
     expect(screen.getByText('Matching conversation')).toBeInTheDocument()
     const chevron = screen.getByRole('button', { name: /^matching-branch/ })
     expect(chevron).toBeDisabled()
-    expect(chevron).toHaveAttribute(
-      'title',
-      'Branches stay open while you search',
-    )
+    expect(chevron.getAttribute('title')).toBeNull()
     fireEvent.click(chevron)
     view.rerender(
       <TooltipProvider>

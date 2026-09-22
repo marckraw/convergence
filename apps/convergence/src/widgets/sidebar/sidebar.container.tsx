@@ -33,6 +33,8 @@ import { useDialogStore } from '@/entities/dialog'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { groupNeedsYou, needsYouCardModel } from '@/features/needs-you'
 import { Button } from '@/shared/ui/button'
+import { LOOM_NO_DRAG_STYLE } from '@/shared/ui/no-drag.styles'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import type { AppSurface } from '@/shared/types/app-surface.types'
 import { cn } from '@/shared/lib/cn.pure'
 import {
@@ -693,143 +695,191 @@ export const Sidebar: FC<SidebarProps> = ({
   if (collapsed) {
     return (
       <div className="relative flex h-full w-14 flex-col items-center">
-        <div
-          className="absolute top-1/2 right-[-11px] z-20 flex h-14 w-5 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-white/10 bg-background/90 text-muted-foreground shadow-lg backdrop-blur-sm transition-colors hover:bg-accent hover:text-foreground"
-          role="button"
-          tabIndex={0}
-          aria-label="Peek sidebar"
-          title="Peek sidebar"
-          onMouseEnter={onPeek}
-          onFocus={onPeek}
-        >
-          <ChevronRight className="h-3.5 w-3.5" />
-        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              className="absolute top-1/2 right-[-11px] z-20 flex h-14 w-5 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-white/10 bg-background/90 text-muted-foreground shadow-lg backdrop-blur-sm transition-colors hover:bg-accent hover:text-foreground"
+              role="button"
+              tabIndex={0}
+              aria-label="Peek sidebar"
+              onMouseEnter={onPeek}
+              onFocus={onPeek}
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+            Peek sidebar
+          </TooltipContent>
+        </Tooltip>
         <div
           className="app-sidebar-topbar h-12 w-full border-b border-white/10"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         />
 
         <div className="flex w-full flex-col items-center gap-1 border-b border-white/10 py-3">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9"
-            title="Expand sidebar"
-            aria-label="Expand sidebar"
-            onClick={onExpand}
-          >
-            <PanelLeftOpen className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant={activeSurface === 'code' ? 'secondary' : 'ghost'}
-            size="icon"
-            className="h-9 w-9"
-            title="Code"
-            aria-label="Show code surface"
-            aria-pressed={activeSurface === 'code'}
-            onClick={() => onSelectSurface('code')}
-          >
-            <Code2 className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant={activeSurface === 'chat' ? 'secondary' : 'ghost'}
-            size="icon"
-            className="h-9 w-9"
-            title="Chat"
-            aria-label="Show chat surface"
-            aria-pressed={activeSurface === 'chat'}
-            onClick={() => onSelectSurface('chat')}
-          >
-            <MessageSquareText className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9"
+                aria-label="Expand sidebar"
+                onClick={onExpand}
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+              Expand sidebar
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant={activeSurface === 'code' ? 'secondary' : 'ghost'}
+                size="icon"
+                className="h-9 w-9"
+                aria-label="Show code surface"
+                aria-pressed={activeSurface === 'code'}
+                onClick={() => onSelectSurface('code')}
+              >
+                <Code2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+              Show code surface
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant={activeSurface === 'chat' ? 'secondary' : 'ghost'}
+                size="icon"
+                className="h-9 w-9"
+                aria-label="Show chat surface"
+                aria-pressed={activeSurface === 'chat'}
+                onClick={() => onSelectSurface('chat')}
+              >
+                <MessageSquareText className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+              Show chat surface
+            </TooltipContent>
+          </Tooltip>
           {onShowMissionControl ? (
-            <Button
-              type="button"
-              variant={missionControlActive ? 'secondary' : 'ghost'}
-              size="icon"
-              className="h-9 w-9"
-              title="Mission Control"
-              aria-label="Show Mission Control"
-              aria-pressed={missionControlActive}
-              onClick={onShowMissionControl}
-            >
-              <Satellite className="h-4 w-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant={missionControlActive ? 'secondary' : 'ghost'}
+                  size="icon"
+                  className="h-9 w-9"
+                  aria-label="Show Mission Control"
+                  aria-pressed={missionControlActive}
+                  onClick={onShowMissionControl}
+                >
+                  <Satellite className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+                Show Mission Control
+              </TooltipContent>
+            </Tooltip>
           ) : null}
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col items-center gap-2 py-3">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="relative h-9 w-9"
-            title={`Needs You (${attentionCards.length})`}
-            aria-label={`Needs You (${attentionCards.length})`}
-          >
-            <span
-              className={cn(
-                'h-3 w-3 rounded-full border-2',
-                attentionCards.some(
-                  (card) => card.attentionGroup === 'Waiting on you',
-                )
-                  ? 'border-warning'
-                  : attentionCards.some(
-                        ({ session }) => session.attention === 'failed',
-                      )
-                    ? 'border-destructive'
-                    : 'border-emerald-500',
-              )}
-            />
-            {attentionCards.length > 0 ? (
-              <span className="absolute -top-1 -right-1 rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-medium leading-none text-destructive-foreground">
-                {attentionCards.length}
-              </span>
-            ) : null}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="relative h-9 w-9"
+                aria-label={`Needs You (${attentionCards.length})`}
+              >
+                <span
+                  className={cn(
+                    'h-3 w-3 rounded-full border-2',
+                    attentionCards.some(
+                      (card) => card.attentionGroup === 'Waiting on you',
+                    )
+                      ? 'border-warning'
+                      : attentionCards.some(
+                            ({ session }) => session.attention === 'failed',
+                          )
+                        ? 'border-destructive'
+                        : 'border-emerald-500',
+                  )}
+                />
+                {attentionCards.length > 0 ? (
+                  <span className="absolute -top-1 -right-1 rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-medium leading-none text-destructive-foreground">
+                    {attentionCards.length}
+                  </span>
+                ) : null}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+              {`Needs You (${attentionCards.length})`}
+            </TooltipContent>
+          </Tooltip>
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9"
-            title={
-              activeSurface === 'chat'
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9"
+                aria-label={
+                  activeSurface === 'chat'
+                    ? 'Convergence Chat'
+                    : (activeProject?.name ?? 'No project')
+                }
+                onClick={() => onSelectSurface(activeSurface)}
+              >
+                {activeSurface === 'chat' ? (
+                  <MessageSquareText className="h-4 w-4" />
+                ) : (
+                  <FolderGit2 className="h-4 w-4" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+              {activeSurface === 'chat'
                 ? 'Convergence Chat'
-                : (activeProject?.name ?? 'No project')
-            }
-            aria-label={
-              activeSurface === 'chat'
-                ? 'Convergence Chat'
-                : (activeProject?.name ?? 'No project')
-            }
-            onClick={() => onSelectSurface(activeSurface)}
-          >
-            {activeSurface === 'chat' ? (
-              <MessageSquareText className="h-4 w-4" />
-            ) : (
-              <FolderGit2 className="h-4 w-4" />
-            )}
-          </Button>
+                : (activeProject?.name ?? 'No project')}
+            </TooltipContent>
+          </Tooltip>
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9"
-            title={activeSurface === 'chat' ? 'New chat' : 'Open a project'}
-            aria-label={
-              activeSurface === 'chat' ? 'New chat' : 'Open a project'
-            }
-            onClick={
-              activeSurface === 'chat' ? onNewGlobalSession : openProjectDialog
-            }
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9"
+                aria-label={
+                  activeSurface === 'chat' ? 'New chat' : 'Open a project'
+                }
+                onClick={
+                  activeSurface === 'chat'
+                    ? onNewGlobalSession
+                    : openProjectDialog
+                }
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+              {activeSurface === 'chat' ? 'New chat' : 'Open a project'}
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         <div className="app-sidebar-footer flex w-full flex-col items-center gap-1 border-t border-white/10 py-3">
@@ -841,15 +891,21 @@ export const Sidebar: FC<SidebarProps> = ({
           />
           <AppSettingsDialogContainer
             trigger={
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                title="Settings"
-                aria-label="Open settings"
-              >
-                <Settings className="h-4 w-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label="Open settings"
+                  >
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
+                  Open settings
+                </TooltipContent>
+              </Tooltip>
             }
           />
           <ThemeToggleButton />
@@ -874,18 +930,24 @@ export const Sidebar: FC<SidebarProps> = ({
           className="flex items-center gap-1"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            title="Insights"
-            aria-label="Open insights"
-            onClick={() =>
-              openDialog('app-settings', { appSettingsSection: 'insights' })
-            }
-          >
-            <BarChart3 className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                aria-label="Open insights"
+                onClick={() =>
+                  openDialog('app-settings', { appSettingsSection: 'insights' })
+                }
+              >
+                <BarChart3 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+              Open insights
+            </TooltipContent>
+          </Tooltip>
           <SidebarToolsMenu
             activeSurface={activeSurface}
             hasActiveProject={!!activeProject}
@@ -894,15 +956,21 @@ export const Sidebar: FC<SidebarProps> = ({
           />
           <AppSettingsDialogContainer
             trigger={
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                title="Settings"
-                aria-label="Open settings"
-              >
-                <Settings className="h-4 w-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label="Open settings"
+                  >
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+                  Open settings
+                </TooltipContent>
+              </Tooltip>
             }
           />
           <ThemeToggleButton />
@@ -916,71 +984,101 @@ export const Sidebar: FC<SidebarProps> = ({
         sessions={sessions}
         headerStart={
           <>
-            <Button
-              type="button"
-              variant={activeSurface === 'code' ? 'secondary' : 'ghost'}
-              size="icon"
-              className="h-8 w-8"
-              title="Code"
-              aria-label="Show code surface"
-              aria-pressed={activeSurface === 'code'}
-              onClick={() => onSelectSurface('code')}
-            >
-              <Code2 className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant={activeSurface === 'chat' ? 'secondary' : 'ghost'}
-              size="icon"
-              className="h-8 w-8"
-              title="Chat"
-              aria-label="Show chat surface"
-              aria-pressed={activeSurface === 'chat'}
-              onClick={() => onSelectSurface('chat')}
-            >
-              <MessageSquareText className="h-4 w-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant={activeSurface === 'code' ? 'secondary' : 'ghost'}
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="Show code surface"
+                  aria-pressed={activeSurface === 'code'}
+                  onClick={() => onSelectSurface('code')}
+                >
+                  <Code2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+                Show code surface
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant={activeSurface === 'chat' ? 'secondary' : 'ghost'}
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="Show chat surface"
+                  aria-pressed={activeSurface === 'chat'}
+                  onClick={() => onSelectSurface('chat')}
+                >
+                  <MessageSquareText className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+                Show chat surface
+              </TooltipContent>
+            </Tooltip>
             {onShowMissionControl ? (
-              <Button
-                type="button"
-                variant={missionControlActive ? 'secondary' : 'ghost'}
-                size="icon"
-                className="h-8 w-8"
-                title="Mission Control"
-                aria-label="Show Mission Control"
-                aria-pressed={missionControlActive}
-                onClick={onShowMissionControl}
-              >
-                <Satellite className="h-4 w-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant={missionControlActive ? 'secondary' : 'ghost'}
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label="Show Mission Control"
+                    aria-pressed={missionControlActive}
+                    onClick={onShowMissionControl}
+                  >
+                    <Satellite className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+                  Show Mission Control
+                </TooltipContent>
+              </Tooltip>
             ) : null}
           </>
         }
         headerEnd={
           peek ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              title="Pin sidebar"
-              aria-label="Pin sidebar"
-              onClick={onPinPeek}
-            >
-              <Pin className="h-4 w-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="Pin sidebar"
+                  onClick={onPinPeek}
+                >
+                  <Pin className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+                Pin sidebar
+              </TooltipContent>
+            </Tooltip>
           ) : (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              title="Collapse sidebar"
-              aria-label="Collapse sidebar"
-              onClick={onCollapse}
-            >
-              <PanelLeftClose className="h-4 w-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="Collapse sidebar"
+                  onClick={onCollapse}
+                >
+                  <PanelLeftClose className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+                Collapse sidebar
+              </TooltipContent>
+            </Tooltip>
           )
         }
         projects={projects}
