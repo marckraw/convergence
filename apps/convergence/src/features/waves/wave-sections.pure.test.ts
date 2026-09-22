@@ -69,10 +69,9 @@ describe('MAR-3199 R5: card words say what happened', () => {
       words: ['opus', 'reviewed', 'lap 1 of 6', 'pass', 'PR #678 open'],
     },
     {
-      // MAR-3304 R5: the ROW is untouched by the widened `entry.pr`. A
-      // tracker link has no state, and a row word is not the place to
-      // explain that -- MAR-3301 owns whatever the row eventually says.
-      // Mutation: print `PR #769 undefined` from the tracker shape -> red.
+      // MAR-3313 R1: a tracker link names the number with no state word
+      // (nobody read one). Mutation: `PR #769 open` -> red; drop the
+      // tracker case entirely -> red.
       name: 'reviewed with a tracker link and no reading',
       entry: {
         state: 'reviewed',
@@ -84,6 +83,12 @@ describe('MAR-3199 R5: card words say what happened', () => {
           title: 'fix(loom): a title',
         },
       },
+      words: ['opus', 'reviewed', 'lap 1 of 6', 'pass', 'PR #769'],
+    },
+    {
+      // MAR-3313 R1: null PR adds nothing.
+      name: 'reviewed with no PR',
+      entry: { state: 'reviewed', verdict: 'pass', pr: null },
       words: ['opus', 'reviewed', 'lap 1 of 6', 'pass'],
     },
     {
