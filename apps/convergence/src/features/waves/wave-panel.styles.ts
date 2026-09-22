@@ -223,3 +223,7 @@ export const LOOM_SEARCH_MISS_CLASS =
 /** One "1 in Plan" answer: a button that opens that sheet (R3). */
 export const LOOM_SEARCH_ELSEWHERE_CLASS =
   'h-auto p-0 text-[11px] font-medium text-foreground underline underline-offset-2'
+
+/** Expanded Before: keep spare cells and let each card keep its own height. */
+export const LOOM_BEFORE_WIDE_CLASS =
+  'grid grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))] items-start gap-3'
