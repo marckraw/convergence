@@ -310,6 +310,115 @@ describe('MAR-3084 R6: the facts join at read time from the app’s own records'
     expect(db.prepare('SELECT * FROM work_ledger').all()).toEqual(before)
   })
 
+  it('MAR-3304 R3: Linear’s link survives the horse moving on', () => {
+    db.prepare(
+      'INSERT INTO projects (id, name, repository_path) VALUES (?, ?, ?)',
+    ).run('p1', 'p1', root)
+    const sessions = new SessionService(
+      db,
+      new LocalExecutionHost(new ProviderRegistry()),
+    )
+    const session = sessions.create({
+      projectId: 'p1',
+      workspaceId: null,
+      providerId: 'claude-code',
+      model: null,
+      effort: null,
+      name: 'opus',
+    })
+    const crews = new CrewService(db)
+    const crew = crews.create({ name: 'Loom', sessionIds: [session.id] })
+    crews.setMemberBatonName(crew.id, { sessionId: session.id }, 'opus')
+    const ledger = new WorkLedgerService(db)
+
+    const link769 = {
+      url: 'https://github.com/marckraw/convergence/pull/769',
+      number: 769,
+      title: 'fix(loom): pending transcript patches',
+    }
+    const linked = (id: string, identifier: string, links = [link769]) => ({
+      ...issue(id, identifier),
+      pullRequests: links,
+    })
+    // The conversation reads the PR of the issue it is ON; the head branch
+    // is what ties the two together (R6).
+    const reading = (number: number, branch: string) => ({
+      number,
+      url: `https://github.com/marckraw/convergence/pull/${number}`,
+      state: 'merged',
+      headBranch: branch,
+      checkedAt: '2026-09-17T08:00:00.000Z',
+      source: 'gh',
+      title: 'fix(loom): pending transcript patches',
+      reviewDecision: 'APPROVED',
+    })
+    const setReading = (pr: unknown) =>
+      db
+        .prepare('UPDATE sessions SET pull_request_json = ? WHERE id = ?')
+        .run(pr === null ? null : JSON.stringify(pr), session.id)
+
+    ledger.append(
+      diffTrackerSnapshot({
+        crewId: crew.id,
+        current: [],
+        issues: [
+          linked('i-3274', 'MAR-3274'),
+          // The tracker links nothing to this one yet.
+          { ...issue('i-3301', 'MAR-3301'), pullRequests: [] },
+        ],
+        seenAt: '2026-09-17T08:00:00.000Z',
+      }),
+    )
+    const read = () =>
+      Object.fromEntries(
+        ledger.list(crew.id).map((entry) => [entry.issueIdentifier, entry.pr]),
+      )
+
+    // (a) the conversation is on THIS issue and reads the linked PR: its
+    // richer reading wins, state and review and all.
+    setReading(reading(769, 'agent/mar-3274-pending-transcript-patches'))
+    expect(read()['MAR-3274']).toMatchObject({
+      number: 769,
+      state: 'merged',
+      reviewDecision: 'APPROVED',
+      source: 'gh',
+    })
+    // (e) the same conversation, on an issue the tracker links nothing to:
+    // a PR opened a minute ago is still the best answer there is.
+    setReading(reading(777, 'agent/mar-3301-pill'))
+    expect(read()['MAR-3301']).toMatchObject({ number: 777, source: 'gh' })
+
+    // (b) the horse has moved on -- its conversation now reads PR 777 for
+    // its NEXT issue, and MAR-3274 has only the tracker's link left. This
+    // is the screen Marcin photographed.
+    expect(read()['MAR-3274']).toEqual({
+      source: 'tracker',
+      number: 769,
+      url: link769.url,
+      title: link769.title,
+    })
+
+    // lap 2, A: a reading that survived the branch rule WINS, always. A
+    // conversation still ON this issue, reading its SECOND attempt, has read
+    // a pull request -- state, review word, time -- while the tracker's link
+    // to the first has not been read by anybody.
+    // Mutation: pair the two by number, preferring the tracker when they
+    // differ -> #777's live reading loses to a stale #769 -> red.
+    setReading(reading(777, 'agent/mar-3274-second-attempt'))
+    expect(read()['MAR-3274']).toMatchObject({
+      source: 'gh',
+      number: 777,
+      state: 'merged',
+      reviewDecision: 'APPROVED',
+    })
+
+    // (c) no conversation reading at all: the tracker's link.
+    setReading(null)
+    expect(read()['MAR-3274']).toMatchObject({ source: 'tracker', number: 769 })
+    // (d) neither: no pull request.
+    expect(read()['MAR-3301']).toBeNull()
+  })
+
   it('a recipe seat has no session and no facts', () => {
     const crews = new CrewService(db)
     const crew = crews.create({ name: 'Loom' })

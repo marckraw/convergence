@@ -592,6 +592,20 @@ describe('MAR-3190 R7: every displayed fact is an observation', () => {
     ['the priority changes', { priority: 2 }],
     ['a label is added', { labels: ['horse › opus-mac'] }],
     ['the summary is rewritten', { summary: 'A different promise' }],
+    // MAR-3304 R2: the PR link is the fact that arrives LAST -- on a Done
+    // issue whose status will never move again.
+    [
+      'the tracker links a pull request',
+      {
+        pullRequests: [
+          {
+            url: 'https://github.com/marckraw/convergence/pull/769',
+            number: 769,
+            title: 'fix(loom): a title',
+          },
+        ],
+      },
+    ],
   ])('%s -> exactly one row', (_case, overrides) => {
     // Mutation: leave any of these out of `sameObservation` -> no row, so no
     // broadcast, so the panel shows the old value until something else about
@@ -651,6 +665,66 @@ describe('MAR-3190 R7: every displayed fact is an observation', () => {
         'summary',
       ),
     ).toBe(true)
+  })
+})
+
+describe('MAR-3304 R2: the fact carries the tracker’s pull request links', () => {
+  const linked = [
+    {
+      url: 'https://github.com/marckraw/convergence/pull/769',
+      number: 769,
+      title: 'fix(loom): pending transcript patches land before teardown',
+    },
+  ]
+
+  it('the fact of an issue the tracker linked a PR to carries it', () => {
+    const [row] = diffTrackerSnapshot({
+      crewId: 'crew-1',
+      current: [],
+      issues: [issue('done', { id: 'issue-1', pullRequests: linked })],
+      seenAt: SEEN,
+    })
+    expect(row?.fact.pullRequests).toEqual(linked)
+  })
+
+  it('lap 2, C: the same two links in a different order is no observation', () => {
+    const second = {
+      url: 'https://github.com/marckraw/convergence/pull/900',
+      number: 900,
+      title: 'feat(loom): the second attempt',
+    }
+    const base = issue('done', {
+      id: 'issue-1',
+      pullRequests: [linked[0], second],
+    })
+    // Mutation: compare the two lists by position -> a tracker that handed
+    // the same two links back the other way round appends a row per tick
+    // with nothing about the issue having moved -> red.
+    expect(
+      diffTrackerSnapshot({
+        crewId: 'crew-1',
+        current: [recorded(base)],
+        issues: [{ ...base, pullRequests: [second, linked[0]] }],
+        seenAt: SEEN,
+      }),
+    ).toEqual([])
+  })
+
+  it('a link that only changes its title is still an observation', () => {
+    const base = issue('done', { id: 'issue-1', pullRequests: linked })
+    expect(
+      diffTrackerSnapshot({
+        crewId: 'crew-1',
+        current: [recorded(base)],
+        issues: [
+          {
+            ...base,
+            pullRequests: [{ ...linked[0], title: 'fix(loom): renamed' }],
+          },
+        ],
+        seenAt: SEEN,
+      }),
+    ).toHaveLength(1)
   })
 })
 

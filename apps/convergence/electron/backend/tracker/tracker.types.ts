@@ -16,6 +16,8 @@ export type {
   TrackerKind,
   TrackerBinding,
   TrackerIssue,
+  TrackerIssuePullRequest,
+  TrackerPullRequest,
   TrackerRefusalKind,
   TrackerRefusal,
   TrackerProbe,

@@ -5,6 +5,8 @@ import {
   LABEL_IS_NOT_A_CONVERSATION,
   loomIssueDetail,
   loomStatusMeaning,
+  PR_LINKED_IN_TRACKER,
+  PR_STATE_NOT_READ,
 } from './loom-detail.pure'
 import { loomHorses } from './loom-horses.pure'
 import { loomSheets } from './loom-sheets.pure'
@@ -126,7 +128,7 @@ describe('MAR-3195 R3: the PR block says what the app read', () => {
   it('a merged PR with a title, a review and the CI sentence', () => {
     const block = detailOf({ issueIdentifier: 'MAR-1', pr }).pr
     expect(block.linked).toBe(true)
-    if (!block.linked) return
+    if (!block.linked || block.source !== 'session') throw new Error('session')
     expect(block.headline).toBe('PR #707 · merged')
     expect(block.title).toBe('feat(accounts): connectors for Codex accounts')
     expect(block.checked).toBe('checked 5m ago')
@@ -156,7 +158,7 @@ describe('MAR-3195 R3: the PR block says what the app read', () => {
       },
     }).pr
     expect(block.linked).toBe(true)
-    if (!block.linked) return
+    if (!block.linked || block.source !== 'session') throw new Error('session')
     expect(block.headline).toBe('PR #707 · draft')
     expect(block.title).toBeNull()
     expect(block.review).toBeNull()
@@ -169,6 +171,51 @@ describe('MAR-3195 R3: the PR block says what the app read', () => {
     expect(block.linked).toBe(false)
     if (block.linked) return
     expect(block.line).toBe('No linked pull request')
+  })
+})
+
+describe('MAR-3304 R4: a tracker link says it is linked, and no more', () => {
+  const tracker = {
+    source: 'tracker' as const,
+    number: 769,
+    url: 'https://github.com/marckraw/convergence/pull/769',
+    title: 'fix(loom): pending transcript patches land before teardown',
+  }
+
+  it('the number, the words, the title and the link the tracker gave', () => {
+    const block = detailOf({ issueIdentifier: 'MAR-3274', pr: tracker }).pr
+    expect(block.linked).toBe(true)
+    if (!block.linked || block.source !== 'tracker') throw new Error('tracker')
+    expect(block.headline).toBe(`PR #769 · ${PR_LINKED_IN_TRACKER}`)
+    expect(block.headline).toBe('PR #769 · linked in Linear')
+    expect(block.title).toBe(tracker.title)
+    expect(block.url).toBe(tracker.url)
+    expect(block.line).toBe(PR_STATE_NOT_READ)
+    expect(block.line).toBe('state not read — open it to see')
+  })
+
+  it('no checked, no review word, no CI sentence -- nobody read it', () => {
+    const block = detailOf({ issueIdentifier: 'MAR-3274', pr: tracker }).pr
+    if (!block.linked) throw new Error('linked')
+    // Read off the assembled block, not off the type: the shape has no field
+    // for any of these, and the one line a person reads carries none of them.
+    const seen = JSON.stringify(block)
+    expect(seen).not.toContain('checked')
+    expect(seen).not.toContain('review')
+    expect(seen).not.toContain(CI_NOT_SEEN)
+    // And never a state word borrowed from the session shape.
+    expect(block.headline).not.toContain('open')
+    expect(block.headline).not.toContain('merged')
+  })
+
+  it('a link the tracker gave no title for says nothing instead', () => {
+    const block = detailOf({
+      issueIdentifier: 'MAR-3274',
+      pr: { ...tracker, title: null },
+    }).pr
+    if (!block.linked) throw new Error('linked')
+    expect(block.title).toBeNull()
+    expect(block.headline).toBe('PR #769 · linked in Linear')
   })
 })
 

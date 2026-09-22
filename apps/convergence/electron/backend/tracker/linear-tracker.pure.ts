@@ -2,6 +2,7 @@ import { trackerLabelGroupName } from './tracker-binding.pure'
 import type { LinearProjectReference } from '../../../src/shared/lib/linear-project-reference.pure'
 import type {
   TrackerIssue,
+  TrackerIssuePullRequest,
   TrackerLogicalStatus,
   TrackerOutsideIssue,
   TrackerRefusal,
@@ -118,6 +119,7 @@ export const LINEAR_LABELED_ISSUES_QUERY = `query ConvergenceTrackerLabeledIssue
       priority
       state { name }
       labels { nodes { name parent { name } } }
+      attachments { nodes { url title sourceType } }
     }
     pageInfo { hasNextPage endCursor }
   }
@@ -385,6 +387,48 @@ export function readIssueLabels(labels: readonly LinearLabelNode[]): string[] {
 }
 
 /**
+ * A GitHub pull request URL, and the number in it (MAR-3304 R1).
+ *
+ * `https://github.com/<owner>/<repo>/pull/<n>`, anchored at both ends: the
+ * tracker files every integration's link in one list -- a Figma file, a Slack
+ * thread, a GitHub ISSUE -- and only this shape is a pull request.
+ * `sourceType` is asked for and deliberately NOT matched on: it is the
+ * integration's word for itself, while the URL is the thing being linked.
+ *
+ * Case-insensitive (lap 2, D): a URL's scheme and host are, by RFC 3986,
+ * and a person pasting `https://GitHub.com/o/r/pull/12` linked a pull
+ * request. The anchors are what keep a look-alike host out, not the case.
+ */
+const GITHUB_PULL_REQUEST_URL =
+  /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/(\d+)(?:[/?#].*)?$/i
+
+/**
+ * The pull requests the tracker links to an issue (MAR-3304 R1), in the order
+ * it gave them. Anything that is not a pull request URL is dropped, and an
+ * absent or malformed list reads as none rather than as a refusal: an issue
+ * nobody linked anything to is not a broken issue.
+ */
+export function readIssuePullRequests(
+  value: unknown,
+): TrackerIssuePullRequest[] {
+  const nodes = isRecord(value) && Array.isArray(value.nodes) ? value.nodes : []
+  const links: TrackerIssuePullRequest[] = []
+  for (const node of nodes) {
+    if (!isRecord(node) || typeof node.url !== 'string') continue
+    const match = GITHUB_PULL_REQUEST_URL.exec(node.url.trim())
+    if (!match) continue
+    const number = Number.parseInt(match[1], 10)
+    if (!Number.isSafeInteger(number) || number <= 0) continue
+    const title =
+      typeof node.title === 'string' && node.title.trim()
+        ? node.title.trim()
+        : null
+    links.push({ url: node.url.trim(), number, title })
+  }
+  return links
+}
+
+/**
  * One page of the response, parsed. An issue carrying no Loom label at all is
  * dropped here, whatever the server-side filter let through (R1).
  */
@@ -445,6 +489,7 @@ export function parseLinearIssuesPage(
       dispatch: hasPlainLabel(labelNodes, 'dispatch'),
       priority: readIssuePriority(node.priority),
       labels: readIssueLabels(labelNodes),
+      pullRequests: readIssuePullRequests(node.attachments),
       // Both come from the issue's BODY, which this query does not carry
       // (R4): `applyIssueBodies` fills them in, from a fresh read for the
       // issues that changed and from the ledger's own last row for the rest.

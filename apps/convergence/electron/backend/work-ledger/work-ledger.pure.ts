@@ -2,6 +2,8 @@ import { parseSessionPullRequest } from '../pull-request/session-pull-request.pu
 import type { SessionPullRequest } from '../../../src/shared/types/session-pull-request.types'
 import type {
   NewWorkLedgerRecord,
+  TrackerIssuePullRequest,
+  TrackerPullRequest,
   WorkLedgerEntry,
   WorkLedgerFact,
   WorkLedgerRecord,
@@ -134,6 +136,7 @@ const FACT_DEFAULTS: WorkLedgerFact = {
   dispatch: false,
   priority: null,
   labels: [],
+  pullRequests: [],
 }
 
 function readFact(raw: string): WorkLedgerFact {
@@ -152,6 +155,9 @@ function readFact(raw: string): WorkLedgerFact {
       dispatch: value?.dispatch ?? FACT_DEFAULTS.dispatch,
       priority: value?.priority ?? FACT_DEFAULTS.priority,
       labels: value?.labels ?? FACT_DEFAULTS.labels,
+      // A row written before MAR-3304 has no key at all; absent is read as
+      // "the tracker links none", so no reader downstream meets `undefined`.
+      pullRequests: value?.pullRequests ?? FACT_DEFAULTS.pullRequests,
       ...(value && 'summary' in value
         ? { summary: value.summary ?? null }
         : {}),
@@ -221,6 +227,55 @@ export function branchNamesIssue(branch: string, identifier: string): boolean {
   return new RegExp(`(?<![A-Za-z0-9])${escaped}(?![0-9])`, 'i').test(branch)
 }
 
+/**
+ * The pull request an issue HAS, best reading first (MAR-3304 R3, lap 2 A/B).
+ *
+ * Two witnesses to one fact, and one of them has actually read it. The
+ * seat's conversation carries a PR with a state, a review word and a time it
+ * was read; the tracker carries a link with no state at all. Which issue a
+ * conversation's reading belongs to is settled BEFORE this function, by the
+ * head-branch rule in `pullRequestForIssue` (MAR-3084 R6) -- that is the
+ * whole "the horse moved on" case, and by the time a session arrives here it
+ * has survived it.
+ *
+ * So a reading that got this far WINS, always. Pairing it against the
+ * tracker's numbers as well (lap 1) looked like extra care and was not: a
+ * seat still on this issue opening a SECOND pull request -- a re-attempt,
+ * with the tracker still linking only the first -- would have had its live
+ * reading overridden by a stale, closed link rendered "state not read", a
+ * worse answer about a PR somebody HAS read.
+ *
+ * The tracker's link is the fallback for the only case left: no reading at
+ * all. With several links the LAST one wins -- Linear orders attachments by
+ * `createdAt`, so the last is the newest, and a re-opened or superseded PR
+ * must not shadow the current one for ever.
+ *
+ * The union is tagged rather than flattened on purpose: a caller must decide
+ * what to do with a link whose state nobody read, and it cannot accidentally
+ * print one.
+ */
+export function resolveEntryPullRequest(input: {
+  session: SessionPullRequest | null
+  /**
+   * Absent on every fact written before MAR-3304, and normalized HERE, once:
+   * every caller reads the same optional key off a stored fact, so a default
+   * per caller is a default one of them will forget.
+   */
+  linked: readonly TrackerIssuePullRequest[] | undefined
+}): SessionPullRequest | TrackerPullRequest | null {
+  const { session } = input
+  if (session) return session
+  const linked = input.linked ?? []
+  const newest = linked[linked.length - 1]
+  if (!newest) return null
+  return {
+    source: 'tracker',
+    number: newest.number,
+    url: newest.url,
+    title: newest.title,
+  }
+}
+
 export function workLedgerEntryFromJoinedRow(
   row: WorkLedgerJoinedRow,
 ): WorkLedgerEntry {
@@ -233,10 +288,13 @@ export function workLedgerEntryFromJoinedRow(
   return {
     ...record,
     sessionId,
-    pr:
-      sessionId === null
-        ? null
-        : pullRequestForIssue(row.pull_request_json, record.issueIdentifier),
+    pr: resolveEntryPullRequest({
+      session:
+        sessionId === null
+          ? null
+          : pullRequestForIssue(row.pull_request_json, record.issueIdentifier),
+      linked: record.fact.pullRequests,
+    }),
     hostLiveness:
       sessionId === null
         ? null

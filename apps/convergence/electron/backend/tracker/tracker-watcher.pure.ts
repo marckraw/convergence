@@ -1,5 +1,6 @@
 import type {
   TrackerIssue,
+  TrackerIssuePullRequest,
   TrackerLogicalStatus,
   TrackerRefusal,
 } from './tracker.types'
@@ -184,6 +185,43 @@ function sameLabels(
   return a.length === b.length && a.every((name, at) => name === b[at])
 }
 
+/** The same links in a stable order of our own: by number, then by URL. */
+function sortedPullRequests(
+  links: readonly TrackerIssuePullRequest[] | undefined,
+): TrackerIssuePullRequest[] {
+  return [...(links ?? [])].sort(
+    (a, b) =>
+      a.number - b.number || (a.url < b.url ? -1 : a.url > b.url ? 1 : 0),
+  )
+}
+
+/**
+ * Two link lists holding the same pull requests, in any order (MAR-3304,
+ * lap 2 C).
+ *
+ * Sorted before comparing, like `sameLabels` and for the same reason: the
+ * order is the server's, and an order that wobbled while nothing about the
+ * issue moved would append a ledger row per multi-link issue per tick. The
+ * set is the fact; the order Linear gives is only how the newest link is
+ * picked downstream (`resolveEntryPullRequest`).
+ */
+function samePullRequests(
+  previous: readonly TrackerIssuePullRequest[] | undefined,
+  next: readonly TrackerIssuePullRequest[] | undefined,
+): boolean {
+  const a = sortedPullRequests(previous)
+  const b = sortedPullRequests(next)
+  return (
+    a.length === b.length &&
+    a.every(
+      (link, at) =>
+        link.number === b[at].number &&
+        link.url === b[at].url &&
+        link.title === b[at].title,
+    )
+  )
+}
+
 /**
  * Whether the tick saw exactly what the ledger already holds.
  *
@@ -217,6 +255,11 @@ function sameObservation(
     previous.fact.dispatch === next.fact.dispatch &&
     (previous.fact.priority ?? null) === (next.fact.priority ?? null) &&
     sameLabels(previous.fact.labels, next.fact.labels) &&
+    // A PR linked on the tracker is a fact a reader SEES (MAR-3304 R2) -- and
+    // it is the one that moves last, long after the status stopped changing.
+    // Left off this list, the very issue this slice exists for (a Done row
+    // whose PR arrives after the last status move) would never be rewritten.
+    samePullRequests(previous.fact.pullRequests, next.fact.pullRequests) &&
     (previous.fact.summary ?? null) === (next.fact.summary ?? null)
   )
 }
@@ -240,6 +283,7 @@ function factFrom(issue: TrackerIssue): WorkLedgerFact {
     dispatch: issue.dispatch,
     priority: issue.priority,
     labels: issue.labels,
+    pullRequests: issue.pullRequests,
     summary: issue.summary,
   }
 }
