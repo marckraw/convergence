@@ -1,4 +1,6 @@
 import type { AppSettingsService } from '../app-settings/app-settings.service'
+import type { CrewService } from '../crew/crew.service'
+import type { RelayService } from '../relay/relay.service'
 import type { ConversationItem } from '../session/conversation-item.types'
 import type {
   SendMessageInput,
@@ -56,6 +58,8 @@ export class SessionAppService {
   constructor(
     private readonly sessions: SessionAppBackend,
     private readonly defaults: SessionDefaultsResolver,
+    private readonly relays: Pick<RelayService, 'removeForSession'>,
+    private readonly crews: Pick<CrewService, 'removeMembershipsForSession'>,
   ) {}
 
   async createSession(input: CreateSessionInput): Promise<Session> {
@@ -90,8 +94,14 @@ export class SessionAppService {
     this.sessions.unarchive(sessionId)
   }
 
-  deleteSession(sessionId: string): void {
+  deleteSession(sessionId: string): {
+    relaysRemoved: number
+    membershipsRemoved: number
+  } {
     this.sessions.delete(sessionId)
+    const relaysRemoved = this.relays.removeForSession(sessionId)
+    const membershipsRemoved = this.crews.removeMembershipsForSession(sessionId)
+    return { relaysRemoved, membershipsRemoved }
   }
 
   async startSession(

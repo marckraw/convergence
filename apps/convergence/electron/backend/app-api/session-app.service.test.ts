@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
+import { CrewService } from '../crew/crew.service'
+import { RelayService } from '../relay/relay.service'
 import {
   SessionAppService,
   type SessionAppBackend,
@@ -68,15 +71,112 @@ function createSessionBackend(
 }
 
 describe('SessionAppService', () => {
+  const relays = { removeForSession: vi.fn(() => 0) }
+  const crews = { removeMembershipsForSession: vi.fn(() => 0) }
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+  })
+
+  it('MAR-3254 R1 deletion removes both directions and the seat, preserving other wires and history', () => {
+    const db = getDatabase()
+    db.prepare(
+      "INSERT INTO projects (id, name, repository_path) VALUES ('p1', 'p1', '/tmp/p1')",
+    ).run()
+    for (const id of ['s1', 's2', 's3']) {
+      db.prepare(
+        `INSERT INTO sessions (id, project_id, provider_id, name, working_directory)
+        VALUES (?, 'p1', 'codex', ?, '/tmp/p1')`,
+      ).run(id, id)
+    }
+    const realCrews = new CrewService(db)
+    const realRelays = new RelayService(db)
+    const crew = realCrews.create({ name: 'Review', sessionIds: ['s1', 's2'] })
+    const wires = [
+      ['s1', 's2'],
+      ['s2', 's1'],
+      ['s2', 's3'],
+      ['s3', 's2'],
+    ].map(([sourceSessionId, targetSessionId]) =>
+      realRelays.create({
+        crewId: crew.id,
+        sourceSessionId,
+        targetSessionId,
+        action: 'hail',
+      }),
+    )
+    const hop = realRelays.appendHop({
+      relayId: wires[0].id,
+      crewId: crew.id,
+      flowRunId: 'history',
+      sourceSessionId: 's1',
+      targetSessionId: 's2',
+      triggerStatus: 'completed',
+      outcome: 'delivered',
+    })
+    const sessions = createSessionBackend({
+      delete: (id) => {
+        db.prepare('DELETE FROM sessions WHERE id = ?').run(id)
+      },
+    })
+    const app = new SessionAppService(
+      sessions,
+      { resolveSessionDefaults: async () => null },
+      realRelays,
+      realCrews,
+    )
+
+    expect(app.deleteSession('s1')).toEqual({
+      relaysRemoved: 2,
+      membershipsRemoved: 1,
+    })
+    expect(
+      db.prepare('SELECT id FROM sessions WHERE id = ?').get('s1'),
+    ).toBeUndefined()
+    expect(realRelays.list()).toEqual(wires.slice(2))
+    expect(
+      db.prepare('SELECT COUNT(*) AS count FROM session_relays').get(),
+    ).toEqual({ count: 2 })
+    expect(
+      db.prepare('SELECT session_id FROM session_crew_members').all(),
+    ).toEqual([{ session_id: 's2' }])
+    expect(realCrews.getById(crew.id)?.sessionIds).toEqual(['s2'])
+    expect(realRelays.listHops(crew.id)).toEqual([hop])
+  })
+
+  it('MAR-3254 R1 leaves wires and memberships alone when session deletion fails', () => {
+    const wireCleanup = { removeForSession: vi.fn() }
+    const seatCleanup = { removeMembershipsForSession: vi.fn() }
+    const app = new SessionAppService(
+      createSessionBackend({
+        delete: () => {
+          throw new Error('delete failed')
+        },
+      }),
+      { resolveSessionDefaults: async () => null },
+      wireCleanup,
+      seatCleanup,
+    )
+    expect(() => app.deleteSession('s1')).toThrow('delete failed')
+    expect(wireCleanup.removeForSession).not.toHaveBeenCalled()
+    expect(seatCleanup.removeMembershipsForSession).not.toHaveBeenCalled()
+  })
+
   it('applies session defaults before creating a session', async () => {
     const sessions = createSessionBackend()
-    const app = new SessionAppService(sessions, {
-      resolveSessionDefaults: vi.fn(async () => ({
-        providerId: 'claude-code',
-        modelId: 'sonnet',
-        effortId: 'high' as const,
-      })),
-    })
+    const app = new SessionAppService(
+      sessions,
+      {
+        resolveSessionDefaults: vi.fn(async () => ({
+          providerId: 'claude-code',
+          modelId: 'sonnet',
+          effortId: 'high' as const,
+        })),
+      },
+      relays,
+      crews,
+    )
     const input: CreateSessionInput = {
       contextKind: 'project',
       projectId: 'project-1',
@@ -99,13 +199,18 @@ describe('SessionAppService', () => {
 
   it('keeps explicit session settings over defaults', async () => {
     const sessions = createSessionBackend()
-    const app = new SessionAppService(sessions, {
-      resolveSessionDefaults: vi.fn(async () => ({
-        providerId: 'claude-code',
-        modelId: 'sonnet',
-        effortId: 'high' as const,
-      })),
-    })
+    const app = new SessionAppService(
+      sessions,
+      {
+        resolveSessionDefaults: vi.fn(async () => ({
+          providerId: 'claude-code',
+          modelId: 'sonnet',
+          effortId: 'high' as const,
+        })),
+      },
+      relays,
+      crews,
+    )
     const input: CreateSessionInput = {
       contextKind: 'project',
       projectId: 'project-1',
@@ -123,9 +228,14 @@ describe('SessionAppService', () => {
 
   it('delegates session command methods through the app boundary', async () => {
     const sessions = createSessionBackend()
-    const app = new SessionAppService(sessions, {
-      resolveSessionDefaults: vi.fn(async () => null),
-    })
+    const app = new SessionAppService(
+      sessions,
+      {
+        resolveSessionDefaults: vi.fn(async () => null),
+      },
+      relays,
+      crews,
+    )
     const input = {
       text: 'continue',
       attachmentIds: ['attachment-1'],
@@ -143,9 +253,14 @@ describe('SessionAppService', () => {
 
   it('R2 app forwards the chosen session scope — drop approval options turns red', () => {
     const sessions = createSessionBackend()
-    const app = new SessionAppService(sessions, {
-      resolveSessionDefaults: vi.fn(async () => null),
-    })
+    const app = new SessionAppService(
+      sessions,
+      {
+        resolveSessionDefaults: vi.fn(async () => null),
+      },
+      relays,
+      crews,
+    )
     app.approveAttentionRequest('session', 'tool', { scope: 'session' })
     expect(vi.mocked(sessions.approve).mock.calls).toEqual([
       ['session', 'tool', { scope: 'session' }],
@@ -160,9 +275,14 @@ describe('SessionAppService', () => {
         )
       }),
     })
-    const app = new SessionAppService(sessions, {
-      resolveSessionDefaults: vi.fn(async () => null),
-    })
+    const app = new SessionAppService(
+      sessions,
+      {
+        resolveSessionDefaults: vi.fn(async () => null),
+      },
+      relays,
+      crews,
+    )
 
     expect(() =>
       app.setSessionModelSelection('session-1', {

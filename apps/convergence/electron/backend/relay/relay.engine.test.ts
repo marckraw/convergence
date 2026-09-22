@@ -440,6 +440,36 @@ describe('RelayEngine', () => {
     })
   }
 
+  it.each(['gone', 'absent'] as const)(
+    'MAR-3254 R2 disarms a wire with a %s target after one error across two settles',
+    async (target) => {
+      const relay = wire()
+      if (target === 'absent') {
+        db.prepare(
+          'UPDATE session_relays SET target_session_id = NULL WHERE id = ?',
+        ).run(relay.id)
+      }
+      const engine = createEngine(createGateway({ missing: ['s2'] }))
+
+      await engine.handleSettle(settled('s1'))
+      expect.soft(relays.getById(relay.id)?.armed).toBe(false)
+      expect.soft(relaysChanged).toBe(1)
+      await engine.handleSettle(settled('s1'))
+
+      expect(relays.listHops('c1')).toMatchObject([
+        {
+          relayId: relay.id,
+          outcome: 'error',
+          error:
+            target === 'gone'
+              ? 'The target session no longer exists.'
+              : 'This relay has no target.',
+        },
+      ])
+      expect(relaysChanged).toBe(1)
+    },
+  )
+
   /** A wire that only fires when the finishing message declares this route. */
   function batonWire(
     source: string,

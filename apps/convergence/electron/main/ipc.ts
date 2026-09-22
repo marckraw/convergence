@@ -11,6 +11,10 @@ import type { LaneCreateProgress } from '../backend/lane/lane.types'
 import { GitService } from '../backend/git/git.service'
 import { PullRequestService } from '../backend/pull-request/pull-request.service'
 import { SessionAppService } from '../backend/app-api/session-app.service'
+import type { CrewService } from '../backend/crew/crew.service'
+import type { RelayService } from '../backend/relay/relay.service'
+import { broadcastCrews } from '../backend/crew/crew.ipc'
+import { broadcastRelays } from '../backend/relay/relay.ipc'
 import { SessionService } from '../backend/session/session.service'
 import { HandoffRefusedError } from '../backend/provider/provider-account-handoff.pure'
 import type { SessionSendResult } from '../../src/shared/types/session-send.types'
@@ -170,6 +174,8 @@ export function registerIpcHandlers(
   attachmentsService: AttachmentsService,
   turnCaptureService: TurnCaptureService,
   projectContextService: ProjectContextService,
+  crewService: CrewService,
+  relayService: RelayService,
   spaceSynthesisService?: SpaceSynthesisService,
   onUpdatePrefsChanged?: (prefs: { backgroundCheckEnabled: boolean }) => void,
   providerActions?: {
@@ -190,7 +196,12 @@ export function registerIpcHandlers(
   const providerQuotaService = new ProviderQuotaService(
     createDefaultProviderQuotaSources(quotaServices),
   )
-  const sessionApp = new SessionAppService(sessionService, appSettingsService)
+  const sessionApp = new SessionAppService(
+    sessionService,
+    appSettingsService,
+    relayService,
+    crewService,
+  )
 
   // Project handlers
   ipcMain.handle('project:create', (_event, input: CreateProjectInput) => {
@@ -969,7 +980,9 @@ export function registerIpcHandlers(
   })
 
   ipcMain.handle('session:delete', (_event, id: string) => {
-    sessionApp.deleteSession(id)
+    const { relaysRemoved, membershipsRemoved } = sessionApp.deleteSession(id)
+    if (relaysRemoved > 0) broadcastRelays(relayService.list())
+    if (membershipsRemoved > 0) broadcastCrews(crewService.list())
     pullRequestService.evictDeletedSessions()
   })
 

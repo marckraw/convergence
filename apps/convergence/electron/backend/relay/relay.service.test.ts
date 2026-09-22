@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import { RelayService } from './relay.service'
 
@@ -24,6 +24,7 @@ describe('RelayService', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     closeDatabase()
     resetDatabase()
   })
@@ -36,6 +37,65 @@ describe('RelayService', () => {
       targetSessionId: overrides.target ?? 's2',
     })
   }
+
+  it('MAR-3254 R1 removes incoming and outgoing wires in one deletion', () => {
+    createRelay()
+    service.create({
+      crewId: 'c1',
+      sourceSessionId: 's2',
+      targetSessionId: 's1',
+      action: 'hail',
+    })
+    const intact = service.create({
+      crewId: 'c1',
+      sourceSessionId: 's2',
+      targetSessionId: 's3',
+      action: 'hail',
+    })
+    expect(service.removeForSession('s1')).toBe(2)
+    expect(service.list()).toEqual([intact])
+    expect(service.removeForSession('s1')).toBe(0)
+  })
+
+  it.each(['source', 'target'] as const)(
+    'MAR-3254 R3 sweeps a %s orphan and preserves intact and spawn wires',
+    (end) => {
+      const log = vi.spyOn(console, 'info').mockImplementation(() => {})
+      service.create({
+        crewId: 'c1',
+        action: 'hail',
+        sourceSessionId: end === 'source' ? 'gone' : 's1',
+        targetSessionId: end === 'target' ? 'gone' : 's2',
+      })
+      const intact = createRelay()
+      const spawn = service.create({
+        crewId: 'c1',
+        action: 'spawn',
+        sourceSessionId: 's1',
+        spawnSpec: {
+          providerId: 'codex',
+          projectId: 'p1',
+          member: null,
+          executionHost: 'local',
+          workAddress: null,
+          roleCard: null,
+          returnWire: null,
+          model: null,
+          effort: null,
+          name: 'Worker',
+          providerAccountId: null,
+        },
+      })
+
+      expect(service.removeOrphans()).toBe(1)
+      expect(service.list()).toEqual([intact, spawn])
+      expect(log).toHaveBeenCalledExactlyOnceWith(
+        '[relay] removed 1 relays whose conversation is gone',
+      )
+      expect(service.removeOrphans()).toBe(0)
+      expect(log).toHaveBeenCalledTimes(1)
+    },
+  )
 
   it('creates an armed settled relay by default', () => {
     const relay = createRelay()

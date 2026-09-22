@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import { CrewService } from './crew.service'
 import { DEFAULT_CREW_MEMBER_SEAT } from './crew.types'
@@ -24,8 +24,46 @@ describe('CrewService', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     closeDatabase()
     resetDatabase()
+  })
+
+  it('MAR-3254 R1 removes a conversation membership and keeps its crew mate', () => {
+    const crew = service.create({ name: 'Review', sessionIds: ['s1', 's2'] })
+    expect(service.removeMembershipsForSession('s1')).toBe(1)
+    expect(service.getById(crew.id)?.sessionIds).toEqual(['s2'])
+    expect(service.removeMembershipsForSession('s1')).toBe(0)
+  })
+
+  it('MAR-3254 R3 sweeps orphan memberships and preserves live and recipe seats', () => {
+    const log = vi.spyOn(console, 'info').mockImplementation(() => {})
+    const db = getDatabase()
+    const crew = service.create({ name: 'Review', sessionIds: ['s1', 's2'] })
+    service.addRecipeMember(crew.id, {
+      batonName: 'worker',
+      providerId: 'codex',
+      model: null,
+      hostPolicy: 'local',
+    })
+    db.prepare("DELETE FROM sessions WHERE id = 's1'").run()
+
+    expect(service.removeOrphanMemberships()).toBe(1)
+    expect(service.getById(crew.id)?.sessionIds).toEqual(['s2'])
+    expect(service.getById(crew.id)?.members).toHaveLength(2)
+    expect(
+      db.prepare('SELECT session_id FROM session_crew_members').all(),
+    ).toEqual(
+      expect.arrayContaining([{ session_id: 's2' }, { session_id: null }]),
+    )
+    expect(
+      db.prepare('SELECT COUNT(*) AS count FROM session_crew_members').get(),
+    ).toEqual({ count: 2 })
+    expect(log).toHaveBeenCalledExactlyOnceWith(
+      '[crew] removed 1 memberships whose conversation is gone',
+    )
+    expect(service.removeOrphanMemberships()).toBe(0)
+    expect(log).toHaveBeenCalledTimes(1)
   })
 
   it('defaults automatic drill off and sets and clears it through the seat door', () => {

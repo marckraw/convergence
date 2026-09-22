@@ -72,8 +72,8 @@ const DAEMON_B = { id: 'daemon-b', baseUrl: 'https://daemon-b.test' }
 const SESSION_SERVICE_ARGUMENT = 7
 const PROVIDER_REGISTRY_ARGUMENT = 8
 const APP_SETTINGS_ARGUMENT = 12
-const EXECUTION_HOST_REMOTE_ARGUMENT = 22
-const ARGUMENT_COUNT = 23
+const EXECUTION_HOST_REMOTE_ARGUMENT = 24
+const ARGUMENT_COUNT = 25
 
 function metaFor(providers: unknown[]): unknown {
   return { providers }
