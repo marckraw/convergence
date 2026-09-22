@@ -228,16 +228,27 @@ export function branchNamesIssue(branch: string, identifier: string): boolean {
 }
 
 /**
- * The pull request an issue HAS, best reading first (MAR-3304 R3).
+ * The pull request an issue HAS, best reading first (MAR-3304 R3, lap 2 A/B).
  *
- * Two witnesses to one fact, and they answer different questions. The seat's
- * conversation carries a PR it actually opened -- with a state, a review word
- * and a time it was read -- but only while that conversation is still on this
- * issue; the tracker carries a link with no state that outlives every
- * conversation. So the conversation wins when it is talking about the SAME
- * pull request the tracker links (or when the tracker links none at all, the
- * case of a PR opened a minute ago), and otherwise the tracker's link is the
- * only witness left.
+ * Two witnesses to one fact, and one of them has actually read it. The
+ * seat's conversation carries a PR with a state, a review word and a time it
+ * was read; the tracker carries a link with no state at all. Which issue a
+ * conversation's reading belongs to is settled BEFORE this function, by the
+ * head-branch rule in `pullRequestForIssue` (MAR-3084 R6) -- that is the
+ * whole "the horse moved on" case, and by the time a session arrives here it
+ * has survived it.
+ *
+ * So a reading that got this far WINS, always. Pairing it against the
+ * tracker's numbers as well (lap 1) looked like extra care and was not: a
+ * seat still on this issue opening a SECOND pull request -- a re-attempt,
+ * with the tracker still linking only the first -- would have had its live
+ * reading overridden by a stale, closed link rendered "state not read", a
+ * worse answer about a PR somebody HAS read.
+ *
+ * The tracker's link is the fallback for the only case left: no reading at
+ * all. With several links the LAST one wins -- Linear orders attachments by
+ * `createdAt`, so the last is the newest, and a re-opened or superseded PR
+ * must not shadow the current one for ever.
  *
  * The union is tagged rather than flattened on purpose: a caller must decide
  * what to do with a link whose state nobody read, and it cannot accidentally
@@ -253,23 +264,15 @@ export function resolveEntryPullRequest(input: {
   linked: readonly TrackerIssuePullRequest[] | undefined
 }): SessionPullRequest | TrackerPullRequest | null {
   const { session } = input
+  if (session) return session
   const linked = input.linked ?? []
-  if (
-    session &&
-    (linked.length === 0 ||
-      linked.some((link) => link.number === session.number))
-  ) {
-    return session
-  }
-  // Nothing left to read from: a session PR paired with no tracker link took
-  // the branch above, so an empty list here means there was no session PR.
-  const first = linked[0]
-  if (!first) return null
+  const newest = linked[linked.length - 1]
+  if (!newest) return null
   return {
     source: 'tracker',
-    number: first.number,
-    url: first.url,
-    title: first.title,
+    number: newest.number,
+    url: newest.url,
+    title: newest.title,
   }
 }
 

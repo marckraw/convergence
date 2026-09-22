@@ -103,8 +103,10 @@ export interface TrackerIssue {
   labels: string[]
   /**
    * The pull requests the tracker links to this issue (MAR-3304 R1), in the
-   * order it gives them. Empty when it links none -- never null: "the
-   * tracker linked nothing" is an answer, and this read always has one.
+   * order it gives them -- Linear orders attachments by `createdAt`, so the
+   * LAST is the newest, and that is the one a reader is shown (lap 2, B).
+   * Empty when it links none -- never null: "the tracker linked nothing" is
+   * an answer, and this read always has one.
    */
   pullRequests: TrackerIssuePullRequest[]
   /**

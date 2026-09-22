@@ -687,6 +687,29 @@ describe('MAR-3304 R2: the fact carries the tracker’s pull request links', () 
     expect(row?.fact.pullRequests).toEqual(linked)
   })
 
+  it('lap 2, C: the same two links in a different order is no observation', () => {
+    const second = {
+      url: 'https://github.com/marckraw/convergence/pull/900',
+      number: 900,
+      title: 'feat(loom): the second attempt',
+    }
+    const base = issue('done', {
+      id: 'issue-1',
+      pullRequests: [linked[0], second],
+    })
+    // Mutation: compare the two lists by position -> a tracker that handed
+    // the same two links back the other way round appends a row per tick
+    // with nothing about the issue having moved -> red.
+    expect(
+      diffTrackerSnapshot({
+        crewId: 'crew-1',
+        current: [recorded(base)],
+        issues: [{ ...base, pullRequests: [second, linked[0]] }],
+        seenAt: SEEN,
+      }),
+    ).toEqual([])
+  })
+
   it('a link that only changes its title is still an observation', () => {
     const base = issue('done', { id: 'issue-1', pullRequests: linked })
     expect(

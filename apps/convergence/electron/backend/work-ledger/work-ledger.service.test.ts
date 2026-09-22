@@ -398,11 +398,19 @@ describe('MAR-3084 R6: the facts join at read time from the app’s own records'
       title: link769.title,
     })
 
-    // The number is what pairs the two witnesses, not the branch alone: a
-    // conversation still ON this issue, reading a DIFFERENT pull request
-    // from a branch that names it, is not reading the linked one.
+    // lap 2, A: a reading that survived the branch rule WINS, always. A
+    // conversation still ON this issue, reading its SECOND attempt, has read
+    // a pull request -- state, review word, time -- while the tracker's link
+    // to the first has not been read by anybody.
+    // Mutation: pair the two by number, preferring the tracker when they
+    // differ -> #777's live reading loses to a stale #769 -> red.
     setReading(reading(777, 'agent/mar-3274-second-attempt'))
-    expect(read()['MAR-3274']).toMatchObject({ source: 'tracker', number: 769 })
+    expect(read()['MAR-3274']).toMatchObject({
+      source: 'gh',
+      number: 777,
+      state: 'merged',
+      reviewDecision: 'APPROVED',
+    })
 
     // (c) no conversation reading at all: the tracker's link.
     setReading(null)

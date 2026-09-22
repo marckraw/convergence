@@ -185,21 +185,32 @@ function sameLabels(
   return a.length === b.length && a.every((name, at) => name === b[at])
 }
 
+/** The same links in a stable order of our own: by number, then by URL. */
+function sortedPullRequests(
+  links: readonly TrackerIssuePullRequest[] | undefined,
+): TrackerIssuePullRequest[] {
+  return [...(links ?? [])].sort(
+    (a, b) =>
+      a.number - b.number || (a.url < b.url ? -1 : a.url > b.url ? 1 : 0),
+  )
+}
+
 /**
- * Two link lists holding the same pull requests in the same order (MAR-3304).
+ * Two link lists holding the same pull requests, in any order (MAR-3304,
+ * lap 2 C).
  *
- * Compared by position, which is safe here in a way `sameLabels` was not:
- * Linear's published schema documents `Issue.attachments(orderBy:)` as
- * defaulting to `createdAt`, and an attachment's creation time never moves,
- * so the order is the tracker's and it is stable. `labels { nodes }`
- * documents no default at all, which is why that one is sorted first.
+ * Sorted before comparing, like `sameLabels` and for the same reason: the
+ * order is the server's, and an order that wobbled while nothing about the
+ * issue moved would append a ledger row per multi-link issue per tick. The
+ * set is the fact; the order Linear gives is only how the newest link is
+ * picked downstream (`resolveEntryPullRequest`).
  */
 function samePullRequests(
   previous: readonly TrackerIssuePullRequest[] | undefined,
   next: readonly TrackerIssuePullRequest[] | undefined,
 ): boolean {
-  const a = previous ?? []
-  const b = next ?? []
+  const a = sortedPullRequests(previous)
+  const b = sortedPullRequests(next)
   return (
     a.length === b.length &&
     a.every(

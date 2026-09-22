@@ -482,7 +482,16 @@ describe('MAR-3304 R1: the port reads the pull requests the tracker links', () =
     ['a fragment', 'https://github.com/o/r/pull/12#discussion', 12],
     ['a GitHub issue', 'https://github.com/o/r/issues/12', null],
     ['a Figma file', 'https://www.figma.com/design/abc/Loom', null],
+    // lap 2, D: scheme and host are case-insensitive (RFC 3986), so a link
+    // written this way is a pull request. Mutation: drop the regex's `i`
+    // flag -> red.
+    ['an upper-case host', 'https://GitHub.com/o/r/pull/12', 12],
     ['a look-alike host', 'https://github.com.evil.test/o/r/pull/12', null],
+    [
+      'an upper-case look-alike host',
+      'https://GITHUB.com.evil/o/r/pull/1',
+      null,
+    ],
     ['a GitHub Enterprise host', 'https://git.example.com/o/r/pull/12', null],
     ['http, not https', 'http://github.com/o/r/pull/12', null],
     ['no number', 'https://github.com/o/r/pull/', null],

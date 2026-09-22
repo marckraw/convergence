@@ -181,18 +181,59 @@ describe('MAR-3304 R3: one resolution, with the conversation first', () => {
   })
 
   it('(b) the seat has moved on: the tracker’s link', () => {
-    // The seat's conversation now reads the PR of its NEXT issue.
+    // The seat's conversation now reads the PR of its NEXT issue, and the
+    // head-branch rule (MAR-3084 R6) is what says so -- which happens on the
+    // way IN to the resolver, so the case is read here at the entry.
     expect(
-      resolveEntryPullRequest({
-        session: { ...session, number: 777, headBranch: 'agent/mar-2981' },
-        linked: [link769],
-      }),
+      workLedgerEntryFromJoinedRow(
+        joined({
+          pull_request_json: JSON.stringify({
+            ...session,
+            number: 777,
+            headBranch: 'agent/mar-2981-auto-dispatch',
+          }),
+          fact_json: JSON.stringify({
+            logicalStatus: 'done',
+            pullRequests: [link769],
+          }),
+        }),
+      ).pr,
     ).toEqual({
       source: 'tracker',
       number: 769,
       url: link769.url,
       title: link769.title,
     })
+  })
+
+  it('lap 2, A: a second attempt on THIS issue beats the stale link', () => {
+    // The branch names MAR-3008 (the row's issue), so this reading survived
+    // MAR-3084 R6 and is a PR somebody actually read -- state, review word
+    // and all -- while the tracker still links only the first attempt.
+    // Mutation: pair the two by number again, preferring the tracker when
+    // they differ -> the live #777 loses to a closed #769 rendered "state
+    // not read" -> red.
+    expect(
+      resolveEntryPullRequest({
+        session: { ...session, number: 777 },
+        linked: [link769],
+      }),
+    ).toMatchObject({ number: 777, source: 'gh', state: 'merged' })
+    expect(
+      workLedgerEntryFromJoinedRow(
+        joined({
+          pull_request_json: JSON.stringify({
+            ...session,
+            number: 777,
+            headBranch: 'agent/mar-3008-second-attempt',
+          }),
+          fact_json: JSON.stringify({
+            logicalStatus: 'in-progress',
+            pullRequests: [link769],
+          }),
+        }),
+      ).pr,
+    ).toMatchObject({ number: 777, source: 'gh' })
   })
 
   it('(c) no conversation reading at all: the tracker’s link', () => {
@@ -217,7 +258,10 @@ describe('MAR-3304 R3: one resolution, with the conversation first', () => {
     expect(resolveEntryPullRequest({ session, linked: [] })).toEqual(session)
   })
 
-  it('the FIRST link wins when the tracker carries several', () => {
+  it('lap 2, B: the LAST link wins when the tracker carries several', () => {
+    // Linear orders attachments by `createdAt`, so the last is the newest.
+    // Mutation: `linked[0]` -> the dead first attempt shadows the PR that
+    // replaced it for ever -> red.
     expect(
       resolveEntryPullRequest({
         session: null,
@@ -226,7 +270,7 @@ describe('MAR-3304 R3: one resolution, with the conversation first', () => {
           { url: 'https://github.com/o/r/pull/900', number: 900, title: null },
         ],
       }),
-    ).toMatchObject({ number: 769 })
+    ).toMatchObject({ number: 900 })
   })
 
   it('reaches the entry, and a pre-slice row still shows the reading', () => {

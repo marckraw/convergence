@@ -394,9 +394,13 @@ export function readIssueLabels(labels: readonly LinearLabelNode[]): string[] {
  * thread, a GitHub ISSUE -- and only this shape is a pull request.
  * `sourceType` is asked for and deliberately NOT matched on: it is the
  * integration's word for itself, while the URL is the thing being linked.
+ *
+ * Case-insensitive (lap 2, D): a URL's scheme and host are, by RFC 3986,
+ * and a person pasting `https://GitHub.com/o/r/pull/12` linked a pull
+ * request. The anchors are what keep a look-alike host out, not the case.
  */
 const GITHUB_PULL_REQUEST_URL =
-  /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/(\d+)(?:[/?#].*)?$/
+  /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/(\d+)(?:[/?#].*)?$/i
 
 /**
  * The pull requests the tracker links to an issue (MAR-3304 R1), in the order
