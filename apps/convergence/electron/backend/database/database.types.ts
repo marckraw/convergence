@@ -244,6 +244,7 @@ export interface SessionCrewRow {
   tracker_project_id?: string | null
   tracker_label_prefix?: string | null
   tracker_wave_prefix?: string | null
+  tracker_auto_dispatch?: number
   tracker_status_map_json?: string | null
   created_at: string
   updated_at: string

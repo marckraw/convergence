@@ -1,3 +1,7 @@
+import {
+  AutoDispatchService,
+  type AutoDispatchGateway,
+} from '../backend/tracker/auto-dispatch.service'
 import { AutoDispatchPlanService } from '../backend/tracker/auto-dispatch-plan.service'
 import { isLocalExecutionHost } from '../backend/execution-host-endpoint/execution-host-endpoint.pure'
 import { CodexAccountHistoryService } from '../backend/provider-account/provider-account-codex-history.service'
@@ -791,34 +795,62 @@ async function startApp(): Promise<void> {
   // stays in the Keychain and only the main process reads it. Built before
   // the engine, because a delivered hop is one of the moments it is told the
   // tracker is about to change (MAR-3227 R2).
-  const dispatchPlanner = new AutoDispatchPlanService({
-    listCrews: () =>
-      crewService.list().map((crew) => ({
-        ...crew,
-        members: crew.members.map((member) => {
-          const session = member.sessionId
-            ? sessionService.getById(member.sessionId)
-            : null
-          return {
-            ...member,
-            localWorkingDirectory:
-              session && isLocalExecutionHost(session.executionHost)
-                ? session.workingDirectory
-                : null,
-          }
-        }),
-      })),
-    currentView: (crewId) => workLedgerService.currentView(crewId),
+  const dispatchCrews = () =>
+    crewService.list().map((crew) => ({
+      ...crew,
+      members: crew.members.map((member) => {
+        const session = member.sessionId
+          ? sessionService.getById(member.sessionId)
+          : null
+        return {
+          ...member,
+          providerId: session?.providerId ?? member.providerId,
+          executionHost: session?.executionHost ?? 'local',
+          localWorkingDirectory:
+            session && isLocalExecutionHost(session.executionHost)
+              ? session.workingDirectory
+              : null,
+        }
+      }),
+    }))
+  const dispatchGateway: AutoDispatchGateway = {
     firstDispatchSeenAt: (crewId) =>
       workLedgerService.firstDispatchSeenAt(crewId),
-    describeSeatAvailability: (sessionId) =>
-      sessionService.describeSeatAvailability(sessionId),
+    describeSeatAvailability: (id) =>
+      sessionService.describeSeatAvailability(id),
     findWire: (crewId, source, target) =>
       relayService.findWire(crewId, source, target),
     describeLane: (path) => gitService.describeLane(path),
-  })
+    getLastTurnProviderAccountId: (id) =>
+      sessionService.getLastTurnProviderAccountId(id),
+    listByProvider: (id) => providerAccountRepository.listByProvider(id),
+    sendMessageWithOpener: (id, input) =>
+      sessionService.sendMessageWithOpener(id, input),
+    deliverRelayMessage: (id, input) =>
+      sessionService.deliverRelayMessage(id, input),
+    addAutoDispatchNote: (id, text) =>
+      sessionService.addAutoDispatchNote(id, text),
+  }
+  const autoDispatcher = new AutoDispatchService(
+    db,
+    dispatchGateway,
+    { list: dispatchCrews },
+    workLedgerService,
+  )
+  const dispatchPlanner = new AutoDispatchPlanService(
+    {
+      listCrews: dispatchCrews,
+      currentView: (id) => workLedgerService.currentView(id),
+      firstDispatchSeenAt: dispatchGateway.firstDispatchSeenAt,
+      describeSeatAvailability: dispatchGateway.describeSeatAvailability,
+      findWire: dispatchGateway.findWire,
+      describeLane: dispatchGateway.describeLane,
+    },
+    (id) => autoDispatcher.records(id),
+  )
   const trackerWatcher = new TrackerWatcherService({
     dispatchPlanner,
+    autoDispatcher,
     crews: crewService,
     ledger: workLedgerService,
     resolveKey: (crewId) => trackerCredentials.resolveKey(crewId),

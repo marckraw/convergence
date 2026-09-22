@@ -383,7 +383,10 @@ export const LoomSheetView = <TSession,>({
                     minute: '2-digit',
                     hour12: false,
                   })}{' '}
-                  · nothing is sent yet — auto-dispatch is not built
+                  ·{' '}
+                  {dispatchPlan.autoDispatch
+                    ? 'Auto-dispatch is on · sends within a minute'
+                    : 'Auto-dispatch is off · nothing is sent'}
                 </p>
               ) : null}
             </>

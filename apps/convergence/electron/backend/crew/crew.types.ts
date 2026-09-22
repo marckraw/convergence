@@ -29,6 +29,7 @@ export const DEFAULT_CREW_MEMBER_WIP_LIMIT = 1
 export const DEFAULT_CREW_MEMBER_SEAT = {
   role: DEFAULT_CREW_MEMBER_ROLE,
   kind: DEFAULT_CREW_MEMBER_KIND,
+  paused: false,
   roleCard: null,
   hostPolicy: null,
   lanePolicy: null,
@@ -82,6 +83,8 @@ export interface SessionCrewMember {
   lanePath: string | null
   /** How many issues this seat may hold at once; an older row holds one. */
   wipLimit: number
+  /** Gates future automatic dispatches without touching a running turn. */
+  paused: boolean
   /** A dynamic seat's recipe. Null on a resident seat, which has a session. */
   providerId: string | null
   model: string | null
@@ -205,6 +208,7 @@ export function trackerBindingFromRow(
 ): TrackerBinding | null {
   if (row.tracker_kind !== 'linear' || !row.tracker_project_id) return null
   return {
+    autoDispatch: row.tracker_auto_dispatch === 1,
     kind: 'linear',
     projectId: row.tracker_project_id,
     labelPrefix: row.tracker_label_prefix || DEFAULT_TRACKER_LABEL_PREFIX,

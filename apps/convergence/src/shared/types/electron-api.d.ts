@@ -359,6 +359,8 @@ interface SessionCrewMemberData {
   lanePath: string | null
   /** How many issues this seat may hold at once; an older member holds one. */
   wipLimit: number
+  /** Gates future automatic dispatches without touching a running turn. */
+  paused: boolean
   /** A dynamic seat's recipe; null on a resident seat. */
   providerId: string | null
   model: string | null
@@ -1891,6 +1893,7 @@ interface ElectronAPI {
         hostPolicy?: string | null
         lanePolicy?: string | null
         lanePath?: string | null
+        paused?: boolean
         wipLimit?: number | null
       },
     ) => Promise<SessionCrewData>
@@ -1904,6 +1907,7 @@ interface ElectronAPI {
       binding: {
         kind?: 'linear'
         projectId: string
+        autoDispatch?: boolean
         labelPrefix?: string
         wavePrefix?: string
       } | null,

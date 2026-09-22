@@ -132,6 +132,7 @@ describe('MAR-3169 R4: a project the key cannot see, through the real Loom', () 
       members: [],
       trackerBinding: {
         kind: 'linear',
+        autoDispatch: false,
         projectId: `project-${id}`,
         labelPrefix: 'horse:',
         wavePrefix: 'wave:',

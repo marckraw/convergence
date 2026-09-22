@@ -1,3 +1,4 @@
+import { useWorkLedgerStore } from '@/entities/work-ledger'
 import { DEFAULT_CREW_MEMBER_SEAT } from '@/entities/session-crew'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { toast } from 'sonner'
@@ -235,6 +236,7 @@ function seedRelays(relays: SessionRelay[]) {
 
 describe('MissionControl', () => {
   beforeEach(() => {
+    useWorkLedgerStore.setState({ snapshots: {}, unsubscribeBroadcast: null })
     vi.mocked(toast.success).mockClear()
     vi.mocked(toast.error).mockClear()
     localStorage.clear()
@@ -273,6 +275,15 @@ describe('MissionControl', () => {
       session: { getAllSummaries },
       // The crew details host the tracker form (MAR-3084), which asks
       // whether a key is stored as soon as it mounts.
+      workLedger: {
+        onUpdated: () => () => {},
+        list: async (crewId: string) => ({
+          crewId,
+          entries: [],
+          dispatchPlan: null,
+          trackerHealth: null,
+        }),
+      },
       tracker: {
         credentialStatus: vi.fn(async () => 'absent'),
         setCredential: vi.fn(async () => 'present'),

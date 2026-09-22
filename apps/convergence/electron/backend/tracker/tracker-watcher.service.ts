@@ -1,3 +1,4 @@
+import type { AutoDispatchService } from './auto-dispatch.service'
 import type { AutoDispatchPlanService } from './auto-dispatch-plan.service'
 import type { SessionCrew } from '../crew/crew.types'
 import type { WorkLedgerService } from '../work-ledger/work-ledger.service'
@@ -62,6 +63,7 @@ function laterUpdatedAt(
  * project id below is read as "not bound yet" rather than as a value.
  */
 const LOOKUP_ONLY_BINDING: TrackerBinding = {
+  autoDispatch: false,
   kind: 'linear',
   projectId: '',
   labelPrefix: DEFAULT_TRACKER_LABEL_PREFIX,
@@ -70,6 +72,7 @@ const LOOKUP_ONLY_BINDING: TrackerBinding = {
 }
 
 export interface TrackerWatcherDeps {
+  autoDispatcher?: Pick<AutoDispatchService, 'act'>
   dispatchPlanner?: Pick<AutoDispatchPlanService, 'refresh' | 'cached'>
   crews: { list(): SessionCrew[] }
   ledger: Pick<WorkLedgerService, 'append' | 'currentView' | 'list'>
@@ -550,10 +553,17 @@ export class TrackerWatcherService {
       if (this.deps.dispatchPlanner) {
         const before = this.deps.dispatchPlanner.cached(crewId)
         try {
-          const after = await this.deps.dispatchPlanner.refresh(
+          let after = await this.deps.dispatchPlanner.refresh(
             crewId,
             now.toISOString(),
           )
+          if (this.deps.autoDispatcher) {
+            await this.deps.autoDispatcher.act(crewId, after, now.toISOString())
+            after = await this.deps.dispatchPlanner.refresh(
+              crewId,
+              now.toISOString(),
+            )
+          }
           planChanged =
             JSON.stringify(before && { ...before, plannedAt: null }) !==
             JSON.stringify({ ...after, plannedAt: null })

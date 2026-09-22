@@ -52,6 +52,7 @@ export interface UpdateCrewSeatInput {
   hostPolicy?: string | null
   lanePolicy?: SessionCrewMemberLane | null
   lanePath?: string | null
+  paused?: boolean
   wipLimit?: number | null
   providerId?: string | null
   model?: string | null
@@ -293,6 +294,7 @@ export class CrewService {
              tracker_label_prefix = ?,
              tracker_wave_prefix = ?,
              tracker_status_map_json = ?,
+             tracker_auto_dispatch = ?,
              updated_at = datetime('now')
          WHERE id = ?`,
       )
@@ -302,6 +304,7 @@ export class CrewService {
         normalized?.labelPrefix ?? null,
         normalized?.wavePrefix ?? null,
         normalized ? JSON.stringify(normalized.statusMap) : null,
+        normalized?.autoDispatch ? 1 : 0,
         crewId,
       )
     return this.requireById(crewId)
@@ -527,6 +530,7 @@ export class CrewService {
       set('lane_policy', normalizeCrewMemberLane(patch.lanePolicy))
     if (patch.lanePath !== undefined)
       set('lane_path', normalizeLanePath(patch.lanePath))
+    if (patch.paused !== undefined) set('paused', patch.paused === true ? 1 : 0)
     if (patch.wipLimit !== undefined)
       set('wip_limit', normalizeCrewLimit(patch.wipLimit, 'A WIP limit'))
     if (patch.providerId !== undefined)
@@ -578,6 +582,7 @@ export class CrewService {
         hostPolicy: row.host_policy ?? null,
         lanePolicy: readSeatWord(row, 'lane_policy', normalizeCrewMemberLane),
         lanePath: row.lane_path ?? null,
+        paused: row.paused === 1,
         wipLimit:
           typeof row.wip_limit === 'number' && Number.isInteger(row.wip_limit)
             ? row.wip_limit
@@ -691,7 +696,7 @@ function readSeatWord<T>(
 const MEMBER_SELECT = `SELECT members.crew_id, members.session_id, members.baton_name,
           members.canvas_x, members.canvas_y, members.role, members.kind,
           members.role_card, members.host_policy, members.lane_policy,
-          members.wip_limit, members.lane_path, members.provider_id, members.model,
+          members.paused, members.wip_limit, members.lane_path, members.provider_id, members.model,
           (members.session_id IS NOT NULL AND sessions.id IS NULL) AS conversation_missing
      FROM session_crew_members members
      LEFT JOIN sessions ON sessions.id = members.session_id
@@ -710,6 +715,7 @@ interface MemberReadRow {
   host_policy: string | null
   lane_policy: string | null
   lane_path: string | null
+  paused: number
   wip_limit: number | null
   provider_id: string | null
   model: string | null

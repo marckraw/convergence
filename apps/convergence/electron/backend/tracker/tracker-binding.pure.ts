@@ -70,6 +70,7 @@ function isLogicalStatus(value: unknown): value is TrackerLogicalStatus {
 }
 
 export interface TrackerBindingInput {
+  autoDispatch?: unknown
   kind?: unknown
   projectId?: unknown
   labelPrefix?: unknown
@@ -125,6 +126,7 @@ export function normalizeTrackerBinding(
   }
 
   return {
+    autoDispatch: input.autoDispatch === true,
     kind: 'linear',
     projectId,
     labelPrefix: prefix(

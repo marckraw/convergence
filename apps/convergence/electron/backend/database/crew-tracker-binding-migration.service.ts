@@ -29,3 +29,21 @@ export function migrateCrewTrackerBinding(db: Database.Database): void {
     ).run()
   })()
 }
+
+/** The crew's opt-in, independent of the already-applied binding migration. */
+export function migrateCrewAutoDispatch(db: Database.Database): void {
+  if (
+    db
+      .prepare("SELECT 1 FROM app_state WHERE key='crew_auto_dispatch_v1'")
+      .get()
+  )
+    return
+  db.transaction(() => {
+    db.prepare(
+      'ALTER TABLE session_crews ADD COLUMN tracker_auto_dispatch INTEGER NOT NULL DEFAULT 0',
+    ).run()
+    db.prepare(
+      "INSERT INTO app_state(key,value) VALUES ('crew_auto_dispatch_v1','1')",
+    ).run()
+  })()
+}

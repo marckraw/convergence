@@ -444,6 +444,18 @@ export const SeatEditor: FC<SeatEditorProps> = ({
             </div>
           </div>
           {refusalFor('wipLimit')}
+          <label className="flex min-h-10 items-center gap-2 text-xs text-muted-foreground">
+            <Input
+              className="size-3.5 shrink-0 rounded-sm p-0"
+              type="checkbox"
+              role="switch"
+              checked={member.paused}
+              disabled={busy}
+              onChange={(event) => onSeatEdit({ paused: event.target.checked })}
+            />
+            Pause automatic dispatch to this seat
+          </label>
+          {refusalFor('paused')}
         </div>
       </section>
 

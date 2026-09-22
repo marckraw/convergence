@@ -20,6 +20,7 @@ export function memberKey(member: {
 export const DEFAULT_CREW_MEMBER_SEAT = {
   role: 'horse',
   kind: 'resident',
+  paused: false,
   roleCard: null,
   hostPolicy: null,
   lanePolicy: null,
@@ -63,6 +64,8 @@ export interface SessionCrewMember {
   lanePath: string | null
   /** How many issues this seat may hold at once; an older member holds one. */
   wipLimit: number
+  /** Gates future automatic dispatches without touching a running turn. */
+  paused: boolean
   /** A dynamic seat's recipe; null on a resident seat. */
   providerId: string | null
   model: string | null

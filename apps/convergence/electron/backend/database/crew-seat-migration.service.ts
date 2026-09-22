@@ -239,3 +239,19 @@ export function readCrewSeatDedupeLog(
     return null
   }
 }
+
+/** Pausing only gates future automatic dispatches; it never stops a turn. */
+export function migrateCrewSeatPause(db: Database.Database): void {
+  if (
+    db.prepare("SELECT 1 FROM app_state WHERE key='crew_seat_pause_v1'").get()
+  )
+    return
+  db.transaction(() => {
+    db.prepare(
+      'ALTER TABLE session_crew_members ADD COLUMN paused INTEGER NOT NULL DEFAULT 0',
+    ).run()
+    db.prepare(
+      "INSERT INTO app_state(key,value) VALUES ('crew_seat_pause_v1','1')",
+    ).run()
+  })()
+}

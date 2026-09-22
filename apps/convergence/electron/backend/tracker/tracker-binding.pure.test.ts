@@ -10,7 +10,12 @@ import type { TrackerBinding } from './tracker.types'
 describe('MAR-3084 R3: a binding holds nothing secret', () => {
   it('has no token or key field (type level)', () => {
     expectTypeOf<keyof TrackerBinding>().toEqualTypeOf<
-      'kind' | 'projectId' | 'labelPrefix' | 'wavePrefix' | 'statusMap'
+      | 'autoDispatch'
+      | 'kind'
+      | 'projectId'
+      | 'labelPrefix'
+      | 'wavePrefix'
+      | 'statusMap'
     >()
     expectTypeOf<TrackerBinding>().not.toHaveProperty('apiKey')
     expectTypeOf<TrackerBinding>().not.toHaveProperty('token')
@@ -23,6 +28,7 @@ describe('MAR-3084 R3: a binding holds nothing secret', () => {
       apiKey: 'lin_api_fixture',
     } as never)
     expect(binding).toEqual({
+      autoDispatch: false,
       kind: 'linear',
       projectId: 'project-1',
       labelPrefix: 'horse:',

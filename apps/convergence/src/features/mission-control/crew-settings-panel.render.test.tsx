@@ -830,3 +830,21 @@ describe('MAR-3084: the tracker lives inside the crew details, never above the s
     expect(details?.contains(tracker)).toBe(true)
   })
 })
+
+it('MAR-2981 R5 seat pause switch submits a seat edit beside WIP', () => {
+  const edit = vi.fn()
+  const member: SessionCrewMember = {
+    ...DEFAULT_CREW_MEMBER_SEAT,
+    sessionId: 's',
+    batonName: 'astra',
+    canvasX: null,
+    canvasY: null,
+  }
+  renderPanel(null, null, [member], edit, { openSeatKey: 's' })
+  const toggle = screen.getByRole('switch', {
+    name: 'Pause automatic dispatch to this seat',
+  })
+  expect(toggle).toHaveProperty('checked', false)
+  fireEvent.click(toggle)
+  expect(edit).toHaveBeenCalledWith({ sessionId: 's' }, { paused: true })
+})
