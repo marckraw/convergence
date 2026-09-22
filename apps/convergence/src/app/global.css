@@ -255,6 +255,37 @@
   }
 }
 
+/*
+ * Loom's fold (MAR-3312 R3): the shape that arrives fades in once the shell
+ * has finished travelling, so icons never sit on a column still shrinking.
+ *
+ * Declared here rather than reached for as `animate-in fade-in-0`: those are
+ * `tailwindcss-animate` utilities, and this app's Tailwind v4 loads no such
+ * plugin -- the package is only a transitive dependency of `@ef-global/backpack`
+ * and nothing imports it, so those class names emit no CSS whatsoever. A
+ * theme entry makes `animate-loom-enter` a real utility, which is what lets
+ * `motion-reduce:animate-none` sit beside it as a class (R2's law: an inline
+ * animation would out-specify the media query).
+ *
+ * `both` fill: the delay is the shell's own 200 ms, and backwards fill is
+ * what keeps the arriving shape invisible while it elapses. The three places
+ * that encode those numbers -- this delay, `LOOM_SHELL_CLASS`'s
+ * `duration-200`, and the timer in `wave-panel.container.tsx` -- are pinned
+ * together by `loom-motion.render.test.tsx`.
+ */
+@theme {
+  --animate-loom-enter: loom-enter 150ms ease-out 200ms both;
+}
+
+@keyframes loom-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @keyframes notifications-pulse {
   0% {
     box-shadow: 0 0 0 0 color-mix(in srgb, var(--ring) 55%, transparent);
