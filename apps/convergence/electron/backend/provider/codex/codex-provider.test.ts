@@ -1218,6 +1218,44 @@ describe('CodexProvider', () => {
     })
   })
 
+  it('inherits GPT-6 Luna as the fast model when model/list lists it', async () => {
+    const { provider, server } = createCodexTestBed({
+      version: '0.156.0',
+      modelListResponse: {
+        data: [
+          {
+            model: 'gpt-6-astra',
+            displayName: 'GPT-6 Astra',
+            isDefault: true,
+            defaultReasoningEffort: 'medium',
+            supportedReasoningEfforts: [{ reasoningEffort: 'medium' }],
+          },
+          {
+            model: 'gpt-6-luna',
+            displayName: 'GPT-6 Luna',
+            isDefault: false,
+            defaultReasoningEffort: 'medium',
+            supportedReasoningEfforts: [{ reasoningEffort: 'medium' }],
+          },
+        ],
+      },
+    })
+
+    const descriptor = await provider.describe()
+
+    expect(descriptor.fastModelId).toBe('gpt-6-luna')
+    expect(descriptor.defaultModelId).toBe('gpt-6-astra')
+    expect(descriptor.modelOptions.map((option) => option.id)).toEqual([
+      'gpt-6-astra',
+      'gpt-6-luna',
+    ])
+    expect(
+      server.requests.find((request) => request.method === 'model/list')
+        ?.params,
+    ).toEqual({ includeHidden: false, limit: 100 })
+    expect(server.methodsCalled()).not.toContain('turn/start')
+  })
+
   it('exposes the ultra reasoning effort reported by model/list', async () => {
     const { provider } = createCodexTestBed({
       modelListResponse: {
