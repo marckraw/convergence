@@ -13,6 +13,8 @@ import {
   workTitle,
   workStatus,
   parallelWorkRefusal,
+  parallelWorkCardTone,
+  PARALLEL_WORK_CARD_TONE_CLASS,
 } from './parallel-work.pure'
 
 it('R2 collapsed activity includes deep descendants and missing elapsed stays missing — mutations count direct children only or invent zero elapsed turn red', () => {
@@ -228,5 +230,42 @@ it('RUN72 a task sharing a run id keys apart and inherits no descendants — mut
     keys: ['agent:shared', 'agent:child', 'task:shared'],
     agent: 1,
     task: 0,
+  })
+})
+
+it('MAR-3308 R1 every state word has one tone and every other word has none — mutation map `unknown` or a missing status to a colour turns red', () => {
+  expect({
+    running: parallelWorkCardTone('running'),
+    completed: parallelWorkCardTone('completed'),
+    failed: parallelWorkCardTone('failed'),
+    stopped: parallelWorkCardTone('stopped'),
+    unknown: parallelWorkCardTone('unknown'),
+    missing: parallelWorkCardTone(undefined),
+    future: parallelWorkCardTone('queued'),
+  }).toEqual({
+    running: 'running',
+    completed: 'completed',
+    failed: 'failed',
+    stopped: 'stopped',
+    unknown: 'none',
+    missing: 'none',
+    future: 'none',
+  })
+})
+
+it('MAR-3308 R1 each tone is its own class pair — mutation reuse one tone for two states turns red', () => {
+  const tones = Object.values(PARALLEL_WORK_CARD_TONE_CLASS)
+  expect({
+    map: PARALLEL_WORK_CARD_TONE_CLASS,
+    distinct: new Set(tones).size,
+  }).toEqual({
+    map: {
+      running: 'border-blue-500/40 bg-blue-500/10',
+      completed: 'border-emerald-500/30 bg-emerald-500/[0.06]',
+      failed: 'border-red-500/40 bg-red-500/10',
+      stopped: 'border-amber-500/30 bg-amber-500/[0.06]',
+      none: 'border-border/50 bg-muted/30',
+    },
+    distinct: 5,
   })
 })

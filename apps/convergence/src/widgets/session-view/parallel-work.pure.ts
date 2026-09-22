@@ -169,3 +169,53 @@ export function parallelWorkRefusal(error: unknown): string {
     '',
   )
 }
+
+export type ParallelWorkCardTone =
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'stopped'
+  | 'none'
+
+/**
+ * A card's tone is the row's own state and nothing else.
+ *
+ * Every other word the harness can report — `unknown` today, whatever a newer
+ * harness adds tomorrow — is `none`: a card wears a colour only when the
+ * colour is a fact. Before MAR-3308 the single tint was keyed on the panel's
+ * selection memory, so the blue on a card meant "the one you last opened" and
+ * a running subagent looked exactly like a finished one until you opened it.
+ */
+export function parallelWorkCardTone(status?: string): ParallelWorkCardTone {
+  switch (status) {
+    case 'running':
+    case 'completed':
+    case 'failed':
+    case 'stopped':
+      return status
+    default:
+      return 'none'
+  }
+}
+
+/**
+ * The classes must stay literal here: Tailwind reads source text, so a tone
+ * assembled from parts (`border-${colour}-500/40`) would generate no CSS and
+ * the card would silently lose its colour.
+ */
+export const PARALLEL_WORK_CARD_TONE_CLASS: Record<
+  ParallelWorkCardTone,
+  string
+> = {
+  running: 'border-blue-500/40 bg-blue-500/10',
+  completed: 'border-emerald-500/30 bg-emerald-500/[0.06]',
+  failed: 'border-red-500/40 bg-red-500/10',
+  stopped: 'border-amber-500/30 bg-amber-500/[0.06]',
+  none: 'border-border/50 bg-muted/30',
+}
+
+/**
+ * The mark for the card you came back to from a detail view. A ring rather
+ * than a tint, so it sits on top of the state tone instead of replacing it.
+ */
+export const PARALLEL_WORK_RETURNED_CLASS = 'ring-1 ring-inset ring-blue-500/50'

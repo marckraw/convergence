@@ -15,9 +15,12 @@ import {
 import { Button } from '@/shared/ui/button'
 import {
   descendantActivity,
+  parallelWorkCardTone,
   workRowKey,
   workStatus,
   workTitle,
+  PARALLEL_WORK_CARD_TONE_CLASS,
+  PARALLEL_WORK_RETURNED_CLASS,
 } from './parallel-work.pure'
 
 export interface ParallelWorkPanelProps {
@@ -246,10 +249,12 @@ export const ParallelWorkPanel: FC<ParallelWorkPanelProps> = (props) => {
     const next = new Set([...seen, key])
     const children = childrenById.get(row) ?? []
     const hidden = collapsed.has(key)
+    const tone = parallelWorkCardTone(parallelWorkRowState(row).fact?.status)
+    const returned = props.highlightedId === key
     return (
       <div key={key} className="space-y-2">
         <div
-          className={`space-y-2 rounded-md border p-3 ${props.highlightedId === key ? 'border-blue-500/40 bg-blue-500/10' : 'border-border/50 bg-muted/30'}`}
+          className={`space-y-2 rounded-md border p-3 ${PARALLEL_WORK_CARD_TONE_CLASS[tone]}${returned ? ` ${PARALLEL_WORK_RETURNED_CLASS}` : ''}`}
           data-work-id={key}
         >
           {children.length > 0 && (

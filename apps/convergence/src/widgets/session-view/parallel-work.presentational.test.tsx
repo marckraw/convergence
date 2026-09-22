@@ -1,10 +1,13 @@
 import { render, screen } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
 import { buildParallelWork } from '@/shared/lib/parallel-work.pure'
 import * as rowHelpers from './parallel-work.pure'
 import * as workHelpers from '@/shared/lib/parallel-work.pure'
 import { ParallelWorkPanel } from './parallel-work.presentational'
+import { PARALLEL_WORK_CARD_TONE_CLASS } from './parallel-work.pure'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -406,4 +409,88 @@ it('RUN64 round3 computes one time per rendered row — mutation recompute the l
     calls: time.mock.calls,
     title: screen.getByText('Running · 4 m').title,
   }).toEqual({ calls: [[rows[0], now]], title: agent.startedAt })
+})
+
+it.each([
+  ['running', 'border-blue-500/40 bg-blue-500/10'],
+  ['completed', 'border-emerald-500/30 bg-emerald-500/[0.06]'],
+  ['failed', 'border-red-500/40 bg-red-500/10'],
+  ['stopped', 'border-amber-500/30 bg-amber-500/[0.06]'],
+  ['unknown', 'border-border/50 bg-muted/30'],
+] as const)(
+  'MAR-3308 R1 a %s card wears its state with no selection memory at all — mutation key the tone on highlightedId turns red',
+  (status, tone) => {
+    const { container } = render(
+      <ParallelWorkPanel
+        rows={buildParallelWork([{ ...agent, status }], [], [])}
+        now={Date.parse('2026-09-09T00:04:12Z')}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
+    const card = container.querySelector('[data-work-id="agent:agent"]')!
+    expect({
+      tone: tone.split(' ').every((name) => card.classList.contains(name)),
+      ring: card.className.includes('ring-'),
+    }).toEqual({ tone: true, ring: false })
+  },
+)
+
+it('MAR-3308 R2 the card you came back to keeps its state tone and adds a ring — mutation let the highlight replace the tone turns red', () => {
+  const { container } = render(
+    <ParallelWorkPanel
+      rows={buildParallelWork(
+        [
+          { ...agent, status: 'completed' },
+          { ...agent, id: 'other', status: 'running' },
+        ],
+        [],
+        [],
+      )}
+      now={Date.parse('2026-09-09T00:04:12Z')}
+      highlightedId="agent:agent"
+      onSelect={vi.fn()}
+      onClose={vi.fn()}
+    />,
+  )
+  const classesOf = (key: string) =>
+    container.querySelector(`[data-work-id="${key}"]`)!.className
+  expect({
+    returnedTone: classesOf('agent:agent').includes(
+      'border-emerald-500/30 bg-emerald-500/[0.06]',
+    ),
+    returnedRing: classesOf('agent:agent').includes(
+      'ring-1 ring-inset ring-blue-500/50',
+    ),
+    returnedNotBlueTint: classesOf('agent:agent').includes('bg-blue-500/10'),
+    otherTone: classesOf('agent:other').includes(
+      'border-blue-500/40 bg-blue-500/10',
+    ),
+    otherRing: classesOf('agent:other').includes('ring-'),
+  }).toEqual({
+    returnedTone: true,
+    returnedRing: true,
+    returnedNotBlueTint: false,
+    otherTone: true,
+    otherRing: false,
+  })
+})
+
+/**
+ * Tailwind emits a class only if it has SCANNED that exact text, so the tone
+ * map's value being right at runtime proves nothing: `border-${colour}-500/40`
+ * evaluates to the same string and emits no CSS at all — the card would lose
+ * its colour in the packaged app with every test green (the shape that killed
+ * the code-block buttons in MAR-2760). This canary reads the source Tailwind
+ * reads and asserts each class appears there verbatim.
+ */
+it('MAR-3308 R1 every tone class is literal in the source Tailwind scans — mutation assemble a tone from parts turns red', () => {
+  const source = readFileSync(
+    resolve(__dirname, 'parallel-work.pure.ts'),
+    'utf8',
+  )
+  const missing = Object.values(PARALLEL_WORK_CARD_TONE_CLASS)
+    .flatMap((tone) => tone.split(' '))
+    .filter((className) => !source.includes(className))
+  expect(missing).toEqual([])
 })
