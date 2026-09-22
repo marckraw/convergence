@@ -201,6 +201,42 @@ describe('clear-then-deliver: failed reset drains the brief (MAR-3298 R2)', () =
     ).toBe(false)
   })
 
+  it('busy seat: the drain sends the queued /clear, the reset fails, the brief drains (MAR-3307) — no reset mark in the drain turns red', async () => {
+    // The seat is mid-turn, so the opener waits as a row of its own. Before
+    // MAR-3307 only the direct door marked a reset in flight, so this path's
+    // failed reset stranded the brief behind it with nothing to drain it.
+    await service.start(sessionId, { text: 'busy turn' })
+    emit({
+      kind: 'session.patch',
+      patch: { continuationToken: '/pi/prior.jsonl', status: 'running' },
+    })
+    const receipt = await service.sendMessageWithOpener(sessionId, {
+      opener: '/clear',
+      text: 'the brief that must ride',
+    })
+    expect(receipt.openerQueued).toBe(true)
+    providerLog.length = 0
+
+    // The busy turn ends; the drain sends the opener from its row.
+    emit({ kind: 'session.patch', patch: { status: 'completed' } })
+    for (let i = 0; i < 5; i++) await Promise.resolve()
+    expect(providerLog).toEqual(['start:/clear'])
+
+    // The reset fails.
+    emit({ kind: 'session.patch', patch: { status: 'failed' } })
+    for (let i = 0; i < 5; i++) await Promise.resolve()
+
+    expect(providerLog).toEqual([
+      'start:/clear',
+      'start:the brief that must ride',
+    ])
+    expect(
+      service
+        .getQueuedInputs(sessionId)
+        .filter((row) => row.dispatchId === receipt.payloadDispatchId),
+    ).toEqual([])
+  })
+
   it('a reset that fails with nothing queued behind it ends failed and does not send', async () => {
     await seedCompletedTurn()
     await service.sendMessage(sessionId, { text: '/clear' })

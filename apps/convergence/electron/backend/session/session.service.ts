@@ -363,8 +363,10 @@ export class SessionService {
   /**
    * Sessions whose current turn is a conversation reset (MAR-3298 R2).
    *
-   * Set when `withDispatchInFlight` routes `CONVERSATION_RESET_COMMAND`;
-   * cleared on the next lifecycle (or on hand Stop, which must not drain).
+   * Set only by `markResetInFlight`, which both doors call as a reset leaves
+   * for the provider -- `withDispatchInFlight` (a direct send) and
+   * `sendQueuedRow` (a row leaving the queue, MAR-3307); cleared on the next
+   * lifecycle (or on hand Stop, which must not drain).
    * Distinguishes a reset's `failed` from a plain turn's without reading the
    * provider's note text.
    */
@@ -2088,6 +2090,28 @@ export class SessionService {
   }
 
   /**
+   * Writes the fact "this session's current turn is a conversation reset"
+   * (MAR-3298 R2), at the moment a turn leaves for the provider -- and it is
+   * the ONLY writer (MAR-3307). Both doors call it: `withDispatchInFlight`
+   * for a direct send and `sendQueuedRow` for a row leaving the queue. With
+   * the direct door as the only writer, a `/clear` drained from the queue
+   * (every opener a busy seat queued) never set it, so its failure stranded
+   * the brief behind it.
+   *
+   * Returns true only when this call set the mark, so a caller whose send
+   * then fails clears exactly its own mark and never a reset already in
+   * flight.
+   */
+  private markResetInFlight(sessionId: string, text: string): boolean {
+    if (text !== CONVERSATION_RESET_COMMAND) return false
+    const providerId = this.getById(sessionId)?.providerId ?? ''
+    if (!providerSupportsConversationReset(providerId)) return false
+    if (this.resetsInFlight.has(sessionId)) return false
+    this.resetsInFlight.add(sessionId)
+    return true
+  }
+
+  /**
    * Runs a send with the session marked as dispatching for the whole of it
    * (MAR-2550).
    *
@@ -2171,7 +2195,7 @@ export class SessionService {
       }
       // Remembered until the next lifecycle so a failed reset can drain the
       // brief queued behind it (MAR-3298 R2). Cleared on hand Stop too.
-      this.resetsInFlight.add(sessionId)
+      this.markResetInFlight(sessionId, input.text)
     }
     if (handoff) this.pendingAccountHandoffs.add(sessionId)
     const inFlight = this.dispatches.begin(sessionId)
@@ -2668,9 +2692,9 @@ export class SessionService {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
 
-    const queueOpener = (): string => {
+    const enqueueOpener = (): SessionQueuedInput & { dispatchId: string } => {
       const dispatchId = randomUUID()
-      this.queuedInputs.enqueue(
+      const row = this.queuedInputs.enqueue(
         id,
         {
           text: input.opener,
@@ -2681,8 +2705,9 @@ export class SessionService {
         },
         'follow-up',
       )
-      return dispatchId
+      return { ...row, dispatchId }
     }
+    const queueOpener = (): string => enqueueOpener().dispatchId
 
     let openerDispatchId: string
     let openerQueued = true
@@ -2706,32 +2731,23 @@ export class SessionService {
     if (this.compactingSessions.has(id) || this.heldSessions.has(id)) {
       openerDispatchId = queueOpener()
       waitingOn = 'compaction'
-    } else if (this.isCarryingATurn(session)) {
+    } else if (
+      this.isCarryingATurn(session) ||
+      // The direct door's own reset refusal, asked here because the opener
+      // no longer goes through that door (MAR-3307): a handle whose turn has
+      // not ended -- `answered` included (MAR-2896) -- is a turn arriving,
+      // and a `/clear` waits for it.
+      (input.opener === CONVERSATION_RESET_COMMAND &&
+        providerSupportsConversationReset(session.providerId) &&
+        this.isTurnUnderWayOrArriving(session))
+    ) {
       openerDispatchId = queueOpener()
     } else {
-      // TWO parties know whether this target is busy and they can disagree
-      // (MAR-2888). `isCarryingATurn` is the record's answer and it has just
-      // said no; the provider answers from state the record cannot see -- an
-      // app-server mid-turn, or still reconnecting -- and when it says no the
-      // answer is the SAME answer: queue the opener behind the turn that is
-      // actually running. Before this, that refusal ended the delivery, fired
-      // a `delivery-failed` hail, and nothing retried: a baton on the floor.
-      //
-      // Only this refusal. Every other error still leaves here, because
-      // "the target is mid-turn" is the one failure a queue can answer, and
-      // swallowing the rest would turn a broken delivery into a silent wait.
-      try {
-        openerDispatchId = await this.sendMessage(id, {
-          text: input.opener,
-          providerAccountId: input.providerAccountId,
-          skipContextInjection: true,
-          muteRelays: true,
-        })
+      const opener = enqueueOpener()
+      openerDispatchId = opener.dispatchId
+      if (await this.sendIdleOpener(session, opener)) {
         openerQueued = false
         waitingOn = undefined
-      } catch (error) {
-        if (!isProviderBusyError(error)) throw error
-        openerDispatchId = queueOpener()
       }
     }
 
@@ -2754,6 +2770,88 @@ export class SessionService {
       openerQueued,
       ...(waitingOn ? { waitingOn } : {}),
     }
+  }
+
+  /**
+   * The idle opener leaves a row and goes out through the drain's door
+   * (MAR-3307). One shape on disk for every opener, busy or idle: a row with
+   * `text === '/clear'` in front of the payload, which is what boot recovery
+   * reads to know that a restart interrupted a reset. The receipt is the
+   * row's own dispatch id -- the door mints nothing -- and the door is what
+   * marks the reset in flight, so a failed reset drains the brief behind it
+   * on this path exactly as on the busy one.
+   *
+   * What the direct door did for this send is kept here, each for the reason
+   * it had there: a `running` row with no handle is failed as stale first
+   * (`deliverMessage`), before the opener's row exists, so that sweep cannot
+   * end it; the MAR-2550 in-flight marker is held across the send, so a
+   * second opener arriving in the await queues behind this one; an archived
+   * session a live handle carries is unarchived (`deliverMessage`'s exempt
+   * path -- `startHandle` unarchives the other one itself).
+   *
+   * Returns true when the opener went out, false when it waits in line.
+   *
+   * TWO parties know whether this target is busy and they can disagree
+   * (MAR-2888). `isCarryingATurn` is the record's answer and it has just
+   * said no; the provider answers from state the record cannot see -- an
+   * app-server mid-turn, or still reconnecting -- and when it says no the
+   * answer is the SAME answer: the opener waits behind the turn that is
+   * actually running. Before this, that refusal ended the delivery, fired a
+   * `delivery-failed` hail, and nothing retried: a baton on the floor.
+   *
+   * Only this refusal. Every other error still leaves here, because "the
+   * target is mid-turn" is the one failure a queue can answer, and swallowing
+   * the rest would turn a broken delivery into a silent wait. The row it
+   * leaves ends as the direct door's attempt ended: failed, unless another
+   * turn still carries it.
+   */
+  private async sendIdleOpener(
+    session: Session,
+    opener: SessionQueuedInput,
+  ): Promise<boolean> {
+    const id = session.id
+    if (session.providerId === 'shell') {
+      throw new Error(
+        `Session ${id} uses the shell provider and cannot accept conversation messages`,
+      )
+    }
+    if (!this.activeHandles.has(id) && session.status === 'running') {
+      this.markStaleRunningSessionFailed(
+        session,
+        'Session marked failed because Convergence no longer has an active provider process for this run.',
+        true,
+      )
+    }
+    if (session.archivedAt && this.activeHandles.has(id)) {
+      this.updateArchiveState(id, null)
+    }
+    this.queuedInputs.patch(opener.id, 'dispatching')
+    const inFlight = this.dispatches.begin(id)
+    const failure: { error?: unknown } = {}
+    let outcome: 'sent' | 'deferred' | 'failed'
+    try {
+      outcome = await this.sendQueuedRow(id, opener, {
+        ownDispatch: true,
+        onFailure: (error) => {
+          // The marker first, as `withDispatchInFlight`'s catch does: the
+          // question below is asked of the session as it now is.
+          this.dispatches.settle(inFlight)
+          if (isProviderBusyError(error)) {
+            this.queuedInputs.patch(opener.id, 'queued')
+            return
+          }
+          failure.error = error
+          this.terminateQueueUnlessCarryingATurn(
+            id,
+            error instanceof Error ? error.message : String(error),
+          )
+        },
+      })
+    } finally {
+      this.dispatches.settle(inFlight)
+    }
+    if ('error' in failure) throw failure.error
+    return outcome === 'sent'
   }
 
   /**
@@ -5121,14 +5219,81 @@ export class SessionService {
     if (!item) return
 
     this.queuedInputs.patch(item.id, 'dispatching')
+    await this.sendQueuedRow(sessionId, item, {
+      onFailure: (err) => {
+        // "Not yet" is not "broken" (MAR-2888). The row was attempted, but
+        // the answer is about timing: it goes back in line and the next turn
+        // boundary tries it again -- the shape this function already uses
+        // for a provider that answers `queue-follow-up`. Failing it here
+        // would kill a baton one beat before it went out.
+        //
+        // The reachable trigger is `redeliverQueuedInput` -- Deliver now
+        // while a turn is connecting -- and that turn's own completion
+        // re-drains the row. NOT a completion itself, which is what an
+        // earlier draft of this comment claimed: `setStatus` writes
+        // `currentStatus` before it emits, the emitter is synchronous, and
+        // `connecting` is nulled in a `finally` before `sendCodexTurn`, so
+        // every Codex `completed` is processed with `connecting === null`
+        // and no refusal to give.
+        if (isProviderBusyError(err)) {
+          this.queuedInputs.patch(item.id, 'queued')
+          return
+        }
+        // The drain is itself a dispatch attempt, and it left the session
+        // idle with this row and every row behind it waiting on nothing:
+        // they end together, in one event (MAR-2759, design P).
+        this.terminateQueuedInputs(
+          sessionId,
+          err instanceof Error ? err.message : String(err),
+        )
+      },
+    })
+  }
+
+  /**
+   * The drain's door (MAR-3307): sends ONE row the caller has already moved
+   * to `dispatching`, and says what became of it. `'deferred'` is the
+   * provider answering `queue-follow-up` -- the row is back in line, nothing
+   * went out. `'failed'` is a refusal or an error, and what to do with the
+   * row is the caller's `onFailure`: the drain puts a busy row back and ends
+   * the rest; `sendMessageWithOpener`'s idle opener falls back to waiting,
+   * or fails loudly to its own caller.
+   *
+   * `onFailure` runs INSIDE this catch, not in the caller's after an
+   * `await`: a provider that refuses synchronously is answered in the same
+   * tick as the settle that drained it -- the drain is synchronous end to
+   * end, which `withDispatchInFlight`'s MAR-2971 pin relies on -- and a
+   * policy applied one microtask later leaves the row `dispatching` for a
+   * reader in between.
+   *
+   * One door for every row that leaves the queue, so every fact a row's
+   * departure writes is written here once -- the `sent` mark, the turn's
+   * receipt, and whether the turn now under way is a conversation reset
+   * (`markResetInFlight`). Before this door the reset fact was written only
+   * by the direct send path, so a `/clear` drained from the queue failed
+   * without draining the brief behind it.
+   *
+   * `ownDispatch`: the caller holds the MAR-2550 in-flight marker for this
+   * very send (the idle opener does, as the direct path always did), so the
+   * account-handoff check must not read that marker as somebody else's send.
+   */
+  private async sendQueuedRow(
+    sessionId: string,
+    item: SessionQueuedInput,
+    policy: { ownDispatch?: boolean; onFailure: (error: unknown) => void },
+  ): Promise<'sent' | 'deferred' | 'failed'> {
     let handoffGuard = false
+    let markedReset = false
 
     try {
       const session = this.getById(sessionId)
       if (!session) throw new Error(`Session not found: ${sessionId}`)
       if (this.isAccountHandoff(session, item.providerAccountId)) {
         this.assertNoPendingAccountHandoff(sessionId)
-        this.assertAccountHandoffEligible(session, { queuedInputId: item.id })
+        this.assertAccountHandoffEligible(session, {
+          ownDispatch: policy.ownDispatch,
+          queuedInputId: item.id,
+        })
         this.pendingAccountHandoffs.add(sessionId)
         handoffGuard = true
       }
@@ -5144,6 +5309,9 @@ export class SessionService {
         item.text,
         item.skipContextInjection,
       )
+      // Before the send, as the direct path does: a reset's `failed` may
+      // arrive before the send below returns.
+      markedReset = this.markResetInFlight(sessionId, item.text)
 
       if (handle) {
         let accepted = false
@@ -5196,10 +5364,11 @@ export class SessionService {
           this.restoreRelayMute(sessionId, previousMute)
           // Keep its original row and ordering; the next completion retries it.
           this.queuedInputs.patch(item.id, 'queued')
-          return
+          if (markedReset) this.resetsInFlight.delete(sessionId)
+          return 'deferred'
         }
         acceptTurn()
-        return
+        return 'sent'
       }
 
       if (isRemoteExecutionHost(session.executionHost)) {
@@ -5215,7 +5384,7 @@ export class SessionService {
         })
         this.attachDispatchToTurn(sessionId, item.dispatchId)
         this.markQueuedInputSent(sessionId, item.dispatchId, item.id)
-        return
+        return 'sent'
       }
 
       const continuationToken = this.getContinuationToken(sessionId)
@@ -5248,31 +5417,13 @@ export class SessionService {
           'the turn publication',
           () => receipt.publish(),
         )
+      return 'sent'
     } catch (err) {
-      // "Not yet" is not "broken" (MAR-2888). The row was attempted, but the
-      // answer is about timing: it goes back in line and the next turn
-      // boundary tries it again -- the shape this function already uses for
-      // a provider that answers `queue-follow-up`. Failing it here would
-      // kill a baton one beat before it went out.
-      //
-      // The reachable trigger is `redeliverQueuedInput` -- Deliver now while
-      // a turn is connecting -- and that turn's own completion re-drains the
-      // row. NOT a completion itself, which is what an earlier draft of this
-      // comment claimed: `setStatus` writes `currentStatus` before it emits,
-      // the emitter is synchronous, and `connecting` is nulled in a `finally`
-      // before `sendCodexTurn`, so every Codex `completed` is processed with
-      // `connecting === null` and no refusal to give.
-      if (isProviderBusyError(err)) {
-        this.queuedInputs.patch(item.id, 'queued')
-        return
-      }
-      // The drain is itself a dispatch attempt, and it left the session idle
-      // with this row and every row behind it waiting on nothing: they end
-      // together, in one event (MAR-2759, design P).
-      this.terminateQueuedInputs(
-        sessionId,
-        err instanceof Error ? err.message : String(err),
-      )
+      // Nothing went out, so no lifecycle will clear the mark: the direct
+      // path's catch does the same. Only a mark THIS call made.
+      if (markedReset) this.resetsInFlight.delete(sessionId)
+      policy.onFailure(err)
+      return 'failed'
     } finally {
       if (handoffGuard) this.pendingAccountHandoffs.delete(sessionId)
     }

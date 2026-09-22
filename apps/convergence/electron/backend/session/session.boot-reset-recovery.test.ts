@@ -27,6 +27,7 @@ import {
   SessionQueuedInputService,
 } from './session-queued-input.service'
 import { STALE_RESET_ROW_ERROR } from './session-stale-reset.pure'
+import type { SessionDelta } from './conversation-item.types'
 import type { DispatchTerminalEvent, QueuedInputState } from './session.types'
 import { SessionService } from './session.service'
 
@@ -38,6 +39,7 @@ describe('boot recovery reads a reset a restart interrupted (MAR-3307)', () => {
   let directory: string
   let registry: ProviderRegistry
   let providerLog: string[]
+  let emit: (delta: SessionDelta) => void
   let sessionId: string
   const services: SessionService[] = []
 
@@ -58,7 +60,9 @@ describe('boot recovery reads a reset a restart interrupted (MAR-3307)', () => {
       start(config) {
         providerLog.push(`start:${config.initialMessage}`)
         return {
-          onDelta: () => {},
+          onDelta: (cb) => {
+            emit = cb
+          },
           onStatusChange: () => {},
           onAttentionChange: () => {},
           onContinuationToken: () => {},
@@ -232,6 +236,59 @@ describe('boot recovery reads a reset a restart interrupted (MAR-3307)', () => {
     service.tellBootEndings()
     expect(terminals).toHaveLength(1)
     // No delivery at boot.
+    await settleAsyncWork()
+    expect(providerLog).toEqual([])
+  })
+
+  it('idle shape, as the app writes it: sendMessageWithOpener on an idle seat, then a restart — boot fails the brief (sending the opener directly turns red)', async () => {
+    // Not seeded: the first process writes the record through the real door,
+    // and dies inside the reset (no lifecycle arrives).
+    const first = boot()
+    db.prepare(
+      "UPDATE sessions SET continuation_token = '/pi/prior.jsonl' WHERE id = ?",
+    ).run(sessionId)
+    const receipt = await first.sendMessageWithOpener(sessionId, {
+      opener: '/clear',
+      text: 'the brief that must ride',
+    })
+    expect(receipt.openerQueued).toBe(false)
+    expect(providerLog).toEqual(['start:/clear'])
+    // As Pi's `resetConversation` reports itself (`pi-provider.ts`).
+    emit({ kind: 'session.patch', patch: { status: 'running' } })
+    expect(first.getById(sessionId)?.status).toBe('running')
+    // The opener left a row with its receipt, the payload waits behind it.
+    // `sent`, not `dispatching`, while the reset still runs: the door stamps
+    // `sent` when the provider takes the turn, not when the turn ends -- so
+    // at the crash the in-flight reset reads `sent` (MAR-3307 lap 3, item 2).
+    const opener = db
+      .prepare(
+        'SELECT id, text, state FROM session_queued_inputs WHERE dispatch_id = ?',
+      )
+      .get(receipt.openerDispatchId) as { id: string; text: string }
+    expect(opener).toMatchObject({ text: '/clear', state: 'sent' })
+    const payload = (
+      db
+        .prepare('SELECT id FROM session_queued_inputs WHERE dispatch_id = ?')
+        .get(receipt.payloadDispatchId) as { id: string }
+    ).id
+    providerLog.length = 0
+
+    const service = boot()
+
+    expect(rowById(payload)).toEqual({
+      state: 'failed',
+      error: STALE_RESET_ROW_ERROR,
+      ending_told_at: null,
+    })
+    expect(resetNotes(service)).toHaveLength(1)
+    const terminals = listen(service)
+    service.tellBootEndings()
+    expect(terminals).toEqual([
+      expect.objectContaining({
+        reason: 'failed',
+        dispatchIds: [receipt.payloadDispatchId],
+      }),
+    ])
     await settleAsyncWork()
     expect(providerLog).toEqual([])
   })
