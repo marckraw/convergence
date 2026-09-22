@@ -438,6 +438,25 @@ export const WavePanel: FC<WavePanelProps> = ({
     windowWidth,
     reservedWidth,
   })
+  /**
+   * Whether this window would give a column at all (MAR-3292 R3).
+   *
+   * The strip has two reasons to be on screen and they can both be true at
+   * once, so the question its ways out ask is not "was this chosen" -- it is
+   * "is there a column to go back to". Asked of the one function that owns
+   * the arithmetic, with `compact` stored, rather than re-derived here: a
+   * second copy of that sum is exactly the shape MAR-3155 R6 exists to
+   * prevent. Answering the other question instead would send a folded person
+   * in a narrow window from the strip to `compact` -- which redraws the same
+   * strip, so the control they pressed would look broken.
+   */
+  const columnFitsHere =
+    effectiveWavePanelMode({
+      stored: 'compact',
+      storedWidth: draftWidth ?? storedWidth,
+      windowWidth,
+      reservedWidth,
+    }).mode === 'compact'
   // Whether the panel renders anything at all (MAR-3161 R4): the last bound
   // crew gone. ONE const, read by the early return below and by the
   // on-screen fact -- which adds the second reason a column can be absent,
@@ -703,6 +722,10 @@ export const WavePanel: FC<WavePanelProps> = ({
   )
 
   if (decision.mode === 'strip') {
+    // Where "open it again" leads (MAR-3292 R3): the column when this window
+    // can hold one, the content area when it cannot. Both are Loom with its
+    // sheets, which is the promise the folded column makes.
+    const openLoom = () => changeMode(columnFitsHere ? 'compact' : 'expanded')
     return withGuide(
       <LoomStripView
         dispatchPlan={board.dispatchPlan}
@@ -710,14 +733,28 @@ export const WavePanel: FC<WavePanelProps> = ({
         now={board.now}
         horses={board.horses}
         outage={board.header.kind === 'outage'}
+        onOpen={openLoom}
         onExpand={() => changeMode('expanded')}
+        // One act, not two halves a person can land between: the sheet
+        // FIRST, so the shape that mounts is already reading the sheet the
+        // icon named. Changing the mode alone would open Loom wherever it
+        // was last left, which is the one thing this control promises not
+        // to do.
+        onSelectSheet={(next) => {
+          selectSheet(next)
+          openLoom()
+        }}
       />,
     )
   }
 
   if (decision.mode === 'expanded') {
     const expandedStack = (
-      <LoomExpandedView {...stack} onFold={() => changeMode('compact')} />
+      <LoomExpandedView
+        {...stack}
+        onFold={() => changeMode('compact')}
+        onCollapse={() => changeMode('folded')}
+      />
     )
     return withGuide(
       expandedContainer
@@ -736,6 +773,7 @@ export const WavePanel: FC<WavePanelProps> = ({
         {...stack}
         width={decision.width}
         onExpand={() => changeMode('expanded')}
+        onCollapse={() => changeMode('folded')}
       />
       <WaveResizeHandle
         width={decision.width}

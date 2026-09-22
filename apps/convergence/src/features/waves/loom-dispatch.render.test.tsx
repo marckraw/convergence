@@ -120,7 +120,9 @@ describe('R8 rendered Next', () => {
         {...base}
         dispatchPlan={plan}
         outage={false}
+        onOpen={() => {}}
         onExpand={() => {}}
+        onSelectSheet={() => {}}
       />,
     )
     expect(screen.getByLabelText('Next: 1')).toBeTruthy()

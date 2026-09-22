@@ -373,6 +373,34 @@ describe('MAR-3097 lap 2, B: the column keeps the main panel at its floor', () =
     ).toEqual({ mode: 'strip', width: null, maxWidth: null })
   })
 
+  it('MAR-3292 R1: a chosen fold is the strip at any width', () => {
+    // Folded by choice and folded by width answer the SAME shape, so one
+    // component renders both and no caller has to tell them apart by reading
+    // a field that could disagree with the mode.
+    // Mutation: fall through to the width arithmetic for `folded` -> a wide
+    // window answers `compact` and the fold is un-choosable, red.
+    for (const windowWidth of [320, 1024, 4000]) {
+      expect(
+        effectiveWavePanelMode({
+          stored: 'folded',
+          storedWidth: WAVE_PANEL_DEFAULT_COLUMN_WIDTH,
+          windowWidth,
+          reservedWidth: 0,
+        }),
+      ).toEqual({ mode: 'strip', width: null, maxWidth: null })
+    }
+    // And it is the decision's answer, not the width's: the same window with
+    // `compact` stored still gives a column.
+    expect(
+      effectiveWavePanelMode({
+        stored: 'compact',
+        storedWidth: WAVE_PANEL_DEFAULT_COLUMN_WIDTH,
+        windowWidth: 4000,
+        reservedWidth: 0,
+      }).mode,
+    ).toBe('compact')
+  })
+
   it('MAR-3189 R5: expanded is asked first and the window never refuses it', () => {
     // The expanded stack IS the main panel, so the arithmetic that starves
     // the column says nothing about it -- including in a window far too

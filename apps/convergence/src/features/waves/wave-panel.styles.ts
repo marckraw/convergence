@@ -13,9 +13,30 @@ import type { LoomHorseRuntime } from './loom-horses.pure'
 export const WAVE_RESIZE_HANDLE_CLASS =
   'app-resize-handle relative z-10 -mx-1.5 w-px shrink-0 cursor-col-resize border-x-[6px] border-x-transparent bg-clip-content transition-colors hover:bg-white/10 focus-visible:bg-white/20 focus-visible:outline-none'
 
-/** Loom's strip: what a window too narrow for the column leaves. */
+/**
+ * Loom's strip: what a window too narrow for the column leaves, and what a
+ * chosen fold looks like (MAR-3292 R2). `w-11` either way -- the folded
+ * column is the same column, so widening it for the icons would make the two
+ * reasons look like two shapes.
+ */
 export const WAVE_RAIL_CLASS =
-  'flex h-full w-11 shrink-0 flex-col items-center gap-3 border-r border-white/10 py-3'
+  'flex h-full w-11 shrink-0 flex-col items-center gap-2 border-r border-white/10 py-3'
+
+/** The strip's two ways out: icon-only, the header controls' size. */
+export const LOOM_STRIP_BUTTON_CLASS = 'size-7 shrink-0 p-0'
+
+/**
+ * A sheet on the folded column: the glyph, the count under it, no word.
+ * `h-auto` and `flex-col` undo the button size's single-line row.
+ */
+export const LOOM_STRIP_SHEET_CLASS =
+  'h-auto w-9 shrink-0 flex-col gap-0.5 rounded-md px-0 py-1.5 text-muted-foreground hover:text-foreground'
+
+/** The number under a folded sheet's glyph. */
+export const LOOM_STRIP_COUNT_CLASS = 'text-[10px] font-normal tabular-nums'
+
+/** The header control that folds Loom away (MAR-3292 R4). */
+export const LOOM_COLLAPSE_BUTTON_CLASS = 'size-7 shrink-0 p-0'
 
 export const WAVE_SECTION_TITLE_CLASS =
   'px-3 pb-1 pt-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground'

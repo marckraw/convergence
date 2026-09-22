@@ -1,12 +1,14 @@
 import type { FC } from 'react'
-import { Maximize2 } from 'lucide-react'
+import { Maximize2, PanelLeftClose } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { LoomStackView } from './loom-stack.presentational'
 import { LoomSublineContent } from './loom-crew-picker.presentational'
 import { LoomStatusView } from './loom-status.presentational'
 import type { LoomStackProps } from './loom-stack.types'
 import {
+  LOOM_COLLAPSE_BUTTON_CLASS,
   LOOM_COMPACT_CLASS,
+  LOOM_NO_DRAG_STYLE,
   LOOM_SEARCH_COMPACT_ROW_CLASS,
   LOOM_SEARCH_SUBLINE_ROW_CLASS,
 } from './wave-panel.styles'
@@ -16,8 +18,12 @@ import { LoomSearchToggleView } from './loom-search-toggle.presentational'
 import { isLoomSearchShortcut } from './loom-search.pure'
 
 export const LoomCompactView: FC<
-  LoomStackProps & { width: number; onExpand: () => void }
-> = ({ width, onExpand, ...props }) => (
+  LoomStackProps & {
+    width: number
+    onExpand: () => void
+    onCollapse: () => void
+  }
+> = ({ width, onExpand, onCollapse, ...props }) => (
   <aside
     aria-label="Loom"
     data-loom="compact"
@@ -37,16 +43,36 @@ export const LoomCompactView: FC<
   >
     <div className="flex shrink-0 items-center justify-between gap-2 px-3 pt-3">
       <h2 className="text-lg font-semibold tracking-tight">Loom</h2>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        aria-label="Expand Loom"
-        className="h-10 gap-2 px-2 text-xs"
-        onClick={onExpand}
-      >
-        Expand <Maximize2 className="size-3.5" />
-      </Button>
+      <div className="flex shrink-0 items-center gap-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-label="Expand Loom"
+          className="h-10 gap-2 px-2 text-xs"
+          onClick={onExpand}
+        >
+          Expand <Maximize2 className="size-3.5" />
+        </Button>
+        {/* Icon-only, and named apart from the two controls that were
+            already here (MAR-3292 R4): "Expand Loom" goes wider, "Fold
+            Loom" in the expanded header comes back to this column, and
+            "Collapse Loom" takes the column away altogether. `no-drag`
+            because a control inside a drag strip is not a control -- the
+            column declares no region of its own, so this says it for
+            itself rather than inheriting whatever is above it. */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-label="Collapse Loom"
+          className={LOOM_COLLAPSE_BUTTON_CLASS}
+          style={LOOM_NO_DRAG_STYLE}
+          onClick={onCollapse}
+        >
+          <PanelLeftClose className="size-3.5" />
+        </Button>
+      </div>
     </div>
     <div className="shrink-0 px-3 pb-4 text-xs text-muted-foreground">
       <div className={LOOM_SEARCH_SUBLINE_ROW_CLASS}>

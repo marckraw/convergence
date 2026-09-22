@@ -6,7 +6,7 @@ import {
 
 const STORAGE_KEY = 'convergence-wave-panel-mode'
 
-/** The column's open/rail choice between runs; a view preference only. */
+/** The column's compact/expanded/folded choice between runs; a view preference only. */
 export function loadWavePanelMode(): WavePanelMode {
   try {
     return parseWavePanelMode(localStorage.getItem(STORAGE_KEY))

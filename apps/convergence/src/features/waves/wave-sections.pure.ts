@@ -4,6 +4,7 @@ import type {
   WorkLedgerSnapshot,
 } from '@/entities/work-ledger'
 import { livenessAge } from '@/shared/lib/host-liveness.pure'
+import type { WavePanelMode } from './wave-panel-mode.pure'
 
 /** The group rows without a wave fall into, shown last. */
 export const UNWAVED_GROUP = '—'
@@ -384,9 +385,10 @@ export function settleWavePanelGesture(input: {
  * has a width and a ceiling; the strip is too narrow to have one and the
  * expanded stack takes the content area it is given.
  *
- * `strip` carries no reason field any more: with the stored mode reduced to
- * `compact | expanded` (MAR-3189), the only thing that can put the strip on
- * screen is a window too narrow for the column. The reason IS the shape.
+ * `strip` carries no reason field, and gains none now that a stored `folded`
+ * can also ask for it (MAR-3292 R1). The shape is the same shape either way,
+ * and the reason is a fact about `stored` that its holder already has -- a
+ * field here would be a second copy of it, free to disagree.
  */
 export type WavePanelModeDecision =
   | {
@@ -422,17 +424,26 @@ export type WavePanelModeDecision =
  * conversation -- in which case a narrower column first, and only then the
  * strip. Neither the mode nor the width is written back.
  *
+ * A stored `folded` is the strip whatever the window can spare (MAR-3292 R1):
+ * folded by choice and folded by width render one thing.
+ *
  * The expanded stack is asked FIRST and is never refused: it does not stand
  * beside the main panel, it IS the main panel (R5), so the window arithmetic
  * that can starve the column says nothing about it.
  */
 export function effectiveWavePanelMode(input: {
-  stored: 'compact' | 'expanded'
+  stored: WavePanelMode
   /** What the person last chose; may be wider than the window allows. */
   storedWidth: number
   windowWidth: number
   reservedWidth: number
 }): WavePanelModeDecision {
+  // A chosen fold is the strip at ANY width (MAR-3292 R1): the window's
+  // arithmetic answers "is there room for a column", which is not the
+  // question a person who asked for no column is asking.
+  if (input.stored === 'folded') {
+    return { mode: 'strip', width: null, maxWidth: null }
+  }
   if (input.stored === 'expanded') {
     return { mode: 'expanded', width: null, maxWidth: null }
   }
