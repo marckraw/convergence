@@ -2,10 +2,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   chmodSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   truncateSync,
   writeFileSync,
@@ -68,6 +71,21 @@ const BIG_FILE_BYTES = 96 * MiB
 async function freeBytes(path: string): Promise<number> {
   const stats = await statfs(path)
   return stats.bavail * stats.bsize
+}
+
+/** Regular-file bytes under `root` (symlinks and sockets are not files). */
+function sumRegularFileBytes(root: string): number {
+  let total = 0
+  const walk = (dir: string): void => {
+    for (const name of readdirSync(dir)) {
+      const path = join(dir, name)
+      const st = lstatSync(path)
+      if (st.isDirectory()) walk(path)
+      else if (st.isFile()) total += st.size
+    }
+  }
+  walk(root)
+  return total
 }
 
 /**
@@ -253,31 +271,87 @@ describe('LaneService', { timeout: GIT_INTEGRATION_TEST_TIMEOUT_MS }, () => {
     },
   )
 
-  it('reports bytes when the copier really copied: the volume gives up the copied bytes', async () => {
-    writeFileSync(join(rootPath, BIG_FILE), Buffer.alloc(BIG_FILE_BYTES, 7))
+  // MAR-3315: assert the copier's reported count against a tree THIS test
+  // owns and against what landed — never against volume free space (sibling
+  // workers and git's fsmonitor make that a measure of the machine).
+  it('reports bytes when the copier really copied', async () => {
+    const sourceDir = mkdtempSync(join(tmpdir(), 'cvg-b-src-'))
+    const targetDir = mkdtempSync(join(tmpdir(), 'cvg-b-dst-'))
+    // No test reads a byte total off a tree another process may touch (MAR-3315).
+    expect(sourceDir.startsWith(tmpdir())).toBe(true)
+
+    mkdirSync(join(sourceDir, 'nested', 'deep'), { recursive: true })
+    const written: string[] = []
+    const writeKnown = (relativePath: string, size: number): void => {
+      const absolute = join(sourceDir, relativePath)
+      writeFileSync(absolute, Buffer.alloc(size, 3))
+      written.push(relativePath)
+    }
+    writeKnown('readme.txt', 100)
+    writeKnown(join('nested', 'a.bin'), 2500)
+    writeKnown(join('nested', 'deep', 'b.bin'), 4096)
+    writeKnown(join('nested', 'deep', 'target.txt'), 12)
+    symlinkSync(
+      join('nested', 'deep', 'target.txt'),
+      join(sourceDir, 'alias.txt'),
+    )
+
+    let expectedBytes = 0
+    for (const relativePath of written) {
+      expectedBytes += statSync(join(sourceDir, relativePath)).size
+    }
+
+    // A socket is not a file: the pre-scan names it and the byte count
+    // excludes it (same law as `.git/fsmonitor--daemon.ipc`).
+    const sockServer = createServer()
+    const sockRel = 'daemon.sock'
+    await new Promise<void>((resolve) =>
+      sockServer.listen(join(sourceDir, sockRel), resolve),
+    )
+
+    try {
+      const { copiedBytes, socketPaths } = await copyLaneTree(
+        sourceDir,
+        targetDir,
+        makeByteCopier(),
+      )
+
+      expect(socketPaths).toEqual([sockRel])
+      expect(existsSync(join(targetDir, sockRel))).toBe(false)
+      expect(copiedBytes).toBe(expectedBytes)
+      expect(sumRegularFileBytes(targetDir)).toBe(expectedBytes)
+      expect(copiedBytes).toBe(sumRegularFileBytes(targetDir))
+      expect(lstatSync(join(targetDir, 'alias.txt')).isSymbolicLink()).toBe(
+        true,
+      )
+    } finally {
+      await new Promise<void>((resolve) => sockServer.close(() => resolve()))
+      rmSync(sourceDir, { recursive: true, force: true })
+      rmSync(targetDir, { recursive: true, force: true })
+    }
+  })
+
+  // MAR-3315 lap 2: re-pin the service's `copyMethod: 'bytes'` claim through
+  // the readFreeBytes port — fake readings, no volume, no byte count.
+  it("reports 'bytes' when the volume gave up the copied bytes", async () => {
+    const consumed = 96 * MiB
+    const freeReadings = [500 * 1024 * MiB, 500 * 1024 * MiB - consumed]
+    const readFreeBytes = async (): Promise<number> => freeReadings.shift()!
     const byteCopying = new LaneService(
       getDatabase(),
       new GitService(),
       () => lanesRoot,
       makeByteCopier(),
+      readFreeBytes,
     )
-    const before = await freeBytes(tempDir)
 
-    const { lane, copyMethod } = await byteCopying.create({
+    const { copyMethod } = await byteCopying.create({
       rootProjectId: rootId,
       laneName: 'copied',
       branchName: 'feat/copied',
     })
 
-    const consumed = before - (await freeBytes(tempDir))
     expect(copyMethod).toBe('bytes')
-    // L1 (round 4): a tenth of margin, because sibling vitest workers free
-    // their own temp dirs on this volume while this one is copying -- the
-    // claim is "the volume gave up the copied bytes", not "to the byte".
-    expect(consumed).toBeGreaterThanOrEqual(0.9 * BIG_FILE_BYTES)
-    expect(readFileSync(join(lane.repositoryPath, BIG_FILE)).length).toBe(
-      BIG_FILE_BYTES,
-    )
   })
 
   // M1 (MAR-2814 round 1): a project row holds `resolve()`d path, not a
