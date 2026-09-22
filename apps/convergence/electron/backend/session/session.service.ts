@@ -5732,6 +5732,38 @@ export class SessionService {
     }
   }
 
+  /**
+   * The texts of a session's user messages recorded at or after `stamp`
+   * (MAR-3307 R1): what `readStaleResetFromQueue` asks to tell a reset in
+   * flight from one that finished.
+   *
+   * `>=`, not `>`: the reset row's `sent` stamp (`markQueuedInputSent`) is
+   * written when the provider accepts the turn, and Claude Code records its
+   * own `/clear` prompt right after, often in the same millisecond. Both are
+   * `toISOString()` values, so the text order is the time order.
+   */
+  private readUserTextsAtOrAfter(sessionId: string, stamp: string): string[] {
+    const rows = this.db
+      .prepare(
+        `SELECT payload_json
+         FROM session_conversation_items
+         WHERE session_id = ?
+           AND kind = 'message'
+           AND json_extract(payload_json, '$.actor') = 'user'
+           AND created_at >= ?
+         ORDER BY sequence`,
+      )
+      .all(sessionId, stamp) as Array<{ payload_json: string }>
+    return rows.map((row) => {
+      try {
+        const text = (JSON.parse(row.payload_json) as { text?: unknown }).text
+        return typeof text === 'string' ? text : ''
+      } catch {
+        return ''
+      }
+    })
+  }
+
   private markStaleRunningSessionFailed(
     session: Session,
     reason: string,
@@ -5743,7 +5775,10 @@ export class SessionService {
     // about to become `failed`, and then it no longer reads as the turn in
     // flight (MAR-3307 R1).
     const staleReset = options.atBoot
-      ? readStaleResetFromQueue(this.queuedInputs.listAllForSession(session.id))
+      ? readStaleResetFromQueue(
+          this.queuedInputs.listAllForSession(session.id),
+          (stamp) => this.readUserTextsAtOrAfter(session.id, stamp),
+        )
       : null
     const note = this.addConversationItem(session.id, {
       id: randomUUID(),

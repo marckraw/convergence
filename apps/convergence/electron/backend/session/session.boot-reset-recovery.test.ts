@@ -134,6 +134,50 @@ describe('boot recovery reads a reset a restart interrupted (MAR-3307)', () => {
     return row.id
   }
 
+  /** Moves a row's state stamp to `at`: for a `sent` row, its acceptance. */
+  function stampRow(id: string, at: string): void {
+    db.prepare(
+      'UPDATE session_queued_inputs SET updated_at = ? WHERE id = ?',
+    ).run(at, id)
+  }
+
+  /** A user message as a provider's `addUserMessage` records it. */
+  function recordUserMessage(text: string, createdAt: string): void {
+    db.prepare(
+      `INSERT INTO session_conversation_items
+        (id, session_id, sequence, turn_id, kind, state, payload_json,
+         provider_item_id, provider_event_type, created_at, updated_at)
+       VALUES (?, ?, (SELECT COALESCE(MAX(sequence), 0) + 1
+                      FROM session_conversation_items WHERE session_id = ?),
+               NULL, 'message', 'complete', ?, NULL, 'user', ?, ?)`,
+    ).run(
+      `user-${text}-${createdAt}`,
+      sessionId,
+      sessionId,
+      JSON.stringify({ actor: 'user', text }),
+      createdAt,
+      createdAt,
+    )
+    // The service numbers the next item from the session row, as it does
+    // after its own insert.
+    db.prepare(
+      `UPDATE sessions SET last_sequence = (SELECT MAX(sequence)
+         FROM session_conversation_items WHERE session_id = ?) WHERE id = ?`,
+    ).run(sessionId, sessionId)
+  }
+
+  function userMessageCount(): number {
+    return (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM session_conversation_items
+           WHERE session_id = ? AND kind = 'message'
+             AND json_extract(payload_json, '$.actor') = 'user'`,
+        )
+        .get(sessionId) as { n: number }
+    ).n
+  }
+
   function rowById(id: string) {
     return db
       .prepare(
@@ -272,6 +316,9 @@ describe('boot recovery reads a reset a restart interrupted (MAR-3307)', () => {
         .get(receipt.payloadDispatchId) as { id: string }
     ).id
     providerLog.length = 0
+    // Pi's reset records no user message and opens no turn (MAR-3307 lap 4):
+    // silence after the stamp is what makes this reset read as in flight.
+    expect(userMessageCount()).toBe(0)
 
     const service = boot()
 
@@ -344,6 +391,96 @@ describe('boot recovery reads a reset a restart interrupted (MAR-3307)', () => {
     service.tellBootEndings()
     expect(terminals).toEqual([])
     expect(providerLog).toEqual([])
+  })
+
+  it('an old finished /clear, then a human hello, then a queued follow-up: the follow-up stays queued (MAR-2971) — dropping the later-message check turns red', () => {
+    markRunning()
+    // A reset typed by hand on a busy seat: it waited, drained, finished, and
+    // had nothing behind it. Its row still reads `sent`.
+    const reset = seedRow('/clear', 'sent', null)
+    stampRow(reset, '2026-09-23T08:00:00.000Z')
+    // Then the human spoke, directly (no queue row), and queued a follow-up
+    // behind their own turn before the app died.
+    recordUserMessage('hello', '2026-09-23T08:05:00.000Z')
+    const later = seedRow('later brief', 'queued', 'later')
+
+    const service = boot()
+
+    expect(rowById(later)).toEqual({
+      state: 'queued',
+      error: null,
+      ending_told_at: null,
+    })
+    expect(resetNotes(service)).toEqual([])
+    const terminals = listen(service)
+    service.tellBootEndings()
+    expect(terminals).toEqual([])
+    expect(providerLog).toEqual([])
+  })
+
+  it("Claude Code's shape: the reset row sent and the SDK's own /clear recorded in the same millisecond — in flight, the brief fails loudly (dropping the /clear exclusion turns red)", () => {
+    markRunning()
+    const at = '2026-09-23T08:00:00.000Z'
+    const opener = seedRow('/clear', 'sent', 'opener-receipt')
+    stampRow(opener, at)
+    // `onTurnAccepted` stamps `sent`, then `addUserMessage('/clear')`
+    // (`claude-code-provider.ts`), both in one millisecond.
+    recordUserMessage('/clear', at)
+    const payload = seedRow('the brief that must ride', 'queued', 'payload')
+
+    const service = boot()
+
+    expect(rowById(payload)).toEqual({
+      state: 'failed',
+      error: STALE_RESET_ROW_ERROR,
+      ending_told_at: null,
+    })
+    expect(resetNotes(service)).toHaveLength(1)
+    const terminals = listen(service)
+    service.tellBootEndings()
+    expect(terminals).toEqual([
+      expect.objectContaining({ reason: 'failed', dispatchIds: ['payload'] }),
+    ])
+    expect(providerLog).toEqual([])
+  })
+
+  it('a conversation with history: a human spoke BEFORE the reset went out — still in flight, the brief fails loudly (reading the whole session turns red)', () => {
+    markRunning()
+    // Every real seat has a past. Only what was said after the stamp counts.
+    recordUserMessage(
+      'yesterday we built the parser',
+      '2026-09-23T07:00:00.000Z',
+    )
+    const opener = seedRow('/clear', 'sent', 'opener-receipt')
+    stampRow(opener, '2026-09-23T08:00:00.000Z')
+    const payload = seedRow('the brief that must ride', 'queued', 'payload')
+
+    const service = boot()
+
+    expect(rowById(payload)).toEqual({
+      state: 'failed',
+      error: STALE_RESET_ROW_ERROR,
+      ending_told_at: null,
+    })
+    expect(resetNotes(service)).toHaveLength(1)
+  })
+
+  it('a human message in the same millisecond as the reset stamp counts as after it: stays queued (comparing with > turns red)', () => {
+    markRunning()
+    const at = '2026-09-23T08:00:00.000Z'
+    const reset = seedRow('/clear', 'sent', null)
+    stampRow(reset, at)
+    recordUserMessage('hello', at)
+    const later = seedRow('later brief', 'queued', 'later')
+
+    const service = boot()
+
+    expect(rowById(later)).toEqual({
+      state: 'queued',
+      error: null,
+      ending_told_at: null,
+    })
+    expect(resetNotes(service)).toEqual([])
   })
 
   it('an ending boot wrote is told by a LATER boot — telling from memory turns red', () => {
