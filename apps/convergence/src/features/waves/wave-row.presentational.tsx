@@ -1,4 +1,4 @@
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2, ExternalLink } from 'lucide-react'
 import type { FC } from 'react'
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
 import { cn } from '@/shared/lib/cn.pure'
@@ -6,6 +6,7 @@ import { Button } from '@/shared/ui/button'
 import {
   waveRowKey,
   waveRowMetaWords,
+  waveRowPullRequest,
   type WaveRow,
 } from './wave-sections.pure'
 import {
@@ -28,7 +29,7 @@ interface WaveRowViewProps {
  * One issue on the panel (R2): identifier, title, crew (when several are
  * bound), seat, state, PR, the human action, the `blocked` label and a host
  * outage marker -- the ledger's facts, nothing invented. A row with a
- * reachable conversation is a button; one without says why it is inert.
+ * reachable destination has a button role; one without says why it is inert.
  */
 export const WaveRowView: FC<WaveRowViewProps> = ({
   appearance,
@@ -39,6 +40,7 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
 }) => {
   const { entry, action, hostMarker } = row
   const key = waveRowKey(entry)
+  const pr = waveRowPullRequest(row)
   const loom = appearance === 'loom'
   const cardClass = loom
     ? cn(
@@ -86,6 +88,26 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
         )}
       >
         {waveRowMetaWords(row).join(' · ')}
+        {pr ? (
+          <>
+            {' · '}
+            {inertReason === null ? (
+              <a
+                href={pr.url}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`${pr.label}, opens on GitHub`}
+                className="inline-flex items-center gap-1 rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                onClick={(event) => event.stopPropagation()}
+              >
+                {pr.label}
+                <ExternalLink className="size-3" aria-hidden />
+              </a>
+            ) : (
+              pr.label
+            )}
+          </>
+        ) : null}
         {entry.fact.merged
           ? ` · merged ${entry.fact.merged.headSha.slice(0, 7)}`
           : null}
@@ -129,13 +151,31 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
 
   return inertReason === null ? (
     <Button
-      type="button"
+      asChild
       variant="ghost"
       data-wave-row={key}
-      className={cn(WAVE_ROW_CLASS, WAVE_ROW_OPENABLE_CLASS, cardClass)}
+      className={cn(
+        WAVE_ROW_CLASS,
+        WAVE_ROW_OPENABLE_CLASS,
+        'cursor-default',
+        cardClass,
+      )}
       onClick={() => onOpen(entry)}
     >
-      {body}
+      <div
+        role="button"
+        tabIndex={0}
+        onKeyDown={(event) => {
+          // Enter on the link belongs to the browser, not the card (MAR-3361).
+          if (event.target !== event.currentTarget) return
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            onOpen(entry)
+          }
+        }}
+      >
+        {body}
+      </div>
     </Button>
   ) : (
     <div

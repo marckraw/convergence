@@ -18,6 +18,7 @@ import {
   waveRowHostMarker,
   waveRowKey,
   waveRowMetaWords,
+  waveRowPullRequest,
   waveRowsFromSnapshots,
   waveLapLabel,
   type WaveRow,
@@ -35,6 +36,7 @@ describe('MAR-3199 R5: card words say what happened', () => {
     entry: Partial<WorkLedgerEntry>
     crewName?: string
     words: string[]
+    pr?: { label: string; url: string }
   }>([
     {
       name: 'assigned without a seat',
@@ -66,7 +68,11 @@ describe('MAR-3199 R5: card words say what happened', () => {
           source: 'gh',
         },
       },
-      words: ['opus', 'reviewed', 'lap 1 of 6', 'pass', 'PR #678 open'],
+      words: ['opus', 'reviewed', 'lap 1 of 6', 'pass'],
+      pr: {
+        label: 'PR #678 open',
+        url: 'https://github.com/example/repo/pull/678',
+      },
     },
     {
       // MAR-3313 R1: a tracker link names the number with no state word
@@ -83,7 +89,11 @@ describe('MAR-3199 R5: card words say what happened', () => {
           title: 'fix(loom): a title',
         },
       },
-      words: ['opus', 'reviewed', 'lap 1 of 6', 'pass', 'PR #769'],
+      words: ['opus', 'reviewed', 'lap 1 of 6', 'pass'],
+      pr: {
+        label: 'PR #769',
+        url: 'https://github.com/marckraw/convergence/pull/769',
+      },
     },
     {
       // MAR-3313 R1: null PR adds nothing.
@@ -96,13 +106,14 @@ describe('MAR-3199 R5: card words say what happened', () => {
       entry: { state: 'unassigned', seat: null },
       words: ['no seat', 'unassigned'],
     },
-  ])('$name', ({ entry, crewName, words }) => {
+  ])('$name', ({ entry, crewName, words, pr }) => {
     const row = sectionWaveRows(
       [ledgerEntry({ issueIdentifier: 'EX-1', ...entry })],
       NOW,
       () => ({ name: crewName ?? null, cap: 6 }),
     ).waves[0].rows[0]
     expect(waveRowMetaWords(row)).toEqual(words)
+    expect(waveRowPullRequest(row)).toEqual(pr ?? null)
   })
 
   it('keeps assigned card wording in agreement with the detail, with or without a seat', () => {

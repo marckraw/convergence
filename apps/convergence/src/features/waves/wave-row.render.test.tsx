@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { render } from './loom-tooltip.fixture'
 import { useSessionCrewStore, type SessionCrew } from '@/entities/session-crew'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
@@ -85,43 +85,168 @@ describe('MAR-3155 R5: the identifier never breaks; the title gets the rest', ()
   })
 })
 
-describe('MAR-3313 R2: the card names a tracker-linked PR', () => {
-  it('shows PR #751 in the meta line, still one button with no anchor', () => {
-    // `done` lands on Before, not Now.inFlight (loomSheets).
-    const waveRow = loomSheets(
-      [
-        ledgerEntry({
-          issueIdentifier: 'MAR-3144',
-          state: 'done',
-          seat: 'deepseek-mac',
-          pr: {
-            source: 'tracker',
-            number: 751,
-            url: 'https://github.com/marckraw/convergence/pull/751',
-            title: 'feat: something',
-          },
-        }),
-      ],
-      NOW,
-    ).before[0]!
+describe('MAR-3361: the PR word opens GitHub, the card opens the detail', () => {
+  const trackerPr = {
+    source: 'tracker' as const,
+    number: 751,
+    url: 'https://github.com/marckraw/convergence/pull/751',
+    title: 'feat: something',
+  }
+
+  function mountRow({
+    pr = trackerPr,
+    inertReason = null,
+    layout = 'list',
+  }: {
+    pr?: ReturnType<typeof ledgerEntry>['pr']
+    inertReason?: string | null
+    layout?: 'list' | 'grid'
+  } = {}) {
+    const entry = ledgerEntry({
+      issueIdentifier: 'MAR-3144',
+      state: 'done',
+      seat: 'deepseek-mac',
+      pr,
+    })
+    const onOpen = vi.fn()
     render(
       <WaveRowView
         appearance="loom"
-        row={waveRow}
-        inertReason={null}
-        onOpen={vi.fn()}
+        layout={layout}
+        row={loomSheets([entry], NOW).before[0]!}
+        inertReason={inertReason}
+        onOpen={onOpen}
       />,
     )
-
-    const el = document.querySelector(
+    const card = document.querySelector(
       '[data-wave-row="crew-1:MAR-3144"]',
     ) as HTMLElement
-    // Mutation: omit the tracker word from waveRowMetaWords -> red.
-    expect(el.textContent).toContain('PR #751')
-    // The card IS the button; the detail holds the link. Mutation: wrap
-    // the number in an <a> inside the row -> red.
-    expect(el.tagName).toBe('BUTTON')
-    expect(el.querySelectorAll('a')).toHaveLength(0)
+    return { card, onOpen, entry }
+  }
+
+  it('R1: renders the tracker PR word as a named external link', () => {
+    const { card } = mountRow()
+    const link = within(card).getByRole('link', {
+      name: 'PR #751, opens on GitHub',
+    })
+    expect(link.tagName).toBe('A')
+    expect(link).toHaveAttribute('href', trackerPr.url)
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link.getAttribute('rel')?.split(' ')).toContain('noreferrer')
+    expect(link.textContent).toBe('PR #751')
+    expect(link.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  it('R1: preserves a session PR state in the link word', () => {
+    mountRow({
+      pr: {
+        source: 'gh',
+        number: 777,
+        state: 'open',
+        url: 'https://github.com/marckraw/convergence/pull/777',
+        headBranch: 'agent/example',
+        checkedAt: AT,
+      },
+    })
+    expect(
+      screen.getByRole('link', { name: 'PR #777 open, opens on GitHub' }),
+    ).toHaveAttribute(
+      'href',
+      'https://github.com/marckraw/convergence/pull/777',
+    )
+  })
+
+  it('R1: no PR means no link or PR word', () => {
+    const { card } = mountRow({ pr: null })
+    expect(within(card).queryByRole('link')).toBeNull()
+    expect(card.textContent).not.toContain('PR #')
+  })
+
+  it('R2: clicking the PR link does not open the detail; the card body does', () => {
+    const { card, onOpen, entry } = mountRow()
+    fireEvent.click(within(card).getByRole('link'))
+    expect(onOpen).not.toHaveBeenCalled()
+    fireEvent.click(within(card).getByText(entry.issueTitle))
+    expect(onOpen).toHaveBeenCalledExactlyOnceWith(entry)
+  })
+
+  it('R2: card and link have separate tab stops and Enter actions', () => {
+    const { card, onOpen, entry } = mountRow()
+    const link = within(card).getByRole('link')
+    expect(card).toHaveRole('button')
+    expect(card.tabIndex).toBe(0)
+    expect(link.tabIndex).toBe(0)
+    expect([...document.querySelectorAll('[tabindex="0"], a[href]')]).toEqual([
+      card,
+      link,
+    ])
+    card.focus()
+    expect(card).toHaveFocus()
+    fireEvent.keyDown(card, { key: 'Enter' })
+    expect(onOpen).toHaveBeenCalledExactlyOnceWith(entry)
+    onOpen.mockClear()
+    link.focus()
+    expect(link).toHaveFocus()
+    // jsdom does not synthesize the browser's Enter click. Its key event
+    // must remain uncancelled; dispatch the resulting click explicitly.
+    expect(fireEvent.keyDown(link, { key: 'Enter' })).toBe(true)
+    fireEvent.click(link)
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  it('R2: Space opens the focused card and prevents scrolling', () => {
+    const { card, onOpen, entry } = mountRow()
+    card.focus()
+    expect(fireEvent.keyDown(card, { key: ' ' })).toBe(false)
+    expect(onOpen).toHaveBeenCalledExactlyOnceWith(entry)
+    onOpen.mockClear()
+    const link = within(card).getByRole('link')
+    link.focus()
+    expect(fireEvent.keyDown(link, { key: ' ' })).toBe(true)
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  it('R3: the PR link has no native button ancestor', () => {
+    const { card } = mountRow()
+    // MAR-3361 retires MAR-3313's "one button with no anchor" assertion:
+    // the card is now a div with a button role, and the anchor is real HTML.
+    expect(within(card).getByRole('link').closest('button')).toBeNull()
+    expect(card.tagName).toBe('DIV')
+  })
+
+  it.each(['list', 'grid'] as const)(
+    'R4: %s keeps card styling and focus feedback',
+    (layout) => {
+      const { card } = mountRow({ layout })
+      for (const token of [
+        'rounded-lg',
+        'p-3',
+        'gap-2',
+        'hover:bg-white/5',
+        'focus-visible:bg-white/5',
+        'focus-visible:ring-1',
+        'focus-visible:ring-ring',
+        'transition-colors',
+        'bg-foreground/[0.035]',
+      ]) {
+        expect(card).toHaveClass(token)
+      }
+      expect(card.classList.contains('mb-2')).toBe(layout === 'list')
+    },
+  )
+
+  it('R4: an inert card keeps its PR word as plain text and stays inert', () => {
+    const { card, onOpen } = mountRow({
+      inertReason: 'no conversation for this seat',
+    })
+    expect(card).toHaveAttribute('aria-disabled', 'true')
+    expect(card).not.toHaveAttribute('role')
+    expect(card.tabIndex).toBe(-1)
+    expect(within(card).queryByRole('link')).toBeNull()
+    expect(card.textContent).toContain('PR #751')
+    fireEvent.click(card)
+    fireEvent.keyDown(card, { key: 'Enter' })
+    expect(onOpen).not.toHaveBeenCalled()
   })
 })
 
