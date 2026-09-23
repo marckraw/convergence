@@ -1,5 +1,6 @@
 import { MergeReviewed } from './merge-reviewed.container'
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -203,12 +204,12 @@ function useSheetScroll(
  * choice, when the window is too narrow for a column. Never writes to the
  * tracker.
  */
-export const WavePanel: FC<WavePanelProps> = ({
+export const WavePanel: FC<WavePanelProps> = memo(function WavePanel({
   onOpenSession,
   reservedWidth = 0,
   onExpandedChange,
   expandedContainer,
-}) => {
+}) {
   /**
    * Loom's search (MAR-3234): the field's text, immediate, and the query the
    * sheets are filtered by -- a debounced copy of it (R10), so typing costs
@@ -648,8 +649,7 @@ export const WavePanel: FC<WavePanelProps> = ({
             now: board.now,
           }),
           onClose: closeDetail,
-          onOpenConversation: (session: SessionSummary) =>
-            onOpenSession?.(session),
+          onOpenConversation: (session: { id: string }) => openSeat(session.id),
           closeRef: closeButton,
         }
 
@@ -925,4 +925,4 @@ export const WavePanel: FC<WavePanelProps> = ({
       ) : null}
     </>,
   )
-}
+})
