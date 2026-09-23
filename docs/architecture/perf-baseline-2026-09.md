@@ -142,3 +142,7 @@ node apps/convergence/tools/perf-busy-day.mjs --loom --out /tmp/perf-busy-day.js
 The runner builds an isolated renderer, rebuilds better-sqlite3 for Electron, and restores the Node native build afterward. `--node --sessions 2 --streaming 1 --minutes 0.1` is the executable contract test; its renderer fields are placeholders explicitly marked `measured: false`. The full default-run JSON is attached to MAR-3322.
 
 Marcin QA: read the ten ranked boundaries and their file:line, verify that all four hypotheses cite numbers, and compare a real busy-day R2 dump before S1 sets budgets. No product behavior or performance fix is included.
+
+## Real busy day
+
+Quit Convergence, start it with `CONVERGENCE_PERF=1 /Applications/Convergence.app/Contents/MacOS/Convergence`, and work for an hour with horses riding. `kill -USR2 $(pgrep -x Convergence)` writes `~/Library/Application Support/convergence/perf/perf-report-<time>-usr2.json`; quitting the app writes `perf-report-<time>-quit.json` beside it.
