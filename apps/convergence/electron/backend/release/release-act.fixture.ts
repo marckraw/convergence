@@ -25,7 +25,7 @@ export const reading = (patch: Record<string, unknown> = {}) =>
     statusCheckRollup: [
       { name: 'verify', status: 'COMPLETED', conclusion: 'SUCCESS' },
     ],
-    mergeCommit: { oid: MERGED },
+    mergeCommit: null,
     ...patch,
   })
 
@@ -81,7 +81,14 @@ export function releaseBench(count = 1) {
         { headSha: MERGED, status: 'completed', conclusion: 'success' },
       ])
     if (args[1] === 'merge') return ''
-    return reading({ url: `https://github.com/example/repo/pull/${args[2]}` })
+    return reading({
+      url: `https://github.com/example/repo/pull/${args[2]}`,
+      mergeCommit: events.some((event) =>
+        event.startsWith(`pr merge ${args[2]} `),
+      )
+        ? { oid: MERGED }
+        : null,
+    })
   })
   const hails = { raise: vi.fn(() => null) }
   const deps = {

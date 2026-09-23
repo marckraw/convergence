@@ -2,6 +2,7 @@ import type { MergeReading } from '../../../src/shared/types/release.types'
 import type { WorkLedgerEntry } from '../work-ledger/work-ledger.types'
 
 export function mergeVerdict(reading: MergeReading): string {
+  if (reading.mergeCommit) return `merged ${reading.mergeCommit.slice(0, 7)}`
   if (reading.mergeStateStatus !== 'CLEAN')
     return `not CLEAN: ${reading.mergeStateStatus}`
   if (reading.verify === 'missing') return 'verify missing'

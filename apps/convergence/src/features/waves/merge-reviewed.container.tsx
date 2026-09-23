@@ -27,7 +27,11 @@ export function MergeReviewed({
       .then((next) => {
         if (disposed) return
         setPlan(next)
-        setSelected(next.candidates.map((row) => row.issueId))
+        setSelected(
+          next.candidates
+            .filter((row) => row.verdict === 'mergeable')
+            .map((row) => row.issueId),
+        )
       })
       .catch((reason: unknown) => {
         if (!disposed)

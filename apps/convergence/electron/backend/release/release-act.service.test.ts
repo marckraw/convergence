@@ -19,6 +19,49 @@ afterEach(() => {
   for (const value of benches.splice(0)) value.db.close()
 })
 
+it('MAR-3360 R1 plans a merged reading without a ledger merged fact', async () => {
+  const b = bench()
+  expect(b.deps.ledger.list()[0].fact.merged).toBeUndefined()
+  vi.spyOn(b.deps.prs, 'viewForMerge').mockResolvedValue({
+    url: 'https://github.com/example/repo/pull/1',
+    headSha: HEAD,
+    title: 'Already merged',
+    mergeStateStatus: 'UNKNOWN',
+    verify: 'SUCCESS',
+    mergeCommit: MERGED,
+  })
+  const plan = await b.service.plan(seat)
+  expect(plan.candidates[0].verdict).toBe('merged ccccccc')
+  await expect(
+    b.service.merge({ ...seat, planId: plan.id, issueIds: ['issue-1'] }),
+  ).rejects.toThrow('Select mergeable PRs only')
+  expect(b.service.acts(seat).acts).toEqual([])
+  expect(b.gh).not.toHaveBeenCalled()
+})
+
+it('MAR-3360 a current merge commit takes precedence over an interrupted act and stale ledger SHA', async () => {
+  const b = bench()
+  const current = b.ledger.currentView('crew')[0]
+  b.ledger.append([
+    {
+      ...current,
+      seenAt: '2026-09-23T00:00:00Z',
+      fact: { ...current.fact, merged: { headSha: HEAD, prNumber: 1 } },
+    },
+  ])
+  b.db
+    .prepare(
+      "INSERT INTO release_acts (id, crew_id, kind, issue_id, pr_number, head_sha, requested_at, outcome) VALUES ('interrupted', 'crew', 'merge', 'issue-1', 1, ?, 'now', 'running')",
+    )
+    .run(HEAD)
+  b.gh.mockResolvedValue(
+    reading({ mergeStateStatus: 'UNKNOWN', mergeCommit: { oid: MERGED } }),
+  )
+  const plan = await b.service.plan(seat)
+  expect(plan.candidates[0].verdict).toBe('merged ccccccc')
+  expect(plan.acts[0].outcome).toBe('running')
+})
+
 describe('MAR-3087 merge rite, fake gh only', () => {
   it('R1/R2 CLEAN twice merges with --merge and the second read head, then records the fact', async () => {
     const b = bench()
@@ -98,7 +141,12 @@ describe('MAR-3087 merge rite, fake gh only', () => {
       b.events.push(args.slice(0, 3).join(' '))
       return args[1] === 'merge'
         ? ''
-        : reading({ url: `https://github.com/example/repo/pull/${args[2]}` })
+        : reading({
+            url: `https://github.com/example/repo/pull/${args[2]}`,
+            mergeCommit: b.events.includes(`pr merge ${args[2]}`)
+              ? { oid: MERGED }
+              : null,
+          })
     })
     await b.merge()
     expect(b.events.indexOf('poll:3:completed')).toBeGreaterThan(
@@ -127,6 +175,15 @@ describe('MAR-3087 merge rite, fake gh only', () => {
             ? ''
             : reading({
                 url: `https://github.com/example/repo/pull/${args[2]}`,
+                mergeCommit: b.service
+                  .acts(seat)
+                  .acts.some(
+                    (act) =>
+                      act.prNumber === Number(args[2]) &&
+                      act.outcome === 'merged',
+                  )
+                  ? { oid: MERGED }
+                  : null,
               }),
       )
       const result = await b.merge()
@@ -227,7 +284,17 @@ describe('MAR-3087 merge rite, fake gh only', () => {
         ])
       return args[1] === 'merge'
         ? ''
-        : reading({ url: `https://github.com/example/repo/pull/${args[2]}` })
+        : reading({
+            url: `https://github.com/example/repo/pull/${args[2]}`,
+            mergeCommit: b.service
+              .acts(seat)
+              .acts.some(
+                (act) =>
+                  act.prNumber === Number(args[2]) && act.outcome === 'merged',
+              )
+              ? { oid: MERGED }
+              : null,
+          })
     })
     const result = await b.merge()
     expect(result.acts.map((act) => act.outcome)).toEqual([

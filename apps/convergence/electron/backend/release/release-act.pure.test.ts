@@ -5,6 +5,19 @@ import { diffTrackerSnapshot } from '../tracker/tracker-watcher.pure'
 import { trackerIssue } from '../tracker/linear-tracker.fixture'
 import { HEAD, reading, releaseBench } from './release-act.fixture'
 
+it('MAR-3360 R1 a merge commit is merged even when GitHub reports UNKNOWN', () => {
+  expect(
+    mergeVerdict(
+      parseMergeReading(
+        reading({
+          mergeStateStatus: 'UNKNOWN',
+          mergeCommit: { oid: '512a3ef632a675195826bed1e4ce29b939bfd2f2' },
+        }),
+      ),
+    ),
+  ).toBe('merged 512a3ef')
+})
+
 it('MAR-3087 parser gates missing, pending, failed and duplicate verify checks', () => {
   for (const [checks, verdict] of [
     [[], 'verify missing'],

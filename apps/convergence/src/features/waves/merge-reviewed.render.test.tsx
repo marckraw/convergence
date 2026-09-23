@@ -6,13 +6,18 @@ import {
   screen,
   within,
 } from '@testing-library/react'
-import type { ReleasePlan } from '@/entities/release'
+import { releaseApi, type ReleasePlan } from '@/entities/release'
 import { MergeReviewedView } from './merge-reviewed.presentational'
+import { MergeReviewed } from './merge-reviewed.container'
 import { LoomSheetView } from './loom-sheet.presentational'
 import { loomSheets } from './loom-sheets.pure'
 import { ledgerEntry } from './wave-rows.fixture'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+  vi.clearAllMocks()
+})
 const plan: ReleasePlan = {
   id: 'plan',
   unavailable: false,
@@ -59,6 +64,87 @@ const props = {
   onMerge: vi.fn(),
 }
 
+const mergedRows = [2, 3, 4].map((prNumber) => ({
+  ...plan.candidates[0],
+  issueId: `merged-${prNumber}`,
+  prNumber,
+  mergeStateStatus: 'UNKNOWN',
+  mergeCommit: 'ccccccc1234',
+  verdict: 'merged ccccccc',
+}))
+
+it('MAR-3360 R2 three merged rows and one mergeable count only the mergeable selection', () => {
+  render(
+    <MergeReviewedView
+      {...props}
+      plan={{ ...plan, candidates: [plan.candidates[0], ...mergedRows] }}
+      selected={['one', ...mergedRows.map((row) => row.issueId)]}
+    />,
+  )
+  expect(screen.getByRole('button', { name: 'Merge 1' })).toBeTruthy()
+  expect(screen.getByRole('checkbox', { name: 'Select PR #1' })).toBeChecked()
+  expect(screen.getByRole('checkbox', { name: 'Select PR #1' })).toBeEnabled()
+  const summary = screen.getByText('Already merged · 3')
+  expect(summary.closest('details')).not.toHaveAttribute('open')
+  fireEvent.click(summary)
+  for (const row of mergedRows) {
+    const checkbox = screen.getByLabelText(`Select PR #${row.prNumber}`)
+    expect(checkbox).not.toBeChecked()
+    expect(checkbox).toBeDisabled()
+  }
+})
+
+it('MAR-3360 R2 only merged rows show the summary and disabled Nothing to merge', () => {
+  render(
+    <MergeReviewedView
+      {...props}
+      plan={{ ...plan, candidates: mergedRows }}
+      selected={mergedRows.map((row) => row.issueId)}
+    />,
+  )
+  expect(
+    screen.getByRole('button', { name: 'Nothing to merge' }),
+  ).toBeDisabled()
+  expect(
+    screen.getByText('Nothing to merge — every reviewed PR is already merged.'),
+  ).toBeTruthy()
+  expect(screen.getByText('Already merged · 3')).toBeTruthy()
+})
+
+it('MAR-3360 R2 opening a mixed plan selects and submits only the mergeable issue', async () => {
+  vi.spyOn(releaseApi, 'plan').mockResolvedValue({
+    ...plan,
+    candidates: [plan.candidates[0], ...mergedRows],
+  })
+  vi.spyOn(releaseApi, 'acts').mockResolvedValue({
+    acts: [],
+    running: false,
+    waitingFor: null,
+  })
+  const merge = vi
+    .spyOn(releaseApi, 'merge')
+    .mockResolvedValue({ acts: [], running: false, waitingFor: null })
+  render(
+    <MergeReviewed
+      seat={{ crewId: 'crew', sessionId: 'mastermind' }}
+      enabled
+    />,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Merge reviewed…' }))
+  const button = await screen.findByRole('button', { name: 'Merge 1' })
+  expect(button).toBeEnabled()
+  fireEvent.click(button)
+  expect(merge).toHaveBeenCalledExactlyOnceWith({
+    crewId: 'crew',
+    sessionId: 'mastermind',
+    planId: 'plan',
+    issueIds: ['one'],
+  })
+  expect(
+    await screen.findByRole('button', { name: 'Nothing to merge' }),
+  ).toBeDisabled()
+})
+
 it('MAR-3087 sheet groups waves, shows all readings and enables a mergeable partial selection', () => {
   const view = render(<MergeReviewedView {...props} />)
   expect(
@@ -68,9 +154,10 @@ it('MAR-3087 sheet groups waves, shows all readings and enables a mergeable part
   ).toEqual(['wave-two', 'no wave'])
   expect(screen.getByText('abcdef1 · CLEAN · verify SUCCESS')).toBeTruthy()
   expect(screen.getByText('not CLEAN: DIRTY')).toBeTruthy()
-  expect(screen.getByRole('button', { name: 'Merge 2' })).toBeDisabled()
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Select PR #2' }))
-  expect(props.onToggle).toHaveBeenCalledWith('two')
+  expect(screen.getByRole('button', { name: 'Merge 1' })).toBeDisabled()
+  expect(screen.getByRole('checkbox', { name: 'Select PR #2' })).toBeDisabled()
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select PR #1' }))
+  expect(props.onToggle).toHaveBeenCalledWith('one')
   view.rerender(<MergeReviewedView {...props} selected={['one']} />)
   fireEvent.click(screen.getByRole('button', { name: 'Merge 1' }))
   expect(props.onMerge).toHaveBeenCalledOnce()
@@ -108,7 +195,7 @@ it('MAR-3087 sheet exposes bot waiting and interrupted records', () => {
     />,
   )
   expect(screen.getByText('#1: waiting for the changesets run…')).toBeTruthy()
-  expect(screen.getByRole('button', { name: 'Merge 2' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Merge 1' })).toBeDisabled()
   view.rerender(
     <MergeReviewedView {...props} plan={{ ...plan, acts: [act] }} />,
   )
