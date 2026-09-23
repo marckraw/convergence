@@ -8,6 +8,13 @@ import type { SessionSendResult } from '../../src/shared/types/session-send.type
 import { contextBridge, ipcRenderer, nativeTheme } from 'electron'
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  perf: {
+    isEnabled: () => process.env.CONVERGENCE_PERF === '1',
+    report: (payload: unknown) =>
+      process.env.CONVERGENCE_PERF === '1'
+        ? ipcRenderer.invoke('perf:report', payload)
+        : Promise.resolve(null),
+  },
   system: {
     getInfo: () => ({
       platform: process.platform,

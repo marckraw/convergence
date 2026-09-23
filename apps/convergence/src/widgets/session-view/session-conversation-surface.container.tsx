@@ -1,3 +1,4 @@
+import { PerfProfiler } from '@/shared/lib/perf-profiler'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 import { Button } from '@/shared/ui/button'
 import type { ParallelWorkRow } from '@/shared/lib/parallel-work.pure'
@@ -116,6 +117,8 @@ function renderComposerArea(
   }
 
   return composerContext ? (
-    <ComposerContainer context={composerContext} />
+    <PerfProfiler id="composer">
+      <ComposerContainer context={composerContext} />
+    </PerfProfiler>
   ) : null
 }

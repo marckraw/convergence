@@ -1,3 +1,4 @@
+import { PerfProfiler } from '@/shared/lib/perf-profiler'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
 import { useProjectStore } from '@/entities/project'
@@ -977,177 +978,181 @@ export const Sidebar: FC<SidebarProps> = ({
         </div>
       </div>
 
-      <SidebarConversations
-        searchRequest={searchRequest}
-        collapsed={collapsed}
-        globalSessions={globalSessions}
-        sessions={sessions}
-        headerStart={
-          <>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant={activeSurface === 'code' ? 'secondary' : 'ghost'}
-                  size="icon"
-                  className="h-8 w-8"
-                  aria-label="Show code surface"
-                  aria-pressed={activeSurface === 'code'}
-                  onClick={() => onSelectSurface('code')}
-                >
-                  <Code2 className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
-                Show code surface
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant={activeSurface === 'chat' ? 'secondary' : 'ghost'}
-                  size="icon"
-                  className="h-8 w-8"
-                  aria-label="Show chat surface"
-                  aria-pressed={activeSurface === 'chat'}
-                  onClick={() => onSelectSurface('chat')}
-                >
-                  <MessageSquareText className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
-                Show chat surface
-              </TooltipContent>
-            </Tooltip>
-            {onShowMissionControl ? (
+      <PerfProfiler id="sidebar">
+        <SidebarConversations
+          searchRequest={searchRequest}
+          collapsed={collapsed}
+          globalSessions={globalSessions}
+          sessions={sessions}
+          headerStart={
+            <>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     type="button"
-                    variant={missionControlActive ? 'secondary' : 'ghost'}
+                    variant={activeSurface === 'code' ? 'secondary' : 'ghost'}
                     size="icon"
                     className="h-8 w-8"
-                    aria-label="Show Mission Control"
-                    aria-pressed={missionControlActive}
-                    onClick={onShowMissionControl}
+                    aria-label="Show code surface"
+                    aria-pressed={activeSurface === 'code'}
+                    onClick={() => onSelectSurface('code')}
                   >
-                    <Satellite className="h-4 w-4" />
+                    <Code2 className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
-                  Show Mission Control
+                  Show code surface
                 </TooltipContent>
               </Tooltip>
-            ) : null}
-          </>
-        }
-        headerEnd={
-          peek ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  aria-label="Pin sidebar"
-                  onClick={onPinPeek}
-                >
-                  <Pin className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
-                Pin sidebar
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  aria-label="Collapse sidebar"
-                  onClick={onCollapse}
-                >
-                  <PanelLeftClose className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
-                Collapse sidebar
-              </TooltipContent>
-            </Tooltip>
-          )
-        }
-        projects={projects}
-        activeProject={activeProject}
-        endpoints={endpoints}
-        cardNow={cardNow}
-        needsYouDismissals={needsYouDismissals}
-        activeSurface={activeSurface}
-        activeSessionId={activeSessionId}
-        activeGlobalSessionId={activeGlobalSessionId}
-        pulsingSessionIds={pulsingSessionIds}
-        terminalIdleNotices={terminalIdleNotices}
-        onPin={(id, pinned) =>
-          void setPinned(id, pinned).catch((error) =>
-            toast.error(error instanceof Error ? error.message : String(error)),
-          )
-        }
-        onSelectNeedsYou={handleSelectNeedsYouSession}
-        onDismissNeedsYou={dismissNeedsYouSession}
-        onArchiveSession={archiveSession}
-        onSelectTerminalIdle={handleSelectTerminalIdleNotice}
-        onDismissTerminalIdle={dismissTerminalIdleNotice}
-        chatSpaces={chatSpaces}
-        ungroupedGlobalChatSessions={ungroupedGlobalChatSessions}
-        selectedSpaceId={selectedSpaceId}
-        expandedSpaceIds={expandedSpaceIds}
-        archivedSpacesExpanded={archivedSpacesExpanded}
-        onNewGlobalSession={onNewGlobalSession}
-        onNewSpace={() => openDialog('space-create')}
-        onSelectSpace={onSelectSpace}
-        onToggleSpace={toggleSpace}
-        onToggleArchivedSpaces={toggleArchivedSpaces}
-        onArchiveSpace={handleArchiveSpace}
-        onUnarchiveSpace={handleUnarchiveSpace}
-        onSelectSpaceAttempt={handleSelectSpaceAttempt}
-        onSelectGlobalSession={onSelectGlobalSession}
-        onManageSessionSpaces={handleManageSessionSpaces}
-        onDetachSpaceAttempt={handleDetachSpaceAttempt}
-        onUnarchiveSession={unarchiveSession}
-        onDeleteGlobalChatSession={handleDeleteGlobalChatSession}
-        onSelectProject={handleSelectProject}
-        onCreateProject={openProjectDialog}
-        cardContext={{
-          projectName: activeProject?.name ?? 'Project',
-          endpoints,
-          now: cardNow,
-        }}
-        baseBranchName={currentBranch}
-        workspaces={workspaces}
-        pullRequestsByWorkspaceId={pullRequestsByWorkspaceId}
-        expandedWorkspaces={expandedWorkspaces}
-        onToggleWorkspace={toggleWorkspace}
-        onSelectSession={onSelectSession}
-        onDeleteSession={(sessionId: string) => {
-          if (!activeProject) return
-          void deleteSession(sessionId, activeProject.id)
-        }}
-        onRenameSession={(sessionId: string, name: string) =>
-          sessionApi.rename(sessionId, name).catch(() => undefined)
-        }
-        regeneratingSessionIds={regeneratingSessionIds}
-        onRegenerateSessionName={handleRegenerateSessionName}
-        onArchiveWorkspace={handleArchiveWorkspace}
-        onUnarchiveWorkspace={handleUnarchiveWorkspace}
-        onRemoveWorkspaceWorktree={handleRemoveWorkspaceWorktree}
-        onSyncWorkspaceEnvFiles={handleSyncWorkspaceEnvFiles}
-        onDeleteWorkspace={handleDeleteWorkspace}
-        onOpenCreateWorkspace={() => openDialog('workspace-create')}
-      />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant={activeSurface === 'chat' ? 'secondary' : 'ghost'}
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label="Show chat surface"
+                    aria-pressed={activeSurface === 'chat'}
+                    onClick={() => onSelectSurface('chat')}
+                  >
+                    <MessageSquareText className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+                  Show chat surface
+                </TooltipContent>
+              </Tooltip>
+              {onShowMissionControl ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant={missionControlActive ? 'secondary' : 'ghost'}
+                      size="icon"
+                      className="h-8 w-8"
+                      aria-label="Show Mission Control"
+                      aria-pressed={missionControlActive}
+                      onClick={onShowMissionControl}
+                    >
+                      <Satellite className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+                    Show Mission Control
+                  </TooltipContent>
+                </Tooltip>
+              ) : null}
+            </>
+          }
+          headerEnd={
+            peek ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label="Pin sidebar"
+                    onClick={onPinPeek}
+                  >
+                    <Pin className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+                  Pin sidebar
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label="Collapse sidebar"
+                    onClick={onCollapse}
+                  >
+                    <PanelLeftClose className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+                  Collapse sidebar
+                </TooltipContent>
+              </Tooltip>
+            )
+          }
+          projects={projects}
+          activeProject={activeProject}
+          endpoints={endpoints}
+          cardNow={cardNow}
+          needsYouDismissals={needsYouDismissals}
+          activeSurface={activeSurface}
+          activeSessionId={activeSessionId}
+          activeGlobalSessionId={activeGlobalSessionId}
+          pulsingSessionIds={pulsingSessionIds}
+          terminalIdleNotices={terminalIdleNotices}
+          onPin={(id, pinned) =>
+            void setPinned(id, pinned).catch((error) =>
+              toast.error(
+                error instanceof Error ? error.message : String(error),
+              ),
+            )
+          }
+          onSelectNeedsYou={handleSelectNeedsYouSession}
+          onDismissNeedsYou={dismissNeedsYouSession}
+          onArchiveSession={archiveSession}
+          onSelectTerminalIdle={handleSelectTerminalIdleNotice}
+          onDismissTerminalIdle={dismissTerminalIdleNotice}
+          chatSpaces={chatSpaces}
+          ungroupedGlobalChatSessions={ungroupedGlobalChatSessions}
+          selectedSpaceId={selectedSpaceId}
+          expandedSpaceIds={expandedSpaceIds}
+          archivedSpacesExpanded={archivedSpacesExpanded}
+          onNewGlobalSession={onNewGlobalSession}
+          onNewSpace={() => openDialog('space-create')}
+          onSelectSpace={onSelectSpace}
+          onToggleSpace={toggleSpace}
+          onToggleArchivedSpaces={toggleArchivedSpaces}
+          onArchiveSpace={handleArchiveSpace}
+          onUnarchiveSpace={handleUnarchiveSpace}
+          onSelectSpaceAttempt={handleSelectSpaceAttempt}
+          onSelectGlobalSession={onSelectGlobalSession}
+          onManageSessionSpaces={handleManageSessionSpaces}
+          onDetachSpaceAttempt={handleDetachSpaceAttempt}
+          onUnarchiveSession={unarchiveSession}
+          onDeleteGlobalChatSession={handleDeleteGlobalChatSession}
+          onSelectProject={handleSelectProject}
+          onCreateProject={openProjectDialog}
+          cardContext={{
+            projectName: activeProject?.name ?? 'Project',
+            endpoints,
+            now: cardNow,
+          }}
+          baseBranchName={currentBranch}
+          workspaces={workspaces}
+          pullRequestsByWorkspaceId={pullRequestsByWorkspaceId}
+          expandedWorkspaces={expandedWorkspaces}
+          onToggleWorkspace={toggleWorkspace}
+          onSelectSession={onSelectSession}
+          onDeleteSession={(sessionId: string) => {
+            if (!activeProject) return
+            void deleteSession(sessionId, activeProject.id)
+          }}
+          onRenameSession={(sessionId: string, name: string) =>
+            sessionApi.rename(sessionId, name).catch(() => undefined)
+          }
+          regeneratingSessionIds={regeneratingSessionIds}
+          onRegenerateSessionName={handleRegenerateSessionName}
+          onArchiveWorkspace={handleArchiveWorkspace}
+          onUnarchiveWorkspace={handleUnarchiveWorkspace}
+          onRemoveWorkspaceWorktree={handleRemoveWorkspaceWorktree}
+          onSyncWorkspaceEnvFiles={handleSyncWorkspaceEnvFiles}
+          onDeleteWorkspace={handleDeleteWorkspace}
+          onOpenCreateWorkspace={() => openDialog('workspace-create')}
+        />
+      </PerfProfiler>
 
       <div className="app-sidebar-footer border-t border-white/10 p-3">
         {activeSurface === 'code' ? (

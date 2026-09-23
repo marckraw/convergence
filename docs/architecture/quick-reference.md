@@ -6,6 +6,11 @@ where it applies: **"Workspace layout" below is repository-relative**, because
 paths that name a sibling workspace have no meaning read from inside one
 (MAR-2737).
 
+## Performance instrumentation
+
+See the [September 2026 busy-day baseline](perf-baseline-2026-09.md) for the
+flag-gated instruments, measured workload, and ranked costs.
+
 ## Product direction
 
 Convergence is a UI-first desktop app for managing agent work across local codebases.
