@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { useResponseAnnotationStore } from '@/entities/response-annotation'
 import { AnnotationTray } from './annotation-tray.container'
+import { AnnotationStrip } from './annotation-strip.presentational'
 import { fourteenAnnotationDrafts } from './annotation-strip-payload.fixture'
 import { toPillBody, toPillQuote } from './annotation-strip.pure'
 
@@ -165,10 +166,47 @@ describe('the RESPONDING TO strip', () => {
       { key: 'ArrowLeft', shiftKey: true },
       { key: 'ArrowLeft', metaKey: true },
     ]) {
-      fireEvent.keyDown(field, keystroke)
+      expect(fireEvent.keyDown(field, keystroke)).toBe(true)
       expect(document.activeElement).toBe(field)
     }
     expect(field.value).toBe('Draft in progress')
+  })
+
+  it('leaves textarea navigation keys to the caret inside an expanded strip item', () => {
+    seedFourteen()
+    const annotations =
+      useResponseAnnotationStore.getState().annotationsBySessionId[SESSION_ID]!
+    const expandedId = annotations[1]!.id
+    render(
+      <AnnotationStrip
+        annotations={annotations}
+        expandedId={expandedId}
+        tabStopId={expandedId}
+        onExpand={vi.fn()}
+        onCollapse={vi.fn()}
+        onPillFocus={vi.fn()}
+        renderExpanded={() => (
+          <textarea
+            aria-label="Annotation response"
+            defaultValue="Draft in progress"
+          />
+        )}
+      />,
+    )
+    const field = within(strip()).getByRole('textbox', {
+      name: 'Annotation response',
+    })
+    field.focus()
+    for (const key of ['ArrowLeft', 'ArrowRight', 'Home', 'End']) {
+      expect(fireEvent.keyDown(field, { key })).toBe(true)
+      expect(document.activeElement).toBe(field)
+    }
+    expect(field).toHaveValue('Draft in progress')
+
+    const [first] = pills()
+    first!.focus()
+    fireEvent.keyDown(first!, { key: 'End' })
+    expect(document.activeElement).toBe(pills().at(-1))
   })
 
   it('leaves a modified arrow on a pill alone', () => {

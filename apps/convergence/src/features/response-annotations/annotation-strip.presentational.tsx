@@ -1,5 +1,6 @@
 import type { FC, KeyboardEvent, ReactNode } from 'react'
 import type { ResponseAnnotation } from '@/entities/response-annotation'
+import { isEditableTarget } from '@/shared/lib/editable-target.pure'
 import { Button } from '@/shared/ui/button'
 import {
   formatAnnotationCount,
@@ -34,16 +35,6 @@ interface AnnotationStripProps {
   renderExpanded: (annotation: ResponseAnnotation) => ReactNode
 }
 
-function isTextField(target: EventTarget): boolean {
-  if (!(target instanceof HTMLElement)) return false
-  return (
-    target.isContentEditable ||
-    target.tagName === 'INPUT' ||
-    target.tagName === 'TEXTAREA' ||
-    target.tagName === 'SELECT'
-  )
-}
-
 /**
  * Arrow keys walk the row. Focus goes to the item's first control, which is
  * the pill itself or, for the open item, its first button — so the row reads
@@ -63,7 +54,7 @@ function moveFocusAlongStrip(
       ctrlKey: event.ctrlKey,
       metaKey: event.metaKey,
       shiftKey: event.shiftKey,
-      fromTextField: isTextField(event.target),
+      fromTextField: isEditableTarget(event.target),
     },
     length,
   )

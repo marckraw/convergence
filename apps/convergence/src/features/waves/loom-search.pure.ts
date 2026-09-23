@@ -1,4 +1,8 @@
 import type { WorkLedgerEntry } from '@/entities/work-ledger'
+import {
+  isEditableTarget,
+  isListboxTarget,
+} from '@/shared/lib/editable-target.pure'
 import type {
   TrackerOutsideIssue,
   TrackerOutsideSnapshot,
@@ -216,15 +220,6 @@ export const LOOM_SEARCH_LEFT_TITLE = 'Left the loop'
 /** The heading over Before's matching rows older than the window (R5). */
 export const LOOM_SEARCH_OLDER_TITLE = `Older than ${LOOM_BEFORE_WINDOW_DAYS} days`
 
-/** What a keydown's target is, as far as the `/` shortcut needs to know. */
-interface ShortcutTarget {
-  tagName?: string
-  isContentEditable?: boolean
-  getAttribute?: (name: string) => string | null
-}
-
-const TEXT_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT'])
-
 /**
  * Whether a keydown inside Loom is the `/` that focuses search (R6).
  *
@@ -242,11 +237,6 @@ export function isLoomSearchShortcut(event: {
 }): boolean {
   if (event.key !== '/') return false
   if (event.metaKey || event.ctrlKey || event.altKey) return false
-  const target = (event.target ?? {}) as ShortcutTarget
-  if (target.tagName && TEXT_TAGS.has(target.tagName.toUpperCase())) {
-    return false
-  }
-  if (target.isContentEditable) return false
-  const role = target.getAttribute?.('role')
-  return role !== 'option' && role !== 'listbox'
+  const target = event.target
+  return !(isEditableTarget(target) || isListboxTarget(target))
 }
