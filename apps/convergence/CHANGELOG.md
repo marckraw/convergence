@@ -1,5 +1,11 @@
 # convergence
 
+## 0.85.3
+
+### Patch Changes
+
+- 46082cd: The PR number on a Loom card opens the pull request; the rest of the card still opens the detail.
+
 ## 0.85.2
 
 ### Patch Changes
