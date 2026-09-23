@@ -32,15 +32,66 @@ export type MainViewRouteResolution =
       fallback: MainViewRouteFallback
     }
 
+/**
+ * The only fields of a conversation route resolution reads. The shell selects
+ * exactly these for the routed conversation, so a status, activity or
+ * `updatedAt` change -- or any other conversation's summary -- cannot reach
+ * it (MAR-3377 R1). A field added to the checks below must be added here, or
+ * the type refuses the read.
+ */
+export type RouteSessionFacts = Pick<
+  SessionSummary,
+  'id' | 'contextKind' | 'projectId' | 'workspaceId' | 'archivedAt'
+>
+
 export interface MainViewRouteResolutionInput {
   route: MainViewRoute
   catalogLoaded: boolean
   spacesLoaded: boolean
   projects: readonly Project[]
-  sessions: readonly SessionSummary[]
-  chatSessions: readonly SessionSummary[]
+  sessions: readonly RouteSessionFacts[]
+  chatSessions: readonly RouteSessionFacts[]
   workspaces: readonly Workspace[]
   spaces: readonly Space[]
+}
+
+/**
+ * The conversation a route points at, found the one way resolution finds it:
+ * a Code Session route looks in the code list only; a Chat Session route looks
+ * in the chat list first, then the code list (which is what makes a
+ * mismatched id resolve to "wrong session route" rather than "not found").
+ */
+export function findRouteSession<T extends RouteSessionFacts>(
+  route: MainViewRoute,
+  sessions: readonly T[],
+  chatSessions: readonly T[],
+): T | null {
+  switch (route.kind) {
+    case 'code-session':
+      return sessions.find((entry) => entry.id === route.sessionId) ?? null
+    case 'chat-session':
+      return (
+        chatSessions.find((entry) => entry.id === route.sessionId) ??
+        sessions.find((entry) => entry.id === route.sessionId) ??
+        null
+      )
+    default:
+      return null
+  }
+}
+
+/** The route facts of a conversation, or null; a fresh object each call. */
+export function pickRouteSessionFacts(
+  session: RouteSessionFacts | null,
+): RouteSessionFacts | null {
+  if (!session) return null
+  return {
+    id: session.id,
+    contextKind: session.contextKind,
+    projectId: session.projectId,
+    workspaceId: session.workspaceId,
+    archivedAt: session.archivedAt,
+  }
 }
 
 export function resolveMainViewRoute(
@@ -56,9 +107,9 @@ export function resolveMainViewRoute(
     case 'new-code-session':
       return resolveWorkspaceRoute(input, route.workspaceId)
     case 'code-session':
-      return resolveCodeSessionRoute(input, route.sessionId)
+      return resolveCodeSessionRoute(input)
     case 'chat-session':
-      return resolveChatSessionRoute(input, route.sessionId)
+      return resolveChatSessionRoute(input)
     case 'chat-space':
       return resolveChatSpaceRoute(input, route.spaceId)
   }
@@ -66,11 +117,14 @@ export function resolveMainViewRoute(
 
 function resolveCodeSessionRoute(
   input: MainViewRouteResolutionInput,
-  sessionId: string,
 ): MainViewRouteResolution {
   if (!input.catalogLoaded) return pending(input.route)
 
-  const session = input.sessions.find((entry) => entry.id === sessionId)
+  const session = findRouteSession(
+    input.route,
+    input.sessions,
+    input.chatSessions,
+  )
   if (!session) {
     return fallback(input.route, {
       reason: 'session-not-found',
@@ -113,12 +167,13 @@ function resolveCodeSessionRoute(
 
 function resolveChatSessionRoute(
   input: MainViewRouteResolutionInput,
-  sessionId: string,
 ): MainViewRouteResolution {
   if (!input.catalogLoaded) return pending(input.route)
 
-  const session = [...input.chatSessions, ...input.sessions].find(
-    (entry) => entry.id === sessionId,
+  const session = findRouteSession(
+    input.route,
+    input.sessions,
+    input.chatSessions,
   )
   if (!session) {
     return fallback(input.route, {

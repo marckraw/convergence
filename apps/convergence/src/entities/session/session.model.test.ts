@@ -513,6 +513,82 @@ describe('useSessionStore', () => {
     ).toEqual([1, 2, 3])
   })
 
+  describe('MAR-3377 R3 the store stays quiet when nothing changed', () => {
+    const kept = {
+      'session-1': {
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        disposition: 'snoozed' as const,
+      },
+    }
+
+    it('keeps the dismissals map and persists nothing on a summary that prunes nothing — mutation Object.fromEntries unconditionally turns red', () => {
+      useSessionStore.setState({
+        globalSessions: [
+          makeSession({ id: 'session-1', attention: 'needs-input' }),
+          makeSession({ id: 'session-2' }),
+        ],
+        needsYouDismissals: kept,
+      })
+
+      useSessionStore.getState().handleSessionSummaryUpdate(
+        makeSession({
+          id: 'session-2',
+          attention: 'finished',
+          updatedAt: '2026-01-01T00:05:00.000Z',
+        }),
+      )
+
+      expect(useSessionStore.getState().needsYouDismissals).toBe(kept)
+      expect(
+        mockElectronAPI.session.setNeedsYouDismissals,
+      ).not.toHaveBeenCalled()
+    })
+
+    it('still drops and persists a dismissal whose conversation moved', () => {
+      useSessionStore.setState({
+        globalSessions: [
+          makeSession({ id: 'session-1', attention: 'needs-input' }),
+        ],
+        needsYouDismissals: kept,
+      })
+
+      useSessionStore.getState().handleSessionSummaryUpdate(
+        makeSession({
+          id: 'session-1',
+          attention: 'needs-input',
+          updatedAt: '2026-01-01T00:05:00.000Z',
+        }),
+      )
+
+      expect(useSessionStore.getState().needsYouDismissals).toEqual({})
+      expect(
+        mockElectronAPI.session.setNeedsYouDismissals,
+      ).toHaveBeenCalledTimes(1)
+      expect(
+        mockElectronAPI.session.setNeedsYouDismissals,
+      ).toHaveBeenCalledWith({})
+    })
+
+    it('notifies no listener for a patch of a conversation that is not open — mutation return {} turns red', () => {
+      useSessionStore.setState({
+        activeSessionId: 'session-1',
+        activeConversationSessionId: 'session-1',
+        activeGlobalSessionId: 'global-1',
+      })
+      const listener = vi.fn()
+      const unsubscribe = useSessionStore.subscribe(listener)
+
+      useSessionStore.getState().handleConversationPatched({
+        sessionId: 'session-elsewhere',
+        op: 'patch',
+        item: makeConversationItem({ id: 'item-1', sequence: 1 }),
+      })
+      unsubscribe()
+
+      expect(listener).not.toHaveBeenCalled()
+    })
+  })
+
   it('loads and prunes persisted needs-you dismissals', async () => {
     mockElectronAPI.session.getAllSummaries.mockResolvedValueOnce([
       {

@@ -1,5 +1,6 @@
 import { usePerfProbe } from '@/shared/lib/usePerfProbe'
 import { useEffect, useMemo, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSpaceStore } from '@/entities/space'
@@ -38,7 +39,11 @@ import { UpdatesToastContainer } from '@/features/updates-toast'
 import { ProviderUpdatesToastContainer } from '@/features/provider-updates-toast'
 import { FeedbackButtonContainer } from '@/features/feedback-button'
 import { AppShell } from './App.layout'
-import { resolveMainViewRoute } from './routes/main-view-route-resolution.pure'
+import {
+  findRouteSession,
+  pickRouteSessionFacts,
+  resolveMainViewRoute,
+} from './routes/main-view-route-resolution.pure'
 
 export type MainViewRoute =
   | { kind: 'home' }
@@ -135,8 +140,18 @@ export function App({
   const loadGlobalChatSessions = useSessionStore(
     (s) => s.loadGlobalChatSessions,
   )
-  const globalSessions = useSessionStore((s) => s.globalSessions)
-  const globalChatSessions = useSessionStore((s) => s.globalChatSessions)
+  // Only the routed conversation's route facts, compared field by field: a
+  // summary of any other conversation, or a status/activity/updatedAt change
+  // of this one, leaves the result equal and the shell does not re-render
+  // (MAR-3377 R1). Subscribing to the whole lists redrew the app ~4x a second
+  // per streaming conversation.
+  const routeSessionFacts = useSessionStore(
+    useShallow((s) =>
+      pickRouteSessionFacts(
+        findRouteSession(mainViewRoute, s.globalSessions, s.globalChatSessions),
+      ),
+    ),
+  )
   const routeSessionLoaded = useSessionStore((s) =>
     routeCodeSessionId
       ? s.globalSessions.some((session) => session.id === routeCodeSessionId)
@@ -181,19 +196,20 @@ export function App({
         spacesLoaded:
           !routeChatSpaceActive || (routeSpacesLoaded && !spacesLoading),
         projects,
-        sessions: globalSessions,
-        chatSessions: globalChatSessions,
+        // The routed conversation is the only one resolution looks up, and
+        // `findRouteSession` already applied the route's list order to it.
+        sessions: routeSessionFacts ? [routeSessionFacts] : [],
+        chatSessions: [],
         workspaces: [...globalWorkspaces, ...workspaces],
         spaces,
       }),
     [
-      globalChatSessions,
-      globalSessions,
       globalWorkspaces,
       loading,
       mainViewRoute,
       projects,
       routeChatSpaceActive,
+      routeSessionFacts,
       routeSessionCatalogLoaded,
       routeSpacesLoaded,
       routeWorkspaceCatalogLoaded,

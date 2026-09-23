@@ -1287,6 +1287,142 @@ describe('SessionView', () => {
     )
   })
 
+  describe('MAR-3377 R2 a status update reloads nothing', () => {
+    const noteAttachment = {
+      id: 'att-1',
+      sessionId: 'session-1',
+      kind: 'text' as const,
+      mimeType: 'text/plain',
+      filename: 'notes.txt',
+      sizeBytes: 12,
+      storagePath: '/tmp/att-1',
+      thumbnailPath: null,
+      textPreview: 'hello',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    }
+
+    function userMessage(attachmentIds: string[]) {
+      return {
+        id: 'user-message-1',
+        sessionId: 'session-1',
+        sequence: 1,
+        turnId: 'turn-1',
+        kind: 'message' as const,
+        actor: 'user' as const,
+        text: 'look at this',
+        attachmentIds,
+        state: 'complete' as const,
+        createdAt: '2026-01-01T00:00:01.000Z',
+        updatedAt: '2026-01-01T00:00:01.000Z',
+        providerMeta: {
+          providerId: 'claude-code',
+          providerItemId: null,
+          providerEventType: 'user',
+        },
+      }
+    }
+
+    function withSpaceSpies(
+      run: (spies: {
+        loadSpaces: ReturnType<typeof vi.fn>
+        loadAttemptsForSession: ReturnType<typeof vi.fn>
+      }) => Promise<void>,
+    ) {
+      const original = useSpaceStore.getState()
+      const loadSpaces = vi.fn().mockResolvedValue(undefined)
+      const loadAttemptsForSession = vi.fn().mockResolvedValue(undefined)
+      useSpaceStore.setState({ loadSpaces, loadAttemptsForSession })
+      return run({ loadSpaces, loadAttemptsForSession }).finally(() =>
+        useSpaceStore.setState({
+          loadSpaces: original.loadSpaces,
+          loadAttemptsForSession: original.loadAttemptsForSession,
+        }),
+      )
+    }
+
+    it('10 summaries of the open conversation call nothing; switching calls each once — mutation key the effects on the session object turns red', () =>
+      withSpaceSpies(async ({ loadSpaces, loadAttemptsForSession }) => {
+        const getForSession = vi.mocked(
+          window.electronAPI.attachments.getForSession,
+        )
+        render(
+          <TooltipProvider>
+            <SessionView />
+          </TooltipProvider>,
+        )
+        await act(async () => {})
+        expect(loadSpaces).toHaveBeenCalledTimes(1)
+        expect(loadAttemptsForSession).toHaveBeenCalledWith('session-1')
+        expect(getForSession).toHaveBeenCalledWith('session-1')
+        loadSpaces.mockClear()
+        loadAttemptsForSession.mockClear()
+        getForSession.mockClear()
+
+        // What `handleSessionSummaryUpdate` leaves for this view: a new
+        // summary object for the same conversation, status and clock moved.
+        for (let i = 1; i <= 10; i += 1) {
+          await act(async () => {
+            useSessionStore.setState((state) => ({
+              sessions: state.sessions.map((entry) => ({
+                ...entry,
+                status: i % 2 ? 'running' : 'completed',
+                activity: i % 2 ? 'streaming' : null,
+                updatedAt: `2026-01-01T00:00:${String(i).padStart(2, '0')}.000Z`,
+              })),
+            }))
+          })
+        }
+
+        expect(loadSpaces).not.toHaveBeenCalled()
+        expect(loadAttemptsForSession).not.toHaveBeenCalled()
+        expect(getForSession).not.toHaveBeenCalled()
+
+        await act(async () => {
+          useSessionStore.setState((state) => ({
+            sessions: [
+              ...state.sessions,
+              { ...state.sessions[0]!, id: 'session-2', name: 'Other' },
+            ],
+            activeSessionId: 'session-2',
+            activeConversationSessionId: 'session-2',
+          }))
+        })
+
+        expect(loadSpaces).toHaveBeenCalledTimes(1)
+        expect(loadAttemptsForSession).toHaveBeenCalledTimes(1)
+        expect(loadAttemptsForSession).toHaveBeenCalledWith('session-2')
+        expect(getForSession).toHaveBeenCalledTimes(1)
+        expect(getForSession).toHaveBeenCalledWith('session-2')
+      }))
+
+    it('a new message referencing an attachment ingested under a draft key renders its chip — mutation drop the referenced-attachments trigger turns red', async () => {
+      const getForSession = vi.mocked(
+        window.electronAPI.attachments.getForSession,
+      )
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+      await act(async () => {})
+      expect(getForSession).toHaveBeenCalledTimes(1)
+
+      // The first message of a new session: the backend rebound the draft's
+      // attachment to this session, and the renderer has not read it yet.
+      getForSession.mockResolvedValue([noteAttachment])
+      await act(async () => {
+        useSessionStore.setState({
+          activeConversation: [userMessage(['att-1'])],
+        })
+      })
+
+      expect(await screen.findByTestId('attachment-chip')).toHaveTextContent(
+        'notes.txt',
+      )
+      expect(getForSession).toHaveBeenCalledTimes(2)
+    })
+  })
+
   it('opens the Space link dialog from session actions', async () => {
     render(
       <TooltipProvider>

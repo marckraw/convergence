@@ -170,18 +170,25 @@ function resolveNeedsYouDisposition(
   }
 }
 
+/**
+ * Drops dismissals whose conversation moved or vanished. Returns the SAME
+ * object when nothing is dropped, so a caller can tell "changed" by identity:
+ * a summary that prunes nothing must neither notify listeners of a new map nor
+ * persist one (MAR-3377 R3).
+ */
 function pruneNeedsYouDismissals(
   dismissals: NeedsYouDismissals,
   sessions: SessionSummary[],
 ): NeedsYouDismissals {
-  return Object.fromEntries(
-    Object.entries(dismissals).filter(([sessionId, dismissal]) =>
-      sessions.some(
-        (session) =>
-          session.id === sessionId && session.updatedAt === dismissal.updatedAt,
-      ),
+  const entries = Object.entries(dismissals)
+  if (entries.length === 0) return dismissals
+  const kept = entries.filter(([sessionId, dismissal]) =>
+    sessions.some(
+      (session) =>
+        session.id === sessionId && session.updatedAt === dismissal.updatedAt,
     ),
   )
+  return kept.length === entries.length ? dismissals : Object.fromEntries(kept)
 }
 
 function removeNeedsYouDismissal(
@@ -1048,10 +1055,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       sessions: nextSessions,
     })
 
-    if (
-      JSON.stringify(nextDismissals) !==
-      JSON.stringify(state.needsYouDismissals)
-    ) {
+    // Identity is the change signal: the prune returns its input untouched
+    // unless it dropped an entry, and a dropped entry is always a real change.
+    if (nextDismissals !== state.needsYouDismissals) {
       void sessionApi.setNeedsYouDismissals(nextDismissals).catch((err) => {
         set({
           error:
@@ -1074,7 +1080,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               ),
               activeGlobalConversationSessionId: event.sessionId,
             }
-          : {}
+          : // The same state object: zustand notifies nobody. `{}` would
+            // build a new state and wake every listener for a conversation
+            // no one has open (MAR-3377 R3).
+            state
       }
 
       return {

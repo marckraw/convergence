@@ -54,6 +54,7 @@ import {
   TerminalSquare,
 } from 'lucide-react'
 import { formatConversationTotalDuration } from './conversation-total-duration.pure'
+import { referencedAttachmentIdsKey } from './referenced-attachments.pure'
 import { resolveRemoteSessionDetails } from './remote-session-details.pure'
 import {
   SpaceContextPanel,
@@ -254,11 +255,15 @@ export const SessionView: FC = () => {
     [globalSessions, linkedSpaceAttempts, projects, sessions, workspaces],
   )
 
+  // Keyed on the id, never the summary object: a streaming conversation's
+  // summary changes ~4x a second, and each reload is two IPC calls plus a
+  // space-store loading flip that redraws the shell (MAR-3377 R2).
+  const openSessionId = session?.id ?? null
   useEffect(() => {
-    if (!session) return
+    if (!openSessionId) return
     void loadSpaces()
-    void loadAttemptsForSession(session.id)
-  }, [loadAttemptsForSession, loadSpaces, session])
+    void loadAttemptsForSession(openSessionId)
+  }, [loadAttemptsForSession, loadSpaces, openSessionId])
 
   useEffect(() => {
     if (!linkedSpace) return
@@ -280,16 +285,25 @@ export const SessionView: FC = () => {
     if (showPullRequestPanel) void refreshPullRequest()
   }, [refreshPullRequest, showPullRequestPanel])
 
-  // Hydrate attachment metadata for the active session so the transcript can render chips.
+  // Hydrate attachment metadata for the active session so the transcript can
+  // render chips. It re-reads when the session changes and when the transcript
+  // starts referencing an attachment set it did not before -- a first message
+  // sent from a new-session or fork draft carries ids that were resolved under
+  // the draft's key, not this session's. A status update changes neither, so
+  // it no longer costs an IPC call (MAR-3377 R2).
   const hydrateAttachments = useAttachmentStore((s) => s.hydrateForSession)
+  const referencedAttachmentKey = useMemo(
+    () => referencedAttachmentIdsKey(activeConversation),
+    [activeConversation],
+  )
   useEffect(() => {
-    if (!session) return
-    const sessionId = session.id
+    if (!openSessionId) return
+    const sessionId = openSessionId
     void attachmentApi
       .getForSession(sessionId)
       .then((items) => hydrateAttachments(sessionId, items))
       .catch(() => hydrateAttachments(sessionId, []))
-  }, [session, hydrateAttachments])
+  }, [openSessionId, referencedAttachmentKey, hydrateAttachments])
 
   const handleTogglePullRequestPanel = useCallback(() => {
     setShowPullRequestPanel((current) => !current)

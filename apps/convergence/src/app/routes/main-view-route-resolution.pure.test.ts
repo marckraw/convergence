@@ -4,7 +4,11 @@ import type { SessionSummary } from '@/entities/session'
 import type { Space } from '@/entities/space'
 import type { Workspace } from '@/entities/workspace'
 import type { MainViewRoute } from '../App.container'
-import { resolveMainViewRoute } from './main-view-route-resolution.pure'
+import {
+  findRouteSession,
+  pickRouteSessionFacts,
+  resolveMainViewRoute,
+} from './main-view-route-resolution.pure'
 
 const project: Project = {
   id: 'project-1',
@@ -185,5 +189,72 @@ describe('resolveMainViewRoute', () => {
       status: 'fallback',
       fallback: { reason: 'space-not-found', action: 'chat-home' },
     })
+  })
+})
+
+describe('the routed conversation lookup the shell subscribes through (MAR-3377)', () => {
+  it('looks in the code list only for a Code Session route', () => {
+    expect(
+      findRouteSession(
+        { kind: 'code-session', sessionId: 'code-1' },
+        [codeSession],
+        [chatSession],
+      ),
+    ).toBe(codeSession)
+    expect(
+      findRouteSession(
+        { kind: 'code-session', sessionId: 'chat-1' },
+        [codeSession],
+        [chatSession],
+      ),
+    ).toBeNull()
+  })
+
+  it('looks in the chat list first, then the code list, for a Chat Session route', () => {
+    const shadow = { ...codeSession, id: 'chat-1' }
+    expect(
+      findRouteSession(
+        { kind: 'chat-session', sessionId: 'chat-1' },
+        [shadow],
+        [chatSession],
+      ),
+    ).toBe(chatSession)
+    expect(
+      findRouteSession(
+        { kind: 'chat-session', sessionId: 'code-1' },
+        [codeSession],
+        [chatSession],
+      ),
+    ).toBe(codeSession)
+    expect(
+      resolve({ kind: 'chat-session', sessionId: 'code-1' }),
+    ).toMatchObject({
+      status: 'fallback',
+      fallback: { reason: 'session-route-mismatch' },
+    })
+  })
+
+  it('finds nothing for a route that names no conversation', () => {
+    expect(
+      findRouteSession({ kind: 'home' }, [codeSession], [chatSession]),
+    ).toBeNull()
+  })
+
+  it('picks the same facts for summaries that differ only in live fields', () => {
+    const live = {
+      ...codeSession,
+      status: 'running' as const,
+      attention: 'needs-input' as const,
+      activity: 'streaming' as const,
+      updatedAt: '2026-01-02T00:00:00.000Z',
+      lastSequence: 42,
+    }
+    expect(pickRouteSessionFacts(live)).toEqual(
+      pickRouteSessionFacts(codeSession),
+    )
+    expect(
+      Object.keys(pickRouteSessionFacts(codeSession) ?? {}).sort(),
+    ).toEqual(['archivedAt', 'contextKind', 'id', 'projectId', 'workspaceId'])
+    expect(pickRouteSessionFacts(null)).toBeNull()
   })
 })
