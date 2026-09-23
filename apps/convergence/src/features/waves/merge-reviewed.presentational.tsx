@@ -1,4 +1,3 @@
-import { Input } from '@/shared/ui/input'
 import type { ReleasePlan } from '@/entities/release'
 import { Button } from '@/shared/ui/button'
 import {
@@ -12,6 +11,7 @@ import {
   DialogTrigger,
 } from '@/shared/ui/dialog'
 import { canMergeReviewed, mergeActWords } from './merge-reviewed.pure'
+import { MergeReviewedRow } from './merge-reviewed.row.presentational'
 
 export interface MergeReviewedViewProps {
   open: boolean
@@ -28,7 +28,15 @@ export interface MergeReviewedViewProps {
 
 export function MergeReviewedView(props: MergeReviewedViewProps) {
   const { plan, selected, busy } = props
-  const waves = [...new Set(plan?.candidates.map((row) => row.wave) ?? [])]
+  const merged =
+    plan?.candidates.filter((row) => row.verdict.startsWith('merged ')) ?? []
+  const awaiting =
+    plan?.candidates.filter((row) => !row.verdict.startsWith('merged ')) ?? []
+  const waves = [...new Set(awaiting.map((row) => row.wave))]
+  const mergeableCount =
+    plan?.candidates.filter(
+      (row) => row.verdict === 'mergeable' && selected.includes(row.issueId),
+    ).length ?? 0
   const running = busy || !!plan?.running
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
@@ -59,6 +67,9 @@ export function MergeReviewedView(props: MergeReviewedViewProps) {
           {plan && plan.candidates.length === 0 ? (
             <p>No reviewed PRs awaiting merge.</p>
           ) : null}
+          {merged.length > 0 && awaiting.length === 0 ? (
+            <p>Nothing to merge — every reviewed PR is already merged.</p>
+          ) : null}
           {waves.map((wave) => (
             <section
               key={wave ?? '__no_wave__'}
@@ -66,35 +77,35 @@ export function MergeReviewedView(props: MergeReviewedViewProps) {
               className="space-y-2"
             >
               <h3 className="text-sm font-medium">{wave ?? 'no wave'}</h3>
-              {plan?.candidates
+              {awaiting
                 .filter((row) => row.wave === wave)
                 .map((row) => (
-                  <label
+                  <MergeReviewedRow
                     key={row.issueId}
-                    className="flex min-h-10 items-start gap-3 rounded-lg bg-foreground/5 p-3 text-sm"
-                  >
-                    <Input
-                      type="checkbox"
-                      className="mt-1 size-4 shrink-0 p-0"
-                      checked={selected.includes(row.issueId)}
-                      disabled={running}
-                      onChange={() => props.onToggle(row.issueId)}
-                      aria-label={`Select PR #${row.prNumber}`}
-                    />
-                    <span className="min-w-0 space-y-1">
-                      <span className="block break-words">
-                        #{row.prNumber} · {row.title}
-                      </span>
-                      <span className="block font-mono text-xs tabular-nums text-muted-foreground">
-                        {row.headSha.slice(0, 7) || '—'} ·{' '}
-                        {row.mergeStateStatus} · verify {row.verify}
-                      </span>
-                      <span className="block text-xs">{row.verdict}</span>
-                    </span>
-                  </label>
+                    row={row}
+                    selected={selected.includes(row.issueId)}
+                    running={running}
+                    onToggle={props.onToggle}
+                  />
                 ))}
             </section>
           ))}
+          {merged.length > 0 ? (
+            <details className="space-y-2">
+              <summary className="min-h-10 cursor-pointer text-sm font-medium">
+                Already merged · {merged.length}
+              </summary>
+              {merged.map((row) => (
+                <MergeReviewedRow
+                  key={row.issueId}
+                  row={row}
+                  selected={false}
+                  running={running}
+                  onToggle={props.onToggle}
+                />
+              ))}
+            </details>
+          ) : null}
           <div role="status" aria-live="polite" className="space-y-1 text-sm">
             {plan?.waitingFor ? (
               <p>#{plan.waitingFor}: waiting for the changesets run…</p>
@@ -122,7 +133,9 @@ export function MergeReviewedView(props: MergeReviewedViewProps) {
             disabled={!canMergeReviewed(plan, selected, busy)}
             onClick={props.onMerge}
           >
-            Merge {selected.length}
+            {mergeableCount > 0
+              ? `Merge ${mergeableCount}`
+              : 'Nothing to merge'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -90,11 +90,13 @@ export class ReleaseActService {
           verdict:
             reading.url.toLowerCase() !== entry.pr!.url.toLowerCase()
               ? 'PR repository mismatch'
-              : interrupted
-                ? 'interrupted — check GitHub'
-                : entry.fact.merged
-                  ? `merged ${entry.fact.merged.headSha.slice(0, 7)}`
-                  : mergeVerdict(reading),
+              : reading.mergeCommit
+                ? mergeVerdict(reading)
+                : interrupted
+                  ? 'interrupted — check GitHub'
+                  : entry.fact.merged
+                    ? `merged ${entry.fact.merged.headSha.slice(0, 7)}`
+                    : mergeVerdict(reading),
         })
       } catch (error) {
         if (classifyGithubCliError(error as Error) !== 'gh-unavailable')
