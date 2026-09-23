@@ -23,6 +23,8 @@ const TREE_WALKING_TESTS = [
   'test/walk-budget.test.ts',
   // Every docblock in both trees documents something (MAR-3151).
   'electron/backend/docblock-shape.walk.test.ts',
+  // No guided-review paper in the repo skills or specs (MAR-3317).
+  'test/guided-review-paper.walk.test.ts',
 ]
 
 /** The configs that run one of the walkers above. */
