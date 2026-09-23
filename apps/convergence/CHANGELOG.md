@@ -1,5 +1,11 @@
 # convergence
 
+## 0.85.4
+
+### Patch Changes
+
+- 649919b: The sidebar's activity feed shows Review before Working, marks Pinned as special, and every section folds while still showing what is inside.
+
 ## 0.85.3
 
 ### Patch Changes
