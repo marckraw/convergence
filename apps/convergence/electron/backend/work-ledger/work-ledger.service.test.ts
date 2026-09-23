@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'fs'
 import { trackerIssue } from '../tracker/linear-tracker.fixture'
 import { join } from 'path'
 import { tmpdir } from 'os'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type Database from 'better-sqlite3'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import { WORK_LEDGER_ISSUE_INDEX } from '../database/work-ledger-migration.service'
@@ -689,6 +689,63 @@ describe('MAR-3186 R5: recipe dispatch joins in real SQLite', () => {
     ledger.append([record()])
     dispatch('spawn')
     expect(ledger.list('crew-1')[0].sessionId).toBe('resident')
+  })
+  it('MAR-3204 R1: the send of THIS lap rides the entry; another lap, crew or none reads null', () => {
+    session('spawn')
+    ledger.append([
+      record(),
+      record({ issueId: 'issue-2', issueIdentifier: 'EX-2', lap: 3 }),
+      record({ issueId: 'issue-3', issueIdentifier: 'EX-3' }),
+    ])
+    dispatch('spawn')
+    db.prepare(
+      "UPDATE auto_dispatches SET delivery = 'queued', error = 'turn failed' WHERE issue_id = 'issue-1'",
+    ).run()
+    // Lap 2 of an issue the ledger has at lap 3: a send, but not of this lap.
+    dispatch('spawn', 'issue-2', 2)
+    // The right issue and lap in another crew is not this crew's send.
+    dispatch('spawn', 'issue-3', 1, 'opus', 'other-crew')
+    const byIssue = Object.fromEntries(
+      ledger.list('crew-1').map((e) => [e.issueId, e.dispatch]),
+    )
+    expect(byIssue).toEqual({
+      'issue-1': {
+        sentAt: '2026-09-22T08:01:00Z',
+        seat: 'opus',
+        sessionId: 'spawn',
+        delivery: 'queued',
+        error: 'turn failed',
+      },
+      // Mutation: join on (crew, issue) without the lap -> lap 2's send
+      // reads as lap 3's -> red.
+      'issue-2': null,
+      // Mutation: drop the crew from the join -> red.
+      'issue-3': null,
+    })
+  })
+  it('MAR-3204 R5: N rows cost one statement, and it is the one that already read auto_dispatches', () => {
+    ledger.append([
+      record(),
+      record({ issueId: 'issue-2', issueIdentifier: 'EX-2' }),
+      record({ issueId: 'issue-3', issueIdentifier: 'EX-3' }),
+    ])
+    dispatch('spawn')
+    dispatch('spawn', 'issue-2')
+    dispatch('spawn', 'issue-3')
+    const prepare = vi.spyOn(db, 'prepare')
+    const entries = ledger.list('crew-1')
+    expect(entries.map((e) => e.dispatch?.sentAt)).toEqual([
+      '2026-09-22T08:01:00Z',
+      '2026-09-22T08:01:00Z',
+      '2026-09-22T08:01:00Z',
+    ])
+    // Mutation: read each row's send with its own SELECT -> 4 statements,
+    // 4 reads of auto_dispatches -> red.
+    expect(prepare).toHaveBeenCalledTimes(1)
+    expect(
+      prepare.mock.calls.filter(([sql]) => sql.includes('auto_dispatches')),
+    ).toHaveLength(1)
+    prepare.mockRestore()
   })
   it('R5 a deleted dispatch session has no session facts', () => {
     ledger.append([record()])

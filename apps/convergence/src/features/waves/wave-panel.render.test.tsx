@@ -1003,7 +1003,9 @@ describe('MAR-3097: through the containers and the real stores', () => {
     // `aria-label` of seat + runtime replaces the content, so a screen
     // reader would hear "opus — Failed" and never learn which issue.
     // Mutation: put that label back -> this query finds no such button, red.
-    expect(screen.getByRole('button', { name: /EX-1/ })).toBeTruthy()
+    // MAR-3204 R4: the ticket line is a door of its own and carries EX-1 too,
+    // so the card's door is the one whose name STARTS with the seat.
+    expect(screen.getByRole('button', { name: /^opus\b.*EX-1/ })).toBeTruthy()
     expect(failed.getByText(/Lap 2/)).toBeTruthy()
 
     const running = within(
@@ -1732,6 +1734,61 @@ describe('MAR-3097: through the containers and the real stores', () => {
     expect(document.activeElement).toBe(
       screen.getByRole('button', { name: 'Details' }),
     )
+  })
+
+  it('MAR-3204 R4: the ticket line of a SENT issue opens its detail, and focus comes back to the line', async () => {
+    crews = [
+      { ...boundCrew('crew-1', 'Loom'), members: [residentSeat('opus')] },
+    ]
+    useSessionStore.setState({
+      globalSessions: [
+        { ...SESSION, id: 'session-opus', status: 'running' } as SessionSummary,
+      ],
+    })
+    snapshots = {
+      'crew-1': {
+        crewId: 'crew-1',
+        entries: [
+          ledgerEntry({
+            issueIdentifier: 'MAR-7',
+            state: 'assigned',
+            trackerStatus: 'Todo',
+            seat: 'opus',
+            sessionId: 'session-opus',
+            dispatch: {
+              sentAt: '2026-09-22T21:40:00.000Z',
+              seat: 'opus',
+              sessionId: 'session-opus',
+              delivery: 'turn',
+              error: null,
+            },
+          }),
+        ],
+        dispatchPlan: null,
+        trackerHealth: health('ok'),
+      },
+    }
+    await mount(<WavePanel reservedWidth={RESERVED} />)
+    await screen.findByLabelText('Loom')
+
+    const line = () =>
+      document.querySelector(
+        '[data-loom-horse-ticket="crew-1:session-opus"]',
+      ) as HTMLElement | null
+    // Mutation: bind the sheet's door to `held` only -> the sent issue's
+    // line is plain text, no door -> red.
+    expect(line()?.textContent).toMatch(
+      /^MAR-7 · dispatched \d\d:\d\d, not yet In Progress$/,
+    )
+    line()!.focus()
+    fireEvent.click(line()!)
+    expect(document.querySelector('[data-loom-detail]')).toBeTruthy()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Close the issue detail' }),
+    )
+    // Mutation: drop the ticket arm of `openerSelector` -> focus is lost
+    // when the detail closes -> red.
+    expect(document.activeElement).toBe(line())
   })
 
   it('MAR-3195 lap 2, F: the PR block, with a PR and without one', async () => {

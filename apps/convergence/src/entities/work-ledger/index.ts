@@ -4,6 +4,7 @@ export type { WorkLedgerStore } from './work-ledger.model'
 export type {
   TrackerHealth,
   TrackerHealthState,
+  WorkLedgerDispatch,
   WorkLedgerEntry,
   WorkLedgerSnapshot,
   WorkLedgerState,

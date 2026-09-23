@@ -6,7 +6,10 @@ import {
   type AttentionState,
   type SessionStatus,
 } from '@/entities/session'
-import type { WorkLedgerState } from '@/entities/work-ledger'
+import type {
+  WorkLedgerDispatch,
+  WorkLedgerState,
+} from '@/entities/work-ledger'
 import type { LoomSheets } from './loom-sheets.pure'
 import type { WaveRow } from './wave-sections.pure'
 
@@ -46,6 +49,15 @@ export interface LoomHorse {
   openable: boolean
   /** The `working` row this seat holds, newest first when it holds several. */
   held: WaveRow | null
+  /**
+   * The issue the app SENT this seat that the tracker still calls assigned
+   * (MAR-3204 R3): the dispatch window, from the `auto_dispatches` record.
+   *
+   * Only when `held` is null -- a held ticket is the card's answer as it was.
+   * Never an input to the runtime: the record says what the app did, not
+   * what the horse is doing, so the runtime word stays the session's.
+   */
+  dispatched: WaveRow | null
   /**
    * Which group the held row came from (lap 2, A).
    *
@@ -238,6 +250,65 @@ function newestInState(
 }
 
 /**
+ * This seat's newest sent-but-not-started row (MAR-3204 R3).
+ *
+ * Next is where an `assigned` row with a seat is drawn, so Next is where the
+ * window is looked for. The record must name THIS seat: a row re-seated after
+ * its send was sent to somebody else, and this horse was never handed it.
+ */
+function newestDispatched(
+  rows: readonly WaveRow[],
+  crewId: string,
+  member: { sessionId: string | null; batonName: string | null },
+): WaveRow | null {
+  const mine = rows
+    .filter(
+      (row) =>
+        row.entry.state === 'assigned' &&
+        row.entry.dispatch !== null &&
+        row.entry.dispatch.seat === member.batonName &&
+        rowBelongsToSeat(row, member, crewId),
+    )
+    .sort((a, b) =>
+      b.entry.dispatch!.sentAt.localeCompare(a.entry.dispatch!.sentAt),
+    )
+  return mine[0] ?? null
+}
+
+/** `21:40`: the clock a dispatch record is read in, 24-hour, local time. */
+export function loomDispatchClock(sentAt: string): string {
+  return new Date(sentAt).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+}
+
+/** What a card says when its seat holds no ticket and was sent none. */
+export const LOOM_NO_ACTIVE_TICKET = 'No active ticket'
+
+/**
+ * The card's ticket line (MAR-3204 R3): the held ticket, else the window the
+ * record names, else nothing -- and `No active ticket` only when the app has
+ * no record of sending this seat anything that is still waiting.
+ */
+export function loomHorseTicketLine(horse: LoomHorse): string {
+  if (horse.held) {
+    return `${horse.held.entry.issueIdentifier} · ${horse.held.entry.issueTitle}`
+  }
+  const sent: WorkLedgerDispatch | null =
+    horse.dispatched?.entry.dispatch ?? null
+  if (horse.dispatched && sent) {
+    const id = horse.dispatched.entry.issueIdentifier
+    const at = loomDispatchClock(sent.sentAt)
+    return sent.error === null
+      ? `${id} · dispatched ${at}, not yet In Progress`
+      : `${id} · dispatch failed ${at}`
+  }
+  return LOOM_NO_ACTIVE_TICKET
+}
+
+/**
  * One card per horse seat of the bound crews (MAR-3191 R1).
  *
  * The seats come from the crew's RECORD, not from the sessions: a recipe seat
@@ -274,6 +345,10 @@ export function loomHorses(input: {
       const working = newestInState(mine, 'working')
       const returnedRow = newestInState(mine, 'returned')
       const held = working?.row ?? null
+      const dispatched =
+        held === null
+          ? newestDispatched(input.sheets.next, crew.id, member)
+          : null
       const returned = returnedRow?.row ?? null
       // The host the seat works on: a resident works where its conversation
       // runs, a recipe where its policy says it will be spawned.
@@ -301,6 +376,7 @@ export function loomHorses(input: {
         openable: session !== null,
         conversationMissing: member.conversationMissing,
         held,
+        dispatched,
         heldFrom: working?.group ?? null,
         returned,
         compacting: seatRuntime.compacting,

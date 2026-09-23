@@ -271,11 +271,13 @@ export const LoomSheetView = <TSession,>({
                     horse={horse}
                     onOpenSeat={onOpenSeat}
                     onShowNext={onShowNext}
-                    onShowDetail={
-                      horse.held && onShowDetail
-                        ? () => onShowDetail(horse.held!.entry)
+                    onShowDetail={(() => {
+                      // The card's issue: held, else sent (MAR-3204 R4).
+                      const row = horse.held ?? horse.dispatched
+                      return row && onShowDetail
+                        ? () => onShowDetail(row.entry)
                         : undefined
-                    }
+                    })()}
                   />
                 ))}
               </section>

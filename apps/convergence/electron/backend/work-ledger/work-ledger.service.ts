@@ -119,8 +119,9 @@ export class WorkLedgerService {
   }
 
   /**
-   * The current rows with the seat's session, its PR for THIS issue and its
-   * host liveness -- one SELECT, nothing written (R6).
+   * The current rows with the seat's session, its PR for THIS issue, its
+   * host liveness and the app's send of this lap (MAR-3204) -- one SELECT,
+   * nothing written (R6).
    *
    * The seat joins a RESIDENT member by baton name; a recipe has no session
    * until something spawns one, so its row carries `sessionId: null`.
@@ -134,7 +135,12 @@ export class WorkLedgerService {
                 session.pull_request_json AS pull_request_json,
                 session.execution_host AS execution_host,
                 session.execution_host_last_event_at AS execution_host_last_event_at,
-                session.attention AS attention
+                session.attention AS attention,
+                sent.sent_at AS sent_at,
+                sent.seat AS sent_seat,
+                sent.session_id AS sent_session_id,
+                sent.delivery AS sent_delivery,
+                sent.error AS sent_error
          FROM work_ledger AS ledger
          LEFT JOIN session_crew_members AS member
            ON member.rowid = (
@@ -153,6 +159,13 @@ export class WorkLedgerService {
            ORDER BY candidate.lap DESC, candidate.sent_at DESC, candidate.rowid DESC
            LIMIT 1
          )
+         -- The send of THIS lap (MAR-3204): UNIQUE (crew_id, issue_id, lap)
+         -- makes it one row or none, so the join never multiplies a row, and
+         -- the window's word costs no statement beyond this one.
+         LEFT JOIN auto_dispatches AS sent
+           ON sent.crew_id = ledger.crew_id
+          AND sent.issue_id = ledger.issue_id
+          AND sent.lap = ledger.lap
          LEFT JOIN sessions AS session ON session.id = seat_session_id
          WHERE ${CURRENT_VIEW_WHERE}
          ${CURRENT_VIEW_ORDER}`,

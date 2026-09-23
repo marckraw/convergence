@@ -1,6 +1,14 @@
-import type { DispatchPlan, DispatchWord } from '@/shared/types/tracker.types'
+import type {
+  DispatchPlan,
+  DispatchWord,
+  WorkLedgerDispatch,
+} from '@/shared/types/tracker.types'
 import { dispatchQueueCompare } from '@/shared/lib/dispatch-order.pure'
-import { rowBelongsToSeat, type LoomHorse } from './loom-horses.pure'
+import {
+  loomDispatchClock,
+  rowBelongsToSeat,
+  type LoomHorse,
+} from './loom-horses.pure'
 import type { WaveRow } from './wave-sections.pure'
 
 /**
@@ -102,6 +110,29 @@ export function dispatchWordSentence(
     case 'would-start':
       return 'would start now'
   }
+}
+
+/**
+ * What a sent row says (MAR-3204 R1, R2), from the app's own record.
+ *
+ * The record outranks the live plan for this row: the plan dies with the
+ * process and its `sent` word is derived from this same record, so the two
+ * can only agree -- and after a restart only the record is there to say it.
+ */
+export function loomDispatchSentence(dispatch: WorkLedgerDispatch): string {
+  const at = loomDispatchClock(dispatch.sentAt)
+  return dispatch.error === null
+    ? `dispatched ${at} · Linear not yet In Progress`
+    : `dispatch failed ${at} · ${dispatch.error}`
+}
+
+/**
+ * The send this row's window is about, or null (MAR-3204). Only an
+ * `assigned` row is IN the window: once the tracker says In Progress the
+ * row is `working` and the tracker's word is the one that counts.
+ */
+function recordedSend(row: WaveRow): WorkLedgerDispatch | null {
+  return row.entry.state === 'assigned' ? row.entry.dispatch : null
 }
 
 /** One horse's queue, as Next draws it. */
@@ -231,6 +262,14 @@ export function loomNext(
     const ready: WaveRow[] = []
     const preparing: WaveRow[] = []
     for (const row of queue) {
+      // Sent is not ready (MAR-3204 R1): the app already did the one thing
+      // Ready promises, so the row waits with the words of its record --
+      // plan or no plan, which is what survives a restart.
+      const sent = recordedSend(row)
+      if (sent) {
+        preparing.push({ ...row, action: loomDispatchSentence(sent) })
+        continue
+      }
       // A seat with no conversation cannot start anything, so its rows are
       // never Ready and never numbered -- the number is a promise about
       // what runs next, and nothing runs through a door that is gone.
@@ -285,12 +324,14 @@ export function loomNext(
     .sort(loomQueueCompare)
     .map((row) => ({
       ...row,
-      action: dispatchPlan?.words[row.entry.issueId]
-        ? dispatchWordSentence(
-            dispatchPlan.words[row.entry.issueId],
-            row.entry.seat,
-          )
-        : `seat "${row.entry.seat ?? ''}" not in the crew`,
+      action: recordedSend(row)
+        ? loomDispatchSentence(recordedSend(row)!)
+        : dispatchPlan?.words[row.entry.issueId]
+          ? dispatchWordSentence(
+              dispatchPlan.words[row.entry.issueId],
+              row.entry.seat,
+            )
+          : `seat "${row.entry.seat ?? ''}" not in the crew`,
     }))
 
   return {

@@ -301,6 +301,7 @@ describe('R4: a horse is not an issue', () => {
           lapLabel: 'lap 1',
         }
       : null,
+    dispatched: null,
     heldFrom: held ? 'in-flight' : null,
     conversationMissing: false,
     returned: null,

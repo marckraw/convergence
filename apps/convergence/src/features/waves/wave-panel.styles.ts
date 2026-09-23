@@ -201,6 +201,13 @@ export const LOOM_HORSE_TINT_CLASS: Readonly<Record<LoomHorseRuntime, string>> =
     'not-seen': 'border-white/10 bg-white/[0.02]',
   }
 
+/**
+ * The ticket line as a door (MAR-3204 R4): raised above the card's stretched
+ * button so a click lands here, and marked as a link so it reads as one.
+ */
+export const LOOM_HORSE_TICKET_DOOR_CLASS =
+  'relative z-10 h-auto w-full min-w-0 justify-start whitespace-normal rounded-sm p-0 text-left text-xs font-normal underline-offset-2 hover:bg-transparent hover:text-inherit hover:underline'
+
 /** The card's second line: host · tracker status · lap. */
 export const LOOM_HORSE_META_CLASS =
   'whitespace-normal break-words text-[11px] text-muted-foreground'
