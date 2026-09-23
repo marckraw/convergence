@@ -22,6 +22,7 @@
     "test:unit": "npm run prepare:release-notes && (npm rebuild better-sqlite3 node-pty > /dev/null 2>&1; vitest run --config vitest.unit.config.ts)",
     "test:electron": "node tools/run-lane-electron-canary.mjs",
     "test:electron:node": "node tools/run-lane-electron-canary.mjs --node",
+    "test:door-electron": "node tools/run-mcp-door-electron.mjs",
     "test:watch": "npm run prepare:release-notes && vitest",
     "typecheck": "npm run prepare:release-notes && tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "rebuild:electron": "electron-rebuild -o better-sqlite3,node-pty"
@@ -69,14 +70,16 @@
     "sonner": "^2.0.7",
     "streamdown": "^2.5.0",
     "tailwind-merge": "^3.5.0",
-    "zustand": "^5.0.12",
-    "yaml": "^2.8.2"
+    "yaml": "^2.8.2",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.263",
     "@convergence/execution-host-client": "*",
     "@electron/asar": "^3.4.1",
     "@electron/rebuild": "^4.0.3",
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "@tailwindcss/vite": "^4.2.2",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
@@ -85,6 +88,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.2.0",
+    "ajv": "^6.14.0",
     "electron": "41.2.0",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
@@ -93,7 +97,6 @@
     "tailwindcss": "^4.2.2",
     "typescript": "^6.0.2",
     "vite": "^7.3.2",
-    "vitest": "^4.1.4",
-    "ajv": "^6.14.0"
+    "vitest": "^4.1.4"
   }
 }

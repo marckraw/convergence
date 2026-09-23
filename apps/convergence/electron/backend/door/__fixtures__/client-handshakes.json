@@ -1,0 +1,1579 @@
+{
+  "about": "Recorded by apps/convergence/tools/probe-mcp-door.mjs --capture (MAR-3173). Only client, version, capturedAt and command are metadata; every request is what the client sent.",
+  "clients": {
+    "claude": {
+      "client": "claude",
+      "version": "2.1.280 (Claude Code)",
+      "capturedAt": "2026-09-23",
+      "connect": {
+        "command": "CLAUDE_CONFIG_DIR=<tmp> claude mcp get convergence-door-probe",
+        "exit": 0,
+        "requests": [
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "authorization",
+              "connection",
+              "content-length",
+              "content-type",
+              "host",
+              "mcp-method",
+              "mcp-protocol-version",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49736",
+            "origin": null,
+            "userAgent": "claude-code/2.1.280 (sdk-cli)",
+            "mcpMethodHeader": "server/discover",
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2026-07-28",
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "server/discover",
+                "kind": "request",
+                "protocolVersion": "2026-07-28",
+                "clientInfo": {
+                  "name": "claude-code",
+                  "title": "Claude Code",
+                  "version": "2.1.280",
+                  "description": "Anthropic's agentic coding tool",
+                  "websiteUrl": "https://claude.com/claude-code"
+                },
+                "metaKeys": [
+                  "io.modelcontextprotocol/clientCapabilities",
+                  "io.modelcontextprotocol/clientInfo",
+                  "io.modelcontextprotocol/protocolVersion"
+                ],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "authorization",
+              "connection",
+              "content-length",
+              "content-type",
+              "host",
+              "mcp-method",
+              "mcp-protocol-version",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49736",
+            "origin": null,
+            "userAgent": "claude-code/2.1.280 (sdk-cli)",
+            "mcpMethodHeader": "subscriptions/listen",
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2026-07-28",
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "subscriptions/listen",
+                "kind": "request",
+                "protocolVersion": "2026-07-28",
+                "clientInfo": {
+                  "name": "claude-code",
+                  "title": "Claude Code",
+                  "version": "2.1.280",
+                  "description": "Anthropic's agentic coding tool",
+                  "websiteUrl": "https://claude.com/claude-code"
+                },
+                "metaKeys": [
+                  "io.modelcontextprotocol/clientCapabilities",
+                  "io.modelcontextprotocol/clientInfo",
+                  "io.modelcontextprotocol/protocolVersion"
+                ],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 200,
+              "contentType": "text/event-stream",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "authorization",
+              "connection",
+              "content-length",
+              "content-type",
+              "host",
+              "mcp-method",
+              "mcp-protocol-version",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49736",
+            "origin": null,
+            "userAgent": "claude-code/2.1.280 (sdk-cli)",
+            "mcpMethodHeader": "tools/list",
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2026-07-28",
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "tools/list",
+                "kind": "request",
+                "protocolVersion": "2026-07-28",
+                "clientInfo": {
+                  "name": "claude-code",
+                  "title": "Claude Code",
+                  "version": "2.1.280",
+                  "description": "Anthropic's agentic coding tool",
+                  "websiteUrl": "https://claude.com/claude-code"
+                },
+                "metaKeys": [
+                  "io.modelcontextprotocol/clientCapabilities",
+                  "io.modelcontextprotocol/clientInfo",
+                  "io.modelcontextprotocol/protocolVersion"
+                ],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          }
+        ]
+      },
+      "unauthorized": {
+        "command": "CLAUDE_CONFIG_DIR=<tmp> claude mcp get convergence-door-probe",
+        "exit": 0,
+        "requests": [
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "authorization",
+              "connection",
+              "content-length",
+              "content-type",
+              "host",
+              "mcp-method",
+              "mcp-protocol-version",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49748",
+            "origin": null,
+            "userAgent": "claude-code/2.1.280 (sdk-cli)",
+            "mcpMethodHeader": "server/discover",
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2026-07-28",
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "server/discover",
+                "kind": "request",
+                "protocolVersion": "2026-07-28",
+                "clientInfo": {
+                  "name": "claude-code",
+                  "title": "Claude Code",
+                  "version": "2.1.280",
+                  "description": "Anthropic's agentic coding tool",
+                  "websiteUrl": "https://claude.com/claude-code"
+                },
+                "metaKeys": [
+                  "io.modelcontextprotocol/clientCapabilities",
+                  "io.modelcontextprotocol/clientInfo",
+                  "io.modelcontextprotocol/protocolVersion"
+                ],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 401,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "authorization",
+              "connection",
+              "content-length",
+              "content-type",
+              "host",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49748",
+            "origin": null,
+            "userAgent": "claude-code/2.1.280 (sdk-cli)",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": null,
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "initialize",
+                "kind": "request",
+                "protocolVersion": "2025-11-25",
+                "clientInfo": {
+                  "name": "claude-code",
+                  "title": "Claude Code",
+                  "version": "2.1.280",
+                  "description": "Anthropic's agentic coding tool",
+                  "websiteUrl": "https://claude.com/claude-code"
+                },
+                "metaKeys": [],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 401,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          }
+        ],
+        "output": "convergence-door-probe:\n  Scope: User config (available in all your projects)\n  Status: ✘ Failed to connect\n  Issue: Server rejected the configured Authorization header (HTTP 401). Check that the token is valid for this MCP endpoint — OAuth fallback is disabled when headers.Authorization is set. Error detail: {\"error\":\"invalid_token\"}\n  Type: http\n  URL: http://127.0.0.1:49748/mcp\n  Headers:\n    Authorization: Bearer ${CVG_DOOR_PROBE_TOKEN}\n\nTo remove this server, run: claude mcp remove convergence-door-probe -s user"
+      },
+      "modelTurn": {
+        "command": "CLAUDE_CONFIG_DIR=<tmp> claude -p 'Call the convergence-door-probe hello tool once and reply with exactly what it returned.' --mcp-config '{\"mcpServers\":{\"convergence-door-probe\":{\"type\":\"http\",\"url\":\"http://127.0.0.1:49490/mcp\",\"headers\":{\"Authorization\":\"Bearer ${CVG_DOOR_PROBE_TOKEN}\"}}}}' --strict-mcp-config --allowedTools mcp__convergence-door-probe__hello --model haiku",
+        "exit": 0,
+        "requests": [
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "authorization",
+              "connection",
+              "content-length",
+              "content-type",
+              "host",
+              "mcp-method",
+              "mcp-protocol-version",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49490",
+            "origin": null,
+            "userAgent": "claude-code/2.1.280 (sdk-cli)",
+            "mcpMethodHeader": "server/discover",
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2026-07-28",
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "server/discover",
+                "kind": "request",
+                "protocolVersion": "2026-07-28",
+                "clientInfo": {
+                  "name": "claude-code",
+                  "title": "Claude Code",
+                  "version": "2.1.280",
+                  "description": "Anthropic's agentic coding tool",
+                  "websiteUrl": "https://claude.com/claude-code"
+                },
+                "metaKeys": [
+                  "io.modelcontextprotocol/clientCapabilities",
+                  "io.modelcontextprotocol/clientInfo",
+                  "io.modelcontextprotocol/protocolVersion"
+                ],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "authorization",
+              "connection",
+              "content-length",
+              "content-type",
+              "host",
+              "mcp-method",
+              "mcp-protocol-version",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49490",
+            "origin": null,
+            "userAgent": "claude-code/2.1.280 (sdk-cli)",
+            "mcpMethodHeader": "subscriptions/listen",
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2026-07-28",
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "subscriptions/listen",
+                "kind": "request",
+                "protocolVersion": "2026-07-28",
+                "clientInfo": {
+                  "name": "claude-code",
+                  "title": "Claude Code",
+                  "version": "2.1.280",
+                  "description": "Anthropic's agentic coding tool",
+                  "websiteUrl": "https://claude.com/claude-code"
+                },
+                "metaKeys": [
+                  "io.modelcontextprotocol/clientCapabilities",
+                  "io.modelcontextprotocol/clientInfo",
+                  "io.modelcontextprotocol/protocolVersion"
+                ],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 200,
+              "contentType": "text/event-stream",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "authorization",
+              "connection",
+              "content-length",
+              "content-type",
+              "host",
+              "mcp-method",
+              "mcp-protocol-version",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49490",
+            "origin": null,
+            "userAgent": "claude-code/2.1.280 (sdk-cli)",
+            "mcpMethodHeader": "tools/list",
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2026-07-28",
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "tools/list",
+                "kind": "request",
+                "protocolVersion": "2026-07-28",
+                "clientInfo": {
+                  "name": "claude-code",
+                  "title": "Claude Code",
+                  "version": "2.1.280",
+                  "description": "Anthropic's agentic coding tool",
+                  "websiteUrl": "https://claude.com/claude-code"
+                },
+                "metaKeys": [
+                  "io.modelcontextprotocol/clientCapabilities",
+                  "io.modelcontextprotocol/clientInfo",
+                  "io.modelcontextprotocol/protocolVersion"
+                ],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "authorization",
+              "connection",
+              "content-length",
+              "content-type",
+              "host",
+              "mcp-method",
+              "mcp-name",
+              "mcp-protocol-version",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49490",
+            "origin": null,
+            "userAgent": "claude-code/2.1.280 (sdk-cli)",
+            "mcpMethodHeader": "tools/call",
+            "mcpNameHeader": "hello",
+            "mcpProtocolVersionHeader": "2026-07-28",
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "tools/call",
+                "kind": "request",
+                "protocolVersion": "2026-07-28",
+                "clientInfo": {
+                  "name": "claude-code",
+                  "title": "Claude Code",
+                  "version": "2.1.280",
+                  "description": "Anthropic's agentic coding tool",
+                  "websiteUrl": "https://claude.com/claude-code"
+                },
+                "metaKeys": [
+                  "claudecode/toolUseId",
+                  "io.modelcontextprotocol/clientCapabilities",
+                  "io.modelcontextprotocol/clientInfo",
+                  "io.modelcontextprotocol/protocolVersion",
+                  "progressToken"
+                ],
+                "toolName": "hello"
+              }
+            ],
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          }
+        ],
+        "output": "hello from the convergence door probe\n\nIgnoring 2 permissions.allow entries from .claude/settings.local.json: this workspace has not been trusted. Run Claude Code interactively here once and accept the trust dialog, or set projects[\"~/Projects/Private/convergence\"].hasTrustDialogAccepted: true in <tmp>/claude-turn/.claude.json."
+      }
+    },
+    "codex": {
+      "client": "codex",
+      "version": "codex-cli 0.156.0",
+      "capturedAt": "2026-09-23",
+      "connect": {
+        "command": "CODEX_HOME=<tmp> codex app-server -c 'mcp_servers.convergence-door-probe.url=\"http://127.0.0.1:65415/mcp\"' -c 'mcp_servers.convergence-door-probe.bearer_token_env_var=\"CVG_DOOR_PROBE_TOKEN\"'",
+        "exit": 0,
+        "requests": [
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "authorization",
+              "content-length",
+              "content-type",
+              "host",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:65415",
+            "origin": null,
+            "userAgent": "codex-mcp-client/0.156.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": null,
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "initialize",
+                "kind": "request",
+                "protocolVersion": "2025-06-18",
+                "clientInfo": {
+                  "name": "codex-mcp-client",
+                  "title": "Codex",
+                  "version": "0.156.0"
+                },
+                "metaKeys": [],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 200,
+              "contentType": "text/event-stream",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "authorization",
+              "content-length",
+              "content-type",
+              "host",
+              "mcp-protocol-version",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:65415",
+            "origin": null,
+            "userAgent": "codex-mcp-client/0.156.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2025-06-18",
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "notifications/initialized",
+                "kind": "notification",
+                "protocolVersion": null,
+                "clientInfo": null,
+                "metaKeys": [],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 202,
+              "contentType": null,
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "authorization",
+              "content-length",
+              "content-type",
+              "host",
+              "mcp-protocol-version",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:65415",
+            "origin": null,
+            "userAgent": "codex-mcp-client/0.156.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2025-06-18",
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "tools/list",
+                "kind": "request",
+                "protocolVersion": null,
+                "clientInfo": null,
+                "metaKeys": ["progressToken"],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 200,
+              "contentType": "text/event-stream",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "authorization",
+              "content-length",
+              "content-type",
+              "host",
+              "mcp-protocol-version",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:65415",
+            "origin": null,
+            "userAgent": "codex-mcp-client/0.156.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2025-06-18",
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "resources/list",
+                "kind": "request",
+                "protocolVersion": null,
+                "clientInfo": null,
+                "metaKeys": ["progressToken"],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 200,
+              "contentType": "text/event-stream",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "authorization",
+              "content-length",
+              "content-type",
+              "host",
+              "mcp-protocol-version",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:65415",
+            "origin": null,
+            "userAgent": "codex-mcp-client/0.156.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2025-06-18",
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "resources/templates/list",
+                "kind": "request",
+                "protocolVersion": null,
+                "clientInfo": null,
+                "metaKeys": ["progressToken"],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 200,
+              "contentType": "text/event-stream",
+              "mcpSessionIdReturned": false
+            }
+          }
+        ]
+      },
+      "unauthorized": {
+        "command": "CODEX_HOME=<tmp> codex app-server -c 'mcp_servers.convergence-door-probe.url=\"http://127.0.0.1:49287/mcp\"' -c 'mcp_servers.convergence-door-probe.bearer_token_env_var=\"CVG_DOOR_PROBE_TOKEN\"'",
+        "exit": 0,
+        "requests": [
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "authorization",
+              "content-length",
+              "content-type",
+              "host",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49287",
+            "origin": null,
+            "userAgent": "codex-mcp-client/0.156.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": null,
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "initialize",
+                "kind": "request",
+                "protocolVersion": "2025-06-18",
+                "clientInfo": {
+                  "name": "codex-mcp-client",
+                  "title": "Codex",
+                  "version": "0.156.0"
+                },
+                "metaKeys": [],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 401,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          }
+        ],
+        "output": "{\"id\":1,\"result\":{\"userAgent\":\"convergence-door-probe/0.156.0 (Mac OS 26.5.1; arm64) unknown (convergence-door-probe; 0.0.0)\",\"codexHome\":\"/private<tmp>/codex-home\",\"platformFamily\":\"unix\",\"platformOs\":\"macos\"}}\n{\"method\":\"configWarning\",\"params\":{\"summary\":\"Project-local config, hooks, and exec policies are disabled in the following folders until the project is trusted, but skills still load.\\n    1. ~/Projects/Private/convergence-lane-opus/.codex\\n       To load project-local config, hooks, and exec policies, add ~/Projects/Private/convergence as a trusted project in /private<tmp>/codex-home/config.toml.\\n\",\"details\":null},\"emittedAtMs\":1790132998142}\n{\"method\":\"remoteControl/status/changed\",\"params\":{\"status\":\"disabled\",\"serverName\":\"Mac.yallo.box\",\"installationId\":\"e2c66839-1b1c-4f38-bd13-0c74d7cbf9f6\",\"environmentId\":null},\"emittedAtMs\":1790132998142}\n{\"id\":2,\"result\":{\"data\":[{\"name\":\"convergence-door-probe\",\"runtimeStatus\":null,\"pluginId\":null,\"serverInfo\":null,\"serverCapabilities\":null,\"tools\":{},\"toolsError\":\"MCP startup failed: handshaking with MCP server failed: Send message error Transport [codex_rmcp_client::event_notification_transport::EventNotificationTransport<rmcp::transport::worker::WorkerTransport<rmcp::transport::streamable_http_client::StreamableHttpClientWorker<codex_rmcp_client::http_client_adapter::StreamableHttpClientAdapter>>>] error: Auth required, when send initialize request: Send message error Transport [codex_rmcp_client::event_notification_transport::EventNotificationTransport<rmcp::transport::worker::WorkerTransport<rmcp::transport::streamable_http_client::StreamableHttpClientWorker<codex_rmcp_client::http_client_adapter::StreamableHttpClientAdapter>>>] error: Auth required, when send initialize request\",\"resources\":[],\"resourceTemplates\":[],\"authStatus\":\"bearerToken\"}],\"nextCursor\":null}}\n\n\u001b[2m2026-09-23T03:09:58.094862Z\u001b[0m \u001b[31mERROR\u001b[0m \u001b[2mcodex_app_server\u001b[0m\u001b[2m:\u001b[0m Project-local config, hooks, and exec policies are disabled in the following folders until the project is trusted, but skills still load.\n    1. ~/Projects/Private/convergence-lane-opus/.codex\n       To load project-local config, hooks, and exec policies, add ~/Projects/Private/convergence as a trusted project in /private<tmp>/codex-home/config.toml.\n\n\u001b[2m2026-09-23T03:09:58.150644Z\u001b[0m \u001b[31mERROR\u001b[0m \u001b[2mrmcp::transport::worker\u001b[0m\u001b[2m:\u001b[0m worker quit with fatal: Transport channel closed, when AuthRequired(AuthRequiredError { www_authenticate_header: \"Bearer realm=\\\"convergence-door-probe\\\"\" })"
+      },
+      "modelTurn": {
+        "command": "codex exec -c 'mcp_servers.convergence-door-probe.url=\"http://127.0.0.1:49585/mcp\"' -c 'mcp_servers.convergence-door-probe.bearer_token_env_var=\"CVG_DOOR_PROBE_TOKEN\"' --skip-git-repo-check --sandbox read-only 'Call the convergence-door-probe hello tool once and reply with exactly what it returned.'",
+        "exit": 0,
+        "requests": [
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "authorization",
+              "content-length",
+              "content-type",
+              "host",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49585",
+            "origin": null,
+            "userAgent": "codex-mcp-client/0.156.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": null,
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "initialize",
+                "kind": "request",
+                "protocolVersion": "2025-06-18",
+                "clientInfo": {
+                  "name": "codex-mcp-client",
+                  "title": "Codex",
+                  "version": "0.156.0"
+                },
+                "metaKeys": [],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 200,
+              "contentType": "text/event-stream",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "authorization",
+              "content-length",
+              "content-type",
+              "host",
+              "mcp-protocol-version",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49585",
+            "origin": null,
+            "userAgent": "codex-mcp-client/0.156.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2025-06-18",
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "notifications/initialized",
+                "kind": "notification",
+                "protocolVersion": null,
+                "clientInfo": null,
+                "metaKeys": [],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 202,
+              "contentType": null,
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "authorization",
+              "content-length",
+              "content-type",
+              "host",
+              "mcp-protocol-version",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49585",
+            "origin": null,
+            "userAgent": "codex-mcp-client/0.156.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2025-06-18",
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "tools/list",
+                "kind": "request",
+                "protocolVersion": null,
+                "clientInfo": null,
+                "metaKeys": ["progressToken"],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 200,
+              "contentType": "text/event-stream",
+              "mcpSessionIdReturned": false
+            }
+          }
+        ],
+        "output": "MCP tool call requires approval, but approval policy is never\n\nReading additional input from stdin...\nOpenAI Codex v0.156.0\n--------\nworkdir: /private<tmp>\nmodel: gpt-6-astra\nprovider: openai\napproval: never\nsandbox: read-only\nreasoning effort: medium\nreasoning summaries: none\nsession id: 01a0cc3f-0c72-7071-a4bb-033603f7f543\n--------\nuser\nCall the convergence-door-probe hello tool once and reply with exactly what it returned.\n2026-09-23T03:11:20.440990Z ERROR codex_rmcp_client::oauth::refresh_transaction: error=failed to refresh OAuth tokens for server atlassian: OAuth refresh token was rejected: Server returned error response: invalid_grant: Invalid refresh token\ncodex\nI’ll locate the tool and call it once.\n\nmcp: convergence-door-probe/hello started\nmcp: convergence-door-probe/hello (failed)\nMCP tool call requires approval, but approval policy is never\ncodex\nMCP tool call requires approval, but approval policy is never\ntokens used\n7,417"
+      }
+    },
+    "cursor": {
+      "client": "cursor",
+      "version": "2026.09.18-9a7762b",
+      "capturedAt": "2026-09-23",
+      "connect": {
+        "command": "HOME=<tmp> sh -c 'agent mcp enable convergence-door-probe && agent mcp list-tools convergence-door-probe'",
+        "exit": 0,
+        "requests": [
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "accept-language",
+              "authorization",
+              "connection",
+              "content-length",
+              "content-type",
+              "host",
+              "sec-fetch-mode",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49207",
+            "origin": null,
+            "userAgent": "Cursor/1.0.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": null,
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "initialize",
+                "kind": "request",
+                "protocolVersion": "2025-11-25",
+                "clientInfo": {
+                  "name": "Cursor",
+                  "version": "1.0.0"
+                },
+                "metaKeys": [],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 200,
+              "contentType": "text/event-stream",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "accept-language",
+              "authorization",
+              "connection",
+              "content-length",
+              "content-type",
+              "host",
+              "mcp-protocol-version",
+              "sec-fetch-mode",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49207",
+            "origin": null,
+            "userAgent": "Cursor/1.0.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2025-11-25",
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "notifications/initialized",
+                "kind": "notification",
+                "protocolVersion": null,
+                "clientInfo": null,
+                "metaKeys": [],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 202,
+              "contentType": null,
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "GET",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "accept-language",
+              "authorization",
+              "connection",
+              "host",
+              "mcp-protocol-version",
+              "sec-fetch-mode",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49207",
+            "origin": null,
+            "userAgent": "Cursor/1.0.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2025-11-25",
+            "mcpSessionIdSent": false,
+            "rpc": null,
+            "response": {
+              "status": 405,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "accept-language",
+              "authorization",
+              "connection",
+              "content-length",
+              "content-type",
+              "host",
+              "mcp-protocol-version",
+              "sec-fetch-mode",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49207",
+            "origin": null,
+            "userAgent": "Cursor/1.0.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2025-11-25",
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "tools/list",
+                "kind": "request",
+                "protocolVersion": null,
+                "clientInfo": null,
+                "metaKeys": [],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 200,
+              "contentType": "text/event-stream",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "accept-language",
+              "authorization",
+              "connection",
+              "content-length",
+              "content-type",
+              "host",
+              "sec-fetch-mode",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49207",
+            "origin": null,
+            "userAgent": "Cursor/1.0.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": null,
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "initialize",
+                "kind": "request",
+                "protocolVersion": "2025-11-25",
+                "clientInfo": {
+                  "name": "Cursor",
+                  "version": "1.0.0"
+                },
+                "metaKeys": [],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 200,
+              "contentType": "text/event-stream",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "accept-language",
+              "authorization",
+              "connection",
+              "content-length",
+              "content-type",
+              "host",
+              "mcp-protocol-version",
+              "sec-fetch-mode",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49207",
+            "origin": null,
+            "userAgent": "Cursor/1.0.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2025-11-25",
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "notifications/initialized",
+                "kind": "notification",
+                "protocolVersion": null,
+                "clientInfo": null,
+                "metaKeys": [],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 202,
+              "contentType": null,
+              "mcpSessionIdReturned": false
+            }
+          }
+        ]
+      },
+      "unauthorized": {
+        "command": "HOME=<tmp> sh -c 'agent mcp enable convergence-door-probe && agent mcp list-tools convergence-door-probe'",
+        "exit": 1,
+        "requests": [
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "accept-language",
+              "authorization",
+              "connection",
+              "content-length",
+              "content-type",
+              "host",
+              "sec-fetch-mode",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49361",
+            "origin": null,
+            "userAgent": "Cursor/1.0.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": null,
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "initialize",
+                "kind": "request",
+                "protocolVersion": "2025-11-25",
+                "clientInfo": {
+                  "name": "Cursor",
+                  "version": "1.0.0"
+                },
+                "metaKeys": [],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 401,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "GET",
+            "path": "/.well-known/oauth-protected-resource/mcp",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "accept-language",
+              "authorization",
+              "connection",
+              "host",
+              "mcp-protocol-version",
+              "sec-fetch-mode",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49361",
+            "origin": null,
+            "userAgent": "Cursor/1.0.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2025-11-25",
+            "mcpSessionIdSent": false,
+            "rpc": null,
+            "response": {
+              "status": 401,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "GET",
+            "path": "/.well-known/oauth-protected-resource",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "accept-language",
+              "authorization",
+              "connection",
+              "host",
+              "mcp-protocol-version",
+              "sec-fetch-mode",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49361",
+            "origin": null,
+            "userAgent": "Cursor/1.0.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2025-11-25",
+            "mcpSessionIdSent": false,
+            "rpc": null,
+            "response": {
+              "status": 401,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "GET",
+            "path": "/.well-known/oauth-authorization-server",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "accept-language",
+              "authorization",
+              "connection",
+              "host",
+              "mcp-protocol-version",
+              "sec-fetch-mode",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49361",
+            "origin": null,
+            "userAgent": "Cursor/1.0.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2025-11-25",
+            "mcpSessionIdSent": false,
+            "rpc": null,
+            "response": {
+              "status": 401,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "GET",
+            "path": "/.well-known/openid-configuration",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "accept-language",
+              "authorization",
+              "connection",
+              "host",
+              "mcp-protocol-version",
+              "sec-fetch-mode",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49361",
+            "origin": null,
+            "userAgent": "Cursor/1.0.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2025-11-25",
+            "mcpSessionIdSent": false,
+            "rpc": null,
+            "response": {
+              "status": 401,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "POST",
+            "path": "/register",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "accept-language",
+              "authorization",
+              "connection",
+              "content-length",
+              "content-type",
+              "host",
+              "sec-fetch-mode",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49361",
+            "origin": null,
+            "userAgent": "Cursor/1.0.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": null,
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": null,
+                "kind": "response",
+                "protocolVersion": null,
+                "clientInfo": null,
+                "metaKeys": [],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 401,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "POST",
+            "path": "/mcp",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "accept-language",
+              "authorization",
+              "connection",
+              "content-length",
+              "content-type",
+              "host",
+              "sec-fetch-mode",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49361",
+            "origin": null,
+            "userAgent": "Cursor/1.0.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": null,
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": "initialize",
+                "kind": "request",
+                "protocolVersion": "2025-11-25",
+                "clientInfo": {
+                  "name": "Cursor",
+                  "version": "1.0.0"
+                },
+                "metaKeys": [],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 401,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "GET",
+            "path": "/.well-known/oauth-protected-resource/mcp",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "accept-language",
+              "authorization",
+              "connection",
+              "host",
+              "mcp-protocol-version",
+              "sec-fetch-mode",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49361",
+            "origin": null,
+            "userAgent": "Cursor/1.0.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2025-11-25",
+            "mcpSessionIdSent": false,
+            "rpc": null,
+            "response": {
+              "status": 401,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "GET",
+            "path": "/.well-known/oauth-protected-resource",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "accept-language",
+              "authorization",
+              "connection",
+              "host",
+              "mcp-protocol-version",
+              "sec-fetch-mode",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49361",
+            "origin": null,
+            "userAgent": "Cursor/1.0.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2025-11-25",
+            "mcpSessionIdSent": false,
+            "rpc": null,
+            "response": {
+              "status": 401,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "GET",
+            "path": "/.well-known/oauth-authorization-server",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "accept-language",
+              "authorization",
+              "connection",
+              "host",
+              "mcp-protocol-version",
+              "sec-fetch-mode",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49361",
+            "origin": null,
+            "userAgent": "Cursor/1.0.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2025-11-25",
+            "mcpSessionIdSent": false,
+            "rpc": null,
+            "response": {
+              "status": 401,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "GET",
+            "path": "/.well-known/openid-configuration",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "accept-language",
+              "authorization",
+              "connection",
+              "host",
+              "mcp-protocol-version",
+              "sec-fetch-mode",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49361",
+            "origin": null,
+            "userAgent": "Cursor/1.0.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": "2025-11-25",
+            "mcpSessionIdSent": false,
+            "rpc": null,
+            "response": {
+              "status": 401,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          },
+          {
+            "httpMethod": "POST",
+            "path": "/register",
+            "headerNames": [
+              "accept",
+              "accept-encoding",
+              "accept-language",
+              "authorization",
+              "connection",
+              "content-length",
+              "content-type",
+              "host",
+              "sec-fetch-mode",
+              "user-agent"
+            ],
+            "authorization": {
+              "present": true,
+              "scheme": "Bearer"
+            },
+            "host": "127.0.0.1:49361",
+            "origin": null,
+            "userAgent": "Cursor/1.0.0",
+            "mcpMethodHeader": null,
+            "mcpNameHeader": null,
+            "mcpProtocolVersionHeader": null,
+            "mcpSessionIdSent": false,
+            "rpc": [
+              {
+                "method": null,
+                "kind": "response",
+                "protocolVersion": null,
+                "clientInfo": null,
+                "metaKeys": [],
+                "toolName": null
+              }
+            ],
+            "response": {
+              "status": 401,
+              "contentType": "application/json",
+              "mcpSessionIdReturned": false
+            }
+          }
+        ],
+        "output": "✓ Enabled and approved MCP server: convergence-door-probe\n\nMCP 'convergence-door-probe' requires authentication.\nPlease run: agent mcp login convergence-door-probe\nError: command failed unexpectedly."
+      }
+    }
+  }
+}
