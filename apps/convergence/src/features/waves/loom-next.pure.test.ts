@@ -2,6 +2,7 @@ import type { DispatchWord } from '@/shared/types/tracker.types'
 import { dispatchWordSentence } from './loom-next.pure'
 import { describe, expect, it } from 'vitest'
 import {
+  loomDispatchSentence,
   loomMissingLabels,
   loomNext,
   loomQueueCompare,
@@ -9,7 +10,7 @@ import {
   LOOM_NEXT_ORDER_LINE,
   LOOM_NEXT_UNSEATED_TITLE,
 } from './loom-next.pure'
-import type { LoomHorse } from './loom-horses.pure'
+import { loomDispatchClock, type LoomHorse } from './loom-horses.pure'
 import { loomSheetCounts, loomSheets, loomSheetTitle } from './loom-sheets.pure'
 import { ledgerEntry } from './wave-rows.fixture'
 import {
@@ -81,6 +82,7 @@ const horse = (overrides: Partial<LoomHorse> = {}): LoomHorse => ({
   sessionId: 'session-opus',
   openable: true,
   held: null,
+  dispatched: null,
   heldFrom: null,
   conversationMissing: false,
   returned: null,
@@ -468,4 +470,84 @@ it.each<[DispatchWord, string]>([
   [{ kind: 'would-start', wire: { id: 'w', opener: null } }, 'would start now'],
 ])('R8 translates %j into the specified sentence', (word, sentence) => {
   expect(dispatchWordSentence(word, 'opus')).toBe(sentence)
+})
+
+describe('MAR-3204: the dispatch window reads the record, plan or no plan', () => {
+  const SENT_AT = '2026-09-22T21:40:00.000Z'
+  const sent = (error: string | null = null) => ({
+    sentAt: SENT_AT,
+    seat: 'opus',
+    sessionId: 'session-opus',
+    delivery: 'turn' as const,
+    error,
+  })
+  /** The row Marcin saw: sent, and the horse not yet In Progress. */
+  const windowRow = (
+    dispatch: WorkLedgerEntry['dispatch'],
+    facts: Record<string, boolean> = { groomed: true, grounded: true },
+  ): WaveRow => row({ ...queuedEntry('MAR-7', { facts }), dispatch })
+  const actionOf = (next: ReturnType<typeof loomNext>) =>
+    next.seats.flatMap((seat) => [...seat.ready, ...seat.preparing])[0]?.action
+
+  it('R1: no live plan (a fresh process) + a record -> dispatched HH:MM; no record -> needs dispatch', () => {
+    const clock = loomDispatchClock(SENT_AT)
+    expect(clock).toMatch(/^\d\d:\d\d$/)
+    // Mutation: read the plan only (drop `recordedSend`) -> the restarted
+    // case reads `needs dispatch` -> red.
+    expect(actionOf(loomNext([windowRow(sent())], [horse()], null))).toBe(
+      `dispatched ${clock} · Linear not yet In Progress`,
+    )
+    expect(actionOf(loomNext([windowRow(null)], [horse()], null))).toBe(
+      'needs dispatch',
+    )
+  })
+
+  it('R1: a sent row is never Ready, even with every label on it', () => {
+    const next = loomNext([windowRow(sent(), READY)], [horse()], null)
+    expect(next.ready).toBe(0)
+    expect(actionOf(next)).toBe(
+      `dispatched ${loomDispatchClock(SENT_AT)} · Linear not yet In Progress`,
+    )
+  })
+
+  it('R1: the record outranks a live plan word for the same row', () => {
+    const plan = {
+      plannedAt: SENT_AT,
+      words: {
+        'issue-MAR-7': { kind: 'needs-labels', missing: ['dispatch'] },
+      } as Record<string, DispatchWord>,
+      order: {},
+      warnings: [],
+    }
+    expect(actionOf(loomNext([windowRow(sent())], [horse()], plan))).toBe(
+      `dispatched ${loomDispatchClock(SENT_AT)} · Linear not yet In Progress`,
+    )
+  })
+
+  it('R1/R2: the two sentences a record can say, and nothing else decides which', () => {
+    const clock = loomDispatchClock(SENT_AT)
+    expect(loomDispatchSentence(sent())).toBe(
+      `dispatched ${clock} · Linear not yet In Progress`,
+    )
+    expect(loomDispatchSentence(sent('seat gone'))).toBe(
+      `dispatch failed ${clock} · seat gone`,
+    )
+  })
+
+  it('R2: a record with an error is its own sentence, never `dispatched`', () => {
+    // Mutation: ignore `error` -> `dispatched …` -> red.
+    expect(
+      actionOf(loomNext([windowRow(sent('turn failed'))], [horse()], null)),
+    ).toBe(`dispatch failed ${loomDispatchClock(SENT_AT)} · turn failed`)
+  })
+
+  it('the window closes with the tracker: a working row is Now, not a Next sentence', () => {
+    const working = row({
+      ...queuedEntry('MAR-7'),
+      state: 'working',
+      dispatch: sent(),
+    })
+    // A working row is not Next's to draw; loomSheets never hands it here.
+    expect(loomSheets([working.entry], NOW).next).toEqual([])
+  })
 })

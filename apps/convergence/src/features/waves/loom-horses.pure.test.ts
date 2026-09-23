@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionStatus } from '@/entities/session'
 import {
+  loomDispatchClock,
   loomHorseRuntimeLabel,
+  loomHorseTicketLine,
+  LOOM_NO_ACTIVE_TICKET,
   rowBelongsToSeat,
   loomHorses,
   loomHorsesLine,
@@ -776,4 +779,84 @@ it('MAR-3186 R5 recipe holds its working issue after the ledger joins the spawn'
   })[0]
   expect(horse.held?.entry.issueIdentifier).toBe('MAR-3186')
   expect(horse.held?.entry.sessionId).toBe('spawn')
+})
+
+describe('MAR-3204 R3: the card names the dispatch window', () => {
+  const SENT_AT = '2026-09-22T21:40:00.000Z'
+  const crew = boundCrewWith('crew-1', 'Loom', [residentSeat('opus-mac')])
+  const sentTo = (seat: string, error: string | null = null) => ({
+    sentAt: SENT_AT,
+    seat,
+    sessionId: 'session-opus-mac',
+    delivery: 'turn' as const,
+    error,
+  })
+  const assigned = (
+    identifier: string,
+    dispatch: ReturnType<typeof sentTo> | null,
+  ) =>
+    ledgerEntry({
+      issueIdentifier: identifier,
+      state: 'assigned',
+      trackerStatus: 'Todo',
+      seat: 'opus-mac',
+      sessionId: 'session-opus-mac',
+      dispatch,
+    })
+  const horseFor = (rows: Parameters<typeof loomSheets>[0]) =>
+    loomHorses({
+      crews: [crew],
+      // Idle: the seat has not picked the send up yet -- the runtime is the
+      // session's word and the record must not move it.
+      sessionsById: new Map([['session-opus-mac', session('completed')]]),
+      sheets: loomSheets(rows, NOW),
+      hostLabelOf,
+    })[0]!
+
+  it('held null + a record for this seat + row assigned -> the issue and the window', () => {
+    const horse = horseFor([assigned('MAR-7', sentTo('opus-mac'))])
+    // Mutation: treat the record as `held` -> `held` is the row and the line
+    // reads `MAR-7 · Work MAR-7` -> red.
+    expect(horse.held).toBeNull()
+    expect(horse.dispatched?.entry.issueIdentifier).toBe('MAR-7')
+    expect(loomHorseTicketLine(horse)).toBe(
+      `MAR-7 · dispatched ${loomDispatchClock(SENT_AT)}, not yet In Progress`,
+    )
+    // The runtime is the session's (runtime word unchanged).
+    expect(horse.runtime).toBe('idle')
+    expect(loomHorseRuntimeLabel(horse)).toBe('Idle')
+  })
+
+  it('a record with an error names the failed send, not the window', () => {
+    const horse = horseFor([assigned('MAR-7', sentTo('opus-mac', 'boom'))])
+    expect(loomHorseTicketLine(horse)).toBe(
+      `MAR-7 · dispatch failed ${loomDispatchClock(SENT_AT)}`,
+    )
+  })
+
+  it('held set -> the held ticket as today, whatever else was sent', () => {
+    const horse = horseFor([
+      ledgerEntry({
+        issueIdentifier: 'MAR-5',
+        state: 'working',
+        seat: 'opus-mac',
+        sessionId: 'session-opus-mac',
+      }),
+      assigned('MAR-7', sentTo('opus-mac')),
+    ])
+    expect(horse.held?.entry.issueIdentifier).toBe('MAR-5')
+    expect(horse.dispatched).toBeNull()
+    expect(loomHorseTicketLine(horse)).toBe('MAR-5 · Work MAR-5')
+  })
+
+  it('neither -> No active ticket; a record naming ANOTHER seat is neither', () => {
+    expect(loomHorseTicketLine(horseFor([assigned('MAR-7', null)]))).toBe(
+      LOOM_NO_ACTIVE_TICKET,
+    )
+    // Re-seated after the send: this horse was never handed it.
+    // Mutation: drop the `dispatch.seat === batonName` check -> red.
+    expect(
+      loomHorseTicketLine(horseFor([assigned('MAR-7', sentTo('grok-mac'))])),
+    ).toBe(LOOM_NO_ACTIVE_TICKET)
+  })
 })

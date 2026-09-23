@@ -349,6 +349,26 @@ export interface WorkLedgerEntry extends WorkLedgerRecord {
    */
   pr: SessionPullRequest | TrackerPullRequest | null
   hostLiveness: WorkLedgerHostLiveness | null
+  /**
+   * The app's own record that it sent THIS lap of this issue (MAR-3204 R1):
+   * the `auto_dispatches` row for `(issue, lap)`, or null when there is none.
+   *
+   * The durable half of the dispatch window. The plan's `sent` word dies
+   * with the process; this is read from the table by the same SELECT that
+   * reads the row, so a fresh process says `dispatched` before its first
+   * tick, and the tracker's state is never rewritten to say it.
+   */
+  dispatch: WorkLedgerDispatch | null
+}
+
+/** One `auto_dispatches` row, as a ledger entry carries it (MAR-3204). */
+export interface WorkLedgerDispatch {
+  sentAt: string
+  seat: string
+  sessionId: string
+  delivery: 'turn' | 'queued'
+  /** A send or its turn failed; null while nothing has said so. */
+  error: string | null
 }
 
 export type TrackerHealthState =

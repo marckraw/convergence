@@ -108,6 +108,11 @@ function openerSelector(active: HTMLElement): string | null {
   if (details) {
     return `[data-loom-horse-details="${details.getAttribute('data-loom-horse-details')}"]`
   }
+  // The card's ticket line is a door to the same detail (MAR-3204 R4).
+  const ticket = active.closest('[data-loom-horse-ticket]')
+  if (ticket) {
+    return `[data-loom-horse-ticket="${ticket.getAttribute('data-loom-horse-ticket')}"]`
+  }
   const row = active.closest('[data-wave-row]')
   return row ? `[data-wave-row="${row.getAttribute('data-wave-row')}"]` : null
 }

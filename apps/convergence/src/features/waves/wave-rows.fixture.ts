@@ -31,6 +31,7 @@ export function ledgerEntry(
       lastEventAt: null,
       hostReachable: true,
     },
+    dispatch: null,
     ...overrides,
   }
 }

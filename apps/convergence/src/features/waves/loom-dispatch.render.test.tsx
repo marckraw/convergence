@@ -37,6 +37,7 @@ const horse = {
   sessionId: 'session-opus',
   openable: true,
   held: null,
+  dispatched: null,
   heldFrom: null,
   conversationMissing: false,
   returned: null,

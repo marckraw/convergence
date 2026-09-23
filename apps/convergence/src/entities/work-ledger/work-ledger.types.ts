@@ -6,6 +6,7 @@
 export type {
   TrackerHealth,
   TrackerHealthState,
+  WorkLedgerDispatch,
   WorkLedgerEntry,
   WorkLedgerSnapshot,
   WorkLedgerState,

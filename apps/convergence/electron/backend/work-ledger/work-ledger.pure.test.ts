@@ -45,6 +45,11 @@ function joined(
     execution_host: 'local',
     execution_host_last_event_at: null,
     attention: 'none',
+    sent_at: null,
+    sent_seat: null,
+    sent_session_id: null,
+    sent_delivery: null,
+    sent_error: null,
     ...overrides,
   }
 }
@@ -74,6 +79,36 @@ describe('MAR-3084 R6: the PR belongs to the issue its branch names', () => {
       lastEventAt: null,
       hostReachable: false,
     })
+  })
+})
+
+describe("MAR-3204 R1: the entry carries the app's send of this lap", () => {
+  it('no joined send reads as null -- never a default record', () => {
+    expect(workLedgerEntryFromJoinedRow(joined()).dispatch).toBeNull()
+  })
+
+  it('a joined send reads as the record, error and all', () => {
+    const sent = {
+      sent_at: '2026-09-22T21:40:00.000Z',
+      sent_seat: 'opus',
+      sent_session_id: 's1',
+      sent_delivery: 'queued',
+    }
+    expect(
+      workLedgerEntryFromJoinedRow(joined({ ...sent, sent_error: null }))
+        .dispatch,
+    ).toEqual({
+      sentAt: '2026-09-22T21:40:00.000Z',
+      seat: 'opus',
+      sessionId: 's1',
+      delivery: 'queued',
+      error: null,
+    })
+    expect(
+      workLedgerEntryFromJoinedRow(
+        joined({ ...sent, sent_error: 'turn failed' }),
+      ).dispatch?.error,
+    ).toBe('turn failed')
   })
 })
 

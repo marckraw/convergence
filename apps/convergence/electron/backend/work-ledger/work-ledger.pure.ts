@@ -4,6 +4,7 @@ import type {
   NewWorkLedgerRecord,
   TrackerIssuePullRequest,
   TrackerPullRequest,
+  WorkLedgerDispatch,
   WorkLedgerEntry,
   WorkLedgerFact,
   WorkLedgerRecord,
@@ -113,6 +114,15 @@ export interface WorkLedgerJoinedRow extends WorkLedgerRow {
   execution_host: string | null
   execution_host_last_event_at: string | null
   attention: string | null
+  /**
+   * The `auto_dispatches` row for this `(issue, lap)` (MAR-3204), joined in
+   * the same SELECT; every column null when the app never sent this lap.
+   */
+  sent_at: string | null
+  sent_seat: string | null
+  sent_session_id: string | null
+  sent_delivery: string | null
+  sent_error: string | null
 }
 
 /**
@@ -303,5 +313,28 @@ export function workLedgerEntryFromJoinedRow(
             lastEventAt: row.execution_host_last_event_at,
             hostReachable: row.attention !== 'host-unreachable',
           },
+    dispatch: workLedgerDispatchFromJoinedRow(row),
+  }
+}
+
+/**
+ * The app's record of sending this lap (MAR-3204 R1), or null.
+ *
+ * `sent_at` is NOT NULL in the table, so a null here can only mean the LEFT
+ * JOIN found no row -- the one case that is "never sent".
+ */
+export function workLedgerDispatchFromJoinedRow(
+  row: Pick<
+    WorkLedgerJoinedRow,
+    'sent_at' | 'sent_seat' | 'sent_session_id' | 'sent_delivery' | 'sent_error'
+  >,
+): WorkLedgerDispatch | null {
+  if (row.sent_at === null) return null
+  return {
+    sentAt: row.sent_at,
+    seat: row.sent_seat ?? '',
+    sessionId: row.sent_session_id ?? '',
+    delivery: row.sent_delivery === 'queued' ? 'queued' : 'turn',
+    error: row.sent_error,
   }
 }
