@@ -135,15 +135,22 @@ export function waveRowMetaWords(row: WaveRow): string[] {
       ? null
       : row.lapLabel,
     entry.verdict,
-    // Session reading has a state (`PR #777 open`); a tracker link has
-    // none -- nobody read one -- so the card names the number only
-    // (`PR #751`). Null adds nothing (MAR-3313).
-    entry.pr
-      ? entry.pr.source === 'tracker'
-        ? `PR #${entry.pr.number}`
-        : `PR #${entry.pr.number} ${entry.pr.state}`
-      : null,
   ].filter((word): word is string => Boolean(word))
+}
+
+/** The PR word is its own door (MAR-3361); tracker links have no state reading. */
+export function waveRowPullRequest(
+  row: WaveRow,
+): { label: string; url: string } | null {
+  const { pr } = row.entry
+  if (!pr) return null
+  return {
+    label:
+      pr.source === 'tracker'
+        ? `PR #${pr.number}`
+        : `PR #${pr.number} ${pr.state}`,
+    url: pr.url,
+  }
 }
 
 /**

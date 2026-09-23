@@ -1653,7 +1653,7 @@ describe('MAR-3097: through the containers and the real stores', () => {
     // that is exactly the issue a person most wants to read.
     // Mutation: pass the conversation's `inertReason` to Loom's rows -> the
     // row is an inert `div`, the click does nothing, red.
-    expect(row.tagName).toBe('BUTTON')
+    expect(row).toHaveRole('button')
     fireEvent.click(row)
     const card = document.querySelector(
       '[data-loom-detail="crew-1:EX-PLAN"]',
