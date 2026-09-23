@@ -127,6 +127,56 @@ export class SessionQueuedInputService {
     }))
   }
 
+  /**
+   * Every row of this session in line order, WHATEVER its state (MAR-3307 R1).
+   *
+   * `list` is the card's read and leaves out `sent` and `cancelled`, which is
+   * right for the card and wrong for a question about the record. At boot,
+   * "which turn was in flight" is answered by the last row that went out, and
+   * that row is `sent` or `dispatching`. Same ordering law as `list` and
+   * `nextQueued`: `queue_position`, then `rowid` as lineage.
+   */
+  listAllForSession(sessionId: string): SessionQueuedInput[] {
+    const rows = this.db
+      .prepare(
+        `SELECT *
+         FROM session_queued_inputs
+         WHERE session_id = ?
+         ORDER BY queue_position ASC, rowid ASC`,
+      )
+      .all(sessionId) as SessionQueuedInputRow[]
+    return rows.map(queuedInputFromRow)
+  }
+
+  /**
+   * Rows that ended `failed` with a receipt and whose ending nobody has been
+   * told yet (MAR-3307): what `tellBootEndings` owes the listeners.
+   *
+   * Read from the record, not from memory, so a crash between the boot that
+   * failed them and the telling leaves them here for the next boot.
+   *
+   * The rows `recoverDispatching` failed are excluded ON PURPOSE. MAR-2971
+   * leaves them untold so the user's dismissal (`abandoned`) or Deliver now
+   * gives them their only ending. Their row also says the input "may already
+   * have reached the provider", so a loud `failed` told at boot could be
+   * false. Their error is the only fact the record keeps about which path
+   * failed them, and exactly one writer sets it.
+   */
+  listFailedUntold(): SessionQueuedInput[] {
+    const rows = this.db
+      .prepare(
+        `SELECT *
+         FROM session_queued_inputs
+         WHERE state = 'failed'
+           AND ending_told_at IS NULL
+           AND dispatch_id IS NOT NULL
+           AND (error IS NULL OR error <> ?)
+         ORDER BY session_id ASC, queue_position ASC, rowid ASC`,
+      )
+      .all(RESTARTED_WHILE_DISPATCHING_ERROR) as SessionQueuedInputRow[]
+    return rows.map(queuedInputFromRow)
+  }
+
   enqueue(
     sessionId: string,
     input: SessionQueuedInputDraft,
