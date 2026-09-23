@@ -292,9 +292,37 @@ async function startApp(): Promise<void> {
   perfProbe?.wrapDatabase(db)
   if (perfProbe) {
     const { ipcMain } = await import('electron')
+    const { mkdirSync, writeFileSync } = await import('node:fs')
+    const { installPerfDump } = await import('../backend/perf/perf-dump')
     ipcMain.handle('perf:report', (_event, payload: unknown) =>
       perfProbe.report(payload),
     )
+    // Same will-quit as dispose, registered first, so the snapshot is taken
+    // while the probe still holds its numbers. Sync IO finishes before the
+    // listener returns, so quit cannot exit ahead of the file.
+    installPerfDump(perfProbe, {
+      dir: join(app.getPath('userData'), 'perf'),
+      now: () => new Date(),
+      mkdir: (path) => {
+        mkdirSync(path, { recursive: true })
+      },
+      writeFile: (path, data) => {
+        writeFileSync(path, data)
+      },
+      onSignal: (signal, handler) => {
+        process.on(signal, () => {
+          void handler()
+        })
+      },
+      onQuit: (handler) => {
+        app.on('will-quit', () => {
+          void handler()
+        })
+      },
+      log: (line) => {
+        console.log(line)
+      },
+    })
     app.on('will-quit', () => {
       ipcMain.removeHandler('perf:report')
       perfProbe.dispose()
