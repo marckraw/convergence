@@ -213,6 +213,9 @@ Avoid the Divergence failure mode where the transcript competes with telemetry, 
 Cursor ACP live surface (measured CP0): `docs/architecture/cursor-acp-surface.md`
 and `apps/convergence/electron/backend/provider/cursor/cursor-acp.recorded.fixture.ts`.
 
+MCP door surface (measured, The Door S0): `docs/architecture/mcp-door-surface.md`
+and `apps/convergence/electron/backend/door/__fixtures__/client-handshakes.json`.
+
 Session state should be provider-neutral and capable of representing:
 
 - user messages
