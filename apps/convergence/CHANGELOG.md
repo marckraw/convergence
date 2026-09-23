@@ -1,5 +1,12 @@
 # convergence
 
+## 0.85.5
+
+### Patch Changes
+
+- 2875b6d: A folded sidebar section says more: what asks for you, the PRs by state and the projects inside, on a second line.
+- 7864ce1: Merge reviewed shows already-merged PRs as merged and counts only what it can merge.
+
 ## 0.85.4
 
 ### Patch Changes
