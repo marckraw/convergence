@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ReleaseActService } from './release-act.service'
 import {
   HEAD,
@@ -76,7 +76,7 @@ describe('MAR-3087 merge rite, fake gh only', () => {
     const b = bench()
     b.gh.mockResolvedValueOnce(reading({ statusCheckRollup: [] }))
     await expect(b.merge()).rejects.toThrow('Select mergeable PRs only')
-    expect(b.service.acts('crew').acts).toEqual([])
+    expect(b.service.acts(seat).acts).toEqual([])
   })
 
   it('R3 second merge follows the matching completed poll, ignoring other heads', async () => {
@@ -131,7 +131,7 @@ describe('MAR-3087 merge rite, fake gh only', () => {
       )
       const result = await b.merge()
       expect(result.acts.map((act) => act.outcome)).toEqual([
-        'failed',
+        'merged',
         'skipped',
       ])
       expect(result.acts[0].error).toBe(
@@ -139,11 +139,80 @@ describe('MAR-3087 merge rite, fake gh only', () => {
           ? 'changesets run did not complete'
           : 'changesets run failure',
       )
+      expect(result.acts[0].completedAt).toBe(result.acts[0].startedAt)
       expect(b.hails.raise).toHaveBeenCalledTimes(1)
       expect(
         b.ledger.currentView('crew').find((row) => row.issueId === 'issue-1')
           ?.fact.merged,
       ).toBeDefined()
+    },
+  )
+
+  it('R8 matches the second run after a concurrent merge and continues the rite', async () => {
+    const b = bench(2)
+    const fakeGh = b.gh.getMockImplementation()!
+    b.gh.mockImplementation(async (args, cwd) => {
+      if (args[0] !== 'run') return fakeGh(args, cwd)
+      const limit = Number(args[args.indexOf('--limit') + 1])
+      return JSON.stringify(
+        [
+          { headSha: MOVED, status: 'completed', conclusion: 'success' },
+          { headSha: MERGED, status: 'completed', conclusion: 'success' },
+        ].slice(0, limit),
+      )
+    })
+    const result = await b.merge()
+    expect(result.acts.map((act) => act.outcome)).toEqual(['merged', 'merged'])
+    expect(b.deps.sleep).not.toHaveBeenCalled()
+    expect(b.hails.raise).not.toHaveBeenCalled()
+    expect(b.events.some((event) => event.startsWith('pr merge 2 '))).toBe(true)
+  })
+
+  it.each(['missing row', 'append failure', 'broadcast failure'])(
+    'R9 records merged before %s, retains a note, and continues without a hail',
+    async (mode) => {
+      const b = bench(2)
+      let observedOutcome: string | undefined
+      if (mode === 'broadcast failure') {
+        b.deps.changed.mockImplementation(() => {
+          const act = b.service.acts(seat).acts[0]
+          if (act?.startedAt) {
+            observedOutcome ??= act.outcome
+            throw new Error('broadcast unavailable')
+          }
+        })
+      } else {
+        vi.spyOn(b.deps.ledger, 'currentView').mockImplementation((id) => {
+          observedOutcome ??= b.service.acts(seat).acts[0]?.outcome
+          return b.ledger
+            .currentView(id)
+            .filter(
+              (row) => mode !== 'missing row' || row.issueId !== 'issue-1',
+            )
+        })
+        if (mode === 'append failure') {
+          vi.spyOn(b.deps.ledger, 'append').mockImplementationOnce(() => {
+            throw new Error('ledger unavailable')
+          })
+        }
+      }
+      const result = await b.merge()
+      expect(observedOutcome).toBe('merged')
+      expect(result.acts.map((act) => act.outcome)).toEqual([
+        'merged',
+        'merged',
+      ])
+      expect(result.acts[0].error).toContain(
+        mode === 'missing row'
+          ? 'no ledger row'
+          : mode === 'append failure'
+            ? 'ledger unavailable'
+            : 'broadcast unavailable',
+      )
+      expect(b.hails.raise).not.toHaveBeenCalled()
+      expect(b.events.some((event) => event.startsWith('pr merge 2 '))).toBe(
+        true,
+      )
     },
   )
 
@@ -222,7 +291,7 @@ describe('MAR-3087 merge rite, fake gh only', () => {
     const plan = await b.service.plan(seat)
     let observedRunning = false
     b.gh.mockImplementation(async (args) => {
-      const act = b.service.acts('crew').acts[0]
+      const act = b.service.acts(seat).acts[0]
       if (args[1] === 'view') {
         expect(act.outcome).toBe('pending')
         return reading()
@@ -254,7 +323,7 @@ describe('MAR-3087 merge rite, fake gh only', () => {
     })
     await b.service.merge({ ...seat, planId: plan.id, issueIds: ['issue-1'] })
     expect(observedRunning).toBe(true)
-    expect(b.service.acts('crew').acts[0].outcome).toBe('failed')
+    expect(b.service.acts(seat).acts[0].outcome).toBe('failed')
   })
 
   it('R7 missing gh disables the plan without a hail or act', async () => {
@@ -269,6 +338,6 @@ describe('MAR-3087 merge rite, fake gh only', () => {
       b.service.merge({ ...seat, planId: plan.id, issueIds: ['issue-1'] }),
     ).rejects.toThrow('Select mergeable')
     expect(b.hails.raise).not.toHaveBeenCalled()
-    expect(b.service.acts('crew').acts).toEqual([])
+    expect(b.service.acts(seat).acts).toEqual([])
   })
 })

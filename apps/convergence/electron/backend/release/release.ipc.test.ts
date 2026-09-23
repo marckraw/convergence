@@ -6,6 +6,30 @@ import { releaseBench, seat } from './release-act.fixture'
 vi.mock('electron', () => ({ ipcMain: { handle: vi.fn() } }))
 afterEach(() => vi.clearAllMocks())
 
+it('MAR-3087 release:acts authorizes the seat before reading records', () => {
+  const b = releaseBench()
+  try {
+    registerReleaseIpcHandlers(b.service)
+    const handler = vi
+      .mocked(ipcMain.handle)
+      .mock.calls.find(([channel]) => channel === 'release:acts')![1]
+    expect(() => handler({} as never, { ...seat, sessionId: 'horse' })).toThrow(
+      'Only the mastermind',
+    )
+    expect(() =>
+      handler({} as never, { ...seat, crewId: 'other-crew' }),
+    ).toThrow('Only the mastermind')
+    expect(handler({} as never, seat)).toEqual({
+      acts: [],
+      running: false,
+      waitingFor: null,
+    })
+    expect(b.gh).not.toHaveBeenCalled()
+  } finally {
+    b.db.close()
+  }
+})
+
 it('MAR-3087 R5 release:merge refuses a horse through the real service boundary', async () => {
   const b = releaseBench()
   try {

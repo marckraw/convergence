@@ -38,7 +38,12 @@ export class ReleaseActService {
       deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
   }
 
-  acts(crewId: string): ReleaseProgress {
+  acts(seat: ReleaseSeat): ReleaseProgress {
+    this.deps.authorize(seat)
+    return this.progress(seat.crewId)
+  }
+
+  private progress(crewId: string): ReleaseProgress {
     const acts = this.deps.db
       .prepare(
         `SELECT id, crew_id AS crewId, issue_id AS issueId,
@@ -56,7 +61,7 @@ export class ReleaseActService {
 
   async plan(seat: ReleaseSeat): Promise<ReleasePlan> {
     const cwd = this.deps.authorize(seat)
-    const progress = this.acts(seat.crewId)
+    const progress = this.progress(seat.crewId)
     const plan: ReleasePlan = {
       ...progress,
       id: randomUUID(),
@@ -201,12 +206,13 @@ export class ReleaseActService {
             )
             .run(this.stamp(), act.id)
           await this.deps.prs.merge(candidate.prNumber, reading.headSha, cwd)
-          // Append against the latest local fact after the await, never overwrite a tracker observation.
-          const current = this.deps.ledger
-            .currentView(input.crewId)
-            .find((row) => row.issueId === candidate.issueId)
-          if (!current) throw new Error('Merged PR has no ledger row')
-          this.deps.db.transaction(() => {
+          this.finish(act, 'merged', null)
+          try {
+            // Append against the latest local fact after the await, never overwrite a tracker observation.
+            const current = this.deps.ledger
+              .currentView(input.crewId)
+              .find((row) => row.issueId === candidate.issueId)
+            if (!current) throw new Error('Merged PR has no ledger row')
             this.deps.ledger.append([
               {
                 ...current,
@@ -220,10 +226,11 @@ export class ReleaseActService {
                 },
               },
             ])
-            this.finish(act, 'merged', null)
-          })()
+          } catch (error) {
+            this.note(act, error)
+          }
           this.running.set(input.crewId, candidate.prNumber)
-          this.deps.changed(input.crewId)
+          this.notify(act)
           const merged = await this.deps.prs.viewForMerge(
             candidate.prNumber,
             cwd,
@@ -240,7 +247,9 @@ export class ReleaseActService {
             : error instanceof Error
               ? error.message
               : String(error)
-          this.finish(act, 'failed', message)
+          const merged = act.outcome === 'merged'
+          if (merged) this.note(act, message)
+          else this.finish(act, 'failed', message)
           for (const pending of acts.slice(index + 1))
             this.finish(pending, 'skipped', `stopped after #${act.prNumber}`)
           if (!missing)
@@ -248,16 +257,35 @@ export class ReleaseActService {
               crewId: input.crewId,
               sessionId: input.sessionId,
               reason: 'release-failed',
-              detail: `Merge #${act.prNumber} failed: ${message}`,
+              detail: merged
+                ? `Merge #${act.prNumber} completed; follow-up failed: ${message}`
+                : `Merge #${act.prNumber} failed: ${message}`,
             })
           break
         }
       }
     } finally {
       this.running.delete(input.crewId)
-      this.deps.changed(input.crewId)
+      this.notify(acts.at(-1)!)
     }
-    return this.acts(input.crewId)
+    return this.progress(input.crewId)
+  }
+
+  private notify(act: ReleaseAct): void {
+    try {
+      this.deps.changed(act.crewId)
+    } catch (error) {
+      this.note(act, error)
+    }
+  }
+
+  private note(act: ReleaseAct, error: unknown): void {
+    const message = error instanceof Error ? error.message : String(error)
+    const note = act.error ? `${act.error}; ${message}` : message
+    this.deps.db
+      .prepare('UPDATE release_acts SET error=? WHERE id=?')
+      .run(note, act.id)
+    act.error = note
   }
 
   private async waitForChangesets(cwd: string, headSha: string): Promise<void> {
@@ -289,5 +317,7 @@ export class ReleaseActService {
         'UPDATE release_acts SET outcome=?, error=?, completed_at=? WHERE id=?',
       )
       .run(outcome, error, this.stamp(), act.id)
+    act.outcome = outcome
+    act.error = error
   }
 }

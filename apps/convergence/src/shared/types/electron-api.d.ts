@@ -1957,7 +1957,7 @@ interface ElectronAPI {
   release: {
     plan: (input: ReleaseSeat) => Promise<ReleasePlan>
     merge: (input: ReleaseMergeInput) => Promise<ReleaseProgress>
-    acts: (crewId: string) => Promise<ReleaseProgress>
+    acts: (input: ReleaseSeat) => Promise<ReleaseProgress>
   }
   workLedger: {
     list: (crewId: string) => Promise<WorkLedgerSnapshot>

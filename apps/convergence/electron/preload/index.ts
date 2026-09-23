@@ -229,7 +229,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     plan: (input: ReleaseSeat) => ipcRenderer.invoke('release:plan', input),
     merge: (input: ReleaseMergeInput) =>
       ipcRenderer.invoke('release:merge', input),
-    acts: (crewId: string) => ipcRenderer.invoke('release:acts', crewId),
+    acts: (input: ReleaseSeat) => ipcRenderer.invoke('release:acts', input),
   },
   workLedger: {
     list: (crewId: string) => ipcRenderer.invoke('workLedger:list', crewId),

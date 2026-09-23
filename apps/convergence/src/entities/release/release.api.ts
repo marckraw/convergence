@@ -5,5 +5,5 @@ import type {
 export const releaseApi = {
   plan: (input: ReleaseSeat) => window.electronAPI.release.plan(input),
   merge: (input: ReleaseMergeInput) => window.electronAPI.release.merge(input),
-  acts: (crewId: string) => window.electronAPI.release.acts(crewId),
+  acts: (input: ReleaseSeat) => window.electronAPI.release.acts(input),
 }

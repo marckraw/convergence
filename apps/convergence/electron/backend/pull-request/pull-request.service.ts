@@ -191,7 +191,7 @@ export class PullRequestService {
           '--branch',
           'master',
           '--limit',
-          '1',
+          '25',
           '--json',
           'status,conclusion,headSha',
         ],

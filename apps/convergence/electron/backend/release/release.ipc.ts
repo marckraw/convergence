@@ -12,7 +12,7 @@ export function registerReleaseIpcHandlers(service: ReleaseActService): void {
   ipcMain.handle('release:merge', (_event, input: ReleaseMergeInput) =>
     service.merge(input),
   )
-  ipcMain.handle('release:acts', (_event, crewId: string) =>
-    service.acts(crewId),
+  ipcMain.handle('release:acts', (_event, input: ReleaseSeat) =>
+    service.acts(input),
   )
 }

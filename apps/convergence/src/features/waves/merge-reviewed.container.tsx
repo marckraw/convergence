@@ -44,7 +44,10 @@ export function MergeReviewed({
     let timer: ReturnType<typeof setTimeout>
     const poll = async () => {
       try {
-        const progress = await releaseApi.acts(seat.crewId)
+        const progress = await releaseApi.acts({
+          crewId: seat.crewId,
+          sessionId: seat.sessionId,
+        })
         if (!disposed)
           setPlan((previous) =>
             previous ? { ...previous, ...progress } : null,
@@ -61,7 +64,7 @@ export function MergeReviewed({
       disposed = true
       clearTimeout(timer)
     }
-  }, [open, seat.crewId])
+  }, [open, seat.crewId, seat.sessionId])
 
   const merge = async () => {
     if (!plan || busy) return
