@@ -64,12 +64,9 @@ export const LOOM_STRIP_WIDTH_PX = 44
 /**
  * The arriving shape, while the shell is still travelling (MAR-3312 R3).
  *
- * A real animation, not `animate-in fade-in-0`: those utilities come from
- * `tailwindcss-animate`, which this app's Tailwind v4 never loads (no
- * `@plugin` in `global.css`), so they emit nothing at all. `animate-loom-enter`
- * is defined in `global.css` beside the app's other keyframes, and its
- * `200ms` delay is the shell's own duration -- the icons arrive when the
- * width has, not on top of a column still shrinking.
+ * The app declares `animate-loom-enter` in `global.css` beside its other
+ * keyframes, and its `200ms` delay is the shell's own duration -- the icons
+ * arrive when the width has, not on top of a column still shrinking.
  */
 export const LOOM_ENTER_CLASS = 'animate-loom-enter motion-reduce:animate-none'
 
