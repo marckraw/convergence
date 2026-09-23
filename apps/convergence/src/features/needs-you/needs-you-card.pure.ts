@@ -115,7 +115,7 @@ export function needsYouCardModel(
 export type NeedsYouCardModel = ReturnType<typeof needsYouCardModel>
 
 export function groupNeedsYou(
-  cards: NeedsYouCardModel[],
+  cards: readonly NeedsYouCardModel[],
 ): { title: string; cards: NeedsYouCardModel[] }[] {
   const groups = FEED_SECTIONS.map(({ source: title }) => ({
     title,

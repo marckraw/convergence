@@ -1,4 +1,11 @@
-import { useEffect, useId, useRef, useState, type ComponentProps } from 'react'
+import {
+  memo,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ComponentProps,
+} from 'react'
 import {
   buildFeedView,
   defaultFeedView,
@@ -30,7 +37,11 @@ function readFoldedTitles(): Set<string> {
   }
 }
 
-export function NeedsYou({
+/**
+ * The Activity feed (MAR-3378 F1b): a `memo` boundary, so a sidebar render
+ * that leaves its groups and handlers untouched does not redraw the feed.
+ */
+export const NeedsYou = memo(function NeedsYou({
   nameSearchQuery = '',
   ...props
 }: Omit<
@@ -167,4 +178,4 @@ export function NeedsYou({
       </div>
     </div>
   )
-}
+})

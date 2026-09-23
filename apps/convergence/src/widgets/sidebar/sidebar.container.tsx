@@ -57,6 +57,12 @@ import { SidebarToolsMenu } from './sidebar-tools-menu.presentational'
 import { toast } from 'sonner'
 import { useSidebarSearchShortcut } from './sidebar-search.container'
 import { useFeedClock } from './use-feed-clock'
+import { sidebarCards } from './sidebar-sessions.pure'
+import {
+  latestSessionSummary,
+  useSidebarSessionLists,
+} from './use-sidebar-sessions'
+import { useStableCallback } from './use-stable-callback'
 
 interface SidebarProps {
   activeSurface: AppSurface
@@ -133,10 +139,16 @@ export const Sidebar: FC<SidebarProps> = ({
     () => openDialog('project-create'),
     [openDialog],
   )
-  const sessions = useSessionStore((s) => s.sessions)
-  const globalSessions = useSessionStore((s) => s.globalSessions)
-  const globalChatSessions = useSessionStore((s) => s.globalChatSessions)
   const needsYouDismissals = useSessionStore((s) => s.needsYouDismissals)
+  const [cardNow, setCardNow] = useState(() => Date.now())
+  // The lists are held against summaries that change nothing shown at once
+  // (MAR-3378 F1b); the clock's tick and a dismissal change release them.
+  const listRefresh = useMemo(
+    () => ({ cardNow, needsYouDismissals }),
+    [cardNow, needsYouDismissals],
+  )
+  const { sessions, globalSessions, globalChatSessions } =
+    useSidebarSessionLists(listRefresh)
   const loadSessions = useSessionStore((s) => s.loadSessions)
   const loadGlobalSessions = useSessionStore((s) => s.loadGlobalSessions)
   const loadGlobalChatSessions = useSessionStore(
@@ -301,28 +313,19 @@ export const Sidebar: FC<SidebarProps> = ({
     (s) => s.settings.executionHostEndpoints,
   )
   const setPinned = useSessionStore((s) => s.setPinned)
-  const [cardNow, setCardNow] = useState(() => Date.now())
-  // Collapsed-rail badges and the feed clock need the full Activity set —
-  // name search lives in SidebarConversations and never reaches this rail.
-  const cardGroups = useMemo(
+  // The one card derivation (MAR-3378 F1b R2). The collapsed rail and the
+  // feed both read it; the feed narrows it by name search and builds none.
+  const cards = useMemo(
     () =>
-      groupNeedsYou(
-        globalSessions.map((session) =>
-          needsYouCardModel(session, {
-            projectName:
-              session.contextKind === 'global'
-                ? 'Convergence'
-                : (projects.find((project) => project.id === session.projectId)
-                    ?.name ?? 'Unknown project'),
-            endpoints,
-            now: cardNow,
-            dismissed:
-              needsYouDismissals[session.id]?.updatedAt === session.updatedAt,
-          }),
-        ),
-      ),
+      sidebarCards(globalSessions, {
+        projects,
+        endpoints,
+        now: cardNow,
+        dismissals: needsYouDismissals,
+      }),
     [globalSessions, projects, endpoints, cardNow, needsYouDismissals],
   )
+  const cardGroups = useMemo(() => groupNeedsYou(cards), [cards])
 
   const selectedProjectSession =
     activeSurface === 'code'
@@ -341,8 +344,14 @@ export const Sidebar: FC<SidebarProps> = ({
 
   // Keyed on presence, not on `cardGroups` itself: the array is rebuilt on
   // every tick, so depending on it would restart the interval each minute.
+  // Any listed conversation keeps it running (MAR-3378 F1b): the tick is also
+  // what releases the held lists, and a project-tree row says "Last moved"
+  // even when the feed is empty.
   useFeedClock(
-    cardGroups.length > 0 || selectedProjectCard !== null,
+    cardGroups.length > 0 ||
+      selectedProjectCard !== null ||
+      globalSessions.length > 0 ||
+      sessions.length > 0,
     setCardNow,
     cardGroups.some((group) => group.cards.some((card) => card.timing.live)) ||
       Boolean(selectedProjectCard?.timing.live),
@@ -352,52 +361,58 @@ export const Sidebar: FC<SidebarProps> = ({
     .flatMap((group) => group.cards)
     .filter((card) => !card.dismissed && card.attentionGroup)
 
-  const handleSelectNeedsYouSession = async (sessionId: string) => {
-    const target = globalSessions.find((session) => session.id === sessionId)
-    if (target && onSelectAnySession) {
-      onSelectAnySession(target)
-      if (target.workspaceId) {
+  const handleSelectNeedsYouSession = useStableCallback(
+    async (sessionId: string) => {
+      const target = useSessionStore
+        .getState()
+        .globalSessions.find((session) => session.id === sessionId)
+      if (target && onSelectAnySession) {
+        onSelectAnySession(target)
+        if (target.workspaceId) {
+          expandWorkspace(target.workspaceId)
+        }
+        return
+      }
+      await switchToSession(sessionId)
+      onSelectSurface(target?.contextKind === 'global' ? 'chat' : 'code')
+      if (target?.workspaceId) {
         expandWorkspace(target.workspaceId)
       }
-      return
-    }
-    await switchToSession(sessionId)
-    onSelectSurface(target?.contextKind === 'global' ? 'chat' : 'code')
-    if (target?.workspaceId) {
-      expandWorkspace(target.workspaceId)
-    }
-    if (target?.contextKind === 'global') {
-      onSelectGlobalSession(sessionId)
-      return
-    }
-    onSelectSession(sessionId)
-  }
+      if (target?.contextKind === 'global') {
+        onSelectGlobalSession(sessionId)
+        return
+      }
+      onSelectSession(sessionId)
+    },
+  )
 
-  const handleSelectTerminalIdleNotice = async (notice: TerminalIdleNotice) => {
-    const target = sessionLookup.get(notice.sessionId)
-    if (target && onSelectAnySession) {
-      onSelectAnySession(target)
-      if (target.workspaceId) {
+  const handleSelectTerminalIdleNotice = useStableCallback(
+    async (notice: TerminalIdleNotice) => {
+      const target = latestSessionSummary(notice.sessionId)
+      if (target && onSelectAnySession) {
+        onSelectAnySession(target)
+        if (target.workspaceId) {
+          expandWorkspace(target.workspaceId)
+        }
+        focusTerminalTab(notice.sessionId, notice.terminalId)
+        dismissTerminalIdleNotice(notice.terminalId)
+        return
+      }
+
+      await switchToSession(notice.sessionId)
+      onSelectSurface(target?.contextKind === 'global' ? 'chat' : 'code')
+      if (target?.workspaceId) {
         expandWorkspace(target.workspaceId)
+      }
+      if (target?.contextKind === 'global') {
+        onSelectGlobalSession(notice.sessionId)
+      } else {
+        onSelectSession(notice.sessionId)
       }
       focusTerminalTab(notice.sessionId, notice.terminalId)
       dismissTerminalIdleNotice(notice.terminalId)
-      return
-    }
-
-    await switchToSession(notice.sessionId)
-    onSelectSurface(target?.contextKind === 'global' ? 'chat' : 'code')
-    if (target?.workspaceId) {
-      expandWorkspace(target.workspaceId)
-    }
-    if (target?.contextKind === 'global') {
-      onSelectGlobalSession(notice.sessionId)
-    } else {
-      onSelectSession(notice.sessionId)
-    }
-    focusTerminalTab(notice.sessionId, notice.terminalId)
-    dismissTerminalIdleNotice(notice.terminalId)
-  }
+    },
+  )
 
   const sessionLookup = useMemo(() => {
     const next = new Map<string, SessionSummary>()
@@ -459,32 +474,34 @@ export const Sidebar: FC<SidebarProps> = ({
     [onSelectSpace],
   )
 
-  const handleSelectSpaceAttempt = async (sessionId: string) => {
-    const target = sessionLookup.get(sessionId)
-    if (!target) return
+  const handleSelectSpaceAttempt = useStableCallback(
+    async (sessionId: string) => {
+      const target = latestSessionSummary(sessionId)
+      if (!target) return
 
-    if (onSelectAnySession) {
-      onSelectAnySession(target)
-      if (target.workspaceId) {
+      if (onSelectAnySession) {
+        onSelectAnySession(target)
+        if (target.workspaceId) {
+          expandWorkspace(target.workspaceId)
+        }
+        return
+      }
+
+      await switchToSession(sessionId)
+
+      if (target?.contextKind === 'global') {
+        onSelectSurface('chat')
+        onSelectGlobalSession(sessionId)
+        return
+      }
+
+      onSelectSurface('code')
+      if (target?.workspaceId) {
         expandWorkspace(target.workspaceId)
       }
-      return
-    }
-
-    await switchToSession(sessionId)
-
-    if (target?.contextKind === 'global') {
-      onSelectSurface('chat')
-      onSelectGlobalSession(sessionId)
-      return
-    }
-
-    onSelectSurface('code')
-    if (target?.workspaceId) {
-      expandWorkspace(target.workspaceId)
-    }
-    onSelectSession(sessionId)
-  }
+      onSelectSession(sessionId)
+    },
+  )
 
   const handleManageSessionSpaces = useCallback(
     (sessionId: string) => {
@@ -561,99 +578,109 @@ export const Sidebar: FC<SidebarProps> = ({
     [deleteSession, loadSpaceAttempts, spaces],
   )
 
-  const handleArchiveWorkspace = async (workspaceId: string) => {
-    if (!activeProject) {
-      return
-    }
+  const handleArchiveWorkspace = useStableCallback(
+    async (workspaceId: string) => {
+      if (!activeProject) {
+        return
+      }
 
-    const workspace = workspaces.find((entry) => entry.id === workspaceId)
-    const branchName = workspace?.branchName ?? 'workspace'
-    const confirmed = window.confirm(
-      `Archive workspace "${branchName}"?\n\nThis will hide the workspace from the active sidebar and archive all sessions inside it. Conversation history will be kept.`,
-    )
-    if (!confirmed) return
+      const workspace = workspaces.find((entry) => entry.id === workspaceId)
+      const branchName = workspace?.branchName ?? 'workspace'
+      const confirmed = window.confirm(
+        `Archive workspace "${branchName}"?\n\nThis will hide the workspace from the active sidebar and archive all sessions inside it. Conversation history will be kept.`,
+      )
+      if (!confirmed) return
 
-    const pullRequest = pullRequestsByWorkspaceId[workspaceId]
-    const removeWorktree =
-      pullRequest?.state === 'merged'
-        ? window.confirm(
-            'This workspace PR is merged. Also remove the git worktree from disk?',
-          )
-        : false
+      const pullRequest = pullRequestsByWorkspaceId[workspaceId]
+      const removeWorktree =
+        pullRequest?.state === 'merged'
+          ? window.confirm(
+              'This workspace PR is merged. Also remove the git worktree from disk?',
+            )
+          : false
 
-    await archiveWorkspace(workspaceId, activeProject.id, removeWorktree)
-    await loadSessions(activeProject.id)
-    await loadGlobalSessions()
-    await loadRecents()
-  }
+      await archiveWorkspace(workspaceId, activeProject.id, removeWorktree)
+      await loadSessions(activeProject.id)
+      await loadGlobalSessions()
+      await loadRecents()
+    },
+  )
 
-  const handleUnarchiveWorkspace = async (workspaceId: string) => {
-    if (!activeProject) {
-      return
-    }
+  const handleUnarchiveWorkspace = useStableCallback(
+    async (workspaceId: string) => {
+      if (!activeProject) {
+        return
+      }
 
-    await unarchiveWorkspace(workspaceId, activeProject.id)
-    await loadSessions(activeProject.id)
-    await loadGlobalSessions()
-    await loadRecents()
-  }
+      await unarchiveWorkspace(workspaceId, activeProject.id)
+      await loadSessions(activeProject.id)
+      await loadGlobalSessions()
+      await loadRecents()
+    },
+  )
 
-  const handleRemoveWorkspaceWorktree = async (workspaceId: string) => {
-    if (!activeProject) {
-      return
-    }
+  const handleRemoveWorkspaceWorktree = useStableCallback(
+    async (workspaceId: string) => {
+      if (!activeProject) {
+        return
+      }
 
-    const workspace = workspaces.find((entry) => entry.id === workspaceId)
-    const branchName = workspace?.branchName ?? 'workspace'
-    const confirmed = window.confirm(
-      `Remove git worktree for "${branchName}" from disk?\n\nConvergence will keep the workspace and conversation history, but this workspace cannot be used for new agent work until restore support exists.`,
-    )
-    if (!confirmed) return
+      const workspace = workspaces.find((entry) => entry.id === workspaceId)
+      const branchName = workspace?.branchName ?? 'workspace'
+      const confirmed = window.confirm(
+        `Remove git worktree for "${branchName}" from disk?\n\nConvergence will keep the workspace and conversation history, but this workspace cannot be used for new agent work until restore support exists.`,
+      )
+      if (!confirmed) return
 
-    await removeWorkspaceWorktree(workspaceId, activeProject.id)
-  }
+      await removeWorkspaceWorktree(workspaceId, activeProject.id)
+    },
+  )
 
-  const handleSyncWorkspaceEnvFiles = async (workspaceId: string) => {
-    if (!activeProject) {
-      return
-    }
+  const handleSyncWorkspaceEnvFiles = useStableCallback(
+    async (workspaceId: string) => {
+      if (!activeProject) {
+        return
+      }
 
-    await syncWorkspaceEnvFiles(workspaceId, activeProject.id)
-    const error = useWorkspaceStore.getState().error
-    if (error) {
-      toast.error(error)
-      return
-    }
-    toast.success('Workspace env files synced')
-  }
+      await syncWorkspaceEnvFiles(workspaceId, activeProject.id)
+      const error = useWorkspaceStore.getState().error
+      if (error) {
+        toast.error(error)
+        return
+      }
+      toast.success('Workspace env files synced')
+    },
+  )
 
-  const handleDeleteWorkspace = async (workspaceId: string) => {
-    if (!activeProject) {
-      return
-    }
+  const handleDeleteWorkspace = useStableCallback(
+    async (workspaceId: string) => {
+      if (!activeProject) {
+        return
+      }
 
-    const workspace = workspaces.find((entry) => entry.id === workspaceId)
-    const branchName = workspace?.branchName ?? 'workspace'
-    const confirmed = window.confirm(
-      `Permanently delete workspace "${branchName}"?\n\nThis deletes the workspace and all sessions/conversations inside it. This cannot be undone.`,
-    )
-    if (!confirmed) return
+      const workspace = workspaces.find((entry) => entry.id === workspaceId)
+      const branchName = workspace?.branchName ?? 'workspace'
+      const confirmed = window.confirm(
+        `Permanently delete workspace "${branchName}"?\n\nThis deletes the workspace and all sessions/conversations inside it. This cannot be undone.`,
+      )
+      if (!confirmed) return
 
-    const deletedSessionIds = sessions
-      .filter((session) => session.workspaceId === workspaceId)
-      .map((session) => session.id)
+      const deletedSessionIds = sessions
+        .filter((session) => session.workspaceId === workspaceId)
+        .map((session) => session.id)
 
-    await deleteWorkspace(workspaceId, activeProject.id)
-    await loadSessions(activeProject.id)
-    await loadGlobalSessions()
-    await loadRecents()
+      await deleteWorkspace(workspaceId, activeProject.id)
+      await loadSessions(activeProject.id)
+      await loadGlobalSessions()
+      await loadRecents()
 
-    if (activeSessionId && deletedSessionIds.includes(activeSessionId)) {
-      setActiveSession(null)
-    }
-  }
+      if (activeSessionId && deletedSessionIds.includes(activeSessionId)) {
+        setActiveSession(null)
+      }
+    },
+  )
 
-  const handleSelectProject = async (projectId: string) => {
+  const handleSelectProject = useStableCallback(async (projectId: string) => {
     if (onSelectProjectRoot) {
       void onSelectProjectRoot(projectId)
       return
@@ -661,7 +688,158 @@ export const Sidebar: FC<SidebarProps> = ({
 
     prepareForProject(projectId)
     await setActiveProject(projectId)
-  }
+  })
+
+  const handlePin = useStableCallback((id: string, pinned: boolean) => {
+    void setPinned(id, pinned).catch((error) =>
+      toast.error(error instanceof Error ? error.message : String(error)),
+    )
+  })
+  const handleNewGlobalSession = useStableCallback(() => onNewGlobalSession())
+  const handleNewSpace = useStableCallback(() => openDialog('space-create'))
+  const handleSelectSpace = useStableCallback((id: string) => onSelectSpace(id))
+  const handleSelectGlobalSession = useStableCallback((id: string) =>
+    onSelectGlobalSession(id),
+  )
+  const handleSelectSession = useStableCallback((id: string) =>
+    onSelectSession(id),
+  )
+  const handleDeleteSession = useStableCallback((sessionId: string) => {
+    if (!activeProject) return
+    void deleteSession(sessionId, activeProject.id)
+  })
+  const handleRenameSession = useStableCallback(
+    (sessionId: string, name: string) =>
+      void sessionApi.rename(sessionId, name).catch(() => undefined),
+  )
+  const handleOpenCreateWorkspace = useStableCallback(() =>
+    openDialog('workspace-create'),
+  )
+  const activeProjectName = activeProject?.name ?? 'Project'
+  const cardContext = useMemo(
+    () => ({ projectName: activeProjectName, endpoints, now: cardNow }),
+    [activeProjectName, endpoints, cardNow],
+  )
+
+  // Memoized so the SidebarConversations boundary can skip a parent render
+  // that changed nothing it shows (MAR-3378 F1b).
+  const selectSurface = useStableCallback((surface: AppSurface) =>
+    onSelectSurface(surface),
+  )
+  const hasMissionControl = Boolean(onShowMissionControl)
+  const showMissionControl = useStableCallback(() => onShowMissionControl?.())
+  const pinPeek = useStableCallback(() => onPinPeek())
+  const collapse = useStableCallback(() => onCollapse())
+  const headerStart = useMemo(
+    () => (
+      <>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant={activeSurface === 'code' ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-8 w-8"
+              aria-label="Show code surface"
+              aria-pressed={activeSurface === 'code'}
+              onClick={() => selectSurface('code')}
+            >
+              <Code2 className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+            Show code surface
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant={activeSurface === 'chat' ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-8 w-8"
+              aria-label="Show chat surface"
+              aria-pressed={activeSurface === 'chat'}
+              onClick={() => selectSurface('chat')}
+            >
+              <MessageSquareText className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+            Show chat surface
+          </TooltipContent>
+        </Tooltip>
+        {hasMissionControl ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant={missionControlActive ? 'secondary' : 'ghost'}
+                size="icon"
+                className="h-8 w-8"
+                aria-label="Show Mission Control"
+                aria-pressed={missionControlActive}
+                onClick={showMissionControl}
+              >
+                <Satellite className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+              Show Mission Control
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+      </>
+    ),
+    [
+      activeSurface,
+      hasMissionControl,
+      missionControlActive,
+      selectSurface,
+      showMissionControl,
+    ],
+  )
+  const headerEnd = useMemo(
+    () =>
+      peek ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              aria-label="Pin sidebar"
+              onClick={pinPeek}
+            >
+              <Pin className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+            Pin sidebar
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              aria-label="Collapse sidebar"
+              onClick={collapse}
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
+            Collapse sidebar
+          </TooltipContent>
+        </Tooltip>
+      ),
+    [peek, pinPeek, collapse],
+  )
 
   const hiddenDialogTrigger = () => (
     <Button
@@ -968,122 +1146,17 @@ export const Sidebar: FC<SidebarProps> = ({
           collapsed={collapsed}
           globalSessions={globalSessions}
           sessions={sessions}
-          headerStart={
-            <>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant={activeSurface === 'code' ? 'secondary' : 'ghost'}
-                    size="icon"
-                    className="h-8 w-8"
-                    aria-label="Show code surface"
-                    aria-pressed={activeSurface === 'code'}
-                    onClick={() => onSelectSurface('code')}
-                  >
-                    <Code2 className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
-                  Show code surface
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant={activeSurface === 'chat' ? 'secondary' : 'ghost'}
-                    size="icon"
-                    className="h-8 w-8"
-                    aria-label="Show chat surface"
-                    aria-pressed={activeSurface === 'chat'}
-                    onClick={() => onSelectSurface('chat')}
-                  >
-                    <MessageSquareText className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
-                  Show chat surface
-                </TooltipContent>
-              </Tooltip>
-              {onShowMissionControl ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant={missionControlActive ? 'secondary' : 'ghost'}
-                      size="icon"
-                      className="h-8 w-8"
-                      aria-label="Show Mission Control"
-                      aria-pressed={missionControlActive}
-                      onClick={onShowMissionControl}
-                    >
-                      <Satellite className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
-                    Show Mission Control
-                  </TooltipContent>
-                </Tooltip>
-              ) : null}
-            </>
-          }
-          headerEnd={
-            peek ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    aria-label="Pin sidebar"
-                    onClick={onPinPeek}
-                  >
-                    <Pin className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
-                  Pin sidebar
-                </TooltipContent>
-              </Tooltip>
-            ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    aria-label="Collapse sidebar"
-                    onClick={onCollapse}
-                  >
-                    <PanelLeftClose className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
-                  Collapse sidebar
-                </TooltipContent>
-              </Tooltip>
-            )
-          }
+          headerStart={headerStart}
+          headerEnd={headerEnd}
           projects={projects}
           activeProject={activeProject}
-          endpoints={endpoints}
-          cardNow={cardNow}
-          needsYouDismissals={needsYouDismissals}
+          cards={cards}
           activeSurface={activeSurface}
           activeSessionId={activeSessionId}
           activeGlobalSessionId={activeGlobalSessionId}
           pulsingSessionIds={pulsingSessionIds}
           terminalIdleNotices={terminalIdleNotices}
-          onPin={(id, pinned) =>
-            void setPinned(id, pinned).catch((error) =>
-              toast.error(
-                error instanceof Error ? error.message : String(error),
-              ),
-            )
-          }
+          onPin={handlePin}
           onSelectNeedsYou={handleSelectNeedsYouSession}
           onDismissNeedsYou={dismissNeedsYouSession}
           onArchiveSession={archiveSession}
@@ -1094,39 +1167,30 @@ export const Sidebar: FC<SidebarProps> = ({
           selectedSpaceId={selectedSpaceId}
           expandedSpaceIds={expandedSpaceIds}
           archivedSpacesExpanded={archivedSpacesExpanded}
-          onNewGlobalSession={onNewGlobalSession}
-          onNewSpace={() => openDialog('space-create')}
-          onSelectSpace={onSelectSpace}
+          onNewGlobalSession={handleNewGlobalSession}
+          onNewSpace={handleNewSpace}
+          onSelectSpace={handleSelectSpace}
           onToggleSpace={toggleSpace}
           onToggleArchivedSpaces={toggleArchivedSpaces}
           onArchiveSpace={handleArchiveSpace}
           onUnarchiveSpace={handleUnarchiveSpace}
           onSelectSpaceAttempt={handleSelectSpaceAttempt}
-          onSelectGlobalSession={onSelectGlobalSession}
+          onSelectGlobalSession={handleSelectGlobalSession}
           onManageSessionSpaces={handleManageSessionSpaces}
           onDetachSpaceAttempt={handleDetachSpaceAttempt}
           onUnarchiveSession={unarchiveSession}
           onDeleteGlobalChatSession={handleDeleteGlobalChatSession}
           onSelectProject={handleSelectProject}
           onCreateProject={openProjectDialog}
-          cardContext={{
-            projectName: activeProject?.name ?? 'Project',
-            endpoints,
-            now: cardNow,
-          }}
+          cardContext={cardContext}
           baseBranchName={currentBranch}
           workspaces={workspaces}
           pullRequestsByWorkspaceId={pullRequestsByWorkspaceId}
           expandedWorkspaces={expandedWorkspaces}
           onToggleWorkspace={toggleWorkspace}
-          onSelectSession={onSelectSession}
-          onDeleteSession={(sessionId: string) => {
-            if (!activeProject) return
-            void deleteSession(sessionId, activeProject.id)
-          }}
-          onRenameSession={(sessionId: string, name: string) =>
-            sessionApi.rename(sessionId, name).catch(() => undefined)
-          }
+          onSelectSession={handleSelectSession}
+          onDeleteSession={handleDeleteSession}
+          onRenameSession={handleRenameSession}
           regeneratingSessionIds={regeneratingSessionIds}
           onRegenerateSessionName={handleRegenerateSessionName}
           onArchiveWorkspace={handleArchiveWorkspace}
@@ -1134,7 +1198,7 @@ export const Sidebar: FC<SidebarProps> = ({
           onRemoveWorkspaceWorktree={handleRemoveWorkspaceWorktree}
           onSyncWorkspaceEnvFiles={handleSyncWorkspaceEnvFiles}
           onDeleteWorkspace={handleDeleteWorkspace}
-          onOpenCreateWorkspace={() => openDialog('workspace-create')}
+          onOpenCreateWorkspace={handleOpenCreateWorkspace}
         />
       </PerfProfiler>
 
