@@ -871,6 +871,18 @@ export class CursorProvider implements Provider {
       }
     }
 
+    /** One debug entry per session for an update kind this adapter cannot read. */
+    function recordUnknownUpdateKindOnce(updateType: string): void {
+      if (debuggedUnknownKinds.has(updateType)) return
+      debuggedUnknownKinds.add(updateType)
+      recordDebug({
+        direction: 'in',
+        channel: 'notification',
+        method: `sessionUpdate:${updateType}`,
+        note: `Unknown session update kind: ${updateType}`,
+      })
+    }
+
     function handleSessionUpdate(params: unknown): void {
       if (suppressReplayUpdates) return
 
@@ -963,15 +975,7 @@ export class CursorProvider implements Provider {
                 providerEventType: updateType,
               })
             } else {
-              if (!debuggedUnknownKinds.has(updateType)) {
-                debuggedUnknownKinds.add(updateType)
-                recordDebug({
-                  direction: 'in',
-                  channel: 'notification',
-                  method: `sessionUpdate:${updateType}`,
-                  note: `Unknown session update kind: ${updateType}`,
-                })
-              }
+              recordUnknownUpdateKindOnce(updateType)
               const rawText = readCursorAcpContentText(
                 getCursorAcpSessionUpdate(params),
               )
@@ -985,15 +989,7 @@ export class CursorProvider implements Provider {
               }
             }
           } else if (updateType) {
-            if (!debuggedUnknownKinds.has(updateType)) {
-              debuggedUnknownKinds.add(updateType)
-              recordDebug({
-                direction: 'in',
-                channel: 'notification',
-                method: `sessionUpdate:${updateType}`,
-                note: `Unknown session update kind: ${updateType}`,
-              })
-            }
+            recordUnknownUpdateKindOnce(updateType)
           }
         }
       }
