@@ -1,5 +1,11 @@
 # convergence
 
+## 0.85.1
+
+### Patch Changes
+
+- 5aafa99: A Cursor turn whose whole answer is one `Error:` line now ends as failed with the error as a note, so the seat reads failed and no return is sent with a crash as its report.
+
 ## 0.85.0
 
 ### Minor Changes
