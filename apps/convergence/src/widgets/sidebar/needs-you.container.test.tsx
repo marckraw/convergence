@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+import { TooltipProvider } from '@/shared/ui/tooltip'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { groupNeedsYou, needsYouCardModel } from '@/features/needs-you'
 import type { SessionSummary } from '@/entities/session'
@@ -484,4 +485,64 @@ it('preserves pointer order protection when Updated sorting would swap the click
   expect(onSelect).toHaveBeenCalledWith('zulu')
   fireEvent.pointerLeave(working)
   expect(visibleOrder()).toEqual(['Alpha', 'Zulu'])
+})
+
+const sectionToggle = (title: string) =>
+  within(screen.getByRole('region', { name: title })).getByRole('button', {
+    name: title,
+  })
+
+it('MAR-3366 R3 folds a section, keeps the others open, and stays folded through a remount — mutation: do not persist turns red', () => {
+  const first = render(<NeedsYou {...props} />, { wrapper: TooltipProvider })
+  expect(sectionToggle('Working')).toHaveAttribute('aria-expanded', 'true')
+  fireEvent.click(sectionToggle('Working'))
+  expect(sectionToggle('Working')).toHaveAttribute('aria-expanded', 'false')
+  expect(screen.queryByRole('button', { name: /^Remote agent,/ })).toBeNull()
+  expect(
+    screen.getByRole('button', { name: /^Finished agent,/ }),
+  ).toBeInTheDocument()
+  expect(sectionToggle('Review')).toHaveAttribute('aria-expanded', 'true')
+  first.unmount()
+  const second = render(<NeedsYou {...props} />, { wrapper: TooltipProvider })
+  expect(sectionToggle('Working')).toHaveAttribute('aria-expanded', 'false')
+  expect(screen.queryByRole('button', { name: /^Remote agent,/ })).toBeNull()
+  fireEvent.click(sectionToggle('Working'))
+  expect(
+    screen.getByRole('button', { name: /^Remote agent,/ }),
+  ).toBeInTheDocument()
+  second.unmount()
+  render(<NeedsYou {...props} />, { wrapper: TooltipProvider })
+  expect(sectionToggle('Working')).toHaveAttribute('aria-expanded', 'true')
+})
+
+it('MAR-3366 R3 a stored fold that is not a JSON list folds nothing', () => {
+  localStorage.setItem('convergence:sidebar-activity-folded:v1', 'not json')
+  render(<NeedsYou {...props} />, { wrapper: TooltipProvider })
+  for (const title of ['Pinned', 'Needs attention', 'Review', 'Working'])
+    expect(sectionToggle(title)).toHaveAttribute('aria-expanded', 'true')
+})
+
+it('MAR-3366 R3 folding keeps the feed order and the filters untouched', () => {
+  render(<NeedsYou {...props} />, { wrapper: TooltipProvider })
+  const titles = () =>
+    screen
+      .getAllByRole('region')
+      .map((region) => region.getAttribute('aria-label'))
+  const before = titles()
+  expect(before).toEqual(['Pinned', 'Needs attention', 'Review', 'Working'])
+  fireEvent.click(sectionToggle('Review'))
+  expect(titles()).toEqual(before)
+  expect(screen.getByLabelText('4 of 4 cards shown')).toBeInTheDocument()
+})
+
+it('MAR-3366 R3 a fold and a filter persist side by side — mutation: store the fold under the view key turns red', () => {
+  const first = render(<NeedsYou {...props} />, { wrapper: TooltipProvider })
+  openFilters()
+  fireEvent.click(choice('Provider filters', 'OpenAI'))
+  fireEvent.click(screen.getByRole('button', { name: 'Collapse filters' }))
+  fireEvent.click(sectionToggle('Working'))
+  first.unmount()
+  render(<NeedsYou {...props} />, { wrapper: TooltipProvider })
+  expect(screen.getByLabelText('3 of 4 cards shown')).toBeInTheDocument()
+  expect(sectionToggle('Working')).toHaveAttribute('aria-expanded', 'false')
 })

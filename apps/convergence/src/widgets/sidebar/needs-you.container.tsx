@@ -14,11 +14,31 @@ import { Button } from '@/shared/ui/button'
 
 const preferenceKey = 'convergence:sidebar-activity-view:v1'
 const filtersExpandedKey = 'convergence:sidebar-activity-filters-expanded:v1'
+const foldedKey = 'convergence:sidebar-activity-folded:v1'
+
+/** A stored set of folded section titles; anything else folds nothing. */
+function readFoldedTitles(): Set<string> {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(foldedKey) ?? '[]')
+    return new Set(
+      Array.isArray(value)
+        ? value.filter((title): title is string => typeof title === 'string')
+        : [],
+    )
+  } catch {
+    return new Set()
+  }
+}
 
 export function NeedsYou({
   nameSearchQuery = '',
   ...props
-}: ComponentProps<typeof NeedsYouFeed> & { nameSearchQuery?: string }) {
+}: Omit<
+  ComponentProps<typeof NeedsYouFeed>,
+  'foldedTitles' | 'onToggleFold'
+> & {
+  nameSearchQuery?: string
+}) {
   const controlsId = useId()
   const controlsTrigger = useRef<HTMLButtonElement>(null)
   const [filtersExpanded, setFiltersExpanded] = useState(() => {
@@ -28,6 +48,20 @@ export function NeedsYou({
       return false
     }
   })
+  const [foldedTitles, setFoldedTitles] = useState(readFoldedTitles)
+  useEffect(() => {
+    try {
+      localStorage.setItem(foldedKey, JSON.stringify([...foldedTitles]))
+    } catch {
+      /* Preferences remain usable for this window. */
+    }
+  }, [foldedTitles])
+  const toggleFold = (title: string) =>
+    setFoldedTitles((previous) => {
+      const next = new Set(previous)
+      if (!next.delete(title)) next.add(title)
+      return next
+    })
   const [heldOrder, setHeldOrder] = useState<FeedGroup[] | null>(null)
   const pointerInside = useRef(false)
   const [view, setView] = useState<FeedView>(() => {
@@ -124,7 +158,12 @@ export function NeedsYou({
             setHeldOrder(null)
         }}
       >
-        <NeedsYouFeed {...props} groups={displayed} />
+        <NeedsYouFeed
+          {...props}
+          groups={displayed}
+          foldedTitles={foldedTitles}
+          onToggleFold={toggleFold}
+        />
       </div>
     </div>
   )

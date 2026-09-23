@@ -18,7 +18,10 @@ export {
   toggleFeedChoice,
   holdFeedOrder,
   feedOrderKey,
+  FEED_SECTIONS,
 } from './needs-you-view.pure'
+export { foldedSectionSummary, FOLD_GLYPH_LIMIT } from './needs-you-fold.pure'
+export type { FoldCardState, FoldedSectionSummary } from './needs-you-fold.pure'
 export type {
   FeedView,
   FeedHost,
