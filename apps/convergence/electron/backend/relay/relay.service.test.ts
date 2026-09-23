@@ -633,7 +633,7 @@ describe('RelayService', () => {
       expect(service.listHops('c1')[0].dispatchId).toBe(queued.dispatchId)
     })
 
-    it('MAR-3108 R1 reads the newest named original receipt and excludes redeliveries', () => {
+    it('MAR-3108 R1 reads the oldest named original receipt and excludes redeliveries', () => {
       const input = {
         relayId: createRelay().id,
         crewId: 'c1',
@@ -670,7 +670,7 @@ describe('RelayService', () => {
       ).run('2026-09-03T00:00:00.000Z', newer.id, duplicate.id)
       expect(service.findFlowRunIdByDispatchIds([])).toBeNull()
       expect(service.findFlowRunIdByDispatchIds(['absent'])).toBeNull()
-      expect(service.findFlowRunIdByDispatchIds(['y', 'x'])).toBe('newer')
+      expect(service.findFlowRunIdByDispatchIds(['y', 'x'])).toBe('older')
       service.markStationSettled('s2', 'completed', new Date().toISOString(), [
         'y',
       ])

@@ -537,7 +537,8 @@ export class RelayEngine {
 
   /**
    * Continue from memory, then the hop record by dispatch id, otherwise mint.
-   * The oldest named memory baton wins and every named baton is consumed;
+   * The oldest named receipt wins, in memory or on the record.
+   * Every named memory baton is consumed;
    * unnamed batons stay owed, and duplicate named receipts retain their run.
    * An empty settle mints today because session-layer receipts are memory-only;
    * MAR-3344 makes them durable so this path can continue across an app restart

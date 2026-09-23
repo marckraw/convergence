@@ -425,7 +425,7 @@ export class RelayService {
         `SELECT flow_run_id FROM relay_hops
        WHERE dispatch_id IN (${dispatchIds.map(() => '?').join(', ')})
          AND redelivered_from IS NULL
-       ORDER BY fired_at DESC, rowid DESC LIMIT 1`,
+       ORDER BY fired_at ASC, rowid ASC LIMIT 1`,
       )
       .get(...dispatchIds) as { flow_run_id: string } | undefined
     return row?.flow_run_id ?? null
