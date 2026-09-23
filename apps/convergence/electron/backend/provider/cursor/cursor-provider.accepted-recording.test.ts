@@ -608,6 +608,67 @@ describe('Cursor accepted-recording boundary (MAR-3143)', () => {
     errors.mockRestore()
   })
 
+  /**
+   * No approval outlives its turn (MAR-3154), but one can be born outside a
+   * turn: `handleServerRequest` registers a permission request whether or not
+   * a turn is accepted. Answering it then clears attention outside
+   * acceptance, where `emitDelta` rethrows a refused write, so the
+   * `recordTeardown` in approve/deny is what keeps the answer from throwing
+   * (MAR-3247 R4).
+   */
+  it.each(['approve', 'deny'] as const)(
+    'a refused attention clear from %s on an approval born before any prompt does not throw and is logged',
+    async (answer) => {
+      const { service, session, server } = await fixture({
+        holdInitialize: true,
+      })
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      void service.start(session.id, { text: 'hi' })
+      await vi.waitUntil(() =>
+        server.requests.some((request) => request.method === 'initialize'),
+      )
+
+      server.send({
+        jsonrpc: '2.0',
+        id: 77,
+        method: 'session/request_permission',
+        params: {
+          sessionId: 'cursor-session-1',
+          toolCall: { title: 'Before any prompt', kind: 'execute' },
+          options: [{ optionId: 'allow-once', name: 'Allow once' }],
+        },
+      })
+      await vi.waitUntil(
+        () => service.getById(session.id)?.attention === 'needs-approval',
+      )
+      expect(
+        server.requests.some((request) => request.method === 'session/prompt'),
+      ).toBe(false)
+
+      getDatabase().exec(`CREATE TEMP TRIGGER refuse_attention_none
+        BEFORE UPDATE ON sessions
+        WHEN NEW.attention = 'none'
+        BEGIN SELECT RAISE(ABORT, 'fixture attention refused'); END`)
+
+      expect(() =>
+        activeHandle(service, session.id)[answer]('77'),
+      ).not.toThrow()
+      expect(
+        errors.mock.calls.some((call) =>
+          String(call[0]).includes('Could not record the cleared attention'),
+        ),
+      ).toBe(true)
+      expect(
+        server.responses.filter((response) => response.id === 77),
+      ).toHaveLength(1)
+
+      getDatabase().exec('DROP TRIGGER refuse_attention_none')
+      server.resolveHeldInitialize()
+      errors.mockRestore()
+    },
+  )
+
   it('door: a refused passive notification note after endTurn is logged by the provider recorder (MAR-3152 R1)', async () => {
     const { service, session, server, child } = await fixture({
       holdPrompt: true,
