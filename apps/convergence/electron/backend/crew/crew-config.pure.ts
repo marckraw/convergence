@@ -570,14 +570,27 @@ const condition: Check = (v, p) => {
 export const TRACKER_KEY_FORBIDDEN = 'tracker.key-forbidden'
 /** A field name that would hold a credential. None of the block's fields does. */
 const CREDENTIAL_FIELD = /key|token|secret|password|credential/i
-/** What a Linear API key looks like. */
-const TRACKER_KEY_VALUE = /^\s*lin_api_/
+/**
+ * What a Linear API key looks like, anywhere inside a string: a key pasted
+ * mid-sentence into an instruction is still a key in the file (MAR-3211 R4′).
+ */
+const TRACKER_KEY_VALUE = /lin_api_/
 const keyForbidden = (path: string): string =>
   `${path}: a crew file never carries a tracker key — set the key on this machine in Mission Control (${TRACKER_KEY_FORBIDDEN})`
-/** The first string in the block, key or value, that looks like a key. */
+/**
+ * The path of the first string under `value` -- a value, a map key, or an
+ * array item, at any depth -- that carries something shaped like a key.
+ */
 function keyShapedValue(value: unknown, path: string): string | null {
   if (typeof value === 'string')
     return TRACKER_KEY_VALUE.test(value) ? path : null
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      const found = keyShapedValue(value[i], `${path}[${i}]`)
+      if (found) return found
+    }
+    return null
+  }
   if (!object(value)) return null
   for (const [key, child] of Object.entries(value)) {
     const childAt = childPath(path, key)
@@ -611,7 +624,8 @@ const TRACKER_FIELDS: Record<keyof CrewConfigTracker, Check> = {
  *
  * 1. No key, ever (R4). Any field the block does not define is refused, and
  *    one whose name could hold a credential is refused with the law's words;
- *    any string shaped like a Linear key is refused wherever it sits.
+ *    any string shaped like a Linear key is refused anywhere in the file
+ *    (`validateRecipe` scans the whole file first; the block scans again).
  * 2. The id is the binding (ruling A). A file naming a project without its id
  *    is refused: `projectName` is shown, never bound.
  * 3. The record owns acceptance: each field provided must be what
@@ -670,7 +684,7 @@ const pair: Check = (v, p) =>
   !Array.isArray(v) || v.length !== 2
     ? expected(p, 'pair of coordinates')
     : list(number)(v, p)
-const validateRecipe = shape({
+const validateRecipeShape = shape({
   version: oneOf(1),
   crew: string,
   emoji: nullable(string),
@@ -713,6 +727,18 @@ const validateRecipe = shape({
   ),
   layout: optional(record(pair)),
 })
+/**
+ * The whole file, key law first (MAR-3211 R4′). A crew file is shared, so the
+ * key law is the file's, not the tracker block's: every string anywhere in
+ * the file -- a role card, a wire instruction, a spawn recipe, a map key -- is
+ * scanned before any structure is checked, and one shaped like a Linear key
+ * is refused with `tracker.key-forbidden` at its own path. The block keeps
+ * its own checks (a credential-named field is refused by name).
+ */
+const validateRecipe: Check = (v, p) => {
+  const leaked = keyShapedValue(v, p)
+  return leaked ? keyForbidden(leaked) : validateRecipeShape(v, p)
+}
 
 /**
  * Every seat whose conversation was deleted, said as a comment in the file

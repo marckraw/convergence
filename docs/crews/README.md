@@ -68,9 +68,14 @@ field provided must be exactly what the binding's write door would store.
 
 **The file never carries a key.** The block refuses any field it does not
 define. A field whose name could hold a credential (`key`, `apiKey`, `token`,
-…) is refused with `tracker.key-forbidden`, and so is any string in the block
-shaped like a Linear key (`lin_api_…`). The key is filed under a crew id on
-one machine, so it is always a person's act, done in Mission Control.
+…) is refused with `tracker.key-forbidden`. So is any string **anywhere in the
+file** that contains a Linear key (`lin_api_…`): a role card, a wire
+instruction, a spawn recipe, a map key, the tracker block. The refusal names
+the path of the offending value, for example `roles.fable.roleCard`. The check
+runs before any other, so a file with a key is always refused for the key. The
+schema states the same rule on the block and on the free-text fields; the
+parser checks every string. The key is filed under a crew id on one machine, so
+setting it is always a person's act, done in Mission Control.
 
 Import shows a **Tracker** row:
 

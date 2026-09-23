@@ -1483,7 +1483,7 @@ describe('the tracker block (MAR-3211)', () => {
       'tracker.projectName',
     ],
   ])(
-    'refuses a key: %s (R4; mutations: allow unknown keys in the block; skip the value scan)',
+    'refuses a key: %s (R4; mutations: allow unknown keys in the block; skip the value scan in both the file and the block)',
     (_name, tracker, path) => {
       expect(readCrewConfig(withTracker(tracker))).toEqual({
         ok: false,
@@ -1492,7 +1492,7 @@ describe('the tracker block (MAR-3211)', () => {
     },
   )
 
-  it('refuses a key-shaped value wherever it sits in the block, and any other stray field (R4; mutations: skip the value scan; allow unknown keys in the block)', () => {
+  it('refuses a key-shaped value wherever it sits in the block, and any other stray field (R4; mutations: skip the value scan in both the file and the block; allow unknown keys in the block)', () => {
     expect(
       [
         { ...block, statusMap: { lin_api_x: 'todo' } },
@@ -1513,6 +1513,49 @@ describe('the tracker block (MAR-3211)', () => {
       ok: false,
       reason: 'tracker.notes: unexpected field',
     })
+  })
+
+  const keyLaw = (path: string) =>
+    `${path}: a crew file never carries a tracker key — set the key on this machine in Mission Control (tracker.key-forbidden)`
+  const withFile = (
+    edit: (config: ReturnType<typeof parse>) => void,
+  ): string => {
+    const config = parse(liveCrewYaml)
+    edit(config)
+    return JSON.stringify(config)
+  }
+  const keyInRoleCard = withFile((config) => {
+    config.roles['horse opus'].roleCard = 'lin_api_x'
+  })
+  const keyInInstruction = withFile((config) => {
+    config.wires[3].instruction = 'finished — the key is lin_api_0123456789'
+  })
+
+  it('refuses a key anywhere in the file, not only in the block: a role card, a wire instruction (R4′; mutation R4′-a: scope the scan back to the block)', () => {
+    expect([
+      readCrewConfig(keyInRoleCard),
+      readCrewConfig(keyInInstruction),
+    ]).toEqual([
+      { ok: false, reason: keyLaw('roles.horse opus.roleCard') },
+      { ok: false, reason: keyLaw('wires[3].instruction') },
+    ])
+  })
+
+  it('reaches every depth of the file: a spawn recipe inside a wire, a map key (R4′; mutation R4′-a: scope the scan back to the block)', () => {
+    const inSpawn = withFile((config) => {
+      config.wires[1].to = {
+        spawn: { name: 'x', roleCard: 'lin_api_x', returnWire: null },
+      }
+    })
+    const inRoleName = withFile((config) => {
+      config.roles.lin_api_x = config.roles['horse opus']
+    })
+    expect(
+      [inSpawn, inRoleName].map((file) => {
+        const read = readCrewConfig(file)
+        return read.ok ? 'accepted' : read.reason
+      }),
+    ).toEqual([keyLaw('wires[1].to.spawn.roleCard'), keyLaw('roles.lin_api_x')])
   })
 
   it('refuses a name with no id, saying the id is the binding (ruling A; mutation: accept a name-only file)', () => {
@@ -1547,7 +1590,7 @@ describe('the tracker block (MAR-3211)', () => {
     ])
   })
 
-  it('agrees with the schema on a bound file and on each refusal (R6; mutation: drop the block from the schema)', () => {
+  it('agrees with the schema on a bound file and on each refusal, a key in a role card or a wire instruction included (R6, R4′; mutations: drop the block from the schema; drop the pattern from roleCard or instruction)', () => {
     const nameOnly = without(block, 'project')
     const verdicts = [
       block,
@@ -1568,6 +1611,18 @@ describe('the tracker block (MAR-3211)', () => {
       [true, true],
       [false, false],
       [false, false],
+      [false, false],
+      [false, false],
+    ])
+    expect(
+      [keyInRoleCard, keyInInstruction].map((file) => {
+        const config = JSON.parse(file)
+        return [
+          new Ajv().validate(schema, config),
+          readCrewConfig(JSON.stringify(config)).ok,
+        ]
+      }),
+    ).toEqual([
       [false, false],
       [false, false],
     ])
