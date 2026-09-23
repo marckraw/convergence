@@ -1,5 +1,11 @@
 # convergence
 
+## 0.85.2
+
+### Patch Changes
+
+- 38a15dc: The gear in the sidebar opens Settings again.
+
 ## 0.85.1
 
 ### Patch Changes
