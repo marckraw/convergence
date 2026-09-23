@@ -2,4 +2,4 @@
 'convergence': patch
 ---
 
-A crew's flow run now survives an app restart: lap numbers, the round budget and the role-card memory continue from the record instead of resetting.
+A crew's flow run continues from the hop record when the engine's memory is gone but the settle still names its dispatch ids; the restart case follows MAR-3344.
