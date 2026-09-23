@@ -1,7 +1,11 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { expect, it, vi } from 'vitest'
-import { groupNeedsYou, needsYouCardModel } from '@/features/needs-you'
+import {
+  cardStateTone,
+  groupNeedsYou,
+  needsYouCardModel,
+} from '@/features/needs-you'
 import { NeedsYou } from './needs-you.presentational'
 import type { SessionSummary } from '@/entities/session'
 it('renders feed groups once and routes selection (mutation: duplicate a pinned review)', () => {
@@ -214,4 +218,42 @@ it('MAR-3366 R4 a folded section draws six glyphs and +N for the rest', () => {
   ).getByRole('heading')
   expect(heading.querySelectorAll('[data-fold-glyph]')).toHaveLength(6)
   expect(heading).toHaveTextContent('+3')
+})
+
+it('MAR-3366 R6 a folded glyph carries its card state tone — mutation: the strip ignores the state turns red', () => {
+  const failed = needsYouCardModel(
+    {
+      id: 'f',
+      name: 'Broken',
+      providerId: 'codex',
+      model: 'm',
+      status: 'failed',
+      attention: 'failed',
+      pinnedAt: '2026-09-12',
+      updatedAt: '2026-09-12T12:00:00Z',
+    } as SessionSummary,
+    { projectName: 'Project', endpoints: [], now: liveNow },
+  )
+  const working = needsYouCardModel(
+    { ...runningCard('w', 5, 'claude-code').session, pinnedAt: '2026-09-12' },
+    { projectName: 'Project', endpoints: [], now: liveNow },
+  )
+  render(
+    <NeedsYou
+      groups={groupNeedsYou([failed, working])}
+      foldedTitles={new Set(['Pinned'])}
+      {...feedProps}
+    />,
+    { wrapper: TooltipProvider },
+  )
+  const heading = within(
+    screen.getByRole('region', { name: 'Pinned' }),
+  ).getByRole('heading')
+  const icon = (state: string) =>
+    heading.querySelector(`[data-fold-glyph][data-state="${state}"] > span`)
+  expect(cardStateTone.failed).not.toEqual(cardStateTone.working)
+  expect(icon('failed')).toHaveClass(...cardStateTone.failed.split(' '))
+  expect(icon('failed')).not.toHaveClass(...cardStateTone.working.split(' '))
+  expect(icon('working')).toHaveClass(...cardStateTone.working.split(' '))
+  expect(icon('working')).not.toHaveClass(cardStateTone.failed)
 })

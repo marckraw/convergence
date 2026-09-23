@@ -1,14 +1,17 @@
 import {
+  cardStateTone,
   foldedSectionSummary,
   type NeedsYouCardModel,
 } from '@/features/needs-you'
+import { cn } from '@/shared/lib/cn.pure'
 import { LOOM_NO_DRAG_STYLE } from '@/shared/ui/no-drag.styles'
 import { ProviderIcon } from '@/shared/ui/provider-icon.presentational'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
 /**
  * What a folded section still says (MAR-3366 R4): one provider glyph per
- * card, `+N` past the limit, and the conversation names on hover.
+ * card tinted by the card's own state tone (R6), `+N` past the limit, and
+ * the conversation names on hover.
  */
 export function FoldedGlyphs({
   section,
@@ -39,7 +42,7 @@ export function FoldedGlyphs({
                 <ProviderIcon
                   providerId={glyph.providerId}
                   title=""
-                  className="size-3 text-muted-foreground"
+                  className={cn('size-3', cardStateTone[glyph.state])}
                 />
               </span>
             ))}
