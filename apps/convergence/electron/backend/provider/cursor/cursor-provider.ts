@@ -2155,6 +2155,10 @@ export class CursorProvider implements Provider {
         rpc.respond(id, approval.approveResult)
         pendingApprovals.delete(id)
         if (pendingApprovals.size === 0) {
+          // Not dead insurance: no approval outlives its turn (MAR-3154), but
+          // one can be born outside a turn (a permission request before any
+          // prompt), and outside acceptance a refused write throws. Same in
+          // deny (MAR-3247 R4).
           recordTeardown('the cleared attention', () => setAttention('none'))
         }
       },
