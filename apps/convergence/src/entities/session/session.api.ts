@@ -1,6 +1,6 @@
+import type { ConversationWireEvent } from '@/shared/types/conversation-item.types'
 import type {
   ConversationItem,
-  ConversationPatchEvent,
   QueuedInputPatchEvent,
   SessionSummary,
   SessionQueuedInput,
@@ -48,6 +48,9 @@ export const sessionApi = {
 
   getSummaryById: (id: string): Promise<SessionSummary | null> =>
     window.electronAPI.session.getSummaryById(id),
+
+  resyncConversation: (id: string, generation: number): Promise<void> =>
+    window.electronAPI.session.resyncConversation(id, generation),
 
   getConversation: (id: string): Promise<ConversationItem[]> =>
     window.electronAPI.session.getConversation(id),
@@ -148,7 +151,7 @@ export const sessionApi = {
     window.electronAPI.session.onSessionSummaryUpdate(callback),
 
   onSessionConversationPatched: (
-    callback: (event: ConversationPatchEvent) => void,
+    callback: (event: ConversationWireEvent<ConversationItem>) => void,
   ): (() => void) =>
     window.electronAPI.session.onSessionConversationPatched(callback),
 

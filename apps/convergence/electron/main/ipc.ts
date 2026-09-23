@@ -1,3 +1,7 @@
+import {
+  conversationPatchWire,
+  type ConversationWireMemory,
+} from './conversation-patch-wire.pure'
 import { connectPullRequestRefresh } from '../backend/pull-request/pull-request-refresh.service'
 import { app, ipcMain, dialog, BrowserWindow, shell } from 'electron'
 import { ProjectService } from '../backend/project/project.service'
@@ -202,6 +206,8 @@ export function registerIpcHandlers(
     relayService,
     crewService,
   )
+
+  const conversationWireMemory: ConversationWireMemory = new Map()
 
   // Project handlers
   ipcMain.handle('project:create', (_event, input: CreateProjectInput) => {
@@ -971,6 +977,27 @@ export function registerIpcHandlers(
     sessionApp.getConversation(id),
   )
 
+  ipcMain.handle(
+    'session:resyncConversation',
+    (event, sessionId: string, generation: number) => {
+      if (
+        typeof sessionId !== 'string' ||
+        !Number.isSafeInteger(generation) ||
+        generation < 1
+      )
+        return
+      // getConversation synchronously flushes pending patches before reading.
+      // No await: those patches, this snapshot, and subsequent appends use one pipe.
+      const items = sessionApp.getConversation(sessionId)
+      event.sender.send('session:conversationPatched', {
+        op: 'snapshot',
+        sessionId,
+        items,
+        generation,
+      })
+    },
+  )
+
   ipcMain.handle('session:archive', (_event, id: string) => {
     sessionApp.archiveSession(id)
   })
@@ -981,6 +1008,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle('session:delete', (_event, id: string) => {
     const { relaysRemoved, membershipsRemoved } = sessionApp.deleteSession(id)
+    conversationWireMemory.delete(id)
     if (relaysRemoved > 0) broadcastRelays(relayService.list())
     if (membershipsRemoved > 0) broadcastCrews(crewService.list())
     pullRequestService.evictDeletedSessions()
@@ -1342,6 +1370,7 @@ export function registerIpcHandlers(
 
   // Session update event forwarding
   sessionApp.onSessionSummaryUpdate((summary) => {
+    if (summary.status !== 'running') conversationWireMemory.delete(summary.id)
     const windows = BrowserWindow.getAllWindows()
     for (const win of windows) {
       if (!win.isDestroyed()) {
@@ -1351,10 +1380,19 @@ export function registerIpcHandlers(
   })
 
   sessionApp.onConversationPatch((event) => {
+    const items = conversationWireMemory.get(event.sessionId) ?? new Map()
+    const { wire, remember } = conversationPatchWire(
+      items.get(event.item.id),
+      event,
+    )
+    if (remember) items.set(event.item.id, remember)
+    else items.delete(event.item.id)
+    if (items.size) conversationWireMemory.set(event.sessionId, items)
+    else conversationWireMemory.delete(event.sessionId)
     const windows = BrowserWindow.getAllWindows()
     for (const win of windows) {
       if (!win.isDestroyed()) {
-        win.webContents.send('session:conversationPatched', event)
+        win.webContents.send('session:conversationPatched', wire)
       }
     }
   })
