@@ -323,7 +323,10 @@ export function diffTrackerSnapshot(input: {
         rows.push({
           ...carriedFrom(previous, input.seenAt),
           trackerStatus: issue.status,
-          fact: factFrom(issue),
+          fact: {
+            ...factFrom(issue),
+            ...(previous?.fact.merged ? { merged: previous.fact.merged } : {}),
+          },
         })
       }
       continue
@@ -341,7 +344,10 @@ export function diffTrackerSnapshot(input: {
       trackerStatus: issue.status,
       groundedAt: issue.groundedAt,
       seenAt: input.seenAt,
-      fact: factFrom(issue),
+      fact: {
+        ...factFrom(issue),
+        ...(previous?.fact.merged ? { merged: previous.fact.merged } : {}),
+      },
       // The watcher records what the tracker said; a ruling is the
       // mastermind's act and only `appendVerdict` writes one (MAR-3085).
       verdict: null,

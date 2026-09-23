@@ -91,6 +91,7 @@ export interface LoomSubline {
  * needing different facts -- they are the same panel at two sizes.
  */
 export interface LoomStackProps {
+  mergeReviewed?: ReactNode
   dispatchPlan?: DispatchPlan | null
   sheets: LoomSheets
   /**

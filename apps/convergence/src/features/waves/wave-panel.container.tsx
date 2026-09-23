@@ -1,3 +1,4 @@
+import { MergeReviewed } from './merge-reviewed.container'
 import {
   useCallback,
   useEffect,
@@ -653,6 +654,15 @@ export const WavePanel: FC<WavePanelProps> = ({
         }
 
   const stack = {
+    mergeReviewed: board.mergeSeat ? (
+      <MergeReviewed
+        key={`${board.mergeSeat.crewId}:${board.mergeSeat.sessionId}`}
+        seat={board.mergeSeat}
+        enabled={board.allSheets.now.awaitingQa.some(
+          (row) => row.entry.pr !== null,
+        )}
+      />
+    ) : null,
     dispatchPlan: board.dispatchPlan,
     sheets: board.sheets,
     now: board.now,

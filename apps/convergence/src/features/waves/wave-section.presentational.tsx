@@ -31,6 +31,7 @@ interface WaveSectionViewProps {
    * A control that belongs to this section, rendered after its rows -- inside
    * the section, so `aria-controls` names an ancestor of the control itself.
    */
+  action?: ReactNode
   footer?: ReactNode
   inertReason: (entry: WorkLedgerEntry) => string | null
   onOpen: (entry: WorkLedgerEntry) => void
@@ -52,6 +53,7 @@ export const WaveSectionView: FC<WaveSectionViewProps> = ({
   hint,
   id,
   footer,
+  action,
   inertReason,
   onOpen,
   disclosure,
@@ -95,7 +97,10 @@ export const WaveSectionView: FC<WaveSectionViewProps> = ({
     </details>
   ) : (
     <section id={id} aria-label={title} className="flex flex-col">
-      <h3 className={WAVE_SECTION_TITLE_CLASS}>{heading}</h3>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className={WAVE_SECTION_TITLE_CLASS}>{heading}</h3>
+        {action}
+      </div>
       {hintLine}
       {content}
       {footer}

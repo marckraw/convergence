@@ -86,6 +86,9 @@ export const WaveRowView: FC<WaveRowViewProps> = ({
         )}
       >
         {waveRowMetaWords(row).join(' · ')}
+        {entry.fact.merged
+          ? ` · merged ${entry.fact.merged.headSha.slice(0, 7)}`
+          : null}
       </span>
       {loom ? (
         <span className="flex max-w-full flex-wrap gap-1.5 text-[11px] text-muted-foreground">

@@ -1,3 +1,4 @@
+import { migrateReleaseActs } from './release-act-migration.service'
 import Database from 'better-sqlite3'
 import { APP_SETTINGS_KEY } from '../app-settings/app-settings.constants'
 import {
@@ -2307,6 +2308,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     // The `blocked` column (MAR-3138): additive, so it runs after the rebuild
     // above rather than being folded into it.
     migrateWorkLedgerBlocked(database)
+    migrateReleaseActs(database)
     database.transaction(() => {
       if (getTableColumnNames(database, 'sessions').has('origin_kind')) return
       database.exec(

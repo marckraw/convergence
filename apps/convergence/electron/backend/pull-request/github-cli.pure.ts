@@ -201,3 +201,46 @@ function mapOpenPullRequestState(
   if (pr.state?.toUpperCase() === 'OPEN') return 'open'
   return 'unknown'
 }
+
+/** Fail closed on unknown check shapes; every check named verify must succeed. */
+export function parseMergeReading(
+  stdout: string,
+): import('../../../src/shared/types/release.types').MergeReading {
+  const value = JSON.parse(stdout)
+  if (!value || typeof value !== 'object')
+    throw new Error('Invalid merge reading')
+  const checks = Array.isArray(value.statusCheckRollup)
+    ? value.statusCheckRollup.filter(
+        (check: { name?: string; context?: string } | null) =>
+          check && (check.name === 'verify' || check.context === 'verify'),
+      )
+    : []
+  const states = checks.map(
+    (check: {
+      name?: string
+      status?: string
+      conclusion?: string
+      state?: string
+    }) =>
+      check.name === 'verify'
+        ? check.status === 'COMPLETED'
+          ? check.conclusion || 'UNKNOWN'
+          : check.status || 'UNKNOWN'
+        : check.state || 'UNKNOWN',
+  )
+  return {
+    url: typeof value.url === 'string' ? value.url : '',
+    headSha: typeof value.headRefOid === 'string' ? value.headRefOid : '',
+    title: typeof value.title === 'string' ? value.title : '',
+    mergeStateStatus:
+      typeof value.mergeStateStatus === 'string'
+        ? value.mergeStateStatus
+        : 'UNKNOWN',
+    verify:
+      states.find((state: string) => state !== 'SUCCESS') ??
+      states[0] ??
+      'missing',
+    mergeCommit:
+      typeof value.mergeCommit?.oid === 'string' ? value.mergeCommit.oid : null,
+  }
+}

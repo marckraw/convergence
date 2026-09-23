@@ -1,3 +1,5 @@
+import { ReleaseActService } from '../backend/release/release-act.service'
+import { registerReleaseIpcHandlers } from '../backend/release/release.ipc'
 import { ErrandSpawner } from '../backend/relay/errand-spawner'
 import { isTerminalSessionStatus } from '../backend/session/session.pure'
 import {
@@ -1083,6 +1085,33 @@ async function startApp(): Promise<void> {
   registerWorkLedgerIpcHandlers({
     snapshot: (crewId) => trackerWatcher.snapshot(crewId),
   })
+  registerReleaseIpcHandlers(
+    new ReleaseActService({
+      db,
+      prs: pullRequestService,
+      ledger: workLedgerService,
+      hails: crewHailService,
+      authorize: ({ crewId, sessionId }) => {
+        const member = crewService
+          .getById(crewId)
+          ?.members.find((seat) => seat.sessionId === sessionId)
+        if (member?.role !== 'mastermind')
+          throw new Error('Only the mastermind can merge reviewed PRs')
+        const target = db
+          .prepare(
+            `SELECT p.repository_path FROM sessions s
+        JOIN projects p ON p.id=s.project_id WHERE s.id=?`,
+          )
+          .get(sessionId) as { repository_path: string } | undefined
+        if (!target) throw new Error('Mastermind repository not found')
+        return target.repository_path
+      },
+      changed: (crewId) => {
+        broadcastWorkLedger(trackerWatcher.snapshot(crewId))
+        broadcastCrewHails(crewHailService.listOpen())
+      },
+    }),
+  )
   trackerWatcher.start()
   // Looking counts (MAR-3227 R3): coming back to any window asks for a read,
   // and with no window in front the watcher slows to its background beat.

@@ -59,6 +59,7 @@ import {
 const QA_SECTION_ID = 'loom-awaiting-qa'
 
 interface LoomSheetViewProps<TSession = unknown> {
+  mergeReviewed?: ReactNode
   dispatchPlan?: DispatchPlan | null
   sheet: LoomSheet
   sheets: LoomSheets
@@ -125,6 +126,7 @@ export const LoomSheetView = <TSession,>({
   now,
   horses,
   dispatchPlan = null,
+  mergeReviewed,
   qaExpanded,
   onToggleQa,
   onOpenSeat,
@@ -293,6 +295,7 @@ export const LoomSheetView = <TSession,>({
                     <WaveSectionView
                       appearance="loom"
                       title="Awaiting QA"
+                      action={mergeReviewed}
                       hint={wide ? 'QA and say done, by name' : undefined}
                       count={qa.length}
                       rows={qaShown}
