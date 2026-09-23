@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import { RelayService } from './relay.service'
+import { SessionQueuedInputService } from '../session/session-queued-input.service'
 
 describe('RelayService', () => {
   let service: RelayService
@@ -604,6 +605,78 @@ describe('RelayService', () => {
   })
 
   describe('the hop ledger', () => {
+    it('MAR-3108 R2 persists the queued delivery receipt before any settle', () => {
+      const queued = new SessionQueuedInputService(db).enqueue(
+        's2',
+        {
+          text: 'the brief',
+          dispatchId: 'delivery-receipt',
+        },
+        'follow-up',
+      )
+      const hop = service.appendHop({
+        relayId: createRelay().id,
+        crewId: 'c1',
+        flowRunId: 'run',
+        sourceSessionId: 's1',
+        targetSessionId: 's2',
+        triggerStatus: 'completed',
+        outcome: 'queued',
+        dispatchId: queued.dispatchId,
+      })
+      expect(hop.dispatchId).toBe(queued.dispatchId)
+      expect(hop.dispatchId).toBe('delivery-receipt')
+      expect(hop.settledAt).toBeNull()
+      service.markStationSettled('s2', 'completed', new Date().toISOString(), [
+        queued.dispatchId!,
+      ])
+      expect(service.listHops('c1')[0].dispatchId).toBe(queued.dispatchId)
+    })
+
+    it('MAR-3108 R1 reads the newest named original receipt and excludes redeliveries', () => {
+      const input = {
+        relayId: createRelay().id,
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        targetSessionId: 's2',
+        triggerStatus: 'completed',
+        outcome: 'delivered' as const,
+      }
+      const older = service.appendHop({
+        ...input,
+        flowRunId: 'older',
+        dispatchId: 'x',
+      })
+      const newer = service.appendHop({
+        ...input,
+        flowRunId: 'newer',
+        dispatchId: 'y',
+      })
+      const duplicate = service.appendHop({
+        ...input,
+        flowRunId: 'duplicate',
+        dispatchId: 'y',
+      })
+      db.prepare('UPDATE relay_hops SET fired_at = ? WHERE id = ?').run(
+        '2026-09-01T00:00:00.000Z',
+        older.id,
+      )
+      db.prepare('UPDATE relay_hops SET fired_at = ? WHERE id = ?').run(
+        '2026-09-02T00:00:00.000Z',
+        newer.id,
+      )
+      db.prepare(
+        'UPDATE relay_hops SET fired_at = ?, redelivered_from = ? WHERE id = ?',
+      ).run('2026-09-03T00:00:00.000Z', newer.id, duplicate.id)
+      expect(service.findFlowRunIdByDispatchIds([])).toBeNull()
+      expect(service.findFlowRunIdByDispatchIds(['absent'])).toBeNull()
+      expect(service.findFlowRunIdByDispatchIds(['y', 'x'])).toBe('newer')
+      service.markStationSettled('s2', 'completed', new Date().toISOString(), [
+        'y',
+      ])
+      expect(service.findFlowRunIdByDispatchIds(['y'])).toBe('newer')
+    })
+
     it('records a firing with its preview and reads the trail newest first', () => {
       const relay = createRelay()
 

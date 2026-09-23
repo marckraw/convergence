@@ -440,6 +440,137 @@ describe('RelayEngine', () => {
     })
   }
 
+  describe('MAR-3108 restart', () => {
+    it('continues duplicate receipts without restoring a consumed memory baton', async () => {
+      wire('s1', 's2')
+      wire('s2', 's1')
+      const gateway = createGateway({})
+      await createEngine(gateway).handleSettle(settled('s1'))
+      const first = hops.at(-1)!
+      const restarted = createEngine(gateway)
+      const lookup = vi.spyOn(relays, 'findFlowRunIdByDispatchIds')
+      try {
+        await restarted.handleSettle(
+          settled('s2', 'completed', false, [first.dispatchId!]),
+        )
+        expect(hops.at(-1)!.flowRunId).toBe(first.flowRunId)
+        await restarted.handleSettle(
+          settled('s2', 'completed', false, [first.dispatchId!]),
+        )
+        expect(hops.at(-1)!.flowRunId).toBe(first.flowRunId)
+        expect(lookup).toHaveBeenCalledTimes(2)
+        const fresh = hops.at(-1)!
+        await restarted.handleSettle(
+          settled('s1', 'completed', false, [fresh.dispatchId!]),
+        )
+        expect(hops.at(-1)!.flowRunId).toBe(first.flowRunId)
+        expect(lookup).toHaveBeenCalledTimes(2)
+      } finally {
+        lookup.mockRestore()
+      }
+    })
+
+    it('recovers remote empty receipts, consumes each delivery and preserves provenance', async () => {
+      seatsBySession.s2 = {
+        batonName: 'horse',
+        kind: 'resident',
+        roleCard: 'You are the horse.',
+        hostPolicy: null,
+        providerId: null,
+        model: null,
+      }
+      wire('s1', 's2')
+      wire('s2', 's1')
+      const gateway = createGateway({ executionHosts: { s2: 'remote-test' } })
+      await createEngine(gateway).handleSettle(settled('s1'))
+      const first = hops.at(-1)!
+      expect(first.dispatchId).toBe(gateway.sent[0].dispatchId)
+      expect(first.settledAt).toBeNull()
+      expect(first.settleId).not.toBeNull()
+      const restarted = createEngine(gateway)
+      const answer = settled('s2')
+      await restarted.handleSettle(answer)
+      expect.soft(hops.at(-1)!.flowRunId).toBe(first.flowRunId)
+      expect
+        .soft(relays.countBudgetedHopsInCrew('c1', hops.at(-1)!.flowRunId))
+        .toBe(2)
+      expect
+        .soft(relays.listHops('c1').find((hop) => hop.id === first.id))
+        .toMatchObject({
+          settledAt: answer.settledAt,
+          settledStatus: 'completed',
+          settleId: first.settleId,
+        })
+      expect
+        .soft(settledHops)
+        .toContainEqual({ crewId: 'c1', hopIds: [first.id] })
+      await restarted.handleSettle(settled('s1'))
+      const secondArrival = hops.at(-1)!
+      expect
+        .soft(secondArrival)
+        .toMatchObject({ flowRunId: first.flowRunId, lapNumber: 2 })
+      expect
+        .soft(
+          db
+            .prepare('SELECT role_card_carried FROM relay_hops WHERE id = ?')
+            .get(secondArrival.id),
+        )
+        .toEqual({ role_card_carried: 0 })
+      await restarted.handleSettle(settled('s2'))
+      expect.soft(hops.at(-1)!.flowRunId).toBe(first.flowRunId)
+      expect
+        .soft(
+          relays.listHops('c1').find((hop) => hop.id === secondArrival.id)
+            ?.settledAt,
+        )
+        .not.toBeNull()
+    })
+
+    it('mints a new run when every delivery to the target is settled', async () => {
+      wire('s1', 's2')
+      wire('s2', 's1')
+      const gateway = createGateway({})
+      await createEngine(gateway).handleSettle(settled('s1'))
+      const first = hops.at(-1)!
+      relays.markStationSettled('s2', 'completed', new Date().toISOString(), [
+        first.dispatchId!,
+      ])
+      await createEngine(gateway).handleSettle(settled('s2'))
+      expect(hops.at(-1)!.flowRunId).not.toBe(first.flowRunId)
+    })
+
+    it('chooses the newest of two open deliveries from different crews', async () => {
+      wire('s1', 's2')
+      wire('s2', 's1')
+      const gateway = createGateway({})
+      await createEngine(gateway).handleSettle(settled('s1'))
+      const older = hops.at(-1)!
+      db.prepare('UPDATE relay_hops SET fired_at = ? WHERE id = ?').run(
+        '2026-09-01T00:00:00.000Z',
+        older.id,
+      )
+      const newer = relays.appendHop({
+        relayId: 'other-wire',
+        crewId: 'c2',
+        flowRunId: 'newer-run',
+        sourceSessionId: 's3',
+        targetSessionId: 's2',
+        triggerStatus: 'completed',
+        outcome: 'delivered',
+        dispatchId: 'newer-receipt',
+        settleId: 'source-settle',
+      })
+      await createEngine(gateway).handleSettle(settled('s2'))
+      expect.soft(hops.at(-1)!.flowRunId).toBe(newer.flowRunId)
+      expect
+        .soft(
+          relays.listHops('c1').find((hop) => hop.id === older.id)?.settledAt,
+        )
+        .toBeNull()
+      expect.soft(relays.listHops('c2')[0].settledAt).not.toBeNull()
+    })
+  })
+
   it.each(['gone', 'absent'] as const)(
     'MAR-3254 R2 disarms a wire with a %s target after one error across two settles',
     async (target) => {
@@ -3776,11 +3907,8 @@ describe('RelayEngine', () => {
      * the same answer, so nothing about a card depends on one process staying
      * alive.
      *
-     * The boundary, measured and reported: a run does NOT survive a restart
-     * either. `takeFlowRunId` continues a run from the in-memory baton map, so
-     * the settle after a restart mints a NEW run id — and a fresh run is
-     * rightly a fresh introduction. Keying the card on the run is correct; the
-     * restart case is the run's to fix, not the card's.
+     * MAR-3108: the hop receipt also continues the run after a restart, so
+     * the next delivery reads the card fact under the same run id.
      */
     it('keeps the card fact in the record, where another engine can read it', async () => {
       seatsBySession.s2 = {
@@ -3807,6 +3935,27 @@ describe('RelayEngine', () => {
       expect(
         new RelayService(db).hasCarriedRoleCard(carried.flowRunId, 's3'),
       ).toBe(false)
+
+      wire('s2', 's1')
+      const restarted = createEngine(gateway)
+      await restarted.handleSettle(settleCarried(gateway, 's2'))
+      expect.soft(hops.at(-1)!.flowRunId).toBe(carried.flowRunId)
+      expect
+        .soft(relays.countBudgetedHopsInCrew('c1', hops.at(-1)!.flowRunId))
+        .toBe(2)
+      await restarted.handleSettle(settleCarried(gateway, 's1'))
+      expect.soft(hops.at(-1)).toMatchObject({
+        flowRunId: carried.flowRunId,
+        lapNumber: 2,
+      })
+      expect
+        .soft(
+          db
+            .prepare('SELECT role_card_carried FROM relay_hops WHERE id = ?')
+            .get(hops.at(-1)!.id),
+        )
+        .toEqual({ role_card_carried: 0 })
+      expect.soft(gateway.sent.at(-1)!.text).toBe('lap one')
     })
 
     /**

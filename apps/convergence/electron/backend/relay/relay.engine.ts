@@ -386,7 +386,7 @@ export class RelayEngine {
 
       // Taken before the wires are read, and once per settle: every wire
       // leaving this session is measured against the same run.
-      const flowRunId = this.takeFlowRunId(event.dispatchIds)
+      const flowRunId = this.takeFlowRunId(event)
 
       this.enterRun(flowRunId)
       try {
@@ -537,21 +537,37 @@ export class RelayEngine {
 
   /**
    * The run a settling session's wires belong to: the run of the OLDEST
-   * baton this settle names, every named baton consumed -- or a brand new
-   * run when it names none.
+   * baton this settle names, every named baton consumed. After a restart,
+   * receipts in the ledger continue the run, including a duplicate settle.
    *
-   * A held baton this settle does not name is PRESERVED, not spent: the beat
-   * that just ended is some other work (a turn that was already running, a
-   * turn the user typed), and the run is still waiting on its own settle.
+   * When neither memory nor named receipts answer, the newest open delivery
+   * into the station supplies the run and is consumed. Remote reattachment
+   * can lose the session layer's receipts; the delivery survives in our ledger.
+   * Only a settle with no claim in either place starts a new run.
    */
-  private takeFlowRunId(dispatchIds: readonly string[]): string {
+  private takeFlowRunId(event: SessionSettledEvent): string {
+    const { dispatchIds } = event
     let continued: string | null = null
     for (const [dispatchId, flowRunId] of this.batons) {
       if (!dispatchIds.includes(dispatchId)) continue
       this.batons.delete(dispatchId)
       continued ??= flowRunId
     }
-    return continued ?? randomUUID()
+    if (continued !== null) return continued
+    const recorded = this.relays.findFlowRunIdByDispatchIds(dispatchIds)
+    if (recorded !== null) return recorded
+    const open = this.relays.findOpenDeliveryForTarget(event.sessionId)
+    if (open) {
+      this.relays.markHopSettled(
+        open.id,
+        event.status,
+        event.settledAt,
+        this.onHopSettled,
+      )
+      this.batons.delete(open.dispatchId)
+      return open.flowRunId
+    }
+    return randomUUID()
   }
 
   /**
@@ -1242,9 +1258,9 @@ export class RelayEngine {
     // this run. Asked of the record rather than of this process's memory: a
     // send that threw leaves the card owed for the retry, a second wire into
     // the same seat in the same run carries the payload alone, and nothing
-    // depends on one engine instance staying alive. A run that begins after a
-    // restart is a new run and introduces the seat again -- the run id lives
-    // in memory, which is MAR-3108, not this.
+    // depends on one engine instance staying alive. The hop receipt continues
+    // the run after a restart (MAR-3108); only a genuinely new run introduces
+    // the seat again.
     const carriesCard =
       relay.action === 'hail' &&
       roleCard !== null &&
