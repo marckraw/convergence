@@ -25,6 +25,8 @@ const TREE_WALKING_TESTS = [
   'electron/backend/docblock-shape.walk.test.ts',
   // No guided-review paper in the repo skills or specs (MAR-3317).
   'test/guided-review-paper.walk.test.ts',
+  // No DialogTrigger whose value starts with a Tooltip root (MAR-3358).
+  'src/widgets/sidebar/sidebar-settings-trigger.walk.test.ts',
 ]
 
 /** The configs that run one of the walkers above. */

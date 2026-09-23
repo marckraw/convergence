@@ -688,9 +688,29 @@ export const Sidebar: FC<SidebarProps> = ({
       <SkillsBrowserDialogContainer trigger={hiddenDialogTrigger()} />
       <PromptLibraryBrowserDialogContainer trigger={hiddenDialogTrigger()} />
       <ReleaseNotesDialogContainer trigger={hiddenDialogTrigger()} />
+      <AppSettingsDialogContainer trigger={hiddenDialogTrigger()} />
       <ProjectCreateDialogContainer />
       <LaneCreateDialogContainer />
     </>
+  )
+
+  const settingsGear = (side: 'right' | 'bottom') => (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          aria-label="Open settings"
+          onClick={() => openDialog('app-settings')}
+        >
+          <Settings className="h-4 w-4" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side={side} style={LOOM_NO_DRAG_STYLE}>
+        Open settings
+      </TooltipContent>
+    </Tooltip>
   )
 
   if (collapsed) {
@@ -890,25 +910,7 @@ export const Sidebar: FC<SidebarProps> = ({
             iconOnly
             onOpenDialog={openDialog}
           />
-          <AppSettingsDialogContainer
-            trigger={
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    aria-label="Open settings"
-                  >
-                    <Settings className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right" style={LOOM_NO_DRAG_STYLE}>
-                  Open settings
-                </TooltipContent>
-              </Tooltip>
-            }
-          />
+          {settingsGear('right')}
           <ThemeToggleButton />
         </div>
 
@@ -955,25 +957,7 @@ export const Sidebar: FC<SidebarProps> = ({
             iconOnly
             onOpenDialog={openDialog}
           />
-          <AppSettingsDialogContainer
-            trigger={
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    aria-label="Open settings"
-                  >
-                    <Settings className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" style={LOOM_NO_DRAG_STYLE}>
-                  Open settings
-                </TooltipContent>
-              </Tooltip>
-            }
-          />
+          {settingsGear('bottom')}
           <ThemeToggleButton />
         </div>
       </div>
