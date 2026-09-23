@@ -259,10 +259,7 @@
  * Loom's fold (MAR-3312 R3): the shape that arrives fades in once the shell
  * has finished travelling, so icons never sit on a column still shrinking.
  *
- * Declared here rather than reached for as `animate-in fade-in-0`: those are
- * `tailwindcss-animate` utilities, and this app's Tailwind v4 loads no such
- * plugin -- the package is only a transitive dependency of `@ef-global/backpack`
- * and nothing imports it, so those class names emit no CSS whatsoever. A
+ * The app owns its animation utilities through theme entries. A
  * theme entry makes `animate-loom-enter` a real utility, which is what lets
  * `motion-reduce:animate-none` sit beside it as a class (R2's law: an inline
  * animation would out-specify the media query).
@@ -275,6 +272,16 @@
  */
 @theme {
   --animate-loom-enter: loom-enter 150ms ease-out 200ms both;
+  --animate-pop-in: pop-in 150ms ease-out both;
+  --animate-pop-out: pop-out 100ms ease-in both;
+  --animate-slide-in-top:
+    pop-in 150ms ease-out both, slide-in-top 150ms ease-out both;
+  --animate-slide-in-bottom:
+    pop-in 150ms ease-out both, slide-in-bottom 150ms ease-out both;
+  --animate-slide-in-left:
+    pop-in 150ms ease-out both, slide-in-left 150ms ease-out both;
+  --animate-slide-in-right:
+    pop-in 150ms ease-out both, slide-in-right 150ms ease-out both;
 }
 
 @keyframes loom-enter {
@@ -283,6 +290,79 @@
   }
   to {
     opacity: 1;
+  }
+}
+
+/*
+ * Surface motion (MAR-3319): scale leaves positioned dialogs' translate
+ * intact; directional travel uses transform so Select's translate offset
+ * survives too. Side utilities include the pop animation because CSS
+ * animation shorthands replace one another. Conditional classes use
+ * motion-safe so their attribute specificity cannot defeat reduced motion.
+ */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    scale: 0.95;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes pop-out {
+  from {
+    opacity: 1;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 0.95;
+  }
+}
+
+@keyframes slide-in-top {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0);
+  }
+}
+
+@keyframes slide-in-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0);
+  }
+}
+
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0);
   }
 }
 

@@ -71,6 +71,7 @@ function DialogContent({
         data-slot="dialog-content"
         className={cn(
           'fixed top-[50%] left-[50%] z-50 flex w-[min(720px,calc(100vw-2rem))] max-h-[min(80vh,720px)] min-h-0 translate-x-[-50%] translate-y-[-50%] flex-col overflow-hidden rounded-xl border border-white/10 bg-background/95 shadow-2xl',
+          'animate-pop-in motion-safe:data-[state=closed]:animate-pop-out motion-reduce:animate-none',
           className,
         )}
         {...props}
