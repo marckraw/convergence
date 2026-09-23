@@ -1710,6 +1710,7 @@ export type ContextDrillCancelResultData =
   | { ok: false; reason: string }
 
 interface ElectronAPI {
+  perf: { isEnabled(): boolean; report(payload: unknown): Promise<unknown> }
   system: {
     getInfo: () => SystemInfo
   }

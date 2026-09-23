@@ -278,7 +278,25 @@ async function startApp(): Promise<void> {
   const globalSessionsRoot = join(app.getPath('userData'), 'global-sessions')
   loadEnvFile(join(app.getAppPath(), '.env'))
   loadEnvFile(join(process.cwd(), '.env'))
+  const perfProbe =
+    process.env.CONVERGENCE_PERF === '1'
+      ? (await import('../backend/perf/perf-probe.service')).createPerfProbe(
+          true,
+        )
+      : null
+  perfProbe?.wrapTimers()
   const db = getDatabase(dbPath)
+  perfProbe?.wrapDatabase(db)
+  if (perfProbe) {
+    const { ipcMain } = await import('electron')
+    ipcMain.handle('perf:report', (_event, payload: unknown) =>
+      perfProbe.report(payload),
+    )
+    app.on('will-quit', () => {
+      ipcMain.removeHandler('perf:report')
+      perfProbe.dispose()
+    })
+  }
 
   const gitService = new GitService()
   const projectService = new ProjectService(db)
@@ -313,6 +331,7 @@ async function startApp(): Promise<void> {
     executionHost,
     globalSessionsRoot,
   )
+  perfProbe?.wrapSummary(sessionService)
   // SessionService has recovered stale sessions; clean legacy wires and seats
   // before the engine or renderer can read them (MAR-3254).
   relayService.removeOrphans()
@@ -1219,6 +1238,7 @@ async function startApp(): Promise<void> {
   }
 
   const onWindowCreated = (window: BrowserWindow) => {
+    perfProbe?.wrapSend(window.webContents)
     currentMainWindow = window
     notificationsState.attach(window)
   }

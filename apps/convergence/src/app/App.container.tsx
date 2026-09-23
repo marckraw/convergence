@@ -1,3 +1,4 @@
+import { usePerfProbe } from '@/shared/lib/usePerfProbe'
 import { useEffect, useMemo, useState } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
@@ -79,6 +80,7 @@ export function App({
   onShowMissionControl,
   onNewGlobalChat,
 }: AppProps) {
+  usePerfProbe()
   const routeCodeSessionId =
     mainViewRoute.kind === 'code-session' ? mainViewRoute.sessionId : null
   const routeNewCodeSessionWorkspaceId =

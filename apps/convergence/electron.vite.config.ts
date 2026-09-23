@@ -69,6 +69,11 @@ export default defineConfig({
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src'),
+        ...(process.env.CONVERGENCE_PERF === '1'
+          ? {
+              'react-dom/client': 'react-dom/profiling',
+            }
+          : {}),
       },
     },
   },

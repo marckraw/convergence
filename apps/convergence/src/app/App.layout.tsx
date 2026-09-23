@@ -1,3 +1,4 @@
+import { PerfProfiler } from '@/shared/lib/perf-profiler'
 import { useState, useCallback, useRef } from 'react'
 import type { FC } from 'react'
 import { Sidebar } from '@/widgets/sidebar'
@@ -312,12 +313,14 @@ export const AppShell: FC<AppShellProps> = ({
         {/* Loom (MAR-3097, MAR-3189): the ledger beside the conversation, its
             four sheets compact in this slot or expanded into the content area.
             Absent when no crew reads a tracker. */}
-        <WavePanel
-          onOpenSession={onSelectAnySession}
-          reservedWidth={sidebarCollapsed ? COLLAPSED_SIDEBAR : sidebarWidth}
-          onExpandedChange={setLoomExpanded}
-          expandedContainer={mainPanelElement}
-        />
+        <PerfProfiler id="wave-panel">
+          <WavePanel
+            onOpenSession={onSelectAnySession}
+            reservedWidth={sidebarCollapsed ? COLLAPSED_SIDEBAR : sidebarWidth}
+            onExpandedChange={setLoomExpanded}
+            expandedContainer={mainPanelElement}
+          />
+        </PerfProfiler>
 
         <div
           ref={setMainPanelElement}

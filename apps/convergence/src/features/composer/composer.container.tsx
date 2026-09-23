@@ -1,3 +1,4 @@
+import { usePerfSessionsIdentity } from '@/shared/lib/usePerfProbe'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FC } from 'react'
 import {
@@ -339,6 +340,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const cancelQueuedInput = useSessionStore((s) => s.cancelQueuedInput)
   const redeliverQueuedInput = useSessionStore((s) => s.redeliverQueuedInput)
   const sessions = useSessionStore((s) => s.sessions)
+  usePerfSessionsIdentity(sessions)
   const globalChatSessions = useSessionStore((s) => s.globalChatSessions)
   const queuedInputs = useSessionStore((s) =>
     activeSessionId
