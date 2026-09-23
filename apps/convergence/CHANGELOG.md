@@ -1,5 +1,27 @@
 # convergence
 
+## 0.85.0
+
+### Minor Changes
+
+- 4ead873: Crew files can carry the tracker binding (project, prefixes, status map — never a key); export writes it, import binds it and asks for the key.
+- 5af9c27: Auto-dispatch reaches recipe seats: a cleared issue whose seat is a recipe spawns an errand on the recipe's host and lane; the row follows the spawned conversation; WIP counts live spawns.
+- 4b97969: Merge reviewed: the mastermind seat can merge a wave's reviewed PRs from the app — on CLEAN and a green verify only, serially, waiting for the changesets run between merges; a failed step stops and raises a card.
+- 2535bbe: Crews carry a lap cap (default none, suggested 6) beside the delivery limit; the Loom's wave rows read 'lap N of C' from it.
+
+### Patch Changes
+
+- 4801102: If Convergence restarts in the middle of a `/clear`, the message queued behind it is failed with a reason and Loom offers the retry, instead of waiting for ever on a failed seat. Deliveries that a restart ends are now reported to Loom and the relay ledger once they start listening, instead of being marked as told to nobody. A `/clear` that waited behind a busy seat and then failed now delivers the message behind it, as one sent to an idle seat already did.
+- 5991dc8: The Loom says 'dispatched HH:MM · Linear not yet In Progress' from the dispatch record instead of 'needs dispatch' during the window; the horse card names the dispatched ticket instead of 'No active ticket'; the card's ticket line opens the issue detail.
+- fc5439d: The context meter no longer reads a turn's summed usage as the context after the turn ends, nor a Task subagent's usage as the session's while the subagent runs; the auto-drill stops compacting small contexts.
+- 71f57f0: The drill's first message says what seal line it reads, so any agent can answer it.
+- 051aac4: Mission Control marks the card of the conversation that is open on screen with a bright frame; the Hail's own mark stays separate.
+- 9ac7a4b: Deleting a conversation removes its crew wires and seat with it; a wire whose other end is gone is disarmed after one error instead of firing for ever; existing orphans are cleaned up at startup.
+- e6fd1e7: Claude Opus 5.5 is in the Claude Code model list as a pinned choice; the `opus` alias now describes itself as Opus 5.5.
+- 46e39b0: A crew's flow run continues from the hop record when the engine's memory is gone but the settle still names its dispatch ids; the empty-settle restart case follows MAR-3344.
+- a22c30d: Tooltips, menus, popovers, selects and dialogs fade and zoom in again — their animation classes had been emitting no CSS since the Tailwind v4 move.
+- 027300a: The Codex model list knows GPT-6 Sol and GPT-6 Luna, mirrored from codex-cli 0.156.0; GPT-6 Luna is the fast model.
+
 ## 0.84.1
 
 ### Patch Changes
