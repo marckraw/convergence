@@ -56,7 +56,10 @@ import {
   formatCursorAcpSilenceBudgetNote,
   getCursorAcpCurrentModelId,
 } from './cursor-acp-contract.pure'
-import { classifyCursorAcpStopReason } from './cursor-acp-stop-reason.pure'
+import {
+  classifyCursorAcpStopReason,
+  formatCursorAcpStopReasonNote,
+} from './cursor-acp-stop-reason.pure'
 import {
   buildCursorAcpPermissionRequest,
   buildCursorAcpAskQuestionInputRequest,
@@ -1384,7 +1387,8 @@ export class CursorProvider implements Provider {
         flushThinkingBuffer()
         flushAssistantBuffer()
 
-        const stopReasonClass = classifyCursorAcpStopReason(result)
+        const stopReason = classifyCursorAcpStopReason(result)
+        const stopReasonClass = stopReason.kind
         endTurn(() => {
           setActivity(null)
           if (stopReasonClass === 'cancelled') {
@@ -1401,42 +1405,12 @@ export class CursorProvider implements Provider {
             setAttention('finished')
             return
           }
-          if (stopReasonClass === 'cut-short') {
-            const reason =
-              result && typeof result === 'object' && 'stopReason' in result
-                ? String((result as Record<string, unknown>).stopReason)
-                : 'max_tokens'
-            sessionEmitter.addNote({
-              text: `Cursor ended this turn early: ${reason}.`,
-              level: 'warning',
-            })
-            setStatus('completed')
-            setAttention('finished')
-            return
+          // cut-short, refused and unknown each say how the turn ended;
+          // done says nothing. All four settle completed (MAR-3242 R2).
+          const stopReasonNote = formatCursorAcpStopReasonNote(stopReason)
+          if (stopReasonNote) {
+            sessionEmitter.addNote({ text: stopReasonNote, level: 'warning' })
           }
-          if (stopReasonClass === 'refused') {
-            sessionEmitter.addNote({
-              text: "Cursor's model refused this turn.",
-              level: 'warning',
-            })
-            setStatus('completed')
-            setAttention('finished')
-            return
-          }
-          if (stopReasonClass === 'unknown') {
-            const raw =
-              result && typeof result === 'object' && 'stopReason' in result
-                ? String((result as Record<string, unknown>).stopReason)
-                : 'none'
-            sessionEmitter.addNote({
-              text: `Cursor ended this turn with an ending Convergence does not know: ${raw}.`,
-              level: 'warning',
-            })
-            setStatus('completed')
-            setAttention('finished')
-            return
-          }
-          // done (end_turn) — plain completed, no note
           setStatus('completed')
           setAttention('finished')
         })
