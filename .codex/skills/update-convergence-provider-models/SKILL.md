@@ -1,6 +1,6 @@
 ---
 name: update-convergence-provider-models
-description: Use when updating Convergence's built-in provider model catalogs, especially Codex/OpenAI or Claude Code/Anthropic defaults, fallback model lists, effort metadata, context windows, or guided-review model preferences after a provider releases new models. This skill is repo-specific to Convergence and should be used for requests like "update the Codex provider models", "refresh OpenAI model list", "Anthropic released a new Claude model", or "make Convergence use the latest Claude Code model".
+description: Use when updating Convergence's built-in provider model catalogs, especially Codex/OpenAI or Claude Code/Anthropic defaults, fallback model lists, effort metadata, or context windows after a provider releases new models. This skill is repo-specific to Convergence and should be used for requests like "update the Codex provider models", "refresh OpenAI model list", "Anthropic released a new Claude model", or "make Convergence use the latest Claude Code model".
 ---
 
 # Update Convergence Provider Models
@@ -23,7 +23,7 @@ This skill is only for the Convergence repository. It preserves the workflow for
 Start with:
 
 ```bash
-rg -n "buildFallbackCodexDescriptor|buildClaudeDescriptor|preferredGuidedReviewModelId|gpt-|claude-|sonnet|opus|haiku" apps/convergence/electron apps/convergence/src
+rg -n "buildFallbackCodexDescriptor|buildClaudeDescriptor|deriveClaudeModelContextWindow|gpt-|claude-|sonnet|opus|haiku" apps/convergence/electron apps/convergence/src
 ```
 
 Primary files (relative to the `apps/convergence` workspace):
@@ -31,19 +31,17 @@ Primary files (relative to the `apps/convergence` workspace):
 - `electron/backend/provider/provider-descriptor.pure.ts`
   - `buildFallbackCodexDescriptor()` owns Codex/OpenAI fallback model options.
   - `buildClaudeDescriptor()` owns Claude Code aliases and pinned Anthropic model ids.
-- `electron/backend/app-settings/app-settings.pure.ts`
-  - `preferredGuidedReviewModelId()` owns provider-specific guided review preferences.
-- `src/features/app-settings/guided-review-model-defaults.presentational.tsx`
-  - mirrors guided-review picker defaults in the settings UI.
 - `electron/backend/provider/provider-descriptor.pure.test.ts`
   - add or update focused tests for catalog ordering, defaults, and key metadata.
-- `electron/backend/app-settings/app-settings.service.test.ts`
-  - update tests that assert guided-review defaults.
+- `electron/backend/provider/context-window.pure.ts`
+  - `deriveClaudeModelContextWindow()` maps Claude model ids and aliases to their context window (1M vs 200k) when the provider reports none.
+- `electron/backend/provider/context-window.pure.test.ts`
+  - add a focused expectation for each new model's estimated context window.
 
 Also check nearby focused tests with `rg` before editing:
 
 ```bash
-rg -n "gpt-|claude-|guided review|defaultModelId|fastModelId" apps/convergence/electron/backend apps/convergence/src/features apps/convergence/src/entities
+rg -n "gpt-|claude-|defaultModelId|fastModelId" apps/convergence/electron/backend apps/convergence/src/features apps/convergence/src/entities
 ```
 
 ## OpenAI / Codex Workflow
@@ -60,7 +58,6 @@ rg -n "gpt-|claude-|guided review|defaultModelId|fastModelId" apps/convergence/e
    - set `fastModelId` only to a real model in `modelOptions`;
    - include only verified `effortOptions`, `defaultEffort`, `contextWindowTokens`, and `inputModalities`;
    - keep older or specialized coding-agent models when they are still valid compatibility options.
-5. Update Codex guided review preference only when the new model is suitable for code review generation.
 
 ## Anthropic / Claude Code Workflow
 
@@ -71,7 +68,7 @@ rg -n "gpt-|claude-|guided review|defaultModelId|fastModelId" apps/convergence/e
    - update `defaultModelId` and `fastModelId` only when the provider guidance justifies it;
    - keep effort options aligned with what Claude Code supports for that model family;
    - keep context window metadata only when verified.
-3. Update guided-review preference if the best Claude Code review model changes.
+3. Update `deriveClaudeModelContextWindow()` when a new Claude model's context window differs from what its id pattern already resolves to.
 
 ## Test Strategy
 
@@ -80,7 +77,7 @@ Add or update focused expectations instead of mass-replacing model strings.
 Preferred tests:
 
 - provider descriptor test asserts the provider's default model, fast model, ordered model ids, and key metadata for the newest model family;
-- app settings service test asserts guided-review defaults;
+- context window test asserts the estimated window for each new Claude model id;
 - UI/default-picker test only when the selected model fallback logic changed.
 
 Avoid broad fixture churn:

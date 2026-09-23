@@ -21,6 +21,8 @@ export default defineConfig({
       '../../workspace-import-ownership.syntax.test.ts',
       // And the walk budget's canary, beside the constant it pins (MAR-2989).
       'test/walk-budget.test.ts',
+      // And the pin that keeps guided-review paper from regrowing (MAR-3317).
+      'test/guided-review-paper.walk.test.ts',
     ],
     environment: 'node',
   },
