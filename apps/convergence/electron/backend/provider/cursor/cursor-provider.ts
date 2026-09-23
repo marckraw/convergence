@@ -14,6 +14,7 @@ import {
   summarizeCursorCommandCatalogUpdate,
 } from '../../skills/cursor-skills.mapper.pure'
 import type {
+  ConversationItem,
   InteractionResponse,
   SessionDelta,
 } from '../../session/conversation-item.types'
@@ -57,6 +58,10 @@ import {
   getCursorAcpCurrentModelId,
 } from './cursor-acp-contract.pure'
 import { classifyCursorAcpStopReason } from './cursor-acp-stop-reason.pure'
+import {
+  formatCursorDeadTurnNote,
+  isDeadTurnText,
+} from './cursor-dead-turn.pure'
 import {
   buildCursorAcpPermissionRequest,
   buildCursorAcpAskQuestionInputRequest,
@@ -816,6 +821,74 @@ export class CursorProvider implements Provider {
       assistantMessageItemId = null
     }
 
+    /**
+     * The turn's last assistant segment, taken out of the buffer when it is a
+     * dead turn's line (MAR-3302 R2); null otherwise, and the buffer is left
+     * for the ordinary flush.
+     *
+     * The buffer holds exactly the text after the turn's last other output:
+     * a tool call, a plan and a todo note each flush it before they are
+     * recorded. So text still in the buffer at settle had nothing after it,
+     * and that is the "no tool call after it" half of the rule.
+     */
+    function takeDeadTurnSegment(): {
+      text: string
+      itemId: string | null
+    } | null {
+      if (!isDeadTurnText(assistantTextBuffer)) return null
+      const segment = {
+        text: assistantTextBuffer,
+        itemId: assistantMessageItemId,
+      }
+      assistantTextBuffer = ''
+      assistantMessageItemId = null
+      return segment
+    }
+
+    /**
+     * The dead turn's line stops being a reply (MAR-3302 R2). The streamed
+     * assistant item is rewritten in place as a warning note: the record's
+     * item patch rewrites `kind` and payload, and the renderer upserts by id.
+     * So the transcript keeps the line where it arrived, and no assistant
+     * message with that text is left for "the last assistant message" to
+     * find. `actor` is cleared so the note carries no message field. With no
+     * streamed item, the note is simply added.
+     */
+    function recordDeadTurnNote(segment: {
+      text: string
+      itemId: string | null
+    }): void {
+      const text = formatCursorDeadTurnNote(segment.text)
+      if (!segment.itemId) {
+        sessionEmitter.addNote({
+          text,
+          level: 'warning',
+          providerEventType: 'cursor-dead-turn',
+        })
+        return
+      }
+      // One patch across two kinds: the note's fields written, the message's
+      // one field of its own cleared.
+      const patch: Partial<ConversationItem> & { actor?: undefined } = {
+        kind: 'note',
+        state: 'complete',
+        level: 'warning',
+        text,
+        actor: undefined,
+        providerMeta: {
+          providerId: CURSOR_PROVIDER_ID,
+          providerItemId: null,
+          providerEventType: 'cursor-dead-turn',
+        },
+        updatedAt: now(),
+      }
+      emitDelta({
+        kind: 'conversation.item.patch',
+        itemId: segment.itemId,
+        patch,
+      })
+    }
+
     function appendAssistantText(text: string): void {
       if (!text) return
       assistantTextBuffer += text
@@ -1386,11 +1459,28 @@ export class CursorProvider implements Provider {
         )
 
         flushThinkingBuffer()
+        // Taken before the flush, which would record the line as a finished
+        // reply (MAR-3302 R2).
+        const deadTurnSegment = takeDeadTurnSegment()
         flushAssistantBuffer()
 
         const stopReasonClass = classifyCursorAcpStopReason(result)
         endTurn(() => {
           setActivity(null)
+          if (deadTurnSegment) {
+            // A turn whose last word is the CLI's own `Error: …` line died,
+            // whatever its stopReason says (MAR-3302 R2): it settles failed on
+            // the same path a rejected prompt takes, so the seat reads failed
+            // and no return is carried.
+            //
+            // No retry here (R4). `RetriableError` means Cursor's client thinks
+            // a retry is possible, but the turn may have half-acted (the lane
+            // held eight modified files). The mastermind's continue baton is
+            // the retry.
+            recordDeadTurnNote(deadTurnSegment)
+            recordFailedTurnState()
+            return
+          }
           if (stopReasonClass === 'cancelled') {
             // A cancelled turn is a finished turn, never a failed one: the
             // user stopped it and the process stays alive (MAR-3142 R2).
