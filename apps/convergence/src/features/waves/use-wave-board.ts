@@ -14,6 +14,11 @@ import {
 } from '@/entities/work-ledger'
 import { useFeedClock } from '@/shared/hooks/use-feed-clock'
 import { loomHorses, type LoomHorse } from './loom-horses.pure'
+import {
+  waveBoardSessionIds,
+  waveBoardSessionKey,
+  waveBoardSessionsFromKey,
+} from './wave-board-sessions.pure'
 import { loomSheets, type LoomSheets } from './loom-sheets.pure'
 import { loomSearchHorses, loomSearchRows } from './loom-search.pure'
 import {
@@ -115,7 +120,6 @@ export function useWaveBoard(query: string | null): WaveBoard {
   const loadCrews = useSessionCrewStore((state) => state.load)
   const snapshots = useWorkLedgerStore((state) => state.snapshots)
   const loadLedger = useWorkLedgerStore((state) => state.load)
-  const sessions = useSessionStore((state) => state.globalSessions)
   const endpoints = useAppSettingsStore(
     (state) => state.settings.executionHostEndpoints,
   )
@@ -214,6 +218,7 @@ export function useWaveBoard(query: string | null): WaveBoard {
     // leaves Loom where it was, and does not leave the change pending for the
     // next broadcast to act on.
     followedFrom.current = openConversation
+    const sessions = useSessionStore.getState().globalSessions
     const next = loomCrewForConversation({
       session: sessions.find((entry) => entry.id === openConversation) ?? null,
       crews: crews.map((crew) => ({
@@ -225,14 +230,7 @@ export function useWaveBoard(query: string | null): WaveBoard {
       current: selectedCrewId,
     })
     if (next !== null && next !== selectedCrewId) selectCrew(next)
-  }, [
-    followsConversation,
-    openConversation,
-    crews,
-    sessions,
-    selectedCrewId,
-    selectCrew,
-  ])
+  }, [followsConversation, openConversation, crews, selectedCrewId, selectCrew])
 
   const rows = useMemo(
     () => waveRowsFromSnapshots(snapshots, shownCrewIds),
@@ -286,18 +284,39 @@ export function useWaveBoard(query: string | null): WaveBoard {
   // the cost this gate exists to refuse.
   useFeedClock(rows.length > 0 || header.kind === 'outage', setNow)
 
+  const shownCrews = useMemo(
+    () => crews.filter((crew) => shownCrewIds.includes(crew.id)),
+    [crews, shownCrewIds],
+  )
+  const sessionIds = useMemo(
+    () => waveBoardSessionIds(shownCrews, rows),
+    [shownCrews, rows],
+  )
+  const sessionKey = useSessionStore(
+    useCallback(
+      (state) => waveBoardSessionKey(state.globalSessions, sessionIds),
+      [sessionIds],
+    ),
+  )
   const sessionsById = useMemo(
-    () => new Map(sessions.map((session) => [session.id, session])),
-    [sessions],
+    () => waveBoardSessionsFromKey(sessionKey),
+    [sessionKey],
+  )
+  const findSession = useCallback(
+    (sessionId: string) =>
+      useSessionStore
+        .getState()
+        .globalSessions.find((session) => session.id === sessionId) ?? null,
+    [],
   )
   const resolveRow = useCallback(
     (entry: WorkLedgerEntry) =>
-      resolveWaveRow(entry, (id) => sessionsById.get(id) ?? null),
-    [sessionsById],
-  )
-  const findSession = useCallback(
-    (sessionId: string) => sessionsById.get(sessionId) ?? null,
-    [sessionsById],
+      // Presence is a subscribed fact. The detail only carries the summary
+      // to its Open action; its displayed words come from the row/horse.
+      resolveWaveRow(entry, (id) =>
+        sessionsById.has(id) ? findSession(id) : null,
+      ),
+    [sessionsById, findSession],
   )
   const lastOkAtOf = useCallback(
     (crewId: string) => snapshots[crewId]?.trackerHealth?.lastOkAt ?? null,
@@ -321,10 +340,6 @@ export function useWaveBoard(query: string | null): WaveBoard {
       return endpoint ? executionHostEndpointDisplayName(endpoint) : hostId
     },
     [endpoints],
-  )
-  const shownCrews = useMemo(
-    () => crews.filter((crew) => shownCrewIds.includes(crew.id)),
-    [crews, shownCrewIds],
   )
   // From the UNFILTERED sheets (MAR-3234 R4): "held" stays true of a horse
   // whose issue the search does not match; only the cards are filtered.

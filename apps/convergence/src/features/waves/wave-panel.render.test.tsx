@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Profiler } from 'react'
+import * as waveBoardModel from './use-wave-board'
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { render } from './loom-tooltip.fixture'
 import { useAppSurfaceStore } from '@/entities/app-surface'
@@ -263,6 +265,114 @@ describe('MAR-3097: through the containers and the real stores', () => {
       render(ui)
     })
   }
+
+  describe('MAR-3379: Loom subscribes to the facts it shows', () => {
+    beforeEach(() => {
+      crews[0].members = [residentSeat('opus'), residentSeat('sol')]
+      useSessionStore.setState({
+        activeSessionId: null,
+        activeGlobalSessionId: null,
+        globalSessions: [
+          SESSION,
+          { ...SESSION, id: 'session-sol' },
+          { ...SESSION, id: 'unrelated' },
+        ],
+      })
+    })
+
+    it.each([
+      ['unrelated summaries', 'unrelated', { updatedAt: 'new' }, 30, 0],
+      ['seat updatedAt', SESSION.id, { updatedAt: 'new' }, 30, 0],
+      ['seat status', SESSION.id, { status: 'running' }, 1, 1],
+      ['seat attention', SESSION.id, { attention: 'host-unreachable' }, 1, 1],
+      [
+        'seat compacting activity',
+        SESSION.id,
+        { activity: 'compacting' },
+        1,
+        1,
+      ],
+    ] as const)(
+      'R1: %s commits only when shown facts change',
+      async (_name, id, patch, updates, expected) => {
+        // Profiler includes descendant-only and empty nested commits. Pair it
+        // with the real board hook to count commits that rendered the PANEL
+        // root, the S0 offender, without mocking any store or rendered child.
+        const renders = vi.spyOn(waveBoardModel, 'useWaveBoard')
+        let rendered = 0
+        const commits = vi.fn()
+        const allCommits = vi.fn(() => {
+          if (renders.mock.calls.length !== rendered) commits()
+          rendered = renders.mock.calls.length
+        })
+        await mount(
+          <Profiler id="loom" onRender={allCommits}>
+            <WavePanel />
+          </Profiler>,
+        )
+        commits.mockClear()
+        allCommits.mockClear()
+        for (let index = 0; index < updates; index++) {
+          act(() => {
+            useSessionStore.setState((state) => ({
+              globalSessions: state.globalSessions.map((session) =>
+                session.id === id
+                  ? { ...session, ...patch, updatedAt: String(index) }
+                  : session,
+              ),
+            }))
+          })
+        }
+        renders.mockRestore()
+        expect(commits).toHaveBeenCalledTimes(expected)
+        if (expected === 0) expect(allCommits).not.toHaveBeenCalled()
+        if ('activity' in patch)
+          expect(screen.getByText('Compacting context…')).toBeTruthy()
+      },
+    )
+
+    it('R3: a missing row session resolves when it arrives, and opens the latest summary', async () => {
+      const onOpen = vi.fn()
+      await mount(<WavePanel onOpenSession={onOpen} />)
+      fireEvent.click(document.querySelector('[data-wave-row="crew-1:EX-4"]')!)
+      expect(screen.getByText('conversation not loaded')).toBeTruthy()
+      const arrived = { ...SESSION, id: 'session-gone' }
+      await act(async () => {
+        useSessionStore.setState((state) => ({
+          globalSessions: [...state.globalSessions, arrived],
+        }))
+      })
+      const latest = { ...arrived, name: 'latest name', updatedAt: 'latest' }
+      await act(async () => {
+        useSessionStore.setState((state) => ({
+          globalSessions: state.globalSessions.map((session) =>
+            session.id === latest.id ? latest : session,
+          ),
+        }))
+      })
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Open conversation →' }),
+      )
+      expect(onOpen).toHaveBeenCalledWith(latest)
+    })
+
+    it('keeps the panel behind a memo boundary when all four mount props are stable', async () => {
+      const renders = vi.spyOn(waveBoardModel, 'useWaveBoard')
+      const props = {
+        onOpenSession: vi.fn(),
+        reservedWidth: RESERVED,
+        onExpandedChange: vi.fn(),
+        expandedContainer: document.createElement('div'),
+      }
+      const mounted = render(<WavePanel {...props} />)
+      await act(async () => {})
+      renders.mockClear()
+      mounted.rerender(<WavePanel {...props} />)
+      const calls = renders.mock.calls.length
+      renders.mockRestore()
+      expect(calls).toBe(0)
+    })
+  })
 
   it('MAR-3087 R5 only the open mastermind seat gets one Awaiting QA merge action', async () => {
     const entry = ledgerEntry({
