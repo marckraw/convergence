@@ -54,9 +54,9 @@ export interface AppendRelayHopInput {
    * Whether the message this hop carried led with the target seat's role card
    * (MAR-3083 R4). The ledger is the memory: the FACT outlives the process
    * that wrote it, and it is written after the send, so a delivery that threw
-   * leaves the card still owed. The run itself does not survive a restart --
-   * `takeFlowRunId` continues a run from memory, so a restart mints a new one
-   * and every per-run fact starts over (MAR-3108).
+   * leaves the card still owed. A settle naming the hop's receipt continues
+   * the recorded run and its card memory after engine memory is lost
+   * (MAR-3108); session-layer restart receipts follow in MAR-3344.
    */
   roleCardCarried?: boolean
 }
@@ -417,6 +417,20 @@ export class RelayService {
     return this.requireHopById(id)
   }
 
+  /** A duplicate settle still names the same run, even after consumption. */
+  findFlowRunIdByDispatchIds(dispatchIds: readonly string[]): string | null {
+    if (dispatchIds.length === 0) return null
+    const row = this.db
+      .prepare(
+        `SELECT flow_run_id FROM relay_hops
+       WHERE dispatch_id IN (${dispatchIds.map(() => '?').join(', ')})
+         AND redelivered_from IS NULL
+       ORDER BY fired_at ASC, rowid ASC LIMIT 1`,
+      )
+      .get(...dispatchIds) as { flow_run_id: string } | undefined
+    return row?.flow_run_id ?? null
+  }
+
   /**
    * Which station a dispatch landed in, and whose crew's wire carried it
    * (MAR-3085 R2): the trail from the settle's consumed receipts back to the
@@ -617,9 +631,9 @@ export class RelayService {
    * only proof it was carried, and it is written after the send. A card owed
    * is therefore a card no delivered hop in this run claims -- true after a
    * delivery that threw, true for a second wire into the same seat, and true
-   * in any process, because the fact is not in this one's memory. A run that
-   * begins after a restart is a NEW run and rightly introduces the seat again
-   * (MAR-3108).
+   * in any process when the settle names its receipt: both the run and the
+   * card fact live in the ledger (MAR-3108). Session-layer restart receipts
+   * follow in MAR-3344.
    */
   hasCarriedRoleCard(flowRunId: string, targetSessionId: string): boolean {
     // "Carried work" is `BUDGETED_OUTCOMES`, bound from its one owner rather

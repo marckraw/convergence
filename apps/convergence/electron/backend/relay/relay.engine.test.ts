@@ -440,6 +440,50 @@ describe('RelayEngine', () => {
     })
   }
 
+  describe('MAR-3108 recorded run recovery', () => {
+    it('continues duplicate receipts without restoring a consumed memory baton', async () => {
+      wire('s1', 's2')
+      wire('s2', 's1')
+      const gateway = createGateway({})
+      await createEngine(gateway).handleSettle(settled('s1'))
+      const first = hops.at(-1)!
+      const restarted = createEngine(gateway)
+      const lookup = vi.spyOn(relays, 'findFlowRunIdByDispatchIds')
+      try {
+        await restarted.handleSettle(
+          settled('s2', 'completed', false, [first.dispatchId!]),
+        )
+        expect(hops.at(-1)!.flowRunId).toBe(first.flowRunId)
+        await restarted.handleSettle(
+          settled('s2', 'completed', false, [first.dispatchId!]),
+        )
+        expect(hops.at(-1)!.flowRunId).toBe(first.flowRunId)
+        expect(lookup).toHaveBeenCalledTimes(2)
+        const fresh = hops.at(-1)!
+        await restarted.handleSettle(
+          settled('s1', 'completed', false, [fresh.dispatchId!]),
+        )
+        expect(hops.at(-1)!.flowRunId).toBe(first.flowRunId)
+        expect(lookup).toHaveBeenCalledTimes(2)
+      } finally {
+        lookup.mockRestore()
+      }
+    })
+
+    it('mints a new run when an empty settle names no receipt', async () => {
+      wire('s1', 's2')
+      wire('s2', 's1')
+      const gateway = createGateway({})
+      await createEngine(gateway).handleSettle(settled('s1'))
+      const first = hops.at(-1)!
+      relays.markStationSettled('s2', 'completed', new Date().toISOString(), [
+        first.dispatchId!,
+      ])
+      await createEngine(gateway).handleSettle(settled('s2'))
+      expect(hops.at(-1)!.flowRunId).not.toBe(first.flowRunId)
+    })
+  })
+
   it.each(['gone', 'absent'] as const)(
     'MAR-3254 R2 disarms a wire with a %s target after one error across two settles',
     async (target) => {
@@ -3776,11 +3820,8 @@ describe('RelayEngine', () => {
      * the same answer, so nothing about a card depends on one process staying
      * alive.
      *
-     * The boundary, measured and reported: a run does NOT survive a restart
-     * either. `takeFlowRunId` continues a run from the in-memory baton map, so
-     * the settle after a restart mints a NEW run id — and a fresh run is
-     * rightly a fresh introduction. Keying the card on the run is correct; the
-     * restart case is the run's to fix, not the card's.
+     * MAR-3108: the hop receipt also continues the run after a restart, so
+     * the next delivery reads the card fact under the same run id.
      */
     it('keeps the card fact in the record, where another engine can read it', async () => {
       seatsBySession.s2 = {
@@ -3807,6 +3848,27 @@ describe('RelayEngine', () => {
       expect(
         new RelayService(db).hasCarriedRoleCard(carried.flowRunId, 's3'),
       ).toBe(false)
+
+      wire('s2', 's1')
+      const restarted = createEngine(gateway)
+      await restarted.handleSettle(settleCarried(gateway, 's2'))
+      expect.soft(hops.at(-1)!.flowRunId).toBe(carried.flowRunId)
+      expect
+        .soft(relays.countBudgetedHopsInCrew('c1', hops.at(-1)!.flowRunId))
+        .toBe(2)
+      await restarted.handleSettle(settleCarried(gateway, 's1'))
+      expect.soft(hops.at(-1)).toMatchObject({
+        flowRunId: carried.flowRunId,
+        lapNumber: 2,
+      })
+      expect
+        .soft(
+          db
+            .prepare('SELECT role_card_carried FROM relay_hops WHERE id = ?')
+            .get(hops.at(-1)!.id),
+        )
+        .toEqual({ role_card_carried: 0 })
+      expect.soft(gateway.sent.at(-1)!.text).toBe('lap one')
     })
 
     /**

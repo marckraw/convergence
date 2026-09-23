@@ -536,13 +536,13 @@ export class RelayEngine {
   }
 
   /**
-   * The run a settling session's wires belong to: the run of the OLDEST
-   * baton this settle names, every named baton consumed -- or a brand new
-   * run when it names none.
-   *
-   * A held baton this settle does not name is PRESERVED, not spent: the beat
-   * that just ended is some other work (a turn that was already running, a
-   * turn the user typed), and the run is still waiting on its own settle.
+   * Continue from memory, then the hop record by dispatch id, otherwise mint.
+   * The oldest named receipt wins, in memory or on the record.
+   * Every named memory baton is consumed;
+   * unnamed batons stay owed, and duplicate named receipts retain their run.
+   * An empty settle mints today because session-layer receipts are memory-only;
+   * MAR-3344 makes them durable so this path can continue across an app restart
+   * without another engine change.
    */
   private takeFlowRunId(dispatchIds: readonly string[]): string {
     let continued: string | null = null
@@ -551,7 +551,10 @@ export class RelayEngine {
       this.batons.delete(dispatchId)
       continued ??= flowRunId
     }
-    return continued ?? randomUUID()
+    if (continued !== null) return continued
+    const recorded = this.relays.findFlowRunIdByDispatchIds(dispatchIds)
+    if (recorded !== null) return recorded
+    return randomUUID()
   }
 
   /**
@@ -1242,9 +1245,9 @@ export class RelayEngine {
     // this run. Asked of the record rather than of this process's memory: a
     // send that threw leaves the card owed for the retry, a second wire into
     // the same seat in the same run carries the payload alone, and nothing
-    // depends on one engine instance staying alive. A run that begins after a
-    // restart is a new run and introduces the seat again -- the run id lives
-    // in memory, which is MAR-3108, not this.
+    // depends on one engine instance staying alive. A settle naming the hop receipt
+    // continues the recorded run after memory is lost (MAR-3108), retaining
+    // its card fact; session-layer restart receipts follow in MAR-3344.
     const carriesCard =
       relay.action === 'hail' &&
       roleCard !== null &&
