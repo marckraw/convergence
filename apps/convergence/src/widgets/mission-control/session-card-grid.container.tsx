@@ -1,5 +1,6 @@
 import { Fragment, useLayoutEffect, useRef, useState } from 'react'
 import type { FC } from 'react'
+import { useSessionStore } from '@/entities/session'
 import { useSessionRelayStore } from '@/entities/session-relay'
 import {
   SessionCardView,
@@ -38,6 +39,10 @@ export const SessionCardGrid: FC<SessionCardGridProps> = ({
   // Subscribed to the stable wire list and narrowed per card below: a selector
   // that filtered inside the subscription would spin zustand.
   const relays = useSessionRelayStore((state) => state.relays)
+  // The conversation open in the main view, marked on its card so the room
+  // says which one is yours (MAR-3321). Read here rather than handed down, so
+  // every grid marks it without each caller remembering to.
+  const activeSessionId = useSessionStore((state) => state.activeSessionId)
 
   // Read from the live card list, so a Hail left open while its Session
   // changes state shows the new state rather than the one it opened on.
@@ -84,6 +89,7 @@ export const SessionCardGrid: FC<SessionCardGridProps> = ({
         <Fragment key={card.session.id}>
           <SessionCardView
             card={card}
+            open={card.session.id === activeSessionId}
             hailOpen={card.session.id === hailSessionId}
             wireHint={buildSessionWireHint(relays, card.session.id)}
             crewAction={

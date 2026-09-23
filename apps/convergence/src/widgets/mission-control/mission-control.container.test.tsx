@@ -585,6 +585,59 @@ describe('MissionControl', () => {
     expect(onOpenSession).not.toHaveBeenCalled()
   })
 
+  describe('the card of the conversation open on screen (MAR-3321)', () => {
+    function cardOf(name: string): HTMLElement {
+      const card = screen
+        .getByLabelText(`Open ${name}`)
+        .closest<HTMLElement>('[data-session-card]')
+      if (!card) throw new Error(`no card rendered for ${name}`)
+      return card
+    }
+
+    function seedTwo() {
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Wire the room' }),
+          makeSession({ id: 'b', name: 'Fix the tunnel' }),
+        ],
+        [CLAUDE_CODE],
+      )
+    }
+
+    it('marks the active session, follows it, and marks none when none is open', async () => {
+      seedTwo()
+      useSessionStore.setState({ activeSessionId: 'b' })
+
+      render(<MissionControl />)
+      await screen.findByText('Wire the room')
+
+      expect(cardOf('Fix the tunnel')).toHaveAttribute('aria-current', 'true')
+      expect(cardOf('Wire the room')).not.toHaveAttribute('aria-current')
+
+      act(() => useSessionStore.setState({ activeSessionId: 'a' }))
+      expect(cardOf('Wire the room')).toHaveAttribute('aria-current', 'true')
+      expect(cardOf('Fix the tunnel')).not.toHaveAttribute('aria-current')
+
+      act(() => useSessionStore.setState({ activeSessionId: null }))
+      expect(cardOf('Wire the room')).not.toHaveAttribute('aria-current')
+      expect(cardOf('Fix the tunnel')).not.toHaveAttribute('aria-current')
+    })
+
+    it('keeps the open mark on the active card when another card is hailed', async () => {
+      seedTwo()
+      useSessionStore.setState({ activeSessionId: 'b' })
+
+      render(<MissionControl />)
+      fireEvent.click(await screen.findByLabelText('Hail Wire the room'))
+      expect(await screen.findByTestId('composer')).toBeInTheDocument()
+
+      expect(cardOf('Fix the tunnel')).toHaveAttribute('aria-current', 'true')
+      expect(cardOf('Wire the room')).not.toHaveAttribute('aria-current')
+
+      act(() => useSessionStore.setState({ activeSessionId: null }))
+    })
+  })
+
   describe('the crew filter dimension', () => {
     it('narrows the flat room to a crew and back', async () => {
       seedCrews([
