@@ -260,3 +260,32 @@ it('renders the chooser on a create role that offers a baton holder (mutation: g
   fireEvent.change(select, { target: { value: 'session-0' } })
   expect(choice).toHaveBeenCalledWith('horse', 'session-0')
 })
+
+it('shows the Tracker row with the binding it will write (MAR-3211; mutation: leave the tracker out of the rows)', () => {
+  render(
+    <CrewImportView
+      plan={{
+        ...plan,
+        tracker: {
+          ...row('tracker', 'create'),
+          label: 'Tracker',
+          detail: 'bind to convergence (needs key to verify)',
+        },
+      }}
+      decisions={decisions}
+      busy={false}
+      error={null}
+      report={null}
+      onClose={() => {}}
+      onApply={() => {}}
+      onChoice={() => {}}
+      onUpdate={() => {}}
+      onIncludeLayout={() => {}}
+      onChooseFolder={() => {}}
+    />,
+  )
+  const tracker = screen.getByRole('rowheader', { name: 'Tracker' })
+  expect(tracker.closest('tr')!.textContent).toBe(
+    'Trackerwill createbind to convergence (needs key to verify)',
+  )
+})

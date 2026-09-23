@@ -18,8 +18,11 @@ import { readCrewConfig } from './crew-config.pure'
 import {
   planCrewImport,
   crewImportRelayFields,
+  crewTrackerBindingInput,
+  crewTrackerCheck,
   normalizedRoleReference,
   modelUpdateOffered,
+  type CrewTrackerCheck,
 } from './crew-import.pure'
 import type {
   CrewImportWorld,
@@ -27,7 +30,7 @@ import type {
   CrewImportDecisions,
   CrewImportReport,
 } from './crew-import.types'
-import type { CrewConfig } from './crew-config.types'
+import type { CrewConfig, CrewTrackerLookup } from './crew-config.types'
 
 /** Application service: commit the synchronous reconciliation before asking the session service for guarded model changes. */
 export class CrewImportService {
@@ -36,6 +39,12 @@ export class CrewImportService {
     private sessions: SessionService,
     private crews: CrewService,
     private relays: RelayService,
+    /**
+     * The crew's own key, asked by id (MAR-3211). It can only look: the import
+     * holds no door that writes a key. Absent, nothing is asked and a tracker
+     * row reads "needs key to verify".
+     */
+    private lookupTracker: CrewTrackerLookup = async () => null,
   ) {}
   async plan(
     path: string,
@@ -68,6 +77,7 @@ export class CrewImportService {
     const keys = new Set([
       'crew',
       'limits',
+      ...(plan.tracker ? [plan.tracker.key] : []),
       ...plan.roles.map((r) => r.key),
       ...plan.wires.map((r) => r.key),
     ])
@@ -298,6 +308,38 @@ export class CrewImportService {
           ? 'kept'
           : 'bound',
     })
+    // The binding, never the key (MAR-3211 R3): the crew reads `needs key`
+    // until a person sets one in Mission Control. A project the key could not
+    // see is skipped, and nothing above is undone for it.
+    if (plan.tracker && config.tracker) {
+      const tracker = plan.tracker
+      const write =
+        tracker.state === 'create' ||
+        (tracker.state === 'differs' &&
+          decisions.updates[tracker.key] !== false)
+      if (write) {
+        this.crews.setTrackerBinding(
+          crew.id,
+          crewTrackerBindingInput(config.tracker),
+        )
+        changed = true
+      }
+      entries.push({
+        key: tracker.key,
+        label: tracker.label,
+        outcome:
+          tracker.state === 'create'
+            ? 'created'
+            : tracker.state === 'differs'
+              ? write
+                ? 'updated'
+                : 'kept'
+              : tracker.state === 'skipped'
+                ? 'not updated'
+                : 'bound',
+        ...(tracker.state === 'existing' ? {} : { reason: tracker.detail }),
+      })
+    }
     for (const kept of plan.kept)
       entries.push({ key: kept.key, label: kept.label, outcome: 'kept' })
     this.crews.stampConfig(crew.id, plan.path, hash)
@@ -320,7 +362,15 @@ export class CrewImportService {
     const result = readCrewConfig(text)
     if (!result.ok) throw new Error(result.reason)
     const world = await this.world()
-    const plan = planCrewImport(result.config, world, choices, updates)
+    const unchecked = planCrewImport(result.config, world, choices, updates)
+    const trackerCheck = await this.checkTracker(
+      result.config,
+      unchecked.crew.id,
+      unchecked.tracker?.state,
+    )
+    const plan = trackerCheck
+      ? planCrewImport(result.config, world, choices, updates, trackerCheck)
+      : unchecked
     const hash = digest(text)
     return {
       config: result.config,
@@ -331,6 +381,32 @@ export class CrewImportService {
         path: absolutePath,
         revision: importRevision(absolutePath, hash, world),
       },
+    }
+  }
+  /**
+   * Asks the crew's own key about the file's project (MAR-3211). Only a crew
+   * that exists can have a key, and a binding already equal to the file needs
+   * no question. A lookup that throws learned nothing, and says so.
+   *
+   * Deliberately outside the plan's revision: it is the tracker's answer, not
+   * a local record, and Apply asks again rather than trusting the preview.
+   */
+  private async checkTracker(
+    config: CrewConfig,
+    crewId: string | null,
+    state: string | undefined,
+  ): Promise<CrewTrackerCheck | null> {
+    if (!config.tracker || !crewId || state === 'existing') return null
+    try {
+      return crewTrackerCheck(
+        await this.lookupTracker(crewId, config.tracker.project),
+        config.tracker.project,
+      )
+    } catch (error) {
+      return {
+        kind: 'unverified',
+        message: error instanceof Error ? error.message : String(error),
+      }
     }
   }
   private async world(): Promise<CrewImportWorld> {

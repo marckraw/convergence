@@ -1,10 +1,20 @@
+import { isDeepStrictEqual } from 'node:util'
 import { normalizeCrewBatonName } from './crew.pure'
 import { normalizeOriginKey } from '@mrck-labs/execution-host-protocol'
 import type {
   CrewConfig,
   CrewConfigRole,
+  CrewConfigTracker,
   CrewConfigWire,
 } from './crew-config.types'
+import {
+  normalizeTrackerBinding,
+  sameTrackerProjectId,
+} from '../tracker/tracker-binding.pure'
+import type {
+  TrackerBinding,
+  TrackerProjectResolution,
+} from '../tracker/tracker.types'
 import type { CrewImportWorld, CrewImportPlan } from './crew-import.types'
 import {
   normalizeRelaySpawnSpec,
@@ -25,6 +35,7 @@ export function planCrewImport(
   world: CrewImportWorld,
   choices: Record<string, string> = {},
   updates: Record<string, boolean> = {},
+  trackerCheck: CrewTrackerCheck = { kind: 'no-key' },
 ): CrewImportPlan {
   const crews = world.crews.filter((c) => c.name === config.crew)
   const crew = choices.crew
@@ -471,10 +482,115 @@ export function planCrewImport(
     roles,
     wires,
     limits,
+    ...(config.tracker
+      ? { tracker: planTrackerRow(config.tracker, crew, trackerCheck) }
+      : {}),
     kept,
     hasLayout: !!config.layout,
     canApply: [crewRow, ...roles, ...wires].every((r) => !blocked(r)),
   }
+}
+/**
+ * What the crew's own key said about the file's project (MAR-3211, ruling A).
+ *
+ * `no-key` is nothing asked -- a crew being created has no key yet, because
+ * the key is filed under a crew id that does not exist. `verified` is the
+ * watcher's law: the tracker answered WITH the file's id. `not-visible` is the
+ * key answering without it. `unverified` is the tracker not answering at all
+ * (offline, rate-limited, a refused key): nothing was learned about the
+ * project, so nothing is concluded about it either.
+ */
+export type CrewTrackerCheck =
+  | { kind: 'no-key' }
+  | { kind: 'verified'; name: string }
+  | { kind: 'not-visible' }
+  | { kind: 'unverified'; message: string }
+
+/** Reads a lookup the way the watcher reads its tick: the id must come back. */
+export function crewTrackerCheck(
+  resolution: TrackerProjectResolution | null,
+  projectId: string,
+): CrewTrackerCheck {
+  if (resolution === null) return { kind: 'no-key' }
+  if (resolution.kind === 'refused')
+    return resolution.refusal.kind === 'project-not-visible'
+      ? { kind: 'not-visible' }
+      : { kind: 'unverified', message: resolution.refusal.message }
+  return resolution.kind === 'resolved' &&
+    sameTrackerProjectId(resolution.project.id, projectId)
+    ? { kind: 'verified', name: resolution.project.name }
+    : { kind: 'not-visible' }
+}
+
+/** The binding the file asks for, through the binding's own write door. */
+export function crewTrackerBindingInput(block: CrewConfigTracker) {
+  return {
+    kind: block.kind,
+    projectId: block.project,
+    labelPrefix: block.labelPrefix,
+    wavePrefix: block.wavePrefix,
+    statusMap: block.statusMap,
+    autoDispatch: block.autoDispatch,
+  }
+}
+
+/**
+ * The plan's Tracker row (MAR-3211 R3). It never blocks the import: a project
+ * the key cannot see is `skipped` and everything else still applies. The key
+ * is never part of it -- the row says when one is needed.
+ */
+function planTrackerRow(
+  block: CrewConfigTracker,
+  crew: CrewImportWorld['crews'][number] | undefined,
+  check: CrewTrackerCheck,
+): CrewImportRow {
+  const wanted = normalizeTrackerBinding(crewTrackerBindingInput(block))
+  const current = crew?.trackerBinding ?? null
+  // The name the file carries is shown, never trusted over the tracker's.
+  const shown =
+    check.kind === 'verified'
+      ? check.name
+      : (block.projectName ?? block.project)
+  const differences = current ? trackerDifferences(current, wanted) : []
+  if (current && differences.length === 0)
+    return {
+      ...row('tracker', 'Tracker', 'existing'),
+      detail: `already bound to ${shown}`,
+    }
+  if (check.kind === 'not-visible')
+    return {
+      ...row('tracker', 'Tracker', 'skipped'),
+      detail: 'project not visible — import continues without the binding',
+    }
+  const bind =
+    check.kind === 'verified'
+      ? `bind to ${shown}`
+      : check.kind === 'no-key'
+        ? `bind to ${shown} (needs key to verify)`
+        : `bind to ${shown} (not verified: ${check.message})`
+  if (!current) return { ...row('tracker', 'Tracker', 'create'), detail: bind }
+  return {
+    ...row('tracker', 'Tracker', 'differs'),
+    differences,
+    canUpdate: true,
+    detail: `differs: ${differences.join(', ')} — ${bind}`,
+  }
+}
+function trackerDifferences(
+  current: TrackerBinding,
+  wanted: TrackerBinding,
+): string[] {
+  return [
+    ...(sameTrackerProjectId(current.projectId, wanted.projectId)
+      ? []
+      : ['project']),
+    ...(current.labelPrefix !== wanted.labelPrefix ? ['labelPrefix'] : []),
+    ...(current.wavePrefix !== wanted.wavePrefix ? ['wavePrefix'] : []),
+    ...(isDeepStrictEqual(current.statusMap, wanted.statusMap)
+      ? []
+      : ['statusMap']),
+    ...(current.autoDispatch !== wanted.autoDispatch ? ['autoDispatch'] : []),
+  ]
 }
 function row(
   key: string,

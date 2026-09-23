@@ -7,9 +7,15 @@ import {
   liveProjects,
   liveRelays,
   liveSessions,
+  liveTrackerBinding,
 } from './crew-config.fixture'
 import type { CrewImportWorld } from './crew-import.types'
-import { planCrewImport, crewImportRelayFields } from './crew-import.pure'
+import type { CrewConfigTracker } from './crew-config.types'
+import {
+  planCrewImport,
+  crewImportRelayFields,
+  crewTrackerCheck,
+} from './crew-import.pure'
 const read = readCrewConfig(liveCrewYaml)
 if (!read.ok) throw new Error(read.reason)
 const config = read.config
@@ -945,5 +951,160 @@ describe('the create role offers the member that holds its baton (MAR-2918)', ()
 
     expect(role.state).toBe('create')
     expect(role.options).toEqual([])
+  })
+})
+
+describe('the Tracker row (MAR-3211)', () => {
+  const block = {
+    kind: 'linear' as const,
+    project: liveTrackerBinding.projectId,
+    projectName: 'convergence',
+    labelPrefix: 'horse:',
+    wavePrefix: 'wave:',
+    statusMap: liveTrackerBinding.statusMap,
+    autoDispatch: false,
+  }
+  const withBlock = (tracker: CrewConfigTracker = block) => ({
+    ...config,
+    tracker,
+  })
+  const newCrewWorld: CrewImportWorld = { ...world, crews: [] }
+  const trackerRow = (plan: ReturnType<typeof planCrewImport>) =>
+    plan.tracker && {
+      state: plan.tracker.state,
+      detail: plan.tracker.detail,
+      canUpdate: plan.tracker.canUpdate,
+    }
+
+  it('has no row when the file has no block (R1; mutation: always add the row)', () => {
+    expect(Object.hasOwn(planCrewImport(config, world), 'tracker')).toBe(false)
+  })
+
+  it('binds a new crew by id and says it needs a key: the name when the file has one, else the id (ruling A; mutation: drop the needs-key clause)', () => {
+    const idOnly: CrewConfigTracker = { ...block }
+    delete idOnly.projectName
+    expect([
+      trackerRow(planCrewImport(withBlock(), newCrewWorld)),
+      trackerRow(planCrewImport(withBlock(idOnly), newCrewWorld)),
+    ]).toEqual([
+      {
+        state: 'create',
+        detail: 'bind to convergence (needs key to verify)',
+        canUpdate: false,
+      },
+      {
+        state: 'create',
+        detail: `bind to ${liveTrackerBinding.projectId} (needs key to verify)`,
+        canUpdate: false,
+      },
+    ])
+  })
+
+  it('names the project as the tracker answered once the key verified the id (ruling A; mutation: show the file name over the tracker name)', () => {
+    expect(
+      trackerRow(
+        planCrewImport(
+          withBlock(),
+          world,
+          {},
+          {},
+          {
+            kind: 'verified',
+            name: 'Convergence',
+          },
+        ),
+      ),
+    ).toEqual({
+      state: 'create',
+      detail: 'bind to Convergence',
+      canUpdate: false,
+    })
+  })
+
+  it('skips a project the key cannot see, and the rest of the import still applies (R3; mutation: block the import on not-visible)', () => {
+    const plan = planCrewImport(
+      withBlock(),
+      world,
+      {},
+      {},
+      {
+        kind: 'not-visible',
+      },
+    )
+    expect({ row: trackerRow(plan), canApply: plan.canApply }).toEqual({
+      row: {
+        state: 'skipped',
+        detail: 'project not visible — import continues without the binding',
+        canUpdate: false,
+      },
+      canApply: true,
+    })
+  })
+
+  it('reads an equal binding as already bound, and a different one as an update to offer (mutation: compare the project id with case)', () => {
+    const boundWorld = (
+      binding: typeof liveTrackerBinding,
+    ): CrewImportWorld => ({
+      ...world,
+      crews: [{ ...world.crews[0]!, trackerBinding: binding }],
+    })
+    expect([
+      trackerRow(
+        planCrewImport(
+          withBlock(),
+          boundWorld({
+            ...liveTrackerBinding,
+            projectId: liveTrackerBinding.projectId.toUpperCase(),
+          }),
+        ),
+      ),
+      trackerRow(
+        planCrewImport(
+          withBlock(),
+          boundWorld({ ...liveTrackerBinding, wavePrefix: 'lap:' }),
+        ),
+      ),
+    ]).toEqual([
+      {
+        state: 'existing',
+        detail: 'already bound to convergence',
+        canUpdate: false,
+      },
+      {
+        state: 'differs',
+        detail:
+          'differs: wavePrefix — bind to convergence (needs key to verify)',
+        canUpdate: true,
+      },
+    ])
+  })
+
+  it('reads a lookup the way the watcher reads its tick: only the bound id verifies (mutation: trust any resolved project)', () => {
+    const id = liveTrackerBinding.projectId
+    const project = (projectId: string) => ({
+      kind: 'resolved' as const,
+      project: { id: projectId, name: 'Convergence', url: 'u' },
+    })
+    const refused = (kind: 'project-not-visible' | 'unreachable') => ({
+      kind: 'refused' as const,
+      refusal: { kind, message: `said ${kind}`, retryAt: null },
+    })
+    expect([
+      crewTrackerCheck(null, id),
+      crewTrackerCheck(project(id.toUpperCase()), id),
+      crewTrackerCheck(project('another-project'), id),
+      crewTrackerCheck({ kind: 'not-found' }, id),
+      crewTrackerCheck({ kind: 'ambiguous', candidates: [] }, id),
+      crewTrackerCheck(refused('project-not-visible'), id),
+      crewTrackerCheck(refused('unreachable'), id),
+    ]).toEqual([
+      { kind: 'no-key' },
+      { kind: 'verified', name: 'Convergence' },
+      { kind: 'not-visible' },
+      { kind: 'not-visible' },
+      { kind: 'not-visible' },
+      { kind: 'not-visible' },
+      { kind: 'unverified', message: 'said unreachable' },
+    ])
   })
 })

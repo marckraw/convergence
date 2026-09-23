@@ -11,6 +11,7 @@ import { CodexAccountHistoryService } from '../backend/provider-account/provider
 import { CrewImportService } from '../backend/crew/crew-import.service'
 import { registerCrewImportIpc } from '../backend/crew/crew-import.ipc'
 import { CrewExportService } from '../backend/crew/crew-export.service'
+import type { CrewTrackerLookup } from '../backend/crew/crew-config.types'
 import { registerCrewExportIpc } from '../backend/crew/crew-export.ipc'
 import {
   app,
@@ -789,12 +790,6 @@ async function startApp(): Promise<void> {
     db,
     forgetTrackerKey: (crewId) => trackerCredentials.deleteKey(crewId),
   })
-  registerCrewExportIpc(new CrewExportService(db), crewService)
-  registerCrewImportIpc(
-    new CrewImportService(db, sessionService, crewService, relayService),
-    crewService,
-    relayService,
-  )
   const crewHailService = new CrewHailService(db)
   // One ledger for the whole process (MAR-3085): the engine writes a lap the
   // moment a verdict settles and the watcher reads the same rows a minute
@@ -909,6 +904,29 @@ async function startApp(): Promise<void> {
     onRead: broadcastTrackerRead,
     broadcastOutside: broadcastTrackerOutside,
   })
+  // The crew file's doors look the bound project up with the crew's own key
+  // (MAR-3211): export writes its name beside the id, import verifies the id.
+  // Null is "this crew has no key" -- nothing was asked. Neither door can write
+  // a key.
+  const lookupCrewTracker: CrewTrackerLookup = async (crewId, projectId) =>
+    (await trackerCredentials.status(crewId)) === 'present'
+      ? trackerWatcher.resolveProject(crewId, projectId)
+      : null
+  registerCrewExportIpc(
+    new CrewExportService(db, lookupCrewTracker),
+    crewService,
+  )
+  registerCrewImportIpc(
+    new CrewImportService(
+      db,
+      sessionService,
+      crewService,
+      relayService,
+      lookupCrewTracker,
+    ),
+    crewService,
+    relayService,
+  )
   const relayEngine = new RelayEngine({
     relays: relayService,
     ledger: workLedgerService,

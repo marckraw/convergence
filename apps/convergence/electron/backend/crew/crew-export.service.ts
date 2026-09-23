@@ -13,7 +13,8 @@ import {
   crewHomeCandidates,
   crewExportSlug,
 } from './crew-config.pure'
-import type { CrewConfigSession } from './crew-config.types'
+import { crewTrackerCheck } from './crew-import.pure'
+import type { CrewConfigSession, CrewTrackerLookup } from './crew-config.types'
 
 export interface CrewExportOptions {
   includePositions?: boolean
@@ -36,7 +37,14 @@ export type ChooseCrewHome = (
 
 /** Facade for snapshotting a crew and writing its recipe; the serializer never sees IO. */
 export class CrewExportService {
-  constructor(private db: Database.Database) {}
+  constructor(
+    private db: Database.Database,
+    /**
+     * The crew's own key, asked by id, only to write the project's name
+     * beside the id (MAR-3211). Absent, the id travels alone.
+     */
+    private lookupTracker: CrewTrackerLookup = async () => null,
+  ) {}
   async export(
     crewId: string,
     options: CrewExportOptions,
@@ -106,15 +114,12 @@ export class CrewExportService {
             : await readGitOriginUrlAsync(project.repositoryPath),
         })),
     )
+    const trackerProjectName = await this.trackerProjectName(crew)
     const yaml = renderCrewYaml(
-      crewToConfig(
-        crew,
-        crew.members,
-        sessions,
-        exportProjects,
-        relays,
-        options,
-      ),
+      crewToConfig(crew, crew.members, sessions, exportProjects, relays, {
+        ...options,
+        trackerProjectName,
+      }),
       [
         ...uncarriedRecipeNotes(crew.members, relays),
         ...orphanSeatNotes(crew.members),
@@ -146,5 +151,27 @@ export class CrewExportService {
     })
     new CrewService(this.db).recordExportPath(crewId, path)
     return { path, yaml }
+  }
+
+  /**
+   * The bound project's name, only when the tracker answered with the bound
+   * id (the watcher's law). No key, a refusal, another project or a throw:
+   * null, and the file carries the id alone -- never an invented name.
+   */
+  private async trackerProjectName(crew: {
+    id: string
+    trackerBinding: { projectId: string } | null
+  }): Promise<string | null> {
+    if (!crew.trackerBinding) return null
+    const projectId = crew.trackerBinding.projectId
+    try {
+      const check = crewTrackerCheck(
+        await this.lookupTracker(crew.id, projectId),
+        projectId,
+      )
+      return check.kind === 'verified' ? check.name : null
+    } catch {
+      return null
+    }
   }
 }

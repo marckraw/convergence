@@ -10,6 +10,8 @@ export type CrewImportState =
   | 'existing'
   | 'new'
   | 'kept'
+  /** Not applied, and the rest of the import goes on without it (MAR-3211). */
+  | 'skipped'
 export interface CrewImportRow {
   key: string
   label: string
@@ -42,6 +44,8 @@ export interface CrewImportPlan {
   roles: CrewImportRoleRow[]
   wires: CrewImportWireRow[]
   limits: CrewImportRow
+  /** Present exactly when the file carries a tracker block (MAR-3211). */
+  tracker?: CrewImportRow
   kept: CrewImportRow[]
   hasLayout: boolean
   canApply: boolean
