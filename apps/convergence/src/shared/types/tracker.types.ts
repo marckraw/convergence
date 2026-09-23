@@ -257,6 +257,7 @@ export type WorkLedgerVerdict = 'pass' | 'return' | 'stop'
 
 /** What else the tick saw, kept verbatim for a later reader. */
 export interface WorkLedgerFact {
+  merged?: { headSha: string; prNumber: number }
   logicalStatus: TrackerLogicalStatus | null
   branchName: string | null
   updatedAt: string | null

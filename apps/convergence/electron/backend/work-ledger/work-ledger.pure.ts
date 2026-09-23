@@ -154,6 +154,7 @@ function readFact(raw: string): WorkLedgerFact {
     const value = JSON.parse(raw) as Partial<WorkLedgerFact> | null
     return {
       ...FACT_DEFAULTS,
+      ...(value?.merged ? { merged: value.merged } : {}),
       logicalStatus: value?.logicalStatus ?? FACT_DEFAULTS.logicalStatus,
       branchName: value?.branchName ?? FACT_DEFAULTS.branchName,
       updatedAt: value?.updatedAt ?? FACT_DEFAULTS.updatedAt,

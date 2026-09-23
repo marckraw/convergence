@@ -1,3 +1,7 @@
+import type {
+  ReleaseSeat,
+  ReleaseMergeInput,
+} from '../../src/shared/types/release.types'
 import type { CrewImportDecisions } from '../../src/shared/types/crew-import.types'
 import type { SendSessionMessageInput } from '../../src/shared/types/electron-api'
 import type { SessionSendResult } from '../../src/shared/types/session-send.types'
@@ -220,6 +224,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeListener('tracker:read', handler)
       }
     },
+  },
+  release: {
+    plan: (input: ReleaseSeat) => ipcRenderer.invoke('release:plan', input),
+    merge: (input: ReleaseMergeInput) =>
+      ipcRenderer.invoke('release:merge', input),
+    acts: (crewId: string) => ipcRenderer.invoke('release:acts', crewId),
   },
   workLedger: {
     list: (crewId: string) => ipcRenderer.invoke('workLedger:list', crewId),

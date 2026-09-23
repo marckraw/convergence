@@ -2,6 +2,8 @@ node_modules/
 out/
 dist/
 release/
+!apps/convergence/electron/backend/release/
+!apps/convergence/src/entities/release/
 .fallow/
 
 # Build artifacts generated on demand (dev/build/typecheck/test all run

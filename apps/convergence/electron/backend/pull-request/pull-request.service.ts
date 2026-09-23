@@ -13,6 +13,7 @@ import type { WorkspacePullRequestRow } from '../database/database.types'
 import { GitService } from '../git/git.service'
 import {
   classifyGithubCliError,
+  parseMergeReading,
   parseGithubCliOpenPullRequests,
   parseGithubCliPullRequests,
   parseGithubRepositoryRef,
@@ -152,7 +153,54 @@ export class PullRequestService {
   constructor(
     private db: Database.Database,
     private git: GitService,
+    private readonly runGh: typeof execGh = execGh,
   ) {}
+
+  async viewForMerge(n: number, cwd: string) {
+    return parseMergeReading(
+      await this.runGh(
+        [
+          'pr',
+          'view',
+          String(n),
+          '--json',
+          'url,title,mergeStateStatus,headRefOid,statusCheckRollup,mergeCommit',
+        ],
+        cwd,
+      ),
+    )
+  }
+
+  async merge(n: number, sha: string, cwd: string): Promise<void> {
+    await this.runGh(
+      ['pr', 'merge', String(n), '--merge', '--match-head-commit', sha],
+      cwd,
+    )
+  }
+
+  async releaseRuns(
+    cwd: string,
+  ): Promise<Array<{ status: string; conclusion: string; headSha: string }>> {
+    const value: unknown = JSON.parse(
+      await this.runGh(
+        [
+          'run',
+          'list',
+          '--workflow',
+          'release-pr.yml',
+          '--branch',
+          'master',
+          '--limit',
+          '1',
+          '--json',
+          'status,conclusion,headSha',
+        ],
+        cwd,
+      ),
+    )
+    if (!Array.isArray(value)) throw new Error('Invalid changesets run reading')
+    return value
+  }
 
   getByWorkspaceId(workspaceId: string): WorkspacePullRequest | null {
     const row = this.db

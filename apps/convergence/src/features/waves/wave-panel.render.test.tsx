@@ -264,6 +264,57 @@ describe('MAR-3097: through the containers and the real stores', () => {
     })
   }
 
+  it('MAR-3087 R5 only the open mastermind seat gets one Awaiting QA merge action', async () => {
+    const entry = ledgerEntry({
+      issueIdentifier: 'MAR-3087',
+      state: 'reviewed',
+      pr: {
+        source: 'tracker',
+        number: 1,
+        url: 'https://github.com/example/repo/pull/1',
+        title: 'Reviewed PR',
+      },
+    })
+    crews[0].members = [residentSeat('opus', { role: 'mastermind' })]
+    snapshots['crew-1'].entries = [entry]
+    useAppSurfaceStore.setState({ activeSurface: 'code' })
+    useSessionStore.setState({ activeSessionId: SESSION.id })
+    try {
+      await mount(<WavePanel />)
+      expect(
+        screen.getAllByRole('button', { name: 'Merge reviewed…' }),
+      ).toHaveLength(1)
+      expect(
+        screen.getByRole('button', { name: 'Merge reviewed…' }),
+      ).toBeEnabled()
+      await act(async () => {
+        useWorkLedgerStore.setState({
+          snapshots: {
+            'crew-1': {
+              ...snapshots['crew-1'],
+              entries: [{ ...entry, pr: null }],
+            },
+          },
+        })
+      })
+      expect(
+        screen.getByRole('button', { name: 'Merge reviewed…' }),
+      ).toBeDisabled()
+      await act(async () => {
+        useSessionCrewStore.setState({
+          crews: [
+            { ...crews[0], members: [residentSeat('opus', { role: 'horse' })] },
+          ],
+        })
+      })
+      expect(
+        screen.queryByRole('button', { name: 'Merge reviewed…' }),
+      ).toBeNull()
+    } finally {
+      useSessionStore.setState({ activeSessionId: null })
+    }
+  })
+
   it('MAR-3293 carries the selected crew plan through the real board and container into Next', async () => {
     setWindowWidth(1600)
     const entry = ledgerEntry({

@@ -221,6 +221,10 @@ export function formatCrewHailDetail(
   } = {},
 ): string {
   switch (reason) {
+    case 'release-failed':
+      return context.error
+        ? `The merge rite stopped: ${context.error}`
+        : 'The merge rite stopped; check the failed PR.'
     case 'terminal':
       return 'This station handed the work to you, so the loop parked here and no wire fired.'
     case 'unrouted':

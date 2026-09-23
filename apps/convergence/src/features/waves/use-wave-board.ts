@@ -49,6 +49,7 @@ export const LOOM_LOCAL_HOST_LABEL = 'This Mac'
  * MAR-3233 retired it.)
  */
 export interface WaveBoard {
+  mergeSeat: { crewId: string; sessionId: string } | null
   dispatchPlan: DispatchPlan | null
   /** How many crews read a tracker; zero means the column is not mounted. */
   boundCrewCount: number
@@ -342,7 +343,15 @@ export function useWaveBoard(query: string | null): WaveBoard {
     [horses, query],
   )
 
+  const mergeMember = shownCrews[0]?.members.find(
+    (member) =>
+      member.sessionId === openConversation && member.role === 'mastermind',
+  )
   return {
+    mergeSeat:
+      mergeMember?.sessionId && selectedCrewId
+        ? { crewId: selectedCrewId, sessionId: mergeMember.sessionId }
+        : null,
     dispatchPlan: selectedCrewId
       ? (snapshots[selectedCrewId]?.dispatchPlan ?? null)
       : null,

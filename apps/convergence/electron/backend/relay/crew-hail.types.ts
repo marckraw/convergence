@@ -33,6 +33,7 @@ export type CrewHailReason =
   | 'budget'
   | 'delivery-failed'
   | 'stall'
+  | 'release-failed'
 
 /** One call for Marcin, raised by the engine and cleared by his hand. */
 export interface CrewHail {

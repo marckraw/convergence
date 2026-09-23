@@ -1,4 +1,10 @@
 import type {
+  ReleaseSeat,
+  ReleaseMergeInput,
+  ReleasePlan,
+  ReleaseProgress,
+} from './release.types'
+import type {
   TrackerBinding,
   TrackerCredentialStatus,
   TrackerOutsideSnapshot,
@@ -1947,6 +1953,11 @@ interface ElectronAPI {
     onOutsideUpdated: (
       callback: (snapshot: TrackerOutsideSnapshot) => void,
     ) => () => void
+  }
+  release: {
+    plan: (input: ReleaseSeat) => Promise<ReleasePlan>
+    merge: (input: ReleaseMergeInput) => Promise<ReleaseProgress>
+    acts: (crewId: string) => Promise<ReleaseProgress>
   }
   workLedger: {
     list: (crewId: string) => Promise<WorkLedgerSnapshot>
