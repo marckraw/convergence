@@ -1,6 +1,9 @@
 import { expect, it } from 'vitest'
 import { cardContext, cardSession } from './needs-you-card.fixture'
-import { needsYouCardModel } from './needs-you-card.pure'
+import {
+  needsYouCardModel,
+  type NeedsYouCardModel,
+} from './needs-you-card.pure'
 import { foldCardState, foldedSectionSummary } from './needs-you-fold.pure'
 
 const now = cardContext.now
@@ -95,9 +98,9 @@ it('MAR-3366 R4 folded Review counts its PRs, and says nothing without one', () 
       finished('yy', true),
       finished('z'),
     ]).line,
-  ).toBe('2 PRs')
+  ).toBe('2 PRs · 2 ready for review')
   expect(foldedSectionSummary('Review', [finished('x', true)]).line).toBe(
-    '1 PR',
+    '1 PR · 1 ready for review',
   )
   expect(foldedSectionSummary('Review', [finished('z')]).line).toBeNull()
 })
@@ -115,12 +118,16 @@ it('MAR-3366 R4 folded Needs attention and Pinned say their states in words', ()
     cardSession({ id: 'f', attention: 'failed', status: 'failed' }),
     cardContext,
   )
-  expect(
-    foldedSectionSummary('Needs attention', [waiting, approval]).line,
-  ).toBe('2 waiting on you')
-  expect(foldedSectionSummary('Needs attention', [waiting, failed]).line).toBe(
+  // MAR-3372 R4: waiting and failed are asks now — said once, by `asks`.
+  const attention = (cards: NeedsYouCardModel[]) => {
+    const summary = foldedSectionSummary('Needs attention', cards)
+    return [summary.line, summary.asks.map((ask) => ask.text).join(' · ')]
+  }
+  expect(attention([waiting, approval])).toEqual([null, '2 waiting on you'])
+  expect(attention([waiting, failed])).toEqual([
+    null,
     '1 waiting on you · 1 failed',
-  )
+  ])
   expect(
     foldedSectionSummary('Pinned', [running('p1', 4), finished('p2')]).line,
   ).toBe('1 working · 1 finished')
@@ -147,4 +154,96 @@ it('MAR-3366 R4 summarises only the cards it is given — the section, not the f
   const summary = foldedSectionSummary('Working', section)
   expect(summary.count).toBe(1)
   expect(summary.names).toEqual(['Horse a'])
+})
+
+const card = (
+  id: string,
+  overrides: Parameters<typeof cardSession>[0] = {},
+  projectName = cardContext.projectName,
+) =>
+  needsYouCardModel(cardSession({ id, name: id, ...overrides }), {
+    ...cardContext,
+    projectName,
+  })
+const reviewWith = (id: string, pullRequest: Record<string, unknown>) =>
+  card(id, {
+    attention: 'finished',
+    status: 'completed',
+    pullRequest: { ...pr, number: id.length, ...pullRequest },
+  } as Parameters<typeof cardSession>[0])
+
+it('MAR-3372 R2 folded Review counts its PRs by the card presentation state — mutation: count pr.state instead turns red', () => {
+  const cards = [
+    reviewWith('a', { reviewDecision: 'APPROVED' }),
+    reviewWith('bb', { reviewDecision: 'APPROVED' }),
+    reviewWith('ccc', { state: 'merged' }),
+  ]
+  expect(foldedSectionSummary('Review', cards).line).toBe(
+    '3 PRs · 2 approved · 1 merged',
+  )
+  // What still asks reads first, whatever order the cards arrive in.
+  expect(
+    foldedSectionSummary('Review', [
+      reviewWith('m', { state: 'merged' }),
+      reviewWith('cr', { reviewDecision: 'CHANGES_REQUESTED' }),
+      card('none', { attention: 'finished', status: 'completed' }),
+    ]).line,
+  ).toBe('2 PRs · 1 changes requested · 1 merged')
+  expect(
+    foldedSectionSummary('Review', [
+      card('none', { attention: 'finished', status: 'completed' }),
+    ]).line,
+  ).toBeNull()
+})
+
+it('MAR-3372 R3 a fold names its projects distinct, in section order, three then +N — mutation: drop the de-dup turns red', () => {
+  const cards = ['a', 'b', 'a', 'c', 'd', 'e'].map((project, index) =>
+    card(String(index), { status: 'running' }, project),
+  )
+  expect(foldedSectionSummary('Working', cards).projects).toEqual({
+    shown: ['a', 'b', 'c'],
+    more: 2,
+    text: 'a, b, c +2',
+  })
+  expect(
+    foldedSectionSummary('Working', [
+      card('1', {}, 'solo'),
+      card('2', {}, 'solo'),
+    ]).projects.text,
+  ).toBe('solo')
+  expect(foldedSectionSummary('Working', []).projects.text).toBeNull()
+})
+
+it('MAR-3372 R4 a fold says what asks, most urgent first, and never says a state twice — mutation: keep failed in the Pinned kind line turns red', () => {
+  const waiting = card('w', { attention: 'needs-input' })
+  const failed = card('f', { attention: 'failed', status: 'failed' })
+  const unreachable = card('u', {
+    attention: 'host-unreachable',
+    status: 'running',
+  })
+  const pinned = foldedSectionSummary('Pinned', [
+    failed,
+    running('r', 4),
+    unreachable,
+    waiting,
+    finished('d'),
+  ])
+  expect(pinned.asks).toEqual([
+    { state: 'waiting', count: 1, text: '1 waiting on you' },
+    { state: 'failed', count: 1, text: '1 failed' },
+    { state: 'unreachable', count: 1, text: '1 host unreachable' },
+  ])
+  expect(pinned.urgent).toBe('waiting')
+  expect(pinned.line).toBe('1 working · 1 finished')
+  const said = [...pinned.asks.map((ask) => ask.text), pinned.line!]
+    .join(' · ')
+    .split(' · ')
+    .map((part) => part.replace(/^\d+ /, ''))
+  expect(new Set(said).size).toBe(said.length)
+
+  const review = foldedSectionSummary('Review', [failed, finished('d')])
+  expect(review.asks.map((ask) => ask.text)).toEqual(['1 failed'])
+  expect(review.urgent).toBe('failed')
+  expect(foldedSectionSummary('Working', [running('r', 2)]).urgent).toBeNull()
+  expect(foldedSectionSummary('Working', [running('r', 2)]).asks).toEqual([])
 })

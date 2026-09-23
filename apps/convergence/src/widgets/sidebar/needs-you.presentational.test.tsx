@@ -7,6 +7,7 @@ import {
   needsYouCardModel,
 } from '@/features/needs-you'
 import { NeedsYou } from './needs-you.presentational'
+import { NeedsYouSection } from './needs-you-section.presentational'
 import type { SessionSummary } from '@/entities/session'
 it('renders feed groups once and routes selection (mutation: duplicate a pinned review)', () => {
   const session = {
@@ -185,7 +186,10 @@ it('MAR-3366 R4 a folded section shows count, one glyph per card and its line; a
     within(heading).getByRole('button', { name: 'Working' }),
   ).toHaveAttribute('aria-expanded', 'false')
   expect(heading.querySelectorAll('[data-fold-glyph]')).toHaveLength(4)
-  expect(heading).toHaveTextContent('longest 52m 0s')
+  // MAR-3372: the kind line moved from the title row to the second line.
+  expect(folded.querySelector('[data-fold-line]')).toHaveTextContent(
+    'longest 52m 0s',
+  )
   expect(heading).toHaveTextContent(/4$/)
   expect(
     within(heading).getByRole('img', {
@@ -256,4 +260,116 @@ it('MAR-3366 R6 a folded glyph carries its card state tone — mutation: the str
   expect(icon('failed')).not.toHaveClass(...cardStateTone.working.split(' '))
   expect(icon('working')).toHaveClass(...cardStateTone.working.split(' '))
   expect(icon('working')).not.toHaveClass(cardStateTone.failed)
+})
+
+function settled(
+  id: string,
+  projectName: string,
+  overrides: Partial<SessionSummary> = {},
+) {
+  return needsYouCardModel(
+    {
+      id,
+      name: `Conversation ${id}`,
+      providerId: 'codex',
+      model: 'm',
+      status: 'completed',
+      attention: 'finished',
+      updatedAt: '2026-09-12T12:00:00Z',
+      ...overrides,
+    } as SessionSummary,
+    { projectName, endpoints: [], now: liveNow },
+  )
+}
+const failedSettled = (id: string, projectName: string) =>
+  settled(id, projectName, { status: 'failed', attention: 'failed' })
+const toneClasses = (tone: string) => tone.split(' ')
+
+it('MAR-3372 R1 a folded section says its projects on a second line; open, there is none — mutation: render line 2 when unfolded turns red', () => {
+  const review = [settled('a', 'projA'), settled('b', 'projB')]
+  const { rerender } = render(
+    <NeedsYou
+      groups={[{ title: 'Review', cards: review }]}
+      foldedTitles={new Set(['Review'])}
+      {...feedProps}
+    />,
+    { wrapper: TooltipProvider },
+  )
+  const section = screen.getByRole('region', { name: 'Review' })
+  const line = section.querySelector('[data-fold-line]')
+  expect(line).toHaveTextContent(/^projA, projB$/)
+  // The second line is not part of the heading: the title row is unchanged.
+  expect(within(section).getByRole('heading')).not.toContainElement(
+    line as HTMLElement,
+  )
+  rerender(
+    <NeedsYou groups={[{ title: 'Review', cards: review }]} {...feedProps} />,
+  )
+  expect(
+    screen
+      .getByRole('region', { name: 'Review' })
+      .querySelector('[data-fold-line]'),
+  ).toBeNull()
+})
+
+it('MAR-3372 R1 a folded section with nothing to say draws no second line', () => {
+  render(<NeedsYouSection title="Review" cards={[]} folded {...feedProps} />, {
+    wrapper: TooltipProvider,
+  })
+  expect(
+    screen
+      .getByRole('region', { name: 'Review' })
+      .querySelector('[data-fold-line]'),
+  ).toBeNull()
+})
+
+it('MAR-3372 R4 a fold never hides an ask: line 2 opens with it in its tone and the title takes the most urgent tone — mutation: drop the title tone turns red', () => {
+  render(
+    <NeedsYou
+      groups={[
+        {
+          title: 'Review',
+          cards: [failedSettled('f', 'projA'), settled('d', 'projA')],
+        },
+        {
+          title: 'Pinned',
+          cards: [
+            failedSettled('pf', 'projB'),
+            settled('pw', 'projB', { attention: 'needs-input' }),
+          ],
+        },
+        { title: 'Working', cards: [runningCard('w', 3, 'codex')] },
+      ]}
+      foldedTitles={new Set(['Review', 'Pinned', 'Working'])}
+      {...feedProps}
+    />,
+    { wrapper: TooltipProvider },
+  )
+  const part = (title: string) => {
+    const section = screen.getByRole('region', { name: title })
+    return {
+      line: section.querySelector('[data-fold-line]')!,
+      title: section.querySelector('[data-section-title]')!,
+      heading: within(section).getByRole('heading'),
+    }
+  }
+
+  const review = part('Review')
+  expect(review.line).toHaveTextContent(/^1 failed · projA$/)
+  expect(review.line.firstElementChild).toHaveTextContent('1 failed')
+  expect(review.line.firstElementChild).toHaveClass(
+    ...toneClasses(cardStateTone.failed),
+  )
+  expect(review.title).toHaveClass(...toneClasses(cardStateTone.failed))
+
+  const pinned = part('Pinned')
+  expect(pinned.line).toHaveTextContent(/^1 waiting on you · 1 failed · projB$/)
+  expect(pinned.title).toHaveClass(...toneClasses(cardStateTone.waiting))
+  expect(pinned.title).not.toHaveClass(...toneClasses(cardStateTone.failed))
+
+  // Nothing asks: the title keeps the header's own colour.
+  const working = part('Working')
+  expect(working.line).toHaveTextContent(/^longest 3m 0s · Project$/)
+  expect(working.title.className).toBe('')
+  expect(working.heading).toHaveClass('text-muted-foreground')
 })
