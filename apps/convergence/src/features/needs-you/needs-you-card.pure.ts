@@ -14,6 +14,7 @@ import {
   parallelWorkStatus,
 } from '@/shared/lib/parallel-work.pure'
 import { needsYouTiming } from './needs-you-timing.pure'
+import { FEED_SECTIONS } from './needs-you-view.pure'
 
 export interface CardContext {
   projectName: string
@@ -116,14 +117,7 @@ export type NeedsYouCardModel = ReturnType<typeof needsYouCardModel>
 export function groupNeedsYou(
   cards: NeedsYouCardModel[],
 ): { title: string; cards: NeedsYouCardModel[] }[] {
-  const titles = [
-    'Pinned',
-    'Waiting on you',
-    'Needs review',
-    'Working',
-    'Errands with a PR',
-  ]
-  const groups = titles.map((title) => ({
+  const groups = FEED_SECTIONS.map(({ source: title }) => ({
     title,
     cards: [] as NeedsYouCardModel[],
   }))

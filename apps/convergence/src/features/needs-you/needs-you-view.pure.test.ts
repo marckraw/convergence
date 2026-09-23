@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import {
   cardContext,
@@ -12,6 +14,7 @@ import {
   holdFeedOrder,
   feedOrderKey,
   toggleFeedChoice,
+  FEED_SECTIONS,
 } from './needs-you-view.pure'
 
 const models = [
@@ -261,7 +264,8 @@ it('unions activity choices while intersecting host and provider choices', () =>
     hosts: ['remote'],
     providers: ['openai'],
   })
-  expect(ids(result)).toEqual(['working', 'finished'])
+  // Review renders above Working (MAR-3366 R1).
+  expect(ids(result)).toEqual(['finished', 'working'])
   expect(result).toMatchObject({
     shown: 2,
     hiddenPins: 1,
@@ -395,4 +399,42 @@ it('RUN77 lap4 zero-count answered says finishing — mutation claim Tasks runni
   const view = buildFeedView(groupNeedsYou([card]), defaultFeedView())
   expect(card.summary).toBe('answered · finishing')
   expect(view.groups[0].title).toBe('Working')
+})
+
+it('MAR-3366 R1 renders sections Pinned, Needs attention, Review, Working, Errands — mutation: swap Review and Working back turns red', () => {
+  const cards = [
+    cardFixtures.working,
+    cardFixtures.open,
+    cardFixtures.noPr,
+    cardFixtures.waiting,
+    cardFixtures.pinned,
+  ].map((session) => needsYouCardModel(session, cardContext))
+  const view = buildFeedView(groupNeedsYou(cards), defaultFeedView())
+  expect(view.groups.map((group) => group.title)).toEqual([
+    'Pinned',
+    'Needs attention',
+    'Review',
+    'Working',
+    'Errands with a PR',
+  ])
+  // The source groups `buildFeedView` re-buckets come out in the same order.
+  expect(groupNeedsYou(cards).map((group) => group.title)).toEqual(
+    FEED_SECTIONS.map((section) => section.source),
+  )
+})
+
+it('MAR-3366 R1 states the section order once — mutation: give groupNeedsYou its own title list turns red', () => {
+  const read = (file: string) => readFileSync(join(__dirname, file), 'utf8')
+  const sources = [
+    read('needs-you-view.pure.ts'),
+    read('needs-you-card.pure.ts'),
+  ]
+  const listLiterals = sources.flatMap(
+    (source) => source.match(/\[\s*'Pinned'\s*,/g) ?? [],
+  )
+  expect(listLiterals).toEqual([])
+  expect(
+    sources.join('\n').match(/export const FEED_SECTIONS = \[/g),
+  ).toHaveLength(1)
+  expect(read('needs-you-card.pure.ts')).toContain('FEED_SECTIONS.map(')
 })

@@ -12,6 +12,24 @@ export type ActivityView = (typeof activityViews)[number]
 export type ActivityFilter = Exclude<ActivityView, 'all'>
 export type FeedHost = 'local' | 'remote'
 export type FeedGroup = { title: string; cards: NeedsYouCardModel[] }
+
+/**
+ * The feed's one section order (MAR-3366 R1): Pinned, then what asks for
+ * Marcin, then what is ready for his review, then what is still running.
+ *
+ * `title` is the section the feed renders; `source` is the attention group
+ * `groupNeedsYou` collects the same cards under before `buildFeedView`
+ * re-buckets them. Both functions read this list, so the order is stated
+ * once and cannot drift between the two.
+ */
+export const FEED_SECTIONS = [
+  { title: 'Pinned', source: 'Pinned' },
+  { title: 'Needs attention', source: 'Waiting on you' },
+  { title: 'Review', source: 'Needs review' },
+  { title: 'Working', source: 'Working' },
+  { title: 'Errands with a PR', source: 'Errands with a PR' },
+] as const
+export type FeedSectionTitle = (typeof FEED_SECTIONS)[number]['title']
 export interface FeedView {
   version: 3
   activities: ActivityFilter[]
@@ -139,13 +157,7 @@ export function buildFeedView(source: FeedGroup[], view: FeedView) {
     bucket.push(card)
     buckets.set(title, bucket)
   }
-  const order = [
-    'Pinned',
-    'Needs attention',
-    'Working',
-    'Review',
-    'Errands with a PR',
-  ]
+  const order: readonly string[] = FEED_SECTIONS.map((section) => section.title)
   const rank = (title: string) =>
     order.includes(title) ? order.indexOf(title) : order.length
   const groups = [...buckets]

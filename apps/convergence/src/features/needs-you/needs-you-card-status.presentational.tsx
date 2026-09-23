@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
 import type { NeedsYouCardModel } from './needs-you-card.pure'
+import { cardStateTone } from './needs-you-card-state.styles'
 
 export function NeedsYouCardStatus({ card }: { card: NeedsYouCardModel }) {
   if (!card.summary) return null
@@ -39,10 +40,10 @@ export function NeedsYouCardStatus({ card }: { card: NeedsYouCardModel }) {
       <Icon
         aria-hidden="true"
         className={cn('size-3 shrink-0', {
-          'text-emerald-500': Icon === CircleCheck,
-          'text-warning-foreground': waiting,
-          'text-destructive': failed,
-          'animate-spin text-blue-600 dark:text-blue-400 motion-reduce:animate-none':
+          [cardStateTone.finished]: Icon === CircleCheck,
+          [cardStateTone.waiting]: waiting,
+          [cardStateTone.failed]: failed,
+          [`animate-spin ${cardStateTone.working} motion-reduce:animate-none`]:
             card.working,
         })}
       />
