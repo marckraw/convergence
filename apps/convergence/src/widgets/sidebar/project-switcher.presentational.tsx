@@ -4,7 +4,7 @@ import { SearchableSelect } from '@/shared/ui/searchable-select.container'
 import { FolderGit2, Plus } from 'lucide-react'
 
 interface ProjectSwitcherProps {
-  projects: Project[]
+  projects: readonly Project[]
   activeProjectId: string | null
   onSelectProject: (id: string) => void
   onCreateProject: () => void

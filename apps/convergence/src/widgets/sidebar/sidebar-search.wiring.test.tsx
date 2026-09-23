@@ -17,6 +17,7 @@ import {
   SidebarConversations,
   type SidebarConversationsProps,
 } from './sidebar-conversations.container'
+import { sidebarCards } from './sidebar-sessions.pure'
 
 beforeEach(() => localStorage.clear())
 
@@ -65,17 +66,24 @@ const noop = vi.fn()
 function conversationProps(
   overrides: Partial<SidebarConversationsProps> = {},
 ): SidebarConversationsProps {
+  // The root builds the cards once (MAR-3378 F1b); this harness stands in for
+  // it with the same derivation over the same list.
+  const globalSessions = overrides.globalSessions ?? []
+  const projects = overrides.projects ?? [activeProject]
   return {
     collapsed: false,
-    globalSessions: [],
+    globalSessions,
     sessions: [],
     headerStart: null,
     headerEnd: null,
-    projects: [activeProject],
+    projects,
     activeProject,
-    endpoints: [],
-    cardNow: Date.parse('2026-01-01T00:00:00.000Z'),
-    needsYouDismissals: {},
+    cards: sidebarCards(globalSessions, {
+      projects,
+      endpoints: [],
+      now: Date.parse('2026-01-01T00:00:00.000Z'),
+      dismissals: {},
+    }),
     activeSurface: 'code',
     activeSessionId: null,
     activeGlobalSessionId: null,

@@ -6,7 +6,7 @@ import { LOOM_NO_DRAG_STYLE } from '@/shared/ui/no-drag.styles'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
 interface TerminalIdleSectionProps {
-  notices: TerminalIdleNotice[]
+  notices: readonly TerminalIdleNotice[]
   onSelect: (notice: TerminalIdleNotice) => void | Promise<void>
   onDismiss: (terminalId: string) => void
 }

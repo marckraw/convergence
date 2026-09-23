@@ -5,8 +5,7 @@ import {
   normalizeNameQuery,
 } from '@/shared/lib/name-search.pure'
 import { isRemoteExecutionHost } from '@/entities/execution-host'
-import { useEffect, useState } from 'react'
-import type { FC } from 'react'
+import { memo, useEffect, useState } from 'react'
 import type { Workspace } from '@/entities/workspace'
 import type { WorkspacePullRequest } from '@/entities/pull-request'
 import type { SessionSummary } from '@/entities/session'
@@ -52,8 +51,8 @@ export const BRANCHES_STAY_OPEN_WHILE_YOU_SEARCH =
 interface ProjectTreeProps {
   cardContext: CardContext
   baseBranchName: string | null
-  workspaces: Workspace[]
-  sessions: SessionSummary[]
+  workspaces: readonly Workspace[]
+  sessions: readonly SessionSummary[]
   activeSessionId: string | null
   nameSearchQuery?: string
   pullRequestsByWorkspaceId?: Readonly<Record<string, WorkspacePullRequest>>
@@ -75,7 +74,7 @@ interface ProjectTreeProps {
   onOpenCreateWorkspace: () => void
 }
 
-export const ProjectTree: FC<ProjectTreeProps> = ({
+export const ProjectTree = memo(function ProjectTree({
   cardContext,
   baseBranchName,
   workspaces,
@@ -99,7 +98,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   onSyncWorkspaceEnvFiles,
   onDeleteWorkspace,
   onOpenCreateWorkspace,
-}) => {
+}: ProjectTreeProps) {
   const [internalExpanded, setInternalExpanded] = useState<Set<string>>(
     new Set(),
   )
@@ -697,4 +696,4 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
       ) : null}
     </div>
   )
-}
+})

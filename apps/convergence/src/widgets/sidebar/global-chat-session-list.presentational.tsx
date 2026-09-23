@@ -5,7 +5,7 @@ import {
   noConversationMatchesLine,
   normalizeNameQuery,
 } from '@/shared/lib/name-search.pure'
-import type { FC } from 'react'
+import { memo } from 'react'
 import type { SessionSummary } from '@/entities/session'
 import type { SpaceAttemptRole } from '@/entities/space'
 import { Button } from '@/shared/ui/button'
@@ -48,8 +48,8 @@ export interface ChatSidebarSpace {
 }
 
 interface GlobalChatSessionListProps {
-  spaces: ChatSidebarSpace[]
-  sessions: SessionSummary[]
+  spaces: readonly ChatSidebarSpace[]
+  sessions: readonly SessionSummary[]
   activeSessionId: string | null
   selectedSpaceId: string | null
   expandedSpaceIds: ReadonlySet<string>
@@ -89,7 +89,7 @@ function narrowChatSpace(
   return { ...space, attempts: matchingAttempts }
 }
 
-export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
+export const GlobalChatSessionList = memo(function GlobalChatSessionList({
   spaces,
   sessions,
   activeSessionId,
@@ -111,7 +111,7 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
   onArchiveSession,
   onUnarchiveSession,
   onDeleteSession,
-}) => {
+}: GlobalChatSessionListProps) {
   const searching = normalizeNameQuery(nameSearchQuery).length > 0
   const visibleSpaces = searching
     ? spaces
@@ -642,4 +642,4 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
       ) : null}
     </div>
   )
-}
+})

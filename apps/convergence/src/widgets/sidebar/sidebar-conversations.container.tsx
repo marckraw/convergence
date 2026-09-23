@@ -1,13 +1,13 @@
-import { useMemo, type FC, type ReactNode } from 'react'
+import { memo, useMemo, type ReactNode } from 'react'
 import type { Project } from '@/entities/project'
 import type { WorkspacePullRequest } from '@/entities/pull-request'
-import type { NeedsYouDismissals, SessionSummary } from '@/entities/session'
+import type { SessionSummary } from '@/entities/session'
 import type { TerminalIdleNotice } from '@/entities/terminal'
 import type { Workspace } from '@/entities/workspace'
 import {
   groupNeedsYou,
-  needsYouCardModel,
   type CardContext,
+  type NeedsYouCardModel,
 } from '@/features/needs-you'
 import type { AppSurface } from '@/shared/types/app-surface.types'
 import {
@@ -26,6 +26,11 @@ import { TerminalIdleSection } from './terminal-idle-section.presentational'
  * Takes the FULL session lists, narrows them once, then feeds Activity cards
  * and the project tree. The root must render this container — it cannot skip
  * the narrowing by wiring NeedsYou / ProjectTree itself.
+ *
+ * It builds no cards (MAR-3378 F1b R2): `cards` is the root's one derivation,
+ * one per `globalSessions` entry, and search only picks among them. The
+ * component is a `memo` boundary, so every prop must keep its identity until
+ * something it shows changes.
  */
 export interface SidebarConversationsProps {
   searchRequest?: number
@@ -36,9 +41,7 @@ export interface SidebarConversationsProps {
   headerEnd: ReactNode
   projects: readonly Project[]
   activeProject: Project | null
-  endpoints: readonly { id: string; label: string }[]
-  cardNow: number
-  needsYouDismissals: NeedsYouDismissals
+  cards: readonly NeedsYouCardModel[]
   activeSurface: AppSurface
   activeSessionId: string | null
   activeGlobalSessionId: string | null
@@ -89,7 +92,7 @@ export interface SidebarConversationsProps {
   onOpenCreateWorkspace: () => void
 }
 
-export const SidebarConversations: FC<SidebarConversationsProps> = ({
+export const SidebarConversations = memo(function SidebarConversations({
   collapsed,
   searchRequest = 0,
   globalSessions,
@@ -98,9 +101,7 @@ export const SidebarConversations: FC<SidebarConversationsProps> = ({
   headerEnd,
   projects,
   activeProject,
-  endpoints,
-  cardNow,
-  needsYouDismissals,
+  cards,
   activeSurface,
   activeSessionId,
   activeGlobalSessionId,
@@ -149,7 +150,7 @@ export const SidebarConversations: FC<SidebarConversationsProps> = ({
   onSyncWorkspaceEnvFiles,
   onDeleteWorkspace,
   onOpenCreateWorkspace,
-}) => {
+}: SidebarConversationsProps) {
   const search = useSidebarConversationSearch({
     globalSessions,
     sessions,
@@ -157,31 +158,15 @@ export const SidebarConversations: FC<SidebarConversationsProps> = ({
     searchRequest,
   })
 
-  const cardGroups = useMemo(
-    () =>
-      groupNeedsYou(
-        search.searchedGlobalSessions.map((session) =>
-          needsYouCardModel(session, {
-            projectName:
-              session.contextKind === 'global'
-                ? 'Convergence'
-                : (projects.find((project) => project.id === session.projectId)
-                    ?.name ?? 'Unknown project'),
-            endpoints,
-            now: cardNow,
-            dismissed:
-              needsYouDismissals[session.id]?.updatedAt === session.updatedAt,
-          }),
-        ),
-      ),
-    [
-      search.searchedGlobalSessions,
-      projects,
-      endpoints,
-      cardNow,
-      needsYouDismissals,
-    ],
-  )
+  const cardGroups = useMemo(() => {
+    if (search.searchedGlobalSessions.length === globalSessions.length) {
+      return groupNeedsYou(cards)
+    }
+    const searched = new Set(
+      search.searchedGlobalSessions.map((session) => session.id),
+    )
+    return groupNeedsYou(cards.filter((card) => searched.has(card.session.id)))
+  }, [cards, globalSessions.length, search.searchedGlobalSessions])
 
   return (
     <>
@@ -210,7 +195,7 @@ export const SidebarConversations: FC<SidebarConversationsProps> = ({
         />
 
         <TerminalIdleSection
-          notices={[...terminalIdleNotices]}
+          notices={terminalIdleNotices}
           onSelect={onSelectTerminalIdle}
           onDismiss={onDismissTerminalIdle}
         />
@@ -221,8 +206,8 @@ export const SidebarConversations: FC<SidebarConversationsProps> = ({
 
         {activeSurface === 'chat' ? (
           <GlobalChatSessionList
-            spaces={[...chatSpaces]}
-            sessions={[...ungroupedGlobalChatSessions]}
+            spaces={chatSpaces}
+            sessions={ungroupedGlobalChatSessions}
             nameSearchQuery={search.query}
             activeSessionId={activeGlobalSessionId}
             selectedSpaceId={selectedSpaceId}
@@ -247,7 +232,7 @@ export const SidebarConversations: FC<SidebarConversationsProps> = ({
           <>
             {projects.length > 0 && (
               <ProjectSwitcher
-                projects={[...projects]}
+                projects={projects}
                 activeProjectId={activeProject?.id ?? null}
                 onSelectProject={onSelectProject}
                 onCreateProject={onCreateProject}
@@ -258,7 +243,7 @@ export const SidebarConversations: FC<SidebarConversationsProps> = ({
               <ProjectTree
                 cardContext={cardContext}
                 baseBranchName={baseBranchName}
-                workspaces={[...workspaces]}
+                workspaces={workspaces}
                 sessions={search.searchedSessions}
                 nameSearchQuery={search.query}
                 activeSessionId={activeSessionId}
@@ -292,4 +277,4 @@ export const SidebarConversations: FC<SidebarConversationsProps> = ({
       </div>
     </>
   )
-}
+})
