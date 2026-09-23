@@ -48,6 +48,7 @@ it.each(['lm', 'local'])(
     render(
       <SessionCardView
         card={card}
+        open={false}
         hailOpen={false}
         onOpen={vi.fn()}
         onHail={vi.fn()}
@@ -73,6 +74,7 @@ it('RUN84 host-unreachable has its own state — mutation map to failed turns re
   render(
     <SessionCardView
       card={card}
+      open={false}
       hailOpen={false}
       onOpen={vi.fn()}
       onHail={vi.fn()}

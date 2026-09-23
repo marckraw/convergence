@@ -6,7 +6,12 @@ import type { SessionSummary } from '@/entities/session'
 import type { SessionCrew } from '@/entities/session-crew'
 import type { SessionCard } from './mission-control.types'
 import { SessionCardView } from './session-card.presentational'
-import { CARD_BREATHE } from './session-card.styles'
+import {
+  CARD_ATTENTION_STYLES,
+  CARD_BREATHE,
+  CARD_HAIL_OPEN_CLASS,
+  CARD_OPEN_CLASS,
+} from './session-card.styles'
 
 /**
  * The working card, rendered.
@@ -62,11 +67,15 @@ function makeCard(
   }
 }
 
-function renderCard(card: SessionCard): HTMLElement {
+function renderCard(
+  card: SessionCard,
+  marks: { open?: boolean; hailOpen?: boolean } = {},
+): HTMLElement {
   const { container } = render(
     <SessionCardView
       card={card}
-      hailOpen={false}
+      open={marks.open ?? false}
+      hailOpen={marks.hailOpen ?? false}
       onOpen={() => {}}
       onHail={() => {}}
     />,
@@ -98,6 +107,81 @@ describe('a working session card breathes', () => {
 
     expect(root.dataset.breathing).toBeUndefined()
     expect(root.style.getPropertyValue('--breathe-color')).toBe('')
+  })
+})
+
+/**
+ * The conversation on screen, marked on its card (MAR-3321).
+ *
+ * Two marks live on one card and must never be one: "this is the conversation
+ * you have open" (a bright ring standing off the card) and "this card's Hail is
+ * open" (a thin outline). Both can be true at once, and the attention frame
+ * must still read under either. The tests read the rendered class list and
+ * `aria-current`, because a mark the DOM does not carry is not on screen.
+ */
+function classesOf(root: HTMLElement): string[] {
+  return root.className.split(/\s+/).filter(Boolean)
+}
+
+function withAttention(
+  card: SessionCard,
+  attention: SessionSummary['attention'],
+): SessionCard {
+  return { ...card, session: { ...card.session, attention } }
+}
+
+describe('the card of the open conversation is marked', () => {
+  const OPEN = CARD_OPEN_CLASS.split(' ')
+  const HAIL = CARD_HAIL_OPEN_CLASS.split(' ')
+  // Pinned as written, not read from the constant: the open mark must stay a
+  // bright ring standing off the card. A quiet `ring-1 ring-ring` -- the old
+  // Hail mark -- is the failure this ticket was filed for.
+  const OPEN_RING = [
+    'ring-2',
+    'ring-foreground/70',
+    'ring-offset-2',
+    'ring-offset-background',
+  ]
+
+  it('wears the open ring, the lift and aria-current when it is on screen', () => {
+    const root = renderCard(makeCard('idle'), { open: true })
+
+    expect(classesOf(root)).toEqual(expect.arrayContaining(OPEN))
+    expect(classesOf(root)).toEqual(expect.arrayContaining(OPEN_RING))
+    expect(root.getAttribute('aria-current')).toBe('true')
+  })
+
+  it('wears neither the ring nor aria-current when it is not on screen', () => {
+    const root = renderCard(makeCard('idle'))
+    const classes = classesOf(root)
+
+    for (const token of OPEN) expect(classes).not.toContain(token)
+    expect(root.hasAttribute('aria-current')).toBe(false)
+  })
+
+  it('shows both marks when it is open and hailed, over its attention frame', () => {
+    const attention = CARD_ATTENTION_STYLES['needs-input'].split(' ')
+    const root = renderCard(withAttention(makeCard('idle'), 'needs-input'), {
+      open: true,
+      hailOpen: true,
+    })
+    const classes = classesOf(root)
+
+    // The ring and the outline are two properties, so both survive the merge.
+    expect(classes).toEqual(expect.arrayContaining(OPEN_RING))
+    expect(classes).toEqual(expect.arrayContaining(HAIL))
+    // Attention owns the frame, tint included: the open lift yields to it.
+    expect(classes).toEqual(expect.arrayContaining(attention))
+    expect(root.getAttribute('aria-current')).toBe('true')
+  })
+
+  it('marks a hailed card that is not on screen with the outline alone', () => {
+    const root = renderCard(makeCard('idle'), { hailOpen: true })
+    const classes = classesOf(root)
+
+    expect(classes).toEqual(expect.arrayContaining(HAIL))
+    for (const token of OPEN) expect(classes).not.toContain(token)
+    expect(root.hasAttribute('aria-current')).toBe(false)
   })
 })
 

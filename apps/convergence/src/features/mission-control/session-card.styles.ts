@@ -15,6 +15,24 @@ export const CARD_ATTENTION_STYLES: Record<AttentionState, string> = {
   none: 'border-white/10',
 }
 
+/**
+ * The card of the conversation open in the main view (MAR-3321). A bright ring
+ * standing 2px off the card, so it reads outside every attention frame rather
+ * than fighting it, plus a lift of the surface. The lift is a background, so it
+ * yields to an attention tint: the card places this before the attention
+ * styles and the frame's colour wins wherever attention has one.
+ */
+export const CARD_OPEN_CLASS =
+  'ring-2 ring-foreground/70 ring-offset-2 ring-offset-background bg-foreground/[0.06]'
+
+/**
+ * The card whose Hail is open. An outline, not a ring, so it is a different
+ * property from the open mark and both can show on one card. Tailwind v4's
+ * `outline-1` carries the outline style as well as the width.
+ */
+export const CARD_HAIL_OPEN_CLASS =
+  'outline-1 outline-ring outline-offset-[-1px]'
+
 export const ACTIVITY_TEXT_STYLES: Record<SessionStatus, string> = {
   running: 'text-foreground',
   idle: 'text-muted-foreground',

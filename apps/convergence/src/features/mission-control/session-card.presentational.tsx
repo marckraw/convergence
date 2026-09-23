@@ -18,11 +18,18 @@ import { buildCardBreatheStyle } from './session-card-breathe.pure'
 import {
   ACTIVITY_TEXT_STYLES,
   CARD_ATTENTION_STYLES,
+  CARD_HAIL_OPEN_CLASS,
+  CARD_OPEN_CLASS,
   STATUS_DOT_STYLES,
 } from './session-card.styles'
 
 interface SessionCardViewProps {
   card: SessionCard
+  /**
+   * True when this is the conversation open in the main view, so the room
+   * shows which card is yours (MAR-3321). Independent of `hailOpen`.
+   */
+  open: boolean
   /** True while this card's Hail is the one open, so the room shows which. */
   hailOpen: boolean
   /** The crew gesture, composed above so this file stays render-only. */
@@ -35,6 +42,7 @@ interface SessionCardViewProps {
 
 export const SessionCardView: FC<SessionCardViewProps> = ({
   card,
+  open,
   hailOpen,
   crewAction,
   wireHint,
@@ -52,6 +60,9 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
     <div
       // The room measures card positions to open a Hail under the right row.
       data-session-card
+      // The conversation on screen, in the semantics a nav marks its current
+      // item with.
+      aria-current={open ? 'true' : undefined}
       // A working card breathes in its crew's colour, so a glance across the
       // room says who is busy. The stylesheet owns the animation; the card
       // hands it the colour and the knobs. Absent entirely when not working.
@@ -59,8 +70,11 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
       style={buildCardBreatheStyle(running, card.crews)}
       className={cn(
         'group flex flex-col rounded-lg border bg-card/40 transition-colors',
+        // Before attention on purpose: the open mark's lift is a background,
+        // and attention owns the frame, tint included.
+        open && CARD_OPEN_CLASS,
         CARD_ATTENTION_STYLES[session.attention],
-        hailOpen && 'ring-1 ring-ring',
+        hailOpen && CARD_HAIL_OPEN_CLASS,
       )}
     >
       <div
