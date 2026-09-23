@@ -143,6 +143,24 @@ export function normalizeTrackerBinding(
   }
 }
 
+/**
+ * Whether two project ids are the same id, with the equality the far side
+ * used to answer (MAR-3169 lap 3, A).
+ *
+ * The form binds a typed UUID verbatim and the reference parser accepts one
+ * in upper case, while Linear answers with its own lower-case form. A strict
+ * `===` would call such a project invisible on its first quiet tick while it
+ * lists issues perfectly well. Comparing without case is safe either way: if
+ * Linear itself were case-sensitive, the lookup would already have answered
+ * `not-found` and the tick would refuse regardless.
+ *
+ * One rule for every reader that asks "is this the bound project": the
+ * watcher's tick and the crew file's import and export (MAR-3211).
+ */
+export function sameTrackerProjectId(a: string, b: string): boolean {
+  return a.toLowerCase() === b.toLowerCase()
+}
+
 /** Reads a stored status map; an unreadable one takes the defaults. */
 export function readTrackerStatusMap(
   raw: string | null | undefined,

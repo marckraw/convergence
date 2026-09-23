@@ -21,6 +21,7 @@ import {
   liveMembers,
   liveProjects,
   liveRelays,
+  liveTrackerBinding,
 } from './crew-config.fixture'
 import type { CrewConfig, CrewConfigSession } from './crew-config.types'
 
@@ -1404,5 +1405,226 @@ describe('an orphan seat at export', () => {
         [relay],
       ),
     ).toThrow('A wire endpoint is not in the crew')
+  })
+})
+
+describe('the tracker block (MAR-3211)', () => {
+  const bound = { ...liveCrew, trackerBinding: liveTrackerBinding }
+  const exportBound = (trackerProjectName: string | null) =>
+    renderCrewYaml(
+      crewToConfig(bound, liveMembers, liveSessions, liveProjects, liveRelays, {
+        trackerProjectName,
+      }),
+    )
+  const block = {
+    kind: 'linear',
+    project: liveTrackerBinding.projectId,
+    projectName: 'convergence',
+    labelPrefix: 'horse:',
+    wavePrefix: 'wave:',
+    statusMap: liveTrackerBinding.statusMap,
+    autoDispatch: false,
+  }
+  const without = (value: object, field: string) =>
+    Object.fromEntries(Object.entries(value).filter(([key]) => key !== field))
+  const withTracker = (tracker: unknown): string => {
+    const config = parse(liveCrewYaml)
+    config.tracker = tracker
+    return JSON.stringify(config)
+  }
+
+  it('round-trips a bound crew: the id, the name beside it, every stored field (R2; mutation: drop wavePrefix from the render)', () => {
+    const yaml = exportBound('convergence')
+    const read = readCrewConfig(yaml)
+    expect({
+      line: yaml.split('\n').find((line) => line.startsWith('tracker:')),
+      tracker: read.ok ? read.config.tracker : read.reason,
+    }).toEqual({
+      line: `tracker: { kind: "linear", project: "${liveTrackerBinding.projectId}", projectName: "convergence", labelPrefix: "horse:", wavePrefix: "wave:", statusMap: { Backlog: "backlog", Todo: "todo", "In Progress": "in-progress", "In Review": "in-review", Reviewed: "reviewed", Done: "done" }, autoDispatch: false }`,
+      tracker: block,
+    })
+  })
+
+  it('writes the id alone when no name was looked up, never an invented one (ruling A; mutation: fall back to a name)', () => {
+    const read = readCrewConfig(exportBound(null))
+    expect(read.ok && read.config.tracker).toEqual({
+      ...block,
+      projectName: undefined,
+    })
+    expect(read.ok && Object.hasOwn(read.config.tracker!, 'projectName')).toBe(
+      false,
+    )
+  })
+
+  it('writes no tracker line for an unbound crew, and reads such a file as before (R1, R5; mutation: always render the block)', () => {
+    const yaml = renderCrewYaml(
+      crewToConfig(
+        { ...liveCrew, trackerBinding: null },
+        liveMembers,
+        liveSessions,
+        liveProjects,
+        liveRelays,
+      ),
+    )
+    const read = readCrewConfig(yaml)
+    expect({
+      yaml,
+      hasTracker: read.ok && Object.hasOwn(read.config, 'tracker'),
+    }).toEqual({ yaml: liveCrewYaml, hasTracker: false })
+  })
+
+  it.each([
+    ['key', { ...block, key: 'anything' }, 'tracker.key'],
+    ['apiKey', { ...block, apiKey: 'anything' }, 'tracker.apiKey'],
+    ['token', { ...block, token: 'anything' }, 'tracker.token'],
+    [
+      'a lin_api_ value',
+      { ...block, projectName: 'lin_api_0123456789' },
+      'tracker.projectName',
+    ],
+  ])(
+    'refuses a key: %s (R4; mutations: allow unknown keys in the block; skip the value scan in both the file and the block)',
+    (_name, tracker, path) => {
+      expect(readCrewConfig(withTracker(tracker))).toEqual({
+        ok: false,
+        reason: `${path}: a crew file never carries a tracker key — set the key on this machine in Mission Control (tracker.key-forbidden)`,
+      })
+    },
+  )
+
+  it('refuses a key-shaped value wherever it sits in the block, and any other stray field (R4; mutations: skip the value scan in both the file and the block; allow unknown keys in the block)', () => {
+    expect(
+      [
+        { ...block, statusMap: { lin_api_x: 'todo' } },
+        { ...block, project: 'lin_api_0123456789' },
+        { ...block, secret: 'x' },
+        { ...block, notes: 'x' },
+      ].map((tracker) => {
+        const read = readCrewConfig(withTracker(tracker))
+        return read.ok ? 'accepted' : read.reason.split(': ')[0]
+      }),
+    ).toEqual([
+      'tracker.statusMap.lin_api_x',
+      'tracker.project',
+      'tracker.secret',
+      'tracker.notes',
+    ])
+    expect(readCrewConfig(withTracker({ ...block, notes: 'x' }))).toEqual({
+      ok: false,
+      reason: 'tracker.notes: unexpected field',
+    })
+  })
+
+  const keyLaw = (path: string) =>
+    `${path}: a crew file never carries a tracker key — set the key on this machine in Mission Control (tracker.key-forbidden)`
+  const withFile = (
+    edit: (config: ReturnType<typeof parse>) => void,
+  ): string => {
+    const config = parse(liveCrewYaml)
+    edit(config)
+    return JSON.stringify(config)
+  }
+  const keyInRoleCard = withFile((config) => {
+    config.roles['horse opus'].roleCard = 'lin_api_x'
+  })
+  const keyInInstruction = withFile((config) => {
+    config.wires[3].instruction = 'finished — the key is lin_api_0123456789'
+  })
+
+  it('refuses a key anywhere in the file, not only in the block: a role card, a wire instruction (R4′; mutation R4′-a: scope the scan back to the block)', () => {
+    expect([
+      readCrewConfig(keyInRoleCard),
+      readCrewConfig(keyInInstruction),
+    ]).toEqual([
+      { ok: false, reason: keyLaw('roles.horse opus.roleCard') },
+      { ok: false, reason: keyLaw('wires[3].instruction') },
+    ])
+  })
+
+  it('reaches every depth of the file: a spawn recipe inside a wire, a map key (R4′; mutation R4′-a: scope the scan back to the block)', () => {
+    const inSpawn = withFile((config) => {
+      config.wires[1].to = {
+        spawn: { name: 'x', roleCard: 'lin_api_x', returnWire: null },
+      }
+    })
+    const inRoleName = withFile((config) => {
+      config.roles.lin_api_x = config.roles['horse opus']
+    })
+    expect(
+      [inSpawn, inRoleName].map((file) => {
+        const read = readCrewConfig(file)
+        return read.ok ? 'accepted' : read.reason
+      }),
+    ).toEqual([keyLaw('wires[1].to.spawn.roleCard'), keyLaw('roles.lin_api_x')])
+  })
+
+  it('refuses a name with no id, saying the id is the binding (ruling A; mutation: accept a name-only file)', () => {
+    const nameOnly = without(block, 'project')
+    expect(readCrewConfig(withTracker(nameOnly))).toEqual({
+      ok: false,
+      reason:
+        'tracker.project: the project id is the binding — this file names the project but not its id, and projectName is only shown, never bound',
+    })
+  })
+
+  it('accepts only what the binding would store (mutation: skip the record-law comparison)', () => {
+    expect(
+      [
+        { kind: 'linear', project: 'id-1' },
+        { ...block, project: ' id-1 ' },
+        { ...block, labelPrefix: '' },
+        { ...block, labelPrefix: ':' },
+        { ...block, autoDispatch: 'yes' },
+        { ...block, kind: 'jira' },
+      ].map((tracker) => {
+        const read = readCrewConfig(withTracker(tracker))
+        return read.ok ? 'accepted' : read.reason.split(': ')[0]
+      }),
+    ).toEqual([
+      'accepted',
+      'tracker.project',
+      'tracker.labelPrefix',
+      'tracker',
+      'tracker.autoDispatch',
+      'tracker.kind',
+    ])
+  })
+
+  it('agrees with the schema on a bound file and on each refusal, a key in a role card or a wire instruction included (R6, R4′; mutations: drop the block from the schema; drop the pattern from roleCard or instruction)', () => {
+    const nameOnly = without(block, 'project')
+    const verdicts = [
+      block,
+      { kind: 'linear', project: 'id-1' },
+      { ...block, key: 'x' },
+      { ...block, projectName: 'lin_api_x' },
+      nameOnly,
+      { ...block, statusMap: { Todo: 'doing' } },
+    ].map((tracker) => {
+      const config = JSON.parse(withTracker(tracker))
+      return [
+        new Ajv().validate(schema, config),
+        readCrewConfig(JSON.stringify(config)).ok,
+      ]
+    })
+    expect(verdicts).toEqual([
+      [true, true],
+      [true, true],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+    ])
+    expect(
+      [keyInRoleCard, keyInInstruction].map((file) => {
+        const config = JSON.parse(file)
+        return [
+          new Ajv().validate(schema, config),
+          readCrewConfig(JSON.stringify(config)).ok,
+        ]
+      }),
+    ).toEqual([
+      [false, false],
+      [false, false],
+    ])
   })
 })

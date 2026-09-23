@@ -26,6 +26,7 @@ import {
   DEFAULT_TRACKER_LABEL_PREFIX,
   DEFAULT_TRACKER_STATUS_MAP,
   DEFAULT_TRACKER_WAVE_PREFIX,
+  sameTrackerProjectId,
   trackerLabelGroupName,
 } from './tracker-binding.pure'
 import {
@@ -98,21 +99,6 @@ export interface TrackerWatcherDeps {
 }
 
 /**
- * Whether two project ids are the same id, with the equality the far side
- * used to answer (lap 3, A).
- *
- * The form binds a typed UUID verbatim and the reference parser accepts one
- * in upper case, while Linear answers with its own lower-case form. A strict
- * `===` would call such a project invisible on its first quiet tick while it
- * lists issues perfectly well. Comparing without case is safe either way: if
- * Linear itself were case-sensitive, the lookup would already have answered
- * `not-found` and the tick would refuse regardless.
- */
-function sameProjectId(a: string, b: string): boolean {
-  return a.toLowerCase() === b.toLowerCase()
-}
-
-/**
  * Throws the refusal an empty page really means, or returns when the project
  * is there UNDER THE BOUND ID and the page is simply quiet (MAR-3169 R1).
  *
@@ -140,7 +126,7 @@ async function verifyProjectVisible(
   // string is not a project this key can see.
   if (
     resolution.kind === 'resolved' &&
-    sameProjectId(resolution.project.id, binding.projectId)
+    sameTrackerProjectId(resolution.project.id, binding.projectId)
   ) {
     return
   }

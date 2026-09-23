@@ -47,6 +47,7 @@ export function CrewImportView({
     ...plan.roles,
     ...plan.wires,
     plan.limits,
+    ...(plan.tracker ? [plan.tracker] : []),
     ...plan.kept,
   ]
   return (

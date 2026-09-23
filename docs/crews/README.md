@@ -38,6 +38,62 @@ layout keys normalizing to the same name refuse import.
 Export resolves default limits into numbers; importing them makes those limits
 explicit choices rather than inherited defaults.
 
+## Tracker binding
+
+A crew bound to a tracker exports an optional `tracker` block (MAR-3211). A
+file without one reads, plans and applies exactly as before.
+
+```yaml
+tracker:
+  {
+    kind: 'linear',
+    project: '<project id>',
+    projectName: 'convergence',
+    labelPrefix: 'horse:',
+    wavePrefix: 'wave:',
+    statusMap: { Backlog: 'backlog', 'In Progress': 'in-progress' },
+    autoDispatch: false,
+  }
+```
+
+`project` is the tracker's project **id**, and it is the binding. The watcher
+trusts a binding only when the tracker answers with the stored id, so a name
+cannot bind. Beyond being non-empty, the id's shape is not validated: Linear's
+ids are opaque. `projectName` is for the reader and the import plan. It is
+shown and never bound. A file with `projectName` and no `project` is refused.
+Export writes the name only when the crew's own key can look the project up
+and the tracker answers with the bound id. Otherwise the id travels alone, and
+no name is invented. Export writes every other binding field as stored. Each
+field provided must be exactly what the binding's write door would store.
+
+**The file never carries a key.** The block refuses any field it does not
+define. A field whose name could hold a credential (`key`, `apiKey`, `token`,
+…) is refused with `tracker.key-forbidden`. So is any string **anywhere in the
+file** that contains a Linear key (`lin_api_…`): a role card, a wire
+instruction, a spawn recipe, a map key, the tracker block. The refusal names
+the path of the offending value, for example `roles.fable.roleCard`. The check
+runs before any other, so a file with a key is always refused for the key. The
+schema states the same rule on the block and on the free-text fields; the
+parser checks every string. The key is filed under a crew id on one machine, so
+setting it is always a person's act, done in Mission Control.
+
+Import shows a **Tracker** row:
+
+- `bind to <projectName or id> (needs key to verify)` when the crew has no
+  key. A crew the import creates never has one.
+- `bind to <name>` when the crew's key looked the id up and the tracker
+  answered with it. The name is the tracker's.
+- `project not visible — import continues without the binding` when the key
+  answered without that id. The row is `skipped` and everything else applies.
+- `bind to … (not verified: <reason>)` when the tracker did not answer (for
+  example, offline or rate-limited). The binding is written, and the watcher's
+  health says what it finds.
+- `already bound to …` when the crew's binding already equals the file.
+
+A binding that differs offers **Update to file**. Apply writes the binding
+through `setTrackerBinding` and never writes a key. The binding's health then
+reads _needs key_ until a key is set.
+
 ## Import and reconciliation
 
 **Import crew…** sits beside **Add conversation** on the Canvas toolbar,

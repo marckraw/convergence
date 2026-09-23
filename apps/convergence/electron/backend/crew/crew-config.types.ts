@@ -8,6 +8,11 @@ import type {
 } from './crew.types'
 import type { SessionSummary } from '../session/session.types'
 import type { Project } from '../project/project.types'
+import type {
+  TrackerBinding,
+  TrackerLogicalStatus,
+  TrackerProjectResolution,
+} from '../tracker/tracker.types'
 
 export type CrewConfigSession = Pick<
   SessionSummary,
@@ -28,7 +33,10 @@ export type CrewConfigProject = Pick<
 export type CrewConfigCrew = Pick<
   SessionCrew,
   'name' | 'emoji' | 'accentColor' | 'roundCap' | 'stallMinutes'
->
+> & {
+  /** Absent or null: the crew is not bound, and the file carries no block. */
+  trackerBinding?: TrackerBinding | null
+}
 export interface CrewConfigRole {
   conversation: string
   /**
@@ -77,12 +85,40 @@ export interface CrewConfigWire {
   instruction?: string
   armed?: false
 }
+/**
+ * The crew's tracker binding as the file carries it (MAR-3211, ruling A).
+ *
+ * `project` is the tracker's project ID -- the binding itself, because the
+ * watcher trusts a binding only when the tracker answers with the stored id.
+ * `projectName` is for the person reading the file and the import plan: it is
+ * shown, never bound, and written only when the crew's key could look it up.
+ * The key is never here: it is a person's act on each machine.
+ */
+export interface CrewConfigTracker {
+  kind: 'linear'
+  project: string
+  projectName?: string
+  labelPrefix?: string
+  wavePrefix?: string
+  statusMap?: Record<string, TrackerLogicalStatus>
+  autoDispatch?: boolean
+}
+/**
+ * Looks a tracker project up by id with the crew's own key (MAR-3211). Null
+ * when the crew has no key: nothing was asked, which is not the same as the
+ * tracker saying no.
+ */
+export type CrewTrackerLookup = (
+  crewId: string,
+  projectId: string,
+) => Promise<TrackerProjectResolution | null>
 export interface CrewConfig {
   version: 1
   crew: string
   emoji: string | null
   color?: string
   limits: { deliveriesPerRun: number; attentionAfterMinutes: number }
+  tracker?: CrewConfigTracker
   roles: Record<string, CrewConfigRole>
   wires: CrewConfigWire[]
   layout?: Record<string, [number, number]>

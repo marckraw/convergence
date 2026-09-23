@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from 'vitest'
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -12,9 +20,10 @@ import { DEFAULT_CREW_MEMBER_SEAT } from './crew.types'
 import { RelayService } from '../relay/relay.service'
 import { CrewImportService } from './crew-import.service'
 import { readGitOriginUrlAsync } from '../git/git-origin'
-import type { CrewConfig } from './crew-config.types'
+import type { CrewConfig, CrewTrackerLookup } from './crew-config.types'
+import { TrackerCredentialsService } from '../credentials/tracker-credentials.service'
 import { crewToConfig } from './crew-config.pure'
-import type { CrewImportPlan } from './crew-import.types'
+import type { CrewImportPlan, CrewImportReport } from './crew-import.types'
 
 vi.mock('../git/git-origin', () => ({
   readGitOriginUrlAsync: vi.fn(async () => null),
@@ -783,5 +792,142 @@ it('seats what the recipe describes, and exports it back unchanged (mutation: dr
     roleCard: 'You hold the map.',
     wipLimit: 3,
     lanePolicy: 'own-worktree',
+  })
+})
+
+describe('the tracker binding (MAR-3211)', () => {
+  const PROJECT_ID = '6851238a-0000-4000-8000-000000000000'
+  const tracker = {
+    kind: 'linear' as const,
+    project: PROJECT_ID,
+    projectName: 'convergence',
+    labelPrefix: 'horse:',
+    wavePrefix: 'lap:',
+    statusMap: { Todo: 'todo' as const, Done: 'done' as const },
+    autoDispatch: true,
+  }
+  let lookup: ReturnType<typeof vi.fn<CrewTrackerLookup>>
+  let setKey: MockInstance
+  let tracked: CrewImportService
+  beforeEach(() => {
+    lookup = vi.fn<CrewTrackerLookup>(async () => null)
+    setKey = vi.spyOn(TrackerCredentialsService.prototype, 'setKey')
+    tracked = new CrewImportService(
+      getDatabase(),
+      sessions,
+      crews,
+      relays,
+      lookup,
+    )
+  })
+  const trackerEntry = (report: CrewImportReport) =>
+    report.entries.find((entry) => entry.key === 'tracker')
+  async function importOnce() {
+    const plan = await tracked.plan(path)
+    return { plan, report: await tracked.apply(path, decisions(plan)) }
+  }
+
+  it('binds a new crew by id without its key, and says the key is needed (R3; mutation: skip setTrackerBinding)', async () => {
+    config = { ...config, tracker }
+    await save()
+    const { plan, report } = await importOnce()
+    expect({
+      row: [plan.tracker?.state, plan.tracker?.detail],
+      binding: crews.getById(report.crewId)!.trackerBinding,
+      entry: trackerEntry(report),
+      asked: lookup.mock.calls.length,
+      keyWritten: setKey.mock.calls.length,
+    }).toEqual({
+      row: ['create', 'bind to convergence (needs key to verify)'],
+      binding: {
+        kind: 'linear',
+        projectId: PROJECT_ID,
+        labelPrefix: 'horse:',
+        wavePrefix: 'lap:',
+        statusMap: { Todo: 'todo', Done: 'done' },
+        autoDispatch: true,
+      },
+      entry: {
+        key: 'tracker',
+        label: 'Tracker',
+        outcome: 'created',
+        reason: 'bind to convergence (needs key to verify)',
+      },
+      // A crew that did not exist has no key to ask with.
+      asked: 0,
+      keyWritten: 0,
+    })
+    const again = await tracked.plan(path)
+    expect([
+      again.tracker?.state,
+      again.tracker?.detail,
+      lookup.mock.calls,
+    ]).toEqual(['existing', 'already bound to convergence', []])
+  })
+
+  it('skips a project the key cannot see and applies everything else (R3; mutation: abort the import on project-not-visible)', async () => {
+    const first = await importOnce()
+    lookup.mockResolvedValue({ kind: 'not-found' })
+    config = {
+      ...config,
+      limits: { deliveriesPerRun: 7, attentionAfterMinutes: 30 },
+      tracker,
+    }
+    await save()
+    const { plan, report } = await importOnce()
+    const crew = crews.getById(first.report.crewId)!
+    expect({
+      row: [plan.tracker?.state, plan.tracker?.detail],
+      canApply: plan.canApply,
+      binding: crew.trackerBinding,
+      roundCap: crew.roundCap,
+      entry: trackerEntry(report)?.outcome,
+      asked: lookup.mock.calls,
+      keyWritten: setKey.mock.calls.length,
+    }).toEqual({
+      row: [
+        'skipped',
+        'project not visible — import continues without the binding',
+      ],
+      canApply: true,
+      binding: null,
+      roundCap: 7,
+      entry: 'not updated',
+      asked: [
+        [crew.id, PROJECT_ID],
+        [crew.id, PROJECT_ID],
+      ],
+      keyWritten: 0,
+    })
+  })
+
+  it('binds with the name the tracker answered once the key verifies the id, and keeps a binding the user unticks (mutation: update an unticked row)', async () => {
+    const first = await importOnce()
+    lookup.mockImplementation(async (_crew, id) => ({
+      kind: 'resolved',
+      project: { id, name: 'Convergence', url: 'https://linear.app/p' },
+    }))
+    config = { ...config, tracker }
+    await save()
+    const bound = await importOnce()
+    config = { ...config, tracker: { ...tracker, wavePrefix: 'wave:' } }
+    await save()
+    const plan = await tracked.plan(path)
+    const kept = await tracked.apply(path, {
+      ...decisions(plan),
+      updates: { tracker: false },
+    })
+    expect({
+      boundRow: bound.plan.tracker?.detail,
+      differsRow: [plan.tracker?.state, plan.tracker?.detail],
+      entry: trackerEntry(kept)?.outcome,
+      wavePrefix: crews.getById(first.report.crewId)!.trackerBinding
+        ?.wavePrefix,
+    }).toEqual({
+      boundRow: 'bind to Convergence',
+      differsRow: ['differs', 'differs: wavePrefix — bind to Convergence'],
+      entry: 'kept',
+      wavePrefix: 'lap:',
+    })
   })
 })

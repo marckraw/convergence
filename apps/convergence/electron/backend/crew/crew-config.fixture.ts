@@ -121,3 +121,23 @@ wires:
   - { from: "horse opus", to: "fable", when: "settled", opener: "keep" }
   - { from: "studio horse astra", to: "fable", when: "settled", opener: "keep", instruction: "Finished, now your turn:" }
 `
+
+/**
+ * The convergence crew's tracker binding (MAR-3211), with a synthetic project
+ * id: the id is the binding, and the name is what the key answered with.
+ */
+export const liveTrackerBinding = {
+  autoDispatch: false,
+  kind: 'linear' as const,
+  projectId: '6851238a-0000-4000-8000-000000000000',
+  labelPrefix: 'horse:',
+  wavePrefix: 'wave:',
+  statusMap: {
+    Backlog: 'backlog' as const,
+    Todo: 'todo' as const,
+    'In Progress': 'in-progress' as const,
+    'In Review': 'in-review' as const,
+    Reviewed: 'reviewed' as const,
+    Done: 'done' as const,
+  },
+}

@@ -32,6 +32,71 @@
       },
       "required": ["deliveriesPerRun", "attentionAfterMinutes"]
     },
+    "tracker": {
+      "description": "The crew's tracker binding (MAR-3211). `project` is the tracker's project id -- the binding itself. `projectName` is shown, never bound. A key is never carried: any other field is refused, and so is any value shaped like a Linear key. The key law covers the whole file: the parser refuses a `lin_api_` string anywhere in it; this schema states the law on the block and on the free-text fields (role cards, wire instructions).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "linear"
+        },
+        "project": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "not": {
+            "pattern": "lin_api_"
+          }
+        },
+        "projectName": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "pattern": "lin_api_"
+          }
+        },
+        "labelPrefix": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "not": {
+            "pattern": "lin_api_"
+          }
+        },
+        "wavePrefix": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "not": {
+            "pattern": "lin_api_"
+          }
+        },
+        "statusMap": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1,
+            "not": {
+              "pattern": "lin_api_"
+            }
+          },
+          "additionalProperties": {
+            "enum": [
+              "backlog",
+              "todo",
+              "in-progress",
+              "in-review",
+              "reviewed",
+              "done",
+              "other"
+            ]
+          }
+        },
+        "autoDispatch": {
+          "type": "boolean"
+        }
+      },
+      "required": ["kind", "project"]
+    },
     "roles": {
       "type": "object",
       "additionalProperties": {
@@ -117,7 +182,10 @@
             "enum": ["resident"]
           },
           "roleCard": {
-            "type": "string"
+            "type": "string",
+            "not": {
+              "pattern": "lin_api_"
+            }
           },
           "lanePolicy": {
             "enum": ["main", "own-worktree"]
@@ -185,7 +253,11 @@
                         "type": "string"
                       },
                       "roleCard": {
-                        "type": ["string", "null"]
+                        "type": ["string", "null"],
+                        "not": {
+                          "type": "string",
+                          "pattern": "lin_api_"
+                        }
                       },
                       "returnWire": {
                         "anyOf": [
@@ -197,7 +269,10 @@
                             "additionalProperties": false,
                             "properties": {
                               "instruction": {
-                                "type": "string"
+                                "type": "string",
+                                "not": {
+                                  "pattern": "lin_api_"
+                                }
                               }
                             },
                             "required": ["instruction"]
@@ -298,7 +373,10 @@
             ]
           },
           "instruction": {
-            "type": "string"
+            "type": "string",
+            "not": {
+              "pattern": "lin_api_"
+            }
           },
           "armed": {
             "const": false

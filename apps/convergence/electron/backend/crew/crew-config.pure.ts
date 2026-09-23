@@ -8,8 +8,11 @@ import {
   normalizeRelayConditionToken,
 } from '../relay/relay.pure'
 import { resolveStallMinutes } from '../relay/crew-hail.pure'
+import { normalizeTrackerBinding } from '../tracker/tracker-binding.pure'
+import { TRACKER_LOGICAL_STATUSES } from '../tracker/tracker.types'
 import type {
   CrewConfig,
+  CrewConfigTracker,
   CrewConfigWire,
   CrewConfigCrew,
   CrewConfigProject,
@@ -25,7 +28,14 @@ export function crewToConfig(
   sessions: readonly CrewConfigSession[],
   projects: readonly CrewConfigProject[],
   relays: readonly SessionRelay[],
-  options: { includePositions?: boolean } = {},
+  options: {
+    includePositions?: boolean
+    /**
+     * The bound project's name as the crew's own key answered it at export
+     * (MAR-3211). Null or absent: the id travels alone, never an invented name.
+     */
+    trackerProjectName?: string | null
+  } = {},
 ): CrewConfig {
   const roles: CrewConfig['roles'] = Object.create(null)
   // A seat whose conversation was deleted is SKIPPED, never thrown on and
@@ -103,6 +113,14 @@ export function crewToConfig(
       deliveriesPerRun: resolveRoundCap(crew.roundCap),
       attentionAfterMinutes: resolveStallMinutes(crew.stallMinutes),
     },
+    ...(crew.trackerBinding
+      ? {
+          tracker: trackerBlock(
+            crew.trackerBinding,
+            options.trackerProjectName ?? null,
+          ),
+        }
+      : {}),
     roles,
     wires: relays
       .map((relay): CrewConfigWire => {
@@ -244,6 +262,25 @@ export function crewToConfig(
       // Export uses the same name law as the record and the import reader.
     }
     throw new Error('A conversation needs a baton name before export')
+  }
+}
+/**
+ * The binding as the file writes it: every stored field, so the far side binds
+ * exactly this crew's settings rather than its own defaults. Never a key --
+ * the binding type has no field that could hold one.
+ */
+function trackerBlock(
+  binding: NonNullable<CrewConfigCrew['trackerBinding']>,
+  projectName: string | null,
+): CrewConfigTracker {
+  return {
+    kind: binding.kind,
+    project: binding.projectId,
+    ...(projectName ? { projectName } : {}),
+    labelPrefix: binding.labelPrefix,
+    wavePrefix: binding.wavePrefix,
+    statusMap: { ...binding.statusMap },
+    autoDispatch: binding.autoDispatch,
   }
 }
 function compare(a: string, b: string): number {
@@ -529,11 +566,125 @@ const condition: Check = (v, p) => {
     return `${p}: ${reason.replace(/^A /, 'a ')}`
   }
 }
+/** The code a refused key carries, so a reader can name the law (MAR-3211 R4). */
+export const TRACKER_KEY_FORBIDDEN = 'tracker.key-forbidden'
+/** A field name that would hold a credential. None of the block's fields does. */
+const CREDENTIAL_FIELD = /key|token|secret|password|credential/i
+/**
+ * What a Linear API key looks like, anywhere inside a string: a key pasted
+ * mid-sentence into an instruction is still a key in the file (MAR-3211 R4′).
+ */
+const TRACKER_KEY_VALUE = /lin_api_/
+const keyForbidden = (path: string): string =>
+  `${path}: a crew file never carries a tracker key — set the key on this machine in Mission Control (${TRACKER_KEY_FORBIDDEN})`
+/**
+ * The path of the first string under `value` -- a value, a map key, or an
+ * array item, at any depth -- that carries something shaped like a key.
+ */
+function keyShapedValue(value: unknown, path: string): string | null {
+  if (typeof value === 'string')
+    return TRACKER_KEY_VALUE.test(value) ? path : null
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      const found = keyShapedValue(value[i], `${path}[${i}]`)
+      if (found) return found
+    }
+    return null
+  }
+  if (!object(value)) return null
+  for (const [key, child] of Object.entries(value)) {
+    const childAt = childPath(path, key)
+    if (TRACKER_KEY_VALUE.test(key)) return childAt
+    const found = keyShapedValue(child, childAt)
+    if (found) return found
+  }
+  return null
+}
+const trimmedText: Check = (v, p) =>
+  typeof v !== 'string'
+    ? expected(p, 'string')
+    : !v.trim()
+      ? `${p}: must not be empty`
+      : v === v.trim()
+        ? null
+        : `${p}: written with surrounding spaces; write it exactly`
+const boolean: Check = (v, p) =>
+  typeof v === 'boolean' ? null : expected(p, 'boolean')
+const TRACKER_FIELDS: Record<keyof CrewConfigTracker, Check> = {
+  kind: oneOf('linear'),
+  project: trimmedText,
+  projectName: optional(trimmedText),
+  labelPrefix: optional(string),
+  wavePrefix: optional(string),
+  statusMap: optional(record(oneOf(...TRACKER_LOGICAL_STATUSES))),
+  autoDispatch: optional(boolean),
+}
+/**
+ * The tracker block (MAR-3211). Three laws, in the order a person needs them:
+ *
+ * 1. No key, ever (R4). Any field the block does not define is refused, and
+ *    one whose name could hold a credential is refused with the law's words;
+ *    any string shaped like a Linear key is refused anywhere in the file
+ *    (`validateRecipe` scans the whole file first; the block scans again).
+ * 2. The id is the binding (ruling A). A file naming a project without its id
+ *    is refused: `projectName` is shown, never bound.
+ * 3. The record owns acceptance: each field provided must be what
+ *    `normalizeTrackerBinding` -- the binding's own write door -- would store.
+ */
+const tracker: Check = (v, p) => {
+  if (!object(v)) return expected(p, 'object')
+  const extra = Object.keys(v).find(
+    (key) => !Object.hasOwn(TRACKER_FIELDS, key),
+  )
+  if (extra !== undefined)
+    return CREDENTIAL_FIELD.test(extra)
+      ? keyForbidden(childPath(p, extra))
+      : `${childPath(p, extra)}: unexpected field`
+  const leaked = keyShapedValue(v, p)
+  if (leaked) return keyForbidden(leaked)
+  if (!Object.hasOwn(v, 'project'))
+    return Object.hasOwn(v, 'projectName')
+      ? `${childPath(p, 'project')}: the project id is the binding — this file names the project but not its id, and projectName is only shown, never bound`
+      : expected(childPath(p, 'project'), 'the tracker project id')
+  for (const [key, check] of Object.entries(TRACKER_FIELDS)) {
+    const reason = check(
+      Object.hasOwn(v, key) ? v[key] : undefined,
+      childPath(p, key),
+    )
+    if (reason) return reason
+  }
+  const input = v as unknown as CrewConfigTracker
+  try {
+    const normalized = normalizeTrackerBinding({
+      kind: input.kind,
+      projectId: input.project,
+      labelPrefix: input.labelPrefix,
+      wavePrefix: input.wavePrefix,
+      statusMap: input.statusMap,
+      autoDispatch: input.autoDispatch,
+    })
+    for (const [field, kept] of Object.entries({
+      project: normalized.projectId,
+      labelPrefix: normalized.labelPrefix,
+      wavePrefix: normalized.wavePrefix,
+      statusMap: normalized.statusMap,
+    })) {
+      if (
+        Object.hasOwn(input, field) &&
+        !isDeepStrictEqual(input[field as keyof CrewConfigTracker], kept)
+      )
+        return `${childPath(p, field)}: write the value exactly as the binding stores it`
+    }
+    return null
+  } catch (error) {
+    return `${p}: ${error instanceof Error ? error.message : String(error)}`
+  }
+}
 const pair: Check = (v, p) =>
   !Array.isArray(v) || v.length !== 2
     ? expected(p, 'pair of coordinates')
     : list(number)(v, p)
-const validateRecipe = shape({
+const validateRecipeShape = shape({
   version: oneOf(1),
   crew: string,
   emoji: nullable(string),
@@ -542,6 +693,7 @@ const validateRecipe = shape({
     deliveriesPerRun: positiveInteger,
     attentionAfterMinutes: positiveInteger,
   }),
+  tracker: optional(tracker),
   roles: record(
     shape({
       conversation: string,
@@ -575,6 +727,18 @@ const validateRecipe = shape({
   ),
   layout: optional(record(pair)),
 })
+/**
+ * The whole file, key law first (MAR-3211 R4′). A crew file is shared, so the
+ * key law is the file's, not the tracker block's: every string anywhere in
+ * the file -- a role card, a wire instruction, a spawn recipe, a map key -- is
+ * scanned before any structure is checked, and one shaped like a Linear key
+ * is refused with `tracker.key-forbidden` at its own path. The block keeps
+ * its own checks (a credential-named field is refused by name).
+ */
+const validateRecipe: Check = (v, p) => {
+  const leaked = keyShapedValue(v, p)
+  return leaked ? keyForbidden(leaked) : validateRecipeShape(v, p)
+}
 
 /**
  * Every seat whose conversation was deleted, said as a comment in the file
