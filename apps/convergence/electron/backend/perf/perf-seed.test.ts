@@ -19,7 +19,8 @@ import Database from 'better-sqlite3'
 import { build } from 'esbuild'
 import { afterEach, describe, expect, it } from 'vitest'
 import { closeDatabase, getDatabase } from '../database/database'
-import { hasTokens, SECRET_COLUMN } from './perf-seed.pure'
+import { hasTokens, scrubStateJson, SECRET_COLUMN } from './perf-seed.pure'
+import { assertUniquePairs, plantUniquePairs } from './perf-seed-unique.fixture'
 
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const script = join(appRoot, 'tools/perf-seed.mjs')
@@ -200,7 +201,10 @@ function run(f: ReturnType<typeof fixture>, entry = script, timeout = 120_000) {
   )
 }
 
-async function mutant(replace: (source: string) => string) {
+async function mutant(
+  replace: (source: string) => string,
+  replacePure?: (source: string) => string,
+) {
   // Keep module resolution inside the workspace, but never change the production tool.
   const out = join(appRoot, 'out')
   mkdirSync(out, { recursive: true })
@@ -209,9 +213,10 @@ async function mutant(replace: (source: string) => string) {
   const path = join(root, 'mutant.mjs')
   const original = readFileSync(script, 'utf8')
   const contents = replace(original)
-  expect(contents, 'mutation must change the production tool').not.toBe(
-    original,
-  )
+  if (!replacePure)
+    expect(contents, 'mutation must change the production tool').not.toBe(
+      original,
+    )
   await build({
     stdin: {
       contents,
@@ -224,6 +229,21 @@ async function mutant(replace: (source: string) => string) {
     platform: 'node',
     format: 'esm',
     logLevel: 'silent',
+    plugins: replacePure
+      ? [
+          {
+            name: 'mask-mutation',
+            setup(builder) {
+              builder.onLoad({ filter: /perf-seed\.pure\.ts$/ }, (args) => {
+                const original = readFileSync(args.path, 'utf8')
+                const contents = replacePure(original)
+                expect(contents).not.toBe(original)
+                return { contents, loader: 'ts' }
+              })
+            },
+          },
+        ]
+      : [],
   })
   return path
 }
@@ -317,8 +337,8 @@ function assertScrubbed(f: ReturnType<typeof fixture>, entry = script) {
     for (const payload of payloads)
       expect(() => JSON.parse(payload)).not.toThrow()
     expect(JSON.parse(payloads[0])).toMatchObject({
-      apiKey: 'x'.repeat(jsonSecret.length),
-      env: { MY_SECRET: expect.stringMatching(/^x+$/) },
+      apiKey: expect.any(String),
+      env: { MY_SECRET: expect.any(String) },
       max_tokens: 4096,
       input_tokens: 12,
       secret: false,
@@ -332,7 +352,11 @@ function assertScrubbed(f: ReturnType<typeof fixture>, entry = script) {
         .raw()
         .iterate() as Iterable<unknown[]>) {
         for (const value of row)
-          if (typeof value === 'string') expect(hasTokens(value)).toBe(false)
+          if (typeof value === 'string') {
+            expect(hasTokens(scrubStateJson(value))).toBe(false)
+            for (const original of f.planted)
+              expect(value).not.toContain(original)
+          }
       }
     }
   } finally {
@@ -444,7 +468,95 @@ afterEach(() => {
     rmSync(root, { recursive: true, force: true })
 })
 
+function assertSchemaUniquePairs(entry = script) {
+  const f = fixture()
+  const source = new Database(f.source)
+  // The extra WITHOUT ROWID fixtures have separate locator coverage already.
+  source.exec('DROP TABLE fixture_secret_key; DROP TABLE fixture_without_rowid')
+  const coverage = plantUniquePairs(source)
+  source.close()
+  expect(coverage.length).toBeGreaterThan(40)
+  const originals = [...new Set(coverage.flatMap((pair) => pair.originals))]
+  const before = hash(f.source)
+  const result = run(f, entry)
+  expect(hash(f.source)).toBe(before)
+  expect(result.status, result.stderr).toBe(0)
+  const path = join(f.out, 'convergence.db')
+  const db = new Database(path, { readonly: true })
+  try {
+    assertUniquePairs(db, coverage)
+    for (const table of new Set(coverage.map((pair) => pair.table))) {
+      for (const row of db
+        .prepare(`SELECT * FROM ${quote(table)}`)
+        .raw()
+        .iterate() as Iterable<unknown[]>) {
+        for (const value of row) {
+          if (typeof value === 'string')
+            expect(originals.some((original) => value.includes(original))).toBe(
+              false,
+            )
+        }
+      }
+    }
+  } finally {
+    db.close()
+  }
+  const bytes = readFileSync(path)
+  for (const original of originals) {
+    expect(
+      bytes.includes(Buffer.from(original)),
+      coverage.find((pair) => pair.originals.includes(original))?.table,
+    ).toBe(false)
+    expect(result.stdout + result.stderr).not.toContain(original)
+  }
+  return coverage.length
+}
+
 describe('perf seed CLI on a generated real-schema database', () => {
+  it('keeps both rows distinct for every schema UNIQUE key covering TEXT', () => {
+    const count = assertSchemaUniquePairs()
+    expect(count).toBeGreaterThan(40)
+    process.stdout.write(`MAR-3381 UNIQUE TEXT keys covered: ${count}\n`)
+  })
+  it('mutation: all-x masking turns schema UNIQUE acceptance red', async () => {
+    const entry = await mutant(
+      (source) => source,
+      (source) =>
+        source.replace(
+          'masks.set(original, candidate)',
+          "candidate = 'x'.repeat(length)\n      masks.set(original, candidate)",
+        ),
+    )
+    expect(() => assertSchemaUniquePairs(entry)).toThrow(
+      'failed during masking',
+    )
+  })
+  it('mutation: skip final compaction turns schema UNIQUE raw-byte acceptance red', async () => {
+    const entry = await mutant((source) =>
+      source.replace(
+        "    db.exec('VACUUM')",
+        '    // compaction removed by test',
+      ),
+    )
+    expect(() => assertSchemaUniquePairs(entry)).toThrow(
+      'session_conversation_items',
+    )
+  })
+  it('reports only phase, table and SQLite code when a trigger raises a planted value', () => {
+    const f = fixture()
+    const db = new Database(f.source)
+    db.exec(
+      `CREATE TRIGGER fixture_failure BEFORE UPDATE OF body ON fixture_extra BEGIN SELECT RAISE(ABORT, '${jsonSecret}'); END;`,
+    )
+    db.close()
+    assertRejected(f)
+    const result = run(f)
+    expect(result.stderr).toContain(
+      'failed during masking; table="fixture_extra"; code=SQLITE_CONSTRAINT_TRIGGER;',
+    )
+    expect(result.stdout).toBe('')
+    expect(result.stderr).not.toContain(jsonSecret)
+  })
   it('R1–R4 scrubs all fields, preserves payload lengths and source bytes, and reports no secrets', () => {
     const report = assertScrubbed(fixture())
     expect(report.rows).toEqual({
@@ -489,12 +601,14 @@ describe('perf seed CLI on a generated real-schema database', () => {
     expect(result.stderr).toContain('failed during blanking')
     expect(readdirSync(f.out)).toEqual([])
   })
-  it('mutation: copy with the old backup() turns source-free-page raw-byte acceptance red', async () => {
+  it('mutation: old backup without final compaction turns source-free-page raw-byte acceptance red', async () => {
     const entry = await mutant((source) =>
-      source.replace(
-        "sourceDb.prepare('VACUUM INTO ?').run(copy)",
-        'await sourceDb.backup(copy)',
-      ),
+      source
+        .replace(
+          "sourceDb.prepare('VACUUM INTO ?').run(copy)",
+          'await sourceDb.backup(copy)',
+        )
+        .replace("    db.exec('VACUUM')", '    // compaction removed by test'),
     )
     const f = fixture()
     plantDeletedSecret(f)
@@ -508,7 +622,7 @@ describe('perf seed CLI on a generated real-schema database', () => {
   it('mutation: skip mask pass turns R1–R4 acceptance red', async () => {
     const entry = await mutant((source) =>
       source.replace(
-        '    maskDatabase(db, reader, tables, report)',
+        '    maskDatabase(db, reader, tables, report, masker)',
         '    // mask pass removed by test',
       ),
     )
@@ -521,7 +635,7 @@ describe('perf seed CLI on a generated real-schema database', () => {
     async (_index, value) => {
       const entry = await mutant((source) =>
         source.replace(
-          '    verifyDatabase(db, tables)',
+          '    verifyDatabase(db, tables, masker)',
           '    // verification removed by test',
         ),
       )
@@ -599,7 +713,7 @@ describe('perf seed CLI on a generated real-schema database', () => {
     async () => {
       const copy = await copyUnderLiveWriter()
       assertLiveCopy(copy)
-      console.log(
+      process.stdout.write(
         JSON.stringify({
           liveWriterIntervalMs: 20,
           boundMs: liveWriterBoundMs,
@@ -607,7 +721,7 @@ describe('perf seed CLI on a generated real-schema database', () => {
           commits: copy.commits,
           elapsedMs: copy.elapsedMs,
           ...JSON.parse(copy.result.stdout),
-        }),
+        }) + '\n',
       )
     },
     20_000,
@@ -624,13 +738,13 @@ describe('perf seed CLI on a generated real-schema database', () => {
       const copy = await copyUnderLiveWriter(entry)
       expect(() => assertLiveCopy(copy)).toThrow()
       expect(copy.result.error).toMatchObject({ code: 'ETIMEDOUT' })
-      console.log(
+      process.stdout.write(
         JSON.stringify({
           mutation: 'old 100-page stepping',
           elapsedMs: copy.elapsedMs,
           commits: copy.commits,
           error: 'ETIMEDOUT',
-        }),
+        }) + '\n',
       )
     },
     20_000,
@@ -642,13 +756,13 @@ describe('perf seed CLI on a generated real-schema database', () => {
         report = assertScrubbed(f)
       const bytes = f.payloadBytes
       const extrapolated = (report.maskSeconds * 1024 ** 3) / bytes
-      console.log(
+      process.stdout.write(
         JSON.stringify({
           fixturePayloadBytes: bytes,
           maskSeconds: report.maskSeconds,
           elapsedSeconds: report.elapsedSeconds,
           extrapolatedGiBSeconds: extrapolated,
-        }),
+        }) + '\n',
       )
       expect(bytes).toBeGreaterThan(50 * 1024 ** 2)
       expect(extrapolated).toBeLessThan(600)
