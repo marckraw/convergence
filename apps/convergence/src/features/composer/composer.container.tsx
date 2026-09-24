@@ -72,6 +72,7 @@ import {
   type Attachment,
 } from '@/entities/attachment'
 import {
+  filterComposerSkills,
   skillSelectionFromCatalogEntry,
   useSkillStore,
   type SkillCatalogEntry,
@@ -87,10 +88,7 @@ import {
   type PromptLibraryEntry,
 } from '@/entities/prompt-library'
 import { Composer } from './composer.presentational'
-import {
-  filterComposerSkills,
-  filterSelectionsForProvider,
-} from './composer-skill-picker.pure'
+import { filterSelectionsForProvider } from './composer-skill-picker.pure'
 import {
   detectComposerInjectionTrigger,
   filterComposerInjectionRootItems,

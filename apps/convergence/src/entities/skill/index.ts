@@ -29,3 +29,5 @@ export type {
   SkillWarning,
   SkillWarningCode,
 } from './skill.types'
+
+export { filterComposerSkills } from './composer-skills.pure'

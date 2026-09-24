@@ -7,6 +7,7 @@ export class HandoffRefusedError extends Error {
   constructor(
     readonly stage: HandoffRefusalStage,
     message: string,
+    readonly rule?: string,
   ) {
     super(message)
   }

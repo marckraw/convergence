@@ -1,3 +1,5 @@
+import { ConversationActionsService } from '../backend/conversation-actions/conversation-actions.service'
+import { registerConversationActionsIpcHandlers } from '../backend/conversation-actions/conversation-actions.ipc'
 import { registerAgentMeterIpc } from '../backend/agent-meter/agent-meter.ipc'
 import { ReleaseActService } from '../backend/release/release-act.service'
 import { registerReleaseIpcHandlers } from '../backend/release/release.ipc'
@@ -1106,6 +1108,14 @@ async function startApp(): Promise<void> {
   })
   contextDrill.onDrillChanged(broadcastContextDrillChange)
   registerContextDrillIpcHandlers({ service: contextDrill })
+  registerConversationActionsIpcHandlers(
+    new ConversationActionsService({
+      sessions: sessionService,
+      drill: contextDrill,
+      providers: providerRegistry,
+      localHost: executionHost,
+    }),
+  )
   const drillEvidence = new HarnessEvidenceService(db)
   new AutoDrillService(
     {

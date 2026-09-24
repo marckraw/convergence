@@ -379,6 +379,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       }
     },
   },
+  conversationActions: {
+    describe: (
+      sessionId: string,
+    ): Promise<
+      import('../../src/shared/types/electron-api').ConversationRoutineAction[]
+    > => ipcRenderer.invoke('conversationActions:describe', sessionId),
+  },
   contextDrill: {
     run: (sessionId: string) =>
       ipcRenderer.invoke('contextDrill:run', sessionId),

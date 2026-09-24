@@ -63,6 +63,20 @@ function assertForkableParent(
   }
 }
 
+export function describeFork(
+  parent: SessionSummary,
+): { ready: true } | { ready: false; reason: string } {
+  try {
+    assertForkableParent(parent)
+    return { ready: true }
+  } catch (error) {
+    return {
+      ready: false,
+      reason: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
 const SUMMARY_EXTRACTION_TIMEOUT_MS = 180_000
 
 export class SessionForkService {

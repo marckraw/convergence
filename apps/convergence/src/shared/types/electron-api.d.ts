@@ -1,3 +1,11 @@
+export interface ConversationRoutineAction {
+  id: 'drill' | 'compact' | 'fork' | 'hand-off'
+  kind: 'routine'
+  label: string
+  offered: boolean
+  reason?: string
+}
+
 import type {
   ReleaseSeat,
   ReleaseMergeInput,
@@ -1995,6 +2003,9 @@ interface ElectronAPI {
     ) => () => void
     onHopAppended: (callback: (hop: RelayHopData) => void) => () => void
     onHopsCleared: (callback: (crewId: string) => void) => () => void
+  }
+  conversationActions: {
+    describe: (sessionId: string) => Promise<ConversationRoutineAction[]>
   }
   contextDrill: {
     run: (sessionId: string) => Promise<ContextDrillOutcomeData>
