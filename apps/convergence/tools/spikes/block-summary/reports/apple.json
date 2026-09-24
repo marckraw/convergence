@@ -1,0 +1,880 @@
+{
+  "candidate": "apple",
+  "timestamp": "2026-09-24T16:05:24.043Z",
+  "host": {
+    "macOS": "27.0",
+    "build": "26A428",
+    "hardware": "Mac15,6",
+    "memoryBytes": 38654705664,
+    "node": "v24.15.0",
+    "loadAverageAtStart": [32.23876953125, 26.55908203125, 25.833984375]
+  },
+  "checkerSha256": "5d91b10f0f7cb6a88de834cfeed7c8da47f42defe7a305f5f757356bb72059ea",
+  "fixtureSha256": "cc8a68fe6e9a047f84539d5289177655bd3f35e6061f15d80ed1f3becce04d30",
+  "promptSha256": "3021f53220e111d7a242f3cbec7f982581d941a15befc316d388da08503812c8",
+  "model": "SystemLanguageModel.default (on-device)",
+  "methodology": "One resident process, 20 blocks in fixed order x 3 runs; greedy, 96 token cap; fresh conversation per block. Cold means process-cold, includes startup/load, excludes download; OS caches/services are not reset; background work on this shared development Mac is uncontrolled. Warm uses remaining successful round trips. RSS/CPU measure worker process, not Apple system inference services or GPU time.",
+  "loadAverageAtEnd": [25.150390625, 25.478515625, 25.47314453125],
+  "summary": {
+    "expectedResponses": 60,
+    "responses": 60,
+    "successfulResponses": 60,
+    "coldFirstCallMs": 2523.232666,
+    "warmP50Ms": 830.351708000002,
+    "warmP95Ms": 1557.2239589999954,
+    "warmSamples": 59,
+    "peakRssBytes": 21938176,
+    "cpuSeconds": 1.82,
+    "wallSeconds": 55.84599983299999,
+    "averageCpuPercent": 3.25896215564672,
+    "truthPassCount": 57,
+    "truthPassRate": 0.95
+  },
+  "fatal": null,
+  "exit": {
+    "code": 0,
+    "signal": null
+  },
+  "rows": [
+    {
+      "blockId": "block-01",
+      "run": 1,
+      "wallMs": 2523.232666,
+      "id": "block-01/run-1",
+      "sentence": "Read content from multiple files: src/widgets/session-view/part-1.tsx to src/widgets/session-view/part-10.tsx",
+      "generationMs": 2496.466542,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-02",
+      "run": 1,
+      "wallMs": 1040.0928749999998,
+      "generationMs": 1039.898542,
+      "id": "block-02/run-1",
+      "sentence": "Grep on src/widgets/session-view and read src/widgets/session-view/index.ts.",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 6,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-03",
+      "run": 1,
+      "wallMs": 1619.7283749999997,
+      "sentence": "The file paths src/features/composer/part-1.ts, src/features/composer/part-2.ts, and src/features/composer/part-3.ts were edited with 'two' replacing 'one'.",
+      "generationMs": 1619.269042,
+      "id": "block-03/run-1",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 13,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-04",
+      "run": 1,
+      "wallMs": 872.5445839999993,
+      "generationMs": 872.309083,
+      "id": "block-04/run-1",
+      "sentence": "The Bash tool executed the command: \"npm test\".",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-05",
+      "run": 1,
+      "wallMs": 765.6833749999996,
+      "generationMs": 765.31325,
+      "id": "block-05/run-1",
+      "sentence": "Read the file at docs/deployed-successfully.md.",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 5,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-06",
+      "run": 1,
+      "wallMs": 787.4405409999999,
+      "id": "block-06/run-1",
+      "sentence": "The tool read the file at package.json.",
+      "generationMs": 787.129042,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-07",
+      "run": 1,
+      "wallMs": 1020.7003749999994,
+      "generationMs": 1020.458458,
+      "id": "block-07/run-1",
+      "sentence": "The file src/shared/theme.css was edited to change 'red' to 'blue'.",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 10,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-08",
+      "run": 1,
+      "wallMs": 812.2051250000004,
+      "sentence": "The bash tool executed the command \"ls src/entities\".",
+      "id": "block-08/run-1",
+      "generationMs": 811.988917,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-09",
+      "run": 1,
+      "wallMs": 1042.977417,
+      "id": "block-09/run-1",
+      "generationMs": 1042.774041,
+      "sentence": "grep found 'timeout' in src/shared/settings and read src/shared/settings/defaults.ts",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-10",
+      "run": 1,
+      "wallMs": 879.5999580000007,
+      "id": "block-10/run-1",
+      "sentence": "The tool read from the path test/all-tests-passed.test.ts.",
+      "generationMs": 879.396583,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-11",
+      "run": 1,
+      "wallMs": 630.7238749999997,
+      "sentence": "Read src/widgets/session-view/transcript.tsx",
+      "generationMs": 630.551834,
+      "id": "block-11/run-1",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 2,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-12",
+      "run": 1,
+      "wallMs": 662.7749590000003,
+      "sentence": "Searched for pending in src/entities/session using Grep tool.",
+      "generationMs": 662.527334,
+      "id": "block-12/run-1",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-13",
+      "run": 1,
+      "wallMs": 697.4082909999997,
+      "id": "block-13/run-1",
+      "sentence": "Replace label text in src/features/composer/button.tsx",
+      "generationMs": 697.228209,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 5,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-14",
+      "run": 1,
+      "wallMs": 474.5014170000013,
+      "id": "block-14/run-1",
+      "sentence": "Run npm run typecheck",
+      "generationMs": 474.342541,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 4,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-15",
+      "run": 1,
+      "wallMs": 766.222291,
+      "id": "block-15/run-1",
+      "sentence": "Read docs/architecture/overview.md and docs/architecture/boundaries.md",
+      "generationMs": 766.036125,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 4,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-16",
+      "run": 1,
+      "wallMs": 1070.7595419999998,
+      "sentence": "Executed pwd, git status --short, git diff --stat, git branch --show-current, git log -1 --oneline.",
+      "id": "block-16/run-1",
+      "generationMs": 1070.538583,
+      "truthCheck": {
+        "pass": false,
+        "reasons": ["over-14-words"],
+        "wordCount": 15,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-17",
+      "run": 1,
+      "wallMs": 706.434709000001,
+      "sentence": "npm test failed with one assertion error.",
+      "generationMs": 706.278292,
+      "id": "block-17/run-1",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-18",
+      "run": 1,
+      "wallMs": 947.9919579999987,
+      "id": "block-18/run-1",
+      "sentence": "The tool output for cat src/entities/session/types.ts exports type SessionId as string.",
+      "generationMs": 947.706875,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 11,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-19",
+      "run": 1,
+      "wallMs": 755.0465829999994,
+      "sentence": "src/widgets/session-view/state.ts:4: pending: false",
+      "id": "block-19/run-1",
+      "generationMs": 754.876542,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 3,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-20",
+      "run": 1,
+      "wallMs": 852.206000000002,
+      "generationMs": 852.012959,
+      "id": "block-20/run-1",
+      "sentence": "The tool returned a list of files: lib, ui, styles.",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 10,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-01",
+      "run": 2,
+      "wallMs": 1473.505041999997,
+      "sentence": "Read content from multiple files: src/widgets/session-view/part-1.tsx to src/widgets/session-view/part-10.tsx",
+      "id": "block-01/run-2",
+      "generationMs": 1473.2775,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-02",
+      "run": 2,
+      "wallMs": 1005.5307089999988,
+      "sentence": "Grep on src/widgets/session-view and read src/widgets/session-view/index.ts.",
+      "id": "block-02/run-2",
+      "generationMs": 1005.295625,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 6,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-03",
+      "run": 2,
+      "wallMs": 1641.0371250000026,
+      "id": "block-03/run-2",
+      "sentence": "The file paths src/features/composer/part-1.ts, src/features/composer/part-2.ts, and src/features/composer/part-3.ts were edited with 'two' replacing 'one'.",
+      "generationMs": 1640.839833,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 13,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-04",
+      "run": 2,
+      "wallMs": 868.9971670000014,
+      "sentence": "The Bash tool executed the command: \"npm test\".",
+      "generationMs": 868.730333,
+      "id": "block-04/run-2",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-05",
+      "run": 2,
+      "wallMs": 780.562041000001,
+      "generationMs": 780.341042,
+      "id": "block-05/run-2",
+      "sentence": "Read the file at docs/deployed-successfully.md.",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 5,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-06",
+      "run": 2,
+      "wallMs": 758.4549580000021,
+      "generationMs": 758.2925,
+      "sentence": "The tool read the file at package.json.",
+      "id": "block-06/run-2",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-07",
+      "run": 2,
+      "wallMs": 1004.861832999999,
+      "id": "block-07/run-2",
+      "sentence": "The file src/shared/theme.css was edited to change 'red' to 'blue'.",
+      "generationMs": 1004.686791,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 10,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-08",
+      "run": 2,
+      "wallMs": 809.5613750000011,
+      "sentence": "The bash tool executed the command \"ls src/entities\".",
+      "id": "block-08/run-2",
+      "generationMs": 809.19525,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-09",
+      "run": 2,
+      "wallMs": 1098.815584,
+      "generationMs": 1098.483125,
+      "id": "block-09/run-2",
+      "sentence": "grep found 'timeout' in src/shared/settings and read src/shared/settings/defaults.ts",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-10",
+      "run": 2,
+      "wallMs": 910.1084159999991,
+      "id": "block-10/run-2",
+      "generationMs": 909.304458,
+      "sentence": "The tool read from the path test/all-tests-passed.test.ts.",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-11",
+      "run": 2,
+      "wallMs": 730.9998750000013,
+      "sentence": "Read src/widgets/session-view/transcript.tsx",
+      "id": "block-11/run-2",
+      "generationMs": 730.285542,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 2,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-12",
+      "run": 2,
+      "wallMs": 707.3390829999989,
+      "sentence": "Searched for pending in src/entities/session using Grep tool.",
+      "generationMs": 707.162,
+      "id": "block-12/run-2",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-13",
+      "run": 2,
+      "wallMs": 727.2483329999995,
+      "sentence": "Replace label text in src/features/composer/button.tsx",
+      "id": "block-13/run-2",
+      "generationMs": 727.056333,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 5,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-14",
+      "run": 2,
+      "wallMs": 509.1075000000019,
+      "id": "block-14/run-2",
+      "sentence": "Run npm run typecheck",
+      "generationMs": 508.855083,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 4,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-15",
+      "run": 2,
+      "wallMs": 803.1243749999994,
+      "id": "block-15/run-2",
+      "sentence": "Read docs/architecture/overview.md and docs/architecture/boundaries.md",
+      "generationMs": 802.911125,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 4,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-16",
+      "run": 2,
+      "wallMs": 1121.6791250000024,
+      "sentence": "Executed pwd, git status --short, git diff --stat, git branch --show-current, git log -1 --oneline.",
+      "id": "block-16/run-2",
+      "generationMs": 1121.383125,
+      "truthCheck": {
+        "pass": false,
+        "reasons": ["over-14-words"],
+        "wordCount": 15,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-17",
+      "run": 2,
+      "wallMs": 740.929790999995,
+      "generationMs": 740.742542,
+      "id": "block-17/run-2",
+      "sentence": "npm test failed with one assertion error.",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-18",
+      "run": 2,
+      "wallMs": 1044.4658749999944,
+      "id": "block-18/run-2",
+      "sentence": "The tool output for cat src/entities/session/types.ts exports type SessionId as string.",
+      "generationMs": 1044.225083,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 11,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-19",
+      "run": 2,
+      "wallMs": 783.0258329999997,
+      "generationMs": 782.857,
+      "id": "block-19/run-2",
+      "sentence": "src/widgets/session-view/state.ts:4: pending: false",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 3,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-20",
+      "run": 2,
+      "wallMs": 973.031332999999,
+      "sentence": "The tool returned a list of files: lib, ui, styles.",
+      "generationMs": 972.831458,
+      "id": "block-20/run-2",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 10,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-01",
+      "run": 3,
+      "wallMs": 1525.2552919999944,
+      "generationMs": 1524.487,
+      "id": "block-01/run-3",
+      "sentence": "Read content from multiple files: src/widgets/session-view/part-1.tsx to src/widgets/session-view/part-10.tsx",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-02",
+      "run": 3,
+      "wallMs": 1040.2876249999972,
+      "id": "block-02/run-3",
+      "sentence": "Grep on src/widgets/session-view and read src/widgets/session-view/index.ts.",
+      "generationMs": 1040.108084,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 6,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-03",
+      "run": 3,
+      "wallMs": 1557.2239589999954,
+      "generationMs": 1557.018958,
+      "id": "block-03/run-3",
+      "sentence": "The file paths src/features/composer/part-1.ts, src/features/composer/part-2.ts, and src/features/composer/part-3.ts were edited with 'two' replacing 'one'.",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 13,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-04",
+      "run": 3,
+      "wallMs": 816.6132499999949,
+      "id": "block-04/run-3",
+      "sentence": "The Bash tool executed the command: \"npm test\".",
+      "generationMs": 816.287958,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-05",
+      "run": 3,
+      "wallMs": 736.1853749999937,
+      "generationMs": 735.999375,
+      "sentence": "Read the file at docs/deployed-successfully.md.",
+      "id": "block-05/run-3",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 5,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-06",
+      "run": 3,
+      "wallMs": 713.4205839999995,
+      "id": "block-06/run-3",
+      "sentence": "The tool read the file at package.json.",
+      "generationMs": 713.202416,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-07",
+      "run": 3,
+      "wallMs": 971.9619579999999,
+      "sentence": "The file src/shared/theme.css was edited to change 'red' to 'blue'.",
+      "generationMs": 971.786292,
+      "id": "block-07/run-3",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 10,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-08",
+      "run": 3,
+      "wallMs": 838.9949160000033,
+      "id": "block-08/run-3",
+      "sentence": "The bash tool executed the command \"ls src/entities\".",
+      "generationMs": 838.723083,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-09",
+      "run": 3,
+      "wallMs": 1122.073083999996,
+      "id": "block-09/run-3",
+      "sentence": "grep found 'timeout' in src/shared/settings and read src/shared/settings/defaults.ts",
+      "generationMs": 1121.723292,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-10",
+      "run": 3,
+      "wallMs": 890.4674999999988,
+      "sentence": "The tool read from the path test/all-tests-passed.test.ts.",
+      "id": "block-10/run-3",
+      "generationMs": 890.274166,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-11",
+      "run": 3,
+      "wallMs": 652.9537909999999,
+      "id": "block-11/run-3",
+      "sentence": "Read src/widgets/session-view/transcript.tsx",
+      "generationMs": 652.740084,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 2,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-12",
+      "run": 3,
+      "wallMs": 690.3949999999968,
+      "generationMs": 690.1955,
+      "sentence": "Searched for pending in src/entities/session using Grep tool.",
+      "id": "block-12/run-3",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-13",
+      "run": 3,
+      "wallMs": 751.4980829999986,
+      "id": "block-13/run-3",
+      "sentence": "Replace label text in src/features/composer/button.tsx",
+      "generationMs": 751.315917,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 5,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-14",
+      "run": 3,
+      "wallMs": 541.7385829999985,
+      "id": "block-14/run-3",
+      "sentence": "Run npm run typecheck",
+      "generationMs": 541.480083,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 4,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-15",
+      "run": 3,
+      "wallMs": 891.1496249999982,
+      "id": "block-15/run-3",
+      "sentence": "Read docs/architecture/overview.md and docs/architecture/boundaries.md",
+      "generationMs": 890.969583,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 4,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-16",
+      "run": 3,
+      "wallMs": 1330.1407499999987,
+      "generationMs": 1329.933542,
+      "sentence": "Executed pwd, git status --short, git diff --stat, git branch --show-current, git log -1 --oneline.",
+      "id": "block-16/run-3",
+      "truthCheck": {
+        "pass": false,
+        "reasons": ["over-14-words"],
+        "wordCount": 15,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-17",
+      "run": 3,
+      "wallMs": 793.3711670000048,
+      "id": "block-17/run-3",
+      "sentence": "npm test failed with one assertion error.",
+      "generationMs": 792.636208,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-18",
+      "run": 3,
+      "wallMs": 972.8954159999994,
+      "generationMs": 972.705916,
+      "id": "block-18/run-3",
+      "sentence": "The tool output for cat src/entities/session/types.ts exports type SessionId as string.",
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 11,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-19",
+      "run": 3,
+      "wallMs": 748.0738340000025,
+      "id": "block-19/run-3",
+      "sentence": "src/widgets/session-view/state.ts:4: pending: false",
+      "generationMs": 747.854084,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 3,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-20",
+      "run": 3,
+      "wallMs": 830.351708000002,
+      "sentence": "The tool returned a list of files: lib, ui, styles.",
+      "id": "block-20/run-3",
+      "generationMs": 830.105375,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 10,
+        "unknownPaths": []
+      }
+    }
+  ]
+}

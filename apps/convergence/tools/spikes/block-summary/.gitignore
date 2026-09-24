@@ -1,0 +1,6 @@
+.venv/
+.cache/
+models/
+apple-fm/.build/
+__pycache__/
+scratch/

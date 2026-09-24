@@ -9,6 +9,7 @@ export default defineConfig({
   },
   test: {
     include: [
+      'tools/spikes/block-summary/**/*.pure.test.ts',
       'src/**/*.pure.test.ts',
       'electron/**/*.test.ts',
       // The lint config's canary lives beside the config it pins.

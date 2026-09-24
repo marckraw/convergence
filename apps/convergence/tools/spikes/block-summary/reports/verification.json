@@ -1,0 +1,42 @@
+{
+  "node": "24.15.0",
+  "npm install": {
+    "exit": 0,
+    "note": "No dependency changes; audit reported 36 existing vulnerabilities."
+  },
+  "npm run typecheck": {
+    "exit": 0
+  },
+  "env -u CODEX_HOME npm run test:pure": {
+    "exit": 1,
+    "convergence": {
+      "passed": 7090,
+      "failed": 1,
+      "skipped": 3
+    },
+    "failure": "Unchanged work-ledger.service.test.ts MAR-2981 R14: 26.506 ms against <20 ms. Isolated unchanged-file retry: 23/23 passed; measured 3.837 ms."
+  },
+  "npm run test:unit": {
+    "exit": 1,
+    "convergence": {
+      "passed": 1974,
+      "failed": 2
+    },
+    "failure": "Unchanged learn-loom.render.test.tsx and motion.styles.test.ts source-walk tests exceeded 5000 ms (7357/5197 ms). Isolated unchanged-file retry: 45/45 passed."
+  },
+  "chaperone check --fix": {
+    "exit": 0
+  },
+  "chaperone check": {
+    "exit": 0
+  },
+  "spike TypeScript standalone check": {
+    "exit": 0
+  },
+  "R2 mutation": "Path rejection disabled: invented-path and invented-folder tests fail. Original restored: 9/9 pass. Raw evidence in mutation.txt.",
+  "swift build -c release": {
+    "exit": 0,
+    "note": "Swift 6.4, Xcode 27; backward-compatible sampling initializer emits a deprecation warning."
+  },
+  "scope": "No app code, provider calls, package changes, global installs or private fixtures. Full suite failures remain disclosed; focused retries do not replace a green full-suite run."
+}
