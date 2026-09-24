@@ -1,6 +1,8 @@
 import { performance } from 'node:perf_hooks'
 import { serialize } from 'node:v8'
 import type Database from 'better-sqlite3'
+import type { ConversationWireEvent } from '../../../src/shared/types/conversation-item.types'
+import { percentile } from '../../../src/shared/lib/perf-marks.pure'
 
 export type ConversationReadTiming = {
   sessionId: string
@@ -8,7 +10,9 @@ export type ConversationReadTiming = {
   parseMs: number
   replyBytes: number
 }
-let conversationObserver: ((sample: ConversationReadTiming) => void) | undefined
+let conversationObserver:
+  | ((sample: ConversationReadTiming, items: unknown) => void)
+  | undefined
 
 export function recordConversationRead(
   sessionId: string,
@@ -16,12 +20,7 @@ export function recordConversationRead(
   parseMs: number,
   items: unknown,
 ): void {
-  conversationObserver?.({
-    sessionId,
-    selectMs,
-    parseMs,
-    replyBytes: serialize(items).byteLength,
-  })
+  conversationObserver?.({ sessionId, selectMs, parseMs, replyBytes: 0 }, items)
 }
 
 type Cost = { calls: number; totalMs: number; maxMs: number }
@@ -42,6 +41,12 @@ export class PerfProbe {
   private readonly statements = new Map<string, Cost>()
   private readonly summary: Cost = { calls: 0, totalMs: 0, maxMs: 0 }
   private renderer: unknown = null
+  private readonly payloadSizes: Array<() => void> = []
+  private readonly patchOps = { add: 0, patch: 0, append: 0, snapshot: 0 }
+  private readonly streamingItems = new Map<
+    string,
+    { sessionId: string; itemId: string; sends: number }
+  >()
 
   private measure<T>(cost: Cost, fn: () => T): T {
     const start = performance.now()
@@ -57,15 +62,45 @@ export class PerfProbe {
 
   observeConversations(): void {
     const previous = conversationObserver
-    conversationObserver = (sample) => this.conversationReads.push(sample)
+    conversationObserver = (sample, items) => {
+      this.conversationReads.push(sample)
+      this.payloadSizes.push(() => {
+        sample.replyBytes = serialize(items).byteLength
+      })
+    }
     this.undo.push(() => {
       conversationObserver = previous
     })
   }
 
+  /** The runner calls this only after the measured renderer paint has completed. */
+  flushPayloadSizes(): void {
+    for (const size of this.payloadSizes.splice(0)) size()
+  }
+
+  private recordPatch(
+    event: ConversationWireEvent<{ id: string; state: string }>,
+  ): void {
+    this.patchOps[event.op]++
+    if (
+      (event.op === 'add' || event.op === 'patch') &&
+      event.item.state === 'streaming'
+    ) {
+      const key = JSON.stringify([event.sessionId, event.item.id])
+      const item = this.streamingItems.get(key) ?? {
+        sessionId: event.sessionId,
+        itemId: event.item.id,
+        sends: 0,
+      }
+      if (event.op === 'patch') item.sends++
+      this.streamingItems.set(key, item)
+    }
+  }
+
   wrapSend(target: { send: Send }): void {
     const original = target.send
-    const { channels, measure } = this
+    const recordPatch = this.recordPatch.bind(this)
+    const { channels, measure, payloadSizes } = this
     target.send = function (channel, ...args) {
       const cost = channels.get(channel) ?? {
         calls: 0,
@@ -76,12 +111,23 @@ export class PerfProbe {
       }
       channels.set(channel, cost)
       cost.sends++
-      // V8-serialized payload bytes: a reproducible proxy, not Electron wire size.
-      try {
-        cost.bytes += serialize(args).byteLength
-      } catch {
-        /* Some Electron-transferable values are not V8 serializable. */
+      const event =
+        channel === 'session:conversationPatched'
+          ? (args[0] as ConversationWireEvent<{ id: string; state: string }>)
+          : undefined
+      if (event) recordPatch(event)
+      const size = () => {
+        // V8-serialized payload bytes: a reproducible proxy, not Electron wire size.
+        try {
+          cost.bytes += serialize(args).byteLength
+        } catch {
+          /* Some Electron-transferable values are not V8 serializable. */
+        }
       }
+      // Sending first is insufficient: main-thread sizing can still delay paint.
+      // Hold large snapshots until the runner explicitly ends that measurement.
+      if (event?.op === 'snapshot') payloadSizes.push(size)
+      else size()
       return measure(cost, () => original.call(this, channel, ...args))
     }
     this.undo.push(() => {
@@ -169,10 +215,24 @@ export class PerfProbe {
 
   report(renderer?: unknown) {
     if (renderer !== undefined) this.renderer = renderer
+    this.flushPayloadSizes()
     const elapsedSeconds = (performance.now() - this.startedAt) / 1000
+    const items = [...this.streamingItems.values()].map((item) => ({ ...item }))
+    const counts = items.map((item) => item.sends)
     return {
       elapsedSeconds,
       main: {
+        conversationPatched: {
+          byOp: { ...this.patchOps },
+          // Counts actual sends across all windows, including zero-patch items.
+          fullPatchesWhileStreaming: {
+            samples: counts.length,
+            min: counts.length ? Math.min(...counts) : 0,
+            p50: percentile(counts, 0.5),
+            max: counts.length ? Math.max(...counts) : 0,
+            items,
+          },
+        },
         cpuPercent: (() => {
           const cpu = process.cpuUsage(this.cpuStart)
           return (cpu.user + cpu.system) / (elapsedSeconds * 10000)
@@ -200,6 +260,7 @@ export class PerfProbe {
   }
 
   dispose(): void {
+    this.payloadSizes.length = 0
     for (const undo of this.undo.splice(0).reverse()) undo()
   }
 }

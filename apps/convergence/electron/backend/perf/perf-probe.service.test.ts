@@ -1,8 +1,125 @@
 import { describe, expect, it, vi } from 'vitest'
+import { serialize } from 'node:v8'
 import { createPerfProbe } from './perf-probe.service'
 import { closeDatabase, getDatabase } from '../database/database'
 
+vi.mock('node:v8', async (original) => {
+  const actual = await original<typeof import('node:v8')>()
+  return { ...actual, serialize: vi.fn(actual.serialize) }
+})
+
+it('M1b defers serialization until after getConversation returns, snapshot sends and paint completes', async () => {
+  const { SessionService } = await import('../session/session.service')
+  const { LocalExecutionHost } =
+    await import('../provider/execution-host/local-execution-host')
+  const { ProviderRegistry } = await import('../provider/provider-registry')
+  const sessions = new SessionService(
+    getDatabase(),
+    new LocalExecutionHost(new ProviderRegistry()),
+  )
+  const probe = createPerfProbe(true)!
+  const order: string[] = []
+  const actual = await vi.importActual<typeof import('node:v8')>('node:v8')
+  vi.mocked(serialize).mockImplementation((value) => {
+    order.push('serialize')
+    return actual.serialize(value)
+  })
+  vi.stubEnv('CONVERGENCE_PERF', '1')
+  probe.observeConversations()
+  const target: { send: (channel: string, ...args: unknown[]) => void } = {
+    send: vi.fn(() => {
+      order.push('snapshot send')
+    }),
+  }
+  probe.wrapSend(target)
+  try {
+    const items = sessions.getConversation('missing')
+    order.push('getConversation returned')
+    target.send('session:conversationPatched', {
+      op: 'snapshot',
+      sessionId: 'missing',
+      items,
+      generation: 1,
+      pageNonce: 'test',
+    })
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    order.push('paint completed')
+    expect(order).toEqual([
+      'getConversation returned',
+      'snapshot send',
+      'paint completed',
+    ])
+    probe.flushPayloadSizes()
+    expect(order).toEqual([
+      'getConversation returned',
+      'snapshot send',
+      'paint completed',
+      'serialize',
+      'serialize',
+    ])
+    expect(probe.conversationReads[0]!.replyBytes).toBeGreaterThan(0)
+    expect(
+      probe.report().main.ipc['session:conversationPatched']!.bytes,
+    ).toBeGreaterThan(0)
+  } finally {
+    vi.mocked(serialize).mockImplementation(actual.serialize)
+    vi.unstubAllEnvs()
+    probe.dispose()
+    closeDatabase()
+  }
+})
+
 describe('main perf recorder', () => {
+  it('tallies wire operations and full streaming patches per item across windows, including zeros', () => {
+    const probe = createPerfProbe(true)!
+    const windows = [{ send: vi.fn() }, { send: vi.fn() }]
+    const send = (event: unknown) => {
+      for (const window of windows)
+        window.send('session:conversationPatched', event)
+    }
+    try {
+      for (const window of windows) probe.wrapSend(window)
+      for (const sessionId of ['one', 'two']) {
+        send({
+          op: 'add',
+          sessionId,
+          item: { id: 'same-id', state: 'streaming' },
+        })
+      }
+      send({
+        op: 'patch',
+        sessionId: 'one',
+        item: { id: 'same-id', state: 'streaming' },
+      })
+      send({
+        op: 'append',
+        sessionId: 'two',
+        itemId: 'same-id',
+        append: 'text',
+      })
+      send({
+        op: 'patch',
+        sessionId: 'one',
+        item: { id: 'same-id', state: 'complete' },
+      })
+      send({ op: 'snapshot', sessionId: 'one', items: [] })
+      expect(probe.report().main.conversationPatched).toEqual({
+        byOp: { add: 4, patch: 4, append: 2, snapshot: 2 },
+        fullPatchesWhileStreaming: {
+          samples: 2,
+          min: 0,
+          p50: 0,
+          max: 2,
+          items: [
+            { sessionId: 'one', itemId: 'same-id', sends: 2 },
+            { sessionId: 'two', itemId: 'same-id', sends: 0 },
+          ],
+        },
+      })
+    } finally {
+      probe.dispose()
+    }
+  })
   it('constructs no recorder and leaves original send untouched when off', () => {
     const original = vi.fn()
     const target = { send: original }
@@ -166,6 +283,7 @@ it('M1b R4 flag-off getConversation performs no timing or serialization', async 
     sessions.getConversation('missing')
     expect(clock).toHaveBeenCalled()
     expect(probe.conversationReads).toHaveLength(1)
+    probe.flushPayloadSizes()
     expect(probe.conversationReads[0]!.replyBytes).toBeGreaterThan(0)
   } finally {
     clock.mockRestore()
@@ -269,6 +387,21 @@ it.each(['busy', 'open', 'stream-into-open'])(
       ])
       expect(report.scenario.targetId).toBe('session-2')
       expect(report.scenario.name).toBe(scenario)
+      for (const op of ['add', 'patch', 'append', 'snapshot'])
+        numeric(report.main.conversationPatched.byOp[op])
+      expect(
+        Object.values(report.main.conversationPatched.byOp).reduce(
+          (total: number, count) => total + Number(count),
+          0,
+        ),
+      ).toBe(report.main.ipc['session:conversationPatched']?.sends ?? 0)
+      if (scenario === 'stream-into-open') {
+        const full = report.main.conversationPatched.fullPatchesWhileStreaming
+        for (const key of ['samples', 'min', 'p50', 'max']) numeric(full[key])
+        expect(full.samples).toBe(2)
+        expect(full.items).toHaveLength(2)
+        for (const item of full.items) numeric(item.sends)
+      }
       if (scenario === 'open') {
         expect(report.open.targetId).toBe('session-2')
         expect(report.open.runs).toHaveLength(5)

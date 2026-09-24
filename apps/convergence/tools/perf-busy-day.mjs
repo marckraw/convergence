@@ -274,7 +274,7 @@ async function main() {
   if (params.db) {
     copy = temp + '/input-copy.db'
     const input = new Database(params.db, { readonly: true, fileMustExist: true })
-    try { await input.backup(copy) } finally { input.close() }
+    try { input.prepare('VACUUM INTO ?').run(copy) } finally { input.close() }
   }
   const db = getDatabase(copy)
   const registry = new ProviderRegistry(); registry.register(provider)
@@ -382,8 +382,12 @@ async function main() {
   if (params.scenario === 'open') {
     for (let iteration = 0; iteration < 5; iteration++) {
       await openConversation(small.id)
+      probe.flushPayloadSizes()
       const before = probe.conversationReads.length
       await openConversation(target.id)
+      // This await has observed the target's paint (or completed the Node read).
+      // Both conversation reply and snapshot send sizing are outside that span.
+      probe.flushPayloadSizes()
       const sample = probe.conversationReads.slice(before).find((sample) => sample.sessionId === target.id)
       if (!sample) throw new Error('Missing getConversation timing')
       const paint = underNode ? 0 : (await paintSamples()).filter((sample) => sample.sessionId === target.id).at(-1).ms
