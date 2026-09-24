@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
 import type { ConversationItem, Session } from '@/entities/session'
 import { useResponseAnnotationStore } from '@/entities/response-annotation'
 import type { ComposerSessionContext } from '@/features/composer'
@@ -305,6 +311,79 @@ describe('SessionConversationSurface', () => {
     )
     expect(screen.queryByTestId('annotation-selection-popover')).toBeNull()
     expect(screen.queryByDisplayValue('draft that must not cross')).toBeNull()
+  })
+})
+
+describe('the Actions button (MAR-3393 R1)', () => {
+  function renderSurface(
+    overrides: Partial<{
+      session: Session
+      composerContext: ComposerSessionContext | null
+      composerDisabledReason: string | null
+    }> = {},
+  ) {
+    render(
+      <SessionConversationSurface
+        session={overrides.session ?? baseSession}
+        conversationItems={[]}
+        composerContext={
+          overrides.composerContext === undefined
+            ? { kind: 'global', activeSessionId: 'session-1' }
+            : overrides.composerContext
+        }
+        composerDisabledReason={overrides.composerDisabledReason ?? null}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
+      />,
+    )
+  }
+
+  function actionsButton() {
+    return screen.queryByRole('button', { name: 'Actions' })
+  }
+
+  it('is there for a global conversation', () => {
+    renderSurface()
+    expect(actionsButton()).toBeInTheDocument()
+  })
+
+  it('is there for a project conversation', () => {
+    renderSurface({
+      session: { ...baseSession, contextKind: 'project', projectId: 'p-1' },
+      composerContext: {
+        kind: 'project',
+        projectId: 'p-1',
+        workspaceId: null,
+        activeSessionId: 'session-1',
+      },
+    })
+    expect(actionsButton()).toBeInTheDocument()
+  })
+
+  it('is absent for a removed worktree, no context, a draft, a shell and a terminal-primary session', () => {
+    renderSurface({ composerDisabledReason: 'Worktree removed.' })
+    expect(actionsButton()).toBeNull()
+    cleanup()
+
+    renderSurface({ composerContext: null })
+    expect(actionsButton()).toBeNull()
+    cleanup()
+
+    renderSurface({
+      composerContext: { kind: 'global', activeSessionId: null },
+    })
+    expect(actionsButton()).toBeNull()
+    cleanup()
+
+    renderSurface({ session: { ...baseSession, providerId: 'shell' } })
+    expect(actionsButton()).toBeNull()
+    cleanup()
+
+    renderSurface({
+      session: { ...baseSession, primarySurface: 'terminal' },
+    })
+    expect(actionsButton()).toBeNull()
   })
 })
 
