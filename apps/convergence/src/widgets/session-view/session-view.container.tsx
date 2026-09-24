@@ -11,6 +11,7 @@ import { useProjectStore } from '@/entities/project'
 import {
   AttentionIndicator,
   useSessionStore,
+  type InteractionResponse,
   type SessionContextWindow,
 } from '@/entities/session'
 import {
@@ -138,13 +139,29 @@ export const SessionView: FC = () => {
     !isRemoteExecutionHost(session.executionHost)
   const harness = useHarnessFacts(supportsHarnessFacts ? activeSessionId : null)
   const parallel = useParallelWork(activeSessionId, activeConversation)
-  const selectParallel = (id: string | null) => {
-    if (!parallelOpen && document.activeElement instanceof HTMLElement)
-      parallelInvoker.current = document.activeElement
-    if (activeSessionId)
-      setParallelSelection({ sessionId: activeSessionId, id })
-    setParallelOpen(true)
-  }
+  // The transcript is a memo boundary (MAR-3310 F1e R2): what it is handed
+  // keeps its identity until what it does changes.
+  const selectParallel = useCallback(
+    (id: string | null) => {
+      if (!parallelOpen && document.activeElement instanceof HTMLElement)
+        parallelInvoker.current = document.activeElement
+      if (activeSessionId)
+        setParallelSelection({ sessionId: activeSessionId, id })
+      setParallelOpen(true)
+    },
+    [parallelOpen, activeSessionId],
+  )
+  const answerInput = useCallback(
+    (sessionId: string, response: InteractionResponse, displayText: string) => {
+      void sendMessageToSession({
+        sessionId,
+        text: displayText,
+        deliveryMode: 'answer',
+        interactionResponse: response,
+      })
+    },
+    [sendMessageToSession],
+  )
   const closeParallel = () => {
     setParallelOpen(false)
     ;(parallelInvoker.current?.isConnected
@@ -796,14 +813,7 @@ export const SessionView: FC = () => {
           }
           onApprove={approveSession}
           onDeny={denySession}
-          onInputAnswer={(sessionId, response, displayText) => {
-            void sendMessageToSession({
-              sessionId,
-              text: displayText,
-              deliveryMode: 'answer',
-              interactionResponse: response,
-            })
-          }}
+          onInputAnswer={answerInput}
         />
       </div>
 

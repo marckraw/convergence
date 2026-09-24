@@ -4,6 +4,10 @@ import {
   useSessionStore,
 } from './session.model'
 import type { ConversationItem } from './session.types'
+import {
+  liveConversationItem,
+  resetLiveConversationTextForTests,
+} from './conversation-live-text.model'
 import type { ConversationWireEvent } from '@/shared/types/conversation-item.types'
 
 const getConversation = vi.fn()
@@ -11,6 +15,7 @@ const resyncConversation = vi.fn().mockResolvedValue(undefined)
 let sessionId: string
 beforeEach(() => {
   resetConversationLoadsForTests()
+  resetLiveConversationTextForTests()
   vi.resetAllMocks()
   resyncConversation.mockResolvedValue(undefined)
   sessionId = 'stream-session'
@@ -95,10 +100,15 @@ for (const global of [false, true]) {
             },
       )
     }
-    function current() {
+    // MAR-3310 F1e R1: appended text lives beside the list; read the items
+    // as their rows show them, and the list itself where identity is the claim.
+    function list() {
       return global
         ? useSessionStore.getState().activeGlobalConversation
         : useSessionStore.getState().activeConversation
+    }
+    function current() {
+      return list().map(liveConversationItem)
     }
     function load() {
       return global
@@ -208,10 +218,10 @@ for (const global of [false, true]) {
         // This fits the stale buffer: only the in-flight guard can reject it.
         if (reason === 'missing')
           emit({ op: 'patch', sessionId, item: message('one') })
-        const waiting = current()
+        const waiting = list()
         append(3, ' WRONG')
         append(13, ' also dropped')
-        expect(current()).toBe(waiting)
+        expect(list()).toBe(waiting)
         expect(resyncConversation).toHaveBeenCalledTimes(1)
         if (reason === 'gap') expect(before).toEqual([message('one')])
         snapshot('one two three', 1)
@@ -235,10 +245,10 @@ for (const global of [false, true]) {
       )
       snapshot('one two', 2)
       append(7, ' three')
-      const newest = current()
+      const newest = list()
       expect(current()).toEqual([message('one two three')])
       snapshot('older snapshot', 1)
-      expect(current()).toBe(newest)
+      expect(list()).toBe(newest)
     })
 
     it('R4 opens and switches back mid-stream with a flushed snapshot', async () => {
@@ -367,9 +377,9 @@ for (const global of [false, true]) {
       append(7, ' three')
       const pageNonce = resyncConversation.mock.lastCall?.[2]
       expect(pageNonce).toEqual(expect.any(String))
-      const before = current()
+      const before = list()
       snapshot('old page', 999, 'previous-page')
-      expect(current()).toBe(before)
+      expect(list()).toBe(before)
       snapshot('one two three', 1)
       append(13, ' four')
       expect(current()).toEqual([message('one two three four')])

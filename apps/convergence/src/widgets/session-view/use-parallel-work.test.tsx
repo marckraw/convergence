@@ -126,3 +126,39 @@ it('R8 L5 parent key is memoised across unchanged renders — mutation map items
   expect(scan.mock.calls.length - initial).toBe(0)
   scan.mockRestore()
 })
+
+it('MAR-3310 F1e R4 an evidence event that changes nothing keeps the rows; a real change replaces them — mutation always store a new record turns red', async () => {
+  const callbacks: Array<(event: { sessionId: string }) => void> = []
+  vi.mocked(parallelWorkApi.subscribe).mockImplementation((callback) => {
+    callbacks.push(callback)
+    return () => {}
+  })
+  const task = (status: SessionTask['status']) =>
+    ({
+      taskId: 'stream-task',
+      sessionId: 'streaming',
+      taskType: 'monitor',
+      status,
+    }) as SessionTask
+  vi.mocked(parallelWorkApi.read).mockImplementation(async () => ({
+    runs: [],
+    tasks: [task('running')],
+  }))
+  const { result } = renderHook(() => useParallelWork('streaming', []))
+  await act(async () => {})
+  const first = result.current.rows
+  // A streaming provider reports the same task on every tick.
+  for (let tick = 0; tick < 5; tick += 1)
+    await act(async () => callbacks.at(-1)!({ sessionId: 'streaming' }))
+  const afterSameEvidence = result.current.rows
+  vi.mocked(parallelWorkApi.read).mockImplementation(async () => ({
+    runs: [],
+    tasks: [task('completed')],
+  }))
+  await act(async () => callbacks.at(-1)!({ sessionId: 'streaming' }))
+  expect({
+    kept: afterSameEvidence === first,
+    replaced: result.current.rows !== first,
+    status: result.current.rows[0]?.task?.status,
+  }).toEqual({ kept: true, replaced: true, status: 'completed' })
+})

@@ -7,7 +7,7 @@ import {
   type SpaceArtifact,
   type SpaceSource,
 } from '@/entities/space'
-import type { SessionSummary } from '@/entities/session'
+import type { InteractionResponse, SessionSummary } from '@/entities/session'
 import { AttentionIndicator, useSessionStore } from '@/entities/session'
 import {
   resolveSessionActivityLabel,
@@ -140,13 +140,29 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
   const parallelButton = useRef<HTMLButtonElement>(null)
   const parallelInvoker = useRef<HTMLElement | null>(null)
   const parallel = useParallelWork(activeSessionId, conversationItems)
-  const selectParallel = (id: string | null) => {
-    if (!parallelOpen && document.activeElement instanceof HTMLElement)
-      parallelInvoker.current = document.activeElement
-    if (activeSessionId)
-      setParallelSelection({ sessionId: activeSessionId, id })
-    setParallelOpen(true)
-  }
+  // The transcript is a memo boundary (MAR-3310 F1e R2): what it is handed
+  // keeps its identity until what it does changes.
+  const selectParallel = useCallback(
+    (id: string | null) => {
+      if (!parallelOpen && document.activeElement instanceof HTMLElement)
+        parallelInvoker.current = document.activeElement
+      if (activeSessionId)
+        setParallelSelection({ sessionId: activeSessionId, id })
+      setParallelOpen(true)
+    },
+    [parallelOpen, activeSessionId],
+  )
+  const answerInput = useCallback(
+    (sessionId: string, response: InteractionResponse, displayText: string) => {
+      void sendMessageToSession({
+        sessionId,
+        text: displayText,
+        deliveryMode: 'answer',
+        interactionResponse: response,
+      })
+    },
+    [sendMessageToSession],
+  )
   const closeParallel = () => {
     setParallelOpen(false)
     ;(parallelInvoker.current?.isConnected
@@ -711,14 +727,7 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
           composerContext={{ kind: 'global', activeSessionId: session.id }}
           onApprove={approveSession}
           onDeny={denySession}
-          onInputAnswer={(sessionId, response, displayText) => {
-            void sendMessageToSession({
-              sessionId,
-              text: displayText,
-              deliveryMode: 'answer',
-              interactionResponse: response,
-            })
-          }}
+          onInputAnswer={answerInput}
         />
         <ParallelWork
           key={session.id}

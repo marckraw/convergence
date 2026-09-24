@@ -12,6 +12,7 @@ import { parallelWorkMarkers } from './parallel-work.pure'
 import { ParallelWorkMarkerView } from './parallel-work-marker.presentational'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -46,6 +47,23 @@ import {
 } from './transcript-view.model'
 import { isTranscriptNearBottom } from './session-transcript-scroll.pure'
 
+/**
+ * The only session fields the transcript reads (MAR-3310 F1e R2). A summary
+ * update that changes none of them does not redraw the transcript; reading
+ * another field means adding it here, where the memo boundary compares it.
+ */
+const TRANSCRIPT_SESSION_FIELDS = [
+  'id',
+  'status',
+  'hasActiveHandle',
+  'attention',
+  'workingDirectory',
+] as const satisfies readonly (keyof Session)[]
+type TranscriptSession = Pick<
+  Session,
+  (typeof TRANSCRIPT_SESSION_FIELDS)[number]
+>
+
 interface SessionTranscriptProps {
   compactions?: SessionHarnessFacts['compactions']
   parallelRows?: ParallelWorkRow[]
@@ -73,6 +91,13 @@ const TRANSCRIPT_ROW_ESTIMATE_PX = 160
 const TRANSCRIPT_OVERSCAN = 6
 const itemOfEntry = (entry: ConversationRenderEntry) => entry.item
 
+interface RowActions {
+  approve: () => void
+  approveSession: () => void
+  deny: () => void
+  inputAnswer: (response: InteractionResponse, displayText: string) => void
+}
+
 /** Full and unfolded rows draw exactly as before; only open members hang. */
 const MemberFrame: FC<{ member: boolean; children: ReactNode }> = ({
   member,
@@ -80,7 +105,12 @@ const MemberFrame: FC<{ member: boolean; children: ReactNode }> = ({
 }) =>
   member ? <div className={WORK_BLOCK_MEMBER_CLASS}>{children}</div> : children
 
-const SessionTranscriptContent: FC<SessionTranscriptProps> = ({
+/** Inside the boundary only the compared fields can be read. */
+type SessionTranscriptContentProps = Omit<SessionTranscriptProps, 'session'> & {
+  session: TranscriptSession
+}
+
+const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
   session,
   compactions = EMPTY_COMPACTIONS,
   parallelRows = EMPTY_PARALLEL_ROWS,
@@ -104,6 +134,66 @@ const SessionTranscriptContent: FC<SessionTranscriptProps> = ({
   const [resolvedInputIds, setResolvedInputIds] = useState<Set<string>>(
     () => new Set(),
   )
+  // R3: a row's handlers are made once per item and call the latest props,
+  // so a redraw of the transcript does not redraw an actionable row.
+  const latestRef = useRef({
+    sessionId: session.id,
+    onApprove,
+    onDeny,
+    onInputAnswer,
+  })
+  useLayoutEffect(() => {
+    latestRef.current = {
+      sessionId: session.id,
+      onApprove,
+      onDeny,
+      onInputAnswer,
+    }
+  })
+  const rowActionsRef = useRef(new WeakMap<ConversationItemEntry, RowActions>())
+  const rowActions = (entry: ConversationItemEntry): RowActions => {
+    const cached = rowActionsRef.current.get(entry)
+    if (cached) return cached
+    const providerApprovalId = entry.providerMeta.providerItemId ?? undefined
+    const resolveApproval = () =>
+      setResolvedApprovalIds((current) => new Set([...current, entry.id]))
+    const actions: RowActions = {
+      approve: () => {
+        resolveApproval()
+        latestRef.current.onApprove(
+          latestRef.current.sessionId,
+          providerApprovalId,
+        )
+      },
+      deny: () => {
+        resolveApproval()
+        latestRef.current.onDeny(
+          latestRef.current.sessionId,
+          providerApprovalId,
+        )
+      },
+      approveSession: () => {
+        resolveApproval()
+        latestRef.current.onApprove(
+          latestRef.current.sessionId,
+          providerApprovalId,
+          { scope: 'session' },
+        )
+      },
+      inputAnswer: (response, displayText) => {
+        setResolvedInputIds((current) => new Set([...current, entry.id]))
+        latestRef.current.onInputAnswer(
+          latestRef.current.sessionId,
+          entry.kind === 'input-request' && entry.responseProviderItemId
+            ? { ...response, providerItemId: entry.responseProviderItemId }
+            : response,
+          displayText,
+        )
+      },
+    }
+    rowActionsRef.current.set(entry, actions)
+    return actions
+  }
 
   const turnStartedAtById = useMemo(() => {
     const startedAtById = new Map<string, string>()
@@ -277,11 +367,17 @@ const SessionTranscriptContent: FC<SessionTranscriptProps> = ({
     }
   }, [session.attention])
 
+  // R2: a new getItemKey drops every measurement, so it changes only with
+  // the rows themselves.
+  const getItemKey = useCallback(
+    (index: number) => displayRows[index]?.key ?? index,
+    [displayRows],
+  )
   const rowVirtualizer = useVirtualizer({
     count: displayRows.length,
     getScrollElement: () => scrollParent,
     estimateSize: () => TRANSCRIPT_ROW_ESTIMATE_PX,
-    getItemKey: (index) => displayRows[index]?.key ?? index,
+    getItemKey,
     overscan: TRANSCRIPT_OVERSCAN,
     enabled: scrollParent !== null,
     initialRect: {
@@ -297,6 +393,14 @@ const SessionTranscriptContent: FC<SessionTranscriptProps> = ({
       (row) =>
         row.kind !== 'block' && row.entry.item.id === navigationTarget.id,
     )
+    const blockId =
+      index < 0 ? blockOfMember.get(navigationTarget.id) : undefined
+    if (index < 0 && !blockId) {
+      // MAR-3310 F1e R7: a jump that cannot land is dropped, and it leaves
+      // the scroll where it was; a reply streaming below keeps following.
+      navigatedNonce.current = navigationTarget.nonce
+      return
+    }
     // The jump owns the scroll: bottom-follow stops and a queued
     // scroll-to-latest frame is dropped, or it fires after the jump and wins.
     bottomFollowRef.current = false
@@ -304,11 +408,10 @@ const SessionTranscriptContent: FC<SessionTranscriptProps> = ({
       window.cancelAnimationFrame(pendingScrollFrameRef.current)
       pendingScrollFrameRef.current = null
     }
-    if (index < 0) {
+    if (blockId) {
       // R6: a jump into a folded block opens it; the rows it adds bring this
       // effect back, and the second pass lands on the item itself.
-      const blockId = blockOfMember.get(navigationTarget.id)
-      if (blockId) openBlock(blockId)
+      openBlock(blockId)
       return
     }
     navigatedNonce.current = navigationTarget.nonce
@@ -503,69 +606,22 @@ const SessionTranscriptContent: FC<SessionTranscriptProps> = ({
                       }
                       onApprove={
                         isActionableApproval
-                          ? () => {
-                              setResolvedApprovalIds((current) => {
-                                const next = new Set(current)
-                                next.add(entry.id)
-                                return next
-                              })
-                              onApprove(
-                                session.id,
-                                entry.providerMeta.providerItemId ?? undefined,
-                              )
-                            }
+                          ? rowActions(entry).approve
                           : undefined
                       }
                       onDeny={
                         isActionableApproval
-                          ? () => {
-                              setResolvedApprovalIds(
-                                (current) => new Set([...current, entry.id]),
-                              )
-                              onDeny(
-                                session.id,
-                                entry.providerMeta.providerItemId ?? undefined,
-                              )
-                            }
+                          ? rowActions(entry).deny
                           : undefined
                       }
                       onApproveSession={
                         isActionableApproval
-                          ? () => {
-                              setResolvedApprovalIds((current) => {
-                                const next = new Set(current)
-                                next.add(entry.id)
-                                return next
-                              })
-                              onApprove(
-                                session.id,
-                                entry.providerMeta.providerItemId ?? undefined,
-                                { scope: 'session' },
-                              )
-                            }
+                          ? rowActions(entry).approveSession
                           : undefined
                       }
                       onInputAnswer={
                         isActionableInput
-                          ? (response, displayText) => {
-                              setResolvedInputIds((current) => {
-                                const next = new Set(current)
-                                next.add(entry.id)
-                                return next
-                              })
-                              onInputAnswer(
-                                session.id,
-                                entry.kind === 'input-request' &&
-                                  entry.responseProviderItemId
-                                  ? {
-                                      ...response,
-                                      providerItemId:
-                                        entry.responseProviderItemId,
-                                    }
-                                  : response,
-                                displayText,
-                              )
-                            }
+                          ? rowActions(entry).inputAnswer
                           : undefined
                       }
                     />
@@ -583,11 +639,33 @@ const SessionTranscriptContent: FC<SessionTranscriptProps> = ({
   )
 }
 
+/**
+ * R2: every prop by identity, and the session by the fields the transcript
+ * reads, so a summary update that changes none of them makes no commit.
+ */
+function sameTranscriptProps(
+  previous: Readonly<SessionTranscriptProps>,
+  next: Readonly<SessionTranscriptProps>,
+): boolean {
+  const keys = new Set([...Object.keys(previous), ...Object.keys(next)])
+  for (const key of keys) {
+    if (key === 'session') continue
+    const name = key as keyof SessionTranscriptProps
+    if (!Object.is(previous[name], next[name])) return false
+  }
+  return TRANSCRIPT_SESSION_FIELDS.every((field) =>
+    Object.is(previous.session[field], next.session[field]),
+  )
+}
+
 // The preload flag is immutable; off keeps the original component boundary.
-export const SessionTranscript: FC<SessionTranscriptProps> = perfApi.isEnabled()
-  ? (props) => (
-      <PerfProfiler id="transcript">
-        <SessionTranscriptContent {...props} />
-      </PerfProfiler>
-    )
-  : SessionTranscriptContent
+export const SessionTranscript = memo<SessionTranscriptProps>(
+  perfApi.isEnabled()
+    ? (props) => (
+        <PerfProfiler id="transcript">
+          <SessionTranscriptContent {...props} />
+        </PerfProfiler>
+      )
+    : SessionTranscriptContent,
+  sameTranscriptProps,
+)

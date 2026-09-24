@@ -1,7 +1,10 @@
-import { useState, useCallback } from 'react'
+import { memo, useState, useCallback } from 'react'
 import type { FC } from 'react'
-import type { ConversationItem as ConversationItemEntry } from '@/entities/session'
-import type { InteractionResponse } from '@/entities/session'
+import {
+  useLiveConversationItem,
+  type ConversationItem as ConversationItemEntry,
+  type InteractionResponse,
+} from '@/entities/session'
 import {
   AttachmentPreviewContainer,
   useAttachmentStore,
@@ -24,8 +27,8 @@ interface ConversationItemProps {
 
 const EMPTY_RESOLVED_ATTACHMENTS: Record<string, Attachment> = {}
 
-export const ConversationItem: FC<ConversationItemProps> = ({
-  entry,
+const ConversationItemContent: FC<ConversationItemProps> = ({
+  entry: listEntry,
   sessionId,
   turnStartedAt,
   injectedContextText = null,
@@ -34,6 +37,9 @@ export const ConversationItem: FC<ConversationItemProps> = ({
   onDeny,
   onInputAnswer,
 }) => {
+  // MAR-3310 F1e R1: a growing reply's text lives beside the list, and only
+  // this row reads it.
+  const entry = useLiveConversationItem(listEntry)
   const resolvedMap = useAttachmentStore(
     (state) => state.resolved[sessionId] ?? EMPTY_RESOLVED_ATTACHMENTS,
   )
@@ -85,3 +91,10 @@ export const ConversationItem: FC<ConversationItemProps> = ({
     </>
   )
 }
+
+/**
+ * A memo boundary per row (MAR-3310 F1e R3): the transcript redraws when a
+ * row measures taller, and a row whose item and handlers did not change does
+ * not redraw with it. Handlers must therefore be stable per item.
+ */
+export const ConversationItem = memo(ConversationItemContent)

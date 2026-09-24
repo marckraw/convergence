@@ -4,11 +4,16 @@ import {
   parallelWorkTime,
   type ParallelWorkRow,
 } from '@/shared/lib/parallel-work.pure'
-import type { SessionTask } from '@/shared/types/harness-evidence.types'
+import type {
+  SessionAgentRun,
+  SessionTask,
+} from '@/shared/types/harness-evidence.types'
 import type { ConversationItem } from '@/entities/session'
 import {
   descendantActivity,
+  parallelWorkLinksKey,
   parallelWorkMarkers,
+  sameParallelWorkEvidence,
   workRowKey,
   workTitle,
   workStatus,
@@ -268,4 +273,51 @@ it('MAR-3308 R1 each tone is its own class pair — mutation reuse one tone for 
     },
     distinct: 5,
   })
+})
+
+it('MAR-3310 F1e R4 the links key names each run with the agent that spawned it, and is blind to text — mutation read the item text turns red', () => {
+  const run = { id: 'run-1', spawnedByItemId: 'spawn' } as SessionAgentRun
+  const orphan = { id: 'run-2', spawnedByItemId: 'gone' } as SessionAgentRun
+  const spawn = {
+    id: 'spawn',
+    kind: 'tool-call',
+    agentRunId: 'parent-run',
+  } as ConversationItem
+  const plain = { id: 'plain', kind: 'message', text: 'a' } as ConversationItem
+  const grown = { ...plain, text: 'a longer reply' } as ConversationItem
+  expect({
+    key: parallelWorkLinksKey([spawn, plain], [run, orphan]),
+    sameWhenTextGrows:
+      parallelWorkLinksKey([spawn, plain], [run]) ===
+      parallelWorkLinksKey([spawn, grown], [run]),
+  }).toEqual({
+    key: JSON.stringify([
+      ['spawn', 'parent-run'],
+      ['gone', null],
+    ]),
+    sameWhenTextGrows: true,
+  })
+})
+
+it('MAR-3310 F1e R4 two reads are the same evidence only when runs and tasks both match — mutation compare tasks only turns red', () => {
+  const task = { taskId: 't', status: 'running' } as SessionTask
+  const run = { id: 'r', status: 'running' } as SessionAgentRun
+  const read = (runs: SessionAgentRun[], tasks: SessionTask[]) => ({
+    runs,
+    tasks,
+  })
+  expect({
+    same: sameParallelWorkEvidence(
+      read([run], [task]),
+      read([{ ...run }], [{ ...task }]),
+    ),
+    taskChanged: sameParallelWorkEvidence(
+      read([run], [task]),
+      read([run], [{ ...task, status: 'completed' }]),
+    ),
+    runChanged: sameParallelWorkEvidence(
+      read([run], [task]),
+      read([{ ...run, status: 'completed' }], [task]),
+    ),
+  }).toEqual({ same: true, taskChanged: false, runChanged: false })
 })

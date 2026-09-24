@@ -14,8 +14,9 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 
-const HELP = `Usage: node apps/convergence/tools/perf-busy-day.mjs [--node] [--db path] [--open id|biggest] [--scenario busy|open|stream-into-open] [--sessions N] [--streaming K] [--minutes M] [--loom] [--out file.json]
+const HELP = `Usage: node apps/convergence/tools/perf-busy-day.mjs [--node] [--db path] [--open id|biggest] [--scenario busy|open|stream-into-open] [--sessions N] [--streaming K] [--minutes M] [--target-items N] [--loom] [--out file.json]
 Defaults: 12 sessions, 6 streaming, 3 minutes, Loom open. Fake provider: one delta/30ms; burst: 60 keys/80ms.
+--target-items N seeds the synthetic target conversation with N items (user, tool call, tool result, reply); not with --db.
 Electron measures a separate profiling renderer build; --node measures main only (renderer.measured=false).
 No installed-app bootstrap, account data, real providers or network services are used.`
 const args = process.argv.slice(2)
@@ -34,6 +35,7 @@ const params = {
   tokenMs: 30,
   keys: 60,
   keyMs: 80,
+  targetItems: 0,
 }
 let underNode = false
 let output = resolve('perf-busy-day.json')
@@ -47,6 +49,7 @@ for (let i = 0; i < args.length; i++) {
   else if (arg === '--out') output = resolve(args[++i])
   else if (['--sessions', '--streaming', '--minutes'].includes(arg))
     params[arg.slice(2)] = Number(args[++i])
+  else if (arg === '--target-items') params.targetItems = Number(args[++i])
   else throw new Error(`Unknown argument: ${arg}\n${HELP}`)
 }
 if (!['busy', 'open', 'stream-into-open'].includes(params.scenario))
@@ -63,6 +66,10 @@ if (
   throw new Error(
     'Require sessions >= 1, 0 <= streaming <= sessions, minutes >= 0.1',
   )
+if (!Number.isInteger(params.targetItems) || params.targetItems < 0)
+  throw new Error('Require --target-items >= 0')
+if (params.targetItems > 0 && params.db)
+  throw new Error('--target-items seeds a synthetic target; it is not for --db')
 if (params.db && existsSync(output)) {
   const inputStat = statSync(params.db),
     outputStat = statSync(output)
@@ -226,6 +233,7 @@ import os from 'node:os'
 import { getDatabase, closeDatabase } from ${source('electron/backend/database/database.ts')}
 import { ProjectService } from ${source('electron/backend/project/project.service.ts')}
 import { percentile } from ${source('src/shared/lib/perf-marks.pure.ts')}
+import { conversationItemToInsertRow } from ${source('electron/backend/session/conversation-item.pure.ts')}
 import { SessionService } from ${source('electron/backend/session/session.service.ts')}
 import { ProviderRegistry } from ${source('electron/backend/provider/provider-registry.ts')}
 import { LocalExecutionHost } from ${source('electron/backend/provider/execution-host/local-execution-host.ts')}
@@ -300,6 +308,25 @@ async function main() {
   }
   const target = params.open === 'biggest' ? rows[0] : rows.find((row) => row.id === params.open)
   if (!target) throw new Error('Conversation not found: ' + params.open)
+  if (params.targetItems > 0) {
+    // MAR-3310 F1e R5: a big open conversation without anyone's database.
+    const insert = db.prepare('INSERT INTO session_conversation_items (id, session_id, sequence, turn_id, agent_run_id, task_id, kind, state, payload_json, provider_item_id, provider_event_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    const providerMeta = { providerId: provider.id, providerItemId: null, providerEventType: null }
+    const at = (i) => new Date(Date.UTC(2026, 0, 1) + i * 1000).toISOString()
+    db.transaction(() => {
+      for (let i = 0; i < params.targetItems; i++) {
+        const turn = Math.floor(i / 4)
+        const base = { id: 'perf-item-' + i, sessionId: target.id, sequence: i + 1, turnId: 'perf-turn-' + turn, state: 'complete', createdAt: at(i), updatedAt: at(i), providerMeta }
+        const item = i % 4 === 0 ? { ...base, kind: 'message', actor: 'user', text: 'Synthetic question ' + turn }
+          : i % 4 === 1 ? { ...base, kind: 'tool-call', toolName: 'Read', inputText: JSON.stringify({ file_path: '/repo/src/file-' + turn + '.ts' }) }
+          : i % 4 === 2 ? { ...base, kind: 'tool-result', toolName: 'Read', relatedItemId: 'perf-item-' + (i - 1), outputText: 'export const value' + turn + ' = ' + turn }
+          : { ...base, kind: 'message', actor: 'assistant', text: 'Synthetic **answer** ' + turn + '.\n\n- one\n- two' }
+        const row = conversationItemToInsertRow(item)
+        insert.run(row.id, row.sessionId, row.sequence, row.turnId, row.agentRunId, row.taskId, row.kind, row.state, row.payloadJson, row.providerItemId, row.providerEventType, row.createdAt, row.updatedAt)
+      }
+      db.prepare('UPDATE sessions SET last_sequence = ?, conversation_version = 2 WHERE id = ?').run(params.targetItems, target.id)
+    })()
+  }
   project = realProjects.getById(target.project_id ?? project?.id) ?? project
   const small = [...rows].reverse().find((row) => row.id !== target.id)
   if (params.scenario === 'open' && !small) throw new Error('Open scenario needs a second conversation')
