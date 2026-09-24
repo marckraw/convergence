@@ -259,6 +259,19 @@ function requireStatedWorkAddress(
 }
 
 /**
+ * The projection the parallel-work panel's reads by id map through
+ * `conversationItemFromRow` (MAR-3310 O0b): the row, its provider, and the
+ * attribution of the run it belongs to — the same columns `getConversation`
+ * reads. `CROSS JOIN` pins `items` as the outer loop: with it free to choose,
+ * SQLite on an analyzed database with few sessions scans `sessions` first and
+ * sorts the items in a temp B-tree instead of reading them in index order.
+ */
+const ITEMS_BY_ID_SELECT = `SELECT items.*, sessions.provider_id, agents.description AS agent_description, agents.agent_type
+         FROM session_conversation_items items
+         CROSS JOIN sessions ON sessions.id = items.session_id
+         LEFT JOIN session_agent_runs agents ON agents.session_id=items.session_id AND agents.id=items.agent_run_id`
+
+/**
  * Facade and orchestrator for session use cases.
  *
  * Keeps the public session API in one place while delegating focused concerns
@@ -1895,6 +1908,68 @@ export class SessionService {
 
   harnessFacts(sessionId: string) {
     return new HarnessEvidenceService(this.db).harnessFacts(sessionId)
+  }
+
+  /**
+   * Every item of these runs, in transcript order (MAR-3310 O0b R1).
+   *
+   * One indexed read per id rather than one `IN (…)`: a multi-value `IN` on
+   * the index's middle column cannot come back in `sequence` order, so SQLite
+   * would sort the whole result in a temp B-tree. Items carry one run id each,
+   * so the per-id results are disjoint and a merge by `sequence` is the union.
+   */
+  listRunItems(sessionId: string, agentRunIds: string[]): ConversationItem[] {
+    return this.listItemsById(sessionId, 'agent_run_id', agentRunIds)
+  }
+
+  /** Every item of these tasks, in transcript order (MAR-3310 O0b R1). */
+  listTaskItems(sessionId: string, taskIds: string[]): ConversationItem[] {
+    return this.listItemsById(sessionId, 'task_id', taskIds)
+  }
+
+  /**
+   * The newest approval and input requests still awaiting an answer, newest
+   * first, at most 50 (MAR-3310 O0b R5).
+   *
+   * "Awaiting" is the item's own half of the transcript's actionable rule: a
+   * `resolution` of `pending`, or none the reader recognises. The reader
+   * (`conversationItemFromRow`) keeps only `pending` / `approved` / `denied`,
+   * so anything but the two answered words reads as absent there, and here.
+   * The session's half — status, attention, a live handle — stays with the
+   * renderer, which has it.
+   */
+  listPendingRequestItems(sessionId: string): ConversationItem[] {
+    this.flushPendingConversationPatchesForSession(sessionId)
+    return (
+      this.db
+        .prepare(
+          `${ITEMS_BY_ID_SELECT}
+         WHERE items.session_id = ?
+           AND items.kind IN ('approval-request', 'input-request')
+           AND IFNULL(json_extract(items.payload_json, '$.resolution'), '') NOT IN ('approved', 'denied')
+         ORDER BY items.sequence DESC
+         LIMIT 50`,
+        )
+        .all(sessionId) as ConversationItemRow[]
+    ).map(conversationItemFromRow)
+  }
+
+  private listItemsById(
+    sessionId: string,
+    column: 'agent_run_id' | 'task_id',
+    ids: string[],
+  ): ConversationItem[] {
+    this.flushPendingConversationPatchesForSession(sessionId)
+    const statement = this.db.prepare(
+      `${ITEMS_BY_ID_SELECT}
+         WHERE items.session_id = ? AND items.${column} = ?
+         ORDER BY items.sequence ASC`,
+    )
+    const rows = [...new Set(ids)].flatMap(
+      (id) => statement.all(sessionId, id) as ConversationItemRow[],
+    )
+    if (ids.length > 1) rows.sort((a, b) => a.sequence - b.sequence)
+    return rows.map(conversationItemFromRow)
   }
 
   listAgentRuns(sessionId: string) {

@@ -1417,6 +1417,22 @@ export function registerIpcHandlers(
   ipcMain.handle('session:listTasks', (_event, sessionId: string) =>
     sessionService.listTasks(sessionId),
   )
+  // The parallel-work panel's bounded reads by id (MAR-3310 O0b).
+  ipcMain.handle(
+    'session:listRunItems',
+    (_event, sessionId: string, agentRunIds: string[]) =>
+      sessionService.listRunItems(sessionId, agentRunIds),
+  )
+  ipcMain.handle(
+    'session:listTaskItems',
+    (_event, sessionId: string, taskIds: string[]) =>
+      sessionService.listTaskItems(sessionId, taskIds),
+  )
+  ipcMain.handle(
+    'session:listPendingRequestItems',
+    (_event, sessionId: string) =>
+      sessionService.listPendingRequestItems(sessionId),
+  )
   ipcMain.handle('turns:listForSession', (_event, sessionId: string) =>
     turnCaptureService.listTurns(sessionId),
   )

@@ -23,6 +23,13 @@ const linkedTaskIdSql = `COALESCE(
    WHERE t.session_id=a.session_id AND t.task_type='local_agent' AND t.tool_use_id=spawn.provider_item_id ORDER BY t.rowid DESC LIMIT 1)
 )`
 
+/**
+ * The run a run was spawned from: whose work the spawning item was. Read by
+ * primary key, so the panel's tree no longer has to find the spawn item in
+ * the loaded conversation — which a window may not hold (MAR-3310 O0b R4).
+ */
+const parentRunIdSql = `(SELECT spawn.agent_run_id FROM session_conversation_items spawn WHERE spawn.id=a.spawned_by_item_id AND spawn.session_id=a.session_id)`
+
 export class HarnessEvidenceService {
   private singleCounts: Database.Statement | null = null
   constructor(private readonly db: Database.Database) {}
@@ -292,7 +299,7 @@ export class HarnessEvidenceService {
   listAgentRuns(sessionId: string): SessionAgentRun[] {
     return this.db
       .prepare(
-        `SELECT ${linkedTaskIdSql} AS taskId,id,session_id AS sessionId,spawned_by_item_id AS spawnedByItemId,agent_type AS agentType,description,model,status,depth,started_at AS startedAt,ended_at AS endedAt,transcript_path AS transcriptPath,is_backgrounded AS isBackgrounded,last_tool_name AS lastToolName,usage_json AS usageJson,updated_at AS updatedAt,stop_reason AS stopReason,ended_summary AS endedSummary FROM session_agent_runs a WHERE session_id=? ORDER BY started_at,rowid`,
+        `SELECT ${linkedTaskIdSql} AS taskId,${parentRunIdSql} AS parentRunId,id,session_id AS sessionId,spawned_by_item_id AS spawnedByItemId,agent_type AS agentType,description,model,status,depth,started_at AS startedAt,ended_at AS endedAt,transcript_path AS transcriptPath,is_backgrounded AS isBackgrounded,last_tool_name AS lastToolName,usage_json AS usageJson,updated_at AS updatedAt,stop_reason AS stopReason,ended_summary AS endedSummary FROM session_agent_runs a WHERE session_id=? ORDER BY started_at,rowid`,
       )
       .all(sessionId)
       .map((row) => {

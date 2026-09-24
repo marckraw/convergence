@@ -2055,6 +2055,20 @@ interface ElectronAPI {
     ) => () => void
     listAgentRuns: (sessionId: string) => Promise<SessionAgentRun[]>
     listTasks: (sessionId: string) => Promise<SessionTask[]>
+    /** Every item of these runs, in transcript order (MAR-3310 O0b). */
+    listRunItems: (
+      sessionId: string,
+      agentRunIds: string[],
+    ) => Promise<ConversationItemData[]>
+    /** Every item of these tasks, in transcript order (MAR-3310 O0b). */
+    listTaskItems: (
+      sessionId: string,
+      taskIds: string[],
+    ) => Promise<ConversationItemData[]>
+    /** Newest 50 approval/input requests still awaiting an answer. */
+    listPendingRequestItems: (
+      sessionId: string,
+    ) => Promise<ConversationItemData[]>
     archive: (id: string) => Promise<void>
     unarchive: (id: string) => Promise<void>
     delete: (id: string) => Promise<void>
