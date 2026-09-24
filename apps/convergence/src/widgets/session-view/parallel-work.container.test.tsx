@@ -10,8 +10,16 @@ import type {
 import { buildParallelWork } from '@/shared/lib/parallel-work.pure'
 import { ParallelWork } from './parallel-work.container'
 import { parallelWorkApi } from './parallel-work.api'
+import { useTranscriptViewStore } from './transcript-view.model'
 
 vi.mock('./parallel-work.api', () => ({ parallelWorkApi: { stop: vi.fn() } }))
+
+// MAR-3391 R5: this file is today's sidebar transcript, so it runs in Full. The
+// Compact view has its own tests (R7 below).
+vi.mock('./transcript-view-mode.api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./transcript-view-mode.api')>()),
+  loadTranscriptViewMode: () => 'full',
+}))
 const run: SessionAgentRun = {
   id: 'agent',
   sessionId: 's',
@@ -765,4 +773,91 @@ it('RUN72 selecting a hidden descendant expands its ancestors by row key — mut
     hidden,
     reopened: Boolean(screen.queryByText('Child work')),
   }).toEqual({ hidden: false, reopened: true })
+})
+
+it('MAR-3391 R7 a subagent’s tool calls fold by the transcript’s rule and open in place — mutation sidebar bypasses the rule turns red', () => {
+  useTranscriptViewStore.setState({
+    modes: { s: 'compact' },
+    openBlocks: new Set(),
+  })
+  const common = {
+    sessionId: 's',
+    agentRunId: 'agent',
+    turnId: null,
+    state: 'complete',
+    createdAt: 'now',
+    updatedAt: 'now',
+    providerMeta: {
+      providerId: 'claude-code',
+      providerItemId: null,
+      providerEventType: null,
+    },
+  }
+  const items = [
+    {
+      ...common,
+      id: 'said',
+      sequence: 1,
+      kind: 'message',
+      actor: 'assistant',
+      text: 'looking at routes',
+    },
+    ...Array.from({ length: 6 }, (_, index) => ({
+      ...common,
+      id: `tool-${index}`,
+      sequence: 2 + index,
+      kind: 'tool-call',
+      toolName: 'Read',
+      inputText: JSON.stringify({ file_path: `/repo/src/routes/r${index}.ts` }),
+    })),
+    {
+      ...common,
+      id: 'done',
+      sequence: 9,
+      kind: 'message',
+      actor: 'assistant',
+      text: 'routes are fine',
+    },
+  ] as ConversationItem[]
+  try {
+    render(
+      <ParallelWork
+        {...props()}
+        session={
+          { id: 's', canStopTasks: true, workingDirectory: '/repo' } as Session
+        }
+        items={items}
+        selectedId="agent:agent"
+      />,
+    )
+    const folded = {
+      blocks: screen
+        .queryAllByTestId('work-block')
+        .map((block) => block.textContent),
+      tools: document.body.textContent?.includes('r3.ts'),
+      said: [
+        Boolean(screen.queryByText('looking at routes')),
+        Boolean(screen.queryByText('routes are fine')),
+      ],
+    }
+    fireEvent.click(screen.getByTestId('work-block'))
+    expect({
+      folded,
+      opened: {
+        expanded: screen
+          .getByTestId('work-block')
+          .getAttribute('aria-expanded'),
+        tools: document.body.textContent?.includes('r3.ts'),
+      },
+    }).toEqual({
+      folded: {
+        blocks: ['Read 6 files in src/routes'],
+        tools: false,
+        said: [true, true],
+      },
+      opened: { expanded: 'true', tools: true },
+    })
+  } finally {
+    useTranscriptViewStore.setState({ modes: {}, openBlocks: new Set() })
+  }
 })

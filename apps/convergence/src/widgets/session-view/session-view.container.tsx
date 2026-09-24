@@ -69,6 +69,11 @@ import { SessionHeaderDetailRow } from './session-header-detail-row.presentation
 import { useAgentMeterStore, SessionAgentMeter } from '@/entities/agent-meter'
 import { SessionWiresContainer } from './session-wires.container'
 import { SessionConversationSurface } from './session-conversation-surface.container'
+import { TranscriptViewSwitch } from './transcript-view-switch.presentational'
+import {
+  useTranscriptViewMode,
+  useTranscriptViewStore,
+} from './transcript-view.model'
 
 export const SessionView: FC = () => {
   const activeProject = useProjectStore((s) => s.activeProject)
@@ -132,6 +137,8 @@ export const SessionView: FC = () => {
     state.snapshot.rows.find((row) => row.sessionId === activeSessionId),
   )
   const session = sessions.find((s) => s.id === activeSessionId) ?? null
+  const transcriptViewMode = useTranscriptViewMode(session?.id ?? '')
+  const setTranscriptViewMode = useTranscriptViewStore((state) => state.setMode)
   const supportsHarnessFacts =
     session?.providerId === 'claude-code' &&
     !isRemoteExecutionHost(session.executionHost)
@@ -460,6 +467,10 @@ export const SessionView: FC = () => {
                 ? ` · ${session.parallelWork.running}`
                 : ''}
             </Button>
+            <TranscriptViewSwitch
+              mode={transcriptViewMode}
+              onChange={(mode) => setTranscriptViewMode(session.id, mode)}
+            />
             <AttentionIndicator
               parallelWork={session.parallelWork}
               attention={session.attention}

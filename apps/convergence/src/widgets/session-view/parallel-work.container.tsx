@@ -29,6 +29,20 @@ import {
   workTitle,
   parallelWorkRefusal,
 } from './parallel-work.pure'
+import {
+  fullDisplayRows,
+  groupWorkBlocks,
+  workBlockLabel,
+  workDisplayRows,
+} from './work-blocks.pure'
+import { WorkBlockRow } from './work-block.presentational'
+import { WORK_BLOCK_MEMBER_CLASS } from './work-block.styles'
+import {
+  useTranscriptViewMode,
+  useTranscriptViewStore,
+} from './transcript-view.model'
+
+const itemOf = (item: Item) => item
 
 interface Props {
   session: Session
@@ -56,6 +70,9 @@ export const ParallelWork: FC<Props> = ({
   error,
 }) => {
   const [olderOpen, setOlderOpen] = useState(false)
+  const viewMode = useTranscriptViewMode(session.id)
+  const openBlocks = useTranscriptViewStore((state) => state.openBlocks)
+  const toggleBlock = useTranscriptViewStore((state) => state.toggleBlock)
   useEffect(() => setOlderOpen(false), [open, session.id])
   const [collapsed, setCollapsed] = useState(new Set<string>())
   const [stopStates, setStopStates] = useState(
@@ -152,6 +169,20 @@ export const ParallelWork: FC<Props> = ({
             ['tool-call', 'tool-result'].includes(item.kind),
       )
     : []
+  // MAR-3391 R7: the sidebar folds by the transcript's own rule and follows
+  // the conversation's Compact/Full choice.
+  const workRows =
+    viewMode === 'full' ? null : groupWorkBlocks(visibleItems, itemOf)
+  const transcriptRows = workRows
+    ? workDisplayRows(workRows, itemOf, (id) => openBlocks.has(id))
+    : fullDisplayRows(visibleItems, itemOf)
+  const lastWorkRow = workRows?.at(-1)
+  const workingBlockId =
+    selected &&
+    parallelWorkRowState(selected).fact?.status === 'running' &&
+    lastWorkRow?.kind === 'block'
+      ? lastWorkRow.id
+      : null
   const transcript = (
     <div className="space-y-2 border-t pt-3">
       <h3 className="text-sm font-medium">
@@ -166,9 +197,31 @@ export const ParallelWork: FC<Props> = ({
       {!visibleItems.length && (
         <p className="text-xs text-muted-foreground">Not reported</p>
       )}
-      {visibleItems.map((item) => (
-        <ConversationItem key={item.id} entry={item} sessionId={session.id} />
-      ))}
+      {transcriptRows.map((row) =>
+        row.kind === 'block' ? (
+          <WorkBlockRow
+            key={row.key}
+            label={workBlockLabel(row.members, {
+              working: row.id === workingBlockId,
+              root: session.workingDirectory,
+            })}
+            memberCount={row.members.length}
+            open={row.open}
+            working={row.id === workingBlockId}
+            onToggle={() => toggleBlock(row.id)}
+          />
+        ) : row.kind === 'member' ? (
+          <div key={row.key} className={WORK_BLOCK_MEMBER_CLASS}>
+            <ConversationItem entry={row.entry} sessionId={session.id} />
+          </div>
+        ) : (
+          <ConversationItem
+            key={row.key}
+            entry={row.entry}
+            sessionId={session.id}
+          />
+        ),
+      )}
     </div>
   )
   const fact = selected ? parallelWorkRowState(selected).fact : undefined

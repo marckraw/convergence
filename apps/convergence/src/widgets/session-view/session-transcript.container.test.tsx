@@ -11,6 +11,13 @@ import { useAttachmentStore } from '@/entities/attachment'
 import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
 import { SessionTranscript } from './session-transcript.container'
 
+// MAR-3391 R5: this file is today's transcript, so it runs in Full. The
+// Compact view has its own tests (session-transcript.work-blocks.render).
+vi.mock('./transcript-view-mode.api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./transcript-view-mode.api')>()),
+  loadTranscriptViewMode: () => 'full',
+}))
+
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: (options: {
     count: number
