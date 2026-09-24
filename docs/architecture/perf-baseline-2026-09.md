@@ -139,6 +139,17 @@ eval "$(fnm env)" && fnm use
 node apps/convergence/tools/perf-busy-day.mjs --loom --out /tmp/perf-busy-day.json
 ```
 
+For a generated fixture or a scrubbed database copy, use:
+
+```sh
+node apps/convergence/tools/perf-busy-day.mjs --db /path/to/copy.db --scenario open --open biggest --out /tmp/perf-open.json
+node apps/convergence/tools/perf-busy-day.mjs --db /path/to/copy.db --scenario stream-into-open --open biggest --streaming 4 --minutes 3 --out /tmp/perf-stream-open.json
+```
+
+`--db` opens its input read-only and uses SQLite backup into the runner's disposable directory before migrations or synthetic writes. It skips fixture inserts and uses the real project service. `--open` accepts an ID or `biggest` (most conversation items); `open` alternates the smallest other conversation and the target five times. The report includes each SELECT, row-parse, V8 conversation-payload size, and opening-to-paint estimate, with nearest-rank p50/p95. On the current renderer path the conversation arrives in a snapshot event, rather than the invoke acknowledgement; `replyBytes` measures the serialized item array, not Electron wire overhead. First paint is bounded by two animation frames after the snapshot lands, not a GPU timestamp.
+
+`stream-into-open` opens the target before starting its fake stream, plus `--streaming K` other conversations (K + 1 streams total). Transcript profiler commits/ms and the usual keystroke-to-paint metrics are included. `busy` remains the default, with K total streams. Every report includes main CPU time divided by elapsed wall time as a percentage of one core and Electron process type/CPU/working-set metrics. Node runs mark process and renderer placeholders as unmeasured. No real provider is launched.
+
 The runner builds an isolated renderer, rebuilds better-sqlite3 for Electron, and restores the Node native build afterward. `--node --sessions 2 --streaming 1 --minutes 0.1` is the executable contract test; its renderer fields are placeholders explicitly marked `measured: false`. The full default-run JSON is attached to MAR-3322.
 
 Marcin QA: read the ten ranked boundaries and their file:line, verify that all four hypotheses cite numbers, and compare a real busy-day R2 dump before S1 sets budgets. No product behavior or performance fix is included.

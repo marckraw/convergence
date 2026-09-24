@@ -1,8 +1,125 @@
 import { describe, expect, it, vi } from 'vitest'
+import { serialize } from 'node:v8'
 import { createPerfProbe } from './perf-probe.service'
 import { closeDatabase, getDatabase } from '../database/database'
 
+vi.mock('node:v8', async (original) => {
+  const actual = await original<typeof import('node:v8')>()
+  return { ...actual, serialize: vi.fn(actual.serialize) }
+})
+
+it('M1b defers serialization until after getConversation returns, snapshot sends and paint completes', async () => {
+  const { SessionService } = await import('../session/session.service')
+  const { LocalExecutionHost } =
+    await import('../provider/execution-host/local-execution-host')
+  const { ProviderRegistry } = await import('../provider/provider-registry')
+  const sessions = new SessionService(
+    getDatabase(),
+    new LocalExecutionHost(new ProviderRegistry()),
+  )
+  const probe = createPerfProbe(true)!
+  const order: string[] = []
+  const actual = await vi.importActual<typeof import('node:v8')>('node:v8')
+  vi.mocked(serialize).mockImplementation((value) => {
+    order.push('serialize')
+    return actual.serialize(value)
+  })
+  vi.stubEnv('CONVERGENCE_PERF', '1')
+  probe.observeConversations()
+  const target: { send: (channel: string, ...args: unknown[]) => void } = {
+    send: vi.fn(() => {
+      order.push('snapshot send')
+    }),
+  }
+  probe.wrapSend(target)
+  try {
+    const items = sessions.getConversation('missing')
+    order.push('getConversation returned')
+    target.send('session:conversationPatched', {
+      op: 'snapshot',
+      sessionId: 'missing',
+      items,
+      generation: 1,
+      pageNonce: 'test',
+    })
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    order.push('paint completed')
+    expect(order).toEqual([
+      'getConversation returned',
+      'snapshot send',
+      'paint completed',
+    ])
+    probe.flushPayloadSizes()
+    expect(order).toEqual([
+      'getConversation returned',
+      'snapshot send',
+      'paint completed',
+      'serialize',
+      'serialize',
+    ])
+    expect(probe.conversationReads[0]!.replyBytes).toBeGreaterThan(0)
+    expect(
+      probe.report().main.ipc['session:conversationPatched']!.bytes,
+    ).toBeGreaterThan(0)
+  } finally {
+    vi.mocked(serialize).mockImplementation(actual.serialize)
+    vi.unstubAllEnvs()
+    probe.dispose()
+    closeDatabase()
+  }
+})
+
 describe('main perf recorder', () => {
+  it('tallies wire operations and full streaming patches per item across windows, including zeros', () => {
+    const probe = createPerfProbe(true)!
+    const windows = [{ send: vi.fn() }, { send: vi.fn() }]
+    const send = (event: unknown) => {
+      for (const window of windows)
+        window.send('session:conversationPatched', event)
+    }
+    try {
+      for (const window of windows) probe.wrapSend(window)
+      for (const sessionId of ['one', 'two']) {
+        send({
+          op: 'add',
+          sessionId,
+          item: { id: 'same-id', state: 'streaming' },
+        })
+      }
+      send({
+        op: 'patch',
+        sessionId: 'one',
+        item: { id: 'same-id', state: 'streaming' },
+      })
+      send({
+        op: 'append',
+        sessionId: 'two',
+        itemId: 'same-id',
+        append: 'text',
+      })
+      send({
+        op: 'patch',
+        sessionId: 'one',
+        item: { id: 'same-id', state: 'complete' },
+      })
+      send({ op: 'snapshot', sessionId: 'one', items: [] })
+      expect(probe.report().main.conversationPatched).toEqual({
+        byOp: { add: 4, patch: 4, append: 2, snapshot: 2 },
+        fullPatchesWhileStreaming: {
+          samples: 2,
+          min: 0,
+          p50: 0,
+          max: 2,
+          items: [
+            { sessionId: 'one', itemId: 'same-id', sends: 2 },
+            { sessionId: 'two', itemId: 'same-id', sends: 0 },
+          ],
+        },
+      })
+    } finally {
+      probe.dispose()
+    }
+  })
   it('constructs no recorder and leaves original send untouched when off', () => {
     const original = vi.fn()
     const target = { send: original }
@@ -98,6 +215,8 @@ it('R1 short Node busy day writes every required numeric metric', async () => {
       keyMs: 80,
       tokenMs: 30,
     })
+    expect(Number.isFinite(report.main.cpuPercent)).toBe(true)
+    expect(report.processes[0].measured).toBe(false)
     expect(report.scenario.emittedDeltas).toBeGreaterThan(0)
     expect(report.scenario.trackerReads).toBeGreaterThan(0)
     const numeric = (value: unknown) => {
@@ -140,3 +259,185 @@ it('R1 short Node busy day writes every required numeric metric', async () => {
     rmSync(temp, { recursive: true, force: true })
   }
 }, 40000)
+
+it('M1b R4 flag-off getConversation performs no timing or serialization', async () => {
+  const { SessionService } = await import('../session/session.service')
+  const { LocalExecutionHost } =
+    await import('../provider/execution-host/local-execution-host')
+  const { ProviderRegistry } = await import('../provider/provider-registry')
+  const db = getDatabase()
+  const sessions = new SessionService(
+    db,
+    new LocalExecutionHost(new ProviderRegistry()),
+  )
+  const probe = createPerfProbe(true)!
+  probe.observeConversations()
+  vi.stubEnv('CONVERGENCE_PERF', undefined)
+  const clock = vi.spyOn(performance, 'now')
+  try {
+    clock.mockClear()
+    expect(sessions.getConversation('missing')).toEqual([])
+    expect(clock).not.toHaveBeenCalled()
+    expect(probe.conversationReads).toEqual([])
+    vi.stubEnv('CONVERGENCE_PERF', '1')
+    sessions.getConversation('missing')
+    expect(clock).toHaveBeenCalled()
+    expect(probe.conversationReads).toHaveLength(1)
+    probe.flushPayloadSizes()
+    expect(probe.conversationReads[0]!.replyBytes).toBeGreaterThan(0)
+  } finally {
+    clock.mockRestore()
+    vi.unstubAllEnvs()
+    probe.dispose()
+    closeDatabase()
+  }
+})
+
+it.each(['busy', 'open', 'stream-into-open'])(
+  'M1b R1/R2/R3 %s copies a 300-conversation fixture and preserves its hash',
+  async (scenario) => {
+    const { createHash } = await import('node:crypto')
+    const { mkdtempSync, readFileSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join, resolve } = await import('node:path')
+    const { spawnSync } = await import('node:child_process')
+    const root = mkdtempSync(join(tmpdir(), 'm1b-fixture-'))
+    const source = join(root, 'input.db')
+    const out = join(root, 'report.json')
+    const hash = () =>
+      createHash('sha256').update(readFileSync(source)).digest('hex')
+    try {
+      const db = getDatabase(source)
+      db.prepare(
+        "INSERT INTO projects (id, name, repository_path) VALUES ('project', 'Generated fixture', ?)",
+      ).run(root)
+      const session = db.prepare(
+        "INSERT INTO sessions (id, project_id, provider_id, name, working_directory, last_sequence) VALUES (?, 'project', 'fixture-provider', ?, ?, ?)",
+      )
+      const item = db.prepare(
+        "INSERT INTO session_conversation_items (id, session_id, sequence, kind, state, payload_json, created_at, updated_at) VALUES (?, ?, ?, 'message', 'complete', ?, '2026-09-24T00:00:00Z', '2026-09-24T00:00:00Z')",
+      )
+      db.transaction(() => {
+        for (let i = 0; i < 300; i++) {
+          const count = i < 3 ? 2000 + i : 1
+          const id = `session-${i}`
+          session.run(id, id, root, count)
+          for (let j = 1; j <= count; j++)
+            item.run(
+              `${id}-${j}`,
+              id,
+              j,
+              JSON.stringify({
+                role: j % 2 ? 'user' : 'assistant',
+                text: 'Generated fixture message ' + j,
+              }),
+            )
+        }
+      })()
+      closeDatabase()
+      const before = hash()
+      const overwrite = spawnSync(
+        process.execPath,
+        [
+          resolve('tools/perf-busy-day.mjs'),
+          '--node',
+          '--db',
+          source,
+          '--out',
+          source,
+        ],
+        { encoding: 'utf8', timeout: 30000 },
+      )
+      expect(overwrite.status).not.toBe(0)
+      expect(overwrite.stderr).toContain(
+        '--out must not overwrite the input database',
+      )
+      expect(hash()).toBe(before)
+      const run = spawnSync(
+        process.execPath,
+        [
+          resolve('tools/perf-busy-day.mjs'),
+          '--node',
+          '--db',
+          source,
+          '--scenario',
+          scenario,
+          '--open',
+          'biggest',
+          '--streaming',
+          '1',
+          '--minutes',
+          '0.1',
+          '--out',
+          out,
+        ],
+        { encoding: 'utf8', timeout: 30000 },
+      )
+      expect(run.status, run.stderr).toBe(0)
+      expect(hash()).toBe(before)
+      const report = JSON.parse(readFileSync(out, 'utf8'))
+      const numeric = (value: unknown) => {
+        expect(typeof value).toBe('number')
+        expect(Number.isFinite(value)).toBe(true)
+      }
+      numeric(report.main.cpuPercent)
+      expect(report.main.cpuPercent).toBeGreaterThanOrEqual(0)
+      expect(report.processes).toEqual([
+        { type: 'Browser', cpuPercent: 0, workingSetKb: 0, measured: false },
+      ])
+      expect(report.scenario.targetId).toBe('session-2')
+      expect(report.scenario.name).toBe(scenario)
+      for (const op of ['add', 'patch', 'append', 'snapshot'])
+        numeric(report.main.conversationPatched.byOp[op])
+      expect(
+        Object.values(report.main.conversationPatched.byOp).reduce(
+          (total: number, count) => total + Number(count),
+          0,
+        ),
+      ).toBe(report.main.ipc['session:conversationPatched']?.sends ?? 0)
+      if (scenario === 'stream-into-open') {
+        const full = report.main.conversationPatched.fullPatchesWhileStreaming
+        for (const key of ['samples', 'min', 'p50', 'max']) numeric(full[key])
+        expect(full.samples).toBe(2)
+        expect(full.items).toHaveLength(2)
+        for (const item of full.items) numeric(item.sends)
+      }
+      if (scenario === 'open') {
+        expect(report.open.targetId).toBe('session-2')
+        expect(report.open.runs).toHaveLength(5)
+        numeric(report.open.replyBytes)
+        expect(report.open.replyBytes).toBeGreaterThan(2000)
+        for (const key of ['select', 'parse', 'replySize', 'firstPaint']) {
+          expect(report.open[key].samples).toBe(5)
+          numeric(report.open[key].p50)
+          numeric(report.open[key].p95)
+        }
+        for (const sample of report.open.runs) {
+          expect(sample.sessionId).toBe('session-2')
+          for (const key of [
+            'selectMs',
+            'parseMs',
+            'replyBytes',
+            'firstPaintMs',
+          ])
+            numeric(sample[key])
+        }
+        expect(report.open.firstPaint.measured).toBe(false)
+        expect(report.scenario.emittedDeltas).toBe(0)
+      } else {
+        expect(report.scenario.emittedDeltas).toBeGreaterThan(0)
+        if (scenario === 'stream-into-open')
+          expect(report.scenario.streamingIds).toEqual([
+            'session-2',
+            'session-1',
+          ])
+      }
+      for (const key of ['count', 'perMinute', 'totalMs'])
+        numeric(report.renderer.commits.transcript[key])
+    } finally {
+      closeDatabase()
+      rmSync(root, { recursive: true, force: true })
+    }
+  },
+  40000,
+)

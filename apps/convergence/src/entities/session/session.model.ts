@@ -1,3 +1,8 @@
+import { perfApi } from '@/shared/lib/perf.api'
+import {
+  markPerfConversationOpen,
+  markPerfConversationLoaded,
+} from '@/shared/lib/usePerfProbe'
 import type { ConversationWireEvent } from '@/shared/types/conversation-item.types'
 import { create } from 'zustand'
 import type { AccountHandoffRefusal } from '@/shared/types/session-send.types'
@@ -965,6 +970,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           err instanceof Error ? err.message : 'Failed to load conversation',
       })
     })
+    if (perfApi.isEnabled()) {
+      if (!load.stopped)
+        markPerfConversationLoaded(sessionId, () => load.pending === null)
+    }
   },
 
   loadActiveGlobalConversation: async (sessionId: string) => {
@@ -1035,6 +1044,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }),
 
   setActiveSession: (id) => {
+    if (perfApi.isEnabled()) markPerfConversationOpen(id)
     const target = id ? findSummaryById(get(), id) : null
     if (target?.contextKind === 'global') {
       get().setActiveGlobalSession(id)

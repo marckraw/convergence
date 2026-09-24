@@ -1,3 +1,5 @@
+import { PerfProfiler } from '@/shared/lib/perf-profiler'
+import { perfApi } from '@/shared/lib/perf.api'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 import { placeCompactions } from './harness-facts.pure'
 import { CompactionMarker } from './compaction-marker.presentational'
@@ -53,7 +55,7 @@ const EMPTY_PARALLEL_ROWS: ParallelWorkRow[] = []
 const TRANSCRIPT_ROW_ESTIMATE_PX = 160
 const TRANSCRIPT_OVERSCAN = 6
 
-export const SessionTranscript: FC<SessionTranscriptProps> = ({
+const SessionTranscriptContent: FC<SessionTranscriptProps> = ({
   session,
   compactions = EMPTY_COMPACTIONS,
   parallelRows = EMPTY_PARALLEL_ROWS,
@@ -462,3 +464,12 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     </div>
   )
 }
+
+// The preload flag is immutable; off keeps the original component boundary.
+export const SessionTranscript: FC<SessionTranscriptProps> = perfApi.isEnabled()
+  ? (props) => (
+      <PerfProfiler id="transcript">
+        <SessionTranscriptContent {...props} />
+      </PerfProfiler>
+    )
+  : SessionTranscriptContent

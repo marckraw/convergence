@@ -1,4 +1,4 @@
-export type PerfRoot = 'composer' | 'sidebar' | 'wave-panel'
+export type PerfRoot = 'composer' | 'sidebar' | 'wave-panel' | 'transcript'
 
 export function percentile(
   values: readonly number[],
