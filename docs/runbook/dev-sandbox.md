@@ -64,3 +64,5 @@ send paths deliberately.
 
 Agents never run `npm run dev`, `dev:sandbox`, or `dev:clean` — launching
 dev instances is the user's action (see AGENTS.md).
+
+`npm run perf:seed -- --source <db> --out <dir>` creates a scrubbed database for performance measurements, while `dev:seed` copies data and files for interactive development. It defaults to the installed app database and `~/.convergence-perf-seed/convergence.db`, uses a read-only SQLite backup, blanks known secret fields, masks recognized token strings without changing their length, and verifies every text value before publishing. Attachments and session outputs are omitted. This is not general anonymization. Only Marcin or Fable runs it on real data; executors always supply a generated temporary fixture with `--source`. Close the target before reseeding; errors delete the unpublished copy and preserve any previous output.

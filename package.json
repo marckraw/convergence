@@ -13,6 +13,7 @@
     "dev:clean": "npm run dev:clean -w convergence",
     "dev:sandbox": "npm run dev:sandbox -w convergence",
     "dev:seed": "npm run dev:seed -w convergence",
+    "perf:seed": "npm run perf:seed -w convergence --",
     "build": "npm run build -w convergence",
     "build:preview": "npm run build:preview -w convergence",
     "package:mac": "npm run package:mac -w convergence",
