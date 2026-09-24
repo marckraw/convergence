@@ -103,3 +103,10 @@ Documentation the Design Director prepares for the repository is handed to
 Fable for review and repository delivery unless Marcin assigns delivery
 ownership differently for that task; the general PR terminal rule is not a
 request to commit or push a handoff independently.
+
+## Component library maintenance
+
+For component discovery, isolated exploration, promotion and app reconciliation,
+follow [design-library-workflow.md](design-library-workflow.md). Repository skills
+under `.agents/skills/convergence-design-{explore,promote,handoff}/SKILL.md`
+provide scoped entry points. Other agent clients can read the same files directly.
