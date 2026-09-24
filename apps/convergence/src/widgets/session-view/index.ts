@@ -1,5 +1,6 @@
 export { SessionView } from './session-view.container'
 export { SessionConversationSurface } from './session-conversation-surface.container'
+export { SessionTranscriptViewSwitch } from './transcript-view-switch.container'
 export { ChangedFilesTree } from './changed-files-tree.container'
 export { DiffFileHeader } from './diff-file-header.presentational'
 export { PierreDiffViewer } from './pierre-diff-viewer.container'

@@ -17,6 +17,7 @@ import { switchToSession } from '@/features/command-center'
 import { ComposerContainer } from '@/features/composer'
 import {
   SessionConversationSurface,
+  SessionTranscriptViewSwitch,
   ParallelWork,
   useParallelWork,
 } from '@/widgets/session-view'
@@ -662,6 +663,7 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
               ? ` · ${session.parallelWork.running}`
               : ''}
           </Button>
+          <SessionTranscriptViewSwitch sessionId={session.id} />
           <AttentionIndicator
             parallelWork={session.parallelWork}
             attention={session.attention}

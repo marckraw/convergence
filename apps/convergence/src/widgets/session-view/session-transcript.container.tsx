@@ -19,6 +19,7 @@ import {
   useRef,
   useState,
   type FC,
+  type ReactNode,
 } from 'react'
 import type {
   ConversationItem as ConversationItemEntry,
@@ -26,7 +27,23 @@ import type {
   Session,
 } from '@/entities/session'
 import { ConversationItem } from './conversation-item.container'
-import { buildConversationRenderPlan } from './session-transcript-render-plan.pure'
+import {
+  buildConversationRenderPlan,
+  type ConversationRenderEntry,
+} from './session-transcript-render-plan.pure'
+import {
+  fullDisplayRows,
+  groupWorkBlocks,
+  workBlockLabel,
+  workBlockMembership,
+  workDisplayRows,
+} from './work-blocks.pure'
+import { WorkBlockRow } from './work-block.presentational'
+import { WORK_BLOCK_MEMBER_CLASS } from './work-block.styles'
+import {
+  useTranscriptViewMode,
+  useTranscriptViewStore,
+} from './transcript-view.model'
 import { isTranscriptNearBottom } from './session-transcript-scroll.pure'
 
 interface SessionTranscriptProps {
@@ -54,6 +71,14 @@ const EMPTY_COMPACTIONS: SessionHarnessFacts['compactions'] = []
 const EMPTY_PARALLEL_ROWS: ParallelWorkRow[] = []
 const TRANSCRIPT_ROW_ESTIMATE_PX = 160
 const TRANSCRIPT_OVERSCAN = 6
+const itemOfEntry = (entry: ConversationRenderEntry) => entry.item
+
+/** Full and unfolded rows draw exactly as before; only open members hang. */
+const MemberFrame: FC<{ member: boolean; children: ReactNode }> = ({
+  member,
+  children,
+}) =>
+  member ? <div className={WORK_BLOCK_MEMBER_CLASS}>{children}</div> : children
 
 const SessionTranscriptContent: FC<SessionTranscriptProps> = ({
   session,
@@ -128,6 +153,46 @@ const SessionTranscriptContent: FC<SessionTranscriptProps> = ({
       ),
     [conversationRenderPlan, compactions],
   )
+  const viewMode = useTranscriptViewMode(session.id)
+  const openBlocks = useTranscriptViewStore((state) => state.openBlocks)
+  const toggleBlock = useTranscriptViewStore((state) => state.toggleBlock)
+  const openBlock = useTranscriptViewStore((state) => state.openBlock)
+  // MAR-3391 R1: runs of tool items fold by the one rule the sidebar shares.
+  // A block never swallows a turn divider or a compaction marker: the entry
+  // that carries one starts the next block, and the block's line draws it.
+  const workRows = useMemo(
+    () =>
+      viewMode === 'full'
+        ? null
+        : groupWorkBlocks(conversationRenderPlan, itemOfEntry, {
+            isMarked: (entry) => workMarkers.has(entry.item.id),
+            startsNewBlock: (entry) =>
+              entry.turnBoundary ||
+              compactionPlacement.before.has(entry.item.id),
+          }),
+    [viewMode, conversationRenderPlan, workMarkers, compactionPlacement],
+  )
+  const blockOfMember = useMemo(
+    () =>
+      workRows
+        ? workBlockMembership(workRows, itemOfEntry)
+        : new Map<string, string>(),
+    [workRows],
+  )
+  const displayRows = useMemo(
+    () =>
+      workRows
+        ? workDisplayRows(workRows, itemOfEntry, (id) => openBlocks.has(id))
+        : fullDisplayRows(conversationRenderPlan, itemOfEntry),
+    [workRows, openBlocks, conversationRenderPlan],
+  )
+  // R4: the last row still grows while the conversation runs; the next
+  // boundary (the agent speaks, asks, errs) makes it not-last and closes it.
+  const lastWorkRow = workRows?.at(-1)
+  const workingBlockId =
+    session.status === 'running' && lastWorkRow?.kind === 'block'
+      ? lastWorkRow.id
+      : null
   const actionableApprovalIds = useMemo(() => {
     if (
       session.status !== 'running' &&
@@ -213,10 +278,10 @@ const SessionTranscriptContent: FC<SessionTranscriptProps> = ({
   }, [session.attention])
 
   const rowVirtualizer = useVirtualizer({
-    count: conversationRenderPlan.length,
+    count: displayRows.length,
     getScrollElement: () => scrollParent,
     estimateSize: () => TRANSCRIPT_ROW_ESTIMATE_PX,
-    getItemKey: (index) => conversationRenderPlan[index]?.item.id ?? index,
+    getItemKey: (index) => displayRows[index]?.key ?? index,
     overscan: TRANSCRIPT_OVERSCAN,
     enabled: scrollParent !== null,
     initialRect: {
@@ -228,17 +293,30 @@ const SessionTranscriptContent: FC<SessionTranscriptProps> = ({
   useEffect(() => {
     if (!navigationTarget || navigatedNonce.current === navigationTarget.nonce)
       return
-    const index = conversationRenderPlan.findIndex(
-      (entry) => entry.item.id === navigationTarget.id,
+    const index = displayRows.findIndex(
+      (row) =>
+        row.kind !== 'block' && row.entry.item.id === navigationTarget.id,
     )
-    if (index < 0) return
-    navigatedNonce.current = navigationTarget.nonce
+    // The jump owns the scroll: bottom-follow stops and a queued
+    // scroll-to-latest frame is dropped, or it fires after the jump and wins.
     bottomFollowRef.current = false
+    if (pendingScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(pendingScrollFrameRef.current)
+      pendingScrollFrameRef.current = null
+    }
+    if (index < 0) {
+      // R6: a jump into a folded block opens it; the rows it adds bring this
+      // effect back, and the second pass lands on the item itself.
+      const blockId = blockOfMember.get(navigationTarget.id)
+      if (blockId) openBlock(blockId)
+      return
+    }
+    navigatedNonce.current = navigationTarget.nonce
     rowVirtualizer.scrollToIndex(index, { align: 'center' })
-  }, [navigationTarget, conversationRenderPlan, rowVirtualizer])
+  }, [navigationTarget, displayRows, blockOfMember, openBlock, rowVirtualizer])
 
   const scrollToLatest = useCallback(() => {
-    if (conversationRenderPlan.length === 0) return
+    if (displayRows.length === 0) return
 
     if (pendingScrollFrameRef.current !== null) {
       window.cancelAnimationFrame(pendingScrollFrameRef.current)
@@ -246,11 +324,11 @@ const SessionTranscriptContent: FC<SessionTranscriptProps> = ({
 
     pendingScrollFrameRef.current = window.requestAnimationFrame(() => {
       pendingScrollFrameRef.current = null
-      rowVirtualizer.scrollToIndex(conversationRenderPlan.length - 1, {
+      rowVirtualizer.scrollToIndex(displayRows.length - 1, {
         align: 'end',
       })
     })
-  }, [conversationRenderPlan.length, rowVirtualizer])
+  }, [displayRows.length, rowVirtualizer])
 
   const updateBottomFollow = useCallback(() => {
     const scrollParent = scrollParentRef.current
@@ -308,6 +386,24 @@ const SessionTranscriptContent: FC<SessionTranscriptProps> = ({
 
   const virtualItems = rowVirtualizer.getVirtualItems()
 
+  const renderDecorations = (renderEntry: ConversationRenderEntry) => (
+    <>
+      {compactionPlacement.before.get(renderEntry.item.id)?.map((fact) => (
+        <CompactionMarker key={fact.sequence} fact={fact} />
+      ))}
+      {renderEntry.turnBoundary && (
+        <div
+          className="my-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
+          data-turn-id={renderEntry.item.turnId}
+        >
+          <span className="h-px flex-1 bg-border" />
+          <span className="font-mono">Turn {renderEntry.turnSequence}</span>
+          <span className="h-px flex-1 bg-border" />
+        </div>
+      )}
+    </>
+  )
+
   return (
     <div
       ref={handleScrollParentRef}
@@ -321,9 +417,39 @@ const SessionTranscriptContent: FC<SessionTranscriptProps> = ({
           style={{ height: rowVirtualizer.getTotalSize() }}
         >
           {virtualItems.map((virtualItem) => {
-            const renderEntry = conversationRenderPlan[virtualItem.index]
-            if (!renderEntry) return null
+            const row = displayRows[virtualItem.index]
+            if (!row) return null
 
+            if (row.kind === 'block') {
+              const first = row.members[0]!
+              return (
+                <div
+                  key={virtualItem.key}
+                  ref={measureRow}
+                  data-index={virtualItem.index}
+                  data-testid="session-transcript-row"
+                  data-work-block-id={row.id}
+                  className="absolute top-0 left-0 w-full rounded-md transition-colors"
+                  style={{
+                    transform: `translateY(${virtualItem.start}px)`,
+                  }}
+                >
+                  {renderDecorations(first)}
+                  <WorkBlockRow
+                    label={workBlockLabel(row.members.map(itemOfEntry), {
+                      working: row.id === workingBlockId,
+                      root: session.workingDirectory,
+                    })}
+                    memberCount={row.members.length}
+                    open={row.open}
+                    working={row.id === workingBlockId}
+                    onToggle={() => toggleBlock(row.id)}
+                  />
+                </div>
+              )
+            }
+
+            const renderEntry = row.entry
             const entry = renderEntry.item
             const workMarker = workMarkers.get(entry.id)
             const isActionableApproval =
@@ -339,120 +465,112 @@ const SessionTranscriptContent: FC<SessionTranscriptProps> = ({
                 data-index={virtualItem.index}
                 data-testid="session-transcript-row"
                 data-conversation-item-id={entry.id}
+                data-work-block-member={
+                  row.kind === 'member' ? row.blockId : undefined
+                }
                 className="absolute top-0 left-0 w-full rounded-md transition-colors"
                 style={{
                   transform: `translateY(${virtualItem.start}px)`,
                 }}
               >
-                {compactionPlacement.before.get(entry.id)?.map((fact) => (
-                  <CompactionMarker key={fact.sequence} fact={fact} />
-                ))}
-                {renderEntry.turnBoundary && (
-                  <div
-                    className="my-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
-                    data-turn-id={entry.turnId}
-                  >
-                    <span className="h-px flex-1 bg-border" />
-                    <span className="font-mono">
-                      Turn {renderEntry.turnSequence}
-                    </span>
-                    <span className="h-px flex-1 bg-border" />
-                  </div>
-                )}
-                {isSubagentWork(entry) &&
-                  !knownAgentIds.has(entry.agentRunId!) &&
-                  entry.kind !== 'tool-call' && (
-                    <div className="mb-1 truncate text-xs text-muted-foreground">
-                      {entry.agentAttribution?.description?.trim()
-                        ? `↳ ${entry.agentAttribution.description} (${entry.agentAttribution.agentType ?? 'unknown'})`
-                        : '↳ subagent'}
-                    </div>
+                <MemberFrame member={row.kind === 'member'}>
+                  {/* An open block's line already drew what sits above it. */}
+                  {row.kind === 'entry' && renderDecorations(renderEntry)}
+                  {isSubagentWork(entry) &&
+                    !knownAgentIds.has(entry.agentRunId!) &&
+                    entry.kind !== 'tool-call' && (
+                      <div className="mb-1 truncate text-xs text-muted-foreground">
+                        {entry.agentAttribution?.description?.trim()
+                          ? `↳ ${entry.agentAttribution.description} (${entry.agentAttribution.agentType ?? 'unknown'})`
+                          : '↳ subagent'}
+                      </div>
+                    )}
+                  {workMarker && (
+                    <ParallelWorkMarkerView
+                      marker={workMarker}
+                      onSelect={(id) => onParallelSelect?.(id)}
+                    />
                   )}
-                {workMarker && (
-                  <ParallelWorkMarkerView
-                    marker={workMarker}
-                    onSelect={(id) => onParallelSelect?.(id)}
-                  />
-                )}
-                {!workMarker?.replace && (
-                  <ConversationItem
-                    entry={entry}
-                    sessionId={session.id}
-                    injectedContextText={renderEntry.injectedContextText}
-                    turnStartedAt={
-                      entry.turnId
-                        ? (turnStartedAtById.get(entry.turnId) ?? null)
-                        : null
-                    }
-                    onApprove={
-                      isActionableApproval
-                        ? () => {
-                            setResolvedApprovalIds((current) => {
-                              const next = new Set(current)
-                              next.add(entry.id)
-                              return next
-                            })
-                            onApprove(
-                              session.id,
-                              entry.providerMeta.providerItemId ?? undefined,
-                            )
-                          }
-                        : undefined
-                    }
-                    onDeny={
-                      isActionableApproval
-                        ? () => {
-                            setResolvedApprovalIds(
-                              (current) => new Set([...current, entry.id]),
-                            )
-                            onDeny(
-                              session.id,
-                              entry.providerMeta.providerItemId ?? undefined,
-                            )
-                          }
-                        : undefined
-                    }
-                    onApproveSession={
-                      isActionableApproval
-                        ? () => {
-                            setResolvedApprovalIds((current) => {
-                              const next = new Set(current)
-                              next.add(entry.id)
-                              return next
-                            })
-                            onApprove(
-                              session.id,
-                              entry.providerMeta.providerItemId ?? undefined,
-                              { scope: 'session' },
-                            )
-                          }
-                        : undefined
-                    }
-                    onInputAnswer={
-                      isActionableInput
-                        ? (response, displayText) => {
-                            setResolvedInputIds((current) => {
-                              const next = new Set(current)
-                              next.add(entry.id)
-                              return next
-                            })
-                            onInputAnswer(
-                              session.id,
-                              entry.kind === 'input-request' &&
-                                entry.responseProviderItemId
-                                ? {
-                                    ...response,
-                                    providerItemId:
-                                      entry.responseProviderItemId,
-                                  }
-                                : response,
-                              displayText,
-                            )
-                          }
-                        : undefined
-                    }
-                  />
-                )}
+                  {!workMarker?.replace && (
+                    <ConversationItem
+                      entry={entry}
+                      sessionId={session.id}
+                      injectedContextText={renderEntry.injectedContextText}
+                      turnStartedAt={
+                        entry.turnId
+                          ? (turnStartedAtById.get(entry.turnId) ?? null)
+                          : null
+                      }
+                      onApprove={
+                        isActionableApproval
+                          ? () => {
+                              setResolvedApprovalIds((current) => {
+                                const next = new Set(current)
+                                next.add(entry.id)
+                                return next
+                              })
+                              onApprove(
+                                session.id,
+                                entry.providerMeta.providerItemId ?? undefined,
+                              )
+                            }
+                          : undefined
+                      }
+                      onDeny={
+                        isActionableApproval
+                          ? () => {
+                              setResolvedApprovalIds(
+                                (current) => new Set([...current, entry.id]),
+                              )
+                              onDeny(
+                                session.id,
+                                entry.providerMeta.providerItemId ?? undefined,
+                              )
+                            }
+                          : undefined
+                      }
+                      onApproveSession={
+                        isActionableApproval
+                          ? () => {
+                              setResolvedApprovalIds((current) => {
+                                const next = new Set(current)
+                                next.add(entry.id)
+                                return next
+                              })
+                              onApprove(
+                                session.id,
+                                entry.providerMeta.providerItemId ?? undefined,
+                                { scope: 'session' },
+                              )
+                            }
+                          : undefined
+                      }
+                      onInputAnswer={
+                        isActionableInput
+                          ? (response, displayText) => {
+                              setResolvedInputIds((current) => {
+                                const next = new Set(current)
+                                next.add(entry.id)
+                                return next
+                              })
+                              onInputAnswer(
+                                session.id,
+                                entry.kind === 'input-request' &&
+                                  entry.responseProviderItemId
+                                  ? {
+                                      ...response,
+                                      providerItemId:
+                                        entry.responseProviderItemId,
+                                    }
+                                  : response,
+                                displayText,
+                              )
+                            }
+                          : undefined
+                      }
+                    />
+                  )}
+                </MemberFrame>
               </div>
             )
           })}

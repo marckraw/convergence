@@ -69,6 +69,7 @@ import { SessionHeaderDetailRow } from './session-header-detail-row.presentation
 import { useAgentMeterStore, SessionAgentMeter } from '@/entities/agent-meter'
 import { SessionWiresContainer } from './session-wires.container'
 import { SessionConversationSurface } from './session-conversation-surface.container'
+import { SessionTranscriptViewSwitch } from './transcript-view-switch.container'
 
 export const SessionView: FC = () => {
   const activeProject = useProjectStore((s) => s.activeProject)
@@ -460,6 +461,7 @@ export const SessionView: FC = () => {
                 ? ` · ${session.parallelWork.running}`
                 : ''}
             </Button>
+            <SessionTranscriptViewSwitch sessionId={session.id} />
             <AttentionIndicator
               parallelWork={session.parallelWork}
               attention={session.attention}
