@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import {
   chmodSync,
   existsSync,
@@ -87,22 +88,57 @@ function schema(db) {
 function blankSecrets(db, reader, tables, report) {
   db.transaction(() => {
     for (const table of tables) {
-      for (const column of table.columns) {
+      const secrets = table.columns.flatMap((column) => {
         const auth =
           table.name === 'workboard_tracker_sources' &&
           column.name === 'auth_json'
-        if (!auth && !SECRET_COLUMN.test(column.name)) continue
-        const value = auth ? '{}' : column.notnull ? '' : null
-        const result = db
-          .prepare(`UPDATE ${quote(table.name)} SET ${quote(column.name)} = ?`)
-          .run(value)
+        return auth || SECRET_COLUMN.test(column.name)
+          ? [{ ...column, auth }]
+          : []
+      })
+      if (!secrets.length) continue
+      const required = secrets.filter(
+        (column) => column.notnull && !column.auth,
+      )
+      let prefix = 'scrubbed-'
+      if (required.length) {
+        // Reserve a namespace absent from all originals so in-place UNIQUE
+        // checks cannot collide with a row that has not been scrubbed yet.
+        const occupied = db.prepare(
+          `SELECT 1 FROM ${quote(table.name)} WHERE ${required.map((column) => `${quote(column.name)} LIKE ?`).join(' OR ')} LIMIT 1`,
+        )
+        while (occupied.get(...required.map(() => `${prefix}%`)))
+          prefix = `scrubbed-${randomUUID()}-`
+      }
+      const update = db.prepare(
+        `UPDATE ${quote(table.name)} SET ${secrets.map((column) => `${quote(column.name)} = ?`).join(', ')} WHERE ${table.keys.map((key) => `${quote(key)} IS ?`).join(' AND ')}`,
+      )
+      let rows = 0
+      // The reader's snapshot holds original locators even when a secret is
+      // itself a WITHOUT ROWID primary key. Ordinals never expose those keys.
+      for (const keys of reader
+        .prepare(
+          `SELECT ${table.keys.map(quote).join(', ')} FROM ${quote(table.name)}`,
+        )
+        .safeIntegers()
+        .raw()
+        .iterate()) {
+        const placeholder = `${prefix}${++rows}`
+        update.run(
+          ...secrets.map((column) =>
+            column.auth ? '{}' : column.notnull ? placeholder : null,
+          ),
+          ...keys,
+        )
+      }
+      for (const column of secrets) {
         report.blanked[maskTokens(`${table.name}.${column.name}`).value] = {
-          rows: result.changes,
-          replacement: auth
+          rows,
+          replacement: column.auth
             ? '{}'
-            : value === null
-              ? 'NULL'
-              : 'empty string (NOT NULL)',
+            : column.notnull
+              ? 'unique placeholder (NOT NULL)'
+              : 'NULL',
         }
       }
     }
