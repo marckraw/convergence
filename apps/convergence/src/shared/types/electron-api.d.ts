@@ -1713,6 +1713,14 @@ export type ContextDrillCancelResultData =
   | { ok: false; reason: string }
 
 interface ElectronAPI {
+  agentMeter: {
+    get: () => Promise<import('./agent-meter.types').AgentMeterSnapshot>
+    onUpdated: (
+      callback: (
+        snapshot: import('./agent-meter.types').AgentMeterSnapshot,
+      ) => void,
+    ) => () => void
+  }
   perf: { isEnabled(): boolean; report(payload: unknown): Promise<unknown> }
   system: {
     getInfo: () => SystemInfo

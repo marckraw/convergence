@@ -1,3 +1,4 @@
+import { registerAgentMeterIpc } from '../backend/agent-meter/agent-meter.ipc'
 import { ReleaseActService } from '../backend/release/release-act.service'
 import { registerReleaseIpcHandlers } from '../backend/release/release.ipc'
 import { ErrandSpawner } from '../backend/relay/errand-spawner'
@@ -361,6 +362,10 @@ async function startApp(): Promise<void> {
     db,
     executionHost,
     globalSessionsRoot,
+  )
+  const agentMeter = registerAgentMeterIpc()
+  sessionService.setAgentMeterListener((id, handle) =>
+    agentMeter.attach(id, handle?.processMeter),
   )
   perfProbe?.wrapSummary(sessionService)
   // SessionService has recovered stale sessions; clean legacy wires and seats
@@ -1319,6 +1324,7 @@ async function startApp(): Promise<void> {
   }
 
   app.on('before-quit', () => {
+    agentMeter.dispose()
     autoDispatcher.dispose()
     systemNotifications.dispose()
     systemCoalescer.dispose()

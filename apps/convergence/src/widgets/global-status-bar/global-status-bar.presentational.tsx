@@ -1,4 +1,6 @@
 import type { FC, ReactNode } from 'react'
+import type { AgentMeterSnapshot } from '@/shared/types/agent-meter.types'
+import { AgentMeterSummary } from './agent-meter-summary.presentational'
 import type { ProjectActivity } from '@/entities/session'
 import { summarizeAttentionRequests } from '@/entities/session'
 import type { ProviderInfo, SessionSummary } from '@/entities/session'
@@ -25,6 +27,8 @@ interface RecencyBadge {
 }
 
 interface GlobalStatusBarProps {
+  meter?: AgentMeterSnapshot
+  meterSessions?: SessionSummary[]
   runningCount: number
   attentionCount: number
   byProject: ProjectActivity[]
@@ -35,6 +39,8 @@ interface GlobalStatusBarProps {
 }
 
 export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
+  meter,
+  meterSessions = [],
   runningCount,
   attentionCount,
   byProject,
@@ -170,6 +176,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
         </>
       )}
 
+      {meter && <AgentMeterSummary snapshot={meter} sessions={meterSessions} />}
       {recency ? (
         <Tooltip delayDuration={120}>
           <TooltipTrigger asChild>

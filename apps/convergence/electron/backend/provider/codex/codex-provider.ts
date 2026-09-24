@@ -3006,6 +3006,7 @@ export class CodexProvider implements Provider {
     }
 
     const handle: SessionHandle = {
+      processMeter: serverHost.processMeter,
       ...(initialDispatch ? { initialDispatch } : {}),
       onDelta: (cb) => {
         listeners.delta.push(cb)

@@ -470,6 +470,7 @@ export interface InitialDispatchReceipt {
 }
 
 export interface SessionHandle {
+  processMeter?: import('../agent-meter/process-source').MeterProcessSource
   /** Optional asynchronous binding gate; rejection means the initial input remains unsent. */
   initialDispatch?: Promise<InitialDispatchReceipt>
   readonly canStopTasks?: boolean

@@ -1,3 +1,4 @@
+import { MeterProcessSource } from '../../agent-meter/process-source'
 import { spawn, type ChildProcess } from 'child_process'
 import { promises as fs } from 'fs'
 import {
@@ -539,6 +540,7 @@ export class CursorProvider implements Provider {
       now,
     })
 
+    const processMeter = new MeterProcessSource()
     let child: ChildProcess | null = null
     let rpc: CursorAcpJsonRpcClient | null = null
     let stopped = false
@@ -1798,6 +1800,8 @@ export class CursorProvider implements Provider {
         env: { ...process.env },
       })
 
+      processMeter.bind(child)
+
       if (!child.stdin || !child.stdout) {
         connecting = false
         resolveReady?.()
@@ -2084,6 +2088,7 @@ export class CursorProvider implements Provider {
     return {
       /** The ACP process and its session outlive a completed turn (R1). */
       resident: true,
+      processMeter,
       get retainQueuedInputsOnCompletion() {
         return interruptRequested
       },

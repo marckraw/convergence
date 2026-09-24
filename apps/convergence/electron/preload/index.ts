@@ -8,6 +8,21 @@ import type { SessionSendResult } from '../../src/shared/types/session-send.type
 import { contextBridge, ipcRenderer, nativeTheme } from 'electron'
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  agentMeter: {
+    get: () => ipcRenderer.invoke('agentMeter:get'),
+    onUpdated: (
+      callback: (
+        snapshot: import('../../src/shared/types/agent-meter.types').AgentMeterSnapshot,
+      ) => void,
+    ) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        snapshot: import('../../src/shared/types/agent-meter.types').AgentMeterSnapshot,
+      ) => callback(snapshot)
+      ipcRenderer.on('agentMeter:updated', handler)
+      return () => ipcRenderer.removeListener('agentMeter:updated', handler)
+    },
+  },
   perf: {
     isEnabled: () => process.env.CONVERGENCE_PERF === '1',
     report: (payload: unknown) =>

@@ -1,3 +1,4 @@
+import { MeterProcessSource } from '../../agent-meter/process-source'
 import { spawn, type ChildProcess } from 'child_process'
 import { promises as fs } from 'fs'
 import type {
@@ -441,6 +442,7 @@ export class PiProvider implements Provider {
       fireHeartbeat()
     }
 
+    const processMeter = new MeterProcessSource()
     let child: ChildProcess | null = null
     let rpc: PiRpcClient | null = null
     let stopped = false
@@ -1338,6 +1340,8 @@ export class PiProvider implements Provider {
         env: childEnv,
       })
 
+      processMeter.bind(child)
+
       if (!child.stdin || !child.stdout) {
         patchUserMessageSkills(
           userMessageItemId,
@@ -1735,6 +1739,7 @@ export class PiProvider implements Provider {
     }
 
     const handle: SessionHandle = {
+      processMeter,
       onDelta: (cb) => {
         listeners.delta.push(cb)
       },
