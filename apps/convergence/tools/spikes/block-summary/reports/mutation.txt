@@ -1,0 +1,66 @@
+Mutation: skip the unknown path rejection, then restore original source.
+Mutated exit: 1
+
+ RUN  v4.1.4 /Users/marckraw/Projects/Private/convergence-lane-astra/apps/convergence
+
+ ❯ tools/spikes/block-summary/truth-check.pure.test.ts (9 tests | 2 failed) 9ms
+     × rejects an invented path 4ms
+     × rejects an invented bare folder 0ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 7 passed (9)
+   Start at  18:03:57
+   Duration  352ms (transform 49ms, setup 0ms, import 102ms, tests 9ms, environment 0ms)
+
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tools/spikes/block-summary/truth-check.pure.test.ts > block summary lexical truth gate > rejects an invented path
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tools/spikes/block-summary/truth-check.pure.test.ts:22:65
+     20|   })
+     21|   it('rejects an invented path', () => {
+     22|     expect(truthCheck('Read src/auth/secrets.ts.', block).pass).toBe(f…
+       |                                                                 ^
+     23|   })
+     24|   it('rejects an invented bare folder', () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tools/spikes/block-summary/truth-check.pure.test.ts > block summary lexical truth gate > rejects an invented bare folder
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tools/spikes/block-summary/truth-check.pure.test.ts:25:63
+     23|   })
+     24|   it('rejects an invented bare folder', () => {
+     25|     expect(truthCheck('Read the banana folder.', block).pass).toBe(fal…
+       |                                                               ^
+     26|     expect(truthCheck('Read a folder named banana.', block).pass).toBe…
+     27|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+Restored exit: 0
+
+ RUN  v4.1.4 /Users/marckraw/Projects/Private/convergence-lane-astra/apps/convergence
+
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  18:04:00
+   Duration  424ms (transform 131ms, setup 0ms, import 209ms, tests 3ms, environment 0ms)

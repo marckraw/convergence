@@ -1,0 +1,506 @@
+[
+  {
+    "id": "block-01",
+    "provider": "claude",
+    "label": "Read ten transcript files",
+    "items": [
+      {
+        "type": "tool-call",
+        "toolName": "Read",
+        "inputText": "{\n  \"file_path\": \"src/widgets/session-view/part-1.tsx\"\n}"
+      },
+      {
+        "type": "tool-call",
+        "toolName": "Read",
+        "inputText": "{\n  \"file_path\": \"src/widgets/session-view/part-2.tsx\"\n}"
+      },
+      {
+        "type": "tool-call",
+        "toolName": "Read",
+        "inputText": "{\n  \"file_path\": \"src/widgets/session-view/part-3.tsx\"\n}"
+      },
+      {
+        "type": "tool-call",
+        "toolName": "Read",
+        "inputText": "{\n  \"file_path\": \"src/widgets/session-view/part-4.tsx\"\n}"
+      },
+      {
+        "type": "tool-call",
+        "toolName": "Read",
+        "inputText": "{\n  \"file_path\": \"src/widgets/session-view/part-5.tsx\"\n}"
+      },
+      {
+        "type": "tool-call",
+        "toolName": "Read",
+        "inputText": "{\n  \"file_path\": \"src/widgets/session-view/part-6.tsx\"\n}"
+      },
+      {
+        "type": "tool-call",
+        "toolName": "Read",
+        "inputText": "{\n  \"file_path\": \"src/widgets/session-view/part-7.tsx\"\n}"
+      },
+      {
+        "type": "tool-call",
+        "toolName": "Read",
+        "inputText": "{\n  \"file_path\": \"src/widgets/session-view/part-8.tsx\"\n}"
+      },
+      {
+        "type": "tool-call",
+        "toolName": "Read",
+        "inputText": "{\n  \"file_path\": \"src/widgets/session-view/part-9.tsx\"\n}"
+      },
+      {
+        "type": "tool-call",
+        "toolName": "Read",
+        "inputText": "{\n  \"file_path\": \"src/widgets/session-view/part-10.tsx\"\n}"
+      }
+    ],
+    "truth": {
+      "toolNames": ["Read"],
+      "paths": [
+        "part-1.tsx",
+        "part-10.tsx",
+        "part-2.tsx",
+        "part-3.tsx",
+        "part-4.tsx",
+        "part-5.tsx",
+        "part-6.tsx",
+        "part-7.tsx",
+        "part-8.tsx",
+        "part-9.tsx",
+        "src",
+        "src/widgets",
+        "src/widgets/session-view",
+        "src/widgets/session-view/part-1.tsx",
+        "src/widgets/session-view/part-10.tsx",
+        "src/widgets/session-view/part-2.tsx",
+        "src/widgets/session-view/part-3.tsx",
+        "src/widgets/session-view/part-4.tsx",
+        "src/widgets/session-view/part-5.tsx",
+        "src/widgets/session-view/part-6.tsx",
+        "src/widgets/session-view/part-7.tsx",
+        "src/widgets/session-view/part-8.tsx",
+        "src/widgets/session-view/part-9.tsx"
+      ]
+    }
+  },
+  {
+    "id": "block-02",
+    "provider": "claude",
+    "label": "Search then read",
+    "items": [
+      {
+        "type": "tool-call",
+        "toolName": "Grep",
+        "inputText": "{\n  \"pattern\": \"transcript\",\n  \"path\": \"src/widgets/session-view\"\n}"
+      },
+      {
+        "type": "tool-call",
+        "toolName": "Read",
+        "inputText": "{\n  \"file_path\": \"src/widgets/session-view/index.ts\"\n}"
+      }
+    ],
+    "truth": {
+      "toolNames": ["Grep", "Read"],
+      "paths": [
+        "index.ts",
+        "session-view",
+        "src",
+        "src/widgets",
+        "src/widgets/session-view",
+        "src/widgets/session-view/index.ts"
+      ]
+    }
+  },
+  {
+    "id": "block-03",
+    "provider": "claude",
+    "label": "Edit three files",
+    "items": [
+      {
+        "type": "tool-call",
+        "toolName": "Edit",
+        "inputText": "{\n  \"file_path\": \"src/features/composer/part-1.ts\",\n  \"old_string\": \"one\",\n  \"new_string\": \"two\"\n}"
+      },
+      {
+        "type": "tool-call",
+        "toolName": "Edit",
+        "inputText": "{\n  \"file_path\": \"src/features/composer/part-2.ts\",\n  \"old_string\": \"one\",\n  \"new_string\": \"two\"\n}"
+      },
+      {
+        "type": "tool-call",
+        "toolName": "Edit",
+        "inputText": "{\n  \"file_path\": \"src/features/composer/part-3.ts\",\n  \"old_string\": \"one\",\n  \"new_string\": \"two\"\n}"
+      }
+    ],
+    "truth": {
+      "toolNames": ["Edit"],
+      "paths": [
+        "part-1.ts",
+        "part-2.ts",
+        "part-3.ts",
+        "src",
+        "src/features",
+        "src/features/composer",
+        "src/features/composer/part-1.ts",
+        "src/features/composer/part-2.ts",
+        "src/features/composer/part-3.ts"
+      ]
+    }
+  },
+  {
+    "id": "block-04",
+    "provider": "claude",
+    "label": "Invoke tests without a result",
+    "items": [
+      {
+        "type": "tool-call",
+        "toolName": "Bash",
+        "inputText": "{\n  \"command\": \"npm test\"\n}"
+      }
+    ],
+    "truth": {
+      "toolNames": ["Bash"],
+      "paths": []
+    }
+  },
+  {
+    "id": "block-05",
+    "provider": "claude",
+    "label": "Trap: filename does not prove deployment",
+    "items": [
+      {
+        "type": "tool-call",
+        "toolName": "Read",
+        "inputText": "{\n  \"file_path\": \"docs/deployed-successfully.md\"\n}"
+      }
+    ],
+    "truth": {
+      "toolNames": ["Read"],
+      "paths": [
+        "deployed-successfully.md",
+        "docs",
+        "docs/deployed-successfully.md"
+      ]
+    }
+  },
+  {
+    "id": "block-06",
+    "provider": "pi",
+    "label": "Read configuration",
+    "items": [
+      {
+        "type": "tool-call",
+        "toolName": "read",
+        "inputText": "{\"path\":\"package.json\"}"
+      }
+    ],
+    "truth": {
+      "toolNames": ["read"],
+      "paths": ["package.json"]
+    }
+  },
+  {
+    "id": "block-07",
+    "provider": "pi",
+    "label": "Edit styling",
+    "items": [
+      {
+        "type": "tool-call",
+        "toolName": "edit",
+        "inputText": "{\"path\":\"src/shared/theme.css\",\"oldText\":\"red\",\"newText\":\"blue\"}"
+      }
+    ],
+    "truth": {
+      "toolNames": ["edit"],
+      "paths": ["src", "src/shared", "src/shared/theme.css", "theme.css"]
+    }
+  },
+  {
+    "id": "block-08",
+    "provider": "pi",
+    "label": "List source directory",
+    "items": [
+      {
+        "type": "tool-call",
+        "toolName": "bash",
+        "inputText": "{\"command\":\"ls src/entities\"}"
+      }
+    ],
+    "truth": {
+      "toolNames": ["bash"],
+      "paths": ["entities", "src", "src/entities"]
+    }
+  },
+  {
+    "id": "block-09",
+    "provider": "pi",
+    "label": "Search then read settings",
+    "items": [
+      {
+        "type": "tool-call",
+        "toolName": "grep",
+        "inputText": "{\"pattern\":\"timeout\",\"path\":\"src/shared/settings\"}"
+      },
+      {
+        "type": "tool-call",
+        "toolName": "read",
+        "inputText": "{\"path\":\"src/shared/settings/defaults.ts\"}"
+      }
+    ],
+    "truth": {
+      "toolNames": ["grep", "read"],
+      "paths": [
+        "defaults.ts",
+        "settings",
+        "src",
+        "src/shared",
+        "src/shared/settings",
+        "src/shared/settings/defaults.ts"
+      ]
+    }
+  },
+  {
+    "id": "block-10",
+    "provider": "pi",
+    "label": "Trap: filename does not prove tests passed",
+    "items": [
+      {
+        "type": "tool-call",
+        "toolName": "read",
+        "inputText": "{\"path\":\"test/all-tests-passed.test.ts\"}"
+      }
+    ],
+    "truth": {
+      "toolNames": ["read"],
+      "paths": [
+        "all-tests-passed.test.ts",
+        "test",
+        "test/all-tests-passed.test.ts"
+      ]
+    }
+  },
+  {
+    "id": "block-11",
+    "provider": "cursor",
+    "label": "Read free text",
+    "items": [
+      {
+        "type": "tool-call",
+        "toolName": "Read",
+        "inputText": "Read src/widgets/session-view/transcript.tsx"
+      }
+    ],
+    "truth": {
+      "toolNames": ["Read"],
+      "paths": [
+        "src",
+        "src/widgets",
+        "src/widgets/session-view",
+        "src/widgets/session-view/transcript.tsx",
+        "transcript.tsx"
+      ]
+    }
+  },
+  {
+    "id": "block-12",
+    "provider": "cursor",
+    "label": "Search free text",
+    "items": [
+      {
+        "type": "tool-call",
+        "toolName": "Grep",
+        "inputText": "Search for pending in src/entities/session"
+      }
+    ],
+    "truth": {
+      "toolNames": ["Grep"],
+      "paths": ["session", "src", "src/entities", "src/entities/session"]
+    }
+  },
+  {
+    "id": "block-13",
+    "provider": "cursor",
+    "label": "Edit free text",
+    "items": [
+      {
+        "type": "tool-call",
+        "toolName": "Edit",
+        "inputText": "Replace label text in src/features/composer/button.tsx"
+      }
+    ],
+    "truth": {
+      "toolNames": ["Edit"],
+      "paths": [
+        "button.tsx",
+        "src",
+        "src/features",
+        "src/features/composer",
+        "src/features/composer/button.tsx"
+      ]
+    }
+  },
+  {
+    "id": "block-14",
+    "provider": "cursor",
+    "label": "Command free text",
+    "items": [
+      {
+        "type": "tool-call",
+        "toolName": "Bash",
+        "inputText": "Run npm run typecheck"
+      }
+    ],
+    "truth": {
+      "toolNames": ["Bash"],
+      "paths": []
+    }
+  },
+  {
+    "id": "block-15",
+    "provider": "cursor",
+    "label": "Read two free text paths",
+    "items": [
+      {
+        "type": "tool-call",
+        "toolName": "Read",
+        "inputText": "Read docs/architecture/overview.md"
+      },
+      {
+        "type": "tool-call",
+        "toolName": "Read",
+        "inputText": "Read docs/architecture/boundaries.md"
+      }
+    ],
+    "truth": {
+      "toolNames": ["Read"],
+      "paths": [
+        "boundaries.md",
+        "docs",
+        "docs/architecture",
+        "docs/architecture/boundaries.md",
+        "docs/architecture/overview.md",
+        "overview.md"
+      ]
+    }
+  },
+  {
+    "id": "block-16",
+    "provider": "codex",
+    "label": "Five command results",
+    "items": [
+      {
+        "type": "tool-result",
+        "toolName": "pwd",
+        "outputText": "Command finished (exit 0)."
+      },
+      {
+        "type": "tool-result",
+        "toolName": "git status --short",
+        "outputText": "Command finished (exit 0)."
+      },
+      {
+        "type": "tool-result",
+        "toolName": "git diff --stat",
+        "outputText": "Command finished (exit 0)."
+      },
+      {
+        "type": "tool-result",
+        "toolName": "git branch --show-current",
+        "outputText": "Command finished (exit 0)."
+      },
+      {
+        "type": "tool-result",
+        "toolName": "git log -1 --oneline",
+        "outputText": "Command finished (exit 0)."
+      }
+    ],
+    "truth": {
+      "toolNames": [
+        "pwd",
+        "git status --short",
+        "git diff --stat",
+        "git branch --show-current",
+        "git log -1 --oneline"
+      ],
+      "paths": []
+    }
+  },
+  {
+    "id": "block-17",
+    "provider": "codex",
+    "label": "Failed test result",
+    "items": [
+      {
+        "type": "tool-result",
+        "toolName": "npm test",
+        "outputText": "Command exited 1. One assertion failed."
+      }
+    ],
+    "truth": {
+      "toolNames": ["npm test"],
+      "paths": []
+    }
+  },
+  {
+    "id": "block-18",
+    "provider": "codex",
+    "label": "Read through command result",
+    "items": [
+      {
+        "type": "tool-result",
+        "toolName": "cat src/entities/session/types.ts",
+        "outputText": "export type SessionId = string;"
+      }
+    ],
+    "truth": {
+      "toolNames": ["cat src/entities/session/types.ts"],
+      "paths": [
+        "src",
+        "src/entities",
+        "src/entities/session",
+        "src/entities/session/types.ts",
+        "types.ts"
+      ]
+    }
+  },
+  {
+    "id": "block-19",
+    "provider": "codex",
+    "label": "Search through command result",
+    "items": [
+      {
+        "type": "tool-result",
+        "toolName": "rg pending src/widgets/session-view",
+        "outputText": "src/widgets/session-view/state.ts:4: pending: false"
+      }
+    ],
+    "truth": {
+      "toolNames": ["rg pending src/widgets/session-view"],
+      "paths": [
+        "session-view",
+        "src",
+        "src/widgets",
+        "src/widgets/session-view",
+        "src/widgets/session-view/state.ts",
+        "state.ts"
+      ]
+    }
+  },
+  {
+    "id": "block-20",
+    "provider": "codex",
+    "label": "Directory listing result",
+    "items": [
+      {
+        "type": "tool-result",
+        "toolName": "ls src/shared",
+        "outputText": "lib\nui\nstyles"
+      }
+    ],
+    "truth": {
+      "toolNames": ["ls src/shared"],
+      "paths": ["lib", "shared", "src", "src/shared", "styles", "ui"]
+    }
+  }
+]

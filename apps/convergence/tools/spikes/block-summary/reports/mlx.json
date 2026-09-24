@@ -1,0 +1,1051 @@
+{
+  "candidate": "mlx",
+  "timestamp": "2026-09-24T16:05:55.277Z",
+  "host": {
+    "macOS": "27.0",
+    "build": "26A428",
+    "hardware": "Mac15,6",
+    "memoryBytes": 38654705664,
+    "node": "v24.15.0",
+    "loadAverageAtStart": [23.61669921875, 25.15478515625, 25.35888671875]
+  },
+  "checkerSha256": "5d91b10f0f7cb6a88de834cfeed7c8da47f42defe7a305f5f757356bb72059ea",
+  "fixtureSha256": "cc8a68fe6e9a047f84539d5289177655bd3f35e6061f15d80ed1f3becce04d30",
+  "promptSha256": "3021f53220e111d7a242f3cbec7f982581d941a15befc316d388da08503812c8",
+  "model": {
+    "model": "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
+    "revision": "8b403126fc14f14cfc99bb4cfa72ecbc129ea677",
+    "downloadBytes": 880169797,
+    "files": [
+      {
+        "name": "added_tokens.json",
+        "bytes": 605,
+        "sha256": "58b54bbe36fc752f79a24a271ef66a0a0830054b4dfad94bde757d851968060b"
+      },
+      {
+        "name": "config.json",
+        "bytes": 784,
+        "sha256": "636d3e2a15e8914b8cf82b05cc2288a811f9bd93c3bf1afc00cab701a70b47c0"
+      },
+      {
+        "name": "merges.txt",
+        "bytes": 1671853,
+        "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5"
+      },
+      {
+        "name": "model.safetensors",
+        "bytes": 868628559,
+        "sha256": "0979f33d1bc58afcf696d13f57977644e7b11a6f0eec3e631d8e9463d18c0717"
+      },
+      {
+        "name": "model.safetensors.index.json",
+        "bytes": 51569,
+        "sha256": "6b98634d5044f0e2ad45228a374f8445904e571f1082392d08a6ce54f5d517ca"
+      },
+      {
+        "name": "special_tokens_map.json",
+        "bytes": 613,
+        "sha256": "76862e765266b85aa9459767e33cbaf13970f327a0e88d1c65846c2ddd3a1ecd"
+      },
+      {
+        "name": "tokenizer.json",
+        "bytes": 7031673,
+        "sha256": "a8506e7111b80c6d8635951a02eab0f4e1a8e4e5772da83846579e97b16f61bf"
+      },
+      {
+        "name": "tokenizer_config.json",
+        "bytes": 7308,
+        "sha256": "f7c61e32b7a17d19bf8e7037dcb74079a833e53ea9801f24008cac68458f03b7"
+      },
+      {
+        "name": "vocab.json",
+        "bytes": 2776833,
+        "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+      }
+    ]
+  },
+  "methodology": "One resident process, 20 blocks in fixed order x 3 runs; greedy, 96 token cap; fresh conversation per block. Cold means process-cold, includes startup/load, excludes download; OS caches/services are not reset; background work on this shared development Mac is uncontrolled. Warm uses remaining successful round trips. RSS/CPU measure worker process, not Apple system inference services or GPU time.",
+  "loadAverageAtEnd": [22.11865234375, 24.67578125, 25.17919921875],
+  "summary": {
+    "expectedResponses": 60,
+    "responses": 60,
+    "successfulResponses": 60,
+    "coldFirstCallMs": 5371.465417,
+    "warmP50Ms": 328.15087500000027,
+    "warmP95Ms": 444.64841700000034,
+    "warmSamples": 59,
+    "peakRssBytes": 1157480448,
+    "cpuSeconds": 11.959999999999999,
+    "wallSeconds": 25.601666291999997,
+    "averageCpuPercent": 46.715709296379885,
+    "truthPassCount": 60,
+    "truthPassRate": 1
+  },
+  "fatal": null,
+  "exit": {
+    "code": 0,
+    "signal": null
+  },
+  "rows": [
+    {
+      "blockId": "block-01",
+      "run": 1,
+      "wallMs": 5371.465417,
+      "id": "block-01/run-1",
+      "sentence": "Claude reads multiple TypeScript files from the \"src/widgets/session-view\" directory.",
+      "generationMs": 611.5476669947384,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 9,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-02",
+      "run": 1,
+      "wallMs": 407.8919169999999,
+      "id": "block-02/run-1",
+      "sentence": "Grep searches for the pattern \"transcript\" in the file \"src/widgets/session-view/index.ts\".",
+      "generationMs": 407.5284999998985,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 10,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-03",
+      "run": 1,
+      "wallMs": 443.1017090000005,
+      "id": "block-03/run-1",
+      "sentence": "The code replaces occurrences of \"one\" with \"two\" in multiple TypeScript files.",
+      "generationMs": 442.6025409993599,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 12,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-04",
+      "run": 1,
+      "wallMs": 279.2557909999996,
+      "id": "block-04/run-1",
+      "sentence": "Run npm test to test the project.",
+      "generationMs": 278.9509590002126,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-05",
+      "run": 1,
+      "wallMs": 343.08720900000026,
+      "id": "block-05/run-1",
+      "sentence": "Read the file `docs/deployed-successfully.md` to extract details.",
+      "generationMs": 342.78858300240245,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-06",
+      "run": 1,
+      "wallMs": 328.15087500000027,
+      "id": "block-06/run-1",
+      "sentence": "Reads the `package.json` file from the current working directory.",
+      "generationMs": 327.82795800449094,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 9,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-07",
+      "run": 1,
+      "wallMs": 289.6865830000006,
+      "id": "block-07/run-1",
+      "sentence": "Edit theme.css to change red color to blue.",
+      "generationMs": 289.4284160065581,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-08",
+      "run": 1,
+      "wallMs": 293.85870800000066,
+      "id": "block-08/run-1",
+      "sentence": "List files in the \"src/entities\" directory.",
+      "generationMs": 293.5711249956512,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 6,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-09",
+      "run": 1,
+      "wallMs": 319.7400000000007,
+      "id": "block-09/run-1",
+      "sentence": "The `defaults.ts` file contains settings with a timeout pattern.",
+      "generationMs": 319.4367920004879,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 9,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-10",
+      "run": 1,
+      "wallMs": 320.24020799999926,
+      "id": "block-10/run-1",
+      "sentence": "Read the `test/all-tests-passed.test.ts` file.",
+      "generationMs": 319.94979200680973,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 4,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-11",
+      "run": 1,
+      "wallMs": 394.03608299999905,
+      "id": "block-11/run-1",
+      "sentence": "Reads the `transcript.tsx` file from the `src/widgets/session-view/` directory.",
+      "generationMs": 393.7814170058118,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-12",
+      "run": 1,
+      "wallMs": 299.13929199999984,
+      "id": "block-12/run-1",
+      "sentence": "Search for pending entries in the src/entities/session directory.",
+      "generationMs": 298.8719580025645,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-13",
+      "run": 1,
+      "wallMs": 341.1391250000015,
+      "id": "block-13/run-1",
+      "sentence": "Edit the label text in `src/features/composer/button.tsx`.",
+      "generationMs": 340.8917089982424,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 6,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-14",
+      "run": 1,
+      "wallMs": 277.0145829999983,
+      "id": "block-14/run-1",
+      "sentence": "Run npm run typecheck to check code type.",
+      "generationMs": 276.75349999481114,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-15",
+      "run": 1,
+      "wallMs": 278.10262500000135,
+      "id": "block-15/run-1",
+      "sentence": "Read documents on architecture overview and boundaries.",
+      "generationMs": 277.862290997291,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-16",
+      "run": 1,
+      "wallMs": 345.975375,
+      "id": "block-16/run-1",
+      "sentence": "Files have been tracked, compared, and listed.",
+      "generationMs": 345.6053330010036,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-17",
+      "run": 1,
+      "wallMs": 288.2233749999996,
+      "id": "block-17/run-1",
+      "sentence": "npm test command failed with one assertion failure.",
+      "generationMs": 287.8913750028005,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-18",
+      "run": 1,
+      "wallMs": 355.58745799999997,
+      "id": "block-18/run-1",
+      "sentence": "The `types.ts` file defines `SessionId` as a string type.",
+      "generationMs": 355.3045419976115,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 9,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-19",
+      "run": 1,
+      "wallMs": 311.56775000000016,
+      "id": "block-19/run-1",
+      "sentence": "The `session-view` component is no longer pending.",
+      "generationMs": 311.31808300415287,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-20",
+      "run": 1,
+      "wallMs": 360.10879100000056,
+      "id": "block-20/run-1",
+      "sentence": "The directory `src/shared` contains `lib`, `ui`, and `styles`.",
+      "generationMs": 359.86995799612487,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575269536,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-01",
+      "run": 2,
+      "wallMs": 533.663625000001,
+      "id": "block-01/run-2",
+      "sentence": "Claude reads multiple TypeScript files from the \"src/widgets/session-view\" directory.",
+      "generationMs": 533.3144169999287,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 9,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-02",
+      "run": 2,
+      "wallMs": 419.073124999999,
+      "id": "block-02/run-2",
+      "sentence": "Grep searches for the pattern \"transcript\" in the file \"src/widgets/session-view/index.ts\".",
+      "generationMs": 418.8450829969952,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 10,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-03",
+      "run": 2,
+      "wallMs": 422.8485830000009,
+      "id": "block-03/run-2",
+      "sentence": "The code replaces occurrences of \"one\" with \"two\" in multiple TypeScript files.",
+      "generationMs": 422.6252079970436,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 12,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-04",
+      "run": 2,
+      "wallMs": 269.52700000000004,
+      "id": "block-04/run-2",
+      "sentence": "Run npm test to test the project.",
+      "generationMs": 269.3083750054939,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-05",
+      "run": 2,
+      "wallMs": 348.9164579999997,
+      "id": "block-05/run-2",
+      "sentence": "Read the file `docs/deployed-successfully.md` to extract details.",
+      "generationMs": 348.6799169986625,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-06",
+      "run": 2,
+      "wallMs": 307.5962920000002,
+      "id": "block-06/run-2",
+      "sentence": "Reads the `package.json` file from the current working directory.",
+      "generationMs": 307.3595000023488,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 9,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-07",
+      "run": 2,
+      "wallMs": 288.0163330000014,
+      "id": "block-07/run-2",
+      "sentence": "Edit theme.css to change red color to blue.",
+      "generationMs": 287.8080829977989,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-08",
+      "run": 2,
+      "wallMs": 288.28666599999997,
+      "id": "block-08/run-2",
+      "sentence": "List files in the \"src/entities\" directory.",
+      "generationMs": 288.06116699706763,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 6,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-09",
+      "run": 2,
+      "wallMs": 303.9344579999997,
+      "id": "block-09/run-2",
+      "sentence": "The `defaults.ts` file contains settings with a timeout pattern.",
+      "generationMs": 303.73879200487863,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 9,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-10",
+      "run": 2,
+      "wallMs": 316.50716699999975,
+      "id": "block-10/run-2",
+      "sentence": "Read the `test/all-tests-passed.test.ts` file.",
+      "generationMs": 316.3043340027798,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 4,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-11",
+      "run": 2,
+      "wallMs": 399.6320420000011,
+      "id": "block-11/run-2",
+      "sentence": "Reads the `transcript.tsx` file from the `src/widgets/session-view/` directory.",
+      "generationMs": 399.403416995483,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-12",
+      "run": 2,
+      "wallMs": 330.08558300000004,
+      "id": "block-12/run-2",
+      "sentence": "Search for pending entries in the src/entities/session directory.",
+      "generationMs": 329.6690830029547,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-13",
+      "run": 2,
+      "wallMs": 349.87774999999965,
+      "id": "block-13/run-2",
+      "sentence": "Edit the label text in `src/features/composer/button.tsx`.",
+      "generationMs": 349.6249999952852,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 6,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-14",
+      "run": 2,
+      "wallMs": 286.84612500000003,
+      "id": "block-14/run-2",
+      "sentence": "Run npm run typecheck to check code type.",
+      "generationMs": 286.53758400469087,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-15",
+      "run": 2,
+      "wallMs": 289.5673330000027,
+      "id": "block-15/run-2",
+      "sentence": "Read documents on architecture overview and boundaries.",
+      "generationMs": 289.3607090009027,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-16",
+      "run": 2,
+      "wallMs": 346.15858300000036,
+      "id": "block-16/run-2",
+      "sentence": "Files have been tracked, compared, and listed.",
+      "generationMs": 345.90933300205506,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-17",
+      "run": 2,
+      "wallMs": 291.52958299999955,
+      "id": "block-17/run-2",
+      "sentence": "npm test command failed with one assertion failure.",
+      "generationMs": 291.2906670026132,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-18",
+      "run": 2,
+      "wallMs": 367.9269999999997,
+      "id": "block-18/run-2",
+      "sentence": "The `types.ts` file defines `SessionId` as a string type.",
+      "generationMs": 367.6890829956392,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 9,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-19",
+      "run": 2,
+      "wallMs": 319.2339170000014,
+      "id": "block-19/run-2",
+      "sentence": "The `session-view` component is no longer pending.",
+      "generationMs": 318.9853329968173,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-20",
+      "run": 2,
+      "wallMs": 368.8398330000018,
+      "id": "block-20/run-2",
+      "sentence": "The directory `src/shared` contains `lib`, `ui`, and `styles`.",
+      "generationMs": 368.61495899938745,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-01",
+      "run": 3,
+      "wallMs": 547.4012920000023,
+      "id": "block-01/run-3",
+      "sentence": "Claude reads multiple TypeScript files from the \"src/widgets/session-view\" directory.",
+      "generationMs": 547.1279159974074,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 9,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-02",
+      "run": 3,
+      "wallMs": 429.72666700000264,
+      "id": "block-02/run-3",
+      "sentence": "Grep searches for the pattern \"transcript\" in the file \"src/widgets/session-view/index.ts\".",
+      "generationMs": 429.5070410007611,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 10,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-03",
+      "run": 3,
+      "wallMs": 444.64841700000034,
+      "id": "block-03/run-3",
+      "sentence": "The code replaces occurrences of \"one\" with \"two\" in multiple TypeScript files.",
+      "generationMs": 444.37516699690605,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 12,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-04",
+      "run": 3,
+      "wallMs": 295.61166700000103,
+      "id": "block-04/run-3",
+      "sentence": "Run npm test to test the project.",
+      "generationMs": 295.2628340062802,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-05",
+      "run": 3,
+      "wallMs": 378.76091599999927,
+      "id": "block-05/run-3",
+      "sentence": "Read the file `docs/deployed-successfully.md` to extract details.",
+      "generationMs": 378.48870800371515,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-06",
+      "run": 3,
+      "wallMs": 313.37145800000144,
+      "id": "block-06/run-3",
+      "sentence": "Reads the `package.json` file from the current working directory.",
+      "generationMs": 313.1377079989761,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 9,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-07",
+      "run": 3,
+      "wallMs": 293.7515830000011,
+      "id": "block-07/run-3",
+      "sentence": "Edit theme.css to change red color to blue.",
+      "generationMs": 293.531041003007,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-08",
+      "run": 3,
+      "wallMs": 293.8833330000016,
+      "id": "block-08/run-3",
+      "sentence": "List files in the \"src/entities\" directory.",
+      "generationMs": 293.67633299989393,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 6,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-09",
+      "run": 3,
+      "wallMs": 326.4849159999976,
+      "id": "block-09/run-3",
+      "sentence": "The `defaults.ts` file contains settings with a timeout pattern.",
+      "generationMs": 326.2435409997124,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 9,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-10",
+      "run": 3,
+      "wallMs": 332.5673330000027,
+      "id": "block-10/run-3",
+      "sentence": "Read the `test/all-tests-passed.test.ts` file.",
+      "generationMs": 332.2982499958016,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 4,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-11",
+      "run": 3,
+      "wallMs": 407.8266670000012,
+      "id": "block-11/run-3",
+      "sentence": "Reads the `transcript.tsx` file from the `src/widgets/session-view/` directory.",
+      "generationMs": 407.5172080047196,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-12",
+      "run": 3,
+      "wallMs": 336.3460410000007,
+      "id": "block-12/run-3",
+      "sentence": "Search for pending entries in the src/entities/session directory.",
+      "generationMs": 336.0472499989555,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-13",
+      "run": 3,
+      "wallMs": 387.5036250000012,
+      "id": "block-13/run-3",
+      "sentence": "Edit the label text in `src/features/composer/button.tsx`.",
+      "generationMs": 387.1262500033481,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 6,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-14",
+      "run": 3,
+      "wallMs": 302.62325000000055,
+      "id": "block-14/run-3",
+      "sentence": "Run npm run typecheck to check code type.",
+      "generationMs": 302.2811249975348,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-15",
+      "run": 3,
+      "wallMs": 289.023707999997,
+      "id": "block-15/run-3",
+      "sentence": "Read documents on architecture overview and boundaries.",
+      "generationMs": 288.7747919958201,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-16",
+      "run": 3,
+      "wallMs": 347.3979999999974,
+      "id": "block-16/run-3",
+      "sentence": "Files have been tracked, compared, and listed.",
+      "generationMs": 347.16216700326186,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-17",
+      "run": 3,
+      "wallMs": 292.8437909999993,
+      "id": "block-17/run-3",
+      "sentence": "npm test command failed with one assertion failure.",
+      "generationMs": 292.6291250041686,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-18",
+      "run": 3,
+      "wallMs": 346.1751660000009,
+      "id": "block-18/run-3",
+      "sentence": "The `types.ts` file defines `SessionId` as a string type.",
+      "generationMs": 345.9600420028437,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 9,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-19",
+      "run": 3,
+      "wallMs": 298.4032920000027,
+      "id": "block-19/run-3",
+      "sentence": "The `session-view` component is no longer pending.",
+      "generationMs": 298.21704200003296,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 7,
+        "unknownPaths": []
+      }
+    },
+    {
+      "blockId": "block-20",
+      "run": 3,
+      "wallMs": 352.0608340000035,
+      "id": "block-20/run-3",
+      "sentence": "The directory `src/shared` contains `lib`, `ui`, and `styles`.",
+      "generationMs": 351.82354200514965,
+      "loadMs": 450.3202499981853,
+      "metalPeakBytes": 1575270680,
+      "truthCheck": {
+        "pass": true,
+        "reasons": [],
+        "wordCount": 8,
+        "unknownPaths": []
+      }
+    }
+  ]
+}

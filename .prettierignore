@@ -1,0 +1,6 @@
+# Local-only CV2 inference dependencies and downloaded model assets.
+apps/convergence/tools/spikes/block-summary/.venv/
+apps/convergence/tools/spikes/block-summary/.cache/
+apps/convergence/tools/spikes/block-summary/models/
+apps/convergence/tools/spikes/block-summary/apple-fm/.build/
+apps/convergence/tools/spikes/block-summary/scratch/
