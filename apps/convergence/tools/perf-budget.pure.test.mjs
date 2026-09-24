@@ -7,8 +7,8 @@ const report = () => ({
   main: {
     conversationPatched: {
       fullPatchesWhileStreaming: {
-        max: 4,
-        items: [{ sessionId: 'session', itemId: 'reply', sends: 4 }],
+        max: 0,
+        items: [{ sessionId: 'session', itemId: 'reply', sends: 0 }],
       },
       byOp: { snapshot: 2 },
     },
@@ -36,7 +36,7 @@ for (const [name, mutate, message] of [
       r.main.conversationPatched.fullPatchesWhileStreaming.max = 5
       r.main.conversationPatched.fullPatchesWhileStreaming.items[0].sends = 5
     },
-    'fullPatchesWhileStreaming.max: expected 0..4, received 5; items=[{"sessionId":"session","itemId":"reply","sends":5}]; known debt MAR-3403 (target 0)',
+    'fullPatchesWhileStreaming.max: expected 0..0, received 5; items=[{"sessionId":"session","itemId":"reply","sends":5}]',
   ],
   [
     'snapshot storm',

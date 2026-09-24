@@ -166,19 +166,18 @@ Quit Convergence, start it with `CONVERGENCE_PERF=1 /Applications/Convergence.ap
 `test:electron:node`, on the same Node version. The temporary report is removed
 after checking; the runner prints its JSON and the wrapper prints a diagnostic table.
 
-| Counter                                                  | Required bound                                                         |
-| -------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `main.conversationPatched.fullPatchesWhileStreaming.max` | `≤ 4` (2 startup patches × 2 windows; known debt MAR-3403, target `0`) |
-| `main.conversationPatched.byOp.snapshot`                 | `≤ parameters.sessions` (`2` in this contract)                         |
-| `main.attentionRowReads.notNeeded`                       | `0`                                                                    |
-| `scenario.rendererErrors.length`                         | `0`                                                                    |
-| Runner process exit code                                 | `0`                                                                    |
+| Counter                                                  | Required bound                                 |
+| -------------------------------------------------------- | ---------------------------------------------- |
+| `main.conversationPatched.fullPatchesWhileStreaming.max` | `0`                                            |
+| `main.conversationPatched.byOp.snapshot`                 | `≤ parameters.sessions` (`2` in this contract) |
+| `main.attentionRowReads.notNeeded`                       | `0`                                            |
+| `scenario.rendererErrors.length`                         | `0`                                            |
+| Runner process exit code                                 | `0`                                            |
 
-The temporary full-patch bound is Fable’s 2026-09-24 ruling on MAR-3323: the
-missing-versus-undefined facts at first growth cause one full patch, then forgetting
-the item causes a second. [MAR-3403](https://linear.app/marckraw/issue/MAR-3403)
-fixes that debt and lowers the bound to zero. Continuous full growth (about 190
-patches in this contract) fails now. Failures name the maximum, items and debt.
+A streaming reply's first text growth crosses as an append, so
+`fullPatchesWhileStreaming.max` is `0`
+([MAR-3403](https://linear.app/marckraw/issue/MAR-3403)). Continuous full
+growth fails. Failures name the maximum and the items.
 
 Missing or malformed counters fail, too. Attention reads count lookup attempts
 per session ID, including reads that return no request. The probe observes both

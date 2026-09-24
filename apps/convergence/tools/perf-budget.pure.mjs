@@ -1,5 +1,5 @@
-// MAR-3403 lowers this deterministic two-window startup debt to zero.
-export const FULL_PATCHES_WHILE_STREAMING_MAX = 4
+// A streaming reply's first text growth is an append (MAR-3403).
+export const FULL_PATCHES_WHILE_STREAMING_MAX = 0
 
 /** Counter contracts are independent of machine speed; missing counters fail closed. */
 export function checkPerfBudget(report, exitCode) {
@@ -19,7 +19,7 @@ export function checkPerfBudget(report, exitCode) {
   )
   if (failures.length > previousFailures)
     failures[failures.length - 1] +=
-      `; items=${JSON.stringify(report?.main?.conversationPatched?.fullPatchesWhileStreaming?.items)}; known debt MAR-3403 (target 0)`
+      `; items=${JSON.stringify(report?.main?.conversationPatched?.fullPatchesWhileStreaming?.items)}`
   check(
     'byOp.snapshot',
     report?.main?.conversationPatched?.byOp?.snapshot,
