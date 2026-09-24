@@ -110,6 +110,146 @@ describe('MAR-3323 hot query plans on the real schema', () => {
     },
   )
 
+  // MAR-3310 O0b R1/R4/R5: the parallel-work panel's reads by id. Each pin
+  // captures the SQL the service really runs.
+  it.each([
+    {
+      read: 'listRunItems',
+      act: () => service.listRunItems(id, ['run-a', 'run-b']),
+      match: /items\.agent_run_id = \?/,
+      params: () => [id, 'run-a'],
+      index: 'USING INDEX idx_session_conversation_items_agent_run',
+    },
+    {
+      read: 'listTaskItems',
+      act: () => service.listTaskItems(id, ['task-a', 'task-b']),
+      match: /items\.task_id = \?/,
+      params: () => [id, 'task-a'],
+      index: 'USING INDEX idx_session_conversation_items_task',
+    },
+    {
+      read: 'listPendingRequestItems',
+      act: () => service.listPendingRequestItems(id),
+      match: /LIMIT 50/,
+      params: () => [id],
+      index: 'USING INDEX idx_session_conversation_items_attention_request',
+    },
+  ])(
+    'MAR-3310 O0b $read seeks its partial index in sequence order without a temp B-tree',
+    ({ act, match, params, index }) => {
+      const detail = plan(capture(act, match), params())
+      expect(detail).toContain(index)
+      expect(detail).not.toContain('TEMP B-TREE')
+      expect(detail).not.toMatch(/SCAN items\b/)
+    },
+  )
+
+  it('MAR-3310 O0b R4 listAgentRuns reads each parent run by the spawning item’s primary key', () => {
+    const sql = capture(
+      () => new HarnessEvidenceService(db).listAgentRuns(id),
+      /AS parentRunId/,
+    )
+    expect(plan(sql, [id])).toMatch(
+      /SEARCH spawn USING INDEX sqlite_autoindex_session_conversation_items_1 \(id=\?\)/,
+    )
+  })
+
+  it('MAR-3310 O0b R1 measures the reads on a 50,000-item conversation with a 2,000-item run, and the plans hold after ANALYZE', () => {
+    const insert = db.prepare(
+      `INSERT INTO session_conversation_items (
+         id, session_id, sequence, kind, state, payload_json, agent_run_id,
+         task_id, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, 'complete', ?, ?, ?, 'at', 'at')`,
+    )
+    const text = 'x'.repeat(400)
+    db.transaction(() => {
+      for (let sequence = 1; sequence <= 50_000; sequence += 1) {
+        // Every 25th item is the big run's: 2,000 of them, spread end to end.
+        const big = sequence % 25 === 0
+        // A fifth of the conversation is other subagents' and tasks' work.
+        const noise = !big && sequence % 5 === 0
+        const request = !big && !noise && sequence % 1_000 === 1
+        insert.run(
+          `big-${sequence}`,
+          id,
+          sequence,
+          request ? 'approval-request' : 'message',
+          JSON.stringify(
+            request
+              ? { description: 'May I?', resolution: 'pending' }
+              : { actor: 'assistant', text },
+          ),
+          big ? 'big-run' : noise ? `noise-run-${sequence % 97}` : null,
+          big && sequence % 4 === 0
+            ? 'big-task'
+            : noise
+              ? `noise-task-${sequence % 89}`
+              : null,
+        )
+      }
+    })()
+    db.exec('ANALYZE')
+    const time = (read: () => unknown[]) => {
+      const samples: number[] = []
+      let count = 0
+      for (let round = 0; round < 5; round += 1) {
+        const started = performance.now()
+        count = read().length
+        samples.push(performance.now() - started)
+      }
+      samples.sort((a, b) => a - b)
+      return { count, medianMs: Number(samples[2]!.toFixed(2)) }
+    }
+    const measured = {
+      listRunItems: time(() => service.listRunItems(id, ['big-run'])),
+      listTaskItems: time(() => service.listTaskItems(id, ['big-task'])),
+      listPendingRequestItems: time(() => service.listPendingRequestItems(id)),
+      getConversation: time(() => service.getConversation(id)),
+    }
+    // The figures the O0b report quotes; no timing bound is asserted here.
+    console.log('MAR-3310 O0b reads on 50,000 items', measured)
+    const runPlan = plan(
+      capture(
+        () => service.listRunItems(id, ['big-run']),
+        /items\.agent_run_id = \?/,
+      ),
+      [id, 'big-run'],
+    )
+    const taskPlan = plan(
+      capture(
+        () => service.listTaskItems(id, ['big-task']),
+        /items\.task_id = \?/,
+      ),
+      [id, 'big-task'],
+    )
+    const pendingPlan = plan(
+      capture(() => service.listPendingRequestItems(id), /LIMIT 50/),
+      [id],
+    )
+    expect({
+      counts: [
+        measured.listRunItems.count,
+        measured.listTaskItems.count,
+        measured.listPendingRequestItems.count,
+        measured.getConversation.count,
+      ],
+      run: runPlan.includes('idx_session_conversation_items_agent_run'),
+      task: taskPlan.includes('idx_session_conversation_items_task'),
+      pending: pendingPlan.includes(
+        'idx_session_conversation_items_attention_request',
+      ),
+      sorts: [runPlan, taskPlan, pendingPlan].some((detail) =>
+        detail.includes('TEMP B-TREE'),
+      ),
+    }).toEqual({
+      counts: [2_000, 500, 50, 50_000],
+      run: true,
+      task: true,
+      pending: true,
+      sorts: false,
+    })
+  })
+
   it('the probe counts unnecessary single and batched attention lookup attempts, even with no request rows', () => {
     const single = capture(() => {
       db.prepare(

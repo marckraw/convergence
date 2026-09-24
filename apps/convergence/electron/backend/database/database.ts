@@ -794,6 +794,24 @@ function ensureAttachmentsTableNoFk(database: Database.Database): void {
 
 let db: Database.Database | null = null
 
+/**
+ * The parallel-work panel reads one run's or one task's items by id
+ * (MAR-3310 O0b) instead of filtering the whole loaded conversation. Partial,
+ * so the conversation's ordinary rows — which carry neither id — cost nothing.
+ * `sequence` rides in the key so each read comes back in transcript order
+ * without a sort.
+ */
+function ensureHarnessEvidenceItemIndexes(database: Database.Database): void {
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_session_conversation_items_agent_run
+      ON session_conversation_items(session_id, agent_run_id, sequence)
+      WHERE agent_run_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_session_conversation_items_task
+      ON session_conversation_items(session_id, task_id, sequence)
+      WHERE task_id IS NOT NULL;
+  `)
+}
+
 function getTableColumnNames(
   database: Database.Database,
   tableName: string,
@@ -2276,6 +2294,9 @@ export function getDatabase(dbPath?: string): Database.Database {
     migrateLegacySessionConversations(database)
     ensureSessionsTableShape(database)
     migrateHarnessEvidence(database)
+    // After the evidence migration, never before: these index the
+    // `agent_run_id` / `task_id` columns it adds.
+    ensureHarnessEvidenceItemIndexes(database)
     migrateResidentStopReason(database)
     migrateEndedSummary(database)
     migrateTaskObserved(database)

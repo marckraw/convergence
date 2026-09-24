@@ -8,6 +8,12 @@ export type AgentRunStatus =
 export interface SessionAgentRun {
   /** Linked local-agent task, resolved by the backend read. */
   taskId?: string | null
+  /**
+   * The run whose work spawned this one — the spawning item's own run —
+   * resolved by the backend read (MAR-3310 O0b R4). Null for a run spawned
+   * from the main conversation.
+   */
+  parentRunId?: string | null
   endedSummary?: string | null
   stopReason?:
     | 'quit'

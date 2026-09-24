@@ -16,6 +16,7 @@ export type AgentRunFact =
       run: Omit<
         SessionAgentRun,
         | 'taskId'
+        | 'parentRunId'
         | 'sessionId'
         | 'status'
         | 'endedAt'

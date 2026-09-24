@@ -121,7 +121,6 @@ it('R5 counts unique identities including monitors without treating unknown as r
       { ...task('failed', 'local_bash'), status: 'failed' },
       { ...task('stopped', 'local_bash'), status: 'stopped' },
     ],
-    [],
   )
   expect(countParallelWork(rows)).toEqual({
     running: 2,
@@ -144,7 +143,16 @@ const task = (taskId: string, taskType: string): SessionTask => ({
 
 it('R1 resolves parent by the spawning item and merges only local-agent ids — mutations parent by depth, merge by description, or count the task twice turn red', () => {
   const rows = buildParallelWork(
-    [run('parent', 1), run('other', 1), run('child', 2), run('orphan', 2)],
+    [
+      run('parent', 1),
+      run('other', 1),
+      // The backend's read of the spawning item's own run (MAR-3310 O0b R4).
+      { ...run('child', 2), parentRunId: 'parent' },
+      // A parent the record does not hold, and a run naming itself: neither
+      // nests.
+      { ...run('orphan', 2), parentRunId: 'gone' },
+      { ...run('self', 2), parentRunId: 'self' },
+    ],
     [
       {
         ...task('parent', 'local_agent'),
@@ -152,13 +160,13 @@ it('R1 resolves parent by the spawning item and merges only local-agent ids — 
       },
       task('command', 'local_bash'),
     ],
-    [{ id: 'spawn-child', agentRunId: 'parent' }],
   )
   expect(rows.map((row) => [row.id, row.kind, row.parentId])).toEqual([
     ['parent', 'agent', null],
     ['other', 'agent', null],
     ['child', 'agent', 'parent'],
     ['orphan', 'agent', null],
+    ['self', 'agent', null],
     ['command', 'task', null],
   ])
 })
@@ -170,7 +178,6 @@ it('H3 a backend link merges without renderer items — mutation derive join fro
       { ...task('harness-agent', 'local_agent'), toolUseId: 'tool-spawn' },
       { ...task('unrelated', 'local_bash'), toolUseId: 'tool-spawn' },
     ],
-    [],
   )
   expect(rows.map((row) => [row.id, row.task?.taskId])).toEqual([
     ['provisional', 'harness-agent'],
@@ -197,7 +204,6 @@ it.each(['running', 'unknown'] as const)(
         },
       ],
       [terminal],
-      [],
     )[0]!
     expect(parallelWorkRowState(row)).toEqual({
       fact: { ...terminal, startedAt: '2026-09-09T00:00:00Z' },

@@ -8,7 +8,6 @@ import {
 } from 'react'
 import type { ConversationItem as Item, Session } from '@/entities/session'
 import {
-  isSubagentWork,
   parallelWorkRowState,
   type ParallelWorkRow,
 } from '@/shared/lib/parallel-work.pure'
@@ -24,11 +23,14 @@ import { ConversationItem } from './conversation-item.container'
 import { ParallelWorkPanel } from './parallel-work.presentational'
 import { parallelWorkApi } from './parallel-work.api'
 import {
+  parallelWorkDetailItems,
   parallelWorkMarkers,
   workRowKey,
   workTitle,
   parallelWorkRefusal,
+  withFetchedWorkItems,
 } from './parallel-work.pure'
+import { useParallelWorkDetail } from './use-parallel-work'
 import {
   fullDisplayRows,
   groupWorkBlocks,
@@ -159,18 +161,23 @@ export const ParallelWork: FC<Props> = ({
   }
   const selected = rows.find((row) => workRowKey(row) === selectedId)
   const confirm = rows.find((row) => workRowKey(row) === confirmId)
+  // MAR-3310 O0b: the selected row's items come from main by id, so its
+  // transcript, "View result" and pending decision do not depend on how much
+  // of the conversation is loaded. The loaded copy of an item wins; on a fully
+  // loaded conversation `panelItems` IS `items`.
+  const detail = useParallelWorkDetail(session.id, selected)
+  const panelItems = useMemo(
+    () => withFetchedWorkItems(items, detail.items),
+    [items, detail.items],
+  )
   const visibleItems = selected
-    ? items.filter((item) =>
-        selected.kind === 'agent'
-          ? parallelWorkRowState(selected).ids.includes(
-              item.agentRunId ?? '',
-            ) && isSubagentWork(item)
-          : parallelWorkRowState(selected).ids.includes(item.taskId ?? '') &&
-            ['tool-call', 'tool-result'].includes(item.kind),
-      )
+    ? parallelWorkDetailItems(panelItems, selected)
     : []
   // One scan per item/row revision, shared by the fold rule and "View result".
-  const markers = useMemo(() => parallelWorkMarkers(items, rows), [items, rows])
+  const markers = useMemo(
+    () => parallelWorkMarkers(panelItems, rows),
+    [panelItems, rows],
+  )
   // MAR-3391 R7: the sidebar folds by the transcript's own rule and follows
   // the conversation's Compact/Full choice. A marked entry is a boundary here
   // exactly as it is in the transcript (R1).
@@ -203,6 +210,11 @@ export const ParallelWork: FC<Props> = ({
         )}
       {!visibleItems.length && (
         <p className="text-xs text-muted-foreground">Not reported</p>
+      )}
+      {detail.error && (
+        <p role="alert" className="text-xs text-red-500">
+          Could not read the earlier part of this work: {detail.error}
+        </p>
       )}
       {transcriptRows.map((row) =>
         row.kind === 'block' ? (
@@ -270,7 +282,7 @@ export const ParallelWork: FC<Props> = ({
         .map(([itemId, marker]) => [marker.rowKey, itemId]),
     )
     const byTaskId = new Map<string, string>()
-    for (const item of items) {
+    for (const item of panelItems) {
       if (
         item.kind === 'note' &&
         item.taskId &&
@@ -288,7 +300,7 @@ export const ParallelWork: FC<Props> = ({
       if (itemId) byRowKey.set(key, itemId)
     }
     return byRowKey
-  }, [items, rows, markers])
+  }, [panelItems, rows, markers])
   const panel = (
     <div
       ref={host}
@@ -320,7 +332,7 @@ export const ParallelWork: FC<Props> = ({
         showEmpty={!loading && !error}
         highlightedId={selectedId ?? highlightedId}
         rows={rows}
-        items={items}
+        items={panelItems}
         now={now}
         selectedId={selectedId}
         collapsed={collapsed}

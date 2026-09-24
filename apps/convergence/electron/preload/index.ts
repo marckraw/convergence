@@ -476,6 +476,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('session:listAgentRuns', sessionId),
     listTasks: (sessionId: string) =>
       ipcRenderer.invoke('session:listTasks', sessionId),
+    listRunItems: (sessionId: string, agentRunIds: string[]) =>
+      ipcRenderer.invoke('session:listRunItems', sessionId, agentRunIds),
+    listTaskItems: (sessionId: string, taskIds: string[]) =>
+      ipcRenderer.invoke('session:listTaskItems', sessionId, taskIds),
+    listPendingRequestItems: (sessionId: string) =>
+      ipcRenderer.invoke('session:listPendingRequestItems', sessionId),
     archive: (id: string) => ipcRenderer.invoke('session:archive', id),
     unarchive: (id: string) => ipcRenderer.invoke('session:unarchive', id),
     delete: (id: string) => ipcRenderer.invoke('session:delete', id),

@@ -113,17 +113,17 @@ export function countParallelWork(rows: ParallelWorkRow[]): ParallelWorkCounts {
   return counts
 }
 
+/**
+ * The panel's rows: one per agent run (merged with its local-agent task) and
+ * one per other task. A run nests under `parentRunId`, which the backend reads
+ * from the spawning item by primary key — never from the loaded conversation,
+ * which a window may not hold (MAR-3310 O0b R4).
+ */
 export function buildParallelWork(
   runs: SessionAgentRun[],
   tasks: SessionTask[],
-  items: {
-    id: string
-    agentRunId?: string | null
-    providerMeta?: { providerItemId?: string | null }
-  }[],
 ): ParallelWorkRow[] {
   const runIds = new Set(runs.map((run) => run.id))
-  const parents = new Map(items.map((item) => [item.id, item.agentRunId]))
   const tasksById = new Map(
     tasks
       .filter((task) => task.taskType === 'local_agent')
@@ -140,7 +140,7 @@ export function buildParallelWork(
   )
   return [
     ...runs.map((run): ParallelWorkRow => {
-      const parent = parents.get(run.spawnedByItemId)
+      const parent = run.parentRunId
       return {
         id: run.id,
         kind: 'agent',

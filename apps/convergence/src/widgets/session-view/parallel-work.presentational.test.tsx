@@ -33,7 +33,7 @@ const agent: SessionAgentRun = {
 it('R6 renders capability reasons with disabled controls — mutation enable unavailable controls or remove reasons turns red', () => {
   render(
     <ParallelWorkPanel
-      rows={buildParallelWork([{ ...agent, status: 'running' }], [], [])}
+      rows={buildParallelWork([{ ...agent, status: 'running' }], [])}
       now={0}
       onSelect={vi.fn()}
       onClose={vi.fn()}
@@ -66,7 +66,6 @@ it('RUN64 R2 unknown last sighting has a relative age and provisional identity s
           },
         ],
         [],
-        [],
       )}
       now={Date.parse('2026-09-09T00:04:12Z')}
       onSelect={vi.fn()}
@@ -89,7 +88,7 @@ it.each([
 ])('R2/R7 renders %s — mutation omit that reported field turns red', (text) => {
   render(
     <ParallelWorkPanel
-      rows={buildParallelWork([agent], [], [])}
+      rows={buildParallelWork([agent], [])}
       now={Date.parse('2026-09-09T01:00:00Z')}
       onSelect={vi.fn()}
       onClose={vi.fn()}
@@ -128,7 +127,6 @@ it.each([
         rows={buildParallelWork(
           [{ ...agent, status: 'stopped', stopReason }],
           [],
-          [],
         )}
         now={0}
         onSelect={vi.fn()}
@@ -141,7 +139,7 @@ it.each([
 
 it('R3′ links a pending decision and removes the link when resolved — mutation omit pending link or retain resolved link turns red', () => {
   const props = {
-    rows: buildParallelWork([agent], [], []),
+    rows: buildParallelWork([agent], []),
     now: 0,
     onSelect: vi.fn(),
     onClose: vi.fn(),
@@ -189,10 +187,15 @@ it('L9 descendant count is collapsed-only and decorations are cached across tick
   const rows = buildParallelWork(
     [
       { ...agent, id: 'parent', spawnedByItemId: 'root', status: 'completed' },
-      { ...agent, id: 'child', spawnedByItemId: 'spawn', status: 'running' },
+      {
+        ...agent,
+        id: 'child',
+        spawnedByItemId: 'spawn',
+        parentRunId: 'parent',
+        status: 'running',
+      },
     ],
     [],
-    [{ id: 'spawn', agentRunId: 'parent' }],
   )
   const items: [] = []
   const input = { rows, items, now: 0, onSelect: vi.fn(), onClose: vi.fn() }
@@ -216,7 +219,7 @@ it('L9 descendant count is collapsed-only and decorations are cached across tick
 })
 
 it('T10 duplicate identity in a malformed branch cannot recurse forever — mutation remove render seen guard turns red', () => {
-  const rows = buildParallelWork([agent, { ...agent, id: 'child' }], [], [])
+  const rows = buildParallelWork([agent, { ...agent, id: 'child' }], [])
   rows[1].parentId = 'agent'
   rows.push({ ...rows[0], parentId: 'child' })
   expect(() =>
@@ -237,7 +240,6 @@ it('M7 descendant scans are lazy and independent of streaming items — mutation
       { ...agent, id: 'parent' },
       { ...agent, id: 'child', status: 'running' },
     ],
-    [],
     [],
   )
   rows[1].parentId = 'parent'
@@ -296,7 +298,6 @@ it('RUN64 R2′ task labels distinguish sighting and missing time with ISO title
         outputFile: null,
       },
     ],
-    [],
   )
   render(
     <ParallelWorkPanel
@@ -334,7 +335,6 @@ it('RUN64 round3 bucket uses the folded seen anchor — mutation restate ended-o
             outputFile: null,
           },
         ],
-        [],
       )}
       now={now}
       onSelect={vi.fn()}
@@ -372,7 +372,6 @@ it('RUN64 round3 rendered children belong to the agent on an id collision — mu
         outputFile: null,
       },
     ],
-    [],
   )
   rows.find((row) => row.id === 'child')!.parentId = 'shared'
   render(
@@ -396,7 +395,7 @@ it('RUN64 round3 rendered children belong to the agent on an id collision — mu
 it('RUN64 round3 computes one time per rendered row — mutation recompute the label turns red', () => {
   const time = vi.spyOn(workHelpers, 'parallelWorkTime')
   const now = Date.parse('2026-09-09T00:04:00Z')
-  const rows = buildParallelWork([{ ...agent, status: 'running' }], [], [])
+  const rows = buildParallelWork([{ ...agent, status: 'running' }], [])
   render(
     <ParallelWorkPanel
       rows={rows}
@@ -422,7 +421,7 @@ it.each([
   (status, tone) => {
     const { container } = render(
       <ParallelWorkPanel
-        rows={buildParallelWork([{ ...agent, status }], [], [])}
+        rows={buildParallelWork([{ ...agent, status }], [])}
         now={Date.parse('2026-09-09T00:04:12Z')}
         onSelect={vi.fn()}
         onClose={vi.fn()}
@@ -444,7 +443,6 @@ it('MAR-3308 R2 the card you came back to keeps its state tone and adds a ring �
           { ...agent, status: 'completed' },
           { ...agent, id: 'other', status: 'running' },
         ],
-        [],
         [],
       )}
       now={Date.parse('2026-09-09T00:04:12Z')}

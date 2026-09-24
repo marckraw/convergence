@@ -141,7 +141,7 @@ export const SessionView: FC = () => {
     session?.providerId === 'claude-code' &&
     !isRemoteExecutionHost(session.executionHost)
   const harness = useHarnessFacts(supportsHarnessFacts ? activeSessionId : null)
-  const parallel = useParallelWork(activeSessionId, activeConversation)
+  const parallel = useParallelWork(activeSessionId)
   // The transcript is a memo boundary (MAR-3310 F1e R2): what it is handed
   // keeps its identity until what it does changes.
   const selectParallel = useCallback(
