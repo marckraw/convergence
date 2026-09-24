@@ -1,16 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useSessionStore } from './session.model'
+import {
+  resetConversationLoadsForTests,
+  useSessionStore,
+} from './session.model'
 import type { ConversationItem } from './session.types'
 import type { ConversationWireEvent } from '@/shared/types/conversation-item.types'
 
 const getConversation = vi.fn()
 const resyncConversation = vi.fn().mockResolvedValue(undefined)
 let sessionId: string
-let serial = 0
 beforeEach(() => {
+  resetConversationLoadsForTests()
   vi.resetAllMocks()
   resyncConversation.mockResolvedValue(undefined)
-  sessionId = `stream-${++serial}`
+  sessionId = 'stream-session'
   Object.defineProperty(globalThis, 'window', {
     value: {
       electronAPI: { session: { getConversation, resyncConversation } },
@@ -109,6 +112,71 @@ for (const global of [false, true]) {
           : { activeSessionId: 'elsewhere' },
       )
     }
+
+    it.each(['initial load', 'resync and retry'] as const)(
+      'R2f permanent failure in %s stops ten appends with one error (mutation: remove-recovery-stop)',
+      async (entry) => {
+        open()
+        resyncConversation.mockRejectedValue(
+          new Error('unreadable conversation'),
+        )
+        const errors: string[] = []
+        const unsubscribe = useSessionStore.subscribe((state) => {
+          if (state.error) {
+            errors.push(state.error)
+            state.clearError()
+          }
+        })
+        try {
+          if (entry === 'initial load') await load()
+          else append(7, ' gap')
+          await vi.waitFor(() => expect(errors.length).toBeGreaterThan(0))
+          // Settle both the resync rejection and its fresh-load retry.
+          await new Promise<void>((resolve) => setTimeout(resolve, 0))
+          const stopped = useSessionStore.getState()
+          for (let index = 0; index < 10; index++) {
+            append(index, ' more')
+            await new Promise<void>((resolve) => setTimeout(resolve, 0))
+          }
+          expect(resyncConversation.mock.calls.length).toBeLessThanOrEqual(2)
+          expect(resyncConversation).toHaveBeenCalledTimes(
+            entry === 'initial load' ? 1 : 2,
+          )
+          expect(errors).toEqual(['unreadable conversation'])
+          expect(useSessionStore.getState()).toBe(stopped)
+          expect(getConversation).not.toHaveBeenCalled()
+
+          // Full events still upsert; even a matching append stays silent.
+          emit({ op: 'add', sessionId, item: message('one') })
+          expect(current()).toEqual([message('one')])
+          append(3, ' dropped')
+          expect(current()).toEqual([message('one')])
+          const terminal = { ...message('one two'), state: 'complete' as const }
+          emit({ op: 'patch', sessionId, item: terminal })
+          expect(current()).toEqual([terminal])
+        } finally {
+          unsubscribe()
+        }
+      },
+    )
+
+    it('R2f selecting a stopped session again requests a fresh snapshot', async () => {
+      open()
+      resyncConversation.mockRejectedValueOnce(
+        new Error('unreadable conversation'),
+      )
+      await load()
+      Object.assign(window.electronAPI.session, {
+        getQueuedInputs: vi.fn().mockResolvedValue([]),
+        setRecentIds: vi.fn().mockResolvedValue(undefined),
+      })
+      if (global) useSessionStore.getState().setActiveGlobalSession(sessionId)
+      else useSessionStore.getState().setActiveSession(sessionId)
+      expect(resyncConversation).toHaveBeenCalledTimes(2)
+      snapshot('one', 2)
+      append(3, ' two')
+      expect(current()).toEqual([message('one two')])
+    })
     it('R2 appends and the full terminal equal the full-patch stream at every step', () => {
       open([message('')])
       let text = ''

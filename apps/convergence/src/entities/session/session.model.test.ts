@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { selectLocalProviders, useSessionStore } from './session.model'
+import {
+  resetConversationLoadsForTests,
+  selectLocalProviders,
+  useSessionStore,
+} from './session.model'
 import {
   catalogInForce,
   localProviderCatalogs,
@@ -135,6 +139,8 @@ function makeGlobalSession(overrides: { id: string; updatedAt?: string }) {
   }
 }
 
+beforeEach(resetConversationLoadsForTests)
+
 describe('useSessionStore', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -161,6 +167,21 @@ describe('useSessionStore', () => {
       error: null,
     })
   })
+
+  it.each([1, 2])(
+    'R-T same-id open requests a snapshot in test %s',
+    async () => {
+      useSessionStore.getState().setActiveSession('load-isolation-canary')
+      await Promise.resolve()
+      expect(
+        mockElectronAPI.session.resyncConversation,
+      ).toHaveBeenCalledExactlyOnceWith(
+        'load-isolation-canary',
+        1,
+        expect.any(String),
+      )
+    },
+  )
 
   describe('MAR-2891 one row per session id', () => {
     const addSites = [

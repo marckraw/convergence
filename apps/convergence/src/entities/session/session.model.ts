@@ -51,15 +51,49 @@ const conversationLoads = new Map<
     applied: number
     resync: number | null
     pending: number | null
+    stopped: boolean
   }
 >()
 function conversationLoad(sessionId: string) {
   let load = conversationLoads.get(sessionId)
   if (!load) {
-    load = { requested: 0, applied: 0, resync: null, pending: null }
+    load = {
+      requested: 0,
+      applied: 0,
+      resync: null,
+      pending: null,
+      stopped: false,
+    }
     conversationLoads.set(sessionId, load)
   }
   return load
+}
+
+export function resetConversationLoadsForTests() {
+  conversationLoads.clear()
+}
+
+async function requestConversationLoad(
+  sessionId: string,
+  onFailure: (error: unknown) => void,
+) {
+  const load = conversationLoad(sessionId)
+  if (load.resync !== null || load.pending !== null) return
+  const generation = ++load.requested
+  load.pending = generation
+  try {
+    // Items arrive on the same FIFO channel as patches, never on this reply.
+    await sessionApi.resyncConversation(
+      sessionId,
+      generation,
+      conversationPageNonce,
+    )
+  } catch (err) {
+    if (load.pending !== generation) return
+    load.pending = null
+    load.stopped = true
+    onFailure(err)
+  }
 }
 
 interface SessionState {
@@ -923,24 +957,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   loadActiveConversation: async (sessionId: string) => {
     const load = conversationLoad(sessionId)
-    if (load.resync !== null || load.pending !== null) return
-    const generation = ++load.requested
-    load.pending = generation
-    try {
-      // Items arrive on the same FIFO channel as patches, never on this reply.
-      await sessionApi.resyncConversation(
-        sessionId,
-        generation,
-        conversationPageNonce,
-      )
-    } catch (err) {
-      if (load.pending !== generation) return
-      load.pending = null
+    // An explicit open/load starts a new failure episode.
+    load.stopped = false
+    await requestConversationLoad(sessionId, (err) => {
       set({
         error:
           err instanceof Error ? err.message : 'Failed to load conversation',
       })
-    }
+    })
   },
 
   loadActiveGlobalConversation: async (sessionId: string) => {
@@ -1120,7 +1144,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         load.applied = event.generation
         nextItems = event.items
       } else if (event.op === 'append') {
-        if (load.resync !== null || load.pending !== null) return state
+        if (load.stopped || load.resync !== null || load.pending !== null)
+          return state
         const item = items.find((candidate) => candidate.id === event.itemId)
         if (
           !item ||
@@ -1167,10 +1192,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
                 : 'Failed to resync conversation',
           })
           const state = get()
-          if (state.activeSessionId === event.sessionId)
-            void state.loadActiveConversation(event.sessionId)
-          else if (state.activeGlobalSessionId === event.sessionId)
-            void state.loadActiveGlobalConversation(event.sessionId)
+          if (
+            state.activeSessionId === event.sessionId ||
+            state.activeGlobalSessionId === event.sessionId
+          ) {
+            // One fresh-load retry belongs to this same, already reported episode.
+            void requestConversationLoad(event.sessionId, () => {})
+          } else {
+            load.stopped = true
+          }
         })
     }
   },
