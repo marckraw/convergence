@@ -1,5 +1,14 @@
 # convergence
 
+## 0.85.6
+
+### Patch Changes
+
+- 6b7f949: The app no longer redraws the whole window when any conversation's status changes.
+- ef59ef1: The sidebar redraws only when something it shows changes.
+- d942c25: Typing in the composer no longer competes with every other conversation's updates.
+- be6a17b: Loom redraws only when a conversation it shows changes.
+
 ## 0.85.5
 
 ### Patch Changes
