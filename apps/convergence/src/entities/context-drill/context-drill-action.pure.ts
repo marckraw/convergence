@@ -1,4 +1,4 @@
-import type { DrillBeat, DrillDescription } from '@/entities/context-drill'
+import type { DrillBeat, DrillDescription } from './context-drill.types'
 
 export interface ContextDrillCancelState {
   visible: boolean
