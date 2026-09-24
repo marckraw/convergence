@@ -32,6 +32,7 @@ export const ConversationActionsPanel: FC<
       role="menu"
       aria-label={GROUP_TITLE[group]}
       data-testid={`conversation-actions-${group}`}
+      tabIndex={-1}
       className={styles.panel}
       style={
         placement

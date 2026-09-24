@@ -92,6 +92,49 @@ export function nextFocusIndex(
   }
 }
 
+/**
+ * Keys that belong to the search's own text while typing in it (R11): the
+ * caret moves Left/Right and jumps Home/End. Only Up and Down leave the
+ * search to traverse the rows.
+ */
+export function isSearchCaretKey(key: string): boolean {
+  return (
+    key === 'ArrowLeft' ||
+    key === 'ArrowRight' ||
+    key === 'Home' ||
+    key === 'End'
+  )
+}
+
+/**
+ * Which entry of a level takes focus when the level opens, or when the
+ * focused entry vanishes under the keyboard (R10): the fan's first group; a
+ * list's first action, past its back control; the back control when it is
+ * all the list has. -1 means no entry at all, so the menu root takes it.
+ */
+export function levelEntryFocusIndex(
+  level: ActionsMenuLevel,
+  count: number,
+): number {
+  if (level === 'closed' || count <= 0) return -1
+  if (level === 'fan') return 0
+  return Math.min(1, count - 1)
+}
+
+/**
+ * Whether opening Skills must scan (R9). A catalog the store already holds
+ * for THIS project is the answer, settled or still arriving: reloading it
+ * would reseed it empty and flash "Loading skills…" over skills already
+ * known, or restart a scan already under way. Another project's catalog, or
+ * none, is not this one's answer, so that one loads.
+ */
+export function projectSkillsNeedLoad(input: {
+  catalogProjectId: string | null
+  projectId: string
+}): boolean {
+  return input.catalogProjectId !== input.projectId
+}
+
 export type SkillListState =
   | { kind: 'loading' }
   | { kind: 'failed'; message: string }
@@ -165,6 +208,8 @@ export function visibleSkillActions(input: {
   )
 }
 
+const NO_PENDING: ReadonlySet<ConversationRoutineAction['id']> = new Set()
+
 export interface RoutineProgressView {
   label: string
   /** Null where no cancel exists at all (a compaction outside a drill). */
@@ -193,15 +238,31 @@ export function resolveRoutineRows(input: {
   drillBeat: DrillBeat | null
   drillDescription: DrillDescription | undefined
   compacting: boolean
+  /** Routines activated whose call has neither settled nor shown a beat (R15). */
+  pending?: ReadonlySet<ConversationRoutineAction['id']>
 }): RoutineRowView[] {
   const { routines, drillBeat, drillDescription, compacting } = input
-  const rows: RoutineRowView[] = routines.map((routine) => ({
-    id: routine.id,
-    label: ROUTINE_LABELS[routine.id],
-    offered: routine.offered,
-    reason: routine.offered ? null : (routine.reason ?? null),
-    progress: null,
-  }))
+  const pending = input.pending ?? NO_PENDING
+  const rows: RoutineRowView[] = routines.map((routine) => {
+    // A started routine is not offered again until its call answers: a
+    // second activation would start it twice. No reason is invented.
+    if (pending.has(routine.id)) {
+      return {
+        id: routine.id,
+        label: ROUTINE_LABELS[routine.id],
+        offered: false,
+        reason: null,
+        progress: null,
+      }
+    }
+    return {
+      id: routine.id,
+      label: ROUTINE_LABELS[routine.id],
+      offered: routine.offered,
+      reason: routine.offered ? null : (routine.reason ?? null),
+      progress: null,
+    }
+  })
   if (drillBeat !== null) {
     const drill = resolveContextDrillAction(drillDescription, drillBeat)
     const progress: RoutineProgressView = {

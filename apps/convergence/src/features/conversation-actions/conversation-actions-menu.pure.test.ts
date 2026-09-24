@@ -14,9 +14,12 @@ import {
   ACTIONS_PANEL_MARGIN,
   ACTIONS_PANEL_WIDTH,
   conversationActionsAvailable,
+  isSearchCaretKey,
   levelAfterEscape,
+  levelEntryFocusIndex,
   nextFocusIndex,
   placeActionsPanel,
+  projectSkillsNeedLoad,
   resolveRoutineRows,
   resolveSkillListState,
   skillsFailedLabel,
@@ -406,5 +409,78 @@ describe('placeActionsPanel (R1)', () => {
     const anchor = { left: 400, top: 540, right: 496, bottom: 574 }
     const { right } = inside(boundary, anchor)
     expect(right).toBe(480 - ACTIONS_PANEL_MARGIN)
+  })
+})
+
+describe('isSearchCaretKey (R11)', () => {
+  it('keeps Left, Right, Home and End for the text, and lets Up and Down traverse', () => {
+    for (const key of ['ArrowLeft', 'ArrowRight', 'Home', 'End']) {
+      expect(isSearchCaretKey(key)).toBe(true)
+    }
+    for (const key of ['ArrowUp', 'ArrowDown', 'Escape', 'a']) {
+      expect(isSearchCaretKey(key)).toBe(false)
+    }
+  })
+})
+
+describe('levelEntryFocusIndex (R10)', () => {
+  it('lands on the fan’s first group, a list’s first action past back, or back alone', () => {
+    expect(levelEntryFocusIndex('fan', 4)).toBe(0)
+    expect(levelEntryFocusIndex('routines', 5)).toBe(1)
+    expect(levelEntryFocusIndex('skills', 1)).toBe(0)
+  })
+
+  it('answers -1, the menu root, when the level has nothing to focus', () => {
+    expect(levelEntryFocusIndex('routines', 0)).toBe(-1)
+    expect(levelEntryFocusIndex('closed', 3)).toBe(-1)
+  })
+})
+
+describe('projectSkillsNeedLoad (R9)', () => {
+  it('does not scan a catalog the store already holds for this project', () => {
+    expect(
+      projectSkillsNeedLoad({ catalogProjectId: 'p-1', projectId: 'p-1' }),
+    ).toBe(false)
+  })
+
+  it('scans when the store holds none, or another project’s', () => {
+    expect(
+      projectSkillsNeedLoad({ catalogProjectId: null, projectId: 'p-1' }),
+    ).toBe(true)
+    expect(
+      projectSkillsNeedLoad({ catalogProjectId: 'p-2', projectId: 'p-1' }),
+    ).toBe(true)
+  })
+})
+
+describe('resolveRoutineRows pending (R15)', () => {
+  const OFFERED: ConversationRoutineAction[] = [
+    { id: 'drill', kind: 'routine', label: 'Run the drill', offered: true },
+    { id: 'compact', kind: 'routine', label: 'Compact', offered: true },
+  ]
+
+  it('holds a started routine unoffered, with no invented reason, and leaves the rest', () => {
+    const rows = resolveRoutineRows({
+      routines: OFFERED,
+      drillBeat: null,
+      drillDescription: undefined,
+      compacting: false,
+      pending: new Set(['compact'] as const),
+    })
+    expect(rows.map((row) => [row.id, row.offered, row.reason])).toEqual([
+      ['drill', true, null],
+      ['compact', false, null],
+    ])
+  })
+
+  it('draws the beat, not the wait, once the backend answers', () => {
+    const [drill] = resolveRoutineRows({
+      routines: OFFERED,
+      drillBeat: 'sealing',
+      drillDescription: undefined,
+      compacting: false,
+      pending: new Set(['drill'] as const),
+    })
+    expect(drill?.progress?.label).toBe('Sealing memory…')
   })
 })

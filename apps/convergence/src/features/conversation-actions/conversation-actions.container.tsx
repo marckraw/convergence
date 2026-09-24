@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -31,9 +32,12 @@ import {
 import { remoteSkillsNotice, useSkillStore } from '@/entities/skill'
 import { detectShortcutPlatform } from '@/shared/lib/keyboard-shortcut.pure'
 import {
+  isSearchCaretKey,
   levelAfterEscape,
+  levelEntryFocusIndex,
   nextFocusIndex,
   placeActionsPanel,
+  projectSkillsNeedLoad,
   resolveRoutineRows,
   resolveSkillListState,
   visibleSkillActions,
@@ -43,20 +47,37 @@ import {
   type RoutineRowView,
 } from './conversation-actions-menu.pure'
 import { ConversationActionsView } from './conversation-actions.presentational'
+import type { ConversationActionsViewProps } from './conversation-actions.types'
 import { useConversationRoutines } from './use-conversation-routines'
 
+/**
+ * Primitives only, so the memo below holds while a reply streams (R16): the
+ * surface redraws on every streamed append, and none of these move with it.
+ */
 interface ConversationActionsContainerProps {
-  session: Pick<
-    SessionSummary,
-    'id' | 'providerId' | 'status' | 'attention' | 'activity' | 'executionHost'
-  >
-  /** Whose skill catalog this conversation reads: its project's, or the chat's. */
-  catalogScope: { kind: 'project'; projectId: string } | { kind: 'global' }
+  sessionId: string
+  providerId: string
+  status: SessionSummary['status']
+  attention: SessionSummary['attention']
+  activity: SessionSummary['activity']
+  executionHost: SessionSummary['executionHost']
+  /** This conversation's project, whose skill catalog it reads; null for a chat. */
+  catalogProjectId: string | null
   /** The conversation surface; the compact lists stay inside it (R1). */
   boundaryRef: RefObject<HTMLElement | null>
 }
 
+type RoutineId = RoutineRowView['id']
+
 const GLOBAL_SKILL_CATALOG_ID = 'global'
+const NO_PENDING: ReadonlySet<RoutineId> = new Set()
+/** What a closed Skills list costs: nothing is filtered or derived (R16). */
+const SKILLS_NOT_OPEN: ConversationActionsViewProps['skills'] = {
+  state: { kind: 'loading' },
+  rows: [],
+  notice: null,
+  query: '',
+}
 
 /** ⌘. on macOS, Ctrl+. elsewhere; not rebindable, and not ⌘K (R6). */
 function isActionsShortcut(event: globalThis.KeyboardEvent): boolean {
@@ -73,6 +94,16 @@ function anyDialogOpen(): boolean {
   return document.querySelector('[data-slot="dialog-content"]') !== null
 }
 
+/** Nothing inside an `inert` ancestor (expanded Loom) answers ⌘. (R13). */
+function insideInert(element: Element | null): boolean {
+  return element?.closest('[inert]') != null
+}
+
+function focusIsLost(): boolean {
+  const active = document.activeElement
+  return active === null || active === document.body
+}
+
 /**
  * The Actions button in a conversation (MAR-3393, handoff r1).
  *
@@ -83,9 +114,14 @@ function anyDialogOpen(): boolean {
  * (through a composer intent), the drill store, the compact action, the fork
  * dialog, the composer's account picker and Loom navigation.
  */
-export function ConversationActionsContainer({
-  session,
-  catalogScope,
+function ConversationActionsContainerView({
+  sessionId,
+  providerId,
+  status,
+  attention,
+  activity,
+  executionHost,
+  catalogProjectId,
   boundaryRef,
 }: ConversationActionsContainerProps) {
   const [level, setLevel] = useState<ActionsMenuLevel>('closed')
@@ -93,6 +129,15 @@ export function ConversationActionsContainer({
   const [cancelRefusal, setCancelRefusal] = useState<string | null>(null)
   const [compactError, setCompactError] = useState<string | null>(null)
   const [placement, setPlacement] = useState<ActionsPanelPlacement | null>(null)
+  const [pending, setPending] = useState<ReadonlySet<RoutineId>>(NO_PENDING)
+  /** The same set, readable in the click that has not re-rendered yet (R15). */
+  const pendingRef = useRef<ReadonlySet<RoutineId>>(NO_PENDING)
+  /**
+   * Which open this is. A close moves it on, so an answer that lands after
+   * the menu it was asked from has closed is dropped, never shown on the
+   * next open (R14).
+   */
+  const openGenerationRef = useRef(0)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const anchorRef = useRef<HTMLDivElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -104,77 +149,114 @@ export function ConversationActionsContainer({
   const open = level !== 'closed'
 
   const routines = useConversationRoutines({
-    sessionId: session.id,
+    sessionId,
     open,
-    status: session.status,
-    attention: session.attention,
-    activity: session.activity,
+    status,
+    attention,
+    activity,
   })
   const drillBeat =
-    useContextDrillStore((state) => state.beats[session.id]) ?? null
+    useContextDrillStore((state) => state.beats[sessionId]) ?? null
   const drillDescription = useContextDrillStore(
-    (state) => state.descriptions[session.id],
+    (state) => state.descriptions[sessionId],
   )
-  const compacting = isSessionCompacting(session)
+  const compacting = isSessionCompacting({ activity })
 
-  const catalog = useSkillStore((state) => state.catalog)
-  const isCatalogLoading = useSkillStore((state) => state.isCatalogLoading)
-  const loadingProviders = useSkillStore((state) => state.loadingProviders)
-  const catalogError = useSkillStore((state) => state.catalogError)
-  const failedProviders = useSkillStore((state) => state.failedProviders)
-  const projectActions = useConversationProjectActions(session.id)
+  // The skill catalog is read only while Skills is open: a closed menu is not
+  // redrawn by a catalog the composer's own picker is loading (R16).
+  const skillsOpen = level === 'skills'
+  const catalog = useSkillStore((state) => (skillsOpen ? state.catalog : null))
+  const isCatalogLoading = useSkillStore(
+    (state) => skillsOpen && state.isCatalogLoading,
+  )
+  const loadingProviders = useSkillStore((state) =>
+    skillsOpen ? state.loadingProviders : null,
+  )
+  const catalogError = useSkillStore((state) =>
+    skillsOpen ? state.catalogError : null,
+  )
+  const failedProviders = useSkillStore((state) =>
+    skillsOpen ? state.failedProviders : null,
+  )
+  const projectActions = useConversationProjectActions(sessionId)
   const endpoints = useAppSettingsStore(
     (state) => state.settings.executionHostEndpoints,
   )
 
-  /**
-   * The same host the composer feeds `remoteSkillsNotice` for a live session:
-   * the session's recorded machine, blank meaning this one, labelled by the
-   * same catalog-source derivation. Not a second notion of "remote".
-   */
-  const hostId = isLocalExecutionHost(session.executionHost)
-    ? LOCAL_EXECUTION_HOST_ID
-    : (session.executionHost ?? LOCAL_EXECUTION_HOST_ID)
-  const notice = remoteSkillsNotice({
-    hostId,
-    hostLabel: providerCatalogHostLabel(
-      providerCatalogSourceForHost(hostId, endpoints).executionHostId,
-      endpoints,
-    ),
-  })
-
   const skillActions = useMemo(
     () =>
-      buildConversationActions({
-        routines: [],
-        skillCatalog: catalog,
-        providerId: session.providerId,
-      }),
-    [catalog, session.providerId],
+      skillsOpen
+        ? buildConversationActions({
+            routines: [],
+            skillCatalog: catalog,
+            providerId,
+          })
+        : [],
+    [catalog, providerId, skillsOpen],
   )
-  const skillRows = visibleSkillActions({
-    actions: skillActions,
+  const skills = useMemo<ConversationActionsViewProps['skills']>(() => {
+    if (!skillsOpen) return SKILLS_NOT_OPEN
+    /**
+     * The same host the composer feeds `remoteSkillsNotice` for a live
+     * session: the session's recorded machine, blank meaning this one,
+     * labelled by the same catalog-source derivation. Not a second notion of
+     * "remote".
+     */
+    const hostId = isLocalExecutionHost(executionHost)
+      ? LOCAL_EXECUTION_HOST_ID
+      : (executionHost ?? LOCAL_EXECUTION_HOST_ID)
+    return {
+      state: resolveSkillListState({
+        catalog,
+        catalogId: catalogProjectId ?? GLOBAL_SKILL_CATALOG_ID,
+        isCatalogLoading,
+        loadingProviderIds: (loadingProviders ?? []).map(
+          (entry) => entry.providerId,
+        ),
+        catalogError,
+        failedProviders: failedProviders ?? {},
+        providerId,
+      }),
+      rows: visibleSkillActions({
+        actions: skillActions,
+        catalog,
+        providerId,
+        query,
+      }).map((row) => ({
+        id: row.id,
+        label: row.label,
+        offered: row.offered,
+        reason: row.reason ?? null,
+      })),
+      notice: remoteSkillsNotice({
+        hostId,
+        hostLabel: providerCatalogHostLabel(
+          providerCatalogSourceForHost(hostId, endpoints).executionHostId,
+          endpoints,
+        ),
+      }),
+      query,
+    }
+  }, [
     catalog,
-    providerId: session.providerId,
-    query,
-  })
-  const skillState = resolveSkillListState({
-    catalog,
-    catalogId:
-      catalogScope.kind === 'project'
-        ? catalogScope.projectId
-        : GLOBAL_SKILL_CATALOG_ID,
-    isCatalogLoading,
-    loadingProviderIds: loadingProviders.map((entry) => entry.providerId),
     catalogError,
+    catalogProjectId,
+    endpoints,
+    executionHost,
     failedProviders,
-    providerId: session.providerId,
-  })
+    isCatalogLoading,
+    loadingProviders,
+    providerId,
+    query,
+    skillActions,
+    skillsOpen,
+  ])
   const routineRows = resolveRoutineRows({
     routines: routines.routines,
     drillBeat,
     drillDescription,
     compacting,
+    pending,
   })
 
   const fanGroups = useMemo(
@@ -191,6 +273,7 @@ export function ConversationActionsContainer({
   const close = useCallback((restoreFocus: boolean) => {
     restoreFocusRef.current = restoreFocus
     returnGroupRef.current = null
+    openGenerationRef.current += 1
     setLevel('closed')
     setQuery('')
     setCancelRefusal(null)
@@ -200,13 +283,23 @@ export function ConversationActionsContainer({
   const openGroup = useCallback(
     (group: ActionsMenuGroup) => {
       setLevel(group)
-      if (group === 'skills') {
-        const store = useSkillStore.getState()
-        if (catalogScope.kind === 'global') void store.loadGlobalCatalog()
-        else void store.loadCatalog(catalogScope.projectId)
+      if (group !== 'skills') return
+      const store = useSkillStore.getState()
+      if (catalogProjectId === null) {
+        void store.loadGlobalCatalog()
+        return
+      }
+      // R9: skills the store already holds for this project are the answer.
+      if (
+        projectSkillsNeedLoad({
+          catalogProjectId: store.catalog?.projectId ?? null,
+          projectId: catalogProjectId,
+        })
+      ) {
+        void store.loadCatalog(catalogProjectId)
       }
     },
-    [catalogScope],
+    [catalogProjectId],
   )
 
   const toggle = useCallback(() => {
@@ -214,10 +307,12 @@ export function ConversationActionsContainer({
     else close(true)
   }, [close, level])
 
-  // ⌘. opens and closes, while this surface is mounted and no dialog is up.
+  // ⌘. opens and closes, while this surface is mounted, can be seen (R13),
+  // and no dialog is up.
   useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {
       if (!isActionsShortcut(event) || anyDialogOpen()) return
+      if (insideInert(anchorRef.current)) return
       event.preventDefault()
       event.stopPropagation()
       toggle()
@@ -247,7 +342,10 @@ export function ConversationActionsContainer({
   // entry a list came back from, or the button after a close that asks.
   useEffect(() => {
     if (level === 'closed') {
-      if (restoreFocusRef.current) triggerRef.current?.focus()
+      // A close that asked for the button gets it; so does one whose
+      // destination could not take focus (a disabled composer), rather than
+      // leaving it on <body>. A destination that took it keeps it.
+      if (restoreFocusRef.current || focusIsLost()) triggerRef.current?.focus()
       restoreFocusRef.current = false
       return
     }
@@ -262,16 +360,21 @@ export function ConversationActionsContainer({
       items[Math.max(0, index)]?.focus()
       return
     }
-    if (level === 'skills' && searchRef.current) {
-      searchRef.current.focus()
-      return
-    }
-    const items = menu.querySelectorAll<HTMLElement>('[data-actions-item]')
-    // A list opens on its first action, past the back control.
-    items[level === 'fan' ? 0 : Math.min(1, items.length - 1)]?.focus()
+    focusLevelEntry(menu, level)
     // Keyed on the level (and the fan's shape), never on content: a re-render
     // inside a level keeps focus where the keyboard put it.
   }, [level, fanGroups])
+
+  // R10: while the menu is open, focus never falls to <body>. When the
+  // focused entry unmounts under the keyboard (the search replaced by
+  // Loading, Cancel or "Close menu" when a drill ends), the level's entry or
+  // the menu root takes it, so Esc and the arrows keep working. Runs after
+  // every render, because any of them can remove the focused node.
+  useLayoutEffect(() => {
+    if (level === 'closed' || !focusIsLost()) return
+    const menu = menuRef.current
+    if (menu) focusLevelEntry(menu, level)
+  })
 
   // Measured on every open of a list and on resize: 286 wide, upward,
   // inside the surface with an 8 px margin.
@@ -322,8 +425,8 @@ export function ConversationActionsContainer({
       const index = items.indexOf(document.activeElement as HTMLElement)
       const target = event.target as HTMLElement
       const inSearch = target === searchRef.current
-      // Home/End belong to the search text while typing in it.
-      if (inSearch && (event.key === 'Home' || event.key === 'End')) return
+      // The caret keys belong to the search text while typing in it (R11).
+      if (inSearch && isSearchCaretKey(event.key)) return
       const next = nextFocusIndex(event.key, index, items.length)
       if (next !== null) {
         event.preventDefault()
@@ -348,59 +451,88 @@ export function ConversationActionsContainer({
 
   const onSkill = useCallback(
     (id: string) => {
-      const action = skillRows.find((row) => row.id === id)
+      const action = skillActions.find(
+        (row): row is Extract<typeof row, { kind: 'skill' }> =>
+          row.kind === 'skill' && row.id === id,
+      )
       if (!action?.offered) return
-      postComposerIntent(session.id, {
+      postComposerIntent(sessionId, {
         kind: 'add-skill',
         skill: action.skill,
       })
       // Focus goes to the composer, which moves it itself.
       close(false)
     },
-    [close, session.id, skillRows],
+    [close, sessionId, skillActions],
   )
 
+  const setRoutinePending = useCallback((id: RoutineId, on: boolean) => {
+    if (pendingRef.current.has(id) === on) return
+    const next = new Set(pendingRef.current)
+    if (on) next.add(id)
+    else next.delete(id)
+    pendingRef.current = next
+    setPending(next)
+  }, [])
+
   const onRoutine = useCallback(
-    (id: RoutineRowView['id']) => {
+    (id: RoutineId) => {
+      // One start per activation: a started routine is pending until its
+      // call settles (R15). Once the backend's beat or compacting activity
+      // arrives, that is what the row draws (`resolveRoutineRows`).
+      if (pendingRef.current.has(id)) return
       setCancelRefusal(null)
       setCompactError(null)
+      const generation = openGenerationRef.current
       switch (id) {
         case 'drill':
-          // Started, not awaited: the store owns the promise and the beats
-          // arrive on `contextDrill:changed`, open menu or not.
-          void useContextDrillStore.getState().run(session.id)
+          // Not awaited: the store owns the promise and the beats arrive on
+          // `contextDrill:changed`, open menu or not.
+          setRoutinePending('drill', true)
+          void useContextDrillStore
+            .getState()
+            .run(sessionId)
+            .finally(() => setRoutinePending('drill', false))
           return
         case 'compact':
+          setRoutinePending('compact', true)
           void useSessionStore
             .getState()
-            .compactSessionContext(session.id)
+            .compactSessionContext(sessionId)
             .catch((error: unknown) => {
+              // An answer to a menu that has since closed is not this one's.
+              if (openGenerationRef.current !== generation) return
               setCompactError(
                 error instanceof Error ? error.message : String(error),
               )
             })
+            .finally(() => setRoutinePending('compact', false))
           return
         case 'fork':
           close(false)
           useDialogStore
             .getState()
-            .open('session-fork', { parentSessionId: session.id })
+            .open('session-fork', { parentSessionId: sessionId })
           return
         case 'hand-off':
           close(false)
-          postComposerIntent(session.id, { kind: 'open-account-picker' })
+          postComposerIntent(sessionId, { kind: 'open-account-picker' })
           return
       }
     },
-    [close, session.id],
+    [close, sessionId, setRoutinePending],
   )
 
   const onCancelDrill = useCallback(() => {
+    const generation = openGenerationRef.current
     void useContextDrillStore
       .getState()
-      .cancel(session.id)
-      .then(setCancelRefusal)
-  }, [session.id])
+      .cancel(sessionId)
+      .then((refusal) => {
+        if (openGenerationRef.current !== generation) return
+        setCancelRefusal(refusal)
+      })
+  }, [sessionId])
 
   const onProject = useCallback(
     (id: string) => {
@@ -417,17 +549,7 @@ export function ConversationActionsContainer({
       level={level}
       fanGroups={fanGroups}
       placement={placement}
-      skills={{
-        state: skillState,
-        rows: skillRows.map((row) => ({
-          id: row.id,
-          label: row.label,
-          offered: row.offered,
-          reason: row.reason ?? null,
-        })),
-        notice,
-        query,
-      }}
+      skills={skills}
       routines={{
         loaded: routines.loaded,
         error: routines.error,
@@ -464,3 +586,29 @@ export function ConversationActionsContainer({
     />
   )
 }
+
+/**
+ * The level's entry (R6/R10): the fan's first group, a list's first action
+ * past its back control, and the menu root when the level has no entry.
+ */
+function focusLevelEntry(menu: HTMLElement, level: ActionsMenuLevel): void {
+  if (level === 'skills') {
+    const search = menu.querySelector<HTMLElement>('input[data-actions-item]')
+    if (search) {
+      search.focus()
+      return
+    }
+  }
+  const items = menu.querySelectorAll<HTMLElement>('[data-actions-item]')
+  const index = levelEntryFocusIndex(level, items.length)
+  if (index >= 0) items[index]?.focus()
+  else menu.focus()
+}
+
+/**
+ * The Actions button, a memo on primitive props: a streamed reply redraws
+ * the surface on every append and must not redraw a closed menu (R16).
+ */
+export const ConversationActionsContainer = memo(
+  ConversationActionsContainerView,
+)

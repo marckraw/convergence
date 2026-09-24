@@ -26,6 +26,7 @@ export const ConversationActionsFan: FC<ConversationActionsViewProps> = ({
     ref={menuRef}
     role="menu"
     aria-label="Actions"
+    tabIndex={-1}
     className={styles.fan}
     onKeyDown={onMenuKeyDown}
   >

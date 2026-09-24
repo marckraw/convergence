@@ -107,18 +107,60 @@ function skillCatalog(
   }
 }
 
-function Harness({ session }: { session: TestSession }) {
+function Harness({
+  session,
+  inert = false,
+}: {
+  session: TestSession
+  inert?: boolean
+}) {
   const boundaryRef = useRef<HTMLDivElement | null>(null)
   return (
-    <div ref={boundaryRef}>
+    <div ref={boundaryRef} inert={inert}>
       <ConversationActionsContainer
-        session={session as never}
-        catalogScope={{ kind: 'project', projectId: 'project-1' }}
+        sessionId={session.id}
+        providerId={session.providerId}
+        status={session.status}
+        attention={session.attention}
+        activity={session.activity}
+        executionHost={session.executionHost}
+        catalogProjectId="project-1"
         boundaryRef={boundaryRef}
       />
       <button type="button">Elsewhere</button>
     </div>
   )
+}
+
+/** Focus is somewhere inside the open menu, never on <body>. */
+function expectFocusInsideMenu() {
+  const active = document.activeElement
+  expect(active).not.toBe(document.body)
+  expect(active?.closest('[role="menu"]')).not.toBeNull()
+}
+
+/** What the store's own `loadCatalog` does first: reseed empty, all loading. */
+function reseedingLoad() {
+  return vi.fn(async () => {
+    useSkillStore.setState({
+      catalog: { ...skillCatalog([]), providers: [] },
+      isCatalogLoading: true,
+      loadingProviders: [
+        { providerId: 'claude-code', providerName: 'Claude Code' },
+      ],
+    })
+    return null
+  })
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
 }
 
 const describeMock = vi.fn<(sessionId: string) => Promise<unknown>>()
@@ -393,7 +435,8 @@ describe('ConversationActionsContainer', () => {
       )
     })
 
-    it('loads this project’s catalog when Skills opens, and nothing before', async () => {
+    it('loads this project’s catalog when Skills opens and the store has none, and nothing before', async () => {
+      useSkillStore.setState({ catalog: null })
       render(<Harness session={SETTLED} />)
       pressActionsShortcut()
       expect(useSkillStore.getState().loadCatalog).not.toHaveBeenCalled()
@@ -404,6 +447,255 @@ describe('ConversationActionsContainer', () => {
       expect(useSkillStore.getState().loadCatalog).toHaveBeenCalledWith(
         'project-1',
       )
+    })
+  })
+
+  describe('skills the store already knows (R9)', () => {
+    it('opens Skills again and again without a rescan: no Loading, and the search keeps focus', async () => {
+      const load = reseedingLoad()
+      useSkillStore.setState({ loadCatalog: load })
+      render(<Harness session={SETTLED} />)
+
+      for (let round = 1; round <= 2; round += 1) {
+        const list = await openGroup('Skills')
+        expect(within(list).queryByRole('status')).toBeNull()
+        expect(document.activeElement).toBe(
+          within(list).getByRole('textbox', { name: 'Find a skill' }),
+        )
+        escape()
+        escape()
+      }
+      expect(load).not.toHaveBeenCalled()
+    })
+
+    it('loads when the store holds another project’s catalog', async () => {
+      const load = reseedingLoad()
+      useSkillStore.setState({
+        catalog: { ...skillCatalog(), projectId: 'project-2' },
+        loadCatalog: load,
+      })
+      render(<Harness session={SETTLED} />)
+      await openGroup('Skills')
+      expect(load).toHaveBeenCalledTimes(1)
+      expect(load).toHaveBeenCalledWith('project-1')
+    })
+  })
+
+  describe('focus never falls to <body> while open (R10)', () => {
+    it('keeps focus inside when the search is replaced by Loading and back, and Esc still goes back one level', async () => {
+      render(<Harness session={SETTLED} />)
+      const list = await openGroup('Skills')
+      expect(document.activeElement).toBe(
+        within(list).getByRole('textbox', { name: 'Find a skill' }),
+      )
+
+      // The composer's own picker rescans: the search unmounts under focus.
+      act(() => {
+        useSkillStore.setState({
+          catalog: { ...skillCatalog([]), providers: [] },
+          isCatalogLoading: true,
+          loadingProviders: [
+            { providerId: 'claude-code', providerName: 'Claude Code' },
+          ],
+        })
+      })
+      expect(within(list).getByRole('status')).toHaveTextContent(
+        'Loading skills…',
+      )
+      expectFocusInsideMenu()
+
+      act(() => {
+        useSkillStore.setState({
+          catalog: skillCatalog(),
+          isCatalogLoading: false,
+          loadingProviders: [],
+        })
+      })
+      expectFocusInsideMenu()
+
+      escape()
+      expect(screen.queryByRole('menu', { name: 'Skills' })).toBeNull()
+      expect(screen.getByRole('menu', { name: 'Actions' })).toBeInTheDocument()
+    })
+
+    it('keeps focus inside when Cancel vanishes as the drill ends, and Esc still works', async () => {
+      useContextDrillStore.setState({ beats: { 'session-1': 'sealing' } })
+      render(<Harness session={SETTLED} />)
+      const list = await openGroup('Routines')
+      within(list).getByRole('menuitem', { name: 'Cancel' }).focus()
+
+      act(() => {
+        useContextDrillStore.setState({ beats: {} })
+      })
+      expect(
+        within(list).queryByRole('menuitem', { name: 'Cancel' }),
+      ).toBeNull()
+      expect(
+        within(list).queryByRole('menuitem', { name: 'Close menu' }),
+      ).toBeNull()
+      expectFocusInsideMenu()
+
+      escape()
+      expect(screen.getByRole('menu', { name: 'Actions' })).toBeInTheDocument()
+    })
+
+    it('keeps focus inside when “Close menu” vanishes as the drill ends', async () => {
+      useContextDrillStore.setState({ beats: { 'session-1': 'resuming' } })
+      render(<Harness session={SETTLED} />)
+      const list = await openGroup('Routines')
+      within(list).getByRole('menuitem', { name: 'Close menu' }).focus()
+
+      act(() => {
+        useContextDrillStore.setState({ beats: {} })
+      })
+      expectFocusInsideMenu()
+      escape()
+      expect(screen.getByRole('menu', { name: 'Actions' })).toBeInTheDocument()
+    })
+
+    it('hands focus to the button, not <body>, when a skill goes to a composer that cannot take it', async () => {
+      render(<Harness session={SETTLED} />)
+      const list = await openGroup('Skills')
+      act(() => {
+        fireEvent.click(within(list).getByRole('menuitem', { name: 'Review' }))
+      })
+      expect(screen.queryByRole('menu')).toBeNull()
+      expect(document.activeElement).toBe(trigger())
+    })
+  })
+
+  describe('the search keeps its caret keys (R11)', () => {
+    it('moves the text cursor on Left and Right, and only Up and Down traverse', async () => {
+      render(<Harness session={SETTLED} />)
+      const list = await openGroup('Skills')
+      const search = within(list).getByRole('textbox', { name: 'Find a skill' })
+      fireEvent.change(search, { target: { value: 'plan' } })
+
+      key('ArrowLeft')
+      expect(document.activeElement).toBe(search)
+      key('ArrowRight')
+      expect(document.activeElement).toBe(search)
+
+      key('ArrowDown')
+      expect(document.activeElement).toHaveTextContent('Planning')
+    })
+  })
+
+  describe('only a surface you can see answers ⌘. (R13)', () => {
+    it('leaves the menu closed inside an inert ancestor (expanded Loom)', () => {
+      render(<Harness session={SETTLED} inert />)
+      pressActionsShortcut()
+      expect(screen.queryByRole('menu')).toBeNull()
+    })
+  })
+
+  describe('nothing crosses an open (R14)', () => {
+    it('drops a compact failure that lands after the menu closed', async () => {
+      const compact = deferred<void>()
+      compactMock.mockReturnValueOnce(compact.promise)
+      render(<Harness session={SETTLED} />)
+      const list = await openGroup('Routines')
+      fireEvent.click(within(list).getByRole('menuitem', { name: 'Compact' }))
+      escape()
+      escape()
+      expect(screen.queryByRole('menu')).toBeNull()
+
+      await act(async () => {
+        compact.reject(new Error('Compaction failed: busy'))
+        await compact.promise.catch(() => {})
+      })
+
+      const reopened = await openGroup('Routines')
+      expect(within(reopened).queryByRole('alert')).toBeNull()
+      expect(within(reopened).queryByText('Compaction failed: busy')).toBeNull()
+    })
+
+    it('drops a cancel refusal that lands after the menu closed', async () => {
+      const refusal = deferred<string | null>()
+      cancelMock.mockReturnValueOnce(refusal.promise)
+      useContextDrillStore.setState({ beats: { 'session-1': 'sealing' } })
+      render(<Harness session={SETTLED} />)
+      const list = await openGroup('Routines')
+      fireEvent.click(within(list).getByRole('menuitem', { name: 'Cancel' }))
+      fireEvent.click(
+        within(list).getByRole('menuitem', { name: 'Close menu' }),
+      )
+
+      await act(async () => {
+        refusal.resolve('The routine already finished.')
+        await refusal.promise
+      })
+
+      const reopened = await openGroup('Routines')
+      expect(
+        within(reopened).queryByText('The routine already finished.'),
+      ).toBeNull()
+    })
+  })
+
+  describe('a routine starts once per activation (R15)', () => {
+    it('starts one compaction for two activations in the same tick', async () => {
+      const compact = deferred<void>()
+      compactMock.mockReturnValueOnce(compact.promise)
+      render(<Harness session={SETTLED} />)
+      const list = await openGroup('Routines')
+      const row = within(list).getByRole('menuitem', { name: 'Compact' })
+      act(() => {
+        fireEvent.click(row)
+        fireEvent.click(row)
+      })
+      expect(compactMock).toHaveBeenCalledTimes(1)
+      await act(async () => {
+        compact.resolve()
+        await compact.promise
+      })
+    })
+
+    it('holds the row pending until the call settles, then offers it again', async () => {
+      const compact = deferred<void>()
+      compactMock.mockReturnValueOnce(compact.promise)
+      render(<Harness session={SETTLED} />)
+      const list = await openGroup('Routines')
+      const row = () => within(list).getByRole('menuitem', { name: 'Compact' })
+
+      fireEvent.click(row())
+      expect(row()).toHaveAttribute('aria-disabled', 'true')
+      fireEvent.click(row())
+      expect(compactMock).toHaveBeenCalledTimes(1)
+
+      await act(async () => {
+        compact.resolve()
+        await compact.promise
+      })
+      expect(row()).not.toHaveAttribute('aria-disabled')
+    })
+
+    it('holds the drill pending until its first beat arrives', async () => {
+      const run = deferred<void>()
+      runMock.mockReturnValueOnce(run.promise)
+      render(<Harness session={SETTLED} />)
+      const list = await openGroup('Routines')
+      fireEvent.click(
+        within(list).getByRole('menuitem', { name: 'Run the drill' }),
+      )
+      fireEvent.click(
+        within(list).getByRole('menuitem', { name: 'Run the drill' }),
+      )
+      expect(runMock).toHaveBeenCalledTimes(1)
+      expect(
+        within(list).getByRole('menuitem', { name: 'Run the drill' }),
+      ).toHaveAttribute('aria-disabled', 'true')
+
+      act(() => {
+        useContextDrillStore.setState({ beats: { 'session-1': 'sealing' } })
+      })
+      expect(
+        within(within(list).getByTestId('routine-drill')).getByRole('status'),
+      ).toHaveTextContent('Sealing memory…')
+      await act(async () => {
+        run.resolve()
+        await run.promise
+      })
     })
   })
 

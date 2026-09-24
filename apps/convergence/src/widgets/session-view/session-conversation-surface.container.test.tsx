@@ -1,15 +1,39 @@
+import type { FC } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  act,
   cleanup,
   fireEvent,
   render,
   screen,
   within,
 } from '@testing-library/react'
-import type { ConversationItem, Session } from '@/entities/session'
+import {
+  useSessionStore,
+  type ConversationItem,
+  type Session,
+} from '@/entities/session'
 import { useResponseAnnotationStore } from '@/entities/response-annotation'
+import { useSkillStore } from '@/entities/skill'
 import type { ComposerSessionContext } from '@/features/composer'
 import { SessionConversationSurface } from './session-conversation-surface.container'
+
+/** Every draw of the Actions menu's view, i.e. every render of its container. */
+const actionsViewDraws = vi.hoisted(() => ({ count: 0 }))
+
+vi.mock(
+  '@/features/conversation-actions/conversation-actions.presentational',
+  async (importOriginal) => {
+    const actual = await importOriginal<{
+      ConversationActionsView: FC<object>
+    }>()
+    const Counted: FC<object> = (props) => {
+      actionsViewDraws.count += 1
+      return <actual.ConversationActionsView {...props} />
+    }
+    return { ConversationActionsView: Counted }
+  },
+)
 
 vi.mock('@/features/composer', () => ({
   ComposerContainer: ({ context }: { context: ComposerSessionContext }) => (
@@ -384,6 +408,86 @@ describe('the Actions button (MAR-3393 R1)', () => {
       session: { ...baseSession, primarySurface: 'terminal' },
     })
     expect(actionsButton()).toBeNull()
+  })
+})
+
+describe('the Actions button while a reply streams (MAR-3393 R16)', () => {
+  function streamingMessage(text: string): ConversationItem {
+    return {
+      id: 'message-streaming',
+      sessionId: 'session-1',
+      sequence: 1,
+      turnId: 'turn-1',
+      kind: 'message',
+      actor: 'assistant',
+      state: 'streaming',
+      text,
+      createdAt: '2026-09-24T00:00:00.000Z',
+      updatedAt: '2026-09-24T00:00:00.000Z',
+      providerMeta: {
+        providerId: 'claude-code',
+        providerItemId: null,
+        providerEventType: null,
+      },
+    } as ConversationItem
+  }
+
+  /**
+   * Shaped like SessionView: it subscribes to the open conversation, so every
+   * streamed append redraws it and the surface under it, and it hands the
+   * surface a context and handlers written inline.
+   */
+  function StreamingParent() {
+    const items = useSessionStore((state) => state.activeConversation)
+    return (
+      <SessionConversationSurface
+        session={{ ...baseSession, id: 'session-1' }}
+        conversationItems={items}
+        composerContext={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
+      />
+    )
+  }
+
+  it('draws a closed menu 0 times across 30 streamed appends and 5 catalog loads the composer runs — mutations drop the memo, or read the catalog while closed, turn red', async () => {
+    useSessionStore.setState({ activeConversation: [streamingMessage('')] })
+    render(<StreamingParent />)
+    await act(async () => {})
+    expect(screen.getByRole('button', { name: 'Actions' })).toBeInTheDocument()
+    actionsViewDraws.count = 0
+
+    for (let i = 1; i <= 30; i += 1) {
+      act(() => {
+        useSessionStore.setState({
+          activeConversation: [streamingMessage(`token ${i}`)],
+        })
+      })
+    }
+    // The appends landed: the transcript drew every one.
+    expect(screen.getByText('token 30')).toBeInTheDocument()
+
+    for (let i = 1; i <= 5; i += 1) {
+      act(() => {
+        useSkillStore.setState({
+          isCatalogLoading: i % 2 === 1,
+          catalog: {
+            projectId: 'project-1',
+            projectName: 'Project',
+            providers: [],
+            refreshedAt: String(i),
+          },
+        })
+      })
+    }
+
+    expect(actionsViewDraws.count).toBe(0)
   })
 })
 

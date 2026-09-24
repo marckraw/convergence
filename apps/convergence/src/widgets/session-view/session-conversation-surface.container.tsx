@@ -138,11 +138,16 @@ export const SessionConversationSurface: FC<
         {actionsAvailable && composerContext ? (
           <ConversationActionsContainer
             key={`actions:${session.id}`}
-            session={session}
-            catalogScope={
+            sessionId={session.id}
+            providerId={session.providerId}
+            status={session.status}
+            attention={session.attention}
+            activity={session.activity}
+            executionHost={session.executionHost}
+            catalogProjectId={
               composerContext.kind === 'project'
-                ? { kind: 'project', projectId: composerContext.projectId }
-                : { kind: 'global' }
+                ? composerContext.projectId
+                : null
             }
             boundaryRef={surfaceRef}
           />
