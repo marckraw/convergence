@@ -10,3 +10,9 @@ export type {
   WorkLedgerState,
   WorkLedgerVerdict,
 } from './work-ledger.types'
+
+export {
+  entryBelongsToSeat,
+  seatTicket,
+  LOOM_NO_ACTIVE_TICKET,
+} from './seat-ticket.pure'

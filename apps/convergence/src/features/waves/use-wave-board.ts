@@ -1,3 +1,4 @@
+import { useLoomNavigationStore } from '@/entities/loom-navigation'
 import type { DispatchPlan } from '@/shared/types/tracker.types'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
@@ -172,6 +173,9 @@ export function useWaveBoard(query: string | null): WaveBoard {
     [boundCrewIds, crewFacts],
   )
   const selectedCrewId = resolveLoomCrew(storedCrew, boundCrewIds)
+  useEffect(() => {
+    useLoomNavigationStore.setState({ shownCrewId: selectedCrewId })
+  }, [selectedCrewId])
   // The crews this board is BUILT from (MAR-3225 R1). Everything below --
   // rows, header health, horses -- reads this list and never `boundCrewIds`,
   // so a second crew cannot leak into Loom through any one of them.

@@ -6,7 +6,10 @@ import {
   type SkillCatalogEntry,
   type SkillProviderId,
 } from '@/entities/skill'
-import { buildConversationActions } from './conversation-actions.pure'
+import {
+  buildConversationActions,
+  buildConversationProjectActions,
+} from './conversation-actions.pure'
 import type { ConversationRoutineAction } from './conversation-actions.types'
 
 function skill(
@@ -147,4 +150,15 @@ describe('buildConversationActions', () => {
       }),
     ).toEqual(routines)
   })
+})
+
+it('has no project actions without a seated conversation', () => {
+  expect(
+    buildConversationProjectActions({
+      sessionId: 'unseated',
+      crews: [],
+      snapshots: {},
+      currentCrewId: 'stale-crew',
+    }),
+  ).toEqual([])
 })

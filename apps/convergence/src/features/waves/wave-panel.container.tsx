@@ -1,3 +1,7 @@
+import {
+  useLoomNavigationStore,
+  type LoomNavigationRequest,
+} from '@/entities/loom-navigation'
 import { MergeReviewed } from './merge-reviewed.container'
 import {
   memo,
@@ -635,6 +639,93 @@ export const WavePanel: FC<WavePanelProps> = memo(function WavePanel({
     stripOpenElement.current = element
   }, [])
 
+  // Where "open it again" leads (MAR-3292 R3): the column when this window
+  // can hold one, the content area when it cannot. Both are Loom with its
+  // sheets, which is the promise the folded column makes.
+  const openLoom = useCallback(
+    () => changeMode(columnFitsHere ? 'compact' : 'expanded'),
+    [changeMode, columnFitsHere],
+  )
+  const { crewOptions, selectCrew } = board
+  const pendingNavigation = useLoomNavigationStore((state) => state.pending)
+  const [navigationLanding, setNavigationLanding] =
+    useState<LoomNavigationRequest | null>(null)
+  // Consume before changing local state. A later render or ledger broadcast
+  // must never replay a person's navigation.
+  useEffect(() => {
+    if (!pendingNavigation) return
+    const request = useLoomNavigationStore.getState().consume()
+    if (!request || !crewOptions.some((crew) => crew.id === request.crewId))
+      return
+    openLoom()
+    selectCrew(request.crewId)
+    selectSheet('now')
+    clearSearch()
+    setNavigationLanding(request)
+  }, [
+    pendingNavigation,
+    crewOptions,
+    selectCrew,
+    openLoom,
+    selectSheet,
+    clearSearch,
+  ])
+
+  // Land only after the requested crew's Now sheet is actually mounted.
+  // The ticket's own button opens the detail, preserving its focus return.
+  useEffect(() => {
+    if (
+      !navigationLanding ||
+      board.selectedCrewId !== navigationLanding.crewId ||
+      sheet !== 'now' ||
+      decision.mode === 'strip' ||
+      query !== null ||
+      detailKey !== null
+    )
+      return
+    const { crewId, target } = navigationLanding
+    const card = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-loom-horse]'),
+    ).find(
+      (element) =>
+        element.dataset.loomHorse === `${crewId}:${target.sessionId}`,
+    )
+    setNavigationLanding(null)
+    if (target.kind === 'issue') {
+      const row = allRows.find(
+        (candidate) => waveRowKey(candidate.entry) === waveRowKey(target.entry),
+      )
+      if (!row) return
+      card?.querySelector<HTMLElement>('[data-loom-horse-ticket]')?.focus()
+      showDetail(row.entry)
+    } else if (card) {
+      card.tabIndex = -1
+      card.classList.add(
+        'focus-visible:outline-none',
+        'focus-visible:ring-1',
+        'focus-visible:ring-ring',
+      )
+      card.scrollIntoView({
+        block: 'nearest',
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+          ? 'instant'
+          : 'smooth',
+      })
+      card.focus({ preventScroll: true })
+    } else {
+      titleElement.current?.focus()
+    }
+  }, [
+    navigationLanding,
+    board.selectedCrewId,
+    sheet,
+    decision.mode,
+    query,
+    detailKey,
+    allRows,
+    showDetail,
+  ])
+
   if (columnAbsent) return null
 
   const detailView =
@@ -838,10 +929,6 @@ export const WavePanel: FC<WavePanelProps> = memo(function WavePanel({
     )
   }
 
-  // Where "open it again" leads (MAR-3292 R3): the column when this window
-  // can hold one, the content area when it cannot. Both are Loom with its
-  // sheets, which is the promise the folded column makes.
-  const openLoom = () => changeMode(columnFitsHere ? 'compact' : 'expanded')
   // The compact shape or nothing, so the width and the ceiling this branch
   // needs are read off the decision that HAS them (lap 2, B) rather than
   // asserted past a boolean.
