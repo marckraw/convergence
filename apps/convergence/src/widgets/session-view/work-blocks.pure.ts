@@ -351,7 +351,7 @@ export function workBlockSummary(
     const verbSteps = byVerb.get(verb)
     if (!verbSteps) continue
     let part = describeVerb(verb, verbSteps)
-    if (folder && !folderPlaced && verbSteps.some((step) => step.path)) {
+    if (folder && !folderPlaced && verbSteps.every((step) => step.path)) {
       part = `${part} in ${folder}`
       folderPlaced = true
     }

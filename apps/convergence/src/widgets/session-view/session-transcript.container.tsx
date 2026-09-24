@@ -297,6 +297,13 @@ const SessionTranscriptContent: FC<SessionTranscriptProps> = ({
       (row) =>
         row.kind !== 'block' && row.entry.item.id === navigationTarget.id,
     )
+    // The jump owns the scroll: bottom-follow stops and a queued
+    // scroll-to-latest frame is dropped, or it fires after the jump and wins.
+    bottomFollowRef.current = false
+    if (pendingScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(pendingScrollFrameRef.current)
+      pendingScrollFrameRef.current = null
+    }
     if (index < 0) {
       // R6: a jump into a folded block opens it; the rows it adds bring this
       // effect back, and the second pass lands on the item itself.
@@ -305,7 +312,6 @@ const SessionTranscriptContent: FC<SessionTranscriptProps> = ({
       return
     }
     navigatedNonce.current = navigationTarget.nonce
-    bottomFollowRef.current = false
     rowVirtualizer.scrollToIndex(index, { align: 'center' })
   }, [navigationTarget, displayRows, blockOfMember, openBlock, rowVirtualizer])
 

@@ -169,10 +169,17 @@ export const ParallelWork: FC<Props> = ({
             ['tool-call', 'tool-result'].includes(item.kind),
       )
     : []
+  // One scan per item/row revision, shared by the fold rule and "View result".
+  const markers = useMemo(() => parallelWorkMarkers(items, rows), [items, rows])
   // MAR-3391 R7: the sidebar folds by the transcript's own rule and follows
-  // the conversation's Compact/Full choice.
+  // the conversation's Compact/Full choice. A marked entry is a boundary here
+  // exactly as it is in the transcript (R1).
   const workRows =
-    viewMode === 'full' ? null : groupWorkBlocks(visibleItems, itemOf)
+    viewMode === 'full'
+      ? null
+      : groupWorkBlocks(visibleItems, itemOf, {
+          isMarked: (item) => markers.has(item.id),
+        })
   const transcriptRows = workRows
     ? workDisplayRows(workRows, itemOf, (id) => openBlocks.has(id))
     : fullDisplayRows(visibleItems, itemOf)
@@ -258,7 +265,7 @@ export const ParallelWork: FC<Props> = ({
    */
   const resultItems = useMemo(() => {
     const byRowKey = new Map(
-      [...parallelWorkMarkers(items, rows)]
+      [...markers]
         .filter(([, marker]) => marker.label.startsWith('Result returned'))
         .map(([itemId, marker]) => [marker.rowKey, itemId]),
     )
@@ -281,7 +288,7 @@ export const ParallelWork: FC<Props> = ({
       if (itemId) byRowKey.set(key, itemId)
     }
     return byRowKey
-  }, [items, rows])
+  }, [items, rows, markers])
   const panel = (
     <div
       ref={host}

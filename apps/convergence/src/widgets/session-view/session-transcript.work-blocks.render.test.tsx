@@ -9,6 +9,8 @@ import {
 } from './transcript-view.model'
 
 const scrollToIndex = vi.fn()
+// Rows re-measure after they land; a test grows the total to say so.
+let mockMeasuredGrowth = 0
 
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: (options: {
@@ -22,7 +24,7 @@ vi.mock('@tanstack/react-virtual', () => ({
         key: options.getItemKey?.(index) ?? index,
         start: index * options.estimateSize(index),
       })),
-    getTotalSize: () => options.count * 160,
+    getTotalSize: () => options.count * 160 + mockMeasuredGrowth,
     measureElement: () => {},
     scrollToIndex,
   }),
@@ -125,6 +127,7 @@ beforeEach(() => {
   localStorage.clear()
   useTranscriptViewStore.setState({ modes: {}, openBlocks: new Set() })
   scrollToIndex.mockClear()
+  mockMeasuredGrowth = 0
 })
 
 const turn = [
@@ -268,6 +271,80 @@ describe('MAR-3391 CV1 work blocks in the transcript', () => {
       landed: [rows.indexOf('a2'), { align: 'center' }],
       rows: ['u1', 'block:r1', 'r1', 'a1', 'r2', 'a2', 'm1'],
     })
+  })
+
+  it('R6 D1 a jump from the bottom into a folded block ends on the item, not the bottom — mutation keep bottom-follow turns red', () => {
+    const frames = new Map<number, FrameRequestCallback>()
+    let nextFrame = 0
+    const request = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        nextFrame += 1
+        frames.set(nextFrame, callback)
+        return nextFrame
+      })
+    const cancel = vi
+      .spyOn(window, 'cancelAnimationFrame')
+      .mockImplementation((id) => {
+        frames.delete(id)
+      })
+    const flushFrames = () =>
+      act(() => {
+        const queued = [...frames.values()]
+        frames.clear()
+        for (const callback of queued) callback(0)
+      })
+    try {
+      const items = [user('u1'), read('r1'), answer('a1', 'r1'), agent('m1')]
+      const { rerender } = renderTranscript(items)
+      flushFrames()
+      // Sitting at the bottom: the last scroll followed the latest row.
+      const atBottom = scrollToIndex.mock.calls.at(-1)
+      scrollToIndex.mockClear()
+
+      rerender(
+        <SessionTranscript
+          session={session}
+          conversationItems={items}
+          navigationTarget={{ id: 'a1', nonce: 1 }}
+          {...handlers}
+        />,
+      )
+      flushFrames()
+      // The opened rows measure taller after the jump lands; the transcript
+      // must not treat that as new content to follow to the bottom.
+      mockMeasuredGrowth = 240
+      rerender(
+        <SessionTranscript
+          session={session}
+          conversationItems={items}
+          navigationTarget={{ id: 'a1', nonce: 1 }}
+          {...handlers}
+        />,
+      )
+      flushFrames()
+      const rows = screen
+        .getAllByTestId('session-transcript-row')
+        .map(
+          (row) =>
+            row.getAttribute('data-conversation-item-id') ??
+            `block:${row.getAttribute('data-work-block-id')}`,
+        )
+      expect({
+        atBottom,
+        rows,
+        last: scrollToIndex.mock.calls.at(-1),
+        calls: scrollToIndex.mock.calls,
+      }).toEqual({
+        atBottom: [2, { align: 'end' }],
+        rows: ['u1', 'block:r1', 'r1', 'a1', 'm1'],
+        last: [3, { align: 'center' }],
+        calls: [[3, { align: 'center' }]],
+      })
+    } finally {
+      request.mockRestore()
+      cancel.mockRestore()
+    }
   })
 
   it('R1 approvals are never folded and stay answerable without opening anything', () => {

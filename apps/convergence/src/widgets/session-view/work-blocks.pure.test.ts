@@ -334,6 +334,27 @@ describe('R2: the label says only facts', () => {
     expect(parseToolInputPath('{"notebook_path":"/n.ipynb"}')).toBe('/n.ipynb')
   })
 
+  it('a folder goes only on a verb whose steps ALL carry a path (D3)', () => {
+    const searches = [
+      call('g1', 'Grep', { pattern: 'x', path: '/repo/src/app/a' }),
+      call('g2', 'Grep', { pattern: 'y', path: '/repo/src/app/b' }),
+      call('g3', 'Grep', { pattern: 'z' }),
+    ]
+    expect(workBlockLabel(searches, { working: false, root: '/repo' })).toBe(
+      '3 searches',
+    )
+    expect(
+      workBlockLabel(
+        [
+          ...searches,
+          read('g4', '/repo/src/app/a/x.ts'),
+          read('g5', '/repo/src/app/b/y.ts'),
+        ],
+        { working: false, root: '/repo' },
+      ),
+    ).toBe('Read 2 files in src/app · 3 searches')
+  })
+
   it('one path is not a folder; the same file read twice is one file', () => {
     expect(
       workBlockLabel([read('s1', '/repo/src/a.ts')], { working: false }),

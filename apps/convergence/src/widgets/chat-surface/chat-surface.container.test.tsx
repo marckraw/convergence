@@ -72,6 +72,8 @@ vi.mock('@/features/command-center', () => ({
 }))
 
 vi.mock('@/widgets/session-view', () => ({
+  // The real switch is proven in chat-surface.transcript-view.render.test.tsx.
+  SessionTranscriptViewSwitch: () => null,
   useParallelWork: () => ({ rows: [], error: null, loading: false }),
   ParallelWork: ({
     open,
