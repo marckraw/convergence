@@ -46,7 +46,6 @@ import {
 import {
   Archive,
   ArrowLeftRight,
-  Clock,
   Cloud,
   GitFork,
   Link2,
@@ -58,7 +57,10 @@ import {
   GitPullRequest,
   TerminalSquare,
 } from 'lucide-react'
-import { formatConversationTotalDuration } from './conversation-total-duration.pure'
+import {
+  formatConversationTotalDuration,
+  readStreamingDurationTarget,
+} from './conversation-total-duration.pure'
 import { referencedAttachmentIdsKey } from './referenced-attachments.pure'
 import { resolveRemoteSessionDetails } from './remote-session-details.pure'
 import {
@@ -70,6 +72,7 @@ import { SessionHeaderDetailRow } from './session-header-detail-row.presentation
 import { useAgentMeterStore, SessionAgentMeter } from '@/entities/agent-meter'
 import { SessionWiresContainer } from './session-wires.container'
 import { SessionConversationSurface } from './session-conversation-surface.container'
+import { SessionElapsedDuration } from './session-elapsed-duration.container'
 import { SessionTranscriptViewSwitch } from './transcript-view-switch.container'
 
 export const SessionView: FC = () => {
@@ -240,10 +243,15 @@ export const SessionView: FC = () => {
     session?.activity,
     drillBeat,
   )
-  const totalDurationLabel = useMemo(
-    () => formatConversationTotalDuration(activeConversation),
-    [activeConversation],
-  )
+  // List-change only (MAR-3310 F1e R4). The open details row extends this
+  // with one item's live updatedAt; an append does not walk the list again.
+  const elapsedReading = useMemo(() => {
+    const label = formatConversationTotalDuration(activeConversation)
+    return {
+      label,
+      ...readStreamingDurationTarget(activeConversation),
+    }
+  }, [activeConversation])
   const linkedSessionAttempts = session
     ? (attemptsBySessionId[session.id] ?? [])
     : []
@@ -625,14 +633,12 @@ export const SessionView: FC = () => {
                       value={activityLabel}
                     />
                   )}
-                  {totalDurationLabel && (
-                    <SessionHeaderDetailRow
-                      icon={<Clock className="h-3.5 w-3.5" />}
-                      label="Elapsed"
-                      value={totalDurationLabel}
-                      testId="session-total-duration"
-                    />
-                  )}
+                  <SessionElapsedDuration
+                    label={elapsedReading.label}
+                    totalMs={elapsedReading.totalMs}
+                    streamingItem={elapsedReading.streamingItem}
+                    turnSpan={elapsedReading.turnSpan}
+                  />
                   <SessionHeaderDetailRow
                     label="Context"
                     value={formatSessionContextLabel(session.contextWindow)}
