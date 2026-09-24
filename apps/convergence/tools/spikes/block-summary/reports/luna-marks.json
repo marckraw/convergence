@@ -1,0 +1,549 @@
+{
+  "low/block-01/run-1": {
+    "mark": "supported"
+  },
+  "low/block-02/run-1": {
+    "mark": "supported"
+  },
+  "low/block-03/run-1": {
+    "mark": "supported"
+  },
+  "low/block-04/run-1": {
+    "mark": "supported"
+  },
+  "low/block-05/run-1": {
+    "mark": "supported"
+  },
+  "low/block-06/run-1": {
+    "mark": "supported"
+  },
+  "low/block-07/run-1": {
+    "mark": "supported"
+  },
+  "low/block-08/run-1": {
+    "mark": "supported"
+  },
+  "low/block-09/run-1": {
+    "mark": "supported"
+  },
+  "low/block-10/run-1": {
+    "mark": "supported"
+  },
+  "low/block-11/run-1": {
+    "mark": "supported"
+  },
+  "low/block-12/run-1": {
+    "mark": "supported"
+  },
+  "low/block-13/run-1": {
+    "mark": "supported"
+  },
+  "low/block-14/run-1": {
+    "mark": "supported"
+  },
+  "low/block-15/run-1": {
+    "mark": "supported"
+  },
+  "low/block-16/run-1": {
+    "mark": "supported"
+  },
+  "low/block-17/run-1": {
+    "mark": "supported"
+  },
+  "low/block-18/run-1": {
+    "mark": "supported"
+  },
+  "low/block-19/run-1": {
+    "mark": "supported"
+  },
+  "low/block-20/run-1": {
+    "mark": "supported"
+  },
+  "low/block-01/run-2": {
+    "mark": "supported"
+  },
+  "low/block-02/run-2": {
+    "mark": "supported"
+  },
+  "low/block-03/run-2": {
+    "mark": "supported"
+  },
+  "low/block-04/run-2": {
+    "mark": "supported"
+  },
+  "low/block-05/run-2": {
+    "mark": "supported"
+  },
+  "low/block-06/run-2": {
+    "mark": "supported"
+  },
+  "low/block-07/run-2": {
+    "mark": "supported"
+  },
+  "low/block-08/run-2": {
+    "mark": "supported"
+  },
+  "low/block-09/run-2": {
+    "mark": "supported"
+  },
+  "low/block-10/run-2": {
+    "mark": "supported"
+  },
+  "low/block-11/run-2": {
+    "mark": "supported"
+  },
+  "low/block-12/run-2": {
+    "mark": "supported"
+  },
+  "low/block-13/run-2": {
+    "mark": "supported"
+  },
+  "low/block-14/run-2": {
+    "mark": "supported"
+  },
+  "low/block-15/run-2": {
+    "mark": "supported"
+  },
+  "low/block-16/run-2": {
+    "mark": "supported"
+  },
+  "low/block-17/run-2": {
+    "mark": "supported"
+  },
+  "low/block-18/run-2": {
+    "mark": "supported"
+  },
+  "low/block-19/run-2": {
+    "mark": "supported"
+  },
+  "low/block-20/run-2": {
+    "mark": "supported"
+  },
+  "low/block-01/run-3": {
+    "mark": "supported"
+  },
+  "low/block-02/run-3": {
+    "mark": "supported"
+  },
+  "low/block-03/run-3": {
+    "mark": "supported"
+  },
+  "low/block-04/run-3": {
+    "mark": "supported"
+  },
+  "low/block-05/run-3": {
+    "mark": "supported"
+  },
+  "low/block-06/run-3": {
+    "mark": "supported"
+  },
+  "low/block-07/run-3": {
+    "mark": "supported"
+  },
+  "low/block-08/run-3": {
+    "mark": "supported"
+  },
+  "low/block-09/run-3": {
+    "mark": "supported"
+  },
+  "low/block-10/run-3": {
+    "mark": "supported"
+  },
+  "low/block-11/run-3": {
+    "mark": "supported"
+  },
+  "low/block-12/run-3": {
+    "mark": "supported"
+  },
+  "low/block-13/run-3": {
+    "mark": "supported"
+  },
+  "low/block-14/run-3": {
+    "mark": "supported"
+  },
+  "low/block-15/run-3": {
+    "mark": "supported"
+  },
+  "low/block-16/run-3": {
+    "mark": "supported"
+  },
+  "low/block-17/run-3": {
+    "mark": "supported"
+  },
+  "low/block-18/run-3": {
+    "mark": "supported"
+  },
+  "low/block-19/run-3": {
+    "mark": "supported"
+  },
+  "low/block-20/run-3": {
+    "mark": "supported"
+  },
+  "medium/block-01/run-1": {
+    "mark": "claims more than the facts",
+    "quote": "part-*.tsx"
+  },
+  "medium/block-02/run-1": {
+    "mark": "supported"
+  },
+  "medium/block-03/run-1": {
+    "mark": "supported"
+  },
+  "medium/block-04/run-1": {
+    "mark": "supported"
+  },
+  "medium/block-05/run-1": {
+    "mark": "supported"
+  },
+  "medium/block-06/run-1": {
+    "mark": "supported"
+  },
+  "medium/block-07/run-1": {
+    "mark": "supported"
+  },
+  "medium/block-08/run-1": {
+    "mark": "supported"
+  },
+  "medium/block-09/run-1": {
+    "mark": "supported"
+  },
+  "medium/block-10/run-1": {
+    "mark": "supported"
+  },
+  "medium/block-11/run-1": {
+    "mark": "supported"
+  },
+  "medium/block-12/run-1": {
+    "mark": "supported"
+  },
+  "medium/block-13/run-1": {
+    "mark": "supported"
+  },
+  "medium/block-14/run-1": {
+    "mark": "supported"
+  },
+  "medium/block-15/run-1": {
+    "mark": "supported"
+  },
+  "medium/block-16/run-1": {
+    "mark": "supported"
+  },
+  "medium/block-17/run-1": {
+    "mark": "supported"
+  },
+  "medium/block-18/run-1": {
+    "mark": "supported"
+  },
+  "medium/block-19/run-1": {
+    "mark": "supported"
+  },
+  "medium/block-20/run-1": {
+    "mark": "supported"
+  },
+  "medium/block-01/run-2": {
+    "mark": "supported"
+  },
+  "medium/block-02/run-2": {
+    "mark": "supported"
+  },
+  "medium/block-03/run-2": {
+    "mark": "supported"
+  },
+  "medium/block-04/run-2": {
+    "mark": "supported"
+  },
+  "medium/block-05/run-2": {
+    "mark": "supported"
+  },
+  "medium/block-06/run-2": {
+    "mark": "supported"
+  },
+  "medium/block-07/run-2": {
+    "mark": "supported"
+  },
+  "medium/block-08/run-2": {
+    "mark": "supported"
+  },
+  "medium/block-09/run-2": {
+    "mark": "supported"
+  },
+  "medium/block-10/run-2": {
+    "mark": "supported"
+  },
+  "medium/block-11/run-2": {
+    "mark": "supported"
+  },
+  "medium/block-12/run-2": {
+    "mark": "claims more than the facts",
+    "quote": "“pending.”"
+  },
+  "medium/block-13/run-2": {
+    "mark": "supported"
+  },
+  "medium/block-14/run-2": {
+    "mark": "supported"
+  },
+  "medium/block-15/run-2": {
+    "mark": "supported"
+  },
+  "medium/block-16/run-2": {
+    "mark": "supported"
+  },
+  "medium/block-17/run-2": {
+    "mark": "supported"
+  },
+  "medium/block-18/run-2": {
+    "mark": "supported"
+  },
+  "medium/block-19/run-2": {
+    "mark": "supported"
+  },
+  "medium/block-20/run-2": {
+    "mark": "supported"
+  },
+  "medium/block-01/run-3": {
+    "mark": "supported"
+  },
+  "medium/block-02/run-3": {
+    "mark": "supported"
+  },
+  "medium/block-03/run-3": {
+    "mark": "supported"
+  },
+  "medium/block-04/run-3": {
+    "mark": "supported"
+  },
+  "medium/block-05/run-3": {
+    "mark": "supported"
+  },
+  "medium/block-06/run-3": {
+    "mark": "supported"
+  },
+  "medium/block-07/run-3": {
+    "mark": "supported"
+  },
+  "medium/block-08/run-3": {
+    "mark": "supported"
+  },
+  "medium/block-09/run-3": {
+    "mark": "supported"
+  },
+  "medium/block-10/run-3": {
+    "mark": "supported"
+  },
+  "medium/block-11/run-3": {
+    "mark": "supported"
+  },
+  "medium/block-12/run-3": {
+    "mark": "supported"
+  },
+  "medium/block-13/run-3": {
+    "mark": "supported"
+  },
+  "medium/block-14/run-3": {
+    "mark": "supported"
+  },
+  "medium/block-15/run-3": {
+    "mark": "supported"
+  },
+  "medium/block-16/run-3": {
+    "mark": "claims more than the facts",
+    "quote": "summary"
+  },
+  "medium/block-17/run-3": {
+    "mark": "supported"
+  },
+  "medium/block-18/run-3": {
+    "mark": "supported"
+  },
+  "medium/block-19/run-3": {
+    "mark": "supported"
+  },
+  "medium/block-20/run-3": {
+    "mark": "supported"
+  },
+  "high/block-01/run-1": {
+    "mark": "supported"
+  },
+  "high/block-02/run-1": {
+    "mark": "supported"
+  },
+  "high/block-03/run-1": {
+    "mark": "supported"
+  },
+  "high/block-04/run-1": {
+    "mark": "supported"
+  },
+  "high/block-05/run-1": {
+    "mark": "supported"
+  },
+  "high/block-06/run-1": {
+    "mark": "supported"
+  },
+  "high/block-07/run-1": {
+    "mark": "supported"
+  },
+  "high/block-08/run-1": {
+    "mark": "supported"
+  },
+  "high/block-09/run-1": {
+    "mark": "supported"
+  },
+  "high/block-10/run-1": {
+    "mark": "supported"
+  },
+  "high/block-11/run-1": {
+    "mark": "supported"
+  },
+  "high/block-12/run-1": {
+    "mark": "supported"
+  },
+  "high/block-13/run-1": {
+    "mark": "supported"
+  },
+  "high/block-14/run-1": {
+    "mark": "supported"
+  },
+  "high/block-15/run-1": {
+    "mark": "claims more than the facts",
+    "quote": "architecture overview and boundaries documentation"
+  },
+  "high/block-16/run-1": {
+    "mark": "supported"
+  },
+  "high/block-17/run-1": {
+    "mark": "supported"
+  },
+  "high/block-18/run-1": {
+    "mark": "supported"
+  },
+  "high/block-19/run-1": {
+    "mark": "supported"
+  },
+  "high/block-20/run-1": {
+    "mark": "supported"
+  },
+  "high/block-01/run-2": {
+    "mark": "supported"
+  },
+  "high/block-02/run-2": {
+    "mark": "supported"
+  },
+  "high/block-03/run-2": {
+    "mark": "supported"
+  },
+  "high/block-04/run-2": {
+    "mark": "supported"
+  },
+  "high/block-05/run-2": {
+    "mark": "supported"
+  },
+  "high/block-06/run-2": {
+    "mark": "supported"
+  },
+  "high/block-07/run-2": {
+    "mark": "supported"
+  },
+  "high/block-08/run-2": {
+    "mark": "supported"
+  },
+  "high/block-09/run-2": {
+    "mark": "supported"
+  },
+  "high/block-10/run-2": {
+    "mark": "supported"
+  },
+  "high/block-11/run-2": {
+    "mark": "supported"
+  },
+  "high/block-12/run-2": {
+    "mark": "supported"
+  },
+  "high/block-13/run-2": {
+    "mark": "supported"
+  },
+  "high/block-14/run-2": {
+    "mark": "supported"
+  },
+  "high/block-15/run-2": {
+    "mark": "supported"
+  },
+  "high/block-16/run-2": {
+    "mark": "supported"
+  },
+  "high/block-17/run-2": {
+    "mark": "supported"
+  },
+  "high/block-18/run-2": {
+    "mark": "supported"
+  },
+  "high/block-19/run-2": {
+    "mark": "supported"
+  },
+  "high/block-20/run-2": {
+    "mark": "supported"
+  },
+  "high/block-01/run-3": {
+    "mark": "supported"
+  },
+  "high/block-02/run-3": {
+    "mark": "supported"
+  },
+  "high/block-03/run-3": {
+    "mark": "supported"
+  },
+  "high/block-04/run-3": {
+    "mark": "supported"
+  },
+  "high/block-05/run-3": {
+    "mark": "supported"
+  },
+  "high/block-06/run-3": {
+    "mark": "supported"
+  },
+  "high/block-07/run-3": {
+    "mark": "supported"
+  },
+  "high/block-08/run-3": {
+    "mark": "supported"
+  },
+  "high/block-09/run-3": {
+    "mark": "supported"
+  },
+  "high/block-10/run-3": {
+    "mark": "supported"
+  },
+  "high/block-11/run-3": {
+    "mark": "supported"
+  },
+  "high/block-12/run-3": {
+    "mark": "supported"
+  },
+  "high/block-13/run-3": {
+    "mark": "claims more than the facts",
+    "quote": "Edited"
+  },
+  "high/block-14/run-3": {
+    "mark": "supported"
+  },
+  "high/block-15/run-3": {
+    "mark": "claims more than the facts",
+    "quote": "architecture overview and boundaries documentation"
+  },
+  "high/block-16/run-3": {
+    "mark": "supported"
+  },
+  "high/block-17/run-3": {
+    "mark": "supported"
+  },
+  "high/block-18/run-3": {
+    "mark": "supported"
+  },
+  "high/block-19/run-3": {
+    "mark": "supported"
+  },
+  "high/block-20/run-3": {
+    "mark": "claims more than the facts",
+    "quote": "directories"
+  }
+}

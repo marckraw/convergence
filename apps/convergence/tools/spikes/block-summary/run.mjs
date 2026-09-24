@@ -4,19 +4,52 @@ import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
+import { buildSync } from 'esbuild'
 import { truthCheck } from './truth-check.pure.ts'
+import {
+  isLunaEffort,
+  LUNA_MODEL_ID,
+  LUNA_ONE_SHOT_TIMEOUT_MS,
+} from './luna-call.pure.ts'
 
 const root = fileURLToPath(new URL('.', import.meta.url))
 const candidate = process.argv[2]
-if (!['apple', 'mlx'].includes(candidate))
-  throw new Error('Usage: node run.mjs apple|mlx')
+const effort = candidate === 'luna' ? process.argv[4] : null
+if (candidate === 'luna') {
+  if (process.argv[3] !== '--effort' || !isLunaEffort(effort ?? undefined))
+    throw new Error('Usage: node run.mjs luna --effort low|medium|high')
+} else if (!['apple', 'mlx'].includes(candidate)) {
+  throw new Error(
+    'Usage: node run.mjs apple|mlx | node run.mjs luna --effort low|medium|high',
+  )
+}
+const reportId = effort ? `luna-${effort}` : candidate
 const fixtureText = readFileSync(`${root}fixtures.json`, 'utf8')
 const fixtures = JSON.parse(fixtureText)
 const prompt = readFileSync(`${root}prompt.txt`, 'utf8')
+if (candidate === 'luna') {
+  mkdirSync(`${root}scratch`, { recursive: true })
+  buildSync({
+    entryPoints: [`${root}luna-runtime.ts`],
+    outfile: `${root}scratch/luna-runtime.mjs`,
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    packages: 'external',
+    logLevel: 'warning',
+  })
+}
 const command =
   candidate === 'apple'
     ? [`${root}apple-fm/.build/release/apple-fm`]
-    : [`${root}.venv/bin/python`, '-u', `${root}mlx-worker.py`]
+    : candidate === 'mlx'
+      ? [`${root}.venv/bin/python`, '-u', `${root}mlx-worker.py`]
+      : [
+          process.execPath,
+          `${root}scratch/luna-runtime.mjs`,
+          '--effort',
+          effort,
+        ]
 mkdirSync(`${root}reports`, { recursive: true })
 const host = {
   macOS: execFileSync('/usr/bin/sw_vers', ['-productVersion'], {
@@ -90,7 +123,7 @@ try {
         `${candidate} ${id}: ${response.error ?? response.sentence} [${check.pass ? 'pass' : check.reasons.join(', ')}]`,
       )
       // An unavailable device or runtime refusal triggers the brief's STOP, not retries.
-      if (candidate === 'apple' && response.error)
+      if ((candidate === 'apple' || candidate === 'luna') && response.error)
         throw new Error(response.error)
     }
   }
@@ -120,6 +153,7 @@ const percentile = (fraction) =>
 const cpuSeconds = cpu ? Number(cpu[2]) + Number(cpu[3]) : null
 const report = {
   candidate,
+  reportId,
   timestamp: new Date().toISOString(),
   host,
   checkerSha256: createHash('sha256')
@@ -130,7 +164,14 @@ const report = {
   model:
     candidate === 'mlx'
       ? JSON.parse(readFileSync(`${root}model-manifest.json`, 'utf8'))
-      : 'SystemLanguageModel.default (on-device)',
+      : candidate === 'luna'
+        ? {
+            modelId: LUNA_MODEL_ID,
+            effort,
+            timeoutMs: LUNA_ONE_SHOT_TIMEOUT_MS,
+            providerAccountId: null,
+          }
+        : 'SystemLanguageModel.default (on-device)',
   methodology:
     'One resident process, 20 blocks in fixed order x 3 runs; greedy, 96 token cap; fresh conversation per block. Cold means process-cold, includes startup/load, excludes download; OS caches/services are not reset; background work on this shared development Mac is uncontrolled. Warm uses remaining successful round trips. RSS/CPU measure worker process, not Apple system inference services or GPU time.',
   loadAverageAtEnd: loadavg(),
@@ -159,9 +200,9 @@ const report = {
   rows,
 }
 writeFileSync(
-  `${root}reports/${candidate}.json`,
+  `${root}reports/${reportId}.json`,
   `${JSON.stringify(report, null, 2)}\n`,
 )
-writeFileSync(`${root}reports/${candidate}.time.txt`, stderr)
+writeFileSync(`${root}reports/${reportId}.time.txt`, stderr)
 console.log(JSON.stringify(report.summary, null, 2))
 if (fatal || exit.code !== 0) process.exitCode = 1
