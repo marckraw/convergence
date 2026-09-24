@@ -181,6 +181,11 @@ interface ComposerProps {
   selectedContextItems: ProjectContextItem[]
   skillCatalogLoading: boolean
   skillCatalogError: string | null
+  /**
+   * The line above both skill lists when this row's machine is not this Mac.
+   * Null on this Mac, including a global draft forced to stay here.
+   */
+  remoteSkillsNotice: string | null
   onSkillPickerOpenChange: (open: boolean) => void
   onSkillQueryChange: (query: string) => void
   onSkillToggle: (skill: SkillCatalogEntry) => void
@@ -293,6 +298,7 @@ export const Composer: FC<ComposerProps> = ({
   selectedContextItems,
   skillCatalogLoading,
   skillCatalogError,
+  remoteSkillsNotice,
   onSkillPickerOpenChange,
   onSkillQueryChange,
   onSkillToggle,
@@ -696,6 +702,7 @@ export const Composer: FC<ComposerProps> = ({
               activeProviderLabel={selection.providerLabel}
               isLoading={skillCatalogLoading}
               error={skillCatalogError}
+              notice={remoteSkillsNotice}
               onSelect={(skill) => onSkillInjectionSelect?.(skill)}
               onHover={(index) => onSkillInjectionHover?.(index)}
               onDismiss={() => onSkillInjectionDismiss?.()}
@@ -797,6 +804,7 @@ export const Composer: FC<ComposerProps> = ({
                     activeProviderLabel={selection.providerLabel}
                     isLoading={skillCatalogLoading}
                     error={skillCatalogError}
+                    notice={remoteSkillsNotice}
                     disabled={!selection.provider}
                     triggerClassName="h-8 w-full justify-start gap-2 px-2"
                     onToggleSkill={onSkillToggle}

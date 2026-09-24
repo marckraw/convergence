@@ -16,6 +16,8 @@ interface ComposerSkillInjectionPickerProps {
   activeProviderLabel: string | null
   isLoading: boolean
   error: string | null
+  /** Null on this Mac. A sentence when the list was read for another machine. */
+  notice: string | null
   onSelect: (skill: SkillCatalogEntry) => void
   onHover: (index: number) => void
   onDismiss: () => void
@@ -31,6 +33,7 @@ export const ComposerSkillInjectionPicker: FC<
   activeProviderLabel,
   isLoading,
   error,
+  notice,
   onSelect,
   onHover,
   onDismiss,
@@ -52,6 +55,14 @@ export const ComposerSkillInjectionPicker: FC<
           {activeProviderLabel ?? 'Active provider'}
         </div>
       </div>
+      {notice ? (
+        <p
+          className="px-3 py-1.5 text-xs text-muted-foreground"
+          data-testid="remote-skills-notice"
+        >
+          {notice}
+        </p>
+      ) : null}
       {error ? (
         <div className="px-3 py-2 text-xs text-destructive">{error}</div>
       ) : isLoading ? (

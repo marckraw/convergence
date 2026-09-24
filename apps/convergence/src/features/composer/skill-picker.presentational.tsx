@@ -17,6 +17,8 @@ interface SkillPickerProps {
   activeProviderLabel: string | null
   isLoading: boolean
   error: string | null
+  /** Null on this Mac. A sentence when the list was read for another machine. */
+  notice: string | null
   disabled?: boolean
   triggerClassName?: string
   onToggleSkill: (skill: SkillCatalogEntry) => void
@@ -86,6 +88,7 @@ export const SkillPicker: FC<SkillPickerProps> = ({
   activeProviderLabel,
   isLoading,
   error,
+  notice,
   disabled = false,
   triggerClassName,
   onToggleSkill,
@@ -141,6 +144,14 @@ export const SkillPicker: FC<SkillPickerProps> = ({
       </div>
 
       <div className="app-scrollbar max-h-80 overflow-y-auto p-2">
+        {notice ? (
+          <p
+            className="px-2 py-1.5 text-xs text-muted-foreground"
+            data-testid="remote-skills-notice"
+          >
+            {notice}
+          </p>
+        ) : null}
         {error ? (
           <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {error}
