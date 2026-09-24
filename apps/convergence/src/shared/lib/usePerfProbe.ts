@@ -3,20 +3,74 @@ import type { ProfilerOnRenderCallback } from 'react'
 import { perfApi } from './perf.api'
 import { percentile, type PerfRoot } from './perf-marks.pure'
 
+type OpenPaint = { sessionId: string; ms: number }
+let pendingOpen: { sessionId: string; name: string; start: number } | undefined
+let openSequence = 0
+
+export function markPerfConversationOpen(sessionId: string | null): void {
+  if (!perfApi.isEnabled()) return
+  if (pendingOpen) performance.clearMarks(pendingOpen.name)
+  pendingOpen = undefined
+  if (sessionId === null) return
+  const name = `convergence-perf-open-${++openSequence}`
+  pendingOpen = { sessionId, name, start: performance.now() }
+  performance.mark(name)
+}
+
+export function markPerfConversationLoaded(
+  sessionId: string,
+  hasSnapshot: () => boolean = () => true,
+): void {
+  if (!perfApi.isEnabled()) return
+  const opening = pendingOpen
+  if (!opening || opening.sessionId !== sessionId) return
+  // The invoke acknowledgement and FIFO snapshot use different pipes. Observe
+  // the snapshot before bounding its next paint; never alter the load itself.
+  const observeSnapshot = () => {
+    if (pendingOpen !== opening) return
+    if (!hasSnapshot()) {
+      requestAnimationFrame(observeSnapshot)
+      return
+    }
+    requestAnimationFrame(() => {
+      if (pendingOpen !== opening) return
+      const endName = `${opening.name}-paint`
+      performance.mark(endName)
+      performance.measure(`${opening.name}-duration`, opening.name, endName)
+      activeState().openPaints.push({
+        sessionId,
+        ms: performance.now() - opening.start,
+      })
+      performance.clearMarks(opening.name)
+      performance.clearMarks(endName)
+      performance.clearMeasures(`${opening.name}-duration`)
+      pendingOpen = undefined
+    })
+  }
+  requestAnimationFrame(observeSnapshot)
+}
+
+export function conversationPaintSamples(): OpenPaint[] {
+  return [...activeState().openPaints]
+}
+
 let state: ReturnType<typeof createState> | undefined
 function createState() {
   return {
     startedAt: performance.now(),
+    openPaints: [] as OpenPaint[],
     burstStart: Infinity,
     burstEnd: -Infinity,
     paints: [] as number[],
     inputDelays: [] as { start: number; ms: number }[],
     longTasks: [] as { start: number; ms: number }[],
     identities: [] as number[],
-    commits: { composer: [], sidebar: [], 'wave-panel': [] } as Record<
-      PerfRoot,
-      { at: number; ms: number }[]
-    >,
+    commits: {
+      composer: [],
+      sidebar: [],
+      'wave-panel': [],
+      transcript: [],
+    } as Record<PerfRoot, { at: number; ms: number }[]>,
   }
 }
 function activeState() {

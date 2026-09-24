@@ -1,3 +1,4 @@
+import { recordConversationRead } from '../perf/perf-probe.service'
 import { HandoffRefusedError } from '../provider/provider-account-handoff.pure'
 import type { InitialDispatchReceipt } from '../provider/provider.types'
 import { readSessionTurnTimings } from './session-timing.service'
@@ -1838,6 +1839,8 @@ export class SessionService {
   getConversation(id: string): ConversationItem[] {
     this.flushPendingConversationPatchesForSession(id)
 
+    const perfStart =
+      process.env.CONVERGENCE_PERF === '1' ? performance.now() : null
     const rows = this.db
       .prepare(
         `SELECT items.*, sessions.provider_id, agents.description AS agent_description, agents.agent_type
@@ -1849,6 +1852,17 @@ export class SessionService {
       )
       .all(id) as ConversationItemRow[]
 
+    if (perfStart !== null) {
+      const parseStart = performance.now()
+      const items = rows.map(conversationItemFromRow)
+      recordConversationRead(
+        id,
+        parseStart - perfStart,
+        performance.now() - parseStart,
+        items,
+      )
+      return items
+    }
     return rows.map(conversationItemFromRow)
   }
 

@@ -2,18 +2,19 @@
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import {
+  existsSync,
+  statSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
   writeFileSync,
   rmSync,
 } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 
-const HELP = `Usage: node apps/convergence/tools/perf-busy-day.mjs [--node] [--sessions N] [--streaming K] [--minutes M] [--loom] [--out file.json]
+const HELP = `Usage: node apps/convergence/tools/perf-busy-day.mjs [--node] [--db path] [--open id|biggest] [--scenario busy|open|stream-into-open] [--sessions N] [--streaming K] [--minutes M] [--loom] [--out file.json]
 Defaults: 12 sessions, 6 streaming, 3 minutes, Loom open. Fake provider: one delta/30ms; burst: 60 keys/80ms.
 Electron measures a separate profiling renderer build; --node measures main only (renderer.measured=false).
 No installed-app bootstrap, account data, real providers or network services are used.`
@@ -23,6 +24,9 @@ if (args.includes('--help')) {
   process.exit(0)
 }
 const params = {
+  db: null,
+  open: 'biggest',
+  scenario: 'busy',
   sessions: 12,
   streaming: 6,
   minutes: 3,
@@ -36,12 +40,17 @@ let output = resolve('perf-busy-day.json')
 for (let i = 0; i < args.length; i++) {
   const arg = args[i]
   if (arg === '--node') underNode = true
+  else if (arg === '--db') params.db = resolve(args[++i])
+  else if (arg === '--open') params.open = args[++i]
+  else if (arg === '--scenario') params.scenario = args[++i]
   else if (arg === '--loom') params.loom = true
   else if (arg === '--out') output = resolve(args[++i])
   else if (['--sessions', '--streaming', '--minutes'].includes(arg))
     params[arg.slice(2)] = Number(args[++i])
   else throw new Error(`Unknown argument: ${arg}\n${HELP}`)
 }
+if (!['busy', 'open', 'stream-into-open'].includes(params.scenario))
+  throw new Error('Unknown scenario: ' + params.scenario)
 if (
   !Number.isInteger(params.sessions) ||
   params.sessions < 1 ||
@@ -54,6 +63,12 @@ if (
   throw new Error(
     'Require sessions >= 1, 0 <= streaming <= sessions, minutes >= 0.1',
   )
+if (params.db && existsSync(output)) {
+  const inputStat = statSync(params.db),
+    outputStat = statSync(output)
+  if (inputStat.dev === outputStat.dev && inputStat.ino === outputStat.ino)
+    throw new Error('--out must not overwrite the input database')
+}
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = resolve(appRoot, '../..')
 // Under the workspace so native packages resolve normally. Removed even after failure.
@@ -85,7 +100,7 @@ const emptyRenderer = {
   longTasks: { count: 0, totalMs: 0 },
   inputDelayP95: 0,
   commits: Object.fromEntries(
-    ['composer', 'sidebar', 'wave-panel'].map((id) => [
+    ['composer', 'sidebar', 'wave-panel', 'transcript'].map((id) => [
       id,
       {
         count: 0,
@@ -136,8 +151,8 @@ try {
     const logError = console.error
     console.error = (...args) => logError(...args.map((arg) => arg instanceof Error ? arg.stack : arg))
     import(${source('src/app/index.tsx')})
-    import { rendererPerfReport } from ${source('src/shared/lib/usePerfProbe.ts')}
-    Object.assign(window, { readPerfReport: rendererPerfReport })
+    import { conversationPaintSamples, rendererPerfReport } from ${source('src/shared/lib/usePerfProbe.ts')}
+    Object.assign(window, { readPerfReport: rendererPerfReport, conversationPaintSamples })
   `,
   )
   let rendererBuild = null
@@ -205,9 +220,12 @@ try {
     String.raw`
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { writeFileSync } from 'node:fs'
+import Database from 'better-sqlite3'
 import { execFileSync } from 'node:child_process'
 import os from 'node:os'
 import { getDatabase, closeDatabase } from ${source('electron/backend/database/database.ts')}
+import { ProjectService } from ${source('electron/backend/project/project.service.ts')}
+import { percentile } from ${source('src/shared/lib/perf-marks.pure.ts')}
 import { SessionService } from ${source('electron/backend/session/session.service.ts')}
 import { ProviderRegistry } from ${source('electron/backend/provider/provider-registry.ts')}
 import { LocalExecutionHost } from ${source('electron/backend/provider/execution-host/local-execution-host.ts')}
@@ -223,7 +241,6 @@ import { RelayEngine } from ${source('electron/backend/relay/relay.engine.ts')}
 import { startRelayStallClock } from ${source('electron/main/relay-stall-clock.ts')}
 import { registerIpcHandlers } from ${source('electron/main/ipc.ts')}
 import { registerWorkLedgerIpcHandlers, broadcastWorkLedger } from ${source('electron/backend/work-ledger/work-ledger.ipc.ts')}
-import { DEFAULT_PROJECT_SETTINGS } from ${source('electron/backend/project/project-settings.pure.ts')}
 
 process.setSourceMapsEnabled?.(true)
 const params = ${JSON.stringify(params)}
@@ -253,18 +270,50 @@ const provider = { id: 'test-provider', name: 'Test Provider', supportsContinuat
 } }
 async function main() {
   if (!underNode) { app.setPath('userData', temp + '/user-data'); await app.whenReady() }
-  const db = getDatabase()
+  let copy
+  if (params.db) {
+    copy = temp + '/input-copy.db'
+    const input = new Database(params.db, { readonly: true, fileMustExist: true })
+    try { await input.backup(copy) } finally { input.close() }
+  }
+  const db = getDatabase(copy)
   const registry = new ProviderRegistry(); registry.register(provider)
   const sessions = new SessionService(db, new LocalExecutionHost(registry), temp + '/global')
   const crews = new CrewService(db)
-  db.prepare("INSERT INTO projects (id, name, repository_path) VALUES ('perf-project', 'Perf fixture', ?)").run(temp + '/repo')
-  const project = { id: 'perf-project', name: 'Perf fixture', repositoryPath: temp + '/repo', settings: DEFAULT_PROJECT_SETTINGS, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
-  const rows = Array.from({length: params.sessions}, (_, i) => sessions.create({ projectId: project.id, workspaceId: null, providerId: provider.id, model: null, effort: null, name: 'Busy day ' + (i + 1) }))
-  const crew = crews.create({ name: 'Perf Loom', sessionIds: rows.map((row) => row.id) })
-  crews.setTrackerBinding(crew.id, { projectId: 'fake-tracker-project' })
+  let rows, project, crew
+  const realProjects = new ProjectService(db)
+  if (params.db) {
+    rows = db.prepare("SELECT sessions.id, sessions.project_id, sessions.provider_id, COUNT(items.id) AS itemCount FROM sessions LEFT JOIN session_conversation_items items ON items.session_id = sessions.id WHERE sessions.primary_surface = 'conversation' GROUP BY sessions.id ORDER BY itemCount DESC, sessions.id").all()
+    if (!rows.length) throw new Error('The copy has no conversations')
+    for (const { provider_id: id } of db.prepare('SELECT DISTINCT provider_id FROM sessions').all()) {
+      registry.register({ ...provider, id, describe: async () => ({ ...descriptors, id }) })
+    }
+    project = realProjects.getById(rows[0].project_id) ?? realProjects.getAll()[0] ?? null
+    crew = crews.list()[0] ?? null
+  } else {
+    db.prepare("INSERT INTO projects (id, name, repository_path) VALUES ('perf-project', 'Perf fixture', ?)").run(temp + '/repo')
+    project = realProjects.getById('perf-project')
+    rows = Array.from({length: params.sessions}, (_, i) => sessions.create({ projectId: project.id, workspaceId: null, providerId: provider.id, model: null, effort: null, name: 'Busy day ' + (i + 1) }))
+    crew = crews.create({ name: 'Perf Loom', sessionIds: rows.map((row) => row.id) })
+    crews.setTrackerBinding(crew.id, { projectId: 'fake-tracker-project' })
+  }
+  const target = params.open === 'biggest' ? rows[0] : rows.find((row) => row.id === params.open)
+  if (!target) throw new Error('Conversation not found: ' + params.open)
+  project = realProjects.getById(target.project_id ?? project?.id) ?? project
+  const small = [...rows].reverse().find((row) => row.id !== target.id)
+  if (params.scenario === 'open' && !small) throw new Error('Open scenario needs a second conversation')
+  const streamingRows = params.scenario === 'open' ? [] : params.scenario === 'stream-into-open'
+    ? [target, ...rows.filter((row) => row.id !== target.id).slice(0, params.streaming)]
+    : rows.slice(0, params.streaming)
+  if (params.scenario === 'stream-into-open' && streamingRows.length !== params.streaming + 1)
+    throw new Error('stream-into-open needs the target plus K other conversations')
+  if (params.db) {
+    // Only the disposable copy is rebound to the in-process fake provider.
+    for (const row of streamingRows) db.prepare("UPDATE sessions SET provider_id = 'test-provider', execution_host = 'local', work_address = NULL, working_directory = ?, continuation_token = NULL WHERE id = ?").run(temp + '/repo', row.id)
+  }
   const ledger = new WorkLedgerService(db)
   const probe = createPerfProbe(true)
-  probe.wrapDatabase(db); probe.wrapSummary(sessions); probe.wrapTimers()
+  probe.observeConversations(); probe.wrapDatabase(db); probe.wrapSummary(sessions); probe.wrapTimers()
   let trackerReads = 0, snapshotReads = 0
   const watcher = new TrackerWatcherService({ crews, ledger, resolveKey: async () => 'synthetic-fixture', createAdapter: () => ({
     probe: async () => ({ ok: true, issues: 40, projectName: 'Fake' }), resolveProject: async () => ({ kind: 'not-found' }), readIssueBodies: async () => new Map(), listOutsideIssues: async () => ({ issues: [], more: false }),
@@ -274,8 +323,8 @@ async function main() {
   // Unrelated app services are explicit no-I/O fakes. Only session and tracker paths are measured as product work.
   const inert = new Proxy({}, { get: () => async () => [] })
   const appSettings = new Proxy({ getAppSettings: async () => settings, filterProviderDescriptors: (descriptors) => descriptors, resolveSessionDefaults: async (input) => input, getPiModelVisibility: () => settings.piModelVisibility, getNamingModelByProvider: () => ({}), sweepOrphanedExecutionHostCredentials: async () => [] }, { get: (target, key) => target[key] ?? (() => null) })
-  const projects = { getActive: () => project, getAll: () => [project], getById: () => project }
-  const state = { get: (key) => key.includes('project') ? project.id : null, set() {} }
+  const projects = params.db ? realProjects : { getActive: () => project, getAll: () => [project], getById: () => project }
+  const state = { get: (key) => key.includes('project') ? project?.id ?? null : null, set() {} }
   const pr = { start() {}, stop() {}, refreshForSession: async () => null, getForSession: async () => null, listByProjectId: async () => [], listGlobal: async () => [] }
   const registered = new Set()
   const actualHandle = ipcMain.handle.bind(ipcMain)
@@ -303,14 +352,48 @@ async function main() {
     const second = new BrowserWindow({ show: false, webPreferences: { offscreen: true, backgroundThrottling: false } })
     for (const win of [window, second]) probe.wrapSend(win.webContents)
     window.webContents.on('console-message', (event) => { if (event.level === 'error') { errors.push(event.message); console.error('[renderer]', event.message) } })
-    await window.loadFile(${JSON.stringify(rendererBuild)}, { hash: '/code/sessions/' + rows[0].id })
+    await window.loadFile(${JSON.stringify(rendererBuild)}, { hash: '/code/sessions/' + target.id })
+    // Electron CPU percentages need an earlier sample to establish their baseline.
+    app.getAppMetrics()
   }
   const stall = startRelayStallClock(new RelayEngine({ relays: new RelayService(db), crews, sessions, accounts: inert, hails: new CrewHailService(db) }))
   const watch = watcher.start()
-  for (const row of rows.slice(0, params.streaming)) await sessions.start(row.id, { text: 'Run synthetic busy day' })
+  const paintSamples = async () => window.webContents.executeJavaScript('window.conversationPaintSamples()')
+  const openConversation = async (id) => {
+    if (underNode) { sessions.getConversation(id); return }
+    const before = (await paintSamples()).length
+    await window.webContents.executeJavaScript('location.hash = ' + JSON.stringify('#/code/sessions/' + id))
+    for (let attempt = 0; attempt < 300; attempt++) {
+      if ((await paintSamples()).slice(before).some((sample) => sample.sessionId === id)) return
+      await wait(100)
+    }
+    throw new Error('Conversation first paint timed out: ' + id)
+  }
+  if (!underNode && params.scenario !== 'busy') {
+    let mounted = false
+    for (let attempt = 0; attempt < 300; attempt++) {
+      mounted = await window.webContents.executeJavaScript('typeof window.conversationPaintSamples === "function" && window.conversationPaintSamples().some(s => s.sessionId === ' + JSON.stringify(target.id) + ')')
+      if (mounted) break
+      await wait(100)
+    }
+    if (!mounted) throw new Error('Runner did not open the target: ' + errors.join('; '))
+  } else if (params.scenario === 'stream-into-open') sessions.getConversation(target.id)
+  const openRuns = []
+  if (params.scenario === 'open') {
+    for (let iteration = 0; iteration < 5; iteration++) {
+      await openConversation(small.id)
+      const before = probe.conversationReads.length
+      await openConversation(target.id)
+      const sample = probe.conversationReads.slice(before).find((sample) => sample.sessionId === target.id)
+      if (!sample) throw new Error('Missing getConversation timing')
+      const paint = underNode ? 0 : (await paintSamples()).filter((sample) => sample.sessionId === target.id).at(-1).ms
+      openRuns.push({ ...sample, firstPaintMs: paint })
+    }
+  }
+  for (const row of streamingRows) await sessions.start(row.id, { text: 'Run synthetic busy day' })
   const start = performance.now()
-  if (underNode) { watcher.snapshot(crew.id); snapshotReads++ }
-  else {
+  if (underNode) { if (crew) { watcher.snapshot(crew.id); snapshotReads++ } }
+  else if (params.scenario !== 'open') {
     let ready = false
     for (let attempt = 0; attempt < 50; attempt++) {
       ready = await window.webContents.executeJavaScript('!!document.querySelector("textarea")')
@@ -327,17 +410,26 @@ async function main() {
       }
     } else renderer.reason = 'Full renderer did not mount a composer within 5 seconds: ' + errors.join('; ')
   }
-  await wait(Math.max(0, params.minutes * 60000 - (performance.now() - start)))
+  if (params.scenario !== 'open') await wait(Math.max(0, params.minutes * 60000 - (performance.now() - start)))
   if (!underNode) {
     const measured = await window.webContents.executeJavaScript('typeof window.readPerfReport === "function" ? (() => { try { return window.readPerfReport() } catch (e) { return { error: e.stack } } })() : null')
     if (measured?.error) errors.push(measured.error)
-    if (measured?.measured) {
+    if (measured && !measured.error && (measured.measured || params.scenario === 'open')) {
       const joined = await window.webContents.executeJavaScript('window.electronAPI.perf.report(window.readPerfReport())')
       renderer = joined.renderer
     }
     else renderer.reason = 'Headless full-app mount did not retain a working composer; R3 requires a user-driven sandbox. ' + errors.join('; ')
   }
-  const report = { schemaVersion: 1, parameters: params, machine: { model: process.platform === 'darwin' ? execFileSync('/usr/sbin/sysctl', ['-n', 'hw.model'], {encoding:'utf8'}).trim() : os.cpus()[0]?.model, os: os.release(), macOS: process.platform === 'darwin' ? execFileSync('/usr/bin/sw_vers', ['-productVersion'], {encoding:'utf8'}).trim() : null, node: process.versions.node, electron: process.versions.electron ?? null, chromium: process.versions.chrome ?? null }, build: underNode ? 'Node main-only' : 'runner Vite production renderer with conditional react-dom/profiling alias', scenario: { emittedDeltas, trackerReads, snapshotReads, windows: 2, rendererErrors: errors }, ...probe.report(renderer) }
+  const distribution = (key) => ({ samples: openRuns.length, p50: percentile(openRuns.map((run) => run[key]), 0.5), p95: percentile(openRuns.map((run) => run[key]), 0.95) })
+  const opening = params.scenario === 'open' ? {
+    targetId: target.id, runs: openRuns, select: distribution('selectMs'), parse: distribution('parseMs'),
+    replyBytes: openRuns[0].replyBytes, replySize: distribution('replyBytes'),
+    firstPaint: { ...distribution('firstPaintMs'), measured: !underNode },
+    transport: 'V8-serialized conversation items (snapshot payload on the current renderer open path)',
+  } : undefined
+  const processes = underNode ? [{ type: 'Browser', cpuPercent: 0, workingSetKb: 0, measured: false }]
+    : app.getAppMetrics().map((metric) => ({ pid: metric.pid, type: metric.type, cpuPercent: metric.cpu.percentCPUUsage, workingSetKb: metric.memory.workingSetSize, measured: true }))
+  const report = { open: opening, processes, schemaVersion: 1, parameters: params, machine: { model: process.platform === 'darwin' ? execFileSync('/usr/sbin/sysctl', ['-n', 'hw.model'], {encoding:'utf8'}).trim() : os.cpus()[0]?.model, os: os.release(), macOS: process.platform === 'darwin' ? execFileSync('/usr/bin/sw_vers', ['-productVersion'], {encoding:'utf8'}).trim() : null, node: process.versions.node, electron: process.versions.electron ?? null, chromium: process.versions.chrome ?? null }, build: underNode ? 'Node main-only' : 'runner Vite production renderer with conditional react-dom/profiling alias', scenario: { name: params.scenario, targetId: target.id, streamingIds: streamingRows.map(row => row.id), emittedDeltas, trackerReads, snapshotReads, windows: 2, rendererErrors: errors }, ...probe.report(renderer) }
   stops.forEach((stop) => stop()); watch.stop(); stall.stop(); probe.dispose()
   await sessions.disposeAllForQuit(); closeDatabase()
   writeFileSync(${JSON.stringify(output)}, JSON.stringify(report, null, 2) + '\n')

@@ -2,12 +2,36 @@ import { performance } from 'node:perf_hooks'
 import { serialize } from 'node:v8'
 import type Database from 'better-sqlite3'
 
+export type ConversationReadTiming = {
+  sessionId: string
+  selectMs: number
+  parseMs: number
+  replyBytes: number
+}
+let conversationObserver: ((sample: ConversationReadTiming) => void) | undefined
+
+export function recordConversationRead(
+  sessionId: string,
+  selectMs: number,
+  parseMs: number,
+  items: unknown,
+): void {
+  conversationObserver?.({
+    sessionId,
+    selectMs,
+    parseMs,
+    replyBytes: serialize(items).byteLength,
+  })
+}
+
 type Cost = { calls: number; totalMs: number; maxMs: number }
 type Send = (channel: string, ...args: unknown[]) => void
 
 /** Decorator: observes existing calls without owning their scheduling or results. */
 export class PerfProbe {
   private readonly startedAt = performance.now()
+  private readonly cpuStart = process.cpuUsage()
+  readonly conversationReads: ConversationReadTiming[] = []
   private readonly heapStart = process.memoryUsage().heapUsed
   private readonly undo: Array<() => void> = []
   private readonly channels = new Map<
@@ -29,6 +53,14 @@ export class PerfProbe {
       cost.totalMs += ms
       cost.maxMs = Math.max(cost.maxMs, ms)
     }
+  }
+
+  observeConversations(): void {
+    const previous = conversationObserver
+    conversationObserver = (sample) => this.conversationReads.push(sample)
+    this.undo.push(() => {
+      conversationObserver = previous
+    })
   }
 
   wrapSend(target: { send: Send }): void {
@@ -141,6 +173,10 @@ export class PerfProbe {
     return {
       elapsedSeconds,
       main: {
+        cpuPercent: (() => {
+          const cpu = process.cpuUsage(this.cpuStart)
+          return (cpu.user + cpu.system) / (elapsedSeconds * 10000)
+        })(),
         ipc: Object.fromEntries(
           [...this.channels].map(([channel, cost]) => [
             channel,

@@ -20,13 +20,16 @@ describe('PerfProfiler flag boundary', () => {
     flag.enabled = false
     flag.mounts = 0
   })
-  it('returns the identical child and mounts no Profiler when off', () => {
-    const child = <textarea aria-label="composer" />
-    expect(PerfProfiler({ id: 'composer', children: child })).toBe(child)
-    render(<PerfProfiler id="composer">{child}</PerfProfiler>)
-    expect(screen.getByRole('textbox')).toBeInTheDocument()
-    expect(flag.mounts).toBe(0)
-  })
+  it.each(['composer', 'transcript'] as const)(
+    'returns the identical child and mounts no %s Profiler when off',
+    (id) => {
+      const child = <textarea aria-label="composer" />
+      expect(PerfProfiler({ id, children: child })).toBe(child)
+      render(<PerfProfiler id={id}>{child}</PerfProfiler>)
+      expect(screen.getByRole('textbox')).toBeInTheDocument()
+      expect(flag.mounts).toBe(0)
+    },
+  )
   it('mounts the Profiler when on', () => {
     flag.enabled = true
     render(
