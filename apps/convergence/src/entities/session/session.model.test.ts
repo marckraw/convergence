@@ -183,6 +183,7 @@ describe('useSessionStore', () => {
         'load-isolation-canary',
         1,
         expect.any(String),
+        { limit: 300 },
       )
     },
   )

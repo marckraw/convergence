@@ -1,3 +1,7 @@
+import {
+  CONVERSATION_PAGE_SIZE,
+  type ConversationPageRequest,
+} from '@/shared/types/conversation-item.types'
 import type { ConversationWireEvent } from '@/shared/types/conversation-item.types'
 import type {
   ConversationItem,
@@ -53,8 +57,14 @@ export const sessionApi = {
     id: string,
     generation: number,
     pageNonce: string,
+    page: ConversationPageRequest = { limit: CONVERSATION_PAGE_SIZE },
   ): Promise<void> =>
-    window.electronAPI.session.resyncConversation(id, generation, pageNonce),
+    window.electronAPI.session.resyncConversation(
+      id,
+      generation,
+      pageNonce,
+      page,
+    ),
 
   getConversation: (id: string): Promise<ConversationItem[]> =>
     window.electronAPI.session.getConversation(id),

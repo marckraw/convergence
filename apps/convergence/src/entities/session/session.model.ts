@@ -1,3 +1,4 @@
+import { CONVERSATION_PAGE_SIZE } from '@/shared/types/conversation-item.types'
 import {
   EMPTY_CONVERSATION_PREFIX,
   type ConversationPrefix,
@@ -67,6 +68,8 @@ const conversationLoads = new Map<
     resync: number | null
     pending: number | null
     stopped: boolean
+    olderBefore: number | null
+    olderFailed: boolean
   }
 >()
 function conversationLoad(sessionId: string) {
@@ -78,6 +81,8 @@ function conversationLoad(sessionId: string) {
       resync: null,
       pending: null,
       stopped: false,
+      olderBefore: null,
+      olderFailed: false,
     }
     conversationLoads.set(sessionId, load)
   }
@@ -111,14 +116,27 @@ async function requestConversationLoad(
   }
 }
 
+export interface ConversationWindow {
+  hasOlder: boolean
+  oldestSequence: number | null
+  loading: boolean
+}
+const EMPTY_WINDOW: ConversationWindow = {
+  hasOlder: false,
+  oldestSequence: null,
+  loading: false,
+}
+
 interface SessionState {
   sessions: SessionSummary[]
   globalSessions: SessionSummary[]
   globalChatSessions: SessionSummary[]
   activeConversationPrefix: ConversationPrefix
+  activeConversationWindow: ConversationWindow
   activeConversation: ConversationItem[]
   activeConversationSessionId: string | null
   activeGlobalConversationPrefix: ConversationPrefix
+  activeGlobalConversationWindow: ConversationWindow
   activeGlobalConversation: ConversationItem[]
   activeGlobalConversationSessionId: string | null
   queuedInputsBySessionId: Record<string, SessionQueuedInput[]>
@@ -189,6 +207,7 @@ interface SessionActions {
   archiveSession: (id: string) => Promise<void>
   unarchiveSession: (id: string) => Promise<void>
   deleteSession: (id: string, projectId?: string | null) => Promise<void>
+  loadOlderConversation: (sessionId: string) => Promise<void>
   loadActiveConversation: (sessionId: string) => Promise<void>
   loadActiveGlobalConversation: (sessionId: string) => Promise<void>
   loadQueuedInputs: (sessionId: string) => Promise<void>
@@ -389,9 +408,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   globalSessions: [],
   globalChatSessions: [],
   activeConversationPrefix: EMPTY_CONVERSATION_PREFIX,
+  activeConversationWindow: EMPTY_WINDOW,
   activeConversation: [],
   activeConversationSessionId: null,
   activeGlobalConversationPrefix: EMPTY_CONVERSATION_PREFIX,
+  activeGlobalConversationWindow: EMPTY_WINDOW,
   activeGlobalConversation: [],
   activeGlobalConversationSessionId: null,
   queuedInputsBySessionId: {},
@@ -416,6 +437,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         activeSessionId: null,
         activeProjectSessionId: null,
         activeConversationPrefix: EMPTY_CONVERSATION_PREFIX,
+        activeConversationWindow: EMPTY_WINDOW,
         activeConversation: [],
         activeConversationSessionId: null,
         queuedInputsBySessionId: {},
@@ -714,6 +736,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           sessions: upsertSummary(state.sessions, latest),
           globalSessions: upsertSummary(state.globalSessions, latest),
           activeConversationPrefix: EMPTY_CONVERSATION_PREFIX,
+          activeConversationWindow: EMPTY_WINDOW,
           activeConversation: [],
           activeConversationSessionId: session.id,
           queuedInputsBySessionId: {
@@ -764,6 +787,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           globalChatSessions: upsertSummary(state.globalChatSessions, latest),
           globalSessions: upsertSummary(state.globalSessions, latest),
           activeGlobalConversationPrefix: EMPTY_CONVERSATION_PREFIX,
+          activeGlobalConversationWindow: EMPTY_WINDOW,
           activeGlobalConversation: [],
           activeGlobalConversationSessionId: session.id,
           queuedInputsBySessionId: {
@@ -808,6 +832,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           : state.sessions,
       globalSessions: upsertSummary(state.globalSessions, session),
       activeConversationPrefix: EMPTY_CONVERSATION_PREFIX,
+      activeConversationWindow: EMPTY_WINDOW,
       activeConversation: [],
       activeConversationSessionId: session.id,
       queuedInputsBySessionId: {
@@ -990,10 +1015,60 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
+  loadOlderConversation: async (sessionId: string) => {
+    const state = get()
+    const project = state.activeSessionId === sessionId
+    if (!project && state.activeGlobalSessionId !== sessionId) return
+    const windowKey = project
+      ? 'activeConversationWindow'
+      : 'activeGlobalConversationWindow'
+    const window = state[windowKey]
+    const load = conversationLoad(sessionId)
+    if (
+      !window.hasOlder ||
+      window.oldestSequence === null ||
+      load.olderBefore !== null ||
+      load.olderFailed ||
+      load.pending !== null ||
+      load.resync !== null ||
+      load.stopped
+    )
+      return
+    const beforeSequence = window.oldestSequence
+    const generation = load.applied
+    load.olderBefore = beforeSequence
+    set({ [windowKey]: { ...window, loading: true } })
+    try {
+      await sessionApi.resyncConversation(
+        sessionId,
+        generation,
+        conversationPageNonce,
+        { limit: CONVERSATION_PAGE_SIZE, beforeSequence },
+      )
+    } catch (error) {
+      if (load.olderBefore !== beforeSequence || load.applied !== generation)
+        return
+      load.olderBefore = null
+      load.olderFailed = true
+      if (
+        (project ? get().activeSessionId : get().activeGlobalSessionId) ===
+        sessionId
+      )
+        set({
+          [windowKey]: { ...get()[windowKey], loading: false },
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Failed to load older messages; reopen the conversation to retry',
+        })
+    }
+  },
+
   loadActiveConversation: async (sessionId: string) => {
     const load = conversationLoad(sessionId)
     // An explicit open/load starts a new failure episode.
     load.stopped = false
+    load.olderFailed = false
     await requestConversationLoad(sessionId, (err) => {
       set({
         error:
@@ -1058,6 +1133,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       activeSessionId: null,
       activeProjectSessionId: null,
       activeConversationPrefix: EMPTY_CONVERSATION_PREFIX,
+      activeConversationWindow: EMPTY_WINDOW,
       activeConversation: [],
       activeConversationSessionId: null,
       queuedInputsBySessionId: {},
@@ -1069,6 +1145,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       activeSessionId: null,
       activeProjectSessionId: null,
       activeConversationPrefix: EMPTY_CONVERSATION_PREFIX,
+      activeConversationWindow: EMPTY_WINDOW,
       activeConversation: [],
       activeConversationSessionId: null,
       queuedInputsBySessionId: {},
@@ -1090,6 +1167,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         id !== null && state.activeConversationSessionId === id
           ? state.activeConversation
           : [],
+      activeConversationPrefix:
+        id !== null && state.activeConversationSessionId === id
+          ? state.activeConversationPrefix
+          : EMPTY_CONVERSATION_PREFIX,
+      activeConversationWindow:
+        id !== null && state.activeConversationSessionId === id
+          ? state.activeConversationWindow
+          : EMPTY_WINDOW,
       activeConversationSessionId: id,
       draftWorkspaceId: null,
     }))
@@ -1107,6 +1192,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         id !== null && state.activeGlobalConversationSessionId === id
           ? state.activeGlobalConversation
           : [],
+      activeGlobalConversationPrefix:
+        id !== null && state.activeGlobalConversationSessionId === id
+          ? state.activeGlobalConversationPrefix
+          : EMPTY_CONVERSATION_PREFIX,
+      activeGlobalConversationWindow:
+        id !== null && state.activeGlobalConversationSessionId === id
+          ? state.activeGlobalConversationWindow
+          : EMPTY_WINDOW,
       activeGlobalConversationSessionId: id,
     }))
     if (id !== null) {
@@ -1163,6 +1256,52 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     event: ConversationWireEvent<ConversationItem>,
   ) => {
     let resyncGeneration: number | undefined
+    if (event.op === 'older-page') {
+      const load = conversationLoad(event.sessionId)
+      if (
+        event.pageNonce !== conversationPageNonce ||
+        event.generation !== load.applied ||
+        event.generation !== load.requested ||
+        load.pending !== null ||
+        load.resync !== null ||
+        load.olderBefore !== event.beforeSequence
+      )
+        return
+      load.olderBefore = null
+      set((state) => {
+        const project = state.activeSessionId === event.sessionId
+        if (!project && state.activeGlobalSessionId !== event.sessionId)
+          return state
+        const itemsKey = project
+          ? 'activeConversation'
+          : 'activeGlobalConversation'
+        const prefixKey = project
+          ? 'activeConversationPrefix'
+          : 'activeGlobalConversationPrefix'
+        const windowKey = project
+          ? 'activeConversationWindow'
+          : 'activeGlobalConversationWindow'
+        if (state[windowKey].oldestSequence !== event.beforeSequence)
+          return state
+        const current = state[itemsKey]
+        const held = new Set(current.map((item) => item.id))
+        const older = event.items.filter((item) => !held.has(item.id))
+        // Reuse the current objects: live text is attached to them (F1e).
+        const next = [...older, ...current].sort(
+          (a, b) => a.sequence - b.sequence,
+        )
+        return {
+          [itemsKey]: next,
+          [prefixKey]: event.prefix,
+          [windowKey]: {
+            hasOlder: event.hasOlder,
+            oldestSequence: event.oldestSequence,
+            loading: false,
+          },
+        }
+      })
+      return
+    }
     if (event.op === 'append') {
       // MAR-3310 F1e R1: a growing reply changes its own row, never the list.
       const state = get()
@@ -1212,6 +1351,21 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             load.pending = null
         }
         const project = state.activeSessionId === event.sessionId
+        const window = project
+          ? state.activeConversationWindow
+          : state.activeGlobalConversationWindow
+        const current = project
+          ? state.activeConversation
+          : state.activeGlobalConversation
+        // Pinned decisions may be patched, but an unrelated old item never
+        // punches a hole in the contiguous window.
+        if (
+          event.op !== 'snapshot' &&
+          window.oldestSequence !== null &&
+          event.item.sequence < window.oldestSequence &&
+          !current.some((item) => item.id === event.item.id)
+        )
+          return state
         // The text grown on an item is superseded by any full fact about it.
         if (event.op === 'snapshot')
           dropSessionLiveConversationText(event.sessionId)
@@ -1226,16 +1380,38 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         let nextItems: ConversationItem[]
         if (event.op === 'snapshot') {
           load.applied = event.generation
+          load.olderBefore = null
+          load.olderFailed = false
           nextItems = event.items
         } else {
           nextItems = upsertConversationItem(items, event.item)
         }
         return project
           ? {
+              ...(event.op === 'snapshot'
+                ? {
+                    activeConversationPrefix: event.prefix,
+                    activeConversationWindow: {
+                      hasOlder: event.hasOlder,
+                      oldestSequence: event.oldestSequence,
+                      loading: false,
+                    },
+                  }
+                : {}),
               activeConversation: nextItems,
               activeConversationSessionId: event.sessionId,
             }
           : {
+              ...(event.op === 'snapshot'
+                ? {
+                    activeGlobalConversationPrefix: event.prefix,
+                    activeGlobalConversationWindow: {
+                      hasOlder: event.hasOlder,
+                      oldestSequence: event.oldestSequence,
+                      loading: false,
+                    },
+                  }
+                : {}),
               activeGlobalConversation: nextItems,
               activeGlobalConversationSessionId: event.sessionId,
             }
@@ -1298,6 +1474,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           : state.sessions,
       globalSessions: upsertSummary(state.globalSessions, session),
       activeConversationPrefix: EMPTY_CONVERSATION_PREFIX,
+      activeConversationWindow: EMPTY_WINDOW,
       activeConversation: [],
       activeConversationSessionId: session.id,
       queuedInputsBySessionId: {
@@ -1322,6 +1499,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           : state.sessions,
       globalSessions: upsertSummary(state.globalSessions, session),
       activeConversationPrefix: EMPTY_CONVERSATION_PREFIX,
+      activeConversationWindow: EMPTY_WINDOW,
       activeConversation: [],
       activeConversationSessionId: session.id,
       queuedInputsBySessionId: {

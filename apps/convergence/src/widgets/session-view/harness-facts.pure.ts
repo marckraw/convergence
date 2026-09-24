@@ -49,6 +49,7 @@ export function compactionLabel(
 export function placeCompactions(
   items: readonly { id: string; createdAt: string }[],
   compactions: SessionHarnessFacts['compactions'],
+  windowStartedAt?: string,
 ) {
   const before = new Map<string, SessionHarnessFacts['compactions']>(),
     tail: SessionHarnessFacts['compactions'] = []
@@ -58,6 +59,8 @@ export function placeCompactions(
   for (const fact of [...compactions].sort(
     (a, b) => a.at.localeCompare(b.at) || a.sequence - b.sequence,
   )) {
+    // A compaction before a partial window is not attached to its first row.
+    if (windowStartedAt !== undefined && fact.at < windowStartedAt) continue
     const next = byTime.find((item) => item.createdAt >= fact.at)
     if (next) before.set(next.id, [...(before.get(next.id) ?? []), fact])
     else tail.push(fact)

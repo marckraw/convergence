@@ -1,3 +1,4 @@
+import type { ConversationPageRequest } from './conversation-item.types'
 export interface ConversationRoutineAction {
   id: 'drill' | 'compact' | 'fork' | 'hand-off'
   kind: 'routine'
@@ -2043,6 +2044,7 @@ interface ElectronAPI {
       id: string,
       generation: number,
       pageNonce: string,
+      page?: ConversationPageRequest,
     ) => Promise<void>
     getConversation: (id: string) => Promise<ConversationItemData[]>
     onEvidenceUpdated: (

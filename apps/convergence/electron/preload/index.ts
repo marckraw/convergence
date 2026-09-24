@@ -1,3 +1,4 @@
+import type { ConversationPageRequest } from '../../src/shared/types/conversation-item.types'
 import type {
   ReleaseSeat,
   ReleaseMergeInput,
@@ -453,12 +454,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getGlobalSummaries: () => ipcRenderer.invoke('session:getGlobalSummaries'),
     getSummaryById: (id: string) =>
       ipcRenderer.invoke('session:getSummaryById', id),
-    resyncConversation: (id: string, generation: number, pageNonce: string) =>
+    resyncConversation: (
+      id: string,
+      generation: number,
+      pageNonce: string,
+      page?: ConversationPageRequest,
+    ) =>
       ipcRenderer.invoke(
         'session:resyncConversation',
         id,
         generation,
         pageNonce,
+        page,
       ),
     getConversation: (id: string) =>
       ipcRenderer.invoke('session:getConversation', id),

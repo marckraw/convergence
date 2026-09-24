@@ -122,25 +122,109 @@ export function useParallelWorkDetail(
       string[],
     ]
     let active = true
-    parallelWorkApi.readDetail(readSessionId, ids).then(
-      (items) => {
-        if (active) setDetail({ rowKey, value: { items, error: null } })
-      },
-      (failure: unknown) => {
-        if (active)
-          setDetail({
-            rowKey,
-            value: {
-              items: [],
-              error:
-                failure instanceof Error ? failure.message : String(failure),
-            },
-          })
-      },
-    )
+    let revision = 0
+    let fetchedIds = new Set<string>()
+    const read = () => {
+      const current = ++revision
+      void parallelWorkApi.readDetail(readSessionId, ids).then(
+        (items) => {
+          if (active && current === revision) {
+            fetchedIds = new Set(items.map((item) => item.id))
+            setDetail({ rowKey, value: { items, error: null } })
+          }
+        },
+        (failure: unknown) => {
+          if (active && current === revision)
+            setDetail({
+              rowKey,
+              value: {
+                items: [],
+                error:
+                  failure instanceof Error ? failure.message : String(failure),
+              },
+            })
+        },
+      )
+    }
+    read()
+    const unsubscribe = parallelWorkApi.subscribeConversation((event) => {
+      if (event.sessionId !== readSessionId) return
+      if (
+        event.op === 'snapshot' ||
+        ((event.op === 'patch' || event.op === 'add') &&
+          (fetchedIds.has(event.item.id) ||
+            ids.includes(event.item.agentRunId ?? '') ||
+            ids.includes(event.item.taskId ?? '')))
+      )
+        read()
+    })
     return () => {
       active = false
+      unsubscribe()
     }
   }, [rowKey, status])
   return detail && detail.rowKey === rowKey ? detail.value : NO_DETAIL
+}
+
+/** Result notes for every card, including cards whose output predates the window. */
+export function useParallelWorkResults(
+  sessionId: string,
+  rows: ParallelWorkRow[],
+  open: boolean,
+) {
+  const idsKey = JSON.stringify(
+    open
+      ? [
+          ...new Set(rows.flatMap((row) => parallelWorkRowState(row).ids)),
+        ].sort()
+      : [],
+  )
+  const [record, setRecord] = useState<{
+    sessionId: string
+    idsKey: string
+    items: ConversationItem[]
+    error: string | null
+  } | null>(null)
+  useEffect(() => {
+    const ids = JSON.parse(idsKey) as string[]
+    if (!ids.length) return
+    let active = true
+    let revision = 0
+    const read = () => {
+      const current = ++revision
+      void parallelWorkApi
+        .readTaskItems(sessionId, ids)
+        .then((items) => {
+          if (active && current === revision)
+            setRecord({ sessionId, idsKey, items, error: null })
+        })
+        .catch((failure: unknown) => {
+          if (active && current === revision)
+            setRecord({
+              sessionId,
+              idsKey,
+              items: [],
+              error:
+                failure instanceof Error ? failure.message : String(failure),
+            })
+        })
+    }
+    read()
+    const unsubscribe = parallelWorkApi.subscribeConversation((event) => {
+      if (
+        event.sessionId === sessionId &&
+        (event.op === 'snapshot' ||
+          ((event.op === 'add' || event.op === 'patch') &&
+            ids.includes(event.item.taskId ?? '')))
+      )
+        read()
+    })
+    return () => {
+      active = false
+      unsubscribe()
+    }
+  }, [sessionId, idsKey])
+  return record?.sessionId === sessionId && record.idsKey === idsKey
+    ? record
+    : NO_DETAIL
 }

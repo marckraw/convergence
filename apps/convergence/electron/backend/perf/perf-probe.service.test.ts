@@ -104,7 +104,7 @@ describe('main perf recorder', () => {
       })
       send({ op: 'snapshot', sessionId: 'one', items: [] })
       expect(probe.report().main.conversationPatched).toEqual({
-        byOp: { add: 4, patch: 4, append: 2, snapshot: 2 },
+        byOp: { add: 4, patch: 4, append: 2, snapshot: 2, 'older-page': 0 },
         fullPatchesWhileStreaming: {
           samples: 2,
           min: 0,

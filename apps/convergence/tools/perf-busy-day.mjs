@@ -68,6 +68,12 @@ if (
   )
 if (!Number.isInteger(params.targetItems) || params.targetItems < 0)
   throw new Error('Require --target-items >= 0')
+if (
+  params.scenario === 'open' &&
+  !params.db &&
+  !args.includes('--target-items')
+)
+  params.targetItems = 50000
 if (params.targetItems > 0 && params.db)
   throw new Error('--target-items seeds a synthetic target; it is not for --db')
 if (params.db && existsSync(output)) {
@@ -389,7 +395,7 @@ async function main() {
   const watch = watcher.start()
   const paintSamples = async () => window.webContents.executeJavaScript('window.conversationPaintSamples()')
   const openConversation = async (id) => {
-    if (underNode) { sessions.getConversation(id); return }
+    if (underNode) { sessions.getConversationPage(id); return }
     const before = (await paintSamples()).length
     await window.webContents.executeJavaScript('location.hash = ' + JSON.stringify('#/code/sessions/' + id))
     for (let attempt = 0; attempt < 300; attempt++) {
@@ -418,7 +424,7 @@ async function main() {
       // Both conversation reply and snapshot send sizing are outside that span.
       probe.flushPayloadSizes()
       const sample = probe.conversationReads.slice(before).find((sample) => sample.sessionId === target.id)
-      if (!sample) throw new Error('Missing getConversation timing')
+      if (!sample) throw new Error('Missing conversation page timing')
       const paint = underNode ? 0 : (await paintSamples()).filter((sample) => sample.sessionId === target.id).at(-1).ms
       openRuns.push({ ...sample, firstPaintMs: paint })
     }
@@ -458,7 +464,7 @@ async function main() {
     targetId: target.id, runs: openRuns, select: distribution('selectMs'), parse: distribution('parseMs'),
     replyBytes: openRuns[0].replyBytes, replySize: distribution('replyBytes'),
     firstPaint: { ...distribution('firstPaintMs'), measured: !underNode },
-    transport: 'V8-serialized conversation items (snapshot payload on the current renderer open path)',
+    transport: 'V8-serialized conversation page including prefix and pinned requests',
   } : undefined
   const processes = underNode ? [{ type: 'Browser', cpuPercent: 0, workingSetKb: 0, measured: false }]
     : app.getAppMetrics().map((metric) => ({ pid: metric.pid, type: metric.type, cpuPercent: metric.cpu.percentCPUUsage, workingSetKb: metric.memory.workingSetSize, measured: true }))

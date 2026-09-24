@@ -1,3 +1,4 @@
+import { EMPTY_CONVERSATION_PREFIX } from './conversation-prefix.pure'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   resetConversationLoadsForTests,
@@ -67,6 +68,9 @@ function snapshot(
 ) {
   emit({
     op: 'snapshot',
+    prefix: EMPTY_CONVERSATION_PREFIX,
+    hasOlder: false,
+    oldestSequence: 1,
     sessionId,
     items: [message(text)],
     generation,
@@ -213,6 +217,7 @@ for (const global of [false, true]) {
           sessionId,
           1,
           expect.any(String),
+          { limit: 300 },
         )
         const before = current()
         // This fits the stale buffer: only the in-flight guard can reject it.
@@ -242,6 +247,7 @@ for (const global of [false, true]) {
         sessionId,
         2,
         expect.any(String),
+        { limit: 300 },
       )
       snapshot('one two', 2)
       append(7, ' three')
@@ -293,6 +299,7 @@ for (const global of [false, true]) {
         sessionId,
         1,
         expect.any(String),
+        { limit: 300 },
       )
       snapshot('one two', 1)
       append(7, ' three')
@@ -325,6 +332,7 @@ for (const global of [false, true]) {
         sessionId,
         2,
         expect.any(String),
+        { limit: 300 },
       )
       snapshot('one two three', 2)
       append(13, ' four')
@@ -365,6 +373,7 @@ for (const global of [false, true]) {
         sessionId,
         2,
         expect.any(String),
+        { limit: 300 },
       )
       snapshot('one two three', 2)
       append(13, ' four')
@@ -388,6 +397,7 @@ for (const global of [false, true]) {
         sessionId,
         2,
         pageNonce,
+        { limit: 300 },
       )
       snapshot('recovered', 2)
       append(9, ' again')
@@ -404,6 +414,7 @@ for (const global of [false, true]) {
         sessionId,
         2,
         expect.any(String),
+        { limit: 300 },
       )
       snapshot('one', 2)
       append(3, ' two')

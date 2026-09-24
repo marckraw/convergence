@@ -76,6 +76,10 @@ interface SessionTranscriptProps {
   onParallelSelect?: (id: string) => void
   navigationTarget?: { id: string; nonce: number } | null
   session: Session
+  hasOlder?: boolean
+  oldestSequence?: number | null
+  loadingOlder?: boolean
+  onLoadOlder?: () => void
   conversationPrefix?: ConversationPrefix
   conversationItems: ConversationItemEntry[]
   onApprove: (
@@ -124,6 +128,10 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
   onParallelSelect,
   navigationTarget,
   conversationItems,
+  hasOlder = false,
+  oldestSequence = null,
+  loadingOlder = false,
+  onLoadOlder,
   conversationPrefix = EMPTY_CONVERSATION_PREFIX,
   onApprove,
   onDeny,
@@ -133,6 +141,7 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
   const scrollParentRef = useRef<HTMLDivElement>(null)
   const [scrollParent, setScrollParent] = useState<HTMLDivElement | null>(null)
   const bottomFollowRef = useRef(true)
+  const prependInsetRef = useRef(0)
   const pendingScrollFrameRef = useRef<number | null>(null)
   const previousSessionIdRef = useRef<string | null>(null)
   const [resolvedApprovalIds, setResolvedApprovalIds] = useState<Set<string>>(
@@ -250,8 +259,18 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
       placeCompactions(
         conversationRenderPlan.map((entry) => entry.item),
         compactions,
+        hasOlder
+          ? conversationItems.find((item) => item.sequence === oldestSequence)
+              ?.createdAt
+          : undefined,
       ),
-    [conversationRenderPlan, compactions],
+    [
+      conversationRenderPlan,
+      compactions,
+      hasOlder,
+      conversationItems,
+      oldestSequence,
+    ],
   )
   const viewMode = useTranscriptViewMode(session.id)
   const openBlocks = useTranscriptViewStore((state) => state.openBlocks)
@@ -272,6 +291,25 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
           }),
     [viewMode, conversationRenderPlan, workMarkers, compactionPlacement],
   )
+  useLayoutEffect(() => {
+    if (!workRows) return
+    const replacements = workRows.filter(
+      (row) =>
+        row.kind === 'block' &&
+        !openBlocks.has(row.id) &&
+        row.members.some((entry) => openBlocks.has(entry.item.id)),
+    )
+    if (!replacements.length) return
+    useTranscriptViewStore.setState((state) => {
+      const next = new Set(state.openBlocks)
+      for (const row of replacements) {
+        if (row.kind !== 'block') continue
+        for (const entry of row.members) next.delete(entry.item.id)
+        next.add(row.id)
+      }
+      return { openBlocks: next }
+    })
+  }, [workRows, openBlocks])
   const blockOfMember = useMemo(
     () =>
       workRows
@@ -388,6 +426,7 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
     getScrollElement: () => scrollParent,
     estimateSize: () => TRANSCRIPT_ROW_ESTIMATE_PX,
     getItemKey,
+    scrollPaddingStart: -prependInsetRef.current,
     overscan: TRANSCRIPT_OVERSCAN,
     enabled: scrollParent !== null,
     initialRect: {
@@ -406,6 +445,10 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
     const blockId =
       index < 0 ? blockOfMember.get(navigationTarget.id) : undefined
     if (index < 0 && !blockId) {
+      if (hasOlder) {
+        if (!loadingOlder) onLoadOlder?.()
+        return
+      }
       // MAR-3310 F1e R7: a jump that cannot land is dropped, and it leaves
       // the scroll where it was; a reply streaming below keeps following.
       navigatedNonce.current = navigationTarget.nonce
@@ -426,7 +469,16 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
     }
     navigatedNonce.current = navigationTarget.nonce
     rowVirtualizer.scrollToIndex(index, { align: 'center' })
-  }, [navigationTarget, displayRows, blockOfMember, openBlock, rowVirtualizer])
+  }, [
+    navigationTarget,
+    displayRows,
+    blockOfMember,
+    openBlock,
+    rowVirtualizer,
+    hasOlder,
+    loadingOlder,
+    onLoadOlder,
+  ])
 
   const scrollToLatest = useCallback(() => {
     if (displayRows.length === 0) return
@@ -443,6 +495,36 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
     })
   }, [displayRows.length, rowVirtualizer])
 
+  const prependAnchor = useRef<{
+    id: string
+    member: boolean
+    inset: number
+    before: number | null
+  } | null>(null)
+  useLayoutEffect(() => {
+    const anchor = prependAnchor.current
+    if (!anchor || anchor.before === oldestSequence) return
+    const index = displayRows.findIndex((row) =>
+      anchor.member
+        ? row.kind !== 'block' && row.entry.item.id === anchor.id
+        : row.kind === 'block'
+          ? row.members.some((entry) => entry.item.id === anchor.id)
+          : row.entry.item.id === anchor.id,
+    )
+    if (index < 0 && anchor.member) {
+      const block = blockOfMember.get(anchor.id)
+      if (block) {
+        openBlock(block)
+        return
+      }
+    }
+    prependAnchor.current = null
+    if (index < 0) return
+    // Indexed scrolling keeps correcting while newly mounted rows measure.
+    // A one-shot pixel offset drifts as estimates above the anchor settle.
+    rowVirtualizer.scrollToIndex(index, { align: 'start' })
+  }, [oldestSequence, displayRows, rowVirtualizer, blockOfMember, openBlock])
+
   const updateBottomFollow = useCallback(() => {
     const scrollParent = scrollParentRef.current
     if (!scrollParent) return
@@ -453,7 +535,47 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
       clientHeight: scrollParent.clientHeight,
     })
     bottomFollowRef.current = nearBottom
-  }, [])
+    if (!nearBottom && pendingScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(pendingScrollFrameRef.current)
+      pendingScrollFrameRef.current = null
+    }
+    if (
+      scrollParent.scrollTop <= 80 &&
+      hasOlder &&
+      !loadingOlder &&
+      onLoadOlder &&
+      (!prependAnchor.current ||
+        prependAnchor.current.before === oldestSequence)
+    ) {
+      // The scroll event can reach React before TanStack updates its visible
+      // range. Its keyed measurements already describe the entire window.
+      const visible = rowVirtualizer.measurementsCache.find(
+        (item) => item.end > scrollParent.scrollTop,
+      )
+      const row = visible && displayRows[visible.index]
+      const id =
+        row?.kind === 'block' ? row.members[0]?.item.id : row?.entry.item.id
+      if (id && visible) {
+        prependInsetRef.current = scrollParent.scrollTop - visible.start
+        prependAnchor.current = {
+          id,
+          member: row?.kind === 'member',
+          inset: scrollParent.scrollTop - visible.start,
+          before: oldestSequence,
+        }
+      }
+      // Retire any in-flight indexed scroll-to-bottom before indices shift.
+      rowVirtualizer.scrollToOffset(scrollParent.scrollTop)
+      onLoadOlder()
+    }
+  }, [
+    hasOlder,
+    loadingOlder,
+    onLoadOlder,
+    rowVirtualizer,
+    displayRows,
+    oldestSequence,
+  ])
 
   const handleScrollParentRef = useCallback((node: HTMLDivElement | null) => {
     scrollParentRef.current = node
@@ -522,6 +644,8 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
       ref={handleScrollParentRef}
       className="app-scrollbar flex-1 overflow-y-auto px-4"
       data-testid="session-transcript-scroll-region"
+      aria-busy={loadingOlder}
+      style={{ overflowAnchor: 'none' }}
       onScroll={updateBottomFollow}
     >
       <div className="mx-auto max-w-2xl py-4">

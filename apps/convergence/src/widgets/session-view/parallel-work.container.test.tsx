@@ -13,7 +13,12 @@ import { parallelWorkApi } from './parallel-work.api'
 import { useTranscriptViewStore } from './transcript-view.model'
 
 vi.mock('./parallel-work.api', () => ({
-  parallelWorkApi: { stop: vi.fn(), readDetail: vi.fn() },
+  parallelWorkApi: {
+    subscribeConversation: vi.fn(() => () => {}),
+    readTaskItems: vi.fn().mockResolvedValue([]),
+    stop: vi.fn(),
+    readDetail: vi.fn(),
+  },
 }))
 
 // MAR-3310 O0b: the detail's by-id read answers nothing unless a test says
@@ -1063,4 +1068,34 @@ it('MAR-3310 O0b R2 a failed detail read says so beside what is loaded — mutat
   expect(screen.getByRole('alert').textContent).toBe(
     'Could not read the earlier part of this work: database is locked',
   )
+})
+
+it('O1 R4 an unselected card keeps View result when its task note predates the window', async () => {
+  const input = {
+    ...props(),
+    rows: buildParallelWork([{ ...run, taskId: 'separate-task-id' }], []),
+  }
+  const note = {
+    id: 'old-result',
+    sessionId: 's',
+    sequence: 1,
+    turnId: null,
+    kind: 'note',
+    state: 'complete',
+    text: 'Finished',
+    taskId: 'separate-task-id',
+    createdAt: 'now',
+    updatedAt: 'now',
+    providerMeta: {
+      providerId: 'fake',
+      providerItemId: null,
+      providerEventType: 'harness.task.terminal',
+    },
+  } as ConversationItem
+  vi.mocked(parallelWorkApi.readTaskItems).mockResolvedValueOnce([note])
+  render(<ParallelWork {...input} />)
+  await act(async () => {})
+  fireEvent.click(screen.getByRole('button', { name: 'View result' }))
+  expect(input.onNavigate).toHaveBeenCalledWith('old-result')
+  expect(parallelWorkApi.readDetail).not.toHaveBeenCalled()
 })

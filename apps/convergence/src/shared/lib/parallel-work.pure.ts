@@ -96,8 +96,8 @@ export function parallelWorkRowState(row: ParallelWorkRow) {
     stopId: row.task?.taskId ?? row.run?.id ?? row.id,
     ids: [
       ...new Set(
-        [row.id, row.run?.id, row.task?.taskId].filter((id): id is string =>
-          Boolean(id),
+        [row.id, row.run?.id, row.run?.taskId, row.task?.taskId].filter(
+          (id): id is string => Boolean(id),
         ),
       ),
     ],
