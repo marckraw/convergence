@@ -16,7 +16,7 @@ import { join, resolve } from 'node:path'
 import Database from 'better-sqlite3'
 import {
   SECRET_COLUMN,
-  hasTokens,
+  createTokenMasker,
   maskTokens,
   scrubStateJson,
 } from '../electron/backend/perf/perf-seed.pure.ts'
@@ -60,6 +60,7 @@ function schema(db) {
     )
     .all()
     .map(({ name }) => {
+      activeTable = name
       const columns = db.prepare('SELECT * FROM pragma_table_info(?)').all(name)
       const extended = db
         .prepare('SELECT * FROM pragma_table_xinfo(?)')
@@ -88,6 +89,7 @@ function schema(db) {
 function blankSecrets(db, reader, tables, report) {
   db.transaction(() => {
     for (const table of tables) {
+      activeTable = table.name
       const secrets = table.columns.flatMap((column) => {
         const auth =
           table.name === 'workboard_tracker_sources' &&
@@ -143,6 +145,7 @@ function blankSecrets(db, reader, tables, report) {
       }
     }
     if (tables.some((table) => table.name === 'app_state')) {
+      activeTable = 'app_state'
       const update = db.prepare('UPDATE app_state SET value = ? WHERE key = ?')
       let rows = 0
       for (const row of reader
@@ -165,8 +168,21 @@ function blankSecrets(db, reader, tables, report) {
 
 // A separate WAL reader keeps row identities stable even when a masked column
 // is a primary key. Only a bounded batch of changed cells is held in memory.
-function maskDatabase(db, reader, tables, report) {
+function maskDatabase(db, reader, tables, report, masker) {
+  // Reserve original matches before allocating fillers, including short JSON
+  // secrets made entirely of punctuation. Only matches are retained, not rows.
   for (const table of tables) {
+    activeTable = table.name
+    for (const row of reader
+      .prepare(`SELECT * FROM ${quote(table.name)}`)
+      .raw()
+      .iterate()) {
+      for (const value of row)
+        if (typeof value === 'string') masker.reserve(value)
+    }
+  }
+  for (const table of tables) {
+    activeTable = table.name
     const select = [
       ...table.keys,
       ...table.columns.map((column) => column.name),
@@ -197,7 +213,7 @@ function maskDatabase(db, reader, tables, report) {
         )
           throw new Error('binary value in text column')
         if (typeof value !== 'string') continue
-        const masked = maskTokens(value)
+        const masked = masker.maskTokens(value)
         if (!masked.count) continue
         const label = maskTokens(
           `${table.name}.${table.columns[index].name}`,
@@ -218,14 +234,15 @@ function maskDatabase(db, reader, tables, report) {
   }
 }
 
-function verifyDatabase(db, tables) {
+function verifyDatabase(db, tables, masker) {
   for (const table of tables) {
+    activeTable = table.name
     for (const row of db
       .prepare(`SELECT * FROM ${quote(table.name)}`)
       .raw()
       .iterate()) {
       for (const value of row) {
-        if (typeof value === 'string' && hasTokens(value))
+        if (typeof value === 'string' && masker.hasTokens(value))
           throw new Error('verification failed')
       }
     }
@@ -233,6 +250,7 @@ function verifyDatabase(db, tables) {
 }
 
 let phase = 'arguments and target checks'
+let activeTable
 async function main() {
   const args = process.argv.slice(2)
   if (args.includes('--help')) {
@@ -297,14 +315,15 @@ async function main() {
     reader = new Database(copy, { readonly: true })
     phase = 'blanking'
     blankSecrets(db, reader, tables, report)
+    const masker = createTokenMasker()
     const maskStarted = performance.now()
     phase = 'masking'
-    maskDatabase(db, reader, tables, report)
+    maskDatabase(db, reader, tables, report, masker)
     report.maskSeconds = (performance.now() - maskStarted) / 1000
     reader.close()
     reader = undefined
     phase = 'verification'
-    verifyDatabase(db, tables)
+    verifyDatabase(db, tables, masker)
     for (const name of ['sessions', 'session_conversation_items']) {
       if (tables.some((table) => table.name === name))
         report.rows[name] = db
@@ -312,8 +331,14 @@ async function main() {
           .get().count
     }
     // VACUUM INTO excluded source free pages; secure_delete erases pages we free.
+    // Rebuild after index updates too: secure_delete alone can leave old index
+    // separator bytes outside live SQL rows.
+    phase = 'compaction'
+    activeTable = undefined
+    db.exec('VACUUM')
     // Checkpoint/truncate the WAL before publishing the scrubbed database.
     phase = 'checkpoint'
+    activeTable = undefined
     db.pragma('wal_checkpoint(TRUNCATE)')
     db.pragma('journal_mode = DELETE')
     db.close()
@@ -334,10 +359,16 @@ async function main() {
 
 try {
   await main()
-} catch {
+} catch (error) {
   // SQLite errors, paths and command arguments can contain row data or credentials.
+  const table =
+    activeTable === undefined ? '(none)' : maskTokens(activeTable).value
+  const code =
+    typeof error?.code === 'string' && /^SQLITE_[A-Z_]+$/.test(error.code)
+      ? error.code
+      : 'NON_SQLITE'
   console.error(
-    `perf:seed failed during ${phase}; unpublished copy removed. Check arguments, target closure, schema and native SQLite runtime. No source values are reported.`,
+    `perf:seed failed during ${phase}; table=${JSON.stringify(table)}; code=${code}; unpublished copy removed. No source values are reported.`,
   )
   process.exitCode = 1
 }
