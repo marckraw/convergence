@@ -4,7 +4,10 @@ import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
 import { ConversationActionsFan } from './conversation-actions-fan.presentational'
 import { ConversationActionsPanel } from './conversation-actions-panel.presentational'
-import { conversationActionsStyles as styles } from './conversation-actions.styles'
+import {
+  ACTIONS_ROW_STYLE,
+  conversationActionsStyles as styles,
+} from './conversation-actions.styles'
 import type { ConversationActionsViewProps } from './conversation-actions.types'
 
 /** Render-only: the Actions button, its fan and one group's compact list. */
@@ -16,7 +19,11 @@ export const ConversationActionsView: FC<ConversationActionsViewProps> = (
   const group = level === 'closed' || level === 'fan' ? null : level
 
   return (
-    <div className={styles.row} data-testid="conversation-actions">
+    <div
+      className={styles.row}
+      style={ACTIONS_ROW_STYLE}
+      data-testid="conversation-actions"
+    >
       <div ref={anchorRef} className={styles.anchor}>
         <Button
           ref={triggerRef}

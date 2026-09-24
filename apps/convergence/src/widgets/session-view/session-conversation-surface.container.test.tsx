@@ -16,6 +16,11 @@ import {
 import { useResponseAnnotationStore } from '@/entities/response-annotation'
 import { useSkillStore } from '@/entities/skill'
 import type { ComposerSessionContext } from '@/features/composer'
+import {
+  cornerRectsIntersect,
+  floatingCornerReservedRect,
+  type CornerRect,
+} from '@/shared/ui/floating-corner.pure'
 import { SessionConversationSurface } from './session-conversation-surface.container'
 
 /** Every draw of the Actions menu's view, i.e. every render of its container. */
@@ -408,6 +413,170 @@ describe('the Actions button (MAR-3393 R1)', () => {
       session: { ...baseSession, primarySurface: 'terminal' },
     })
     expect(actionsButton()).toBeNull()
+  })
+})
+
+/**
+ * Reads the few Tailwind tokens that place the Actions button, exactly as the
+ * rendered elements carry them (MAR-3416). jsdom has no layout, so the box is
+ * computed from the classes and the CSS variables the row sets, never from a
+ * second copy of the numbers. A token it cannot read throws, so a new
+ * placement class cannot slip past it.
+ */
+function placementTokens(
+  element: Element,
+  containerWidth: number,
+): Map<string, string> {
+  const active = new Map<string, string>()
+  for (const token of (element.getAttribute('class') ?? '').split(/\s+/)) {
+    if (!token) continue
+    let utility = token
+    const query = token.match(/^@min-\[(\d+)rem\]:(.+)$/)
+    if (query) {
+      if (containerWidth < Number(query[1]) * 16) continue
+      utility = query[2]
+    } else if (token.includes(':')) {
+      continue // a state variant (hover, focus, inert, ...): not in play
+    }
+    if (/^(absolute|relative|fixed|static)$/.test(utility)) {
+      active.set('position', utility)
+      continue
+    }
+    const length = utility.match(/^(bottom|right|pr|pb|px|py|w|h)-(.+)$/)
+    if (length) active.set(length[1], length[2])
+  }
+  return active
+}
+
+function lengthPx(value: string | undefined, element: Element): number {
+  if (value === undefined) return 0
+  if (/^\d+$/.test(value)) return Number(value) * 4
+  const literal = value.match(/^\[(\d+)px\]$/)
+  if (literal) return Number(literal[1])
+  const variable = value.match(/^\[var\((--[\w-]+)\)\]$/)
+  if (variable) {
+    const set = (element as HTMLElement).style.getPropertyValue(variable[1])
+    const px = set.match(/^(\d+)px$/)
+    if (!px) throw new Error(`${variable[1]} is "${set}", not a px length`)
+    return Number(px[1])
+  }
+  throw new Error(`cannot read the length "${value}"`)
+}
+
+/**
+ * The Actions button's box in a window whose right and bottom edges are the
+ * surface's (the worst case, MAR-3416 R2), and which layout placed it.
+ */
+function actionsButtonRect(
+  row: Element,
+  surface: { width: number; height: number },
+): { rect: CornerRect; layout: 'row' | 'gutter' } {
+  const host = row.parentElement!
+  const anchor = row.firstElementChild!
+  const hostTokens = placementTokens(host, surface.width)
+  const hostPadRight = lengthPx(
+    hostTokens.get('pr') ?? hostTokens.get('px'),
+    host,
+  )
+  const hostPadBottom = lengthPx(
+    hostTokens.get('pb') ?? hostTokens.get('py'),
+    host,
+  )
+  // A container query reads the host's content box, not its border box.
+  const contentWidth = surface.width - 2 * hostPadRight
+  const rowTokens = placementTokens(row, contentWidth)
+  const anchorTokens = placementTokens(anchor, contentWidth)
+  const width = lengthPx(anchorTokens.get('w'), anchor)
+  const height = lengthPx(anchorTokens.get('h'), anchor)
+  const rowPadRight = lengthPx(rowTokens.get('pr'), row)
+  const absolute = rowTokens.get('position') === 'absolute'
+  const right = absolute
+    ? surface.width - lengthPx(rowTokens.get('right'), row) - rowPadRight
+    : surface.width - hostPadRight - rowPadRight
+  const bottom = absolute
+    ? surface.height - lengthPx(rowTokens.get('bottom'), row)
+    : surface.height - hostPadBottom
+  return {
+    rect: { left: right - width, top: bottom - height, right, bottom },
+    layout: absolute ? 'gutter' : 'row',
+  }
+}
+
+describe('the Actions layer and the feedback corner (MAR-3416)', () => {
+  beforeEach(() => {
+    // Opening the fan asks the backend for the routines' state.
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      conversationActions: { describe: vi.fn().mockResolvedValue([]) },
+    }
+  })
+
+  function renderSurface() {
+    render(
+      <SessionConversationSurface
+        session={baseSession}
+        conversationItems={[]}
+        composerContext={{ kind: 'global', activeSessionId: 'session-1' }}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
+      />,
+    )
+    return screen.getByTestId('conversation-actions')
+  }
+
+  it('R1: one layer holds the button, every fan pill and Close — above the composer card (z-10) and the feedback button (z-40), below dialogs (z-50)', () => {
+    const root = renderSurface()
+    const layer = (root.getAttribute('class') ?? '').match(
+      /(?:^|\s)z-\[(\d+)\](?:\s|$)/,
+    )
+    expect(layer, 'the Actions root carries no z-index layer').not.toBeNull()
+    expect(Number(layer![1])).toBeGreaterThan(40)
+    expect(Number(layer![1])).toBeLessThan(50)
+    expect(root.className.split(/\s+/)).toContain('relative')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
+    const fan = screen.getByRole('menu', { name: 'Actions' })
+    const pills = within(fan).getAllByRole('menuitem')
+    expect(pills.map((pill) => pill.textContent)).toEqual(
+      expect.arrayContaining(['Skills', 'Routines', 'Close']),
+    )
+    for (const pill of pills) expect(root.contains(pill)).toBe(true)
+  })
+
+  it('R1: the layer hides under covered, inert content, so it cannot show through the expanded Loom', () => {
+    const root = renderSurface()
+    expect(root.className.split(/\s+/)).toContain('in-[[inert]]:invisible')
+  })
+
+  it('R2: at 600, 896 (56rem), 928 and 1400 px the button and the Close pill stay out of the feedback corner', () => {
+    const root = renderSurface()
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
+    const close = screen.getByRole('menuitem', { name: 'Close menu' })
+    const closeTokens = placementTokens(close, 0)
+    expect(close.parentElement?.parentElement).toBe(root.firstElementChild)
+    expect(closeTokens.get('position')).toBe('absolute')
+    expect(lengthPx(closeTokens.get('bottom'), close)).toBe(0)
+    expect(lengthPx(closeTokens.get('right'), close)).toBe(0)
+    expect(lengthPx(closeTokens.get('w'), close)).toBe(96)
+
+    const height = 800
+    const layouts: Record<number, 'row' | 'gutter'> = {
+      600: 'row',
+      // The host's px-4 leaves a 864 px content box: still the row.
+      896: 'row',
+      928: 'gutter',
+      1400: 'gutter',
+    }
+    for (const [width, layout] of Object.entries(layouts)) {
+      const surface = { width: Number(width), height }
+      const button = actionsButtonRect(root, surface)
+      expect(button.layout, `layout at ${width}px`).toBe(layout)
+      // Close takes the button's own box (bottom-0 right-0 w-24 in the anchor).
+      expect(
+        cornerRectsIntersect(button.rect, floatingCornerReservedRect(surface)),
+        `the Actions button at ${width}px: ${JSON.stringify(button.rect)}`,
+      ).toBe(false)
+    }
   })
 })
 
