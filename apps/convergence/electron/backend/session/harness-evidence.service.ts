@@ -45,8 +45,6 @@ export class HarnessEvidenceService {
     // CC2-4c reuses this derivation: alive is current; only failed/stopped use the answer window.
     // The latest turn's start, carried as a column rather than re-read in the
     // WHERE, so the answer window can name it twice for the cost of once.
-    const latestTurnStart = (alias: string) =>
-      `(SELECT started_at FROM session_turns turn WHERE turn.session_id=${alias}.session_id ORDER BY turn.sequence DESC LIMIT 1) AS turn_start`
     // The window boundary is a comparison of TIMES, and it used to be a
     // comparison of the strings carrying them: `'…00.000Z' < '…00Z'` lexically,
     // so a failure stamped at exactly the turn's start was counted or dropped by
@@ -62,16 +60,31 @@ export class HarnessEvidenceService {
     // such a value; a label like `start` or `zz-after` parses as nothing and
     // falls through to the text comparison unchanged (MAR-2992).
     const window = `COALESCE(turn_start,window_start)`
-    const query = `WITH linked AS (
-      SELECT a.*, ${linkedTaskIdSql} AS linked_task_id FROM session_agent_runs a WHERE a.session_id IN (${placeholders})
+    // Materialize each input once. The tool fallback chooses the newest task
+    // row exactly as linkedTaskIdSql does, without scanning tasks for each run.
+    // TEXT affinity also lets SQLite index linked_task_id in the anti-join;
+    // without it, the automatic index covers only session_id and scans runs.
+    const query = `WITH requested(session_id) AS MATERIALIZED (SELECT DISTINCT column1 FROM (VALUES ${sessionIds.map(() => '(?)').join(',')})),
+    latest AS MATERIALIZED (
+      SELECT session_id,(SELECT started_at FROM session_turns turn WHERE turn.session_id=requested.session_id ORDER BY sequence DESC LIMIT 1) AS turn_start FROM requested
+    ), tool_tasks AS MATERIALIZED (
+      SELECT t.session_id,t.tool_use_id,t.task_id,MAX(t.rowid) FROM session_tasks t
+      WHERE t.session_id IN (${placeholders}) AND t.task_type='local_agent' GROUP BY t.session_id,t.tool_use_id
+    ), linked AS MATERIALIZED (
+      SELECT a.*,CAST(COALESCE(direct.task_id,fallback.task_id) AS TEXT) AS linked_task_id
+      FROM session_agent_runs a
+      LEFT JOIN session_tasks direct ON direct.session_id=a.session_id AND direct.task_id=a.id AND direct.task_type='local_agent'
+      LEFT JOIN session_conversation_items spawn ON spawn.session_id=a.session_id AND spawn.id=a.spawned_by_item_id
+      LEFT JOIN tool_tasks fallback ON fallback.session_id=a.session_id AND fallback.tool_use_id=spawn.provider_item_id
+      WHERE a.session_id IN (${placeholders})
     ) SELECT session_id, status, COUNT(*) AS count,
       CASE WHEN COUNT(julianday(actual_start)) = COUNT(*) THEN MIN(julianday(actual_start)) END AS oldest_start FROM (
-      SELECT a.session_id, CASE WHEN a.status IN ('running','unknown') AND t.status<>'running' THEN t.status ELSE a.status END AS status, a.started_at AS window_start, COALESCE(t.started_at,a.started_at) AS actual_start, ${latestTurnStart('a')}
+      SELECT a.session_id, CASE WHEN a.status IN ('running','unknown') AND t.status<>'running' THEN t.status ELSE a.status END AS status, a.started_at AS window_start, COALESCE(t.started_at,a.started_at) AS actual_start
       FROM linked a LEFT JOIN session_tasks t ON t.session_id=a.session_id AND t.task_id=a.linked_task_id
       UNION ALL
-      SELECT t.session_id,t.status,COALESCE(t.started_at,t.observed_at) AS window_start, t.started_at AS actual_start, ${latestTurnStart('t')} FROM session_tasks t WHERE t.session_id IN (${placeholders})
+      SELECT t.session_id,t.status,COALESCE(t.started_at,t.observed_at) AS window_start, t.started_at AS actual_start FROM session_tasks t WHERE t.session_id IN (${placeholders})
       AND NOT EXISTS (SELECT 1 FROM linked a WHERE a.session_id=t.session_id AND a.linked_task_id=t.task_id)
-    ) work WHERE status IN ('running','unknown') OR (status IN ('failed','stopped')
+    ) work JOIN latest USING(session_id) WHERE status IN ('running','unknown') OR (status IN ('failed','stopped')
       AND window_start IS NOT NULL
       AND COALESCE(julianday(window_start) >= julianday(${window}), window_start >= ${window}))
       GROUP BY session_id,status`
@@ -79,7 +92,12 @@ export class HarnessEvidenceService {
       sessionIds.length === 1
         ? (this.singleCounts ??= this.db.prepare(query))
         : this.db.prepare(query)
-    const rows = statement.all(...sessionIds, ...sessionIds) as {
+    const rows = statement.all(
+      ...sessionIds,
+      ...sessionIds,
+      ...sessionIds,
+      ...sessionIds,
+    ) as {
       session_id: string
       status: 'running' | 'unknown' | 'failed' | 'stopped'
       count: number
@@ -150,17 +168,27 @@ export class HarnessEvidenceService {
         return null
       }
       if (fact.kind === 'task.changed' || fact.kind === 'process.ended') {
-        const previousTasks = this.listTasks(sessionId)
+        // A task fact folds only its own projection; process end settles all
+        // running projections. Neither needs historical rows from the session.
+        const previousTasks = this.db
+          .prepare(
+            `SELECT task_id AS taskId,session_id AS sessionId,tool_use_id AS toolUseId,task_type AS taskType,description,status,started_at AS startedAt,observed_at AS observedAt,stop_receipt_at AS stopReceiptAt,ended_at AS endedAt,output_file AS outputFile,stop_reason AS stopReason,ended_summary AS endedSummary FROM session_tasks WHERE session_id=? AND ${fact.kind === 'task.changed' ? 'task_id=?' : "status='running'"}`,
+          )
+          .all(
+            ...(fact.kind === 'task.changed'
+              ? [sessionId, fact.taskId]
+              : [sessionId]),
+          ) as SessionTask[]
+        const previousById = new Map(
+          previousTasks.map((task) => [task.taskId, task]),
+        )
         const tasks = foldTasks(previousTasks, fact, sessionId)
         const upsert = this.db
           .prepare(`INSERT INTO session_tasks(task_id,session_id,tool_use_id,task_type,description,status,started_at,ended_at,output_file,stop_reason,ended_summary,observed_at,stop_receipt_at)
           VALUES (@taskId,@sessionId,@toolUseId,@taskType,@description,@status,@startedAt,@endedAt,@outputFile,@stopReason,@endedSummary,@observedAt,@stopReceiptAt)
           ON CONFLICT(session_id,task_id) DO UPDATE SET tool_use_id=excluded.tool_use_id,task_type=excluded.task_type,description=excluded.description,status=excluded.status,started_at=excluded.started_at,ended_at=excluded.ended_at,output_file=excluded.output_file,stop_reason=excluded.stop_reason,ended_summary=excluded.ended_summary,stop_receipt_at=excluded.stop_receipt_at`)
         for (const task of tasks)
-          if (
-            task !==
-            previousTasks.find((previous) => previous.taskId === task.taskId)
-          )
+          if (task !== previousById.get(task.taskId))
             upsert.run({
               ...task,
               stopReceiptAt: task.stopReceiptAt ?? null,
@@ -196,7 +224,36 @@ export class HarnessEvidenceService {
             : null
         }
       }
-      const previous = this.listAgentRuns(sessionId)
+      // Folding does not use the panel's linked task or parent run enrichment.
+      // Read the indexed spawn identity, not every run and its linked tasks.
+      const spawnId =
+        fact.kind === 'agent.started'
+          ? fact.run.spawnedByItemId
+          : fact.kind === 'process.ended'
+            ? null
+            : fact.spawnedByItemId
+      const previous = this.db
+        .prepare(
+          `SELECT id,session_id AS sessionId,spawned_by_item_id AS spawnedByItemId,agent_type AS agentType,description,model,status,depth,started_at AS startedAt,ended_at AS endedAt,transcript_path AS transcriptPath,is_backgrounded AS isBackgrounded,last_tool_name AS lastToolName,usage_json AS usageJson,updated_at AS updatedAt,stop_reason AS stopReason,ended_summary AS endedSummary FROM session_agent_runs WHERE session_id=? AND ${fact.kind === 'process.ended' ? "status='running'" : 'spawned_by_item_id=?'}`,
+        )
+        .all(
+          ...(fact.kind === 'process.ended'
+            ? [sessionId]
+            : [sessionId, spawnId]),
+        )
+        .map((row) => {
+          const run = row as Omit<SessionAgentRun, 'isBackgrounded'> & {
+            isBackgrounded: number | null
+          }
+          return {
+            ...run,
+            isBackgrounded:
+              run.isBackgrounded === null ? null : Boolean(run.isBackgrounded),
+          }
+        })
+      const previousBySpawn = new Map(
+        previous.map((run) => [run.spawnedByItemId, run]),
+      )
       const runs = foldAgentRuns(previous, fact, sessionId)
       let renamed: { itemIds: string[] } | null = null
       const upsert = this.db
@@ -204,9 +261,7 @@ export class HarnessEvidenceService {
         VALUES (@id,@sessionId,@spawnedByItemId,@agentType,@description,@model,@status,@depth,@startedAt,@endedAt,@transcriptPath,@isBackgrounded,@lastToolName,@usageJson,@updatedAt,@stopReason,@endedSummary)
         ON CONFLICT(session_id,spawned_by_item_id) DO UPDATE SET id=excluded.id,agent_type=excluded.agent_type,description=excluded.description,model=excluded.model,status=excluded.status,depth=excluded.depth,ended_at=excluded.ended_at,transcript_path=excluded.transcript_path,is_backgrounded=excluded.is_backgrounded,last_tool_name=excluded.last_tool_name,usage_json=excluded.usage_json,updated_at=excluded.updated_at,stop_reason=excluded.stop_reason,ended_summary=excluded.ended_summary`)
       for (const run of runs) {
-        const old = previous.find(
-          (item) => item.spawnedByItemId === run.spawnedByItemId,
-        )
+        const old = previousBySpawn.get(run.spawnedByItemId)
         if (run === old) continue
         upsert.run({
           ...run,

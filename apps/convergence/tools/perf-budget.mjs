@@ -16,6 +16,7 @@ try {
     [
       join(tools, 'perf-busy-day.mjs'),
       '--node',
+      '--evidence',
       '--sessions',
       '2',
       '--streaming',

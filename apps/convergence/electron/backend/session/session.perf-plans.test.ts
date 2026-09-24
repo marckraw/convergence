@@ -116,9 +116,9 @@ describe('MAR-3323 hot query plans on the real schema', () => {
       const evidence = new HarnessEvidenceService(db)
       const sql = capture(
         () => evidence.countParallelWork(ids),
-        /WITH linked AS/,
+        /WITH requested\(session_id\)/,
       )
-      const detail = plan(sql, [...ids, ...ids])
+      const detail = plan(sql, [...ids, ...ids, ...ids, ...ids])
       expect(detail).toContain('sqlite_autoindex_session_agent_runs_2')
       expect(detail).toContain('sqlite_autoindex_session_tasks_1')
       expect(detail).toContain('idx_session_turns_session_sequence')

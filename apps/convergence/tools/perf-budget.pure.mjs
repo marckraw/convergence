@@ -30,6 +30,12 @@ export function checkPerfBudget(report, exitCode) {
     report?.main?.attentionRowReads?.notNeeded,
     0,
   )
+  check('evidenceCount.vmSteps', report?.evidenceCount?.vmSteps, 250000)
+  const shape = report?.evidenceCount?.shape
+  if (shape?.runs !== 253 || shape?.tasks !== 2148 || shape?.turns !== 1431)
+    failures.push(
+      'evidenceCount.shape: expected 253 runs, 2148 tasks, 1431 turns',
+    )
   const errors = report?.scenario?.rendererErrors
   check(
     'scenario.rendererErrors',

@@ -18,6 +18,7 @@ const HELP = `Usage: node apps/convergence/tools/perf-busy-day.mjs [--node] [--d
 Defaults: 12 sessions, 6 streaming, 3 minutes, Loom open. Fake provider: one delta/30ms; burst: 60 keys/80ms.
 --target-items N seeds the synthetic target conversation with N items (user, tool call, tool result, reply); not with --db.
 --panel opens parallel work after the five opens and reports result-read bytes; seeds 60 runs with 400 children each inside the synthetic target (open scenario, at least 24060 items).
+--evidence seeds 253 runs, 2148 tasks and 1431 turns in the synthetic target.
 Electron measures a separate profiling renderer build; --node measures main only (renderer.measured=false).
 No installed-app bootstrap, account data, real providers or network services are used.`
 const args = process.argv.slice(2)
@@ -38,6 +39,7 @@ const params = {
   keyMs: 80,
   targetItems: 0,
   panel: false,
+  evidence: false,
 }
 let underNode = false
 let output = resolve('perf-busy-day.json')
@@ -49,6 +51,7 @@ for (let i = 0; i < args.length; i++) {
   else if (arg === '--scenario') params.scenario = args[++i]
   else if (arg === '--loom') params.loom = true
   else if (arg === '--panel') params.panel = true
+  else if (arg === '--evidence') params.evidence = true
   else if (arg === '--out') output = resolve(args[++i])
   else if (['--sessions', '--streaming', '--minutes'].includes(arg))
     params[arg.slice(2)] = Number(args[++i])
@@ -79,6 +82,8 @@ if (
   params.targetItems = 50000
 if (params.targetItems > 0 && params.db)
   throw new Error('--target-items seeds a synthetic target; it is not for --db')
+if (params.evidence && (params.db || params.targetItems || params.panel))
+  throw new Error('--evidence requires its own synthetic target')
 if (
   params.panel &&
   (params.db || params.targetItems < 24060 || params.scenario !== 'open')
@@ -251,10 +256,12 @@ import { ProjectService } from ${source('electron/backend/project/project.servic
 import { percentile } from ${source('src/shared/lib/perf-marks.pure.ts')}
 import { conversationItemToInsertRow } from ${source('electron/backend/session/conversation-item.pure.ts')}
 import { SessionService } from ${source('electron/backend/session/session.service.ts')}
+import { HarnessEvidenceService } from ${source('electron/backend/session/harness-evidence.service.ts')}
 import { ProviderRegistry } from ${source('electron/backend/provider/provider-registry.ts')}
 import { LocalExecutionHost } from ${source('electron/backend/provider/execution-host/local-execution-host.ts')}
 import { ProviderSessionEmitter } from ${source('electron/backend/provider/provider-session.emitter.ts')}
 import { createPerfProbe } from ${source('electron/backend/perf/perf-probe.service.ts')}
+import { seedEvidenceFixture, measureEvidenceCount, measureEvidenceTick } from ${source('electron/backend/perf/evidence.fixture.ts')}
 import { CrewService } from ${source('electron/backend/crew/crew.service.ts')}
 import { WorkLedgerService } from ${source('electron/backend/work-ledger/work-ledger.service.ts')}
 import { TrackerWatcherService } from ${source('electron/backend/tracker/tracker-watcher.service.ts')}
@@ -324,6 +331,8 @@ async function main() {
   }
   const target = params.open === 'biggest' ? rows[0] : rows.find((row) => row.id === params.open)
   if (!target) throw new Error('Conversation not found: ' + params.open)
+  if (params.evidence) seedEvidenceFixture(db, target.id)
+  const evidenceCount = params.evidence ? await measureEvidenceCount(db, target.id, temp + '/evidence-counter.db') : null
   if (params.targetItems > 0) {
     // MAR-3310 F1e R5: a big open conversation without anyone's database.
     const insert = db.prepare('INSERT INTO session_conversation_items (id, session_id, sequence, turn_id, agent_run_id, task_id, kind, state, payload_json, provider_item_id, provider_event_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
@@ -364,6 +373,7 @@ async function main() {
   const ledger = new WorkLedgerService(db)
   const probe = createPerfProbe(true)
   probe.observeConversations(); probe.wrapDatabase(db); probe.wrapSummary(sessions); probe.wrapTimers()
+  probe.wrapEvidence(HarnessEvidenceService.prototype)
   let trackerReads = 0, snapshotReads = 0
   const watcher = new TrackerWatcherService({ crews, ledger, resolveKey: async () => 'synthetic-fixture', createAdapter: () => ({
     probe: async () => ({ ok: true, issues: 40, projectName: 'Fake' }), resolveProject: async () => ({ kind: 'not-found' }), readIssueBodies: async () => new Map(), listOutsideIssues: async () => ({ issues: [], more: false }),
@@ -415,6 +425,7 @@ async function main() {
     // Electron CPU percentages need an earlier sample to establish their baseline.
     app.getAppMetrics()
   }
+  const evidenceTickMs = params.evidence ? measureEvidenceTick(() => sessions.scheduleEvidenceUpdate(target.id)) : null
   const stall = startRelayStallClock(new RelayEngine({ relays: new RelayService(db), crews, sessions, accounts: inert, hails: new CrewHailService(db) }))
   const watch = watcher.start()
   const paintSamples = async () => window.webContents.executeJavaScript('window.conversationPaintSamples()')
@@ -503,6 +514,8 @@ async function main() {
   const processes = underNode ? [{ type: 'Browser', cpuPercent: 0, workingSetKb: 0, measured: false }]
     : app.getAppMetrics().map((metric) => ({ pid: metric.pid, type: metric.type, cpuPercent: metric.cpu.percentCPUUsage, workingSetKb: metric.memory.workingSetSize, measured: true }))
   const report = { open: opening, processes, schemaVersion: 1, parameters: params, machine: { model: process.platform === 'darwin' ? execFileSync('/usr/sbin/sysctl', ['-n', 'hw.model'], {encoding:'utf8'}).trim() : os.cpus()[0]?.model, os: os.release(), macOS: process.platform === 'darwin' ? execFileSync('/usr/bin/sw_vers', ['-productVersion'], {encoding:'utf8'}).trim() : null, node: process.versions.node, electron: process.versions.electron ?? null, chromium: process.versions.chrome ?? null }, build: underNode ? 'Node main-only' : 'runner Vite production renderer with conditional react-dom/profiling alias', scenario: { name: params.scenario, targetId: target.id, streamingIds: streamingRows.map(row => row.id), emittedDeltas, trackerReads, snapshotReads, windows: 2, rendererErrors: errors }, ...probe.report(renderer) }
+  report.evidenceCount = evidenceCount
+  report.evidenceTickMs = evidenceTickMs
   stops.forEach((stop) => stop()); watch.stop(); stall.stop(); agentMeter.dispose(); probe.dispose()
   await sessions.disposeAllForQuit(); closeDatabase()
   writeFileSync(${JSON.stringify(output)}, JSON.stringify(report, null, 2) + '\n')

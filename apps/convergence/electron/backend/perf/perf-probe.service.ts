@@ -1,6 +1,7 @@
 import { performance } from 'node:perf_hooks'
 import { serialize } from 'node:v8'
 import type Database from 'better-sqlite3'
+import type { HarnessEvidenceService } from '../session/harness-evidence.service'
 import type { ConversationWireEvent } from '../../../src/shared/types/conversation-item.types'
 import { percentile } from '../../../src/shared/lib/perf-marks.pure'
 
@@ -37,9 +38,13 @@ export class PerfProbe {
     string,
     Cost & { sends: number; bytes: number }
   >()
-  private readonly timers = new Map<string, Cost & { ticks: number }>()
+  private readonly timers = new Map<
+    string,
+    Cost & { ticks: number; samples: number[] }
+  >()
   private readonly statements = new Map<string, Cost>()
   private readonly summary: Cost = { calls: 0, totalMs: 0, maxMs: 0 }
+  private readonly evidenceApply: Cost = { calls: 0, totalMs: 0, maxMs: 0 }
   private readonly attentionRowReads = { total: 0, notNeeded: 0 }
   private renderer: unknown = null
   private readonly payloadSizes: Array<() => void> = []
@@ -206,6 +211,17 @@ export class PerfProbe {
     })
   }
 
+  wrapEvidence(target: Pick<HarnessEvidenceService, 'apply'>): void {
+    const original = target.apply
+    const { evidenceApply, measure } = this
+    target.apply = function (...args) {
+      return measure(evidenceApply, () => original.apply(this, args))
+    }
+    this.undo.push(() => {
+      target.apply = original
+    })
+  }
+
   wrapTimers(): void {
     for (const key of ['setTimeout', 'setInterval'] as const) {
       const original = globalThis[key]
@@ -227,12 +243,18 @@ export class PerfProbe {
           ticks: 0,
           totalMs: 0,
           maxMs: 0,
+          samples: [],
         }
         timers.set(name, cost)
         return original(
           function (this: unknown, ...values: unknown[]) {
             cost.ticks++
-            return measure(cost, () => callback.apply(this, values))
+            const started = performance.now()
+            try {
+              return measure(cost, () => callback.apply(this, values))
+            } finally {
+              cost.samples.push(performance.now() - started)
+            }
           },
           delay,
           ...args,
@@ -268,6 +290,7 @@ export class PerfProbe {
           },
         },
         attentionRowReads: { ...this.attentionRowReads },
+        evidenceApply: { ...this.evidenceApply },
         cpuPercent: (() => {
           const cpu = process.cpuUsage(this.cpuStart)
           return (cpu.user + cpu.system) / (elapsedSeconds * 10000)
@@ -282,7 +305,12 @@ export class PerfProbe {
             },
           ]),
         ),
-        timers: Object.fromEntries(this.timers),
+        timers: Object.fromEntries(
+          [...this.timers].map(([name, { samples, ...cost }]) => [
+            name,
+            { ...cost, p95Ms: percentile(samples, 0.95) },
+          ]),
+        ),
         getSummaryById: { calls: this.summary.calls, ms: this.summary.totalMs },
         sqlite: [...this.statements]
           .map(([sql, cost]) => ({ sql: sql.slice(0, 240), ...cost }))
