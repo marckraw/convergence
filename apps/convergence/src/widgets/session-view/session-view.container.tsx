@@ -1,3 +1,4 @@
+import { usePerfSessionsIdentity } from '@/shared/lib/usePerfProbe'
 import { toast } from 'sonner'
 import { useHarnessFacts } from './use-harness-facts'
 import { HarnessFactsView } from './harness-facts.presentational'
@@ -20,7 +21,10 @@ import { useDialogStore } from '@/entities/dialog'
 import { useSpaceStore } from '@/entities/space'
 import { useSessionPullRequest } from './pull-request-session.container'
 import { gitApi, useWorkspaceStore } from '@/entities/workspace'
-import { ComposerContainer } from '@/features/composer'
+import {
+  ComposerContainer,
+  type ComposerSessionContext,
+} from '@/features/composer'
 import { ProjectOpenMenuContainer } from '@/features/project-open-menu'
 import { SessionDebugDrawerContainer } from '@/widgets/session-debug-drawer'
 import { ProjectActionsMenu } from '@/widgets/project-actions-menu'
@@ -73,6 +77,11 @@ export const SessionView: FC = () => {
   const draftWorkspaceId = useSessionStore((s) => s.draftWorkspaceId)
   const beginSessionDraft = useSessionStore((s) => s.beginSessionDraft)
   const sessions = useSessionStore((s) => s.sessions)
+  // The S0 denominator: how often the project's summary list changes identity.
+  // Counted here because this view still subscribes to the list whole (space
+  // attempts read other sessions' names); the composer no longer does
+  // (MAR-3325), so it could no longer see the changes it is measured against.
+  usePerfSessionsIdentity(sessions)
   const activeConversation = useSessionStore((s) => s.activeConversation)
   const globalSessions = useSessionStore((s) => s.globalSessions)
   const setActiveSession = useSessionStore((s) => s.setActiveSession)
@@ -308,6 +317,38 @@ export const SessionView: FC = () => {
   const handleTogglePullRequestPanel = useCallback(() => {
     setShowPullRequestPanel((current) => !current)
   }, [])
+
+  // Where the composer is aimed, built once per aim (MAR-3325). This view
+  // redraws for every streamed token of the open conversation, and the
+  // composer below it is a memo boundary: an inline literal here would be a
+  // new prop on each of those redraws.
+  const activeProjectId = activeProject?.id ?? null
+  const sessionWorkspaceId = session?.workspaceId ?? null
+  const composerContext = useMemo<ComposerSessionContext | null>(
+    () =>
+      activeProjectId && openSessionId
+        ? {
+            kind: 'project',
+            projectId: activeProjectId,
+            workspaceId: sessionWorkspaceId,
+            activeSessionId: openSessionId,
+          }
+        : null,
+    [activeProjectId, openSessionId, sessionWorkspaceId],
+  )
+  const draftComposerContext = useMemo<ComposerSessionContext | null>(
+    () =>
+      activeProjectId
+        ? {
+            kind: 'project',
+            projectId: activeProjectId,
+            workspaceId: draftWorkspaceId,
+            activeSessionId: null,
+          }
+        : null,
+    [activeProjectId, draftWorkspaceId],
+  )
+
   // Empty state
   if (!session) {
     const draftWorkspace = draftWorkspaceId
@@ -372,15 +413,8 @@ export const SessionView: FC = () => {
                 )}
               </div>
             )}
-            {activeProject && (
-              <ComposerContainer
-                context={{
-                  kind: 'project',
-                  projectId: activeProject.id,
-                  workspaceId: draftWorkspaceId,
-                  activeSessionId: null,
-                }}
-              />
+            {draftComposerContext && (
+              <ComposerContainer context={draftComposerContext} />
             )}
           </div>
         </div>
@@ -744,16 +778,7 @@ export const SessionView: FC = () => {
           onParallelRetry={parallel.retry}
           onParallelSelect={selectParallel}
           navigationTarget={parallelNavigation}
-          composerContext={
-            activeProject
-              ? {
-                  kind: 'project',
-                  projectId: activeProject.id,
-                  workspaceId: session.workspaceId,
-                  activeSessionId: session.id,
-                }
-              : null
-          }
+          composerContext={composerContext}
           composerDisabledReason={
             sessionWorktreeRemoved
               ? "This workspace's git worktree was removed from disk. Conversation history is preserved, but new agent work is disabled until restore support exists."
