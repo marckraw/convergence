@@ -241,6 +241,7 @@ import { RelayEngine } from ${source('electron/backend/relay/relay.engine.ts')}
 import { startRelayStallClock } from ${source('electron/main/relay-stall-clock.ts')}
 import { registerIpcHandlers } from ${source('electron/main/ipc.ts')}
 import { registerWorkLedgerIpcHandlers, broadcastWorkLedger } from ${source('electron/backend/work-ledger/work-ledger.ipc.ts')}
+import { registerAgentMeterIpc } from ${source('electron/backend/agent-meter/agent-meter.ipc.ts')}
 
 process.setSourceMapsEnabled?.(true)
 const params = ${JSON.stringify(params)}
@@ -340,6 +341,7 @@ async function main() {
     'provider:getStatuses': () => [], 'provider:getAllAvailable': () => [],
   }
   for (const [name, fn] of Object.entries(replacements)) { if (registered.has(name)) ipcMain.removeHandler(name); ipcMain.handle(name, fn) }
+  const agentMeter = registerAgentMeterIpc()
   const preloadChannels = ${JSON.stringify([...new Set([...readFileSync(join(appRoot, 'electron/preload/index.ts'), 'utf8').matchAll(/ipcRenderer\.invoke\(\s*['"]([^'"]+)['"]/g)].map((x) => x[1]))])}
   for (const channel of preloadChannels) if (!registered.has(channel)) ipcMain.handle(channel, () => [])
   let renderer = ${JSON.stringify(emptyRenderer)}
@@ -434,7 +436,7 @@ async function main() {
   const processes = underNode ? [{ type: 'Browser', cpuPercent: 0, workingSetKb: 0, measured: false }]
     : app.getAppMetrics().map((metric) => ({ pid: metric.pid, type: metric.type, cpuPercent: metric.cpu.percentCPUUsage, workingSetKb: metric.memory.workingSetSize, measured: true }))
   const report = { open: opening, processes, schemaVersion: 1, parameters: params, machine: { model: process.platform === 'darwin' ? execFileSync('/usr/sbin/sysctl', ['-n', 'hw.model'], {encoding:'utf8'}).trim() : os.cpus()[0]?.model, os: os.release(), macOS: process.platform === 'darwin' ? execFileSync('/usr/bin/sw_vers', ['-productVersion'], {encoding:'utf8'}).trim() : null, node: process.versions.node, electron: process.versions.electron ?? null, chromium: process.versions.chrome ?? null }, build: underNode ? 'Node main-only' : 'runner Vite production renderer with conditional react-dom/profiling alias', scenario: { name: params.scenario, targetId: target.id, streamingIds: streamingRows.map(row => row.id), emittedDeltas, trackerReads, snapshotReads, windows: 2, rendererErrors: errors }, ...probe.report(renderer) }
-  stops.forEach((stop) => stop()); watch.stop(); stall.stop(); probe.dispose()
+  stops.forEach((stop) => stop()); watch.stop(); stall.stop(); agentMeter.dispose(); probe.dispose()
   await sessions.disposeAllForQuit(); closeDatabase()
   writeFileSync(${JSON.stringify(output)}, JSON.stringify(report, null, 2) + '\n')
   console.log(JSON.stringify(report))

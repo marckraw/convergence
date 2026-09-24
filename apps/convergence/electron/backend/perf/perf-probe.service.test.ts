@@ -441,3 +441,24 @@ it.each(['busy', 'open', 'stream-into-open'])(
   },
   40000,
 )
+
+it('M1c generated scenario registers the agent meter before the preload [] fallback', async () => {
+  const { readFileSync } = await import('node:fs')
+  const { resolve } = await import('node:path')
+  const tool = readFileSync(resolve('tools/perf-busy-day.mjs'), 'utf8')
+  const opened = tool.indexOf("    'scenario.ts',\n    String.raw`")
+  expect(opened).toBeGreaterThan(-1)
+  const bodyStart = tool.indexOf('String.raw`', opened) + 'String.raw`'.length
+  const bodyEnd = tool.indexOf('`,\n  )', bodyStart)
+  const scenario = tool.slice(bodyStart, bodyEnd)
+  const call = scenario.search(/registerAgentMeterIpc\s*\(\s*\)/)
+  const fallback = scenario.indexOf(
+    'if (!registered.has(channel)) ipcMain.handle(channel, () => [])',
+  )
+  expect(call, 'remove the registerAgentMeterIpc() call').toBeGreaterThan(-1)
+  expect(fallback).toBeGreaterThan(call)
+  expect(scenario).toContain(
+    "${source('electron/backend/agent-meter/agent-meter.ipc.ts')}",
+  )
+  expect(scenario).toMatch(/agentMeter\.dispose\(\);\s*probe\.dispose\(\)/)
+})
