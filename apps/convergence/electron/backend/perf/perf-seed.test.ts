@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
+import { once } from 'node:events'
+import { createRequire } from 'node:module'
 import {
   existsSync,
   mkdirSync,
@@ -7,10 +9,12 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { Worker } from 'node:worker_threads'
 import Database from 'better-sqlite3'
 import { build } from 'esbuild'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -33,13 +37,33 @@ const tokens = [
   `github_pat_${'GH_'.repeat(12)}`,
   `glpat-${'GL-'.repeat(10)}`,
   ...['ant', 'or', 'proj'].map((kind) => `sk-${kind}-${'TEST_'.repeat(10)}`),
+  `npm_${'N'.repeat(36)}`,
+  `xai-${'X'.repeat(24)}`,
+  ...['o', 'u', 's', 'r'].map((kind) => `gh${kind}_${'G'.repeat(24)}`),
+  `AIza${'A_-'.repeat(11)}AA`,
+  `hf_${'H'.repeat(24)}`,
+  `gsk_${'G'.repeat(24)}`,
+  ...['sk', 'rk'].map((kind) => `${kind}_live_${'L'.repeat(24)}`),
 ]
+const deletedSecret = 'fake-secret-in-source-free-pages'
+const jsonSecret = 'plainrandomvalue123'
+const secretPayload = JSON.stringify({
+  apiKey: jsonSecret,
+  env: { MY_SECRET: 'fake-env-secret-"\\\n🙂' },
+  max_tokens: 4096,
+  input_tokens: 12,
+  secret: false,
+  token: null,
+})
 const planted = [
   ...tokens,
   'fake-resume-handle',
   'fake-state-key',
   'fake-extra-token',
   'fake-required-secret',
+  deletedSecret,
+  jsonSecret,
+  'fake-env-secret',
 ]
 const hash = (path: string) =>
   createHash('sha256').update(readFileSync(path)).digest('hex')
@@ -70,7 +94,7 @@ function fixture(large = false) {
     'fake-extra-token',
     'fake-required-secret',
     tokens[2],
-    tokens[3],
+    secretPayload,
   )
   db.prepare('INSERT INTO fixture_without_rowid VALUES (?, ?)').run(
     tokens[10],
@@ -91,6 +115,7 @@ function fixture(large = false) {
     for (let index = 0; index < count; index++) {
       const payload = JSON.stringify({
         text: `${large ? 'ordinary words '.repeat(4369) : '🙂 '} ${tokens[index % tokens.length]}`,
+        ...(index === 0 ? JSON.parse(secretPayload) : {}),
       })
       insert.run(`item-${index}`, index, payload)
       lengths.push([...payload].length)
@@ -101,11 +126,11 @@ function fixture(large = false) {
   return { root, source, out: join(root, 'output'), lengths, payloadBytes }
 }
 
-function run(f: ReturnType<typeof fixture>, entry = script) {
+function run(f: ReturnType<typeof fixture>, entry = script, timeout = 120_000) {
   return spawnSync(
     process.execPath,
     [entry, '--source', f.source, '--out', f.out],
-    { encoding: 'utf8', timeout: 120_000 },
+    { encoding: 'utf8', timeout },
   )
 }
 
@@ -116,9 +141,14 @@ async function mutant(replace: (source: string) => string) {
   const root = mkdtempSync(join(out, 'perf-seed-mutation-'))
   roots.push(root)
   const path = join(root, 'mutant.mjs')
+  const original = readFileSync(script, 'utf8')
+  const contents = replace(original)
+  expect(contents, 'mutation must change the production tool').not.toBe(
+    original,
+  )
   await build({
     stdin: {
-      contents: replace(readFileSync(script, 'utf8')),
+      contents,
       resolveDir: dirname(script),
       sourcefile: 'perf-seed.mjs',
     },
@@ -132,6 +162,26 @@ async function mutant(replace: (source: string) => string) {
   return path
 }
 
+function plantDeletedSecret(f: ReturnType<typeof fixture>) {
+  const db = new Database(f.source)
+  try {
+    db.pragma('secure_delete = OFF')
+    db.exec('CREATE TABLE fixture_deleted (body TEXT)')
+    db.prepare('INSERT INTO fixture_deleted VALUES (?)').run(
+      deletedSecret.repeat(32_768),
+    )
+    db.exec('DELETE FROM fixture_deleted')
+    expect(db.pragma('freelist_count', { simple: true })).toBeGreaterThan(0)
+    expect(
+      db.prepare('SELECT count(*) FROM fixture_deleted').pluck().get(),
+    ).toBe(0)
+    db.pragma('wal_checkpoint(TRUNCATE)')
+  } finally {
+    db.close()
+  }
+  expect(readFileSync(f.source).includes(Buffer.from(deletedSecret))).toBe(true)
+}
+
 function assertScrubbed(f: ReturnType<typeof fixture>, entry = script) {
   const before = hash(f.source)
   const result = run(f, entry)
@@ -142,6 +192,7 @@ function assertScrubbed(f: ReturnType<typeof fixture>, entry = script) {
   const path = join(f.out, 'convergence.db')
   const db = new Database(path, { readonly: true })
   try {
+    expect(db.pragma('integrity_check', { simple: true })).toBe('ok')
     expect(
       db
         .prepare('SELECT auth_json FROM workboard_tracker_sources')
@@ -174,6 +225,22 @@ function assertScrubbed(f: ReturnType<typeof fixture>, entry = script) {
         .pluck()
         .all(),
     ).toEqual(f.lengths)
+    const payloads = db
+      .prepare(
+        'SELECT payload_json FROM session_conversation_items ORDER BY sequence',
+      )
+      .pluck()
+      .all() as string[]
+    for (const payload of payloads)
+      expect(() => JSON.parse(payload)).not.toThrow()
+    expect(JSON.parse(payloads[0])).toMatchObject({
+      apiKey: 'x'.repeat(jsonSecret.length),
+      env: { MY_SECRET: expect.stringMatching(/^x+$/) },
+      max_tokens: 4096,
+      input_tokens: 12,
+      secret: false,
+      token: null,
+    })
     for (const { name } of db
       .prepare("SELECT name FROM sqlite_master WHERE type='table'")
       .all() as { name: string }[]) {
@@ -200,13 +267,80 @@ function assertScrubbed(f: ReturnType<typeof fixture>, entry = script) {
   }
 }
 
-function plantLateToken(f: ReturnType<typeof fixture>) {
+function plantLateToken(f: ReturnType<typeof fixture>, value = tokens[0]) {
   const db = new Database(f.source)
   db.exec(`CREATE TABLE aaa_late (body TEXT); INSERT INTO aaa_late VALUES ('ordinary');
     CREATE TRIGGER fixture_late AFTER UPDATE OF payload_json ON session_conversation_items BEGIN
-      UPDATE aaa_late SET body = '${tokens[0]}';
+      UPDATE aaa_late SET body = '${value.replaceAll("'", "''")}';
     END;`)
   db.close()
+}
+
+const liveWriterBoundMs = 10_000
+async function copyUnderLiveWriter(entry = script) {
+  const f = fixture(true)
+  const sourceBytes = statSync(f.source).size
+  expect(sourceBytes).toBeGreaterThan(50 * 1024 ** 2)
+  const db = new Database(f.source)
+  db.exec(
+    'CREATE TABLE fixture_heartbeat (value INTEGER); INSERT INTO fixture_heartbeat VALUES (0)',
+  )
+  db.close()
+  const counter = new Int32Array(new SharedArrayBuffer(4))
+  const sqlite = createRequire(import.meta.url).resolve('better-sqlite3')
+  const writer = new Worker(
+    `
+    const { parentPort, workerData } = require('node:worker_threads')
+    const Database = require(${JSON.stringify(sqlite)})
+    const db = new Database(workerData.source)
+    db.pragma('journal_mode = WAL')
+    const update = db.prepare('UPDATE fixture_heartbeat SET value = value + 1')
+    const counter = new Int32Array(workerData.counter)
+    const tick = () => { update.run(); Atomics.add(counter, 0, 1) }
+    tick()
+    setInterval(tick, 20)
+    parentPort.postMessage('ready')
+  `,
+    { eval: true, workerData: { source: f.source, counter: counter.buffer } },
+  )
+  try {
+    await once(writer, 'message')
+    const before = Atomics.load(counter, 0)
+    const started = performance.now()
+    const result = run(f, entry, liveWriterBoundMs)
+    const elapsedMs = performance.now() - started
+    const commits = Atomics.load(counter, 0) - before
+    expect(commits).toBeGreaterThan(2)
+    return { f, result, elapsedMs, commits, sourceBytes }
+  } finally {
+    await writer.terminate()
+  }
+}
+
+function assertLiveCopy(copy: Awaited<ReturnType<typeof copyUnderLiveWriter>>) {
+  expect(
+    copy.result.error,
+    'copy must finish before the live-writer deadline',
+  ).toBeUndefined()
+  expect(copy.result.status, copy.result.stderr).toBe(0)
+  expect(copy.elapsedMs).toBeLessThan(liveWriterBoundMs)
+  const db = new Database(join(copy.f.out, 'convergence.db'), {
+    readonly: true,
+  })
+  try {
+    expect(db.pragma('integrity_check', { simple: true })).toBe('ok')
+    expect(
+      db
+        .prepare('SELECT count(*) FROM session_conversation_items')
+        .pluck()
+        .get(),
+    ).toBe(800)
+    expect(
+      db.prepare('SELECT value FROM fixture_heartbeat').pluck().get(),
+    ).toBeGreaterThan(0)
+  } finally {
+    db.close()
+  }
 }
 
 function assertRejected(f: ReturnType<typeof fixture>, entry = script) {
@@ -239,6 +373,36 @@ describe('perf seed CLI on a generated real-schema database', () => {
     plantLateToken(f)
     assertRejected(f)
   })
+  it.each(
+    [...tokens.slice(16), secretPayload].map(
+      (value, index) => [index, value] as const,
+    ),
+  )('verification rejects late secret shape %s', (_index, value) => {
+    const f = fixture()
+    plantLateToken(f, value)
+    assertRejected(f)
+  })
+  it('raw-byte acceptance excludes deleted secrets from source free pages', () => {
+    const f = fixture()
+    plantDeletedSecret(f)
+    assertScrubbed(f)
+  })
+  it('mutation: copy with the old backup() turns source-free-page raw-byte acceptance red', async () => {
+    const entry = await mutant((source) =>
+      source.replace(
+        "sourceDb.prepare('VACUUM INTO ?').run(copy)",
+        'await sourceDb.backup(copy)',
+      ),
+    )
+    const f = fixture()
+    plantDeletedSecret(f)
+    expect(() => assertScrubbed(f, entry)).toThrow()
+    expect(
+      readFileSync(join(f.out, 'convergence.db')).includes(
+        Buffer.from(deletedSecret),
+      ),
+    ).toBe(true)
+  })
   it('mutation: skip mask pass turns R1–R4 acceptance red', async () => {
     const entry = await mutant((source) =>
       source.replace(
@@ -248,25 +412,30 @@ describe('perf seed CLI on a generated real-schema database', () => {
     )
     expect(() => assertScrubbed(fixture(), entry)).toThrow()
   })
-  it('mutation: skip verify pass turns late-token rejection red and leaves the planted token', async () => {
-    const entry = await mutant((source) =>
-      source.replace(
-        '    verifyDatabase(db, tables)',
-        '    // verification removed by test',
-      ),
-    )
-    const f = fixture()
-    plantLateToken(f)
-    expect(() => assertRejected(f, entry)).toThrow()
-    const db = new Database(join(f.out, 'convergence.db'), { readonly: true })
-    try {
-      expect(db.prepare('SELECT body FROM aaa_late').pluck().get()).toBe(
-        tokens[0],
+  it.each(
+    [tokens[0], secretPayload].map((value, index) => [index, value] as const),
+  )(
+    'mutation: skip verify pass turns late-secret rejection %s red and leaves the planted value',
+    async (_index, value) => {
+      const entry = await mutant((source) =>
+        source.replace(
+          '    verifyDatabase(db, tables)',
+          '    // verification removed by test',
+        ),
       )
-    } finally {
-      db.close()
-    }
-  })
+      const f = fixture()
+      plantLateToken(f, value)
+      expect(() => assertRejected(f, entry)).toThrow()
+      const db = new Database(join(f.out, 'convergence.db'), { readonly: true })
+      try {
+        expect(db.prepare('SELECT body FROM aaa_late').pluck().get()).toBe(
+          value,
+        )
+      } finally {
+        db.close()
+      }
+    },
+  )
   it('refuses a held target and a source alias without changing either', () => {
     const f = fixture()
     assertScrubbed(f)
@@ -323,6 +492,47 @@ describe('perf seed CLI on a generated real-schema database', () => {
   })
   // Run explicitly so the large write cannot disturb the APFS clone test's
   // volume-wide free-space measurement in the normal parallel suite.
+  it.runIf(process.env.PERF_SEED_BENCHMARK === '1')(
+    'finishes a 50 MiB live-writer snapshot within 10 seconds with integrity ok',
+    async () => {
+      const copy = await copyUnderLiveWriter()
+      assertLiveCopy(copy)
+      console.log(
+        JSON.stringify({
+          liveWriterIntervalMs: 20,
+          boundMs: liveWriterBoundMs,
+          sourceBytes: copy.sourceBytes,
+          commits: copy.commits,
+          elapsedMs: copy.elapsedMs,
+          ...JSON.parse(copy.result.stdout),
+        }),
+      )
+    },
+    20_000,
+  )
+  it.runIf(process.env.PERF_SEED_BENCHMARK === '1')(
+    'mutation: old 100-page stepping turns live-writer completion red',
+    async () => {
+      const entry = await mutant((source) =>
+        source.replace(
+          "sourceDb.prepare('VACUUM INTO ?').run(copy)",
+          'await sourceDb.backup(copy)',
+        ),
+      )
+      const copy = await copyUnderLiveWriter(entry)
+      expect(() => assertLiveCopy(copy)).toThrow()
+      expect(copy.result.error).toMatchObject({ code: 'ETIMEDOUT' })
+      console.log(
+        JSON.stringify({
+          mutation: 'old 100-page stepping',
+          elapsedMs: copy.elapsedMs,
+          commits: copy.commits,
+          error: 'ETIMEDOUT',
+        }),
+      )
+    },
+    20_000,
+  )
   it.runIf(process.env.PERF_SEED_BENCHMARK === '1')(
     'times roughly 50 MiB of generated payload and extrapolates to 1 GiB',
     () => {

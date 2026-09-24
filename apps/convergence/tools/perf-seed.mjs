@@ -26,7 +26,7 @@ Defaults: --source ~/Library/Application Support/convergence/convergence.db
 Writes convergence.db: a consistent read-only-source backup, scrubbed and fully re-scanned.
 Marcin or Fable runs real-data measurements; executors use generated temporary fixtures only.
 No attachments or session-outputs are copied: database measurements do not need them.
-Known secrets are blanked; token-shaped text is masked with equal-length x characters.
+Known secrets are blanked; token-shaped text and secret-keyed JSON strings are masked at equal length.
 This is pattern-based scrubbing, not anonymization of arbitrary prose or personal data.
 The target must be closed (checked with lsof); there is no force override.
 Requires the Node version in .nvmrc and a Node-compatible better-sqlite3 build.
@@ -234,10 +234,13 @@ async function main() {
   let sourceDb, db, reader
   try {
     phase = 'read-only backup'
+    const copyStarted = performance.now()
     sourceDb = new Database(source, { readonly: true, fileMustExist: true })
-    await sourceDb.backup(copy)
+    // One snapshot under concurrent writes; deleted source pages never enter the copy.
+    sourceDb.prepare('VACUUM INTO ?').run(copy)
     sourceDb.close()
     sourceDb = undefined
+    const copySeconds = (performance.now() - copyStarted) / 1000
     chmodSync(copy, 0o600)
     db = new Database(copy)
     db.pragma('trusted_schema = OFF')
@@ -252,6 +255,7 @@ async function main() {
       rows: {},
       bytes: 0,
       maskSeconds: 0,
+      copySeconds,
       elapsedSeconds: 0,
     }
     reader = new Database(copy, { readonly: true })
@@ -271,9 +275,9 @@ async function main() {
           .prepare(`SELECT count(*) AS count FROM ${quote(name)}`)
           .get().count
     }
-    // Remove original bytes from freelists and checkpoint/delete unsanitized WAL pages.
-    phase = 'compaction'
-    db.exec('VACUUM')
+    // VACUUM INTO excluded source free pages; secure_delete erases pages we free.
+    // Checkpoint/truncate the WAL before publishing the scrubbed database.
+    phase = 'checkpoint'
     db.pragma('wal_checkpoint(TRUNCATE)')
     db.pragma('journal_mode = DELETE')
     db.close()
