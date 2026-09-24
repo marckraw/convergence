@@ -266,6 +266,14 @@ function requireStatedWorkAddress(
  * and context injection to collaborators.
  */
 export class SessionService {
+  private agentMeterListener?: (id: string, handle?: SessionHandle) => void
+
+  setAgentMeterListener(
+    listener: (id: string, handle?: SessionHandle) => void,
+  ): void {
+    this.agentMeterListener = listener
+  }
+
   private activeHandles = new Map<string, SessionHandle>()
   private pendingHandleDisposals = new Set<Promise<void>>()
   /**
@@ -4957,6 +4965,7 @@ export class SessionService {
     const previousMute = this.getRowById(session.id)?.relays_muted
     this.requestRelayMute(session.id, turn?.muteRelays)
     this.activeHandles.set(session.id, handle)
+    this.agentMeterListener?.(session.id, handle)
     this.notifySummaryUpdated(session.id)
     handle.onDelta((delta: SessionDelta) => {
       this.applyDelta(session.id, delta, handle)
@@ -5184,6 +5193,7 @@ export class SessionService {
     if (!handle) return Promise.resolve()
 
     this.activeHandles.delete(sessionId)
+    this.agentMeterListener?.(sessionId)
     this.notifySummaryUpdated(sessionId)
     let disposal: void | Promise<void> = undefined
     try {
@@ -5520,6 +5530,7 @@ export class SessionService {
       this.sessionRepository.getExecutionHostLastSeq(session.id),
     )
     this.activeHandles.set(session.id, handle)
+    this.agentMeterListener?.(session.id, handle)
     this.notifySummaryUpdated(session.id)
     if (isTerminalSessionStatus(session.status)) {
       this.handlesAwaitingTheirRun.add(handle)

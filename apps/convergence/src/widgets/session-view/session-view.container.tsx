@@ -66,6 +66,7 @@ import {
 } from './space-context-panel.presentational'
 import { PullRequestPanel } from './pull-request-panel.presentational'
 import { SessionHeaderDetailRow } from './session-header-detail-row.presentational'
+import { useAgentMeterStore, SessionAgentMeter } from '@/entities/agent-meter'
 import { SessionWiresContainer } from './session-wires.container'
 import { SessionConversationSurface } from './session-conversation-surface.container'
 
@@ -127,6 +128,9 @@ export const SessionView: FC = () => {
   } | null>(null)
   const parallelButton = useRef<HTMLButtonElement>(null)
   const parallelInvoker = useRef<HTMLElement | null>(null)
+  const meterRow = useAgentMeterStore((state) =>
+    state.snapshot.rows.find((row) => row.sessionId === activeSessionId),
+  )
   const session = sessions.find((s) => s.id === activeSessionId) ?? null
   const supportsHarnessFacts =
     session?.providerId === 'claude-code' &&
@@ -493,6 +497,10 @@ export const SessionView: FC = () => {
                 onRetry={harness.retry}
               />
             )}
+            <SessionAgentMeter
+              row={meterRow}
+              remote={isRemoteExecutionHost(session.executionHost)}
+            />
             <SessionWiresContainer sessionId={session.id} />
             <DropdownMenu
               onOpenChange={(open) => {

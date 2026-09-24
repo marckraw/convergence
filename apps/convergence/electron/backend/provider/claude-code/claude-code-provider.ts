@@ -1,3 +1,4 @@
+import { MeterProcessSource } from '../../agent-meter/process-source'
 import { ClaudePermissionsService } from './claude-permissions.service'
 import { ClaudeAccountMaintenance } from './claude-account-maintenance.service'
 import { spawn, type ChildProcess } from 'child_process'
@@ -552,6 +553,7 @@ export class ClaudeCodeProvider implements Provider {
       fireHeartbeat()
     }
 
+    const processMeter = new MeterProcessSource()
     let child: ClaudeTransport | null = null
     let connectionGeneration = 0
     let stopped = false
@@ -1785,6 +1787,7 @@ export class ClaudeCodeProvider implements Provider {
             },
             endIdle: () => endConnection('maintenance'),
           })
+          let spawnedMeterRoot: ReturnType<typeof processMeter.current> = null
           child = createClaudeTransport({
             binaryPath,
             args,
@@ -1809,11 +1812,13 @@ export class ClaudeCodeProvider implements Provider {
                 })
               return permissions.request(request)
             },
-            onSpawn: (pid) =>
+            onSpawn: (pid) => {
+              spawnedMeterRoot = processMeter.set(pid)
               recordDebug('lifecycle', {
                 direction: 'in',
                 note: `spawned resident process ${pid}`,
-              }),
+              })
+            },
             onMessage: (event) => {
               recordDebug('event', { direction: 'in', payload: event })
               handleEvent(event)
@@ -1825,6 +1830,7 @@ export class ClaudeCodeProvider implements Provider {
                 scheduleContinuationRecovery('missing-session')
             },
             onExit: ({ code, signal, error }) => {
+              processMeter.clear(spawnedMeterRoot)
               unregisterConnection?.()
               unregisterConnection = undefined
               interruptRequested = false
@@ -2011,6 +2017,7 @@ export class ClaudeCodeProvider implements Provider {
     }
 
     const handle: SessionHandle = {
+      processMeter,
       get canStopTasks() {
         return !stopped && !connectionEnding && child?.canStopTasks === true
       },

@@ -1,3 +1,4 @@
+import { MeterProcessSource } from '../../agent-meter/process-source'
 import { HandoffRefusedError } from '../provider-account-handoff.pure'
 import {
   isCodexThreadRuntimeIdle,
@@ -221,7 +222,12 @@ export class CodexServerHost {
   private readonly startBudgetMs: number
   private readonly readyPollIntervalMs: number
 
+  readonly processMeter: MeterProcessSource
+
   constructor(private readonly options: CodexServerHostOptions) {
+    this.processMeter = new MeterProcessSource(
+      options.account?.label ?? 'Default account',
+    )
     this.key = options.key
     this.spawnProcess = options.spawnProcess ?? spawn
     this.connectTransport =
@@ -712,6 +718,7 @@ export class CodexServerHost {
         }),
       },
     )
+    this.processMeter.bind(child)
     this.spawning = child
 
     // A death during the start is an answer to both phases below, so it is

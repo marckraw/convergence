@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
+import { useAgentMeterStore, watchAgentMeter } from '@/entities/agent-meter'
 import type { FC } from 'react'
 import { useProjectStore } from '@/entities/project'
 import {
@@ -16,6 +17,8 @@ interface GlobalStatusBarContainerProps {
 export const GlobalStatusBarContainer: FC<GlobalStatusBarContainerProps> = ({
   onSelectProject,
 }) => {
+  useEffect(watchAgentMeter, [])
+  const meter = useAgentMeterStore((state) => state.snapshot)
   const globalSessions = useSessionStore((state) => state.globalSessions)
   const dismissals = useSessionStore((state) => state.needsYouDismissals)
   const providers = useSessionStore(selectLocalProviders)
@@ -58,6 +61,8 @@ export const GlobalStatusBarContainer: FC<GlobalStatusBarContainerProps> = ({
 
   return (
     <GlobalStatusBar
+      meter={meter}
+      meterSessions={globalSessions}
       runningCount={status.running.length}
       attentionCount={status.needsAttention.length}
       byProject={status.byProject}

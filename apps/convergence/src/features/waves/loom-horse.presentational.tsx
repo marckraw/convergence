@@ -1,4 +1,4 @@
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 import { Circle, CircleHelp, CircleX, LoaderCircle } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
@@ -23,7 +23,8 @@ const RUNTIME_ICON: Readonly<Record<LoomHorseRuntime, typeof Circle>> = {
   'not-seen': CircleHelp,
 }
 
-interface LoomHorseCardProps {
+export interface LoomHorseCardProps {
+  meterSlot?: ReactNode
   horse: LoomHorse
   /** Opens the seat's conversation; absent when there is none to open. */
   onOpenSeat?: (sessionId: string) => void
@@ -58,6 +59,7 @@ function idBaseFor(key: string): string {
  * its accessible name still carries the issue (MAR-3191 lap 2, D).
  */
 export const LoomHorseCard: FC<LoomHorseCardProps> = ({
+  meterSlot,
   horse,
   onOpenSeat,
   onShowNext,
@@ -131,6 +133,7 @@ export const LoomHorseCard: FC<LoomHorseCardProps> = ({
             {loomHorseRuntimeLabel(horse)}
           </span>
         </span>
+        {meterSlot}
         {ticketDoor ? (
           <Button
             type="button"

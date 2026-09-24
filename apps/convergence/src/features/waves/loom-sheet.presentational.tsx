@@ -40,7 +40,7 @@ import {
   LOOM_QA_PREVIEW,
   type LoomHorse,
 } from './loom-horses.pure'
-import { LoomHorseCard } from './loom-horse.presentational'
+import { LoomHorseCardContainer as LoomHorseCard } from './loom-horse.container'
 import { LoomDetailView } from './loom-detail.presentational'
 import type { LoomIssueDetail } from './loom-detail.pure'
 import { type LoomSheet } from './wave-panel-sheet.pure'
