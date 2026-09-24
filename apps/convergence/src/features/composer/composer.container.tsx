@@ -1769,7 +1769,14 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
    * the picker open long after anybody asked.
    */
   const accountPickerOpenable =
-    providerAccountPickerVisible && !providerAccountSelectionLocked
+    providerAccountPickerVisible &&
+    !providerAccountSelectionLocked &&
+    !isComposerDisabled
+  // R12: a picker that locks, disables or hides is closed, and stays closed.
+  // Left open underneath, the lock's end would pop it open by itself and
+  // take focus from the textbox. Adjusted during render, so the locked
+  // commit already carries it closed.
+  if (accountPickerOpen && !accountPickerOpenable) setAccountPickerOpen(false)
   const handleComposerIntent = useCallback(
     (intent: ComposerIntent) => {
       if (intent.kind === 'add-skill') {

@@ -2485,6 +2485,81 @@ describe('ComposerContainer', () => {
       ).toHaveLength(1)
     })
 
+    it('never takes another conversation’s intent along with its own', () => {
+      const textbox = renderComposer()
+      const PLANNING: SkillSelection = {
+        ...REVIEW,
+        id: 'claude-code:global:planning',
+        name: 'planning',
+        displayName: 'Planning',
+        path: '/skills/planning/SKILL.md',
+      }
+
+      act(() => {
+        postComposerIntent('session-2', { kind: 'add-skill', skill: REVIEW })
+      })
+      act(() => {
+        postComposerIntent('session-1', { kind: 'add-skill', skill: PLANNING })
+      })
+
+      expect(
+        screen.getByRole('button', { name: 'Remove Planning' }),
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Remove Review' })).toBeNull()
+      expect(document.activeElement).toBe(textbox)
+      expect(
+        useComposerIntentStore.getState().intentsBySessionId['session-2'],
+      ).toHaveLength(1)
+    })
+
+    it('closes its account picker when a turn locks it, and does not pop it open again when the lock ends (R12)', async () => {
+      providerAccountsMock = [buildAccount()]
+      const textbox = renderComposer()
+      await waitFor(() =>
+        expect(window.electronAPI.providerAccounts.list).toHaveBeenCalled(),
+      )
+      const setStatus = (
+        status: 'running' | 'completed',
+        attention: 'none' | 'finished',
+      ) =>
+        act(() => {
+          useSessionStore.setState((state) => ({
+            sessions: state.sessions.map((session) =>
+              session.id === 'session-1'
+                ? { ...session, status, attention }
+                : session,
+            ),
+          }))
+        })
+
+      act(() => {
+        postComposerIntent('session-1', { kind: 'open-account-picker' })
+      })
+      expect(
+        await screen.findByPlaceholderText('Search accounts...'),
+      ).toBeInTheDocument()
+
+      // A turn starts (a relay, a queued input): the picker locks.
+      setStatus('running', 'none')
+      await waitFor(() =>
+        expect(
+          screen.getByRole('combobox', { name: /account|login/i }),
+        ).toBeDisabled(),
+      )
+      expect(screen.queryByPlaceholderText('Search accounts...')).toBeNull()
+
+      // The user is typing when the turn ends.
+      textbox.focus()
+      setStatus('completed', 'finished')
+      await waitFor(() =>
+        expect(
+          screen.getByRole('combobox', { name: /account|login/i }),
+        ).not.toBeDisabled(),
+      )
+      expect(screen.queryByPlaceholderText('Search accounts...')).toBeNull()
+      expect(document.activeElement).toBe(textbox)
+    })
+
     it('does not keep a hand-off it cannot honour now, to pop the picker open later', async () => {
       providerAccountsMock = [buildAccount()]
       act(() => {
