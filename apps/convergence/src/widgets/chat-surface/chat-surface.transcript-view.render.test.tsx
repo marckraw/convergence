@@ -19,6 +19,7 @@ vi.mock('@/widgets/session-view/use-parallel-work', () => ({
     retry: vi.fn(),
   }),
   useParallelWorkDetail: () => ({ items: [], error: null }),
+  useParallelWorkResults: () => ({ items: [], error: null }),
 }))
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: (options: {

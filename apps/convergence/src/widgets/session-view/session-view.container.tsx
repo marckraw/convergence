@@ -89,6 +89,11 @@ export const SessionView: FC = () => {
   // (MAR-3325), so it could no longer see the changes it is measured against.
   usePerfSessionsIdentity(sessions)
   const conversationPrefix = useSessionStore((s) => s.activeConversationPrefix)
+  const handleLoadOlder = useCallback((retry?: boolean) => {
+    const id = useSessionStore.getState().activeSessionId
+    if (id) void useSessionStore.getState().loadOlderConversation(id, retry)
+  }, [])
+  const conversationWindow = useSessionStore((s) => s.activeConversationWindow)
   const activeConversation = useSessionStore((s) => s.activeConversation)
   const globalSessions = useSessionStore((s) => s.globalSessions)
   const setActiveSession = useSessionStore((s) => s.setActiveSession)
@@ -808,6 +813,12 @@ export const SessionView: FC = () => {
         <SessionConversationSurface
           compactions={harness.facts?.compactions}
           session={session}
+          hasOlder={conversationWindow.hasOlder}
+          oldestSequence={conversationWindow.oldestSequence}
+          loadingOlder={conversationWindow.loading}
+          olderError={conversationWindow.error}
+          snapshotVersion={conversationWindow.snapshotVersion}
+          onLoadOlder={handleLoadOlder}
           conversationPrefix={conversationPrefix}
           conversationItems={activeConversation}
           parallelRows={parallel.rows}

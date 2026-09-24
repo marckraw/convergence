@@ -97,6 +97,13 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
   const conversationPrefix = useSessionStore(
     (s) => s.activeGlobalConversationPrefix,
   )
+  const handleLoadOlder = useCallback((retry?: boolean) => {
+    const id = useSessionStore.getState().activeGlobalSessionId
+    if (id) void useSessionStore.getState().loadOlderConversation(id, retry)
+  }, [])
+  const conversationWindow = useSessionStore(
+    (s) => s.activeGlobalConversationWindow,
+  )
   const conversationItems = useSessionStore(
     (state) => state.activeGlobalConversation,
   )
@@ -720,6 +727,12 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
       <div className="relative flex min-h-0 flex-1">
         <SessionConversationSurface
           session={session}
+          hasOlder={conversationWindow.hasOlder}
+          oldestSequence={conversationWindow.oldestSequence}
+          loadingOlder={conversationWindow.loading}
+          olderError={conversationWindow.error}
+          snapshotVersion={conversationWindow.snapshotVersion}
+          onLoadOlder={handleLoadOlder}
           conversationPrefix={conversationPrefix}
           conversationItems={conversationItems}
           parallelRows={parallel.rows}

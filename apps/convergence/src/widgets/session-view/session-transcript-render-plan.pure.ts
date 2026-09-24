@@ -34,6 +34,8 @@ export function buildConversationRenderPlan(
   visibleItems: ConversationItem[] = items,
 ): ConversationRenderEntry[] {
   const entries: ConversationRenderEntry[] = []
+  // Historical boot-context notes fold into their user message once that
+  // part of the transcript is loaded; the page never fetches old note payloads.
   const pendingBootContext: NoteConversationItem[] = []
   const ordinals = combineTurnOrdinals(prefix, items)
   let previousRenderedTurnId: string | null = null

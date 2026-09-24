@@ -27,6 +27,12 @@ interface SessionConversationSurfaceProps {
   onParallelSelect?: (id: string) => void
   navigationTarget?: { id: string; nonce: number } | null
   session: Session
+  hasOlder?: boolean
+  oldestSequence?: number | null
+  loadingOlder?: boolean
+  olderError?: string
+  snapshotVersion?: number
+  onLoadOlder?: (retry?: boolean) => void
   conversationPrefix?: ConversationPrefix
   conversationItems: ConversationItem[]
   composerContext: ComposerSessionContext | null
@@ -55,6 +61,12 @@ export const SessionConversationSurface: FC<
   onParallelRetry,
   onParallelSelect,
   navigationTarget,
+  hasOlder,
+  oldestSequence,
+  loadingOlder,
+  olderError,
+  snapshotVersion,
+  onLoadOlder,
   conversationPrefix,
   conversationItems,
   composerContext,
@@ -85,6 +97,12 @@ export const SessionConversationSurface: FC<
         parallelLoading={parallelLoading}
         onParallelSelect={onParallelSelect}
         navigationTarget={navigationTarget}
+        hasOlder={hasOlder}
+        oldestSequence={oldestSequence}
+        loadingOlder={loadingOlder}
+        olderError={olderError}
+        snapshotVersion={snapshotVersion}
+        onLoadOlder={onLoadOlder}
         conversationPrefix={conversationPrefix}
         conversationItems={conversationItems}
         onApprove={onApprove}

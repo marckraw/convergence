@@ -1,3 +1,4 @@
+import type { ConversationWireEvent } from '@/shared/types/conversation-item.types'
 import type { ConversationItem } from '@/entities/session'
 
 export const parallelWorkApi = {
@@ -23,6 +24,14 @@ export const parallelWorkApi = {
     ])
     return [...runItems, ...taskItems]
   },
+  readTaskResultNotes: (
+    sessionId: string,
+    ids: string[],
+  ): Promise<ConversationItem[]> =>
+    window.electronAPI.session.listTaskResultNotes(sessionId, ids),
+  subscribeConversation: (
+    listener: (event: ConversationWireEvent<ConversationItem>) => void,
+  ) => window.electronAPI.session.onSessionConversationPatched(listener),
   subscribe: (listener: (event: { sessionId: string }) => void) =>
     window.electronAPI.session.onEvidenceUpdated(listener),
   stop: (sessionId: string, id: string) =>
