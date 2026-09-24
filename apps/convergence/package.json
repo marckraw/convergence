@@ -26,7 +26,8 @@
     "test:door-electron": "node tools/run-mcp-door-electron.mjs",
     "test:watch": "npm run prepare:release-notes && vitest",
     "typecheck": "npm run prepare:release-notes && tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
-    "rebuild:electron": "electron-rebuild -o better-sqlite3,node-pty"
+    "rebuild:electron": "electron-rebuild -o better-sqlite3,node-pty",
+    "test:perf": "node --test tools/perf-budget.pure.test.mjs && node tools/perf-budget.mjs"
   },
   "keywords": [],
   "author": "",
