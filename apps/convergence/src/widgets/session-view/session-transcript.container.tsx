@@ -1,3 +1,8 @@
+import {
+  EMPTY_CONVERSATION_PREFIX,
+  combineTurnStarts,
+  type ConversationPrefix,
+} from '@/entities/session'
 import { PerfProfiler } from '@/shared/lib/perf-profiler'
 import { perfApi } from '@/shared/lib/perf.api'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
@@ -71,6 +76,7 @@ interface SessionTranscriptProps {
   onParallelSelect?: (id: string) => void
   navigationTarget?: { id: string; nonce: number } | null
   session: Session
+  conversationPrefix?: ConversationPrefix
   conversationItems: ConversationItemEntry[]
   onApprove: (
     sessionId: string,
@@ -118,6 +124,7 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
   onParallelSelect,
   navigationTarget,
   conversationItems,
+  conversationPrefix = EMPTY_CONVERSATION_PREFIX,
   onApprove,
   onDeny,
   onInputAnswer,
@@ -195,15 +202,10 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
     return actions
   }
 
-  const turnStartedAtById = useMemo(() => {
-    const startedAtById = new Map<string, string>()
-    for (const item of conversationItems) {
-      if (item.turnId && !startedAtById.has(item.turnId)) {
-        startedAtById.set(item.turnId, item.createdAt)
-      }
-    }
-    return startedAtById
-  }, [conversationItems])
+  const turnStartedAtById = useMemo(
+    () => combineTurnStarts(conversationPrefix, conversationItems),
+    [conversationPrefix, conversationItems],
+  )
 
   const workMarkers = useMemo(
     () =>
@@ -225,6 +227,8 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
   const conversationRenderPlan = useMemo(
     () =>
       buildConversationRenderPlan(
+        conversationPrefix,
+        conversationItems,
         conversationItems.filter(
           (item) =>
             !isSubagentWork(
@@ -233,7 +237,13 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
             ) || workMarkers.has(item.id),
         ),
       ),
-    [conversationItems, workMarkers, knownAgentIds, parallelLoading],
+    [
+      conversationPrefix,
+      conversationItems,
+      workMarkers,
+      knownAgentIds,
+      parallelLoading,
+    ],
   )
   const compactionPlacement = useMemo(
     () =>

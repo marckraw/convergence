@@ -1,3 +1,4 @@
+import { EMPTY_CONVERSATION_PREFIX } from '@/entities/session'
 import { act, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
@@ -40,8 +41,8 @@ function item(
 
 function readingOf(items: ConversationItem[]) {
   return {
-    label: formatConversationTotalDuration(items),
-    ...readStreamingDurationTarget(items),
+    label: formatConversationTotalDuration(EMPTY_CONVERSATION_PREFIX, items),
+    ...readStreamingDurationTarget(EMPTY_CONVERSATION_PREFIX, items),
   }
 }
 

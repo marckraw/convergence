@@ -65,7 +65,7 @@ describe('MAR-3323 hot query plans on the real schema', () => {
     return sql!
   }
 
-  function plan(sql: string, params: string[]): string {
+  function plan(sql: string, params: (string | number)[]): string {
     return (
       db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params) as {
         detail: string
@@ -80,6 +80,21 @@ describe('MAR-3323 hot query plans on the real schema', () => {
     const detail = plan(sql, [id])
     expect(detail).toContain(
       'USING INDEX idx_session_conversation_items_session_sequence',
+    )
+    expect(detail).not.toContain('TEMP B-TREE')
+  })
+
+  it('conversation prefix groups the sequence range through its statistics index without a temp B-tree', () => {
+    const sql = capture(
+      () => service.getConversationPrefix(id, 49701),
+      /SELECT spans/,
+    )
+    const detail = plan(sql, [id, 49701, id])
+    expect(detail).toContain(
+      'USING COVERING INDEX idx_session_conversation_items_prefix',
+    )
+    expect(detail).toMatch(
+      /SEARCH first USING INDEX .*\(session_id=\? AND sequence=\?\)/,
     )
     expect(detail).not.toContain('TEMP B-TREE')
   })

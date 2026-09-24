@@ -195,6 +195,15 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_session_conversation_items_session_sequence
     ON session_conversation_items(session_id, sequence);
 
+  -- Prefix statistics group item turns without reading payloads or sorting
+  -- the sequence range. Cache timestamp conversion at write time (MAR-3408).
+  CREATE INDEX IF NOT EXISTS idx_session_conversation_items_prefix
+    ON session_conversation_items(session_id, turn_id, sequence,
+      unixepoch(created_at, 'subsec'), unixepoch(updated_at, 'subsec'),
+      CASE WHEN kind = 'message' AND state = 'complete'
+        AND json_valid(payload_json) THEN
+          CASE WHEN json_extract(payload_json, '$.actor') = 'assistant' THEN sequence END END);
+
   -- The "needs you" lookup reads the latest approval/input request of a
   -- session (MAR-3396). Without this partial index SQLite walks the session's
   -- whole transcript backwards to find it, and most sessions have none.

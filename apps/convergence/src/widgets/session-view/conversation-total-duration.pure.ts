@@ -1,4 +1,9 @@
-import type { ConversationItem } from '@/entities/session'
+import {
+  combineConversationPrefix,
+  combineConversationDurationMs,
+  type ConversationPrefix,
+  type ConversationItem,
+} from '@/entities/session'
 import { formatDuration } from './transcript-entry-view-model.pure'
 
 export interface ConversationTurnSpan {
@@ -18,24 +23,33 @@ export interface StreamingDurationTarget {
 }
 
 export function getConversationTotalDurationMs(
+  prefix: ConversationPrefix,
   items: ConversationItem[],
 ): number | null {
-  return collectConversationTurns(items).totalMs
+  return combineConversationDurationMs(prefix, items)
 }
 
 /**
- * The list-change reading Elapsed extends (MAR-3310 F1g). One walk, same
- * span rules as the base total, plus the newest streaming text item.
+ * The list-change reading Elapsed extends (MAR-3310 F1g). The prefix
+ * supplies old spans, including the start of a streaming turn in the window.
  */
 export function readStreamingDurationTarget(
+  prefix: ConversationPrefix,
   items: ConversationItem[],
 ): StreamingDurationTarget {
-  const collected = collectConversationTurns(items)
-  const turnId = collected.streamingItem?.turnId
+  const collected = combineConversationPrefix(prefix, items)
+  let streamingItem: StreamingTextItem | null = null
+  for (const item of items) {
+    if (isStreamingTextItem(item)) streamingItem = item
+  }
+  const turn = collected.turns.find((turn) => turn.id === streamingItem?.turnId)
   return {
     totalMs: collected.totalMs,
-    streamingItem: collected.streamingItem,
-    turnSpan: turnId ? (collected.spansByTurn.get(turnId) ?? null) : null,
+    streamingItem,
+    turnSpan:
+      turn && turn.startMs !== null && turn.endMs !== null
+        ? { start: turn.startMs, end: turn.endMs }
+        : null,
   }
 }
 
@@ -63,46 +77,12 @@ export function formatConversationDurationMs(
 }
 
 export function formatConversationTotalDuration(
+  prefix: ConversationPrefix,
   items: ConversationItem[],
 ): string | null {
-  return formatConversationDurationMs(getConversationTotalDurationMs(items))
-}
-
-function collectConversationTurns(items: ConversationItem[]): {
-  totalMs: number | null
-  spansByTurn: Map<string, ConversationTurnSpan>
-  streamingItem: StreamingTextItem | null
-} {
-  const spansByTurn = new Map<string, ConversationTurnSpan>()
-  let streamingItem: StreamingTextItem | null = null
-
-  for (const item of items) {
-    if (isStreamingTextItem(item)) streamingItem = item
-    if (!item.turnId) continue
-
-    const start = parseTimestamp(item.createdAt)
-    const end = parseTimestamp(item.updatedAt) ?? start
-    if (start === null) continue
-
-    const existing = spansByTurn.get(item.turnId)
-    if (!existing) {
-      spansByTurn.set(item.turnId, { start, end: end ?? start })
-      continue
-    }
-
-    if (start < existing.start) existing.start = start
-    if (end !== null && end > existing.end) existing.end = end
-  }
-
-  if (spansByTurn.size === 0) {
-    return { totalMs: null, spansByTurn, streamingItem }
-  }
-
-  let total = 0
-  for (const span of spansByTurn.values()) {
-    if (span.end > span.start) total += span.end - span.start
-  }
-  return { totalMs: total, spansByTurn, streamingItem }
+  return formatConversationDurationMs(
+    getConversationTotalDurationMs(prefix, items),
+  )
 }
 
 function isStreamingTextItem(

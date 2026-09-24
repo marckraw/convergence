@@ -94,6 +94,9 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
   const setActiveGlobalSession = useSessionStore(
     (state) => state.setActiveGlobalSession,
   )
+  const conversationPrefix = useSessionStore(
+    (s) => s.activeGlobalConversationPrefix,
+  )
   const conversationItems = useSessionStore(
     (state) => state.activeGlobalConversation,
   )
@@ -717,6 +720,7 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
       <div className="relative flex min-h-0 flex-1">
         <SessionConversationSurface
           session={session}
+          conversationPrefix={conversationPrefix}
           conversationItems={conversationItems}
           parallelRows={parallel.rows}
           parallelLoading={!parallel.hasRecord}

@@ -1,3 +1,7 @@
+import {
+  EMPTY_CONVERSATION_PREFIX,
+  type ConversationPrefix,
+} from './conversation-prefix.pure'
 import { perfApi } from '@/shared/lib/perf.api'
 import {
   markPerfConversationOpen,
@@ -111,8 +115,10 @@ interface SessionState {
   sessions: SessionSummary[]
   globalSessions: SessionSummary[]
   globalChatSessions: SessionSummary[]
+  activeConversationPrefix: ConversationPrefix
   activeConversation: ConversationItem[]
   activeConversationSessionId: string | null
+  activeGlobalConversationPrefix: ConversationPrefix
   activeGlobalConversation: ConversationItem[]
   activeGlobalConversationSessionId: string | null
   queuedInputsBySessionId: Record<string, SessionQueuedInput[]>
@@ -382,8 +388,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
   globalSessions: [],
   globalChatSessions: [],
+  activeConversationPrefix: EMPTY_CONVERSATION_PREFIX,
   activeConversation: [],
   activeConversationSessionId: null,
+  activeGlobalConversationPrefix: EMPTY_CONVERSATION_PREFIX,
   activeGlobalConversation: [],
   activeGlobalConversationSessionId: null,
   queuedInputsBySessionId: {},
@@ -407,6 +415,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         sessions: [],
         activeSessionId: null,
         activeProjectSessionId: null,
+        activeConversationPrefix: EMPTY_CONVERSATION_PREFIX,
         activeConversation: [],
         activeConversationSessionId: null,
         queuedInputsBySessionId: {},
@@ -704,6 +713,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           currentProjectId: request.projectId,
           sessions: upsertSummary(state.sessions, latest),
           globalSessions: upsertSummary(state.globalSessions, latest),
+          activeConversationPrefix: EMPTY_CONVERSATION_PREFIX,
           activeConversation: [],
           activeConversationSessionId: session.id,
           queuedInputsBySessionId: {
@@ -753,6 +763,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         return {
           globalChatSessions: upsertSummary(state.globalChatSessions, latest),
           globalSessions: upsertSummary(state.globalSessions, latest),
+          activeGlobalConversationPrefix: EMPTY_CONVERSATION_PREFIX,
           activeGlobalConversation: [],
           activeGlobalConversationSessionId: session.id,
           queuedInputsBySessionId: {
@@ -796,6 +807,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           ? upsertSummary(state.sessions, session)
           : state.sessions,
       globalSessions: upsertSummary(state.globalSessions, session),
+      activeConversationPrefix: EMPTY_CONVERSATION_PREFIX,
       activeConversation: [],
       activeConversationSessionId: session.id,
       queuedInputsBySessionId: {
@@ -1045,6 +1057,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       sessions: [],
       activeSessionId: null,
       activeProjectSessionId: null,
+      activeConversationPrefix: EMPTY_CONVERSATION_PREFIX,
       activeConversation: [],
       activeConversationSessionId: null,
       queuedInputsBySessionId: {},
@@ -1055,6 +1068,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set({
       activeSessionId: null,
       activeProjectSessionId: null,
+      activeConversationPrefix: EMPTY_CONVERSATION_PREFIX,
       activeConversation: [],
       activeConversationSessionId: null,
       queuedInputsBySessionId: {},
@@ -1283,6 +1297,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           ? upsertSummary(state.sessions, session)
           : state.sessions,
       globalSessions: upsertSummary(state.globalSessions, session),
+      activeConversationPrefix: EMPTY_CONVERSATION_PREFIX,
       activeConversation: [],
       activeConversationSessionId: session.id,
       queuedInputsBySessionId: {
@@ -1306,6 +1321,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           ? upsertSummary(state.sessions, session)
           : state.sessions,
       globalSessions: upsertSummary(state.globalSessions, session),
+      activeConversationPrefix: EMPTY_CONVERSATION_PREFIX,
       activeConversation: [],
       activeConversationSessionId: session.id,
       queuedInputsBySessionId: {

@@ -1,3 +1,4 @@
+import { EMPTY_CONVERSATION_PREFIX } from '@/entities/session'
 import { describe, expect, it } from 'vitest'
 import type { ConversationItem } from '@/entities/session'
 import { buildConversationRenderPlan } from './session-transcript-render-plan.pure'
@@ -51,7 +52,9 @@ describe('buildConversationRenderPlan', () => {
     )
     const message = userMessage(2, 'do you know the path?')
 
-    expect(buildConversationRenderPlan([note, message])).toEqual([
+    expect(
+      buildConversationRenderPlan(EMPTY_CONVERSATION_PREFIX, [note, message]),
+    ).toEqual([
       {
         item: message,
         injectedContextText: '<project:context>\npath\n</project:context>',
@@ -73,7 +76,9 @@ describe('buildConversationRenderPlan', () => {
     }
     const message = userMessage(2, 'continue')
 
-    expect(buildConversationRenderPlan([note, message])).toEqual([
+    expect(
+      buildConversationRenderPlan(EMPTY_CONVERSATION_PREFIX, [note, message]),
+    ).toEqual([
       {
         item: note,
         injectedContextText: null,
@@ -92,7 +97,9 @@ describe('buildConversationRenderPlan', () => {
   it('renders orphaned boot context notes rather than dropping them', () => {
     const note = bootContextNote(1, '<project:context />')
 
-    expect(buildConversationRenderPlan([note])).toEqual([
+    expect(
+      buildConversationRenderPlan(EMPTY_CONVERSATION_PREFIX, [note]),
+    ).toEqual([
       {
         item: note,
         injectedContextText: null,
@@ -116,13 +123,15 @@ describe('buildConversationRenderPlan', () => {
     const secondUser = userMessage(3, 'continue')
 
     expect(
-      buildConversationRenderPlan([firstUser, assistant, secondUser]).map(
-        (entry) => ({
-          id: entry.item.id,
-          turnBoundary: entry.turnBoundary,
-          turnSequence: entry.turnSequence,
-        }),
-      ),
+      buildConversationRenderPlan(EMPTY_CONVERSATION_PREFIX, [
+        firstUser,
+        assistant,
+        secondUser,
+      ]).map((entry) => ({
+        id: entry.item.id,
+        turnBoundary: entry.turnBoundary,
+        turnSequence: entry.turnSequence,
+      })),
     ).toEqual([
       { id: firstUser.id, turnBoundary: true, turnSequence: 1 },
       { id: assistant.id, turnBoundary: false, turnSequence: null },

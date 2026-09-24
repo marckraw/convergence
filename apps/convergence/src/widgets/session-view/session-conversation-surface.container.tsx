@@ -4,6 +4,7 @@ import type { ParallelWorkRow } from '@/shared/lib/parallel-work.pure'
 import { type FC, type ReactNode } from 'react'
 import type {
   ConversationItem,
+  ConversationPrefix,
   InteractionResponse,
   Session,
 } from '@/entities/session'
@@ -26,6 +27,7 @@ interface SessionConversationSurfaceProps {
   onParallelSelect?: (id: string) => void
   navigationTarget?: { id: string; nonce: number } | null
   session: Session
+  conversationPrefix?: ConversationPrefix
   conversationItems: ConversationItem[]
   composerContext: ComposerSessionContext | null
   composerDisabledReason?: string | null
@@ -53,6 +55,7 @@ export const SessionConversationSurface: FC<
   onParallelRetry,
   onParallelSelect,
   navigationTarget,
+  conversationPrefix,
   conversationItems,
   composerContext,
   composerDisabledReason = null,
@@ -82,6 +85,7 @@ export const SessionConversationSurface: FC<
         parallelLoading={parallelLoading}
         onParallelSelect={onParallelSelect}
         navigationTarget={navigationTarget}
+        conversationPrefix={conversationPrefix}
         conversationItems={conversationItems}
         onApprove={onApprove}
         onDeny={onDeny}
