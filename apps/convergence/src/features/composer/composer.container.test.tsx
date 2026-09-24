@@ -2245,6 +2245,136 @@ describe('ComposerContainer', () => {
     })
   })
 
+  describe('whose skills the picker lists (MAR-3401)', () => {
+    const NOTE = 'From this Mac — little-monster may not have these skills.'
+
+    function seedLittleMonster() {
+      setEndpoints([endpointFixture('daemon-lm', 'little-monster', 0)])
+      seedCatalog('daemon-lm', [
+        {
+          descriptor: remoteProvider('claude-code', 'Claude Code', [
+            { id: 'sonnet', label: 'Claude Sonnet' },
+          ]),
+          blockedReason: null,
+        },
+      ])
+    }
+
+    function renderProjectDraft() {
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: null,
+          }}
+        />,
+      )
+    }
+
+    function pickHost(currentName: RegExp, nextLabel: string) {
+      fireEvent.click(screen.getByRole('combobox', { name: currentName }))
+      fireEvent.click(screen.getByText(nextLabel))
+    }
+
+    function openAddSkills() {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Add composer resources' }),
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Select skills' }))
+    }
+
+    function openSkillInjection() {
+      const textbox = screen.getByRole('textbox', {
+        name: 'Message',
+      }) as HTMLTextAreaElement
+      textbox.focus()
+      fireEvent.change(textbox, { target: { value: '::s::' } })
+      textbox.setSelectionRange(5, 5)
+      fireEvent.keyUp(textbox, { key: 's' })
+    }
+
+    it('a project draft with a remote pick shows the note, with that host’s label', () => {
+      seedLittleMonster()
+      renderProjectDraft()
+      pickHost(/Local/, 'little-monster')
+
+      openAddSkills()
+      expect(screen.getByTestId('remote-skills-notice')).toHaveTextContent(NOTE)
+      expect(screen.getByRole('button', { name: /Planning/ })).toBeEnabled()
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Add composer resources' }),
+      )
+      openSkillInjection()
+      expect(
+        screen.getByTestId('composer-skill-injection-picker'),
+      ).toHaveTextContent(NOTE)
+      expect(
+        screen.getByTestId(
+          'composer-skill-injection-item-claude-code:global:planning',
+        ),
+      ).toBeEnabled()
+    })
+
+    it('the same draft switched back to this Mac shows no note', () => {
+      seedLittleMonster()
+      renderProjectDraft()
+      pickHost(/Local/, 'little-monster')
+      openAddSkills()
+      expect(screen.getByTestId('remote-skills-notice')).toHaveTextContent(NOTE)
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Add composer resources' }),
+      )
+      pickHost(/little-monster/, 'Local')
+      openAddSkills()
+      expect(screen.queryByTestId('remote-skills-notice')).toBeNull()
+      expect(screen.getByRole('button', { name: /Planning/ })).toBeEnabled()
+    })
+
+    it('a global draft shows no note', () => {
+      // Endpoints exist on purpose. A global draft is forced onto this Mac,
+      // so the absence of the note is that rule, not an empty chooser.
+      seedLittleMonster()
+      render(
+        <ComposerContainer
+          context={{ kind: 'global', activeSessionId: null }}
+        />,
+      )
+
+      openAddSkills()
+      expect(screen.queryByTestId('remote-skills-notice')).toBeNull()
+      expect(screen.getByRole('button', { name: /Planning/ })).toBeEnabled()
+    })
+
+    it('a live remote session shows the note', () => {
+      seedLittleMonster()
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) =>
+          session.id === 'session-1'
+            ? { ...session, executionHost: 'daemon-lm' }
+            : session,
+        ),
+      }))
+
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+
+      openAddSkills()
+      expect(screen.getByTestId('remote-skills-notice')).toHaveTextContent(NOTE)
+    })
+  })
+
   it('loads global skills when opening the skill picker in global chat', () => {
     render(
       <ComposerContainer

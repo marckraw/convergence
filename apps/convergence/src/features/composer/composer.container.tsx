@@ -73,6 +73,7 @@ import {
 } from '@/entities/attachment'
 import {
   filterComposerSkills,
+  remoteSkillsNotice,
   skillSelectionFromCatalogEntry,
   useSkillStore,
   type SkillCatalogEntry,
@@ -453,6 +454,12 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
     catalogSource.executionHostId,
     appSettings.executionHostEndpoints,
   )
+  // The strip's host, not the live session's. A project draft has no live
+  // host, and a remote pick on that draft is where the send will run.
+  const remoteSkillsNoticeText = remoteSkillsNotice({
+    hostId: executionBar.hostId,
+    hostLabel,
+  })
   const optionRow = resolveOptionRowCatalog({
     source: catalogSource,
     hostLabel,
@@ -2027,6 +2034,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
         selectedContextItems={selectedContextItems}
         skillCatalogLoading={skillCatalogLoading}
         skillCatalogError={skillCatalogError}
+        remoteSkillsNotice={remoteSkillsNoticeText}
         onSkillPickerOpenChange={handleSkillPickerOpenChange}
         onSkillQueryChange={setSkillQuery}
         onSkillToggle={handleSkillToggle}

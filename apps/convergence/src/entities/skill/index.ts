@@ -4,6 +4,7 @@ export {
   hasSkillSelection,
   skillSelectionFromCatalogEntry,
 } from './skill-selection.pure'
+export { remoteSkillsNotice } from './remote-skills-notice.pure'
 export type { SkillStore } from './skill.model'
 export type {
   ProjectSkillCatalog,
