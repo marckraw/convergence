@@ -10,7 +10,7 @@ import { useWorkspaceStore } from '@/entities/workspace'
 import { recordPerfCommit } from '@/shared/lib/usePerfProbe'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { formatConversationTotalDuration } from './conversation-total-duration.pure'
-import { parallelWorkLinksKey, parallelWorkMarkers } from './parallel-work.pure'
+import { parallelWorkMarkers, withFetchedWorkItems } from './parallel-work.pure'
 import { referencedAttachmentIdsKey } from './referenced-attachments.pure'
 import { SessionView } from './session-view.container'
 
@@ -46,8 +46,8 @@ vi.mock('./parallel-work.pure', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./parallel-work.pure')>()
   return {
     ...actual,
-    parallelWorkLinksKey: vi.fn(actual.parallelWorkLinksKey),
     parallelWorkMarkers: vi.fn(actual.parallelWorkMarkers),
+    withFetchedWorkItems: vi.fn(actual.withFetchedWorkItems),
   }
 })
 
@@ -409,14 +409,14 @@ describe('MAR-3310 F1e SessionView while a reply streams', () => {
     expect(transcriptCommits()).toBe(0)
   })
 
-  it('R4 two hundred appends run no per-list pass: total duration, attachment key, parallel-work links and markers — mutation route appends through upsertConversationItem turns red', async () => {
+  it('R4 two hundred appends run no per-list pass: total duration, attachment key, parallel-work markers and detail merge — mutation route appends through upsertConversationItem turns red', async () => {
     streamingConversation()
     await renderView()
     const passes = {
       formatConversationTotalDuration,
       referencedAttachmentIdsKey,
-      parallelWorkLinksKey,
       parallelWorkMarkers,
+      withFetchedWorkItems,
     }
     for (const pass of Object.values(passes)) {
       expect(vi.mocked(pass)).toHaveBeenCalled()
@@ -449,8 +449,8 @@ describe('MAR-3310 F1e SessionView while a reply streams', () => {
     ).toEqual({
       formatConversationTotalDuration: 0,
       referencedAttachmentIdsKey: 0,
-      parallelWorkLinksKey: 0,
       parallelWorkMarkers: 0,
+      withFetchedWorkItems: 0,
     })
     expect(
       document.querySelector(`[data-conversation-item-id="${streamingId}"]`)

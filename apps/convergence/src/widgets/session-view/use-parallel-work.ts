@@ -4,17 +4,20 @@ import type {
   SessionAgentRun,
   SessionTask,
 } from '@/shared/types/harness-evidence.types'
-import { buildParallelWork } from '@/shared/lib/parallel-work.pure'
-import { parallelWorkApi } from './parallel-work.api'
 import {
-  parallelWorkLinksKey,
-  sameParallelWorkEvidence,
-} from './parallel-work.pure'
+  buildParallelWork,
+  parallelWorkRowState,
+  type ParallelWorkRow,
+} from '@/shared/lib/parallel-work.pure'
+import { parallelWorkApi } from './parallel-work.api'
+import { sameParallelWorkEvidence, workRowKey } from './parallel-work.pure'
 
-export function useParallelWork(
-  sessionId: string | null,
-  items: ConversationItem[],
-) {
+/**
+ * The session's parallel work as panel rows. Built from the evidence record
+ * alone: a run's parent arrives on the run (MAR-3310 O0b R4), so the rows no
+ * longer read — or wait on — the loaded conversation.
+ */
+export function useParallelWork(sessionId: string | null) {
   const [readRevision, setReadRevision] = useState(0)
   const retry = useCallback(() => setReadRevision((value) => value + 1), [])
   const [settledSessionId, setSettledSessionId] = useState<string | null>(null)
@@ -67,20 +70,13 @@ export function useParallelWork(
       unsubscribe()
     }
   }, [sessionId, readRevision])
-  const parentLinksKey = useMemo(
-    () => parallelWorkLinksKey(items, record?.runs ?? []),
-    [items, record?.runs],
+  const rows = useMemo(
+    () =>
+      record?.sessionId === sessionId
+        ? buildParallelWork(record.runs, record.tasks)
+        : [],
+    [record, sessionId],
   )
-  const rows = useMemo(() => {
-    const links = JSON.parse(parentLinksKey) as Array<[string, string | null]>
-    return record?.sessionId === sessionId
-      ? buildParallelWork(
-          record.runs,
-          record.tasks,
-          links.map(([id, agentRunId]) => ({ id, agentRunId })),
-        )
-      : []
-  }, [record, sessionId, parentLinksKey])
   return {
     rows,
     hasRecord: record?.sessionId === sessionId,
@@ -88,4 +84,63 @@ export function useParallelWork(
     error: error?.sessionId === sessionId ? error.message : null,
     loading: Boolean(sessionId) && settledSessionId !== sessionId,
   }
+}
+
+const NO_DETAIL: { items: ConversationItem[]; error: string | null } = {
+  items: [],
+  error: null,
+}
+
+/**
+ * The selected row's items, read from main by id (MAR-3310 O0b R2).
+ *
+ * Read when the selection or the row's ids change, and again when the row's
+ * status changes. A reply is kept only for the row it was asked about: a
+ * reply for another selection is dropped on arrival, and a kept one is
+ * served only while that row is still the one selected — a status re-read
+ * keeps the last reply up until its successor lands, so a window never
+ * blinks back to only what is loaded.
+ */
+export function useParallelWorkDetail(
+  sessionId: string,
+  row: ParallelWorkRow | undefined,
+): { items: ConversationItem[]; error: string | null } {
+  const state = row ? parallelWorkRowState(row) : null
+  const rowKey = row
+    ? JSON.stringify([sessionId, workRowKey(row), state!.ids])
+    : null
+  const status = state?.fact?.status ?? null
+  const [detail, setDetail] = useState<{
+    rowKey: string
+    value: { items: ConversationItem[]; error: string | null }
+  } | null>(null)
+  useEffect(() => {
+    if (!rowKey) return
+    const [readSessionId, , ids] = JSON.parse(rowKey) as [
+      string,
+      string,
+      string[],
+    ]
+    let active = true
+    parallelWorkApi.readDetail(readSessionId, ids).then(
+      (items) => {
+        if (active) setDetail({ rowKey, value: { items, error: null } })
+      },
+      (failure: unknown) => {
+        if (active)
+          setDetail({
+            rowKey,
+            value: {
+              items: [],
+              error:
+                failure instanceof Error ? failure.message : String(failure),
+            },
+          })
+      },
+    )
+    return () => {
+      active = false
+    }
+  }, [rowKey, status])
+  return detail && detail.rowKey === rowKey ? detail.value : NO_DETAIL
 }

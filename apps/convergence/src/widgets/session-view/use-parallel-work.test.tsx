@@ -5,11 +5,12 @@ import type {
   SessionAgentRun,
   SessionTask,
 } from '@/shared/types/harness-evidence.types'
-import { useParallelWork } from './use-parallel-work'
+import { buildParallelWork } from '@/shared/lib/parallel-work.pure'
+import { useParallelWork, useParallelWorkDetail } from './use-parallel-work'
 import { parallelWorkApi } from './parallel-work.api'
 
 vi.mock('./parallel-work.api', () => ({
-  parallelWorkApi: { read: vi.fn(), subscribe: vi.fn() },
+  parallelWorkApi: { read: vi.fn(), subscribe: vi.fn(), readDetail: vi.fn() },
 }))
 
 it('R1/R2 rereads evidence for its session and rejects a stale session read — mutations omit subscription or accept stale read turn red', async () => {
@@ -34,7 +35,7 @@ it('R1/R2 rereads evidence for its session and rejects a stale session read — 
     .mockReturnValueOnce(old)
     .mockResolvedValue({ runs: [], tasks: [task('current')] })
   const { result, rerender, unmount } = renderHook(
-    ({ id }) => useParallelWork(id, []),
+    ({ id }) => useParallelWork(id),
     { initialProps: { id: 'old' } },
   )
   await act(async () => rerender({ id: 'new' }))
@@ -68,7 +69,7 @@ it('M4/T10 a rejected read settles loading and reports the error — mutation le
   vi.mocked(parallelWorkApi.read).mockRejectedValue(
     new Error('Record unavailable'),
   )
-  const { result } = renderHook(() => useParallelWork('broken', []))
+  const { result } = renderHook(() => useParallelWork('broken'))
   await act(async () => {})
   expect({
     loading: result.current.loading,
@@ -83,48 +84,105 @@ it('M4/T10 a rejected read settles loading and reports the error — mutation le
   })
 })
 
-it('M7 streaming text keeps row identity stable while a changed parent updates it — mutation memoize rows on whole items turns red', async () => {
+it('MAR-3310 O0b R4 a nested agent stays nested when no loaded item holds its spawn — mutation the tree ignores parentRunId turns red', async () => {
   vi.mocked(parallelWorkApi.subscribe).mockReturnValue(() => {})
   vi.mocked(parallelWorkApi.read).mockResolvedValue({
     runs: [
-      { id: 'parent', spawnedByItemId: 'parent-spawn' },
-      { id: 'child', spawnedByItemId: 'child-spawn' },
+      { id: 'parent', spawnedByItemId: 'parent-spawn', parentRunId: null },
+      // The spawn item is older than any window: only the read knows it.
+      { id: 'child', spawnedByItemId: 'child-spawn', parentRunId: 'parent' },
     ] as SessionAgentRun[],
     tasks: [],
   })
-  const items = (inputText: string, agentRunId: string | null = null) =>
-    [
-      { id: 'child-spawn', kind: 'tool-call', inputText, agentRunId },
-    ] as ConversationItem[]
-  const { result, rerender } = renderHook(
-    ({ value }) => useParallelWork('s', value),
-    { initialProps: { value: items('first') } },
-  )
+  const { result } = renderHook(() => useParallelWork('s'))
   await act(async () => {})
-  const first = result.current.rows
-  for (let i = 0; i < 20; i++) rerender({ value: items(String(i)) })
-  const stable = first === result.current.rows
-  rerender({ value: items('last', 'parent') })
-  expect({
-    stable,
-    parent: result.current.rows.find((row) => row.id === 'child')?.parentId,
-  }).toEqual({ stable: true, parent: 'parent' })
+  expect(result.current.rows.map((row) => [row.id, row.parentId])).toEqual([
+    ['parent', null],
+    ['child', 'parent'],
+  ])
 })
 
-it('R8 L5 parent key is memoised across unchanged renders — mutation map items each render turns red', async () => {
-  vi.mocked(parallelWorkApi.subscribe).mockReturnValue(() => {})
-  vi.mocked(parallelWorkApi.read).mockResolvedValue({
-    runs: [{ id: 'child', spawnedByItemId: 'spawn' }] as SessionAgentRun[],
-    tasks: [],
+const detailRow = (status: SessionAgentRun['status'], id = 'agent') =>
+  buildParallelWork(
+    [
+      {
+        id,
+        sessionId: 's',
+        spawnedByItemId: 'spawn',
+        status,
+      } as SessionAgentRun,
+    ],
+    [],
+  )[0]!
+const detailItem = (id: string) =>
+  ({
+    id,
+    sequence: 1,
+    kind: 'thinking',
+    agentRunId: 'agent',
+  }) as ConversationItem
+
+it('MAR-3310 O0b R2 the detail reads the selected row by its ids, drops a reply for another selection or an older read, and rereads on a status change without blanking — mutations accept a late reply, serve another row’s reply, or key the read on selection only turn red', async () => {
+  const pending: Array<{
+    ids: string[]
+    resolve: (items: ConversationItem[]) => void
+  }> = []
+  vi.mocked(parallelWorkApi.readDetail).mockImplementation(
+    (_sessionId, ids) =>
+      new Promise((resolve) => pending.push({ ids, resolve })),
+  )
+  const ids = () => result.current.items.map((item) => item.id)
+  const { result, rerender } = renderHook(
+    ({ row }) => useParallelWorkDetail('s', row),
+    { initialProps: { row: detailRow('running') } },
+  )
+  // Select another row before the first reply lands; then it lands.
+  rerender({ row: detailRow('running', 'other') })
+  await act(async () => pending[0]!.resolve([detailItem('stale')]))
+  const afterStale = ids()
+  await act(async () => pending[1]!.resolve([detailItem('other-1')]))
+  const afterOwn = ids()
+  // The row finishes: read again, keep serving the last reply meanwhile.
+  rerender({ row: detailRow('completed', 'other') })
+  const whileRereading = ids()
+  // It changes again before that read returns; the newer read lands first
+  // and the older one late — the late one is not the row's latest word.
+  rerender({ row: detailRow('failed', 'other') })
+  await act(async () => pending[3]!.resolve([detailItem('other-3')]))
+  await act(async () => pending[2]!.resolve([detailItem('other-2')]))
+  const afterRace = ids()
+  // Back to the first row: what `other` read is not this row's detail.
+  rerender({ row: detailRow('running') })
+  const afterReselect = ids()
+  expect({
+    reads: pending.map((read) => read.ids),
+    afterStale,
+    afterOwn,
+    whileRereading,
+    afterRace,
+    afterReselect,
+    none: renderHook(() => useParallelWorkDetail('s', undefined)).result.current
+      .items,
+  }).toEqual({
+    reads: [['agent'], ['other'], ['other'], ['other'], ['agent']],
+    afterStale: [],
+    afterOwn: ['other-1'],
+    whileRereading: ['other-1'],
+    afterRace: ['other-3'],
+    afterReselect: [],
+    none: [],
   })
-  const items = [{ id: 'spawn', agentRunId: 'parent' }] as ConversationItem[]
-  const scan = vi.spyOn(items, 'map')
-  const { rerender } = renderHook(() => useParallelWork('s', items))
+})
+
+it('MAR-3310 O0b R2 a failed detail read is reported, not swallowed — mutation drop the error turns red', async () => {
+  vi.mocked(parallelWorkApi.readDetail).mockRejectedValue(
+    new Error('database is locked'),
+  )
+  const { result } = renderHook(() =>
+    useParallelWorkDetail('s', detailRow('running')),
+  )
   await act(async () => {})
-  const initial = scan.mock.calls.length
-  for (let i = 0; i < 20; i++) rerender()
-  expect(scan.mock.calls.length - initial).toBe(0)
-  scan.mockRestore()
+  expect(result.current).toEqual({ items: [], error: 'database is locked' })
 })
 
 it('MAR-3310 F1e R4 an evidence event that changes nothing keeps the rows; a real change replaces them — mutation always store a new record turns red', async () => {
@@ -144,7 +202,7 @@ it('MAR-3310 F1e R4 an evidence event that changes nothing keeps the rows; a rea
     runs: [],
     tasks: [task('running')],
   }))
-  const { result } = renderHook(() => useParallelWork('streaming', []))
+  const { result } = renderHook(() => useParallelWork('streaming'))
   await act(async () => {})
   const first = result.current.rows
   // A streaming provider reports the same task on every tick.

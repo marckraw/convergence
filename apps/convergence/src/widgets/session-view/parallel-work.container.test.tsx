@@ -1,7 +1,7 @@
 import * as markerHelpers from './parallel-work.pure'
 import { useState } from 'react'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ConversationItem, Session } from '@/entities/session'
 import type {
   SessionAgentRun,
@@ -12,7 +12,15 @@ import { ParallelWork } from './parallel-work.container'
 import { parallelWorkApi } from './parallel-work.api'
 import { useTranscriptViewStore } from './transcript-view.model'
 
-vi.mock('./parallel-work.api', () => ({ parallelWorkApi: { stop: vi.fn() } }))
+vi.mock('./parallel-work.api', () => ({
+  parallelWorkApi: { stop: vi.fn(), readDetail: vi.fn() },
+}))
+
+// MAR-3310 O0b: the detail's by-id read answers nothing unless a test says
+// otherwise, so every older test sees exactly the loaded list it passes in.
+beforeEach(() => {
+  vi.mocked(parallelWorkApi.readDetail).mockReset().mockResolvedValue([])
+})
 
 // MAR-3391 R5: this file is today's sidebar transcript, so it runs in Full. The
 // Compact view has its own tests (R7 below).
@@ -39,7 +47,7 @@ const run: SessionAgentRun = {
 }
 const props = () => ({
   session: { id: 's', canStopTasks: true } as Session,
-  rows: buildParallelWork([run], [], []),
+  rows: buildParallelWork([run], []),
   items: [] as ConversationItem[],
   open: true,
   selectedId: null,
@@ -77,7 +85,6 @@ it('R6′ keeps Stop pending after the receipt until evidence settles — mutati
             endedAt: '2026-09-09T00:00:12Z',
           },
         ],
-        [],
         [],
       )}
     />,
@@ -185,7 +192,7 @@ it('R2 back restores the panel list scroll and selection — mutation reset list
 it('R4 View result exists only at a recorded return — mutation use terminal row status as a return turns red', () => {
   const input = {
     ...props(),
-    rows: buildParallelWork([{ ...run, status: 'unknown' }], [], []),
+    rows: buildParallelWork([{ ...run, status: 'unknown' }], []),
   }
   const { rerender } = render(<ParallelWork {...input} />)
   const absent = screen.queryByRole('button', { name: 'View result' }) === null
@@ -253,7 +260,7 @@ it('T10 narrow sheet closes when navigating to the spawn — mutations force wid
 })
 
 it('T10 cyclic ancestry finishes selection — mutation remove visited parent guard turns red', () => {
-  const rows = buildParallelWork([run, { ...run, id: 'other' }], [], [])
+  const rows = buildParallelWork([run, { ...run, id: 'other' }], [])
   rows[0].parentId = 'other'
   rows[1].parentId = 'agent'
   let reads = 0
@@ -279,7 +286,7 @@ it('H2 a missed-adoption row stops by the harness id and settles from its task w
   const input = {
     ...props(),
     selectedId: 'agent:agent',
-    rows: buildParallelWork([linkedRun], [task], []),
+    rows: buildParallelWork([linkedRun], [task]),
   }
   const { rerender } = render(<ParallelWork {...input} />)
   fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
@@ -292,7 +299,6 @@ it('H2 a missed-adoption row stops by the harness id and settles from its task w
       rows={buildParallelWork(
         [linkedRun],
         [{ ...task, status: 'completed', endedAt: '2026-09-09T00:00:12Z' }],
-        [],
       )}
       items={[
         {
@@ -333,7 +339,7 @@ it('L8 a refused Stop stays visible after the row is no longer running — mutat
   rerender(
     <ParallelWork
       {...input}
-      rows={buildParallelWork([{ ...run, status: 'completed' }], [], [])}
+      rows={buildParallelWork([{ ...run, status: 'completed' }], [])}
     />,
   )
   fireEvent.click(
@@ -422,7 +428,6 @@ it('RUN64 R3 older bucket expands without changing all-time summary — mutation
         },
       ],
       [],
-      [],
     ),
   }
   const { container, unmount } = render(<ParallelWork {...input} />)
@@ -455,7 +460,6 @@ it('RUN64 R2/R3 finished-only panel ages into archive — mutation clock only wi
     ...props(),
     rows: buildParallelWork(
       [{ ...run, status: 'completed', endedAt: '2026-09-09T00:00:30Z' }],
-      [],
       [],
     ),
   }
@@ -514,7 +518,6 @@ it('RUN64 round2 one root bucket keeps visible trees whole — mutation bucket e
         outputFile: null,
       },
     ],
-    [],
   )
   rows.find((row) => row.id === 'old-child')!.parentId = 'active'
   rows.find((row) => row.id === 'old-descendant')!.parentId = 'old-root'
@@ -555,7 +558,6 @@ it.each(['reopen', 'session'] as const)(
       ...props(),
       rows: buildParallelWork(
         [{ ...run, status: 'completed', endedAt: '2026-09-09T09:00:00Z' }],
-        [],
         [],
       ),
     }
@@ -605,7 +607,6 @@ const sharedIdRows = () =>
         outputFile: null,
       },
     ],
-    [],
   )
 
 it('RUN72 an agent and a task sharing an id are separate rows on every surface — mutation key a surface on the bare id turns red', async () => {
@@ -703,6 +704,7 @@ it('RUN72 collapsing the agent under a shared id hides only its branch — mutat
         ...run,
         id: 'child',
         spawnedByItemId: 'child-spawn',
+        parentRunId: 'agent',
         description: 'Child work',
       },
     ],
@@ -720,7 +722,6 @@ it('RUN72 collapsing the agent under a shared id hides only its branch — mutat
         outputFile: null,
       },
     ],
-    [{ id: 'child-spawn', agentRunId: 'agent' }],
   )
   render(<ParallelWork {...props()} rows={rows} />)
   const before = Boolean(screen.queryByText('Child work'))
@@ -743,6 +744,7 @@ it('RUN72 selecting a hidden descendant expands its ancestors by row key — mut
         ...run,
         id: 'child',
         spawnedByItemId: 'child-spawn',
+        parentRunId: 'agent',
         description: 'Child work',
       },
     ],
@@ -760,7 +762,6 @@ it('RUN72 selecting a hidden descendant expands its ancestors by row key — mut
         outputFile: null,
       },
     ],
-    [{ id: 'child-spawn', agentRunId: 'agent' }],
   )
   const input = { ...props(), rows }
   const { rerender } = render(<ParallelWork {...input} />)
@@ -914,7 +915,7 @@ it('MAR-3391 R1/R7 D2 the sidebar never folds an entry the parallel-work markers
         session={
           { id: 's', canStopTasks: true, workingDirectory: '/repo' } as Session
         }
-        rows={buildParallelWork([run, nested], [], [])}
+        rows={buildParallelWork([run, nested], [])}
         items={items}
         selectedId="agent:agent"
       />,
@@ -937,4 +938,129 @@ it('MAR-3391 R1/R7 D2 the sidebar never folds an entry the parallel-work markers
   } finally {
     useTranscriptViewStore.setState({ modes: {}, openBlocks: new Set() })
   }
+})
+
+it.each(['full', 'window'] as const)(
+  'MAR-3310 O0b R2/R3 with the %s conversation loaded, the detail shows the older transcript, resolves View result and the pending decision, and keeps the live text — mutations drop the read or let the fetched copy win turn red',
+  async (loaded) => {
+    const common = {
+      sessionId: 's',
+      turnId: null,
+      state: 'complete',
+      createdAt: 'now',
+      updatedAt: 'now',
+      providerMeta: {
+        providerId: 'claude-code',
+        providerItemId: null,
+        providerEventType: null,
+      },
+    }
+    const older = [
+      {
+        ...common,
+        id: 'older-tool',
+        sequence: 1,
+        agentRunId: 'agent',
+        kind: 'tool-call',
+        toolName: 'Read',
+        inputText: '{"file_path":"older-file.txt"}',
+      },
+      {
+        ...common,
+        id: 'older-request',
+        sequence: 2,
+        agentRunId: 'agent',
+        kind: 'approval-request',
+        resolution: 'pending',
+        description: 'older permission card',
+      },
+      {
+        ...common,
+        id: 'older-note',
+        sequence: 3,
+        taskId: 'harness',
+        kind: 'note',
+        text: 'Task finished',
+        providerMeta: {
+          ...common.providerMeta,
+          providerEventType: 'harness.task.terminal',
+        },
+      },
+    ] as ConversationItem[]
+    const live = (text: string) =>
+      ({
+        ...common,
+        id: 'live',
+        sequence: 4,
+        agentRunId: 'agent',
+        kind: 'message',
+        actor: 'assistant',
+        text,
+      }) as ConversationItem
+    // Main answered before the last chunk streamed in.
+    vi.mocked(parallelWorkApi.readDetail).mockResolvedValue([
+      ...older,
+      live('stale snapshot'),
+    ])
+    const onNavigate = vi.fn()
+    const rows = buildParallelWork(
+      [{ ...run, taskId: 'harness' }],
+      [
+        {
+          taskId: 'harness',
+          sessionId: 's',
+          status: 'completed',
+          description: 'Read routes',
+          startedAt: '2026-09-09T00:00:00Z',
+          endedAt: '2026-09-09T00:00:09Z',
+          observedAt: null,
+          toolUseId: null,
+          taskType: 'local_agent',
+          outputFile: null,
+        },
+      ],
+    )
+    const items =
+      loaded === 'full'
+        ? [...older, live('the live reply')]
+        : [live('the live reply')]
+    const { container } = render(
+      <ParallelWork
+        {...props()}
+        rows={rows}
+        items={items}
+        selectedId="agent:agent"
+        onNavigate={onNavigate}
+      />,
+    )
+    await act(async () => {})
+    fireEvent.click(
+      screen.getByText('Waiting for your decision in the conversation →'),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'View result' }))
+    expect({
+      read: vi.mocked(parallelWorkApi.readDetail).mock.calls,
+      olderTool: container.textContent?.includes('older-file.txt'),
+      live: container.textContent?.includes('the live reply'),
+      stale: container.textContent?.includes('stale snapshot'),
+      navigated: onNavigate.mock.calls,
+    }).toEqual({
+      read: [['s', ['agent', 'harness']]],
+      olderTool: true,
+      live: true,
+      stale: false,
+      navigated: [['older-request'], ['older-note']],
+    })
+  },
+)
+
+it('MAR-3310 O0b R2 a failed detail read says so beside what is loaded — mutation swallow the failure turns red', async () => {
+  vi.mocked(parallelWorkApi.readDetail).mockRejectedValue(
+    new Error('database is locked'),
+  )
+  render(<ParallelWork {...props()} selectedId="agent:agent" />)
+  await act(async () => {})
+  expect(screen.getByRole('alert').textContent).toBe(
+    'Could not read the earlier part of this work: database is locked',
+  )
 })

@@ -1,6 +1,9 @@
 import { expect, it } from 'vitest'
 import {
+  buildParallelWork,
   countParallelWork,
+  isSubagentWork,
+  parallelWorkRowState,
   parallelWorkTime,
   type ParallelWorkRow,
 } from '@/shared/lib/parallel-work.pure'
@@ -11,7 +14,7 @@ import type {
 import type { ConversationItem } from '@/entities/session'
 import {
   descendantActivity,
-  parallelWorkLinksKey,
+  parallelWorkDetailItems,
   parallelWorkMarkers,
   sameParallelWorkEvidence,
   workRowKey,
@@ -20,6 +23,7 @@ import {
   parallelWorkRefusal,
   parallelWorkCardTone,
   PARALLEL_WORK_CARD_TONE_CLASS,
+  withFetchedWorkItems,
 } from './parallel-work.pure'
 
 it('R2 collapsed activity includes deep descendants and missing elapsed stays missing — mutations count direct children only or invent zero elapsed turn red', () => {
@@ -275,27 +279,147 @@ it('MAR-3308 R1 each tone is its own class pair — mutation reuse one tone for 
   })
 })
 
-it('MAR-3310 F1e R4 the links key names each run with the agent that spawned it, and is blind to text — mutation read the item text turns red', () => {
-  const run = { id: 'run-1', spawnedByItemId: 'spawn' } as SessionAgentRun
-  const orphan = { id: 'run-2', spawnedByItemId: 'gone' } as SessionAgentRun
-  const spawn = {
-    id: 'spawn',
-    kind: 'tool-call',
-    agentRunId: 'parent-run',
-  } as ConversationItem
-  const plain = { id: 'plain', kind: 'message', text: 'a' } as ConversationItem
-  const grown = { ...plain, text: 'a longer reply' } as ConversationItem
+// MAR-3310 O0b R2. The panel's detail filter exactly as it stood before the
+// by-id read, kept here as the reference the merged detail must equal.
+const todaysDetail = (items: ConversationItem[], row: ParallelWorkRow) =>
+  items.filter((item) =>
+    row.kind === 'agent'
+      ? parallelWorkRowState(row).ids.includes(item.agentRunId ?? '') &&
+        isSubagentWork(item)
+      : parallelWorkRowState(row).ids.includes(item.taskId ?? '') &&
+        ['tool-call', 'tool-result'].includes(item.kind),
+  )
+// What main's `listRunItems` + `listTaskItems` answer for a row's ids.
+const readById = (items: ConversationItem[], row: ParallelWorkRow) => {
+  const { ids } = parallelWorkRowState(row)
+  return items.filter(
+    (item) =>
+      ids.includes(item.agentRunId ?? '') || ids.includes(item.taskId ?? ''),
+  )
+}
+const detailFixture = () => {
+  let sequence = 0
+  const item = (fields: Partial<ConversationItem>) =>
+    ({
+      id: `item-${++sequence}`,
+      sequence,
+      sessionId: 's',
+      turnId: null,
+      state: 'complete',
+      createdAt: '',
+      updatedAt: '',
+      providerMeta: { providerId: 'claude-code' },
+      ...fields,
+    }) as ConversationItem
+  const items = [
+    item({ kind: 'message', actor: 'user', text: 'go' }),
+    item({ kind: 'tool-call', agentRunId: 'agent', toolName: 'Read' }),
+    item({ kind: 'tool-call', taskId: 'task', toolName: 'Bash' }),
+    item({ kind: 'thinking', agentRunId: 'agent', text: 'hm' }),
+    item({
+      kind: 'approval-request',
+      agentRunId: 'agent',
+      resolution: 'pending',
+    }),
+    item({ kind: 'tool-result', taskId: 'task', outputText: 'out' }),
+    item({ kind: 'note', taskId: 'task', text: 'done' }),
+    item({ kind: 'tool-result', agentRunId: 'agent', outputText: 'r' }),
+    item({ kind: 'message', actor: 'assistant', text: 'main' }),
+    item({
+      kind: 'message',
+      actor: 'assistant',
+      agentRunId: 'agent',
+      text: 'a',
+    }),
+    item({
+      kind: 'message',
+      actor: 'assistant',
+      agentRunId: 'other',
+      text: 'o',
+    }),
+  ]
+  const at = '2026-09-09T00:00:00Z'
+  const rows = buildParallelWork(
+    [
+      {
+        id: 'agent',
+        sessionId: 's',
+        spawnedByItemId: 'spawn',
+        status: 'running',
+        startedAt: at,
+      } as SessionAgentRun,
+    ],
+    [
+      {
+        taskId: 'task',
+        sessionId: 's',
+        taskType: 'local_bash',
+        status: 'running',
+      } as SessionTask,
+    ],
+  )
+  return { items, rows }
+}
+
+it('MAR-3310 O0b R2 on full data the merged detail IS today’s list and today’s filter, for agent and task rows; in a window the older items come back — mutation drop the fetched items turns red', () => {
+  const { items, rows } = detailFixture()
+  const window = items.slice(-2)
+  expect(
+    rows.map((row) => {
+      const full = withFetchedWorkItems(items, readById(items, row))
+      const windowed = withFetchedWorkItems(window, readById(items, row))
+      return {
+        kind: row.kind,
+        fullIsLoaded: full === items,
+        full: parallelWorkDetailItems(full, row).map((item) => item.id),
+        windowed: parallelWorkDetailItems(windowed, row).map((item) => item.id),
+        today: todaysDetail(items, row).map((item) => item.id),
+        todayInWindow: todaysDetail(window, row).map((item) => item.id),
+      }
+    }),
+  ).toEqual([
+    {
+      kind: 'agent',
+      fullIsLoaded: true,
+      full: ['item-2', 'item-4', 'item-8', 'item-10'],
+      windowed: ['item-2', 'item-4', 'item-8', 'item-10'],
+      today: ['item-2', 'item-4', 'item-8', 'item-10'],
+      todayInWindow: ['item-10'],
+    },
+    {
+      kind: 'task',
+      fullIsLoaded: true,
+      full: ['item-3', 'item-6'],
+      windowed: ['item-3', 'item-6'],
+      today: ['item-3', 'item-6'],
+      todayInWindow: [],
+    },
+  ])
+})
+
+it('MAR-3310 O0b R2 the loaded copy of a streaming item wins over the fetched one, and the merge is ordered and deduplicated — mutation let the fetched copy win turns red', () => {
+  const { items, rows } = detailFixture()
+  const agent = rows[0]!
+  const live = items.at(-2)!
+  const window = [
+    { ...live, text: 'the live, still-growing reply' } as ConversationItem,
+    items.at(-1)!,
+  ]
+  // The read ran before the last chunk landed, and both reads returned it.
+  const fetched = [
+    ...readById(items, agent),
+    { ...live, text: 'a stale snapshot' } as ConversationItem,
+  ]
+  const merged = withFetchedWorkItems(window, fetched)
+  const detail = parallelWorkDetailItems(merged, agent)
   expect({
-    key: parallelWorkLinksKey([spawn, plain], [run, orphan]),
-    sameWhenTextGrows:
-      parallelWorkLinksKey([spawn, plain], [run]) ===
-      parallelWorkLinksKey([spawn, grown], [run]),
+    ids: detail.map((item) => item.id),
+    live: detail.find((item) => item.id === live.id),
+    liveIsLoadedObject: detail.includes(window[0]!),
   }).toEqual({
-    key: JSON.stringify([
-      ['spawn', 'parent-run'],
-      ['gone', null],
-    ]),
-    sameWhenTextGrows: true,
+    ids: ['item-2', 'item-4', 'item-8', 'item-10'],
+    live: expect.objectContaining({ text: 'the live, still-growing reply' }),
+    liveIsLoadedObject: true,
   })
 })
 

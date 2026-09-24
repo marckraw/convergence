@@ -29,7 +29,7 @@ it('R4 renders spawn, launch and real return in order with identity links — mu
       providerMeta: { providerEventType: 'harness.task.terminal' },
     },
   ] as ConversationItem[]
-  const markers = parallelWorkMarkers(items, buildParallelWork([run], [], []))
+  const markers = parallelWorkMarkers(items, buildParallelWork([run], []))
   const select = vi.fn()
   render(
     <>

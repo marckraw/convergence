@@ -1,4 +1,5 @@
 import {
+  isSubagentWork,
   parallelWorkParents,
   parallelWorkRowState,
   type ParallelWorkRow,
@@ -21,22 +22,42 @@ export function sameParallelWorkEvidence(
 }
 
 /**
- * Which item spawned each run, and whose work that item was: the one fact the
- * panel's tree reads from the transcript. A string, so a list change that
- * moves no link leaves the rows alone. O(n) per list change (MAR-3310 F1e R4).
+ * The loaded conversation plus what a by-id read fetched that the loaded list
+ * does not hold, deduplicated by id, in `sequence` order (MAR-3310 O0b R2).
+ *
+ * The loaded copy of an item always wins: it may be newer than the fetched
+ * one, or still streaming — a subagent's live text is tied to the loaded
+ * object (F1e). When the read adds nothing, which on a fully loaded
+ * conversation is every time, the loaded list itself comes back, so every
+ * surface computed from it keeps its identity and is exactly today's.
  */
-export function parallelWorkLinksKey(
+export function withFetchedWorkItems<
+  T extends { id: string; sequence: number },
+>(loaded: T[], fetched: readonly T[]): T[] {
+  if (!fetched.length) return loaded
+  const held = new Set(loaded.map((item) => item.id))
+  const added = new Map<string, T>()
+  for (const item of fetched)
+    if (!held.has(item.id) && !added.has(item.id)) added.set(item.id, item)
+  if (!added.size) return loaded
+  return [...loaded, ...added.values()].sort((a, b) => a.sequence - b.sequence)
+}
+
+/**
+ * A row's detail: an agent's own transcript, or a task's tool calls and
+ * results. The same filter the panel has always applied, now over the loaded
+ * list merged with the row's by-id read (MAR-3310 O0b R2).
+ */
+export function parallelWorkDetailItems(
   items: readonly ConversationItem[],
-  runs: readonly SessionAgentRun[],
-): string {
-  const parentByItem = new Map(
-    items.map((item) => [item.id, item.agentRunId ?? null]),
-  )
-  return JSON.stringify(
-    runs.map((run) => [
-      run.spawnedByItemId,
-      parentByItem.get(run.spawnedByItemId) ?? null,
-    ]),
+  row: ParallelWorkRow,
+): ConversationItem[] {
+  const { ids } = parallelWorkRowState(row)
+  return items.filter((item) =>
+    row.kind === 'agent'
+      ? ids.includes(item.agentRunId ?? '') && isSubagentWork(item)
+      : ids.includes(item.taskId ?? '') &&
+        ['tool-call', 'tool-result'].includes(item.kind),
   )
 }
 

@@ -1,3 +1,5 @@
+import type { ConversationItem } from '@/entities/session'
+
 export const parallelWorkApi = {
   read: async (sessionId: string) => {
     const [runs, tasks] = await Promise.all([
@@ -5,6 +7,21 @@ export const parallelWorkApi = {
       window.electronAPI.session.listTasks(sessionId),
     ])
     return { runs, tasks }
+  },
+  /**
+   * Every item that belongs to one row, read from main by id (MAR-3310 O0b):
+   * the items of any run with one of these ids, and of any task with one.
+   * The two reads may share an item; the panel's merge deduplicates by id.
+   */
+  readDetail: async (
+    sessionId: string,
+    ids: string[],
+  ): Promise<ConversationItem[]> => {
+    const [runItems, taskItems] = await Promise.all([
+      window.electronAPI.session.listRunItems(sessionId, ids),
+      window.electronAPI.session.listTaskItems(sessionId, ids),
+    ])
+    return [...runItems, ...taskItems]
   },
   subscribe: (listener: (event: { sessionId: string }) => void) =>
     window.electronAPI.session.onEvidenceUpdated(listener),
