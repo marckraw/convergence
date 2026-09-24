@@ -1,5 +1,23 @@
 # convergence
 
+## 0.87.0
+
+### Minor Changes
+
+- 1bc8d96: Long conversations open instantly; older messages load as you scroll up.
+- 9fa67be: Conversations are compact: runs of tool calls fold into one line that says what the agent did, and open in place; a Full switch shows everything.
+- f3b90e0: Conversations get an Actions button: this agent's skills, routines and project actions, each honest about now
+
+### Patch Changes
+
+- b41cbc6: Local-model tunnels stop re-sending an unchanged status every 15 seconds.
+- 091477f: Streaming into a long conversation no longer slows the app: only the growing reply redraws.
+- cbe5787: Conversations stay responsive while agents stream: the check for 'needs your approval' no longer scans whole conversations.
+- 1c8b574: Remote conversations say whose skills the picker lists.
+- 78ff646: A streaming reply no longer sends its whole message twice when it starts.
+- b53ab6b: The conversation's Elapsed time keeps counting while a reply streams.
+- 7bf75c8: Turn numbers in a conversation stay put while subagent details load.
+
 ## 0.86.0
 
 ### Minor Changes
