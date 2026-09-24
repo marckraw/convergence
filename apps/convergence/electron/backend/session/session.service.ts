@@ -2054,16 +2054,31 @@ export class SessionService {
     return this.listItemsById(sessionId, 'task_id', taskIds)
   }
 
+  /** Only the latest terminal note per task crosses IPC for the cards. */
+  listTaskResultNotes(
+    sessionId: string,
+    taskIds: string[],
+  ): ConversationItem[] {
+    this.flushPendingConversationPatchesForSession(sessionId)
+    const statement = this.db.prepare(`${ITEMS_BY_ID_SELECT}
+      WHERE items.session_id = ? AND items.task_id = ?
+        AND items.kind = 'note' AND items.provider_event_type = 'harness.task.terminal'
+      ORDER BY items.sequence DESC LIMIT 1`)
+    return [...new Set(taskIds)].flatMap((id) => {
+      const row = statement.get(sessionId, id) as
+        | ConversationItemRow
+        | undefined
+      return row ? [conversationItemFromRow(row)] : []
+    })
+  }
+
   /**
    * The newest approval and input requests still awaiting an answer, newest
    * first, at most 50 (MAR-3310 O0b R5).
    *
-   * "Awaiting" is the item's own half of the transcript's actionable rule: a
-   * `resolution` of `pending`, or none the reader recognises. The reader
-   * (`conversationItemFromRow`) keeps only `pending` / `approved` / `denied`,
-   * so anything but the two answered words reads as absent there, and here.
-   * The session's half — status, attention, a live handle — stays with the
-   * renderer, which has it.
+   * Only explicit pending resolutions are pins. Providers that do not record
+   * answers leave historical requests absent; their live request is already
+   * in the newest page (MAR-3398 R7). Actionability stays with the renderer.
    */
   listPendingRequestItems(sessionId: string): ConversationItem[] {
     this.flushPendingConversationPatchesForSession(sessionId)
@@ -2073,7 +2088,7 @@ export class SessionService {
           `${ITEMS_BY_ID_SELECT}
          WHERE items.session_id = ?
            AND items.kind IN ('approval-request', 'input-request')
-           AND IFNULL(json_extract(items.payload_json, '$.resolution'), '') NOT IN ('approved', 'denied')
+           AND json_extract(items.payload_json, '$.resolution') = 'pending'
          ORDER BY items.sequence DESC
          LIMIT 50`,
         )

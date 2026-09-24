@@ -30,7 +30,9 @@ interface SessionConversationSurfaceProps {
   hasOlder?: boolean
   oldestSequence?: number | null
   loadingOlder?: boolean
-  onLoadOlder?: () => void
+  olderError?: string
+  snapshotVersion?: number
+  onLoadOlder?: (retry?: boolean) => void
   conversationPrefix?: ConversationPrefix
   conversationItems: ConversationItem[]
   composerContext: ComposerSessionContext | null
@@ -62,6 +64,8 @@ export const SessionConversationSurface: FC<
   hasOlder,
   oldestSequence,
   loadingOlder,
+  olderError,
+  snapshotVersion,
   onLoadOlder,
   conversationPrefix,
   conversationItems,
@@ -96,6 +100,8 @@ export const SessionConversationSurface: FC<
         hasOlder={hasOlder}
         oldestSequence={oldestSequence}
         loadingOlder={loadingOlder}
+        olderError={olderError}
+        snapshotVersion={snapshotVersion}
         onLoadOlder={onLoadOlder}
         conversationPrefix={conversationPrefix}
         conversationItems={conversationItems}

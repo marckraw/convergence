@@ -120,6 +120,8 @@ export interface ConversationWindow {
   hasOlder: boolean
   oldestSequence: number | null
   loading: boolean
+  error?: string
+  snapshotVersion?: number
 }
 const EMPTY_WINDOW: ConversationWindow = {
   hasOlder: false,
@@ -207,7 +209,7 @@ interface SessionActions {
   archiveSession: (id: string) => Promise<void>
   unarchiveSession: (id: string) => Promise<void>
   deleteSession: (id: string, projectId?: string | null) => Promise<void>
-  loadOlderConversation: (sessionId: string) => Promise<void>
+  loadOlderConversation: (sessionId: string, retry?: boolean) => Promise<void>
   loadActiveConversation: (sessionId: string) => Promise<void>
   loadActiveGlobalConversation: (sessionId: string) => Promise<void>
   loadQueuedInputs: (sessionId: string) => Promise<void>
@@ -1015,7 +1017,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  loadOlderConversation: async (sessionId: string) => {
+  loadOlderConversation: async (sessionId: string, retry = false) => {
     const state = get()
     const project = state.activeSessionId === sessionId
     if (!project && state.activeGlobalSessionId !== sessionId) return
@@ -1024,6 +1026,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       : 'activeGlobalConversationWindow'
     const window = state[windowKey]
     const load = conversationLoad(sessionId)
+    if (retry) load.olderFailed = false
     if (
       !window.hasOlder ||
       window.oldestSequence === null ||
@@ -1037,7 +1040,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const beforeSequence = window.oldestSequence
     const generation = load.applied
     load.olderBefore = beforeSequence
-    set({ [windowKey]: { ...window, loading: true } })
+    set({ [windowKey]: { ...window, loading: true, error: undefined } })
     try {
       await sessionApi.resyncConversation(
         sessionId,
@@ -1055,11 +1058,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         sessionId
       )
         set({
-          [windowKey]: { ...get()[windowKey], loading: false },
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to load older messages; reopen the conversation to retry',
+          [windowKey]: {
+            ...get()[windowKey],
+            loading: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : 'Failed to load earlier messages',
+          },
         })
     }
   },
@@ -1294,6 +1300,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           [itemsKey]: next,
           [prefixKey]: event.prefix,
           [windowKey]: {
+            snapshotVersion: state[windowKey].snapshotVersion,
             hasOlder: event.hasOlder,
             oldestSequence: event.oldestSequence,
             loading: false,
@@ -1392,6 +1399,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
                 ? {
                     activeConversationPrefix: event.prefix,
                     activeConversationWindow: {
+                      snapshotVersion:
+                        (state.activeConversationWindow.snapshotVersion ?? 0) +
+                        1,
                       hasOlder: event.hasOlder,
                       oldestSequence: event.oldestSequence,
                       loading: false,
@@ -1406,6 +1416,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
                 ? {
                     activeGlobalConversationPrefix: event.prefix,
                     activeGlobalConversationWindow: {
+                      snapshotVersion:
+                        (state.activeGlobalConversationWindow.snapshotVersion ??
+                          0) + 1,
                       hasOlder: event.hasOlder,
                       oldestSequence: event.oldestSequence,
                       loading: false,

@@ -119,6 +119,7 @@ for (const global of [false, true]) {
         : store().activeConversationPrefix,
     ).toBe(prefix)
     expect(windowState()).toEqual({
+      snapshotVersion: 1,
       hasOlder: true,
       oldestSequence: 701,
       loading: false,
@@ -160,5 +161,31 @@ for (const global of [false, true]) {
     const replaced = items()
     emit(event)
     expect(items()).toBe(replaced)
+  })
+  it(`R13 ${global ? 'global' : 'project'} snapshot clears in-flight and failed older loads so the next scroll-up reads`, async () => {
+    const pageNonce = await open()
+    await store().loadOlderConversation('s')
+    const snapshot = {
+      op: 'snapshot' as const,
+      sessionId: 's',
+      items: [item(1001)],
+      prefix: EMPTY_CONVERSATION_PREFIX,
+      hasOlder: true,
+      oldestSequence: 1001,
+      generation: 1,
+      pageNonce,
+    }
+    emit(snapshot)
+    await store().loadOlderConversation('s')
+    expect(resync).toHaveBeenCalledTimes(3)
+    emit(snapshot)
+    resync.mockRejectedValueOnce(new Error('older failed'))
+    await store().loadOlderConversation('s')
+    expect(windowState().error).toBe('older failed')
+    emit(snapshot)
+    await store().loadOlderConversation('s')
+    expect(resync).toHaveBeenCalledTimes(5)
+    expect(windowState()).toMatchObject({ loading: true })
+    expect(windowState().error).toBeUndefined()
   })
 }

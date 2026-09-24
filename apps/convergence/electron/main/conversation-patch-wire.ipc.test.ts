@@ -71,6 +71,37 @@ beforeEach(() => {
   )
 })
 
+it('R13 beforeSequence requests emit older-page, never snapshot', () => {
+  getConversationPage.mockReturnValue({
+    items: [item],
+    prefix: EMPTY_CONVERSATION_PREFIX,
+    hasOlder: true,
+    oldestSequence: 1,
+  })
+  handlers.get('session:resyncConversation')!(
+    { sender: { send } },
+    'session',
+    3,
+    'page',
+    { limit: 300, beforeSequence: 301 },
+  )
+  expect(getConversationPage).toHaveBeenCalledExactlyOnceWith('session', {
+    limit: 300,
+    beforeSequence: 301,
+  })
+  expect(send).toHaveBeenCalledExactlyOnceWith('session:conversationPatched', {
+    op: 'older-page',
+    sessionId: 'session',
+    generation: 3,
+    pageNonce: 'page',
+    beforeSequence: 301,
+    items: [item],
+    prefix: EMPTY_CONVERSATION_PREFIX,
+    hasOlder: true,
+    oldestSequence: 1,
+  })
+})
+
 it('R2b/R2e flushes before exactly one snapshot and sends all three in order on the patch channel', () => {
   patch('one')
   send.mockClear()

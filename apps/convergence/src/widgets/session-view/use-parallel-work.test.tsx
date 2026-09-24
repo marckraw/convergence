@@ -6,13 +6,17 @@ import type {
   SessionTask,
 } from '@/shared/types/harness-evidence.types'
 import { buildParallelWork } from '@/shared/lib/parallel-work.pure'
-import { useParallelWork, useParallelWorkDetail } from './use-parallel-work'
+import {
+  useParallelWork,
+  useParallelWorkDetail,
+  useParallelWorkResults,
+} from './use-parallel-work'
 import { parallelWorkApi } from './parallel-work.api'
 
 vi.mock('./parallel-work.api', () => ({
   parallelWorkApi: {
     subscribeConversation: vi.fn(() => () => {}),
-    readTaskItems: vi.fn().mockResolvedValue([]),
+    readTaskResultNotes: vi.fn().mockResolvedValue([]),
     read: vi.fn(),
     subscribe: vi.fn(),
     readDetail: vi.fn(),
@@ -154,8 +158,9 @@ it('MAR-3310 O0b R2 the detail reads the selected row by its ids, drops a reply 
   // It changes again before that read returns; the newer read lands first
   // and the older one late — the late one is not the row's latest word.
   rerender({ row: detailRow('failed', 'other') })
-  await act(async () => pending[3]!.resolve([detailItem('other-3')]))
+  expect(pending).toHaveLength(3)
   await act(async () => pending[2]!.resolve([detailItem('other-2')]))
+  await act(async () => pending[3]!.resolve([detailItem('other-3')]))
   const afterRace = ids()
   // Back to the first row: what `other` read is not this row's detail.
   rerender({ row: detailRow('running') })
@@ -227,48 +232,114 @@ it('MAR-3310 F1e R4 an evidence event that changes nothing keeps the rows; a rea
   }).toEqual({ kept: true, replaced: true, status: 'completed' })
 })
 
-it('O1 R4 rereads the selected fetched set on snapshot and on a patch outside the loaded window', async () => {
-  let receive!: Parameters<typeof parallelWorkApi.subscribeConversation>[0]
-  vi.mocked(parallelWorkApi.subscribeConversation).mockImplementation(
-    (listener) => {
-      receive = listener
-      return () => {}
-    },
-  )
-  vi.mocked(parallelWorkApi.readDetail)
-    .mockReset()
-    .mockResolvedValue([detailItem('old')])
-  const { result } = renderHook(() =>
-    useParallelWorkDetail('s', detailRow('running')),
-  )
-  await act(async () => {})
-  vi.mocked(parallelWorkApi.readDetail).mockResolvedValue([
-    detailItem('after-snapshot'),
-  ])
-  await act(async () =>
-    receive({
-      op: 'snapshot',
-      sessionId: 's',
-      items: [],
-      generation: 2,
-      pageNonce: 'page',
-      hasOlder: true,
-      oldestSequence: 1001,
-      prefix: {
-        turnCount: 0,
-        turns: [],
-        totalMs: null,
-        latestCompletedReplyId: null,
+it.each(['detail', 'results'] as const)(
+  'R10 %s: 50 add/patch events cause zero reads; patches update fetched copies and a snapshot reads once',
+  async (mode) => {
+    let receive!: Parameters<typeof parallelWorkApi.subscribeConversation>[0]
+    vi.mocked(parallelWorkApi.subscribeConversation).mockImplementation(
+      (listener) => {
+        receive = listener
+        return () => {}
       },
-    }),
-  )
-  expect(result.current.items[0].id).toBe('after-snapshot')
-  vi.mocked(parallelWorkApi.readDetail).mockResolvedValue([
-    detailItem('after-patch'),
-  ])
-  await act(async () =>
-    receive({ op: 'patch', sessionId: 's', item: detailItem('old') }),
-  )
-  expect(result.current.items[0].id).toBe('after-patch')
-  expect(parallelWorkApi.readDetail).toHaveBeenCalledTimes(3)
-})
+    )
+    const read =
+      mode === 'detail'
+        ? parallelWorkApi.readDetail
+        : parallelWorkApi.readTaskResultNotes
+    vi.mocked(read)
+      .mockReset()
+      .mockResolvedValue([detailItem('old')])
+    const { result } = renderHook(() =>
+      mode === 'detail'
+        ? useParallelWorkDetail('s', detailRow('running'))
+        : useParallelWorkResults('s', [detailRow('running')], true),
+    )
+    await act(async () => {})
+    const patched = { ...detailItem('old'), state: 'complete' as const }
+    await act(async () => {
+      for (let i = 0; i < 50; i++)
+        receive(
+          i % 2
+            ? { op: 'patch', sessionId: 's', item: patched }
+            : { op: 'add', sessionId: 's', item: detailItem(`new-${i}`) },
+        )
+    })
+    expect(read).toHaveBeenCalledTimes(1)
+    expect(result.current.items).toEqual([patched])
+    vi.mocked(read).mockResolvedValue([detailItem('after-snapshot')])
+    await act(async () =>
+      receive({
+        op: 'snapshot',
+        sessionId: 's',
+        items: [],
+        generation: 2,
+        pageNonce: 'page',
+        hasOlder: true,
+        oldestSequence: 1001,
+        prefix: {
+          turnCount: 0,
+          turns: [],
+          totalMs: null,
+          latestCompletedReplyId: null,
+        },
+      }),
+    )
+    expect(result.current.items[0].id).toBe('after-snapshot')
+    expect(read).toHaveBeenCalledTimes(2)
+  },
+)
+
+it.each(['detail', 'results'] as const)(
+  'R10 %s coalesces snapshot and row changes to one in flight plus one trailing and preserves an in-flight patch',
+  async (mode) => {
+    let receive!: Parameters<typeof parallelWorkApi.subscribeConversation>[0]
+    vi.mocked(parallelWorkApi.subscribeConversation).mockImplementation(
+      (listener) => {
+        receive = listener
+        return () => {}
+      },
+    )
+    const pending: Array<(items: ConversationItem[]) => void> = []
+    const read =
+      mode === 'detail'
+        ? parallelWorkApi.readDetail
+        : parallelWorkApi.readTaskResultNotes
+    vi.mocked(read)
+      .mockReset()
+      .mockImplementation(() => new Promise((resolve) => pending.push(resolve)))
+    const { result, rerender } = renderHook(
+      ({ status }) =>
+        mode === 'detail'
+          ? useParallelWorkDetail('s', detailRow(status))
+          : useParallelWorkResults('s', [detailRow(status)], true),
+      { initialProps: { status: 'running' as SessionAgentRun['status'] } },
+    )
+    act(() => {
+      for (let i = 0; i < 50; i++)
+        receive({
+          op: 'snapshot',
+          sessionId: 's',
+          items: [],
+          generation: 2,
+          pageNonce: 'page',
+          hasOlder: true,
+          oldestSequence: 1001,
+          prefix: {
+            turnCount: 0,
+            turns: [],
+            totalMs: null,
+            latestCompletedReplyId: null,
+          },
+        })
+    })
+    rerender({ status: 'completed' })
+    expect(read).toHaveBeenCalledTimes(1)
+    await act(async () => pending[0]!([detailItem('stale')]))
+    expect(read).toHaveBeenCalledTimes(2)
+    const patched = { ...detailItem('old'), state: 'complete' as const }
+    act(() => receive({ op: 'patch', sessionId: 's', item: patched }))
+    await act(async () => pending[1]!([detailItem('old')]))
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(result.current.items).toEqual([patched])
+  },
+)

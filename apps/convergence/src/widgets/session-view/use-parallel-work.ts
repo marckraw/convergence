@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ConversationItem } from '@/entities/session'
 import type {
   SessionAgentRun,
@@ -110,60 +110,7 @@ export function useParallelWorkDetail(
     ? JSON.stringify([sessionId, workRowKey(row), state!.ids])
     : null
   const status = state?.fact?.status ?? null
-  const [detail, setDetail] = useState<{
-    rowKey: string
-    value: { items: ConversationItem[]; error: string | null }
-  } | null>(null)
-  useEffect(() => {
-    if (!rowKey) return
-    const [readSessionId, , ids] = JSON.parse(rowKey) as [
-      string,
-      string,
-      string[],
-    ]
-    let active = true
-    let revision = 0
-    let fetchedIds = new Set<string>()
-    const read = () => {
-      const current = ++revision
-      void parallelWorkApi.readDetail(readSessionId, ids).then(
-        (items) => {
-          if (active && current === revision) {
-            fetchedIds = new Set(items.map((item) => item.id))
-            setDetail({ rowKey, value: { items, error: null } })
-          }
-        },
-        (failure: unknown) => {
-          if (active && current === revision)
-            setDetail({
-              rowKey,
-              value: {
-                items: [],
-                error:
-                  failure instanceof Error ? failure.message : String(failure),
-              },
-            })
-        },
-      )
-    }
-    read()
-    const unsubscribe = parallelWorkApi.subscribeConversation((event) => {
-      if (event.sessionId !== readSessionId) return
-      if (
-        event.op === 'snapshot' ||
-        ((event.op === 'patch' || event.op === 'add') &&
-          (fetchedIds.has(event.item.id) ||
-            ids.includes(event.item.agentRunId ?? '') ||
-            ids.includes(event.item.taskId ?? '')))
-      )
-        read()
-    })
-    return () => {
-      active = false
-      unsubscribe()
-    }
-  }, [rowKey, status])
-  return detail && detail.rowKey === rowKey ? detail.value : NO_DETAIL
+  return useParallelWorkItems(rowKey, status, parallelWorkApi.readDetail)
 }
 
 /** Result notes for every card, including cards whose output predates the window. */
@@ -179,52 +126,104 @@ export function useParallelWorkResults(
         ].sort()
       : [],
   )
+  const key =
+    open && idsKey !== '[]'
+      ? JSON.stringify([sessionId, 'results', JSON.parse(idsKey)])
+      : null
+  const revision = open
+    ? JSON.stringify(
+        rows.map((row) => [
+          workRowKey(row),
+          parallelWorkRowState(row).fact?.status,
+        ]),
+      )
+    : null
+  return useParallelWorkItems(
+    key,
+    revision,
+    parallelWorkApi.readTaskResultNotes,
+  )
+}
+
+/** Shared read lifecycle: one in flight and one trailing, with local patches. */
+function useParallelWorkItems(
+  key: string | null,
+  revision: string | null,
+  readItems: (sessionId: string, ids: string[]) => Promise<ConversationItem[]>,
+) {
   const [record, setRecord] = useState<{
-    sessionId: string
-    idsKey: string
+    key: string
     items: ConversationItem[]
     error: string | null
   } | null>(null)
+  const queue = useRef<{
+    running: boolean
+    trailing: (() => Promise<void>) | null
+  }>({ running: false, trailing: null })
   useEffect(() => {
-    const ids = JSON.parse(idsKey) as string[]
-    if (!ids.length) return
+    if (!key) return
+    const [sessionId, , ids] = JSON.parse(key) as [string, string, string[]]
     let active = true
-    let revision = 0
+    const patches = new Map<string, ConversationItem>()
+    const job = async () => {
+      if (!active) return
+      patches.clear()
+      try {
+        const items = await readItems(sessionId, ids)
+        if (active)
+          setRecord({
+            key,
+            items: items.map((item) => patches.get(item.id) ?? item),
+            error: null,
+          })
+      } catch (failure) {
+        if (active)
+          setRecord({
+            key,
+            items: [],
+            error: failure instanceof Error ? failure.message : String(failure),
+          })
+      }
+    }
     const read = () => {
-      const current = ++revision
-      void parallelWorkApi
-        .readTaskItems(sessionId, ids)
-        .then((items) => {
-          if (active && current === revision)
-            setRecord({ sessionId, idsKey, items, error: null })
-        })
-        .catch((failure: unknown) => {
-          if (active && current === revision)
-            setRecord({
-              sessionId,
-              idsKey,
-              items: [],
-              error:
-                failure instanceof Error ? failure.message : String(failure),
-            })
-        })
+      const state = queue.current
+      state.trailing = job
+      if (state.running) return
+      state.running = true
+      void (async () => {
+        while (state.trailing) {
+          const next = state.trailing
+          state.trailing = null
+          await next()
+        }
+        state.running = false
+      })()
     }
     read()
     const unsubscribe = parallelWorkApi.subscribeConversation((event) => {
-      if (
-        event.sessionId === sessionId &&
-        (event.op === 'snapshot' ||
-          ((event.op === 'add' || event.op === 'patch') &&
-            ids.includes(event.item.taskId ?? '')))
-      )
-        read()
+      if (event.sessionId !== sessionId) return
+      if (event.op === 'snapshot') read()
+      if (event.op === 'patch') {
+        if (queue.current.running) patches.set(event.item.id, event.item)
+        setRecord((previous) =>
+          previous?.key === key &&
+          previous.items.some((item) => item.id === event.item.id)
+            ? {
+                ...previous,
+                items: previous.items.map((item) =>
+                  item.id === event.item.id ? event.item : item,
+                ),
+              }
+            : previous,
+        )
+      }
     })
     return () => {
       active = false
       unsubscribe()
     }
-  }, [sessionId, idsKey])
-  return record?.sessionId === sessionId && record.idsKey === idsKey
-    ? record
+  }, [key, revision, readItems])
+  return record?.key === key
+    ? { items: record.items, error: record.error }
     : NO_DETAIL
 }

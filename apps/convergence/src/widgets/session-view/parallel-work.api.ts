@@ -24,11 +24,11 @@ export const parallelWorkApi = {
     ])
     return [...runItems, ...taskItems]
   },
-  readTaskItems: (
+  readTaskResultNotes: (
     sessionId: string,
     ids: string[],
   ): Promise<ConversationItem[]> =>
-    window.electronAPI.session.listTaskItems(sessionId, ids),
+    window.electronAPI.session.listTaskResultNotes(sessionId, ids),
   subscribeConversation: (
     listener: (event: ConversationWireEvent<ConversationItem>) => void,
   ) => window.electronAPI.session.onSessionConversationPatched(listener),

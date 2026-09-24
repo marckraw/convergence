@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -247,7 +247,7 @@ describe('SessionService — parallel-work reads by id (MAR-3310 O0b)', () => {
     },
   })
 
-  it('R5 pending requests are the ones the transcript would call actionable: resolution pending or absent, never answered — mutations drop the absent case or keep answered ones turn red', () => {
+  it('R7 only explicit pending requests are pins; absent, malformed and answered history are excluded', () => {
     seed([
       approval('pending'),
       approval(),
@@ -268,15 +268,15 @@ describe('SessionService — parallel-work reads by id (MAR-3310 O0b)', () => {
       ids: pending.map((item) => item.id).sort(),
       newestFirst: pending.map((item) => item.sequence),
     }).toEqual({
-      ids: actionableToday(service.getConversation(sessionId)).sort(),
-      newestFirst: [12, 9, 8, 6, 5, 2, 1],
+      ids: [`${sessionId}-1`, `${sessionId}-8`].sort(),
+      newestFirst: [8, 1],
     })
   })
 
   it('R5 an awaiting request the transcript cannot render as actionable (a text prompt, a malformed request) is still returned — the renderer keeps its own request-kind gate', () => {
     const [text, malformed] = seed([
-      input(undefined, { kind: 'text', prompt: 'Name?' }),
-      input(undefined, { kind: 'url', url: 'https://example.com' }),
+      input('pending', { kind: 'text', prompt: 'Name?' }),
+      input('pending', { kind: 'url', url: 'https://example.com' }),
     ])
     expect({
       main: service.listPendingRequestItems(sessionId).map((item) => item.id),
@@ -292,5 +292,76 @@ describe('SessionService — parallel-work reads by id (MAR-3310 O0b)', () => {
       first: pending[0]?.sequence,
       last: pending.at(-1)?.sequence,
     }).toEqual({ count: 50, first: 60, last: 11 })
+  })
+
+  it('R10 results return only the latest terminal note per task for 60 x 400 children, with an indexed bounded plan', () => {
+    const taskIds = Array.from({ length: 60 }, (_, i) => `task-${i}`)
+    seed(
+      taskIds.flatMap((taskId) => [
+        ...Array.from({ length: 400 }, () =>
+          message('x'.repeat(1000), taskId, taskId),
+        ),
+        {
+          kind: 'note',
+          taskId,
+          eventType: 'harness.task.terminal',
+          payload: { level: 'info', text: 'old result' },
+        },
+        {
+          kind: 'note',
+          taskId,
+          eventType: 'harness.task.terminal',
+          payload: { level: 'info', text: 'latest result' },
+        },
+        {
+          kind: 'message',
+          taskId,
+          eventType: 'harness.task.terminal',
+          payload: { actor: 'assistant', text: 'not a note' },
+        },
+        {
+          kind: 'note',
+          taskId,
+          eventType: 'harness.task.progress',
+          payload: { level: 'info', text: 'not terminal' },
+        },
+      ]),
+    )
+    db.exec('ANALYZE')
+    const prepare = vi.spyOn(db, 'prepare')
+    const items = service.listTaskResultNotes(sessionId, [
+      ...taskIds,
+      taskIds[0]!,
+    ])
+    expect(items).toHaveLength(60)
+    expect(
+      items.every(
+        (item) => item.kind === 'note' && item.text === 'latest result',
+      ),
+    ).toBe(true)
+    const sql = prepare.mock.calls
+      .map(([sql]) => sql)
+      .find((sql) =>
+        sql.includes("items.provider_event_type = 'harness.task.terminal'"),
+      )!
+    expect(sql).toMatch(/LIMIT 1/)
+    const plan = db
+      .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+      .all(sessionId, taskIds[0]) as { detail: string }[]
+    expect(plan[0]?.detail).toMatch(
+      /USING INDEX idx_session_conversation_items_task/,
+    )
+    expect(plan.map((row) => row.detail).join('\n')).not.toMatch(
+      /TEMP B-TREE|SCAN items/,
+    )
+    console.log(
+      'R10 panel result notes:',
+      JSON.stringify({
+        children: 24000,
+        items: items.length,
+        bytes: Buffer.byteLength(JSON.stringify(items)),
+      }),
+    )
+    prepare.mockRestore()
   })
 })

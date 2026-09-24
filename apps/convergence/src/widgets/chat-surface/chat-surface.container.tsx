@@ -97,9 +97,9 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
   const conversationPrefix = useSessionStore(
     (s) => s.activeGlobalConversationPrefix,
   )
-  const handleLoadOlder = useCallback(() => {
+  const handleLoadOlder = useCallback((retry?: boolean) => {
     const id = useSessionStore.getState().activeGlobalSessionId
-    if (id) void useSessionStore.getState().loadOlderConversation(id)
+    if (id) void useSessionStore.getState().loadOlderConversation(id, retry)
   }, [])
   const conversationWindow = useSessionStore(
     (s) => s.activeGlobalConversationWindow,
@@ -730,6 +730,8 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
           hasOlder={conversationWindow.hasOlder}
           oldestSequence={conversationWindow.oldestSequence}
           loadingOlder={conversationWindow.loading}
+          olderError={conversationWindow.error}
+          snapshotVersion={conversationWindow.snapshotVersion}
           onLoadOlder={handleLoadOlder}
           conversationPrefix={conversationPrefix}
           conversationItems={conversationItems}

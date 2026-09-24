@@ -17,6 +17,7 @@ import { build } from 'esbuild'
 const HELP = `Usage: node apps/convergence/tools/perf-busy-day.mjs [--node] [--db path] [--open id|biggest] [--scenario busy|open|stream-into-open] [--sessions N] [--streaming K] [--minutes M] [--target-items N] [--loom] [--out file.json]
 Defaults: 12 sessions, 6 streaming, 3 minutes, Loom open. Fake provider: one delta/30ms; burst: 60 keys/80ms.
 --target-items N seeds the synthetic target conversation with N items (user, tool call, tool result, reply); not with --db.
+--panel opens parallel work after the five opens and reports result-read bytes; seeds 60 runs with 400 children each inside the synthetic target (open scenario, at least 24060 items).
 Electron measures a separate profiling renderer build; --node measures main only (renderer.measured=false).
 No installed-app bootstrap, account data, real providers or network services are used.`
 const args = process.argv.slice(2)
@@ -36,6 +37,7 @@ const params = {
   keys: 60,
   keyMs: 80,
   targetItems: 0,
+  panel: false,
 }
 let underNode = false
 let output = resolve('perf-busy-day.json')
@@ -46,6 +48,7 @@ for (let i = 0; i < args.length; i++) {
   else if (arg === '--open') params.open = args[++i]
   else if (arg === '--scenario') params.scenario = args[++i]
   else if (arg === '--loom') params.loom = true
+  else if (arg === '--panel') params.panel = true
   else if (arg === '--out') output = resolve(args[++i])
   else if (['--sessions', '--streaming', '--minutes'].includes(arg))
     params[arg.slice(2)] = Number(args[++i])
@@ -76,6 +79,13 @@ if (
   params.targetItems = 50000
 if (params.targetItems > 0 && params.db)
   throw new Error('--target-items seeds a synthetic target; it is not for --db')
+if (
+  params.panel &&
+  (params.db || params.targetItems < 24060 || params.scenario !== 'open')
+)
+  throw new Error(
+    '--panel requires a synthetic open target with at least 24060 items',
+  )
 if (params.db && existsSync(output)) {
   const inputStat = statSync(params.db),
     outputStat = statSync(output)
@@ -323,14 +333,20 @@ async function main() {
       for (let i = 0; i < params.targetItems; i++) {
         const turn = Math.floor(i / 4)
         const base = { id: 'perf-item-' + i, sessionId: target.id, sequence: i + 1, turnId: 'perf-turn-' + turn, state: 'complete', createdAt: at(i), updatedAt: at(i), providerMeta }
-        const item = i % 4 === 0 ? { ...base, kind: 'message', actor: 'user', text: 'Synthetic question ' + turn }
+        let item = i % 4 === 0 ? { ...base, kind: 'message', actor: 'user', text: 'Synthetic question ' + turn }
           : i % 4 === 1 ? { ...base, kind: 'tool-call', toolName: 'Read', inputText: JSON.stringify({ file_path: '/repo/src/file-' + turn + '.ts' }) }
           : i % 4 === 2 ? { ...base, kind: 'tool-result', toolName: 'Read', relatedItemId: 'perf-item-' + (i - 1), outputText: 'export const value' + turn + ' = ' + turn }
           : { ...base, kind: 'message', actor: 'assistant', text: 'Synthetic **answer** ' + turn + '.\n\n- one\n- two' }
+        if (params.panel && i < 24000) item = { ...base, agentRunId: 'perf-run-' + Math.floor(i / 400), taskId: 'perf-run-' + Math.floor(i / 400), kind: 'message', actor: 'assistant', text: 'x'.repeat(1000) }
+        if (params.panel && i >= 24000 && i < 24060) item = { ...base, taskId: 'perf-run-' + (i - 24000), kind: 'note', level: 'info', text: 'Synthetic terminal result', providerMeta: { ...providerMeta, providerEventType: 'harness.task.terminal' } }
         const row = conversationItemToInsertRow(item)
         insert.run(row.id, row.sessionId, row.sequence, row.turnId, row.agentRunId, row.taskId, row.kind, row.state, row.payloadJson, row.providerItemId, row.providerEventType, row.createdAt, row.updatedAt)
       }
       db.prepare('UPDATE sessions SET last_sequence = ?, conversation_version = 2 WHERE id = ?').run(params.targetItems, target.id)
+      if (params.panel) {
+        const run = db.prepare("INSERT INTO session_agent_runs (id, session_id, spawned_by_item_id, description, status, started_at, ended_at) VALUES (?, ?, ?, ?, 'completed', ?, ?)")
+        for (let i = 0; i < 60; i++) run.run('perf-run-' + i, target.id, 'synthetic-spawn-' + i, 'Synthetic agent ' + i, at(i), at(i + 400))
+      }
     })()
   }
   project = realProjects.getById(target.project_id ?? project?.id) ?? project
@@ -361,6 +377,14 @@ async function main() {
   const state = { get: (key) => key.includes('project') ? project?.id ?? null : null, set() {} }
   const pr = { start() {}, stop() {}, refreshForSession: async () => null, getForSession: async () => null, listByProjectId: async () => [], listGlobal: async () => [] }
   const registered = new Set()
+  const resultReads = []
+  const readResults = sessions.listTaskResultNotes.bind(sessions)
+  sessions.listTaskResultNotes = (sessionId, ids) => {
+    const started = performance.now()
+    const items = readResults(sessionId, ids)
+    resultReads.push({ sessionId, items: items.length, bytes: Buffer.byteLength(JSON.stringify(items)), ms: performance.now() - started })
+    return items
+  }
   const actualHandle = ipcMain.handle.bind(ipcMain)
   ipcMain.handle = (name, handler) => { registered.add(name); actualHandle(name, handler) }
   registerIpcHandlers(projects, inert, state, inert, inert, inert, pr, sessions, registry, inert, inert, inert, appSettings, inert, inert, inert, inert, inert, crews, inert, undefined, undefined, undefined, { codex: { getQuota: async () => null } })
@@ -429,6 +453,15 @@ async function main() {
       openRuns.push({ ...sample, firstPaintMs: paint })
     }
   }
+  if (params.panel) {
+    if (underNode) sessions.listTaskResultNotes(target.id, sessions.listAgentRuns(target.id).map(run => run.id))
+    else {
+      const opened = await window.webContents.executeJavaScript('(() => { const button = [...document.querySelectorAll("button")].find(button => button.textContent.trim().startsWith("Parallel work")); if (!button) return false; button.click(); return true })()')
+      if (!opened) throw new Error('Parallel work button not mounted')
+      for (let attempt = 0; attempt < 100 && !resultReads.length; attempt++) await wait(50)
+      if (!resultReads.length) throw new Error('Open panel did not read result notes')
+    }
+  }
   for (const row of streamingRows) await sessions.start(row.id, { text: 'Run synthetic busy day' })
   const start = performance.now()
   if (underNode) { if (crew) { watcher.snapshot(crew.id); snapshotReads++ } }
@@ -465,6 +498,7 @@ async function main() {
     replyBytes: openRuns[0].replyBytes, replySize: distribution('replyBytes'),
     firstPaint: { ...distribution('firstPaintMs'), measured: !underNode },
     transport: 'V8-serialized conversation page including prefix and pinned requests',
+    panelResults: params.panel ? { open: !underNode, children: 24000, runs: 60, reads: resultReads } : undefined,
   } : undefined
   const processes = underNode ? [{ type: 'Browser', cpuPercent: 0, workingSetKb: 0, measured: false }]
     : app.getAppMetrics().map((metric) => ({ pid: metric.pid, type: metric.type, cpuPercent: metric.cpu.percentCPUUsage, workingSetKb: metric.memory.workingSetSize, measured: true }))

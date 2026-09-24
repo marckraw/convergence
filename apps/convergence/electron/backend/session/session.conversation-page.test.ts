@@ -113,7 +113,37 @@ describe('MAR-3398 conversation pages on the real schema', () => {
     expect(first.prefix).toEqual(summarizeConversationPrefix([]))
     prepare.mockRestore()
   })
-  it('R4 pins an unanswered approval 1000 items back on every page and keeps the cursor on the contiguous window', () => {
+  it('R7 excludes 60 absent-resolution approvals before the window', () => {
+    insert(
+      Array.from({ length: 1300 }, (_, i) =>
+        prefixFixtureItem(i + 1, 'turn', {
+          kind: 'message',
+          actor: 'assistant',
+          text: 'x',
+        }),
+      ),
+    )
+    db.prepare(
+      "UPDATE session_conversation_items SET kind='approval-request', payload_json=? WHERE session_id=? AND sequence<=60",
+    ).run(JSON.stringify({ description: 'Historical permission' }), id)
+    expect(service.getConversationPage(id).items).toHaveLength(300)
+  })
+  it('R13 deduplicates an explicitly pending request inside the newest page', () => {
+    insert([
+      prefixFixtureItem(1, 'turn', {
+        kind: 'message',
+        actor: 'assistant',
+        text: 'x',
+      }),
+    ])
+    db.prepare(
+      "UPDATE session_conversation_items SET kind='approval-request', payload_json=? WHERE session_id=?",
+    ).run(JSON.stringify({ description: 'Allow?', resolution: 'pending' }), id)
+    expect(
+      service.getConversationPage(id).items.map((item) => item.id),
+    ).toEqual(['item-1'])
+  })
+  it('R7 pins an explicitly pending approval 1000 items back on every page and keeps the cursor on the contiguous window', () => {
     insert(
       Array.from({ length: 1300 }, (_, index) =>
         prefixFixtureItem(index + 1, 'turn', {

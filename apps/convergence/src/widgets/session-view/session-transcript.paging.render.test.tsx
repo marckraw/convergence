@@ -53,7 +53,9 @@ let sessionCounter = 0
 const handlers = { onApprove: vi.fn(), onDeny: vi.fn(), onInputAnswer: vi.fn() }
 const resync = vi.fn().mockResolvedValue(undefined)
 let frames: FrameRequestCallback[] = []
-const message = (sequence: number): ConversationItem => ({
+const message = (
+  sequence: number,
+): Extract<ConversationItem, { kind: 'message' }> => ({
   id: `m${sequence}`,
   sessionId: session.id,
   sequence,
@@ -85,8 +87,10 @@ function Transcript({ target }: { target?: { id: string; nonce: number } }) {
       hasOlder={window.hasOlder}
       oldestSequence={window.oldestSequence}
       loadingOlder={window.loading}
-      onLoadOlder={() =>
-        void useSessionStore.getState().loadOlderConversation(session.id)
+      olderError={window.error}
+      snapshotVersion={window.snapshotVersion}
+      onLoadOlder={(retry) =>
+        void useSessionStore.getState().loadOlderConversation(session.id, retry)
       }
       navigationTarget={target}
       {...handlers}
@@ -261,3 +265,211 @@ it('R2 Compact keeps an unfolded member anchored when prepending extends and rek
     document.querySelector('[data-conversation-item-id="m1001"]'),
   ).not.toBeNull()
 })
+
+it('R9 button loads exactly one page; failure shows Try again and clears the failed episode', async () => {
+  const nonce = await open()
+  render(<Transcript />)
+  act(() => frames.splice(0).forEach((frame) => frame(0)))
+  const region = screen.getByTestId('session-transcript-scroll-region')
+  Object.defineProperties(region, {
+    scrollHeight: { value: 1000 },
+    clientHeight: { value: 100 },
+    scrollTop: { writable: true, value: 35 },
+  })
+  resync.mockRejectedValueOnce(new Error('Database busy'))
+  await act(async () =>
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Load earlier messages' }),
+    ),
+  )
+  expect(resync).toHaveBeenCalledTimes(2)
+  expect(screen.getByText('Database busy')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+  expect(resync).toHaveBeenCalledTimes(3)
+  expect(screen.getByText('Loading earlier messages…')).toBeInTheDocument()
+  older(nonce, 1001, [701])
+  expect(virtual.index).toHaveBeenLastCalledWith(1, { align: 'start' })
+  expect(virtual.padding).toBe(-35)
+  expect(
+    screen.getByRole('button', { name: 'Load earlier messages' }),
+  ).toBeInTheDocument()
+  expect(resync).toHaveBeenCalledTimes(3)
+})
+
+it.each([false, true])(
+  'R9 Compact auto-fills 300 folded tools in a 400px viewport until overflow=%s or five pages',
+  async (overflow) => {
+    const nonce = await open()
+    const tool = (sequence: number) =>
+      ({
+        ...message(sequence),
+        kind: 'tool-call',
+        toolName: 'Read',
+        inputText: '{}',
+      }) as ConversationItem
+    useSessionStore.setState({
+      activeConversation: Array.from({ length: 300 }, (_, i) => tool(1001 + i)),
+    })
+    useTranscriptViewStore.setState({
+      modes: { [session.id]: 'compact' },
+      openBlocks: new Set(),
+    })
+    virtual.size = 82
+    const height = vi
+      .spyOn(HTMLElement.prototype, 'clientHeight', 'get')
+      .mockReturnValue(400)
+    const scrollHeight = vi
+      .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return (
+          Number.parseFloat(
+            this.querySelector<HTMLElement>('.relative.w-full')?.style.height ??
+              '0',
+          ) + 56
+        )
+      })
+    try {
+      render(<Transcript />)
+      expect(resync).toHaveBeenCalledTimes(2)
+      for (let page = 0; page < (overflow ? 1 : 5); page++) {
+        const beforeSequence = 1001 - page * 100
+        emit({
+          op: 'older-page',
+          sessionId: session.id,
+          generation: 1,
+          pageNonce: nonce,
+          beforeSequence,
+          oldestSequence: beforeSequence - 100,
+          hasOlder: true,
+          prefix: EMPTY_CONVERSATION_PREFIX,
+          items: overflow
+            ? Array.from({ length: 10 }, (_, i) => ({
+                ...message(beforeSequence - 100 + i),
+                actor: 'user' as const,
+              }))
+            : Array.from({ length: 100 }, (_, i) =>
+                tool(beforeSequence - 100 + i),
+              ),
+        })
+      }
+      expect(resync).toHaveBeenCalledTimes(overflow ? 2 : 6)
+      expect(
+        screen.getByRole('button', { name: 'Load earlier messages' }),
+      ).toBeInTheDocument()
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Load earlier messages' }),
+      )
+      expect(resync).toHaveBeenCalledTimes(overflow ? 3 : 7)
+    } finally {
+      height.mockRestore()
+      scrollHeight.mockRestore()
+    }
+  },
+)
+
+it('R11 a loaded hidden target is dropped immediately and its nonce is marked', async () => {
+  await open()
+  const hidden = { ...message(1), agentRunId: 'child' }
+  const rows = [
+    {
+      id: 'parent',
+      parentId: null,
+      kind: 'agent',
+      run: { id: 'parent', spawnedByItemId: 'm2' },
+    },
+    {
+      id: 'child',
+      parentId: 'parent',
+      kind: 'agent',
+      run: { id: 'child', spawnedByItemId: 'm1', parentRunId: 'parent' },
+    },
+  ] as unknown as NonNullable<
+    Parameters<typeof SessionTranscript>[0]['parallelRows']
+  >
+  const load = vi.fn()
+  const props = {
+    session,
+    ...handlers,
+    hasOlder: true,
+    oldestSequence: 1001,
+    onLoadOlder: load,
+    navigationTarget: { id: 'm1', nonce: 1 },
+    parallelRows: rows,
+  }
+  const { rerender } = render(
+    <SessionTranscript
+      {...props}
+      conversationItems={[hidden, message(1001)]}
+    />,
+  )
+  expect(load).not.toHaveBeenCalled()
+  rerender(<SessionTranscript {...props} conversationItems={[message(1001)]} />)
+  expect(load).not.toHaveBeenCalled()
+})
+
+it('R11 a failed older load drops a pending jump even after retry succeeds', async () => {
+  const nonce = await open()
+  resync.mockRejectedValueOnce(new Error('Read failed'))
+  await act(async () => render(<Transcript target={{ id: 'm1', nonce: 9 }} />))
+  expect(resync).toHaveBeenCalledTimes(2)
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+  older(nonce, 1001, [701])
+  expect(resync).toHaveBeenCalledTimes(3)
+})
+
+it.each(['snapshot', 'failure', 'dropped'] as const)(
+  'R12 clears a prepend anchor on %s before a later window change',
+  async (reason) => {
+    await open()
+    const load = vi.fn()
+    const props = {
+      session,
+      ...handlers,
+      hasOlder: true,
+      oldestSequence: 1001,
+      snapshotVersion: 1,
+      onLoadOlder: load,
+    }
+    const current = [message(1001), message(1002)]
+    const { rerender } = render(
+      <SessionTranscript {...props} conversationItems={current} />,
+    )
+    act(() => frames.splice(0).forEach((frame) => frame(0)))
+    const region = screen.getByTestId('session-transcript-scroll-region')
+    Object.defineProperties(region, {
+      scrollHeight: { value: 1000 },
+      clientHeight: { value: 100 },
+      scrollTop: { writable: true, value: 35 },
+    })
+    fireEvent.scroll(region)
+    rerender(
+      <SessionTranscript {...props} loadingOlder conversationItems={current} />,
+    )
+    const extra =
+      reason === 'snapshot'
+        ? { snapshotVersion: 2, oldestSequence: 701 }
+        : reason === 'failure'
+          ? { olderError: 'Failed' }
+          : {}
+    virtual.index.mockClear()
+    rerender(
+      <SessionTranscript
+        {...props}
+        {...extra}
+        conversationItems={
+          reason === 'snapshot' ? [message(701), ...current] : current
+        }
+      />,
+    )
+    expect(virtual.index).not.toHaveBeenCalled()
+    rerender(
+      <SessionTranscript
+        {...props}
+        snapshotVersion={reason === 'snapshot' ? 2 : 1}
+        oldestSequence={701}
+        conversationItems={[message(701), ...current]}
+      />,
+    )
+    expect(virtual.index).not.toHaveBeenCalled()
+  },
+)
