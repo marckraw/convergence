@@ -19,7 +19,7 @@ import Database from 'better-sqlite3'
 import { build } from 'esbuild'
 import { afterEach, describe, expect, it } from 'vitest'
 import { closeDatabase, getDatabase } from '../database/database'
-import { hasTokens } from './perf-seed.pure'
+import { hasTokens, SECRET_COLUMN } from './perf-seed.pure'
 
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const script = join(appRoot, 'tools/perf-seed.mjs')
@@ -76,15 +76,29 @@ function fixture(large = false) {
   const db = getDatabase(source)
   db.exec(`
     INSERT INTO sessions (id, context_kind, provider_id, name, working_directory, continuation_token)
-      VALUES ('session', 'global', 'fixture', 'fixture', '/fixture', 'fake-resume-handle');
+      VALUES ('session', 'global', 'fixture', 'fixture', '/fixture', 'fake-resume-handle'),
+        ('session-2', 'global', 'fixture', 'fixture', '/fixture', 'fake-resume-handle-2');
+    INSERT INTO provider_accounts (id, provider_id, label, config_dir, credential_dir)
+      VALUES ('account-1', 'fixture', 'fixture', '/fixture/config-1', '/fixture/private-1'),
+        ('account-2', 'fixture', 'fixture', '/fixture/config-2', '/fixture/private-2'),
+        ('account-3', 'fixture', 'fixture', '/fixture/config-3', 'scrubbed-2-original-fixture');
+    INSERT INTO session_relays (id, crew_id, source_session_id, action, condition_token)
+      VALUES ('relay-1', 'fixture', 'session', 'fixture', 'fake-condition-1'),
+        ('relay-2', 'fixture', 'session-2', 'fixture', 'fake-condition-2');
     CREATE TABLE workboard_tracker_sources (id TEXT PRIMARY KEY, auth_json TEXT NOT NULL);
     CREATE TABLE fixture_extra (id INTEGER PRIMARY KEY, extra_token TEXT, required_secret TEXT NOT NULL, body TEXT, dynamic_value);
+    CREATE UNIQUE INDEX fixture_secret_unique ON fixture_extra(required_secret);
+    CREATE TABLE fixture_secret_key (secret_key TEXT, part INTEGER, password TEXT NOT NULL UNIQUE, PRIMARY KEY (secret_key, part)) WITHOUT ROWID;
     CREATE TABLE fixture_without_rowid (id TEXT PRIMARY KEY, body TEXT) WITHOUT ROWID;
     CREATE TABLE fixture_integer (id INTEGER PRIMARY KEY, body TEXT, exact INTEGER);
   `)
   db.prepare('INSERT INTO workboard_tracker_sources VALUES (?, ?)').run(
     'source',
     JSON.stringify({ token: tokens[0] }),
+  )
+  db.prepare('INSERT INTO workboard_tracker_sources VALUES (?, ?)').run(
+    'source-2',
+    JSON.stringify({ token: 'fake-tracker-auth-2' }),
   )
   db.prepare('INSERT INTO app_state VALUES (?, ?)').run(
     'fixture',
@@ -96,6 +110,15 @@ function fixture(large = false) {
     tokens[2],
     secretPayload,
   )
+  db.prepare('INSERT INTO fixture_extra VALUES (2, ?, ?, ?, ?)').run(
+    'fake-extra-token-2',
+    'fake-required-secret-2',
+    'ordinary',
+    'ordinary',
+  )
+  db.exec(`
+    INSERT INTO fixture_secret_key VALUES ('fake-key-1', 1, 'fake-password-1'), ('fake-key-2', 1, 'fake-password-2');
+  `)
   db.prepare('INSERT INTO fixture_without_rowid VALUES (?, ?)').run(
     tokens[10],
     tokens[11],
@@ -122,8 +145,51 @@ function fixture(large = false) {
       payloadBytes += Buffer.byteLength(payload)
     }
   })()
+  // Discover coverage from the schema: a newly added secret column/table must
+  // have populated, distinct originals before it can pass this acceptance test.
+  const secretColumns = []
+  for (const { name } of db
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+    )
+    .all() as { name: string }[]) {
+    for (const column of db
+      .prepare('SELECT * FROM pragma_table_info(?)')
+      .all(name) as { name: string; notnull: number }[]) {
+      const auth =
+        name === 'workboard_tracker_sources' && column.name === 'auth_json'
+      if (!auth && !SECRET_COLUMN.test(column.name)) continue
+      const values = db
+        .prepare(`SELECT ${quote(column.name)} FROM ${quote(name)}`)
+        .pluck()
+        .all() as string[]
+      expect(
+        values.length,
+        `${name}.${column.name} fixture coverage`,
+      ).toBeGreaterThanOrEqual(name === 'provider_accounts' ? 3 : 2)
+      expect(
+        values.every((value) => typeof value === 'string' && value.length > 0),
+      ).toBe(true)
+      expect(new Set(values).size).toBe(values.length)
+      secretColumns.push({
+        table: name,
+        column: column.name,
+        notnull: column.notnull,
+        auth,
+        values,
+      })
+    }
+  }
   closeDatabase()
-  return { root, source, out: join(root, 'output'), lengths, payloadBytes }
+  return {
+    root,
+    source,
+    out: join(root, 'output'),
+    lengths,
+    payloadBytes,
+    secretColumns,
+    planted: [...planted, ...secretColumns.flatMap(({ values }) => values)],
+  }
 }
 
 function run(f: ReturnType<typeof fixture>, entry = script, timeout = 120_000) {
@@ -185,7 +251,7 @@ function plantDeletedSecret(f: ReturnType<typeof fixture>) {
 function assertScrubbed(f: ReturnType<typeof fixture>, entry = script) {
   const before = hash(f.source)
   const result = run(f, entry)
-  for (const secret of planted)
+  for (const secret of f.planted)
     expect(result.stdout + result.stderr).not.toContain(secret)
   expect(result.status, result.stderr).toBe(0)
   expect(hash(f.source)).toBe(before)
@@ -205,9 +271,26 @@ function assertScrubbed(f: ReturnType<typeof fixture>, entry = script) {
     expect(
       db.prepare('SELECT extra_token FROM fixture_extra').pluck().get(),
     ).toBeNull()
-    expect(
-      db.prepare('SELECT required_secret FROM fixture_extra').pluck().get(),
-    ).toBe('')
+    for (const {
+      table,
+      column,
+      notnull,
+      auth,
+      values: originals,
+    } of f.secretColumns) {
+      const values = db
+        .prepare(`SELECT ${quote(column)} FROM ${quote(table)}`)
+        .pluck()
+        .all()
+      expect(values).toHaveLength(originals.length)
+      for (const value of values) {
+        expect(originals).not.toContain(value)
+        expect(value).toEqual(
+          auth ? '{}' : notnull ? expect.stringMatching(/^scrubbed-/) : null,
+        )
+      }
+      if (notnull && !auth) expect(new Set(values).size).toBe(values.length)
+    }
     expect(
       db.prepare('SELECT id, exact FROM fixture_integer').safeIntegers().get(),
     ).toEqual({ id: 9007199254740993n, exact: 9007199254740995n })
@@ -257,13 +340,14 @@ function assertScrubbed(f: ReturnType<typeof fixture>, entry = script) {
   }
   // Also catch remnants in free pages, not just live SQL values.
   const bytes = readFileSync(path)
-  for (const secret of planted)
+  for (const secret of f.planted)
     expect(bytes.includes(Buffer.from(secret))).toBe(false)
   expect(readdirSync(f.out)).toEqual(['convergence.db'])
   return JSON.parse(result.stdout) as {
     maskSeconds: number
     elapsedSeconds: number
     rows: Record<string, number>
+    blanked: Record<string, { rows: number; replacement: string }>
   }
 }
 
@@ -350,7 +434,7 @@ function assertRejected(f: ReturnType<typeof fixture>, entry = script) {
   expect(hash(f.source)).toBe(before)
   expect(existsSync(join(f.out, 'convergence.db'))).toBe(false)
   expect(readdirSync(f.out)).toEqual([])
-  for (const secret of planted)
+  for (const secret of f.planted)
     expect(result.stdout + result.stderr).not.toContain(secret)
 }
 
@@ -364,8 +448,12 @@ describe('perf seed CLI on a generated real-schema database', () => {
   it('R1–R4 scrubs all fields, preserves payload lengths and source bytes, and reports no secrets', () => {
     const report = assertScrubbed(fixture())
     expect(report.rows).toEqual({
-      sessions: 1,
+      sessions: 2,
       session_conversation_items: tokens.length,
+    })
+    expect(report.blanked['provider_accounts.credential_dir']).toEqual({
+      rows: 3,
+      replacement: 'unique placeholder (NOT NULL)',
     })
   })
   it('verification rejects a token introduced after its table was masked and deletes the copy', () => {
@@ -386,6 +474,20 @@ describe('perf seed CLI on a generated real-schema database', () => {
     const f = fixture()
     plantDeletedSecret(f)
     assertScrubbed(f)
+  })
+  it('mutation: shared empty NOT NULL replacement turns R1–R4 acceptance red', async () => {
+    const entry = await mutant((source) =>
+      source.replace(
+        'const placeholder = `${prefix}${++rows}`',
+        "const placeholder = ''; ++rows",
+      ),
+    )
+    const f = fixture()
+    expect(() => assertScrubbed(f, entry)).toThrow()
+    const result = run(f, entry)
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('failed during blanking')
+    expect(readdirSync(f.out)).toEqual([])
   })
   it('mutation: copy with the old backup() turns source-free-page raw-byte acceptance red', async () => {
     const entry = await mutant((source) =>
