@@ -1,0 +1,6145 @@
+{
+  "fileKey": "nizmdlM7yENFDQ4XQuFwoN",
+  "observedAt": "2026-09-24",
+  "scope": "All 42 pages existing at scan time. Component definitions include variant children. Discovery only, no implicit app-parity claim.",
+  "pages": [
+    {
+      "page": {
+        "id": "14:785",
+        "name": "00 \u00b7 Start here"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "17:1729",
+          "name": "Earlier orientation \u00b7 historical coverage notes"
+        },
+        {
+          "id": "45:2423",
+          "name": "All reference views \u00b7 Linked index"
+        },
+        {
+          "id": "600:2",
+          "name": "START HERE \u00b7 Design workspace directory \u00b7 September 2026"
+        }
+      ],
+      "instances": 0,
+      "classification": "reference-unverified"
+    },
+    {
+      "page": {
+        "id": "3:2",
+        "name": "90 \u00b7 Foundations"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "7:856",
+          "name": "Convergence \u00b7 Foundations"
+        }
+      ],
+      "instances": 0,
+      "classification": "reference-unverified"
+    },
+    {
+      "page": {
+        "id": "3:3",
+        "name": "91 \u00b7 Components"
+      },
+      "components": [
+        {
+          "id": "3:108",
+          "name": "Control / Compact",
+          "type": "COMPONENT",
+          "parentId": "57:7395",
+          "parentName": "Library / Controls",
+          "w": 76,
+          "h": 28
+        },
+        {
+          "id": "15:1536",
+          "name": "Choice / Card",
+          "type": "COMPONENT",
+          "parentId": "57:7395",
+          "parentName": "Library / Controls",
+          "w": 308,
+          "h": 82
+        },
+        {
+          "id": "16:1719",
+          "name": "Button",
+          "type": "COMPONENT_SET",
+          "parentId": "57:7395",
+          "parentName": "Library / Controls",
+          "w": 396,
+          "h": 288
+        },
+        {
+          "id": "14:792",
+          "name": "Appearance=Primary, State=Default",
+          "type": "COMPONENT",
+          "parentId": "16:1719",
+          "parentName": "Button",
+          "w": 63,
+          "h": 36
+        },
+        {
+          "id": "14:794",
+          "name": "Appearance=Secondary, State=Default",
+          "type": "COMPONENT",
+          "parentId": "16:1719",
+          "parentName": "Button",
+          "w": 63,
+          "h": 36
+        },
+        {
+          "id": "14:796",
+          "name": "Appearance=Outline, State=Default",
+          "type": "COMPONENT",
+          "parentId": "16:1719",
+          "parentName": "Button",
+          "w": 63,
+          "h": 36
+        },
+        {
+          "id": "14:798",
+          "name": "Appearance=Ghost, State=Default",
+          "type": "COMPONENT",
+          "parentId": "16:1719",
+          "parentName": "Button",
+          "w": 63,
+          "h": 36
+        },
+        {
+          "id": "22:792",
+          "name": "Appearance=Primary, State=Hover",
+          "type": "COMPONENT",
+          "parentId": "16:1719",
+          "parentName": "Button",
+          "w": 63,
+          "h": 36
+        },
+        {
+          "id": "22:794",
+          "name": "Appearance=Primary, State=Focus",
+          "type": "COMPONENT",
+          "parentId": "16:1719",
+          "parentName": "Button",
+          "w": 63,
+          "h": 36
+        },
+        {
+          "id": "22:796",
+          "name": "Appearance=Primary, State=Disabled",
+          "type": "COMPONENT",
+          "parentId": "16:1719",
+          "parentName": "Button",
+          "w": 63,
+          "h": 36
+        },
+        {
+          "id": "22:798",
+          "name": "Appearance=Secondary, State=Hover",
+          "type": "COMPONENT",
+          "parentId": "16:1719",
+          "parentName": "Button",
+          "w": 63,
+          "h": 36
+        },
+        {
+          "id": "22:800",
+          "name": "Appearance=Secondary, State=Focus",
+          "type": "COMPONENT",
+          "parentId": "16:1719",
+          "parentName": "Button",
+          "w": 63,
+          "h": 36
+        },
+        {
+          "id": "22:802",
+          "name": "Appearance=Secondary, State=Disabled",
+          "type": "COMPONENT",
+          "parentId": "16:1719",
+          "parentName": "Button",
+          "w": 63,
+          "h": 36
+        },
+        {
+          "id": "22:804",
+          "name": "Appearance=Outline, State=Hover",
+          "type": "COMPONENT",
+          "parentId": "16:1719",
+          "parentName": "Button",
+          "w": 63,
+          "h": 36
+        },
+        {
+          "id": "22:806",
+          "name": "Appearance=Outline, State=Focus",
+          "type": "COMPONENT",
+          "parentId": "16:1719",
+          "parentName": "Button",
+          "w": 63,
+          "h": 36
+        },
+        {
+          "id": "22:808",
+          "name": "Appearance=Outline, State=Disabled",
+          "type": "COMPONENT",
+          "parentId": "16:1719",
+          "parentName": "Button",
+          "w": 63,
+          "h": 36
+        },
+        {
+          "id": "22:810",
+          "name": "Appearance=Ghost, State=Hover",
+          "type": "COMPONENT",
+          "parentId": "16:1719",
+          "parentName": "Button",
+          "w": 63,
+          "h": 36
+        },
+        {
+          "id": "22:812",
+          "name": "Appearance=Ghost, State=Focus",
+          "type": "COMPONENT",
+          "parentId": "16:1719",
+          "parentName": "Button",
+          "w": 63,
+          "h": 36
+        },
+        {
+          "id": "22:814",
+          "name": "Appearance=Ghost, State=Disabled",
+          "type": "COMPONENT",
+          "parentId": "16:1719",
+          "parentName": "Button",
+          "w": 63,
+          "h": 36
+        },
+        {
+          "id": "16:1720",
+          "name": "Switch",
+          "type": "COMPONENT_SET",
+          "parentId": "57:7395",
+          "parentName": "Library / Controls",
+          "w": 152,
+          "h": 68
+        },
+        {
+          "id": "14:802",
+          "name": "State=Off",
+          "type": "COMPONENT",
+          "parentId": "16:1720",
+          "parentName": "Switch",
+          "w": 36,
+          "h": 20
+        },
+        {
+          "id": "14:804",
+          "name": "State=On",
+          "type": "COMPONENT",
+          "parentId": "16:1720",
+          "parentName": "Switch",
+          "w": 36,
+          "h": 20
+        },
+        {
+          "id": "16:1722",
+          "name": "Command result",
+          "type": "COMPONENT_SET",
+          "parentId": "57:7395",
+          "parentName": "Library / Controls",
+          "w": 1456,
+          "h": 84
+        },
+        {
+          "id": "14:816",
+          "name": "State=Default",
+          "type": "COMPONENT",
+          "parentId": "16:1722",
+          "parentName": "Command result",
+          "w": 688,
+          "h": 36
+        },
+        {
+          "id": "14:819",
+          "name": "State=Selected",
+          "type": "COMPONENT",
+          "parentId": "16:1722",
+          "parentName": "Command result",
+          "w": 688,
+          "h": 36
+        },
+        {
+          "id": "22:820",
+          "name": "Input / Text",
+          "type": "COMPONENT_SET",
+          "parentId": "57:7395",
+          "parentName": "Library / Controls",
+          "w": 720,
+          "h": 160
+        },
+        {
+          "id": "14:800",
+          "name": "State=Default",
+          "type": "COMPONENT",
+          "parentId": "22:820",
+          "parentName": "Input / Text",
+          "w": 320,
+          "h": 40
+        },
+        {
+          "id": "22:816",
+          "name": "State=Focus",
+          "type": "COMPONENT",
+          "parentId": "22:820",
+          "parentName": "Input / Text",
+          "w": 320,
+          "h": 40
+        },
+        {
+          "id": "22:818",
+          "name": "State=Disabled",
+          "type": "COMPONENT",
+          "parentId": "22:820",
+          "parentName": "Input / Text",
+          "w": 320,
+          "h": 40
+        },
+        {
+          "id": "56:9452",
+          "name": "Choice / Terminal card",
+          "type": "COMPONENT",
+          "parentId": "57:7395",
+          "parentName": "Library / Controls",
+          "w": 250,
+          "h": 128
+        },
+        {
+          "id": "3:22",
+          "name": "Sidebar / Code",
+          "type": "COMPONENT",
+          "parentId": "57:7404",
+          "parentName": "Library / Shell & navigation",
+          "w": 260,
+          "h": 772
+        },
+        {
+          "id": "3:65",
+          "name": "Sidebar / Session row",
+          "type": "COMPONENT",
+          "parentId": "57:7404",
+          "parentName": "Library / Shell & navigation",
+          "w": 228,
+          "h": 24
+        },
+        {
+          "id": "3:70",
+          "name": "Sidebar / Attention row",
+          "type": "COMPONENT",
+          "parentId": "57:7404",
+          "parentName": "Library / Shell & navigation",
+          "w": 228,
+          "h": 36
+        },
+        {
+          "id": "3:827",
+          "name": "Sidebar / Attention row / Failed",
+          "type": "COMPONENT",
+          "parentId": "57:7404",
+          "parentName": "Library / Shell & navigation",
+          "w": 228,
+          "h": 36
+        },
+        {
+          "id": "56:1082",
+          "name": "Shell / Window toolbar",
+          "type": "COMPONENT",
+          "parentId": "57:7404",
+          "parentName": "Library / Shell & navigation",
+          "w": 260,
+          "h": 48
+        },
+        {
+          "id": "56:1100",
+          "name": "Shell / Surface navigation",
+          "type": "COMPONENT",
+          "parentId": "57:7404",
+          "parentName": "Library / Shell & navigation",
+          "w": 260,
+          "h": 52
+        },
+        {
+          "id": "56:1121",
+          "name": "Shell / Global status",
+          "type": "COMPONENT",
+          "parentId": "57:7404",
+          "parentName": "Library / Shell & navigation",
+          "w": 1200,
+          "h": 28
+        },
+        {
+          "id": "56:1126",
+          "name": "Sidebar / Active session",
+          "type": "COMPONENT",
+          "parentId": "57:7404",
+          "parentName": "Library / Shell & navigation",
+          "w": 236,
+          "h": 32
+        },
+        {
+          "id": "56:1128",
+          "name": "Sidebar / Attention summary",
+          "type": "COMPONENT",
+          "parentId": "57:7404",
+          "parentName": "Library / Shell & navigation",
+          "w": 236,
+          "h": 54
+        },
+        {
+          "id": "3:930",
+          "name": "Transcript / Message",
+          "type": "COMPONENT",
+          "parentId": "57:7415",
+          "parentName": "Library / Conversation & requests",
+          "w": 672,
+          "h": 43
+        },
+        {
+          "id": "7:789",
+          "name": "Transcript / Agent message",
+          "type": "COMPONENT",
+          "parentId": "57:7415",
+          "parentName": "Library / Conversation & requests",
+          "w": 672,
+          "h": 43
+        },
+        {
+          "id": "24:793",
+          "name": "Request / Approval",
+          "type": "COMPONENT",
+          "parentId": "57:7415",
+          "parentName": "Library / Conversation & requests",
+          "w": 672,
+          "h": 128
+        },
+        {
+          "id": "24:801",
+          "name": "Request / Choice",
+          "type": "COMPONENT",
+          "parentId": "57:7415",
+          "parentName": "Library / Conversation & requests",
+          "w": 672,
+          "h": 282
+        },
+        {
+          "id": "24:812",
+          "name": "Request / Plan",
+          "type": "COMPONENT",
+          "parentId": "57:7415",
+          "parentName": "Library / Conversation & requests",
+          "w": 672,
+          "h": 260
+        },
+        {
+          "id": "24:822",
+          "name": "Request / Form",
+          "type": "COMPONENT",
+          "parentId": "57:7415",
+          "parentName": "Library / Conversation & requests",
+          "w": 672,
+          "h": 208
+        },
+        {
+          "id": "24:834",
+          "name": "Request / URL",
+          "type": "COMPONENT",
+          "parentId": "57:7415",
+          "parentName": "Library / Conversation & requests",
+          "w": 672,
+          "h": 157
+        },
+        {
+          "id": "24:843",
+          "name": "Transcript / Tool collapsed",
+          "type": "COMPONENT",
+          "parentId": "57:7415",
+          "parentName": "Library / Conversation & requests",
+          "w": 672,
+          "h": 56
+        },
+        {
+          "id": "24:847",
+          "name": "Transcript / Tool expanded",
+          "type": "COMPONENT",
+          "parentId": "57:7415",
+          "parentName": "Library / Conversation & requests",
+          "w": 672,
+          "h": 115
+        },
+        {
+          "id": "24:857",
+          "name": "Transcript / Restart boundary",
+          "type": "COMPONENT",
+          "parentId": "57:7415",
+          "parentName": "Library / Conversation & requests",
+          "w": 672,
+          "h": 36
+        },
+        {
+          "id": "24:862",
+          "name": "Transcript / Model change boundary",
+          "type": "COMPONENT",
+          "parentId": "57:7415",
+          "parentName": "Library / Conversation & requests",
+          "w": 672,
+          "h": 36
+        },
+        {
+          "id": "3:720",
+          "name": "Composer / New session",
+          "type": "COMPONENT",
+          "parentId": "57:7428",
+          "parentName": "Library / Composer & attachments",
+          "w": 672,
+          "h": 128
+        },
+        {
+          "id": "3:951",
+          "name": "Composer / Provider unavailable",
+          "type": "COMPONENT",
+          "parentId": "57:7428",
+          "parentName": "Library / Composer & attachments",
+          "w": 672,
+          "h": 128
+        },
+        {
+          "id": "24:852",
+          "name": "Composer / Queued input",
+          "type": "COMPONENT",
+          "parentId": "57:7428",
+          "parentName": "Library / Composer & attachments",
+          "w": 672,
+          "h": 69
+        },
+        {
+          "id": "24:875",
+          "name": "Attachment / Chip",
+          "type": "COMPONENT_SET",
+          "parentId": "57:7428",
+          "parentName": "Library / Composer & attachments",
+          "w": 264,
+          "h": 140
+        },
+        {
+          "id": "24:867",
+          "name": "State=Ready",
+          "type": "COMPONENT",
+          "parentId": "24:875",
+          "parentName": "Attachment / Chip",
+          "w": 92,
+          "h": 30
+        },
+        {
+          "id": "24:870",
+          "name": "State=Unsupported",
+          "type": "COMPONENT",
+          "parentId": "24:875",
+          "parentName": "Attachment / Chip",
+          "w": 92,
+          "h": 30
+        },
+        {
+          "id": "24:873",
+          "name": "State=Missing",
+          "type": "COMPONENT",
+          "parentId": "24:875",
+          "parentName": "Attachment / Chip",
+          "w": 76,
+          "h": 30
+        },
+        {
+          "id": "25:1153",
+          "name": "Composer / Lifecycle",
+          "type": "COMPONENT_SET",
+          "parentId": "57:7428",
+          "parentName": "Library / Composer & attachments",
+          "w": 1424,
+          "h": 600
+        },
+        {
+          "id": "25:798",
+          "name": "State=Draft",
+          "type": "COMPONENT",
+          "parentId": "25:1153",
+          "parentName": "Composer / Lifecycle",
+          "w": 672,
+          "h": 86
+        },
+        {
+          "id": "25:846",
+          "name": "State=Ready",
+          "type": "COMPONENT",
+          "parentId": "25:1153",
+          "parentName": "Composer / Lifecycle",
+          "w": 672,
+          "h": 86
+        },
+        {
+          "id": "25:894",
+          "name": "State=Running",
+          "type": "COMPONENT",
+          "parentId": "25:1153",
+          "parentName": "Composer / Lifecycle",
+          "w": 672,
+          "h": 114
+        },
+        {
+          "id": "25:951",
+          "name": "State=Steer",
+          "type": "COMPONENT",
+          "parentId": "25:1153",
+          "parentName": "Composer / Lifecycle",
+          "w": 672,
+          "h": 114
+        },
+        {
+          "id": "25:1008",
+          "name": "State=Input",
+          "type": "COMPONENT",
+          "parentId": "25:1153",
+          "parentName": "Composer / Lifecycle",
+          "w": 672,
+          "h": 86
+        },
+        {
+          "id": "25:1056",
+          "name": "State=Finished",
+          "type": "COMPONENT",
+          "parentId": "25:1153",
+          "parentName": "Composer / Lifecycle",
+          "w": 672,
+          "h": 86
+        },
+        {
+          "id": "25:1104",
+          "name": "State=Unavailable",
+          "type": "COMPONENT",
+          "parentId": "25:1153",
+          "parentName": "Composer / Lifecycle",
+          "w": 672,
+          "h": 86
+        },
+        {
+          "id": "28:906",
+          "name": "Composer detail / Attachments",
+          "type": "COMPONENT",
+          "parentId": "57:7428",
+          "parentName": "Library / Composer & attachments",
+          "w": 672,
+          "h": 124
+        },
+        {
+          "id": "28:942",
+          "name": "Composer detail / Unsupported attachment",
+          "type": "COMPONENT",
+          "parentId": "57:7428",
+          "parentName": "Library / Composer & attachments",
+          "w": 672,
+          "h": 149
+        },
+        {
+          "id": "28:995",
+          "name": "Composer detail / Selected context",
+          "type": "COMPONENT",
+          "parentId": "57:7428",
+          "parentName": "Library / Composer & attachments",
+          "w": 672,
+          "h": 162
+        },
+        {
+          "id": "28:1043",
+          "name": "Composer detail / Advanced permissions",
+          "type": "COMPONENT",
+          "parentId": "57:7428",
+          "parentName": "Library / Composer & attachments",
+          "w": 672,
+          "h": 126
+        },
+        {
+          "id": "28:1084",
+          "name": "Composer detail / Remote asking",
+          "type": "COMPONENT",
+          "parentId": "57:7428",
+          "parentName": "Library / Composer & attachments",
+          "w": 672,
+          "h": 156
+        },
+        {
+          "id": "28:1140",
+          "name": "Composer detail / Remote unreachable",
+          "type": "COMPONENT",
+          "parentId": "57:7428",
+          "parentName": "Library / Composer & attachments",
+          "w": 672,
+          "h": 156
+        },
+        {
+          "id": "28:1196",
+          "name": "Composer detail / Remote empty",
+          "type": "COMPONENT",
+          "parentId": "57:7428",
+          "parentName": "Library / Composer & attachments",
+          "w": 672,
+          "h": 156
+        },
+        {
+          "id": "28:1252",
+          "name": "Composer detail / Remote choose place",
+          "type": "COMPONENT",
+          "parentId": "57:7428",
+          "parentName": "Library / Composer & attachments",
+          "w": 672,
+          "h": 156
+        },
+        {
+          "id": "28:1337",
+          "name": "Composer detail / Remote settled",
+          "type": "COMPONENT",
+          "parentId": "57:7428",
+          "parentName": "Library / Composer & attachments",
+          "w": 672,
+          "h": 156
+        },
+        {
+          "id": "28:1417",
+          "name": "Composer detail / Endpoint removed",
+          "type": "COMPONENT",
+          "parentId": "57:7428",
+          "parentName": "Library / Composer & attachments",
+          "w": 672,
+          "h": 156
+        },
+        {
+          "id": "52:1064",
+          "name": "Annotation / Selection toolbar",
+          "type": "COMPONENT",
+          "parentId": "57:7445",
+          "parentName": "Library / Responses & annotations",
+          "w": 218,
+          "h": 36
+        },
+        {
+          "id": "52:1077",
+          "name": "Annotation / Comment popover",
+          "type": "COMPONENT",
+          "parentId": "57:7445",
+          "parentName": "Library / Responses & annotations",
+          "w": 320,
+          "h": 73
+        },
+        {
+          "id": "52:1085",
+          "name": "Annotation / Pending response",
+          "type": "COMPONENT",
+          "parentId": "57:7445",
+          "parentName": "Library / Responses & annotations",
+          "w": 487,
+          "h": 32
+        },
+        {
+          "id": "52:1091",
+          "name": "Annotation / Editing response",
+          "type": "COMPONENT",
+          "parentId": "57:7445",
+          "parentName": "Library / Responses & annotations",
+          "w": 405,
+          "h": 32
+        },
+        {
+          "id": "52:1133",
+          "name": "UI response / Panel",
+          "type": "COMPONENT_SET",
+          "parentId": "57:7445",
+          "parentName": "Library / Responses & annotations",
+          "w": 1522,
+          "h": 872
+        },
+        {
+          "id": "52:1096",
+          "name": "State=Rendered",
+          "type": "COMPONENT",
+          "parentId": "52:1133",
+          "parentName": "UI response / Panel",
+          "w": 470,
+          "h": 824
+        },
+        {
+          "id": "52:1113",
+          "name": "State=Empty",
+          "type": "COMPONENT",
+          "parentId": "52:1133",
+          "parentName": "UI response / Panel",
+          "w": 470,
+          "h": 824
+        },
+        {
+          "id": "52:1123",
+          "name": "State=Error",
+          "type": "COMPONENT",
+          "parentId": "52:1133",
+          "parentName": "UI response / Panel",
+          "w": 470,
+          "h": 824
+        },
+        {
+          "id": "3:1028",
+          "name": "Mission Control / Session card",
+          "type": "COMPONENT",
+          "parentId": "57:7452",
+          "parentName": "Library / Mission Control",
+          "w": 292,
+          "h": 152
+        },
+        {
+          "id": "3:1066",
+          "name": "Mission Control / Session card / Failed",
+          "type": "COMPONENT",
+          "parentId": "57:7452",
+          "parentName": "Library / Mission Control",
+          "w": 292,
+          "h": 152
+        },
+        {
+          "id": "29:1613",
+          "name": "Canvas node / Finished",
+          "type": "COMPONENT",
+          "parentId": "57:7452",
+          "parentName": "Library / Mission Control",
+          "w": 260,
+          "h": 108
+        },
+        {
+          "id": "29:1619",
+          "name": "Canvas node / Working",
+          "type": "COMPONENT",
+          "parentId": "57:7452",
+          "parentName": "Library / Mission Control",
+          "w": 260,
+          "h": 108
+        },
+        {
+          "id": "29:1626",
+          "name": "Canvas node / Approval needed",
+          "type": "COMPONENT",
+          "parentId": "57:7452",
+          "parentName": "Library / Mission Control",
+          "w": 260,
+          "h": 108
+        },
+        {
+          "id": "29:1632",
+          "name": "Mission Control / Wire details",
+          "type": "COMPONENT",
+          "parentId": "57:7452",
+          "parentName": "Library / Mission Control",
+          "w": 320,
+          "h": 104
+        },
+        {
+          "id": "41:1141",
+          "name": "Mission Control / Session card detail",
+          "type": "COMPONENT_SET",
+          "parentId": "57:7452",
+          "parentName": "Library / Mission Control",
+          "w": 640,
+          "h": 568
+        },
+        {
+          "id": "41:1049",
+          "name": "State=Finished",
+          "type": "COMPONENT",
+          "parentId": "41:1141",
+          "parentName": "Mission Control / Session card detail",
+          "w": 280,
+          "h": 152
+        },
+        {
+          "id": "41:1067",
+          "name": "State=Working",
+          "type": "COMPONENT",
+          "parentId": "41:1141",
+          "parentName": "Mission Control / Session card detail",
+          "w": 280,
+          "h": 152
+        },
+        {
+          "id": "41:1085",
+          "name": "State=Approval",
+          "type": "COMPONENT",
+          "parentId": "41:1141",
+          "parentName": "Mission Control / Session card detail",
+          "w": 280,
+          "h": 152
+        },
+        {
+          "id": "41:1103",
+          "name": "State=Input",
+          "type": "COMPONENT",
+          "parentId": "41:1141",
+          "parentName": "Mission Control / Session card detail",
+          "w": 280,
+          "h": 152
+        },
+        {
+          "id": "41:1122",
+          "name": "State=Failed",
+          "type": "COMPONENT",
+          "parentId": "41:1141",
+          "parentName": "Mission Control / Session card detail",
+          "w": 280,
+          "h": 152
+        },
+        {
+          "id": "14:806",
+          "name": "Settings / Select field",
+          "type": "COMPONENT",
+          "parentId": "57:7461",
+          "parentName": "Library / Settings & resources",
+          "w": 672,
+          "h": 56
+        },
+        {
+          "id": "14:812",
+          "name": "Settings / Toggle row",
+          "type": "COMPONENT",
+          "parentId": "57:7461",
+          "parentName": "Library / Settings & resources",
+          "w": 672,
+          "h": 56
+        },
+        {
+          "id": "14:822",
+          "name": "Model / Selection row",
+          "type": "COMPONENT",
+          "parentId": "57:7461",
+          "parentName": "Library / Settings & resources",
+          "w": 672,
+          "h": 56
+        },
+        {
+          "id": "14:827",
+          "name": "Usage / Quota window",
+          "type": "COMPONENT",
+          "parentId": "57:7461",
+          "parentName": "Library / Settings & resources",
+          "w": 640,
+          "h": 64
+        },
+        {
+          "id": "14:834",
+          "name": "Insights / Metric",
+          "type": "COMPONENT",
+          "parentId": "57:7461",
+          "parentName": "Library / Settings & resources",
+          "w": 222,
+          "h": 106
+        },
+        {
+          "id": "15:1530",
+          "name": "Resource / Skill card",
+          "type": "COMPONENT",
+          "parentId": "57:7461",
+          "parentName": "Library / Settings & resources",
+          "w": 360,
+          "h": 180
+        },
+        {
+          "id": "15:1539",
+          "name": "Detail / Text section",
+          "type": "COMPONENT",
+          "parentId": "57:7461",
+          "parentName": "Library / Settings & resources",
+          "w": 640,
+          "h": 94
+        },
+        {
+          "id": "15:1542",
+          "name": "Model / Picker item",
+          "type": "COMPONENT",
+          "parentId": "57:7461",
+          "parentName": "Library / Settings & resources",
+          "w": 652,
+          "h": 112
+        },
+        {
+          "id": "16:1721",
+          "name": "Settings navigation",
+          "type": "COMPONENT_SET",
+          "parentId": "57:7461",
+          "parentName": "Library / Settings & resources",
+          "w": 544,
+          "h": 120
+        },
+        {
+          "id": "14:786",
+          "name": "State=Default",
+          "type": "COMPONENT",
+          "parentId": "16:1721",
+          "parentName": "Settings navigation",
+          "w": 232,
+          "h": 72
+        },
+        {
+          "id": "14:789",
+          "name": "State=Selected",
+          "type": "COMPONENT",
+          "parentId": "16:1721",
+          "parentName": "Settings navigation",
+          "w": 232,
+          "h": 72
+        },
+        {
+          "id": "24:876",
+          "name": "Onboarding / Notifications",
+          "type": "COMPONENT",
+          "parentId": "57:7461",
+          "parentName": "Library / Settings & resources",
+          "w": 767,
+          "h": 64
+        },
+        {
+          "id": "53:1140",
+          "name": "Lane / Create dialog",
+          "type": "COMPONENT_SET",
+          "parentId": "57:7473",
+          "parentName": "Library / Projects & lanes",
+          "w": 1520,
+          "h": 1272
+        },
+        {
+          "id": "53:1068",
+          "name": "State=Form",
+          "type": "COMPONENT",
+          "parentId": "53:1140",
+          "parentName": "Lane / Create dialog",
+          "w": 720,
+          "h": 536
+        },
+        {
+          "id": "53:1091",
+          "name": "State=Working",
+          "type": "COMPONENT",
+          "parentId": "53:1140",
+          "parentName": "Lane / Create dialog",
+          "w": 720,
+          "h": 572
+        },
+        {
+          "id": "53:1115",
+          "name": "State=Error",
+          "type": "COMPONENT",
+          "parentId": "53:1140",
+          "parentName": "Lane / Create dialog",
+          "w": 720,
+          "h": 596
+        },
+        {
+          "id": "53:1141",
+          "name": "Lane / Ready dialog",
+          "type": "COMPONENT",
+          "parentId": "57:7473",
+          "parentName": "Library / Projects & lanes",
+          "w": 720,
+          "h": 340
+        },
+        {
+          "id": "166:785",
+          "name": "Mission Control r1 / App shell",
+          "type": "COMPONENT",
+          "parentId": "172:440",
+          "parentName": "Library / Mission Control \u00b7 integrated r1",
+          "w": 1600,
+          "h": 1000
+        },
+        {
+          "id": "166:13751",
+          "name": "Mission Control r1 / Crew graph",
+          "type": "COMPONENT",
+          "parentId": "172:440",
+          "parentName": "Library / Mission Control \u00b7 integrated r1",
+          "w": 800,
+          "h": 732
+        },
+        {
+          "id": "165:782",
+          "name": "Mission Control r1 / Canvas session / Finished",
+          "type": "COMPONENT",
+          "parentId": "172:440",
+          "parentName": "Library / Mission Control \u00b7 integrated r1",
+          "w": 260,
+          "h": 108
+        },
+        {
+          "id": "166:13745",
+          "name": "Mission Control r1 / Human chair",
+          "type": "COMPONENT",
+          "parentId": "172:440",
+          "parentName": "Library / Mission Control \u00b7 integrated r1",
+          "w": 260,
+          "h": 59
+        },
+        {
+          "id": "168:14482",
+          "name": "Mission Control r1 / History event",
+          "type": "COMPONENT",
+          "parentId": "172:440",
+          "parentName": "Library / Mission Control \u00b7 integrated r1",
+          "w": 704,
+          "h": 54
+        },
+        {
+          "id": "167:2572",
+          "name": "Mission Control r1 / Connection inspector / Saved",
+          "type": "COMPONENT",
+          "parentId": "172:440",
+          "parentName": "Library / Mission Control \u00b7 integrated r1",
+          "w": 340,
+          "h": 796
+        },
+        {
+          "id": "168:2648",
+          "name": "Mission Control r1 / Connection inspector / Draft",
+          "type": "COMPONENT",
+          "parentId": "172:440",
+          "parentName": "Library / Mission Control \u00b7 integrated r1",
+          "w": 340,
+          "h": 796
+        },
+        {
+          "id": "168:14409",
+          "name": "Mission Control r1 / Add conversations",
+          "type": "COMPONENT",
+          "parentId": "172:440",
+          "parentName": "Library / Mission Control \u00b7 integrated r1",
+          "w": 340,
+          "h": 796
+        },
+        {
+          "id": "168:14590",
+          "name": "Mission Control r1 / Recorded event / Failure",
+          "type": "COMPONENT",
+          "parentId": "172:440",
+          "parentName": "Library / Mission Control \u00b7 integrated r1",
+          "w": 340,
+          "h": 796
+        },
+        {
+          "id": "168:14659",
+          "name": "Mission Control r1 / Recorded event / Human handoff",
+          "type": "COMPONENT",
+          "parentId": "172:440",
+          "parentName": "Library / Mission Control \u00b7 integrated r1",
+          "w": 340,
+          "h": 796
+        },
+        {
+          "id": "168:14766",
+          "name": "Mission Control r1 / Crew settings",
+          "type": "COMPONENT",
+          "parentId": "172:440",
+          "parentName": "Library / Mission Control \u00b7 integrated r1",
+          "w": 340,
+          "h": 796
+        }
+      ],
+      "frames": [
+        {
+          "id": "57:7395",
+          "name": "Library / Controls"
+        },
+        {
+          "id": "57:7404",
+          "name": "Library / Shell & navigation"
+        },
+        {
+          "id": "57:7415",
+          "name": "Library / Conversation & requests"
+        },
+        {
+          "id": "57:7428",
+          "name": "Library / Composer & attachments"
+        },
+        {
+          "id": "57:7445",
+          "name": "Library / Responses & annotations"
+        },
+        {
+          "id": "57:7452",
+          "name": "Library / Mission Control"
+        },
+        {
+          "id": "57:7461",
+          "name": "Library / Settings & resources"
+        },
+        {
+          "id": "57:7473",
+          "name": "Library / Projects & lanes"
+        },
+        {
+          "id": "172:440",
+          "name": "Library / Mission Control \u00b7 integrated r1"
+        }
+      ],
+      "instances": 251,
+      "classification": "reference-unverified"
+    },
+    {
+      "page": {
+        "id": "594:2821",
+        "name": "20 \u00b7 Components / Conversations \u00b7 pilot"
+      },
+      "components": [
+        {
+          "id": "594:4095",
+          "name": "Conversation / Project card",
+          "type": "COMPONENT_SET",
+          "parentId": "594:2821",
+          "parentName": "20 \u00b7 Components / Conversations \u00b7 pilot",
+          "w": 984,
+          "h": 1320
+        },
+        {
+          "id": "594:4096",
+          "name": "Provider=Anthropic, View=Compact",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "594:4110",
+          "name": "Provider=Anthropic, View=Compact hover",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "594:4124",
+          "name": "Provider=Anthropic, View=Expanded",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "594:4141",
+          "name": "Provider=OpenAI, View=Compact",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "594:4155",
+          "name": "Provider=OpenAI, View=Compact hover",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "594:4169",
+          "name": "Provider=OpenAI, View=Expanded",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "594:4186",
+          "name": "Provider=Pi, View=Compact",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "594:4200",
+          "name": "Provider=Pi, View=Compact hover",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "594:4214",
+          "name": "Provider=Pi, View=Expanded",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "594:4231",
+          "name": "Provider=Cursor, View=Compact",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "594:4245",
+          "name": "Provider=Cursor, View=Compact hover",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "594:4259",
+          "name": "Provider=Cursor, View=Expanded",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "594:4276",
+          "name": "Provider=Google, View=Compact",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "594:4290",
+          "name": "Provider=Google, View=Compact hover",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "594:4304",
+          "name": "Provider=Google, View=Expanded",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "594:4321",
+          "name": "Provider=OpenRouter, View=Compact",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "594:4335",
+          "name": "Provider=OpenRouter, View=Compact hover",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "594:4349",
+          "name": "Provider=OpenRouter, View=Expanded",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "594:4366",
+          "name": "Provider=Unknown, View=Compact",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "594:4380",
+          "name": "Provider=Unknown, View=Compact hover",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "594:4394",
+          "name": "Provider=Unknown, View=Expanded",
+          "type": "COMPONENT",
+          "parentId": "594:4095",
+          "parentName": "Conversation / Project card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "596:1328",
+          "name": "Conversation / Status / Finished",
+          "type": "COMPONENT",
+          "parentId": "594:2821",
+          "parentName": "20 \u00b7 Components / Conversations \u00b7 pilot",
+          "w": 60,
+          "h": 17
+        },
+        {
+          "id": "597:38613",
+          "name": "Conversation / Activity card",
+          "type": "COMPONENT_SET",
+          "parentId": "594:2821",
+          "parentName": "20 \u00b7 Components / Conversations \u00b7 pilot",
+          "w": 1320,
+          "h": 1600
+        },
+        {
+          "id": "595:1294",
+          "name": "Provider=Anthropic, State=Default",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:35766",
+          "name": "Provider=Anthropic, State=Hover",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:35871",
+          "name": "Provider=Anthropic, State=Selected",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:35976",
+          "name": "Provider=Anthropic, State=Selected hover",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:36081",
+          "name": "Provider=OpenAI, State=Default",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:36186",
+          "name": "Provider=OpenAI, State=Hover",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:36291",
+          "name": "Provider=OpenAI, State=Selected",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:36396",
+          "name": "Provider=OpenAI, State=Selected hover",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:36501",
+          "name": "Provider=Pi, State=Default",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:36607",
+          "name": "Provider=Pi, State=Hover",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:36713",
+          "name": "Provider=Pi, State=Selected",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:36819",
+          "name": "Provider=Pi, State=Selected hover",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:36925",
+          "name": "Provider=Cursor, State=Default",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:37030",
+          "name": "Provider=Cursor, State=Hover",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:37135",
+          "name": "Provider=Cursor, State=Selected",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:37240",
+          "name": "Provider=Cursor, State=Selected hover",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:37345",
+          "name": "Provider=Google, State=Default",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:37453",
+          "name": "Provider=Google, State=Hover",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:37561",
+          "name": "Provider=Google, State=Selected",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:37669",
+          "name": "Provider=Google, State=Selected hover",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:37777",
+          "name": "Provider=OpenRouter, State=Default",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:37882",
+          "name": "Provider=OpenRouter, State=Hover",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:37987",
+          "name": "Provider=OpenRouter, State=Selected",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:38092",
+          "name": "Provider=OpenRouter, State=Selected hover",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:38197",
+          "name": "Provider=Unknown, State=Default",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:38301",
+          "name": "Provider=Unknown, State=Hover",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:38405",
+          "name": "Provider=Unknown, State=Selected",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        },
+        {
+          "id": "597:38509",
+          "name": "Provider=Unknown, State=Selected hover",
+          "type": "COMPONENT",
+          "parentId": "597:38613",
+          "parentName": "Conversation / Activity card",
+          "w": 280,
+          "h": 130
+        }
+      ],
+      "frames": [
+        {
+          "id": "597:1331",
+          "name": "Current examples \u00b7 Working / Finished / Acknowledged"
+        },
+        {
+          "id": "599:2668",
+          "name": "START HERE \u00b7 Conversations / maintained pilot"
+        },
+        {
+          "id": "601:2967",
+          "name": "Content checks \u00b7 228px / 400px / Light / Host liveness"
+        },
+        {
+          "id": "618:36941",
+          "name": "Activity card \u00b7 one component, three kinds of choice"
+        }
+      ],
+      "instances": 647,
+      "classification": "maintained-pilot"
+    },
+    {
+      "page": {
+        "id": "597:38614",
+        "name": "10 \u00b7 Current screens / Conversation pilot"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "597:38615",
+          "name": "Conversation pilot \u00b7 full app context \u00b7 screenshot-backed surroundings"
+        }
+      ],
+      "instances": 62,
+      "classification": "reference-unverified"
+    },
+    {
+      "page": {
+        "id": "22:789",
+        "name": "07 \u00b7 Current / Mission Control"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "165:769",
+          "name": "Current app / Mission Control \u00b7 integration guide"
+        },
+        {
+          "id": "165:774",
+          "name": "01 \u00b7 Canvas / Crew overview"
+        },
+        {
+          "id": "165:775",
+          "name": "02 \u00b7 Canvas / Connection inspector"
+        },
+        {
+          "id": "165:776",
+          "name": "03 \u00b7 Canvas / New connection \u00b7 Off"
+        },
+        {
+          "id": "165:777",
+          "name": "04 \u00b7 Canvas / Add conversations"
+        },
+        {
+          "id": "165:778",
+          "name": "05 \u00b7 History / Recorded delivery failure"
+        },
+        {
+          "id": "165:779",
+          "name": "06 \u00b7 History / Human handoff"
+        },
+        {
+          "id": "165:780",
+          "name": "07 \u00b7 Canvas / Crew settings"
+        },
+        {
+          "id": "165:781",
+          "name": "08 \u00b7 Canvas / Empty crew"
+        },
+        {
+          "id": "172:14622",
+          "name": "Review note / 01 \u00b7 The integrated canvas"
+        },
+        {
+          "id": "172:14625",
+          "name": "Review note / 02 \u00b7 Inspect a stored connection"
+        },
+        {
+          "id": "172:14628",
+          "name": "Review note / 03 \u00b7 A new connection starts Off"
+        },
+        {
+          "id": "172:14631",
+          "name": "Review note / 04 \u00b7 Add existing conversations"
+        },
+        {
+          "id": "172:14634",
+          "name": "Review note / 05 \u00b7 Read a failed delivery"
+        },
+        {
+          "id": "172:14637",
+          "name": "Review note / 06 \u00b7 Follow the run to a human"
+        },
+        {
+          "id": "172:14640",
+          "name": "Review note / 07 \u00b7 Crew controls belong to Canvas"
+        },
+        {
+          "id": "172:14643",
+          "name": "Review note / 08 \u00b7 Start with a conversation"
+        }
+      ],
+      "instances": 619,
+      "classification": "reference-unverified"
+    },
+    {
+      "page": {
+        "id": "103:657",
+        "name": "30 \u00b7 Working / Backpack Studio"
+      },
+      "components": [
+        {
+          "id": "104:4",
+          "name": "Studio / Conversation navigation",
+          "type": "COMPONENT",
+          "parentId": "104:2",
+          "parentName": "90 \u00b7 Exploration parts / Editable components",
+          "w": 240,
+          "h": 960
+        },
+        {
+          "id": "104:10088",
+          "name": "Studio / Composer",
+          "type": "COMPONENT",
+          "parentId": "104:2",
+          "parentName": "90 \u00b7 Exploration parts / Editable components",
+          "w": 760,
+          "h": 152
+        },
+        {
+          "id": "104:10101",
+          "name": "Studio / Narrator update",
+          "type": "COMPONENT",
+          "parentId": "104:2",
+          "parentName": "90 \u00b7 Exploration parts / Editable components",
+          "w": 760,
+          "h": 126
+        },
+        {
+          "id": "115:704",
+          "name": "remoteControl",
+          "type": "COMPONENT",
+          "parentId": "103:657",
+          "parentName": "30 \u00b7 Working / Backpack Studio",
+          "w": 192,
+          "h": 88
+        },
+        {
+          "id": "131:11637",
+          "name": "account",
+          "type": "COMPONENT",
+          "parentId": "103:657",
+          "parentName": "30 \u00b7 Working / Backpack Studio",
+          "w": 192,
+          "h": 48
+        },
+        {
+          "id": "133:1856",
+          "name": "conversationSurface",
+          "type": "COMPONENT",
+          "parentId": "103:657",
+          "parentName": "30 \u00b7 Working / Backpack Studio",
+          "w": 1120,
+          "h": 808
+        },
+        {
+          "id": "133:12031",
+          "name": "collapsedRail",
+          "type": "COMPONENT",
+          "parentId": "103:657",
+          "parentName": "30 \u00b7 Working / Backpack Studio",
+          "w": 72,
+          "h": 960
+        },
+        {
+          "id": "229:15160",
+          "name": "Studio / Conversation list row",
+          "type": "COMPONENT",
+          "parentId": "103:657",
+          "parentName": "30 \u00b7 Working / Backpack Studio",
+          "w": 1000,
+          "h": 100
+        }
+      ],
+      "frames": [
+        {
+          "id": "104:2",
+          "name": "90 \u00b7 Exploration parts / Editable components"
+        },
+        {
+          "id": "105:10197",
+          "name": "Notes / 01.04 \u00b7 Inbox / Return to your work"
+        },
+        {
+          "id": "105:10200",
+          "name": "01.04 \u00b7 Inbox / Return to your work"
+        },
+        {
+          "id": "106:10223",
+          "name": "Notes / 02.01 \u00b7 Design workbench"
+        },
+        {
+          "id": "106:10226",
+          "name": "02.01 \u00b7 Design / Ready to prompt"
+        },
+        {
+          "id": "106:10423",
+          "name": "Notes / 03.01 \u00b7 Roadmap workbench"
+        },
+        {
+          "id": "106:10426",
+          "name": "03.01 \u00b7 Conversation / Planning"
+        },
+        {
+          "id": "106:10645",
+          "name": "Notes / 04.01 \u00b7 Investigate with evidence"
+        },
+        {
+          "id": "106:10648",
+          "name": "04.01 \u00b7 Conversation / Engineering"
+        },
+        {
+          "id": "107:350",
+          "name": "Notes / 02.03 \u00b7 Assistant working"
+        },
+        {
+          "id": "107:353",
+          "name": "02.03 \u00b7 Design / Assistant working"
+        },
+        {
+          "id": "107:10524",
+          "name": "Notes / 05.03 \u00b7 Reconnect and return"
+        },
+        {
+          "id": "107:10527",
+          "name": "05.03 \u00b7 Conversation / Connection lost, draft kept"
+        },
+        {
+          "id": "107:10757",
+          "name": "Notes / 05.02 \u00b7 One useful clarification"
+        },
+        {
+          "id": "107:10760",
+          "name": "05.02 \u00b7 One useful clarification"
+        },
+        {
+          "id": "107:10884",
+          "name": "Notes / 05.04 \u00b7 Full activity"
+        },
+        {
+          "id": "107:10887",
+          "name": "05.04 \u00b7 Full activity"
+        },
+        {
+          "id": "107:10934",
+          "name": "Notes / 01.01 \u00b7 Company sign-in"
+        },
+        {
+          "id": "107:10946",
+          "name": "Notes / 01.02 \u00b7 Choose a first request"
+        },
+        {
+          "id": "107:10958",
+          "name": "Notes / 05.05 \u00b7 Access not enabled"
+        },
+        {
+          "id": "107:10961",
+          "name": "05.05 \u00b7 Access not enabled"
+        },
+        {
+          "id": "109:639",
+          "name": "states"
+        },
+        {
+          "id": "109:10824",
+          "name": "decisions"
+        },
+        {
+          "id": "110:693",
+          "name": "START HERE \u00b7 Backpack Studio working exploration"
+        },
+        {
+          "id": "110:10790",
+          "name": "recommend"
+        },
+        {
+          "id": "111:703",
+          "name": "walkthroughs"
+        },
+        {
+          "id": "117:2",
+          "name": "Notes / 01.03 \u00b7 Home / Meet your assistant"
+        },
+        {
+          "id": "117:10936",
+          "name": "06.01 \u00b7 Choose a remote"
+        },
+        {
+          "id": "117:10933",
+          "name": "Notes / 06.01 \u00b7 Choose a remote"
+        },
+        {
+          "id": "117:10999",
+          "name": "06.02 \u00b7 About your remote"
+        },
+        {
+          "id": "117:10996",
+          "name": "Notes / 06.02 \u00b7 About your remote"
+        },
+        {
+          "id": "117:11077",
+          "name": "06.03 \u00b7 Runtime update"
+        },
+        {
+          "id": "117:11074",
+          "name": "Notes / 06.03 \u00b7 Runtime update"
+        },
+        {
+          "id": "117:11146",
+          "name": "06.04 \u00b7 Remote unreachable"
+        },
+        {
+          "id": "117:11143",
+          "name": "Notes / 06.04 \u00b7 Remote unreachable"
+        },
+        {
+          "id": "117:11909",
+          "name": "06.05 \u00b7 Optional technical details"
+        },
+        {
+          "id": "117:11906",
+          "name": "Notes / 06.05 \u00b7 Optional technical details"
+        },
+        {
+          "id": "117:11201",
+          "name": "07.01 \u00b7 Discover skills"
+        },
+        {
+          "id": "117:11198",
+          "name": "Notes / 07.01 \u00b7 Discover skills"
+        },
+        {
+          "id": "117:11261",
+          "name": "07.02 \u00b7 Understand a skill"
+        },
+        {
+          "id": "117:11258",
+          "name": "Notes / 07.02 \u00b7 Understand a skill"
+        },
+        {
+          "id": "117:11321",
+          "name": "07.03 \u00b7 Browse knowledge"
+        },
+        {
+          "id": "117:11318",
+          "name": "Notes / 07.03 \u00b7 Browse knowledge"
+        },
+        {
+          "id": "117:11803",
+          "name": "07.04 \u00b7 Prepare a skill request"
+        },
+        {
+          "id": "117:11800",
+          "name": "Notes / 07.04 \u00b7 Prepare a skill request"
+        },
+        {
+          "id": "117:11619",
+          "name": "09.01 \u00b7 Future / Choose a workflow"
+        },
+        {
+          "id": "117:11616",
+          "name": "Notes / 09.01 \u00b7 Future / Choose a workflow"
+        },
+        {
+          "id": "117:11669",
+          "name": "09.02 \u00b7 Future / Add the brief"
+        },
+        {
+          "id": "117:11666",
+          "name": "Notes / 09.02 \u00b7 Future / Add the brief"
+        },
+        {
+          "id": "117:11858",
+          "name": "09.03 \u00b7 Future / Follow progress"
+        },
+        {
+          "id": "117:11855",
+          "name": "Notes / 09.03 \u00b7 Future / Follow progress"
+        },
+        {
+          "id": "117:11735",
+          "name": "09.04 \u00b7 Future / Review the handback"
+        },
+        {
+          "id": "117:11732",
+          "name": "Notes / 09.04 \u00b7 Future / Review the handback"
+        },
+        {
+          "id": "118:509",
+          "name": "Working agreement / Iterate in place"
+        },
+        {
+          "id": "118:11552",
+          "name": "mxPrototypeGuide"
+        },
+        {
+          "id": "118:11379",
+          "name": "mxStates"
+        },
+        {
+          "id": "118:11371",
+          "name": "mxDecisions"
+        },
+        {
+          "id": "118:11482",
+          "name": "mxRationale"
+        },
+        {
+          "id": "118:503",
+          "name": "Reference / The remote assistant principle"
+        },
+        {
+          "id": "124:11404",
+          "name": "01 \u00b7 Start / Sign in, meet your assistant, find your work"
+        },
+        {
+          "id": "124:11406",
+          "name": "02 \u00b7 Design / Explore and review the output"
+        },
+        {
+          "id": "124:11408",
+          "name": "03 \u00b7 Plan / Compare priorities and review changes"
+        },
+        {
+          "id": "124:11410",
+          "name": "04 \u00b7 Act / Investigate, review and publish"
+        },
+        {
+          "id": "124:11412",
+          "name": "05 \u00b7 Conversation states / Working, clarifying and returning"
+        },
+        {
+          "id": "124:11414",
+          "name": "06 \u00b7 Your remote / Availability, updates and capabilities"
+        },
+        {
+          "id": "124:11416",
+          "name": "07 \u00b7 Library / Skills and knowledge"
+        },
+        {
+          "id": "124:11418",
+          "name": "08 \u00b7 Files / Attach, prepare and use"
+        },
+        {
+          "id": "124:11420",
+          "name": "09 \u00b7 Future workflows / Choose, start, follow and review"
+        },
+        {
+          "id": "134:1943",
+          "name": "connectionReady"
+        },
+        {
+          "id": "134:1951",
+          "name": "connectionChecking"
+        },
+        {
+          "id": "134:12018",
+          "name": "connectionError"
+        },
+        {
+          "id": "134:12035",
+          "name": "accountPopover"
+        },
+        {
+          "id": "137:1961",
+          "name": "popoverNotes"
+        },
+        {
+          "id": "152:12415",
+          "name": "08.01 \u00b7 Attach files / One request, many formats"
+        },
+        {
+          "id": "152:12484",
+          "name": "08.02 \u00b7 Upload progress / Keep the good files"
+        },
+        {
+          "id": "152:12553",
+          "name": "08.03 \u00b7 Ready / Review and send"
+        },
+        {
+          "id": "152:12622",
+          "name": "08.04 \u00b7 Conversation / Sources and saved result"
+        },
+        {
+          "id": "152:12691",
+          "name": "10.01 \u00b7 Future / Connect a folder"
+        },
+        {
+          "id": "152:12760",
+          "name": "10.03 \u00b7 Future / Computer unavailable"
+        },
+        {
+          "id": "152:13039",
+          "name": "08.05 \u00b7 File requirements / Clear recovery"
+        },
+        {
+          "id": "152:13122",
+          "name": "10.02 \u00b7 Future / Folder connected"
+        },
+        {
+          "id": "152:13236",
+          "name": "Notes / 08.01 \u00b7 Attach files"
+        },
+        {
+          "id": "152:13239",
+          "name": "Notes / 08.02 \u00b7 Upload and prepare"
+        },
+        {
+          "id": "152:13242",
+          "name": "Notes / 08.03 \u00b7 Ready to send"
+        },
+        {
+          "id": "153:2351",
+          "name": "Notes / 08.04 \u00b7 Use files and save the result"
+        },
+        {
+          "id": "153:2354",
+          "name": "Notes / 08.05 \u00b7 File requirements and recovery"
+        },
+        {
+          "id": "153:2357",
+          "name": "Notes / 10.01 \u00b7 Future / Connect a folder"
+        },
+        {
+          "id": "156:2351",
+          "name": "Notes / 10.02 \u00b7 Connected folder / Read as needed"
+        },
+        {
+          "id": "156:2354",
+          "name": "Notes / 10.03 \u00b7 Folder unavailable / Keep the request"
+        },
+        {
+          "id": "156:2357",
+          "name": "10 \u00b7 Future / Work with a connected folder"
+        },
+        {
+          "id": "195:1488",
+          "name": "02.04 \u00b7 Design / Ready in Figma"
+        },
+        {
+          "id": "195:1496",
+          "name": "Notes / 02.04 \u00b7 Ready in Figma"
+        },
+        {
+          "id": "195:14711",
+          "name": "02.02 \u00b7 Design / Prompt ready to send"
+        },
+        {
+          "id": "195:14782",
+          "name": "Notes / 02.02 \u00b7 Prompt ready"
+        },
+        {
+          "id": "195:14788",
+          "name": "02.06 \u00b7 Prototype sample output / Summer campaign"
+        },
+        {
+          "id": "195:14802",
+          "name": "Notes / 02.06 \u00b7 Sample Figma output"
+        },
+        {
+          "id": "200:1822",
+          "name": "01.01 \u00b7 Company sign-in"
+        },
+        {
+          "id": "200:1833",
+          "name": "01.02 \u00b7 Choose a first request"
+        },
+        {
+          "id": "200:1853",
+          "name": "01.03 \u00b7 Home / Meet your assistant"
+        },
+        {
+          "id": "202:14895",
+          "name": "Prototype only / Review screens"
+        },
+        {
+          "id": "229:1563",
+          "name": "01.05 \u00b7 All conversations / Find and continue"
+        },
+        {
+          "id": "229:1609",
+          "name": "01.06 \u00b7 Search / Find a conversation by name"
+        },
+        {
+          "id": "229:1655",
+          "name": "05.06 \u00b7 Follow-up / Assistant working"
+        },
+        {
+          "id": "229:1672",
+          "name": "05.07 \u00b7 Follow-up / Stopped with partial work"
+        },
+        {
+          "id": "229:1689",
+          "name": "05.08 \u00b7 Follow-up / Changes ready"
+        },
+        {
+          "id": "229:15250",
+          "name": "Notes / 01.05 \u00b7 All conversations / Find and continue"
+        },
+        {
+          "id": "229:15253",
+          "name": "Notes / 01.06 \u00b7 Search / Find a conversation by name"
+        },
+        {
+          "id": "230:2108",
+          "name": "Notes / 05.06 \u00b7 Follow-up / Assistant working"
+        },
+        {
+          "id": "230:2111",
+          "name": "Notes / 05.07 \u00b7 Follow-up / Stopped with partial work"
+        },
+        {
+          "id": "230:2114",
+          "name": "Notes / 05.08 \u00b7 Follow-up / Changes ready"
+        }
+      ],
+      "instances": 394,
+      "classification": "exploration"
+    },
+    {
+      "page": {
+        "id": "0:1",
+        "name": "01 \u00b7 Core views"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "3:13",
+          "name": "01 \u00b7 New session"
+        },
+        {
+          "id": "3:16",
+          "name": "02 \u00b7 Conversation"
+        },
+        {
+          "id": "3:19",
+          "name": "03 \u00b7 Mission Control / Flat"
+        },
+        {
+          "id": "324:24458",
+          "name": "04 \u00b7 Activity filters / Expanded"
+        },
+        {
+          "id": "324:25153",
+          "name": "05 \u00b7 Activity filters / Applied"
+        },
+        {
+          "id": "324:25862",
+          "name": "06 \u00b7 Activity filters / No results"
+        }
+      ],
+      "instances": 471,
+      "classification": "reference-unverified"
+    },
+    {
+      "page": {
+        "id": "22:786",
+        "name": "02 \u00b7 Sessions"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "25:2062",
+          "name": "01 \u00b7 Running / Thinking"
+        },
+        {
+          "id": "25:2241",
+          "name": "02 \u00b7 Running / Tool call"
+        },
+        {
+          "id": "25:2412",
+          "name": "03 \u00b7 Tool output / Expanded"
+        },
+        {
+          "id": "25:2584",
+          "name": "04 \u00b7 Waiting / Approval"
+        },
+        {
+          "id": "25:2752",
+          "name": "05 \u00b7 Waiting / Choice"
+        },
+        {
+          "id": "25:2923",
+          "name": "06 \u00b7 Waiting / Plan review"
+        },
+        {
+          "id": "25:3093",
+          "name": "07 \u00b7 Waiting / Form"
+        },
+        {
+          "id": "25:3265",
+          "name": "08 \u00b7 Waiting / URL confirmation"
+        },
+        {
+          "id": "25:3434",
+          "name": "09 \u00b7 Running / Follow-up queued"
+        },
+        {
+          "id": "25:3610",
+          "name": "10 \u00b7 Finished / Continue conversation"
+        },
+        {
+          "id": "25:3770",
+          "name": "11 \u00b7 Failed / Provider unavailable"
+        },
+        {
+          "id": "25:3907",
+          "name": "12 \u00b7 Conversation / Restart boundary"
+        },
+        {
+          "id": "25:4074",
+          "name": "13 \u00b7 Conversation / Model change"
+        },
+        {
+          "id": "25:4241",
+          "name": "14 \u00b7 Approval / Historical card"
+        }
+      ],
+      "instances": 563,
+      "classification": "reference-unverified"
+    },
+    {
+      "page": {
+        "id": "22:788",
+        "name": "03 \u00b7 Composer"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "28:1496",
+          "name": "Attachments"
+        },
+        {
+          "id": "28:1561",
+          "name": "Unsupported attachment"
+        },
+        {
+          "id": "28:1611",
+          "name": "Selected context"
+        },
+        {
+          "id": "28:1686",
+          "name": "Advanced permissions"
+        },
+        {
+          "id": "28:1756",
+          "name": "Remote asking"
+        },
+        {
+          "id": "28:1784",
+          "name": "Remote unreachable"
+        },
+        {
+          "id": "28:1812",
+          "name": "Remote empty"
+        },
+        {
+          "id": "28:1840",
+          "name": "Remote choose place"
+        },
+        {
+          "id": "28:1885",
+          "name": "Remote settled"
+        },
+        {
+          "id": "28:1925",
+          "name": "Endpoint removed"
+        },
+        {
+          "id": "28:1964",
+          "name": "Text preview"
+        },
+        {
+          "id": "28:1973",
+          "name": "Loading preview"
+        },
+        {
+          "id": "28:1981",
+          "name": "Preview error"
+        },
+        {
+          "id": "28:1989",
+          "name": "Missing attachment"
+        }
+      ],
+      "instances": 69,
+      "classification": "reference-unverified"
+    },
+    {
+      "page": {
+        "id": "52:1134",
+        "name": "04 \u00b7 Responses & annotations"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "52:1135",
+          "name": "Annotations / Selection"
+        },
+        {
+          "id": "52:1304",
+          "name": "Annotations / Comment"
+        },
+        {
+          "id": "52:1467",
+          "name": "Annotations / Pending"
+        },
+        {
+          "id": "52:1629",
+          "name": "Annotations / Editing"
+        },
+        {
+          "id": "52:1790",
+          "name": "UI response / Rendered"
+        },
+        {
+          "id": "52:1959",
+          "name": "UI response / Empty"
+        },
+        {
+          "id": "52:2121",
+          "name": "UI response / Error"
+        }
+      ],
+      "instances": 251,
+      "classification": "reference-unverified"
+    },
+    {
+      "page": {
+        "id": "22:787",
+        "name": "05 \u00b7 First use & recovery"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "27:782",
+          "name": "01 \u00b7 First launch / No project"
+        },
+        {
+          "id": "27:862",
+          "name": "02 \u00b7 Open first project"
+        },
+        {
+          "id": "27:956",
+          "name": "03 \u00b7 Clone project / In progress"
+        },
+        {
+          "id": "27:1065",
+          "name": "04 \u00b7 Clone project / Error"
+        },
+        {
+          "id": "27:1168",
+          "name": "05 \u00b7 Project ready / First draft"
+        },
+        {
+          "id": "27:1320",
+          "name": "06 \u00b7 Project ready / Notifications onboarding"
+        },
+        {
+          "id": "27:1460",
+          "name": "07 \u00b7 App loading"
+        },
+        {
+          "id": "27:1541",
+          "name": "08 \u00b7 Project-free chat / Empty"
+        },
+        {
+          "id": "33:995",
+          "name": "Providers / Checking"
+        },
+        {
+          "id": "33:1006",
+          "name": "Providers / Unavailable"
+        },
+        {
+          "id": "33:1023",
+          "name": "Workspace / Creating"
+        },
+        {
+          "id": "33:1050",
+          "name": "Workspace / Error"
+        },
+        {
+          "id": "33:1067",
+          "name": "Session not found"
+        },
+        {
+          "id": "33:1159",
+          "name": "Worktree removed"
+        }
+      ],
+      "instances": 138,
+      "classification": "reference-unverified"
+    },
+    {
+      "page": {
+        "id": "14:783",
+        "name": "06 \u00b7 Projects & lanes"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "14:2041",
+          "name": "Project / Open local"
+        },
+        {
+          "id": "14:2058",
+          "name": "Project / Clone URL"
+        },
+        {
+          "id": "15:829",
+          "name": "Project / Settings"
+        },
+        {
+          "id": "15:870",
+          "name": "Workspace / Create"
+        },
+        {
+          "id": "53:1229",
+          "name": "Lane / Form"
+        },
+        {
+          "id": "53:1385",
+          "name": "Lane / Working"
+        },
+        {
+          "id": "53:1542",
+          "name": "Lane / Error"
+        },
+        {
+          "id": "53:1700",
+          "name": "Lane / Ready with warning"
+        },
+        {
+          "id": "53:1847",
+          "name": "Lane / Project switcher"
+        }
+      ],
+      "instances": 122,
+      "classification": "reference-unverified"
+    },
+    {
+      "page": {
+        "id": "14:782",
+        "name": "08 \u00b7 Settings"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "14:838",
+          "name": "Settings / Session defaults"
+        },
+        {
+          "id": "14:941",
+          "name": "Settings / Credentials"
+        },
+        {
+          "id": "14:1000",
+          "name": "Settings / Accounts"
+        },
+        {
+          "id": "14:1090",
+          "name": "Settings / Usage"
+        },
+        {
+          "id": "14:1169",
+          "name": "Settings / Pi models"
+        },
+        {
+          "id": "14:1259",
+          "name": "Settings / Notifications \u00b7 Channels"
+        },
+        {
+          "id": "14:1344",
+          "name": "Settings / Updates"
+        },
+        {
+          "id": "14:1405",
+          "name": "Settings / Shortcuts"
+        },
+        {
+          "id": "14:1463",
+          "name": "Settings / Debug logs"
+        },
+        {
+          "id": "14:1519",
+          "name": "Settings / Insights \u00b7 Your Usage"
+        },
+        {
+          "id": "14:1647",
+          "name": "Settings / Insights \u00b7 Your Work Style"
+        },
+        {
+          "id": "14:1735",
+          "name": "Settings / Session defaults \u00b7 Forking & hosts"
+        },
+        {
+          "id": "14:1828",
+          "name": "Settings / Notifications \u00b7 Events & testing"
+        },
+        {
+          "id": "14:1912",
+          "name": "Settings / Shortcuts \u00b7 Recording"
+        }
+      ],
+      "instances": 288,
+      "classification": "reference-unverified"
+    },
+    {
+      "page": {
+        "id": "14:784",
+        "name": "09 \u00b7 Commands & tools"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "15:1549",
+          "name": "Skills / Grid"
+        },
+        {
+          "id": "15:1665",
+          "name": "Skills / Detail panel"
+        },
+        {
+          "id": "15:1703",
+          "name": "Prompt Library / Browse"
+        },
+        {
+          "id": "15:1754",
+          "name": "Providers / Status"
+        },
+        {
+          "id": "15:1782",
+          "name": "MCP / Server availability"
+        },
+        {
+          "id": "15:1810",
+          "name": "Model picker / All providers"
+        },
+        {
+          "id": "15:1857",
+          "name": "Prompt Library / Create prompt"
+        },
+        {
+          "id": "16:973",
+          "name": "Composer / Injection menu"
+        },
+        {
+          "id": "16:992",
+          "name": "Composer / Project context picker"
+        },
+        {
+          "id": "16:1007",
+          "name": "Composer / Skill picker"
+        },
+        {
+          "id": "16:1026",
+          "name": "Model picker / Empty result"
+        },
+        {
+          "id": "14:1966",
+          "name": "Command Center / Default \u00b7 Groups"
+        },
+        {
+          "id": "14:2012",
+          "name": "Command Center / Search \u00b7 Settings"
+        },
+        {
+          "id": "14:2035",
+          "name": "Command Center / Search \u00b7 No results"
+        },
+        {
+          "id": "14:2086",
+          "name": "Session / Choose type"
+        },
+        {
+          "id": "15:896",
+          "name": "Session / Fork"
+        }
+      ],
+      "instances": 120,
+      "classification": "reference-unverified"
+    },
+    {
+      "page": {
+        "id": "15:1961",
+        "name": "10 \u00b7 Spaces"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "15:1962",
+          "name": "Space / Create"
+        },
+        {
+          "id": "15:1981",
+          "name": "Space / Chats"
+        },
+        {
+          "id": "15:2020",
+          "name": "Space / Sources"
+        },
+        {
+          "id": "15:2056",
+          "name": "Space / Memory"
+        },
+        {
+          "id": "15:2091",
+          "name": "Space / Artifacts"
+        },
+        {
+          "id": "15:2156",
+          "name": "Space / Brief"
+        }
+      ],
+      "instances": 56,
+      "classification": "reference-unverified"
+    },
+    {
+      "page": {
+        "id": "22:790",
+        "name": "11 \u00b7 Layouts & themes"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "36:782",
+          "name": "01 \u00b7 Sidebar collapsed"
+        },
+        {
+          "id": "36:1009",
+          "name": "02 \u00b7 Narrow window / 800 \u00d7 700"
+        },
+        {
+          "id": "36:1220",
+          "name": "03 \u00b7 Approval / Light theme"
+        },
+        {
+          "id": "36:1302",
+          "name": "04 \u00b7 Settings / Light theme"
+        },
+        {
+          "id": "36:1343",
+          "name": "05 \u00b7 Conversation / Terminal dock"
+        }
+      ],
+      "instances": 127,
+      "classification": "reference-unverified"
+    },
+    {
+      "page": {
+        "id": "22:791",
+        "name": "12 \u00b7 Prototype journeys"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "38:5633",
+          "name": "A1 \u00b7 Welcome"
+        },
+        {
+          "id": "38:5699",
+          "name": "A2 \u00b7 Open project"
+        },
+        {
+          "id": "38:5779",
+          "name": "A3 \u00b7 Project ready"
+        },
+        {
+          "id": "38:5862",
+          "name": "A4 \u00b7 Message ready"
+        },
+        {
+          "id": "38:5945",
+          "name": "A5 \u00b7 Running"
+        },
+        {
+          "id": "38:6034",
+          "name": "A6 \u00b7 Approval needed"
+        },
+        {
+          "id": "38:6127",
+          "name": "A7 \u00b7 Checks complete"
+        },
+        {
+          "id": "38:6216",
+          "name": "A8 \u00b7 Finished"
+        },
+        {
+          "id": "38:6547",
+          "name": "A6b \u00b7 Approval denied"
+        },
+        {
+          "id": "38:6687",
+          "name": "B1 \u00b7 Crew overview"
+        },
+        {
+          "id": "38:6790",
+          "name": "B2 \u00b7 Canvas"
+        },
+        {
+          "id": "38:6888",
+          "name": "B3 \u00b7 Wire detail"
+        },
+        {
+          "id": "38:6983",
+          "name": "B4 \u00b7 Reviewer needs approval"
+        },
+        {
+          "id": "38:7076",
+          "name": "B5 \u00b7 Reviewer finished"
+        },
+        {
+          "id": "38:7482",
+          "name": "C1 \u00b7 Missing session"
+        },
+        {
+          "id": "38:7553",
+          "name": "C2 \u00b7 Code home"
+        },
+        {
+          "id": "38:7636",
+          "name": "C3 \u00b7 Open another project"
+        },
+        {
+          "id": "39:4348",
+          "name": "Read me / Prototype journeys"
+        }
+      ],
+      "instances": 306,
+      "classification": "reference-unverified"
+    },
+    {
+      "page": {
+        "id": "100:1288",
+        "name": "80 \u00b7 Frozen handoff / Mission Control r1"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "100:1289",
+          "name": "01 \u00b7 Inspect a connection"
+        },
+        {
+          "id": "100:1646",
+          "name": "02 \u00b7 Draw a connection"
+        },
+        {
+          "id": "100:1997",
+          "name": "03 \u00b7 Add existing conversations"
+        },
+        {
+          "id": "100:2376",
+          "name": "04 \u00b7 History / Delivery failure"
+        },
+        {
+          "id": "100:2771",
+          "name": "05 \u00b7 History / Human handoff"
+        },
+        {
+          "id": "100:3169",
+          "name": "06 \u00b7 Crew settings / Whole-run limits"
+        },
+        {
+          "id": "100:3527",
+          "name": "07 \u00b7 One run / Three correction laps"
+        },
+        {
+          "id": "100:3902",
+          "name": "08 \u00b7 Empty crew"
+        },
+        {
+          "id": "100:4160",
+          "name": "09 \u00b7 Save failure / Draft retained"
+        },
+        {
+          "id": "100:4506",
+          "name": "10 \u00b7 Empty, recovery and guard states"
+        },
+        {
+          "id": "101:2",
+          "name": "00 \u00b7 Read me / Design handoff r1"
+        }
+      ],
+      "instances": 0,
+      "classification": "handoff"
+    },
+    {
+      "page": {
+        "id": "200:1879",
+        "name": "81 \u00b7 Frozen handoff / Studio S1"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "107:10937",
+          "name": "01.01 \u00b7 Company sign-in"
+        },
+        {
+          "id": "107:10949",
+          "name": "01.02 \u00b7 Choose a first request"
+        },
+        {
+          "id": "117:5",
+          "name": "01.03 \u00b7 Home / Meet your assistant"
+        }
+      ],
+      "instances": 12,
+      "classification": "handoff"
+    },
+    {
+      "page": {
+        "id": "216:2200",
+        "name": "82 \u00b7 Frozen handoff / Mission Control r2"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "216:2201",
+          "name": "R2 rationale / Mission Control r2 \u00b7 Selected proposal 1 \u00b7 7 September 2026"
+        },
+        {
+          "id": "216:2204",
+          "name": "R2.01 \u00b7 Labels / Clear space beside the wire"
+        },
+        {
+          "id": "216:2492",
+          "name": "R2 rationale / 01 \u00b7 Keep the label out of every card"
+        },
+        {
+          "id": "217:2387",
+          "name": "R2.02 \u00b7 Labels / Crowded fallback and connection list"
+        },
+        {
+          "id": "217:2694",
+          "name": "R2 rationale / 02 \u00b7 A collision never becomes overlapping text"
+        },
+        {
+          "id": "217:2697",
+          "name": "R2.03 \u00b7 Drag / Live preview and legal drop position"
+        },
+        {
+          "id": "217:2978",
+          "name": "R2 rationale / 03 \u00b7 The card follows the pointer; expensive routing waits"
+        },
+        {
+          "id": "218:2761",
+          "name": "R2.04 \u00b7 Drag / Settled on drop"
+        },
+        {
+          "id": "218:3047",
+          "name": "R2 rationale / 04 \u00b7 Settle once, then persist the position"
+        },
+        {
+          "id": "218:3050",
+          "name": "R2.05 \u00b7 Empty crew / Selectable and ready to populate"
+        },
+        {
+          "id": "218:3284",
+          "name": "R2 rationale / 05 \u00b7 The crew exists before its first card"
+        },
+        {
+          "id": "218:3287",
+          "name": "R2.06 \u00b7 Filtered crew / Members hidden, not removed"
+        },
+        {
+          "id": "218:3521",
+          "name": "R2 rationale / 06 \u00b7 Preserve the distinction between empty and hidden"
+        },
+        {
+          "id": "219:3250",
+          "name": "R2.07 \u00b7 Connection sides / Fixed gesture, automatic route"
+        },
+        {
+          "id": "219:3532",
+          "name": "R2 rationale / 07 \u00b7 Keep the authoring gesture in r2; retain automatic side selection"
+        }
+      ],
+      "instances": 0,
+      "classification": "handoff"
+    },
+    {
+      "page": {
+        "id": "181:5316",
+        "name": "97 \u00b7 Archive / Mission Control before r1"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "29:1636",
+          "name": "Historical \u00b7 pre-r1 / 01 \u00b7 Canvas / Crew connections"
+        },
+        {
+          "id": "29:1815",
+          "name": "Historical \u00b7 pre-r1 / 02 \u00b7 Canvas / Wire details"
+        },
+        {
+          "id": "29:1990",
+          "name": "Historical \u00b7 pre-r1 / 03 \u00b7 Canvas / Waiting on Marcin"
+        },
+        {
+          "id": "29:2166",
+          "name": "Historical \u00b7 pre-r1 / 04 \u00b7 Crews / Flow and sessions"
+        },
+        {
+          "id": "29:2349",
+          "name": "Historical \u00b7 pre-r1 / 05 \u00b7 Crews / Filtered out"
+        },
+        {
+          "id": "29:2520",
+          "name": "Historical \u00b7 pre-r1 / 06 \u00b7 Crews / Call waiting on you"
+        },
+        {
+          "id": "32:1089",
+          "name": "Historical \u00b7 pre-r1 / 07 \u00b7 Relay / Draw wire"
+        },
+        {
+          "id": "32:1130",
+          "name": "Historical \u00b7 pre-r1 / 08 \u00b7 Crew / Loop controls"
+        },
+        {
+          "id": "32:1153",
+          "name": "Historical \u00b7 pre-r1 / 09 \u00b7 Relay / Hop trail"
+        },
+        {
+          "id": "32:1169",
+          "name": "Historical \u00b7 pre-r1 / 10 \u00b7 Canvas / Empty"
+        }
+      ],
+      "instances": 189,
+      "classification": "legacy"
+    },
+    {
+      "page": {
+        "id": "69:2",
+        "name": "98 \u00b7 Archive / Mission Control explorations"
+      },
+      "components": [
+        {
+          "id": "94:1009",
+          "name": "Explore / History event",
+          "type": "COMPONENT",
+          "parentId": "69:2",
+          "parentName": "98 \u00b7 Archive / Mission Control explorations",
+          "w": 720,
+          "h": 76
+        }
+      ],
+      "frames": [
+        {
+          "id": "69:3",
+          "name": "History \u00b7 00 / Initial direction comparison"
+        },
+        {
+          "id": "69:4",
+          "name": "History \u00b7 A \u00b7 Canvas + connection inspector"
+        },
+        {
+          "id": "69:5",
+          "name": "History \u00b7 B \u00b7 Guided crew setup"
+        },
+        {
+          "id": "69:6",
+          "name": "History \u00b7 C \u00b7 Conversation + routes"
+        },
+        {
+          "id": "69:9226",
+          "name": "History \u00b7 A2 \u00b7 Canvas / Human handoff"
+        },
+        {
+          "id": "70:155",
+          "name": "History \u00b7 A3 \u00b7 Review / Before enabling"
+        },
+        {
+          "id": "73:252",
+          "name": "A \u00b7 01 / Editable canvas \u2014 existing app shell"
+        },
+        {
+          "id": "78:9247",
+          "name": "A \u00b7 02 / Draw connection \u2014 choose destination"
+        },
+        {
+          "id": "78:9483",
+          "name": "A \u00b7 03 / Add existing conversations to crew"
+        },
+        {
+          "id": "81:482",
+          "name": "Selected direction / Canvas authoring"
+        },
+        {
+          "id": "81:487",
+          "name": "01 \u00b7 Inspect a connection"
+        },
+        {
+          "id": "81:490",
+          "name": "02 \u00b7 Draw a connection"
+        },
+        {
+          "id": "81:493",
+          "name": "03 \u00b7 Add conversations"
+        },
+        {
+          "id": "81:496",
+          "name": "History / Initial exploration"
+        },
+        {
+          "id": "85:482",
+          "name": "Canvas history / Review this next"
+        },
+        {
+          "id": "86:476",
+          "name": "B \u00b7 01 / Run history \u2014 delivery error"
+        },
+        {
+          "id": "87:585",
+          "name": "B \u00b7 02 / Run history \u2014 human handoff"
+        },
+        {
+          "id": "87:856",
+          "name": "B \u00b7 03 / Crew controls inside Canvas"
+        },
+        {
+          "id": "87:10030",
+          "name": "C \u00b7 01 / Empty crew \u2014 first conversation"
+        },
+        {
+          "id": "87:10247",
+          "name": "C \u00b7 02 / Save failed \u2014 draft retained"
+        },
+        {
+          "id": "92:990",
+          "name": "C \u00b7 03 / Empty, recovery and guard states"
+        },
+        {
+          "id": "95:1017",
+          "name": "B01 \u00b7 Follow a run; inspect the failure"
+        },
+        {
+          "id": "95:1020",
+          "name": "B02 \u00b7 Separate a held route from a human handoff"
+        },
+        {
+          "id": "95:1023",
+          "name": "B03 \u00b7 Crew capabilities become Canvas-native"
+        },
+        {
+          "id": "95:1026",
+          "name": "C01 \u00b7 Start with an existing conversation"
+        },
+        {
+          "id": "95:1029",
+          "name": "C02 \u00b7 Keep the draft when saving fails"
+        },
+        {
+          "id": "95:1032",
+          "name": "C03 \u00b7 Make failures and limits understandable"
+        },
+        {
+          "id": "100:1021",
+          "name": "Run model / Multi-lap history"
+        },
+        {
+          "id": "100:1024",
+          "name": "B \u00b7 04 / One run \u2014 three correction laps"
+        }
+      ],
+      "instances": 363,
+      "classification": "legacy"
+    },
+    {
+      "page": {
+        "id": "181:5317",
+        "name": "99 \u00b7 Archive / Backpack earlier & deferred"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "105:15",
+          "name": "Earlier / A0note"
+        },
+        {
+          "id": "105:18",
+          "name": "Earlier / A01 \u00b7 A calm place to begin"
+        },
+        {
+          "id": "105:10134",
+          "name": "Earlier / B0note"
+        },
+        {
+          "id": "105:10137",
+          "name": "Earlier / B01 \u00b7 A studio that opens around your request"
+        },
+        {
+          "id": "106:95",
+          "name": "Earlier / A1note"
+        },
+        {
+          "id": "106:98",
+          "name": "Earlier / A02 \u00b7 Designer / An answer you can see"
+        },
+        {
+          "id": "106:10304",
+          "name": "Earlier / C1note"
+        },
+        {
+          "id": "106:10307",
+          "name": "Earlier / C02 \u00b7 Designer / A useful decision"
+        },
+        {
+          "id": "106:10362",
+          "name": "Earlier / A2note"
+        },
+        {
+          "id": "106:10365",
+          "name": "Earlier / A03 \u00b7 Manager / Start with the question"
+        },
+        {
+          "id": "106:10507",
+          "name": "Deferred / Notes / 03.03 \u00b7 Review Jira changes"
+        },
+        {
+          "id": "106:10510",
+          "name": "Deferred / 03.03 \u00b7 Review Jira changes"
+        },
+        {
+          "id": "106:10577",
+          "name": "Earlier / A3note"
+        },
+        {
+          "id": "106:10580",
+          "name": "Earlier / A04 \u00b7 Developer / A clear explanation first"
+        },
+        {
+          "id": "106:10713",
+          "name": "Deferred / Notes / 04.02 \u00b7 Review the next action"
+        },
+        {
+          "id": "106:10716",
+          "name": "Deferred / 04.02 \u00b7 Review the next action"
+        },
+        {
+          "id": "107:10466",
+          "name": "Deferred / Notes / 02.02 \u00b7 Compare design directions"
+        },
+        {
+          "id": "107:10469",
+          "name": "Deferred / 02.02 \u00b7 Compare design directions"
+        },
+        {
+          "id": "107:10583",
+          "name": "Deferred / Notes / 04.03 \u00b7 Review publishing"
+        },
+        {
+          "id": "107:10586",
+          "name": "Deferred / 04.03 \u00b7 Review publishing"
+        },
+        {
+          "id": "107:10642",
+          "name": "Deferred / Notes / 03.02 \u00b7 Compare priorities"
+        },
+        {
+          "id": "107:10645",
+          "name": "Deferred / 03.02 \u00b7 Compare priorities"
+        },
+        {
+          "id": "107:10697",
+          "name": "Deferred / Notes / 03.04 \u00b7 Partial-success receipt"
+        },
+        {
+          "id": "107:10700",
+          "name": "Deferred / 03.04 \u00b7 Partial-success receipt"
+        },
+        {
+          "id": "107:10819",
+          "name": "Deferred / Notes / 02.03 \u00b7 Sources behind the result"
+        },
+        {
+          "id": "107:10822",
+          "name": "Deferred / 02.03 \u00b7 Sources behind the result"
+        },
+        {
+          "id": "108:591",
+          "name": "Earlier / D0note"
+        },
+        {
+          "id": "108:594",
+          "name": "Earlier / D01 \u00b7 Focus / One open invitation"
+        },
+        {
+          "id": "108:10688",
+          "name": "Earlier / D1note"
+        },
+        {
+          "id": "108:10691",
+          "name": "Earlier / D02 \u00b7 Focus / The output takes the room"
+        },
+        {
+          "id": "108:10739",
+          "name": "Earlier / D2note"
+        },
+        {
+          "id": "108:10742",
+          "name": "Earlier / D03 \u00b7 Focus / The plan is the conversation"
+        },
+        {
+          "id": "108:10784",
+          "name": "Earlier / D3note"
+        },
+        {
+          "id": "108:10787",
+          "name": "Earlier / D04 \u00b7 Focus / A fix that explains itself"
+        },
+        {
+          "id": "117:11380",
+          "name": "Deferred / 08.01 \u00b7 Save a prompt"
+        },
+        {
+          "id": "117:11377",
+          "name": "Deferred / Notes / 08.01 \u00b7 Save a prompt"
+        },
+        {
+          "id": "117:11441",
+          "name": "Deferred / 08.02 \u00b7 My prompts"
+        },
+        {
+          "id": "117:11438",
+          "name": "Deferred / Notes / 08.02 \u00b7 My prompts"
+        },
+        {
+          "id": "117:11502",
+          "name": "Deferred / 08.03 \u00b7 Reuse a prompt"
+        },
+        {
+          "id": "117:11499",
+          "name": "Deferred / Notes / 08.03 \u00b7 Reuse a prompt"
+        },
+        {
+          "id": "117:11562",
+          "name": "Deferred / 08.04 \u00b7 Recheck remote capabilities"
+        },
+        {
+          "id": "117:11559",
+          "name": "Deferred / Notes / 08.04 \u00b7 Recheck remote capabilities"
+        },
+        {
+          "id": "124:11422",
+          "name": "Earlier alternatives \u00b7 Comparison only / Outside the working flow"
+        },
+        {
+          "id": "124:11424",
+          "name": "Earlier alternatives \u00b7 Conversation-first planning and investigation"
+        },
+        {
+          "id": "124:11426",
+          "name": "Earlier alternatives \u00b7 Minimal Focus direction"
+        },
+        {
+          "id": "131:1344",
+          "name": "Future concept / 02.01 \u00b7 Design workbench"
+        },
+        {
+          "id": "131:1423",
+          "name": "Future concept / 03.01 \u00b7 Roadmap workbench"
+        },
+        {
+          "id": "131:1505",
+          "name": "Future concept / 04.01 \u00b7 Investigate with evidence"
+        },
+        {
+          "id": "137:1958",
+          "name": "deferredIntro"
+        },
+        {
+          "id": "110:10808",
+          "name": "Notes / 02.05 \u00b7 Sidebar collapsed"
+        },
+        {
+          "id": "110:10811",
+          "name": "02.05 \u00b7 Conversation / Sidebar collapsed"
+        }
+      ],
+      "instances": 171,
+      "classification": "legacy"
+    },
+    {
+      "page": {
+        "id": "256:2",
+        "name": "83 \u00b7 Frozen handoff / CC2 parallel work"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "256:5",
+          "name": "01 \u00b7 Answered / background work continues"
+        },
+        {
+          "id": "257:102",
+          "name": "02 \u00b7 Inspect an agent / its own transcript"
+        },
+        {
+          "id": "257:582",
+          "name": "03 \u00b7 Message an agent / scoped controls"
+        },
+        {
+          "id": "257:936",
+          "name": "04 \u00b7 Result returned / session settles"
+        },
+        {
+          "id": "257:16178",
+          "name": "05 \u00b7 Stopped by quit / failed agent"
+        },
+        {
+          "id": "257:16532",
+          "name": "06 \u00b7 Reconnected / outcome unknown"
+        },
+        {
+          "id": "257:16880",
+          "name": "07 \u00b7 Empty / no parallel work yet"
+        },
+        {
+          "id": "257:17216",
+          "name": "08 \u00b7 Background task / output and Stop"
+        },
+        {
+          "id": "257:17564",
+          "name": "09 \u00b7 Panel closed / session activity remains"
+        },
+        {
+          "id": "257:17688",
+          "name": "10 \u00b7 Experience contract / details and action states"
+        },
+        {
+          "id": "259:2",
+          "name": "11 \u00b7 Agent details / recorded evidence"
+        }
+      ],
+      "instances": 0,
+      "classification": "handoff"
+    },
+    {
+      "page": {
+        "id": "274:2",
+        "name": "31 \u00b7 Exploration / Sidebar cards"
+      },
+      "components": [
+        {
+          "id": "275:5",
+          "name": "Sidebar card / Baseline / Finished",
+          "type": "COMPONENT",
+          "parentId": "275:2",
+          "parentName": "00 / Current dev \u00b7 reconstruction",
+          "w": 228,
+          "h": 133
+        },
+        {
+          "id": "275:28",
+          "name": "Sidebar card / Baseline / Working",
+          "type": "COMPONENT",
+          "parentId": "275:2",
+          "parentName": "00 / Current dev \u00b7 reconstruction",
+          "w": 228,
+          "h": 133
+        },
+        {
+          "id": "275:53",
+          "name": "Sidebar card / Baseline / Needs input",
+          "type": "COMPONENT",
+          "parentId": "275:2",
+          "parentName": "00 / Current dev \u00b7 reconstruction",
+          "w": 228,
+          "h": 133
+        },
+        {
+          "id": "275:82",
+          "name": "Sidebar card / A / Finished",
+          "type": "COMPONENT",
+          "parentId": "275:79",
+          "parentName": "A / Identity rail",
+          "w": 228,
+          "h": 130
+        },
+        {
+          "id": "275:113",
+          "name": "Sidebar card / A / Working",
+          "type": "COMPONENT",
+          "parentId": "275:79",
+          "parentName": "A / Identity rail",
+          "w": 228,
+          "h": 130
+        },
+        {
+          "id": "275:145",
+          "name": "Sidebar card / A / Needs input",
+          "type": "COMPONENT",
+          "parentId": "275:79",
+          "parentName": "A / Identity rail",
+          "w": 228,
+          "h": 130
+        },
+        {
+          "id": "275:179",
+          "name": "Sidebar card / B / Finished",
+          "type": "COMPONENT",
+          "parentId": "275:176",
+          "parentName": "B / Compact footer",
+          "w": 228,
+          "h": 122
+        },
+        {
+          "id": "275:210",
+          "name": "Sidebar card / B / Working",
+          "type": "COMPONENT",
+          "parentId": "275:176",
+          "parentName": "B / Compact footer",
+          "w": 228,
+          "h": 122
+        },
+        {
+          "id": "275:242",
+          "name": "Sidebar card / B / Needs input",
+          "type": "COMPONENT",
+          "parentId": "275:176",
+          "parentName": "B / Compact footer",
+          "w": 228,
+          "h": 122
+        },
+        {
+          "id": "275:276",
+          "name": "Sidebar card / C / Finished",
+          "type": "COMPONENT",
+          "parentId": "275:273",
+          "parentName": "C / Activity first",
+          "w": 228,
+          "h": 135
+        },
+        {
+          "id": "275:308",
+          "name": "Sidebar card / C / Working",
+          "type": "COMPONENT",
+          "parentId": "275:273",
+          "parentName": "C / Activity first",
+          "w": 228,
+          "h": 135
+        },
+        {
+          "id": "275:341",
+          "name": "Sidebar card / C / Needs input",
+          "type": "COMPONENT",
+          "parentId": "275:273",
+          "parentName": "C / Activity first",
+          "w": 228,
+          "h": 135
+        },
+        {
+          "id": "275:448",
+          "name": "Sidebar card / A / Failed",
+          "type": "COMPONENT",
+          "parentId": "275:446",
+          "parentName": "Long content + failed state",
+          "w": 228,
+          "h": 130
+        }
+      ],
+      "frames": [
+        {
+          "id": "274:3",
+          "name": "Sidebar cards / Exploration \u00b7 12 Sep 2026"
+        },
+        {
+          "id": "276:2",
+          "name": "Provider tint / At-a-glance study \u00b7 12 Sep 2026"
+        },
+        {
+          "id": "279:2",
+          "name": "Kind icons / Alternatives to anchor and arrow"
+        },
+        {
+          "id": "280:2",
+          "name": "Layout A / Implementation preview \u00b7 Infinity + Briefcase"
+        },
+        {
+          "id": "282:2",
+          "name": "Selected / A + Whisper \u00b7 13 Sep 2026"
+        },
+        {
+          "id": "287:68",
+          "name": "PR on cards / Placement exploration \u00b7 13 Sep 2026"
+        },
+        {
+          "id": "287:715",
+          "name": "PR on cards / States + honest fallbacks \u00b7 Exploration"
+        },
+        {
+          "id": "291:72",
+          "name": "Sidebar controls / Three directions \u00b7 Exploration"
+        },
+        {
+          "id": "291:910",
+          "name": "Sidebar controls / Menus and ordering \u00b7 Exploration"
+        },
+        {
+          "id": "291:1144",
+          "name": "Sidebar controls / Edge states and section order \u00b7 Exploration"
+        },
+        {
+          "id": "294:83",
+          "name": "Card timing / Placement exploration \u00b7 13 Sep 2026"
+        },
+        {
+          "id": "294:575",
+          "name": "Card timing / Meaning and source evidence \u00b7 Exploration"
+        },
+        {
+          "id": "294:598",
+          "name": "Card timing / Parallel work and missing facts \u00b7 Exploration"
+        },
+        {
+          "id": "295:89",
+          "name": "Selected / PR in metadata \u00b7 A \u00b7 13 Sep 2026"
+        },
+        {
+          "id": "324:27933",
+          "name": "Current released reference / Navigation"
+        }
+      ],
+      "instances": 21,
+      "classification": "exploration"
+    },
+    {
+      "page": {
+        "id": "299:2",
+        "name": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot"
+      },
+      "components": [
+        {
+          "id": "300:54",
+          "name": "Activity card / Icon / MoreHorizontal",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:59",
+          "name": "Activity card / Icon / Pin",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:63",
+          "name": "Activity card / Icon / Laptop",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:67",
+          "name": "Activity card / Icon / Server",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:73",
+          "name": "Activity card / Icon / Infinity",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:76",
+          "name": "Activity card / Icon / ClipboardList",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:84",
+          "name": "Activity card / Icon / CircleCheck",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:88",
+          "name": "Activity card / Icon / CircleAlert",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:93",
+          "name": "Activity card / Icon / CircleHelp",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:98",
+          "name": "Activity card / Icon / LoaderCircle",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:101",
+          "name": "Activity card / Icon / MessageCircle",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:104",
+          "name": "Activity card / Icon / GitPullRequest",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:110",
+          "name": "Activity card / Icon / GitPullRequestDraft",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:117",
+          "name": "Activity card / Icon / GitMerge",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:122",
+          "name": "Activity card / Icon / GitPullRequestClosed",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:130",
+          "name": "Activity card / Icon / MessageSquareWarning",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:135",
+          "name": "Activity card / Icon / anthropic",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:138",
+          "name": "Activity card / Icon / openai",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:141",
+          "name": "Activity card / Icon / pi",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:145",
+          "name": "Activity card / Icon / cursor",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:148",
+          "name": "Activity card / Icon / google",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:154",
+          "name": "Activity card / Icon / openrouter",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:157",
+          "name": "Activity card / Icon / Unknown provider",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "300:15321",
+          "name": "Activity card / Status",
+          "type": "COMPONENT_SET",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 340,
+          "h": 396
+        },
+        {
+          "id": "300:15266",
+          "name": "Status=Working",
+          "type": "COMPONENT",
+          "parentId": "300:15321",
+          "parentName": "Activity card / Status",
+          "w": 59,
+          "h": 17
+        },
+        {
+          "id": "300:15273",
+          "name": "Status=Finished",
+          "type": "COMPONENT",
+          "parentId": "300:15321",
+          "parentName": "Activity card / Status",
+          "w": 60,
+          "h": 17
+        },
+        {
+          "id": "300:15281",
+          "name": "Status=Failed",
+          "type": "COMPONENT",
+          "parentId": "300:15321",
+          "parentName": "Activity card / Status",
+          "w": 48,
+          "h": 17
+        },
+        {
+          "id": "300:15290",
+          "name": "Status=Needs input",
+          "type": "COMPONENT",
+          "parentId": "300:15321",
+          "parentName": "Activity card / Status",
+          "w": 79,
+          "h": 17
+        },
+        {
+          "id": "300:15297",
+          "name": "Status=Needs approval",
+          "type": "COMPONENT",
+          "parentId": "300:15321",
+          "parentName": "Activity card / Status",
+          "w": 98,
+          "h": 17
+        },
+        {
+          "id": "300:15304",
+          "name": "Status=Background tasks",
+          "type": "COMPONENT",
+          "parentId": "300:15321",
+          "parentName": "Activity card / Status",
+          "w": 157,
+          "h": 17
+        },
+        {
+          "id": "300:15312",
+          "name": "Status=Unknown tasks",
+          "type": "COMPONENT",
+          "parentId": "300:15321",
+          "parentName": "Activity card / Status",
+          "w": 133,
+          "h": 17
+        },
+        {
+          "id": "300:15375",
+          "name": "Activity card / Pull request",
+          "type": "COMPONENT_SET",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 310,
+          "h": 344
+        },
+        {
+          "id": "300:15322",
+          "name": "PR=Draft",
+          "type": "COMPONENT",
+          "parentId": "300:15375",
+          "parentName": "Activity card / Pull request",
+          "w": 75,
+          "h": 19
+        },
+        {
+          "id": "300:15332",
+          "name": "PR=Ready for review",
+          "type": "COMPONENT",
+          "parentId": "300:15375",
+          "parentName": "Activity card / Pull request",
+          "w": 130,
+          "h": 19
+        },
+        {
+          "id": "300:15341",
+          "name": "PR=Changes requested",
+          "type": "COMPONENT",
+          "parentId": "300:15375",
+          "parentName": "Activity card / Pull request",
+          "w": 144,
+          "h": 19
+        },
+        {
+          "id": "300:15349",
+          "name": "PR=Approved",
+          "type": "COMPONENT",
+          "parentId": "300:15375",
+          "parentName": "Activity card / Pull request",
+          "w": 97,
+          "h": 19
+        },
+        {
+          "id": "300:15356",
+          "name": "PR=Merged",
+          "type": "COMPONENT",
+          "parentId": "300:15375",
+          "parentName": "Activity card / Pull request",
+          "w": 87,
+          "h": 19
+        },
+        {
+          "id": "300:15364",
+          "name": "PR=Closed",
+          "type": "COMPONENT",
+          "parentId": "300:15375",
+          "parentName": "Activity card / Pull request",
+          "w": 84,
+          "h": 19
+        },
+        {
+          "id": "300:15376",
+          "name": "Activity card / Identity",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 40,
+          "h": 28
+        },
+        {
+          "id": "302:1007",
+          "name": "Activity card",
+          "type": "COMPONENT_SET",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 1288,
+          "h": 1360
+        },
+        {
+          "id": "301:63",
+          "name": "Provider=Anthropic, State=Default",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:83",
+          "name": "Provider=Anthropic, State=Hover",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:115",
+          "name": "Provider=Anthropic, State=Selected",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:147",
+          "name": "Provider=Anthropic, State=Selected hover",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:179",
+          "name": "Provider=OpenAI, State=Default",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:213",
+          "name": "Provider=OpenAI, State=Hover",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:247",
+          "name": "Provider=OpenAI, State=Selected",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:281",
+          "name": "Provider=OpenAI, State=Selected hover",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:315",
+          "name": "Provider=Pi, State=Default",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:350",
+          "name": "Provider=Pi, State=Hover",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:385",
+          "name": "Provider=Pi, State=Selected",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:420",
+          "name": "Provider=Pi, State=Selected hover",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:455",
+          "name": "Provider=Cursor, State=Default",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:489",
+          "name": "Provider=Cursor, State=Hover",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:523",
+          "name": "Provider=Cursor, State=Selected",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:557",
+          "name": "Provider=Cursor, State=Selected hover",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:591",
+          "name": "Provider=Google, State=Default",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:628",
+          "name": "Provider=Google, State=Hover",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:665",
+          "name": "Provider=Google, State=Selected",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:702",
+          "name": "Provider=Google, State=Selected hover",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:739",
+          "name": "Provider=OpenRouter, State=Default",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:773",
+          "name": "Provider=OpenRouter, State=Hover",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:807",
+          "name": "Provider=OpenRouter, State=Selected",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:841",
+          "name": "Provider=OpenRouter, State=Selected hover",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:875",
+          "name": "Provider=Unknown, State=Default",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:908",
+          "name": "Provider=Unknown, State=Hover",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:941",
+          "name": "Provider=Unknown, State=Selected",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "302:974",
+          "name": "Provider=Unknown, State=Selected hover",
+          "type": "COMPONENT",
+          "parentId": "302:1007",
+          "parentName": "Activity card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "310:1355",
+          "name": "Project conversation / Status icon",
+          "type": "COMPONENT_SET",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 100,
+          "h": 260
+        },
+        {
+          "id": "310:1332",
+          "name": "Status=Finished",
+          "type": "COMPONENT",
+          "parentId": "310:1355",
+          "parentName": "Project conversation / Status icon",
+          "w": 12,
+          "h": 12
+        },
+        {
+          "id": "310:1336",
+          "name": "Status=Working",
+          "type": "COMPONENT",
+          "parentId": "310:1355",
+          "parentName": "Project conversation / Status icon",
+          "w": 12,
+          "h": 12
+        },
+        {
+          "id": "310:1339",
+          "name": "Status=Needs input",
+          "type": "COMPONENT",
+          "parentId": "310:1355",
+          "parentName": "Project conversation / Status icon",
+          "w": 12,
+          "h": 12
+        },
+        {
+          "id": "310:1342",
+          "name": "Status=Needs approval",
+          "type": "COMPONENT",
+          "parentId": "310:1355",
+          "parentName": "Project conversation / Status icon",
+          "w": 12,
+          "h": 12
+        },
+        {
+          "id": "310:1347",
+          "name": "Status=Failed",
+          "type": "COMPONENT",
+          "parentId": "310:1355",
+          "parentName": "Project conversation / Status icon",
+          "w": 12,
+          "h": 12
+        },
+        {
+          "id": "310:1352",
+          "name": "Status=Background",
+          "type": "COMPONENT",
+          "parentId": "310:1355",
+          "parentName": "Project conversation / Status icon",
+          "w": 12,
+          "h": 12
+        },
+        {
+          "id": "311:2186",
+          "name": "Project conversation card",
+          "type": "COMPONENT_SET",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 984,
+          "h": 1320
+        },
+        {
+          "id": "310:1357",
+          "name": "Provider=Anthropic, View=Compact",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "311:1370",
+          "name": "Provider=Anthropic, View=Compact hover",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "310:16495",
+          "name": "Provider=Anthropic, View=Expanded",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "311:1415",
+          "name": "Provider=OpenAI, View=Compact",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "311:1448",
+          "name": "Provider=OpenAI, View=Compact hover",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "311:1481",
+          "name": "Provider=OpenAI, View=Expanded",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "311:1542",
+          "name": "Provider=Pi, View=Compact",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "311:1576",
+          "name": "Provider=Pi, View=Compact hover",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "311:1610",
+          "name": "Provider=Pi, View=Expanded",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "311:1672",
+          "name": "Provider=Cursor, View=Compact",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "311:1705",
+          "name": "Provider=Cursor, View=Compact hover",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "311:1738",
+          "name": "Provider=Cursor, View=Expanded",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "311:1799",
+          "name": "Provider=Google, View=Compact",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "311:1835",
+          "name": "Provider=Google, View=Compact hover",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "311:1871",
+          "name": "Provider=Google, View=Expanded",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "311:1935",
+          "name": "Provider=OpenRouter, View=Compact",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "311:1968",
+          "name": "Provider=OpenRouter, View=Compact hover",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "311:2001",
+          "name": "Provider=OpenRouter, View=Expanded",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "311:2062",
+          "name": "Provider=Unknown, View=Compact",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "311:2094",
+          "name": "Provider=Unknown, View=Compact hover",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 48
+        },
+        {
+          "id": "311:2126",
+          "name": "Provider=Unknown, View=Expanded",
+          "type": "COMPONENT",
+          "parentId": "311:2186",
+          "parentName": "Project conversation card",
+          "w": 280,
+          "h": 128
+        },
+        {
+          "id": "319:2978",
+          "name": "Sidebar / Activity controls \u00b7 Current",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 236,
+          "h": 108
+        },
+        {
+          "id": "321:2149",
+          "name": "Sidebar / Code \u00b7 0.58.1",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 260,
+          "h": 772
+        },
+        {
+          "id": "321:18540",
+          "name": "Control / Provider \u00b7 0.58.1",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 98,
+          "h": 28
+        },
+        {
+          "id": "322:23349",
+          "name": "Mission Control / App shell \u00b7 0.58.1",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 1600,
+          "h": 1000
+        },
+        {
+          "id": "322:26299",
+          "name": "Mission Control / Canvas session \u00b7 0.58.1",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 260,
+          "h": 108
+        },
+        {
+          "id": "324:4180",
+          "name": "Sidebar / Expanded filters \u00b7 Current",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 236,
+          "h": 238
+        },
+        {
+          "id": "324:27287",
+          "name": "Mission Control / Flat session finished \u00b7 0.58.1",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 292,
+          "h": 152
+        },
+        {
+          "id": "324:27298",
+          "name": "Mission Control / Flat session failed \u00b7 0.58.1",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 292,
+          "h": 152
+        },
+        {
+          "id": "361:28166",
+          "name": "Sidebar / Activity controls \u00b7 Expanded",
+          "type": "COMPONENT",
+          "parentId": "299:2",
+          "parentName": "92 \u00b7 Legacy reference / Activity cards \u00b7 see Conversations pilot",
+          "w": 236,
+          "h": 108
+        }
+      ],
+      "frames": [
+        {
+          "id": "300:33",
+          "name": "Activity card / Start here"
+        },
+        {
+          "id": "303:850",
+          "name": "Activity card / Examples \u00b7 Dark"
+        },
+        {
+          "id": "303:1546",
+          "name": "Activity card / Light theme and content stress"
+        },
+        {
+          "id": "307:1297",
+          "name": "Identity / Tooltip examples"
+        },
+        {
+          "id": "307:1348",
+          "name": "Verification and Figma limitations"
+        },
+        {
+          "id": "310:1325",
+          "name": "Project conversation / Implementation reference"
+        },
+        {
+          "id": "312:1803",
+          "name": "Project cards / Selection behavior"
+        },
+        {
+          "id": "324:27929",
+          "name": "Released app building blocks"
+        }
+      ],
+      "instances": 811,
+      "classification": "legacy"
+    },
+    {
+      "page": {
+        "id": "326:2789",
+        "name": "32 \u00b7 Exploration / Activity filters"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "327:2",
+          "name": "Filter UX / Three directions"
+        },
+        {
+          "id": "328:1482",
+          "name": "A / Provider and host interactions"
+        },
+        {
+          "id": "329:1802",
+          "name": "Filter UX / Opened pickers"
+        },
+        {
+          "id": "330:3228",
+          "name": "A / Full app context"
+        },
+        {
+          "id": "335:3100",
+          "name": "A+C / Compact activity controls"
+        },
+        {
+          "id": "337:4023",
+          "name": "Selected / A+C \u00b7 MAR-3007 \u00b7 r1"
+        },
+        {
+          "id": "343:4023",
+          "name": "Exploration / Collapsible activity filters / Round 1 / 2026-09-14"
+        },
+        {
+          "id": "347:4161",
+          "name": "Selected A / MAR-3015 / Frozen 2026-09-14"
+        },
+        {
+          "id": "360:4161",
+          "name": "Current / Activity filters \u00b7 PR 645 / 2026-09-14"
+        }
+      ],
+      "instances": 831,
+      "classification": "exploration"
+    },
+    {
+      "page": {
+        "id": "360:4174",
+        "name": "33 \u00b7 Exploration / Card quick actions"
+      },
+      "components": [
+        {
+          "id": "363:2",
+          "name": "Quick action / Icon / Acknowledge",
+          "type": "COMPONENT",
+          "parentId": "360:4174",
+          "parentName": "33 \u00b7 Exploration / Card quick actions",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "363:6",
+          "name": "Quick action / Icon / Archive",
+          "type": "COMPONENT",
+          "parentId": "360:4174",
+          "parentName": "33 \u00b7 Exploration / Card quick actions",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "363:4328",
+          "name": "Quick action / Button",
+          "type": "COMPONENT",
+          "parentId": "360:4174",
+          "parentName": "33 \u00b7 Exploration / Card quick actions",
+          "w": 116,
+          "h": 32
+        },
+        {
+          "id": "364:5",
+          "name": "Exploration / A \u00b7 Always visible",
+          "type": "COMPONENT",
+          "parentId": "360:4174",
+          "parentName": "33 \u00b7 Exploration / Card quick actions",
+          "w": 352,
+          "h": 169
+        },
+        {
+          "id": "365:186",
+          "name": "Exploration / B \u00b7 Hover and focus",
+          "type": "COMPONENT_SET",
+          "parentId": "360:4174",
+          "parentName": "33 \u00b7 Exploration / Card quick actions",
+          "w": 764,
+          "h": 181
+        },
+        {
+          "id": "365:93",
+          "name": "State=Rest",
+          "type": "COMPONENT",
+          "parentId": "365:186",
+          "parentName": "Exploration / B \u00b7 Hover and focus",
+          "w": 352,
+          "h": 141
+        },
+        {
+          "id": "365:133",
+          "name": "State=Hover",
+          "type": "COMPONENT",
+          "parentId": "365:186",
+          "parentName": "Exploration / B \u00b7 Hover and focus",
+          "w": 352,
+          "h": 141
+        },
+        {
+          "id": "366:235",
+          "name": "Exploration / C \u00b7 Compact icons",
+          "type": "COMPONENT",
+          "parentId": "360:4174",
+          "parentName": "33 \u00b7 Exploration / Card quick actions",
+          "w": 352,
+          "h": 120
+        },
+        {
+          "id": "378:835",
+          "name": "Exploration / D \u00b7 Act beside the status",
+          "type": "COMPONENT_SET",
+          "parentId": "360:4174",
+          "parentName": "33 \u00b7 Exploration / Card quick actions",
+          "w": 764,
+          "h": 184
+        },
+        {
+          "id": "378:677",
+          "name": "State=Rest",
+          "type": "COMPONENT",
+          "parentId": "378:835",
+          "parentName": "Exploration / D \u00b7 Act beside the status",
+          "w": 352,
+          "h": 144
+        },
+        {
+          "id": "378:759",
+          "name": "State=Hover",
+          "type": "COMPONENT",
+          "parentId": "378:835",
+          "parentName": "Exploration / D \u00b7 Act beside the status",
+          "w": 352,
+          "h": 144
+        },
+        {
+          "id": "379:890",
+          "name": "Exploration / E \u00b7 Floating action bar",
+          "type": "COMPONENT_SET",
+          "parentId": "360:4174",
+          "parentName": "33 \u00b7 Exploration / Card quick actions",
+          "w": 764,
+          "h": 204
+        },
+        {
+          "id": "379:831",
+          "name": "State=Rest",
+          "type": "COMPONENT",
+          "parentId": "379:890",
+          "parentName": "Exploration / E \u00b7 Floating action bar",
+          "w": 352,
+          "h": 120
+        },
+        {
+          "id": "379:852",
+          "name": "State=Hover",
+          "type": "COMPONENT",
+          "parentId": "379:890",
+          "parentName": "Exploration / E \u00b7 Floating action bar",
+          "w": 352,
+          "h": 120
+        },
+        {
+          "id": "380:1201",
+          "name": "Exploration / F \u00b7 Swipe to clear",
+          "type": "COMPONENT_SET",
+          "parentId": "360:4174",
+          "parentName": "33 \u00b7 Exploration / Card quick actions",
+          "w": 1136,
+          "h": 160
+        },
+        {
+          "id": "380:970",
+          "name": "Gesture=Rest",
+          "type": "COMPONENT",
+          "parentId": "380:1201",
+          "parentName": "Exploration / F \u00b7 Swipe to clear",
+          "w": 352,
+          "h": 120
+        },
+        {
+          "id": "380:1047",
+          "name": "Gesture=Acknowledge",
+          "type": "COMPONENT",
+          "parentId": "380:1201",
+          "parentName": "Exploration / F \u00b7 Swipe to clear",
+          "w": 352,
+          "h": 120
+        },
+        {
+          "id": "380:1124",
+          "name": "Gesture=Archive",
+          "type": "COMPONENT",
+          "parentId": "380:1201",
+          "parentName": "Exploration / F \u00b7 Swipe to clear",
+          "w": 352,
+          "h": 120
+        }
+      ],
+      "frames": [
+        {
+          "id": "360:4175",
+          "name": "Card quick actions / Round 1 / 2026-09-14"
+        },
+        {
+          "id": "368:370",
+          "name": "B / Context and action outcomes"
+        },
+        {
+          "id": "377:649",
+          "name": "Card quick actions / Round 2 \u00b7 D E F / 2026-09-14"
+        },
+        {
+          "id": "385:1244",
+          "name": "Selected \u00b7 A \u00b7 Always visible \u00b7 2026-09-14"
+        }
+      ],
+      "instances": 314,
+      "classification": "exploration"
+    },
+    {
+      "page": {
+        "id": "394:2",
+        "name": "34 \u00b7 Exploration / Selected card & stable order"
+      },
+      "components": [
+        {
+          "id": "394:6",
+          "name": "Exploration / Selection card",
+          "type": "COMPONENT",
+          "parentId": "394:2",
+          "parentName": "34 \u00b7 Exploration / Selected card & stable order",
+          "w": 276,
+          "h": 177
+        }
+      ],
+      "frames": [
+        {
+          "id": "394:103",
+          "name": "Selected card / Round 1 / 2026-09-15"
+        },
+        {
+          "id": "397:1274",
+          "name": "Stable order / Round 1 / 2026-09-15"
+        },
+        {
+          "id": "401:1322",
+          "name": "Selected \u00b7 A \u00b7 Brighter ring \u00b7 2026-09-15"
+        }
+      ],
+      "instances": 324,
+      "classification": "exploration"
+    },
+    {
+      "page": {
+        "id": "405:2",
+        "name": "35 \u00b7 Exploration / Wave panel"
+      },
+      "components": [
+        {
+          "id": "405:6",
+          "name": "Wave / Icon / X",
+          "type": "COMPONENT",
+          "parentId": "405:2",
+          "parentName": "35 \u00b7 Exploration / Wave panel",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "405:9",
+          "name": "Wave / Icon / ChevronDown",
+          "type": "COMPONENT",
+          "parentId": "405:2",
+          "parentName": "35 \u00b7 Exploration / Wave panel",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "405:12",
+          "name": "Wave / Icon / ChevronRight",
+          "type": "COMPONENT",
+          "parentId": "405:2",
+          "parentName": "35 \u00b7 Exploration / Wave panel",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "405:17",
+          "name": "Wave / Icon / Waves",
+          "type": "COMPONENT",
+          "parentId": "405:2",
+          "parentName": "35 \u00b7 Exploration / Wave panel",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "405:23",
+          "name": "Wave / Icon / Hourglass",
+          "type": "COMPONENT",
+          "parentId": "405:2",
+          "parentName": "35 \u00b7 Exploration / Wave panel",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "405:27",
+          "name": "Wave / Icon / UserRound",
+          "type": "COMPONENT",
+          "parentId": "405:2",
+          "parentName": "35 \u00b7 Exploration / Wave panel",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "405:33",
+          "name": "Wave / Icon / Ticket",
+          "type": "COMPONENT",
+          "parentId": "405:2",
+          "parentName": "35 \u00b7 Exploration / Wave panel",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "405:43",
+          "name": "Wave / Icon / CircleDashed",
+          "type": "COMPONENT",
+          "parentId": "405:2",
+          "parentName": "35 \u00b7 Exploration / Wave panel",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "405:47",
+          "name": "Wave / Icon / Pin",
+          "type": "COMPONENT",
+          "parentId": "405:2",
+          "parentName": "35 \u00b7 Exploration / Wave panel",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "405:53",
+          "name": "Wave / Icon / RefreshCw",
+          "type": "COMPONENT",
+          "parentId": "405:2",
+          "parentName": "35 \u00b7 Exploration / Wave panel",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "405:58",
+          "name": "Wave / Icon / PanelLeftOpen",
+          "type": "COMPONENT",
+          "parentId": "405:2",
+          "parentName": "35 \u00b7 Exploration / Wave panel",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "405:62",
+          "name": "Wave / Icon / ArrowUpRight",
+          "type": "COMPONENT",
+          "parentId": "405:2",
+          "parentName": "35 \u00b7 Exploration / Wave panel",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "405:30636",
+          "name": "Wave / Ticket row",
+          "type": "COMPONENT",
+          "parentId": "405:2",
+          "parentName": "35 \u00b7 Exploration / Wave panel",
+          "w": 300,
+          "h": 100
+        }
+      ],
+      "frames": [
+        {
+          "id": "411:2657",
+          "name": "Wave panel / Round 1 / 2026-09-15"
+        }
+      ],
+      "instances": 357,
+      "classification": "exploration"
+    },
+    {
+      "page": {
+        "id": "416:2657",
+        "name": "36 \u00b7 Exploration / The system (Fable)"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "416:2658",
+          "name": "The system / Round 1 / 2026-09-15"
+        }
+      ],
+      "instances": 0,
+      "classification": "exploration"
+    },
+    {
+      "page": {
+        "id": "424:2",
+        "name": "37 \u00b7 Exploration / Seats"
+      },
+      "components": [
+        {
+          "id": "424:5",
+          "name": "Seat / Icon / MessageSquare",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:10",
+          "name": "Seat / Icon / FlaskConical",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:16",
+          "name": "Seat / Icon / GitBranch",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:21",
+          "name": "Seat / Icon / GitCommit",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:25",
+          "name": "Seat / Icon / Laptop",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:31",
+          "name": "Seat / Icon / Server",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:35",
+          "name": "Seat / Icon / Plus",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:38",
+          "name": "Seat / Icon / Minus",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:42",
+          "name": "Seat / Icon / Search",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:45",
+          "name": "Seat / Icon / ChevronDown",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:48",
+          "name": "Seat / Icon / ChevronRight",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:52",
+          "name": "Seat / Icon / X",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:57",
+          "name": "Seat / Icon / AlertTriangle",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:60",
+          "name": "Seat / Icon / Loader",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:64",
+          "name": "Seat / Icon / Lock",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:68",
+          "name": "Seat / Icon / ArrowUpRight",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:73",
+          "name": "Seat / Icon / Trash",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:79",
+          "name": "Seat / Icon / Users",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:86",
+          "name": "Seat / Icon / FileText",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:94",
+          "name": "Seat / Icon / Unlink",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "424:32773",
+          "name": "Seat / Row",
+          "type": "COMPONENT",
+          "parentId": "424:2",
+          "parentName": "37 \u00b7 Exploration / Seats",
+          "w": 316,
+          "h": 36
+        }
+      ],
+      "frames": [
+        {
+          "id": "429:621",
+          "name": "Seats / Round 1 / 2026-09-16"
+        },
+        {
+          "id": "431:730",
+          "name": "Selected \u00b7 Seats r1 \u00b7 ratified by Marcin 2026-09-16 (frozen)"
+        }
+      ],
+      "instances": 160,
+      "classification": "exploration"
+    },
+    {
+      "page": {
+        "id": "450:2",
+        "name": "98 \u00b7 Archive / Programme view \u00b7 see Loom r6"
+      },
+      "components": [
+        {
+          "id": "450:8",
+          "name": "Programme / Icon / Maximize",
+          "type": "COMPONENT",
+          "parentId": "450:2",
+          "parentName": "98 \u00b7 Archive / Programme view \u00b7 see Loom r6",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "450:14",
+          "name": "Programme / Icon / Minimize",
+          "type": "COMPONENT",
+          "parentId": "450:2",
+          "parentName": "98 \u00b7 Archive / Programme view \u00b7 see Loom r6",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "450:18",
+          "name": "Programme / Icon / Pause",
+          "type": "COMPONENT",
+          "parentId": "450:2",
+          "parentName": "98 \u00b7 Archive / Programme view \u00b7 see Loom r6",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "450:22",
+          "name": "Programme / Icon / Clock",
+          "type": "COMPONENT",
+          "parentId": "450:2",
+          "parentName": "98 \u00b7 Archive / Programme view \u00b7 see Loom r6",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "450:28",
+          "name": "Programme / Icon / Hand",
+          "type": "COMPONENT",
+          "parentId": "450:2",
+          "parentName": "98 \u00b7 Archive / Programme view \u00b7 see Loom r6",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "450:34",
+          "name": "Programme / Icon / Package",
+          "type": "COMPONENT",
+          "parentId": "450:2",
+          "parentName": "98 \u00b7 Archive / Programme view \u00b7 see Loom r6",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "450:41",
+          "name": "Programme / Icon / Radio",
+          "type": "COMPONENT",
+          "parentId": "450:2",
+          "parentName": "98 \u00b7 Archive / Programme view \u00b7 see Loom r6",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "450:49",
+          "name": "Programme / Icon / ListOrdered",
+          "type": "COMPONENT",
+          "parentId": "450:2",
+          "parentName": "98 \u00b7 Archive / Programme view \u00b7 see Loom r6",
+          "w": 16,
+          "h": 16
+        },
+        {
+          "id": "450:50",
+          "name": "Programme / Row",
+          "type": "COMPONENT",
+          "parentId": "450:2",
+          "parentName": "98 \u00b7 Archive / Programme view \u00b7 see Loom r6",
+          "w": 256,
+          "h": 40
+        }
+      ],
+      "frames": [
+        {
+          "id": "470:34095",
+          "name": "Loom \u00b7 r3 \u00b7 Now \u00b7 stacked sheets"
+        },
+        {
+          "id": "470:34108",
+          "name": "Loom \u00b7 r3 \u00b7 Next \u00b7 stacked sheets"
+        },
+        {
+          "id": "470:34129",
+          "name": "Loom \u00b7 r3 \u00b7 Plan \u00b7 stacked sheets"
+        },
+        {
+          "id": "470:34150",
+          "name": "Loom \u00b7 r3 \u00b7 Before \u00b7 stacked sheets"
+        },
+        {
+          "id": "471:34231",
+          "name": "Loom \u00b7 r3 \u00b7 Next \u00b7 reordered"
+        },
+        {
+          "id": "473:864",
+          "name": "Loom r3 \u00b7 Review guide"
+        },
+        {
+          "id": "481:878",
+          "name": "Loom \u00b7 r3 \u00b7 rail \u00b7 Now open"
+        },
+        {
+          "id": "491:891",
+          "name": "Loom \u00b7 ticket detail \u00b7 MAR-3183 \u00b7 observed snapshot"
+        },
+        {
+          "id": "492:890",
+          "name": "Loom \u00b7 ticket detail \u00b7 DEMO-101 \u00b7 working example"
+        },
+        {
+          "id": "492:907",
+          "name": "Loom \u00b7 prototype conversation handoff \u00b7 illustrative"
+        },
+        {
+          "id": "496:902",
+          "name": "Loom \u00b7 r3 \u00b7 rail \u00b7 Before open"
+        },
+        {
+          "id": "496:955",
+          "name": "Loom \u00b7 r3 \u00b7 rail \u00b7 Next open"
+        },
+        {
+          "id": "496:1008",
+          "name": "Loom \u00b7 r3 \u00b7 rail \u00b7 Plan open"
+        },
+        {
+          "id": "500:1008",
+          "name": "Loom \u00b7 selected \u00b7 rail \u00b7 Next reordered"
+        },
+        {
+          "id": "502:182",
+          "name": "Loom \u00b7 selected \u00b7 400px rail \u00b7 Before"
+        },
+        {
+          "id": "502:272",
+          "name": "Loom \u00b7 selected \u00b7 400px rail \u00b7 Now"
+        },
+        {
+          "id": "502:427",
+          "name": "Loom \u00b7 selected \u00b7 400px rail \u00b7 Next"
+        },
+        {
+          "id": "502:547",
+          "name": "Loom \u00b7 selected \u00b7 400px rail \u00b7 Plan"
+        },
+        {
+          "id": "503:221",
+          "name": "Loom \u00b7 expanded \u00b7 return to 400px \u00b7 Before"
+        },
+        {
+          "id": "503:290",
+          "name": "Loom \u00b7 expanded \u00b7 return to 400px \u00b7 Now"
+        },
+        {
+          "id": "503:442",
+          "name": "Loom \u00b7 expanded \u00b7 return to 400px \u00b7 Next"
+        },
+        {
+          "id": "503:537",
+          "name": "Loom \u00b7 expanded \u00b7 return to 400px \u00b7 Plan"
+        },
+        {
+          "id": "503:1023",
+          "name": "Loom \u00b7 400px rail \u00b7 Next reordered"
+        },
+        {
+          "id": "503:1146",
+          "name": "Loom \u00b7 expanded reordered \u00b7 return to 400px"
+        }
+      ],
+      "instances": 60,
+      "classification": "legacy"
+    },
+    {
+      "page": {
+        "id": "508:362",
+        "name": "84 \u00b7 Handoff / Loom r4 \u00b7 selected"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "508:363",
+          "name": "Loom \u00b7 r4 \u00b7 Now \u00b7 stacked sheets"
+        },
+        {
+          "id": "508:451",
+          "name": "Loom \u00b7 r4 \u00b7 Next \u00b7 stacked sheets"
+        },
+        {
+          "id": "508:516",
+          "name": "Loom \u00b7 r4 \u00b7 Plan \u00b7 stacked sheets"
+        },
+        {
+          "id": "508:570",
+          "name": "Loom \u00b7 r4 \u00b7 Before \u00b7 stacked sheets"
+        },
+        {
+          "id": "508:614",
+          "name": "Loom \u00b7 r4 \u00b7 Next \u00b7 reordered"
+        },
+        {
+          "id": "508:679",
+          "name": "Loom \u00b7 r4 \u00b7 rail \u00b7 Now open"
+        },
+        {
+          "id": "508:835",
+          "name": "Loom \u00b7 ticket detail \u00b7 MAR-3183 \u00b7 observed snapshot"
+        },
+        {
+          "id": "508:851",
+          "name": "Loom \u00b7 ticket detail \u00b7 DEMO-101 \u00b7 working example"
+        },
+        {
+          "id": "508:865",
+          "name": "Loom \u00b7 prototype conversation handoff \u00b7 illustrative"
+        },
+        {
+          "id": "508:1025",
+          "name": "Loom \u00b7 r4 \u00b7 rail \u00b7 Before open"
+        },
+        {
+          "id": "508:1116",
+          "name": "Loom \u00b7 r4 \u00b7 rail \u00b7 Next open"
+        },
+        {
+          "id": "508:1237",
+          "name": "Loom \u00b7 r4 \u00b7 rail \u00b7 Plan open"
+        },
+        {
+          "id": "508:1343",
+          "name": "Loom \u00b7 selected \u00b7 rail \u00b7 Next reordered"
+        },
+        {
+          "id": "508:1464",
+          "name": "Loom \u00b7 selected \u00b7 400px rail \u00b7 Before"
+        },
+        {
+          "id": "508:1557",
+          "name": "Loom \u00b7 selected \u00b7 400px rail \u00b7 Now"
+        },
+        {
+          "id": "508:1715",
+          "name": "Loom \u00b7 selected \u00b7 400px rail \u00b7 Next"
+        },
+        {
+          "id": "508:1838",
+          "name": "Loom \u00b7 selected \u00b7 400px rail \u00b7 Plan"
+        },
+        {
+          "id": "508:1946",
+          "name": "Loom \u00b7 expanded \u00b7 return to 400px \u00b7 Before"
+        },
+        {
+          "id": "508:1990",
+          "name": "Loom \u00b7 expanded \u00b7 return to 400px \u00b7 Now"
+        },
+        {
+          "id": "508:2078",
+          "name": "Loom \u00b7 expanded \u00b7 return to 400px \u00b7 Next"
+        },
+        {
+          "id": "508:2143",
+          "name": "Loom \u00b7 expanded \u00b7 return to 400px \u00b7 Plan"
+        },
+        {
+          "id": "508:2197",
+          "name": "Loom \u00b7 400px rail \u00b7 Next reordered"
+        },
+        {
+          "id": "508:2320",
+          "name": "Loom \u00b7 expanded reordered \u00b7 return to 400px"
+        }
+      ],
+      "instances": 0,
+      "classification": "handoff"
+    },
+    {
+      "page": {
+        "id": "532:2",
+        "name": "85 \u00b7 Frozen reference / Loom r5 \u00b7 shipped"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "532:3",
+          "name": "Loom \u00b7 r5 correction \u00b7 Before \u00b7 stacked sheets"
+        },
+        {
+          "id": "532:72",
+          "name": "Loom \u00b7 r5 correction \u00b7 Now \u00b7 stacked sheets"
+        },
+        {
+          "id": "532:224",
+          "name": "Loom \u00b7 r5 correction \u00b7 Next \u00b7 stacked sheets"
+        },
+        {
+          "id": "532:319",
+          "name": "Loom \u00b7 r5 correction \u00b7 Plan \u00b7 stacked sheets"
+        },
+        {
+          "id": "532:404",
+          "name": "Loom \u00b7 r5 correction \u00b7 rail \u00b7 Before open"
+        },
+        {
+          "id": "532:495",
+          "name": "Loom \u00b7 r5 correction \u00b7 rail \u00b7 Now open"
+        },
+        {
+          "id": "532:651",
+          "name": "Loom \u00b7 r5 correction \u00b7 rail \u00b7 Next open"
+        },
+        {
+          "id": "532:772",
+          "name": "Loom \u00b7 r5 correction \u00b7 rail \u00b7 Plan open"
+        },
+        {
+          "id": "532:878",
+          "name": "Loom \u00b7 r5 correction \u00b7 400px rail \u00b7 Before"
+        },
+        {
+          "id": "532:971",
+          "name": "Loom \u00b7 r5 correction \u00b7 400px rail \u00b7 Now"
+        },
+        {
+          "id": "532:1129",
+          "name": "Loom \u00b7 r5 correction \u00b7 400px rail \u00b7 Next"
+        },
+        {
+          "id": "532:1252",
+          "name": "Loom \u00b7 r5 correction \u00b7 400px rail \u00b7 Plan"
+        }
+      ],
+      "instances": 0,
+      "classification": "handoff"
+    },
+    {
+      "page": {
+        "id": "543:639",
+        "name": "39 \u00b7 Current / Loom + learning \u00b7 r6"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "543:640",
+          "name": "Loom \u00b7 r6 current \u00b7 Before \u00b7 stacked sheets"
+        },
+        {
+          "id": "543:709",
+          "name": "Loom \u00b7 r6 current \u00b7 Now \u00b7 stacked sheets"
+        },
+        {
+          "id": "543:892",
+          "name": "Loom \u00b7 r6 current \u00b7 Next \u00b7 stacked sheets"
+        },
+        {
+          "id": "543:987",
+          "name": "Loom \u00b7 r6 current \u00b7 Plan \u00b7 stacked sheets"
+        },
+        {
+          "id": "543:1089",
+          "name": "Loom \u00b7 r6 current \u00b7 rail \u00b7 Before open"
+        },
+        {
+          "id": "543:1180",
+          "name": "Loom \u00b7 r6 current \u00b7 rail \u00b7 Now open"
+        },
+        {
+          "id": "543:1367",
+          "name": "Loom \u00b7 r6 current \u00b7 rail \u00b7 Next open"
+        },
+        {
+          "id": "543:1488",
+          "name": "Loom \u00b7 r6 current \u00b7 rail \u00b7 Plan open"
+        },
+        {
+          "id": "543:1609",
+          "name": "Loom \u00b7 r6 current \u00b7 400px rail \u00b7 Before"
+        },
+        {
+          "id": "543:1702",
+          "name": "Loom \u00b7 r6 current \u00b7 400px rail \u00b7 Now"
+        },
+        {
+          "id": "543:1891",
+          "name": "Loom \u00b7 r6 current \u00b7 400px rail \u00b7 Next"
+        },
+        {
+          "id": "543:2014",
+          "name": "Loom \u00b7 r6 current \u00b7 400px rail \u00b7 Plan"
+        },
+        {
+          "id": "544:14",
+          "name": "Learn Loom \u00b7 1 Prepare"
+        },
+        {
+          "id": "547:19",
+          "name": "Learn Loom \u00b7 2 Assign"
+        },
+        {
+          "id": "547:245",
+          "name": "Learn Loom \u00b7 3 Work"
+        },
+        {
+          "id": "547:471",
+          "name": "Learn Loom \u00b7 4 Review"
+        },
+        {
+          "id": "547:697",
+          "name": "Learn Loom \u00b7 5 Accept"
+        },
+        {
+          "id": "547:923",
+          "name": "Learn Loom \u00b7 6 History"
+        },
+        {
+          "id": "548:44",
+          "name": "Learn Loom \u00b7 Quick reference"
+        }
+      ],
+      "instances": 46,
+      "classification": "reference-unverified"
+    },
+    {
+      "page": {
+        "id": "559:48",
+        "name": "86 \u00b7 Frozen handoff / Learn Loom \u00b7 r1"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "559:49",
+          "name": "Entry \u00b7 expanded"
+        },
+        {
+          "id": "559:236",
+          "name": "Entry \u00b7 280px rail"
+        },
+        {
+          "id": "559:427",
+          "name": "Entry \u00b7 400px rail"
+        },
+        {
+          "id": "559:620",
+          "name": "Learn Loom \u00b7 1 Prepare"
+        },
+        {
+          "id": "559:870",
+          "name": "Learn Loom \u00b7 2 Assign"
+        },
+        {
+          "id": "559:1120",
+          "name": "Learn Loom \u00b7 3 Work"
+        },
+        {
+          "id": "559:1370",
+          "name": "Learn Loom \u00b7 4 Review"
+        },
+        {
+          "id": "559:1620",
+          "name": "Learn Loom \u00b7 5 Accept"
+        },
+        {
+          "id": "559:1870",
+          "name": "Learn Loom \u00b7 6 History"
+        },
+        {
+          "id": "559:2120",
+          "name": "Learn Loom \u00b7 Quick reference"
+        },
+        {
+          "id": "563:2",
+          "name": "START HERE \u00b7 LEARN LOOM r1"
+        },
+        {
+          "id": "563:6",
+          "name": "MOTION IS PART OF THE DESIGN"
+        },
+        {
+          "id": "563:9",
+          "name": "IMPLEMENTATION READBACK"
+        }
+      ],
+      "instances": 0,
+      "classification": "handoff"
+    },
+    {
+      "page": {
+        "id": "569:8261",
+        "name": "98 \u00b7 Superseded / Layered r1 \u00b7 simplified content"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "570:2",
+          "name": "00 \u00b7 Read first / Exploration, not handoff"
+        },
+        {
+          "id": "570:6",
+          "name": "01 \u00b7 Conversation / Layered workspace proposal"
+        },
+        {
+          "id": "570:7",
+          "name": "02 \u00b7 Surface language / Exploration"
+        },
+        {
+          "id": "570:8",
+          "name": "03 \u00b7 Typography / Same content, same scale"
+        },
+        {
+          "id": "570:33930",
+          "name": "04 \u00b7 Mission Control / Surface study"
+        },
+        {
+          "id": "570:34343",
+          "name": "05 \u00b7 Settings / Surface study"
+        },
+        {
+          "id": "571:34429",
+          "name": "06 \u00b7 Element states / A repeatable family"
+        },
+        {
+          "id": "571:34468",
+          "name": "07 \u00b7 Discussion / What changes and what needs testing"
+        }
+      ],
+      "instances": 99,
+      "classification": "legacy"
+    },
+    {
+      "page": {
+        "id": "574:2",
+        "name": "40 \u00b7 Exploration / Layered Convergence \u00b7 r2 \u00b7 actual density"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "574:3",
+          "name": "Original supplied screenshot \u00b7 full resolution"
+        },
+        {
+          "id": "575:2",
+          "name": "01 \u00b7 BEFORE / Exact supplied app snapshot"
+        },
+        {
+          "id": "575:4",
+          "name": "02 \u00b7 AFTER / Same snapshot + editable elevation overlays"
+        },
+        {
+          "id": "578:2",
+          "name": "05 \u00b7 Editable pinned card / same fields / Inter metric substitute"
+        },
+        {
+          "id": "579:34227",
+          "name": "06 \u00b7 Composer BEFORE / complete controls and queued message"
+        },
+        {
+          "id": "579:34229",
+          "name": "07 \u00b7 Composer AFTER / unchanged content, raised face"
+        },
+        {
+          "id": "579:34237",
+          "name": "08 \u00b7 Editable queue card / all visible fields"
+        },
+        {
+          "id": "587:2",
+          "name": "START HERE \u00b7 Readable card comparison"
+        },
+        {
+          "id": "587:11",
+          "name": "Read me \u00b7 Changes and preservation"
+        },
+        {
+          "id": "589:2",
+          "name": "Selection \u00b7 Persistent edge, quiet elevation \u00b7 proposal"
+        }
+      ],
+      "instances": 0,
+      "classification": "exploration"
+    },
+    {
+      "page": {
+        "id": "634:48",
+        "name": "41 \u00b7 Exploration / Mission Control \u00b7 layered controls"
+      },
+      "components": [],
+      "frames": [
+        {
+          "id": "634:54",
+          "name": "A \u00b7 Full Convergence window / Layered workbench"
+        },
+        {
+          "id": "634:57",
+          "name": "B \u00b7 Full Convergence window / Crew shelf"
+        },
+        {
+          "id": "634:60",
+          "name": "C \u00b7 Full Convergence window / Floating controls"
+        },
+        {
+          "id": "637:325",
+          "name": "D / Seat open \u00b7 policy + facts"
+        },
+        {
+          "id": "637:369",
+          "name": "E / Connection open \u00b7 explicit save"
+        },
+        {
+          "id": "637:412",
+          "name": "F / Filters open \u00b7 all facets visible"
+        },
+        {
+          "id": "638:345",
+          "name": "Recommendation and interaction rules"
+        },
+        {
+          "id": "639:325",
+          "name": "Seat interaction comparison / four labelled states"
+        },
+        {
+          "id": "643:37870",
+          "name": "D / Full app \u00b7 Seat open"
+        },
+        {
+          "id": "643:38040",
+          "name": "E / Full app \u00b7 Connection open"
+        },
+        {
+          "id": "643:38209",
+          "name": "F / Full app \u00b7 Filters and crew picker open"
+        }
+      ],
+      "instances": 450,
+      "classification": "exploration"
+    },
+    {
+      "page": {
+        "id": "666:2",
+        "name": "Conversation actions"
+      },
+      "components": [
+        {
+          "id": "667:40235",
+          "name": "Exploration dependency / Action row \u2014 not maintained",
+          "type": "COMPONENT_SET",
+          "parentId": "666:2",
+          "parentName": "Conversation actions",
+          "w": 1456,
+          "h": 84
+        },
+        {
+          "id": "667:40236",
+          "name": "State=Default",
+          "type": "COMPONENT",
+          "parentId": "667:40235",
+          "parentName": "Exploration dependency / Action row \u2014 not maintained",
+          "w": 600,
+          "h": 58
+        },
+        {
+          "id": "667:40239",
+          "name": "State=Selected",
+          "type": "COMPONENT",
+          "parentId": "667:40235",
+          "parentName": "Exploration dependency / Action row \u2014 not maintained",
+          "w": 600,
+          "h": 58
+        }
+      ],
+      "frames": [
+        {
+          "id": "666:7",
+          "name": "A / Full app \u00b7 Wheel open"
+        },
+        {
+          "id": "666:19",
+          "name": "B / Full app \u00b7 Claude Code actions open"
+        },
+        {
+          "id": "666:31",
+          "name": "C / Full app \u00b7 Scoped palette open"
+        },
+        {
+          "id": "668:40097",
+          "name": "B1 / Closed \u00b7 idle conversation"
+        },
+        {
+          "id": "668:40463",
+          "name": "B2 / Codex \u00b7 its own skills, no Loom crew"
+        },
+        {
+          "id": "668:40829",
+          "name": "B3 / Drill \u00b7 Sealing memory \u00b7 Cancel available"
+        },
+        {
+          "id": "668:41195",
+          "name": "B4 / Drill \u00b7 Compacting \u00b7 cannot cancel"
+        },
+        {
+          "id": "668:41561",
+          "name": "B5 / Drill \u00b7 Waking up \u00b7 Cancel available"
+        },
+        {
+          "id": "668:41927",
+          "name": "B6 / Mid-turn \u00b7 unavailable actions explain why"
+        },
+        {
+          "id": "668:42293",
+          "name": "B7 / No skills \u00b7 successful empty catalogue"
+        },
+        {
+          "id": "668:42659",
+          "name": "B8 / Skill selected \u00b7 composer draft, not sent"
+        },
+        {
+          "id": "668:43025",
+          "name": "B9 / Skills could not be read \u00b7 retry, not empty"
+        },
+        {
+          "id": "669:4217",
+          "name": "B10 / Full narrow window \u00b7 1280 \u00d7 960 \u00b7 Loom collapsed"
+        },
+        {
+          "id": "671:4579",
+          "name": "A \u00b7 Spatial wheel"
+        },
+        {
+          "id": "671:4582",
+          "name": "B \u00b7 Composer actions \u2014 recommended"
+        },
+        {
+          "id": "671:4585",
+          "name": "C \u00b7 Conversation command palette"
+        },
+        {
+          "id": "671:4588",
+          "name": "Interaction contract \u00b7 exploration, not dispatched"
+        },
+        {
+          "id": "676:4571",
+          "name": "Superseded context / R2 / Closed \u00b7 one quiet entry point"
+        },
+        {
+          "id": "676:4921",
+          "name": "Superseded context / R2 / Open \u00b7 three choices, no solid wheel"
+        },
+        {
+          "id": "676:5278",
+          "name": "Superseded context / R2 / Skills \u00b7 replaces the fan"
+        },
+        {
+          "id": "676:5640",
+          "name": "Superseded context / R2 / Routines \u00b7 short list, honest unavailable state"
+        },
+        {
+          "id": "676:6007",
+          "name": "Round 2 / Behaviour and placement"
+        },
+        {
+          "id": "679:5901",
+          "name": "R3 / Actual running Convergence \u00b7 source capture"
+        },
+        {
+          "id": "680:5903",
+          "name": "R3 / Closed \u00b7 current app"
+        },
+        {
+          "id": "680:5907",
+          "name": "R3 / Open \u00b7 fan on the right"
+        },
+        {
+          "id": "680:5917",
+          "name": "R3 / Skills \u00b7 composer stays real"
+        },
+        {
+          "id": "680:5928",
+          "name": "R3 / Routines \u00b7 current mid-turn state"
+        }
+      ],
+      "instances": 1408,
+      "classification": "exploration"
+    }
+  ]
+}

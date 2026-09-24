@@ -39,6 +39,14 @@ not assign that role.
   [DESIGN.md](DESIGN.md) and [the design workflow](docs/agents/design-workflow.md).
   For Figma component maintenance and skills, also read
   [the library workflow](docs/agents/design-library-workflow.md).
+  Before creating any design, explicitly read the relevant repository skill:
+  `.agents/skills/convergence-design-explore/SKILL.md` (new designs),
+  `convergence-design-promote/SKILL.md` (selected changes), or
+  `convergence-design-handoff/SKILL.md` (implementation references), all under
+  `.agents/skills/`. Do not depend on automatic skill discovery. Use the
+  component inventory linked from the library workflow; compose editable
+  full-app frames from existing Figma instances. Screenshots are comparison
+  evidence only, never a substitute for app UI inside a design frame.
   This role usually works in the ChatGPT Codex desktop app, outside the
   Convergence executor/reviewer relay loop. It hands compact design briefs
   to Fable in Linear; it does not arm runs or own implementation/release.
