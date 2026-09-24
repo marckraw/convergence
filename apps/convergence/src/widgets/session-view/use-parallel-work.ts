@@ -6,6 +6,10 @@ import type {
 } from '@/shared/types/harness-evidence.types'
 import { buildParallelWork } from '@/shared/lib/parallel-work.pure'
 import { parallelWorkApi } from './parallel-work.api'
+import {
+  parallelWorkLinksKey,
+  sameParallelWorkEvidence,
+} from './parallel-work.pure'
 
 export function useParallelWork(
   sessionId: string | null,
@@ -32,7 +36,15 @@ export function useParallelWork(
       try {
         const next = await parallelWorkApi.read(sessionId)
         if (active && current === revision) {
-          setRecord({ sessionId, ...next })
+          // An evidence event that changed nothing keeps the record, so the
+          // rows and everything derived from them keep their identity
+          // (MAR-3310 F1e R4).
+          setRecord((previous) =>
+            previous?.sessionId === sessionId &&
+            sameParallelWorkEvidence(previous, next)
+              ? previous
+              : { sessionId, ...next },
+          )
           setError(null)
         }
       } catch (failure) {
@@ -55,17 +67,10 @@ export function useParallelWork(
       unsubscribe()
     }
   }, [sessionId, readRevision])
-  const parentLinksKey = useMemo(() => {
-    const parentByItem = new Map(
-      items.map((item) => [item.id, item.agentRunId ?? null]),
-    )
-    return JSON.stringify(
-      (record?.runs ?? []).map((run) => [
-        run.spawnedByItemId,
-        parentByItem.get(run.spawnedByItemId) ?? null,
-      ]),
-    )
-  }, [items, record?.runs])
+  const parentLinksKey = useMemo(
+    () => parallelWorkLinksKey(items, record?.runs ?? []),
+    [items, record?.runs],
+  )
   const rows = useMemo(() => {
     const links = JSON.parse(parentLinksKey) as Array<[string, string | null]>
     return record?.sessionId === sessionId

@@ -37,6 +37,12 @@ import {
   type RemoteProjectCatalogState,
 } from './remote-project-catalog.pure'
 import { sessionForkApi } from './session-fork.api'
+import {
+  appendLiveConversationText,
+  dropLiveConversationText,
+  dropSessionLiveConversationText,
+  liveConversationItem,
+} from './conversation-live-text.model'
 import type {
   ForkFullInput,
   ForkSummarizeWith,
@@ -283,6 +289,17 @@ function findSummaryById(
     state.globalSessions.find((session) => session.id === id) ??
     null
   )
+}
+
+/** A streaming item is almost always the newest; walk from the end. */
+function findConversationItemFromEnd(
+  items: ConversationItem[],
+  id: string,
+): ConversationItem | undefined {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    if (items[index]?.id === id) return items[index]
+  }
+  return undefined
 }
 
 function upsertConversationItem(
@@ -1131,59 +1148,83 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     event: ConversationWireEvent<ConversationItem>,
   ) => {
     let resyncGeneration: number | undefined
-    set((state) => {
+    if (event.op === 'append') {
+      // MAR-3310 F1e R1: a growing reply changes its own row, never the list.
+      const state = get()
       const load = conversationLoad(event.sessionId)
-      if (event.op === 'snapshot') {
-        if (event.pageNonce !== conversationPageNonce) return state
-        if (event.generation < load.applied) return state
-        if (load.resync !== null && event.generation >= load.resync)
-          load.resync = null
-        if (load.pending !== null && event.generation >= load.pending)
-          load.pending = null
-      }
       const project = state.activeSessionId === event.sessionId
-      if (!project && state.activeGlobalSessionId !== event.sessionId) {
-        // Preserve F1a: a conversation no one has open notifies nobody.
-        return state
-      }
+      // Preserve F1a: a conversation no one has open notifies nobody.
+      if (!project && state.activeGlobalSessionId !== event.sessionId) return
+      if (load.stopped || load.resync !== null || load.pending !== null) return
       const items = project
         ? state.activeConversation
         : state.activeGlobalConversation
-      let nextItems: ConversationItem[]
-      if (event.op === 'snapshot') {
-        load.applied = event.generation
-        nextItems = event.items
-      } else if (event.op === 'append') {
-        if (load.stopped || load.resync !== null || load.pending !== null)
-          return state
-        const item = items.find((candidate) => candidate.id === event.itemId)
-        if (
-          !item ||
-          (item.kind !== 'message' && item.kind !== 'thinking') ||
-          item.text.length !== event.baseLength
-        ) {
-          resyncGeneration = ++load.requested
-          load.resync = resyncGeneration
+      const base = findConversationItemFromEnd(items, event.itemId)
+      // F2's gap check compares against the text the row shows, not the list's.
+      if (
+        !base ||
+        (base.kind !== 'message' && base.kind !== 'thinking') ||
+        liveConversationItem(base).text.length !== event.baseLength
+      ) {
+        resyncGeneration = ++load.requested
+        load.resync = resyncGeneration
+      } else {
+        appendLiveConversationText(
+          event.sessionId,
+          base,
+          event.append,
+          event.updatedAt,
+        )
+        const conversationSessionId = project
+          ? state.activeConversationSessionId
+          : state.activeGlobalConversationSessionId
+        if (conversationSessionId !== event.sessionId)
+          set(
+            project
+              ? { activeConversationSessionId: event.sessionId }
+              : { activeGlobalConversationSessionId: event.sessionId },
+          )
+      }
+    } else
+      set((state) => {
+        const load = conversationLoad(event.sessionId)
+        if (event.op === 'snapshot') {
+          if (event.pageNonce !== conversationPageNonce) return state
+          if (event.generation < load.applied) return state
+          if (load.resync !== null && event.generation >= load.resync)
+            load.resync = null
+          if (load.pending !== null && event.generation >= load.pending)
+            load.pending = null
+        }
+        const project = state.activeSessionId === event.sessionId
+        // The text grown on an item is superseded by any full fact about it.
+        if (event.op === 'snapshot')
+          dropSessionLiveConversationText(event.sessionId)
+        else dropLiveConversationText(event.item.id)
+        if (!project && state.activeGlobalSessionId !== event.sessionId) {
+          // Preserve F1a: a conversation no one has open notifies nobody.
           return state
         }
-        nextItems = upsertConversationItem(items, {
-          ...item,
-          text: item.text + event.append,
-          updatedAt: event.updatedAt,
-        })
-      } else {
-        nextItems = upsertConversationItem(items, event.item)
-      }
-      return project
-        ? {
-            activeConversation: nextItems,
-            activeConversationSessionId: event.sessionId,
-          }
-        : {
-            activeGlobalConversation: nextItems,
-            activeGlobalConversationSessionId: event.sessionId,
-          }
-    })
+        const items = project
+          ? state.activeConversation
+          : state.activeGlobalConversation
+        let nextItems: ConversationItem[]
+        if (event.op === 'snapshot') {
+          load.applied = event.generation
+          nextItems = event.items
+        } else {
+          nextItems = upsertConversationItem(items, event.item)
+        }
+        return project
+          ? {
+              activeConversation: nextItems,
+              activeConversationSessionId: event.sessionId,
+            }
+          : {
+              activeGlobalConversation: nextItems,
+              activeGlobalConversationSessionId: event.sessionId,
+            }
+      })
     if (resyncGeneration !== undefined) {
       void sessionApi
         .resyncConversation(

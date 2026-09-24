@@ -4,6 +4,41 @@ import {
   type ParallelWorkRow,
 } from '@/shared/lib/parallel-work.pure'
 import type { ConversationItem } from '@/entities/session'
+import type {
+  SessionAgentRun,
+  SessionTask,
+} from '@/shared/types/harness-evidence.types'
+
+/** Two reads of one session's evidence that say the same thing. */
+export function sameParallelWorkEvidence(
+  previous: { runs: readonly SessionAgentRun[]; tasks: readonly SessionTask[] },
+  next: { runs: readonly SessionAgentRun[]; tasks: readonly SessionTask[] },
+): boolean {
+  return (
+    JSON.stringify(previous.runs) === JSON.stringify(next.runs) &&
+    JSON.stringify(previous.tasks) === JSON.stringify(next.tasks)
+  )
+}
+
+/**
+ * Which item spawned each run, and whose work that item was: the one fact the
+ * panel's tree reads from the transcript. A string, so a list change that
+ * moves no link leaves the rows alone. O(n) per list change (MAR-3310 F1e R4).
+ */
+export function parallelWorkLinksKey(
+  items: readonly ConversationItem[],
+  runs: readonly SessionAgentRun[],
+): string {
+  const parentByItem = new Map(
+    items.map((item) => [item.id, item.agentRunId ?? null]),
+  )
+  return JSON.stringify(
+    runs.map((run) => [
+      run.spawnedByItemId,
+      parentByItem.get(run.spawnedByItemId) ?? null,
+    ]),
+  )
+}
 
 export interface ParallelWorkMarker {
   /**
