@@ -1,5 +1,15 @@
 # convergence
 
+## 0.86.0
+
+### Minor Changes
+
+- de6e29e: The status bar shows how much CPU and memory the agents and Convergence use; each conversation shows its own agent's numbers.
+
+### Patch Changes
+
+- 406c14b: Streaming replies send only the new words to the window instead of the whole message every time.
+
 ## 0.85.6
 
 ### Patch Changes
