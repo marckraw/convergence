@@ -3241,6 +3241,27 @@ export class SessionService {
     }
   }
 
+  describeAccountHandoff(
+    id: string,
+  ): { ready: true } | { ready: false; reason: string } {
+    try {
+      const session = this.getById(id)
+      if (!session) throw new Error(`Session not found: ${id}`)
+      this.assertAccountHandoffEligible(session)
+      return { ready: true }
+    } catch (error) {
+      return {
+        ready: false,
+        reason:
+          error instanceof HandoffRefusedError
+            ? (error.rule ?? error.message)
+            : error instanceof Error
+              ? error.message
+              : String(error),
+      }
+    }
+  }
+
   private assertAccountHandoffEligible(
     session: Session,
     own: { ownDispatch?: boolean; queuedInputId?: string } = {},
@@ -3262,6 +3283,7 @@ export class SessionService {
       throw new HandoffRefusedError(
         'not-eligible',
         'Wait for this conversation and its pending requests to settle before switching accounts. Your message was not sent.',
+        'Wait for this conversation and its pending requests to settle before switching accounts.',
       )
     }
   }
