@@ -1,3 +1,8 @@
+import {
+  entryBelongsToSeat,
+  seatTicket,
+  LOOM_NO_ACTIVE_TICKET,
+} from '@/entities/work-ledger'
 import type { SessionCrew, SessionCrewMember } from '@/entities/session-crew'
 import {
   COMPACTING_CONTEXT_LABEL,
@@ -191,9 +196,7 @@ export function rowBelongsToSeat(
   member: { sessionId: string | null; batonName: string | null },
   crewId: string,
 ): boolean {
-  if (row.entry.crewId !== crewId) return false
-  if (member.sessionId !== null) return row.entry.sessionId === member.sessionId
-  return member.batonName !== null && row.entry.seat === member.batonName
+  return entryBelongsToSeat(row.entry, member, crewId)
 }
 
 /** Which of Now's four groups a row was drawn under. */
@@ -249,32 +252,6 @@ function newestInState(
   return mine[0] ?? null
 }
 
-/**
- * This seat's newest sent-but-not-started row (MAR-3204 R3).
- *
- * Next is where an `assigned` row with a seat is drawn, so Next is where the
- * window is looked for. The record must name THIS seat: a row re-seated after
- * its send was sent to somebody else, and this horse was never handed it.
- */
-function newestDispatched(
-  rows: readonly WaveRow[],
-  crewId: string,
-  member: { sessionId: string | null; batonName: string | null },
-): WaveRow | null {
-  const mine = rows
-    .filter(
-      (row) =>
-        row.entry.state === 'assigned' &&
-        row.entry.dispatch !== null &&
-        row.entry.dispatch.seat === member.batonName &&
-        rowBelongsToSeat(row, member, crewId),
-    )
-    .sort((a, b) =>
-      b.entry.dispatch!.sentAt.localeCompare(a.entry.dispatch!.sentAt),
-    )
-  return mine[0] ?? null
-}
-
 /** `21:40`: the clock a dispatch record is read in, 24-hour, local time. */
 export function loomDispatchClock(sentAt: string): string {
   return new Date(sentAt).toLocaleTimeString([], {
@@ -285,7 +262,7 @@ export function loomDispatchClock(sentAt: string): string {
 }
 
 /** What a card says when its seat holds no ticket and was sent none. */
-export const LOOM_NO_ACTIVE_TICKET = 'No active ticket'
+export { LOOM_NO_ACTIVE_TICKET } from '@/entities/work-ledger'
 
 /**
  * The card's ticket line (MAR-3204 R3): the held ticket, else the window the
@@ -342,12 +319,21 @@ export function loomHorses(input: {
       // A card holds the issue the horse is WORKING, never one that merely
       // shares its seat and its blocked label.
       const mine = seatRowsInNow(input.sheets, crew.id, member)
-      const working = newestInState(mine, 'working')
+      const candidates = [...mine.map(({ row }) => row), ...input.sheets.next]
+      const ticket = seatTicket(
+        candidates.map((row) => row.entry),
+        crew.id,
+        member,
+      )
+      const working =
+        ticket?.state === 'working'
+          ? (mine.find(({ row }) => row.entry === ticket) ?? null)
+          : null
       const returnedRow = newestInState(mine, 'returned')
       const held = working?.row ?? null
       const dispatched =
-        held === null
-          ? newestDispatched(input.sheets.next, crew.id, member)
+        ticket?.state === 'assigned'
+          ? (input.sheets.next.find((row) => row.entry === ticket) ?? null)
           : null
       const returned = returnedRow?.row ?? null
       // The host the seat works on: a resident works where its conversation
