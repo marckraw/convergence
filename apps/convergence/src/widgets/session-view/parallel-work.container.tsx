@@ -30,7 +30,10 @@ import {
   parallelWorkRefusal,
   withFetchedWorkItems,
 } from './parallel-work.pure'
-import { useParallelWorkDetail } from './use-parallel-work'
+import {
+  useParallelWorkDetail,
+  useParallelWorkResults,
+} from './use-parallel-work'
 import {
   fullDisplayRows,
   groupWorkBlocks,
@@ -165,10 +168,17 @@ export const ParallelWork: FC<Props> = ({
   // transcript, "View result" and pending decision do not depend on how much
   // of the conversation is loaded. The loaded copy of an item wins; on a fully
   // loaded conversation `panelItems` IS `items`.
-  const detail = useParallelWorkDetail(session.id, selected)
+  const detail = useParallelWorkDetail(session.id, open ? selected : undefined)
+  const results = useParallelWorkResults(session.id, rows, open)
+  // Pins are sequence-sorted. pendingAgentDecision keeps its existing stricter
+  // contract: oldest explicit 'pending'; absent resolutions remain transcript-only.
   const panelItems = useMemo(
-    () => withFetchedWorkItems(items, detail.items),
-    [items, detail.items],
+    () =>
+      withFetchedWorkItems(
+        withFetchedWorkItems(items, detail.items),
+        results.items,
+      ),
+    [items, detail.items, results.items],
   )
   const visibleItems = selected
     ? parallelWorkDetailItems(panelItems, selected)
@@ -321,9 +331,9 @@ export const ParallelWork: FC<Props> = ({
           Loading parallel work…
         </p>
       )}
-      {error && (
+      {(error || results.error) && (
         <p role="alert" className="p-5 text-xs text-red-500">
-          Could not read parallel work: {error}
+          Could not read parallel work: {error ?? results.error}
         </p>
       )}
       <ParallelWorkPanel

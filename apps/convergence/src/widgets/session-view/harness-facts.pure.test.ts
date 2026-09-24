@@ -166,3 +166,22 @@ it('RUN61 r5 omitted alert count controls the pill — mutation ignore omittedAl
   )
   expect(alerts).toEqual([false, true])
 })
+
+it('O1 R4 hides compactions before a partial window and restores them when their history loads', () => {
+  const facts = [
+    { ...compact, at: '2026-01-01' },
+    { ...compact, sequence: 2, at: '2026-01-03' },
+  ]
+  const items = [
+    { id: 'pin', createdAt: '2025-12-01' },
+    { id: 'first', createdAt: '2026-01-02' },
+    { id: 'last', createdAt: '2026-01-04' },
+  ]
+  expect([...placeCompactions(items, facts, '2026-01-02').before]).toEqual([
+    ['last', [facts[1]]],
+  ])
+  expect([...placeCompactions(items, facts).before]).toEqual([
+    ['first', [facts[0]]],
+    ['last', [facts[1]]],
+  ])
+})

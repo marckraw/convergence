@@ -1,3 +1,8 @@
+import {
+  CONVERSATION_PAGE_SIZE,
+  type ConversationPageRequest,
+  type ConversationPage,
+} from '../../../src/shared/types/conversation-item.types'
 import type { ConversationPrefix } from '../../../src/entities/session/conversation-prefix.pure'
 import { recordConversationRead } from '../perf/perf-probe.service'
 import { HandoffRefusedError } from '../provider/provider-account-handoff.pure'
@@ -1863,7 +1868,7 @@ export class SessionService {
     return typeof text === 'string' && text.trim().length > 0 ? text : null
   }
 
-  /** Summarize persisted items before a future window; no IPC in O0a. */
+  /** Summarize persisted items before the loaded window without item payloads. */
   getConversationPrefix(
     sessionId: string,
     beforeSequence: number,
@@ -1942,6 +1947,48 @@ export class SessionService {
     }
   }
 
+  /** Keyset window; the full read remains the contract of main-side consumers. */
+  getConversationPage(
+    id: string,
+    request: ConversationPageRequest = { limit: CONVERSATION_PAGE_SIZE },
+  ): ConversationPage<ConversationItem> {
+    this.flushPendingConversationPatchesForSession(id)
+    const start =
+      process.env.CONVERGENCE_PERF === '1' ? performance.now() : null
+    const rows = this.db
+      .prepare(
+        `${ITEMS_BY_ID_SELECT}
+       WHERE items.session_id = ? ${request.beforeSequence === undefined ? '' : 'AND items.sequence < ?'}
+       ORDER BY items.sequence DESC LIMIT ?`,
+      )
+      .all(
+        ...(request.beforeSequence === undefined
+          ? [id, request.limit + 1]
+          : [id, request.beforeSequence, request.limit + 1]),
+      ) as ConversationItemRow[]
+    const parseStart = start === null ? null : performance.now()
+    const hasOlder = rows.length > request.limit
+    if (hasOlder) rows.pop()
+    const items = rows.reverse().map(conversationItemFromRow)
+    const parseMs = parseStart === null ? 0 : performance.now() - parseStart
+    const oldestSequence = items[0]?.sequence ?? null
+    const prefix = this.getConversationPrefix(
+      id,
+      oldestSequence ?? request.beforeSequence ?? 0,
+    )
+    // Pending decisions are the only deliberate exceptions to the contiguous
+    // window. Keep the page boundary separate from these pinned old items.
+    const held = new Set(items.map((item) => item.id))
+    const pinned = this.listPendingRequestItems(id).filter(
+      (item) => !held.has(item.id),
+    )
+    const merged = [...pinned, ...items].sort((a, b) => a.sequence - b.sequence)
+    const page = { items: merged, hasOlder, oldestSequence, prefix }
+    if (start !== null && parseStart !== null)
+      recordConversationRead(id, parseStart - start, parseMs, page)
+    return page
+  }
+
   getConversation(id: string): ConversationItem[] {
     this.flushPendingConversationPatchesForSession(id)
 
@@ -2007,16 +2054,31 @@ export class SessionService {
     return this.listItemsById(sessionId, 'task_id', taskIds)
   }
 
+  /** Only the latest terminal note per task crosses IPC for the cards. */
+  listTaskResultNotes(
+    sessionId: string,
+    taskIds: string[],
+  ): ConversationItem[] {
+    this.flushPendingConversationPatchesForSession(sessionId)
+    const statement = this.db.prepare(`${ITEMS_BY_ID_SELECT}
+      WHERE items.session_id = ? AND items.task_id = ?
+        AND items.kind = 'note' AND items.provider_event_type = 'harness.task.terminal'
+      ORDER BY items.sequence DESC LIMIT 1`)
+    return [...new Set(taskIds)].flatMap((id) => {
+      const row = statement.get(sessionId, id) as
+        | ConversationItemRow
+        | undefined
+      return row ? [conversationItemFromRow(row)] : []
+    })
+  }
+
   /**
    * The newest approval and input requests still awaiting an answer, newest
    * first, at most 50 (MAR-3310 O0b R5).
    *
-   * "Awaiting" is the item's own half of the transcript's actionable rule: a
-   * `resolution` of `pending`, or none the reader recognises. The reader
-   * (`conversationItemFromRow`) keeps only `pending` / `approved` / `denied`,
-   * so anything but the two answered words reads as absent there, and here.
-   * The session's half — status, attention, a live handle — stays with the
-   * renderer, which has it.
+   * Only explicit pending resolutions are pins. Providers that do not record
+   * answers leave historical requests absent; their live request is already
+   * in the newest page (MAR-3398 R7). Actionability stays with the renderer.
    */
   listPendingRequestItems(sessionId: string): ConversationItem[] {
     this.flushPendingConversationPatchesForSession(sessionId)
@@ -2026,7 +2088,7 @@ export class SessionService {
           `${ITEMS_BY_ID_SELECT}
          WHERE items.session_id = ?
            AND items.kind IN ('approval-request', 'input-request')
-           AND IFNULL(json_extract(items.payload_json, '$.resolution'), '') NOT IN ('approved', 'denied')
+           AND json_extract(items.payload_json, '$.resolution') = 'pending'
          ORDER BY items.sequence DESC
          LIMIT 50`,
         )

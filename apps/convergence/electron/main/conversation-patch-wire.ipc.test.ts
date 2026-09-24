@@ -1,3 +1,4 @@
+import { EMPTY_CONVERSATION_PREFIX } from '../../src/entities/session/conversation-prefix.pure'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type {
   ConversationItem,
@@ -27,6 +28,7 @@ vi.mock('electron', () => ({
 let emitPatch: (event: ConversationPatchEvent) => void
 let emitSummary: (summary: SessionSummary) => void
 const getConversation = vi.fn()
+const getConversationPage = vi.fn()
 const item: Extract<ConversationItem, { kind: 'message' }> = {
   id: 'item',
   sessionId: 'session',
@@ -53,6 +55,7 @@ beforeEach(() => {
   const args = Array.from({ length: 20 }, () => ({}))
   args[7] = {
     getConversation,
+    getConversationPage,
     setSummaryUpdateListener: (listener: typeof emitSummary) => {
       emitSummary = listener
     },
@@ -68,12 +71,48 @@ beforeEach(() => {
   )
 })
 
+it('R13 beforeSequence requests emit older-page, never snapshot', () => {
+  getConversationPage.mockReturnValue({
+    items: [item],
+    prefix: EMPTY_CONVERSATION_PREFIX,
+    hasOlder: true,
+    oldestSequence: 1,
+  })
+  handlers.get('session:resyncConversation')!(
+    { sender: { send } },
+    'session',
+    3,
+    'page',
+    { limit: 300, beforeSequence: 301 },
+  )
+  expect(getConversationPage).toHaveBeenCalledExactlyOnceWith('session', {
+    limit: 300,
+    beforeSequence: 301,
+  })
+  expect(send).toHaveBeenCalledExactlyOnceWith('session:conversationPatched', {
+    op: 'older-page',
+    sessionId: 'session',
+    generation: 3,
+    pageNonce: 'page',
+    beforeSequence: 301,
+    items: [item],
+    prefix: EMPTY_CONVERSATION_PREFIX,
+    hasOlder: true,
+    oldestSequence: 1,
+  })
+})
+
 it('R2b/R2e flushes before exactly one snapshot and sends all three in order on the patch channel', () => {
   patch('one')
   send.mockClear()
-  getConversation.mockImplementation(() => {
+  getConversationPage.mockImplementation(() => {
     patch('one two') // generated pending patch flushed by the existing service contract
-    return [{ ...item, text: 'one two' }]
+    return {
+      items: [{ ...item, text: 'one two' }],
+      prefix: EMPTY_CONVERSATION_PREFIX,
+      hasOlder: false,
+      oldestSequence: 1,
+    }
   })
   const acknowledgment = handlers.get('session:resyncConversation')!(
     { sender: { send } },
@@ -83,7 +122,10 @@ it('R2b/R2e flushes before exactly one snapshot and sends all three in order on 
   )
   patch('one two three')
   expect(acknowledgment).toBeUndefined()
-  expect(getConversation).toHaveBeenCalledExactlyOnceWith('session')
+  expect(getConversation).not.toHaveBeenCalled()
+  expect(getConversationPage).toHaveBeenCalledExactlyOnceWith('session', {
+    limit: 300,
+  })
   expect(
     send.mock.calls.filter(([, event]) => event.op === 'snapshot'),
   ).toHaveLength(1)
@@ -103,6 +145,10 @@ it('R2b/R2e flushes before exactly one snapshot and sends all three in order on 
       'session:conversationPatched',
       {
         op: 'snapshot',
+        beforeSequence: undefined,
+        prefix: EMPTY_CONVERSATION_PREFIX,
+        hasOlder: false,
+        oldestSequence: 1,
         sessionId: 'session',
         items: [{ ...item, text: 'one two' }],
         generation: 2,

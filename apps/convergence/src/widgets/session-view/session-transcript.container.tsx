@@ -5,6 +5,7 @@ import {
 } from '@/entities/session'
 import { PerfProfiler } from '@/shared/lib/perf-profiler'
 import { perfApi } from '@/shared/lib/perf.api'
+import { Button } from '@/shared/ui/button'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 import { placeCompactions } from './harness-facts.pure'
 import { CompactionMarker } from './compaction-marker.presentational'
@@ -76,6 +77,12 @@ interface SessionTranscriptProps {
   onParallelSelect?: (id: string) => void
   navigationTarget?: { id: string; nonce: number } | null
   session: Session
+  hasOlder?: boolean
+  oldestSequence?: number | null
+  loadingOlder?: boolean
+  olderError?: string
+  snapshotVersion?: number
+  onLoadOlder?: (retry?: boolean) => void
   conversationPrefix?: ConversationPrefix
   conversationItems: ConversationItemEntry[]
   onApprove: (
@@ -124,6 +131,12 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
   onParallelSelect,
   navigationTarget,
   conversationItems,
+  hasOlder = false,
+  oldestSequence = null,
+  loadingOlder = false,
+  olderError,
+  snapshotVersion = 0,
+  onLoadOlder,
   conversationPrefix = EMPTY_CONVERSATION_PREFIX,
   onApprove,
   onDeny,
@@ -133,6 +146,7 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
   const scrollParentRef = useRef<HTMLDivElement>(null)
   const [scrollParent, setScrollParent] = useState<HTMLDivElement | null>(null)
   const bottomFollowRef = useRef(true)
+  const prependInsetRef = useRef(0)
   const pendingScrollFrameRef = useRef<number | null>(null)
   const previousSessionIdRef = useRef<string | null>(null)
   const [resolvedApprovalIds, setResolvedApprovalIds] = useState<Set<string>>(
@@ -250,8 +264,18 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
       placeCompactions(
         conversationRenderPlan.map((entry) => entry.item),
         compactions,
+        hasOlder
+          ? conversationItems.find((item) => item.sequence === oldestSequence)
+              ?.createdAt
+          : undefined,
       ),
-    [conversationRenderPlan, compactions],
+    [
+      conversationRenderPlan,
+      compactions,
+      hasOlder,
+      conversationItems,
+      oldestSequence,
+    ],
   )
   const viewMode = useTranscriptViewMode(session.id)
   const openBlocks = useTranscriptViewStore((state) => state.openBlocks)
@@ -272,6 +296,25 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
           }),
     [viewMode, conversationRenderPlan, workMarkers, compactionPlacement],
   )
+  useLayoutEffect(() => {
+    if (!workRows) return
+    const replacements = workRows.filter(
+      (row) =>
+        row.kind === 'block' &&
+        !openBlocks.has(row.id) &&
+        row.members.some((entry) => openBlocks.has(entry.item.id)),
+    )
+    if (!replacements.length) return
+    useTranscriptViewStore.setState((state) => {
+      const next = new Set(state.openBlocks)
+      for (const row of replacements) {
+        if (row.kind !== 'block') continue
+        for (const entry of row.members) next.delete(entry.item.id)
+        next.add(row.id)
+      }
+      return { openBlocks: next }
+    })
+  }, [workRows, openBlocks])
   const blockOfMember = useMemo(
     () =>
       workRows
@@ -388,6 +431,8 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
     getScrollElement: () => scrollParent,
     estimateSize: () => TRANSCRIPT_ROW_ESTIMATE_PX,
     getItemKey,
+    paddingStart: hasOlder ? 24 : 0,
+    scrollPaddingStart: -prependInsetRef.current,
     overscan: TRANSCRIPT_OVERSCAN,
     enabled: scrollParent !== null,
     initialRect: {
@@ -406,6 +451,14 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
     const blockId =
       index < 0 ? blockOfMember.get(navigationTarget.id) : undefined
     if (index < 0 && !blockId) {
+      if (
+        hasOlder &&
+        !olderError &&
+        !conversationItems.some((item) => item.id === navigationTarget.id)
+      ) {
+        if (!loadingOlder) onLoadOlder?.()
+        return
+      }
       // MAR-3310 F1e R7: a jump that cannot land is dropped, and it leaves
       // the scroll where it was; a reply streaming below keeps following.
       navigatedNonce.current = navigationTarget.nonce
@@ -426,7 +479,18 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
     }
     navigatedNonce.current = navigationTarget.nonce
     rowVirtualizer.scrollToIndex(index, { align: 'center' })
-  }, [navigationTarget, displayRows, blockOfMember, openBlock, rowVirtualizer])
+  }, [
+    navigationTarget,
+    displayRows,
+    blockOfMember,
+    openBlock,
+    rowVirtualizer,
+    hasOlder,
+    loadingOlder,
+    olderError,
+    conversationItems,
+    onLoadOlder,
+  ])
 
   const scrollToLatest = useCallback(() => {
     if (displayRows.length === 0) return
@@ -443,9 +507,108 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
     })
   }, [displayRows.length, rowVirtualizer])
 
+  const prependAnchor = useRef<{
+    id: string
+    member: boolean
+    inset: number
+    before: number | null
+  } | null>(null)
+  const snapshotKey = `${session.id}:${snapshotVersion}`
+  const anchorSnapshot = useRef(snapshotKey)
+  const fillEpisode = useRef({
+    pages: 0,
+    requestedBefore: null as number | null,
+  })
+  const lastScrollTop = useRef(Number.POSITIVE_INFINITY)
+  const restoredAwayFromTop = useRef(false)
+  useLayoutEffect(() => {
+    if (anchorSnapshot.current !== snapshotKey || olderError) {
+      prependAnchor.current = null
+      prependInsetRef.current = 0
+      fillEpisode.current = { pages: 0, requestedBefore: null }
+      anchorSnapshot.current = snapshotKey
+    }
+    const anchor = prependAnchor.current
+    if (!anchor) return
+    if (anchor.before === oldestSequence) {
+      if (!loadingOlder) {
+        prependAnchor.current = null
+        prependInsetRef.current = 0
+      }
+      return
+    }
+    const index = displayRows.findIndex((row) =>
+      anchor.member
+        ? row.kind !== 'block' && row.entry.item.id === anchor.id
+        : row.kind === 'block'
+          ? row.members.some((entry) => entry.item.id === anchor.id)
+          : row.entry.item.id === anchor.id,
+    )
+    if (index < 0 && anchor.member) {
+      const block = blockOfMember.get(anchor.id)
+      if (block) {
+        openBlock(block)
+        return
+      }
+    }
+    prependAnchor.current = null
+    if (index < 0) return
+    restoredAwayFromTop.current = index > 0
+    // Indexed scrolling keeps correcting while newly mounted rows measure.
+    // A one-shot pixel offset drifts as estimates above the anchor settle.
+    rowVirtualizer.scrollToIndex(index, { align: 'start' })
+  }, [
+    oldestSequence,
+    displayRows,
+    rowVirtualizer,
+    blockOfMember,
+    openBlock,
+    snapshotKey,
+    olderError,
+    loadingOlder,
+  ])
+
+  const requestOlder = useCallback(
+    (retry = false) => {
+      const parent = scrollParentRef.current
+      if (!parent || !onLoadOlder) return
+      restoredAwayFromTop.current = false
+      // Pins are outside the contiguous window and cannot preserve its position.
+      const visible = rowVirtualizer.measurementsCache.find((item) => {
+        const row = displayRows[item.index]
+        const entry =
+          row?.kind === 'block' ? row.members[0]?.item : row?.entry.item
+        return (
+          item.end > parent.scrollTop &&
+          entry &&
+          entry.sequence >= (oldestSequence ?? 0)
+        )
+      })
+      const row = visible && displayRows[visible.index]
+      const id =
+        row?.kind === 'block' ? row.members[0]?.item.id : row?.entry.item.id
+      if (id && visible) {
+        prependInsetRef.current = parent.scrollTop - visible.start
+        prependAnchor.current = {
+          id,
+          member: row?.kind === 'member',
+          inset: prependInsetRef.current,
+          before: oldestSequence,
+        }
+      }
+      rowVirtualizer.scrollToOffset(parent.scrollTop)
+      fillEpisode.current.requestedBefore = oldestSequence
+      onLoadOlder(retry)
+    },
+    [onLoadOlder, rowVirtualizer, displayRows, oldestSequence],
+  )
+
   const updateBottomFollow = useCallback(() => {
     const scrollParent = scrollParentRef.current
     if (!scrollParent) return
+    const enteredTop =
+      lastScrollTop.current > 80 && scrollParent.scrollTop <= 80
+    lastScrollTop.current = scrollParent.scrollTop
 
     const nearBottom = isTranscriptNearBottom({
       scrollHeight: scrollParent.scrollHeight,
@@ -453,7 +616,33 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
       clientHeight: scrollParent.clientHeight,
     })
     bottomFollowRef.current = nearBottom
-  }, [])
+    if (scrollParent.scrollTop > 80)
+      fillEpisode.current = { pages: 0, requestedBefore: null }
+    if (!nearBottom && pendingScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(pendingScrollFrameRef.current)
+      pendingScrollFrameRef.current = null
+    }
+    if (
+      enteredTop &&
+      hasOlder &&
+      !loadingOlder &&
+      !olderError &&
+      onLoadOlder &&
+      (!prependAnchor.current ||
+        prependAnchor.current.before === oldestSequence)
+    ) {
+      // The scroll event can reach React before TanStack updates its visible
+      // range. Its keyed measurements already describe the entire window.
+      requestOlder()
+    }
+  }, [
+    hasOlder,
+    loadingOlder,
+    onLoadOlder,
+    oldestSequence,
+    olderError,
+    requestOlder,
+  ])
 
   const handleScrollParentRef = useCallback((node: HTMLDivElement | null) => {
     scrollParentRef.current = node
@@ -468,6 +657,38 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
   )
 
   const totalSize = rowVirtualizer.getTotalSize()
+  useEffect(() => {
+    if (
+      !scrollParent ||
+      scrollParent.clientHeight <= 0 ||
+      !hasOlder ||
+      loadingOlder ||
+      olderError ||
+      !onLoadOlder
+    )
+      return
+    const episode = fillEpisode.current
+    if (episode.pages >= 5 || episode.requestedBefore === oldestSequence) return
+    if (
+      scrollParent.scrollHeight > scrollParent.clientHeight &&
+      (restoredAwayFromTop.current ||
+        scrollParent.scrollTop > 0 ||
+        episode.requestedBefore === null)
+    )
+      return
+    episode.pages += 1
+    episode.requestedBefore = oldestSequence
+    requestOlder()
+  }, [
+    scrollParent,
+    totalSize,
+    hasOlder,
+    loadingOlder,
+    olderError,
+    oldestSequence,
+    requestOlder,
+    onLoadOlder,
+  ])
   const lastCompactionSequence = compactions.at(-1)?.sequence
   useLayoutEffect(() => {
     const sessionChanged = previousSessionIdRef.current !== session.id
@@ -522,6 +743,8 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
       ref={handleScrollParentRef}
       className="app-scrollbar flex-1 overflow-y-auto px-4"
       data-testid="session-transcript-scroll-region"
+      aria-busy={loadingOlder}
+      style={{ overflowAnchor: 'none' }}
       onScroll={updateBottomFollow}
     >
       <div className="mx-auto max-w-2xl py-4">
@@ -529,6 +752,37 @@ const SessionTranscriptContent: FC<SessionTranscriptContentProps> = ({
           className="relative w-full"
           style={{ height: rowVirtualizer.getTotalSize() }}
         >
+          {hasOlder && (
+            <div className="absolute top-0 flex w-full items-center justify-center gap-2 text-xs text-muted-foreground">
+              {loadingOlder ? (
+                'Loading earlier messages…'
+              ) : (
+                <>
+                  {olderError && (
+                    <span
+                      role="status"
+                      title={olderError}
+                      className="min-w-0 truncate"
+                    >
+                      {olderError}
+                    </span>
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto shrink-0 px-1 py-0 font-normal text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      fillEpisode.current.pages = 5
+                      requestOlder(Boolean(olderError))
+                    }}
+                  >
+                    {olderError ? 'Try again' : 'Load earlier messages'}
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
           {virtualItems.map((virtualItem) => {
             const row = displayRows[virtualItem.index]
             if (!row) return null

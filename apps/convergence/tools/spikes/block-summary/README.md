@@ -19,7 +19,11 @@ node run.mjs mlx
 node mutate-path-check.mjs
 ```
 
-Run candidates sequentially with no other benchmark or build running. Download is a separate step, excludes inference, requires no account, and checks the pinned revision, file sizes and weight SHA256. It refuses a download above 2 GB. Only the named model is downloaded, into this folder. The venv, weights, compiler products and local caches are ignored. MLX inference runs offline and disables implicit Hugging Face token use. No provider CLI or API is involved.
+Run candidates sequentially with no other benchmark or build running. Download is a separate step, excludes inference, requires no account, and checks the pinned revision, file sizes and weight SHA256. It refuses a download above 2 GB. Only the named model is downloaded, into this folder. The venv, weights, compiler products and local caches are ignored. MLX inference runs offline and disables implicit Hugging Face token use. Apple and MLX use no provider CLI or API.
+
+## Cloud candidate (GPT-6 Luna)
+
+`node run.mjs luna --effort low|medium|high` runs the same 20 blocks × 3 through Convergence's Codex `provider.oneShot` (`modelId: gpt-6-luna`, that effort, `providerAccountId: null`). The worker bundles `luna-runtime.ts` with esbuild the way `tools/perf-busy-day.mjs` loads backend sources, then speaks the same JSONL contract. `which -a codex` is walked until a binary passes the app's resident app-server version gate, because this seat's Node 24.15 PATH lists an older CLI first. One resident provider process, a fresh ephemeral thread per block, no retry or repair. Reports land in `reports/luna-<effort>.json`. `node render-table.mjs luna` writes `reports/luna-table.md`. The helper's own permission constant is read-only with approvals refused; the call also sends that profile. The whole-call budget is 110s so a cold app-server start fits inside the harness's 120s row limit.
 
 `prompt.txt` is the exact common prompt; only provider and tool records are appended. Fixture labels and truth sets are withheld. Claude uses pretty JSON inputs; Pi compact JSON; Cursor free text; Codex results only with commands as tool names. Truth paths include literal paths, their parent directories and basenames, plus literal listing entries. The generator is deterministic. Both candidates use greedy decoding and a 96-token response limit. Apple additionally uses a `@Generable` structure with one `sentence` field; MLX emits plain text. This decoding difference is intentional, not an identical-model comparison.
 

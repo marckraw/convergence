@@ -1,4 +1,8 @@
 import {
+  CONVERSATION_PAGE_SIZE,
+  type ConversationPageRequest,
+} from '../../src/shared/types/conversation-item.types'
+import {
   nextWireMemory,
   type ConversationWireMemory,
 } from './conversation-patch-wire.pure'
@@ -979,23 +983,37 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     'session:resyncConversation',
-    (event, sessionId: string, generation: number, pageNonce: string) => {
+    (
+      event,
+      sessionId: string,
+      generation: number,
+      pageNonce: string,
+      page: ConversationPageRequest = { limit: CONVERSATION_PAGE_SIZE },
+    ) => {
       if (
         typeof sessionId !== 'string' ||
         sessionId.length === 0 ||
         !Number.isSafeInteger(generation) ||
         generation < 1 ||
         typeof pageNonce !== 'string' ||
-        pageNonce.length === 0
+        pageNonce.length === 0 ||
+        !page ||
+        !Number.isSafeInteger(page.limit) ||
+        page.limit < 1 ||
+        page.limit > CONVERSATION_PAGE_SIZE ||
+        (page.beforeSequence !== undefined &&
+          (!Number.isSafeInteger(page.beforeSequence) ||
+            page.beforeSequence < 1))
       )
         throw new Error('Invalid conversation snapshot request')
       // getConversation synchronously flushes pending patches before reading.
       // No await: those patches, this snapshot, and subsequent appends use one pipe.
-      const items = sessionApp.getConversation(sessionId)
+      const result = sessionService.getConversationPage(sessionId, page)
       event.sender.send('session:conversationPatched', {
-        op: 'snapshot',
+        op: page.beforeSequence === undefined ? 'snapshot' : 'older-page',
         sessionId,
-        items,
+        ...result,
+        beforeSequence: page.beforeSequence,
         generation,
         pageNonce,
       })
@@ -1422,6 +1440,11 @@ export function registerIpcHandlers(
     'session:listRunItems',
     (_event, sessionId: string, agentRunIds: string[]) =>
       sessionService.listRunItems(sessionId, agentRunIds),
+  )
+  ipcMain.handle(
+    'session:listTaskResultNotes',
+    (_event, sessionId: string, taskIds: string[]) =>
+      sessionService.listTaskResultNotes(sessionId, taskIds),
   )
   ipcMain.handle(
     'session:listTaskItems',

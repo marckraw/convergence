@@ -43,7 +43,13 @@ export class PerfProbe {
   private readonly attentionRowReads = { total: 0, notNeeded: 0 }
   private renderer: unknown = null
   private readonly payloadSizes: Array<() => void> = []
-  private readonly patchOps = { add: 0, patch: 0, append: 0, snapshot: 0 }
+  private readonly patchOps = {
+    add: 0,
+    patch: 0,
+    append: 0,
+    snapshot: 0,
+    'older-page': 0,
+  }
   private readonly streamingItems = new Map<
     string,
     { sessionId: string; itemId: string; sends: number }
@@ -127,7 +133,8 @@ export class PerfProbe {
       }
       // Sending first is insufficient: main-thread sizing can still delay paint.
       // Hold large snapshots until the runner explicitly ends that measurement.
-      if (event?.op === 'snapshot') payloadSizes.push(size)
+      if (event?.op === 'snapshot' || event?.op === 'older-page')
+        payloadSizes.push(size)
       else size()
       return measure(cost, () => original.call(this, channel, ...args))
     }

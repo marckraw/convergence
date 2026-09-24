@@ -1,3 +1,4 @@
+import type { ConversationPageRequest } from './conversation-item.types'
 export interface ConversationRoutineAction {
   id: 'drill' | 'compact' | 'fork' | 'hand-off'
   kind: 'routine'
@@ -2043,6 +2044,7 @@ interface ElectronAPI {
       id: string,
       generation: number,
       pageNonce: string,
+      page?: ConversationPageRequest,
     ) => Promise<void>
     getConversation: (id: string) => Promise<ConversationItemData[]>
     onEvidenceUpdated: (
@@ -2059,6 +2061,11 @@ interface ElectronAPI {
     listRunItems: (
       sessionId: string,
       agentRunIds: string[],
+    ) => Promise<ConversationItemData[]>
+    /** Latest terminal note per task, at most one each (MAR-3398 R10). */
+    listTaskResultNotes: (
+      sessionId: string,
+      taskIds: string[],
     ) => Promise<ConversationItemData[]>
     /** Every item of these tasks, in transcript order (MAR-3310 O0b). */
     listTaskItems: (
