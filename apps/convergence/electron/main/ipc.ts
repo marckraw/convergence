@@ -1,3 +1,7 @@
+import {
+  nextWireMemory,
+  type ConversationWireMemory,
+} from './conversation-patch-wire.pure'
 import { connectPullRequestRefresh } from '../backend/pull-request/pull-request-refresh.service'
 import { app, ipcMain, dialog, BrowserWindow, shell } from 'electron'
 import { ProjectService } from '../backend/project/project.service'
@@ -202,6 +206,8 @@ export function registerIpcHandlers(
     relayService,
     crewService,
   )
+
+  let conversationWireMemory: ConversationWireMemory = new Map()
 
   // Project handlers
   ipcMain.handle('project:create', (_event, input: CreateProjectInput) => {
@@ -971,6 +977,31 @@ export function registerIpcHandlers(
     sessionApp.getConversation(id),
   )
 
+  ipcMain.handle(
+    'session:resyncConversation',
+    (event, sessionId: string, generation: number, pageNonce: string) => {
+      if (
+        typeof sessionId !== 'string' ||
+        sessionId.length === 0 ||
+        !Number.isSafeInteger(generation) ||
+        generation < 1 ||
+        typeof pageNonce !== 'string' ||
+        pageNonce.length === 0
+      )
+        throw new Error('Invalid conversation snapshot request')
+      // getConversation synchronously flushes pending patches before reading.
+      // No await: those patches, this snapshot, and subsequent appends use one pipe.
+      const items = sessionApp.getConversation(sessionId)
+      event.sender.send('session:conversationPatched', {
+        op: 'snapshot',
+        sessionId,
+        items,
+        generation,
+        pageNonce,
+      })
+    },
+  )
+
   ipcMain.handle('session:archive', (_event, id: string) => {
     sessionApp.archiveSession(id)
   })
@@ -981,6 +1012,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle('session:delete', (_event, id: string) => {
     const { relaysRemoved, membershipsRemoved } = sessionApp.deleteSession(id)
+    conversationWireMemory.delete(id)
     if (relaysRemoved > 0) broadcastRelays(relayService.list())
     if (membershipsRemoved > 0) broadcastCrews(crewService.list())
     pullRequestService.evictDeletedSessions()
@@ -1342,6 +1374,7 @@ export function registerIpcHandlers(
 
   // Session update event forwarding
   sessionApp.onSessionSummaryUpdate((summary) => {
+    if (summary.status !== 'running') conversationWireMemory.delete(summary.id)
     const windows = BrowserWindow.getAllWindows()
     for (const win of windows) {
       if (!win.isDestroyed()) {
@@ -1351,10 +1384,12 @@ export function registerIpcHandlers(
   })
 
   sessionApp.onConversationPatch((event) => {
+    const { wire, memory } = nextWireMemory(conversationWireMemory, event)
+    conversationWireMemory = memory
     const windows = BrowserWindow.getAllWindows()
     for (const win of windows) {
       if (!win.isDestroyed()) {
-        win.webContents.send('session:conversationPatched', event)
+        win.webContents.send('session:conversationPatched', wire)
       }
     }
   })

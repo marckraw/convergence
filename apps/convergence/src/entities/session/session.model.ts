@@ -1,8 +1,8 @@
+import type { ConversationWireEvent } from '@/shared/types/conversation-item.types'
 import { create } from 'zustand'
 import type { AccountHandoffRefusal } from '@/shared/types/session-send.types'
 import type {
   ConversationItem,
-  ConversationPatchEvent,
   CreateAndStartGlobalSessionRequest,
   CreateAndStartSessionRequest,
   QueuedInputPatchEvent,
@@ -41,6 +41,60 @@ import type {
 
 const RECENT_SESSIONS_CAP = 10
 const pendingPins = new Map<string, symbol>()
+const conversationPageNonce = crypto.randomUUID()
+
+// Request bookkeeping is not view state: dropped events must notify nobody.
+const conversationLoads = new Map<
+  string,
+  {
+    requested: number
+    applied: number
+    resync: number | null
+    pending: number | null
+    stopped: boolean
+  }
+>()
+function conversationLoad(sessionId: string) {
+  let load = conversationLoads.get(sessionId)
+  if (!load) {
+    load = {
+      requested: 0,
+      applied: 0,
+      resync: null,
+      pending: null,
+      stopped: false,
+    }
+    conversationLoads.set(sessionId, load)
+  }
+  return load
+}
+
+export function resetConversationLoadsForTests() {
+  conversationLoads.clear()
+}
+
+async function requestConversationLoad(
+  sessionId: string,
+  onFailure: (error: unknown) => void,
+) {
+  const load = conversationLoad(sessionId)
+  if (load.resync !== null || load.pending !== null) return
+  const generation = ++load.requested
+  load.pending = generation
+  try {
+    // Items arrive on the same FIFO channel as patches, never on this reply.
+    await sessionApi.resyncConversation(
+      sessionId,
+      generation,
+      conversationPageNonce,
+    )
+  } catch (err) {
+    if (load.pending !== generation) return
+    load.pending = null
+    load.stopped = true
+    onFailure(err)
+  }
+}
 
 interface SessionState {
   sessions: SessionSummary[]
@@ -128,7 +182,9 @@ interface SessionActions {
   setActiveSession: (id: string | null) => void
   setActiveGlobalSession: (id: string | null) => void
   handleSessionSummaryUpdate: (summary: SessionSummary) => void
-  handleConversationPatched: (event: ConversationPatchEvent) => void
+  handleConversationPatched: (
+    event: ConversationWireEvent<ConversationItem>,
+  ) => void
   handleQueuedInputPatched: (event: QueuedInputPatchEvent) => void
   previewFork: (
     parentSessionId: string,
@@ -900,27 +956,19 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   loadActiveConversation: async (sessionId: string) => {
-    const conversation = await sessionApi.getConversation(sessionId)
-    set((state) =>
-      state.activeSessionId === sessionId
-        ? {
-            activeConversation: conversation,
-            activeConversationSessionId: sessionId,
-          }
-        : {},
-    )
+    const load = conversationLoad(sessionId)
+    // An explicit open/load starts a new failure episode.
+    load.stopped = false
+    await requestConversationLoad(sessionId, (err) => {
+      set({
+        error:
+          err instanceof Error ? err.message : 'Failed to load conversation',
+      })
+    })
   },
 
   loadActiveGlobalConversation: async (sessionId: string) => {
-    const conversation = await sessionApi.getConversation(sessionId)
-    set((state) =>
-      state.activeGlobalSessionId === sessionId
-        ? {
-            activeGlobalConversation: conversation,
-            activeGlobalConversationSessionId: sessionId,
-          }
-        : {},
-    )
+    await get().loadActiveConversation(sessionId)
   },
 
   loadQueuedInputs: async (sessionId: string) => {
@@ -1069,31 +1117,92 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  handleConversationPatched: (event: ConversationPatchEvent) => {
+  handleConversationPatched: (
+    event: ConversationWireEvent<ConversationItem>,
+  ) => {
+    let resyncGeneration: number | undefined
     set((state) => {
-      if (state.activeSessionId !== event.sessionId) {
-        return state.activeGlobalSessionId === event.sessionId
-          ? {
-              activeGlobalConversation: upsertConversationItem(
-                state.activeGlobalConversation,
-                event.item,
-              ),
-              activeGlobalConversationSessionId: event.sessionId,
-            }
-          : // The same state object: zustand notifies nobody. `{}` would
-            // build a new state and wake every listener for a conversation
-            // no one has open (MAR-3377 R3).
-            state
+      const load = conversationLoad(event.sessionId)
+      if (event.op === 'snapshot') {
+        if (event.pageNonce !== conversationPageNonce) return state
+        if (event.generation < load.applied) return state
+        if (load.resync !== null && event.generation >= load.resync)
+          load.resync = null
+        if (load.pending !== null && event.generation >= load.pending)
+          load.pending = null
       }
-
-      return {
-        activeConversation: upsertConversationItem(
-          state.activeConversation,
-          event.item,
-        ),
-        activeConversationSessionId: event.sessionId,
+      const project = state.activeSessionId === event.sessionId
+      if (!project && state.activeGlobalSessionId !== event.sessionId) {
+        // Preserve F1a: a conversation no one has open notifies nobody.
+        return state
       }
+      const items = project
+        ? state.activeConversation
+        : state.activeGlobalConversation
+      let nextItems: ConversationItem[]
+      if (event.op === 'snapshot') {
+        load.applied = event.generation
+        nextItems = event.items
+      } else if (event.op === 'append') {
+        if (load.stopped || load.resync !== null || load.pending !== null)
+          return state
+        const item = items.find((candidate) => candidate.id === event.itemId)
+        if (
+          !item ||
+          (item.kind !== 'message' && item.kind !== 'thinking') ||
+          item.text.length !== event.baseLength
+        ) {
+          resyncGeneration = ++load.requested
+          load.resync = resyncGeneration
+          return state
+        }
+        nextItems = upsertConversationItem(items, {
+          ...item,
+          text: item.text + event.append,
+          updatedAt: event.updatedAt,
+        })
+      } else {
+        nextItems = upsertConversationItem(items, event.item)
+      }
+      return project
+        ? {
+            activeConversation: nextItems,
+            activeConversationSessionId: event.sessionId,
+          }
+        : {
+            activeGlobalConversation: nextItems,
+            activeGlobalConversationSessionId: event.sessionId,
+          }
     })
+    if (resyncGeneration !== undefined) {
+      void sessionApi
+        .resyncConversation(
+          event.sessionId,
+          resyncGeneration,
+          conversationPageNonce,
+        )
+        .catch((err) => {
+          const load = conversationLoad(event.sessionId)
+          if (load.resync !== resyncGeneration) return
+          load.resync = null
+          set({
+            error:
+              err instanceof Error
+                ? err.message
+                : 'Failed to resync conversation',
+          })
+          const state = get()
+          if (
+            state.activeSessionId === event.sessionId ||
+            state.activeGlobalSessionId === event.sessionId
+          ) {
+            // One fresh-load retry belongs to this same, already reported episode.
+            void requestConversationLoad(event.sessionId, () => {})
+          } else {
+            load.stopped = true
+          }
+        })
+    }
   },
 
   handleQueuedInputPatched: (event: QueuedInputPatchEvent) => {
