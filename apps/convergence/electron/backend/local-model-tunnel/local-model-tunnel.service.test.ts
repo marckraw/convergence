@@ -79,6 +79,22 @@ function mockTcpFailure() {
   })
 }
 
+function mockTcpConnect() {
+  connectMock.mockImplementation(() => {
+    const socket = new MockSocket()
+    queueMicrotask(() => socket.emit('connect'))
+    return socket
+  })
+}
+
+function mockTcpConnectAfter(delayMs: number) {
+  connectMock.mockImplementation(() => {
+    const socket = new MockSocket()
+    setTimeout(() => socket.emit('connect'), delayMs)
+    return socket
+  })
+}
+
 function mockHttpFailure() {
   httpRequestMock.mockImplementation(() => {
     const request = new MockHttpRequest()
@@ -492,5 +508,105 @@ describe('LocalModelTunnelService', () => {
     expect(snapshot.profiles[0]?.status.state).toBe('running')
     expect(snapshot.profiles[0]?.status.managed).toBe(false)
     expect(snapshot.profiles[0]?.status.health.state).toBe('healthy')
+  })
+
+  it('broadcasts a monitor tick only when status, error, or route changes (MAR-3327)', async () => {
+    vi.useFakeTimers()
+    try {
+      mockTcpConnect()
+      const profile = createProfile({
+        connectionKind: 'local-runtime',
+        healthCheckEnabled: false,
+        healthCheckUrl: '',
+        localPort: 11434,
+      })
+      const { emit, service } = createService([profile])
+
+      service.startMonitoring(15_000)
+      // The immediate tick plus one interval: two identical probes.
+      await vi.advanceTimersByTimeAsync(15_000)
+      expect(emit).toHaveBeenCalledTimes(1)
+
+      mockTcpFailure()
+      await vi.advanceTimersByTimeAsync(15_000)
+      expect(emit).toHaveBeenCalledTimes(2)
+      expect(emit.mock.calls.at(-1)?.[0].profiles[0]?.status.state).toBe(
+        'stopped',
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('broadcasts a monitor tick when only latency changes (MAR-3327)', async () => {
+    vi.useFakeTimers()
+    try {
+      mockTcpConnectAfter(12)
+      const profile = createProfile({
+        connectionKind: 'local-runtime',
+        healthCheckEnabled: false,
+        healthCheckUrl: '',
+        localPort: 11434,
+      })
+      const { emit, service } = createService([profile])
+
+      service.startMonitoring(15_000)
+      await vi.advanceTimersByTimeAsync(100)
+      expect(emit).toHaveBeenCalledTimes(1)
+      expect(emit.mock.calls[0]?.[0].profiles[0]?.status.state).toBe('running')
+      expect(emit.mock.calls[0]?.[0].profiles[0]?.status.health.latencyMs).toBe(
+        12,
+      )
+
+      mockTcpConnectAfter(48)
+      await vi.advanceTimersByTimeAsync(15_100)
+      expect(emit).toHaveBeenCalledTimes(2)
+      const next = emit.mock.calls[1]?.[0].profiles[0]?.status
+      expect(next?.state).toBe('running')
+      expect(next?.health.state).toBe('healthy')
+      expect(next?.health.latencyMs).toBe(48)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('broadcasts once when an unreachable profile stays idle across 10 ticks (MAR-3327)', async () => {
+    vi.useFakeTimers()
+    try {
+      mockHttpFailure()
+      const profile = buildDefaultLocalModelTunnelProfile(
+        '2026-01-01T00:00:00.000Z',
+      )
+      const { emit, service } = createService([profile])
+
+      service.startMonitoring(15_000)
+      // The immediate tick plus nine intervals.
+      await vi.advanceTimersByTimeAsync(15_000 * 9)
+      expect(emit).toHaveBeenCalledTimes(1)
+      const status = emit.mock.calls[0]?.[0].profiles[0]?.status
+      expect(status?.state).toBe('stopped')
+      expect(status?.health.latencyMs).toBeNull()
+      expect(status?.health.error).toBe('Health URL connection refused.')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still broadcasts explicit start, edit, and stop (MAR-3327)', async () => {
+    mockTcpConnect()
+    const profile = createProfile({
+      connectionKind: 'local-runtime',
+      healthCheckEnabled: false,
+      healthCheckUrl: '',
+      localPort: 11434,
+    })
+    const { emit, service } = createService([profile])
+
+    await service.start(profile.id)
+    expect(emit).toHaveBeenCalledTimes(1)
+    await service.updateProfile(profile.id, { name: 'Renamed tunnel' })
+    expect(emit).toHaveBeenCalledTimes(2)
+    await service.stop(profile.id)
+    expect(emit).toHaveBeenCalledTimes(3)
   })
 })

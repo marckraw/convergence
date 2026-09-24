@@ -80,6 +80,8 @@ export class LocalModelTunnelService {
   private readonly statuses = new Map<string, LocalModelTunnelRuntimeStatus>()
   private readonly startTokens = new Map<string, symbol>()
   private monitorTimer: NodeJS.Timeout | null = null
+  /** Last monitor snapshot identity. Explicit actions update it too, so the next identical tick stays quiet. */
+  private lastMonitorBroadcastKey: string | null = null
 
   constructor(
     private readonly state: StateService,
@@ -686,8 +688,25 @@ export class LocalModelTunnelService {
 
   private async broadcast(): Promise<LocalModelTunnelSnapshot> {
     const snapshot = this.buildSnapshot()
+    this.lastMonitorBroadcastKey = monitorBroadcastKey(snapshot)
     this.emit(snapshot)
     return snapshot
+  }
+
+  /**
+   * A monitor tick emits only when the snapshot the window shows has changed.
+   *
+   * `buildSnapshot` stamps a new `updatedAt` on every call, and each probe
+   * rewrites `lastCheckedAt` and `health.checkedAt` even when nothing else
+   * moved. Those clocks are left out of the comparison. `health.latencyMs`
+   * stays in, because the window prints it (MAR-3327).
+   */
+  private async broadcastMonitorTick(): Promise<void> {
+    const snapshot = this.buildSnapshot()
+    const key = monitorBroadcastKey(snapshot)
+    if (key === this.lastMonitorBroadcastKey) return
+    this.lastMonitorBroadcastKey = key
+    this.emit(snapshot)
   }
 
   private getStatus(
@@ -766,7 +785,7 @@ export class LocalModelTunnelService {
   private async refreshTick(): Promise<void> {
     try {
       await this.refreshMonitoredStatuses()
-      await this.broadcast()
+      await this.broadcastMonitorTick()
     } catch {
       // Deliberately swallowed: see above.
     }
@@ -777,6 +796,28 @@ export class LocalModelTunnelService {
     clearInterval(this.monitorTimer)
     this.monitorTimer = null
   }
+}
+
+/**
+ * What a monitor tick treats as "the same snapshot".
+ *
+ * Left out: `updatedAt`, `lastCheckedAt`, and `health.checkedAt` — they move
+ * on every probe. Kept: `health.latencyMs`, because the status line prints it.
+ */
+function monitorBroadcastKey(snapshot: LocalModelTunnelSnapshot): string {
+  return JSON.stringify({
+    profiles: snapshot.profiles.map((item) => ({
+      profile: item.profile,
+      status: {
+        ...item.status,
+        lastCheckedAt: null,
+        health: {
+          ...item.status.health,
+          checkedAt: null,
+        },
+      },
+    })),
+  })
 }
 
 async function waitForRouteAttempt(input: {
