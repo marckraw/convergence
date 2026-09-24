@@ -1658,9 +1658,14 @@ export class SessionService {
       canStopTasks: this.activeHandles.get(row.id)?.canStopTasks === true,
       parallelWork: this.cachedParallelWork([row.id]).get(row.id)!,
     }
+    // Read the request row only when the answer can use it, the same rule the
+    // batched path applies (MAR-3396): a settled or idle conversation's row is
+    // thrown away by resolveAttentionRequestKind, and reading it cost a scan.
     const attentionRequestKind = resolveAttentionRequestKind(
       summary,
-      this.readAttentionRequestRow(summary.id),
+      isAttentionRequestSummary(summary)
+        ? this.readAttentionRequestRow(summary.id)
+        : null,
     )
     return attentionRequestKind ? { ...summary, attentionRequestKind } : summary
   }
