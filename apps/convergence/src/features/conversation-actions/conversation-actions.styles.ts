@@ -1,4 +1,8 @@
 import type { CSSProperties } from 'react'
+import {
+  FLOATING_CORNER_CLEAR_BOTTOM,
+  FLOATING_CORNER_CLEAR_RIGHT,
+} from '@/shared/ui/floating-corner.pure'
 import type { ActionsMenuGroup } from './conversation-actions-menu.pure'
 
 /**
@@ -23,8 +27,18 @@ export const conversationActionsStyles = {
    * Below the composer, right-aligned, while the surface is narrow; in the
    * right gutter beside the composer column once there is room for it
    * (the column is `max-w-2xl`, 42rem, so 56rem leaves 7rem each side).
+   *
+   * Never under the feedback button (MAR-3416 R2): narrow, the button stops
+   * short of the feedback button's corner (`--actions-clear-right`); in the
+   * gutter it stands above that corner (`--actions-clear-bottom`). Both
+   * lengths come from the shared corner, through `ACTIONS_ROW_STYLE`.
+   *
+   * One layer for the button, the fan and the lists (R1): above the composer
+   * card (`z-10`) and the feedback button (`z-40`), below dialogs, popovers
+   * and tooltips (`z-50`). Covered content is `inert` (the expanded Loom),
+   * and a layer this high would show through the cover, so it hides there.
    */
-  row: 'mt-2 flex justify-end @min-[56rem]:absolute @min-[56rem]:bottom-3 @min-[56rem]:right-4 @min-[56rem]:mt-0',
+  row: 'relative z-[45] mt-2 flex justify-end pr-[var(--actions-clear-right)] in-[[inert]]:invisible @min-[56rem]:absolute @min-[56rem]:bottom-[var(--actions-clear-bottom)] @min-[56rem]:right-4 @min-[56rem]:mt-0 @min-[56rem]:pr-0',
   anchor: 'relative h-[34px] w-24',
   trigger: `${PILL} w-24 px-0 ${FOCUS_RING}`,
   triggerHidden: 'invisible',
@@ -45,6 +59,18 @@ export const conversationActionsStyles = {
   hint: 'mt-1 px-2 text-xs text-muted-foreground',
   refusal: 'px-2 pb-1.5 text-xs leading-relaxed text-destructive',
 } as const
+
+/**
+ * The Actions host's right padding (the mount's `px-4`). The narrow row sits
+ * inside it, so the row pads only the rest of the way to the corner's edge.
+ */
+const ACTIONS_HOST_INSET_RIGHT = 16
+
+/** The lengths the row's classes read (MAR-3416 R2), from the shared corner. */
+export const ACTIONS_ROW_STYLE = {
+  '--actions-clear-right': `${FLOATING_CORNER_CLEAR_RIGHT - ACTIONS_HOST_INSET_RIGHT}px`,
+  '--actions-clear-bottom': `${FLOATING_CORNER_CLEAR_BOTTOM}px`,
+} as CSSProperties
 
 /**
  * Where each fan entry sits, measured from the button's bottom-right corner
