@@ -145,4 +145,51 @@ describe('MAR-3380 main wire adapter', () => {
       'patch',
     )
   })
+
+  it('R1 remembers a full non-text patch so the next text growth is an append', () => {
+    const stream = wireStream()
+    const added = message('hi')
+    expect(stream.send({ ...patch(added), op: 'add' }).op).toBe('add')
+    const withTask = patch({ ...added, taskId: 'task' })
+    expect(stream.send(withTask)).toEqual(withTask)
+    expect(
+      stream.send(patch({ ...added, taskId: 'task', text: 'hi there' })),
+    ).toEqual({
+      op: 'append',
+      sessionId: 'session',
+      itemId: 'item',
+      baseLength: 2,
+      append: ' there',
+      updatedAt: added.updatedAt,
+    })
+  })
+
+  it('R2 treats a missing key and undefined as the same fact', () => {
+    const stream = wireStream()
+    const added = message('hi')
+    expect(stream.send({ ...patch(added), op: 'add' }).op).toBe('add')
+    expect(
+      stream.send(
+        patch({
+          ...added,
+          text: 'hi there',
+          attachmentIds: undefined,
+          skillSelections: undefined,
+        }),
+      ),
+    ).toEqual({
+      op: 'append',
+      sessionId: 'session',
+      itemId: 'item',
+      baseLength: 2,
+      append: ' there',
+      updatedAt: added.updatedAt,
+    })
+    const nulled = {
+      ...added,
+      text: 'hi there!',
+      attachmentIds: null,
+    } as unknown as Extract<ConversationItem, { kind: 'message' }>
+    expect(stream.send(patch(nulled)).op).toBe('patch')
+  })
 })
