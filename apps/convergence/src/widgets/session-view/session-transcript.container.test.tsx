@@ -6,7 +6,11 @@ import {
   within,
 } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { ConversationItem, Session } from '@/entities/session'
+import {
+  summarizeConversationPrefix,
+  type ConversationItem,
+  type Session,
+} from '@/entities/session'
 import { useAttachmentStore } from '@/entities/attachment'
 import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
 import { SessionTranscript } from './session-transcript.container'
@@ -953,4 +957,91 @@ it('places compaction at its recorded boundary — mutation omit marker placemen
     before: true,
     after: true,
   })
+})
+
+it('R5 turn ordinals stay fixed while parallel evidence loads, is absent, and is present', () => {
+  const items = [1, 2, 3, 4, 5].map((sequence) =>
+    assistantMessage({
+      id: `ordinal-${sequence}`,
+      sequence,
+      text: `reply ${sequence}`,
+      state: 'complete',
+    }),
+  )
+  items[3] = { ...items[3], agentRunId: 'child' }
+  const props = {
+    session: baseSession,
+    conversationItems: items,
+    onApprove: vi.fn(),
+    onDeny: vi.fn(),
+    onInputAnswer: vi.fn(),
+  }
+  const { rerender } = render(<SessionTranscript {...props} parallelLoading />)
+  expect(screen.getByText('Turn 3')).toBeInTheDocument()
+  expect(screen.queryByText('Turn 4')).not.toBeInTheDocument()
+  expect(screen.getByText('Turn 5')).toBeInTheDocument()
+  rerender(
+    <SessionTranscript {...props} parallelLoading={false} parallelRows={[]} />,
+  )
+  expect(screen.getByText('Turn 4')).toBeInTheDocument()
+  expect(screen.getByText('Turn 5')).toBeInTheDocument()
+  rerender(
+    <SessionTranscript
+      {...props}
+      parallelLoading={false}
+      parallelRows={[
+        {
+          id: 'child',
+          kind: 'agent',
+          parentId: null,
+          run: {
+            id: 'child',
+            spawnedByItemId: 'outside-window',
+            status: 'completed',
+          } as SessionAgentRun,
+        },
+      ]}
+    />,
+  )
+  expect(screen.getByText('Turn 3')).toBeInTheDocument()
+  expect(screen.queryByText('Turn 4')).not.toBeInTheDocument()
+  expect(screen.getByText('Turn 5')).toBeInTheDocument()
+})
+
+it('a window continues prefix numbering and uses the first visible turn’s true start', () => {
+  const before = [
+    userMessage({ id: 'old', sequence: 1, text: 'old turn' }),
+    userMessage({
+      id: 'start',
+      sequence: 2,
+      text: 'true start',
+      turnId: 'continuing',
+    }),
+  ]
+  const reply = {
+    ...assistantMessage({
+      id: 'reply',
+      sequence: 3,
+      text: 'visible reply',
+      turnId: 'continuing',
+      state: 'complete',
+    }),
+    createdAt: '2026-01-01T00:00:30.000Z',
+    updatedAt: '2026-01-01T00:00:30.000Z',
+  }
+  render(
+    <SessionTranscript
+      session={baseSession}
+      conversationPrefix={summarizeConversationPrefix(before)}
+      conversationItems={[reply]}
+      onApprove={vi.fn()}
+      onDeny={vi.fn()}
+      onInputAnswer={vi.fn()}
+    />,
+  )
+  expect(screen.getByText('Turn 2')).toBeInTheDocument()
+  expect(screen.queryByText('Turn 1')).not.toBeInTheDocument()
+  expect(
+    screen.getByTestId('conversation-item-turn-elapsed'),
+  ).toHaveTextContent('+30s')
 })

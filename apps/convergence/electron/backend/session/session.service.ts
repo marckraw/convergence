@@ -1,3 +1,4 @@
+import type { ConversationPrefix } from '../../../src/entities/session/conversation-prefix.pure'
 import { recordConversationRead } from '../perf/perf-probe.service'
 import { HandoffRefusedError } from '../provider/provider-account-handoff.pure'
 import type { InitialDispatchReceipt } from '../provider/provider.types'
@@ -1860,6 +1861,85 @@ export class SessionService {
     }
 
     return typeof text === 'string' && text.trim().length > 0 ? text : null
+  }
+
+  /** Summarize persisted items before a future window; no IPC in O0a. */
+  getConversationPrefix(
+    sessionId: string,
+    beforeSequence: number,
+  ): ConversationPrefix {
+    this.flushPendingConversationPatchesForSession(sessionId)
+    // Item timestamps, not session_turns.started_at: turn records can precede
+    // their first item and need not cover imported/provider-attributed turns.
+    const rows = this.db
+      .prepare(
+        `
+      SELECT spans.*, first.created_at AS startedAt
+      FROM (
+        SELECT turn_id AS id, MIN(sequence) AS firstSequence,
+          MAX(CASE WHEN kind = 'message' AND state = 'complete'
+            AND json_valid(payload_json) THEN
+          CASE WHEN json_extract(payload_json, '$.actor') = 'assistant' THEN sequence END END) AS latestReplySequence,
+          ROUND(MIN(unixepoch(created_at, 'subsec')) * 1000) AS startMs,
+          ROUND(MAX(CASE WHEN unixepoch(created_at, 'subsec') IS NOT NULL
+            THEN COALESCE(unixepoch(updated_at, 'subsec'), unixepoch(created_at, 'subsec')) END) * 1000) AS endMs
+        FROM session_conversation_items
+        WHERE session_id = ? AND sequence < ?
+        GROUP BY turn_id
+      ) spans
+      JOIN session_conversation_items first ON first.session_id = ? AND first.sequence = spans.firstSequence
+    `,
+      )
+      .all(sessionId, beforeSequence, sessionId) as {
+      id: string | null
+      firstSequence: number
+      latestReplySequence: number | null
+      startedAt: string
+      startMs: number | null
+      endMs: number | null
+    }[]
+    rows.sort((a, b) => a.firstSequence - b.firstSequence)
+    const turns = rows
+      .filter((row) => row.id)
+      .map(({ id, startedAt, startMs, endMs }, index) => ({
+        id: id!,
+        ordinal: index + 1,
+        startedAt,
+        startMs,
+        endMs,
+      }))
+    let totalMs: number | null = null
+    for (const turn of turns) {
+      if (turn.startMs !== null && turn.endMs !== null) {
+        totalMs = (totalMs ?? 0) + Math.max(0, turn.endMs - turn.startMs)
+      }
+    }
+    const latestSequence = rows.reduce<number | null>(
+      (latest, row) =>
+        row.latestReplySequence === null
+          ? latest
+          : Math.max(
+              latest ?? row.latestReplySequence,
+              row.latestReplySequence,
+            ),
+      null,
+    )
+    const latest =
+      latestSequence === null
+        ? undefined
+        : (this.db
+            .prepare(
+              `
+      SELECT id FROM session_conversation_items WHERE session_id = ? AND sequence = ?
+    `,
+            )
+            .get(sessionId, latestSequence) as { id: string } | undefined)
+    return {
+      turnCount: turns.length,
+      turns,
+      totalMs,
+      latestCompletedReplyId: latest?.id ?? null,
+    }
   }
 
   getConversation(id: string): ConversationItem[] {

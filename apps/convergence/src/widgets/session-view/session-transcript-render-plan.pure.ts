@@ -1,4 +1,8 @@
-import type { ConversationItem } from '@/entities/session'
+import {
+  combineTurnOrdinals,
+  type ConversationPrefix,
+  type ConversationItem,
+} from '@/entities/session'
 
 export interface ConversationRenderEntry {
   item: ConversationItem
@@ -25,13 +29,14 @@ function isUserMessage(
 }
 
 export function buildConversationRenderPlan(
+  prefix: ConversationPrefix,
   items: ConversationItem[],
+  visibleItems: ConversationItem[] = items,
 ): ConversationRenderEntry[] {
   const entries: ConversationRenderEntry[] = []
   const pendingBootContext: NoteConversationItem[] = []
-  const seenTurnIds = new Set<string>()
+  const ordinals = combineTurnOrdinals(prefix, items)
   let previousRenderedTurnId: string | null = null
-  let turnCount = 0
 
   const pushEntry = (
     item: ConversationItem,
@@ -42,11 +47,7 @@ export function buildConversationRenderPlan(
     let turnSequence: number | null = null
 
     if (turnBoundary && item.turnId) {
-      if (!seenTurnIds.has(item.turnId)) {
-        seenTurnIds.add(item.turnId)
-        turnCount += 1
-      }
-      turnSequence = turnCount
+      turnSequence = ordinals.get(item.turnId) ?? null
     }
 
     previousRenderedTurnId = item.turnId
@@ -58,7 +59,7 @@ export function buildConversationRenderPlan(
     })
   }
 
-  for (const item of items) {
+  for (const item of visibleItems) {
     if (isBootContextNote(item)) {
       pendingBootContext.push(item)
       continue

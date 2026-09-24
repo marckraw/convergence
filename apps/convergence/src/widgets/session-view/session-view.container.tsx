@@ -88,6 +88,7 @@ export const SessionView: FC = () => {
   // attempts read other sessions' names); the composer no longer does
   // (MAR-3325), so it could no longer see the changes it is measured against.
   usePerfSessionsIdentity(sessions)
+  const conversationPrefix = useSessionStore((s) => s.activeConversationPrefix)
   const activeConversation = useSessionStore((s) => s.activeConversation)
   const globalSessions = useSessionStore((s) => s.globalSessions)
   const setActiveSession = useSessionStore((s) => s.setActiveSession)
@@ -246,12 +247,15 @@ export const SessionView: FC = () => {
   // List-change only (MAR-3310 F1e R4). The open details row extends this
   // with one item's live updatedAt; an append does not walk the list again.
   const elapsedReading = useMemo(() => {
-    const label = formatConversationTotalDuration(activeConversation)
+    const label = formatConversationTotalDuration(
+      conversationPrefix,
+      activeConversation,
+    )
     return {
       label,
-      ...readStreamingDurationTarget(activeConversation),
+      ...readStreamingDurationTarget(conversationPrefix, activeConversation),
     }
-  }, [activeConversation])
+  }, [conversationPrefix, activeConversation])
   const linkedSessionAttempts = session
     ? (attemptsBySessionId[session.id] ?? [])
     : []
@@ -804,6 +808,7 @@ export const SessionView: FC = () => {
         <SessionConversationSurface
           compactions={harness.facts?.compactions}
           session={session}
+          conversationPrefix={conversationPrefix}
           conversationItems={activeConversation}
           parallelRows={parallel.rows}
           parallelLoading={!parallel.hasRecord}

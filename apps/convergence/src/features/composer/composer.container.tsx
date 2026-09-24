@@ -398,6 +398,9 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
     }
     return selectLatestAgentMessageId(
       context.kind === 'global'
+        ? s.activeGlobalConversationPrefix
+        : s.activeConversationPrefix,
+      context.kind === 'global'
         ? s.activeGlobalConversation
         : s.activeConversation,
     )

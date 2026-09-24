@@ -162,3 +162,13 @@ export type {
 } from './session-fork.types'
 export { readContextAlert } from './context-alert.pure'
 export type { ContextAlertReading } from './context-alert.pure'
+
+export {
+  combineConversationPrefix,
+  EMPTY_CONVERSATION_PREFIX,
+  summarizeConversationPrefix,
+  combineTurnOrdinals,
+  combineTurnStarts,
+  combineConversationDurationMs,
+} from './conversation-prefix.pure'
+export type { ConversationPrefix } from './conversation-prefix.pure'

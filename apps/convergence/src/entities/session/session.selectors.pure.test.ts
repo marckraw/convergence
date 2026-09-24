@@ -1,3 +1,4 @@
+import { EMPTY_CONVERSATION_PREFIX } from '@/entities/session'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PROJECT_SETTINGS } from '../project'
 import type { Project } from '../project/project.types'
@@ -301,7 +302,7 @@ describe('selectLatestAgentMessageId', () => {
 
   it('finds the newest finished agent message', () => {
     expect(
-      selectLatestAgentMessageId([
+      selectLatestAgentMessageId(EMPTY_CONVERSATION_PREFIX, [
         message({ id: 'older' }),
         message({ id: 'newest' }),
       ]),
@@ -312,7 +313,7 @@ describe('selectLatestAgentMessageId', () => {
     // Quoting half a sentence the model has not finished writing would put
     // words in its mouth.
     expect(
-      selectLatestAgentMessageId([
+      selectLatestAgentMessageId(EMPTY_CONVERSATION_PREFIX, [
         message({ id: 'finished' }),
         message({ id: 'in-flight', state: 'streaming' }),
       ]),
@@ -321,7 +322,7 @@ describe('selectLatestAgentMessageId', () => {
 
   it('ignores the human own messages and the agent thinking', () => {
     expect(
-      selectLatestAgentMessageId([
+      selectLatestAgentMessageId(EMPTY_CONVERSATION_PREFIX, [
         message({ id: 'agent' }),
         message({ id: 'mine', actor: 'user' }),
         message({ id: 'thought', kind: 'thinking' }),
@@ -330,9 +331,11 @@ describe('selectLatestAgentMessageId', () => {
   })
 
   it('answers nothing for a conversation with no agent message yet', () => {
-    expect(selectLatestAgentMessageId([])).toBeNull()
+    expect(selectLatestAgentMessageId(EMPTY_CONVERSATION_PREFIX, [])).toBeNull()
     expect(
-      selectLatestAgentMessageId([message({ id: 'mine', actor: 'user' })]),
+      selectLatestAgentMessageId(EMPTY_CONVERSATION_PREFIX, [
+        message({ id: 'mine', actor: 'user' }),
+      ]),
     ).toBeNull()
   })
 })

@@ -1,3 +1,7 @@
+import {
+  combineLatestCompletedReplyId,
+  type ConversationPrefix,
+} from './conversation-prefix.pure'
 import { isSessionCompacting } from './session-compacting.pure'
 import type { Project } from '../project/project.types'
 import type {
@@ -155,18 +159,8 @@ function mostRecentUpdatedAt(activity: ProjectActivity): string {
  * every store update while a turn is streaming.
  */
 export function selectLatestAgentMessageId(
+  prefix: ConversationPrefix,
   items: readonly ConversationItem[],
 ): string | null {
-  for (let index = items.length - 1; index >= 0; index -= 1) {
-    const item = items[index]
-    if (
-      item &&
-      item.kind === 'message' &&
-      item.actor === 'assistant' &&
-      item.state === 'complete'
-    ) {
-      return item.id
-    }
-  }
-  return null
+  return combineLatestCompletedReplyId(prefix, items)
 }

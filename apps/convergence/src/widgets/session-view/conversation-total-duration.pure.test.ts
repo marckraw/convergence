@@ -1,3 +1,7 @@
+import {
+  EMPTY_CONVERSATION_PREFIX,
+  summarizeConversationPrefix,
+} from '@/entities/session'
 import { describe, expect, it } from 'vitest'
 import type { ConversationItem } from '@/entities/session'
 import {
@@ -47,7 +51,9 @@ describe('getConversationTotalDurationMs', () => {
         updatedAt: '2026-04-22T00:00:05.000Z',
       }),
     ]
-    expect(getConversationTotalDurationMs(items)).toBeNull()
+    expect(
+      getConversationTotalDurationMs(EMPTY_CONVERSATION_PREFIX, items),
+    ).toBeNull()
   })
 
   it('sums per-turn spans across multiple turns', () => {
@@ -79,7 +85,9 @@ describe('getConversationTotalDurationMs', () => {
         updatedAt: '2026-04-22T00:04:04.000Z',
       }),
     ]
-    expect(getConversationTotalDurationMs(items)).toBe(110_000 + 124_000)
+    expect(
+      getConversationTotalDurationMs(EMPTY_CONVERSATION_PREFIX, items),
+    ).toBe(110_000 + 124_000)
   })
 
   it('uses updatedAt as the turn end when later than any createdAt', () => {
@@ -91,7 +99,9 @@ describe('getConversationTotalDurationMs', () => {
         updatedAt: '2026-04-22T00:00:30.000Z',
       }),
     ]
-    expect(getConversationTotalDurationMs(items)).toBe(30_000)
+    expect(
+      getConversationTotalDurationMs(EMPTY_CONVERSATION_PREFIX, items),
+    ).toBe(30_000)
   })
 
   it('ignores items with invalid timestamps', () => {
@@ -109,7 +119,9 @@ describe('getConversationTotalDurationMs', () => {
         updatedAt: '2026-04-22T00:00:10.000Z',
       }),
     ]
-    expect(getConversationTotalDurationMs(items)).toBe(10_000)
+    expect(
+      getConversationTotalDurationMs(EMPTY_CONVERSATION_PREFIX, items),
+    ).toBe(10_000)
   })
 })
 
@@ -129,7 +141,9 @@ describe('formatConversationTotalDuration', () => {
         updatedAt: '2026-04-22T00:03:25.000Z',
       }),
     ]
-    expect(formatConversationTotalDuration(items)).toBe('3m 25s')
+    expect(
+      formatConversationTotalDuration(EMPTY_CONVERSATION_PREFIX, items),
+    ).toBe('3m 25s')
   })
 
   it('returns null when total is below the 1s display threshold', () => {
@@ -141,11 +155,15 @@ describe('formatConversationTotalDuration', () => {
         updatedAt: '2026-04-22T00:00:00.500Z',
       }),
     ]
-    expect(formatConversationTotalDuration(items)).toBeNull()
+    expect(
+      formatConversationTotalDuration(EMPTY_CONVERSATION_PREFIX, items),
+    ).toBeNull()
   })
 
   it('returns null when there are no turns', () => {
-    expect(formatConversationTotalDuration([])).toBeNull()
+    expect(
+      formatConversationTotalDuration(EMPTY_CONVERSATION_PREFIX, []),
+    ).toBeNull()
   })
 })
 
@@ -177,7 +195,10 @@ describe('extendConversationTotalMs', () => {
   }
 
   it('adds only the live time past the turn end', () => {
-    const target = readStreamingDurationTarget(streamingTurn(T1, T1))
+    const target = readStreamingDurationTarget(
+      EMPTY_CONVERSATION_PREFIX,
+      streamingTurn(T1, T1),
+    )
     expect(target.streamingItem?.id).toBe('reply')
     expect(
       extendConversationTotalMs(target.totalMs, target.turnSpan, T_LAST),
@@ -190,7 +211,10 @@ describe('extendConversationTotalMs', () => {
   })
 
   it('leaves the base untouched when the live time is not later', () => {
-    const target = readStreamingDurationTarget(streamingTurn(T1, T1))
+    const target = readStreamingDurationTarget(
+      EMPTY_CONVERSATION_PREFIX,
+      streamingTurn(T1, T1),
+    )
     expect(extendConversationTotalMs(target.totalMs, target.turnSpan, T1)).toBe(
       10_000,
     )
@@ -200,6 +224,7 @@ describe('extendConversationTotalMs', () => {
   it('a first turn under 1s stays hidden until the live extension passes 1s', () => {
     const createdAt = '2026-04-22T00:00:00.400Z'
     const target = readStreamingDurationTarget(
+      EMPTY_CONVERSATION_PREFIX,
       streamingTurn(createdAt, createdAt),
     )
     expect(
@@ -224,7 +249,10 @@ describe('extendConversationTotalMs', () => {
 
   it('a completion patch equals the live extension at the last append', () => {
     const streaming = streamingTurn(T1, T1)
-    const target = readStreamingDurationTarget(streaming)
+    const target = readStreamingDurationTarget(
+      EMPTY_CONVERSATION_PREFIX,
+      streaming,
+    )
     const liveMs = extendConversationTotalMs(
       target.totalMs,
       target.turnSpan,
@@ -235,9 +263,54 @@ describe('extendConversationTotalMs', () => {
         ? { ...item, state: 'complete' as const, updatedAt: T_LAST }
         : item,
     )
-    expect(getConversationTotalDurationMs(completed)).toBe(liveMs)
-    expect(formatConversationTotalDuration(completed)).toBe(
-      formatConversationDurationMs(liveMs),
-    )
+    expect(
+      getConversationTotalDurationMs(EMPTY_CONVERSATION_PREFIX, completed),
+    ).toBe(liveMs)
+    expect(
+      formatConversationTotalDuration(EMPTY_CONVERSATION_PREFIX, completed),
+    ).toBe(formatConversationDurationMs(liveMs))
   })
+})
+
+it('a live extension of a window includes prefix-only turns and the true straddling span', () => {
+  const before = [
+    makeItem({
+      id: 'old',
+      turnId: 'old-turn',
+      createdAt: T0,
+      updatedAt: '2026-04-22T00:00:30.000Z',
+    }),
+    makeItem({
+      id: 'start',
+      turnId: 'current-turn',
+      createdAt: T0,
+      updatedAt: T0,
+    }),
+  ]
+  const window = [
+    makeItem({
+      id: 'reply',
+      turnId: 'current-turn',
+      kind: 'message',
+      actor: 'assistant',
+      state: 'streaming',
+      createdAt: T1,
+      updatedAt: T1,
+    }),
+  ]
+  const prefix = summarizeConversationPrefix(before)
+  const target = readStreamingDurationTarget(prefix, window)
+  expect(target.totalMs).toBe(40_000)
+  expect(target.turnSpan).toEqual({
+    start: new Date(T0).getTime(),
+    end: new Date(T1).getTime(),
+  })
+  expect(
+    extendConversationTotalMs(target.totalMs, target.turnSpan, T_LAST),
+  ).toBe(220_000)
+  expect(
+    getConversationTotalDurationMs(prefix, [
+      { ...window[0], state: 'complete', updatedAt: T_LAST },
+    ]),
+  ).toBe(220_000)
 })
