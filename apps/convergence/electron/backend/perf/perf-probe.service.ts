@@ -40,6 +40,7 @@ export class PerfProbe {
   private readonly timers = new Map<string, Cost & { ticks: number }>()
   private readonly statements = new Map<string, Cost>()
   private readonly summary: Cost = { calls: 0, totalMs: 0, maxMs: 0 }
+  private readonly attentionRowReads = { total: 0, notNeeded: 0 }
   private renderer: unknown = null
   private readonly payloadSizes: Array<() => void> = []
   private readonly patchOps = { add: 0, patch: 0, append: 0, snapshot: 0 }
@@ -150,9 +151,20 @@ export class PerfProbe {
 
   wrapDatabase(db: Database.Database): void {
     const original = db.prepare
-    const { statements, measure } = this
+    const { statements, measure, attentionRowReads } = this
+    // Use the original prepare so these probe-only classification reads do not
+    // inflate the product SQL counters. No reads are added on the guarded path.
+    const attention = original.call(
+      db,
+      'SELECT attention FROM sessions WHERE id = ?',
+    )
     db.prepare = function (this: Database.Database, sql: string) {
       const statement = original.call(this, sql)
+      const isAttentionRead =
+        /FROM\s+session_conversation_items/i.test(sql) &&
+        /kind\s+IN\s*\(\s*'approval-request'\s*,\s*'input-request'\s*\)/i.test(
+          sql,
+        )
       for (const method of ['run', 'get', 'all'] as const) {
         const execute = statement[method]
         const cost = statements.get(sql) ?? {
@@ -162,6 +174,21 @@ export class PerfProbe {
         }
         statements.set(sql, cost)
         statement[method] = function (...args: unknown[]) {
+          if (isAttentionRead && (method === 'get' || method === 'all')) {
+            // Both current request queries bind only session IDs. Count lookup
+            // attempts, including attempts that find no request row.
+            for (const id of args) {
+              const row = Reflect.apply(attention.get, attention, [id]) as
+                | { attention: string }
+                | undefined
+              attentionRowReads.total++
+              if (
+                row?.attention !== 'needs-approval' &&
+                row?.attention !== 'needs-input'
+              )
+                attentionRowReads.notNeeded++
+            }
+          }
           return measure(cost, () => Reflect.apply(execute, this, args))
         }
       }
@@ -233,6 +260,7 @@ export class PerfProbe {
             items,
           },
         },
+        attentionRowReads: { ...this.attentionRowReads },
         cpuPercent: (() => {
           const cpu = process.cpuUsage(this.cpuStart)
           return (cpu.user + cpu.system) / (elapsedSeconds * 10000)

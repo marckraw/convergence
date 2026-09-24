@@ -37,7 +37,8 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "rebuild:electron": "npm run rebuild:electron -w convergence",
     "agent:pre-commit": "npm run format:fix && npm run lint:fix && npm run typecheck",
-    "agent:pre-push": "chaperone check --fix && (git diff --quiet --exit-code || (echo \"chaperone produced changes; commit them before pushing.\" && exit 1))"
+    "agent:pre-push": "chaperone check --fix && (git diff --quiet --exit-code || (echo \"chaperone produced changes; commit them before pushing.\" && exit 1))",
+    "test:perf": "npm run test:perf -w convergence"
   },
   "keywords": [],
   "author": "",

@@ -157,3 +157,70 @@ Marcin QA: read the ten ranked boundaries and their file:line, verify that all f
 ## Real busy day
 
 Quit Convergence, start it with `CONVERGENCE_PERF=1 /Applications/Convergence.app/Contents/MacOS/Convergence`, and work for an hour with horses riding. `kill -USR2 $(pgrep -x Convergence)` writes `~/Library/Application Support/convergence/perf/perf-report-<time>-usr2.json`; quitting the app writes `perf-report-<time>-quit.json` beside it.
+
+## Budgets (MAR-3323)
+
+`npm run test:perf` runs the checker’s pure tests, then the unchanged Node contract:
+`node tools/perf-busy-day.mjs --node --sessions 2 --streaming 1 --minutes 0.1 --out <tmp>`
+(from the app workspace). The CI `verify` job runs it immediately after
+`test:electron:node`, on the same Node version. The temporary report is removed
+after checking; the runner prints its JSON and the wrapper prints a diagnostic table.
+
+| Counter                                                  | Required bound                                                         |
+| -------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `main.conversationPatched.fullPatchesWhileStreaming.max` | `≤ 4` (2 startup patches × 2 windows; known debt MAR-3403, target `0`) |
+| `main.conversationPatched.byOp.snapshot`                 | `≤ parameters.sessions` (`2` in this contract)                         |
+| `main.attentionRowReads.notNeeded`                       | `0`                                                                    |
+| `scenario.rendererErrors.length`                         | `0`                                                                    |
+| Runner process exit code                                 | `0`                                                                    |
+
+The temporary full-patch bound is Fable’s 2026-09-24 ruling on MAR-3323: the
+missing-versus-undefined facts at first growth cause one full patch, then forgetting
+the item causes a second. [MAR-3403](https://linear.app/marckraw/issue/MAR-3403)
+fixes that debt and lowers the bound to zero. Continuous full growth (about 190
+patches in this contract) fails now. Failures name the maximum, items and debt.
+
+Missing or malformed counters fail, too. Attention reads count lookup attempts
+per session ID, including reads that return no request. The probe observes both
+single and batched query execution and checks each session’s stored attention
+through an uninstrumented read; only `needs-approval` and `needs-input` justify a
+lookup. Those diagnostic classification reads happen only when a request lookup
+runs and are excluded from product SQL timings. The synthetic contract exercises
+settled/streaming summaries; separate service tests exercise both waiting states.
+
+CPU percentage, milliseconds and bytes are printed and never determine pass/fail.
+Machine speed, scheduling, instrumentation and the amount of work completed alter
+them. Node mode does not measure the renderer, so its empty renderer-error list
+is not renderer coverage. The wrapper also prints elapsed time; the CI step’s
+actual duration is reported on the issue, not enforced with a timing assertion.
+
+The real-data evidence below is quoted from Fable’s
+[2026-09-24 reports on MAR-3310](https://linear.app/marckraw/issue/MAR-3310),
+not re-measured here. The scrubbed copy had 576 conversations and 560,004 items;
+the largest conversation had 54,924 items.
+
+> A · open the biggest conversation (5 runs): main SELECT p50 182 ms / p95
+> 232 ms; main row parse 130 / 135 ms; payload (V8) 132 MB; open → first paint
+> 808 / 845 ms.
+
+> B · 5 streaming, before F4: Main CPU 144 %; attention lookup 410 calls,
+> 13.5 s, max 1,029 ms. C · 10 streaming: Main CPU 154 %; attention lookup
+> 765 calls, 15.6 s.
+
+> After F4: attention lookup 0 calls in B and C. `getSummaryById`: B 429 calls,
+> 0.44 s; C 836 calls, 0.51 s. Deltas: B 877 → 1,022 (+17 %);
+> C 1,372 → 1,892 (+38 %). Main CPU: B 144 % → 162 %; C 154 % → 175 %.
+
+More deltas completed after F4, so CPU percentage rose even though summary reads
+became cheaper. These observations explain the counter budgets; they are not
+portable timing thresholds.
+
+Plans are captured from the services’ real SQL and explained against
+`getDatabase(tmp)`: F4’s existing adversarial tests pin both attention reads to
+`idx_session_conversation_items_attention_request`; the conversation pin names
+`idx_session_conversation_items_session_sequence` and rejects a temporary B-tree;
+summary turn timings name `idx_session_turns_session_sequence`. Parallel-work
+single and batch plans name `sqlite_autoindex_session_agent_runs_2`,
+`sqlite_autoindex_session_tasks_1`, and the turn index. Its aggregate and linked-task
+sorting still use temporary B-trees; the contract only forbids one for the
+conversation read. None of these hot queries lacks an index to pin.

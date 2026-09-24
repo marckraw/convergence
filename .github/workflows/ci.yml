@@ -54,6 +54,9 @@ jobs:
       - name: Run the lane canary under plain Node
         run: npm run test:electron:node
 
+      - name: Run performance counter budgets
+        run: npm run test:perf
+
       - name: Install Chaperone
         env:
           CHAPERONE_VERSION: v0.7.1
