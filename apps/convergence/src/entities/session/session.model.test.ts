@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  liveConversationItem,
+  resetLiveConversationTextForTests,
+} from './conversation-live-text.model'
+import {
   resetConversationLoadsForTests,
   selectLocalProviders,
   useSessionStore,
@@ -1050,6 +1054,36 @@ describe('useSessionStore', () => {
     expect(state.activeGlobalConversationSessionId).toBeNull()
     expect(state.needsYouDismissals).toEqual({})
     expect(state.recentSessionIds).toEqual(['project-session'])
+  })
+
+  it('deleteSession drops live reply text so the base item reads as itself', async () => {
+    resetLiveConversationTextForTests()
+    resetConversationLoadsForTests()
+    const base = {
+      ...makeConversationItem({ id: 'item-1', sequence: 1, text: 'hello' }),
+      state: 'streaming' as const,
+    }
+    useSessionStore.setState({
+      activeSessionId: 'session-1',
+      activeConversationSessionId: 'session-1',
+      activeConversation: [base],
+      sessions: [makeSession({ id: 'session-1' })],
+      globalSessions: [makeSession({ id: 'session-1' })],
+    })
+    useSessionStore.getState().handleConversationPatched({
+      op: 'append',
+      sessionId: 'session-1',
+      itemId: 'item-1',
+      baseLength: base.text.length,
+      append: ' world',
+      updatedAt: '2026-01-01T00:03:00.000Z',
+    })
+    expect(liveConversationItem(base).text).toBe('hello world')
+    mockElectronAPI.session.getSummariesByProjectId.mockResolvedValueOnce([])
+
+    await useSessionStore.getState().deleteSession('session-1', 'project-1')
+
+    expect(liveConversationItem(base)).toBe(base)
   })
 
   describe('fork actions', () => {

@@ -967,6 +967,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         draftWorkspaceId:
           activeSessionId === id ? null : get().draftWorkspaceId,
       })
+      dropSessionLiveConversationText(id)
       if (nextRecents.length !== prevRecents.length) {
         persistRecents(nextRecents)
       }

@@ -17,14 +17,29 @@ function notify(itemId: string) {
   for (const listener of listeners.get(itemId) ?? []) listener()
 }
 
+function subscribeLiveItem(itemId: string, listener: () => void) {
+  let bucket = listeners.get(itemId)
+  if (!bucket) {
+    bucket = new Set()
+    listeners.set(itemId, bucket)
+  }
+  const set = bucket
+  set.add(listener)
+  return () => {
+    set.delete(listener)
+    if (set.size === 0) listeners.delete(itemId)
+  }
+}
+
 /**
  * External store (observer) for the text of a reply that is still growing
  * (MAR-3310 F1e).
  *
  * A streaming append changes one row, so its text lives here, keyed by item
  * id, rather than in the conversation's item array: the array keeps its
- * identity and nothing that walks it redoes O(n) work per token. Only the row
- * subscribes, through `useLiveConversationItem`.
+ * identity and nothing that walks it redoes O(n) work per token. The row
+ * subscribes through `useLiveConversationItem`. Elapsed subscribes to
+ * `updatedAt` only, through `useLiveConversationUpdatedAt`.
  *
  * Every entry is bound to the array object it grew on. When a full patch or a
  * snapshot replaces that object, the entry no longer applies, even before it
@@ -66,24 +81,35 @@ export function resetLiveConversationTextForTests() {
   liveTexts.clear()
 }
 
+/**
+ * One subscription to a streaming item's live `updatedAt` (MAR-3310 F1g).
+ * A null item registers no listener: a quiet conversation pays nothing.
+ */
+export function useLiveConversationUpdatedAt(
+  item: ConversationItem | null,
+): string | null {
+  const itemId = item?.id ?? null
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      if (itemId === null) return () => {}
+      return subscribeLiveItem(itemId, listener)
+    },
+    [itemId],
+  )
+  const read = useCallback(
+    () => (item === null ? null : liveConversationItem(item).updatedAt),
+    [item],
+  )
+  return useSyncExternalStore(subscribe, read, read)
+}
+
 /** The item as its row shows it: the list's facts with the live text. */
 export function useLiveConversationItem<T extends ConversationItem>(
   item: T,
 ): T {
   const itemId = item.id
   const subscribe = useCallback(
-    (listener: () => void) => {
-      let set = listeners.get(itemId)
-      if (!set) {
-        set = new Set()
-        listeners.set(itemId, set)
-      }
-      set.add(listener)
-      return () => {
-        set.delete(listener)
-        if (set.size === 0) listeners.delete(itemId)
-      }
-    },
+    (listener: () => void) => subscribeLiveItem(itemId, listener),
     [itemId],
   )
   const read = useCallback(() => liveConversationItem(item), [item])

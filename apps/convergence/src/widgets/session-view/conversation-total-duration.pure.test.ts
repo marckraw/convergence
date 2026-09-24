@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { ConversationItem } from '@/entities/session'
 import {
+  extendConversationTotalMs,
+  formatConversationDurationMs,
   formatConversationTotalDuration,
   getConversationTotalDurationMs,
+  readStreamingDurationTarget,
 } from './conversation-total-duration.pure'
 
 const baseItem = {
@@ -143,5 +146,98 @@ describe('formatConversationTotalDuration', () => {
 
   it('returns null when there are no turns', () => {
     expect(formatConversationTotalDuration([])).toBeNull()
+  })
+})
+
+const T0 = '2026-04-22T00:00:00.000Z'
+const T1 = '2026-04-22T00:00:10.000Z'
+const T_LAST = '2026-04-22T00:03:10.000Z'
+
+describe('extendConversationTotalMs', () => {
+  function streamingTurn(createdAt: string, updatedAt: string) {
+    return [
+      makeItem({
+        id: 'user',
+        turnId: 'turn-a',
+        createdAt: T0,
+        updatedAt: T0,
+        kind: 'message',
+        actor: 'user',
+      }),
+      makeItem({
+        id: 'reply',
+        turnId: 'turn-a',
+        createdAt,
+        updatedAt,
+        kind: 'message',
+        actor: 'assistant',
+        state: 'streaming',
+      }),
+    ]
+  }
+
+  it('adds only the live time past the turn end', () => {
+    const target = readStreamingDurationTarget(streamingTurn(T1, T1))
+    expect(target.streamingItem?.id).toBe('reply')
+    expect(
+      extendConversationTotalMs(target.totalMs, target.turnSpan, T_LAST),
+    ).toBe(190_000)
+    expect(
+      formatConversationDurationMs(
+        extendConversationTotalMs(target.totalMs, target.turnSpan, T_LAST),
+      ),
+    ).toBe('3m 10s')
+  })
+
+  it('leaves the base untouched when the live time is not later', () => {
+    const target = readStreamingDurationTarget(streamingTurn(T1, T1))
+    expect(extendConversationTotalMs(target.totalMs, target.turnSpan, T1)).toBe(
+      10_000,
+    )
+    expect(extendConversationTotalMs(target.totalMs, null, T_LAST)).toBe(10_000)
+  })
+
+  it('a first turn under 1s stays hidden until the live extension passes 1s', () => {
+    const createdAt = '2026-04-22T00:00:00.400Z'
+    const target = readStreamingDurationTarget(
+      streamingTurn(createdAt, createdAt),
+    )
+    expect(
+      formatConversationDurationMs(
+        extendConversationTotalMs(
+          target.totalMs,
+          target.turnSpan,
+          '2026-04-22T00:00:00.900Z',
+        ),
+      ),
+    ).toBeNull()
+    expect(
+      formatConversationDurationMs(
+        extendConversationTotalMs(
+          target.totalMs,
+          target.turnSpan,
+          '2026-04-22T00:00:01.100Z',
+        ),
+      ),
+    ).toBe('1s')
+  })
+
+  it('a completion patch equals the live extension at the last append', () => {
+    const streaming = streamingTurn(T1, T1)
+    const target = readStreamingDurationTarget(streaming)
+    const liveMs = extendConversationTotalMs(
+      target.totalMs,
+      target.turnSpan,
+      T_LAST,
+    )
+    const completed = streaming.map((item) =>
+      item.id === 'reply'
+        ? { ...item, state: 'complete' as const, updatedAt: T_LAST }
+        : item,
+    )
+    expect(getConversationTotalDurationMs(completed)).toBe(liveMs)
+    expect(formatConversationTotalDuration(completed)).toBe(
+      formatConversationDurationMs(liveMs),
+    )
   })
 })

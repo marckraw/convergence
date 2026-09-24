@@ -51,10 +51,16 @@ export type {
 export { AttentionIndicator } from './attention-indicator.presentational'
 export { SessionStateBadge } from './session-state-badge.presentational'
 export type { SessionStateBadgeSession } from './session-state-badge.presentational'
-export { selectLocalProviders, useSessionStore } from './session.model'
+export {
+  resetConversationLoadsForTests,
+  selectLocalProviders,
+  useSessionStore,
+} from './session.model'
 export {
   liveConversationItem,
+  resetLiveConversationTextForTests,
   useLiveConversationItem,
+  useLiveConversationUpdatedAt,
 } from './conversation-live-text.model'
 export type { SessionStore } from './session.model'
 export {
