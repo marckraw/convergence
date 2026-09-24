@@ -2020,7 +2020,11 @@ interface ElectronAPI {
     getAllSummaries: () => Promise<SessionSummaryData[]>
     getGlobalSummaries: () => Promise<SessionSummaryData[]>
     getSummaryById: (id: string) => Promise<SessionSummaryData | null>
-    resyncConversation: (id: string, generation: number) => Promise<void>
+    resyncConversation: (
+      id: string,
+      generation: number,
+      pageNonce: string,
+    ) => Promise<void>
     getConversation: (id: string) => Promise<ConversationItemData[]>
     onEvidenceUpdated: (
       callback: (event: { sessionId: string }) => void,

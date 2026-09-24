@@ -49,8 +49,12 @@ export const sessionApi = {
   getSummaryById: (id: string): Promise<SessionSummary | null> =>
     window.electronAPI.session.getSummaryById(id),
 
-  resyncConversation: (id: string, generation: number): Promise<void> =>
-    window.electronAPI.session.resyncConversation(id, generation),
+  resyncConversation: (
+    id: string,
+    generation: number,
+    pageNonce: string,
+  ): Promise<void> =>
+    window.electronAPI.session.resyncConversation(id, generation, pageNonce),
 
   getConversation: (id: string): Promise<ConversationItem[]> =>
     window.electronAPI.session.getConversation(id),

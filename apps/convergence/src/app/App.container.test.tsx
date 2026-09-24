@@ -188,6 +188,7 @@ const mockElectronAPI = {
     getSummariesByProjectId: vi.fn().mockResolvedValue([]),
     getSummaryById: vi.fn().mockResolvedValue(null),
     getConversation: vi.fn().mockResolvedValue([]),
+    resyncConversation: vi.fn().mockResolvedValue(undefined),
     getNeedsYouDismissals: vi.fn().mockResolvedValue({}),
     archive: vi.fn(),
     unarchive: vi.fn(),

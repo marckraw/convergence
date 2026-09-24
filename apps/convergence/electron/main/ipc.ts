@@ -1,5 +1,5 @@
 import {
-  conversationPatchWire,
+  nextWireMemory,
   type ConversationWireMemory,
 } from './conversation-patch-wire.pure'
 import { connectPullRequestRefresh } from '../backend/pull-request/pull-request-refresh.service'
@@ -207,7 +207,7 @@ export function registerIpcHandlers(
     crewService,
   )
 
-  const conversationWireMemory: ConversationWireMemory = new Map()
+  let conversationWireMemory: ConversationWireMemory = new Map()
 
   // Project handlers
   ipcMain.handle('project:create', (_event, input: CreateProjectInput) => {
@@ -979,13 +979,16 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     'session:resyncConversation',
-    (event, sessionId: string, generation: number) => {
+    (event, sessionId: string, generation: number, pageNonce: string) => {
       if (
         typeof sessionId !== 'string' ||
+        sessionId.length === 0 ||
         !Number.isSafeInteger(generation) ||
-        generation < 1
+        generation < 1 ||
+        typeof pageNonce !== 'string' ||
+        pageNonce.length === 0
       )
-        return
+        throw new Error('Invalid conversation snapshot request')
       // getConversation synchronously flushes pending patches before reading.
       // No await: those patches, this snapshot, and subsequent appends use one pipe.
       const items = sessionApp.getConversation(sessionId)
@@ -994,6 +997,7 @@ export function registerIpcHandlers(
         sessionId,
         items,
         generation,
+        pageNonce,
       })
     },
   )
@@ -1380,15 +1384,8 @@ export function registerIpcHandlers(
   })
 
   sessionApp.onConversationPatch((event) => {
-    const items = conversationWireMemory.get(event.sessionId) ?? new Map()
-    const { wire, remember } = conversationPatchWire(
-      items.get(event.item.id),
-      event,
-    )
-    if (remember) items.set(event.item.id, remember)
-    else items.delete(event.item.id)
-    if (items.size) conversationWireMemory.set(event.sessionId, items)
-    else conversationWireMemory.delete(event.sessionId)
+    const { wire, memory } = nextWireMemory(conversationWireMemory, event)
+    conversationWireMemory = memory
     const windows = BrowserWindow.getAllWindows()
     for (const win of windows) {
       if (!win.isDestroyed()) {

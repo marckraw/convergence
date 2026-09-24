@@ -9,4 +9,10 @@ export type ConversationWireEvent<Item> =
       append: string
       updatedAt: string
     }
-  | { op: 'snapshot'; sessionId: string; items: Item[]; generation: number }
+  | {
+      op: 'snapshot'
+      sessionId: string
+      items: Item[]
+      generation: number
+      pageNonce: string
+    }

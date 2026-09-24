@@ -48,7 +48,7 @@ function patch(text: string) {
   emitPatch({ op: 'patch', sessionId: 'session', item: { ...item, text } })
 }
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   handlers.clear()
   const args = Array.from({ length: 20 }, () => ({}))
   args[7] = {
@@ -68,20 +68,25 @@ beforeEach(() => {
   )
 })
 
-it('R2b flushes before the snapshot and sends all three in order on the patch channel', () => {
+it('R2b/R2e flushes before exactly one snapshot and sends all three in order on the patch channel', () => {
   patch('one')
   send.mockClear()
   getConversation.mockImplementation(() => {
     patch('one two') // generated pending patch flushed by the existing service contract
     return [{ ...item, text: 'one two' }]
   })
-  handlers.get('session:resyncConversation')!(
+  const acknowledgment = handlers.get('session:resyncConversation')!(
     { sender: { send } },
     'session',
     2,
+    'page',
   )
   patch('one two three')
+  expect(acknowledgment).toBeUndefined()
   expect(getConversation).toHaveBeenCalledExactlyOnceWith('session')
+  expect(
+    send.mock.calls.filter(([, event]) => event.op === 'snapshot'),
+  ).toHaveLength(1)
   expect(send.mock.calls).toEqual([
     [
       'session:conversationPatched',
@@ -101,6 +106,7 @@ it('R2b flushes before the snapshot and sends all three in order on the patch ch
         sessionId: 'session',
         items: [{ ...item, text: 'one two' }],
         generation: 2,
+        pageNonce: 'page',
       },
     ],
     [
@@ -116,6 +122,29 @@ it('R2b flushes before the snapshot and sends all three in order on the patch ch
     ],
   ])
 })
+
+it.each([
+  [undefined, 1, 'page'],
+  ['', 1, 'page'],
+  ['session', 0, 'page'],
+  ['session', 1.5, 'page'],
+  ['session', 1, undefined],
+  ['session', 1, ''],
+])(
+  'R2d rejects invalid snapshot arguments (%s, %s, %s)',
+  (id, generation, pageNonce) => {
+    expect(() =>
+      handlers.get('session:resyncConversation')!(
+        { sender: { send } },
+        id,
+        generation,
+        pageNonce,
+      ),
+    ).toThrow('Invalid conversation snapshot request')
+    expect(getConversation).not.toHaveBeenCalled()
+    expect(send).not.toHaveBeenCalled()
+  },
+)
 
 it.each(['idle', 'answered', 'completed', 'failed'] as const)(
   'R3 forgets streaming memory when a session becomes %s',

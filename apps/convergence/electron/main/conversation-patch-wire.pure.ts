@@ -49,3 +49,23 @@ export function conversationPatchWire(
 }
 
 export type ConversationWireMemory = Map<string, Map<string, StreamingText>>
+
+export function nextWireMemory(
+  previous: ConversationWireMemory,
+  event: ConversationPatchEvent,
+): {
+  wire: ConversationWireEvent<ConversationItem>
+  memory: ConversationWireMemory
+} {
+  const memory = new Map(previous)
+  const items = new Map(memory.get(event.sessionId))
+  const { wire, remember } = conversationPatchWire(
+    items.get(event.item.id),
+    event,
+  )
+  if (remember) items.set(event.item.id, remember)
+  else items.delete(event.item.id)
+  if (items.size) memory.set(event.sessionId, items)
+  else memory.delete(event.sessionId)
+  return { wire, memory }
+}

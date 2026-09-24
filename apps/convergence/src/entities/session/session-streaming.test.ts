@@ -8,7 +8,8 @@ const resyncConversation = vi.fn().mockResolvedValue(undefined)
 let sessionId: string
 let serial = 0
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
+  resyncConversation.mockResolvedValue(undefined)
   sessionId = `stream-${++serial}`
   Object.defineProperty(globalThis, 'window', {
     value: {
@@ -51,15 +52,27 @@ function append(baseLength: number, text: string) {
     updatedAt: 'same',
   })
 }
-function snapshot(text: string, generation: number) {
-  emit({ op: 'snapshot', sessionId, items: [message(text)], generation })
+function snapshot(
+  text: string,
+  generation: number,
+  pageNonce = resyncConversation.mock.lastCall?.[2],
+) {
+  emit({
+    op: 'snapshot',
+    sessionId,
+    items: [message(text)],
+    generation,
+    pageNonce,
+  })
 }
 function deferred() {
-  let resolve!: (items: ConversationItem[]) => void
-  const promise = new Promise<ConversationItem[]>((done) => {
+  let resolve!: (items?: ConversationItem[]) => void
+  let reject!: (error: Error) => void
+  const promise = new Promise<ConversationItem[] | undefined>((done, fail) => {
     resolve = done
+    reject = fail
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 
 for (const global of [false, true]) {
@@ -89,6 +102,13 @@ for (const global of [false, true]) {
         ? useSessionStore.getState().loadActiveGlobalConversation(sessionId)
         : useSessionStore.getState().loadActiveConversation(sessionId)
     }
+    function close() {
+      useSessionStore.setState(
+        global
+          ? { activeGlobalSessionId: 'elsewhere' }
+          : { activeSessionId: 'elsewhere' },
+      )
+    }
     it('R2 appends and the full terminal equal the full-patch stream at every step', () => {
       open([message('')])
       let text = ''
@@ -111,7 +131,11 @@ for (const global of [false, true]) {
       (reason) => {
         open(reason === 'gap' ? [message('one')] : [])
         append(7, ' three')
-        expect(resyncConversation).toHaveBeenCalledExactlyOnceWith(sessionId, 1)
+        expect(resyncConversation).toHaveBeenCalledExactlyOnceWith(
+          sessionId,
+          1,
+          expect.any(String),
+        )
         const before = current()
         // This fits the stale buffer: only the in-flight guard can reject it.
         if (reason === 'missing')
@@ -131,19 +155,19 @@ for (const global of [false, true]) {
       },
     )
 
-    it('R2c ignores generation 1 invoke after generation 2 ordered recovery', async () => {
+    it('R2c ignores an older snapshot after a newer ordered recovery', async () => {
       open()
-      const initial = deferred()
-      getConversation.mockReturnValueOnce(initial.promise)
-      const pending = load()
-      append(3, ' two')
-      expect(resyncConversation).toHaveBeenCalledExactlyOnceWith(sessionId, 2)
+      void load()
+      snapshot('one', 1)
+      append(9, ' gap')
+      expect(resyncConversation).toHaveBeenLastCalledWith(
+        sessionId,
+        2,
+        expect.any(String),
+      )
       snapshot('one two', 2)
       append(7, ' three')
       const newest = current()
-      initial.resolve([message('one')])
-      await pending
-      expect(current()).toBe(newest)
       expect(current()).toEqual([message('one two three')])
       snapshot('older snapshot', 1)
       expect(current()).toBe(newest)
@@ -151,8 +175,8 @@ for (const global of [false, true]) {
 
     it('R4 opens and switches back mid-stream with a flushed snapshot', async () => {
       open()
-      getConversation.mockResolvedValueOnce([message('one')])
-      await load()
+      void load()
+      snapshot('one', 1)
       append(3, ' two')
       expect(current()).toEqual([message('one two')])
       useSessionStore.setState(
@@ -169,25 +193,143 @@ for (const global of [false, true]) {
       expect(listener).not.toHaveBeenCalled()
       unsubscribe()
       open()
-      getConversation.mockResolvedValueOnce([message('one two three')])
-      await load()
+      void load()
+      snapshot('one two three', 2)
       append(13, ' four')
       expect(current()).toEqual([message('one two three four')])
-      expect(resyncConversation).not.toHaveBeenCalled()
+      expect(resyncConversation).toHaveBeenCalledTimes(2)
+      expect(getConversation).not.toHaveBeenCalled()
     })
 
-    it('R2b an invoke arriving during recovery cannot reopen the append stream', async () => {
+    it('R2e opens mid-stream with exactly one snapshot and a late acknowledgment cannot overwrite the terminal', async () => {
+      open()
+      const initial = deferred()
+      // A legacy invoke implementation receives the same delayed partial data.
+      getConversation.mockReturnValueOnce(initial.promise)
+      resyncConversation.mockReturnValueOnce(initial.promise)
+      const pending = load()
+      append(3, ' two')
+      append(7, ' three')
+      expect(current()).toEqual([])
+      expect(resyncConversation).toHaveBeenCalledExactlyOnceWith(
+        sessionId,
+        1,
+        expect.any(String),
+      )
+      snapshot('one two', 1)
+      append(7, ' three')
+      const terminal = {
+        ...message('one two three'),
+        state: 'complete' as const,
+      }
+      emit({ op: 'patch', sessionId, item: terminal })
+      initial.resolve([message('one')])
+      await pending
+      expect(current()).toEqual([terminal])
+      expect(resyncConversation).toHaveBeenCalledTimes(1)
+      expect(getConversation).not.toHaveBeenCalled()
+    })
+
+    it('R2d clears a resync snapshot received while closed before reopening', () => {
+      open([message('one')])
+      append(7, ' three')
+      close()
+      const state = useSessionStore.getState()
+      const listener = vi.fn()
+      const unsubscribe = useSessionStore.subscribe(listener)
+      snapshot('one two three', 1)
+      expect(useSessionStore.getState()).toBe(state)
+      expect(listener).not.toHaveBeenCalled()
+      unsubscribe()
+      open()
+      void load()
+      expect(resyncConversation).toHaveBeenLastCalledWith(
+        sessionId,
+        2,
+        expect.any(String),
+      )
+      snapshot('one two three', 2)
+      append(13, ' four')
+      expect(current()).toEqual([message('one two three four')])
+    })
+
+    it('R2e a delayed load reply cannot replace a later terminal full patch', async () => {
       open()
       const initial = deferred()
       getConversation.mockReturnValueOnce(initial.promise)
+      resyncConversation.mockReturnValueOnce(initial.promise)
       const pending = load()
-      append(3, ' two')
+      snapshot('one', 1)
+      const terminal = {
+        ...message('one two three'),
+        state: 'complete' as const,
+      }
+      emit({ op: 'patch', sessionId, item: terminal })
       initial.resolve([message('one')])
       await pending
-      expect(current()).toEqual([])
-      snapshot('one two', 2)
+      expect(current()).toEqual([terminal])
+    })
+
+    it('R2d a rejected resync retries the blocked open with a fresh load', async () => {
+      const recovery = deferred()
+      resyncConversation.mockReturnValueOnce(recovery.promise)
+      open([message('one')])
       append(7, ' three')
-      expect(current()).toEqual([message('one two three')])
+      close()
+      open()
+      await load()
+      expect(resyncConversation).toHaveBeenCalledTimes(1)
+      recovery.reject(new Error('resync rejected'))
+      await vi.waitFor(() =>
+        expect(resyncConversation).toHaveBeenCalledTimes(2),
+      )
+      expect(resyncConversation).toHaveBeenLastCalledWith(
+        sessionId,
+        2,
+        expect.any(String),
+      )
+      snapshot('one two three', 2)
+      append(13, ' four')
+      expect(current()).toEqual([message('one two three four')])
+      expect(useSessionStore.getState().error).toBe('resync rejected')
+    })
+
+    it('R2d ignores a previous page snapshot with a higher generation and still recovers', () => {
+      open([message('one')])
+      append(7, ' three')
+      const pageNonce = resyncConversation.mock.lastCall?.[2]
+      expect(pageNonce).toEqual(expect.any(String))
+      const before = current()
+      snapshot('old page', 999, 'previous-page')
+      expect(current()).toBe(before)
+      snapshot('one two three', 1)
+      append(13, ' four')
+      expect(current()).toEqual([message('one two three four')])
+      append(99, ' gap')
+      expect(resyncConversation).toHaveBeenLastCalledWith(
+        sessionId,
+        2,
+        pageNonce,
+      )
+      snapshot('recovered', 2)
+      append(9, ' again')
+      expect(current()).toEqual([message('recovered again')])
+    })
+
+    it('R2e a rejected initial load releases its pending request for a later open', async () => {
+      open()
+      resyncConversation.mockRejectedValueOnce(new Error('load rejected'))
+      await load()
+      expect(useSessionStore.getState().error).toBe('load rejected')
+      void load()
+      expect(resyncConversation).toHaveBeenLastCalledWith(
+        sessionId,
+        2,
+        expect.any(String),
+      )
+      snapshot('one', 2)
+      append(3, ' two')
+      expect(current()).toEqual([message('one two')])
     })
   })
 }

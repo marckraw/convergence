@@ -41,16 +41,22 @@ import type {
 
 const RECENT_SESSIONS_CAP = 10
 const pendingPins = new Map<string, symbol>()
+const conversationPageNonce = crypto.randomUUID()
 
 // Request bookkeeping is not view state: dropped events must notify nobody.
 const conversationLoads = new Map<
   string,
-  { requested: number; applied: number; resync: number | null }
+  {
+    requested: number
+    applied: number
+    resync: number | null
+    pending: number | null
+  }
 >()
 function conversationLoad(sessionId: string) {
   let load = conversationLoads.get(sessionId)
   if (!load) {
-    load = { requested: 0, applied: 0, resync: null }
+    load = { requested: 0, applied: 0, resync: null, pending: null }
     conversationLoads.set(sessionId, load)
   }
   return load
@@ -917,40 +923,28 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   loadActiveConversation: async (sessionId: string) => {
     const load = conversationLoad(sessionId)
+    if (load.resync !== null || load.pending !== null) return
     const generation = ++load.requested
-    const conversation = await sessionApi.getConversation(sessionId)
-    set((state) => {
-      if (
-        state.activeSessionId !== sessionId ||
-        generation < load.applied ||
-        load.resync !== null
+    load.pending = generation
+    try {
+      // Items arrive on the same FIFO channel as patches, never on this reply.
+      await sessionApi.resyncConversation(
+        sessionId,
+        generation,
+        conversationPageNonce,
       )
-        return state
-      load.applied = generation
-      return {
-        activeConversation: conversation,
-        activeConversationSessionId: sessionId,
-      }
-    })
+    } catch (err) {
+      if (load.pending !== generation) return
+      load.pending = null
+      set({
+        error:
+          err instanceof Error ? err.message : 'Failed to load conversation',
+      })
+    }
   },
 
   loadActiveGlobalConversation: async (sessionId: string) => {
-    const load = conversationLoad(sessionId)
-    const generation = ++load.requested
-    const conversation = await sessionApi.getConversation(sessionId)
-    set((state) => {
-      if (
-        state.activeGlobalSessionId !== sessionId ||
-        generation < load.applied ||
-        load.resync !== null
-      )
-        return state
-      load.applied = generation
-      return {
-        activeGlobalConversation: conversation,
-        activeGlobalConversationSessionId: sessionId,
-      }
-    })
+    await get().loadActiveConversation(sessionId)
   },
 
   loadQueuedInputs: async (sessionId: string) => {
@@ -1106,9 +1100,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((state) => {
       const load = conversationLoad(event.sessionId)
       if (event.op === 'snapshot') {
+        if (event.pageNonce !== conversationPageNonce) return state
         if (event.generation < load.applied) return state
         if (load.resync !== null && event.generation >= load.resync)
           load.resync = null
+        if (load.pending !== null && event.generation >= load.pending)
+          load.pending = null
       }
       const project = state.activeSessionId === event.sessionId
       if (!project && state.activeGlobalSessionId !== event.sessionId) {
@@ -1123,7 +1120,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         load.applied = event.generation
         nextItems = event.items
       } else if (event.op === 'append') {
-        if (load.resync !== null) return state
+        if (load.resync !== null || load.pending !== null) return state
         const item = items.find((candidate) => candidate.id === event.itemId)
         if (
           !item ||
@@ -1154,7 +1151,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     })
     if (resyncGeneration !== undefined) {
       void sessionApi
-        .resyncConversation(event.sessionId, resyncGeneration)
+        .resyncConversation(
+          event.sessionId,
+          resyncGeneration,
+          conversationPageNonce,
+        )
         .catch((err) => {
           const load = conversationLoad(event.sessionId)
           if (load.resync !== resyncGeneration) return
@@ -1165,6 +1166,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
                 ? err.message
                 : 'Failed to resync conversation',
           })
+          const state = get()
+          if (state.activeSessionId === event.sessionId)
+            void state.loadActiveConversation(event.sessionId)
+          else if (state.activeGlobalSessionId === event.sessionId)
+            void state.loadActiveGlobalConversation(event.sessionId)
         })
     }
   },

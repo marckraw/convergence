@@ -6,6 +6,7 @@ import type {
 } from '../backend/session/conversation-item.types'
 import {
   conversationPatchWire,
+  nextWireMemory,
   type ConversationWireMemory,
 } from './conversation-patch-wire.pure'
 
@@ -32,34 +33,52 @@ function patch(item: ConversationItem): ConversationPatchEvent {
   return { sessionId: item.sessionId, op: 'patch', item }
 }
 
-function rememberConversationPatch(
-  memory: ConversationWireMemory,
-  event: ConversationPatchEvent,
-) {
-  const items = memory.get(event.sessionId) ?? new Map()
-  const result = conversationPatchWire(items.get(event.item.id), event)
-  if (result.remember) items.set(event.item.id, result.remember)
-  else items.delete(event.item.id)
-  if (items.size) memory.set(event.sessionId, items)
-  else memory.delete(event.sessionId)
-  return result.wire
+function wireStream() {
+  let memory: ConversationWireMemory = new Map()
+  return {
+    get memory() {
+      return memory
+    },
+    send(event: ConversationPatchEvent) {
+      const result = nextWireMemory(memory, event)
+      memory = result.memory
+      return result.wire
+    },
+  }
 }
 
 describe('MAR-3380 main wire adapter', () => {
+  it('R3 releases only the changed item and preserves the previous memory', () => {
+    const a = message('one')
+    const b = { ...message('two'), id: 'other-item' }
+    const c = { ...message('three'), sessionId: 'other-session' }
+    const first = nextWireMemory(new Map(), patch(a)).memory
+    const second = nextWireMemory(first, patch(b)).memory
+    const third = nextWireMemory(second, patch(c)).memory
+    const released = nextWireMemory(
+      third,
+      patch({ ...a, state: 'complete' }),
+    ).memory
+    expect(first.get('session')?.size).toBe(1)
+    expect(third.get('session')?.size).toBe(2)
+    expect(released.get('session')?.has(a.id)).toBe(false)
+    expect(released.get('session')?.get(b.id)).toBe(b)
+    expect(released.get('other-session')?.get(c.id)).toBe(c)
+  })
   it('R1/R6 sends at most 10% of full-stream bytes and a full terminal item', () => {
-    const memory: ConversationWireMemory = new Map()
+    const stream = wireStream()
     let before = 0
     let after = 0
     for (let i = 1; i <= 200; i++) {
       const event = patch(message('x'.repeat(i * 100)))
       before += serialize(event).byteLength
-      after += serialize(rememberConversationPatch(memory, event)).byteLength
+      after += serialize(stream.send(event)).byteLength
     }
     const terminal = patch({
       ...message('x'.repeat(20_000)),
       state: 'complete',
     })
-    const terminalWire = rememberConversationPatch(memory, terminal)
+    const terminalWire = stream.send(terminal)
     before += serialize(terminal).byteLength
     after += serialize(terminalWire).byteLength
     console.info(
@@ -67,7 +86,7 @@ describe('MAR-3380 main wire adapter', () => {
     )
     expect(after).toBeLessThanOrEqual(before * 0.1)
     expect(terminalWire).toEqual(terminal)
-    expect(memory.size).toBe(0)
+    expect(stream.memory.size).toBe(0)
   })
 
   it('R3 keeps adds, structural changes, non-prefix restatements and evidence full', () => {
@@ -105,18 +124,14 @@ describe('MAR-3380 main wire adapter', () => {
   })
 
   it('R3 remembers streaming adds, appends thinking, and forgets non-prefix restatements', () => {
-    const memory: ConversationWireMemory = new Map()
+    const stream = wireStream()
     const item = {
       ...message('think'),
       kind: 'thinking' as const,
       actor: 'assistant' as const,
     }
-    expect(
-      rememberConversationPatch(memory, { ...patch(item), op: 'add' }).op,
-    ).toBe('add')
-    expect(
-      rememberConversationPatch(memory, patch({ ...item, text: 'thinking' })),
-    ).toEqual({
+    expect(stream.send({ ...patch(item), op: 'add' }).op).toBe('add')
+    expect(stream.send(patch({ ...item, text: 'thinking' }))).toEqual({
       op: 'append',
       sessionId: 'session',
       itemId: 'item',
@@ -124,13 +139,10 @@ describe('MAR-3380 main wire adapter', () => {
       append: 'ing',
       updatedAt: item.updatedAt,
     })
-    rememberConversationPatch(memory, patch({ ...item, text: 'restated' }))
-    expect(memory.size).toBe(0)
-    expect(
-      rememberConversationPatch(
-        memory,
-        patch({ ...item, text: 'restated again' }),
-      ).op,
-    ).toBe('patch')
+    stream.send(patch({ ...item, text: 'restated' }))
+    expect(stream.memory.size).toBe(0)
+    expect(stream.send(patch({ ...item, text: 'restated again' })).op).toBe(
+      'patch',
+    )
   })
 })
