@@ -18,12 +18,22 @@ export function SearchableSelect({
   contentClassName,
   icon,
   action,
+  open: controlledOpen,
+  onOpenChange,
 }: SearchableSelectProps) {
-  const [open, setOpen] = useState(false)
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
   const [query, setQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const normalizedQuery = query.trim().toLowerCase()
   const isDisabled = disabled || (items.length === 0 && !action)
+  const open =
+    controlledOpen === undefined
+      ? uncontrolledOpen
+      : controlledOpen && !isDisabled
+  const setOpen = (nextOpen: boolean) => {
+    if (controlledOpen === undefined) setUncontrolledOpen(nextOpen)
+    onOpenChange?.(nextOpen)
+  }
   const selectedBadge =
     items.find((item) => item.id === selectedId)?.badge ?? undefined
 

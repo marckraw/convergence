@@ -89,7 +89,14 @@ import {
   type PromptLibraryEntry,
 } from '@/entities/prompt-library'
 import { Composer } from './composer.presentational'
-import { filterSelectionsForProvider } from './composer-skill-picker.pure'
+import {
+  addSkillSelectionOnce,
+  filterSelectionsForProvider,
+} from './composer-skill-picker.pure'
+import {
+  useComposerIntents,
+  type ComposerIntent,
+} from '@/entities/composer-intent'
 import {
   detectComposerInjectionTrigger,
   filterComposerInjectionRootItems,
@@ -301,6 +308,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
     null,
   )
   const [skillPickerOpen, setSkillPickerOpen] = useState(false)
+  const [accountPickerOpen, setAccountPickerOpen] = useState(false)
   const [contextPickerOpen, setContextPickerOpen] = useState(false)
   const [skillQuery, setSkillQuery] = useState('')
   const [selectedSkills, setSelectedSkills] = useState<SkillSelection[]>([])
@@ -1734,13 +1742,9 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
     (skill: SkillCatalogEntry) => {
       if (!skillInjectionTrigger || !skill.enabled) return
 
-      setSelectedSkills((current) => {
-        const existingSelection = current.some(
-          (selection) => selection.id === skill.id,
-        )
-        if (existingSelection) return current
-        return [...current, skillSelectionFromCatalogEntry(skill)]
-      })
+      setSelectedSkills((current) =>
+        addSkillSelectionOnce(current, skillSelectionFromCatalogEntry(skill)),
+      )
 
       const result = replaceComposerInjectionRange(
         value,
@@ -1752,6 +1756,34 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
     },
     [skillInjectionTrigger, value],
   )
+
+  /**
+   * What the Actions menu asks of this composer (MAR-3393 R2/R4). Read
+   * through a hook, never a prop, so the memo comparator below is untouched.
+   *
+   * A skill goes through the add-without-toggle path above and nothing else:
+   * no send, no queue. Focus moves to the textarea directly, because the
+   * cursor effect only fires on a `value` change and adding a chip changes
+   * no text. The account picker opens only where it is drawn and unlocked:
+   * a request it cannot honour now is not kept for later, where it would pop
+   * the picker open long after anybody asked.
+   */
+  const accountPickerOpenable =
+    providerAccountPickerVisible && !providerAccountSelectionLocked
+  const handleComposerIntent = useCallback(
+    (intent: ComposerIntent) => {
+      if (intent.kind === 'add-skill') {
+        setSelectedSkills((current) =>
+          addSkillSelectionOnce(current, intent.skill),
+        )
+        textareaRef.current?.focus()
+        return
+      }
+      if (accountPickerOpenable) setAccountPickerOpen(true)
+    },
+    [accountPickerOpenable],
+  )
+  useComposerIntents(activeSessionId, handleComposerIntent)
 
   const handleSkillInjectionDismiss = useCallback(() => {
     if (!skillInjectionTrigger) return
@@ -1895,6 +1927,8 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
         providerAccounts={providerAccountsForSession}
         selectedProviderAccountId={selectedProviderAccountId}
         onProviderAccountChange={setSelectedProviderAccountId}
+        providerAccountPickerOpen={accountPickerOpen}
+        onProviderAccountPickerOpenChange={setAccountPickerOpen}
         providerAccountSelectionLocked={providerAccountSelectionLocked}
         providerAccountPickerVisible={providerAccountPickerVisible}
         providerAccountAmbientDisabledReason={
