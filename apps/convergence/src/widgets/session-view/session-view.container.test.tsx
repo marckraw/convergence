@@ -11,10 +11,15 @@ import { useWorkspaceStore } from '@/entities/workspace'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
 const navigationScroll = vi.hoisted(() => vi.fn())
+// Every context the composer was handed, in order (MAR-3325).
+const composerContexts = vi.hoisted((): unknown[] => [])
 import { SessionView } from './session-view.container'
 
 vi.mock('@/features/composer', () => ({
-  ComposerContainer: () => <div>composer</div>,
+  ComposerContainer: ({ context }: { context: unknown }) => {
+    composerContexts.push(context)
+    return <div>composer</div>
+  },
 }))
 
 vi.mock('@tanstack/react-virtual', () => ({
@@ -500,6 +505,43 @@ describe('SessionView', () => {
       useContextDrillStore.setState({ beats: {} })
     },
   )
+
+  it('MAR-3325 hands the composer one context object while the open conversation streams and its summary moves — mutation write the context inline turns red', () => {
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    const first = composerContexts.at(-1)
+    expect(first).toEqual({
+      kind: 'project',
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      activeSessionId: 'session-1',
+    })
+    composerContexts.length = 0
+
+    for (let i = 1; i <= 15; i += 1) {
+      act(() => {
+        useSessionStore.setState((state) => ({
+          activeConversation: [...state.activeConversation],
+        }))
+      })
+      act(() => {
+        useSessionStore.setState((state) => ({
+          sessions: state.sessions.map((entry) => ({
+            ...entry,
+            status: i % 2 ? 'running' : 'completed',
+            updatedAt: `2026-01-01T00:00:${String(i).padStart(2, '0')}.000Z`,
+          })),
+        }))
+      })
+    }
+
+    // The view did redraw for each — the context it handed over did not move.
+    expect(composerContexts.length).toBeGreaterThanOrEqual(30)
+    expect(new Set(composerContexts)).toEqual(new Set([first]))
+  })
 
   it('shows the live session activity in the header', async () => {
     useSessionStore.setState((state) => ({

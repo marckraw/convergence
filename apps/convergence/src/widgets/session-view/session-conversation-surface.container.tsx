@@ -1,4 +1,3 @@
-import { PerfProfiler } from '@/shared/lib/perf-profiler'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 import { Button } from '@/shared/ui/button'
 import type { ParallelWorkRow } from '@/shared/lib/parallel-work.pure'
@@ -116,9 +115,9 @@ function renderComposerArea(
     )
   }
 
+  // The composer is a memo boundary and carries its own perf root inside it
+  // (MAR-3325): wrapped here, the Profiler fired on every transcript redraw.
   return composerContext ? (
-    <PerfProfiler id="composer">
-      <ComposerContainer context={composerContext} />
-    </PerfProfiler>
+    <ComposerContainer context={composerContext} />
   ) : null
 }

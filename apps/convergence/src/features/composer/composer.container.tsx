@@ -1,5 +1,5 @@
-import { usePerfSessionsIdentity } from '@/shared/lib/usePerfProbe'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { PerfProfiler } from '@/shared/lib/perf-profiler'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FC } from 'react'
 import {
   describeUnavailableProviderSelection,
@@ -98,6 +98,12 @@ import {
   type ComposerInjectionRootItem,
 } from './composer-injection-trigger.pure'
 import { countArmedOutgoingRelays } from './relay-mute.pure'
+import {
+  findComposerSession,
+  sameComposerContext,
+  sessionPermissionConfigFromKey,
+  sessionPermissionConfigKey,
+} from './composer-session.pure'
 import { filterComposerPrompts } from './composer-prompt-injection.pure'
 import {
   defaultPermissionPresetForHost,
@@ -116,17 +122,8 @@ import { ContextWindowDot } from './context-window-dot.container'
 import { Button } from '@/shared/ui/button'
 import { X } from 'lucide-react'
 
-export type ComposerSessionContext =
-  | {
-      kind: 'project'
-      projectId: string
-      workspaceId: string | null
-      activeSessionId: string | null
-    }
-  | {
-      kind: 'global'
-      activeSessionId: string | null
-    }
+import type { ComposerSessionContext } from './composer.types'
+export type { ComposerSessionContext } from './composer.types'
 
 interface ComposerContainerProps {
   context: ComposerSessionContext
@@ -186,7 +183,7 @@ function getQueuedInputPreview(input: SessionQueuedInput): string {
   return 'Empty input'
 }
 
-export const ComposerContainer: FC<ComposerContainerProps> = ({
+const ComposerContainerView: FC<ComposerContainerProps> = ({
   context,
   onGlobalSessionCreated,
   prepareNewSessionMessage,
@@ -326,29 +323,30 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   )
   const sendMessageToSession = useSessionStore((s) => s.sendMessageToSession)
   /**
-   * The whole wire list, narrowed below. Relays are cross-project furniture and
-   * the store already holds every one of them, so "does anything leave this
-   * session?" costs no IPC. Subscribed whole and filtered in a `useMemo`:
-   * filtering inside the selector would hand zustand a fresh array on every
-   * render and spin the app (run 16 hit exactly that).
+   * Armed wires leaving this session, as a number (MAR-3325). Relays are
+   * cross-project furniture and the store already holds every one of them, so
+   * "does anything leave this session?" costs no IPC. The selector counts and
+   * returns a primitive, so a wire list that moved elsewhere redraws nothing.
+   * Never a filtered array here: a selector that returns a fresh array on
+   * every call spins the app (run 16 hit exactly that).
    */
-  const relays = useSessionRelayStore((s) => s.relays)
+  const armedOutgoingRelays = useSessionRelayStore((s) =>
+    countArmedOutgoingRelays(s.relays, activeSessionId),
+  )
   const compactSessionContext = useSessionStore((s) => s.compactSessionContext)
   const setSessionModelSelection = useSessionStore(
     (s) => s.setSessionModelSelection,
   )
   const cancelQueuedInput = useSessionStore((s) => s.cancelQueuedInput)
   const redeliverQueuedInput = useSessionStore((s) => s.redeliverQueuedInput)
-  const sessions = useSessionStore((s) => s.sessions)
-  usePerfSessionsIdentity(sessions)
-  const globalChatSessions = useSessionStore((s) => s.globalChatSessions)
   const queuedInputs = useSessionStore((s) =>
     activeSessionId
       ? (s.queuedInputsBySessionId[activeSessionId] ?? EMPTY_QUEUED_INPUTS)
       : EMPTY_QUEUED_INPUTS,
   )
   /**
-   * The Session this composer is aimed at.
+   * The Session this composer is aimed at: the stored summary, selected by id
+   * (MAR-3325).
    *
    * The scoped lists hold the project or chat currently open, which is the
    * whole story when the composer sits under a conversation. Aimed from
@@ -357,12 +355,15 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
    * "start a new session" composer. `globalSessions` is the all-projects list
    * the app already keeps live, so falling back to it costs nothing and keeps
    * the composer honest about what it is about to do.
+   *
+   * One selector returning one stored object, not three whole lists: the
+   * lists get a new identity for every summary of every conversation, and
+   * subscribing to them redrew this composer ~53 times a second while others
+   * streamed (S0, MAR-3310).
    */
-  const globalSessions = useSessionStore((s) => s.globalSessions)
-  const sessionList = context.kind === 'project' ? sessions : globalChatSessions
-  const activeSession =
-    sessionList.find((s) => s.id === activeSessionId) ??
-    globalSessions.find((s) => s.id === activeSessionId)
+  const activeSession = useSessionStore((s) =>
+    findComposerSession(s, context.kind, activeSessionId),
+  )
   /**
    * Whether a message sent now waits, and why (MAR-3288 R6/R7). The input
    * and the send button stay enabled: the backend queues the message.
@@ -770,10 +771,6 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
    * between the two (MAR-2689).
    */
   const workAddressForSend = workAddressForNewSession(workAddressSlot)
-  const armedOutgoingRelays = useMemo(
-    () => countArmedOutgoingRelays(relays, activeSessionId),
-    [relays, activeSessionId],
-  )
   // Null on a daemon, and null is the honest value: the session record would
   // otherwise claim a service tier for a run this app never chose one for.
   const serviceTier = showCodexBillingControls
@@ -1294,14 +1291,33 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     handoffAccountKnown &&
     lastTurnAccount?.id !== effectiveProviderAccountId
 
+  /**
+   * What the effect below copies out of the live Session, field by field
+   * (MAR-3325). Keyed on these rather than on the summary object, because the
+   * summary is a new object on every update of the open conversation — a
+   * streaming one gets several a second — and each re-run committed the
+   * composer again with a fresh permission object. The permission config is
+   * compared by value (its key), since IPC hands over a new object each time.
+   * The Session's id is in the list so switching conversations re-applies
+   * even when the two record the same values.
+   */
+  const seededSessionId = activeSession?.id ?? null
+  const seededProviderId = activeSession?.providerId ?? null
+  const seededModelId = activeSession?.model ?? ''
+  const seededEffortId = activeSession?.effort ?? ''
+  const seededFastMode = activeSession?.serviceTier === 'fast'
+  const seededPermissionKey = sessionPermissionConfigKey(
+    activeSession?.permissionConfig,
+  )
   useEffect(() => {
-    if (activeSession) {
-      setProviderId(activeSession.providerId)
-      setModelId(activeSession.model ?? '')
-      setEffortId(activeSession.effort ?? '')
-      setCodexFastMode(activeSession.serviceTier === 'fast')
+    if (seededSessionId !== null && seededProviderId !== null) {
+      setProviderId(seededProviderId)
+      setModelId(seededModelId)
+      setEffortId(seededEffortId)
+      setCodexFastMode(seededFastMode)
       setPermissionConfig(
-        activeSession.permissionConfig ?? resolveSimplePermissionConfig('ask'),
+        sessionPermissionConfigFromKey(seededPermissionKey) ??
+          resolveSimplePermissionConfig('ask'),
       )
       return
     }
@@ -1314,7 +1330,12 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     setModelId((current) => current || selection.modelId)
     setEffortId((current) => current || selection.effortId)
   }, [
-    activeSession,
+    seededSessionId,
+    seededProviderId,
+    seededModelId,
+    seededEffortId,
+    seededFastMode,
+    seededPermissionKey,
     selection.providerId,
     selection.modelId,
     selection.effortId,
@@ -1832,7 +1853,10 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   }, [openDialog])
 
   return (
-    <>
+    // The perf root sits inside the memo boundary (MAR-3325): outside it, a
+    // parent's redraw fired the Profiler even when the composer bailed out,
+    // so the count measured the parent, not the composer.
+    <PerfProfiler id="composer">
       {waitReason ? (
         <div
           role="status"
@@ -2119,6 +2143,24 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         attachment={previewAttachment}
         onClose={() => setPreviewAttachment(null)}
       />
-    </>
+    </PerfProfiler>
   )
 }
+
+/**
+ * The composer as a memo boundary (MAR-3325).
+ *
+ * Its parents redraw for every streamed token of the open conversation —
+ * `SessionView` subscribes to the transcript — and typing has to compete with
+ * none of it. The composer reads everything it shows from the stores itself,
+ * so a parent redraw with the same aim carries nothing new. `context` is
+ * compared by value because callers write it inline; the callbacks by
+ * identity, which is what they are.
+ */
+export const ComposerContainer = memo(
+  ComposerContainerView,
+  (previous, next) =>
+    sameComposerContext(previous.context, next.context) &&
+    previous.onGlobalSessionCreated === next.onGlobalSessionCreated &&
+    previous.prepareNewSessionMessage === next.prepareNewSessionMessage,
+)
