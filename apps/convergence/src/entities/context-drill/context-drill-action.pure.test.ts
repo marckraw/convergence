@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { DrillDescription } from '@/entities/context-drill'
+import type { DrillDescription } from './context-drill.types'
 import {
   DRILL_COMPACTION_UNINTERRUPTIBLE,
   DRILL_RUN_LABEL,

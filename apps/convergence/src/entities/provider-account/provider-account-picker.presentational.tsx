@@ -21,6 +21,9 @@ interface ProviderAccountPickerProps {
   ambientIsCurrent?: boolean
   help?: string
   onManageAccounts?: () => void
+  /** Controlled open state, passed to the select (MAR-3393). */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 /**
@@ -46,6 +49,8 @@ export const ProviderAccountPicker: FC<ProviderAccountPickerProps> = ({
   ambientIsCurrent,
   help,
   onManageAccounts,
+  open,
+  onOpenChange,
 }) => {
   // No accounts, no picker. On a daemon that is not a filtered-empty list but
   // the absence of the concept: accounts are directories on this machine, and
@@ -80,6 +85,8 @@ export const ProviderAccountPicker: FC<ProviderAccountPickerProps> = ({
         triggerVariant="ghost"
         triggerSize="sm"
         triggerClassName="gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+        open={open}
+        onOpenChange={onOpenChange}
       />
     </span>
   )

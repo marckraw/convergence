@@ -96,6 +96,9 @@ interface ComposerProps {
   providerAccounts: ProviderAccount[]
   selectedProviderAccountId: string | null
   onProviderAccountChange: (accountId: string | null) => void
+  /** Controlled by the composer so the Actions menu can open it (MAR-3393). */
+  providerAccountPickerOpen?: boolean
+  onProviderAccountPickerOpenChange?: (open: boolean) => void
   providerAccountSelectionLocked: boolean
   providerAccountPickerVisible?: boolean
   providerAccountAmbientDisabledReason?: string
@@ -247,6 +250,8 @@ export const Composer: FC<ComposerProps> = ({
   providerAccounts,
   selectedProviderAccountId,
   onProviderAccountChange,
+  providerAccountPickerOpen,
+  onProviderAccountPickerOpenChange,
   providerAccountSelectionLocked,
   providerAccountPickerVisible,
   providerAccountAmbientDisabledReason,
@@ -898,6 +903,8 @@ export const Composer: FC<ComposerProps> = ({
                       selectedAccountId={selectedProviderAccountId}
                       onChange={onProviderAccountChange}
                       disabled={disabled || providerAccountSelectionLocked}
+                      open={providerAccountPickerOpen}
+                      onOpenChange={onProviderAccountPickerOpenChange}
                     />
                   )}
                   {/*

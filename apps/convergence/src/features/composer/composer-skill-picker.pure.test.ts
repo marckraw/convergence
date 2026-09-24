@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  addSkillSelectionOnce,
   filterComposerSkills,
   filterSelectionsForProvider,
 } from './composer-skill-picker.pure'
@@ -140,5 +141,35 @@ describe('filterSelectionsForProvider', () => {
       selections[0],
     ])
     expect(filterSelectionsForProvider(selections, null)).toEqual([])
+  })
+})
+
+describe('addSkillSelectionOnce (MAR-3393 R2)', () => {
+  function selection(id: string): SkillSelection {
+    return {
+      id,
+      providerId: 'codex',
+      providerName: 'Codex',
+      name: id,
+      displayName: id,
+      path: `/tmp/${id}/SKILL.md`,
+      scope: 'user',
+      rawScope: 'user',
+      sourceLabel: 'User',
+      status: 'selected',
+    }
+  }
+
+  it('appends a skill that is not selected yet, leaving the others in place', () => {
+    const current = [selection('a')]
+    expect(addSkillSelectionOnce(current, selection('b'))).toEqual([
+      selection('a'),
+      selection('b'),
+    ])
+  })
+
+  it('keeps a skill already selected, never toggling it off', () => {
+    const current = [selection('a'), selection('b')]
+    expect(addSkillSelectionOnce(current, selection('a'))).toBe(current)
   })
 })

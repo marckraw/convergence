@@ -13,3 +13,12 @@ export {
   formatDrillBeatLabel,
   resolveSessionActivityLabel,
 } from './context-drill-activity.pure'
+export {
+  DRILL_COMPACTION_UNINTERRUPTIBLE,
+  DRILL_RUN_LABEL,
+  resolveContextDrillAction,
+} from './context-drill-action.pure'
+export type {
+  ContextDrillActionState,
+  ContextDrillCancelState,
+} from './context-drill-action.pure'

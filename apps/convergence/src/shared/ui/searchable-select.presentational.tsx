@@ -53,6 +53,13 @@ export interface SearchableSelectProps {
   contentClassName?: string
   icon?: ReactNode
   action?: SearchableSelectAction
+  /**
+   * Controlled open state, for a caller that must open the list from outside
+   * its trigger (MAR-3393: the Actions menu's "Hand off"). Absent, the select
+   * owns its open state exactly as before. A disabled select never opens.
+   */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 interface SearchableSelectPresentationalProps {

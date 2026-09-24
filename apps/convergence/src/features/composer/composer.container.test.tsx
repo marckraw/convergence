@@ -21,7 +21,11 @@ import { useContextDrillStore } from '@/entities/context-drill'
 import { useAttachmentStore } from '@/entities/attachment'
 import { useDialogStore } from '@/entities/dialog'
 import type { TurnDelta } from '@/entities/turn'
-import { useSkillStore } from '@/entities/skill'
+import { useSkillStore, type SkillSelection } from '@/entities/skill'
+import {
+  postComposerIntent,
+  useComposerIntentStore,
+} from '@/entities/composer-intent'
 import {
   useProjectContextStore,
   type ProjectContextItem,
@@ -2372,6 +2376,254 @@ describe('ComposerContainer', () => {
 
       openAddSkills()
       expect(screen.getByTestId('remote-skills-notice')).toHaveTextContent(NOTE)
+    })
+  })
+
+  describe('what the Actions menu asks of it (MAR-3393)', () => {
+    const REVIEW: SkillSelection = {
+      id: 'claude-code:global:review',
+      providerId: 'claude-code',
+      providerName: 'Claude Code',
+      name: 'review',
+      displayName: 'Review',
+      path: '/skills/review/SKILL.md',
+      scope: 'global',
+      rawScope: null,
+      sourceLabel: 'Global',
+      status: 'selected',
+    }
+
+    beforeEach(() => {
+      useComposerIntentStore.setState({ intentsBySessionId: {} })
+    })
+
+    function seedAttachment() {
+      useAttachmentStore.setState({
+        drafts: {
+          'session-1': {
+            items: [
+              {
+                id: 'att-1',
+                sessionId: 'session-1',
+                kind: 'image',
+                mimeType: 'image/png',
+                filename: 'shot.png',
+                sizeBytes: 4,
+                storagePath: '/tmp/att-1.png',
+                thumbnailPath: null,
+                textPreview: null,
+                createdAt: '2026-08-01T00:00:00.000Z',
+              },
+            ],
+            rejections: [],
+            ingestInFlight: false,
+          },
+        },
+        resolved: {},
+      })
+    }
+
+    it('adds exactly its chip beside the draft, the attachment and the chip already there, focuses the textarea, and sends nothing (R2)', () => {
+      seedAttachment()
+      const textbox = renderComposer()
+      fireEvent.change(textbox, { target: { value: 'half a thought' } })
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Add composer resources' }),
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Select skills' }))
+      fireEvent.click(screen.getByRole('button', { name: /Planning/ }))
+      // Focus is elsewhere when the intent lands: the menu had it.
+      screen.getByRole('button', { name: 'Remove Planning' }).focus()
+
+      act(() => {
+        postComposerIntent('session-1', { kind: 'add-skill', skill: REVIEW })
+      })
+
+      expect(
+        screen.getByRole('button', { name: 'Remove Planning' }),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Remove Review' }),
+      ).toBeInTheDocument()
+      expect(textbox).toHaveValue('half a thought')
+      expect(screen.getByText('shot.png')).toBeInTheDocument()
+      expect(document.activeElement).toBe(textbox)
+      const state = useSessionStore.getState()
+      expect(state.sendMessageToSession).not.toHaveBeenCalled()
+      expect(state.createAndStartSession).not.toHaveBeenCalled()
+      expect(useComposerIntentStore.getState().intentsBySessionId).toEqual({})
+    })
+
+    it('adds the same skill twice as one chip and never toggles it off (R2)', () => {
+      renderComposer()
+
+      act(() => {
+        postComposerIntent('session-1', { kind: 'add-skill', skill: REVIEW })
+      })
+      act(() => {
+        postComposerIntent('session-1', { kind: 'add-skill', skill: REVIEW })
+      })
+
+      expect(
+        screen.getAllByRole('button', { name: 'Remove Review' }),
+      ).toHaveLength(1)
+      expect(
+        useSessionStore.getState().sendMessageToSession,
+      ).not.toHaveBeenCalled()
+    })
+
+    it('leaves an intent for another conversation alone', () => {
+      renderComposer()
+
+      act(() => {
+        postComposerIntent('session-2', { kind: 'add-skill', skill: REVIEW })
+      })
+
+      expect(screen.queryByRole('button', { name: 'Remove Review' })).toBeNull()
+      expect(
+        useComposerIntentStore.getState().intentsBySessionId['session-2'],
+      ).toHaveLength(1)
+    })
+
+    it('never takes another conversation’s intent along with its own', () => {
+      const textbox = renderComposer()
+      const PLANNING: SkillSelection = {
+        ...REVIEW,
+        id: 'claude-code:global:planning',
+        name: 'planning',
+        displayName: 'Planning',
+        path: '/skills/planning/SKILL.md',
+      }
+
+      act(() => {
+        postComposerIntent('session-2', { kind: 'add-skill', skill: REVIEW })
+      })
+      act(() => {
+        postComposerIntent('session-1', { kind: 'add-skill', skill: PLANNING })
+      })
+
+      expect(
+        screen.getByRole('button', { name: 'Remove Planning' }),
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Remove Review' })).toBeNull()
+      expect(document.activeElement).toBe(textbox)
+      expect(
+        useComposerIntentStore.getState().intentsBySessionId['session-2'],
+      ).toHaveLength(1)
+    })
+
+    it('closes its account picker when a turn locks it, and does not pop it open again when the lock ends (R12)', async () => {
+      providerAccountsMock = [buildAccount()]
+      const textbox = renderComposer()
+      await waitFor(() =>
+        expect(window.electronAPI.providerAccounts.list).toHaveBeenCalled(),
+      )
+      const setStatus = (
+        status: 'running' | 'completed',
+        attention: 'none' | 'finished',
+      ) =>
+        act(() => {
+          useSessionStore.setState((state) => ({
+            sessions: state.sessions.map((session) =>
+              session.id === 'session-1'
+                ? { ...session, status, attention }
+                : session,
+            ),
+          }))
+        })
+
+      act(() => {
+        postComposerIntent('session-1', { kind: 'open-account-picker' })
+      })
+      expect(
+        await screen.findByPlaceholderText('Search accounts...'),
+      ).toBeInTheDocument()
+
+      // A turn starts (a relay, a queued input): the picker locks.
+      setStatus('running', 'none')
+      await waitFor(() =>
+        expect(
+          screen.getByRole('combobox', { name: /account|login/i }),
+        ).toBeDisabled(),
+      )
+      expect(screen.queryByPlaceholderText('Search accounts...')).toBeNull()
+
+      // The user is typing when the turn ends.
+      textbox.focus()
+      setStatus('completed', 'finished')
+      await waitFor(() =>
+        expect(
+          screen.getByRole('combobox', { name: /account|login/i }),
+        ).not.toBeDisabled(),
+      )
+      expect(screen.queryByPlaceholderText('Search accounts...')).toBeNull()
+      expect(document.activeElement).toBe(textbox)
+    })
+
+    it('does not keep a hand-off it cannot honour now, to pop the picker open later', async () => {
+      providerAccountsMock = [buildAccount()]
+      act(() => {
+        useSessionStore.setState((state) => ({
+          sessions: state.sessions.map((session) =>
+            session.id === 'session-1'
+              ? { ...session, status: 'running', attention: 'none' }
+              : session,
+          ),
+        }))
+      })
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+      await waitFor(() =>
+        expect(window.electronAPI.providerAccounts.list).toHaveBeenCalled(),
+      )
+
+      act(() => {
+        postComposerIntent('session-1', { kind: 'open-account-picker' })
+      })
+      act(() => {
+        useSessionStore.setState((state) => ({
+          sessions: state.sessions.map((session) =>
+            session.id === 'session-1'
+              ? { ...session, status: 'completed', attention: 'finished' }
+              : session,
+          ),
+        }))
+      })
+
+      await waitFor(() =>
+        expect(
+          screen.getByRole('combobox', { name: /account|login/i }),
+        ).not.toBeDisabled(),
+      )
+      expect(screen.queryByPlaceholderText('Search accounts...')).toBeNull()
+    })
+
+    it('opens its own account picker on a hand-off, and sends nothing (R4)', async () => {
+      providerAccountsMock = [buildAccount()]
+      renderComposer()
+      await waitFor(() =>
+        expect(window.electronAPI.providerAccounts.list).toHaveBeenCalled(),
+      )
+      expect(screen.queryByPlaceholderText('Search accounts...')).toBeNull()
+
+      act(() => {
+        postComposerIntent('session-1', { kind: 'open-account-picker' })
+      })
+
+      expect(
+        await screen.findByPlaceholderText('Search accounts...'),
+      ).toBeInTheDocument()
+      expect(
+        useSessionStore.getState().sendMessageToSession,
+      ).not.toHaveBeenCalled()
     })
   })
 

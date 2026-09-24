@@ -1,7 +1,7 @@
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 import { Button } from '@/shared/ui/button'
 import type { ParallelWorkRow } from '@/shared/lib/parallel-work.pure'
-import { type FC, type ReactNode } from 'react'
+import { useRef, type FC, type ReactNode } from 'react'
 import type {
   ConversationItem,
   ConversationPrefix,
@@ -16,6 +16,10 @@ import {
   AnnotationSelectionCapture,
   AnnotationTray,
 } from '@/features/response-annotations'
+import {
+  ConversationActionsContainer,
+  conversationActionsAvailable,
+} from '@/features/conversation-actions'
 import { SessionTranscript } from './session-transcript.container'
 
 interface SessionConversationSurfaceProps {
@@ -75,8 +79,14 @@ export const SessionConversationSurface: FC<
   onDeny,
   onInputAnswer,
 }) => {
+  const surfaceRef = useRef<HTMLDivElement | null>(null)
+  const actionsAvailable = conversationActionsAvailable({
+    session,
+    composerContext,
+    composerDisabledReason,
+  })
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div ref={surfaceRef} className="relative flex min-h-0 flex-1 flex-col">
       {parallelError && (
         <div role="alert" className="px-4 py-2 text-sm text-muted-foreground">
           Parallel work could not be read ·{' '}
@@ -117,9 +127,31 @@ export const SessionConversationSurface: FC<
       */}
       <AnnotationSelectionCapture key={session.id} sessionId={session.id} />
 
-      <div className="shrink-0 px-4 py-3">
+      <div className="@container relative shrink-0 px-4 py-3">
         <AnnotationTray key={session.id} sessionId={session.id} />
         {renderComposerArea(composerContext, composerDisabledReason)}
+        {/*
+          The Actions button (MAR-3393) is composed here, beside the composer
+          rather than inside it: it reaches the composer only through composer
+          intents, so neither feature imports the other.
+        */}
+        {actionsAvailable && composerContext ? (
+          <ConversationActionsContainer
+            key={`actions:${session.id}`}
+            sessionId={session.id}
+            providerId={session.providerId}
+            status={session.status}
+            attention={session.attention}
+            activity={session.activity}
+            executionHost={session.executionHost}
+            catalogProjectId={
+              composerContext.kind === 'project'
+                ? composerContext.projectId
+                : null
+            }
+            boundaryRef={surfaceRef}
+          />
+        ) : null}
       </div>
     </div>
   )

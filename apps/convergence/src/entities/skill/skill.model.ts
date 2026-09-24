@@ -15,6 +15,16 @@ interface SkillState {
   /** Providers still being scanned — drives the "loading more" indicator. */
   loadingProviders: SkillProviderDescriptor[]
   catalogError: string | null
+  /**
+   * Providers whose scan THREW on the last project load, by provider id, with
+   * the message (MAR-3393 R3).
+   *
+   * A thrown scan used to be dropped exactly like a scan that found nothing,
+   * so "no skills" and "could not read them" were the same catalog. The
+   * composer's pickers still render the catalog as before; this field is read
+   * by surfaces that must tell the two apart.
+   */
+  failedProviders: Record<string, string>
   selectedSkillId: string | null
   detailsBySkillId: Record<string, SkillDetails>
   detailsErrorBySkillId: Record<string, string>
@@ -44,6 +54,7 @@ const initialState: SkillState = {
   isCatalogLoading: false,
   loadingProviders: [],
   catalogError: null,
+  failedProviders: {},
   selectedSkillId: null,
   detailsBySkillId: {},
   detailsErrorBySkillId: {},
@@ -58,7 +69,7 @@ export const useSkillStore = create<SkillStore>((set, get) => ({
   ...initialState,
 
   loadCatalog: async (projectId, options) => {
-    set({ isCatalogLoading: true, catalogError: null })
+    set({ isCatalogLoading: true, catalogError: null, failedProviders: {} })
 
     // Phase 1: cheap provider list so the dialog shell renders immediately.
     let listing
@@ -101,22 +112,28 @@ export const useSkillStore = create<SkillStore>((set, get) => ({
     await Promise.all(
       listing.providers.map(async (descriptor) => {
         let resolved: ProviderSkillCatalog | null = null
+        let failure: string | null = null
         try {
           resolved = await skillApi.listProvider(
             projectId,
             descriptor.providerId,
             options,
           )
-        } catch {
+        } catch (error) {
           resolved = null
+          failure = errorMessage(error, 'Failed to load skills')
         }
 
         set((state) => {
           const remaining = state.loadingProviders.filter(
             (provider) => provider.providerId !== descriptor.providerId,
           )
+          const failedProviders =
+            failure === null
+              ? state.failedProviders
+              : { ...state.failedProviders, [descriptor.providerId]: failure }
           if (!state.catalog) {
-            return { loadingProviders: remaining }
+            return { loadingProviders: remaining, failedProviders }
           }
           const others = state.catalog.providers.filter(
             (provider) => provider.providerId !== descriptor.providerId,
@@ -134,6 +151,7 @@ export const useSkillStore = create<SkillStore>((set, get) => ({
           return {
             catalog: { ...state.catalog, providers: nextProviders },
             loadingProviders: remaining,
+            failedProviders,
           }
         })
       }),
@@ -144,7 +162,7 @@ export const useSkillStore = create<SkillStore>((set, get) => ({
   },
 
   loadGlobalCatalog: async (options) => {
-    set({ isCatalogLoading: true, catalogError: null })
+    set({ isCatalogLoading: true, catalogError: null, failedProviders: {} })
     try {
       const catalog = await skillApi.listGlobal(options)
       set((state) => {
