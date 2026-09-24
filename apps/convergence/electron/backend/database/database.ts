@@ -195,6 +195,13 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_session_conversation_items_session_sequence
     ON session_conversation_items(session_id, sequence);
 
+  -- The "needs you" lookup reads the latest approval/input request of a
+  -- session (MAR-3396). Without this partial index SQLite walks the session's
+  -- whole transcript backwards to find it, and most sessions have none.
+  CREATE INDEX IF NOT EXISTS idx_session_conversation_items_attention_request
+    ON session_conversation_items(session_id, sequence)
+    WHERE kind IN ('approval-request', 'input-request');
+
   CREATE TABLE IF NOT EXISTS session_queued_inputs (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
