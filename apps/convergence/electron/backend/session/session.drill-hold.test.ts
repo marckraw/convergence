@@ -18,6 +18,14 @@ import { SessionService } from './session.service'
 import type { SessionSettledEvent } from './session.types'
 import { TurnCaptureService } from './turn/turn-capture.service'
 import { AutoDrillService } from '../context-drill/auto-drill.service'
+import {
+  CODEX_HOME_RESTORED_TEST,
+  isolateAmbientCodexHome,
+  isolatedCodexHomeTestsFinished,
+} from './isolate-ambient-codex-home'
+
+const runnerCodexHome = process.env.CODEX_HOME
+isolateAmbientCodexHome()
 
 /**
  * The queue hold, against the real `SessionService` (MAR-3255 R2).
@@ -1003,4 +1011,9 @@ describe('the readiness answer is the refusal (MAR-3255 R3)', () => {
     )
     expect(error?.message).toBe((readiness as { reason: string }).reason)
   })
+})
+
+it(CODEX_HOME_RESTORED_TEST, () => {
+  expect(isolatedCodexHomeTestsFinished()).toBeGreaterThan(0)
+  expect(process.env.CODEX_HOME).toBe(runnerCodexHome)
 })
