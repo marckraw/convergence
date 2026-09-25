@@ -84,7 +84,7 @@ describe('sentences are asked for when a turn ends, never per item', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  function emitter() {
+  function emitter(id = sessionId) {
     const source = {
       dispose: vi.fn(),
       stop: vi.fn(),
@@ -96,9 +96,50 @@ describe('sentences are asked for when a turn ends, never per item', () => {
           sessions as unknown as {
             applyDelta: (id: string, delta: unknown, s: SessionHandle) => void
           }
-        ).applyDelta(sessionId, delta, source),
+        ).applyDelta(id, delta, source),
     })
   }
+
+  /** A turn with one closed block of three reads under `dir`. */
+  function turnWithOneBlock(id: string, dir: string) {
+    const turn = emitter(id)
+    turn.patchSession({ status: 'running' })
+    turn.addUserMessage({ text: 'look around' })
+    for (const name of ['a', 'b', 'c'])
+      turn.addToolCall({
+        toolName: 'Read',
+        inputText: JSON.stringify({ file_path: `${dir}/${name}.ts` }),
+      })
+    turn.addAssistantMessage({ text: 'Looked.', state: 'complete' })
+    return turn
+  }
+
+  it('R10: a session deleted while its sentence is asked for does not stall the queue', async () => {
+    const other = sessions.create({
+      projectId: 'p',
+      workspaceId: null,
+      providerId: 'claude-code',
+      model: null,
+      effort: null,
+      name: 'the next session',
+    }).id
+    oneShot.mockImplementationOnce(async () => {
+      // The reader's sequence: s1 is deleted mid-request, so the write that
+      // follows breaks the foreign key (INSERT OR IGNORE does not cover it).
+      sessions.delete(sessionId)
+      return { text: 'Read three files under src.' }
+    })
+    const first = turnWithOneBlock(sessionId, 'src')
+    const second = turnWithOneBlock(other, 'src')
+    first.patchSession({ status: 'completed' })
+    second.patchSession({ status: 'completed' })
+    await sentences.whenIdle()
+
+    expect(oneShot).toHaveBeenCalledTimes(2)
+    expect(repository.list(sessionId)).toEqual([])
+    expect(repository.list(other)).toHaveLength(1)
+    await turnCapture.flushPendingEnd(other)
+  })
 
   it('hears the turn once, after it completes, and describes its closed blocks', async () => {
     const turn = emitter()

@@ -7,10 +7,11 @@ import {
 } from './block-sentence-blocks.pure'
 import {
   acceptBlockSentence,
-  blockRecordsFromItems,
+  blockRecords,
   buildBlockPrompt,
   buildBlockSentenceOneShotInput,
   LUNA_MODEL_ID,
+  promptProviderName,
 } from './block-sentence.pure'
 import type { BlockSentenceRepository } from './block-sentence.repository'
 
@@ -47,20 +48,33 @@ export interface BlockSentenceServiceDeps {
  * A single app-wide queue (Producer-Consumer): a finished turn is enqueued
  * and nothing else happens on the caller's path; one consumer folds it, asks
  * for one block at a time, checks the line and stores what passes. Failures
- * are silent -- a block without a sentence shows its facts, as before.
+ * are silent -- a block without a sentence shows its facts, as before -- and
+ * never the queue's: one turn failing ends that turn, not the ones behind it.
  */
 export class BlockSentenceService {
   private readonly turns: Array<{ sessionId: string; turnId: string }> = []
   private draining: Promise<void> | null = null
+  private stopped = false
 
   constructor(private readonly deps: BlockSentenceServiceDeps) {}
 
   /** A turn ended (R2): queue it when the switch is on and a model exists. */
   turnEnded(sessionId: string, turnId: string): void {
     if (!this.deps.isEnabled()) return
-    if (!this.deps.model()) return
+    if (!this.model()) return
     this.turns.push({ sessionId, turnId })
     this.drain()
+  }
+
+  /**
+   * The app is quitting (R12): what is queued is dropped, and from here on
+   * the model is never asked for -- so no helper turn, and no fresh
+   * `codex app-server` host, is started while the app goes down. A request
+   * already in flight finishes, but its answer is not stored.
+   */
+  stop(): void {
+    this.stopped = true
+    this.turns.length = 0
   }
 
   /** Resolves when the queue is empty (tests, shutdown). */
@@ -68,18 +82,32 @@ export class BlockSentenceService {
     while (this.draining) await this.draining
   }
 
+  /** The Codex helper, or null once stopped: the one door to a request. */
+  private model(): BlockSentenceModel | null {
+    return this.stopped ? null : this.deps.model()
+  }
+
   private drain(): void {
     if (this.draining) return
-    this.draining = (async () => {
-      // Off the caller's path: the turn-end handler has already returned.
-      await Promise.resolve()
-      for (let turn = this.turns.shift(); turn; turn = this.turns.shift())
+    this.draining = this.consume().finally(() => {
+      this.draining = null
+      // R10: a turn queued after the loop found the queue empty, but before
+      // this cleared `draining`, was refused a new consumer; start it now.
+      if (this.turns.length > 0) this.drain()
+    })
+  }
+
+  private async consume(): Promise<void> {
+    // Off the caller's path: the turn-end handler has already returned.
+    await Promise.resolve()
+    for (let turn = this.turns.shift(); turn; turn = this.turns.shift()) {
+      try {
         await this.describeTurn(turn.sessionId, turn.turnId)
-    })()
-      .catch(() => {})
-      .finally(() => {
-        this.draining = null
-      })
+      } catch {
+        // R10: this turn is done -- its session deleted mid-request, its
+        // items unreadable. The turns behind it are still asked for.
+      }
+    }
   }
 
   private async describeTurn(sessionId: string, turnId: string) {
@@ -103,14 +131,14 @@ export class BlockSentenceService {
     // The switch and the model are read again per block: turning it Off
     // stops the queue at the next block, not after the turn.
     if (!this.deps.isEnabled()) return 'skipped'
-    const model = this.deps.model()
+    const model = this.model()
     if (!model) return 'skipped'
     if (this.deps.repository.has(sessionId, block.firstItemId)) return 'skipped'
 
     const built = buildBlockPrompt(
       this.deps.promptText,
-      block.members[0]!.providerMeta.providerId,
-      blockRecordsFromItems(block.members),
+      promptProviderName(block.members[0]!.providerMeta.providerId),
+      blockRecords(block.members),
     )
     if (!built) return 'skipped'
 
@@ -127,6 +155,8 @@ export class BlockSentenceService {
     } catch {
       return 'call-failed'
     }
+    // R12: an answer that lands after quit began is not written.
+    if (this.stopped) return 'skipped'
 
     // R3: the gate runs before storage; a failing line is dropped for good.
     const sentence = acceptBlockSentence(text, built.truth)

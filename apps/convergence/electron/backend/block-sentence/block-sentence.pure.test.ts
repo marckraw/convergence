@@ -6,11 +6,15 @@ import type { ConversationItem } from '../session/conversation-item.types'
 import {
   acceptBlockSentence,
   assembleBlockPrompt,
+  blockRecords,
   BLOCK_PROMPT_MAX_BYTES,
   BLOCK_RECORD_TEXT_MAX_CHARS,
   blockRecordsFromItems,
   buildBlockPrompt,
   deriveBlockTruth,
+  promptProviderName,
+  unwrapShellCommand,
+  type BlockPrompt,
   type BlockRecord,
 } from './block-sentence.pure'
 
@@ -19,7 +23,11 @@ const promptText = readFileSync(
   'utf8',
 )
 
-function base(id: string, providerEventType: string | null = null) {
+function base(
+  id: string,
+  providerEventType: string | null = null,
+  providerId = 'codex',
+) {
   return {
     id,
     sessionId: 's',
@@ -29,10 +37,43 @@ function base(id: string, providerEventType: string | null = null) {
     createdAt: '2026-09-25T00:00:00.000Z',
     updatedAt: '2026-09-25T00:00:00.000Z',
     providerMeta: {
-      providerId: 'codex',
+      providerId,
       providerItemId: null,
       providerEventType,
     },
+  }
+}
+
+type Fixture = (typeof fixtures)[number]
+const fixture = (id: string): Fixture =>
+  fixtures.find((block) => block.id === id)!
+
+/** A Claude Code Read as the app records it: an absolute `file_path`. */
+function claudeRead(id: string, filePath: string): ConversationItem {
+  return {
+    ...base(id, 'tool-use', 'claude-code'),
+    kind: 'tool-call',
+    toolName: 'Read',
+    inputText: JSON.stringify({ file_path: filePath }, null, 2),
+  }
+}
+
+/**
+ * A Codex step exactly as `codex-provider.ts` records a `commandExecution`:
+ * `toolName` is the command as Codex sent it, and the output carries a
+ * `"<command>: "` prefix.
+ */
+function codexCommand(
+  id: string,
+  command: string,
+  output: string,
+): ConversationItem {
+  return {
+    ...base(id, 'commandExecution'),
+    kind: 'tool-result',
+    toolName: command,
+    relatedItemId: null,
+    outputText: `${command}: ${output}`,
   }
 }
 
@@ -191,5 +232,325 @@ describe('truth before storage (R3)', () => {
     ).toBeNull()
     expect(acceptBlockSentence('Read state.ts. Updated it.', truth)).toBeNull()
     expect(acceptBlockSentence('   ', truth)).toBeNull()
+  })
+})
+
+describe('paths as the model will write them (R7)', () => {
+  const items = ['a', 'b', 'c'].map((name) =>
+    claudeRead(`read-${name}`, `/Users/me/proj/src/app/${name}.ts`),
+  )
+  const built = buildBlockPrompt(
+    promptText,
+    promptProviderName('claude-code'),
+    blockRecordsFromItems(items),
+  )!
+
+  it('holds every contiguous sub-path of an absolute Claude path', () => {
+    for (const path of [
+      'src/app',
+      'src/app/a.ts',
+      'app/a.ts',
+      'proj/src',
+      'Users/me/proj/src/app/a.ts',
+      'a.ts',
+    ])
+      expect(built.truth.paths, path).toContain(path)
+  })
+
+  it('keeps "Read three files in src/app." for Claude-shaped items', () => {
+    expect(
+      acceptBlockSentence('Read three files in src/app.', built.truth),
+    ).toBe('Read three files in src/app.')
+  })
+
+  it('keeps a line that copies the absolute path exactly, and its ./ spelling', () => {
+    expect(
+      acceptBlockSentence('Read /Users/me/proj/src/app/a.ts.', built.truth),
+    ).not.toBeNull()
+    expect(
+      acceptBlockSentence('Read ./src/app/b.ts and src/app/c.ts.', built.truth),
+    ).not.toBeNull()
+  })
+
+  it('still drops an invented path, and a real folder joined to a name it never held', () => {
+    expect(acceptBlockSentence('Read src/lib/x.ts.', built.truth)).toBeNull()
+    expect(
+      acceptBlockSentence('Read three files in src/app/lib.', built.truth),
+    ).toBeNull()
+    expect(
+      acceptBlockSentence('Read /Users/me/proj/src/lib/a.ts.', built.truth),
+    ).toBeNull()
+  })
+
+  it('reads ./ and a leading / the same way on both sides', () => {
+    const truth = deriveBlockTruth([
+      {
+        type: 'tool-call',
+        toolName: 'Bash',
+        inputText: '{"command":"cat ./docs/notes/plan.md"}',
+      },
+    ])
+    expect(truth.paths).toContain('docs/notes/plan.md')
+    expect(truth.paths).not.toContain('./docs/notes/plan.md')
+    for (const sentence of [
+      'Read docs/notes/plan.md.',
+      'Read ./docs/notes/plan.md.',
+      'Read /docs/notes/plan.md.',
+      'Read notes/plan.md.',
+    ])
+      expect(acceptBlockSentence(sentence, truth), sentence).toBe(sentence)
+  })
+})
+
+describe('Codex records in the spike shape (R8)', () => {
+  it.each([
+    [`/bin/zsh -lc 'ls src/shared'`, 'ls src/shared'],
+    [`zsh -lc 'git status --short'`, 'git status --short'],
+    [`/bin/bash -c 'npm test'`, 'npm test'],
+    [`bash -l -c 'rg pending src'`, 'rg pending src'],
+    [`/usr/bin/sh -c "npm run typecheck"`, 'npm run typecheck'],
+    [String.raw`/bin/zsh -lc 'echo '\''hi'\'' > a.txt'`, `echo 'hi' > a.txt`],
+    [
+      String.raw`bash -lc "echo \"\$HOME\" \\ done"`,
+      String.raw`echo "$HOME" \ done`,
+    ],
+    [`/bin/zsh -lc 'cat <<EOF\nline\nEOF'`, 'cat <<EOF\nline\nEOF'],
+  ])('unwraps %s', (wrapped, command) => {
+    expect(unwrapShellCommand(wrapped)).toBe(command)
+  })
+
+  it.each([
+    'ls src/shared',
+    `python -c 'print(1)'`,
+    `/bin/zsh -lc ls`,
+    `/bin/zsh -lc 'a' 'b'`,
+    `/bin/zsh -lc 'it's'`,
+    `bash -lc "say "hi""`,
+    `fish -c 'ls'`,
+  ])('leaves %s as Codex wrote it', (command) => {
+    expect(unwrapShellCommand(command)).toBe(command)
+  })
+
+  it('a wrapped `ls` with its prefixed output gives the spike listing record and truth set', () => {
+    const block = fixture('block-20')
+    const records = blockRecordsFromItems([
+      codexCommand('ls', `/bin/zsh -lc 'ls src/shared'`, 'lib\nui\nstyles'),
+    ])
+    expect(records).toEqual(block.items)
+    expect(deriveBlockTruth(records)).toEqual(block.truth)
+    // The listing rule reads the entries, the first one included.
+    expect(deriveBlockTruth(records).paths).toContain('lib')
+  })
+
+  it('a wrapped `npm test` with output gives the spike record', () => {
+    const block = fixture('block-17')
+    const records = blockRecordsFromItems([
+      codexCommand(
+        'test',
+        `/bin/zsh -lc 'npm test'`,
+        'Command exited 1. One assertion failed.',
+      ),
+    ])
+    expect(records).toEqual(block.items)
+    expect(deriveBlockTruth(records)).toEqual(block.truth)
+  })
+
+  it('five wrapped commands give the spike block and its exact prompt', () => {
+    const block = fixture('block-16')
+    const items = (block.items as BlockRecord[]).map((record, index) =>
+      codexCommand(
+        `c${index}`,
+        `/bin/zsh -lc '${record.toolName}'`,
+        record.type === 'tool-result' ? record.outputText : '',
+      ),
+    )
+    const built = buildBlockPrompt(
+      promptText,
+      promptProviderName('codex'),
+      blockRecordsFromItems(items),
+    )!
+    expect(built.records).toEqual(block.items)
+    expect(built.truth).toEqual(block.truth)
+    expect(built.prompt).toBe(
+      assembleBlockPrompt(promptText, 'codex', block.items as BlockRecord[]),
+    )
+  })
+
+  it('strips only the prefix Codex added, never a matching start of real output', () => {
+    const records = blockRecordsFromItems([
+      codexCommand('p', 'pwd', 'pwd: /tmp/x'),
+    ])
+    expect(records).toEqual([
+      { type: 'tool-result', toolName: 'pwd', outputText: 'pwd: /tmp/x' },
+    ])
+  })
+})
+
+describe('the prompt names the provider as measured (R11)', () => {
+  it('claude-code is claude; the others are as the fixtures had them', () => {
+    expect(promptProviderName('claude-code')).toBe('claude')
+    for (const name of ['codex', 'pi', 'cursor'])
+      expect(promptProviderName(name)).toBe(name)
+  })
+
+  it("a Claude Code block's prompt is byte-identical to the spike's", () => {
+    const block = fixture('block-01')
+    const items = (block.items as BlockRecord[]).map((record, index) => ({
+      ...base(`r${index}`, 'tool-use', 'claude-code'),
+      kind: 'tool-call' as const,
+      toolName: record.toolName,
+      inputText: record.type === 'tool-call' ? record.inputText : '',
+    }))
+    expect(
+      buildBlockPrompt(
+        promptText,
+        promptProviderName(items[0]!.providerMeta.providerId),
+        blockRecordsFromItems(items),
+      )!.prompt,
+    ).toBe(
+      assembleBlockPrompt(promptText, 'claude', block.items as BlockRecord[]),
+    )
+  })
+})
+
+/**
+ * Lap 1's `buildBlockPrompt`, verbatim, as the reference the linear fit must
+ * agree with (R9). It re-assembles and re-measures the prompt per dropped
+ * record: quadratic in the block, which is why it was replaced.
+ */
+function lap1BuildBlockPrompt(
+  text: string,
+  provider: string,
+  records: readonly BlockRecord[],
+): BlockPrompt | null {
+  const cap = (value: string) =>
+    value.length > BLOCK_RECORD_TEXT_MAX_CHARS
+      ? value.slice(0, BLOCK_RECORD_TEXT_MAX_CHARS)
+      : value
+  const capped: BlockRecord[] = records.map((record) =>
+    record.type === 'tool-call'
+      ? { ...record, inputText: cap(record.inputText) }
+      : { ...record, outputText: cap(record.outputText) },
+  )
+  while (capped.length > 0) {
+    const prompt = assembleBlockPrompt(text, provider, capped)
+    if (new TextEncoder().encode(prompt).length <= BLOCK_PROMPT_MAX_BYTES)
+      return { prompt, records: capped, truth: deriveBlockTruth(capped) }
+    capped.pop()
+  }
+  return null
+}
+
+/** A long Codex block: heredoc commands of KBs, outputs past the cap. */
+function thousandCodexSteps(): ConversationItem[] {
+  return Array.from({ length: 1_000 }, (_, index) => {
+    const heredoc = `cat <<'EOF' > src/gen/file-${index}.ts\n${'const x = 1 // ünïcode\n'.repeat(200)}EOF`
+    return codexCommand(
+      `step-${index}`,
+      `/bin/zsh -lc '${index % 2 ? heredoc : `sed -n 1,400p src/mod-${index}/index.ts`}'`,
+      `${'line of output with a path src/out/file.ts\n'.repeat(80)}`,
+    )
+  })
+}
+
+describe('no quadratic work on main (R9)', () => {
+  /** Median of 7 timed runs after one warm-up, in ms. */
+  function medianMs(run: () => unknown): { median: number; runs: number[] } {
+    run()
+    const runs: number[] = []
+    for (let index = 0; index < 7; index += 1) {
+      const started = performance.now()
+      run()
+      runs.push(performance.now() - started)
+    }
+    const sorted = [...runs].sort((a, b) => a - b)
+    return { median: sorted[3]!, runs }
+  }
+
+  it('builds a 1,000-record block in at most 5 ms', () => {
+    const items = thousandCodexSteps()
+    const records = blockRecordsFromItems(items)
+    expect(records).toHaveLength(1_000)
+    // The fit alone, over an already mapped block of 1,000 records.
+    const fit = medianMs(() => buildBlockPrompt(promptText, 'codex', records))
+    // The service's own path: items -> lazy records -> fit -> one assembly.
+    const path = medianMs(() =>
+      buildBlockPrompt(promptText, 'codex', blockRecords(items)),
+    )
+    const show = (ms: number) => ms.toFixed(3)
+    process.stdout.write(
+      `R9: 1,000-record Codex block -- buildBlockPrompt ${show(fit.median)} ms, ` +
+        `items to prompt ${show(path.median)} ms (median of 7; ` +
+        `runs ${fit.runs.map(show).join(', ')} / ${path.runs.map(show).join(', ')})\n`,
+    )
+    expect(fit.median).toBeLessThanOrEqual(5)
+    expect(path.median).toBeLessThanOrEqual(5)
+    // Both ways send the same thing.
+    expect(buildBlockPrompt(promptText, 'codex', blockRecords(items))).toEqual(
+      buildBlockPrompt(promptText, 'codex', records),
+    )
+  })
+
+  it('maps only what it sends: the fit stops pulling items at the first record past the budget', () => {
+    const items = thousandCodexSteps()
+    let pulled = 0
+    const counted: Iterable<ConversationItem> = {
+      *[Symbol.iterator]() {
+        for (const item of items) {
+          pulled += 1
+          yield item
+        }
+      },
+    }
+    const built = buildBlockPrompt(promptText, 'codex', blockRecords(counted))!
+    expect(built.records.length).toBeGreaterThan(0)
+    expect(pulled).toBe(built.records.length + 1)
+  })
+
+  it('equals the lap-1 function on the 20 fixtures', () => {
+    for (const block of fixtures) {
+      const records = block.items as BlockRecord[]
+      expect(
+        buildBlockPrompt(promptText, block.provider, records),
+        block.id,
+      ).toEqual(lap1BuildBlockPrompt(promptText, block.provider, records))
+    }
+  })
+
+  it('equals the lap-1 function wherever the cut lands, multi-byte text included', () => {
+    for (let count = 0; count <= 24; count += 1) {
+      const records: BlockRecord[] = Array.from({ length: count }, (_, i) => ({
+        type: i % 3 ? 'tool-call' : 'tool-result',
+        toolName: i % 3 ? 'Read' : `ls src/part-${i}`,
+        ...(i % 3
+          ? {
+              inputText: JSON.stringify({
+                file_path: `src/part-${i}/f.ts`,
+                pad: 'é'.repeat(300 + i * 97),
+              }),
+            }
+          : { outputText: `a\nb\n${'z'.repeat(2_500)}` }),
+      })) as BlockRecord[]
+      expect(buildBlockPrompt(promptText, 'pi', records), `${count}`).toEqual(
+        lap1BuildBlockPrompt(promptText, 'pi', records),
+      )
+    }
+  })
+
+  it('caps every text field of a record, the tool name included', () => {
+    const toolName = `cat <<'EOF' > src/a.ts\n${'x'.repeat(5_000)} src/hidden/after-cap.ts\nEOF`
+    const built = buildBlockPrompt(promptText, 'codex', [
+      { type: 'tool-result', toolName, outputText: 'ok' },
+      { type: 'tool-call', toolName, inputText: 'y'.repeat(3_000) },
+    ])!
+    for (const record of built.records) {
+      expect(record.toolName.length).toBe(BLOCK_RECORD_TEXT_MAX_CHARS)
+      const text =
+        record.type === 'tool-call' ? record.inputText : record.outputText
+      expect(text.length).toBeLessThanOrEqual(BLOCK_RECORD_TEXT_MAX_CHARS)
+    }
+    expect(built.prompt).not.toContain('src/hidden/after-cap.ts')
+    expect(built.truth.paths).not.toContain('src/hidden/after-cap.ts')
+    expect(built.truth.paths).toContain('src/a.ts')
   })
 })

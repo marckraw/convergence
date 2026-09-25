@@ -64,11 +64,14 @@ function harness(
     active?: boolean
     available?: () => boolean
     answer?: (input: OneShotInput) => Promise<{ text: string }>
+    /** Runs before the row is written; throw to fail the write. */
+    beforeInsert?: (row: BlockSentence) => void
   } = {},
 ) {
   const stored = new Map<string, BlockSentence>()
   let inFlight = 0
   let maxInFlight = 0
+  let modelAsked = 0
   const oneShot = vi.fn(async (input: OneShotInput) => {
     inFlight += 1
     maxInFlight = Math.max(maxInFlight, inFlight)
@@ -88,6 +91,7 @@ function harness(
       has: (sessionId, firstItemId) =>
         stored.has(`${sessionId}/${firstItemId}`),
       insert: (row) => {
+        options.beforeInsert?.(row)
         const key = `${row.sessionId}/${row.firstItemId}`
         if (stored.has(key)) return false
         stored.set(key, row)
@@ -97,8 +101,10 @@ function harness(
     turnItems,
     isTurnActive: () => options.active ?? false,
     isEnabled: options.enabled ?? (() => true),
-    model: () =>
-      options.available && !options.available() ? null : { oneShot },
+    model: () => {
+      modelAsked += 1
+      return options.available && !options.available() ? null : { oneShot }
+    },
     workingDirectory: () => '/tmp/block-sentence-scratch',
     promptText: BLOCK_SENTENCE_PROMPT,
     onChanged: changed,
@@ -112,6 +118,7 @@ function harness(
     changed,
     turnItems,
     maxInFlight: () => maxInFlight,
+    modelAsked: () => modelAsked,
   }
 }
 
@@ -198,9 +205,10 @@ describe('the call (A1)', () => {
     await h.service.whenIdle()
     const members = items.slice(1, 4)
     expect(h.oneShot).toHaveBeenCalledWith({
+      // R11: a `claude-code` session is `claude` in the prompt, as measured.
       prompt: buildBlockPrompt(
         BLOCK_SENTENCE_PROMPT,
-        'claude-code',
+        'claude',
         blockRecordsFromItems(members),
       )!.prompt,
       modelId: 'gpt-6-luna',
@@ -309,5 +317,136 @@ describe('his switch (R6, A4)', () => {
     h.service.turnEnded('s1', 't1')
     await h.service.whenIdle()
     expect(h.oneShot).toHaveBeenCalledTimes(1)
+  })
+})
+
+/** A settled macrotask: every microtask queued before it has run. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 5))
+
+describe('the queue never stalls (R10)', () => {
+  it('a write that fails for one turn (its session deleted mid-request) does not drop the turns behind it', async () => {
+    const items = [
+      ...turnWithBlocks(2),
+      ...turnWithBlocks(1).map((item) => ({
+        ...item,
+        id: `s2-${item.id}`,
+        sessionId: 's2',
+      })),
+    ]
+    const h = harness({
+      items,
+      beforeInsert: (row) => {
+        // What SQLite says when the session row is gone: OR IGNORE does not
+        // cover a foreign key (the real table: block-sentence.turn-end.test).
+        if (row.sessionId === 's1')
+          throw new Error('FOREIGN KEY constraint failed')
+      },
+    })
+    h.turnItems.mockImplementation((sessionId: string) =>
+      items.filter((item) => item.sessionId === sessionId),
+    )
+    h.service.turnEnded('s1', 't1')
+    h.service.turnEnded('s2', 't1')
+    await h.service.whenIdle()
+
+    // s1's first block was asked and failed to store; its turn ends there.
+    // s2's block is still asked for, and stored.
+    expect(h.oneShot).toHaveBeenCalledTimes(2)
+    expect([...h.stored.keys()]).toEqual(['s2/s2-b0-0'])
+  })
+
+  it('a turn that ends in the microtask gap as the queue empties is still described', async () => {
+    // The gap is a few microtasks wide, between the loop finding the queue
+    // empty and the consumer letting go; walk a late turn across it.
+    for (let late = 0; late <= 12; late += 1) {
+      const items = [
+        ...turnWithBlocks(1),
+        ...turnWithBlocks(1).map((item) => ({
+          ...item,
+          id: `t2-${item.id}`,
+          turnId: 't2',
+        })),
+      ]
+      let lateTurnEnded!: () => void
+      const lateTurnDone = new Promise<void>((resolve) => {
+        lateTurnEnded = resolve
+      })
+      let answered = 0
+      const h = harness({
+        items,
+        answer: async () => {
+          answered += 1
+          if (answered === 1) {
+            void (async () => {
+              for (let tick = 0; tick < late; tick += 1) await Promise.resolve()
+              h.service.turnEnded('s1', 't2')
+              lateTurnEnded()
+            })()
+          }
+          return { text: 'Read three files.' }
+        },
+      })
+      h.service.turnEnded('s1', 't1')
+      await lateTurnDone
+      await h.service.whenIdle()
+      await settle()
+      expect(
+        h.oneShot,
+        `turn ended ${late} microtasks after the answer`,
+      ).toHaveBeenCalledTimes(2)
+    }
+  })
+})
+
+describe('quitting stops the queue (R12)', () => {
+  it('two queued turns, stopped during the first call: no second request, the model is never asked for again, nothing is stored', async () => {
+    // Two blocks in the first turn, so its own next block also meets the
+    // stop (the model is not asked for), and a second turn behind it (the
+    // queue is dropped: it is not even read).
+    const items = [
+      ...turnWithBlocks(2),
+      ...turnWithBlocks(1).map((item) => ({
+        ...item,
+        id: `t2-${item.id}`,
+        turnId: 't2',
+      })),
+    ]
+    let modelAskedAtStop = -1
+    const h = harness({
+      items,
+      answer: async () => {
+        h.service.stop()
+        modelAskedAtStop = h.modelAsked()
+        return { text: 'Read three files.' }
+      },
+    })
+    h.service.turnEnded('s1', 't1')
+    h.service.turnEnded('s1', 't2')
+    await h.service.whenIdle()
+    await settle()
+
+    expect(h.oneShot).toHaveBeenCalledTimes(1)
+    // model() is where a Codex host would be resolved: not once after stop.
+    expect(h.modelAsked()).toBe(modelAskedAtStop)
+    expect(h.stored.size).toBe(0)
+    expect(h.changed).not.toHaveBeenCalled()
+    // The second turn was dropped from the queue, never read.
+    expect(h.turnItems).toHaveBeenCalledTimes(1)
+
+    // A turn ending during the quit is not even queued.
+    h.service.turnEnded('s1', 't1')
+    await h.service.whenIdle()
+    expect(h.oneShot).toHaveBeenCalledTimes(1)
+    expect(h.modelAsked()).toBe(modelAskedAtStop)
+  })
+
+  it('main stops the service first thing on before-quit, before sessions or servers close', () => {
+    const main = readFileSync(
+      new URL('../../main/index.ts', import.meta.url),
+      'utf8',
+    )
+    expect(main).toMatch(
+      /app\.on\('before-quit', \(event\) => \{[^}]*?blockSentenceService\.stop\(\)[\s\S]*?sessionService\.disposeAllForQuit\(\)[\s\S]*?codexServerHosts\.stopAll\(\)/,
+    )
   })
 })

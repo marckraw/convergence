@@ -9,6 +9,7 @@ import {
   assembleBlockPrompt,
   blockRecordsFromItems,
   buildBlockPrompt,
+  promptProviderName,
   type BlockRecord,
 } from './block-sentence.pure'
 import { BlockSentenceService } from './block-sentence.service'
@@ -19,7 +20,23 @@ import type { BlockSentence } from './block-sentence.types'
  * The double answers only a prompt byte-identical to the one the spike sent
  * for that block, so a green run means main asks exactly what was measured,
  * and the app's gate keeps exactly what the spike's gate kept.
+ *
+ * The items are the app's own, not the spike's: a Claude session's provider
+ * id is `claude-code` (R11), and a Codex step is what `codex-provider.ts`
+ * records for a `commandExecution` -- the command shell-wrapped as Codex
+ * sends it, and the output behind a `"<command>: "` prefix (R8).
  */
+
+/** The app's provider id for each spike provider name (R11). */
+const APP_PROVIDER_ID: Record<string, string> = { claude: 'claude-code' }
+const appProviderId = (spikeName: string) =>
+  APP_PROVIDER_ID[spikeName] ?? spikeName
+
+/** `codex-provider.ts`'s `commandExecution` result, for a zsh-wrapped command. */
+function codexCommandItem(command: string, output: string) {
+  const wrapped = `/bin/zsh -lc '${command.replaceAll(`'`, `'\\''`)}'`
+  return { toolName: wrapped, outputText: `${wrapped}: ${output}` }
+}
 
 type Fixture = (typeof fixtures)[number]
 
@@ -43,11 +60,10 @@ function itemsFor(block: Fixture, withAnswers: boolean): ConversationItem[] {
       items.push({
         ...base,
         kind: 'tool-result',
-        toolName: record.toolName,
+        ...codexCommandItem(record.toolName, record.outputText),
         relatedItemId: null,
-        outputText: record.outputText,
         providerMeta: {
-          providerId: block.provider,
+          providerId: appProviderId(block.provider),
           providerItemId: null,
           providerEventType: 'commandExecution',
         },
@@ -60,7 +76,7 @@ function itemsFor(block: Fixture, withAnswers: boolean): ConversationItem[] {
       toolName: record.toolName,
       inputText: record.inputText,
       providerMeta: {
-        providerId: block.provider,
+        providerId: appProviderId(block.provider),
         providerItemId: null,
         providerEventType: 'tool-use',
       },
@@ -76,7 +92,7 @@ function itemsFor(block: Fixture, withAnswers: boolean): ConversationItem[] {
         relatedItemId: base.id,
         outputText: 'ok',
         providerMeta: {
-          providerId: block.provider,
+          providerId: appProviderId(block.provider),
           providerItemId: null,
           providerEventType: 'tool-result',
         },
@@ -100,7 +116,7 @@ describe('CV2b replay: the app asks what the spike measured', () => {
       expect(records, block.id).toEqual(block.items)
       const built = buildBlockPrompt(
         BLOCK_SENTENCE_PROMPT,
-        block.provider,
+        promptProviderName(appProviderId(block.provider)),
         records,
       )!
       expect(built.prompt, block.id).toBe(spikePrompt(block))
@@ -144,7 +160,7 @@ describe('CV2b replay: the app asks what the spike measured', () => {
         createdAt: '2026-09-25T00:00:00.000Z',
         updatedAt: '2026-09-25T00:00:00.000Z',
         providerMeta: {
-          providerId: block.provider,
+          providerId: appProviderId(block.provider),
           providerItemId: null,
           providerEventType: 'assistant',
         },

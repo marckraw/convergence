@@ -68,6 +68,17 @@
         "part-7.tsx",
         "part-8.tsx",
         "part-9.tsx",
+        "session-view",
+        "session-view/part-1.tsx",
+        "session-view/part-10.tsx",
+        "session-view/part-2.tsx",
+        "session-view/part-3.tsx",
+        "session-view/part-4.tsx",
+        "session-view/part-5.tsx",
+        "session-view/part-6.tsx",
+        "session-view/part-7.tsx",
+        "session-view/part-8.tsx",
+        "session-view/part-9.tsx",
         "src",
         "src/widgets",
         "src/widgets/session-view",
@@ -80,7 +91,19 @@
         "src/widgets/session-view/part-6.tsx",
         "src/widgets/session-view/part-7.tsx",
         "src/widgets/session-view/part-8.tsx",
-        "src/widgets/session-view/part-9.tsx"
+        "src/widgets/session-view/part-9.tsx",
+        "widgets",
+        "widgets/session-view",
+        "widgets/session-view/part-1.tsx",
+        "widgets/session-view/part-10.tsx",
+        "widgets/session-view/part-2.tsx",
+        "widgets/session-view/part-3.tsx",
+        "widgets/session-view/part-4.tsx",
+        "widgets/session-view/part-5.tsx",
+        "widgets/session-view/part-6.tsx",
+        "widgets/session-view/part-7.tsx",
+        "widgets/session-view/part-8.tsx",
+        "widgets/session-view/part-9.tsx"
       ]
     }
   },
@@ -105,10 +128,14 @@
       "paths": [
         "index.ts",
         "session-view",
+        "session-view/index.ts",
         "src",
         "src/widgets",
         "src/widgets/session-view",
-        "src/widgets/session-view/index.ts"
+        "src/widgets/session-view/index.ts",
+        "widgets",
+        "widgets/session-view",
+        "widgets/session-view/index.ts"
       ]
     }
   },
@@ -136,6 +163,15 @@
     "truth": {
       "toolNames": ["Edit"],
       "paths": [
+        "composer",
+        "composer/part-1.ts",
+        "composer/part-2.ts",
+        "composer/part-3.ts",
+        "features",
+        "features/composer",
+        "features/composer/part-1.ts",
+        "features/composer/part-2.ts",
+        "features/composer/part-3.ts",
         "part-1.ts",
         "part-2.ts",
         "part-3.ts",
@@ -213,7 +249,14 @@
     ],
     "truth": {
       "toolNames": ["edit"],
-      "paths": ["src", "src/shared", "src/shared/theme.css", "theme.css"]
+      "paths": [
+        "shared",
+        "shared/theme.css",
+        "src",
+        "src/shared",
+        "src/shared/theme.css",
+        "theme.css"
+      ]
     }
   },
   {
@@ -253,6 +296,10 @@
       "paths": [
         "defaults.ts",
         "settings",
+        "settings/defaults.ts",
+        "shared",
+        "shared/settings",
+        "shared/settings/defaults.ts",
         "src",
         "src/shared",
         "src/shared/settings",
@@ -294,11 +341,16 @@
     "truth": {
       "toolNames": ["Read"],
       "paths": [
+        "session-view",
+        "session-view/transcript.tsx",
         "src",
         "src/widgets",
         "src/widgets/session-view",
         "src/widgets/session-view/transcript.tsx",
-        "transcript.tsx"
+        "transcript.tsx",
+        "widgets",
+        "widgets/session-view",
+        "widgets/session-view/transcript.tsx"
       ]
     }
   },
@@ -315,7 +367,14 @@
     ],
     "truth": {
       "toolNames": ["Grep"],
-      "paths": ["session", "src", "src/entities", "src/entities/session"]
+      "paths": [
+        "entities",
+        "entities/session",
+        "session",
+        "src",
+        "src/entities",
+        "src/entities/session"
+      ]
     }
   },
   {
@@ -333,6 +392,11 @@
       "toolNames": ["Edit"],
       "paths": [
         "button.tsx",
+        "composer",
+        "composer/button.tsx",
+        "features",
+        "features/composer",
+        "features/composer/button.tsx",
         "src",
         "src/features",
         "src/features/composer",
@@ -375,6 +439,9 @@
     "truth": {
       "toolNames": ["Read"],
       "paths": [
+        "architecture",
+        "architecture/boundaries.md",
+        "architecture/overview.md",
         "boundaries.md",
         "docs",
         "docs/architecture",
@@ -456,6 +523,11 @@
     "truth": {
       "toolNames": ["cat src/entities/session/types.ts"],
       "paths": [
+        "entities",
+        "entities/session",
+        "entities/session/types.ts",
+        "session",
+        "session/types.ts",
         "src",
         "src/entities",
         "src/entities/session",
@@ -479,11 +551,15 @@
       "toolNames": ["rg pending src/widgets/session-view"],
       "paths": [
         "session-view",
+        "session-view/state.ts",
         "src",
         "src/widgets",
         "src/widgets/session-view",
         "src/widgets/session-view/state.ts",
-        "state.ts"
+        "state.ts",
+        "widgets",
+        "widgets/session-view",
+        "widgets/session-view/state.ts"
       ]
     }
   },

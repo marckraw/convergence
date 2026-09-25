@@ -1337,6 +1337,9 @@ async function startApp(): Promise<void> {
   let sessionsDisposedForQuit = false
   let sessionQuitInFlight = false
   app.on('before-quit', (event) => {
+    // MAR-3395 R12: first, before sessions close their turns or the servers
+    // stop -- no sentence request, and so no fresh Codex host, after this.
+    blockSentenceService.stop()
     if (sessionsDisposedForQuit) return
     event.preventDefault()
     if (sessionQuitInFlight) return
