@@ -1,5 +1,12 @@
 # convergence
 
+## 0.88.2
+
+### Patch Changes
+
+- 7830ffa: The conversation header's labels now say what caused them: why the harness chip is red, which wires may fire, and a named Stop button.
+- 8fa49fb: Parallel work now opens over the conversation when there isn't room beside it, so the conversation keeps its title and controls.
+
 ## 0.88.1
 
 ### Patch Changes
