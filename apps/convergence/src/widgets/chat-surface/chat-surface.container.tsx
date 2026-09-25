@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import type { FC } from 'react'
+import { flushSync } from 'react-dom'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import {
   spaceApi,
@@ -15,10 +16,14 @@ import {
 } from '@/entities/context-drill'
 import { switchToSession } from '@/features/command-center'
 import { ComposerContainer } from '@/features/composer'
+import { selectProjectName, useProjectStore } from '@/entities/project'
 import {
+  ConversationHeader,
+  headerFocusTarget,
   SessionConversationSurface,
   SessionTranscriptViewSwitch,
   ParallelWork,
+  useConversationViewEntries,
   useParallelWork,
 } from '@/widgets/session-view'
 import { Button } from '@/shared/ui/button'
@@ -47,6 +52,8 @@ interface ChatSurfaceProps {
 const EMPTY_SPACE_SOURCES: SpaceSource[] = []
 // Nothing else docks beside Parallel work in the chat row (MAR-3426).
 const NO_OTHER_DOCKED_PANELS: readonly number[] = []
+// The chat icon before the identity: `h-4 w-4` and its `gap-1.5`.
+const CHAT_LEADING_WIDTH = 22
 
 const DEFAULT_ARTIFACT_DRAFT: SpaceArtifactDraft = {
   kind: 'documentation',
@@ -176,13 +183,20 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
     [sendMessageToSession],
   )
   const parallelRow = useRef<HTMLDivElement>(null)
+  // A Parallel work button that has yielded is hidden and inert; opened from
+  // More, the panel hands focus back to More (MAR-3427 D).
   const focusParallelInvoker = () =>
-    (parallelInvoker.current?.isConnected
-      ? parallelInvoker.current
-      : parallelButton.current
+    headerFocusTarget(
+      parallelInvoker.current?.isConnected
+        ? parallelInvoker.current
+        : parallelButton.current,
     )?.focus()
+  // The close is committed before focus is decided: while open the button is
+  // pinned (MAR-3427 C), and closing may yield it again or move it off the
+  // status row -- a new button -- so the target is read from the header as
+  // it is once the panel has closed.
   const closeParallel = () => {
-    setParallelOpen(false)
+    flushSync(() => setParallelOpen(false))
     focusParallelInvoker()
   }
   const session = sessions.find((entry) => entry.id === activeSessionId) ?? null
@@ -214,6 +228,11 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
     session?.activity,
     drillBeat,
   )
+  // The session's own project, when a chat has one (MAR-3427 R1, R6).
+  const sessionProjectName = useProjectStore(
+    selectProjectName(session?.projectId ?? null),
+  )
+  const viewEntries = useConversationViewEntries(session?.id ?? '')
   const sessionLookup = useMemo(() => {
     const next = new Map<string, SessionSummary>()
     for (const entry of globalSessions) next.set(entry.id, entry)
@@ -664,71 +683,137 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
     )
   }
 
+  const toggleParallel = () => {
+    if (parallelOpen) closeParallel()
+    else {
+      parallelInvoker.current = parallelButton.current
+      setParallelOpen(true)
+    }
+  }
+
   return (
     <div className="flex h-full flex-col">
-      <div
-        className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-      >
-        <div
-          className="flex min-w-0 items-center gap-2"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
-          <MessageSquareText className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span className="truncate text-sm font-medium">{session.name}</span>
-          <Button
-            ref={parallelButton}
-            variant="ghost"
-            size="sm"
-            aria-expanded={parallelOpen}
-            onClick={() => {
-              if (parallelOpen) closeParallel()
-              else {
-                parallelInvoker.current = parallelButton.current
-                setParallelOpen(true)
-              }
-            }}
-          >
-            Parallel work
-            {session.parallelWork?.running
-              ? ` · ${session.parallelWork.running}`
-              : ''}
-          </Button>
-          <SessionTranscriptViewSwitch sessionId={session.id} />
-          <AttentionIndicator
-            parallelWork={session.parallelWork}
-            attention={session.attention}
-            status={session.status}
-            activity={session.activity}
-          />
-          {session.archivedAt ? (
-            <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
-              Archived
-            </span>
-          ) : null}
-          {activityLabel ? (
-            <span
-              className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground"
-              data-testid="chat-session-activity-indicator"
-            >
-              {activityLabel}
-            </span>
-          ) : null}
-        </div>
-        {session.status === 'running' ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            title={`Stop ${session.name}`}
-            aria-label={`Stop ${session.name}`}
-            onClick={() => stopSession(session.id)}
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          >
-            <Square className="h-3 w-3" />
-          </Button>
-        ) : null}
-      </div>
+      <ConversationHeader
+        // A project-free chat has no project part; one started from a
+        // project names it (MAR-3427 I).
+        projectName={
+          session.projectId === null
+            ? null
+            : (sessionProjectName ?? 'Unknown project')
+        }
+        conversationName={session.name}
+        leading={{
+          node: (
+            <MessageSquareText className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ),
+          width: CHAT_LEADING_WIDTH,
+        }}
+        slots={[
+          {
+            id: 'parallel-work',
+            side: 'left',
+            group: session.parallelWork?.running ? 'status' : 'control',
+            // Its panel open, it is pinned (MAR-3427 C).
+            open: parallelOpen,
+            node: (
+              <Button
+                ref={parallelButton}
+                variant="ghost"
+                size="sm"
+                aria-expanded={parallelOpen}
+                onClick={toggleParallel}
+              >
+                Parallel work
+                {session.parallelWork?.running
+                  ? ` · ${session.parallelWork.running}`
+                  : ''}
+              </Button>
+            ),
+            entries: [
+              {
+                kind: 'action',
+                key: 'parallel-work',
+                label: 'Parallel work',
+                onSelect: toggleParallel,
+              },
+            ],
+          },
+          {
+            id: 'view',
+            side: 'left',
+            group: 'control',
+            node: <SessionTranscriptViewSwitch sessionId={session.id} />,
+            entries: viewEntries,
+          },
+          {
+            id: 'attention',
+            side: 'left',
+            group: 'status',
+            node: (
+              <AttentionIndicator
+                parallelWork={session.parallelWork}
+                attention={session.attention}
+                status={session.status}
+                activity={session.activity}
+              />
+            ),
+          },
+          ...(session.archivedAt
+            ? [
+                {
+                  id: 'archived',
+                  side: 'left' as const,
+                  group: 'status' as const,
+                  node: (
+                    <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
+                      Archived
+                    </span>
+                  ),
+                },
+              ]
+            : []),
+          ...(activityLabel
+            ? [
+                {
+                  id: 'activity',
+                  side: 'left' as const,
+                  group: 'status' as const,
+                  node: (
+                    <span
+                      className="max-w-[12rem] truncate rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground"
+                      title={activityLabel}
+                      data-testid="chat-session-activity-indicator"
+                    >
+                      {activityLabel}
+                    </span>
+                  ),
+                },
+              ]
+            : []),
+          ...(session.status === 'running'
+            ? [
+                {
+                  id: 'stop',
+                  side: 'right' as const,
+                  group: 'stop' as const,
+                  node: (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      title={`Stop ${session.name}`}
+                      aria-label={`Stop ${session.name}`}
+                      onClick={() => stopSession(session.id)}
+                    >
+                      <Square className="h-3 w-3" />
+                    </Button>
+                  ),
+                },
+              ]
+            : []),
+        ]}
+        moreContent={null}
+      />
 
       <div ref={parallelRow} className="relative flex min-h-0 flex-1">
         <SessionConversationSurface

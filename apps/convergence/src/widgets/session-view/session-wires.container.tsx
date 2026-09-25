@@ -5,7 +5,10 @@ import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
 import { useSessionRelayStore } from '@/entities/session-relay'
 import { buildRelaySentence } from '@/features/mission-control'
-import { SessionWires } from './session-wires.presentational'
+import {
+  SessionWires,
+  type SessionWiresContentFocus,
+} from './session-wires.presentational'
 import {
   countSessionWires,
   formatSessionWireSummary,
@@ -14,6 +17,11 @@ import {
 
 interface SessionWiresContainerProps {
   sessionId: string
+  /**
+   * Focus handling for the menu's content, from a header that may have moved
+   * this control into More (MAR-3427 A).
+   */
+  contentFocus?: SessionWiresContentFocus
 }
 
 /**
@@ -26,6 +34,7 @@ interface SessionWiresContainerProps {
  */
 export const SessionWiresContainer: FC<SessionWiresContainerProps> = ({
   sessionId,
+  contentFocus,
 }) => {
   const relays = useSessionRelayStore((s) => s.relays)
   const projects = useProjectStore((s) => s.projects)
@@ -84,6 +93,7 @@ export const SessionWiresContainer: FC<SessionWiresContainerProps> = ({
       lines={lines}
       armedCount={armedCount}
       summary={formatSessionWireSummary(unconditional, conditional, disarmed)}
+      contentFocus={contentFocus}
     />
   )
 }

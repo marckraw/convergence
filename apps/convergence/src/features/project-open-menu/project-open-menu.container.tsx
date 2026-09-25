@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentPropsWithoutRef,
+} from 'react'
 import { toast } from 'sonner'
 import { projectOpenApi, type ProjectOpenApp } from '@/entities/project-open'
 import { Button } from '@/shared/ui/button'
@@ -12,10 +17,19 @@ import { ChevronDown, Code2, Folder } from 'lucide-react'
 
 interface ProjectOpenMenuContainerProps {
   targetPath: string | null
+  /**
+   * Focus handling for the menu's content, from a header that may have moved
+   * this control into More (MAR-3427 A).
+   */
+  contentFocus?: Pick<
+    ComponentPropsWithoutRef<typeof DropdownMenuContent>,
+    'onCloseAutoFocus' | 'onInteractOutside'
+  >
 }
 
 export function ProjectOpenMenuContainer({
   targetPath,
+  contentFocus,
 }: ProjectOpenMenuContainerProps) {
   const [apps, setApps] = useState<ProjectOpenApp[]>([])
   const [loading, setLoading] = useState(true)
@@ -82,7 +96,7 @@ export function ProjectOpenMenuContainer({
           <ChevronDown className="h-3 w-3" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-40">
+      <DropdownMenuContent align="end" className="min-w-40" {...contentFocus}>
         {loading ? (
           <DropdownMenuItem disabled>Detecting apps...</DropdownMenuItem>
         ) : (

@@ -111,3 +111,51 @@ it('measures an ancestor whose ref attaches after the child mounts — mutation 
   render(<Row />)
   expect(seen.at(-1)).toBe('wide')
 })
+
+function RemeasureProbe({
+  target,
+  remeasure,
+  seen,
+}: {
+  target: RefObject<HTMLElement | null>
+  remeasure: string
+  seen: string[]
+}) {
+  seen.push(useElementWidth(target, bucket(800), remeasure))
+  return null
+}
+
+it('reads the width again in the layout pass when remeasure changes, before any observer fires — mutation keep the cached width turns red', () => {
+  let width = 1000
+  const element = document.createElement('div')
+  element.getBoundingClientRect = () => ({ width }) as DOMRect
+  // An observer that never fires: what is read comes from the layout pass.
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  )
+  const target = { current: element }
+  const seen: string[] = []
+  const view = render(
+    <RemeasureProbe target={target} remeasure="" seen={seen} />,
+  )
+  expect(seen.at(-1)).toBe('wide')
+
+  // A panel docks beside the element in this commit.
+  width = 700
+  view.rerender(
+    <RemeasureProbe target={target} remeasure="panel" seen={seen} />,
+  )
+  expect(seen.at(-1)).toBe('narrow')
+
+  // Nothing named a width change: the cached width stands, no read.
+  width = 1000
+  view.rerender(
+    <RemeasureProbe target={target} remeasure="panel" seen={seen} />,
+  )
+  expect(seen.at(-1)).toBe('narrow')
+})

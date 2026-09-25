@@ -536,3 +536,52 @@ it('MAR-3213 R2 an old fact without the new fields renders exactly today — mut
   expect(screen.queryByText(/more connected/)).not.toBeInTheDocument()
   expect(container.textContent).not.toContain('undefined')
 })
+
+it('MAR-3427 C caps an alert pill chaining every reason: it truncates and keeps its full label in title — mutation remove the harness cap turns red', () => {
+  const facts: SessionHarnessFacts = {
+    turns: [],
+    currentTurn: {
+      turnId: 't',
+      hooks: [],
+      retries: null,
+      denials: null,
+    },
+    compactions: [],
+    rateLimit: null,
+    init: {
+      mcpServers: {
+        connected: 0,
+        others: [
+          { name: 'a', status: 'needs-auth' },
+          { name: 'b', status: 'failed' },
+        ],
+        omittedAlerts: 4,
+        omitted: 0,
+      },
+      plugins: null,
+      capabilities: null,
+      tools: null,
+      skills: null,
+      slashCommands: null,
+    },
+  } as unknown as SessionHarnessFacts
+  render(
+    <HarnessFactsView
+      facts={facts}
+      loading={false}
+      error={null}
+      onRetry={vi.fn()}
+    />,
+  )
+  const pill = screen.getByTestId('harness-pill')
+  const label =
+    'Harness · 1 integration needs sign-in · 1 integration failed · 4 more integrations need attention'
+  expect(pill).toHaveAttribute('data-alert', 'true')
+  expect(pill).toHaveAttribute('title', label)
+  // 15rem = 240 px, the width the header's layout test holds the pill to.
+  expect(pill.className.split(/\s+/)).toContain('max-w-[15rem]')
+  const text = within(pill).getByText(label)
+  expect(text.className.split(/\s+/)).toEqual(
+    expect.arrayContaining(['min-w-0', 'truncate']),
+  )
+})

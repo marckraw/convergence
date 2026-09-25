@@ -8,6 +8,8 @@ import { useContextDrillStore } from '@/entities/context-drill'
 import { useSessionRelayStore } from '@/entities/session-relay'
 import { useProjectScriptStore } from '@/entities/project-script'
 import { useWorkspaceStore } from '@/entities/workspace'
+import { useTerminalStore } from '@/entities/terminal'
+import { useAgentMeterStore } from '@/entities/agent-meter'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
 const navigationScroll = vi.hoisted(() => vi.fn())
@@ -27,6 +29,33 @@ function sessionRowWidth(width: number) {
       return this.hasAttribute('data-session-row')
         ? ({ width } as DOMRect)
         : measure.call(this)
+    },
+  )
+}
+
+/**
+ * A laid-out conversation header (MAR-3427): the header measures `width`, each
+ * drawn control `itemWidth`, and the two names their own natural widths. A
+ * control that renders nothing measures nothing, as in the browser.
+ */
+function headerWidth(width: number, itemWidth = 90) {
+  const measure = HTMLElement.prototype.getBoundingClientRect
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+    function (this: HTMLElement) {
+      if (this.hasAttribute('data-conversation-header'))
+        return { width } as DOMRect
+      if (this.hasAttribute('data-header-inner'))
+        return {
+          width: this.childElementCount > 0 ? itemWidth : 0,
+        } as DOMRect
+      return measure.call(this)
+    },
+  )
+  vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      if (this.hasAttribute('data-header-project')) return 90
+      if (this.hasAttribute('data-header-name')) return 200
+      return 0
     },
   )
 }
@@ -1794,5 +1823,633 @@ describe('SessionView', () => {
     expect(focused?.closest('[role="dialog"][data-state="closed"]')).toBeNull()
     expect(dialogs[0].contains(focused)).toBe(true)
     expect(openerFocused).not.toHaveBeenCalled()
+  })
+
+  describe('MAR-3427 CH3 the conversation header', () => {
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    const otherProject = {
+      id: 'project-2',
+      name: 'emergence',
+      repositoryPath: '/tmp/emergence',
+      settings: DEFAULT_PROJECT_SETTINGS,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      laneOf: null,
+      laneName: null,
+    }
+
+    it('R1 names the session’s own project and the conversation, in title and accessible name — mutation use activeProject turns red', () => {
+      // The sidebar has convergence selected; this conversation is emergence's.
+      useProjectStore.setState((state) => ({
+        projects: [state.activeProject!, otherProject],
+      }))
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) => ({
+          ...session,
+          projectId: 'project-2',
+        })),
+      }))
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+      const identity = screen.getByRole('group', {
+        name: 'Test session, in emergence',
+      })
+      expect(identity).toHaveAttribute('title', 'emergence / Test session')
+      expect(identity).toHaveTextContent('emergence')
+      expect(identity).toHaveTextContent('Test session')
+      expect(identity).not.toHaveTextContent('convergence')
+    })
+
+    it('R1 the project gives way before the conversation name: the name keeps its reserve', () => {
+      useProjectStore.setState((state) => ({
+        projects: [state.activeProject!],
+      }))
+      headerWidth(400)
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+      const project = document.querySelector<HTMLElement>(
+        '[data-header-project]',
+      )!
+      const name = document.querySelector<HTMLElement>('[data-header-name]')!
+      expect(name.style.minWidth).toBe('120px')
+      expect(project.style.minWidth).toBe('40px')
+      // MAR-3427 B: the project is the one name that flex-shrinks; the
+      // conversation name is capped at what the project's floor leaves.
+      expect(project.style.flexShrink).toBe('1')
+      expect(name.style.flexShrink).toBe('0')
+      expect(name.style.maxWidth).toBe('calc(100% - 60px)')
+    })
+
+    it('R4 a narrow header moves the terminal toggle and Open into More by name, and the terminal item toggles the terminal — mutation drop yielded items turns red', async () => {
+      const hydratePaneTree = vi.fn().mockResolvedValue(undefined)
+      useTerminalStore.setState({ hydratePaneTree, treesBySessionId: {} })
+      headerWidth(400)
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+      // Yielded: out of the header's reach, still mounted.
+      expect(
+        screen.queryByRole('button', { name: 'Open project' }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Open terminal' }),
+      ).not.toBeInTheDocument()
+
+      fireEvent.pointerDown(
+        screen.getByRole('button', { name: 'Session actions' }),
+      )
+      expect(
+        await screen.findByRole('menuitem', { name: 'Open terminal' }),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('menuitem', { name: 'Open project' }),
+      ).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Open terminal' }))
+      expect(hydratePaneTree).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        cwd: '/tmp/project',
+        cols: 80,
+        rows: 24,
+      })
+    })
+
+    it('R4 Open, yielded, opens its own menu from More and still opens the workspace', async () => {
+      headerWidth(400)
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+      // Let the app list land so Open is enabled.
+      await act(async () => {
+        await Promise.resolve()
+      })
+      fireEvent.pointerDown(
+        screen.getByRole('button', { name: 'Session actions' }),
+      )
+      fireEvent.click(
+        await screen.findByRole('menuitem', { name: 'Open project' }),
+      )
+      fireEvent.click(await screen.findByText('VS Code'))
+      const projectOpen = (
+        window as unknown as {
+          electronAPI: { projectOpen: { open: ReturnType<typeof vi.fn> } }
+        }
+      ).electronAPI.projectOpen
+      await waitFor(() =>
+        expect(projectOpen.open).toHaveBeenCalledWith({
+          appId: 'vscode',
+          path: '/tmp/project',
+        }),
+      )
+    })
+
+    it('R5 a narrow running header puts identity, Stop and More on row 1 and the status on row 2', () => {
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) => ({
+          ...session,
+          status: 'running' as const,
+        })),
+      }))
+      headerWidth(400)
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+      const header = document.querySelector('[data-conversation-header]')!
+      expect(header).toHaveAttribute('data-header-rows', '2')
+      const statusRow = header.querySelector('[data-header-status-row]')!
+      expect(statusRow).toHaveTextContent('Running')
+      expect(
+        screen.getByRole('button', { name: 'Stop Test session' }),
+      ).toBeInTheDocument()
+    })
+
+    const renderView = () =>
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+    const more = () => screen.getByRole('button', { name: 'Session actions' })
+    const openMore = () => fireEvent.pointerDown(more())
+    const innerTrigger = (id: string) =>
+      document
+        .querySelector(`[data-header-inner="${id}"]`)!
+        .querySelector('button')!
+    const setSession = (patch: Record<string, unknown>) =>
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) => ({ ...session, ...patch })),
+      }))
+
+    it('D Parallel work opened from More hands focus back to More when it closes — mutation save the hidden button turns red', async () => {
+      headerWidth(400)
+      renderView()
+      openMore()
+      fireEvent.click(
+        await screen.findByRole('menuitem', { name: 'Parallel work' }),
+      )
+      const close = await screen.findByRole('button', {
+        name: 'Close parallel work',
+      })
+      // While its panel is open the button is pinned, on the status row (C);
+      // closing it yields it again, and mounts it back in row 1.
+      expect(innerTrigger('parallel-work').closest('[data-yielded]')).toBeNull()
+      close.focus()
+      fireEvent.click(close)
+      expect(
+        innerTrigger('parallel-work').closest('[data-yielded]'),
+      ).not.toBeNull()
+      expect(document.activeElement).toBe(more())
+    })
+
+    it('D Parallel work opened from its own drawn button still returns focus to that button', async () => {
+      headerWidth(2400)
+      renderView()
+      const opener = screen.getByRole('button', { name: 'Parallel work' })
+      opener.focus()
+      fireEvent.click(opener)
+      const close = await screen.findByRole('button', {
+        name: 'Close parallel work',
+      })
+      close.focus()
+      fireEvent.click(close)
+      await waitFor(() => expect(document.activeElement).toBe(opener))
+    })
+
+    it.each([
+      ['Project actions', 'project-actions', 'menu'],
+      ['Session details', 'session-details', 'menu'],
+      ['Harness', 'harness', 'menu'],
+      ['1 wire fires when this session finishes.', 'wires', 'dialog'],
+    ] as const)(
+      'E %s, yielded, opens its own %s from More — mutation popovers sent ArrowDown turns red',
+      async (name, id, role) => {
+        useSessionRelayStore.setState({
+          relays: [
+            {
+              id: 'relay-1',
+              crewId: 'crew-1',
+              sourceSessionId: 'session-1',
+              trigger: 'settled',
+              action: 'hail',
+              targetSessionId: 'session-2',
+              spawnSpec: null,
+              instruction: null,
+              opener: null,
+              conditionToken: null,
+              armed: true,
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          isLoaded: true,
+        })
+        headerWidth(400)
+        renderView()
+        await act(async () => {
+          await Promise.resolve()
+        })
+        openMore()
+        fireEvent.click(await screen.findByRole('menuitem', { name }))
+        const trigger = innerTrigger(id)
+        await waitFor(() =>
+          expect(trigger).toHaveAttribute('aria-expanded', 'true'),
+        )
+        const opened = screen.getByRole(role)
+        expect(opened.id).toBe(trigger.getAttribute('aria-controls'))
+      },
+    )
+
+    it('E a menu opened from More hands focus back to More when it closes — mutation the focus() removed turns red', async () => {
+      headerWidth(400)
+      renderView()
+      openMore()
+      fireEvent.click(
+        await screen.findByRole('menuitem', { name: 'Session details' }),
+      )
+      const trigger = innerTrigger('session-details')
+      await waitFor(() =>
+        expect(trigger).toHaveAttribute('aria-expanded', 'true'),
+      )
+      await act(async () =>
+        fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' }),
+      )
+      await waitFor(() =>
+        expect(trigger).toHaveAttribute('aria-expanded', 'false'),
+      )
+      await waitFor(() => expect(document.activeElement).toBe(more()))
+    })
+
+    /**
+     * Menus and popovers as the app draws them (MAR-3427 A): they fade out,
+     * and Radix keeps the closing content mounted -- with focus still inside
+     * -- until the animation ends. jsdom runs no animation, so the content is
+     * given its animation name here, and `finishExits` ends every fade.
+     */
+    function withExitAnimations() {
+      const real = globalThis.getComputedStyle.bind(globalThis)
+      vi.spyOn(globalThis, 'getComputedStyle').mockImplementation(
+        (element, pseudo) => {
+          const style = real(element, pseudo)
+          if (!element.matches('[role="menu"], [role="dialog"]')) return style
+          return new Proxy(style, {
+            get(target, key) {
+              if (key === 'animationName')
+                return element.getAttribute('data-state') === 'closed'
+                  ? 'pop-out'
+                  : 'pop-in'
+              const value = Reflect.get(target, key, target)
+              return typeof value === 'function' ? value.bind(target) : value
+            },
+          })
+        },
+      )
+      if (typeof globalThis.CSS?.escape !== 'function')
+        vi.stubGlobal('CSS', {
+          ...globalThis.CSS,
+          escape: (value: string) => value,
+        })
+    }
+    const finishExits = () =>
+      act(() => {
+        for (const content of document.querySelectorAll(
+          '[role="menu"][data-state="closed"], [role="dialog"][data-state="closed"]',
+        )) {
+          const end = new Event('animationend')
+          Object.assign(end, { animationName: 'pop-out' })
+          content.dispatchEvent(end)
+        }
+      })
+    const armOneWire = () =>
+      useSessionRelayStore.setState({
+        relays: [
+          {
+            id: 'relay-1',
+            crewId: 'crew-1',
+            sourceSessionId: 'session-1',
+            trigger: 'settled',
+            action: 'hail',
+            targetSessionId: 'session-2',
+            spawnSpec: null,
+            instruction: null,
+            opener: null,
+            conditionToken: null,
+            armed: true,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        isLoaded: true,
+      })
+    /** Opens a yielded menu from More, both fades played out. */
+    const openFromMore = async (name: string, id: string) => {
+      openMore()
+      fireEvent.click(await screen.findByRole('menuitem', { name }))
+      await finishExits()
+      const trigger = innerTrigger(id)
+      await waitFor(() =>
+        expect(trigger).toHaveAttribute('aria-expanded', 'true'),
+      )
+      return {
+        trigger,
+        content: document.getElementById(
+          trigger.getAttribute('aria-controls')!,
+        )!,
+      }
+    }
+
+    it.each([
+      ['Open project', 'open'],
+      ['Project actions', 'project-actions'],
+      ['Session details', 'session-details'],
+      ['Harness', 'harness'],
+      ['1 wire fires when this session finishes.', 'wires'],
+    ] as const)(
+      'A %s, opened from More, hands focus back to More after its exit animation — mutation lap 2 one-task watcher turns red',
+      async (name, id) => {
+        armOneWire()
+        withExitAnimations()
+        headerWidth(400)
+        renderView()
+        await act(async () => {
+          await Promise.resolve()
+        })
+        const { trigger, content } = await openFromMore(name, id)
+        await waitFor(() =>
+          expect(content.contains(document.activeElement)).toBe(true),
+        )
+        await act(async () => fireEvent.keyDown(content, { key: 'Escape' }))
+        await waitFor(() =>
+          expect(trigger).toHaveAttribute('aria-expanded', 'false'),
+        )
+        // The exit: closed, still mounted, focus still inside -- past the
+        // task in which a watcher on aria-expanded would have looked.
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+        })
+        expect(content).toBeInTheDocument()
+        expect(content.contains(document.activeElement)).toBe(true)
+
+        await finishExits()
+        await waitFor(() => expect(content).not.toBeInTheDocument())
+        await waitFor(() => expect(document.activeElement).toBe(more()))
+      },
+    )
+
+    it.each([
+      ['a control there keeps it', true],
+      ['nothing that takes focus leaves it on the page, not on More', false],
+    ] as const)(
+      'A a click elsewhere keeps its focus: %s — mutation drop the outside check turns red',
+      async (_, focusable) => {
+        armOneWire()
+        withExitAnimations()
+        headerWidth(400)
+        renderView()
+        const outside = document.createElement(focusable ? 'button' : 'p')
+        outside.textContent = 'elsewhere'
+        document.body.append(outside)
+        const { content } = await openFromMore(
+          '1 wire fires when this session finishes.',
+          'wires',
+        )
+        // Radix listens for outside presses one task after it opens.
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        })
+        await act(async () => {
+          fireEvent.pointerDown(outside)
+          if (focusable) outside.focus()
+        })
+        await finishExits()
+        await waitFor(() => expect(content).not.toBeInTheDocument())
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+        })
+        expect(document.activeElement).toBe(focusable ? outside : document.body)
+        outside.remove()
+      },
+    )
+
+    it('A a left click outside a modal menu is not an interaction that keeps focus: More takes it, as Radix gives it to the trigger', async () => {
+      withExitAnimations()
+      headerWidth(400)
+      renderView()
+      const outside = document.createElement('p')
+      document.body.append(outside)
+      const { content } = await openFromMore(
+        'Session details',
+        'session-details',
+      )
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      await act(async () => fireEvent.pointerDown(outside, { button: 0 }))
+      await finishExits()
+      await waitFor(() => expect(content).not.toBeInTheDocument())
+      await waitFor(() => expect(document.activeElement).toBe(more()))
+      outside.remove()
+    })
+
+    it('D a control that yields while More is open is listed by its own name and disabled state — mutation read triggers only when More opens turns red', async () => {
+      const electronAPI = (
+        window as unknown as {
+          electronAPI: {
+            projectOpen: { listApps: ReturnType<typeof vi.fn> }
+          }
+        }
+      ).electronAPI
+      electronAPI.projectOpen.listApps.mockResolvedValueOnce([])
+      // 1,100 px: idle, Open is drawn; a run's Stop takes its place.
+      headerWidth(1100)
+      renderView()
+      await act(async () => {
+        await Promise.resolve()
+      })
+      expect(innerTrigger('open')).toBeDisabled()
+      expect(innerTrigger('open').closest('[data-yielded]')).toBeNull()
+      openMore()
+      await screen.findByRole('menu')
+      act(() => setSession({ status: 'running' }))
+      expect(innerTrigger('open').closest('[data-yielded]')).not.toBeNull()
+      const item = await screen.findByRole('menuitem', { name: 'Open project' })
+      expect(item).toHaveAttribute('aria-disabled', 'true')
+      expect(screen.queryByRole('menuitem', { name: 'open' })).toBeNull()
+    })
+
+    it('D a yielded trigger that changes on its own while More is open is read again — mutation drop the open-More observer turns red', async () => {
+      const electronAPI = (
+        window as unknown as {
+          electronAPI: {
+            projectOpen: { listApps: ReturnType<typeof vi.fn> }
+          }
+        }
+      ).electronAPI
+      let land: (apps: unknown[]) => void = () => {}
+      electronAPI.projectOpen.listApps.mockReturnValueOnce(
+        new Promise((resolve) => {
+          land = resolve
+        }),
+      )
+      // 1,000 px, idle: Open has yielded. More opens while the app list is
+      // still loading, so Open is enabled; then the empty list lands.
+      headerWidth(1000)
+      renderView()
+      openMore()
+      const item = await screen.findByRole('menuitem', { name: 'Open project' })
+      expect(item).not.toHaveAttribute('aria-disabled')
+      await act(async () => {
+        land([])
+        await Promise.resolve()
+      })
+      expect(innerTrigger('open')).toBeDisabled()
+      await waitFor(() =>
+        expect(
+          screen.getByRole('menuitem', { name: 'Open project' }),
+        ).toHaveAttribute('aria-disabled', 'true'),
+      )
+    })
+
+    it('D choosing the agent meter keeps More open — mutation drop its preventDefault turns red', async () => {
+      useAgentMeterStore.setState({
+        snapshot: {
+          agents: null,
+          convergence: null,
+          rows: [
+            {
+              sessionId: 'session-1',
+              account: null,
+              usage: { cpu: 5, memoryMb: 120 },
+            },
+          ],
+        },
+      })
+      headerWidth(400)
+      renderView()
+      openMore()
+      const item = await screen.findByRole('menuitem', {
+        name: /^Agent CPU and memory: /,
+      })
+      fireEvent.click(item)
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+      // More is modal: the page behind it is hidden from role queries.
+      expect(document.querySelector('[data-header-more]')).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      )
+      useAgentMeterStore.setState({
+        snapshot: { agents: null, convergence: null, rows: [] },
+      })
+    })
+
+    it('F the agent meter, yielded, is a focusable menu item named by its reading — mutation the div back turns red', async () => {
+      useAgentMeterStore.setState({
+        snapshot: {
+          agents: null,
+          convergence: null,
+          rows: [
+            {
+              sessionId: 'session-1',
+              account: null,
+              usage: { cpu: 5, memoryMb: 120 },
+            },
+          ],
+        },
+      })
+      headerWidth(400)
+      renderView()
+      openMore()
+      const item = await screen.findByRole('menuitem', {
+        name: /^Agent CPU and memory: /,
+      })
+      expect(item).toHaveAttribute('tabindex', '-1')
+      expect(item).toHaveTextContent(/\S/)
+      useAgentMeterStore.setState({
+        snapshot: { agents: null, convergence: null, rows: [] },
+      })
+    })
+
+    it('G a yielded control is inert and hidden; a drawn one is neither — mutation removing inert turns red', () => {
+      headerWidth(400)
+      renderView()
+      const yielded = document.querySelector('[data-header-item="terminal"]')!
+      expect(yielded).toHaveAttribute('data-yielded')
+      expect(yielded).toHaveAttribute('inert')
+      expect(yielded).toHaveAttribute('aria-hidden', 'true')
+      const drawn = document.querySelector('[data-header-item="attention"]')!
+      expect(drawn).not.toHaveAttribute('inert')
+    })
+
+    it('H in two rows the status row drags by its empty space; only its controls are no-drag — mutation no-drag back on the row turns red', () => {
+      setSession({
+        status: 'running',
+        parallelWork: { running: 2, unknown: 0, failed: 0, stopped: 0 },
+      })
+      headerWidth(400)
+      renderView()
+      const header = document.querySelector<HTMLElement>(
+        '[data-conversation-header]',
+      )!
+      expect(header).toHaveAttribute('data-header-rows', '2')
+      const statusRow = header.querySelector<HTMLElement>(
+        '[data-header-status-row]',
+      )!
+      expect(statusRow).not.toHaveAttribute('data-app-region')
+      expect(statusRow.style.getPropertyValue('-webkit-app-region')).toBe('')
+      expect(
+        statusRow.closest('[data-app-region]')?.getAttribute('data-app-region'),
+      ).toBe('drag')
+      const buttons = statusRow.querySelectorAll('button')
+      expect([...buttons].map((button) => button.textContent)).toEqual([
+        'Parallel work · 2',
+      ])
+      for (const button of buttons)
+        expect(
+          button.closest('[data-app-region]')?.getAttribute('data-app-region'),
+        ).toBe('no-drag')
+    })
+
+    it('R7 every button in the header sits inside a no-drag region, and the header itself drags — mutation remove no-drag from the right-hand group turns red', () => {
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) => ({
+          ...session,
+          status: 'running' as const,
+        })),
+      }))
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+      const header = document.querySelector<HTMLElement>(
+        '[data-conversation-header]',
+      )!
+      expect(header).toHaveAttribute('data-app-region', 'drag')
+      const buttons = header.querySelectorAll('button')
+      // The right-hand group is in the sweep: Stop and More live there.
+      expect(
+        [...buttons].map((button) => button.getAttribute('aria-label')),
+      ).toEqual(
+        expect.arrayContaining(['Stop Test session', 'Session actions']),
+      )
+      for (const button of buttons)
+        expect(
+          button.closest('[data-app-region]')?.getAttribute('data-app-region'),
+          button.textContent ?? '',
+        ).toBe('no-drag')
+    })
   })
 })

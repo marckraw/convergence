@@ -1,4 +1,4 @@
-import type { FC } from 'react'
+import type { ComponentPropsWithoutRef, FC } from 'react'
 import type {
   ProjectScript,
   ProjectScriptRun,
@@ -23,8 +23,15 @@ import { ProjectActionRunLog } from './project-action-run-log.presentational'
 import { formatProjectActionRunMeta } from './project-actions-menu.pure'
 import type { ProjectActionItem } from './project-actions-menu.types'
 
+/** Focus props for the menu's content (MAR-3427 A). */
+export type ProjectActionsMenuContentFocus = Pick<
+  ComponentPropsWithoutRef<typeof DropdownMenuContent>,
+  'onCloseAutoFocus' | 'onInteractOutside'
+>
+
 interface ProjectActionsMenuPresentationalProps {
   projectName: string
+  contentFocus?: ProjectActionsMenuContentFocus
   items: ProjectActionItem[]
   outputByRunId: Record<string, ProjectScriptRunOutput[]>
   expandedRunIds: Set<string>
@@ -45,6 +52,7 @@ export const ProjectActionsMenuPresentational: FC<
   ProjectActionsMenuPresentationalProps
 > = ({
   projectName,
+  contentFocus,
   items,
   outputByRunId,
   expandedRunIds,
@@ -59,7 +67,11 @@ export const ProjectActionsMenuPresentational: FC<
   onDelete,
   onToggleRun,
 }) => (
-  <DropdownMenuContent align="end" className="w-[28rem] p-1.5">
+  <DropdownMenuContent
+    align="end"
+    className="w-[28rem] p-1.5"
+    {...contentFocus}
+  >
     <div className="flex items-center justify-between border-b border-border/70 px-2 py-1.5 text-[11px] text-muted-foreground">
       <span>Project actions</span>
       <span className="max-w-32 truncate">{projectName}</span>

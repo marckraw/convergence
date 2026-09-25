@@ -11,6 +11,7 @@ interface Tracked<T> {
   observer: ResizeObserver | null
   width: number | null
   value: T
+  remeasure: unknown
 }
 
 /**
@@ -30,10 +31,16 @@ interface Tracked<T> {
  *
  * The ref may name an ancestor whose ref attaches after this component's
  * layout effects on first mount; the passive pass picks it up then.
+ *
+ * `remeasure` names a commit that moves the element's width by itself (a
+ * docked panel opening or closing beside it): when it changes, the layout
+ * pass reads the width again instead of waiting a frame for the observer, so
+ * `select` never runs against the width the element had before that commit.
  */
 export function useElementWidth<T>(
   ref: RefObject<HTMLElement | null>,
   select: (width: number | null) => T,
+  remeasure?: unknown,
 ): T {
   const [selected, setSelected] = useState(() => select(null))
   const selectRef = useRef(select)
@@ -42,9 +49,10 @@ export function useElementWidth<T>(
     observer: null,
     width: null,
     value: selected,
+    remeasure,
   })
 
-  const sync = () => {
+  const sync = (fresh: boolean) => {
     const box = tracked.current
     const publish = () => {
       const next = selectRef.current(box.width)
@@ -65,6 +73,8 @@ export function useElementWidth<T>(
             })
           : null
       if (element) box.observer?.observe(element)
+    } else if (fresh && element) {
+      box.width = element.getBoundingClientRect().width
     }
     publish()
   }
@@ -74,10 +84,12 @@ export function useElementWidth<T>(
   // and the ref change without the caller naming them.
   useLayoutEffect(() => {
     selectRef.current = select
-    sync()
+    const fresh = !Object.is(tracked.current.remeasure, remeasure)
+    tracked.current.remeasure = remeasure
+    sync(fresh)
   })
   useEffect(() => {
-    sync()
+    sync(false)
   })
   useEffect(
     () => () => {

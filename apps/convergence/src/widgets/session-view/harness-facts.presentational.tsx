@@ -1,3 +1,4 @@
+import type { ComponentPropsWithoutRef } from 'react'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 import { Button } from '@/shared/ui/button'
 import {
@@ -16,11 +17,20 @@ export function HarnessFactsView({
   error,
   loading,
   onRetry,
+  contentFocus,
 }: {
   facts: SessionHarnessFacts | null
   error: string | null
   loading: boolean
   onRetry: () => void
+  /**
+   * Focus handling for the menu's content, from a header that may have moved
+   * this control into More (MAR-3427 A).
+   */
+  contentFocus?: Pick<
+    ComponentPropsWithoutRef<typeof DropdownMenuContent>,
+    'onCloseAutoFocus' | 'onInteractOutside'
+  >
 }) {
   const pill = harnessPill(facts),
     current = facts?.currentTurn,
@@ -41,16 +51,21 @@ export function HarnessFactsView({
           type="button"
           variant="ghost"
           size="sm"
-          className={`h-7 rounded-full border px-2 text-[11px] ${pill.alert ? 'border-destructive/50 text-destructive' : 'border-border/70 text-muted-foreground'}`}
+          // Capped, so an alert chaining several reasons truncates inside
+          // its header row instead of overlapping it; the full label stays in
+          // the title (MAR-3427 C).
+          className={`h-7 max-w-[15rem] rounded-full border px-2 text-[11px] ${pill.alert ? 'border-destructive/50 text-destructive' : 'border-border/70 text-muted-foreground'}`}
+          title={pill.label}
           data-testid="harness-pill"
           data-alert={pill.alert}
         >
-          {pill.label}
+          <span className="min-w-0 truncate">{pill.label}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
         className="max-h-[70vh] w-96 max-w-[calc(100vw-2rem)] overflow-auto p-3 text-xs"
+        {...contentFocus}
       >
         {error ? (
           <div role="alert">

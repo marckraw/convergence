@@ -12,13 +12,21 @@ import {
 import { ProjectScriptEditor } from '@/features/project-script-editor'
 import { DropdownMenu, DropdownMenuTrigger } from '@/shared/ui/dropdown-menu'
 import { isProjectScriptRunActive } from './project-actions-menu.pure'
-import { ProjectActionsMenuPresentational } from './project-actions-menu.presentational'
+import {
+  ProjectActionsMenuPresentational,
+  type ProjectActionsMenuContentFocus,
+} from './project-actions-menu.presentational'
 import { ProjectActionsTrigger } from './project-actions-trigger.presentational'
 import type { ProjectActionItem } from './project-actions-menu.types'
 
 interface ProjectActionsMenuProps {
   project: Project
   runtimeCwd?: string | null
+  /**
+   * Focus handling for the menu's content, from a header that may have moved
+   * this control into More (MAR-3427 A).
+   */
+  contentFocus?: ProjectActionsMenuContentFocus
 }
 
 const EMPTY_SCRIPTS: ProjectScript[] = []
@@ -27,6 +35,7 @@ const EMPTY_RUNS: ProjectScriptRun[] = []
 export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
   project,
   runtimeCwd,
+  contentFocus,
 }) => {
   const scripts = useProjectScriptStore(
     (state) => state.scriptsByProjectId[project.id] ?? EMPTY_SCRIPTS,
@@ -94,6 +103,7 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
         </DropdownMenuTrigger>
         <ProjectActionsMenuPresentational
           projectName={project.name}
+          contentFocus={contentFocus}
           items={items}
           outputByRunId={outputByRunId}
           expandedRunIds={expandedRunIds}
