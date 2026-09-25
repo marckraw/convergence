@@ -1291,6 +1291,9 @@ export class ClaudeCodeProvider implements Provider {
           // partials must never enter the foreground turn's streaming buffers.
           if (evidence.identity(data).agentRunId) break
           sawTurnOutput = true
+          if (event.event?.type === 'message_start') {
+            currentTurnHasThinkingText = false
+          }
           if (
             event.event?.type === 'content_block_delta' &&
             event.event.delta?.type === 'thinking_delta' &&
@@ -1341,6 +1344,8 @@ export class ClaudeCodeProvider implements Provider {
           // Only this message's buffered text proves a streamed duplicate.
           // Earlier messages in the turn must not suppress complete-only text.
           const hadStreamedText = !isChild && assistantTextBuffer.length > 0
+          // Remember thinking flushed by a text delta until its completed
+          // assistant event acknowledges it, never for the rest of the turn.
           const hadStreamedThinking =
             !isChild &&
             (currentTurnHasThinkingText || thinkingBuffer.length > 0)
@@ -1348,6 +1353,7 @@ export class ClaudeCodeProvider implements Provider {
           if (!isChild) {
             flushThinkingBuffer()
             flushAssistantBuffer()
+            currentTurnHasThinkingText = false
           }
           if (event.message?.content) {
             for (const block of event.message.content) {
@@ -1376,7 +1382,6 @@ export class ClaudeCodeProvider implements Provider {
                   state: 'complete',
                   providerEventType: 'thinking',
                 })
-                if (!isChild) currentTurnHasThinkingText = true
               } else if (
                 block.type === 'text' &&
                 block.text &&
