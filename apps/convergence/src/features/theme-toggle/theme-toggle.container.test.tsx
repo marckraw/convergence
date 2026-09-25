@@ -5,6 +5,8 @@ import { ThemeToggleButton } from './theme-toggle.container'
 
 type ChangeListener = (event: { matches: boolean }) => void
 
+const DARK_SCHEME = '(prefers-color-scheme: dark)'
+
 function installMatchMedia(initialMatches: boolean) {
   const listeners = new Set<ChangeListener>()
   const media = {
@@ -16,14 +18,22 @@ function installMatchMedia(initialMatches: boolean) {
       if (type === 'change') listeners.delete(listener)
     }),
   }
-  vi.stubGlobal(
-    'matchMedia',
-    vi.fn(() => media),
+  const inert = {
+    matches: false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }
+  const matchMedia = vi.fn((query: string) =>
+    query === DARK_SCHEME ? media : inert,
   )
+  vi.stubGlobal('matchMedia', matchMedia)
   return {
     fire(matches: boolean) {
       media.matches = matches
       for (const listener of listeners) listener({ matches })
+    },
+    queries() {
+      return matchMedia.mock.calls.map(([query]) => query)
     },
     netListeners() {
       return (
@@ -64,6 +74,11 @@ describe('ThemeToggleButton system appearance', () => {
     render(<ThemeToggleButton />)
 
     expect(darkClass()).toBe(false)
+    const queries = media.queries()
+    expect(queries.length).toBeGreaterThan(0)
+    // Mutation: a different query → this list includes it, and fire below
+    // never reaches that listener, so the dark class stays off.
+    expect(queries.every((query) => query === DARK_SCHEME)).toBe(true)
     media.fire(true)
     // Mutation: no listener → stays light here, red.
     expect(darkClass()).toBe(true)
