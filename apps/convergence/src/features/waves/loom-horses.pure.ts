@@ -372,6 +372,62 @@ export function loomHorses(input: {
   return horses
 }
 
+/** The mastermind's seat facts, with a crew-wide verdict count instead of a ticket. */
+export interface LoomMastermind extends Pick<
+  LoomHorse,
+  | 'key'
+  | 'crewId'
+  | 'crewName'
+  | 'seat'
+  | 'kind'
+  | 'runtime'
+  | 'compacting'
+  | 'hostLabel'
+  | 'sessionId'
+  | 'openable'
+> {
+  waitingReturns: number
+}
+
+/** One mastermind per shown, bound crew; returns stay independent of search. */
+export function loomMasterminds(
+  input: Parameters<typeof loomHorses>[0],
+): LoomMastermind[] {
+  return input.crews.flatMap((crew) => {
+    if (!crew.trackerBinding) return []
+    const member = crew.members.find((seat) => seat.role === 'mastermind')
+    if (!member) return []
+    const session =
+      member.sessionId === null
+        ? null
+        : (input.sessionsById.get(member.sessionId) ?? null)
+    const hostId = session?.executionHost ?? member.hostPolicy
+    return [
+      {
+        key: `${crew.id}:mastermind`,
+        crewId: crew.id,
+        crewName: crew.name,
+        seat: member.batonName,
+        kind: member.kind,
+        ...runtimeFor({ session, held: null, returned: null }),
+        hostLabel: input.hostLabelOf(hostId),
+        sessionId: member.sessionId,
+        openable: session !== null,
+        waitingReturns: input.sheets.now.fablesTurn.filter(
+          (row) => row.entry.crewId === crew.id,
+        ).length,
+      },
+    ]
+  })
+}
+
+export function loomMastermindVerdictLine(count: number): string {
+  if (count === 0) return 'Nothing waits for its verdict'
+  return count === 1
+    ? '1 return waits for its verdict'
+    : `${count} returns wait for its verdict`
+}
+
 /** What a card says where a resident says its runtime (R1). */
 export const LOOM_RECIPE_LINE = 'recipe · spawns on dispatch'
 
@@ -394,7 +450,9 @@ const RUNTIME_WORDS: Readonly<Record<LoomHorseRuntime, string>> = {
  * missing -- it simply has no conversation yet, and the four runtime words
  * are all about one.
  */
-export function loomHorseRuntimeLabel(horse: LoomHorse): string {
+export function loomHorseRuntimeLabel(
+  horse: Pick<LoomHorse, 'kind' | 'compacting' | 'runtime'>,
+): string {
   if (horse.kind === 'dynamic') return LOOM_RECIPE_LINE
   // The finer word for a working seat (MAR-3289 R1). The same sentence every
   // other surface says while a conversation compacts, from the session

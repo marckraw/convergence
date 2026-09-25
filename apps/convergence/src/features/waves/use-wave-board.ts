@@ -14,7 +14,12 @@ import {
   type WorkLedgerEntry,
 } from '@/entities/work-ledger'
 import { useFeedClock } from '@/shared/hooks/use-feed-clock'
-import { loomHorses, type LoomHorse } from './loom-horses.pure'
+import {
+  loomHorses,
+  loomMasterminds,
+  type LoomHorse,
+  type LoomMastermind,
+} from './loom-horses.pure'
 import {
   waveBoardSessionIds,
   waveBoardSessionKey,
@@ -90,6 +95,7 @@ export interface WaveBoard {
    * is still working on it, and Next's queues and a detail's seat read that.
    */
   horses: LoomHorse[]
+  masterminds: LoomMastermind[]
   /**
    * The horse cards a search shows (MAR-3234 R4): a card iff the issue it
    * holds matches; every horse when nothing is searched.
@@ -357,6 +363,16 @@ export function useWaveBoard(query: string | null): WaveBoard {
       }),
     [shownCrews, sessionsById, allSheets, hostLabelOf],
   )
+  const masterminds = useMemo(
+    () =>
+      loomMasterminds({
+        crews: shownCrews,
+        sessionsById,
+        sheets: allSheets,
+        hostLabelOf,
+      }),
+    [shownCrews, sessionsById, allSheets, hostLabelOf],
+  )
   const shownHorses = useMemo(
     () => loomSearchHorses(horses, query),
     [horses, query],
@@ -383,6 +399,7 @@ export function useWaveBoard(query: string | null): WaveBoard {
     sheets,
     allSheets,
     horses,
+    masterminds,
     shownHorses,
     findSession,
     lastOkAtOf,
