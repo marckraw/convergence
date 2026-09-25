@@ -1073,6 +1073,7 @@ it('names every local harness family remote cannot show — mutation remove an i
     'harness.denial',
     'harness.rateLimit',
     'harness.init',
+    'harness.mcpStatus',
   ])
 })
 

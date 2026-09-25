@@ -19,6 +19,13 @@ export interface ClaudeTransport {
   interrupt(): Promise<unknown>
   setModel(model: string | null, effort?: string | null): Promise<void>
   setPermissionMode(mode: string): Promise<void>
+  /**
+   * The running process's MCP servers, as the SDK reports them (MAR-3206):
+   * decoded by `readClaudeMcpStatus`, so no SDK type leaves this file.
+   */
+  mcpServerStatus(): Promise<unknown[]>
+  /** Reconnect one MCP server inside the running process; throws on failure. */
+  reconnectMcpServer(name: string): Promise<void>
   close(): Promise<void>
 }
 
@@ -147,6 +154,8 @@ export function createClaudeTransport(input: {
       runner.setPermissionMode(
         next as 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan',
       ),
+    mcpServerStatus: () => runner.mcpServerStatus(),
+    reconnectMcpServer: (name) => runner.reconnectMcpServer(name),
     close: async () => {
       closed = true
       wake?.()

@@ -37,7 +37,14 @@ export function foldHarnessFacts(
           value.retries.state = 'unknown'
       continue
     }
-    if (fact.kind === 'harness.init') result.init = fact
+    // A start record is a new process: the status read from the one before
+    // it no longer describes anything that runs (MAR-3206). Absent, not null,
+    // so a session that never had one folds exactly as it did before.
+    if (fact.kind === 'harness.init') {
+      result.init = fact
+      delete result.mcpStatus
+    }
+    if (fact.kind === 'harness.mcpStatus') result.mcpStatus = fact
     if (fact.kind === 'harness.rateLimit') result.rateLimit = fact
     if (fact.kind === 'harness.compaction')
       result.compactions.push({ ...fact, sequence: event.sequence })

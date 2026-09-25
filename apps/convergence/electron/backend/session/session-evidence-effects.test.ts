@@ -387,3 +387,53 @@ it('R3prime turn accounting schedules the final fact flush — mutation skip acc
   vi.advanceTimersByTime(250)
   expect({ before, counts }).toEqual({ before: 0, counts: [1] })
 })
+
+it.each([false, true])(
+  'MAR-3206 R8 the summary’s canReconnectMcpServers follows the handle, in both summary builders — mutation hard false turns red (capable=%s)',
+  (capable) => {
+    const { service, source } = bed()
+    const before = service.getSummaryById('session')?.canReconnectMcpServers
+    service['activeHandles'].set('session', {
+      ...source,
+      canReconnectMcpServers: capable,
+    })
+    expect({
+      before,
+      one: service.getSummaryById('session')?.canReconnectMcpServers,
+      all: service.getAllSummaries().find((summary) => summary.id === 'session')
+        ?.canReconnectMcpServers,
+    }).toEqual({ before: false, one: capable, all: capable })
+  },
+)
+
+it('MAR-3206 R8 refreshMcpServers refuses with no handle or no capability, and passes the server name through otherwise', async () => {
+  const { service, source } = bed()
+  const refreshMcpServers = vi.fn().mockResolvedValue(undefined)
+  const refusal = async () => {
+    try {
+      await service.refreshMcpServers('session', 'claude.ai Figma')
+      return null
+    } catch (failure) {
+      return (failure as Error).message
+    }
+  }
+  const noHandle = await refusal()
+  service['activeHandles'].set('session', {
+    ...source,
+    canReconnectMcpServers: false,
+    refreshMcpServers,
+  })
+  const incapable = await refusal()
+  service['activeHandles'].set('session', {
+    ...source,
+    canReconnectMcpServers: true,
+    refreshMcpServers,
+  })
+  await service.refreshMcpServers('session', 'claude.ai Figma')
+  await service.refreshMcpServers('session', null)
+  expect({ noHandle, incapable, calls: refreshMcpServers.mock.calls }).toEqual({
+    noHandle: 'No Claude process is running for this conversation',
+    incapable: 'No Claude process is running for this conversation',
+    calls: [['claude.ai Figma'], [undefined]],
+  })
+})

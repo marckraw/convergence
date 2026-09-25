@@ -16,6 +16,7 @@ it('R3 forwards the harness read and event with disposal — mutation misroute b
       exposed.get('electronAPI') as {
         session: {
           harnessFacts: (id: string) => unknown
+          refreshMcpServers: (id: string, reconnect: string | null) => unknown
           onHarnessFacts: (
             callback: (event: { sessionId: string }) => void,
           ) => () => void
@@ -24,6 +25,8 @@ it('R3 forwards the harness read and event with disposal — mutation misroute b
     ).session,
     callback = vi.fn()
   api.harnessFacts('s')
+  // MAR-3206 R8: Details' one MCP action, server name intact.
+  api.refreshMcpServers('s', 'claude.ai Figma')
   const off = api.onHarnessFacts(callback),
     handler = on.mock.calls.find((call) => call[0] === 'harness.facts')?.[1]
   handler?.({}, { sessionId: 's' })
@@ -34,7 +37,10 @@ it('R3 forwards the harness read and event with disposal — mutation misroute b
     payload: callback.mock.calls,
     removed: remove.mock.calls,
   }).toEqual({
-    read: [['session:harnessFacts', 's']],
+    read: [
+      ['session:harnessFacts', 's'],
+      ['session:refreshMcpServers', 's', 'claude.ai Figma'],
+    ],
     channel: ['harness.facts'],
     payload: [[{ sessionId: 's' }]],
     removed: [['harness.facts', handler]],

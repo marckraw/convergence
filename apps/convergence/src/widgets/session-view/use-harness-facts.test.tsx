@@ -8,6 +8,7 @@ vi.mock('./harness-facts.api', () => ({
   harnessFactsApi: {
     read: vi.fn(),
     subscribe: vi.fn(),
+    refreshMcpServers: vi.fn(),
     subscribeSummary: summarySubscribe,
   },
 }))
@@ -95,5 +96,81 @@ it('rejects stale reads and retries a failed read — mutations accept stale ses
     failed: { facts: null, error: 'Read unavailable', loading: false },
     recovered: empty,
     error: null,
+  })
+})
+
+const figmaStatus = (status: string): SessionHarnessFacts => ({
+  ...empty,
+  mcpStatus: {
+    kind: 'harness.mcpStatus',
+    at: 'later',
+    servers: [
+      {
+        name: 'claude.ai Figma',
+        status,
+        scope: 'claudeai',
+        origin: 'https://mcp.figma.com',
+      },
+    ],
+    connected: status === 'connected' ? 1 : 0,
+    omitted: 0,
+    omittedAlerts: 0,
+    pluginServers: [],
+  },
+})
+
+it('MAR-3206 R8 a settle belongs to its conversation: press in A, switch to B, press in B, A settles → B stays pending — mutation settle without the id guard turns red', async () => {
+  vi.mocked(harnessFactsApi.subscribe).mockReturnValue(() => {})
+  summarySubscribe.mockReturnValue(() => {})
+  vi.mocked(harnessFactsApi.read).mockResolvedValue(figmaStatus('needs-auth'))
+  const settles: Array<() => void> = []
+  vi.mocked(harnessFactsApi.refreshMcpServers).mockImplementation(
+    () => new Promise<void>((resolve) => settles.push(resolve)),
+  )
+  const { result, rerender } = renderHook(({ id }) => useHarnessFacts(id), {
+    initialProps: { id: 'a' },
+  })
+  await act(async () => {})
+  act(() => void result.current.reconnectMcpServer('claude.ai Figma'))
+  await act(async () => rerender({ id: 'b' }))
+  act(() => void result.current.reconnectMcpServer('claude.ai Figma'))
+  await act(async () => settles[0]())
+  expect({
+    calls: vi.mocked(harnessFactsApi.refreshMcpServers).mock.calls,
+    pending: result.current.mcpPending,
+  }).toEqual({
+    calls: [
+      ['a', 'claude.ai Figma'],
+      ['b', 'claude.ai Figma'],
+    ],
+    pending: 'claude.ai Figma',
+  })
+})
+
+it('MAR-3206 R6 a newer status where the server is no longer an alert ends a failed Reconnect’s error for good', async () => {
+  const flushes: Array<(e: { sessionId: string }) => void> = []
+  vi.mocked(harnessFactsApi.subscribe).mockImplementation((cb) => {
+    flushes.push(cb)
+    return () => {}
+  })
+  summarySubscribe.mockReturnValue(() => {})
+  vi.mocked(harnessFactsApi.read)
+    .mockResolvedValueOnce(figmaStatus('needs-auth'))
+    .mockResolvedValueOnce(figmaStatus('connected'))
+    .mockResolvedValue(figmaStatus('needs-auth'))
+  vi.mocked(harnessFactsApi.refreshMcpServers).mockRejectedValue(
+    new Error('needs authentication'),
+  )
+  const { result } = renderHook(() => useHarnessFacts('s'))
+  await act(async () => {})
+  await act(async () => result.current.reconnectMcpServer('claude.ai Figma'))
+  const failed = result.current.mcpError
+  await act(async () => flushes.forEach((cb) => cb({ sessionId: 's' })))
+  const connected = result.current.mcpError
+  await act(async () => flushes.forEach((cb) => cb({ sessionId: 's' })))
+  expect({ failed, connected, alertAgain: result.current.mcpError }).toEqual({
+    failed: { server: 'claude.ai Figma', message: 'needs authentication' },
+    connected: null,
+    alertAgain: null,
   })
 })

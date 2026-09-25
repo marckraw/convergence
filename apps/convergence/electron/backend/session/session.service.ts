@@ -1754,6 +1754,8 @@ export class SessionService {
       ),
       hasActiveHandle: this.activeHandles.has(row.id),
       canStopTasks: this.activeHandles.get(row.id)?.canStopTasks === true,
+      canReconnectMcpServers:
+        this.activeHandles.get(row.id)?.canReconnectMcpServers === true,
       parallelWork: this.cachedParallelWork([row.id]).get(row.id)!,
     }
     // Read the request row only when the answer can use it, the same rule the
@@ -1779,6 +1781,8 @@ export class SessionService {
       turnTiming: this.summaryTurnTiming(row, timings.get(row.id)),
       hasActiveHandle: this.activeHandles.has(row.id),
       canStopTasks: this.activeHandles.get(row.id)?.canStopTasks === true,
+      canReconnectMcpServers:
+        this.activeHandles.get(row.id)?.canReconnectMcpServers === true,
       parallelWork: counts.get(row.id)!,
     }))
     const attentionRowsBySessionId =
@@ -2114,6 +2118,22 @@ export class SessionService {
 
   harnessFacts(sessionId: string) {
     return new HarnessEvidenceService(this.db).harnessFacts(sessionId)
+  }
+
+  /**
+   * Read the running process's MCP status into the harness facts, after
+   * reconnecting one server inside that process when named (MAR-3206). The
+   * conversation is never restarted for it: with no running process there is
+   * nothing to reconnect, and the refusal says so.
+   */
+  async refreshMcpServers(
+    sessionId: string,
+    reconnect: string | null,
+  ): Promise<void> {
+    const handle = this.activeHandles.get(sessionId)
+    if (!handle?.canReconnectMcpServers || !handle.refreshMcpServers)
+      throw new Error('No Claude process is running for this conversation')
+    await handle.refreshMcpServers(reconnect ?? undefined)
   }
 
   /**

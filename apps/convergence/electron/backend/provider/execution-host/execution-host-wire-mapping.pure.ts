@@ -670,4 +670,5 @@ export const EXECUTION_HOST_UNSENT_HARNESS_FACT_KINDS = {
   'harness.denial': true,
   'harness.rateLimit': true,
   'harness.init': true,
+  'harness.mcpStatus': true,
 } satisfies Record<HarnessFact['kind'], true>

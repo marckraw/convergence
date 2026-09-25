@@ -148,3 +148,76 @@ it('serializes controls and forwards child text — mutations drop permission co
     await transport.close()
   }
 })
+
+it('MAR-3206 reads MCP status and reconnects one server over the running query — mutations drop either control or send the wrong server name turn red', async () => {
+  const child = Object.assign(new EventEmitter(), {
+    stdin: new PassThrough(),
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    killed: false,
+    exitCode: null,
+    signalCode: null,
+    kill: vi.fn(() => true),
+  })
+  const requests: Array<{ subtype: string }> = []
+  const figma = {
+    name: 'claude.ai Figma',
+    status: 'needs-auth',
+    scope: 'claudeai',
+    config: { type: 'claudeai-proxy', url: 'https://mcp.figma.com/mcp' },
+  }
+  child.stdin.on('data', (chunk) => {
+    for (const line of String(chunk).trim().split('\n')) {
+      const e = JSON.parse(line)
+      if (e.type !== 'control_request') continue
+      requests.push(e.request)
+      child.stdout.write(
+        JSON.stringify({
+          type: 'control_response',
+          response: {
+            subtype: 'success',
+            request_id: e.request_id,
+            response:
+              e.request.subtype === 'mcp_status' ? { mcpServers: [figma] } : {},
+          },
+        }) + '\n',
+      )
+    }
+  })
+  spawnMock.mockReset().mockReturnValue(child)
+  const transport = createClaudeTransport({
+    onPermissionRequest: async (request) => ({
+      behavior: 'deny',
+      message: 'fixture denies',
+      toolUseID: request.toolUseID,
+      decisionClassification: 'user_reject',
+    }),
+    binaryPath: '/chosen/claude',
+    args: [],
+    cwd: '/tmp',
+    env: {},
+    onMessage: () => {},
+    onExit: () => {},
+    onStderr: () => {},
+  })
+  try {
+    await transport.reconnectMcpServer('claude.ai Figma')
+    const status = await transport.mcpServerStatus()
+    expect({
+      controls: requests.filter((r) => r.subtype !== 'initialize'),
+      status,
+      spawns: spawnMock.mock.calls.length,
+    }).toEqual({
+      controls: [
+        { subtype: 'mcp_reconnect', serverName: 'claude.ai Figma' },
+        { subtype: 'mcp_status' },
+      ],
+      status: [figma],
+      spawns: 1,
+    })
+  } finally {
+    child.emit('exit', 0, null)
+    child.stdout.end()
+    await transport.close()
+  }
+})
