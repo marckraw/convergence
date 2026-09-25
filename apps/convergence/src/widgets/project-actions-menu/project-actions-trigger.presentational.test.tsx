@@ -41,3 +41,10 @@ describe('ProjectActionsTrigger', () => {
     expect(await screen.findByText('Action menu opened')).toBeInTheDocument()
   })
 })
+
+it('CH1 R5 names the project menu when no script is selected', () => {
+  render(<ProjectActionsTrigger selectedScript={null} running={false} />)
+  expect(
+    screen.getByRole('button', { name: 'Project actions' }),
+  ).toHaveTextContent('Project actions')
+})

@@ -126,7 +126,7 @@ describe('SessionWiresContainer', () => {
 
     expect(
       screen.getByRole('button', {
-        name: '2 wires leave this session; 1 of them is armed.',
+        name: '2 wires leave this session: 1 fires when it finishes, 1 disarmed.',
       }),
     ).toBeInTheDocument()
   })
@@ -142,7 +142,7 @@ describe('SessionWiresContainer', () => {
 
     fireEvent.click(
       screen.getByRole('button', {
-        name: '2 wires leave this session; 1 of them is armed.',
+        name: '2 wires leave this session: 1 fires when it finishes, 1 disarmed.',
       }),
     )
 
@@ -158,4 +158,20 @@ describe('SessionWiresContainer', () => {
     expect(armed.className).toContain('text-foreground')
     expect(armed.className).not.toContain('line-through')
   })
+})
+
+it('CH1 R2 the chip and individual wire retain the condition', () => {
+  useSessionRelayStore.setState({
+    relays: [{ ...hail('r1', 's1', 's2'), conditionToken: 'BATON: fable' }],
+  })
+  render(<SessionWiresContainer sessionId="s1" />)
+  const chip = screen.getByRole('button', {
+    name: '1 wire leaves this session: 1 only if its last line matches.',
+  })
+  fireEvent.click(chip)
+  expect(
+    screen.getByText(
+      'Only if it ends with "BATON: fable", when Implementor finishes, send its last message to Reviewer',
+    ),
+  ).toBeInTheDocument()
 })

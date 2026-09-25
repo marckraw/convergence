@@ -607,7 +607,7 @@ export const SessionView: FC = () => {
                       {remoteDetails.branch && (
                         <SessionHeaderDetailRow
                           icon={<GitBranch className="h-3.5 w-3.5" />}
-                          label="Branch"
+                          label="Remote branch"
                           value={remoteDetails.branch}
                         />
                       )}
@@ -633,7 +633,7 @@ export const SessionView: FC = () => {
                     <>
                       <SessionHeaderDetailRow
                         icon={<GitBranch className="h-3.5 w-3.5" />}
-                        label="Branch"
+                        label="Checkout branch"
                         value={branchName ?? 'Unknown'}
                       />
                       <SessionHeaderDetailRow
@@ -741,6 +741,8 @@ export const SessionView: FC = () => {
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
+                aria-label={`Stop ${session.name}`}
+                title={`Stop ${session.name}`}
                 onClick={() => stopSession(session.id)}
               >
                 <Square className="h-3 w-3" />

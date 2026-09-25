@@ -44,7 +44,7 @@ export const ProjectActionsTrigger = forwardRef<
         <Play className="h-3.5 w-3.5 shrink-0" />
       )}
       <span className="max-w-24 truncate">
-        {selectedScript?.name ?? 'Actions'}
+        {selectedScript?.name ?? 'Project actions'}
       </span>
     </span>
     <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />

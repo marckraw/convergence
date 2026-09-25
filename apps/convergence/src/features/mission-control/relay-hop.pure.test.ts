@@ -341,10 +341,52 @@ describe('buildSessionWireHint', () => {
     expect(hint?.label).toContain('every wire touching it is disarmed')
   })
 
+  it('CH1 E pluralises two unconditional incoming wires', () => {
+    expect(
+      buildSessionWireHint([wire('s2', 's1'), wire('s3', 's1')], 's1')?.label,
+    ).toBe('Wired: receives from 2 others')
+  })
+
   it('ignores a wire with no target when counting what arrives', () => {
     const hint = buildSessionWireHint([wire('s1', null)], 's1')
 
     expect(hint).toMatchObject({ outgoing: 1, incoming: 0, total: 1 })
+  })
+
+  it('CH1 B separates unconditional sends from conditional wires on a card', () => {
+    const hint = buildSessionWireHint(
+      [
+        wire('s1', 's2'),
+        { ...wire('s1', 's3'), conditionToken: 'DONE' },
+        { ...wire('s1', 's4'), conditionToken: 'BATON: fable' },
+        { ...wire('s1', 's5', false), conditionToken: 'DONE' },
+      ],
+      's1',
+    )
+    expect(hint).toEqual({
+      outgoing: 3,
+      incoming: 0,
+      total: 4,
+      label:
+        'Wired: sends its last message on when it finishes (1), sends only if its last line matches (2)',
+    })
+  })
+
+  it('CH1 B all conditional wires make no unconditional promise', () => {
+    const relays = [{ ...wire('s1', 's2'), conditionToken: 'DONE' }]
+    expect(buildSessionWireHint(relays, 's1')?.label).toBe(
+      'Wired: sends only if its last line matches (1)',
+    )
+    expect(buildSessionWireHint(relays, 's2')?.label).toBe(
+      'Wired: receives only if the sender’s last line matches (1)',
+    )
+  })
+
+  it('CH1 B blank conditions are unconditional', () => {
+    const relays = [{ ...wire('s1', 's2'), conditionToken: '  ' }]
+    expect(buildSessionWireHint(relays, 's1')?.label).toBe(
+      'Wired: sends its last message on when it finishes (1)',
+    )
   })
 })
 

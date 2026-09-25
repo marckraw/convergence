@@ -266,6 +266,9 @@ describe('ChatSurface', () => {
     render(<ChatSurface selectedSpaceId={null} />)
 
     expect(screen.getByText('Running')).toBeInTheDocument()
+    const stop = screen.getByRole('button', { name: /^Stop / })
+    expect(stop).toHaveAttribute('aria-label', `Stop ${globalSession.name}`)
+    expect(stop).toHaveAttribute('title', `Stop ${globalSession.name}`)
   })
 
   it('MAR-3288 R5 says Compacting context… and never Finished while compacting — mutation drop the activity prop turns red', () => {

@@ -103,6 +103,7 @@ describe('SessionElapsedDuration', () => {
     })
     const view = render(<SessionElapsedDuration {...readingOf(items)} />)
     expect(elapsedValue()).toBe('10s')
+    expect(screen.getByText('Agent working time')).toBeInTheDocument()
 
     const shown = { length: reply.text.length }
     append(reply, shown, ' one', '2026-04-22T00:01:10.000Z')

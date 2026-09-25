@@ -27,7 +27,7 @@ export const SessionElapsedDuration: FC<
   return (
     <SessionHeaderDetailRow
       icon={<Clock className="h-3.5 w-3.5" />}
-      label="Elapsed"
+      label="Agent working time"
       value={value}
       testId="session-total-duration"
     />

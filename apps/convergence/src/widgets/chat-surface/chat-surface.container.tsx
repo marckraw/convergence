@@ -720,7 +720,8 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
             variant="ghost"
             size="icon"
             className="h-7 w-7"
-            title="Stop session"
+            title={`Stop ${session.name}`}
+            aria-label={`Stop ${session.name}`}
             onClick={() => stopSession(session.id)}
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >

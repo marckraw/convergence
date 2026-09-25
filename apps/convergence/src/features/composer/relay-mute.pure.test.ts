@@ -36,7 +36,27 @@ describe('relayMuteTitle', () => {
       'This send will not fire the 2 wires leaving this session. It resets after you send.',
     )
     expect(relayMuteTitle(false, 1)).toBe(
-      'Sending will fire the 1 wire leaving this session. Switch this on to send quiet, once.',
+      'Sending may fire the 1 wire leaving this session when it finishes, if their conditions match. Switch this on to send quiet, once.',
     )
   })
 })
+
+it.each([
+  ['all unconditional', [null, null], [true, true]],
+  ['all conditional', ['BATON: fable', 'BATON: horse'], [true, true]],
+  ['mixed', [null, 'BATON: fable', null], [true, true, false]],
+  ['all disarmed', ['BATON: fable'], [false]],
+] as const)(
+  'CH1 R2 Quiet makes no unconditional promise for %s wires',
+  (_name, tokens, armed) => {
+    const relays = tokens.map((conditionToken, i) => ({
+      sourceSessionId: 's1',
+      armed: armed[i],
+      conditionToken,
+    }))
+    const count = countArmedOutgoingRelays(relays, 's1')
+    expect(relayMuteTitle(false, count)).toContain('may fire')
+    expect(relayMuteTitle(false, count)).toContain('if their conditions match')
+    expect(relayMuteTitle(true, count)).toContain('will not fire')
+  },
+)

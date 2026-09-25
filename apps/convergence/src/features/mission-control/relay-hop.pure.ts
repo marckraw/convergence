@@ -228,15 +228,15 @@ export interface SessionWireHint {
 /**
  * The glyph a Session Card wears when wires touch it.
  *
- * Counts armed wires only in the numbers, because the glyph answers "will
- * anything happen when this finishes" -- but keeps the total so a card with
- * only switched-off wires still shows something rather than looking unwired.
+ * Counts armed wires only in the numbers and names their conditions. Keeps
+ * the total so a card with only switched-off wires still shows it is wired.
  */
 export function buildSessionWireHint(
   relays: readonly {
     sourceSessionId: string
     targetSessionId: string | null
     armed: boolean
+    conditionToken?: string | null
   }[],
   sessionId: string,
 ): SessionWireHint | null {
@@ -253,13 +253,39 @@ export function buildSessionWireHint(
   const incoming = touching.filter(
     (relay) => relay.armed && relay.targetSessionId === sessionId,
   ).length
+  const conditionalOutgoing = touching.filter(
+    (relay) =>
+      relay.armed &&
+      relay.sourceSessionId === sessionId &&
+      relay.conditionToken?.trim(),
+  ).length
+  const conditionalIncoming = touching.filter(
+    (relay) =>
+      relay.armed &&
+      relay.targetSessionId === sessionId &&
+      relay.conditionToken?.trim(),
+  ).length
+  const unconditionalOutgoing = outgoing - conditionalOutgoing
+  const unconditionalIncoming = incoming - conditionalIncoming
 
   const parts: string[] = []
-  if (outgoing > 0) {
-    parts.push(`sends its last message on when it finishes (${outgoing})`)
+  if (unconditionalOutgoing > 0) {
+    parts.push(
+      `sends its last message on when it finishes (${unconditionalOutgoing})`,
+    )
   }
-  if (incoming > 0) {
-    parts.push(`receives from ${incoming} other`)
+  if (conditionalOutgoing > 0) {
+    parts.push(`sends only if its last line matches (${conditionalOutgoing})`)
+  }
+  if (unconditionalIncoming > 0) {
+    parts.push(
+      `receives from ${unconditionalIncoming} ${unconditionalIncoming === 1 ? 'other' : 'others'}`,
+    )
+  }
+  if (conditionalIncoming > 0) {
+    parts.push(
+      `receives only if the sender’s last line matches (${conditionalIncoming})`,
+    )
   }
   if (parts.length === 0) {
     parts.push('every wire touching it is disarmed')

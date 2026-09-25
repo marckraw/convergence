@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  countSessionWires,
   formatSessionWireCount,
   formatSessionWireSummary,
   selectOutgoingWires,
@@ -43,35 +44,62 @@ describe('formatSessionWireCount', () => {
   })
 })
 
-describe('formatSessionWireSummary', () => {
-  it('says plainly what happens when this session finishes', () => {
-    expect(formatSessionWireSummary(2, 2)).toBe(
+describe('CH1 R2 wire summary counts conditions', () => {
+  it.each([
+    [
+      'all unconditional',
+      [null, '  '],
+      0,
       '2 wires fire when this session finishes.',
-    )
-  })
-
-  it('agrees with itself about one wire', () => {
-    expect(formatSessionWireSummary(1, 1)).toBe(
-      '1 wire fires when this session finishes.',
-    )
-    expect(formatSessionWireSummary(1, 0)).toBe(
-      '1 wire leaves this session, and it is disarmed.',
-    )
-  })
-
-  it('does not let a disarmed wire look armed', () => {
-    expect(formatSessionWireSummary(2, 0)).toBe(
+    ],
+    [
+      'all conditional',
+      ['BATON: fable', 'BATON: horse'],
+      0,
+      '2 wires leave this session: 2 only if its last line matches.',
+    ],
+    [
+      'mixed',
+      [null, 'BATON: fable', 'BATON: horse'],
+      1,
+      '4 wires leave this session: 1 fires when it finishes, 2 only if its last line matches, 1 disarmed.',
+    ],
+    [
+      'all disarmed',
+      [],
+      2,
       '2 wires leave this session. Every one is disarmed.',
+    ],
+    ['one disarmed', [], 1, '1 wire leaves this session, and it is disarmed.'],
+    [
+      'one unconditional',
+      [null],
+      0,
+      '1 wire fires when this session finishes.',
+    ],
+    ['empty', [], 0, 'Nothing leaves this session.'],
+    [
+      'CH1 A DONE is a condition, not a BATON line',
+      ['DONE'],
+      0,
+      '1 wire leaves this session: 1 only if its last line matches.',
+    ],
+  ] as const)('%s', (_name, tokens, off, expected) => {
+    const wires = [
+      ...tokens.map((conditionToken) => ({
+        sourceSessionId: 's1',
+        armed: true,
+        conditionToken,
+      })),
+      ...Array.from({ length: off }, () => ({
+        sourceSessionId: 's1',
+        armed: false,
+        conditionToken: 'BATON: fable',
+      })),
+    ]
+    const { unconditional, conditional, disarmed } = countSessionWires(wires)
+    expect(formatSessionWireSummary(unconditional, conditional, disarmed)).toBe(
+      expected,
     )
-    expect(formatSessionWireSummary(3, 1)).toBe(
-      '3 wires leave this session; 1 of them is armed.',
-    )
-    expect(formatSessionWireSummary(3, 2)).toBe(
-      '3 wires leave this session; 2 of them are armed.',
-    )
-  })
-
-  it('has an answer for a session nothing leaves', () => {
-    expect(formatSessionWireSummary(0, 0)).toBe('Nothing leaves this session.')
   })
 })
