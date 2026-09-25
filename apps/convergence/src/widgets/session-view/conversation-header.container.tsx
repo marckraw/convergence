@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -22,6 +23,7 @@ import {
   headerLayout,
   headerLayoutKey,
   headerYieldPriority,
+  identityStyles,
   identityWidths,
   parseHeaderLayoutKey,
   type HeaderItem,
@@ -67,14 +69,31 @@ export type HeaderMenuEntry =
    */
   | { kind: 'text'; key: string; name: string; label: string }
 
+/**
+ * What a control that is a menu or popover spreads on its Radix content, so
+ * that its close-autofocus -- which runs after the exit animation, when the
+ * content has unmounted -- hands focus to More while the control is yielded
+ * (MAR-3427 A).
+ */
+export interface HeaderMenuFocus {
+  onCloseAutoFocus: (event: Event) => void
+  onInteractOutside: (event: CustomEvent<{ originalEvent: Event }>) => void
+}
+
 export interface HeaderSlot {
   /** A control's id is its place in `HEADER_YIELD_ORDER`. */
   id: string
   side: 'left' | 'right'
   /** Status and Stop are pinned; only a control may yield. */
   group: 'status' | 'control' | 'stop'
-  node: ReactNode
+  /**
+   * A control that opens a menu or popover takes the focus props for its
+   * content (MAR-3427 A).
+   */
+  node: ReactNode | ((focus: HeaderMenuFocus) => ReactNode)
   entries?: HeaderMenuEntry[]
+  /** The control's own panel is open: it is pinned (MAR-3427 C). */
+  open?: boolean
 }
 
 interface ConversationHeaderProps {
@@ -134,6 +153,50 @@ export function headerFocusTarget(
   )
 }
 
+type TriggerReadings = Record<string, { name: string; disabled: boolean }>
+
+/** What More needs of each yielded menu trigger, read as it is now (D). */
+function readTriggers(
+  header: HTMLElement | null,
+  ids: readonly string[],
+): TriggerReadings {
+  const readings: TriggerReadings = {}
+  for (const id of ids) {
+    const trigger = triggerOf(header, id)
+    if (trigger)
+      readings[id] = { name: triggerName(trigger), disabled: trigger.disabled }
+  }
+  return readings
+}
+
+function sameReadings(left: TriggerReadings, right: TriggerReadings): boolean {
+  const keys = Object.keys(left)
+  if (keys.length !== Object.keys(right).length) return false
+  return keys.every(
+    (key) =>
+      left[key].name === right[key]?.name &&
+      left[key].disabled === right[key]?.disabled,
+  )
+}
+
+/**
+ * Radix's own rule for when an interaction outside a closing menu means its
+ * trigger is not focused again: for a modal menu (every header dropdown) only
+ * a right-click outside; for a non-modal popover anything touched or focused
+ * outside. MAR-3427 A keeps that rule, with More standing in for the trigger.
+ */
+function interactionKeepsFocusWhereItIs(
+  opens: 'menu' | 'popover',
+  event: CustomEvent<{ originalEvent: Event }>,
+): boolean {
+  if (opens === 'popover') return true
+  const original = event.detail.originalEvent as Partial<MouseEvent>
+  return (
+    original.button === 2 ||
+    (original.button === 0 && original.ctrlKey === true)
+  )
+}
+
 function sameMeasured(left: Measured, right: Measured): boolean {
   if (left.project !== right.project || left.name !== right.name) return false
   const keys = Object.keys(left.items)
@@ -186,9 +249,10 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
     null,
   )
   const [measured, setMeasured] = useState<Measured>(EMPTY_MEASURED)
-  const [triggers, setTriggers] = useState<
-    Record<string, { name: string; disabled: boolean }>
-  >({})
+  const [triggers, setTriggers] = useState<TriggerReadings>({})
+  const [moreOpen, setMoreOpen] = useState(false)
+  /** Yielded menus touched from outside while open (MAR-3427 A). */
+  const interactedOutside = useRef(new Set<string>())
 
   // Natural widths. A control's inner box never shrinks, yielded or not, so
   // what is measured never depends on the layout it feeds. Reads happen when
@@ -278,6 +342,7 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
               : 0,
           pinned: slot.group !== 'control',
           group: slot.group,
+          open: slot.open,
         }),
       ),
     {
@@ -291,8 +356,18 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
   ]
   // The header measures itself, never the window, and redraws only when what
   // it draws changes (R3).
-  const layoutKey = useElementWidth(headerRef, (width) =>
-    headerLayoutKey(headerLayout({ width, items })),
+  // Opening or closing a docked panel changes the header's width in the same
+  // commit that pins or unpins its control; the width is read again then, so
+  // the unpinned control is laid out at the width it actually has, not the
+  // docked one it had a frame ago (MAR-3427 C).
+  const openKey = slots
+    .filter((slot) => slot.open)
+    .map((slot) => slot.id)
+    .join(' ')
+  const layoutKey = useElementWidth(
+    headerRef,
+    (width) => headerLayoutKey(headerLayout({ width, items })),
+    openKey,
   )
   const layout = useMemo(() => parseHeaderLayoutKey(layoutKey), [layoutKey])
   const overflow = new Set(layout.overflow)
@@ -301,36 +376,7 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
   const onStatusRow = new Set(statusRows.flat())
 
   const openYielded = (id: string, opens: 'menu' | 'popover') => {
-    const trigger = triggerOf(headerRef.current, id)
-    if (!trigger) return
-    // The trigger is inert while yielded, so the menu's own focus return
-    // lands nowhere; hand focus back to More when it closes. One task later,
-    // after the menu's own return has run, and only if focus is lost (on the
-    // body, or on a yielded control): a click elsewhere keeps its focus.
-    let opened = false
-    const watch = new MutationObserver(() => {
-      const expanded = trigger.getAttribute('aria-expanded') === 'true'
-      if (expanded) opened = true
-      else if (opened) {
-        watch.disconnect()
-        window.setTimeout(() => {
-          const active = document.activeElement
-          const lost =
-            !active ||
-            active === document.body ||
-            active.closest('[data-yielded]') !== null
-          if (lost && moreRef.current?.isConnected) moreRef.current.focus()
-        }, 0)
-      }
-    })
-    watch.observe(trigger, {
-      attributes: true,
-      attributeFilter: ['aria-expanded'],
-    })
-    window.setTimeout(() => {
-      if (!opened) watch.disconnect()
-    }, 1000)
-    trigger.dispatchEvent(
+    triggerOf(headerRef.current, id)?.dispatchEvent(
       opens === 'menu'
         ? new KeyboardEvent('keydown', {
             key: 'ArrowDown',
@@ -341,22 +387,42 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
     )
   }
 
-  const readTriggers = () => {
-    const next: Record<string, { name: string; disabled: boolean }> = {}
-    for (const slot of slots) {
-      if (!overflow.has(slot.id)) continue
-      const trigger = triggerOf(headerRef.current, slot.id)
-      if (trigger)
-        next[slot.id] = {
-          name: triggerName(trigger),
-          disabled: trigger.disabled,
-        }
-    }
-    setTriggers(next)
-  }
+  const isYielded = (id: string) =>
+    headerRef.current?.querySelector(
+      `[data-header-item="${id}"][data-yielded]`,
+    ) != null
+
+  /**
+   * A yielded menu's trigger is inert, so the menu's own focus return lands
+   * nowhere. At its close-autofocus -- after the exit animation, once the
+   * content has unmounted -- More takes the trigger's place, by Radix's own
+   * rule for when the trigger would have been focused (MAR-3427 A).
+   */
+  const menuFocus = (
+    id: string,
+    opens: 'menu' | 'popover',
+  ): HeaderMenuFocus => ({
+    onInteractOutside: (event) => {
+      if (interactionKeepsFocusWhereItIs(opens, event))
+        interactedOutside.current.add(id)
+    },
+    onCloseAutoFocus: (event) => {
+      const outside = interactedOutside.current.delete(id)
+      if (!isYielded(id)) return
+      event.preventDefault()
+      if (!outside) moreRef.current?.focus()
+    },
+  })
 
   const renderSlot = (slot: HeaderSlot) => {
     const yielded = overflow.has(slot.id)
+    const opens = slot.entries?.find((entry) => entry.kind === 'opens')
+    const node =
+      typeof slot.node === 'function'
+        ? slot.node(
+            menuFocus(slot.id, opens?.kind === 'opens' ? opens.opens : 'menu'),
+          )
+        : slot.node
     return (
       <div
         key={slot.id}
@@ -380,7 +446,7 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
           // status row's own empty space still does (R7).
           {...HEADER_NO_DRAG_REGION}
         >
-          {slot.node}
+          {node}
         </div>
       </div>
     )
@@ -395,6 +461,60 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
     projectName === null
       ? conversationName
       : `${projectName} / ${conversationName}`
+
+  const identityStyle = identityStyles(identity, {
+    projectNatural: projectName === null ? null : measured.project,
+    leading: leading?.width,
+  })
+
+  // More reads its yielded menus' names and disabled states as they are now,
+  // not as they were when it opened: after every render (a control yielding
+  // while More is open), and while it is open, whenever a trigger changes on
+  // its own (MAR-3427 D).
+  const yieldedMenuIds = slots
+    .filter(
+      (slot) =>
+        overflow.has(slot.id) &&
+        slot.entries?.some((entry) => entry.kind === 'opens'),
+    )
+    .map((slot) => slot.id)
+  const yieldedMenuKey = yieldedMenuIds.join(' ')
+  const syncTriggers = useRef<() => void>(() => {})
+  syncTriggers.current = () => {
+    const next = readTriggers(headerRef.current, yieldedMenuIds)
+    setTriggers((previous) => (sameReadings(previous, next) ? previous : next))
+  }
+  useLayoutEffect(() => {
+    syncTriggers.current()
+  })
+  useEffect(() => {
+    const header = headerRef.current
+    if (!moreOpen || !header || typeof MutationObserver !== 'function') return
+    const watch = new MutationObserver(() => syncTriggers.current())
+    watch.observe(header, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ['disabled', 'aria-label', 'title'],
+    })
+    return () => watch.disconnect()
+  }, [moreOpen, yieldedMenuKey])
+
+  // Focus never stays inside a control that has yielded: it is hidden and
+  // inert there, and the browser drops it to the page. More, where the
+  // control now lives, takes it (MAR-3427 C: Parallel work unpinning as its
+  // panel closes).
+  useLayoutEffect(() => {
+    const active = document.activeElement
+    if (
+      active instanceof HTMLElement &&
+      headerRef.current?.contains(active) &&
+      active.closest('[data-header-item][data-yielded]') &&
+      moreRef.current?.isConnected
+    )
+      moreRef.current.focus()
+  })
 
   const yieldedEntries = slots
     .filter((slot) => overflow.has(slot.id))
@@ -427,8 +547,8 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
                 <span
                   ref={projectRef}
                   data-header-project
-                  className="min-w-0 shrink-[999] truncate text-muted-foreground"
-                  style={{ minWidth: identity.projectMin }}
+                  className="truncate text-muted-foreground"
+                  style={identityStyle.project ?? undefined}
                 >
                   {projectName}
                 </span>
@@ -443,8 +563,8 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
             <span
               ref={nameRef}
               data-header-name
-              className="min-w-0 shrink truncate font-medium"
-              style={{ minWidth: identity.nameMin }}
+              className="truncate font-medium"
+              style={identityStyle.name}
             >
               {conversationName}
             </span>
@@ -461,11 +581,7 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
             .filter((slot) => slot.side === 'right' && inRow1(slot))
             .map(renderSlot)}
           {visible.has('more') && (
-            <DropdownMenu
-              onOpenChange={(open) => {
-                if (open) readTriggers()
-              }}
-            >
+            <DropdownMenu onOpenChange={setMoreOpen}>
               <DropdownMenuTrigger asChild>
                 <Button
                   ref={moreRef}
@@ -510,7 +626,7 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
                     <DropdownMenuItem
                       key={entry.key}
                       data-yielded-entry={slot.id}
-                      disabled={triggers[slot.id]?.disabled}
+                      disabled={triggers[slot.id]?.disabled ?? true}
                       onSelect={() => {
                         pendingOpen.current = {
                           id: slot.id,
@@ -518,7 +634,7 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
                         }
                       }}
                     >
-                      {triggers[slot.id]?.name ?? slot.id}
+                      {triggers[slot.id]?.name}
                     </DropdownMenuItem>
                   ) : (
                     <DropdownMenuItem

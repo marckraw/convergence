@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import type { FC } from 'react'
+import { flushSync } from 'react-dom'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import {
   spaceApi,
@@ -190,8 +191,12 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
         ? parallelInvoker.current
         : parallelButton.current,
     )?.focus()
+  // The close is committed before focus is decided: while open the button is
+  // pinned (MAR-3427 C), and closing may yield it again or move it off the
+  // status row -- a new button -- so the target is read from the header as
+  // it is once the panel has closed.
   const closeParallel = () => {
-    setParallelOpen(false)
+    flushSync(() => setParallelOpen(false))
     focusParallelInvoker()
   }
   const session = sessions.find((entry) => entry.id === activeSessionId) ?? null
@@ -708,6 +713,8 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
             id: 'parallel-work',
             side: 'left',
             group: session.parallelWork?.running ? 'status' : 'control',
+            // Its panel open, it is pinned (MAR-3427 C).
+            open: parallelOpen,
             node: (
               <Button
                 ref={parallelButton}

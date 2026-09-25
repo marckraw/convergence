@@ -984,19 +984,31 @@ describe('ChatSurface', () => {
       })
       headerWidth(400)
       render(<ChatSurface selectedSpaceId={null} />)
-      const more = screen.getByRole('button', { name: 'Session actions' })
-      fireEvent.pointerDown(more)
+      fireEvent.pointerDown(
+        screen.getByRole('button', { name: 'Session actions' }),
+      )
       fireEvent.click(
         await screen.findByRole('menuitem', { name: 'Parallel work' }),
       )
-      // Let More's own close hand focus back first, so it cannot be what
-      // the assertion below sees.
-      await waitFor(() => expect(document.activeElement).toBe(more))
+      // Open, Parallel work is pinned (MAR-3427 C) and was the chat's only
+      // yielded control: More has nothing left to hold and goes, so its own
+      // close focus cannot be what the assertion below sees.
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('button', { name: 'Session actions' }),
+        ).not.toBeInTheDocument(),
+      )
+      expect(
+        screen.getByRole('button', { name: 'Parallel work' }),
+      ).toBeInTheDocument()
       const close = screen.getByRole('button', { name: 'mock close parallel' })
       close.focus()
       expect(document.activeElement).toBe(close)
       fireEvent.click(close)
-      expect(document.activeElement).toBe(more)
+      // Closed, it yields again and More returns -- and holds the focus.
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Session actions' }),
+      )
     })
 
     it('a wide chat header shows everything and no More at all', () => {

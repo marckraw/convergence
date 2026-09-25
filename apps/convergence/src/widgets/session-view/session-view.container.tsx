@@ -8,6 +8,7 @@ import { useParallelWork } from './use-parallel-work'
 import { isRemoteExecutionHost } from '@/entities/execution-host'
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import type { FC } from 'react'
+import { flushSync } from 'react-dom'
 import { selectProjectName, useProjectStore } from '@/entities/project'
 import {
   AttentionIndicator,
@@ -78,6 +79,7 @@ import {
   ConversationHeader,
   headerFocusTarget,
   useConversationViewEntries,
+  type HeaderMenuFocus,
 } from './conversation-header.container'
 import { harnessPill } from './harness-facts.pure'
 import { SessionWiresContainer } from './session-wires.container'
@@ -194,8 +196,12 @@ export const SessionView: FC = () => {
         ? parallelInvoker.current
         : parallelButton.current,
     )?.focus()
+  // The close is committed before focus is decided: while open the button is
+  // pinned (MAR-3427 C), and closing may yield it again or move it off the
+  // status row -- a new button -- so the target is read from the header as
+  // it is once the panel has closed.
   const closeParallel = () => {
-    setParallelOpen(false)
+    flushSync(() => setParallelOpen(false))
     focusParallelInvoker()
   }
   const remoteSessionId = isRemoteExecutionHost(session?.executionHost)
@@ -523,6 +529,8 @@ export const SessionView: FC = () => {
               side: 'left',
               // While something runs it is live status, and it stays (R2).
               group: session.parallelWork?.running ? 'status' : 'control',
+              // Its panel open, it is pinned (MAR-3427 C).
+              open: parallelOpen,
               node: (
                 <Button
                   ref={parallelButton}
@@ -626,12 +634,13 @@ export const SessionView: FC = () => {
                     group: harnessPill(harness.facts).alert
                       ? ('status' as const)
                       : ('control' as const),
-                    node: (
+                    node: (focus: HeaderMenuFocus) => (
                       <HarnessFactsView
                         facts={harness.facts}
                         error={harness.error}
                         loading={harness.loading}
                         onRetry={harness.retry}
+                        contentFocus={focus}
                       />
                     ),
                     entries: [
@@ -670,14 +679,19 @@ export const SessionView: FC = () => {
               id: 'wires',
               side: 'left',
               group: 'control',
-              node: <SessionWiresContainer sessionId={session.id} />,
+              node: (focus) => (
+                <SessionWiresContainer
+                  sessionId={session.id}
+                  contentFocus={focus}
+                />
+              ),
               entries: [{ kind: 'opens', key: 'wires', opens: 'popover' }],
             },
             {
               id: 'session-details',
               side: 'left',
               group: 'control',
-              node: (
+              node: (focus) => (
                 <DropdownMenu
                   onOpenChange={(open) => {
                     if (open) void refreshPullRequest()
@@ -693,7 +707,11 @@ export const SessionView: FC = () => {
                       Session details
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-80 p-2">
+                  <DropdownMenuContent
+                    align="start"
+                    className="w-80 p-2"
+                    {...focus}
+                  >
                     <div className="grid gap-1.5 text-xs">
                       {session.parentSessionId && (
                         <Button
@@ -813,10 +831,11 @@ export const SessionView: FC = () => {
                     id: 'project-actions',
                     side: 'right' as const,
                     group: 'control' as const,
-                    node: (
+                    node: (focus: HeaderMenuFocus) => (
                       <ProjectActionsMenu
                         project={activeProject}
                         runtimeCwd={session.workingDirectory}
+                        contentFocus={focus}
                       />
                     ),
                     entries: [
@@ -833,13 +852,20 @@ export const SessionView: FC = () => {
               id: 'open',
               side: 'right',
               group: 'control',
-              node: <ProjectOpenMenuContainer targetPath={sessionOpenPath} />,
+              node: (focus) => (
+                <ProjectOpenMenuContainer
+                  targetPath={sessionOpenPath}
+                  contentFocus={focus}
+                />
+              ),
               entries: [{ kind: 'opens', key: 'open', opens: 'menu' }],
             },
             {
               id: 'pull-request',
               side: 'right',
               group: 'control',
+              // Its panel open, it is pinned (MAR-3427 C).
+              open: showPullRequestPanel,
               node: (
                 <Button
                   variant="ghost"

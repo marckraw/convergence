@@ -5,8 +5,10 @@ import {
   headerLayout,
   headerLayoutKey,
   headerYieldPriority,
+  identityStyles,
   identityWidths,
   parseHeaderLayoutKey,
+  type IdentityNameStyle,
   type HeaderItem,
   type HeaderYieldId,
 } from './conversation-header.pure'
@@ -331,6 +333,141 @@ describe('headerLayout', () => {
     const items = [identity(), control('wires', 0), control('open', 70), more]
     const layout = headerLayout({ width: 330, items })
     expect(layout.overflow).toEqual(['open'])
+  })
+})
+
+describe('MAR-3427 C a control whose panel is open', () => {
+  const withParallel = (open: boolean) =>
+    codeHeader({ running: true }).map((item) =>
+      item.id === 'parallel-work' ? { ...item, open } : item,
+    )
+
+  it('stays drawn at a width where it would otherwise yield — mutation unpin it turns red', () => {
+    // 700 px, running, one row: closed, Parallel work is the last control and
+    // still does not fit beside the pinned items.
+    const closed = headerLayout({ width: 700, items: withParallel(false) })
+    expect(closed.rows).toHaveLength(1)
+    expect(closed.overflow).toContain('parallel-work')
+
+    const open = headerLayout({ width: 700, items: withParallel(true) })
+    expect(open.rows).toHaveLength(1)
+    expect(open.visible).toContain('parallel-work')
+    expect(open.overflow).not.toContain('parallel-work')
+  })
+
+  it('sits with the live status when the header has two rows', () => {
+    const open = headerLayout({ width: 400, items: withParallel(true) })
+    expect(open.rows[0]).not.toContain('parallel-work')
+    expect(open.rows.slice(1).flat()).toContain('parallel-work')
+    expect(open.overflow).not.toContain('parallel-work')
+  })
+})
+
+/**
+ * The browser's flex shrink, for one identity row laid out at `available` px:
+ * each name starts at its natural width capped by its `max-width` (a
+ * `calc(100% - Npx)` resolves against the identity), and the overflow is taken
+ * from the names that shrink, in proportion to shrink factor x width, none
+ * below its `min-width`. This reads the styles `identityStyles` hands the
+ * spans -- the same ones the header applies -- so it proves what they do.
+ */
+function flexIdentity(
+  available: number,
+  names: { natural: number; style: IdentityNameStyle }[],
+  fixed: number,
+): number[] {
+  const cap = (style: IdentityNameStyle) => {
+    const match = style.maxWidth?.match(/^calc\(100% - (\d+(?:\.\d+)?)px\)$/)
+    if (style.maxWidth !== undefined && !match)
+      throw new Error(`unreadable max-width ${style.maxWidth}`)
+    return match ? available - Number(match[1]) : Infinity
+  }
+  const widths = names.map(({ natural, style }) =>
+    Math.max(style.minWidth, Math.min(natural, cap(style))),
+  )
+  const frozen = names.map(({ style }, index) =>
+    style.flexShrink === 0 ? true : widths[index] <= style.minWidth,
+  )
+  let overflow =
+    fixed + widths.reduce((sum, width) => sum + width, 0) - available
+  while (overflow > 1e-9) {
+    const weight = names.reduce(
+      (sum, { style }, index) =>
+        frozen[index] ? sum : sum + style.flexShrink * widths[index],
+      0,
+    )
+    if (weight === 0) break
+    let taken = 0
+    names.forEach(({ style }, index) => {
+      if (frozen[index]) return
+      const share = (overflow * style.flexShrink * widths[index]) / weight
+      const next = Math.max(style.minWidth, widths[index] - share)
+      taken += widths[index] - next
+      if (next === style.minWidth) frozen[index] = true
+      widths[index] = next
+    })
+    overflow -= taken
+    if (taken === 0) break
+  }
+  return widths
+}
+
+describe('MAR-3427 B the identity shares a squeeze', () => {
+  // The reader's Chromium probe: a 215 px project and a 219.81 px name.
+  const projectNatural = 215
+  const nameNatural = 219.81
+  const widths = identityWidths({ projectNatural, nameNatural })
+  const styles = identityStyles(widths, { projectNatural })
+  const layout = (available: number) => {
+    const [project, name] = flexIdentity(
+      available,
+      [
+        { natural: projectNatural, style: styles.project! },
+        { natural: nameNatural, style: styles.name },
+      ],
+      20,
+    )
+    return { project, name }
+  }
+
+  it('the conversation name keeps every pixel until the project is at its 40 px floor — mutation restore the shrink-[999] / shrink split turns red', () => {
+    // 380 px: the reader's case. The project gives the whole squeeze.
+    const reader = layout(380)
+    expect(reader.name).toBe(219.81)
+    expect(reader.project).toBeCloseTo(140.19, 6)
+
+    // Just above the floor: still all from the project.
+    const edge = layout(40 + 20 + 219.81 + 0.5)
+    expect(edge.name).toBe(219.81)
+    expect(edge.project).toBeCloseTo(40.5, 6)
+
+    // Past it: the project holds its 40 px, the name takes the rest.
+    const past = layout(260)
+    expect(past.project).toBe(40)
+    expect(past.name).toBe(200)
+  })
+
+  it('applies the styles that say so: the name does not flex-shrink and is capped at what the project floor leaves', () => {
+    expect(styles).toEqual({
+      project: { minWidth: 40, flexShrink: 1 },
+      name: { minWidth: 120, flexShrink: 0, maxWidth: 'calc(100% - 60px)' },
+    })
+    const chat = identityStyles(
+      identityWidths({ projectNatural: 80, nameNatural: 150, leading: 22 }),
+      { projectNatural: 80, leading: 22 },
+    )
+    expect(chat.name.maxWidth).toBe('calc(100% - 82px)')
+  })
+
+  it('a conversation without a project is the one name, and shrinks to its reserve', () => {
+    const alone = identityStyles(
+      identityWidths({ projectNatural: null, nameNatural: 300 }),
+      { projectNatural: null },
+    )
+    expect(alone).toEqual({
+      project: null,
+      name: { minWidth: 120, flexShrink: 1 },
+    })
   })
 })
 

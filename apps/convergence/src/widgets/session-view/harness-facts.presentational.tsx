@@ -1,3 +1,4 @@
+import type { ComponentPropsWithoutRef } from 'react'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 import { Button } from '@/shared/ui/button'
 import {
@@ -16,11 +17,20 @@ export function HarnessFactsView({
   error,
   loading,
   onRetry,
+  contentFocus,
 }: {
   facts: SessionHarnessFacts | null
   error: string | null
   loading: boolean
   onRetry: () => void
+  /**
+   * Focus handling for the menu's content, from a header that may have moved
+   * this control into More (MAR-3427 A).
+   */
+  contentFocus?: Pick<
+    ComponentPropsWithoutRef<typeof DropdownMenuContent>,
+    'onCloseAutoFocus' | 'onInteractOutside'
+  >
 }) {
   const pill = harnessPill(facts),
     current = facts?.currentTurn,
@@ -55,6 +65,7 @@ export function HarnessFactsView({
       <DropdownMenuContent
         align="end"
         className="max-h-[70vh] w-96 max-w-[calc(100vw-2rem)] overflow-auto p-3 text-xs"
+        {...contentFocus}
       >
         {error ? (
           <div role="alert">

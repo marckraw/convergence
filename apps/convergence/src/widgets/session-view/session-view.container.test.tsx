@@ -1882,7 +1882,11 @@ describe('SessionView', () => {
       const name = document.querySelector<HTMLElement>('[data-header-name]')!
       expect(name.style.minWidth).toBe('120px')
       expect(project.style.minWidth).toBe('40px')
-      expect(project.className).toContain('shrink-[999]')
+      // MAR-3427 B: the project is the one name that flex-shrinks; the
+      // conversation name is capped at what the project's floor leaves.
+      expect(project.style.flexShrink).toBe('1')
+      expect(name.style.flexShrink).toBe('0')
+      expect(name.style.maxWidth).toBe('calc(100% - 60px)')
     })
 
     it('R4 a narrow header moves the terminal toggle and Open into More by name, and the terminal item toggles the terminal — mutation drop yielded items turns red', async () => {
@@ -2000,13 +2004,15 @@ describe('SessionView', () => {
       const close = await screen.findByRole('button', {
         name: 'Close parallel work',
       })
-      // The button it would otherwise return to is yielded: hidden and inert.
+      // While its panel is open the button is pinned, on the status row (C);
+      // closing it yields it again, and mounts it back in row 1.
+      expect(innerTrigger('parallel-work').closest('[data-yielded]')).toBeNull()
+      close.focus()
+      fireEvent.click(close)
       expect(
         innerTrigger('parallel-work').closest('[data-yielded]'),
       ).not.toBeNull()
-      close.focus()
-      fireEvent.click(close)
-      await waitFor(() => expect(document.activeElement).toBe(more()))
+      expect(document.activeElement).toBe(more())
     })
 
     it('D Parallel work opened from its own drawn button still returns focus to that button', async () => {
@@ -2085,6 +2091,268 @@ describe('SessionView', () => {
         expect(trigger).toHaveAttribute('aria-expanded', 'false'),
       )
       await waitFor(() => expect(document.activeElement).toBe(more()))
+    })
+
+    /**
+     * Menus and popovers as the app draws them (MAR-3427 A): they fade out,
+     * and Radix keeps the closing content mounted -- with focus still inside
+     * -- until the animation ends. jsdom runs no animation, so the content is
+     * given its animation name here, and `finishExits` ends every fade.
+     */
+    function withExitAnimations() {
+      const real = globalThis.getComputedStyle.bind(globalThis)
+      vi.spyOn(globalThis, 'getComputedStyle').mockImplementation(
+        (element, pseudo) => {
+          const style = real(element, pseudo)
+          if (!element.matches('[role="menu"], [role="dialog"]')) return style
+          return new Proxy(style, {
+            get(target, key) {
+              if (key === 'animationName')
+                return element.getAttribute('data-state') === 'closed'
+                  ? 'pop-out'
+                  : 'pop-in'
+              const value = Reflect.get(target, key, target)
+              return typeof value === 'function' ? value.bind(target) : value
+            },
+          })
+        },
+      )
+      if (typeof globalThis.CSS?.escape !== 'function')
+        vi.stubGlobal('CSS', {
+          ...globalThis.CSS,
+          escape: (value: string) => value,
+        })
+    }
+    const finishExits = () =>
+      act(() => {
+        for (const content of document.querySelectorAll(
+          '[role="menu"][data-state="closed"], [role="dialog"][data-state="closed"]',
+        )) {
+          const end = new Event('animationend')
+          Object.assign(end, { animationName: 'pop-out' })
+          content.dispatchEvent(end)
+        }
+      })
+    const armOneWire = () =>
+      useSessionRelayStore.setState({
+        relays: [
+          {
+            id: 'relay-1',
+            crewId: 'crew-1',
+            sourceSessionId: 'session-1',
+            trigger: 'settled',
+            action: 'hail',
+            targetSessionId: 'session-2',
+            spawnSpec: null,
+            instruction: null,
+            opener: null,
+            conditionToken: null,
+            armed: true,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        isLoaded: true,
+      })
+    /** Opens a yielded menu from More, both fades played out. */
+    const openFromMore = async (name: string, id: string) => {
+      openMore()
+      fireEvent.click(await screen.findByRole('menuitem', { name }))
+      await finishExits()
+      const trigger = innerTrigger(id)
+      await waitFor(() =>
+        expect(trigger).toHaveAttribute('aria-expanded', 'true'),
+      )
+      return {
+        trigger,
+        content: document.getElementById(
+          trigger.getAttribute('aria-controls')!,
+        )!,
+      }
+    }
+
+    it.each([
+      ['Open project', 'open'],
+      ['Project actions', 'project-actions'],
+      ['Session details', 'session-details'],
+      ['Harness', 'harness'],
+      ['1 wire fires when this session finishes.', 'wires'],
+    ] as const)(
+      'A %s, opened from More, hands focus back to More after its exit animation — mutation lap 2 one-task watcher turns red',
+      async (name, id) => {
+        armOneWire()
+        withExitAnimations()
+        headerWidth(400)
+        renderView()
+        await act(async () => {
+          await Promise.resolve()
+        })
+        const { trigger, content } = await openFromMore(name, id)
+        await waitFor(() =>
+          expect(content.contains(document.activeElement)).toBe(true),
+        )
+        await act(async () => fireEvent.keyDown(content, { key: 'Escape' }))
+        await waitFor(() =>
+          expect(trigger).toHaveAttribute('aria-expanded', 'false'),
+        )
+        // The exit: closed, still mounted, focus still inside -- past the
+        // task in which a watcher on aria-expanded would have looked.
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+        })
+        expect(content).toBeInTheDocument()
+        expect(content.contains(document.activeElement)).toBe(true)
+
+        await finishExits()
+        await waitFor(() => expect(content).not.toBeInTheDocument())
+        await waitFor(() => expect(document.activeElement).toBe(more()))
+      },
+    )
+
+    it.each([
+      ['a control there keeps it', true],
+      ['nothing that takes focus leaves it on the page, not on More', false],
+    ] as const)(
+      'A a click elsewhere keeps its focus: %s — mutation drop the outside check turns red',
+      async (_, focusable) => {
+        armOneWire()
+        withExitAnimations()
+        headerWidth(400)
+        renderView()
+        const outside = document.createElement(focusable ? 'button' : 'p')
+        outside.textContent = 'elsewhere'
+        document.body.append(outside)
+        const { content } = await openFromMore(
+          '1 wire fires when this session finishes.',
+          'wires',
+        )
+        // Radix listens for outside presses one task after it opens.
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        })
+        await act(async () => {
+          fireEvent.pointerDown(outside)
+          if (focusable) outside.focus()
+        })
+        await finishExits()
+        await waitFor(() => expect(content).not.toBeInTheDocument())
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+        })
+        expect(document.activeElement).toBe(focusable ? outside : document.body)
+        outside.remove()
+      },
+    )
+
+    it('A a left click outside a modal menu is not an interaction that keeps focus: More takes it, as Radix gives it to the trigger', async () => {
+      withExitAnimations()
+      headerWidth(400)
+      renderView()
+      const outside = document.createElement('p')
+      document.body.append(outside)
+      const { content } = await openFromMore(
+        'Session details',
+        'session-details',
+      )
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      await act(async () => fireEvent.pointerDown(outside, { button: 0 }))
+      await finishExits()
+      await waitFor(() => expect(content).not.toBeInTheDocument())
+      await waitFor(() => expect(document.activeElement).toBe(more()))
+      outside.remove()
+    })
+
+    it('D a control that yields while More is open is listed by its own name and disabled state — mutation read triggers only when More opens turns red', async () => {
+      const electronAPI = (
+        window as unknown as {
+          electronAPI: {
+            projectOpen: { listApps: ReturnType<typeof vi.fn> }
+          }
+        }
+      ).electronAPI
+      electronAPI.projectOpen.listApps.mockResolvedValueOnce([])
+      // 1,100 px: idle, Open is drawn; a run's Stop takes its place.
+      headerWidth(1100)
+      renderView()
+      await act(async () => {
+        await Promise.resolve()
+      })
+      expect(innerTrigger('open')).toBeDisabled()
+      expect(innerTrigger('open').closest('[data-yielded]')).toBeNull()
+      openMore()
+      await screen.findByRole('menu')
+      act(() => setSession({ status: 'running' }))
+      expect(innerTrigger('open').closest('[data-yielded]')).not.toBeNull()
+      const item = await screen.findByRole('menuitem', { name: 'Open project' })
+      expect(item).toHaveAttribute('aria-disabled', 'true')
+      expect(screen.queryByRole('menuitem', { name: 'open' })).toBeNull()
+    })
+
+    it('D a yielded trigger that changes on its own while More is open is read again — mutation drop the open-More observer turns red', async () => {
+      const electronAPI = (
+        window as unknown as {
+          electronAPI: {
+            projectOpen: { listApps: ReturnType<typeof vi.fn> }
+          }
+        }
+      ).electronAPI
+      let land: (apps: unknown[]) => void = () => {}
+      electronAPI.projectOpen.listApps.mockReturnValueOnce(
+        new Promise((resolve) => {
+          land = resolve
+        }),
+      )
+      // 1,000 px, idle: Open has yielded. More opens while the app list is
+      // still loading, so Open is enabled; then the empty list lands.
+      headerWidth(1000)
+      renderView()
+      openMore()
+      const item = await screen.findByRole('menuitem', { name: 'Open project' })
+      expect(item).not.toHaveAttribute('aria-disabled')
+      await act(async () => {
+        land([])
+        await Promise.resolve()
+      })
+      expect(innerTrigger('open')).toBeDisabled()
+      await waitFor(() =>
+        expect(
+          screen.getByRole('menuitem', { name: 'Open project' }),
+        ).toHaveAttribute('aria-disabled', 'true'),
+      )
+    })
+
+    it('D choosing the agent meter keeps More open — mutation drop its preventDefault turns red', async () => {
+      useAgentMeterStore.setState({
+        snapshot: {
+          agents: null,
+          convergence: null,
+          rows: [
+            {
+              sessionId: 'session-1',
+              account: null,
+              usage: { cpu: 5, memoryMb: 120 },
+            },
+          ],
+        },
+      })
+      headerWidth(400)
+      renderView()
+      openMore()
+      const item = await screen.findByRole('menuitem', {
+        name: /^Agent CPU and memory: /,
+      })
+      fireEvent.click(item)
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+      // More is modal: the page behind it is hidden from role queries.
+      expect(document.querySelector('[data-header-more]')).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      )
+      useAgentMeterStore.setState({
+        snapshot: { agents: null, convergence: null, rows: [] },
+      })
     })
 
     it('F the agent meter, yielded, is a focusable menu item named by its reading — mutation the div back turns red', async () => {

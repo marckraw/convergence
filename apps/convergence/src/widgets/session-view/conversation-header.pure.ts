@@ -35,6 +35,12 @@ export interface HeaderItem {
    * which has nothing of its own to offer).
    */
   onlyWithOverflow?: boolean
+  /**
+   * The control's own panel is open (Parallel work, the PR panel). It is then
+   * pinned with the live status: yielding it would hide, and make inert, the
+   * very button its open panel belongs to (MAR-3427 C).
+   */
+  open?: boolean
 }
 
 export interface HeaderLayout {
@@ -138,6 +144,68 @@ export function identityWidths(input: {
   }
 }
 
+/**
+ * A control whose panel is open is pinned, and sits with the live status
+ * (MAR-3427 C). Docking a panel narrows the header; the control that docked it
+ * must not yield under the focus it still holds.
+ */
+function pinnedWhileOpen(item: HeaderItem): HeaderItem {
+  return item.open && !item.pinned
+    ? { ...item, pinned: true, group: 'status' }
+    : item
+}
+
+/** The inline styles a name span takes, as `identityStyles` decides them. */
+export interface IdentityNameStyle {
+  minWidth: number
+  flexShrink: number
+  /** A CSS length; absent means no cap. */
+  maxWidth?: string
+}
+
+export interface IdentityStyles {
+  /** Null when there is no project part. */
+  project: IdentityNameStyle | null
+  name: IdentityNameStyle
+}
+
+/**
+ * How the identity's two names share a squeeze (MAR-3427 B): the project name
+ * takes all of it, down to its floor, and only then does the conversation name
+ * give way.
+ *
+ * Flex shrink factors cannot say "none until the other is at its floor": any
+ * non-zero share is still a share, and `truncate` draws an ellipsis for a
+ * fraction of a pixel. So the conversation name does not flex-shrink at all.
+ * Its cap is what is left of the identity once the project is at its floor --
+ * `100%` of the identity minus the leading icon, the project's floor and the
+ * separator -- so it keeps its whole width while the project can still give,
+ * and truncates only past that point. The project is the one shrinking item.
+ *
+ * Without a project, the conversation name is the only name and shrinks
+ * plainly, down to its reserve.
+ */
+export function identityStyles(
+  widths: IdentityWidths,
+  input: { projectNatural: number | null; leading?: number },
+): IdentityStyles {
+  if (input.projectNatural === null)
+    return {
+      project: null,
+      name: { minWidth: widths.nameMin, flexShrink: 1 },
+    }
+  const beforeName =
+    (input.leading ?? 0) + widths.projectMin + IDENTITY_INNER_GAP
+  return {
+    project: { minWidth: widths.projectMin, flexShrink: 1 },
+    name: {
+      minWidth: widths.nameMin,
+      flexShrink: 0,
+      maxWidth: `calc(100% - ${beforeName}px)`,
+    },
+  }
+}
+
 /** The width a row of items takes at the given identity width. */
 function rowCost(items: HeaderItem[], useMin: boolean): number {
   const drawn = items.filter((item) => item.width > 0)
@@ -183,7 +251,7 @@ export function headerLayout(input: {
   width: number | null
   items: HeaderItem[]
 }): HeaderLayout {
-  const { items } = input
+  const items = input.items.map(pinnedWhileOpen)
   const ids = (list: HeaderItem[]) => list.map((item) => item.id)
   const inOrder = (keep: Set<HeaderItem>) =>
     items.filter((item) => keep.has(item))

@@ -1,4 +1,4 @@
-import type { FC } from 'react'
+import type { ComponentPropsWithoutRef, FC } from 'react'
 import { Waypoints } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
@@ -12,10 +12,21 @@ export interface SessionWireLine {
   text: string
 }
 
+/** Focus props for the popover's content (MAR-3427 A). */
+export type SessionWiresContentFocus = Pick<
+  ComponentPropsWithoutRef<typeof PopoverContent>,
+  'onCloseAutoFocus' | 'onInteractOutside'
+>
+
 interface SessionWiresProps {
   lines: SessionWireLine[]
   armedCount: number
   summary: string
+  /**
+   * Focus handling for the menu's content, from a header that may have moved
+   * this control into More (MAR-3427 A).
+   */
+  contentFocus?: SessionWiresContentFocus
 }
 
 /**
@@ -34,6 +45,7 @@ export const SessionWires: FC<SessionWiresProps> = ({
   lines,
   armedCount,
   summary,
+  contentFocus,
 }) => {
   // Nothing leaves this session: no chip, no empty state, no placeholder. A
   // composer with no wires should look like it always did.
@@ -59,7 +71,7 @@ export const SessionWires: FC<SessionWiresProps> = ({
           {formatSessionWireCount(lines.length)}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-96 p-2">
+      <PopoverContent align="start" className="w-96 p-2" {...contentFocus}>
         <ul className="flex flex-col gap-1">
           {lines.map((line) => (
             <li

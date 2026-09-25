@@ -1,6 +1,9 @@
 import { render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ConversationHeader } from './conversation-header.container'
+import {
+  ConversationHeader,
+  type HeaderSlot,
+} from './conversation-header.container'
 
 /**
  * Layout as the browser gives it: the header is 1,200 px wide, and a span's
@@ -59,6 +62,61 @@ describe('ConversationHeader', () => {
       document.querySelector<HTMLElement>('[data-header-identity]')?.style
         .minWidth,
     ).toBe('60px')
+  })
+
+  it('C a focused control that yields hands focus to More, not to the page — mutation drop the yielded-focus rule turns red', () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+      function (this: HTMLElement) {
+        if (this.hasAttribute('data-conversation-header'))
+          return { width: 700 } as DOMRect
+        const id = this.getAttribute('data-header-inner')
+        if (id === 'terminal') return { width: 100 } as DOMRect
+        if (id === 'activity') return { width: 600 } as DOMRect
+        return { width: 0 } as DOMRect
+      },
+    )
+    const terminal: HeaderSlot = {
+      id: 'terminal',
+      side: 'right',
+      group: 'control',
+      node: <button type="button">Terminal</button>,
+      entries: [
+        { kind: 'action', key: 'terminal', label: 'Terminal', onSelect() {} },
+      ],
+    }
+    const activity: HeaderSlot = {
+      id: 'activity',
+      side: 'left',
+      group: 'status',
+      node: <span>Working on something long</span>,
+    }
+    const view = render(
+      <ConversationHeader
+        projectName="cvg"
+        conversationName="Hi"
+        slots={[terminal]}
+        moreContent={null}
+      />,
+    )
+    const button = document.querySelector<HTMLElement>(
+      '[data-header-inner="terminal"] button',
+    )!
+    expect(button.closest('[data-yielded]')).toBeNull()
+    button.focus()
+
+    // A wide status item arrives; the terminal yields under the focus.
+    view.rerender(
+      <ConversationHeader
+        projectName="cvg"
+        conversationName="Hi"
+        slots={[activity, terminal]}
+        moreContent={null}
+      />,
+    )
+    expect(button.closest('[data-yielded]')).not.toBeNull()
+    expect(document.activeElement).toBe(
+      document.querySelector('[data-header-more]'),
+    )
   })
 
   it('I a conversation without a project has no project part at all', () => {
