@@ -1,5 +1,13 @@
 # convergence
 
+## 0.88.1
+
+### Patch Changes
+
+- 74f9bbc: An agent's thinking in later steps of a reply is no longer lost.
+- 48adb23: An agent's words between tool steps are no longer lost from the conversation.
+- efffd5f: A work block's one-line summary now appears seconds after the block finishes, instead of after the whole turn.
+
 ## 0.88.0
 
 ### Minor Changes
