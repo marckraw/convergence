@@ -1,4 +1,11 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PROJECT_SETTINGS, useProjectStore } from '@/entities/project'
 import { useDialogStore } from '@/entities/dialog'
@@ -10,6 +17,8 @@ import { useProjectScriptStore } from '@/entities/project-script'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useTerminalStore } from '@/entities/terminal'
 import { useAgentMeterStore } from '@/entities/agent-meter'
+import { useAppSettingsStore } from '@/entities/app-settings'
+import { useTranscriptViewStore } from './transcript-view.model'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
 const navigationScroll = vi.hoisted(() => vi.fn())
@@ -61,9 +70,20 @@ function headerWidth(width: number, itemWidth = 90) {
 }
 
 vi.mock('@/features/composer', () => ({
-  ComposerContainer: ({ context }: { context: unknown }) => {
+  ComposerContainer: ({
+    context,
+    wiresSlot,
+  }: {
+    context: unknown
+    wiresSlot?: React.ReactNode
+  }) => {
     composerContexts.push(context)
-    return <div>composer</div>
+    return (
+      <div data-testid="composer">
+        composer
+        {wiresSlot}
+      </div>
+    )
   },
 }))
 
@@ -108,12 +128,63 @@ const attempt = {
   createdAt: '2026-01-01T00:00:00.000Z',
 }
 
+const sidebarProject = {
+  id: 'project-1',
+  name: 'convergence',
+  repositoryPath: '/tmp/project',
+  settings: DEFAULT_PROJECT_SETTINGS,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+  laneOf: null,
+  laneName: null,
+}
+
+const devScript = {
+  id: 'script-1',
+  projectId: 'project-1',
+  name: 'Dev',
+  command: 'npm run dev',
+  icon: 'play' as const,
+  cwd: null,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+}
+const devRun = {
+  id: 'run-1',
+  scriptId: devScript.id,
+  projectId: 'project-1',
+  command: devScript.command,
+  cwd: '/tmp/project',
+  status: 'queued' as const,
+  startedAt: '2026-01-01T00:00:00.000Z',
+  endedAt: null,
+  exitCode: null,
+  signal: null,
+  errorMessage: null,
+  stdout: '',
+  stderr: '',
+}
+
+/** One task running: Parallel work holds its place in the row (CH4 R2). */
+const oneRunning = { running: 1, unknown: 0, failed: 0, stopped: 0 }
+const runParallel = () =>
+  useSessionStore.setState((state) => ({
+    sessions: state.sessions.map((session) => ({
+      ...session,
+      parallelWork: oneRunning,
+    })),
+  }))
+
+/** Opens one of the header's groups (MAR-3429 CH4) from its trigger. */
+const openGroup = (name: 'View' | 'Details' | 'Project' | 'Session actions') =>
+  fireEvent.pointerDown(screen.getByRole('button', { name }))
+
 describe('SessionView', () => {
   beforeEach(() => {
     Element.prototype.scrollIntoView = vi.fn()
 
     useProjectStore.setState({
-      projects: [],
+      projects: [sidebarProject],
       activeProject: {
         id: 'project-1',
         name: 'convergence',
@@ -347,7 +418,7 @@ describe('SessionView', () => {
     })
   })
 
-  it('header toggles the shared pin action (mutation: remove header pin handler)', async () => {
+  it('CH4 R5 More toggles the shared pin action, and a pinned conversation shows a mark beside its name — mutation the pin button still in the row turns red', async () => {
     const original = useSessionStore.getState().setPinned
     const setPinned = vi.fn().mockResolvedValue(undefined)
     useSessionStore.setState({ setPinned })
@@ -358,7 +429,20 @@ describe('SessionView', () => {
         </TooltipProvider>,
       )
       await act(async () => {})
-      fireEvent.click(screen.getByRole('button', { name: 'Pin Test session' }))
+      const header = document.querySelector<HTMLElement>(
+        '[data-conversation-header]',
+      )!
+      // No pin button in the row, pinned or not.
+      expect(
+        within(header).queryByRole('button', { name: /pin/i }),
+      ).not.toBeInTheDocument()
+      expect(header.querySelector('[data-header-pin-mark]')).toBeNull()
+      openGroup('Session actions')
+      const pin = await screen.findByRole('menuitemcheckbox', {
+        name: 'Pin conversation',
+      })
+      expect(pin).toHaveAttribute('aria-checked', 'false')
+      fireEvent.click(pin)
       expect(setPinned).toHaveBeenCalledWith('session-1', true)
       act(() =>
         useSessionStore.setState((state) => ({
@@ -368,8 +452,17 @@ describe('SessionView', () => {
           })),
         })),
       )
+      expect(
+        within(header).getByRole('img', { name: 'Pinned' }),
+      ).toBeInTheDocument()
+      expect(
+        within(header).queryByRole('button', { name: /pin/i }),
+      ).not.toBeInTheDocument()
+      openGroup('Session actions')
       fireEvent.click(
-        screen.getByRole('button', { name: 'Unpin Test session' }),
+        await screen.findByRole('menuitemcheckbox', {
+          name: 'Unpin conversation',
+        }),
       )
       expect(setPinned).toHaveBeenLastCalledWith('session-1', false)
     } finally {
@@ -397,7 +490,12 @@ describe('SessionView', () => {
         </TooltipProvider>,
       )
       await act(async () => {})
-      expect(screen.queryByTestId('harness-pill')).toBeNull()
+      expect(screen.queryByTestId('harness-alert')).toBeNull()
+      openGroup('Details')
+      await screen.findByRole('region', { name: 'Session' })
+      expect(
+        screen.queryByRole('region', { name: 'Harness history' }),
+      ).toBeNull()
     },
   )
 
@@ -425,14 +523,20 @@ describe('SessionView', () => {
       </TooltipProvider>,
     )
     await waitFor(() =>
-      expect({
-        pill: screen.queryByTestId('harness-pill')?.textContent,
-        marker: screen.queryByTestId('compaction-marker')?.textContent,
-      }).toEqual({
-        pill: 'Harness',
-        marker: 'Compacted (auto) · 84k → 12k tokens',
-      }),
+      expect(screen.queryByTestId('compaction-marker')?.textContent).toBe(
+        'Compacted (auto) · 84k → 12k tokens',
+      ),
     )
+    // No alert, no chip in the row: the harness history is in Details (CH4
+    // R3).
+    expect(screen.queryByTestId('harness-alert')).toBeNull()
+    openGroup('Details')
+    const harness = await screen.findByRole('region', {
+      name: 'Harness history',
+    })
+    expect(
+      within(harness).getByRole('region', { name: 'Compactions' }),
+    ).toHaveTextContent('Compacted (auto) · 84k → 12k tokens')
   })
 
   it('R8 M2 failed evidence read keeps child work moved and exposes Retry in the conversation — mutation settle on error turns red', async () => {
@@ -746,9 +850,7 @@ describe('SessionView', () => {
           <SessionView />
         </TooltipProvider>,
       )
-      fireEvent.pointerDown(
-        screen.getByRole('button', { name: 'Session details' }),
-      )
+      fireEvent.pointerDown(screen.getByRole('button', { name: 'Details' }))
 
       const panel = await screen.findByText('Works in')
       const rows = panel.closest('div')?.parentElement
@@ -813,9 +915,7 @@ describe('SessionView', () => {
         <SessionView />
       </TooltipProvider>,
     )
-    fireEvent.pointerDown(
-      screen.getByRole('button', { name: 'Session details' }),
-    )
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Details' }))
 
     const panel = await screen.findByText('Works in')
     const rows = panel.closest('div')?.parentElement
@@ -871,9 +971,7 @@ describe('SessionView', () => {
         <SessionView />
       </TooltipProvider>,
     )
-    fireEvent.pointerDown(
-      screen.getByRole('button', { name: 'Session details' }),
-    )
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Details' }))
 
     const panel = await screen.findByText('Works in')
     const rows = panel.closest('div')?.parentElement
@@ -947,9 +1045,7 @@ describe('SessionView', () => {
         <SessionView />
       </TooltipProvider>,
     )
-    fireEvent.pointerDown(
-      screen.getByRole('button', { name: 'Session details' }),
-    )
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Details' }))
 
     const panel = await screen.findByText('Works in')
     const rows = panel.closest('div')?.parentElement
@@ -968,9 +1064,7 @@ describe('SessionView', () => {
         <SessionView />
       </TooltipProvider>,
     )
-    fireEvent.pointerDown(
-      screen.getByRole('button', { name: 'Session details' }),
-    )
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Details' }))
 
     const branchRow = await screen.findByText('Checkout branch')
     const rows = branchRow.closest('div')?.parentElement
@@ -996,10 +1090,11 @@ describe('SessionView', () => {
         <SessionView />
       </TooltipProvider>,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Pull request status' }))
-    fireEvent.pointerDown(
-      screen.getByRole('button', { name: 'Session details' }),
+    openGroup('Project')
+    fireEvent.click(
+      await screen.findByRole('menuitemcheckbox', { name: /^Pull request/ }),
     )
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Details' }))
     await waitFor(() =>
       expect(
         screen.getAllByText('No PR for this branch').length,
@@ -1056,7 +1151,10 @@ describe('SessionView', () => {
         <SessionView />
       </TooltipProvider>,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Pull request status' }))
+    openGroup('Project')
+    fireEvent.click(
+      await screen.findByRole('menuitemcheckbox', { name: /^Pull request/ }),
+    )
     await screen.findByText('PR unknown — gh not found')
     expect(screen.getByText('#42 · open')).toBeInTheDocument()
   })
@@ -1076,7 +1174,7 @@ describe('SessionView', () => {
     ).not.toHaveBeenCalled()
   })
 
-  it('shows the wires leaving this session in the header', async () => {
+  it('CH4 R6 the wires leave the header; the composer still shows them — mutation keep the header pill turns red', async () => {
     useSessionStore.setState((state) => ({
       ...state,
       globalSessions: [
@@ -1115,28 +1213,16 @@ describe('SessionView', () => {
       </TooltipProvider>,
     )
 
-    const chip = screen.getByRole('button', {
-      name: '1 wire fires when this session finishes.',
-    })
-    expect(chip).toHaveTextContent('1 wire')
-
-    fireEvent.click(chip)
-    expect(
-      await screen.findByText(
-        'When Test session finishes, send its last message to Reviewer',
-      ),
-    ).toBeInTheDocument()
-  })
-
-  it('leaves the header alone for a session nothing is wired to', () => {
-    render(
-      <TooltipProvider>
-        <SessionView />
-      </TooltipProvider>,
+    const name = '1 wire fires when this session finishes.'
+    const header = document.querySelector<HTMLElement>(
+      '[data-conversation-header]',
+    )!
+    expect(within(header).queryByRole('button', { name })).toBeNull()
+    expect(within(header).queryByText('1 wire')).toBeNull()
+    const composer = screen.getByTestId('composer')
+    expect(within(composer).getByRole('button', { name })).toHaveTextContent(
+      '1 wire',
     )
-
-    expect(screen.queryByText('1 wire')).not.toBeInTheDocument()
-    expect(screen.queryByText('0 wires')).not.toBeInTheDocument()
   })
 
   it('opens the session workspace from the header menu', async () => {
@@ -1146,8 +1232,14 @@ describe('SessionView', () => {
       </TooltipProvider>,
     )
 
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Open project' }))
-    fireEvent.click(await screen.findByText('VS Code'))
+    // Let the app list land so Open in… lists them.
+    await act(async () => {
+      await Promise.resolve()
+    })
+    openGroup('Project')
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: 'Open in VS Code' }),
+    )
 
     const projectOpen = (
       window as unknown as {
@@ -1165,7 +1257,7 @@ describe('SessionView', () => {
     })
   })
 
-  it('runs project actions from the active session working directory', async () => {
+  it('runs the project actions from the session working directory, one activation after Project opens', async () => {
     const script = {
       id: 'script-1',
       projectId: 'project-1',
@@ -1213,7 +1305,7 @@ describe('SessionView', () => {
       </TooltipProvider>,
     )
 
-    fireEvent.pointerDown(await screen.findByRole('button', { name: /dev/i }))
+    openGroup('Project')
     fireEvent.click(await screen.findByTitle('Run Dev'))
 
     await waitFor(() => {
@@ -1645,12 +1737,13 @@ describe('SessionView', () => {
         },
       ],
     })
+    runParallel()
     render(
       <TooltipProvider>
         <SessionView />
       </TooltipProvider>,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Parallel work' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Parallel work · 1' }))
     fireEvent.click(
       await screen.findByRole('button', {
         name: '1 older · time not reported',
@@ -1670,12 +1763,13 @@ describe('SessionView', () => {
 
   it('T10 closing parallel work returns focus to its invoking control — mutation omit focus return turns red', async () => {
     sessionRowWidth(1700)
+    runParallel()
     render(
       <TooltipProvider>
         <SessionView />
       </TooltipProvider>,
     )
-    const opener = screen.getByRole('button', { name: 'Parallel work' })
+    const opener = screen.getByRole('button', { name: 'Parallel work · 1' })
     opener.focus()
     fireEvent.click(opener)
     const close = await screen.findByRole('button', {
@@ -1688,12 +1782,13 @@ describe('SessionView', () => {
 
   it('CH2 R3 Escape in the overlay closes it and returns focus to its invoking control — mutation drop onReturnFocus turns red', async () => {
     sessionRowWidth(900)
+    runParallel()
     render(
       <TooltipProvider>
         <SessionView />
       </TooltipProvider>,
     )
-    const opener = screen.getByRole('button', { name: 'Parallel work' })
+    const opener = screen.getByRole('button', { name: 'Parallel work · 1' })
     opener.focus()
     fireEvent.click(opener)
     const overlay = await screen.findByRole('dialog', {
@@ -1717,15 +1812,19 @@ describe('SessionView', () => {
 
   it('CH2 lap 2 A opening the PR panel turns docked Parallel work into the overlay, closing it docks again — mutation drop the PR term turns red', async () => {
     sessionRowWidth(1300)
+    runParallel()
     render(
       <TooltipProvider>
         <SessionView />
       </TooltipProvider>,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Parallel work' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Parallel work · 1' }))
     await waitFor(() => expect(dockedParallel()).toBe(true))
 
-    fireEvent.click(screen.getByTitle('Pull request status'))
+    openGroup('Project')
+    fireEvent.click(
+      await screen.findByRole('menuitemcheckbox', { name: /^Pull request/ }),
+    )
     await waitFor(() => expect(overlayParallel()).toBe(true))
 
     // The modal overlay hides the rest of the row from the accessibility
@@ -1743,6 +1842,7 @@ describe('SessionView', () => {
   it('CH2 lap 2 A linking a Space turns docked Parallel work into the overlay, unlinking docks again — mutation drop the Space term turns red', async () => {
     sessionRowWidth(1300)
     useSpaceStore.setState({ spaces: [space] })
+    runParallel()
     render(
       <TooltipProvider>
         <SessionView />
@@ -1755,7 +1855,7 @@ describe('SessionView', () => {
       ).toHaveBeenCalled(),
     )
     await act(async () => {})
-    fireEvent.click(screen.getByRole('button', { name: 'Parallel work' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Parallel work · 1' }))
     await waitFor(() => expect(dockedParallel()).toBe(true))
 
     act(() =>
@@ -1779,6 +1879,7 @@ describe('SessionView', () => {
 
   it('CH2 lap 2 B switching conversations with the overlay open leaves no stale dialog and no stolen focus — mutation return focus unconditionally turns red', async () => {
     sessionRowWidth(900)
+    runParallel()
     const [first] = useSessionStore.getState().sessions
     useSessionStore.setState({
       sessions: [first, { ...first, id: 'session-2', name: 'Second session' }],
@@ -1788,7 +1889,7 @@ describe('SessionView', () => {
         <SessionView />
       </TooltipProvider>,
     )
-    const opener = screen.getByRole('button', { name: 'Parallel work' })
+    const opener = screen.getByRole('button', { name: 'Parallel work · 1' })
     opener.focus()
     fireEvent.click(opener)
     const before = await screen.findByRole('dialog', { name: 'Parallel work' })
@@ -1889,7 +1990,7 @@ describe('SessionView', () => {
       expect(name.style.maxWidth).toBe('calc(100% - 60px)')
     })
 
-    it('R4 a narrow header moves the terminal toggle and Open into More by name, and the terminal item toggles the terminal — mutation drop yielded items turns red', async () => {
+    it('R4 a narrow header moves the groups into More by name; Project, opened from there, still toggles the terminal — mutation drop yielded items turns red', async () => {
       const hydratePaneTree = vi.fn().mockResolvedValue(undefined)
       useTerminalStore.setState({ hydratePaneTree, treesBySessionId: {} })
       headerWidth(400)
@@ -1899,60 +2000,26 @@ describe('SessionView', () => {
         </TooltipProvider>,
       )
       // Yielded: out of the header's reach, still mounted.
-      expect(
-        screen.queryByRole('button', { name: 'Open project' }),
-      ).not.toBeInTheDocument()
-      expect(
-        screen.queryByRole('button', { name: 'Open terminal' }),
-      ).not.toBeInTheDocument()
+      for (const name of ['View', 'Details', 'Project'])
+        expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
 
       fireEvent.pointerDown(
         screen.getByRole('button', { name: 'Session actions' }),
       )
-      expect(
+      for (const name of ['View', 'Details'])
+        expect(
+          await screen.findByRole('menuitem', { name }),
+        ).toBeInTheDocument()
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Project' }))
+      fireEvent.click(
         await screen.findByRole('menuitem', { name: 'Open terminal' }),
-      ).toBeInTheDocument()
-      expect(
-        screen.getByRole('menuitem', { name: 'Open project' }),
-      ).toBeInTheDocument()
-      fireEvent.click(screen.getByRole('menuitem', { name: 'Open terminal' }))
+      )
       expect(hydratePaneTree).toHaveBeenCalledWith({
         sessionId: 'session-1',
         cwd: '/tmp/project',
         cols: 80,
         rows: 24,
       })
-    })
-
-    it('R4 Open, yielded, opens its own menu from More and still opens the workspace', async () => {
-      headerWidth(400)
-      render(
-        <TooltipProvider>
-          <SessionView />
-        </TooltipProvider>,
-      )
-      // Let the app list land so Open is enabled.
-      await act(async () => {
-        await Promise.resolve()
-      })
-      fireEvent.pointerDown(
-        screen.getByRole('button', { name: 'Session actions' }),
-      )
-      fireEvent.click(
-        await screen.findByRole('menuitem', { name: 'Open project' }),
-      )
-      fireEvent.click(await screen.findByText('VS Code'))
-      const projectOpen = (
-        window as unknown as {
-          electronAPI: { projectOpen: { open: ReturnType<typeof vi.fn> } }
-        }
-      ).electronAPI.projectOpen
-      await waitFor(() =>
-        expect(projectOpen.open).toHaveBeenCalledWith({
-          appId: 'vscode',
-          path: '/tmp/project',
-        }),
-      )
     })
 
     it('R5 a narrow running header puts identity, Stop and More on row 1 and the status on row 2', () => {
@@ -1994,69 +2061,13 @@ describe('SessionView', () => {
         sessions: state.sessions.map((session) => ({ ...session, ...patch })),
       }))
 
-    it('D Parallel work opened from More hands focus back to More when it closes — mutation save the hidden button turns red', async () => {
-      headerWidth(400)
-      renderView()
-      openMore()
-      fireEvent.click(
-        await screen.findByRole('menuitem', { name: 'Parallel work' }),
-      )
-      const close = await screen.findByRole('button', {
-        name: 'Close parallel work',
-      })
-      // While its panel is open the button is pinned, on the status row (C);
-      // closing it yields it again, and mounts it back in row 1.
-      expect(innerTrigger('parallel-work').closest('[data-yielded]')).toBeNull()
-      close.focus()
-      fireEvent.click(close)
-      expect(
-        innerTrigger('parallel-work').closest('[data-yielded]'),
-      ).not.toBeNull()
-      expect(document.activeElement).toBe(more())
-    })
-
-    it('D Parallel work opened from its own drawn button still returns focus to that button', async () => {
-      headerWidth(2400)
-      renderView()
-      const opener = screen.getByRole('button', { name: 'Parallel work' })
-      opener.focus()
-      fireEvent.click(opener)
-      const close = await screen.findByRole('button', {
-        name: 'Close parallel work',
-      })
-      close.focus()
-      fireEvent.click(close)
-      await waitFor(() => expect(document.activeElement).toBe(opener))
-    })
-
     it.each([
-      ['Project actions', 'project-actions', 'menu'],
-      ['Session details', 'session-details', 'menu'],
-      ['Harness', 'harness', 'menu'],
-      ['1 wire fires when this session finishes.', 'wires', 'dialog'],
+      ['View', 'view'],
+      ['Details', 'details'],
+      ['Project', 'project'],
     ] as const)(
-      'E %s, yielded, opens its own %s from More — mutation popovers sent ArrowDown turns red',
-      async (name, id, role) => {
-        useSessionRelayStore.setState({
-          relays: [
-            {
-              id: 'relay-1',
-              crewId: 'crew-1',
-              sourceSessionId: 'session-1',
-              trigger: 'settled',
-              action: 'hail',
-              targetSessionId: 'session-2',
-              spawnSpec: null,
-              instruction: null,
-              opener: null,
-              conditionToken: null,
-              armed: true,
-              createdAt: '2026-01-01T00:00:00.000Z',
-              updatedAt: '2026-01-01T00:00:00.000Z',
-            },
-          ],
-          isLoaded: true,
-        })
+      'E %s, yielded, opens its own menu from More through its controlled open — mutation drop onOpen turns red',
+      async (name, id) => {
         headerWidth(400)
         renderView()
         await act(async () => {
@@ -2068,7 +2079,7 @@ describe('SessionView', () => {
         await waitFor(() =>
           expect(trigger).toHaveAttribute('aria-expanded', 'true'),
         )
-        const opened = screen.getByRole(role)
+        const opened = screen.getByRole('menu')
         expect(opened.id).toBe(trigger.getAttribute('aria-controls'))
       },
     )
@@ -2077,10 +2088,8 @@ describe('SessionView', () => {
       headerWidth(400)
       renderView()
       openMore()
-      fireEvent.click(
-        await screen.findByRole('menuitem', { name: 'Session details' }),
-      )
-      const trigger = innerTrigger('session-details')
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Details' }))
+      const trigger = innerTrigger('details')
       await waitFor(() =>
         expect(trigger).toHaveAttribute('aria-expanded', 'true'),
       )
@@ -2094,10 +2103,10 @@ describe('SessionView', () => {
     })
 
     /**
-     * Menus and popovers as the app draws them (MAR-3427 A): they fade out,
-     * and Radix keeps the closing content mounted -- with focus still inside
-     * -- until the animation ends. jsdom runs no animation, so the content is
-     * given its animation name here, and `finishExits` ends every fade.
+     * Menus as the app draws them (MAR-3427 A): they fade out, and Radix
+     * keeps the closing content mounted -- with focus still inside -- until
+     * the animation ends. jsdom runs no animation, so the content is given its
+     * animation name here, and `finishExits` ends every fade.
      */
     function withExitAnimations() {
       const real = globalThis.getComputedStyle.bind(globalThis)
@@ -2133,27 +2142,6 @@ describe('SessionView', () => {
           content.dispatchEvent(end)
         }
       })
-    const armOneWire = () =>
-      useSessionRelayStore.setState({
-        relays: [
-          {
-            id: 'relay-1',
-            crewId: 'crew-1',
-            sourceSessionId: 'session-1',
-            trigger: 'settled',
-            action: 'hail',
-            targetSessionId: 'session-2',
-            spawnSpec: null,
-            instruction: null,
-            opener: null,
-            conditionToken: null,
-            armed: true,
-            createdAt: '2026-01-01T00:00:00.000Z',
-            updatedAt: '2026-01-01T00:00:00.000Z',
-          },
-        ],
-        isLoaded: true,
-      })
     /** Opens a yielded menu from More, both fades played out. */
     const openFromMore = async (name: string, id: string) => {
       openMore()
@@ -2172,15 +2160,12 @@ describe('SessionView', () => {
     }
 
     it.each([
-      ['Open project', 'open'],
-      ['Project actions', 'project-actions'],
-      ['Session details', 'session-details'],
-      ['Harness', 'harness'],
-      ['1 wire fires when this session finishes.', 'wires'],
+      ['View', 'view'],
+      ['Details', 'details'],
+      ['Project', 'project'],
     ] as const)(
       'A %s, opened from More, hands focus back to More after its exit animation — mutation lap 2 one-task watcher turns red',
       async (name, id) => {
-        armOneWire()
         withExitAnimations()
         headerWidth(400)
         renderView()
@@ -2195,8 +2180,7 @@ describe('SessionView', () => {
         await waitFor(() =>
           expect(trigger).toHaveAttribute('aria-expanded', 'false'),
         )
-        // The exit: closed, still mounted, focus still inside -- past the
-        // task in which a watcher on aria-expanded would have looked.
+        // The exit: closed, still mounted, focus still inside.
         await act(async () => {
           await new Promise((resolve) => setTimeout(resolve, 10))
         })
@@ -2209,51 +2193,13 @@ describe('SessionView', () => {
       },
     )
 
-    it.each([
-      ['a control there keeps it', true],
-      ['nothing that takes focus leaves it on the page, not on More', false],
-    ] as const)(
-      'A a click elsewhere keeps its focus: %s — mutation drop the outside check turns red',
-      async (_, focusable) => {
-        armOneWire()
-        withExitAnimations()
-        headerWidth(400)
-        renderView()
-        const outside = document.createElement(focusable ? 'button' : 'p')
-        outside.textContent = 'elsewhere'
-        document.body.append(outside)
-        const { content } = await openFromMore(
-          '1 wire fires when this session finishes.',
-          'wires',
-        )
-        // Radix listens for outside presses one task after it opens.
-        await act(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 0))
-        })
-        await act(async () => {
-          fireEvent.pointerDown(outside)
-          if (focusable) outside.focus()
-        })
-        await finishExits()
-        await waitFor(() => expect(content).not.toBeInTheDocument())
-        await act(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 10))
-        })
-        expect(document.activeElement).toBe(focusable ? outside : document.body)
-        outside.remove()
-      },
-    )
-
     it('A a left click outside a modal menu is not an interaction that keeps focus: More takes it, as Radix gives it to the trigger', async () => {
       withExitAnimations()
       headerWidth(400)
       renderView()
       const outside = document.createElement('p')
       document.body.append(outside)
-      const { content } = await openFromMore(
-        'Session details',
-        'session-details',
-      )
+      const { content } = await openFromMore('Details', 'details')
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
       })
@@ -2264,128 +2210,81 @@ describe('SessionView', () => {
       outside.remove()
     })
 
-    it('D a control that yields while More is open is listed by its own name and disabled state — mutation read triggers only when More opens turns red', async () => {
-      const electronAPI = (
-        window as unknown as {
-          electronAPI: {
-            projectOpen: { listApps: ReturnType<typeof vi.fn> }
-          }
-        }
-      ).electronAPI
-      electronAPI.projectOpen.listApps.mockResolvedValueOnce([])
-      // 1,100 px: idle, Open is drawn; a run's Stop takes its place.
-      headerWidth(1100)
+    it('R9 a right-click outside a modal menu leaves focus where it is, not on More — mutation the menu branch returns false turns red', async () => {
+      withExitAnimations()
+      headerWidth(400)
       renderView()
+      const outside = document.createElement('p')
+      document.body.append(outside)
+      const { content } = await openFromMore('Details', 'details')
       await act(async () => {
-        await Promise.resolve()
+        await new Promise((resolve) => setTimeout(resolve, 0))
       })
-      expect(innerTrigger('open')).toBeDisabled()
-      expect(innerTrigger('open').closest('[data-yielded]')).toBeNull()
+      await act(async () => fireEvent.pointerDown(outside, { button: 2 }))
+      await finishExits()
+      await waitFor(() => expect(content).not.toBeInTheDocument())
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      })
+      expect(document.activeElement).not.toBe(more())
+      expect(document.activeElement).toBe(document.body)
+      outside.remove()
+    })
+
+    it('D a group that yields while More is open is listed by its own name — mutation read triggers only when More opens turns red', async () => {
+      // 760 px, idle: the row asks 698 (identity 280, Finished 90, the three
+      // groups at 90, More 28, five 6 px gaps) of 728 and every group is
+      // drawn; a run's Stop asks 96 more, and Project yields.
+      headerWidth(760)
+      renderView()
+      expect(innerTrigger('project').closest('[data-yielded]')).toBeNull()
       openMore()
       await screen.findByRole('menu')
+      expect(screen.queryByRole('menuitem', { name: 'Project' })).toBeNull()
       act(() => setSession({ status: 'running' }))
-      expect(innerTrigger('open').closest('[data-yielded]')).not.toBeNull()
-      const item = await screen.findByRole('menuitem', { name: 'Open project' })
-      expect(item).toHaveAttribute('aria-disabled', 'true')
-      expect(screen.queryByRole('menuitem', { name: 'open' })).toBeNull()
+      expect(innerTrigger('project').closest('[data-yielded]')).not.toBeNull()
+      expect(
+        await screen.findByRole('menuitem', { name: 'Project' }),
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('menuitem', { name: 'project' })).toBeNull()
     })
 
     it('D a yielded trigger that changes on its own while More is open is read again — mutation drop the open-More observer turns red', async () => {
-      const electronAPI = (
-        window as unknown as {
-          electronAPI: {
-            projectOpen: { listApps: ReturnType<typeof vi.fn> }
-          }
-        }
-      ).electronAPI
-      let land: (apps: unknown[]) => void = () => {}
-      electronAPI.projectOpen.listApps.mockReturnValueOnce(
-        new Promise((resolve) => {
-          land = resolve
-        }),
-      )
-      // 1,000 px, idle: Open has yielded. More opens while the app list is
-      // still loading, so Open is enabled; then the empty list lands.
-      headerWidth(1000)
+      headerWidth(400)
       renderView()
-      openMore()
-      const item = await screen.findByRole('menuitem', { name: 'Open project' })
-      expect(item).not.toHaveAttribute('aria-disabled')
       await act(async () => {
-        land([])
         await Promise.resolve()
       })
-      expect(innerTrigger('open')).toBeDisabled()
+      openMore()
+      expect(
+        await screen.findByRole('menuitem', { name: 'Project' }),
+      ).toBeInTheDocument()
+      // An action starts: only the Project trigger re-renders, not the
+      // header, so only the observer can see its new name.
+      act(() =>
+        useProjectScriptStore.setState({
+          scriptsByProjectId: { 'project-1': [devScript] },
+          runsByProjectId: {
+            'project-1': [{ ...devRun, status: 'running' as const }],
+          },
+        }),
+      )
+      expect(innerTrigger('project')).toHaveTextContent(
+        'Project, an action is running',
+      )
       await waitFor(() =>
         expect(
-          screen.getByRole('menuitem', { name: 'Open project' }),
-        ).toHaveAttribute('aria-disabled', 'true'),
+          screen.getByRole('menuitem', {
+            name: 'Project, an action is running',
+          }),
+        ).toBeInTheDocument(),
       )
     })
 
-    it('D choosing the agent meter keeps More open — mutation drop its preventDefault turns red', async () => {
-      useAgentMeterStore.setState({
-        snapshot: {
-          agents: null,
-          convergence: null,
-          rows: [
-            {
-              sessionId: 'session-1',
-              account: null,
-              usage: { cpu: 5, memoryMb: 120 },
-            },
-          ],
-        },
-      })
+    it('G a yielded group is inert and hidden; a drawn status item is neither — mutation removing inert turns red', () => {
       headerWidth(400)
       renderView()
-      openMore()
-      const item = await screen.findByRole('menuitem', {
-        name: /^Agent CPU and memory: /,
-      })
-      fireEvent.click(item)
-      expect(screen.getByRole('menu')).toBeInTheDocument()
-      // More is modal: the page behind it is hidden from role queries.
-      expect(document.querySelector('[data-header-more]')).toHaveAttribute(
-        'aria-expanded',
-        'true',
-      )
-      useAgentMeterStore.setState({
-        snapshot: { agents: null, convergence: null, rows: [] },
-      })
-    })
-
-    it('F the agent meter, yielded, is a focusable menu item named by its reading — mutation the div back turns red', async () => {
-      useAgentMeterStore.setState({
-        snapshot: {
-          agents: null,
-          convergence: null,
-          rows: [
-            {
-              sessionId: 'session-1',
-              account: null,
-              usage: { cpu: 5, memoryMb: 120 },
-            },
-          ],
-        },
-      })
-      headerWidth(400)
-      renderView()
-      openMore()
-      const item = await screen.findByRole('menuitem', {
-        name: /^Agent CPU and memory: /,
-      })
-      expect(item).toHaveAttribute('tabindex', '-1')
-      expect(item).toHaveTextContent(/\S/)
-      useAgentMeterStore.setState({
-        snapshot: { agents: null, convergence: null, rows: [] },
-      })
-    })
-
-    it('G a yielded control is inert and hidden; a drawn one is neither — mutation removing inert turns red', () => {
-      headerWidth(400)
-      renderView()
-      const yielded = document.querySelector('[data-header-item="terminal"]')!
+      const yielded = document.querySelector('[data-header-item="project"]')!
       expect(yielded).toHaveAttribute('data-yielded')
       expect(yielded).toHaveAttribute('inert')
       expect(yielded).toHaveAttribute('aria-hidden', 'true')
@@ -2450,6 +2349,691 @@ describe('SessionView', () => {
           button.closest('[data-app-region]')?.getAttribute('data-app-region'),
           button.textContent ?? '',
         ).toBe('no-drag')
+    })
+  })
+  describe('MAR-3429 CH4 the header’s groups', () => {
+    afterEach(() => {
+      vi.restoreAllMocks()
+      localStorage.clear()
+      useTranscriptViewStore.setState({ modes: {} })
+      useAgentMeterStore.setState({
+        snapshot: { agents: null, convergence: null, rows: [] },
+      })
+    })
+
+    const renderView = () =>
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+    const header = () =>
+      document.querySelector<HTMLElement>('[data-conversation-header]')!
+    const setSession = (patch: Record<string, unknown>) =>
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) => ({ ...session, ...patch })),
+      }))
+    const toolItem = (id: string, sequence: number, rest: object) => ({
+      id,
+      sessionId: 'session-1',
+      sequence,
+      turnId: 'turn-1',
+      state: 'complete' as const,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      providerMeta: {
+        providerId: 'claude-code',
+        providerItemId: null,
+        providerEventType: null,
+      },
+      ...rest,
+    })
+    const harnessAlert = () =>
+      vi.mocked(window.electronAPI.session.harnessFacts).mockResolvedValue({
+        turns: [],
+        currentTurn: null,
+        compactions: [],
+        rateLimit: null,
+        init: {
+          kind: 'harness.init',
+          at: 'now',
+          claudeCodeVersion: null,
+          model: null,
+          permissionMode: null,
+          mcpServers: {
+            total: 1,
+            connected: 0,
+            others: [{ name: 'linear', status: 'failed' }],
+            omittedAlerts: 0,
+            omitted: 0,
+          },
+          plugins: null,
+          capabilities: null,
+          tools: null,
+          skills: null,
+          slashCommands: null,
+        },
+      })
+    const meterReading = () =>
+      useAgentMeterStore.setState({
+        snapshot: {
+          agents: null,
+          convergence: null,
+          rows: [
+            {
+              sessionId: 'session-1',
+              account: null,
+              usage: { cpu: 5, memoryMb: 120 },
+            },
+          ],
+        },
+      })
+
+    it('R1 choosing Full from View switches the transcript, and no switch sits in the row — mutation the switch still in the row turns red', async () => {
+      useSessionStore.setState({
+        activeConversation: [
+          toolItem('u1', 1, { kind: 'message', actor: 'user', text: 'look' }),
+          toolItem('r1', 2, {
+            kind: 'tool-call',
+            toolName: 'Read',
+            inputText: JSON.stringify({ file_path: '/tmp/project/a.md' }),
+          }),
+          toolItem('r2', 3, {
+            kind: 'tool-call',
+            toolName: 'Read',
+            inputText: JSON.stringify({ file_path: '/tmp/project/b.md' }),
+          }),
+          toolItem('m1', 4, {
+            kind: 'message',
+            actor: 'assistant',
+            text: 'done',
+          }),
+        ] as never,
+      })
+      renderView()
+      const toolRows = () =>
+        ['r1', 'r2'].filter((id) =>
+          document.querySelector(`[data-conversation-item-id="${id}"]`),
+        )
+      expect(
+        within(header()).queryByRole('group', { name: 'Conversation view' }),
+      ).toBeNull()
+      expect(
+        within(header()).queryByRole('button', { name: 'Full' }),
+      ).toBeNull()
+      expect(toolRows()).toEqual([])
+
+      openGroup('View')
+      const choice = await screen.findByRole('group', {
+        name: 'Conversation view',
+      })
+      expect(
+        within(choice).getByRole('menuitemradio', { name: 'Compact' }),
+      ).toHaveAttribute('aria-checked', 'true')
+      fireEvent.click(
+        within(choice).getByRole('menuitemradio', { name: 'Full' }),
+      )
+      await waitFor(() => expect(toolRows()).toEqual(['r1', 'r2']))
+    })
+
+    it('R2 Parallel work is in the row only while it runs, reading its count; otherwise its history is in View — mutation always in the row turns red', async () => {
+      setSession({
+        parallelWork: { running: 2, unknown: 0, failed: 0, stopped: 0 },
+      })
+      const first = renderView()
+      expect(
+        within(header()).getByRole('button', { name: 'Parallel work · 2' }),
+      ).toBeInTheDocument()
+      first.unmount()
+
+      setSession({
+        parallelWork: { running: 0, unknown: 0, failed: 3, stopped: 12 },
+      })
+      sessionRowWidth(1700)
+      renderView()
+      expect(
+        within(header()).queryByRole('button', { name: /^Parallel work/ }),
+      ).toBeNull()
+      const view = screen.getByRole('button', { name: 'View' })
+      view.focus()
+      openGroup('View')
+      fireEvent.click(
+        await screen.findByRole('menuitem', { name: 'Parallel work history' }),
+      )
+      const close = await screen.findByRole('button', {
+        name: 'Close parallel work',
+      })
+      close.focus()
+      fireEvent.click(close)
+      // Back to View, which it was opened from.
+      await waitFor(() => expect(document.activeElement).toBe(view))
+    })
+
+    it('R3 no alert, no harness chip in the row; CPU and memory only inside Details — mutation the harness chip always in the row turns red', async () => {
+      meterReading()
+      renderView()
+      await act(async () => {})
+      expect(screen.queryByTestId('harness-alert')).toBeNull()
+      expect(within(header()).queryByTestId('session-agent-meter')).toBeNull()
+      expect(within(header()).queryByText(/5% · 120 MB/)).toBeNull()
+      openGroup('Details')
+      const agent = await screen.findByRole('region', { name: 'Agent' })
+      expect(
+        within(agent).getByTestId('session-agent-meter'),
+      ).toHaveTextContent('5% · 120 MB')
+    })
+
+    it('R3 an alert is a chip naming its cause, and it opens Details at the harness, with focus back on the chip after — mutation drop the section focus turns red', async () => {
+      harnessAlert()
+      renderView()
+      const chip = await screen.findByTestId('harness-alert')
+      expect(chip).toHaveTextContent('Harness · 1 integration failed')
+      expect(header().contains(chip)).toBe(true)
+      chip.focus()
+      fireEvent.click(chip)
+      const harness = await screen.findByRole('region', {
+        name: 'Harness history',
+      })
+      await waitFor(() => expect(document.activeElement).toBe(harness))
+      expect(harness).toHaveTextContent('linear · failed')
+      await act(async () =>
+        fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' }),
+      )
+      await waitFor(() => expect(document.activeElement).toBe(chip))
+    })
+
+    it('R4 a session whose project is not the sidebar’s runs its own project’s command — mutation activeProject back turns red', async () => {
+      const emergence = {
+        ...sidebarProject,
+        id: 'project-2',
+        name: 'emergence',
+        repositoryPath: '/tmp/emergence',
+      }
+      useProjectStore.setState({ projects: [sidebarProject, emergence] })
+      setSession({ projectId: 'project-2', workingDirectory: '/tmp/emergence' })
+      vi.mocked(window.electronAPI.projectScripts.list).mockImplementation(
+        async (projectId: string) =>
+          projectId === 'project-2'
+            ? [{ ...devScript, id: 'script-2', projectId, name: 'Build' }]
+            : [devScript],
+      )
+      vi.mocked(window.electronAPI.projectScripts.run).mockResolvedValue({
+        ...devRun,
+        scriptId: 'script-2',
+        projectId: 'project-2',
+      })
+      renderView()
+      openGroup('Project')
+      fireEvent.click(await screen.findByTitle('Run Build'))
+      expect(screen.queryByTitle('Run Dev')).toBeNull()
+      await waitFor(() =>
+        expect(window.electronAPI.projectScripts.run).toHaveBeenCalledWith(
+          'script-2',
+          { cwd: '/tmp/emergence' },
+        ),
+      )
+    })
+
+    it('R4 a removed worktree opens the session’s own project, not the sidebar’s — mutation activeProject back turns red', async () => {
+      const emergence = {
+        ...sidebarProject,
+        id: 'project-2',
+        name: 'emergence',
+        repositoryPath: '/tmp/emergence',
+      }
+      useProjectStore.setState({ projects: [sidebarProject, emergence] })
+      useWorkspaceStore.setState((state) => ({
+        globalWorkspaces: state.globalWorkspaces.map((workspace) => ({
+          ...workspace,
+          projectId: 'project-2',
+          worktreeRemovedAt: '2026-09-01T00:00:00.000Z',
+        })),
+      }))
+      setSession({ projectId: 'project-2' })
+      renderView()
+      await act(async () => {
+        await Promise.resolve()
+      })
+      openGroup('Project')
+      fireEvent.click(
+        await screen.findByRole('menuitem', { name: 'Open in VS Code' }),
+      )
+      await waitFor(() =>
+        expect(window.electronAPI.projectOpen?.open).toHaveBeenCalledWith({
+          appId: 'vscode',
+          path: '/tmp/emergence',
+        }),
+      )
+    })
+
+    it.each([
+      ['drawn', 2400],
+      ['yielded', 400],
+    ] as const)(
+      'R9 the PR panel opened from the Project group, %s, hands focus back to where the group lives when it closes — mutation no focus return turns red',
+      async (state, width) => {
+        headerWidth(width)
+        renderView()
+        if (state === 'drawn') openGroup('Project')
+        else {
+          openGroup('Session actions')
+          fireEvent.click(
+            await screen.findByRole('menuitem', { name: 'Project' }),
+          )
+        }
+        fireEvent.click(
+          await screen.findByRole('menuitemcheckbox', {
+            name: /^Pull request/,
+          }),
+        )
+        const close = await screen.findByRole('button', {
+          name: 'Close pull request panel',
+        })
+        close.focus()
+        fireEvent.click(close)
+        expect(
+          screen.queryByRole('button', { name: 'Close pull request panel' }),
+        ).toBeNull()
+        expect(document.activeElement).toBe(
+          state === 'drawn'
+            ? screen.getByRole('button', { name: 'Project' })
+            : screen.getByRole('button', { name: 'Session actions' }),
+        )
+      },
+    )
+
+    it('R7 every button in the header is h-7 — mutation h-10 back on any turns red', async () => {
+      harnessAlert()
+      setSession({
+        status: 'running',
+        parallelWork: { running: 2, unknown: 0, failed: 0, stopped: 0 },
+      })
+      renderView()
+      await screen.findByTestId('harness-alert')
+      const buttons = [...header().querySelectorAll('button')]
+      // The whole row: Parallel work, the harness chip, the three groups,
+      // Stop and More.
+      expect(buttons.length).toBeGreaterThanOrEqual(7)
+      for (const button of buttons)
+        expect(
+          button.className.split(/\s+/),
+          button.textContent || button.getAttribute('aria-label') || '',
+        ).toContain('h-7')
+      for (const button of buttons)
+        expect(button.className).not.toMatch(/\bh-(8|9|10)\b/)
+    })
+
+    /**
+     * Every capability the header had, with the path of roles and names that
+     * reaches it now (R8). Each row renders its own header: removing any one
+     * of them turns exactly that row red.
+     */
+    const reach =
+      (role: 'menuitem' | 'menuitemcheckbox' | 'menuitemradio') =>
+      (name: string | RegExp) =>
+      () =>
+        screen.findByRole(role, { name })
+    const inRegion = (region: string, text: string) => async () =>
+      within(await screen.findByRole('region', { name: region })).getByText(
+        text,
+      )
+    const capabilities: Array<
+      [
+        string,
+        'View' | 'Details' | 'Project' | 'Session actions' | null,
+        () => Promise<HTMLElement>,
+      ]
+    > = [
+      ['Compact', 'View', reach('menuitemradio')('Compact')],
+      ['Full', 'View', reach('menuitemradio')('Full')],
+      [
+        'Parallel work history',
+        'View',
+        reach('menuitem')('Parallel work history'),
+      ],
+      ['Checkout branch', 'Details', inRegion('Session', 'Checkout branch')],
+      ['Pull request row', 'Details', inRegion('Session', 'Pull request')],
+      ['Context', 'Details', inRegion('Session', 'Context')],
+      ['Activity', 'Details', inRegion('Session', 'Activity')],
+      [
+        'harness history',
+        'Details',
+        () => screen.findByRole('region', { name: 'Harness history' }),
+      ],
+      ['CPU and memory', 'Details', inRegion('Agent', 'CPU / memory')],
+      ['Project actions', 'Project', () => screen.findByTitle('Run Dev')],
+      [
+        'Open',
+        'Project',
+        async () =>
+          within(
+            await screen.findByRole('group', { name: 'Open in' }),
+          ).findByRole('menuitem', { name: 'Open in VS Code' }),
+      ],
+      ['Pull request', 'Project', reach('menuitemcheckbox')(/^Pull request/)],
+      ['Terminal', 'Project', reach('menuitem')('Open terminal')],
+      ['Pin', 'Session actions', reach('menuitemcheckbox')('Pin conversation')],
+      ['Fork', 'Session actions', reach('menuitem')('Fork session…')],
+      [
+        'Link to Space',
+        'Session actions',
+        reach('menuitem')('Link to Space...'),
+      ],
+      ['debug log', 'Session actions', reach('menuitem')('Open debug log…')],
+      [
+        'Stop',
+        null,
+        async () => screen.getByRole('button', { name: 'Stop Test session' }),
+      ],
+    ]
+
+    it.each(capabilities)(
+      'R8 %s is reachable from %s — mutation remove it turns red',
+      async (_, group, find) => {
+        vi.mocked(window.electronAPI.projectScripts.list).mockResolvedValue([
+          devScript,
+        ])
+        meterReading()
+        const settings = useAppSettingsStore.getState().settings
+        useAppSettingsStore.setState({
+          settings: {
+            ...settings,
+            debugLogging: { ...settings.debugLogging, enabled: true },
+          },
+        })
+        setSession({ status: 'running', activity: 'thinking' })
+        try {
+          renderView()
+          await act(async () => {
+            await Promise.resolve()
+          })
+          if (group) openGroup(group)
+          expect(await find()).toBeInTheDocument()
+        } finally {
+          useAppSettingsStore.setState({ settings })
+        }
+      },
+    )
+
+    describe('lap 2 (verdict bd69905f)', () => {
+      afterEach(() => {
+        vi.unstubAllGlobals()
+      })
+
+      /**
+       * A session row laid out as the browser lays it: the row is `row` wide,
+       * and the header pays for every panel docked beside it right now (the
+       * PR panel 320, docked Parallel work 420), read from the DOM at the
+       * moment it is measured. The groups measure `groupWidth`, anything else
+       * drawn 60. The ResizeObservers fire only on `settle` -- the frame after
+       * a commit -- so a width read in the commit itself is the header's own
+       * doing (A).
+       */
+      function dockingGeometry(row: number, groupWidth: number) {
+        const observers = new Set<() => void>()
+        vi.stubGlobal(
+          'ResizeObserver',
+          class {
+            constructor(private readonly callback: () => void) {}
+            observe() {
+              observers.add(this.callback)
+            }
+            unobserve() {}
+            disconnect() {
+              observers.delete(this.callback)
+            }
+          },
+        )
+        const docked = () => {
+          let width = 0
+          if (document.querySelector('[aria-label="Close pull request panel"]'))
+            width += 320
+          const parallel = document.querySelector(
+            '[aria-label="Close parallel work"]',
+          )
+          if (parallel && !parallel.closest('[role="dialog"]')) width += 420
+          return width
+        }
+        const measure = HTMLElement.prototype.getBoundingClientRect
+        vi.spyOn(
+          HTMLElement.prototype,
+          'getBoundingClientRect',
+        ).mockImplementation(function (this: HTMLElement) {
+          if (this.hasAttribute('data-session-row'))
+            return { width: row } as DOMRect
+          if (this.hasAttribute('data-conversation-header'))
+            return { width: row - docked() } as DOMRect
+          const inner = this.getAttribute('data-header-inner')
+          if (inner !== null)
+            return {
+              width:
+                this.childElementCount === 0
+                  ? 0
+                  : ['project', 'view', 'details'].includes(inner)
+                    ? groupWidth
+                    : 60,
+            } as DOMRect
+          return measure.call(this)
+        })
+        vi.spyOn(
+          HTMLElement.prototype,
+          'scrollWidth',
+          'get',
+        ).mockImplementation(function (this: HTMLElement) {
+          if (this.hasAttribute('data-header-project')) return 90
+          if (this.hasAttribute('data-header-name')) return 200
+          return 0
+        })
+        return {
+          settle: () => act(() => observers.forEach((notify) => notify())),
+        }
+      }
+      const yielded = (id: string) =>
+        header().querySelector(`[data-header-item="${id}"][data-yielded]`) !==
+        null
+      const trigger = (name: 'Project' | 'View') =>
+        within(header()).getByRole('button', { name, hidden: true })
+
+      it('A closing the docked PR panel hands focus to Project, drawn again at the header’s real width in the same commit — mutation drop the docked re-read turns red', async () => {
+        // 1200 px: every group is drawn. The PR panel docks 320 px of it, and
+        // at 880 Project yields; closed, the header is 1200 again.
+        const geometry = dockingGeometry(1200, 250)
+        renderView()
+        expect(yielded('project')).toBe(false)
+        openGroup('Project')
+        fireEvent.click(
+          await screen.findByRole('menuitemcheckbox', {
+            name: /^Pull request/,
+          }),
+        )
+        const close = await screen.findByRole('button', {
+          name: 'Close pull request panel',
+        })
+        geometry.settle()
+        expect(yielded('project')).toBe(true)
+        close.focus()
+        fireEvent.click(close)
+        expect(document.activeElement).toBe(trigger('Project'))
+        expect(yielded('project')).toBe(false)
+      })
+
+      it('A closing docked Parallel work opened from View hands focus to View, drawn again in the same commit — mutation drop the docked re-read turns red', async () => {
+        // 1200 px: every group is drawn. Parallel work docks 420 px of it (780
+        // is still a conversation's width), and at 780 View yields as well.
+        const geometry = dockingGeometry(1200, 250)
+        renderView()
+        expect(yielded('view')).toBe(false)
+        openGroup('View')
+        fireEvent.click(
+          await screen.findByRole('menuitem', {
+            name: 'Parallel work history',
+          }),
+        )
+        const close = await screen.findByRole('button', {
+          name: 'Close parallel work',
+        })
+        expect(close.closest('[role="dialog"]')).toBeNull()
+        geometry.settle()
+        expect(yielded('view')).toBe(true)
+        close.focus()
+        fireEvent.click(close)
+        expect(document.activeElement).toBe(trigger('View'))
+        expect(yielded('view')).toBe(false)
+      })
+
+      it('B Parallel work history from a drawn View, docked, leaves focus on View, never the page — mutation preventDefault back unconditionally turns red', async () => {
+        dockingGeometry(1700, 90)
+        renderView()
+        const view = trigger('View')
+        view.focus()
+        openGroup('View')
+        fireEvent.click(
+          await screen.findByRole('menuitem', {
+            name: 'Parallel work history',
+          }),
+        )
+        const close = await screen.findByRole('button', {
+          name: 'Close parallel work',
+        })
+        expect(close.closest('[role="dialog"]')).toBeNull()
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+        })
+        expect(document.activeElement).not.toBe(document.body)
+        expect(document.activeElement).toBe(view)
+      })
+
+      it('B Parallel work history from a drawn View, as the overlay, puts focus inside the overlay — mutation preventDefault back unconditionally keeps it there too', async () => {
+        // jsdom's row measures 0: Parallel work opens as the overlay.
+        renderView()
+        const view = trigger('View')
+        view.focus()
+        openGroup('View')
+        fireEvent.click(
+          await screen.findByRole('menuitem', {
+            name: 'Parallel work history',
+          }),
+        )
+        const dialog = await screen.findByRole('dialog')
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+        })
+        expect(document.activeElement).not.toBe(document.body)
+        expect(dialog.contains(document.activeElement)).toBe(true)
+      })
+
+      it('C a right-click outside Details opened from the harness chip leaves focus where it is — mutation the chip branch ignores the outside interaction turns red', async () => {
+        harnessAlert()
+        renderView()
+        const outside = document.createElement('p')
+        document.body.append(outside)
+        const chip = await screen.findByTestId('harness-alert')
+        chip.focus()
+        fireEvent.click(chip)
+        const harness = await screen.findByRole('region', {
+          name: 'Harness history',
+        })
+        await waitFor(() => expect(document.activeElement).toBe(harness))
+        await act(async () => fireEvent.pointerDown(outside, { button: 2 }))
+        await waitFor(() =>
+          expect(
+            screen.queryByRole('region', { name: 'Harness history' }),
+          ).toBeNull(),
+        )
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+        })
+        expect(document.activeElement).not.toBe(chip)
+        expect(document.activeElement).toBe(document.body)
+        outside.remove()
+      })
+
+      it('D one PR refresh per PR panel open and per Details or Project open, none on a close — mutation the one effect over all three turns red', async () => {
+        const refresh = vi.mocked(
+          window.electronAPI.pullRequest.refreshForSession,
+        )
+        const closeMenu = async () => {
+          await act(async () =>
+            fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' }),
+          )
+          await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+        }
+        renderView()
+        await act(async () => {})
+        refresh.mockClear()
+
+        openGroup('Project')
+        await screen.findByRole('menu')
+        await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1))
+        fireEvent.click(
+          await screen.findByRole('menuitemcheckbox', {
+            name: /^Pull request/,
+          }),
+        )
+        await screen.findByRole('button', { name: 'Close pull request panel' })
+        await act(async () => {})
+        // Project's open, then the panel's: two, and nothing for Project
+        // closing as the item was chosen.
+        expect(refresh).toHaveBeenCalledTimes(2)
+
+        openGroup('Details')
+        await screen.findByRole('menu')
+        await act(async () => {})
+        expect(refresh).toHaveBeenCalledTimes(3)
+        await closeMenu()
+        expect(refresh).toHaveBeenCalledTimes(3)
+
+        openGroup('Project')
+        await screen.findByRole('menu')
+        await act(async () => {})
+        expect(refresh).toHaveBeenCalledTimes(4)
+        await closeMenu()
+
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Close pull request panel' }),
+        )
+        await act(async () => {})
+        expect(refresh).toHaveBeenCalledTimes(4)
+      })
+
+      it('D the Open in list is read once while the header lives: a second Project open shows the apps at once, with nothing detecting — mutation read it on each open turns red', async () => {
+        const listApps = vi.mocked(window.electronAPI.projectOpen!.listApps)
+        listApps.mockClear()
+        renderView()
+        await act(async () => {})
+        for (let open = 0; open < 2; open += 1) {
+          openGroup('Project')
+          const menu = await screen.findByRole('menu')
+          expect(within(menu).queryByText('Detecting apps...')).toBeNull()
+          expect(
+            within(menu).getByRole('menuitem', { name: 'Open in VS Code' }),
+          ).toBeInTheDocument()
+          await act(async () => fireEvent.keyDown(menu, { key: 'Escape' }))
+          await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+        }
+        expect(listApps).toHaveBeenCalledTimes(1)
+      })
+
+      it('E Details has one Harness heading, and the harness section the chip focuses shows a focus-visible ring — mutation the outer heading back turns red', async () => {
+        harnessAlert()
+        renderView()
+        await screen.findByTestId('harness-alert')
+        openGroup('Details')
+        const harness = await screen.findByRole('region', {
+          name: 'Harness history',
+        })
+        expect(
+          within(screen.getByRole('menu')).getAllByRole('heading', {
+            name: /harness/i,
+          }),
+        ).toHaveLength(1)
+        expect(harness.className.split(/\s+/)).toEqual(
+          expect.arrayContaining([
+            'focus-visible:ring-2',
+            'focus-visible:ring-ring',
+          ]),
+        )
+      })
     })
   })
 })

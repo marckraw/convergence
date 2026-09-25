@@ -8,7 +8,7 @@ import {
   type FC,
   type ReactNode,
 } from 'react'
-import { MoreVertical } from 'lucide-react'
+import { MoreVertical, Pin } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import {
   DropdownMenu,
@@ -25,14 +25,11 @@ import {
   headerYieldPriority,
   identityStyles,
   identityWidths,
+  interactionKeepsFocusWhereItIs,
   parseHeaderLayoutKey,
   type HeaderItem,
   type HeaderYieldId,
 } from './conversation-header.pure'
-import {
-  useTranscriptViewMode,
-  useTranscriptViewStore,
-} from './transcript-view.model'
 
 /**
  * The window drags by the header's empty space, and never by a control (R7).
@@ -59,10 +56,11 @@ export type HeaderMenuEntry =
       onSelect: () => void
     }
   /**
-   * The control is itself a menu or popover: the entry opens that one, from
-   * the control's own trigger, under the name that trigger carries.
+   * The control is itself a menu: the entry opens that one, through the
+   * menu's own controlled `open` (MAR-3429 CH4), under the name its trigger
+   * carries.
    */
-  | { kind: 'opens'; key: string; opens: 'menu' | 'popover' }
+  | { kind: 'opens'; key: string; onOpen: () => void }
   /**
    * A reading with no action (the agent meter): a focusable item that reads
    * out `name: label` and leaves More open when chosen.
@@ -70,7 +68,7 @@ export type HeaderMenuEntry =
   | { kind: 'text'; key: string; name: string; label: string }
 
 /**
- * What a control that is a menu or popover spreads on its Radix content, so
+ * What a control that is a menu spreads on its Radix content, so
  * that its close-autofocus -- which runs after the exit animation, when the
  * content has unmounted -- hands focus to More while the control is yielded
  * (MAR-3427 A).
@@ -87,13 +85,11 @@ export interface HeaderSlot {
   /** Status and Stop are pinned; only a control may yield. */
   group: 'status' | 'control' | 'stop'
   /**
-   * A control that opens a menu or popover takes the focus props for its
-   * content (MAR-3427 A).
+   * A control that opens a menu takes the focus props for its content
+   * (MAR-3427 A).
    */
   node: ReactNode | ((focus: HeaderMenuFocus) => ReactNode)
   entries?: HeaderMenuEntry[]
-  /** The control's own panel is open: it is pinned (MAR-3427 C). */
-  open?: boolean
 }
 
 interface ConversationHeaderProps {
@@ -109,9 +105,25 @@ interface ConversationHeaderProps {
    * only to hold what yielded.
    */
   moreContent: ReactNode | null
+  /**
+   * The conversation is pinned: a small mark beside its name says so, where
+   * a button used to (MAR-3429 CH4 R5).
+   */
+  pinned?: boolean
+  /**
+   * What is docked beside the header right now, named (the PR panel, docked
+   * Parallel work). A dock opening or closing moves the header's width in its
+   * own commit; when this changes the width is read again in that commit, so
+   * a focus decided right after it (a closed panel handing focus back to its
+   * group) sees the groups drawn at the header's real width (MAR-3429 CH4
+   * lap 2 A).
+   */
+  docked?: string
 }
 
 const MORE_WIDTH = 28
+/** The pin mark (`h-3 w-3`) and the gap before it (`gap-1.5`). */
+const PIN_MARK_WIDTH = 18
 
 interface Measured {
   items: Record<string, number>
@@ -179,24 +191,6 @@ function sameReadings(left: TriggerReadings, right: TriggerReadings): boolean {
   )
 }
 
-/**
- * Radix's own rule for when an interaction outside a closing menu means its
- * trigger is not focused again: for a modal menu (every header dropdown) only
- * a right-click outside; for a non-modal popover anything touched or focused
- * outside. MAR-3427 A keeps that rule, with More standing in for the trigger.
- */
-function interactionKeepsFocusWhereItIs(
-  opens: 'menu' | 'popover',
-  event: CustomEvent<{ originalEvent: Event }>,
-): boolean {
-  if (opens === 'popover') return true
-  const original = event.detail.originalEvent as Partial<MouseEvent>
-  return (
-    original.button === 2 ||
-    (original.button === 0 && original.ctrlKey === true)
-  )
-}
-
 function sameMeasured(left: Measured, right: Measured): boolean {
   if (left.project !== right.project || left.name !== right.name) return false
   const keys = Object.keys(left.items)
@@ -204,7 +198,7 @@ function sameMeasured(left: Measured, right: Measured): boolean {
   return keys.every((key) => left.items[key] === right.items[key])
 }
 
-/** The trigger a yielded menu or popover control opens from. */
+/** The trigger a yielded menu control opens from. */
 function triggerOf(header: HTMLElement | null, id: string) {
   return (
     header
@@ -232,7 +226,8 @@ function triggerName(trigger: HTMLButtonElement): string {
  * as slots, and `headerLayout` alone decides which are drawn and on how many
  * rows. A yielded control stays mounted where it was -- hidden, inert, and
  * parked over More -- so a menu keeps its state and opens from More exactly
- * as it opens from the header.
+ * as it opens from the header: through its own controlled `open`, anchored
+ * where More is (MAR-3429 CH4).
  */
 export const ConversationHeader: FC<ConversationHeaderProps> = ({
   projectName,
@@ -240,14 +235,15 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
   leading,
   slots,
   moreContent,
+  pinned = false,
+  docked = '',
 }) => {
   const headerRef = useRef<HTMLDivElement>(null)
   const projectRef = useRef<HTMLSpanElement>(null)
   const nameRef = useRef<HTMLSpanElement>(null)
   const moreRef = useRef<HTMLButtonElement>(null)
-  const pendingOpen = useRef<{ id: string; opens: 'menu' | 'popover' } | null>(
-    null,
-  )
+  /** The yielded menu More opens once its own content has gone. */
+  const pendingOpen = useRef<(() => void) | null>(null)
   const [measured, setMeasured] = useState<Measured>(EMPTY_MEASURED)
   const [triggers, setTriggers] = useState<TriggerReadings>({})
   const [moreOpen, setMoreOpen] = useState(false)
@@ -314,10 +310,12 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
     [],
   )
 
+  const trailing = pinned ? PIN_MARK_WIDTH : 0
   const identity = identityWidths({
     projectNatural: projectName === null ? null : measured.project,
     nameNatural: measured.name,
     leading: leading?.width,
+    trailing,
   })
   const items: HeaderItem[] = [
     {
@@ -342,7 +340,6 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
               : 0,
           pinned: slot.group !== 'control',
           group: slot.group,
-          open: slot.open,
         }),
       ),
     {
@@ -355,37 +352,20 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
     },
   ]
   // The header measures itself, never the window, and redraws only when what
-  // it draws changes (R3).
-  // Opening or closing a docked panel changes the header's width in the same
-  // commit that pins or unpins its control; the width is read again then, so
-  // the unpinned control is laid out at the width it actually has, not the
-  // docked one it had a frame ago (MAR-3427 C).
-  const openKey = slots
-    .filter((slot) => slot.open)
-    .map((slot) => slot.id)
-    .join(' ')
+  // it draws changes (R3). No control is pinned by an open panel any more
+  // (MAR-3429 CH4), but a docked panel still moves the header's width in the
+  // commit that opens or closes it: `docked` has the width read again then,
+  // not a frame later when the observer fires (lap 2 A).
   const layoutKey = useElementWidth(
     headerRef,
     (width) => headerLayoutKey(headerLayout({ width, items })),
-    openKey,
+    docked,
   )
   const layout = useMemo(() => parseHeaderLayoutKey(layoutKey), [layoutKey])
   const overflow = new Set(layout.overflow)
   const visible = new Set(layout.visible)
   const statusRows = layout.rows.slice(1)
   const onStatusRow = new Set(statusRows.flat())
-
-  const openYielded = (id: string, opens: 'menu' | 'popover') => {
-    triggerOf(headerRef.current, id)?.dispatchEvent(
-      opens === 'menu'
-        ? new KeyboardEvent('keydown', {
-            key: 'ArrowDown',
-            bubbles: true,
-            cancelable: true,
-          })
-        : new MouseEvent('click', { bubbles: true, cancelable: true }),
-    )
-  }
 
   const isYielded = (id: string) =>
     headerRef.current?.querySelector(
@@ -398,12 +378,9 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
    * content has unmounted -- More takes the trigger's place, by Radix's own
    * rule for when the trigger would have been focused (MAR-3427 A).
    */
-  const menuFocus = (
-    id: string,
-    opens: 'menu' | 'popover',
-  ): HeaderMenuFocus => ({
+  const menuFocus = (id: string): HeaderMenuFocus => ({
     onInteractOutside: (event) => {
-      if (interactionKeepsFocusWhereItIs(opens, event))
+      if (interactionKeepsFocusWhereItIs(event))
         interactedOutside.current.add(id)
     },
     onCloseAutoFocus: (event) => {
@@ -416,12 +393,9 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
 
   const renderSlot = (slot: HeaderSlot) => {
     const yielded = overflow.has(slot.id)
-    const opens = slot.entries?.find((entry) => entry.kind === 'opens')
     const node =
       typeof slot.node === 'function'
-        ? slot.node(
-            menuFocus(slot.id, opens?.kind === 'opens' ? opens.opens : 'menu'),
-          )
+        ? slot.node(menuFocus(slot.id))
         : slot.node
     return (
       <div
@@ -465,6 +439,7 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
   const identityStyle = identityStyles(identity, {
     projectNatural: projectName === null ? null : measured.project,
     leading: leading?.width,
+    trailing,
   })
 
   // More reads its yielded menus' names and disabled states as they are now,
@@ -487,6 +462,13 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
   useLayoutEffect(() => {
     syncTriggers.current()
   })
+  // More is drawn only while it has something to hold (the chat header's):
+  // when it goes, it goes closed, so it never comes back open (MAR-3429 CH4
+  // R9).
+  const moreShown = visible.has('more')
+  useLayoutEffect(() => {
+    if (!moreShown) setMoreOpen(false)
+  }, [moreShown])
   useEffect(() => {
     const header = headerRef.current
     if (!moreOpen || !header || typeof MutationObserver !== 'function') return
@@ -568,6 +550,14 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
             >
               {conversationName}
             </span>
+            {pinned && (
+              <Pin
+                role="img"
+                aria-label="Pinned"
+                data-header-pin-mark
+                className="h-3 w-3 shrink-0 fill-current text-primary"
+              />
+            )}
           </div>
           {slots
             .filter((slot) => slot.side === 'left' && inRow1(slot))
@@ -580,8 +570,8 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
           {slots
             .filter((slot) => slot.side === 'right' && inRow1(slot))
             .map(renderSlot)}
-          {visible.has('more') && (
-            <DropdownMenu onOpenChange={setMoreOpen}>
+          {moreShown && (
+            <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
               <DropdownMenuTrigger asChild>
                 <Button
                   ref={moreRef}
@@ -598,11 +588,11 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
               <DropdownMenuContent
                 align="end"
                 onCloseAutoFocus={(event) => {
-                  const pending = pendingOpen.current
-                  if (!pending) return
+                  const open = pendingOpen.current
+                  if (!open) return
                   pendingOpen.current = null
                   event.preventDefault()
-                  openYielded(pending.id, pending.opens)
+                  open()
                 }}
               >
                 {yieldedEntries.map(({ slot, entry }) =>
@@ -628,10 +618,7 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
                       data-yielded-entry={slot.id}
                       disabled={triggers[slot.id]?.disabled ?? true}
                       onSelect={() => {
-                        pendingOpen.current = {
-                          id: slot.id,
-                          opens: entry.opens,
-                        }
+                        pendingOpen.current = entry.onOpen
                       }}
                     >
                       {triggers[slot.id]?.name}
@@ -669,31 +656,4 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
       ))}
     </div>
   )
-}
-
-/**
- * The Compact/Full switch as More entries, bound to the same remembered
- * choice the switch writes (MAR-3391 R5).
- */
-export function useConversationViewEntries(
-  sessionId: string,
-): HeaderMenuEntry[] {
-  const mode = useTranscriptViewMode(sessionId)
-  const setMode = useTranscriptViewStore((state) => state.setMode)
-  return [
-    {
-      kind: 'action',
-      key: 'view-compact',
-      label: 'Compact',
-      checked: mode === 'compact',
-      onSelect: () => setMode(sessionId, 'compact'),
-    },
-    {
-      kind: 'action',
-      key: 'view-full',
-      label: 'Full',
-      checked: mode === 'full',
-      onSelect: () => setMode(sessionId, 'full'),
-    },
-  ]
 }

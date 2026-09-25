@@ -1,7 +1,8 @@
 import { usePerfSessionsIdentity } from '@/shared/lib/usePerfProbe'
 import { toast } from 'sonner'
 import { useHarnessFacts } from './use-harness-facts'
-import { HarnessFactsView } from './harness-facts.presentational'
+import { HarnessAlertChip } from './harness-alert-chip.presentational'
+import { HarnessFactsSections } from './harness-facts.presentational'
 import { ParallelWork } from './parallel-work.container'
 import { SIDE_PANEL_WIDTH } from './parallel-work-dock.pure'
 import { useParallelWork } from './use-parallel-work'
@@ -39,12 +40,7 @@ import {
 import { attachmentApi, useAttachmentStore } from '@/entities/attachment'
 import { useTerminalStore } from '@/entities/terminal'
 import { Button } from '@/shared/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+import { DropdownMenuItem } from '@/shared/ui/dropdown-menu'
 import {
   Archive,
   ArrowLeftRight,
@@ -56,7 +52,6 @@ import {
   Square,
   GitBranch,
   GitPullRequest,
-  TerminalSquare,
 } from 'lucide-react'
 import {
   formatConversationTotalDuration,
@@ -70,22 +65,21 @@ import {
 } from './space-context-panel.presentational'
 import { PullRequestPanel } from './pull-request-panel.presentational'
 import { SessionHeaderDetailRow } from './session-header-detail-row.presentational'
-import {
-  formatSessionMeter,
-  useAgentMeterStore,
-  SessionAgentMeter,
-} from '@/entities/agent-meter'
+import { useAgentMeterStore, SessionAgentMeter } from '@/entities/agent-meter'
 import {
   ConversationHeader,
   headerFocusTarget,
-  useConversationViewEntries,
-  type HeaderMenuFocus,
 } from './conversation-header.container'
+import { parallelWorkInRow } from './conversation-header.pure'
+import {
+  ConversationDetailsMenu,
+  DETAILS_SECTION,
+} from './conversation-details-menu.container'
+import { ConversationProjectMenu } from './conversation-project-menu.container'
+import { ConversationViewMenu } from './conversation-view-menu.container'
 import { harnessPill } from './harness-facts.pure'
-import { SessionWiresContainer } from './session-wires.container'
 import { SessionConversationSurface } from './session-conversation-surface.container'
 import { SessionElapsedDuration } from './session-elapsed-duration.container'
-import { SessionTranscriptViewSwitch } from './transcript-view-switch.container'
 
 export const SessionView: FC = () => {
   const activeProject = useProjectStore((s) => s.activeProject)
@@ -151,6 +145,18 @@ export const SessionView: FC = () => {
   } | null>(null)
   const parallelButton = useRef<HTMLButtonElement>(null)
   const parallelInvoker = useRef<HTMLElement | null>(null)
+  // The header's groups, each a menu whose open state lives here, so More
+  // opens a yielded one through the same `open` (MAR-3429 CH4).
+  const [viewOpen, setViewOpen] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [detailsAt, setDetailsAt] = useState<string | null>(null)
+  const [projectOpen, setProjectOpen] = useState(false)
+  const viewTrigger = useRef<HTMLButtonElement>(null)
+  const detailsTrigger = useRef<HTMLButtonElement>(null)
+  const projectTrigger = useRef<HTMLButtonElement>(null)
+  const harnessChip = useRef<HTMLButtonElement>(null)
+  /** The harness chip, when it opened Details: focus goes back to it. */
+  const detailsInvoker = useRef<HTMLElement | null>(null)
   const meterRow = useAgentMeterStore((state) =>
     state.snapshot.rows.find((row) => row.sessionId === activeSessionId),
   )
@@ -159,11 +165,13 @@ export const SessionView: FC = () => {
     session?.providerId === 'claude-code' &&
     !isRemoteExecutionHost(session.executionHost)
   const harness = useHarnessFacts(supportsHarnessFacts ? activeSessionId : null)
-  // The session's own project, never the one selected in the sidebar (R1).
+  // The session's own project, never the one selected in the sidebar (R1):
+  // its name in the header, and its tools in the Project group (CH4 R4).
   const sessionProjectName = useProjectStore(
     selectProjectName(session?.projectId ?? null),
   )
-  const viewEntries = useConversationViewEntries(session?.id ?? '')
+  const sessionProject =
+    projects.find((project) => project.id === session?.projectId) ?? null
   const parallel = useParallelWork(activeSessionId)
   // The transcript is a memo boundary (MAR-3310 F1e R2): what it is handed
   // keeps its identity until what it does changes.
@@ -188,18 +196,18 @@ export const SessionView: FC = () => {
     },
     [sendMessageToSession],
   )
-  // A Parallel work button that has yielded is hidden and inert; opened from
-  // More, the panel hands focus back to More (MAR-3427 D).
+  // The panel hands focus back to what opened it: the row's Parallel work
+  // button, or View when it was opened from there -- and More in View's
+  // place when View has yielded (MAR-3427 D, MAR-3429 CH4 R1).
   const focusParallelInvoker = () =>
     headerFocusTarget(
       parallelInvoker.current?.isConnected
         ? parallelInvoker.current
-        : parallelButton.current,
+        : (parallelButton.current ?? viewTrigger.current),
     )?.focus()
-  // The close is committed before focus is decided: while open the button is
-  // pinned (MAR-3427 C), and closing may yield it again or move it off the
-  // status row -- a new button -- so the target is read from the header as
-  // it is once the panel has closed.
+  // The close is committed before focus is decided: the row's button may
+  // have left while the panel was open (nothing runs any more), so the target
+  // is read from the header as it is once the panel has closed.
   const closeParallel = () => {
     flushSync(() => setParallelOpen(false))
     focusParallelInvoker()
@@ -225,7 +233,7 @@ export const SessionView: FC = () => {
     ? (workspaces.find((entry) => entry.id === session.workspaceId) ?? null)
     : null
   const sessionOpenPath = sessionWorkspace?.worktreeRemovedAt
-    ? (activeProject?.repositoryPath ?? null)
+    ? (sessionProject?.repositoryPath ?? null)
     : (sessionWorkspace?.path ?? session?.workingDirectory ?? null)
   const sessionWorktreeRemoved = !!sessionWorkspace?.worktreeRemovedAt
   const {
@@ -355,6 +363,10 @@ export const SessionView: FC = () => {
     }
   }, [session?.workingDirectory])
 
+  // The PR is read again when its panel opens. Details (its row) and the
+  // Project group (its item) read it as they open, in their open handlers:
+  // one read per open, none on a close, and none for a group opening or
+  // closing while the panel is already showing (lap 2 D).
   useEffect(() => {
     if (showPullRequestPanel) void refreshPullRequest()
   }, [refreshPullRequest, showPullRequestPanel])
@@ -382,6 +394,12 @@ export const SessionView: FC = () => {
   const handleTogglePullRequestPanel = useCallback(() => {
     setShowPullRequestPanel((current) => !current)
   }, [])
+  // Closed from its own panel, focus goes back to the Project group it is
+  // opened from -- or More, when the group has yielded (MAR-3429 CH4 R9).
+  const closePullRequestPanel = () => {
+    flushSync(() => setShowPullRequestPanel(false))
+    headerFocusTarget(projectTrigger.current)?.focus()
+  }
 
   // Where the composer is aimed, built once per aim (MAR-3325). This view
   // redraws for every streamed token of the open conversation, and the
@@ -494,6 +512,12 @@ export const SessionView: FC = () => {
       setParallelOpen(true)
     }
   }
+  // Parallel work's history, from View: the panel opens and gives focus back
+  // to View when it closes.
+  const openParallelHistory = () => {
+    parallelInvoker.current = viewTrigger.current
+    setParallelOpen(true)
+  }
   const toggleTerminal = () => {
     if (hasTerminal) {
       void closeAllTerminals(session.id)
@@ -506,11 +530,33 @@ export const SessionView: FC = () => {
       })
     }
   }
-  const pinLabel = `${session.pinnedAt ? 'Unpin' : 'Pin'} ${session.name}`
   const togglePin = () =>
     void setPinned(session.id, !session.pinnedAt).catch((error) =>
       toast.error(error instanceof Error ? error.message : String(error)),
     )
+  const parallelLabel = parallelWorkInRow(session.parallelWork)
+  const harnessAlert = supportsHarnessFacts ? harnessPill(harness.facts) : null
+  const remote = isRemoteExecutionHost(session.executionHost)
+  // Details opens at the top from its own trigger (or from More), and at the
+  // harness from the harness alert chip, which then takes focus back.
+  const changeDetailsOpen = (open: boolean) => {
+    if (open) {
+      setDetailsAt(null)
+      detailsInvoker.current = null
+      if (!detailsOpen) void refreshPullRequest()
+    }
+    setDetailsOpen(open)
+  }
+  const openDetailsAtHarness = () => {
+    setDetailsAt('harness')
+    detailsInvoker.current = harnessChip.current
+    if (!detailsOpen) void refreshPullRequest()
+    setDetailsOpen(true)
+  }
+  const changeProjectOpen = (open: boolean) => {
+    if (open && !projectOpen) void refreshPullRequest()
+    setProjectOpen(open)
+  }
 
   return (
     <div
@@ -523,44 +569,40 @@ export const SessionView: FC = () => {
         <ConversationHeader
           projectName={sessionProjectName ?? 'Unknown project'}
           conversationName={session.name}
+          pinned={!!session.pinnedAt}
+          // What docks beside the header, so a close hands focus to a group
+          // at the header's real width (lap 2 A). Parallel work counts while
+          // open in either mode: as an overlay it moves nothing, and the
+          // re-read is one measurement.
+          docked={dockedKey(
+            showPullRequestPanel && 'pull-request',
+            parallelOpen && 'parallel-work',
+            linkedSpace !== null && 'space',
+          )}
           slots={[
-            {
-              id: 'parallel-work',
-              side: 'left',
-              // While something runs it is live status, and it stays (R2).
-              group: session.parallelWork?.running ? 'status' : 'control',
-              // Its panel open, it is pinned (MAR-3427 C).
-              open: parallelOpen,
-              node: (
-                <Button
-                  ref={parallelButton}
-                  variant="ghost"
-                  size="sm"
-                  aria-expanded={parallelOpen}
-                  onClick={toggleParallel}
-                >
-                  Parallel work
-                  {session.parallelWork?.running
-                    ? ` · ${session.parallelWork.running}`
-                    : ''}
-                </Button>
-              ),
-              entries: [
-                {
-                  kind: 'action',
-                  key: 'parallel-work',
-                  label: 'Parallel work',
-                  onSelect: toggleParallel,
-                },
-              ],
-            },
-            {
-              id: 'view',
-              side: 'left',
-              group: 'control',
-              node: <SessionTranscriptViewSwitch sessionId={session.id} />,
-              entries: viewEntries,
-            },
+            // Parallel work holds a place in the row only while it matters,
+            // and then it is live status (CH4 R2). Its history is in View.
+            ...(parallelLabel
+              ? [
+                  {
+                    id: 'parallel-work',
+                    side: 'left' as const,
+                    group: 'status' as const,
+                    node: (
+                      <Button
+                        ref={parallelButton}
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2"
+                        aria-expanded={parallelOpen}
+                        onClick={toggleParallel}
+                      >
+                        {parallelLabel}
+                      </Button>
+                    ),
+                  },
+                ]
+              : []),
             {
               id: 'attention',
               side: 'left',
@@ -574,7 +616,7 @@ export const SessionView: FC = () => {
                 />
               ),
             },
-            ...(isRemoteExecutionHost(session.executionHost)
+            ...(remote
               ? [
                   {
                     id: 'remote',
@@ -625,92 +667,59 @@ export const SessionView: FC = () => {
                   },
                 ]
               : []),
-            ...(supportsHarnessFacts
+            // The harness is in the row only while it alerts, naming the
+            // cause; it opens Details at the harness (CH4 R3).
+            ...(harnessAlert?.alert
               ? [
                   {
                     id: 'harness',
                     side: 'left' as const,
-                    // An alert is live status and stays; otherwise it yields.
-                    group: harnessPill(harness.facts).alert
-                      ? ('status' as const)
-                      : ('control' as const),
-                    node: (focus: HeaderMenuFocus) => (
-                      <HarnessFactsView
-                        facts={harness.facts}
-                        error={harness.error}
-                        loading={harness.loading}
-                        onRetry={harness.retry}
-                        contentFocus={focus}
+                    group: 'status' as const,
+                    node: (
+                      <HarnessAlertChip
+                        ref={harnessChip}
+                        label={harnessAlert.label}
+                        expanded={detailsOpen && detailsAt === 'harness'}
+                        onOpen={openDetailsAtHarness}
                       />
                     ),
-                    entries: [
-                      {
-                        kind: 'opens' as const,
-                        key: 'harness',
-                        opens: 'menu' as const,
-                      },
-                    ],
                   },
                 ]
               : []),
             {
-              id: 'agent-meter',
-              side: 'left',
-              group: 'control',
-              node: (
-                <SessionAgentMeter
-                  row={meterRow}
-                  remote={isRemoteExecutionHost(session.executionHost)}
-                />
-              ),
-              entries: [
-                {
-                  kind: 'text',
-                  key: 'agent-meter',
-                  name: 'Agent CPU and memory',
-                  label: formatSessionMeter(
-                    meterRow ?? undefined,
-                    isRemoteExecutionHost(session.executionHost),
-                  ),
-                },
-              ],
-            },
-            {
-              id: 'wires',
-              side: 'left',
+              id: 'view',
+              side: 'right',
               group: 'control',
               node: (focus) => (
-                <SessionWiresContainer
+                <ConversationViewMenu
                   sessionId={session.id}
+                  open={viewOpen}
+                  onOpenChange={setViewOpen}
+                  onOpenParallelWork={openParallelHistory}
+                  triggerRef={viewTrigger}
                   contentFocus={focus}
                 />
               ),
-              entries: [{ kind: 'opens', key: 'wires', opens: 'popover' }],
+              entries: [
+                { kind: 'opens', key: 'view', onOpen: () => setViewOpen(true) },
+              ],
             },
             {
-              id: 'session-details',
-              side: 'left',
+              id: 'details',
+              side: 'right',
               group: 'control',
               node: (focus) => (
-                <DropdownMenu
-                  onOpenChange={(open) => {
-                    if (open) void refreshPullRequest()
-                  }}
+                <ConversationDetailsMenu
+                  open={detailsOpen}
+                  onOpenChange={changeDetailsOpen}
+                  openAt={detailsAt}
+                  invoker={detailsInvoker}
+                  triggerRef={detailsTrigger}
+                  contentFocus={focus}
                 >
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 rounded-full border border-border/70 px-2 text-[11px] text-muted-foreground"
-                    >
-                      Session details
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    className="w-80 p-2"
-                    {...focus}
+                  <section
+                    aria-label="Session"
+                    {...{ [DETAILS_SECTION]: 'session' }}
                   >
                     <div className="grid gap-1.5 text-xs">
                       {session.parentSessionId && (
@@ -818,131 +827,70 @@ export const SessionView: FC = () => {
                         />
                       )}
                     </div>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  </section>
+                  {supportsHarnessFacts && (
+                    // Named by its label, with no heading of its own: the
+                    // harness's own "Harness" section is the one heading
+                    // (lap 2 E). The chip focuses it, and the ring shows
+                    // where focus landed.
+                    <section
+                      aria-label="Harness history"
+                      tabIndex={-1}
+                      className="mt-2 rounded-sm border-t border-border/70 px-2 pt-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      {...{ [DETAILS_SECTION]: 'harness' }}
+                    >
+                      <HarnessFactsSections
+                        facts={harness.facts}
+                        error={harness.error}
+                        loading={harness.loading}
+                        onRetry={harness.retry}
+                      />
+                    </section>
+                  )}
+                  {(remote || meterRow?.usage) && (
+                    <section
+                      aria-label="Agent"
+                      className="mt-2 border-t border-border/70 pt-2"
+                      {...{ [DETAILS_SECTION]: 'agent' }}
+                    >
+                      <SessionAgentMeter row={meterRow} remote={remote} />
+                    </section>
+                  )}
+                </ConversationDetailsMenu>
               ),
               entries: [
-                { kind: 'opens', key: 'session-details', opens: 'menu' },
+                {
+                  kind: 'opens',
+                  key: 'details',
+                  onOpen: () => changeDetailsOpen(true),
+                },
               ],
             },
-            ...(activeProject
-              ? [
-                  {
-                    id: 'project-actions',
-                    side: 'right' as const,
-                    group: 'control' as const,
-                    node: (focus: HeaderMenuFocus) => (
-                      <ProjectActionsMenu
-                        project={activeProject}
-                        runtimeCwd={session.workingDirectory}
-                        contentFocus={focus}
-                      />
-                    ),
-                    entries: [
-                      {
-                        kind: 'opens' as const,
-                        key: 'project-actions',
-                        opens: 'menu' as const,
-                      },
-                    ],
-                  },
-                ]
-              : []),
             {
-              id: 'open',
+              id: 'project',
               side: 'right',
               group: 'control',
               node: (focus) => (
-                <ProjectOpenMenuContainer
-                  targetPath={sessionOpenPath}
+                <ConversationProjectMenu
+                  project={sessionProject}
+                  runtimeCwd={session.workingDirectory}
+                  openPath={sessionOpenPath}
+                  pullRequestLabel={pullRequestLabel}
+                  pullRequestOpen={showPullRequestPanel}
+                  onTogglePullRequest={handleTogglePullRequestPanel}
+                  hasTerminal={hasTerminal}
+                  onToggleTerminal={toggleTerminal}
+                  open={projectOpen}
+                  onOpenChange={changeProjectOpen}
+                  triggerRef={projectTrigger}
                   contentFocus={focus}
                 />
               ),
-              entries: [{ kind: 'opens', key: 'open', opens: 'menu' }],
-            },
-            {
-              id: 'pull-request',
-              side: 'right',
-              group: 'control',
-              // Its panel open, it is pinned (MAR-3427 C).
-              open: showPullRequestPanel,
-              node: (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={handleTogglePullRequestPanel}
-                  title="Pull request status"
-                  aria-pressed={showPullRequestPanel ? true : undefined}
-                >
-                  <GitPullRequest className="h-3.5 w-3.5" />
-                </Button>
-              ),
               entries: [
                 {
-                  kind: 'action',
-                  key: 'pull-request',
-                  label: 'Pull request status',
-                  checked: showPullRequestPanel,
-                  onSelect: handleTogglePullRequestPanel,
-                },
-              ],
-            },
-            {
-              id: 'terminal',
-              side: 'right',
-              group: 'control',
-              node: (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={toggleTerminal}
-                  title={hasTerminal ? 'Close terminal' : 'Open terminal'}
-                  aria-pressed={hasTerminal ? true : undefined}
-                >
-                  <TerminalSquare className="h-3.5 w-3.5" />
-                </Button>
-              ),
-              entries: [
-                {
-                  kind: 'action',
-                  key: 'terminal',
-                  label: hasTerminal ? 'Close terminal' : 'Open terminal',
-                  onSelect: toggleTerminal,
-                },
-              ],
-            },
-            {
-              id: 'pin',
-              side: 'right',
-              group: 'control',
-              node: (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-10 w-10"
-                  title={session.pinnedAt ? 'Unpin session' : 'Pin session'}
-                  aria-label={pinLabel}
-                  aria-pressed={!!session.pinnedAt}
-                  onClick={togglePin}
-                >
-                  <Pin
-                    className={
-                      session.pinnedAt
-                        ? 'h-3.5 w-3.5 fill-current text-primary'
-                        : 'h-3.5 w-3.5'
-                    }
-                  />
-                </Button>
-              ),
-              entries: [
-                {
-                  kind: 'action',
-                  key: 'pin',
-                  label: pinLabel,
-                  onSelect: togglePin,
+                  kind: 'opens',
+                  key: 'project',
+                  onOpen: () => changeProjectOpen(true),
                 },
               ],
             },
@@ -970,6 +918,15 @@ export const SessionView: FC = () => {
           ]}
           moreContent={
             <>
+              <DropdownMenuItem
+                role="menuitemcheckbox"
+                aria-checked={!!session.pinnedAt}
+                onSelect={togglePin}
+                className="gap-2"
+              >
+                <Pin className="h-3.5 w-3.5" />
+                {session.pinnedAt ? 'Unpin conversation' : 'Pin conversation'}
+              </DropdownMenuItem>
               {session.providerId !== 'shell' && (
                 <DropdownMenuItem
                   onClick={() =>
@@ -1096,7 +1053,7 @@ export const SessionView: FC = () => {
           onRefresh={() => {
             void refreshPullRequest()
           }}
-          onClose={() => setShowPullRequestPanel(false)}
+          onClose={closePullRequestPanel}
         />
       )}
 
@@ -1118,6 +1075,11 @@ export const SessionView: FC = () => {
       )}
     </div>
   )
+}
+
+/** The docked panels, named, as one key for the header's re-read. */
+function dockedKey(...panels: (string | false)[]): string {
+  return panels.filter(Boolean).join(' ')
 }
 
 function formatSessionContextLabel(

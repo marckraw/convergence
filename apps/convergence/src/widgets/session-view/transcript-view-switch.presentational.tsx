@@ -1,9 +1,8 @@
 import type { FC } from 'react'
-import { cn } from '@/shared/lib/cn.pure'
-import { Button } from '@/shared/ui/button'
+import { DropdownMenuItem } from '@/shared/ui/dropdown-menu'
 import type { TranscriptViewMode } from './transcript-view-mode.api'
 
-interface TranscriptViewSwitchProps {
+interface TranscriptViewMenuItemsProps {
   mode: TranscriptViewMode
   onChange: (mode: TranscriptViewMode) => void
 }
@@ -21,32 +20,35 @@ const OPTIONS: ReadonlyArray<{
   { mode: 'full', label: 'Full', title: 'Show every entry' },
 ]
 
-/** The conversation's Compact/Full choice (MAR-3391 R5), in its header. */
-export const TranscriptViewSwitch: FC<TranscriptViewSwitchProps> = ({
+/**
+ * The conversation's Compact/Full choice (MAR-3391 R5) as a radio choice
+ * inside the header's View menu (MAR-3429 CH4 R1). The group keeps the name
+ * the segmented switch had, "Conversation view".
+ */
+export const TranscriptViewMenuItems: FC<TranscriptViewMenuItemsProps> = ({
   mode,
   onChange,
 }) => (
-  <div
-    role="group"
-    aria-label="Conversation view"
-    className="flex shrink-0 items-center rounded-md border border-border/60 p-0.5"
-  >
+  <div role="group" aria-label="Conversation view">
     {OPTIONS.map((option) => (
-      <Button
+      <DropdownMenuItem
         key={option.mode}
-        type="button"
-        variant="ghost"
-        size="sm"
-        aria-pressed={mode === option.mode}
+        role="menuitemradio"
+        aria-checked={mode === option.mode}
         title={option.title}
-        onClick={() => onChange(option.mode)}
-        className={cn(
-          'h-6 rounded px-2 py-0.5 text-xs font-normal text-muted-foreground hover:text-foreground',
-          mode === option.mode && 'bg-muted text-foreground',
-        )}
+        onSelect={() => onChange(option.mode)}
+        className="gap-2"
       >
+        <span
+          aria-hidden
+          className={
+            mode === option.mode
+              ? 'h-1.5 w-1.5 rounded-full bg-foreground'
+              : 'h-1.5 w-1.5'
+          }
+        />
         {option.label}
-      </Button>
+      </DropdownMenuItem>
     ))}
   </div>
 )

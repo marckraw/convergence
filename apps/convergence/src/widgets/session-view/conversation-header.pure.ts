@@ -9,6 +9,8 @@
  * `HEADER_YIELD_ORDER` names, into the More menu.
  */
 
+import type { ParallelWorkCounts } from '@/shared/lib/parallel-work.pure'
+
 /** Where an item sits, which decides the rows at narrow widths (R5). */
 export type HeaderItemGroup =
   | 'identity'
@@ -35,12 +37,6 @@ export interface HeaderItem {
    * which has nothing of its own to offer).
    */
   onlyWithOverflow?: boolean
-  /**
-   * The control's own panel is open (Parallel work, the PR panel). It is then
-   * pinned with the live status: yielding it would hide, and make inert, the
-   * very button its open panel belongs to (MAR-3427 C).
-   */
-  open?: boolean
 }
 
 export interface HeaderLayout {
@@ -56,22 +52,13 @@ export interface HeaderLayout {
 }
 
 /**
- * The controls that yield, first to go first (R2). Anything absent from a
- * header is simply skipped; anything pinned never consults this list.
+ * The controls that yield, first to go first (R2). Since MAR-3429 CH4 the
+ * header's controls are its groups -- Project, View, Details -- and they yield
+ * in that order. Anything absent from a header is simply skipped; anything
+ * pinned (the live status, Parallel work while it runs, a harness alert, Stop)
+ * never consults this list.
  */
-export const HEADER_YIELD_ORDER = [
-  'agent-meter',
-  'pin',
-  'terminal',
-  'pull-request',
-  'open',
-  'project-actions',
-  'view',
-  'harness',
-  'wires',
-  'session-details',
-  'parallel-work',
-] as const
+export const HEADER_YIELD_ORDER = ['project', 'view', 'details'] as const
 
 export type HeaderYieldId = (typeof HEADER_YIELD_ORDER)[number]
 
@@ -127,8 +114,10 @@ export function identityWidths(input: {
   projectNatural: number | null
   nameNatural: number
   leading?: number
+  /** What is drawn after the name, gap included (the pin mark, CH4 R5). */
+  trailing?: number
 }): IdentityWidths {
-  const leading = input.leading ?? 0
+  const leading = (input.leading ?? 0) + (input.trailing ?? 0)
   const project = input.projectNatural
   const projectMin = project === null ? 0 : Math.min(project, PROJECT_NAME_MIN)
   const nameMin = Math.min(input.nameNatural, CONVERSATION_NAME_RESERVED)
@@ -142,17 +131,6 @@ export function identityWidths(input: {
     projectMin,
     nameMin,
   }
-}
-
-/**
- * A control whose panel is open is pinned, and sits with the live status
- * (MAR-3427 C). Docking a panel narrows the header; the control that docked it
- * must not yield under the focus it still holds.
- */
-function pinnedWhileOpen(item: HeaderItem): HeaderItem {
-  return item.open && !item.pinned
-    ? { ...item, pinned: true, group: 'status' }
-    : item
 }
 
 /** The inline styles a name span takes, as `identityStyles` decides them. */
@@ -187,7 +165,7 @@ export interface IdentityStyles {
  */
 export function identityStyles(
   widths: IdentityWidths,
-  input: { projectNatural: number | null; leading?: number },
+  input: { projectNatural: number | null; leading?: number; trailing?: number },
 ): IdentityStyles {
   if (input.projectNatural === null)
     return {
@@ -195,7 +173,10 @@ export function identityStyles(
       name: { minWidth: widths.nameMin, flexShrink: 1 },
     }
   const beforeName =
-    (input.leading ?? 0) + widths.projectMin + IDENTITY_INNER_GAP
+    (input.leading ?? 0) +
+    widths.projectMin +
+    IDENTITY_INNER_GAP +
+    (input.trailing ?? 0)
   return {
     project: { minWidth: widths.projectMin, flexShrink: 1 },
     name: {
@@ -251,7 +232,7 @@ export function headerLayout(input: {
   width: number | null
   items: HeaderItem[]
 }): HeaderLayout {
-  const items = input.items.map(pinnedWhileOpen)
+  const items = input.items
   const ids = (list: HeaderItem[]) => list.map((item) => item.id)
   const inOrder = (keep: Set<HeaderItem>) =>
     items.filter((item) => keep.has(item))
@@ -328,4 +309,35 @@ export function headerLayoutKey(layout: HeaderLayout): string {
 
 export function parseHeaderLayoutKey(key: string): HeaderLayout {
   return JSON.parse(key) as HeaderLayout
+}
+
+/**
+ * Parallel work's label in the header's row, or null when it holds no place
+ * there (MAR-3429 CH4 R2): only while something runs, or while a task's state
+ * is unknown and wants a look. Otherwise its history is in View.
+ */
+export function parallelWorkInRow(
+  counts: ParallelWorkCounts | undefined,
+): string | null {
+  if (counts?.running) return `Parallel work · ${counts.running}`
+  if (counts?.unknown) return `Parallel work · ${counts.unknown} unknown`
+  return null
+}
+
+/**
+ * Radix's own rule for when an interaction outside a closing menu means focus
+ * does not go back to where the menu came from: for a modal menu (every
+ * header group is one) only a right-click outside, or a ctrl-click, which is
+ * the Mac's right-click. The header keeps it with More standing in for a
+ * yielded trigger (MAR-3427 A), and Details keeps it for the harness chip it
+ * was opened from (MAR-3429 CH4 lap 2 C).
+ */
+export function interactionKeepsFocusWhereItIs(event: {
+  detail: { originalEvent: Event }
+}): boolean {
+  const original = event.detail.originalEvent as Partial<MouseEvent>
+  return (
+    original.button === 2 ||
+    (original.button === 0 && original.ctrlKey === true)
+  )
 }
