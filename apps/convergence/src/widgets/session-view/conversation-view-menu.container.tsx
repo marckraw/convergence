@@ -43,8 +43,10 @@ export const ConversationViewMenu: FC<ConversationViewMenuProps> = ({
 }) => {
   const mode = useTranscriptViewMode(sessionId)
   const setMode = useTranscriptViewStore((state) => state.setMode)
-  // The panel opens once the menu has gone, so the menu's own focus return
-  // never lands after the panel has taken focus.
+  // The panel opens once the menu has gone. Its focus return is left to run
+  // (lap 2 B): View takes focus back, or More when View has yielded. A docked
+  // panel never takes focus, so focus stays on View, beside it; the overlay's
+  // dialog mounts after this and moves focus inside itself.
   const openParallel = useRef(false)
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
@@ -69,7 +71,6 @@ export const ConversationViewMenu: FC<ConversationViewMenuProps> = ({
           contentFocus?.onCloseAutoFocus(event)
           if (!openParallel.current) return
           openParallel.current = false
-          event.preventDefault()
           onOpenParallelWork()
         }}
       >

@@ -25,6 +25,7 @@ import {
   headerYieldPriority,
   identityStyles,
   identityWidths,
+  interactionKeepsFocusWhereItIs,
   parseHeaderLayoutKey,
   type HeaderItem,
   type HeaderYieldId,
@@ -109,6 +110,15 @@ interface ConversationHeaderProps {
    * a button used to (MAR-3429 CH4 R5).
    */
   pinned?: boolean
+  /**
+   * What is docked beside the header right now, named (the PR panel, docked
+   * Parallel work). A dock opening or closing moves the header's width in its
+   * own commit; when this changes the width is read again in that commit, so
+   * a focus decided right after it (a closed panel handing focus back to its
+   * group) sees the groups drawn at the header's real width (MAR-3429 CH4
+   * lap 2 A).
+   */
+  docked?: string
 }
 
 const MORE_WIDTH = 28
@@ -181,23 +191,6 @@ function sameReadings(left: TriggerReadings, right: TriggerReadings): boolean {
   )
 }
 
-/**
- * Radix's own rule for when an interaction outside a closing menu means its
- * trigger is not focused again: for a modal menu (every header group is one)
- * only a right-click outside. MAR-3427 A keeps that rule, with More standing
- * in for the trigger. Since MAR-3429 CH4 the header holds no popover (the
- * wires moved to the composer), so the rule has one branch.
- */
-function interactionKeepsFocusWhereItIs(
-  event: CustomEvent<{ originalEvent: Event }>,
-): boolean {
-  const original = event.detail.originalEvent as Partial<MouseEvent>
-  return (
-    original.button === 2 ||
-    (original.button === 0 && original.ctrlKey === true)
-  )
-}
-
 function sameMeasured(left: Measured, right: Measured): boolean {
   if (left.project !== right.project || left.name !== right.name) return false
   const keys = Object.keys(left.items)
@@ -243,6 +236,7 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
   slots,
   moreContent,
   pinned = false,
+  docked = '',
 }) => {
   const headerRef = useRef<HTMLDivElement>(null)
   const projectRef = useRef<HTMLSpanElement>(null)
@@ -359,9 +353,13 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
   ]
   // The header measures itself, never the window, and redraws only when what
   // it draws changes (R3). No control is pinned by an open panel any more
-  // (MAR-3429 CH4): a docked panel narrows the header like any resize.
-  const layoutKey = useElementWidth(headerRef, (width) =>
-    headerLayoutKey(headerLayout({ width, items })),
+  // (MAR-3429 CH4), but a docked panel still moves the header's width in the
+  // commit that opens or closes it: `docked` has the width read again then,
+  // not a frame later when the observer fires (lap 2 A).
+  const layoutKey = useElementWidth(
+    headerRef,
+    (width) => headerLayoutKey(headerLayout({ width, items })),
+    docked,
   )
   const layout = useMemo(() => parseHeaderLayoutKey(layoutKey), [layoutKey])
   const overflow = new Set(layout.overflow)

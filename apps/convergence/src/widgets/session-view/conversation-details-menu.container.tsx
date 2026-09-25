@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useRef,
   type FC,
   type ReactNode,
   type Ref,
@@ -13,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
 import type { HeaderMenuFocus } from './conversation-header.container'
+import { interactionKeepsFocusWhereItIs } from './conversation-header.pure'
 
 /** The attribute a Details section carries, so it can be opened at. */
 export const DETAILS_SECTION = 'data-details-section'
@@ -66,6 +68,9 @@ export const ConversationDetailsMenu: FC<ConversationDetailsMenuProps> = ({
     },
     [openAt],
   )
+  // A right-click outside leaves focus where it is, whoever opened the menu:
+  // the chip's way back obeys the same rule as the trigger's (lap 2 C).
+  const keptOutside = useRef(false)
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
@@ -84,13 +89,18 @@ export const ConversationDetailsMenu: FC<ConversationDetailsMenuProps> = ({
       <DropdownMenuContent
         align="end"
         className="max-h-[70vh] w-96 max-w-[calc(100vw-2rem)] overflow-auto p-2 text-xs"
-        onInteractOutside={contentFocus?.onInteractOutside}
+        onInteractOutside={(event) => {
+          contentFocus?.onInteractOutside(event)
+          if (interactionKeepsFocusWhereItIs(event)) keptOutside.current = true
+        }}
         onCloseAutoFocus={(event) => {
           contentFocus?.onCloseAutoFocus(event)
+          const outside = keptOutside.current
+          keptOutside.current = false
           const target = invoker.current
           if (!target?.isConnected) return
           event.preventDefault()
-          target.focus()
+          if (!outside) target.focus()
         }}
       >
         <span ref={openAtRef} hidden />

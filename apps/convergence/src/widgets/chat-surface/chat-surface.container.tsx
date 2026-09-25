@@ -710,6 +710,9 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
             : (sessionProjectName ?? 'Unknown project')
         }
         conversationName={session.name}
+        // Parallel work docks beside the header: its close hands focus to
+        // View at the header's real width (MAR-3429 CH4 lap 2 A).
+        docked={parallelOpen ? 'parallel-work' : ''}
         leading={{
           node: (
             <MessageSquareText className="h-4 w-4 shrink-0 text-muted-foreground" />

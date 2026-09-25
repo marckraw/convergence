@@ -2754,5 +2754,286 @@ describe('SessionView', () => {
         }
       },
     )
+
+    describe('lap 2 (verdict bd69905f)', () => {
+      afterEach(() => {
+        vi.unstubAllGlobals()
+      })
+
+      /**
+       * A session row laid out as the browser lays it: the row is `row` wide,
+       * and the header pays for every panel docked beside it right now (the
+       * PR panel 320, docked Parallel work 420), read from the DOM at the
+       * moment it is measured. The groups measure `groupWidth`, anything else
+       * drawn 60. The ResizeObservers fire only on `settle` -- the frame after
+       * a commit -- so a width read in the commit itself is the header's own
+       * doing (A).
+       */
+      function dockingGeometry(row: number, groupWidth: number) {
+        const observers = new Set<() => void>()
+        vi.stubGlobal(
+          'ResizeObserver',
+          class {
+            constructor(private readonly callback: () => void) {}
+            observe() {
+              observers.add(this.callback)
+            }
+            unobserve() {}
+            disconnect() {
+              observers.delete(this.callback)
+            }
+          },
+        )
+        const docked = () => {
+          let width = 0
+          if (document.querySelector('[aria-label="Close pull request panel"]'))
+            width += 320
+          const parallel = document.querySelector(
+            '[aria-label="Close parallel work"]',
+          )
+          if (parallel && !parallel.closest('[role="dialog"]')) width += 420
+          return width
+        }
+        const measure = HTMLElement.prototype.getBoundingClientRect
+        vi.spyOn(
+          HTMLElement.prototype,
+          'getBoundingClientRect',
+        ).mockImplementation(function (this: HTMLElement) {
+          if (this.hasAttribute('data-session-row'))
+            return { width: row } as DOMRect
+          if (this.hasAttribute('data-conversation-header'))
+            return { width: row - docked() } as DOMRect
+          const inner = this.getAttribute('data-header-inner')
+          if (inner !== null)
+            return {
+              width:
+                this.childElementCount === 0
+                  ? 0
+                  : ['project', 'view', 'details'].includes(inner)
+                    ? groupWidth
+                    : 60,
+            } as DOMRect
+          return measure.call(this)
+        })
+        vi.spyOn(
+          HTMLElement.prototype,
+          'scrollWidth',
+          'get',
+        ).mockImplementation(function (this: HTMLElement) {
+          if (this.hasAttribute('data-header-project')) return 90
+          if (this.hasAttribute('data-header-name')) return 200
+          return 0
+        })
+        return {
+          settle: () => act(() => observers.forEach((notify) => notify())),
+        }
+      }
+      const yielded = (id: string) =>
+        header().querySelector(`[data-header-item="${id}"][data-yielded]`) !==
+        null
+      const trigger = (name: 'Project' | 'View') =>
+        within(header()).getByRole('button', { name, hidden: true })
+
+      it('A closing the docked PR panel hands focus to Project, drawn again at the header’s real width in the same commit — mutation drop the docked re-read turns red', async () => {
+        // 1200 px: every group is drawn. The PR panel docks 320 px of it, and
+        // at 880 Project yields; closed, the header is 1200 again.
+        const geometry = dockingGeometry(1200, 250)
+        renderView()
+        expect(yielded('project')).toBe(false)
+        openGroup('Project')
+        fireEvent.click(
+          await screen.findByRole('menuitemcheckbox', {
+            name: /^Pull request/,
+          }),
+        )
+        const close = await screen.findByRole('button', {
+          name: 'Close pull request panel',
+        })
+        geometry.settle()
+        expect(yielded('project')).toBe(true)
+        close.focus()
+        fireEvent.click(close)
+        expect(document.activeElement).toBe(trigger('Project'))
+        expect(yielded('project')).toBe(false)
+      })
+
+      it('A closing docked Parallel work opened from View hands focus to View, drawn again in the same commit — mutation drop the docked re-read turns red', async () => {
+        // 1200 px: every group is drawn. Parallel work docks 420 px of it (780
+        // is still a conversation's width), and at 780 View yields as well.
+        const geometry = dockingGeometry(1200, 250)
+        renderView()
+        expect(yielded('view')).toBe(false)
+        openGroup('View')
+        fireEvent.click(
+          await screen.findByRole('menuitem', {
+            name: 'Parallel work history',
+          }),
+        )
+        const close = await screen.findByRole('button', {
+          name: 'Close parallel work',
+        })
+        expect(close.closest('[role="dialog"]')).toBeNull()
+        geometry.settle()
+        expect(yielded('view')).toBe(true)
+        close.focus()
+        fireEvent.click(close)
+        expect(document.activeElement).toBe(trigger('View'))
+        expect(yielded('view')).toBe(false)
+      })
+
+      it('B Parallel work history from a drawn View, docked, leaves focus on View, never the page — mutation preventDefault back unconditionally turns red', async () => {
+        dockingGeometry(1700, 90)
+        renderView()
+        const view = trigger('View')
+        view.focus()
+        openGroup('View')
+        fireEvent.click(
+          await screen.findByRole('menuitem', {
+            name: 'Parallel work history',
+          }),
+        )
+        const close = await screen.findByRole('button', {
+          name: 'Close parallel work',
+        })
+        expect(close.closest('[role="dialog"]')).toBeNull()
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+        })
+        expect(document.activeElement).not.toBe(document.body)
+        expect(document.activeElement).toBe(view)
+      })
+
+      it('B Parallel work history from a drawn View, as the overlay, puts focus inside the overlay — mutation preventDefault back unconditionally keeps it there too', async () => {
+        // jsdom's row measures 0: Parallel work opens as the overlay.
+        renderView()
+        const view = trigger('View')
+        view.focus()
+        openGroup('View')
+        fireEvent.click(
+          await screen.findByRole('menuitem', {
+            name: 'Parallel work history',
+          }),
+        )
+        const dialog = await screen.findByRole('dialog')
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+        })
+        expect(document.activeElement).not.toBe(document.body)
+        expect(dialog.contains(document.activeElement)).toBe(true)
+      })
+
+      it('C a right-click outside Details opened from the harness chip leaves focus where it is — mutation the chip branch ignores the outside interaction turns red', async () => {
+        harnessAlert()
+        renderView()
+        const outside = document.createElement('p')
+        document.body.append(outside)
+        const chip = await screen.findByTestId('harness-alert')
+        chip.focus()
+        fireEvent.click(chip)
+        const harness = await screen.findByRole('region', {
+          name: 'Harness history',
+        })
+        await waitFor(() => expect(document.activeElement).toBe(harness))
+        await act(async () => fireEvent.pointerDown(outside, { button: 2 }))
+        await waitFor(() =>
+          expect(
+            screen.queryByRole('region', { name: 'Harness history' }),
+          ).toBeNull(),
+        )
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+        })
+        expect(document.activeElement).not.toBe(chip)
+        expect(document.activeElement).toBe(document.body)
+        outside.remove()
+      })
+
+      it('D one PR refresh per PR panel open and per Details or Project open, none on a close — mutation the one effect over all three turns red', async () => {
+        const refresh = vi.mocked(
+          window.electronAPI.pullRequest.refreshForSession,
+        )
+        const closeMenu = async () => {
+          await act(async () =>
+            fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' }),
+          )
+          await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+        }
+        renderView()
+        await act(async () => {})
+        refresh.mockClear()
+
+        openGroup('Project')
+        await screen.findByRole('menu')
+        await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1))
+        fireEvent.click(
+          await screen.findByRole('menuitemcheckbox', {
+            name: /^Pull request/,
+          }),
+        )
+        await screen.findByRole('button', { name: 'Close pull request panel' })
+        await act(async () => {})
+        // Project's open, then the panel's: two, and nothing for Project
+        // closing as the item was chosen.
+        expect(refresh).toHaveBeenCalledTimes(2)
+
+        openGroup('Details')
+        await screen.findByRole('menu')
+        await act(async () => {})
+        expect(refresh).toHaveBeenCalledTimes(3)
+        await closeMenu()
+        expect(refresh).toHaveBeenCalledTimes(3)
+
+        openGroup('Project')
+        await screen.findByRole('menu')
+        await act(async () => {})
+        expect(refresh).toHaveBeenCalledTimes(4)
+        await closeMenu()
+
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Close pull request panel' }),
+        )
+        await act(async () => {})
+        expect(refresh).toHaveBeenCalledTimes(4)
+      })
+
+      it('D the Open in list is read once while the header lives: a second Project open shows the apps at once, with nothing detecting — mutation read it on each open turns red', async () => {
+        const listApps = vi.mocked(window.electronAPI.projectOpen!.listApps)
+        listApps.mockClear()
+        renderView()
+        await act(async () => {})
+        for (let open = 0; open < 2; open += 1) {
+          openGroup('Project')
+          const menu = await screen.findByRole('menu')
+          expect(within(menu).queryByText('Detecting apps...')).toBeNull()
+          expect(
+            within(menu).getByRole('menuitem', { name: 'Open in VS Code' }),
+          ).toBeInTheDocument()
+          await act(async () => fireEvent.keyDown(menu, { key: 'Escape' }))
+          await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+        }
+        expect(listApps).toHaveBeenCalledTimes(1)
+      })
+
+      it('E Details has one Harness heading, and the harness section the chip focuses shows a focus-visible ring — mutation the outer heading back turns red', async () => {
+        harnessAlert()
+        renderView()
+        await screen.findByTestId('harness-alert')
+        openGroup('Details')
+        const harness = await screen.findByRole('region', {
+          name: 'Harness history',
+        })
+        expect(
+          within(screen.getByRole('menu')).getAllByRole('heading', {
+            name: /harness/i,
+          }),
+        ).toHaveLength(1)
+        expect(harness.className.split(/\s+/)).toEqual(
+          expect.arrayContaining([
+            'focus-visible:ring-2',
+            'focus-visible:ring-ring',
+          ]),
+        )
+      })
+    })
   })
 })

@@ -1,7 +1,10 @@
 import type { FC, Ref } from 'react'
 import { ChevronDown, GitPullRequest, TerminalSquare } from 'lucide-react'
 import type { Project } from '@/entities/project'
-import { ProjectOpenMenuSection } from '@/features/project-open-menu'
+import {
+  ProjectOpenMenuSection,
+  useProjectOpenApps,
+} from '@/features/project-open-menu'
 import { ProjectActionsMenu } from '@/widgets/project-actions-menu'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
@@ -54,6 +57,8 @@ export const ConversationProjectMenu: FC<ConversationProjectMenuProps> = ({
   triggerRef,
   contentFocus,
 }) => {
+  // Read once while the header lives, not on each open (lap 2 D).
+  const openApps = useProjectOpenApps(openPath)
   const trigger = (running: boolean) => (
     <Button
       ref={triggerRef}
@@ -77,7 +82,12 @@ export const ConversationProjectMenu: FC<ConversationProjectMenuProps> = ({
   const tools = (afterActions: boolean) => (
     <>
       {afterActions && <DropdownMenuSeparator />}
-      <ProjectOpenMenuSection targetPath={openPath} />
+      <ProjectOpenMenuSection
+        apps={openApps.apps}
+        loading={openApps.loading}
+        disabledReason={openApps.disabledReason}
+        onOpen={openApps.openIn}
+      />
       <DropdownMenuSeparator />
       <DropdownMenuItem
         role="menuitemcheckbox"

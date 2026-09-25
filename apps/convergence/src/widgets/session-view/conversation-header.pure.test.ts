@@ -7,6 +7,7 @@ import {
   headerYieldPriority,
   identityStyles,
   identityWidths,
+  interactionKeepsFocusWhereItIs,
   parseHeaderLayoutKey,
   parallelWorkInRow,
   type IdentityNameStyle,
@@ -466,5 +467,24 @@ describe('MAR-3429 CH4', () => {
     expect(parallelWorkInRow(counts(0, 3))).toBe('Parallel work · 3 unknown')
     expect(parallelWorkInRow(counts(0, 0))).toBeNull()
     expect(parallelWorkInRow(undefined)).toBeNull()
+  })
+})
+
+describe('interactionKeepsFocusWhereItIs (MAR-3429 CH4 lap 2 C)', () => {
+  const outside = (init: Partial<MouseEvent>) => ({
+    detail: { originalEvent: init as Event },
+  })
+
+  it('keeps focus where it is for a right-click or ctrl-click outside, and only then — mutation return false turns red', () => {
+    expect(interactionKeepsFocusWhereItIs(outside({ button: 2 }))).toBe(true)
+    expect(
+      interactionKeepsFocusWhereItIs(outside({ button: 0, ctrlKey: true })),
+    ).toBe(true)
+    expect(interactionKeepsFocusWhereItIs(outside({ button: 0 }))).toBe(false)
+    expect(
+      interactionKeepsFocusWhereItIs(outside({ button: 1, ctrlKey: true })),
+    ).toBe(false)
+    // A focus moving outside is no pointer at all.
+    expect(interactionKeepsFocusWhereItIs(outside({}))).toBe(false)
   })
 })

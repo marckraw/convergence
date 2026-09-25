@@ -363,12 +363,13 @@ export const SessionView: FC = () => {
     }
   }, [session?.workingDirectory])
 
-  // The PR is read again whenever something that shows it opens: its panel,
-  // Details (its row) or the Project group (its item).
+  // The PR is read again when its panel opens. Details (its row) and the
+  // Project group (its item) read it as they open, in their open handlers:
+  // one read per open, none on a close, and none for a group opening or
+  // closing while the panel is already showing (lap 2 D).
   useEffect(() => {
-    if (showPullRequestPanel || detailsOpen || projectOpen)
-      void refreshPullRequest()
-  }, [refreshPullRequest, showPullRequestPanel, detailsOpen, projectOpen])
+    if (showPullRequestPanel) void refreshPullRequest()
+  }, [refreshPullRequest, showPullRequestPanel])
 
   // Hydrate attachment metadata for the active session so the transcript can
   // render chips. It re-reads when the session changes and when the transcript
@@ -542,13 +543,19 @@ export const SessionView: FC = () => {
     if (open) {
       setDetailsAt(null)
       detailsInvoker.current = null
+      if (!detailsOpen) void refreshPullRequest()
     }
     setDetailsOpen(open)
   }
   const openDetailsAtHarness = () => {
     setDetailsAt('harness')
     detailsInvoker.current = harnessChip.current
+    if (!detailsOpen) void refreshPullRequest()
     setDetailsOpen(true)
+  }
+  const changeProjectOpen = (open: boolean) => {
+    if (open && !projectOpen) void refreshPullRequest()
+    setProjectOpen(open)
   }
 
   return (
@@ -563,6 +570,15 @@ export const SessionView: FC = () => {
           projectName={sessionProjectName ?? 'Unknown project'}
           conversationName={session.name}
           pinned={!!session.pinnedAt}
+          // What docks beside the header, so a close hands focus to a group
+          // at the header's real width (lap 2 A). Parallel work counts while
+          // open in either mode: as an overlay it moves nothing, and the
+          // re-read is one measurement.
+          docked={dockedKey(
+            showPullRequestPanel && 'pull-request',
+            parallelOpen && 'parallel-work',
+            linkedSpace !== null && 'space',
+          )}
           slots={[
             // Parallel work holds a place in the row only while it matters,
             // and then it is live status (CH4 R2). Its history is in View.
@@ -813,15 +829,16 @@ export const SessionView: FC = () => {
                     </div>
                   </section>
                   {supportsHarnessFacts && (
+                    // Named by its label, with no heading of its own: the
+                    // harness's own "Harness" section is the one heading
+                    // (lap 2 E). The chip focuses it, and the ring shows
+                    // where focus landed.
                     <section
                       aria-label="Harness history"
                       tabIndex={-1}
-                      className="mt-2 border-t border-border/70 px-2 pt-2 outline-none"
+                      className="mt-2 rounded-sm border-t border-border/70 px-2 pt-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       {...{ [DETAILS_SECTION]: 'harness' }}
                     >
-                      <h3 className="mb-1 text-[11px] text-muted-foreground">
-                        Harness
-                      </h3>
                       <HarnessFactsSections
                         facts={harness.facts}
                         error={harness.error}
@@ -864,7 +881,7 @@ export const SessionView: FC = () => {
                   hasTerminal={hasTerminal}
                   onToggleTerminal={toggleTerminal}
                   open={projectOpen}
-                  onOpenChange={setProjectOpen}
+                  onOpenChange={changeProjectOpen}
                   triggerRef={projectTrigger}
                   contentFocus={focus}
                 />
@@ -873,7 +890,7 @@ export const SessionView: FC = () => {
                 {
                   kind: 'opens',
                   key: 'project',
-                  onOpen: () => setProjectOpen(true),
+                  onOpen: () => changeProjectOpen(true),
                 },
               ],
             },
@@ -1058,6 +1075,11 @@ export const SessionView: FC = () => {
       )}
     </div>
   )
+}
+
+/** The docked panels, named, as one key for the header's re-read. */
+function dockedKey(...panels: (string | false)[]): string {
+  return panels.filter(Boolean).join(' ')
 }
 
 function formatSessionContextLabel(

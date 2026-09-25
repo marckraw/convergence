@@ -323,3 +323,21 @@ export function parallelWorkInRow(
   if (counts?.unknown) return `Parallel work · ${counts.unknown} unknown`
   return null
 }
+
+/**
+ * Radix's own rule for when an interaction outside a closing menu means focus
+ * does not go back to where the menu came from: for a modal menu (every
+ * header group is one) only a right-click outside, or a ctrl-click, which is
+ * the Mac's right-click. The header keeps it with More standing in for a
+ * yielded trigger (MAR-3427 A), and Details keeps it for the harness chip it
+ * was opened from (MAR-3429 CH4 lap 2 C).
+ */
+export function interactionKeepsFocusWhereItIs(event: {
+  detail: { originalEvent: Event }
+}): boolean {
+  const original = event.detail.originalEvent as Partial<MouseEvent>
+  return (
+    original.button === 2 ||
+    (original.button === 0 && original.ctrlKey === true)
+  )
+}
