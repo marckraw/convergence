@@ -402,6 +402,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
       }
     },
   },
+  blockSentences: {
+    list: (sessionId: string) =>
+      ipcRenderer.invoke('blockSentences:list', sessionId),
+    onChanged: (callback: (event: unknown) => void) => {
+      const handler = (_: unknown, event: unknown) => callback(event)
+      ipcRenderer.on('blockSentences:changed', handler)
+      return () => {
+        ipcRenderer.removeListener('blockSentences:changed', handler)
+      }
+    },
+  },
   crewHail: {
     listOpen: () => ipcRenderer.invoke('crewHails:listOpen'),
     acknowledge: (id: string) =>

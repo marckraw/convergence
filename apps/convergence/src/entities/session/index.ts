@@ -172,3 +172,12 @@ export {
   combineConversationDurationMs,
 } from './conversation-prefix.pure'
 export type { ConversationPrefix } from './conversation-prefix.pure'
+
+export {
+  fullDisplayRows,
+  groupWorkBlocks,
+  workBlockLabel,
+  workBlockMembership,
+  workDisplayRows,
+} from './work-blocks.pure'
+export type { WorkBlockItem, WorkDisplayRow, WorkRow } from './work-blocks.pure'

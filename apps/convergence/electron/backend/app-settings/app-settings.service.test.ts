@@ -222,6 +222,7 @@ describe('AppSettingsService', () => {
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         lanes: DEFAULT_LANES_PREFS,
         contextAlert: DEFAULT_CONTEXT_ALERT,
+        describeWorkBlocks: false,
         claude: { residentIdleMinutes: 30 },
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
@@ -243,6 +244,7 @@ describe('AppSettingsService', () => {
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         lanes: DEFAULT_LANES_PREFS,
         contextAlert: DEFAULT_CONTEXT_ALERT,
+        describeWorkBlocks: false,
         claude: { residentIdleMinutes: 30 },
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
@@ -262,6 +264,7 @@ describe('AppSettingsService', () => {
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         lanes: DEFAULT_LANES_PREFS,
         contextAlert: DEFAULT_CONTEXT_ALERT,
+        describeWorkBlocks: false,
         claude: { residentIdleMinutes: 30 },
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
@@ -292,6 +295,7 @@ describe('AppSettingsService', () => {
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         lanes: DEFAULT_LANES_PREFS,
         contextAlert: DEFAULT_CONTEXT_ALERT,
+        describeWorkBlocks: false,
         claude: { residentIdleMinutes: 30 },
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
@@ -322,6 +326,7 @@ describe('AppSettingsService', () => {
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         lanes: DEFAULT_LANES_PREFS,
         contextAlert: DEFAULT_CONTEXT_ALERT,
+        describeWorkBlocks: false,
         claude: { residentIdleMinutes: 30 },
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
@@ -352,6 +357,7 @@ describe('AppSettingsService', () => {
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         lanes: DEFAULT_LANES_PREFS,
         contextAlert: DEFAULT_CONTEXT_ALERT,
+        describeWorkBlocks: false,
         claude: { residentIdleMinutes: 30 },
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
@@ -375,6 +381,7 @@ describe('AppSettingsService', () => {
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         lanes: DEFAULT_LANES_PREFS,
         contextAlert: DEFAULT_CONTEXT_ALERT,
+        describeWorkBlocks: false,
         claude: { residentIdleMinutes: 30 },
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
@@ -406,6 +413,32 @@ describe('AppSettingsService', () => {
           { providerId: 'claude-code', modelId: 'opus' },
         ],
       })
+    })
+  })
+
+  describe('Describe work blocks (MAR-3395)', () => {
+    it('is Off until turned On, and a save that omits it keeps it', async () => {
+      expect((await service.getAppSettings()).describeWorkBlocks).toBe(false)
+      await service.setAppSettings({
+        defaultProviderId: null,
+        defaultModelId: null,
+        defaultEffortId: null,
+        describeWorkBlocks: true,
+      })
+      expect((await service.getAppSettings()).describeWorkBlocks).toBe(true)
+      await service.setAppSettings({
+        defaultProviderId: null,
+        defaultModelId: null,
+        defaultEffortId: null,
+      })
+      expect((await service.getAppSettings()).describeWorkBlocks).toBe(true)
+      await service.setAppSettings({
+        defaultProviderId: null,
+        defaultModelId: null,
+        defaultEffortId: null,
+        describeWorkBlocks: false,
+      })
+      expect((await service.getAppSettings()).describeWorkBlocks).toBe(false)
     })
   })
 
@@ -514,6 +547,7 @@ describe('AppSettingsService', () => {
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         lanes: DEFAULT_LANES_PREFS,
         contextAlert: DEFAULT_CONTEXT_ALERT,
+        describeWorkBlocks: false,
         claude: { residentIdleMinutes: 30 },
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,

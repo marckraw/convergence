@@ -113,6 +113,9 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     useState<DebugLoggingPrefs | null>(null)
   const [contextAlertDraft, setContextAlertDraft] =
     useState<ContextAlertSettings | null>(null)
+  const [describeWorkBlocksDraft, setDescribeWorkBlocksDraft] = useState<
+    boolean | null
+  >(null)
   const [piModelDraft, setPiModelDraft] = useState<string[] | null>(null)
   const [shortcutsDraft, setShortcutsDraft] =
     useState<CommandCenterShortcutPrefs | null>(null)
@@ -245,6 +248,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     setUpdatesDraft(settings.updates)
     setDebugLoggingDraft(settings.debugLogging)
     setContextAlertDraft(settings.contextAlert)
+    setDescribeWorkBlocksDraft(settings.describeWorkBlocks)
     setPiModelDraft(settings.piModelVisibility.additionalModelIds)
     setShortcutsDraft(settings.commandCenterShortcut)
     setShortcutsConflict(null)
@@ -402,6 +406,10 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     setDebugLoggingDraft({ enabled: next })
   }, [])
 
+  const handleToggleDescribeWorkBlocks = useCallback((next: boolean) => {
+    setDescribeWorkBlocksDraft(next)
+  }, [])
+
   const handleContextAlertChange = useCallback((next: ContextAlertSettings) => {
     setContextAlertDraft(next)
   }, [])
@@ -533,6 +541,8 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         updates: updatesDraft ?? settings.updates,
         debugLogging: debugLoggingDraft ?? settings.debugLogging,
         contextAlert: contextAlertDraft ?? settings.contextAlert,
+        describeWorkBlocks:
+          describeWorkBlocksDraft ?? settings.describeWorkBlocks,
         piModelVisibility: {
           additionalModelIds:
             piModelDraft ?? settings.piModelVisibility.additionalModelIds,
@@ -558,12 +568,14 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     updatesDraft,
     debugLoggingDraft,
     contextAlertDraft,
+    describeWorkBlocksDraft,
     piModelDraft,
     settings.notifications,
     settings.onboarding,
     settings.updates,
     settings.debugLogging,
     settings.contextAlert,
+    settings.describeWorkBlocks,
     settings.piModelVisibility.additionalModelIds,
     settings.favoriteModels,
     loadProviders,
@@ -590,6 +602,9 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       updatesDraft={updatesDraft ?? settings.updates}
       debugLoggingDraft={debugLoggingDraft ?? settings.debugLogging}
       contextAlertDraft={contextAlertDraft ?? settings.contextAlert}
+      describeWorkBlocksDraft={
+        describeWorkBlocksDraft ?? settings.describeWorkBlocks
+      }
       piModelIdsDraft={
         piModelDraft ?? settings.piModelVisibility.additionalModelIds
       }
@@ -619,6 +634,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       onOpenReleaseNotes={handleOpenReleaseNotes}
       onToggleDebugLogging={handleToggleDebugLogging}
       onContextAlertChange={handleContextAlertChange}
+      onToggleDescribeWorkBlocks={handleToggleDescribeWorkBlocks}
       onTogglePiModel={handleTogglePiModel}
       onOpenDebugLogFolder={handleOpenDebugLogFolder}
       commandCenterShortcutDraft={commandCenterShortcutDraft}

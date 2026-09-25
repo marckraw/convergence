@@ -1,4 +1,5 @@
 import { writeFileSync } from 'node:fs'
+import { deriveBlockTruth } from '../../../electron/backend/block-sentence/block-sentence.pure.ts'
 
 const specs = [
   [
@@ -139,35 +140,13 @@ const blocks = specs.map(([provider, label, records], index) => {
                 ),
         },
   )
-  // Include literal file paths, their parents and basenames as allowed mentions.
-  const paths = new Set()
-  for (const item of items) {
-    const text = Object.values(item).join(' ')
-    for (const match of text.matchAll(
-      /(?:[\w.-]+\/)+[\w.-]+|\b[\w-]+\.(?:json|tsx?|css|md)\b/g,
-    )) {
-      const path = match[0]
-      paths.add(path)
-      paths.add(path.split('/').at(-1))
-      let parent = path
-      while (parent.includes('/')) {
-        parent = parent.slice(0, parent.lastIndexOf('/'))
-        paths.add(parent)
-      }
-    }
-  }
-  if (label === 'Directory listing result') {
-    for (const name of ['lib', 'ui', 'styles']) paths.add(name)
-  }
   return {
     id: `block-${String(index + 1).padStart(2, '0')}`,
     provider,
     label,
     items,
-    truth: {
-      toolNames: [...new Set(items.map((item) => item.toolName))],
-      paths: [...paths].sort(),
-    },
+    // The app derives a block's truth set with this same function (MAR-3395).
+    truth: deriveBlockTruth(items),
   }
 })
 writeFileSync(

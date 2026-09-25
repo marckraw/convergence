@@ -141,6 +141,7 @@ describe('app-settings pure helpers', () => {
       favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       lanes: DEFAULT_LANES_PREFS,
       contextAlert: DEFAULT_CONTEXT_ALERT,
+      describeWorkBlocks: false,
       claude: { residentIdleMinutes: 30 },
     })
   })
@@ -260,6 +261,20 @@ describe('app-settings pure helpers', () => {
     expect(
       validateAppSettings(settings, buildDescriptors()).contextAlert,
     ).toEqual({ enabled: false, percent: 42, tokens: null })
+  })
+
+  it('defaults "Describe work blocks" Off and carries an explicit On through validation (MAR-3395 A4)', () => {
+    expect(parseAppSettings(null).describeWorkBlocks).toBe(false)
+    expect(parseAppSettings(JSON.stringify({})).describeWorkBlocks).toBe(false)
+    expect(
+      parseAppSettings(JSON.stringify({ describeWorkBlocks: 'yes' }))
+        .describeWorkBlocks,
+    ).toBe(false)
+    const on = parseAppSettings(JSON.stringify({ describeWorkBlocks: true }))
+    expect(on.describeWorkBlocks).toBe(true)
+    expect(validateAppSettings(on, buildDescriptors()).describeWorkBlocks).toBe(
+      true,
+    )
   })
 
   it('resolves session defaults from validated settings', () => {

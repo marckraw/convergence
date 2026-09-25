@@ -100,6 +100,11 @@ export interface AppSettings {
   lanes: LanesPrefs
   /** When to warn that a conversation is filling its window (MAR-3250). */
   contextAlert: ContextAlertSettings
+  /**
+   * Whether a finished turn's work blocks get one GPT-6 Luna sentence each
+   * (MAR-3395 CV3). Off by default: it spends the default Codex account.
+   */
+  describeWorkBlocks: boolean
 }
 
 /**
@@ -125,6 +130,7 @@ export type AppSettingsInput = Omit<
   | 'favoriteModels'
   | 'lanes'
   | 'contextAlert'
+  | 'describeWorkBlocks'
 > & {
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
@@ -138,6 +144,7 @@ export type AppSettingsInput = Omit<
   favoriteModels?: FavoriteModelsPrefs
   lanes?: LanesPrefs
   contextAlert?: ContextAlertSettings
+  describeWorkBlocks?: boolean
 }
 
 export interface ResolvedSessionDefaults {

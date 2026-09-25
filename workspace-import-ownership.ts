@@ -240,6 +240,9 @@ export function importSpecifiersOf(filePath: string): string[] {
   return specifiers
 }
 
+/** Vite's resource queries: the specifier minus this suffix is the file. */
+const VITE_RESOURCE_QUERY = /\?(?:raw|url|inline)$/
+
 /**
  * The tsconfig's own `paths` substitution, applied by hand.
  *
@@ -420,7 +423,12 @@ export function createWorkspaceImportOwnership(options: OwnershipOptions) {
     if (resolved !== undefined) return realpathOrSelf(resolved)
 
     if (specifier.startsWith('.')) {
-      const candidate = resolve(dirname(containingFile), specifier)
+      // A Vite resource query (`./prompt.txt?raw`, MAR-3395) names the file
+      // before the `?`; the file it names is judged like any other.
+      const candidate = resolve(
+        dirname(containingFile),
+        specifier.replace(VITE_RESOURCE_QUERY, ''),
+      )
       return existsSync(candidate) ? realpathOrSelf(candidate) : undefined
     }
 

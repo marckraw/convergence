@@ -39,7 +39,7 @@ import {
   groupWorkBlocks,
   workBlockLabel,
   workDisplayRows,
-} from './work-blocks.pure'
+} from '@/entities/session'
 import { WorkBlockRow } from './work-block.presentational'
 import { WORK_BLOCK_MEMBER_CLASS } from './work-block.styles'
 import {

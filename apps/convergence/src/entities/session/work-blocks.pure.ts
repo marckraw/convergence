@@ -1,4 +1,35 @@
-import type { ConversationItem } from '@/entities/session'
+/**
+ * The fields the fold rule reads, structurally (MAR-3395 CV3 A2). Both the
+ * renderer's and main's `ConversationItem` satisfy it, so main folds a
+ * finished turn with this same file and needs no renderer import -- the shape
+ * `conversation-prefix.pure.ts` uses for the same reason.
+ */
+interface WorkBlockItemBase {
+  id: string
+  state: string
+  providerMeta: { providerEventType: string | null }
+}
+
+export type WorkBlockItem =
+  | (WorkBlockItemBase & {
+      kind: 'tool-call'
+      toolName: string
+      inputText: string
+    })
+  | (WorkBlockItemBase & {
+      kind: 'tool-result'
+      toolName: string | null
+      relatedItemId: string | null
+      outputText: string
+    })
+  | (WorkBlockItemBase & {
+      kind:
+        | 'message'
+        | 'thinking'
+        | 'approval-request'
+        | 'input-request'
+        | 'note'
+    })
 
 /**
  * Work blocks (MAR-3391 CV1): a run of tool items between two things a
@@ -19,7 +50,7 @@ import type { ConversationItem } from '@/entities/session'
 export type WorkBlockRole = 'tool' | 'thinking' | 'boundary'
 
 export function workBlockRole(
-  item: ConversationItem,
+  item: WorkBlockItem,
   carriesParallelWorkMarker = false,
 ): WorkBlockRole {
   if (carriesParallelWorkMarker) return 'boundary'
@@ -51,7 +82,7 @@ export interface GroupWorkBlocksOptions<T> {
  */
 export function groupWorkBlocks<T>(
   entries: readonly T[],
-  itemOf: (entry: T) => ConversationItem,
+  itemOf: (entry: T) => WorkBlockItem,
   options: GroupWorkBlocksOptions<T> = {},
 ): WorkRow<T>[] {
   const rows: WorkRow<T>[] = []
@@ -100,7 +131,7 @@ export function groupWorkBlocks<T>(
 /** Which block (by id) each folded member belongs to. */
 export function workBlockMembership<T>(
   rows: readonly WorkRow<T>[],
-  itemOf: (entry: T) => ConversationItem,
+  itemOf: (entry: T) => WorkBlockItem,
 ): Map<string, string> {
   const byMember = new Map<string, string>()
   for (const row of rows) {
@@ -123,7 +154,7 @@ export type WorkDisplayRow<T> =
 
 export function workDisplayRows<T>(
   rows: readonly WorkRow<T>[],
-  itemOf: (entry: T) => ConversationItem,
+  itemOf: (entry: T) => WorkBlockItem,
   isOpen: (blockId: string) => boolean,
 ): WorkDisplayRow<T>[] {
   const display: WorkDisplayRow<T>[] = []
@@ -161,7 +192,7 @@ export function workDisplayRows<T>(
 /** Every entry, drawn as today: the Full view (R5). */
 export function fullDisplayRows<T>(
   entries: readonly T[],
-  itemOf: (entry: T) => ConversationItem,
+  itemOf: (entry: T) => WorkBlockItem,
 ): WorkDisplayRow<T>[] {
   return entries.map((entry) => ({
     kind: 'entry',
@@ -250,7 +281,7 @@ interface WorkStep {
  * results to the call, Pi's results follow their call unlinked, and only
  * Codex's typed results stand alone.
  */
-export function workSteps(items: readonly ConversationItem[]): WorkStep[] {
+export function workSteps(items: readonly WorkBlockItem[]): WorkStep[] {
   const steps: WorkStep[] = []
   for (const item of items) {
     if (item.kind === 'tool-call') {
@@ -327,7 +358,7 @@ const VERB_ORDER: readonly WorkVerb[] = [
  * results that answer calls outside it says how many results it holds.
  */
 export function workBlockSummary(
-  items: readonly ConversationItem[],
+  items: readonly WorkBlockItem[],
   root: string | null = null,
 ): string {
   const steps = workSteps(items)
@@ -386,7 +417,7 @@ function describeVerb(verb: WorkVerb, steps: readonly WorkStep[]): string {
  * reads `Working… <facts>`; a closed one reads its facts, capitalised.
  */
 export function workBlockLabel(
-  items: readonly ConversationItem[],
+  items: readonly WorkBlockItem[],
   options: { working: boolean; root?: string | null },
 ): string {
   const summary = workBlockSummary(items, options.root ?? null)

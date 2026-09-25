@@ -119,6 +119,18 @@ const FORBIDDEN_SPELLINGS: readonly [string, string, string, string][] = [
     `backpack-studio/${IN_STUDIO}`,
     INTO_STUDIO,
   ],
+  [
+    'a Vite ?raw climb, which reads the file it names (MAR-3395)',
+    ELECTRON_ANCHOR,
+    `../../../backpack-studio/${IN_STUDIO}.tsx?raw`,
+    INTO_STUDIO,
+  ],
+  [
+    'a Vite ?raw of a file that is not there',
+    ELECTRON_ANCHOR,
+    './no-such-prompt.txt?raw',
+    NOWHERE,
+  ],
 ]
 
 /**

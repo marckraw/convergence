@@ -2,6 +2,7 @@ import type { FC } from 'react'
 import { ChevronRight, Layers } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
+import { WORK_BLOCK_SENTENCE_CLASS } from './work-block.styles'
 
 interface WorkBlockRowProps {
   /** Built from the members' own fields by `workBlockLabel` (R2). */
@@ -10,6 +11,11 @@ interface WorkBlockRowProps {
   memberCount: number
   open: boolean
   working: boolean
+  /**
+   * The model's one line about this block (MAR-3395 CV3), already checked
+   * against the block's own records. Absent: the row is exactly CV1's.
+   */
+  sentence?: string | null
   onToggle: () => void
 }
 
@@ -23,6 +29,7 @@ export const WorkBlockRow: FC<WorkBlockRowProps> = ({
   memberCount,
   open,
   working,
+  sentence = null,
   onToggle,
 }) => (
   <div className="py-1">
@@ -47,5 +54,14 @@ export const WorkBlockRow: FC<WorkBlockRowProps> = ({
         {label}
       </span>
     </Button>
+    {sentence ? (
+      <p
+        data-testid="work-block-sentence"
+        className={WORK_BLOCK_SENTENCE_CLASS}
+        title={sentence}
+      >
+        {sentence}
+      </p>
+    ) : null}
   </div>
 )

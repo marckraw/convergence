@@ -94,6 +94,8 @@ export interface AppSettings {
   lanes: LanesPrefs
   /** When to warn that a conversation is filling its window (MAR-3250). */
   contextAlert: ContextAlertSettings
+  /** One GPT-6 Luna line per closed work block (MAR-3395); Off by default. */
+  describeWorkBlocks: boolean
 }
 
 export type AppSettingsInput = Omit<
@@ -110,6 +112,7 @@ export type AppSettingsInput = Omit<
   | 'favoriteModels'
   | 'lanes'
   | 'contextAlert'
+  | 'describeWorkBlocks'
 > & {
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
@@ -123,6 +126,7 @@ export type AppSettingsInput = Omit<
   favoriteModels?: FavoriteModelsPrefs
   lanes?: LanesPrefs
   contextAlert?: ContextAlertSettings
+  describeWorkBlocks?: boolean
 }
 
 export interface OpenRouterCredentialStatus {
