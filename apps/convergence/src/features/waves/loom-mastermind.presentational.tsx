@@ -43,7 +43,15 @@ export function LoomMastermindCard({
           <Button
             type="button"
             variant="ghost"
-            aria-labelledby={`${ids}-seat ${ids}-runtime ${ids}-verdict ${ids}-open`}
+            aria-labelledby={[
+              `${ids}-seat`,
+              `${ids}-runtime`,
+              `${ids}-verdict`,
+              mastermind.hostLabel ? `${ids}-host` : null,
+              `${ids}-open`,
+            ]
+              .filter((id): id is string => id !== null)
+              .join(' ')}
             className="absolute inset-0 h-auto w-full rounded-lg p-0 hover:bg-transparent"
             onClick={() => onOpenSeat?.(mastermind.sessionId!)}
           />
@@ -65,7 +73,9 @@ export function LoomMastermindCard({
           {loomMastermindVerdictLine(mastermind.waitingReturns)}
         </span>
         {mastermind.hostLabel ? (
-          <span className={LOOM_HORSE_META_CLASS}>{mastermind.hostLabel}</span>
+          <span id={`${ids}-host`} className={LOOM_HORSE_META_CLASS}>
+            {mastermind.hostLabel}
+          </span>
         ) : null}
         {openable ? (
           <span id={`${ids}-open`} className={LOOM_HORSE_META_CLASS}>

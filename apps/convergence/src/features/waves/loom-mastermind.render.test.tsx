@@ -68,6 +68,28 @@ afterEach(() => {
 
 describe('MAR-3457 mastermind in Now', () => {
   it.each([false, true])(
+    'A: a mastermind with no Now rows keeps the empty-Now note (wide=%s)',
+    (wide) => {
+      show({ wide })
+      const note = screen.getByText('Nothing in Now right now.')
+      for (const name of ['Mastermind', 'Horses']) {
+        expect(
+          screen.getByRole('region', { name }).compareDocumentPosition(note) &
+            Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy()
+      }
+    },
+  )
+
+  it('B: the Open button accessible name includes the host', () => {
+    show()
+    const card = within(screen.getByRole('region', { name: 'Mastermind' }))
+    expect(
+      card.getByRole('button', { name: /fable.*Open →/ }),
+    ).toHaveAccessibleName(/This Mac/)
+  })
+
+  it.each([false, true])(
     'R1/R4: mastermind precedes Horses; two horses stay two (wide=%s)',
     (wide) => {
       show({ wide })

@@ -149,12 +149,8 @@ export const LoomSheetView = <TSession,>({
 }: LoomSheetViewProps<TSession>) => {
   // While a search is active the sheet's own notes step aside: "Nothing in
   // Now right now" about a filtered sheet is a sentence about the filter
-  // wearing the words of the ledger (MAR-3234 R3/R5). A visible mastermind
-  // also means Now has something to show, even without issue rows.
-  const note =
-    search || (sheet === 'now' && masterminds.length > 0)
-      ? null
-      : loomSheetNote(sheet, sheets, now)
+  // wearing the words of the ledger (MAR-3234 R3/R5).
+  const note = search ? null : loomSheetNote(sheet, sheets, now)
   // With a search, the open sheet may hold no matching issues. The miss
   // line says where the matches are (R3), or why there are none (R5); the
   // mastermind stays above it because it is independent of issue search.
@@ -243,7 +239,9 @@ export const LoomSheetView = <TSession,>({
         </p>
       ) : (
         <>
-          {note ? <p className={LOOM_SHEET_NOTE_CLASS}>{note}</p> : null}
+          {note && sheet !== 'now' ? (
+            <p className={LOOM_SHEET_NOTE_CLASS}>{note}</p>
+          ) : null}
           {sheet === 'before' ? (
             <>
               {/* Grouped by the wave the work belonged to (MAR-3192 R1),
@@ -381,6 +379,9 @@ export const LoomSheetView = <TSession,>({
                 )
               })()}
             </div>
+          ) : null}
+          {note && sheet === 'now' ? (
+            <p className={LOOM_SHEET_NOTE_CLASS}>{note}</p>
           ) : null}
           {sheet === 'next' ? (
             <>
