@@ -4,6 +4,10 @@ import { checkPerfBudget, perfTimingRows } from './perf-budget.pure.mjs'
 
 const report = () => ({
   parameters: { sessions: 2 },
+  evidenceCount: {
+    vmSteps: 250000,
+    shape: { runs: 253, tasks: 2148, turns: 1431 },
+  },
   main: {
     conversationPatched: {
       fullPatchesWhileStreaming: {
@@ -30,6 +34,20 @@ test('accepts the exact counter bounds regardless of CPU, milliseconds and bytes
 })
 
 for (const [name, mutate, message] of [
+  [
+    'missing evidence fixture',
+    (r) => {
+      r.evidenceCount.shape.tasks = 0
+    },
+    'evidenceCount.shape: expected 253 runs, 2148 tasks, 1431 turns',
+  ],
+  [
+    'evidence per-task re-evaluation',
+    (r) => {
+      r.evidenceCount.vmSteps = 250001
+    },
+    'evidenceCount.vmSteps: expected 0..250000, received 250001',
+  ],
   [
     'full streaming patch',
     (r) => {
@@ -82,6 +100,8 @@ test('reports all violations together and never treats a missing report as zeroe
       'fullPatchesWhileStreaming.max',
       'byOp.snapshot',
       'attentionRowReads.notNeeded',
+      'evidenceCount.vmSteps',
+      'evidenceCount.shape',
       'scenario.rendererErrors',
       'runner.exitCode',
     ],
@@ -93,5 +113,8 @@ test('rejects missing and malformed counters', () => {
     const data = report()
     data.main.attentionRowReads.notNeeded = value
     assert.equal(checkPerfBudget(data, 0).length, 1)
+    const evidence = report()
+    evidence.evidenceCount.vmSteps = value
+    assert.equal(checkPerfBudget(evidence, 0).length, 1)
   }
 })
