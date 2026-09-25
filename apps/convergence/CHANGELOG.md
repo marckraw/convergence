@@ -1,5 +1,13 @@
 # convergence
 
+## 0.90.1
+
+### Patch Changes
+
+- 62e2ea4: A Claude conversation's Details names each connector's scope, explains when a claude.ai connector hides a plugin's server, and can reconnect a server without a restart.
+- 65e1585: Loom's Now shows the crew's mastermind in its own section above the horses, with Open.
+- 90f40d1: Authorize, Connect Linear and Reconnect on a Codex account no longer wait for idle conversations to be closed.
+
 ## 0.90.0
 
 ### Minor Changes
