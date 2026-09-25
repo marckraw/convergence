@@ -1,5 +1,16 @@
 # convergence
 
+## 0.88.0
+
+### Minor Changes
+
+- 1e19b5f: Folded work blocks can say in one line what the agent was doing.
+
+### Patch Changes
+
+- fe6af5a: The Actions menu opens above the composer and never hides under the feedback button.
+- 1c61283: No more stutter while an agent runs: counting a conversation's parallel work is fast again.
+
 ## 0.87.0
 
 ### Minor Changes
