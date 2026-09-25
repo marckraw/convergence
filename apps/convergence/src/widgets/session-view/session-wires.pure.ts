@@ -77,7 +77,7 @@ export function formatSessionWireSummary(
     parts.push(
       `${unconditional} ${unconditional === 1 ? 'fires' : 'fire'} when it finishes`,
     )
-  if (conditional) parts.push(`${conditional} only on a matching BATON line`)
+  if (conditional) parts.push(`${conditional} only if its last line matches`)
   if (disarmed) parts.push(`${disarmed} disarmed`)
   return `${wires} ${leave} this session: ${parts.join(', ')}.`
 }

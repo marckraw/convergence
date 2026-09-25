@@ -166,7 +166,7 @@ it('CH1 R2 the chip and individual wire retain the condition', () => {
   })
   render(<SessionWiresContainer sessionId="s1" />)
   const chip = screen.getByRole('button', {
-    name: '1 wire leaves this session: 1 only on a matching BATON line.',
+    name: '1 wire leaves this session: 1 only if its last line matches.',
   })
   fireEvent.click(chip)
   expect(

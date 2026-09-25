@@ -56,13 +56,13 @@ describe('CH1 R2 wire summary counts conditions', () => {
       'all conditional',
       ['BATON: fable', 'BATON: horse'],
       0,
-      '2 wires leave this session: 2 only on a matching BATON line.',
+      '2 wires leave this session: 2 only if its last line matches.',
     ],
     [
       'mixed',
       [null, 'BATON: fable', 'BATON: horse'],
       1,
-      '4 wires leave this session: 1 fires when it finishes, 2 only on a matching BATON line, 1 disarmed.',
+      '4 wires leave this session: 1 fires when it finishes, 2 only if its last line matches, 1 disarmed.',
     ],
     [
       'all disarmed',
@@ -78,6 +78,12 @@ describe('CH1 R2 wire summary counts conditions', () => {
       '1 wire fires when this session finishes.',
     ],
     ['empty', [], 0, 'Nothing leaves this session.'],
+    [
+      'CH1 A DONE is a condition, not a BATON line',
+      ['DONE'],
+      0,
+      '1 wire leaves this session: 1 only if its last line matches.',
+    ],
   ] as const)('%s', (_name, tokens, off, expected) => {
     const wires = [
       ...tokens.map((conditionToken) => ({

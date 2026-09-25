@@ -702,6 +702,9 @@ describe('SessionView', () => {
     const rows = panel.closest('div')?.parentElement
     expect(rows).toBeTruthy()
     expect(rows?.textContent).toContain('agent/34372e47')
+    expect(
+      screen.getByText('Remote branch (reported or requested)'),
+    ).toBeInTheDocument()
     // The two local rows, gone: this session runs on another machine and has
     // no worktree here to have a branch or a pull request on.
     expect(rows?.textContent).not.toContain('No workspace')

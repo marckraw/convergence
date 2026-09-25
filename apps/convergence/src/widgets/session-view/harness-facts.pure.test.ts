@@ -191,7 +191,10 @@ it('O1 R4 hides compactions before a partial window and restores them when their
   ])
 })
 
-function pillFacts(statuses: string[], omittedAlerts = 0): SessionHarnessFacts {
+function pillFacts(
+  statuses: (string | null)[],
+  omittedAlerts = 0,
+): SessionHarnessFacts {
   return {
     currentTurn: null,
     compactions: [compact],
@@ -203,6 +206,25 @@ function pillFacts(statuses: string[], omittedAlerts = 0): SessionHarnessFacts {
     },
   } as unknown as SessionHarnessFacts
 }
+it.each([
+  'connected',
+  'pending',
+  'disabled',
+  'failed',
+  'needs-auth',
+  'unknown',
+  null,
+])('CH1 C chip and detail alerts agree for %s', (status) => {
+  const pill = harnessPill(pillFacts([status]))
+  expect(pill.alert).toBe(isMcpAlertStatus(status))
+  if (pill.alert) {
+    expect(pill.reason).not.toBeNull()
+    expect(pill.label).toContain(pill.reason)
+    if (status !== 'needs-auth' && status !== 'failed') {
+      expect(pill.reason).toBe('1 integration needs attention')
+    }
+  }
+})
 it('CH1 R1 the alert reason leads the label even with compaction history', () => {
   expect(harnessPill(pillFacts(['needs-auth']))).toEqual({
     label: 'Harness · 1 integration needs sign-in',

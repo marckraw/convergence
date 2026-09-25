@@ -7,11 +7,13 @@ export function harnessPill(facts: SessionHarnessFacts | null): {
   const current = facts?.currentTurn
   const retry = current?.retries
   const servers = facts?.init?.mcpServers
-  const needsAuth =
-    servers?.others.filter((server) => server.status === 'needs-auth').length ??
-    0
-  const failed =
-    servers?.others.filter((server) => server.status === 'failed').length ?? 0
+  const alerts =
+    servers?.others.filter((server) => isMcpAlertStatus(server.status)) ?? []
+  const needsAuth = alerts.filter(
+    (server) => server.status === 'needs-auth',
+  ).length
+  const failed = alerts.filter((server) => server.status === 'failed').length
+  const needsAttention = alerts.length - needsAuth - failed
   const omitted = servers?.omittedAlerts ?? 0
   const reasons: string[] = []
   if (needsAuth)
@@ -20,6 +22,10 @@ export function harnessPill(facts: SessionHarnessFacts | null): {
     )
   if (failed)
     reasons.push(`${failed} integration${failed === 1 ? '' : 's'} failed`)
+  if (needsAttention)
+    reasons.push(
+      `${needsAttention} integration${needsAttention === 1 ? ' needs' : 's need'} attention`,
+    )
   // Omitted alerts carry a count, but no status breakdown. Do not guess it.
   if (omitted)
     reasons.push(
