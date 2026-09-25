@@ -2,11 +2,8 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ConversationItem, Session } from '@/entities/session'
 import { SessionTranscript } from './session-transcript.container'
-import { TranscriptViewSwitch } from './transcript-view-switch.presentational'
-import {
-  useTranscriptViewMode,
-  useTranscriptViewStore,
-} from './transcript-view.model'
+import { ConversationViewMenu } from './conversation-view-menu.container'
+import { useTranscriptViewStore } from './transcript-view.model'
 
 const scrollToIndex = vi.fn()
 // Rows re-measure after they land; a test grows the total to say so.
@@ -154,18 +151,15 @@ describe('MAR-3391 CV1 work blocks in the transcript', () => {
   })
 
   it('R5 Full draws every entry as today, and the choice is remembered per conversation', () => {
-    function Harness({ id }: { id: string }) {
-      const mode = useTranscriptViewMode(id)
-      const setMode = useTranscriptViewStore((state) => state.setMode)
-      return (
-        <TranscriptViewSwitch
-          mode={mode}
-          onChange={(next) => setMode(id, next)}
-        />
-      )
-    }
-    render(<Harness id={session.id} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Full' }))
+    render(
+      <ConversationViewMenu
+        sessionId={session.id}
+        open
+        onOpenChange={() => {}}
+        onOpenParallelWork={() => {}}
+      />,
+    )
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Full' }))
     renderTranscript(turn)
     const fullRows = screen
       .getAllByTestId('session-transcript-row')

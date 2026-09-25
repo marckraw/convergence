@@ -117,15 +117,19 @@ const toolRows = () =>
     document.querySelector(`[data-conversation-item-id="${id}"]`),
   )
 
-it('MAR-3391 R5 E a global chat that folds has the Compact/Full switch, and Full shows every entry — mutation drop the switch from the chat header turns red', () => {
+it('MAR-3391 R5 E a global chat that folds has the Compact/Full choice in View, and Full shows every entry — mutation drop View from the chat header turns red', () => {
   render(<ChatSurface selectedSpaceId={null} />)
-  const switchGroup = screen.getByRole('group', { name: 'Conversation view' })
   const compact = {
     blocks: screen.queryAllByTestId('work-block').length,
     toolRows: toolRows(),
   }
 
-  fireEvent.click(within(switchGroup).getByRole('button', { name: 'Full' }))
+  // The choice lives in the header's View menu (MAR-3429 CH4 R1).
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'View' }))
+  const switchGroup = screen.getByRole('group', { name: 'Conversation view' })
+  fireEvent.click(
+    within(switchGroup).getByRole('menuitemradio', { name: 'Full' }),
+  )
   expect({
     compact,
     full: {

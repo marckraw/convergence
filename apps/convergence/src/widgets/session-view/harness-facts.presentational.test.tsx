@@ -3,7 +3,26 @@ import { readHarnessFactRow } from '../../../electron/backend/session/harness-fa
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
-import { HarnessFactsView } from './harness-facts.presentational'
+import { HarnessAlertChip } from './harness-alert-chip.presentational'
+import { HarnessFactsSections } from './harness-facts.presentational'
+import { harnessPill } from './harness-facts.pure'
+
+/**
+ * The harness as the header draws it since MAR-3429 CH4 R3: its reading (the
+ * label the alert chip carries) beside the sections Details holds. The
+ * sections are always drawn here, so a press on the reading opens nothing.
+ */
+function HarnessFactsView(props: Parameters<typeof HarnessFactsSections>[0]) {
+  const pill = harnessPill(props.facts)
+  return (
+    <>
+      <span data-testid="harness-pill" data-alert={pill.alert}>
+        {pill.label}
+      </span>
+      <HarnessFactsSections {...props} />
+    </>
+  )
+}
 it('shows the same hook count and bounded output in the popover — mutation drop hook rows turns red', () => {
   const facts: SessionHarnessFacts = {
     turns: [],
@@ -565,22 +584,18 @@ it('MAR-3427 C caps an alert pill chaining every reason: it truncates and keeps 
       slashCommands: null,
     },
   } as unknown as SessionHarnessFacts
+  const pill = harnessPill(facts)
   render(
-    <HarnessFactsView
-      facts={facts}
-      loading={false}
-      error={null}
-      onRetry={vi.fn()}
-    />,
+    <HarnessAlertChip label={pill.label} expanded={false} onOpen={vi.fn()} />,
   )
-  const pill = screen.getByTestId('harness-pill')
+  const chip = screen.getByTestId('harness-alert')
   const label =
     'Harness · 1 integration needs sign-in · 1 integration failed · 4 more integrations need attention'
-  expect(pill).toHaveAttribute('data-alert', 'true')
-  expect(pill).toHaveAttribute('title', label)
-  // 15rem = 240 px, the width the header's layout test holds the pill to.
-  expect(pill.className.split(/\s+/)).toContain('max-w-[15rem]')
-  const text = within(pill).getByText(label)
+  expect(pill.alert).toBe(true)
+  expect(chip).toHaveAttribute('title', label)
+  // 15rem = 240 px, the width the header's layout test holds the chip to.
+  expect(chip.className.split(/\s+/)).toContain('max-w-[15rem]')
+  const text = within(chip).getByText(label)
   expect(text.className.split(/\s+/)).toEqual(
     expect.arrayContaining(['min-w-0', 'truncate']),
   )

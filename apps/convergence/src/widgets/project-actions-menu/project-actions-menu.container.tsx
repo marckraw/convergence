@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 import { toast } from 'sonner'
 import { useDialogStore } from '@/entities/dialog'
 import { laneApi, type Project } from '@/entities/project'
@@ -27,6 +27,22 @@ interface ProjectActionsMenuProps {
    * this control into More (MAR-3427 A).
    */
   contentFocus?: ProjectActionsMenuContentFocus
+  /**
+   * The menu's open state, when a header owns it: opened from More, or from
+   * the header's Project group (MAR-3429 CH4). Uncontrolled without it.
+   */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  /**
+   * The header's own trigger in place of the action picker; it is told
+   * whether an action runs.
+   */
+  renderTrigger?: (state: { running: boolean }) => ReactNode
+  /**
+   * Sections drawn after the project's actions and lanes, in the same menu
+   * (the header's Open in, Pull request and Terminal, CH4 R4).
+   */
+  children?: ReactNode
 }
 
 const EMPTY_SCRIPTS: ProjectScript[] = []
@@ -36,6 +52,10 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
   project,
   runtimeCwd,
   contentFocus,
+  open,
+  onOpenChange,
+  renderTrigger,
+  children,
 }) => {
   const scripts = useProjectScriptStore(
     (state) => state.scriptsByProjectId[project.id] ?? EMPTY_SCRIPTS,
@@ -55,7 +75,12 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
   const stopRun = useProjectScriptStore((state) => state.stopRun)
   const error = useProjectScriptStore((state) => state.error)
   const openDialog = useDialogStore((state) => state.open)
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [ownOpen, setOwnOpen] = useState(false)
+  const menuOpen = open ?? ownOpen
+  const setMenuOpen = (next: boolean) => {
+    if (open === undefined) setOwnOpen(next)
+    onOpenChange?.(next)
+  }
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingScript, setEditingScript] = useState<ProjectScript | null>(null)
   const [selectedScriptId, setSelectedScriptId] = useState<string | null>(null)
@@ -96,10 +121,14 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
     <>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
-          <ProjectActionsTrigger
-            selectedScript={selectedItem?.script ?? null}
-            running={selectedItem?.running ?? false}
-          />
+          {renderTrigger ? (
+            renderTrigger({ running: activeItem !== null })
+          ) : (
+            <ProjectActionsTrigger
+              selectedScript={selectedItem?.script ?? null}
+              running={selectedItem?.running ?? false}
+            />
+          )}
         </DropdownMenuTrigger>
         <ProjectActionsMenuPresentational
           projectName={project.name}
@@ -168,7 +197,9 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
               return next
             })
           }}
-        />
+        >
+          {children}
+        </ProjectActionsMenuPresentational>
       </DropdownMenu>
 
       <ProjectScriptEditor

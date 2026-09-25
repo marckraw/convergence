@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { selectOption } from '@/shared/testing/select-option'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { useContextDrillStore } from '@/entities/context-drill'
@@ -78,9 +78,10 @@ vi.mock('@/widgets/session-view', async (importOriginal) => {
   return {
     ConversationHeader: actual.ConversationHeader,
     headerFocusTarget: actual.headerFocusTarget,
-    useConversationViewEntries: actual.useConversationViewEntries,
-    // The real switch is proven in chat-surface.transcript-view.render.test.tsx.
-    SessionTranscriptViewSwitch: () => null,
+    // The real View group (MAR-3429 CH4 R9): More holds it when it yields,
+    // here as in the app.
+    ConversationViewMenu: actual.ConversationViewMenu,
+    parallelWorkInRow: actual.parallelWorkInRow,
     useParallelWork: () => ({ rows: [], error: null, loading: false }),
     ParallelWork: ({
       open,
@@ -157,6 +158,9 @@ const globalSession: Session = {
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
+
+/** One task running: Parallel work holds its place in the row (CH4 R2). */
+const oneRunning = { running: 1, unknown: 0, failed: 0, stopped: 0 }
 
 describe('ChatSurface', () => {
   beforeEach(() => {
@@ -829,11 +833,11 @@ describe('ChatSurface', () => {
   it('L8/T10 global navigation advances within one millisecond and closing restores focus — mutations Date.now nonce or omit focus turn red', () => {
     vi.spyOn(Date, 'now').mockReturnValue(17)
     useSessionStore.setState({
-      globalChatSessions: [globalSession],
+      globalChatSessions: [{ ...globalSession, parallelWork: oneRunning }],
       activeGlobalSessionId: globalSession.id,
     })
     render(<ChatSurface selectedSpaceId={null} />)
-    const opener = screen.getByRole('button', { name: 'Parallel work' })
+    const opener = screen.getByRole('button', { name: 'Parallel work · 1' })
     opener.focus()
     fireEvent.click(opener)
     const navigate = screen.getByRole('button', { name: 'mock view spawn' })
@@ -861,11 +865,11 @@ describe('ChatSurface', () => {
 
   it('CH2 the chat row is what Parallel work measures, nothing else docks in it, and the overlay returns focus to the opener — mutations drop the row ref or drop onReturnFocus turn red', () => {
     useSessionStore.setState({
-      globalChatSessions: [globalSession],
+      globalChatSessions: [{ ...globalSession, parallelWork: oneRunning }],
       activeGlobalSessionId: globalSession.id,
     })
     render(<ChatSurface selectedSpaceId={null} />)
-    const opener = screen.getByRole('button', { name: 'Parallel work' })
+    const opener = screen.getByRole('button', { name: 'Parallel work · 1' })
     opener.focus()
     fireEvent.click(opener)
     const panel = screen.getByRole('button', {
@@ -951,7 +955,15 @@ describe('ChatSurface', () => {
       expect(identity.querySelector('[data-header-project]')).toBeNull()
     })
 
-    it('a narrow chat header yields Parallel work into More and keeps Stop — mutation the chat header without the layout function turns red', async () => {
+    const more = () => screen.getByRole('button', { name: 'Session actions' })
+    /** Opens View from More, where it has yielded, both fades played out. */
+    const openViewFromMore = async () => {
+      fireEvent.pointerDown(more())
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'View' }))
+      return screen.findByRole('menuitem', { name: 'Parallel work history' })
+    }
+
+    it('a narrow chat header yields View into More and keeps Stop; Parallel work history opens from there — mutation the chat header without the layout function turns red', async () => {
       useSessionStore.setState({
         globalChatSessions: [{ ...globalSession, status: 'running' }],
         activeGlobalSessionId: globalSession.id,
@@ -962,21 +974,16 @@ describe('ChatSurface', () => {
       const header = document.querySelector('[data-conversation-header]')!
       expect(header).toHaveAttribute('data-header-rows', '2')
       expect(
-        screen.queryByRole('button', { name: 'Parallel work' }),
+        screen.queryByRole('button', { name: 'View' }),
       ).not.toBeInTheDocument()
       expect(
         screen.getByRole('button', { name: 'Stop Planning chat' }),
       ).toBeInTheDocument()
-      fireEvent.pointerDown(
-        screen.getByRole('button', { name: 'Session actions' }),
-      )
-      fireEvent.click(
-        await screen.findByRole('menuitem', { name: 'Parallel work' }),
-      )
-      expect(screen.getByText('mock close parallel')).toBeInTheDocument()
+      fireEvent.click(await openViewFromMore())
+      expect(await screen.findByText('mock close parallel')).toBeInTheDocument()
     })
 
-    it('D Parallel work opened from More hands focus back to More when it closes — mutation save the hidden button turns red', async () => {
+    it('D Parallel work opened from View in More hands focus back to More when it closes — mutation save the hidden trigger turns red', async () => {
       useSessionStore.setState({
         globalChatSessions: [{ ...globalSession, status: 'running' }],
         activeGlobalSessionId: globalSession.id,
@@ -984,34 +991,44 @@ describe('ChatSurface', () => {
       })
       headerWidth(400)
       render(<ChatSurface selectedSpaceId={null} />)
-      fireEvent.pointerDown(
-        screen.getByRole('button', { name: 'Session actions' }),
-      )
-      fireEvent.click(
-        await screen.findByRole('menuitem', { name: 'Parallel work' }),
-      )
-      // Open, Parallel work is pinned (MAR-3427 C) and was the chat's only
-      // yielded control: More has nothing left to hold and goes, so its own
-      // close focus cannot be what the assertion below sees.
-      await waitFor(() =>
-        expect(
-          screen.queryByRole('button', { name: 'Session actions' }),
-        ).not.toBeInTheDocument(),
-      )
-      expect(
-        screen.getByRole('button', { name: 'Parallel work' }),
-      ).toBeInTheDocument()
-      const close = screen.getByRole('button', { name: 'mock close parallel' })
+      fireEvent.click(await openViewFromMore())
+      const close = await screen.findByRole('button', {
+        name: 'mock close parallel',
+      })
       close.focus()
       expect(document.activeElement).toBe(close)
       fireEvent.click(close)
-      // Closed, it yields again and More returns -- and holds the focus.
-      expect(document.activeElement).toBe(
-        screen.getByRole('button', { name: 'Session actions' }),
-      )
+      // View is still yielded: More, where it lives, holds the focus.
+      expect(document.activeElement).toBe(more())
     })
 
-    it('a wide chat header shows everything and no More at all', () => {
+    it('R2 Parallel work stands in the chat row only while it runs, reading its count — mutation always in the row turns red', () => {
+      useSessionStore.setState({
+        globalChatSessions: [globalSession],
+        activeGlobalSessionId: globalSession.id,
+        activeGlobalConversation: [],
+      })
+      headerWidth(1600)
+      const { unmount } = render(<ChatSurface selectedSpaceId={null} />)
+      expect(
+        screen.queryByRole('button', { name: /^Parallel work/ }),
+      ).not.toBeInTheDocument()
+      unmount()
+      useSessionStore.setState({
+        globalChatSessions: [
+          {
+            ...globalSession,
+            parallelWork: { running: 2, unknown: 0, failed: 0, stopped: 0 },
+          },
+        ],
+      })
+      render(<ChatSurface selectedSpaceId={null} />)
+      expect(
+        screen.getByRole('button', { name: 'Parallel work · 2' }),
+      ).toBeInTheDocument()
+    })
+
+    it('a wide chat header shows View and no More at all', () => {
       useSessionStore.setState({
         globalChatSessions: [globalSession],
         activeGlobalSessionId: globalSession.id,
@@ -1019,12 +1036,39 @@ describe('ChatSurface', () => {
       })
       headerWidth(1600)
       render(<ChatSurface selectedSpaceId={null} />)
-      expect(
-        screen.getByRole('button', { name: 'Parallel work' }),
-      ).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'View' })).toBeInTheDocument()
       expect(
         screen.queryByRole('button', { name: 'Session actions' }),
       ).not.toBeInTheDocument()
+    })
+
+    it('R9 More goes closed when it goes: the chat More that left open comes back closed — mutation keep moreOpen across its unmount turns red', async () => {
+      // 560 px, one row (528 px inside the padding). Running, the row asks
+      // 530 -- the name 182 (22 icon + 160), Running 110, View 110, Stop 110
+      // and three 6 px gaps -- so View yields and More appears. Settled,
+      // Running and Stop leave, View fits, and More has nothing to hold.
+      useSessionStore.setState({
+        globalChatSessions: [{ ...globalSession, status: 'running' }],
+        activeGlobalSessionId: globalSession.id,
+        activeGlobalConversation: [],
+      })
+      headerWidth(560)
+      render(<ChatSurface selectedSpaceId={null} />)
+      fireEvent.pointerDown(more())
+      expect(await screen.findByRole('menu')).toBeInTheDocument()
+      act(() =>
+        useSessionStore.setState({ globalChatSessions: [globalSession] }),
+      )
+      expect(
+        screen.queryByRole('button', { name: 'Session actions' }),
+      ).not.toBeInTheDocument()
+      act(() =>
+        useSessionStore.setState({
+          globalChatSessions: [{ ...globalSession, status: 'running' }],
+        }),
+      )
+      expect(more()).toHaveAttribute('aria-expanded', 'false')
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
     })
   })
 })

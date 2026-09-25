@@ -19,11 +19,11 @@ import { ComposerContainer } from '@/features/composer'
 import { selectProjectName, useProjectStore } from '@/entities/project'
 import {
   ConversationHeader,
+  ConversationViewMenu,
   headerFocusTarget,
+  parallelWorkInRow,
   SessionConversationSurface,
-  SessionTranscriptViewSwitch,
   ParallelWork,
-  useConversationViewEntries,
   useParallelWork,
 } from '@/widgets/session-view'
 import { Button } from '@/shared/ui/button'
@@ -158,6 +158,10 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
   } | null>(null)
   const parallelButton = useRef<HTMLButtonElement>(null)
   const parallelInvoker = useRef<HTMLElement | null>(null)
+  // The View group's menu, opened from its trigger or from More (MAR-3429
+  // CH4 R1).
+  const [viewOpen, setViewOpen] = useState(false)
+  const viewTrigger = useRef<HTMLButtonElement>(null)
   const parallel = useParallelWork(activeSessionId)
   // The transcript is a memo boundary (MAR-3310 F1e R2): what it is handed
   // keeps its identity until what it does changes.
@@ -183,18 +187,18 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
     [sendMessageToSession],
   )
   const parallelRow = useRef<HTMLDivElement>(null)
-  // A Parallel work button that has yielded is hidden and inert; opened from
-  // More, the panel hands focus back to More (MAR-3427 D).
+  // The panel hands focus back to what opened it: the row's Parallel work
+  // button, or View -- and More in View's place when View has yielded
+  // (MAR-3427 D, MAR-3429 CH4 R1).
   const focusParallelInvoker = () =>
     headerFocusTarget(
       parallelInvoker.current?.isConnected
         ? parallelInvoker.current
-        : parallelButton.current,
+        : (parallelButton.current ?? viewTrigger.current),
     )?.focus()
-  // The close is committed before focus is decided: while open the button is
-  // pinned (MAR-3427 C), and closing may yield it again or move it off the
-  // status row -- a new button -- so the target is read from the header as
-  // it is once the panel has closed.
+  // The close is committed before focus is decided: the row's button may
+  // have left while the panel was open (nothing runs any more), so the target
+  // is read from the header as it is once the panel has closed.
   const closeParallel = () => {
     flushSync(() => setParallelOpen(false))
     focusParallelInvoker()
@@ -232,7 +236,6 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
   const sessionProjectName = useProjectStore(
     selectProjectName(session?.projectId ?? null),
   )
-  const viewEntries = useConversationViewEntries(session?.id ?? '')
   const sessionLookup = useMemo(() => {
     const next = new Map<string, SessionSummary>()
     for (const entry of globalSessions) next.set(entry.id, entry)
@@ -690,6 +693,11 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
       setParallelOpen(true)
     }
   }
+  const openParallelHistory = () => {
+    parallelInvoker.current = viewTrigger.current
+    setParallelOpen(true)
+  }
+  const parallelLabel = parallelWorkInRow(session.parallelWork)
 
   return (
     <div className="flex h-full flex-col">
@@ -702,6 +710,9 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
             : (sessionProjectName ?? 'Unknown project')
         }
         conversationName={session.name}
+        // Parallel work docks beside the header: its close hands focus to
+        // View at the header's real width (MAR-3429 CH4 lap 2 A).
+        docked={parallelOpen ? 'parallel-work' : ''}
         leading={{
           node: (
             <MessageSquareText className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -709,42 +720,29 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
           width: CHAT_LEADING_WIDTH,
         }}
         slots={[
-          {
-            id: 'parallel-work',
-            side: 'left',
-            group: session.parallelWork?.running ? 'status' : 'control',
-            // Its panel open, it is pinned (MAR-3427 C).
-            open: parallelOpen,
-            node: (
-              <Button
-                ref={parallelButton}
-                variant="ghost"
-                size="sm"
-                aria-expanded={parallelOpen}
-                onClick={toggleParallel}
-              >
-                Parallel work
-                {session.parallelWork?.running
-                  ? ` · ${session.parallelWork.running}`
-                  : ''}
-              </Button>
-            ),
-            entries: [
-              {
-                kind: 'action',
-                key: 'parallel-work',
-                label: 'Parallel work',
-                onSelect: toggleParallel,
-              },
-            ],
-          },
-          {
-            id: 'view',
-            side: 'left',
-            group: 'control',
-            node: <SessionTranscriptViewSwitch sessionId={session.id} />,
-            entries: viewEntries,
-          },
+          // In the row only while it matters (MAR-3429 CH4 R2); its history
+          // is in View.
+          ...(parallelLabel
+            ? [
+                {
+                  id: 'parallel-work',
+                  side: 'left' as const,
+                  group: 'status' as const,
+                  node: (
+                    <Button
+                      ref={parallelButton}
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2"
+                      aria-expanded={parallelOpen}
+                      onClick={toggleParallel}
+                    >
+                      {parallelLabel}
+                    </Button>
+                  ),
+                },
+              ]
+            : []),
           {
             id: 'attention',
             side: 'left',
@@ -790,6 +788,24 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
                 },
               ]
             : []),
+          {
+            id: 'view',
+            side: 'right',
+            group: 'control',
+            node: (focus) => (
+              <ConversationViewMenu
+                sessionId={session.id}
+                open={viewOpen}
+                onOpenChange={setViewOpen}
+                onOpenParallelWork={openParallelHistory}
+                triggerRef={viewTrigger}
+                contentFocus={focus}
+              />
+            ),
+            entries: [
+              { kind: 'opens', key: 'view', onOpen: () => setViewOpen(true) },
+            ],
+          },
           ...(session.status === 'running'
             ? [
                 {
