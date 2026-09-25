@@ -6,6 +6,10 @@ import type {
 } from '../../../../src/shared/types/harness-facts.types'
 import { claudeRecord, claudeString } from './claude-evidence.pure'
 import {
+  isInsidePath,
+  mcpJsonServerBlock,
+  pluginJsonMcpServers,
+  pluginRootPath,
   readClaudeMcpStatus,
   readPluginMcpServers,
 } from './claude-harness.pure'
@@ -33,6 +37,8 @@ export class ClaudeMcpStatusService {
     private readonly now: () => string,
     private readonly readText: (path: string) => Promise<string> = (path) =>
       fs.readFile(path, 'utf8'),
+    private readonly realPath: (path: string) => Promise<string> = (path) =>
+      fs.realpath(path),
   ) {}
 
   /**
@@ -82,13 +88,47 @@ export class ClaudeMcpStatusService {
   private async readPluginServers(): Promise<PluginMcpServerFact[]> {
     const read = (path: string) => this.readText(path).catch(() => null)
     const perPlugin = await Promise.all(
-      this.plugins.map(async (plugin) =>
-        readPluginMcpServers(plugin.name, [
-          await read(join(plugin.path, '.mcp.json')),
+      this.plugins.map(async (plugin) => {
+        // `.mcp.json` may hold its servers at the top level; `plugin.json`
+        // only under `mcpServers`, inline or as paths inside the plugin
+        // (MAR-3206 R9).
+        const manifest = pluginJsonMcpServers(
           await read(join(plugin.path, '.claude-plugin', 'plugin.json')),
-        ]),
-      ),
+        )
+        const referenced = await Promise.all(
+          manifest.paths.map(async (path) => {
+            const inside = await this.insidePlugin(plugin.path, path)
+            return inside ? mcpJsonServerBlock(await read(inside)) : null
+          }),
+        )
+        return readPluginMcpServers(plugin.name, [
+          mcpJsonServerBlock(await read(join(plugin.path, '.mcp.json'))),
+          manifest.block,
+          ...referenced,
+        ])
+      }),
     )
     return perPlugin.flat()
+  }
+
+  /**
+   * A manifest's path inside its plugin, or null when it leaves the plugin:
+   * refused on the text first, then again after links are resolved.
+   */
+  private async insidePlugin(
+    root: string,
+    path: string,
+  ): Promise<string | null> {
+    const resolved = pluginRootPath(root, path)
+    if (!resolved) return null
+    try {
+      const [realRoot, realTarget] = await Promise.all([
+        this.realPath(root),
+        this.realPath(resolved),
+      ])
+      return isInsidePath(realRoot, realTarget) ? realTarget : null
+    } catch {
+      return null
+    }
   }
 }

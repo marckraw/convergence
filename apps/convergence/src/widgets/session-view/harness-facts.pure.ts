@@ -1,6 +1,7 @@
 import type {
+  HarnessFact,
   McpServerFact,
-  PluginMcpServerFact,
+  RecordedPluginMcpServerFact,
   SessionHarnessFacts,
 } from '../../shared/types/harness-facts.types'
 export function harnessPill(facts: SessionHarnessFacts | null): {
@@ -112,27 +113,26 @@ export interface HiddenPluginServer {
 /**
  * The plugin servers a claude.ai connector is hiding (MAR-3206 R2): a
  * connector in `needs-auth` at the same origin as a server a loaded plugin
- * declares, while that plugin server is absent from the running process's
- * status. The harness drops the plugin's copy of a duplicate address, so the
- * one that survives cannot be used until it is authorized.
+ * declares, while the running process did not load that plugin server. The
+ * harness drops the plugin's copy of a duplicate address, so the one that
+ * survives cannot be used until it is authorized.
  *
  * Matched by ORIGIN, never by name: `claude.ai Figma` and the `figma` plugin
  * share a word by coincidence, and it is the address the harness compares.
+ * Whether the plugin server was loaded is the recorded `loaded`, decided on
+ * the whole status before any bound (R10) -- a recorded name may be a prefix.
  */
 export function hiddenPluginServers(
   status: readonly McpServerFact[],
-  plugins: readonly PluginMcpServerFact[],
+  plugins: readonly RecordedPluginMcpServerFact[],
 ): HiddenPluginServer[] {
-  const present = new Set(status.map((server) => server.name))
   return status.flatMap((connector) =>
     connector.scope === 'claudeai' &&
     connector.status === 'needs-auth' &&
     connector.origin !== null
       ? plugins
           .filter(
-            (plugin) =>
-              plugin.origin === connector.origin &&
-              !present.has(`plugin:${plugin.plugin}:${plugin.server}`),
+            (plugin) => plugin.origin === connector.origin && !plugin.loaded,
           )
           .map((plugin) => ({
             connector: connector.name,
@@ -160,11 +160,51 @@ export function mcpRefusal(error: unknown): string {
   )
 }
 
+const NO_PROCESS =
+  'no process is running; the next message starts one and reads its connectors afresh'
+
 /** Why Details cannot reconnect a server, or null when it can (MAR-3206 R3). */
 export function mcpReconnectUnavailable(
   canReconnect: boolean | undefined,
 ): string | null {
-  return canReconnect
-    ? null
-    : 'no Claude process is running for this conversation; the next message starts one, which reads its connectors afresh'
+  return canReconnect ? null : NO_PROCESS
+}
+
+/**
+ * The MCP list's heading (MAR-3206 R5, R7): the connected count over the
+ * whole status, when it was read, and whether a process runs now -- a status
+ * outlives the process it was read from, and says so whenever none runs.
+ * `running` is null when the caller cannot tell.
+ */
+export function mcpStatusHeading(
+  status: Extract<HarnessFact, { kind: 'harness.mcpStatus' }>,
+  running: boolean | null,
+): string {
+  const read = new Date(status.at)
+  const parts = [
+    `MCP servers · ${status.connected} connected of ${status.servers.length + status.omitted}`,
+    `read at ${Number.isNaN(read.getTime()) ? status.at : read.toLocaleTimeString()}`,
+  ]
+  if (running !== null) parts.push(running ? 'process running' : NO_PROCESS)
+  return parts.join(' · ')
+}
+
+/**
+ * A failed Reconnect's error, while it still describes the latest status
+ * (MAR-3206 R6): only as long as that server is still listed as an alert.
+ */
+export function mcpReconnectErrorFor<
+  E extends { server: string; message: string },
+>(
+  error: E | null,
+  status:
+    | Pick<Extract<HarnessFact, { kind: 'harness.mcpStatus' }>, 'servers'>
+    | undefined,
+): E | null {
+  if (!error || !status) return null
+  return status.servers.some(
+    (server) => server.name === error.server && isMcpAlertStatus(server.status),
+  )
+    ? error
+    : null
 }

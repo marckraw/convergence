@@ -323,6 +323,7 @@ describe('SessionView', () => {
             init: null,
           }),
           onHarnessFacts: vi.fn().mockReturnValue(() => {}),
+          refreshMcpServers: vi.fn().mockResolvedValue(undefined),
           onSessionSummaryUpdate: vi.fn().mockReturnValue(() => {}),
           listAgentRuns: vi.fn().mockResolvedValue([]),
           listTasks: vi.fn().mockResolvedValue([]),
@@ -537,6 +538,142 @@ describe('SessionView', () => {
     expect(
       within(harness).getByRole('region', { name: 'Compactions' }),
     ).toHaveTextContent('Compacted (auto) · 84k → 12k tokens')
+  })
+
+  describe('MAR-3206 R8 — Details reaches the running process', () => {
+    const figmaFacts = {
+      turns: [],
+      currentTurn: null,
+      compactions: [],
+      rateLimit: null,
+      init: {
+        kind: 'harness.init' as const,
+        at: 'start',
+        claudeCodeVersion: null,
+        model: null,
+        permissionMode: null,
+        mcpServers: null,
+        plugins: null,
+        capabilities: null,
+        tools: null,
+        skills: null,
+        slashCommands: null,
+      },
+      mcpStatus: {
+        kind: 'harness.mcpStatus' as const,
+        at: 'later',
+        servers: [
+          {
+            name: 'claude.ai Figma',
+            status: 'needs-auth',
+            scope: 'claudeai',
+            origin: 'https://mcp.figma.com',
+          },
+        ],
+        connected: 0,
+        omitted: 0,
+        omittedAlerts: 0,
+        pluginServers: [],
+      },
+    }
+    const refresh = () =>
+      vi.mocked(window.electronAPI.session.refreshMcpServers)
+    const running = (canReconnectMcpServers: boolean) =>
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) => ({
+          ...session,
+          canReconnectMcpServers,
+        })),
+      }))
+    const renderDetails = async () => {
+      vi.mocked(window.electronAPI.session.harnessFacts).mockResolvedValue(
+        figmaFacts,
+      )
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+      await act(async () => {})
+      openGroup('Details')
+      return screen.findByRole('region', { name: 'Harness history' })
+    }
+
+    it.each([true, false])(
+      'opening Details reads the status only when a process runs — mutation no refresh on open turns red (running=%s)',
+      async (capable) => {
+        running(capable)
+        await renderDetails()
+        await act(async () => {})
+        expect(refresh().mock.calls).toEqual(
+          capable ? [['session-1', null]] : [],
+        )
+      },
+    )
+
+    it('pressing Reconnect calls the running session with the server’s name — mutation drop the mcp prop turns red', async () => {
+      running(true)
+      const harness = await renderDetails()
+      refresh().mockClear()
+      fireEvent.click(
+        await within(harness).findByRole('button', {
+          name: 'Reconnect claude.ai Figma',
+        }),
+      )
+      await act(async () => {})
+      expect(refresh().mock.calls).toEqual([['session-1', 'claude.ai Figma']])
+    })
+
+    it('press in A, switch to B, press in B, A settles → B stays pending — mutation settle without the id guard turns red', async () => {
+      useSessionStore.setState((state) => ({
+        sessions: [
+          ...state.sessions,
+          { ...state.sessions[0], id: 'session-2', name: 'Other session' },
+        ],
+      }))
+      running(true)
+      const settles: Array<() => void> = []
+      const harness = await renderDetails()
+      refresh().mockImplementation(
+        (_id, reconnect) =>
+          new Promise<void>((resolve) => {
+            if (reconnect) settles.push(resolve)
+            else resolve()
+          }),
+      )
+      fireEvent.click(
+        await within(harness).findByRole('button', {
+          name: 'Reconnect claude.ai Figma',
+        }),
+      )
+      await act(async () => {
+        useSessionStore.setState({
+          activeSessionId: 'session-2',
+          activeConversationSessionId: 'session-2',
+        })
+      })
+      const other = await screen.findByRole('region', {
+        name: 'Harness history',
+      })
+      fireEvent.click(
+        await within(other).findByRole('button', {
+          name: 'Reconnect claude.ai Figma',
+        }),
+      )
+      await act(async () => settles[0]())
+      expect({
+        calls: refresh()
+          .mock.calls.filter(([, reconnect]) => reconnect !== null)
+          .map(([id]) => id),
+        label: within(
+          screen.getByRole('region', { name: 'Harness history' }),
+        ).getByRole('button', { name: 'Reconnect claude.ai Figma' })
+          .textContent,
+      }).toEqual({
+        calls: ['session-1', 'session-2'],
+        label: 'Reconnecting…',
+      })
+    })
   })
 
   it('R8 M2 failed evidence read keeps child work moved and exposes Retry in the conversation — mutation settle on error turns red', async () => {

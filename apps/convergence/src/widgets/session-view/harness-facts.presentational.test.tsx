@@ -1,4 +1,7 @@
-import { readClaudeHarnessFact } from '../../../electron/backend/provider/claude-code/claude-harness.pure'
+import {
+  readClaudeHarnessFact,
+  readClaudeMcpStatus,
+} from '../../../electron/backend/provider/claude-code/claude-harness.pure'
 import { readHarnessFactRow } from '../../../electron/backend/session/harness-fact-row.pure'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
@@ -627,10 +630,16 @@ describe('MAR-3206 — MCP servers in Details', () => {
         origin: 'https://mcp.linear.app',
       },
     ],
+    connected: figma === 'connected' ? 2 : 1,
     omitted: 0,
     omittedAlerts: 0,
     pluginServers: [
-      { plugin: 'figma', server: 'figma', origin: 'https://mcp.figma.com' },
+      {
+        plugin: 'figma',
+        server: 'figma',
+        origin: 'https://mcp.figma.com',
+        loaded: false,
+      },
     ],
   })
   const facts = (figma: string): SessionHarnessFacts => ({
@@ -703,25 +712,115 @@ describe('MAR-3206 — MCP servers in Details', () => {
     expect(screen.queryByRole('button', { name: /Reconnect/ })).toBeNull()
   })
 
-  it('with no running process, Reconnect is disabled and the reason is said', () => {
+  it.each(['needs-auth', 'connected'])(
+    'R5 a status with no running process says so in the heading, and no Reconnect is enabled (Figma %s)',
+    (figma) => {
+      const unavailable =
+        'no process is running; the next message starts one and reads its connectors afresh'
+      render(
+        <HarnessFactsSections
+          facts={facts(figma)}
+          error={null}
+          loading={false}
+          onRetry={() => {}}
+          mcp={mcp({ unavailable })}
+        />,
+      )
+      const list = screen.getByLabelText('MCP servers')
+      expect(list.textContent).toContain(`read at later · ${unavailable}`)
+      expect(
+        within(list)
+          .queryAllByRole('button')
+          .filter((button) => !(button as HTMLButtonElement).disabled),
+      ).toEqual([])
+      // The hidden-plugin sentence describes the account, which outlives
+      // the process: it stays.
+      expect(screen.queryAllByRole('note')).toHaveLength(
+        figma === 'needs-auth' ? 1 : 0,
+      )
+    },
+  )
+
+  it('R5 a running process is named in the heading', () => {
     render(
       <HarnessFactsSections
-        facts={facts('needs-auth')}
+        facts={facts('connected')}
         error={null}
         loading={false}
         onRetry={() => {}}
-        mcp={mcp({
-          unavailable: 'no Claude process is running for this conversation',
-        })}
+        mcp={mcp()}
       />,
     )
-    const button = screen.getByRole('button', {
-      name: 'Reconnect claude.ai Figma',
-    }) as HTMLButtonElement
-    expect(button.disabled).toBe(true)
     expect(screen.getByLabelText('MCP servers').textContent).toContain(
-      'Reconnect is unavailable: no Claude process is running for this conversation.',
+      'read at later · process running',
     )
+  })
+
+  it('R7 25 connected servers read "25 connected of 25" though 20 are listed — count over the listed servers and this turns red', () => {
+    const fact = readClaudeMcpStatus(
+      Array.from({ length: 25 }, (_, index) => ({
+        name: `server-${index}`,
+        status: 'connected',
+        scope: 'user',
+        config: { type: 'http', url: `https://s${index}.test/mcp` },
+      })),
+      [],
+      'later',
+    )
+    render(
+      <HarnessFactsSections
+        facts={{ ...facts('connected'), mcpStatus: fact }}
+        error={null}
+        loading={false}
+        onRetry={() => {}}
+        mcp={mcp()}
+      />,
+    )
+    expect(fact.servers).toHaveLength(20)
+    expect(screen.getByLabelText('MCP servers').textContent).toContain(
+      'MCP servers · 25 connected of 25 · ',
+    )
+  })
+
+  it('R10 a 77-character plugin server name gets no Reconnect, says why, and raises no false hidden sentence', () => {
+    const server = 'x'.repeat(64)
+    const name = `plugin:figma:${server}`
+    expect(name).toHaveLength(77)
+    const fact = readClaudeMcpStatus(
+      [
+        {
+          name: 'claude.ai Figma',
+          status: 'needs-auth',
+          scope: 'claudeai',
+          config: { type: 'claudeai-proxy', url: 'https://mcp.figma.com/mcp' },
+        },
+        {
+          name,
+          status: 'failed',
+          scope: 'dynamic',
+          config: { type: 'http', url: 'https://mcp.figma.com/mcp' },
+        },
+      ],
+      [{ plugin: 'figma', server, origin: 'https://mcp.figma.com' }],
+      'later',
+    )
+    render(
+      <HarnessFactsSections
+        facts={{ ...facts('needs-auth'), mcpStatus: fact }}
+        error={null}
+        loading={false}
+        onRetry={() => {}}
+        mcp={mcp()}
+      />,
+    )
+    const list = screen.getByLabelText('MCP servers')
+    expect(
+      within(list)
+        .getAllByRole('button')
+        .map((button) => button.getAttribute('aria-label')),
+    ).toEqual(['Reconnect claude.ai Figma'])
+    expect(list.textContent).toContain('name too long to reconnect from here')
+    expect(screen.queryByRole('note')).toBeNull()
   })
 
   it('a refused reconnect says so beside the list', () => {
@@ -739,5 +838,34 @@ describe('MAR-3206 — MCP servers in Details', () => {
     expect(screen.getByRole('alert').textContent).toBe(
       'Reconnect claude.ai Figma failed: needs authentication',
     )
+  })
+
+  it('R6 a failed Reconnect’s error goes when the status flips to connected', () => {
+    const view = mcp({
+      error: { server: 'claude.ai Figma', message: 'needs authentication' },
+    })
+    const { rerender } = render(
+      <HarnessFactsSections
+        facts={facts('needs-auth')}
+        error={null}
+        loading={false}
+        onRetry={() => {}}
+        mcp={view}
+      />,
+    )
+    const before = screen.queryByRole('alert')?.textContent ?? null
+    rerender(
+      <HarnessFactsSections
+        facts={facts('connected')}
+        error={null}
+        loading={false}
+        onRetry={() => {}}
+        mcp={view}
+      />,
+    )
+    expect({ before, after: screen.queryByRole('alert') }).toEqual({
+      before: 'Reconnect claude.ai Figma failed: needs authentication',
+      after: null,
+    })
   })
 })

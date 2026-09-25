@@ -5,6 +5,8 @@ import {
   hiddenPluginSentence,
   hiddenPluginServers,
   isMcpAlertStatus,
+  mcpReconnectErrorFor,
+  mcpStatusHeading,
 } from './harness-facts.pure'
 
 /** What Details can do with a server of the running process (MAR-3206 R3). */
@@ -42,6 +44,8 @@ export function HarnessFactsSections({
   const hidden = status
     ? hiddenPluginServers(status.servers, status.pluginServers)
     : []
+  // An error belongs to the status it was about (MAR-3206 R6).
+  const mcpError = mcpReconnectErrorFor(mcp?.error ?? null, status)
   const hasFacts = !!(
     init ||
     status ||
@@ -224,12 +228,12 @@ export function HarnessFactsSections({
           )}
           {status ? (
             <div className="mt-2" aria-label="MCP servers">
-              MCP servers ·{' '}
-              {
-                status.servers.filter((server) => server.status === 'connected')
-                  .length
-              }{' '}
-              connected of {status.servers.length + status.omitted}
+              <p>
+                {mcpStatusHeading(
+                  status,
+                  mcp ? mcp.unavailable === null : null,
+                )}
+              </p>
               {hidden.map((entry) => (
                 <p
                   key={`${entry.connector}:${entry.plugin}:${entry.server}`}
@@ -249,39 +253,44 @@ export function HarnessFactsSections({
                       isMcpAlertStatus(server.status) ? 'text-destructive' : ''
                     }
                   >
-                    {server.name} · {server.status ?? 'Not reported'} ·{' '}
+                    {server.name}
+                    {server.nameTruncated ? '…' : ''} ·{' '}
+                    {server.status ?? 'Not reported'} ·{' '}
                     {server.scope ?? 'scope not reported'} ·{' '}
                     {server.origin ?? 'no address'}
                   </p>
-                  {mcp && isMcpAlertStatus(server.status) && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 px-2 text-xs"
-                      disabled={
-                        mcp.unavailable !== null || mcp.pending !== null
-                      }
-                      title={mcp.unavailable ?? undefined}
-                      aria-label={`Reconnect ${server.name}`}
-                      onClick={() => mcp.onReconnect(server.name)}
-                    >
-                      {mcp.pending === server.name
-                        ? 'Reconnecting…'
-                        : 'Reconnect'}
-                    </Button>
-                  )}
+                  {mcp &&
+                    isMcpAlertStatus(server.status) &&
+                    server.nameTruncated && (
+                      <span>name too long to reconnect from here</span>
+                    )}
+                  {mcp &&
+                    isMcpAlertStatus(server.status) &&
+                    !server.nameTruncated && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        disabled={
+                          mcp.unavailable !== null || mcp.pending !== null
+                        }
+                        title={mcp.unavailable ?? undefined}
+                        aria-label={`Reconnect ${server.name}`}
+                        onClick={() => mcp.onReconnect(server.name)}
+                      >
+                        {mcp.pending === server.name
+                          ? 'Reconnecting…'
+                          : 'Reconnect'}
+                      </Button>
+                    )}
                 </div>
               ))}
               {status.omitted > 0 && (
                 <p>{`… and ${status.omitted} more (${status.omittedAlerts} failed or needing auth)`}</p>
               )}
-              {mcp?.unavailable &&
-                status.servers.some((server) =>
-                  isMcpAlertStatus(server.status),
-                ) && <p>Reconnect is unavailable: {mcp.unavailable}.</p>}
-              {mcp?.error && (
+              {mcpError && (
                 <p role="alert" className="text-destructive">
-                  Reconnect {mcp.error.server} failed: {mcp.error.message}
+                  Reconnect {mcpError.server} failed: {mcpError.message}
                 </p>
               )}
             </div>

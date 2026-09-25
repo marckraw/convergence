@@ -6,8 +6,10 @@ import {
   compactionLabel,
   hiddenPluginSentence,
   hiddenPluginServers,
+  mcpReconnectErrorFor,
   mcpReconnectUnavailable,
   mcpRefusal,
+  mcpStatusHeading,
 } from './harness-facts.pure'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 const compact = {
@@ -268,6 +270,7 @@ describe('MAR-3206 R2 — a claude.ai connector hiding a plugin server', () => {
     plugin: 'figma',
     server: 'figma',
     origin: 'https://mcp.figma.com',
+    loaded: false,
   }
   const sentence =
     "claude.ai Figma needs sign-in and is hiding the Figma plugin's server (same address). Authorize Figma at claude.ai → Settings → Connectors, then Reconnect."
@@ -292,7 +295,24 @@ describe('MAR-3206 R2 — a claude.ai connector hiding a plugin server', () => {
           origin: 'https://mcp.figma.com',
         },
       ],
-      [figmaPlugin],
+      [{ ...figmaPlugin, loaded: true }],
+      [],
+    ],
+    [
+      // R10: the process loaded it under a name the bound cut, and the
+      // recorded `loaded` -- decided on the whole name -- still says so.
+      'the plugin server is loaded under a name the bound cut',
+      [
+        connector('needs-auth'),
+        {
+          name: `plugin:figma:${'f'.repeat(52)}`,
+          status: 'connected',
+          scope: 'dynamic',
+          origin: 'https://mcp.figma.com',
+          nameTruncated: true as const,
+        },
+      ],
+      [{ ...figmaPlugin, server: 'f'.repeat(70), loaded: true }],
       [],
     ],
     [
@@ -317,6 +337,7 @@ describe('MAR-3206 R2 — a claude.ai connector hiding a plugin server', () => {
             plugin: 'design-tools',
             server: 'canvas',
             origin: 'https://mcp.figma.com',
+            loaded: false,
           },
         ],
       ).map((entry) => entry.plugin),
@@ -330,6 +351,7 @@ describe('MAR-3206 R2 — a claude.ai connector hiding a plugin server', () => {
             plugin: 'figma',
             server: 'figma',
             origin: 'https://figma.internal.example',
+            loaded: false,
           },
         ],
       ),
@@ -379,6 +401,7 @@ it('MAR-3206 R3 the pill reads the newer MCP status over the start record — a 
             origin: 'https://mcp.figma.com',
           },
         ],
+        connected: 1,
         omitted: 0,
         omittedAlerts: 0,
         pluginServers: [],
@@ -389,8 +412,8 @@ it('MAR-3206 R3 the pill reads the newer MCP status over the start record — a 
 
 it('MAR-3206 R3 names why Reconnect is unavailable, and strips the IPC prefix from a refusal', () => {
   expect(mcpReconnectUnavailable(true)).toBeNull()
-  expect(mcpReconnectUnavailable(undefined)).toMatch(
-    /^no Claude process is running for this conversation/,
+  expect(mcpReconnectUnavailable(undefined)).toBe(
+    'no process is running; the next message starts one and reads its connectors afresh',
   )
   expect(
     mcpRefusal(
@@ -399,4 +422,76 @@ it('MAR-3206 R3 names why Reconnect is unavailable, and strips the IPC prefix fr
       ),
     ),
   ).toBe('MCP server needs authentication')
+})
+
+describe('MAR-3206 R5 R6 R7 — the MCP heading and a Reconnect error', () => {
+  const at = '2026-09-25T19:02:00.000Z'
+  const status = (
+    servers: { name: string; status: string }[],
+    extra: { connected?: number; omitted?: number } = {},
+  ) => ({
+    kind: 'harness.mcpStatus' as const,
+    at,
+    servers: servers.map((server) => ({
+      ...server,
+      scope: 'claudeai',
+      origin: 'https://mcp.figma.com',
+    })),
+    connected:
+      extra.connected ??
+      servers.filter((server) => server.status === 'connected').length,
+    omitted: extra.omitted ?? 0,
+    omittedAlerts: 0,
+    pluginServers: [],
+  })
+
+  it('R5 says when the list was read and whether a process runs — whenever none runs, not only with alerts', () => {
+    const allConnected = status([{ name: 'linear', status: 'connected' }])
+    const time = new Date(at).toLocaleTimeString()
+    expect({
+      running: mcpStatusHeading(allConnected, true),
+      stopped: mcpStatusHeading(allConnected, false),
+      unknown: mcpStatusHeading(allConnected, null),
+    }).toEqual({
+      running: `MCP servers · 1 connected of 1 · read at ${time} · process running`,
+      stopped: `MCP servers · 1 connected of 1 · read at ${time} · no process is running; the next message starts one and reads its connectors afresh`,
+      unknown: `MCP servers · 1 connected of 1 · read at ${time}`,
+    })
+  })
+
+  it('R7 the heading counts connected over the whole status — count over the listed servers and this turns red', () => {
+    const listed = Array.from({ length: 20 }, (_, index) => ({
+      name: `s${index}`,
+      status: 'connected',
+    }))
+    expect(
+      mcpStatusHeading(status(listed, { connected: 25, omitted: 5 }), null),
+    ).toMatch(/^MCP servers · 25 connected of 25 · /)
+  })
+
+  it('R6 an error shows only while its server is still an alert in the latest status', () => {
+    const error = { server: 'claude.ai Figma', message: 'needs authentication' }
+    expect({
+      alert: mcpReconnectErrorFor(
+        error,
+        status([{ name: 'claude.ai Figma', status: 'needs-auth' }]),
+      ),
+      connected: mcpReconnectErrorFor(
+        error,
+        status([{ name: 'claude.ai Figma', status: 'connected' }]),
+      ),
+      gone: mcpReconnectErrorFor(error, status([])),
+      noStatus: mcpReconnectErrorFor(error, undefined),
+      none: mcpReconnectErrorFor(
+        null,
+        status([{ name: 'claude.ai Figma', status: 'failed' }]),
+      ),
+    }).toEqual({
+      alert: error,
+      connected: null,
+      gone: null,
+      noStatus: null,
+      none: null,
+    })
+  })
 })

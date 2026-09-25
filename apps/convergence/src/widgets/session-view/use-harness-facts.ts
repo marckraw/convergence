@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 import { harnessFactsApi } from './harness-facts.api'
-import { mcpRefusal } from './harness-facts.pure'
+import { mcpReconnectErrorFor, mcpRefusal } from './harness-facts.pure'
 export function useHarnessFacts(sessionId: string | null) {
   const [record, setRecord] = useState<{
     id: string
@@ -9,6 +9,13 @@ export function useHarnessFacts(sessionId: string | null) {
     error: string | null
   } | null>(null)
   const [revision, setRevision] = useState(0)
+  // A reconnect belongs to the conversation it was pressed in: a switch
+  // away leaves its result behind (the id guards every settle).
+  const [mcp, setMcp] = useState<{
+    id: string
+    pending: string | null
+    error: { server: string; message: string } | null
+  } | null>(null)
   useEffect(() => {
     if (!sessionId) return
     let alive = true,
@@ -23,8 +30,18 @@ export function useHarnessFacts(sessionId: string | null) {
         const request = ++generation
         try {
           const facts = await harnessFactsApi.read(sessionId)
-          if (alive && request === generation)
+          if (alive && request === generation) {
             setRecord({ id: sessionId, facts, error: null })
+            // A newer status where the server is no longer an alert ends a
+            // failed Reconnect's error for good (MAR-3206 R6).
+            setMcp((previous) =>
+              previous?.id === sessionId &&
+              previous.error &&
+              !mcpReconnectErrorFor(previous.error, facts?.mcpStatus)
+                ? { ...previous, error: null }
+                : previous,
+            )
+          }
         } catch (error) {
           if (alive && request === generation)
             setRecord((previous) => ({
@@ -48,13 +65,6 @@ export function useHarnessFacts(sessionId: string | null) {
       unsubscribe()
     }
   }, [sessionId, revision])
-  // A reconnect belongs to the conversation it was pressed in: a switch
-  // away leaves its result behind (the id guards every settle).
-  const [mcp, setMcp] = useState<{
-    id: string
-    pending: string | null
-    error: { server: string; message: string } | null
-  } | null>(null)
   const reconnectMcpServer = useCallback(
     async (server: string) => {
       if (!sessionId) return

@@ -4,6 +4,12 @@ import type {
   McpServerFact,
   PluginMcpServerFact,
 } from '../../../../src/shared/types/harness-facts.types'
+import {
+  isAbsolute as isAbsolutePath,
+  relative as relativePath,
+  resolve as resolvePath,
+  sep as pathSeparator,
+} from 'path'
 import { claudeRecord, claudeString } from './claude-evidence.pure'
 
 const number = (value: unknown): number | null =>
@@ -232,11 +238,21 @@ export function mcpOrigin(url: unknown): string | null {
 const MCP_STATUS_SERVERS = 20
 const MCP_STATUS_PLUGIN_SERVERS = 8
 
+/** A plugin server's name in the running process's status. */
+export function pluginMcpServerName(plugin: string, server: string): string {
+  return `plugin:${plugin}:${server}`
+}
+
 /**
  * The resident query's `mcpServerStatus()` as a fact (MAR-3206 R1): name,
  * status, scope and origin per server. Bounded so the recorded envelope stays
  * under its 8192-byte budget (`boundedHarnessPayload`): the fact names 20
  * servers and counts the rest, and every text field has its own bound.
+ *
+ * What the bound would falsify is decided before it (R7, R10): the connected
+ * count is taken over every server, a name cut by its bound says so, and
+ * whether a plugin's declared server was loaded is read from the whole
+ * status -- never from recorded names a bound may have cut or dropped.
  */
 export function readClaudeMcpStatus(
   statuses: unknown,
@@ -244,19 +260,31 @@ export function readClaudeMcpStatus(
   at: string,
 ): Extract<HarnessFact, { kind: 'harness.mcpStatus' }> {
   const entries = Array.isArray(statuses) ? statuses : []
-  const text = (value: unknown, budget: number): string | null => {
+  const bounded = (
+    value: unknown,
+    budget: number,
+  ): { text: string; truncated: boolean } | null => {
     const raw = claudeString(value)
     if (raw === null) return null
-    const bounded = boundHarnessText(raw, budget)
-    return typeof bounded === 'string' ? bounded : bounded.preview
+    const result = boundHarnessText(raw, budget)
+    return typeof result === 'string'
+      ? { text: result, truncated: false }
+      : { text: result.preview, truncated: true }
   }
+  const text = (value: unknown, budget: number): string | null =>
+    bounded(value, budget)?.text ?? null
+  const loadedNames = new Set<string>()
   const listed: McpServerFact[] = entries.map((value) => {
     const r = claudeRecord(value)
+    const rawName = claudeString(r?.name)
+    if (rawName !== null) loadedNames.add(rawName)
+    const name = bounded(rawName, 64)
     return {
-      name: text(r?.name, 64) ?? 'unnamed',
+      name: name?.text ?? 'unnamed',
       status: text(r?.status, 24),
       scope: text(r?.scope, 24),
       origin: text(mcpOrigin(claudeRecord(r?.config)?.url), 96),
+      ...(name?.truncated ? { nameTruncated: true as const } : {}),
     }
   })
   // Failing and needs-sign-in servers first, as the start record orders its
@@ -266,43 +294,96 @@ export function readClaudeMcpStatus(
   const servers = [...listed].sort(
     (a, b) => Number(isAlert(b)) - Number(isAlert(a)),
   )
+  // A declared server the process did not load first: only those can be
+  // hidden, so the bound drops a loaded one before it drops one of them.
+  const declared = pluginServers
+    .map((entry) => ({
+      entry,
+      loaded: loadedNames.has(pluginMcpServerName(entry.plugin, entry.server)),
+    }))
+    .sort((a, b) => Number(a.loaded) - Number(b.loaded))
   return {
     kind: 'harness.mcpStatus',
     at,
     servers: servers.slice(0, MCP_STATUS_SERVERS),
+    connected: listed.filter((server) => server.status === 'connected').length,
     omitted: Math.max(0, servers.length - MCP_STATUS_SERVERS),
     omittedAlerts: servers.slice(MCP_STATUS_SERVERS).filter(isAlert).length,
-    pluginServers: pluginServers
+    pluginServers: declared
       .slice(0, MCP_STATUS_PLUGIN_SERVERS)
-      .map((entry) => ({
+      .map(({ entry, loaded }) => ({
         plugin: text(entry.plugin, 64) ?? 'unnamed',
         server: text(entry.server, 64) ?? 'unnamed',
         origin: text(entry.origin, 96) ?? entry.origin,
+        loaded,
       })),
   }
 }
 
 /**
- * The http(s) servers one plugin declares, from the text of its manifests:
- * `.mcp.json` (`{ mcpServers: {...} }` or the servers at its top level) and
- * `.claude-plugin/plugin.json`'s inline `mcpServers`. Only each server's name
- * and origin leave this function -- headers and the rest of the URL do not.
+ * The server block of an `.mcp.json`-shaped file: `{ mcpServers: {...} }`,
+ * or the servers at its top level. Null for text that is not a JSON object.
+ */
+export function mcpJsonServerBlock(
+  text: string | null,
+): Record<string, unknown> | null {
+  const root = parseJsonRecord(text)
+  return claudeRecord(root?.mcpServers) ?? root
+}
+
+/**
+ * What a plugin's `.claude-plugin/plugin.json` declares under `mcpServers`
+ * (MAR-3206 R9), and nothing else: an object is the server block itself; a
+ * string (or strings) names an `.mcp.json`-shaped file inside the plugin.
+ * The manifest's other keys (`author`, `homepage`, ...) are never servers.
+ */
+export function pluginJsonMcpServers(text: string | null): {
+  block: Record<string, unknown> | null
+  paths: string[]
+} {
+  const declared = parseJsonRecord(text)?.mcpServers
+  if (typeof declared === 'string') return { block: null, paths: [declared] }
+  if (Array.isArray(declared))
+    return {
+      block: null,
+      paths: declared.filter(
+        (entry): entry is string => typeof entry === 'string',
+      ),
+    }
+  return { block: claudeRecord(declared), paths: [] }
+}
+
+/**
+ * A manifest path resolved against the plugin root, or null when it leaves
+ * that root (MAR-3206 R9): `../x`, an absolute path elsewhere, the root itself.
+ */
+export function pluginRootPath(root: string, path: string): string | null {
+  const resolved = resolvePath(root, path)
+  return isInsidePath(root, resolved) ? resolved : null
+}
+
+/** Whether `target` lies strictly inside `root` (both absolute). */
+export function isInsidePath(root: string, target: string): boolean {
+  const rel = relativePath(root, target)
+  return (
+    rel !== '' &&
+    rel !== '..' &&
+    !rel.startsWith(`..${pathSeparator}`) &&
+    !isAbsolutePath(rel)
+  )
+}
+
+/**
+ * The http(s) servers one plugin declares, from its server blocks. Only each
+ * server's name and origin leave this function -- headers and the rest of the
+ * URL do not. The first block to name a server wins.
  */
 export function readPluginMcpServers(
   plugin: string,
-  manifests: readonly (string | null)[],
+  blocks: readonly (Record<string, unknown> | null)[],
 ): PluginMcpServerFact[] {
   const found = new Map<string, PluginMcpServerFact>()
-  for (const manifest of manifests) {
-    if (manifest === null) continue
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(manifest)
-    } catch {
-      continue
-    }
-    const root = claudeRecord(parsed)
-    const servers = claudeRecord(root?.mcpServers) ?? root
+  for (const servers of blocks) {
     if (!servers) continue
     for (const [server, config] of Object.entries(servers)) {
       const origin = mcpOrigin(claudeRecord(config)?.url)
@@ -311,6 +392,15 @@ export function readPluginMcpServers(
     }
   }
   return [...found.values()]
+}
+
+function parseJsonRecord(text: string | null): Record<string, unknown> | null {
+  if (text === null) return null
+  try {
+    return claudeRecord(JSON.parse(text))
+  } catch {
+    return null
+  }
 }
 
 /** Bound text in the envelope's JSON UTF-8 unit; never split a code point. */
