@@ -55,6 +55,16 @@ import {
 } from './transcript-view.model'
 
 const itemOf = (item: Item) => item
+/**
+ * Radix calls the overlay's close-focus on a later task, and also when the
+ * instance unmounts rather than closes -- a conversation switch remounts this
+ * panel by key, and by then the next conversation may already hold focus.
+ * Focus goes back to the invoker only when nothing holds it (MAR-3426 lap 2).
+ */
+const focusIsLost = () => {
+  const active = document.activeElement
+  return active === null || active === document.body || !active.isConnected
+}
 
 interface Props {
   session: Session
@@ -74,7 +84,8 @@ interface Props {
   /**
    * Put focus back where the panel was opened from. The overlay calls it once
    * its focus trap is gone: a focus made while the trap is still mounted is
-   * pulled back inside the dialog and lost with it (MAR-3426 R3).
+   * pulled back inside the dialog and lost with it (MAR-3426 R3). It is not
+   * called when something else already holds focus (see `focusIsLost`).
    */
   onReturnFocus: () => void
 }
@@ -435,7 +446,7 @@ export const ParallelWork: FC<Props> = ({
           <DialogContent
             onCloseAutoFocus={(event) => {
               event.preventDefault()
-              onReturnFocus()
+              if (focusIsLost()) onReturnFocus()
             }}
             className="left-auto right-0 top-0 h-full max-h-none w-[min(420px,100vw)] translate-x-0 translate-y-0 rounded-none p-0 [&>button]:hidden"
             aria-describedby={undefined}
