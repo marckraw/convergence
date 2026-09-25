@@ -1005,6 +1005,18 @@ export class CodexProvider implements Provider {
      * turn to cancel whose id has simply not arrived yet (F1).
      */
     let pendingTurnStart: Promise<string | null> | null = null
+    // Count from synchronous acceptance through preparation and acknowledgement,
+    // including reconnect/recovery. Overlapping sends must not clear each other.
+    let preparingSends = 0
+
+    async function prepareSend<T>(work: () => Promise<T>): Promise<T> {
+      preparingSends += 1
+      try {
+        return await work()
+      } finally {
+        preparingSends -= 1
+      }
+    }
     /**
      * Whether the turn this handle is running was acknowledged by the server
      * (MAR-3023 lap 3, H): set with the ack (or reconciliation's "landed"),
@@ -1761,7 +1773,16 @@ export class CodexProvider implements Provider {
       })
     }
 
-    async function sendCodexTurn(input: {
+    function sendCodexTurn(input: {
+      activeRpc: JsonRpcClient
+      text: string
+      attachments?: Attachment[]
+      skillSelections?: SkillSelection[]
+    }): Promise<void> {
+      return prepareSend(() => sendPreparedCodexTurn(input))
+    }
+
+    async function sendPreparedCodexTurn(input: {
       activeRpc: JsonRpcClient
       text: string
       attachments?: Attachment[]
@@ -2192,6 +2213,23 @@ export class CodexProvider implements Provider {
           noteWarmUp()
         }
         const opened = await serverHost.connect({
+          owner: {
+            isBusy: () =>
+              stopped ||
+              currentStatus === 'running' ||
+              preparingSends > 0 ||
+              pendingTurnStart !== null ||
+              connecting !== null ||
+              pendingApprovals.size > 0 ||
+              pendingUserInputs.size > 0,
+            endIdle: () => {
+              const idle = connection
+              connection = null
+              rpc = null
+              forgetThreadReadiness()
+              idle?.close()
+            },
+          },
           onTransportFailure: (error) => abandonConnection(error.message),
           isProgressNotification: (_method, params) =>
             notificationBelongsToSession(params),
@@ -2260,8 +2298,8 @@ export class CodexProvider implements Provider {
       initialAttachments?: Attachment[],
       initialSkillSelections?: SkillSelection[],
     ): void {
-      void openConnection()
-        .then((activeRpc) => {
+      void prepareSend(() =>
+        openConnection().then((activeRpc) => {
           if (!activeRpc || stopped) return
           return sendCodexTurn({
             activeRpc,
@@ -2269,21 +2307,21 @@ export class CodexProvider implements Provider {
             attachments: initialAttachments,
             skillSelections: initialSkillSelections,
           })
+        }),
+      ).catch((err) => {
+        if (stopped) return
+        const failureEntry = buildTurnFailureEntry(err, now())
+        sessionEmitter.addNote({
+          text:
+            initialMessage === CONVERSATION_RESET_COMMAND
+              ? `Could not clear the conversation: ${err instanceof Error ? err.message : String(err)}.${threadId ? ' The previous conversation is still active; your next message will resume it.' : ' No conversation was started.'}`
+              : failureEntry.text,
+          level: failureEntry.level,
+          timestamp: failureEntry.timestamp,
         })
-        .catch((err) => {
-          if (stopped) return
-          const failureEntry = buildTurnFailureEntry(err, now())
-          sessionEmitter.addNote({
-            text:
-              initialMessage === CONVERSATION_RESET_COMMAND
-                ? `Could not clear the conversation: ${err instanceof Error ? err.message : String(err)}.${threadId ? ' The previous conversation is still active; your next message will resume it.' : ' No conversation was started.'}`
-                : failureEntry.text,
-            level: failureEntry.level,
-            timestamp: failureEntry.timestamp,
-          })
-          setStatus('failed')
-          setAttention('failed')
-        })
+        setStatus('failed')
+        setAttention('failed')
+      })
     }
 
     function attachHandlers(activeRpc: JsonRpcClient): void {
@@ -2743,20 +2781,22 @@ export class CodexProvider implements Provider {
             'not-eligible',
             'The account handoff was stopped before sending.',
           )
-        const activeRpc = await openConnection()
-        if (!activeRpc || stopped)
-          throw new HandoffRefusedError(
-            'not-eligible',
-            'The destination connection closed before sending.',
-          )
-        // Resume before preparing the user item. Publication remains held until
-        // turn/start accepts too: the server can refuse a missing thread there.
-        await ensureThread(activeRpc)
-        await sendCodexTurn({
-          activeRpc,
-          text: config.initialMessage,
-          attachments: config.initialAttachments,
-          skillSelections: config.initialSkillSelections,
+        await prepareSend(async () => {
+          const activeRpc = await openConnection()
+          if (!activeRpc || stopped)
+            throw new HandoffRefusedError(
+              'not-eligible',
+              'The destination connection closed before sending.',
+            )
+          // Resume before preparing the user item. Publication remains held until
+          // turn/start accepts too: the server can refuse a missing thread there.
+          await ensureThread(activeRpc)
+          await sendCodexTurn({
+            activeRpc,
+            text: config.initialMessage,
+            attachments: config.initialAttachments,
+            skillSelections: config.initialSkillSelections,
+          })
         })
         acceptInitial({
           publish: () => {
@@ -3085,34 +3125,36 @@ export class CodexProvider implements Provider {
         }
 
         if (deliveryMode === 'steer') {
-          void sendCodexSteer({
-            activeRpc,
-            text,
-            attachments,
-            skillSelections,
-            expectedProviderTurnId: options?.expectedProviderTurnId,
-          }).catch((err) => {
+          void prepareSend(() =>
+            sendCodexSteer({
+              activeRpc,
+              text,
+              attachments,
+              skillSelections,
+              expectedProviderTurnId: options?.expectedProviderTurnId,
+            }),
+          ).catch((err) => {
             if (!stopped) addMidRunInputFailureNote(err)
           })
           return
         }
 
         if (deliveryMode === 'interrupt') {
-          void interruptCodexTurn({
-            activeRpc,
-            expectedProviderTurnId: options?.expectedProviderTurnId,
-          })
-            .then(() =>
+          void prepareSend(() =>
+            interruptCodexTurn({
+              activeRpc,
+              expectedProviderTurnId: options?.expectedProviderTurnId,
+            }).then(() =>
               sendCodexTurn({
                 activeRpc,
                 text,
                 attachments,
                 skillSelections,
               }),
-            )
-            .catch((err) => {
-              if (!stopped) addMidRunInputFailureNote(err)
-            })
+            ),
+          ).catch((err) => {
+            if (!stopped) addMidRunInputFailureNote(err)
+          })
           return
         }
 
