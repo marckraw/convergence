@@ -228,5 +228,46 @@ describe.each(['global', 'project'] as const)(
         }),
       ).toBeVisible()
     })
+
+    it('B switches one mounted surface from A to B and shows B’s wires', () => {
+      const next = {
+        ...session,
+        id: 'next',
+        name: 'Next',
+        contextKind,
+        projectId: contextKind === 'project' ? 'project' : null,
+      }
+      const firstWires = [wire()]
+      const nextWires = [
+        wire({
+          id: 'next-wire',
+          sourceSessionId: next.id,
+          armed: false,
+          conditionToken: 'BATON: next',
+        }),
+      ]
+      useSessionRelayStore.setState({ relays: [...firstWires, ...nextWires] })
+      useSessionStore.setState((state) => ({
+        globalSessions: [...state.globalSessions, next],
+      }))
+      const { rerender } = renderSurface()
+      expect(
+        screen.getByRole('button', { name: summary(firstWires) }),
+      ).toBeVisible()
+
+      rerender(surface(next))
+
+      expect(
+        screen.queryByRole('button', { name: summary(firstWires) }),
+      ).toBeNull()
+      const trigger = screen.getByRole('button', { name: summary(nextWires) })
+      expect(trigger).toHaveAttribute('title', summary(nextWires))
+      fireEvent.click(trigger)
+      expect(
+        within(screen.getByRole('dialog')).getByText(
+          'Only if it ends with "BATON: next", when Next finishes, send its last message to Target',
+        ),
+      ).toHaveClass('line-through')
+    })
   },
 )

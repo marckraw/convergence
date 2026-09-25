@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { Profiler } from 'react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { useProjectStore } from '@/entities/project'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import { useSessionRelayStore } from '@/entities/session-relay'
@@ -67,6 +68,88 @@ describe('SessionWiresContainer', () => {
     // exactly as it did before F11 existed.
     const { container } = render(<SessionWiresContainer sessionId="s1" />)
     expect(container).toBeEmptyDOMElement()
+  })
+
+  it('A ignores summary traffic but updates referenced names and missing endpoints', () => {
+    useSessionRelayStore.setState({ relays: [hail('r1', 's1', 's2')] })
+    const onRender = vi.fn()
+    render(
+      <Profiler id="wires" onRender={onRender}>
+        <SessionWiresContainer sessionId="s1" />
+      </Profiler>,
+    )
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '1 wire fires when this session finishes.',
+      }),
+    )
+    onRender.mockClear()
+
+    act(() =>
+      useSessionStore.setState((state) => ({
+        globalSessions: state.globalSessions.map((entry) => ({
+          ...entry,
+          name: entry.id === 's3' ? 'Unrelated rename' : entry.name,
+          updatedAt: '2026-09-25T00:00:00.000Z',
+        })),
+      })),
+    )
+    expect(onRender).not.toHaveBeenCalled()
+
+    act(() =>
+      useSessionStore.setState((state) => ({
+        globalSessions: state.globalSessions.map((entry) => ({
+          ...entry,
+          name:
+            entry.id === 's1'
+              ? 'New source'
+              : entry.id === 's2'
+                ? 'New target'
+                : entry.name,
+        })),
+      })),
+    )
+    expect(
+      screen.getByText(
+        'When New source finishes, send its last message to New target',
+      ),
+    ).toBeVisible()
+
+    act(() =>
+      useSessionStore.setState((state) => ({
+        globalSessions: state.globalSessions.filter(
+          (entry) => entry.id !== 's2',
+        ),
+      })),
+    )
+    expect(
+      screen.getByText(
+        'When New source finishes, send its last message to a session that no longer exists',
+      ),
+    ).toBeVisible()
+
+    act(() =>
+      useSessionStore.setState((state) => ({
+        globalSessions: [
+          ...state.globalSessions,
+          session('s2', 'Returned target'),
+        ],
+      })),
+    )
+    expect(
+      screen.getByText(
+        'When New source finishes, send its last message to Returned target',
+      ),
+    ).toBeVisible()
+
+    act(() =>
+      useSessionRelayStore.setState({ relays: [hail('r1', 's1', 's3')] }),
+    )
+    expect(
+      screen.getByText(
+        'When New source finishes, send its last message to Unrelated rename',
+      ),
+    ).toBeVisible()
   })
 
   it('renders nothing for a session wires only point at', () => {
