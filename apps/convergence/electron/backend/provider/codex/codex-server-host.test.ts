@@ -244,7 +244,7 @@ describe('CodexServerHost', () => {
     env.registry.stopAll()
   })
 
-  it('fails an arriving connection with the same maintenance failure', async () => {
+  it('admits an arriving connection after maintenance fails', async () => {
     const env = createEnvironment()
     const host = env.registry.get({ account: accountA })
     let release!: () => void
@@ -256,12 +256,12 @@ describe('CodexServerHost', () => {
     })
     const failed = expect(maintenance).rejects.toThrow('migration failed')
     await vi.waitFor(() => expect(release).toBeTypeOf('function'))
-    const waiting = expect(host.connect()).rejects.toThrow('migration failed')
+    const waiting = host.connect()
     release()
-    await Promise.all([failed, waiting])
-    expect(env.children).toEqual([])
-    const retry = await host.connect()
-    retry.close()
+    await failed
+    const admitted = await waiting
+    expect(env.children).toHaveLength(1)
+    admitted.close()
     env.registry.stopAll()
   })
 

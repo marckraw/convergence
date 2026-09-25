@@ -382,12 +382,9 @@ export class CodexServerHost {
       )
     }
     let release!: () => void
-    let fail!: (error: unknown) => void
-    const admission = new Promise<void>((resolve, reject) => {
+    const admission = new Promise<void>((resolve) => {
       release = resolve
-      fail = reject
     })
-    void admission.catch(() => {})
     // Closed before the witness's first await, including warming helpers.
     this.maintaining = admission
     let mutating = false
@@ -477,13 +474,11 @@ export class CodexServerHost {
         this.retired = true
         this.stopped = true
       }
-      release()
       return result
     } catch (error) {
-      // A refused witness did not disturb this server. Bystanders may enter
-      // after the window reopens; only a failed mutation belongs to them.
+      // The maintenance result belongs to its caller. Waiting sends re-enter
+      // after either refusal or failed work, using the surviving or new server.
       if (options.handoff && !mutating) {
-        release()
         throw error instanceof HandoffRefusedError
           ? error
           : new HandoffRefusedError(
@@ -491,10 +486,10 @@ export class CodexServerHost {
               `${options.handoff.accountLabel}: ${error instanceof Error ? error.message : String(error)} Your message was not sent.`,
             )
       }
-      fail(error)
       throw error
     } finally {
       this.maintaining = null
+      release()
     }
   }
 
@@ -1068,12 +1063,9 @@ export class CodexServerHostRegistry {
     const host =
       this.hosts.get(key) ?? (this.binaryPath ? this.get(input) : null)
     let release!: () => void
-    let fail!: (error: unknown) => void
-    const admission = new Promise<void>((resolve, reject) => {
+    const admission = new Promise<void>((resolve) => {
       release = resolve
-      fail = reject
     })
-    void admission.catch(() => {})
     this.maintainingKeys.set(key, admission)
     try {
       // Detection may already have removed an old host from `hosts`. Its
@@ -1085,14 +1077,10 @@ export class CodexServerHostRegistry {
       if (options.retire && this.hosts.get(key) === host) {
         this.hosts.delete(key)
       }
-      release()
       return result
-    } catch (error) {
-      if (error instanceof HandoffRefusedError) release()
-      else fail(error)
-      throw error
     } finally {
       this.maintainingKeys.delete(key)
+      release()
     }
   }
 

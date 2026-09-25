@@ -2781,20 +2781,22 @@ export class CodexProvider implements Provider {
             'not-eligible',
             'The account handoff was stopped before sending.',
           )
-        const activeRpc = await openConnection()
-        if (!activeRpc || stopped)
-          throw new HandoffRefusedError(
-            'not-eligible',
-            'The destination connection closed before sending.',
-          )
-        // Resume before preparing the user item. Publication remains held until
-        // turn/start accepts too: the server can refuse a missing thread there.
-        await ensureThread(activeRpc)
-        await sendCodexTurn({
-          activeRpc,
-          text: config.initialMessage,
-          attachments: config.initialAttachments,
-          skillSelections: config.initialSkillSelections,
+        await prepareSend(async () => {
+          const activeRpc = await openConnection()
+          if (!activeRpc || stopped)
+            throw new HandoffRefusedError(
+              'not-eligible',
+              'The destination connection closed before sending.',
+            )
+          // Resume before preparing the user item. Publication remains held until
+          // turn/start accepts too: the server can refuse a missing thread there.
+          await ensureThread(activeRpc)
+          await sendCodexTurn({
+            activeRpc,
+            text: config.initialMessage,
+            attachments: config.initialAttachments,
+            skillSelections: config.initialSkillSelections,
+          })
         })
         acceptInitial({
           publish: () => {
