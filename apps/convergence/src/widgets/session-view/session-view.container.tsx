@@ -600,7 +600,7 @@ export const SessionView: FC = () => {
                       {remoteDetails.branch && (
                         <SessionHeaderDetailRow
                           icon={<GitBranch className="h-3.5 w-3.5" />}
-                          label="Remote branch (reported or requested)"
+                          label="Remote branch"
                           value={remoteDetails.branch}
                         />
                       )}

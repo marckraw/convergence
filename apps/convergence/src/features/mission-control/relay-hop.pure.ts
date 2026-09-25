@@ -278,7 +278,9 @@ export function buildSessionWireHint(
     parts.push(`sends only if its last line matches (${conditionalOutgoing})`)
   }
   if (unconditionalIncoming > 0) {
-    parts.push(`receives from ${unconditionalIncoming} other`)
+    parts.push(
+      `receives from ${unconditionalIncoming} ${unconditionalIncoming === 1 ? 'other' : 'others'}`,
+    )
   }
   if (conditionalIncoming > 0) {
     parts.push(

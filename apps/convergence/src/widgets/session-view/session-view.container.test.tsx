@@ -662,59 +662,65 @@ describe('SessionView', () => {
    * Mutation: drop the remote branch from `resolveRemoteSessionDetails` (or
    * render the local rows unconditionally again) and this goes red.
    */
-  it("shows a remote session the daemon's branch and pull request, never the local ones", async () => {
-    useSessionStore.setState((state) => ({
-      ...state,
-      sessions: state.sessions.map((session) =>
-        session.id === 'session-1'
-          ? {
-              ...session,
-              executionHost: 'daemon-a',
-              workAddress: {
-                mode: 'repository' as const,
-                repository: 'https://github.com/marckraw/convergence.git',
-                branchName: null,
-                label: 'marckraw/convergence',
-              },
-              reportedWorkspace: {
-                mode: 'repository' as const,
-                repository: 'https://github.com/marckraw/convergence.git',
-                branchName: 'agent/34372e47',
-                baseRef: 'master',
-                workspacePath: '/srv/worktrees/s-1',
-                environment: null,
-              },
-            }
-          : session,
-      ),
-    }))
+  it.each([
+    { branchName: 'agent/34372e47', expectedBranch: 'agent/34372e47' },
+    { branchName: null, expectedBranch: 'daemon-named' },
+  ])(
+    'CH1 D shows Remote branch with $expectedBranch, never the local branch',
+    async ({ branchName, expectedBranch }) => {
+      useSessionStore.setState((state) => ({
+        ...state,
+        sessions: state.sessions.map((session) =>
+          session.id === 'session-1'
+            ? {
+                ...session,
+                executionHost: 'daemon-a',
+                workAddress: {
+                  mode: 'repository' as const,
+                  repository: 'https://github.com/marckraw/convergence.git',
+                  branchName: null,
+                  label: 'marckraw/convergence',
+                },
+                reportedWorkspace: branchName
+                  ? {
+                      mode: 'repository' as const,
+                      repository: 'https://github.com/marckraw/convergence.git',
+                      branchName,
+                      baseRef: 'master',
+                      workspacePath: '/srv/worktrees/s-1',
+                      environment: null,
+                    }
+                  : null,
+              }
+            : session,
+        ),
+      }))
 
-    render(
-      <TooltipProvider>
-        <SessionView />
-      </TooltipProvider>,
-    )
-    fireEvent.pointerDown(
-      screen.getByRole('button', { name: 'Session details' }),
-    )
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+      fireEvent.pointerDown(
+        screen.getByRole('button', { name: 'Session details' }),
+      )
 
-    const panel = await screen.findByText('Works in')
-    const rows = panel.closest('div')?.parentElement
-    expect(rows).toBeTruthy()
-    expect(rows?.textContent).toContain('agent/34372e47')
-    expect(
-      screen.getByText('Remote branch (reported or requested)'),
-    ).toBeInTheDocument()
-    // The two local rows, gone: this session runs on another machine and has
-    // no worktree here to have a branch or a pull request on.
-    expect(rows?.textContent).not.toContain('No workspace')
-    expect(rows?.textContent).not.toContain('master')
-    // The branch stays recorded; the PR row reports the Mac lookup's failure.
-    await waitFor(() =>
-      expect(rows?.textContent).toContain('PR unknown — gh not found'),
-    )
-    expect(rows?.textContent).not.toContain('None yet')
-  })
+      const panel = await screen.findByText('Works in')
+      const rows = panel.closest('div')?.parentElement
+      expect(rows).toBeTruthy()
+      expect(rows?.textContent).toContain(expectedBranch)
+      expect(screen.getByText('Remote branch')).toBeInTheDocument()
+      // The two local rows, gone: this session runs on another machine and has
+      // no worktree here to have a branch or a pull request on.
+      expect(rows?.textContent).not.toContain('No workspace')
+      expect(rows?.textContent).not.toContain('master')
+      // The branch stays recorded; the PR row reports the Mac lookup's failure.
+      await waitFor(() =>
+        expect(rows?.textContent).toContain('PR unknown — gh not found'),
+      )
+      expect(rows?.textContent).not.toContain('None yet')
+    },
+  )
 
   // The refresh is the gh-backed session lookup; the daemon snapshot is a hint.
   it('checks the PR when Session details opens (mutation: omit details refresh)', async () => {

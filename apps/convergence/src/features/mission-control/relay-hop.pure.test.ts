@@ -341,6 +341,12 @@ describe('buildSessionWireHint', () => {
     expect(hint?.label).toContain('every wire touching it is disarmed')
   })
 
+  it('CH1 E pluralises two unconditional incoming wires', () => {
+    expect(
+      buildSessionWireHint([wire('s2', 's1'), wire('s3', 's1')], 's1')?.label,
+    ).toBe('Wired: receives from 2 others')
+  })
+
   it('ignores a wire with no target when counting what arrives', () => {
     const hint = buildSessionWireHint([wire('s1', null)], 's1')
 
