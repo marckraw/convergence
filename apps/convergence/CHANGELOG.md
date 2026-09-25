@@ -1,5 +1,11 @@
 # convergence
 
+## 0.88.3
+
+### Patch Changes
+
+- 6581596: The wires leaving a conversation now show beside the Quiet switch in the composer.
+
 ## 0.88.2
 
 ### Patch Changes
