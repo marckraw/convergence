@@ -8,6 +8,7 @@ export type {
   Project,
 } from './project.types'
 export { useProjectStore } from './project.model'
+export { selectProjectName } from './project-name.pure'
 export type { ProjectStore } from './project.model'
 export { dialogApi, laneApi, projectApi } from './project.api'
 export {

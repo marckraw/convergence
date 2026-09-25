@@ -8,6 +8,7 @@ import { useContextDrillStore } from '@/entities/context-drill'
 import { useSessionRelayStore } from '@/entities/session-relay'
 import { useProjectScriptStore } from '@/entities/project-script'
 import { useWorkspaceStore } from '@/entities/workspace'
+import { useTerminalStore } from '@/entities/terminal'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
 const navigationScroll = vi.hoisted(() => vi.fn())
@@ -27,6 +28,33 @@ function sessionRowWidth(width: number) {
       return this.hasAttribute('data-session-row')
         ? ({ width } as DOMRect)
         : measure.call(this)
+    },
+  )
+}
+
+/**
+ * A laid-out conversation header (MAR-3427): the header measures `width`, each
+ * drawn control `itemWidth`, and the two names their own natural widths. A
+ * control that renders nothing measures nothing, as in the browser.
+ */
+function headerWidth(width: number, itemWidth = 90) {
+  const measure = HTMLElement.prototype.getBoundingClientRect
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+    function (this: HTMLElement) {
+      if (this.hasAttribute('data-conversation-header'))
+        return { width } as DOMRect
+      if (this.hasAttribute('data-header-inner'))
+        return {
+          width: this.childElementCount > 0 ? itemWidth : 0,
+        } as DOMRect
+      return measure.call(this)
+    },
+  )
+  vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      if (this.hasAttribute('data-header-project')) return 90
+      if (this.hasAttribute('data-header-name')) return 200
+      return 0
     },
   )
 }
@@ -1794,5 +1822,184 @@ describe('SessionView', () => {
     expect(focused?.closest('[role="dialog"][data-state="closed"]')).toBeNull()
     expect(dialogs[0].contains(focused)).toBe(true)
     expect(openerFocused).not.toHaveBeenCalled()
+  })
+
+  describe('MAR-3427 CH3 the conversation header', () => {
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    const otherProject = {
+      id: 'project-2',
+      name: 'emergence',
+      repositoryPath: '/tmp/emergence',
+      settings: DEFAULT_PROJECT_SETTINGS,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      laneOf: null,
+      laneName: null,
+    }
+
+    it('R1 names the session’s own project and the conversation, in title and accessible name — mutation use activeProject turns red', () => {
+      // The sidebar has convergence selected; this conversation is emergence's.
+      useProjectStore.setState((state) => ({
+        projects: [state.activeProject!, otherProject],
+      }))
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) => ({
+          ...session,
+          projectId: 'project-2',
+        })),
+      }))
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+      const identity = screen.getByRole('group', {
+        name: 'Test session, in emergence',
+      })
+      expect(identity).toHaveAttribute('title', 'emergence / Test session')
+      expect(identity).toHaveTextContent('emergence')
+      expect(identity).toHaveTextContent('Test session')
+      expect(identity).not.toHaveTextContent('convergence')
+    })
+
+    it('R1 the project gives way before the conversation name: the name keeps its reserve', () => {
+      useProjectStore.setState((state) => ({
+        projects: [state.activeProject!],
+      }))
+      headerWidth(400)
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+      const project = document.querySelector<HTMLElement>(
+        '[data-header-project]',
+      )!
+      const name = document.querySelector<HTMLElement>('[data-header-name]')!
+      expect(name.style.minWidth).toBe('120px')
+      expect(project.style.minWidth).toBe('40px')
+      expect(project.className).toContain('shrink-[999]')
+    })
+
+    it('R4 a narrow header moves the terminal toggle and Open into More by name, and the terminal item toggles the terminal — mutation drop yielded items turns red', async () => {
+      const hydratePaneTree = vi.fn().mockResolvedValue(undefined)
+      useTerminalStore.setState({ hydratePaneTree, treesBySessionId: {} })
+      headerWidth(400)
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+      // Yielded: out of the header's reach, still mounted.
+      expect(
+        screen.queryByRole('button', { name: 'Open project' }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Open terminal' }),
+      ).not.toBeInTheDocument()
+
+      fireEvent.pointerDown(
+        screen.getByRole('button', { name: 'Session actions' }),
+      )
+      expect(
+        await screen.findByRole('menuitem', { name: 'Open terminal' }),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('menuitem', { name: 'Open project' }),
+      ).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Open terminal' }))
+      expect(hydratePaneTree).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        cwd: '/tmp/project',
+        cols: 80,
+        rows: 24,
+      })
+    })
+
+    it('R4 Open, yielded, opens its own menu from More and still opens the workspace', async () => {
+      headerWidth(400)
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+      // Let the app list land so Open is enabled.
+      await act(async () => {
+        await Promise.resolve()
+      })
+      fireEvent.pointerDown(
+        screen.getByRole('button', { name: 'Session actions' }),
+      )
+      fireEvent.click(
+        await screen.findByRole('menuitem', { name: 'Open project' }),
+      )
+      fireEvent.click(await screen.findByText('VS Code'))
+      const projectOpen = (
+        window as unknown as {
+          electronAPI: { projectOpen: { open: ReturnType<typeof vi.fn> } }
+        }
+      ).electronAPI.projectOpen
+      await waitFor(() =>
+        expect(projectOpen.open).toHaveBeenCalledWith({
+          appId: 'vscode',
+          path: '/tmp/project',
+        }),
+      )
+    })
+
+    it('R5 a narrow running header puts identity, Stop and More on row 1 and the status on row 2', () => {
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) => ({
+          ...session,
+          status: 'running' as const,
+        })),
+      }))
+      headerWidth(400)
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+      const header = document.querySelector('[data-conversation-header]')!
+      expect(header).toHaveAttribute('data-header-rows', '2')
+      const statusRow = header.querySelector('[data-header-status-row]')!
+      expect(statusRow).toHaveTextContent('Running')
+      expect(
+        screen.getByRole('button', { name: 'Stop Test session' }),
+      ).toBeInTheDocument()
+    })
+
+    it('R7 every button in the header sits inside a no-drag region, and the header itself drags — mutation remove no-drag from the right-hand group turns red', () => {
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) => ({
+          ...session,
+          status: 'running' as const,
+        })),
+      }))
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+      const header = document.querySelector<HTMLElement>(
+        '[data-conversation-header]',
+      )!
+      expect(header).toHaveAttribute('data-app-region', 'drag')
+      const buttons = header.querySelectorAll('button')
+      // The right-hand group is in the sweep: Stop and More live there.
+      expect(
+        [...buttons].map((button) => button.getAttribute('aria-label')),
+      ).toEqual(
+        expect.arrayContaining(['Stop Test session', 'Session actions']),
+      )
+      for (const button of buttons)
+        expect(
+          button.closest('[data-app-region]')?.getAttribute('data-app-region'),
+          button.textContent ?? '',
+        ).toBe('no-drag')
+    })
   })
 })

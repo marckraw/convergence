@@ -12,3 +12,7 @@ export type { PierreDiffViewerProps } from './pierre-diff-viewer.presentational'
 
 export { ParallelWork } from './parallel-work.container'
 export { useParallelWork } from './use-parallel-work'
+export {
+  ConversationHeader,
+  useConversationViewEntries,
+} from './conversation-header.container'

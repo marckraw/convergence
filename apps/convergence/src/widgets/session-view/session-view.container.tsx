@@ -8,7 +8,7 @@ import { useParallelWork } from './use-parallel-work'
 import { isRemoteExecutionHost } from '@/entities/execution-host'
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import type { FC } from 'react'
-import { useProjectStore } from '@/entities/project'
+import { selectProjectName, useProjectStore } from '@/entities/project'
 import {
   AttentionIndicator,
   useSessionStore,
@@ -50,7 +50,6 @@ import {
   Cloud,
   GitFork,
   Link2,
-  MoreVertical,
   Pin,
   ScrollText,
   Square,
@@ -70,7 +69,16 @@ import {
 } from './space-context-panel.presentational'
 import { PullRequestPanel } from './pull-request-panel.presentational'
 import { SessionHeaderDetailRow } from './session-header-detail-row.presentational'
-import { useAgentMeterStore, SessionAgentMeter } from '@/entities/agent-meter'
+import {
+  formatSessionMeter,
+  useAgentMeterStore,
+  SessionAgentMeter,
+} from '@/entities/agent-meter'
+import {
+  ConversationHeader,
+  useConversationViewEntries,
+} from './conversation-header.container'
+import { harnessPill } from './harness-facts.pure'
 import { SessionWiresContainer } from './session-wires.container'
 import { SessionConversationSurface } from './session-conversation-surface.container'
 import { SessionElapsedDuration } from './session-elapsed-duration.container'
@@ -148,6 +156,11 @@ export const SessionView: FC = () => {
     session?.providerId === 'claude-code' &&
     !isRemoteExecutionHost(session.executionHost)
   const harness = useHarnessFacts(supportsHarnessFacts ? activeSessionId : null)
+  // The session's own project, never the one selected in the sidebar (R1).
+  const sessionProjectName = useProjectStore(
+    selectProjectName(session?.projectId ?? null),
+  )
+  const viewEntries = useConversationViewEntries(session?.id ?? '')
   const parallel = useParallelWork(activeSessionId)
   // The transcript is a memo boundary (MAR-3310 F1e R2): what it is handed
   // keeps its identity until what it does changes.
@@ -464,6 +477,31 @@ export const SessionView: FC = () => {
     )
   }
 
+  const toggleParallel = () => {
+    if (parallelOpen) closeParallel()
+    else {
+      parallelInvoker.current = parallelButton.current
+      setParallelOpen(true)
+    }
+  }
+  const toggleTerminal = () => {
+    if (hasTerminal) {
+      void closeAllTerminals(session.id)
+    } else {
+      void hydratePaneTree({
+        sessionId: session.id,
+        cwd: session.workingDirectory,
+        cols: 80,
+        rows: 24,
+      })
+    }
+  }
+  const pinLabel = `${session.pinnedAt ? 'Unpin' : 'Pin'} ${session.name}`
+  const togglePin = () =>
+    void setPinned(session.id, !session.pinnedAt).catch((error) =>
+      toast.error(error instanceof Error ? error.message : String(error)),
+    )
+
   return (
     <div
       ref={sessionRootRef}
@@ -472,352 +510,491 @@ export const SessionView: FC = () => {
     >
       {/* Main session area */}
       <div className="relative flex min-w-0 flex-1 flex-col">
-        {/* Header */}
-        <div
-          className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4"
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        >
-          <div
-            className="flex min-w-0 items-center gap-2"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          >
-            <span className="min-w-0 truncate text-sm font-medium">
-              {session.name}
-            </span>
-            <Button
-              ref={parallelButton}
-              variant="ghost"
-              size="sm"
-              aria-expanded={parallelOpen}
-              onClick={() => {
-                if (parallelOpen) closeParallel()
-                else {
-                  parallelInvoker.current = parallelButton.current
-                  setParallelOpen(true)
-                }
-              }}
-            >
-              Parallel work
-              {session.parallelWork?.running
-                ? ` · ${session.parallelWork.running}`
-                : ''}
-            </Button>
-            <SessionTranscriptViewSwitch sessionId={session.id} />
-            <AttentionIndicator
-              parallelWork={session.parallelWork}
-              attention={session.attention}
-              status={session.status}
-              activity={session.activity}
-            />
-            {isRemoteExecutionHost(session.executionHost) && (
-              <span
-                className="flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[11px] text-sky-600 dark:text-sky-300"
-                title="This session runs on the remote execution host"
-                data-testid="session-remote-indicator"
-              >
-                <Cloud className="h-3 w-3" />
-                Remote
-              </span>
-            )}
-            {activityLabel && (
-              <span
-                className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground"
-                data-testid="session-activity-indicator"
-              >
-                {activityLabel}
-              </span>
-            )}
-            {sessionWorktreeRemoved && (
-              <span className="flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[11px] text-warning-foreground">
-                Worktree removed
-              </span>
-            )}
-            {supportsHarnessFacts && (
-              <HarnessFactsView
-                facts={harness.facts}
-                error={harness.error}
-                loading={harness.loading}
-                onRetry={harness.retry}
-              />
-            )}
-            <SessionAgentMeter
-              row={meterRow}
-              remote={isRemoteExecutionHost(session.executionHost)}
-            />
-            <SessionWiresContainer sessionId={session.id} />
-            <DropdownMenu
-              onOpenChange={(open) => {
-                if (open) void refreshPullRequest()
-              }}
-            >
-              <DropdownMenuTrigger asChild>
+        <ConversationHeader
+          projectName={sessionProjectName ?? 'Unknown project'}
+          conversationName={session.name}
+          slots={[
+            {
+              id: 'parallel-work',
+              side: 'left',
+              // While something runs it is live status, and it stays (R2).
+              group: session.parallelWork?.running ? 'status' : 'control',
+              node: (
                 <Button
-                  type="button"
+                  ref={parallelButton}
                   variant="ghost"
                   size="sm"
-                  className="h-7 rounded-full border border-border/70 px-2 text-[11px] text-muted-foreground"
+                  aria-expanded={parallelOpen}
+                  onClick={toggleParallel}
                 >
-                  Session details
+                  Parallel work
+                  {session.parallelWork?.running
+                    ? ` · ${session.parallelWork.running}`
+                    : ''}
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-80 p-2">
-                <div className="grid gap-1.5 text-xs">
-                  {session.parentSessionId && (
+              ),
+              entries: [
+                {
+                  kind: 'action',
+                  key: 'parallel-work',
+                  label: 'Parallel work',
+                  onSelect: toggleParallel,
+                },
+              ],
+            },
+            {
+              id: 'view',
+              side: 'left',
+              group: 'control',
+              node: <SessionTranscriptViewSwitch sessionId={session.id} />,
+              entries: viewEntries,
+            },
+            {
+              id: 'attention',
+              side: 'left',
+              group: 'status',
+              node: (
+                <AttentionIndicator
+                  parallelWork={session.parallelWork}
+                  attention={session.attention}
+                  status={session.status}
+                  activity={session.activity}
+                />
+              ),
+            },
+            ...(isRemoteExecutionHost(session.executionHost)
+              ? [
+                  {
+                    id: 'remote',
+                    side: 'left' as const,
+                    group: 'status' as const,
+                    node: (
+                      <span
+                        className="flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[11px] text-sky-600 dark:text-sky-300"
+                        title="This session runs on the remote execution host"
+                        data-testid="session-remote-indicator"
+                      >
+                        <Cloud className="h-3 w-3" />
+                        Remote
+                      </span>
+                    ),
+                  },
+                ]
+              : []),
+            ...(activityLabel
+              ? [
+                  {
+                    id: 'activity',
+                    side: 'left' as const,
+                    group: 'status' as const,
+                    node: (
+                      <span
+                        className="max-w-[12rem] truncate rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground"
+                        title={activityLabel}
+                        data-testid="session-activity-indicator"
+                      >
+                        {activityLabel}
+                      </span>
+                    ),
+                  },
+                ]
+              : []),
+            ...(sessionWorktreeRemoved
+              ? [
+                  {
+                    id: 'worktree-removed',
+                    side: 'left' as const,
+                    group: 'status' as const,
+                    node: (
+                      <span className="flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[11px] text-warning-foreground">
+                        Worktree removed
+                      </span>
+                    ),
+                  },
+                ]
+              : []),
+            ...(supportsHarnessFacts
+              ? [
+                  {
+                    id: 'harness',
+                    side: 'left' as const,
+                    // An alert is live status and stays; otherwise it yields.
+                    group: harnessPill(harness.facts).alert
+                      ? ('status' as const)
+                      : ('control' as const),
+                    node: (
+                      <HarnessFactsView
+                        facts={harness.facts}
+                        error={harness.error}
+                        loading={harness.loading}
+                        onRetry={harness.retry}
+                      />
+                    ),
+                    entries: [
+                      {
+                        kind: 'opens' as const,
+                        key: 'harness',
+                        opens: 'menu' as const,
+                      },
+                    ],
+                  },
+                ]
+              : []),
+            {
+              id: 'agent-meter',
+              side: 'left',
+              group: 'control',
+              node: (
+                <SessionAgentMeter
+                  row={meterRow}
+                  remote={isRemoteExecutionHost(session.executionHost)}
+                />
+              ),
+              entries: [
+                {
+                  kind: 'text',
+                  key: 'agent-meter',
+                  label: formatSessionMeter(
+                    meterRow ?? undefined,
+                    isRemoteExecutionHost(session.executionHost),
+                  ),
+                },
+              ],
+            },
+            {
+              id: 'wires',
+              side: 'left',
+              group: 'control',
+              node: <SessionWiresContainer sessionId={session.id} />,
+              entries: [{ kind: 'opens', key: 'wires', opens: 'popover' }],
+            },
+            {
+              id: 'session-details',
+              side: 'left',
+              group: 'control',
+              node: (
+                <DropdownMenu
+                  onOpenChange={(open) => {
+                    if (open) void refreshPullRequest()
+                  }}
+                >
+                  <DropdownMenuTrigger asChild>
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() =>
-                        session.parentSessionId &&
-                        setActiveSession(session.parentSessionId)
-                      }
-                      className="h-auto justify-start gap-2 px-2 py-1.5 text-xs"
+                      className="h-7 rounded-full border border-border/70 px-2 text-[11px] text-muted-foreground"
                     >
-                      <GitFork className="h-3.5 w-3.5" />
-                      Forked from:{' '}
-                      {globalSessions.find(
-                        (entry) => entry.id === session.parentSessionId,
-                      )?.name ?? 'parent'}
+                      Session details
                     </Button>
-                  )}
-                  {remoteDetails ? (
-                    <>
-                      <SessionHeaderDetailRow
-                        icon={<Cloud className="h-3.5 w-3.5" />}
-                        label="Execution host"
-                        value="Remote daemon"
-                      />
-                      {/*
-                        What this session was told, above what the daemon says
-                        it did (MAR-2689). A row written before the work address
-                        existed reads "Unknown" rather than a repository
-                        re-derived from a local checkout it may never have
-                        matched.
-                      */}
-                      <SessionHeaderDetailRow
-                        label="Works in"
-                        value={remoteDetails.worksIn}
-                      />
-                      {remoteDetails.remoteRepository && (
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-80 p-2">
+                    <div className="grid gap-1.5 text-xs">
+                      {session.parentSessionId && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            session.parentSessionId &&
+                            setActiveSession(session.parentSessionId)
+                          }
+                          className="h-auto justify-start gap-2 px-2 py-1.5 text-xs"
+                        >
+                          <GitFork className="h-3.5 w-3.5" />
+                          Forked from:{' '}
+                          {globalSessions.find(
+                            (entry) => entry.id === session.parentSessionId,
+                          )?.name ?? 'parent'}
+                        </Button>
+                      )}
+                      {remoteDetails ? (
+                        <>
+                          <SessionHeaderDetailRow
+                            icon={<Cloud className="h-3.5 w-3.5" />}
+                            label="Execution host"
+                            value="Remote daemon"
+                          />
+                          {/*
+                    What this session was told, above what the daemon says
+                    it did (MAR-2689). A row written before the work address
+                    existed reads "Unknown" rather than a repository
+                    re-derived from a local checkout it may never have
+                    matched.
+                  */}
+                          <SessionHeaderDetailRow
+                            label="Works in"
+                            value={remoteDetails.worksIn}
+                          />
+                          {remoteDetails.remoteRepository && (
+                            <SessionHeaderDetailRow
+                              label="Remote repository"
+                              value={remoteDetails.remoteRepository}
+                            />
+                          )}
+                          {remoteDetails.branch && (
+                            <SessionHeaderDetailRow
+                              icon={<GitBranch className="h-3.5 w-3.5" />}
+                              label="Remote branch"
+                              value={remoteDetails.branch}
+                            />
+                          )}
+                          {remoteDetails.requestedBranch && (
+                            <SessionHeaderDetailRow
+                              label="Branch requested"
+                              value={remoteDetails.requestedBranch}
+                            />
+                          )}
+                          <SessionHeaderDetailRow
+                            icon={<GitPullRequest className="h-3.5 w-3.5" />}
+                            label="Pull request"
+                            value={pullRequestLabel}
+                          />
+                          {remoteDetails.unreadable && (
+                            <SessionHeaderDetailRow
+                              label="Remote workspace"
+                              value={remoteDetails.unreadable}
+                            />
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <SessionHeaderDetailRow
+                            icon={<GitBranch className="h-3.5 w-3.5" />}
+                            label="Checkout branch"
+                            value={branchName ?? 'Unknown'}
+                          />
+                          <SessionHeaderDetailRow
+                            icon={<GitPullRequest className="h-3.5 w-3.5" />}
+                            label="Pull request"
+                            value={pullRequestLabel}
+                          />
+                        </>
+                      )}
+                      {activityLabel && (
                         <SessionHeaderDetailRow
-                          label="Remote repository"
-                          value={remoteDetails.remoteRepository}
+                          label="Activity"
+                          value={activityLabel}
                         />
                       )}
-                      {remoteDetails.branch && (
-                        <SessionHeaderDetailRow
-                          icon={<GitBranch className="h-3.5 w-3.5" />}
-                          label="Remote branch"
-                          value={remoteDetails.branch}
-                        />
-                      )}
-                      {remoteDetails.requestedBranch && (
-                        <SessionHeaderDetailRow
-                          label="Branch requested"
-                          value={remoteDetails.requestedBranch}
-                        />
-                      )}
-                      <SessionHeaderDetailRow
-                        icon={<GitPullRequest className="h-3.5 w-3.5" />}
-                        label="Pull request"
-                        value={pullRequestLabel}
-                      />
-                      {remoteDetails.unreadable && (
-                        <SessionHeaderDetailRow
-                          label="Remote workspace"
-                          value={remoteDetails.unreadable}
-                        />
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <SessionHeaderDetailRow
-                        icon={<GitBranch className="h-3.5 w-3.5" />}
-                        label="Checkout branch"
-                        value={branchName ?? 'Unknown'}
+                      <SessionElapsedDuration
+                        label={elapsedReading.label}
+                        totalMs={elapsedReading.totalMs}
+                        streamingItem={elapsedReading.streamingItem}
+                        turnSpan={elapsedReading.turnSpan}
                       />
                       <SessionHeaderDetailRow
-                        icon={<GitPullRequest className="h-3.5 w-3.5" />}
-                        label="Pull request"
-                        value={pullRequestLabel}
+                        label="Context"
+                        value={formatSessionContextLabel(session.contextWindow)}
                       />
-                    </>
-                  )}
-                  {activityLabel && (
-                    <SessionHeaderDetailRow
-                      label="Activity"
-                      value={activityLabel}
-                    />
-                  )}
-                  <SessionElapsedDuration
-                    label={elapsedReading.label}
-                    totalMs={elapsedReading.totalMs}
-                    streamingItem={elapsedReading.streamingItem}
-                    turnSpan={elapsedReading.turnSpan}
-                  />
-                  <SessionHeaderDetailRow
-                    label="Context"
-                    value={formatSessionContextLabel(session.contextWindow)}
-                  />
-                  {session.archivedAt && (
-                    <SessionHeaderDetailRow
-                      icon={<Archive className="h-3.5 w-3.5" />}
-                      label="State"
-                      value="Archived"
-                    />
-                  )}
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-          <div
-            className="flex items-center gap-1"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          >
-            {activeProject && (
-              <ProjectActionsMenu
-                project={activeProject}
-                runtimeCwd={session.workingDirectory}
-              />
-            )}
-            <ProjectOpenMenuContainer targetPath={sessionOpenPath} />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={handleTogglePullRequestPanel}
-              title="Pull request status"
-              aria-pressed={showPullRequestPanel ? true : undefined}
-            >
-              <GitPullRequest className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => {
-                if (hasTerminal) {
-                  void closeAllTerminals(session.id)
-                } else {
-                  void hydratePaneTree({
-                    sessionId: session.id,
-                    cwd: session.workingDirectory,
-                    cols: 80,
-                    rows: 24,
-                  })
-                }
-              }}
-              title={hasTerminal ? 'Close terminal' : 'Open terminal'}
-              aria-pressed={hasTerminal ? true : undefined}
-            >
-              <TerminalSquare className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10"
-              title={session.pinnedAt ? 'Unpin session' : 'Pin session'}
-              aria-label={`${session.pinnedAt ? 'Unpin' : 'Pin'} ${session.name}`}
-              aria-pressed={!!session.pinnedAt}
-              onClick={() =>
-                void setPinned(session.id, !session.pinnedAt).catch((error) =>
-                  toast.error(
-                    error instanceof Error ? error.message : String(error),
-                  ),
-                )
-              }
-            >
-              <Pin
-                className={
-                  session.pinnedAt
-                    ? 'h-3.5 w-3.5 fill-current text-primary'
-                    : 'h-3.5 w-3.5'
-                }
-              />
-            </Button>
-            {session.status === 'running' && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                aria-label={`Stop ${session.name}`}
-                title={`Stop ${session.name}`}
-                onClick={() => stopSession(session.id)}
-              >
-                <Square className="h-3 w-3" />
-              </Button>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+                      {session.archivedAt && (
+                        <SessionHeaderDetailRow
+                          icon={<Archive className="h-3.5 w-3.5" />}
+                          label="State"
+                          value="Archived"
+                        />
+                      )}
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ),
+              entries: [
+                { kind: 'opens', key: 'session-details', opens: 'menu' },
+              ],
+            },
+            ...(activeProject
+              ? [
+                  {
+                    id: 'project-actions',
+                    side: 'right' as const,
+                    group: 'control' as const,
+                    node: (
+                      <ProjectActionsMenu
+                        project={activeProject}
+                        runtimeCwd={session.workingDirectory}
+                      />
+                    ),
+                    entries: [
+                      {
+                        kind: 'opens' as const,
+                        key: 'project-actions',
+                        opens: 'menu' as const,
+                      },
+                    ],
+                  },
+                ]
+              : []),
+            {
+              id: 'open',
+              side: 'right',
+              group: 'control',
+              node: <ProjectOpenMenuContainer targetPath={sessionOpenPath} />,
+              entries: [{ kind: 'opens', key: 'open', opens: 'menu' }],
+            },
+            {
+              id: 'pull-request',
+              side: 'right',
+              group: 'control',
+              node: (
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
-                  title="More actions"
-                  aria-label="Session actions"
+                  onClick={handleTogglePullRequestPanel}
+                  title="Pull request status"
+                  aria-pressed={showPullRequestPanel ? true : undefined}
                 >
-                  <MoreVertical className="h-3.5 w-3.5" />
+                  <GitPullRequest className="h-3.5 w-3.5" />
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {session.providerId !== 'shell' && (
-                  <DropdownMenuItem
-                    onClick={() =>
-                      openDialog('session-fork', {
-                        parentSessionId: session.id,
-                      })
+              ),
+              entries: [
+                {
+                  kind: 'action',
+                  key: 'pull-request',
+                  label: 'Pull request status',
+                  checked: showPullRequestPanel,
+                  onSelect: handleTogglePullRequestPanel,
+                },
+              ],
+            },
+            {
+              id: 'terminal',
+              side: 'right',
+              group: 'control',
+              node: (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={toggleTerminal}
+                  title={hasTerminal ? 'Close terminal' : 'Open terminal'}
+                  aria-pressed={hasTerminal ? true : undefined}
+                >
+                  <TerminalSquare className="h-3.5 w-3.5" />
+                </Button>
+              ),
+              entries: [
+                {
+                  kind: 'action',
+                  key: 'terminal',
+                  label: hasTerminal ? 'Close terminal' : 'Open terminal',
+                  onSelect: toggleTerminal,
+                },
+              ],
+            },
+            {
+              id: 'pin',
+              side: 'right',
+              group: 'control',
+              node: (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10"
+                  title={session.pinnedAt ? 'Unpin session' : 'Pin session'}
+                  aria-label={pinLabel}
+                  aria-pressed={!!session.pinnedAt}
+                  onClick={togglePin}
+                >
+                  <Pin
+                    className={
+                      session.pinnedAt
+                        ? 'h-3.5 w-3.5 fill-current text-primary'
+                        : 'h-3.5 w-3.5'
                     }
-                    className="gap-2"
-                  >
-                    <GitFork className="h-3.5 w-3.5" />
-                    Fork session…
-                  </DropdownMenuItem>
-                )}
-                {session.providerId !== 'shell' && (
-                  <DropdownMenuItem
-                    onClick={() =>
-                      openDialog('space-session-link', {
-                        sessionId: session.id,
-                      })
-                    }
-                    className="gap-2"
-                  >
-                    <Link2 className="h-3.5 w-3.5" />
-                    Link to Space...
-                  </DropdownMenuItem>
-                )}
-                {session.providerId !== 'shell' && (
-                  <DropdownMenuItem
-                    onClick={() => {
-                      void setPrimarySurface(
-                        session.id,
-                        session.primarySurface === 'terminal'
-                          ? 'conversation'
-                          : 'terminal',
-                      )
-                    }}
-                    className="gap-2"
-                  >
-                    <ArrowLeftRight className="h-3.5 w-3.5" />
-                    {session.primarySurface === 'terminal'
-                      ? 'Show conversation as main'
-                      : 'Show terminal as main'}
-                  </DropdownMenuItem>
-                )}
-                {session.providerId !== 'shell' && debugLoggingEnabled && (
-                  <DropdownMenuItem
-                    onClick={() => setDebugDrawerOpen(true)}
-                    className="gap-2"
-                  >
-                    <ScrollText className="h-3.5 w-3.5" />
-                    Open debug log…
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
+                  />
+                </Button>
+              ),
+              entries: [
+                {
+                  kind: 'action',
+                  key: 'pin',
+                  label: pinLabel,
+                  onSelect: togglePin,
+                },
+              ],
+            },
+            ...(session.status === 'running'
+              ? [
+                  {
+                    id: 'stop',
+                    side: 'right' as const,
+                    group: 'stop' as const,
+                    node: (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        aria-label={`Stop ${session.name}`}
+                        title={`Stop ${session.name}`}
+                        onClick={() => stopSession(session.id)}
+                      >
+                        <Square className="h-3 w-3" />
+                      </Button>
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+          moreContent={
+            <>
+              {session.providerId !== 'shell' && (
+                <DropdownMenuItem
+                  onClick={() =>
+                    openDialog('session-fork', {
+                      parentSessionId: session.id,
+                    })
+                  }
+                  className="gap-2"
+                >
+                  <GitFork className="h-3.5 w-3.5" />
+                  Fork session…
+                </DropdownMenuItem>
+              )}
+              {session.providerId !== 'shell' && (
+                <DropdownMenuItem
+                  onClick={() =>
+                    openDialog('space-session-link', {
+                      sessionId: session.id,
+                    })
+                  }
+                  className="gap-2"
+                >
+                  <Link2 className="h-3.5 w-3.5" />
+                  Link to Space...
+                </DropdownMenuItem>
+              )}
+              {session.providerId !== 'shell' && (
+                <DropdownMenuItem
+                  onClick={() => {
+                    void setPrimarySurface(
+                      session.id,
+                      session.primarySurface === 'terminal'
+                        ? 'conversation'
+                        : 'terminal',
+                    )
+                  }}
+                  className="gap-2"
+                >
+                  <ArrowLeftRight className="h-3.5 w-3.5" />
+                  {session.primarySurface === 'terminal'
+                    ? 'Show conversation as main'
+                    : 'Show terminal as main'}
+                </DropdownMenuItem>
+              )}
+              {session.providerId !== 'shell' && debugLoggingEnabled && (
+                <DropdownMenuItem
+                  onClick={() => setDebugDrawerOpen(true)}
+                  className="gap-2"
+                >
+                  <ScrollText className="h-3.5 w-3.5" />
+                  Open debug log…
+                </DropdownMenuItem>
+              )}
+            </>
+          }
+        />
 
         <SessionConversationSurface
           compactions={harness.facts?.compactions}

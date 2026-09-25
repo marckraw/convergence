@@ -9,6 +9,7 @@ import type {
 } from '@/entities/session'
 import { useSessionStore } from '@/entities/session'
 import { useSpaceStore } from '@/entities/space'
+import { DEFAULT_PROJECT_SETTINGS, useProjectStore } from '@/entities/project'
 import type { ComposerSessionContext } from '@/features/composer'
 import { ChatSurface } from './chat-surface.container'
 
@@ -71,60 +72,66 @@ vi.mock('@/features/command-center', () => ({
   switchToSession: vi.fn(),
 }))
 
-vi.mock('@/widgets/session-view', () => ({
-  // The real switch is proven in chat-surface.transcript-view.render.test.tsx.
-  SessionTranscriptViewSwitch: () => null,
-  useParallelWork: () => ({ rows: [], error: null, loading: false }),
-  ParallelWork: ({
-    open,
-    onNavigate,
-    onClose,
-    rowRef,
-    otherDockedWidths,
-    onReturnFocus,
-  }: {
-    open: boolean
-    onNavigate: (id: string) => void
-    onClose: () => void
-    rowRef: { current: HTMLElement | null }
-    otherDockedWidths: readonly number[]
-    onReturnFocus: () => void
-  }) =>
-    open ? (
-      <div
-        data-row-holds-conversation={String(
-          Boolean(
-            rowRef.current?.querySelector(
-              '[data-testid="conversation-surface"]',
+vi.mock('@/widgets/session-view', async (importOriginal) => {
+  // The real header and its layout function: R6 is proven through them.
+  const actual = await importOriginal<typeof import('@/widgets/session-view')>()
+  return {
+    ConversationHeader: actual.ConversationHeader,
+    useConversationViewEntries: actual.useConversationViewEntries,
+    // The real switch is proven in chat-surface.transcript-view.render.test.tsx.
+    SessionTranscriptViewSwitch: () => null,
+    useParallelWork: () => ({ rows: [], error: null, loading: false }),
+    ParallelWork: ({
+      open,
+      onNavigate,
+      onClose,
+      rowRef,
+      otherDockedWidths,
+      onReturnFocus,
+    }: {
+      open: boolean
+      onNavigate: (id: string) => void
+      onClose: () => void
+      rowRef: { current: HTMLElement | null }
+      otherDockedWidths: readonly number[]
+      onReturnFocus: () => void
+    }) =>
+      open ? (
+        <div
+          data-row-holds-conversation={String(
+            Boolean(
+              rowRef.current?.querySelector(
+                '[data-testid="conversation-surface"]',
+              ),
             ),
-          ),
-        )}
-        data-other-docked={otherDockedWidths.join(',')}
+          )}
+          data-other-docked={otherDockedWidths.join(',')}
+        >
+          <button onClick={() => onNavigate('spawn')}>mock view spawn</button>
+          <button onClick={onClose}>mock close parallel</button>
+          <button onClick={onReturnFocus}>mock return focus</button>
+        </div>
+      ) : null,
+    SessionConversationSurface: ({
+      session,
+      conversationItems,
+      composerContext,
+      navigationTarget,
+    }: {
+      session: Session
+      conversationItems: ConversationItem[]
+      composerContext: ComposerSessionContext
+      navigationTarget?: { id: string; nonce: number } | null
+    }) => (
+      <div
+        data-testid="conversation-surface"
+        data-navigation={JSON.stringify(navigationTarget)}
       >
-        <button onClick={() => onNavigate('spawn')}>mock view spawn</button>
-        <button onClick={onClose}>mock close parallel</button>
-        <button onClick={onReturnFocus}>mock return focus</button>
+        {session.name}:{conversationItems.length}:{composerContext.kind}
       </div>
-    ) : null,
-  SessionConversationSurface: ({
-    session,
-    conversationItems,
-    composerContext,
-    navigationTarget,
-  }: {
-    session: Session
-    conversationItems: ConversationItem[]
-    composerContext: ComposerSessionContext
-    navigationTarget?: { id: string; nonce: number } | null
-  }) => (
-    <div
-      data-testid="conversation-surface"
-      data-navigation={JSON.stringify(navigationTarget)}
-    >
-      {session.name}:{conversationItems.length}:{composerContext.kind}
-    </div>
-  ),
-}))
+    ),
+  }
+})
 
 const globalSession: Session = {
   id: 'global-session-1',
@@ -873,5 +880,113 @@ describe('ChatSurface', () => {
       otherDocked: panel.dataset.otherDocked,
       focus: document.activeElement === opener,
     }).toEqual({ rowHoldsConversation: 'true', otherDocked: '', focus: true })
+  })
+
+  describe('MAR-3427 CH3 R6 the chat header follows the same rules', () => {
+    afterEach(() => {
+      vi.restoreAllMocks()
+      useProjectStore.setState({ projects: [] })
+    })
+
+    /** The header and its controls laid out, as in the code header test. */
+    function headerWidth(width: number) {
+      const measure = HTMLElement.prototype.getBoundingClientRect
+      vi.spyOn(
+        HTMLElement.prototype,
+        'getBoundingClientRect',
+      ).mockImplementation(function (this: HTMLElement) {
+        if (this.hasAttribute('data-conversation-header'))
+          return { width } as DOMRect
+        if (this.hasAttribute('data-header-inner'))
+          return { width: this.childElementCount > 0 ? 110 : 0 } as DOMRect
+        return measure.call(this)
+      })
+      vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(
+        function (this: HTMLElement) {
+          if (this.hasAttribute('data-header-project')) return 60
+          if (this.hasAttribute('data-header-name')) return 160
+          return 0
+        },
+      )
+    }
+
+    it('names a project-free chat as Chat and a project chat by its own project, with a named Stop', () => {
+      useProjectStore.setState({
+        projects: [
+          {
+            id: 'project-2',
+            name: 'emergence',
+            repositoryPath: '/tmp/emergence',
+            settings: DEFAULT_PROJECT_SETTINGS,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+            laneOf: null,
+            laneName: null,
+          },
+        ],
+      })
+      useSessionStore.setState({
+        globalChatSessions: [
+          { ...globalSession, projectId: 'project-2', status: 'running' },
+        ],
+        activeGlobalSessionId: globalSession.id,
+        activeGlobalConversation: [],
+      })
+      const { unmount } = render(<ChatSurface selectedSpaceId={null} />)
+      expect(
+        screen.getByRole('group', { name: 'Planning chat, in emergence' }),
+      ).toHaveAttribute('title', 'emergence / Planning chat')
+      expect(
+        screen.getByRole('button', { name: 'Stop Planning chat' }),
+      ).toBeInTheDocument()
+      unmount()
+
+      useSessionStore.setState({ globalChatSessions: [globalSession] })
+      render(<ChatSurface selectedSpaceId={null} />)
+      expect(
+        screen.getByRole('group', { name: 'Planning chat, in Chat' }),
+      ).toBeInTheDocument()
+    })
+
+    it('a narrow chat header yields Parallel work into More and keeps Stop — mutation the chat header without the layout function turns red', async () => {
+      useSessionStore.setState({
+        globalChatSessions: [{ ...globalSession, status: 'running' }],
+        activeGlobalSessionId: globalSession.id,
+        activeGlobalConversation: [],
+      })
+      headerWidth(400)
+      render(<ChatSurface selectedSpaceId={null} />)
+      const header = document.querySelector('[data-conversation-header]')!
+      expect(header).toHaveAttribute('data-header-rows', '2')
+      expect(
+        screen.queryByRole('button', { name: 'Parallel work' }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Stop Planning chat' }),
+      ).toBeInTheDocument()
+      fireEvent.pointerDown(
+        screen.getByRole('button', { name: 'Session actions' }),
+      )
+      fireEvent.click(
+        await screen.findByRole('menuitem', { name: 'Parallel work' }),
+      )
+      expect(screen.getByText('mock close parallel')).toBeInTheDocument()
+    })
+
+    it('a wide chat header shows everything and no More at all', () => {
+      useSessionStore.setState({
+        globalChatSessions: [globalSession],
+        activeGlobalSessionId: globalSession.id,
+        activeGlobalConversation: [],
+      })
+      headerWidth(1600)
+      render(<ChatSurface selectedSpaceId={null} />)
+      expect(
+        screen.getByRole('button', { name: 'Parallel work' }),
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Session actions' }),
+      ).not.toBeInTheDocument()
+    })
   })
 })
