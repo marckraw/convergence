@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { FC } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
 import { useSessionRelayStore } from '@/entities/session-relay'
@@ -27,12 +28,37 @@ export const SessionWiresContainer: FC<SessionWiresContainerProps> = ({
   sessionId,
 }) => {
   const relays = useSessionRelayStore((s) => s.relays)
-  const globalSessions = useSessionStore((s) => s.globalSessions)
   const projects = useProjectStore((s) => s.projects)
 
   const outgoing = useMemo(
     () => selectOutgoingWires(relays, sessionId),
     [relays, sessionId],
+  )
+
+  const sessionIds = useMemo(
+    () => [
+      ...new Set(
+        outgoing.flatMap((relay) => [
+          relay.sourceSessionId,
+          ...(relay.action === 'hail' && relay.targetSessionId
+            ? [relay.targetSessionId]
+            : []),
+        ]),
+      ),
+    ],
+    [outgoing],
+  )
+  // Summary traffic must not redraw the disclosure in the composer or header.
+  // Only names used by these sentences can change their session-derived text.
+  const sessionNames = useSessionStore(
+    useShallow((s) =>
+      Object.fromEntries(
+        sessionIds.map((id) => [
+          id,
+          s.globalSessions.find((session) => session.id === id)?.name ?? null,
+        ]),
+      ),
+    ),
   )
 
   const lines = useMemo(
@@ -42,12 +68,12 @@ export const SessionWiresContainer: FC<SessionWiresContainerProps> = ({
         armed: relay.armed,
         text: buildRelaySentence(
           relay,
-          (id) => globalSessions.find((s) => s.id === id)?.name ?? null,
+          (id) => sessionNames[id] ?? null,
           (projectId) =>
             projects.find((p) => p.id === projectId)?.name ?? 'a project',
         ).text,
       })),
-    [outgoing, globalSessions, projects],
+    [outgoing, sessionNames, projects],
   )
 
   const { unconditional, conditional, disarmed } = countSessionWires(outgoing)
