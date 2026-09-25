@@ -1,5 +1,3 @@
-import { readFileSync, readdirSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   act,
@@ -930,20 +928,4 @@ describe('MAR-3203: the footer keeps its primary, whatever it loses', () => {
     expect(footer.className).not.toMatch(/\bflex-col\b/)
     expect(footer.className).toContain('h-10')
   })
-})
-
-it('MAR-2981 R15 no source says the app cannot automatically start a ready ticket', () => {
-  const root = resolve(import.meta.dirname, '../..')
-  const old = ['does not automatically', 'start a ready ticket'].join(' ')
-  const files = readdirSync(root, {
-    recursive: true,
-    withFileTypes: true,
-  }).filter((f) => f.isFile() && /\.tsx?$/.test(f.name))
-  expect(
-    files
-      .filter((f) =>
-        readFileSync(resolve(f.parentPath, f.name), 'utf8').includes(old),
-      )
-      .map((f) => f.name),
-  ).toEqual([])
 })

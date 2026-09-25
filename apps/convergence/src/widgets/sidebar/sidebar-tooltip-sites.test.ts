@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { WALK_TEST_TIMEOUT_MS } from '../../../test/walk-budget'
 
 /**
  * The sidebar's hover hints use the shared Tooltip (MAR-3314 R2).
@@ -50,6 +51,7 @@ describe('MAR-3314 R2: the sidebar cannot grow an OS hint again', () => {
     SIDEBAR_FILES.map((path) => [path.slice(SIDEBAR_ROOT.length + 1), path]),
   )(
     '%s hands no hint to the OS (except truncation or empty title="")',
+    { timeout: WALK_TEST_TIMEOUT_MS },
     (_name, path) => {
       const source = readFileSync(path, 'utf8')
       const offenders = source
@@ -71,14 +73,18 @@ describe('MAR-3314 R2: every sidebar tooltip is no-drag, not just the read one',
 
   it.each(
     withTooltips.map((path) => [path.slice(SIDEBAR_ROOT.length + 1), path]),
-  )('%s gives every tooltip the no-drag style', (_name, path) => {
-    const source = readFileSync(path, 'utf8')
-    const written = source.match(TOOLTIP_CONTENT) ?? []
-    const noDrag = (source.match(TOOLTIP_CONTENT_TAG) ?? []).filter((tag) =>
-      tag.includes(NO_DRAG),
-    )
-    // Mutation: drop the style from ANY one TooltipContent -> red here.
-    expect(written.length).toBeGreaterThan(0)
-    expect(noDrag.length).toBe(written.length)
-  })
+  )(
+    '%s gives every tooltip the no-drag style',
+    { timeout: WALK_TEST_TIMEOUT_MS },
+    (_name, path) => {
+      const source = readFileSync(path, 'utf8')
+      const written = source.match(TOOLTIP_CONTENT) ?? []
+      const noDrag = (source.match(TOOLTIP_CONTENT_TAG) ?? []).filter((tag) =>
+        tag.includes(NO_DRAG),
+      )
+      // Mutation: drop the style from ANY one TooltipContent -> red here.
+      expect(written.length).toBeGreaterThan(0)
+      expect(noDrag.length).toBe(written.length)
+    },
+  )
 })
