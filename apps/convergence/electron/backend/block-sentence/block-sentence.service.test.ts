@@ -9,7 +9,10 @@ import {
   LUNA_ONE_SHOT_TIMEOUT_MS,
 } from './block-sentence.pure'
 import { BlockSentenceService } from './block-sentence.service'
-import type { BlockSentence } from './block-sentence.types'
+import type {
+  BlockSentence,
+  BlockSentenceAttempt,
+} from './block-sentence.types'
 
 let sequence = 0
 
@@ -86,7 +89,22 @@ function harness(
   const turnItems = vi.fn((_sessionId: string, turnId: string) =>
     items.filter((item) => item.turnId === turnId),
   )
+  const attempts: BlockSentenceAttempt[] = []
   const service = new BlockSentenceService({
+    attempts: {
+      insert: (row) => void attempts.push(row),
+      hasRefusal: (sessionId, firstItemId) =>
+        attempts.some(
+          (row) =>
+            row.sessionId === sessionId &&
+            row.firstItemId === firstItemId &&
+            row.outcome === 'refused',
+        ),
+    },
+    turnItemsSince: (_sessionId, turnId, afterSequence) =>
+      items.filter(
+        (item) => item.turnId === turnId && item.sequence > afterSequence,
+      ),
     repository: {
       has: (sessionId, firstItemId) =>
         stored.has(`${sessionId}/${firstItemId}`),
@@ -117,6 +135,7 @@ function harness(
     stored,
     changed,
     turnItems,
+    attempts,
     maxInFlight: () => maxInFlight,
     modelAsked: () => modelAsked,
   }

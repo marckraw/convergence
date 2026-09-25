@@ -176,7 +176,9 @@ describe('CV2b replay: the app asks what the spike measured', () => {
         has: () => false,
         insert: (row) => (stored.push(row), true),
       },
+      attempts: { insert: () => {}, hasRefusal: () => false },
       turnItems: () => turn,
+      turnItemsSince: () => [],
       isTurnActive: () => false,
       isEnabled: () => true,
       model: () => ({

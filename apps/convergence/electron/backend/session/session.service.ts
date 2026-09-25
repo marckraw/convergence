@@ -353,6 +353,13 @@ export class SessionService {
   private onTurnClosed:
     | ((event: { sessionId: string; turnId: string }) => void)
     | null = null
+  private onTurnItemRecorded:
+    | ((event: {
+        sessionId: string
+        turnId: string
+        item: ConversationItem
+      }) => void)
+    | null = null
   private readonly sessionSettledListeners = new Set<SessionSettledListener>()
   private readonly pullRequestHintListeners = new Set<
     (sessionId: string) => void
@@ -505,6 +512,21 @@ export class SessionService {
     this.onTurnClosed = listener
   }
 
+  /**
+   * Told right after an item of the running turn is recorded (MAR-3422
+   * CV3d): a block is finished the moment a boundary follows it. Called on
+   * the insert path, so the listener must only take note and return.
+   */
+  setTurnItemRecordedListener(
+    listener: (event: {
+      sessionId: string
+      turnId: string
+      item: ConversationItem
+    }) => void,
+  ): void {
+    this.onTurnItemRecorded = listener
+  }
+
   /** Whether `turnId` is still the session's running turn. */
   isTurnActive(sessionId: string, turnId: string): boolean {
     return this.activeTurnIds.get(sessionId) === turnId
@@ -523,6 +545,29 @@ export class SessionService {
          ORDER BY items.sequence ASC`,
       )
       .all(sessionId, turnId) as ConversationItemRow[]
+    return rows.map(conversationItemFromRow)
+  }
+
+  /**
+   * A turn's items after `afterSequence`, in sequence order, by the same
+   * (session, turn, sequence) index (MAR-3422 CV3d R4).
+   */
+  getTurnConversationSince(
+    sessionId: string,
+    turnId: string,
+    afterSequence: number,
+  ): ConversationItem[] {
+    this.flushPendingConversationPatchesForSession(sessionId)
+    const rows = this.db
+      .prepare(
+        `SELECT items.*, sessions.provider_id, agents.description AS agent_description, agents.agent_type
+         FROM session_conversation_items items
+         INNER JOIN sessions ON sessions.id = items.session_id
+         LEFT JOIN session_agent_runs agents ON agents.session_id=items.session_id AND agents.id=items.agent_run_id
+         WHERE items.session_id = ? AND items.turn_id = ? AND items.sequence > ?
+         ORDER BY items.sequence ASC`,
+      )
+      .all(sessionId, turnId, afterSequence) as ConversationItemRow[]
     return rows.map(conversationItemFromRow)
   }
 
@@ -4752,6 +4797,11 @@ export class SessionService {
         )
         .run(nextSequence, item.updatedAt, sessionId),
     )
+
+    // The row landed (MAR-3422 CV3d): the running turn has news. The
+    // listener only takes note; no read happens on this path.
+    if (turnId && this.activeTurnIds.get(sessionId) === turnId)
+      this.onTurnItemRecorded?.({ sessionId, turnId, item })
 
     if (isUserMessage) this.unrecordedTurnIds.delete(sessionId)
 
