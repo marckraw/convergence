@@ -74,12 +74,9 @@ export class ClaudeMcpStatusService {
     ])
     if (!isCurrent()) return
     const fact = readClaudeMcpStatus(statuses, pluginServers, this.now())
-    const signature = JSON.stringify([
-      fact.servers,
-      fact.omitted,
-      fact.omittedAlerts,
-      fact.pluginServers,
-    ])
+    // The whole fact but its time (MAR-3206 R11): a field added to the fact
+    // later is part of "changed" without anyone remembering to list it.
+    const signature = JSON.stringify({ ...fact, at: undefined })
     if (signature === this.lastRecorded) return
     this.lastRecorded = signature
     this.record(fact)

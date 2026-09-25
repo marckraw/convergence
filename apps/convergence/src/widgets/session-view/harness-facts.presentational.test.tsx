@@ -727,7 +727,9 @@ describe('MAR-3206 — MCP servers in Details', () => {
         />,
       )
       const list = screen.getByLabelText('MCP servers')
-      expect(list.textContent).toContain(`read at later · ${unavailable}`)
+      expect(list.textContent).toContain(
+        `unchanged since later · ${unavailable}`,
+      )
       expect(
         within(list)
           .queryAllByRole('button')
@@ -752,7 +754,7 @@ describe('MAR-3206 — MCP servers in Details', () => {
       />,
     )
     expect(screen.getByLabelText('MCP servers').textContent).toContain(
-      'read at later · process running',
+      'unchanged since later · process running',
     )
   })
 

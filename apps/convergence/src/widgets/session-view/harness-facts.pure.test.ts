@@ -445,7 +445,7 @@ describe('MAR-3206 R5 R6 R7 — the MCP heading and a Reconnect error', () => {
     pluginServers: [],
   })
 
-  it('R5 says when the list was read and whether a process runs — whenever none runs, not only with alerts', () => {
+  it('R5 R13 says since when the list is unchanged and whether a process runs — whenever none runs, not only with alerts; "read at" back and this turns red', () => {
     const allConnected = status([{ name: 'linear', status: 'connected' }])
     const time = new Date(at).toLocaleTimeString()
     expect({
@@ -453,9 +453,9 @@ describe('MAR-3206 R5 R6 R7 — the MCP heading and a Reconnect error', () => {
       stopped: mcpStatusHeading(allConnected, false),
       unknown: mcpStatusHeading(allConnected, null),
     }).toEqual({
-      running: `MCP servers · 1 connected of 1 · read at ${time} · process running`,
-      stopped: `MCP servers · 1 connected of 1 · read at ${time} · no process is running; the next message starts one and reads its connectors afresh`,
-      unknown: `MCP servers · 1 connected of 1 · read at ${time}`,
+      running: `MCP servers · 1 connected of 1 · unchanged since ${time} · process running`,
+      stopped: `MCP servers · 1 connected of 1 · unchanged since ${time} · no process is running; the next message starts one and reads its connectors afresh`,
+      unknown: `MCP servers · 1 connected of 1 · unchanged since ${time}`,
     })
   })
 

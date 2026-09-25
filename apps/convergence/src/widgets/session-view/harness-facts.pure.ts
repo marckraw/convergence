@@ -171,19 +171,22 @@ export function mcpReconnectUnavailable(
 }
 
 /**
- * The MCP list's heading (MAR-3206 R5, R7): the connected count over the
- * whole status, when it was read, and whether a process runs now -- a status
- * outlives the process it was read from, and says so whenever none runs.
- * `running` is null when the caller cannot tell.
+ * The MCP list's heading (MAR-3206 R5, R7, R13): the connected count over the
+ * whole status, since when it has been unchanged, and whether a process runs
+ * now -- a status outlives the process it was read from, and says so
+ * whenever none runs. `running` is null when the caller cannot tell.
+ *
+ * The time is the status's own: an unchanged re-read records nothing, so the
+ * time is when the list last changed, never when it was last read.
  */
 export function mcpStatusHeading(
   status: Extract<HarnessFact, { kind: 'harness.mcpStatus' }>,
   running: boolean | null,
 ): string {
-  const read = new Date(status.at)
+  const since = new Date(status.at)
   const parts = [
     `MCP servers · ${status.connected} connected of ${status.servers.length + status.omitted}`,
-    `read at ${Number.isNaN(read.getTime()) ? status.at : read.toLocaleTimeString()}`,
+    `unchanged since ${Number.isNaN(since.getTime()) ? status.at : since.toLocaleTimeString()}`,
   ]
   if (running !== null) parts.push(running ? 'process running' : NO_PROCESS)
   return parts.join(' · ')

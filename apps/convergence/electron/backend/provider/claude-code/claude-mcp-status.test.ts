@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'fs/promises'
+import { tmpdir } from 'os'
+import { dirname, join } from 'path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   mcpJsonServerBlock,
@@ -336,11 +339,13 @@ describe('ClaudeMcpStatusService', () => {
         mcpServers: './linked.json',
       }),
     }
+    // c's `linked.json` is a link out of its plugin, to a's file: reading it
+    // serves the target, as the real filesystem does (MAR-3206 R12).
+    files['/plugins/c/linked.json'] = files['/plugins/a/config/servers.json']
     const readText = vi.fn(async (path: string) => {
       if (path in files) return files[path]
       throw new Error('ENOENT')
     })
-    // c's `linked.json` is a link out of its plugin, to a's file.
     const realPath = async (path: string) =>
       path === '/plugins/c/linked.json'
         ? '/plugins/a/config/servers.json'
@@ -365,6 +370,95 @@ describe('ClaudeMcpStatusService', () => {
     ])
     expect(readText.mock.calls.map(([path]) => path)).not.toContain(
       '/plugins/a/../a/config/servers.json',
+    )
+  })
+
+  it('R12 on a real filesystem a link out of the plugin is refused and a link inside it is followed — skip the realpath re-check and this turns red', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'mar-3206-r12-'))
+    try {
+      const put = async (path: string, value: unknown) => {
+        await mkdir(dirname(join(tmp, path)), { recursive: true })
+        await writeFile(join(tmp, path), JSON.stringify(value))
+      }
+      // `outside` is not a loaded plugin: its server must never be recorded.
+      await put('outside/servers.json', {
+        mcpServers: { outside: { url: 'https://outside.test/mcp' } },
+      })
+      await put('plugins/escape/.claude-plugin/plugin.json', {
+        mcpServers: './linked.json',
+      })
+      await symlink(
+        join(tmp, 'outside/servers.json'),
+        join(tmp, 'plugins/escape/linked.json'),
+      )
+      await put('plugins/inner/real/servers.json', {
+        mcpServers: { inner: { url: 'https://inner.test/mcp' } },
+      })
+      await put('plugins/inner/.claude-plugin/plugin.json', {
+        mcpServers: './linked.json',
+      })
+      await symlink(
+        join(tmp, 'plugins/inner/real/servers.json'),
+        join(tmp, 'plugins/inner/linked.json'),
+      )
+      const record = vi.fn()
+      // The real readers: no fake decides what a link resolves to.
+      const service = new ClaudeMcpStatusService(record, () => 'at')
+      service.observeInit({
+        plugins: [
+          { name: 'escape', path: join(tmp, 'plugins/escape') },
+          { name: 'inner', path: join(tmp, 'plugins/inner') },
+        ],
+      })
+      await service.refresh(transport([[]]), () => true)
+      expect(record.mock.calls[0][0].pluginServers).toEqual([
+        {
+          plugin: 'inner',
+          server: 'inner',
+          origin: 'https://inner.test',
+          loaded: false,
+        },
+      ])
+    } finally {
+      await rm(tmp, { recursive: true, force: true })
+    }
+  })
+
+  it('R11 a change to a server beyond the bound is a change: 25 servers, one unlisted turns connected → a second record reading 25 of 25 — drop `connected` from the signature and this turns red', async () => {
+    const servers = (unlistedConnected: boolean) =>
+      Array.from({ length: 25 }, (_, index) => ({
+        name: `s${String(index).padStart(2, '0')}`,
+        // The last one sorts last among equals and falls beyond the bound
+        // of 20 either way: connected or not, it is never an alert.
+        status: index === 24 && !unlistedConnected ? 'pending' : 'connected',
+        config: { url: `https://s${index}.test/` },
+      }))
+    const record = vi.fn()
+    const service = new ClaudeMcpStatusService(
+      record,
+      () => 'at',
+      async () => {
+        throw new Error('ENOENT')
+      },
+    )
+    service.observeInit({})
+    const fake = transport([servers(false), servers(true)])
+    await service.refresh(fake, () => true)
+    await service.refresh(fake, () => true)
+    expect(
+      record.mock.calls.map(([fact]) => ({
+        connected: fact.connected,
+        listed: fact.servers.length,
+        omitted: fact.omitted,
+        omittedAlerts: fact.omittedAlerts,
+      })),
+    ).toEqual([
+      { connected: 24, listed: 20, omitted: 5, omittedAlerts: 0 },
+      { connected: 25, listed: 20, omitted: 5, omittedAlerts: 0 },
+    ])
+    // The listed twenty are the same in both readings: only the count moved.
+    expect(record.mock.calls[1][0].servers).toEqual(
+      record.mock.calls[0][0].servers,
     )
   })
 
