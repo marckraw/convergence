@@ -15,6 +15,22 @@ const navigationScroll = vi.hoisted(() => vi.fn())
 const composerContexts = vi.hoisted((): unknown[] => [])
 import { SessionView } from './session-view.container'
 
+/**
+ * jsdom lays nothing out, so the session row measures 0 and Parallel work
+ * opens as the overlay (MAR-3426). Tests of the docked panel give the row --
+ * and only the row -- a width.
+ */
+function sessionRowWidth(width: number) {
+  const measure = HTMLElement.prototype.getBoundingClientRect
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+    function (this: HTMLElement) {
+      return this.hasAttribute('data-session-row')
+        ? ({ width } as DOMRect)
+        : measure.call(this)
+    },
+  )
+}
+
 vi.mock('@/features/composer', () => ({
   ComposerContainer: ({ context }: { context: unknown }) => {
     composerContexts.push(context)
@@ -1537,6 +1553,7 @@ describe('SessionView', () => {
   })
 
   it('L8 two navigation clicks in one millisecond both reach the transcript — mutation Date.now nonce turns red', async () => {
+    sessionRowWidth(1700)
     vi.spyOn(Date, 'now').mockReturnValue(17)
     vi.mocked(window.electronAPI.session.listAgentRuns).mockResolvedValue([
       {
@@ -1593,6 +1610,7 @@ describe('SessionView', () => {
   })
 
   it('T10 closing parallel work returns focus to its invoking control — mutation omit focus return turns red', async () => {
+    sessionRowWidth(1700)
     render(
       <TooltipProvider>
         <SessionView />
@@ -1607,5 +1625,25 @@ describe('SessionView', () => {
     close.focus()
     fireEvent.click(close)
     expect(document.activeElement).toBe(opener)
+  })
+
+  it('CH2 R3 Escape in the overlay closes it and returns focus to its invoking control — mutation drop onReturnFocus turns red', async () => {
+    sessionRowWidth(900)
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    const opener = screen.getByRole('button', { name: 'Parallel work' })
+    opener.focus()
+    fireEvent.click(opener)
+    const overlay = await screen.findByRole('dialog', {
+      name: 'Parallel work',
+    })
+    await act(async () => fireEvent.keyDown(overlay, { key: 'Escape' }))
+    // The dialog's focus trap lets go on a later task; wait for it rather
+    // than guess which one.
+    await waitFor(() => expect(document.activeElement).toBe(opener))
+    expect(screen.queryByRole('dialog', { name: 'Parallel work' })).toBeNull()
   })
 })

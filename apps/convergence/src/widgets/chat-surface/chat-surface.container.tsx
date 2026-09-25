@@ -45,6 +45,8 @@ interface ChatSurfaceProps {
 }
 
 const EMPTY_SPACE_SOURCES: SpaceSource[] = []
+// Nothing else docks beside Parallel work in the chat row (MAR-3426).
+const NO_OTHER_DOCKED_PANELS: readonly number[] = []
 
 const DEFAULT_ARTIFACT_DRAFT: SpaceArtifactDraft = {
   kind: 'documentation',
@@ -173,12 +175,15 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
     },
     [sendMessageToSession],
   )
-  const closeParallel = () => {
-    setParallelOpen(false)
-    ;(parallelInvoker.current?.isConnected
+  const parallelRow = useRef<HTMLDivElement>(null)
+  const focusParallelInvoker = () =>
+    (parallelInvoker.current?.isConnected
       ? parallelInvoker.current
       : parallelButton.current
     )?.focus()
+  const closeParallel = () => {
+    setParallelOpen(false)
+    focusParallelInvoker()
   }
   const session = sessions.find((entry) => entry.id === activeSessionId) ?? null
   const selectedSpace =
@@ -724,7 +729,7 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
         ) : null}
       </div>
 
-      <div className="relative flex min-h-0 flex-1">
+      <div ref={parallelRow} className="relative flex min-h-0 flex-1">
         <SessionConversationSurface
           session={session}
           hasOlder={conversationWindow.hasOlder}
@@ -767,6 +772,9 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
           }
           loading={parallel.loading}
           error={parallel.error}
+          rowRef={parallelRow}
+          otherDockedWidths={NO_OTHER_DOCKED_PANELS}
+          onReturnFocus={focusParallelInvoker}
         />
       </div>
     </div>

@@ -1,6 +1,13 @@
 import * as markerHelpers from './parallel-work.pure'
-import { useState } from 'react'
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { Profiler, useRef, useState } from 'react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ConversationItem, Session } from '@/entities/session'
 import type {
@@ -50,6 +57,44 @@ const run: SessionAgentRun = {
   usageJson: null,
   updatedAt: null,
 }
+/**
+ * A session-view row of a given width, and the ResizeObservers watching it.
+ * `resize` moves the row and fires every observer, as the browser does.
+ */
+function rowOf(width: number) {
+  let current = width
+  const row = document.createElement('div')
+  row.getBoundingClientRect = () => ({ width: current }) as DOMRect
+  const observers = new Set<() => void>()
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(private readonly callback: () => void) {}
+      observe() {
+        observers.add(this.callback)
+      }
+      unobserve() {}
+      disconnect() {
+        observers.delete(this.callback)
+      }
+    },
+  )
+  return {
+    ref: { current: row as HTMLElement | null },
+    resize: (next: number) => {
+      current = next
+      for (const observer of [...observers]) observer()
+    },
+  }
+}
+
+// Wide enough to dock with nothing else open: today's docked panel.
+const wideRow = () => {
+  const row = document.createElement('div')
+  row.getBoundingClientRect = () => ({ width: 1700 }) as DOMRect
+  return { current: row as HTMLElement | null }
+}
+
 const props = () => ({
   session: { id: 's', canStopTasks: true } as Session,
   rows: buildParallelWork([run], []),
@@ -61,6 +106,9 @@ const props = () => ({
   onNavigate: vi.fn(),
   loading: false,
   error: null,
+  rowRef: wideRow(),
+  otherDockedWidths: [] as number[],
+  onReturnFocus: vi.fn(),
 })
 
 it('R6′ keeps Stop pending after the receipt until evidence settles — mutation clear pending on receipt turns red', async () => {
@@ -237,15 +285,7 @@ it('R4 View result exists only at a recorded return — mutation use terminal ro
 afterEach(() => vi.unstubAllGlobals())
 
 it('T10 narrow sheet closes when navigating to the spawn — mutations force wide or omit close on navigate turn red', async () => {
-  vi.stubGlobal(
-    'matchMedia',
-    vi.fn(() => ({
-      matches: true,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    })),
-  )
-  const input = props()
+  const input = { ...props(), rowRef: rowOf(900).ref }
   function Harness() {
     const [open, setOpen] = useState(true)
     return (
@@ -1098,4 +1138,113 @@ it('O1 R4 an unselected card keeps View result when its task note predates the w
   fireEvent.click(screen.getByRole('button', { name: 'View result' }))
   expect(input.onNavigate).toHaveBeenCalledWith('old-result')
   expect(parallelWorkApi.readDetail).not.toHaveBeenCalled()
+})
+
+// MAR-3426 CH2: the conversation's own row decides, not the window.
+const dialog = () => screen.queryByRole('dialog', { name: 'Parallel work' })
+const docked = () =>
+  dialog() === null &&
+  screen.queryByRole('complementary', { name: 'Parallel work' }) !== null
+
+it.each([
+  [900, { overlay: true, docked: false }],
+  [1700, { overlay: false, docked: true }],
+])(
+  'CH2 R2 a wide window with a %ipx row picks the mode by the row — mutation restore matchMedia turns red',
+  (width, expected) => {
+    vi.stubGlobal('innerWidth', 1800)
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: query === '(max-width: 1100px)' && window.innerWidth <= 1100,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    )
+    render(<ParallelWork {...props()} rowRef={rowOf(width).ref} />)
+    expect({ overlay: dialog() !== null, docked: docked() }).toEqual(expected)
+  },
+)
+
+it('CH2 R1 wiring: a row that fits the panel alone overlays once PR and Space take their share', () => {
+  render(
+    <ParallelWork
+      {...props()}
+      rowRef={rowOf(1400).ref}
+      otherDockedWidths={[320, 320]}
+    />,
+  )
+  expect(dialog()).not.toBeNull()
+})
+
+it('CH2 R3 shrinking past the bound keeps the panel open as the overlay; Escape closes it and focus returns to the trigger — mutation close on a mode change turns red', async () => {
+  const row = rowOf(1700)
+  const input = props()
+  function Harness() {
+    const [open, setOpen] = useState(false)
+    const trigger = useRef<HTMLButtonElement>(null)
+    return (
+      <>
+        <button ref={trigger} onClick={() => setOpen(true)}>
+          Parallel work trigger
+        </button>
+        <ParallelWork
+          {...input}
+          rowRef={row.ref}
+          open={open}
+          onClose={() => {
+            // SessionView's closeParallel: close, then focus the invoker --
+            // which a still-mounted overlay's trap pulls back inside.
+            setOpen(false)
+            trigger.current?.focus()
+          }}
+          onReturnFocus={() => trigger.current?.focus()}
+        />
+      </>
+    )
+  }
+  render(<Harness />)
+  const trigger = screen.getByRole('button', { name: 'Parallel work trigger' })
+  trigger.focus()
+  fireEvent.click(trigger)
+  const dockedFirst = docked()
+  act(() => row.resize(900))
+  const overlayAfterShrink = dialog() !== null
+  await act(async () =>
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    }),
+  )
+  // The dialog's focus trap lets go on a later task; wait for it rather than
+  // guess which one.
+  await waitFor(() => expect(document.activeElement).toBe(trigger))
+  expect({
+    dockedFirst,
+    overlayAfterShrink,
+    closed: dialog() === null && !docked(),
+  }).toEqual({
+    dockedFirst: true,
+    overlayAfterShrink: true,
+    closed: true,
+  })
+})
+
+it('CH2 R4 twenty resizes on one side of the bound render nothing; crossing it renders — mutation keep the width in state turns red', () => {
+  const row = rowOf(1700)
+  let commits = 0
+  render(
+    <Profiler id="parallel-work" onRender={() => commits++}>
+      <ParallelWork {...props()} rowRef={row.ref} />
+    </Profiler>,
+  )
+  const settled = commits
+  for (let step = 1; step <= 20; step++) act(() => row.resize(1700 - step * 10))
+  const sameSide = commits - settled
+  act(() => row.resize(900))
+  // Crossing mounts the dialog, whose own parts commit a few times; what
+  // matters is that it renders at all, and that nothing did before it.
+  expect({ sameSide, crossed: commits - settled - sameSide > 0 }).toEqual({
+    sameSide: 0,
+    crossed: true,
+  })
 })
