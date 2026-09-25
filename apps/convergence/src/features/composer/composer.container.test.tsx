@@ -716,6 +716,29 @@ describe('ComposerContainer', () => {
     return screen.getByPlaceholderText('Send a follow-up...')
   }
 
+  it('CH5 forwards an optional wires slot and updates it across the memo boundary', () => {
+    useSessionRelayStore.setState({ relays: [wireLeaving('session-1')] })
+    const context = {
+      kind: 'project' as const,
+      projectId: 'project-1',
+      workspaceId: null,
+      activeSessionId: 'session-1',
+    }
+    const { rerender } = render(<ComposerContainer context={context} />)
+    expect(screen.queryByText('Wire fixture')).toBeNull()
+    rerender(
+      <ComposerContainer
+        context={context}
+        wiresSlot={<button>Wire fixture</button>}
+      />,
+    )
+    expect(
+      screen.getByRole('switch', { name: 'Send quiet' }).nextElementSibling,
+    ).toBe(screen.getByRole('button', { name: 'Wire fixture' }))
+    rerender(<ComposerContainer context={context} />)
+    expect(screen.queryByText('Wire fixture')).toBeNull()
+  })
+
   describe('the quiet send (F10)', () => {
     it('shows no toggle at all when nothing leaves this session', () => {
       // A switch that silences nothing would sit on every composer in the app.

@@ -1,6 +1,6 @@
 import { PerfProfiler } from '@/shared/lib/perf-profiler'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 import {
   describeUnavailableProviderSelection,
   type MidRunInputMode,
@@ -133,6 +133,7 @@ export type { ComposerSessionContext } from './composer.types'
 
 interface ComposerContainerProps {
   context: ComposerSessionContext
+  wiresSlot?: ReactNode
   onGlobalSessionCreated?: (session: SessionSummary) => void | Promise<void>
   prepareNewSessionMessage?: (message: string) => string
 }
@@ -193,6 +194,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
   context,
   onGlobalSessionCreated,
   prepareNewSessionMessage,
+  wiresSlot,
 }) => {
   const activeSessionId = context.activeSessionId
   const accountHandoffRefusal = useSessionStore((state) =>
@@ -1955,6 +1957,7 @@ const ComposerContainerView: FC<ComposerContainerProps> = ({
         codexFastMode={codexFastMode}
         onCodexFastModeChange={setCodexFastMode}
         codexBillingControlsAvailable={showCodexBillingControls}
+        wiresSlot={wiresSlot}
         armedOutgoingRelays={armedOutgoingRelays}
         relaysMuted={relaysMuted}
         onRelaysMutedChange={setRelaysMuted}
@@ -2212,5 +2215,6 @@ export const ComposerContainer = memo(
   (previous, next) =>
     sameComposerContext(previous.context, next.context) &&
     previous.onGlobalSessionCreated === next.onGlobalSessionCreated &&
-    previous.prepareNewSessionMessage === next.prepareNewSessionMessage,
+    previous.prepareNewSessionMessage === next.prepareNewSessionMessage &&
+    previous.wiresSlot === next.wiresSlot,
 )

@@ -125,6 +125,8 @@ interface ComposerProps {
    * a switch that silences nothing is noise on every other composer.
    */
   armedOutgoingRelays: number
+  /** Widget-owned disclosure, also visible when every wire is disarmed. */
+  wiresSlot?: ReactNode
   relaysMuted: boolean
   onRelaysMutedChange: (muted: boolean) => void
   permissionConfig: SessionPermissionConfig
@@ -267,6 +269,7 @@ export const Composer: FC<ComposerProps> = ({
   workAddress,
   onWorkAddressChange,
   onWorkAddressBranchChange,
+  wiresSlot,
   armedOutgoingRelays,
   relaysMuted,
   onRelaysMutedChange,
@@ -1023,6 +1026,7 @@ export const Composer: FC<ComposerProps> = ({
                   Quiet
                 </Button>
               ) : null}
+              {wiresSlot}
               {usagePill}
               {contextWindowDot}
               {visibleDeliveryModes.length > 1 ? (
