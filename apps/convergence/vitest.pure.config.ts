@@ -24,6 +24,8 @@ export default defineConfig({
       'test/walk-budget.test.ts',
       // And the pin that keeps guided-review paper from regrowing (MAR-3317).
       'test/guided-review-paper.walk.test.ts',
+      // And the canary for every repo `.md` path the docs name (MAR-3178).
+      'test/doc-links.walk.test.ts',
     ],
     environment: 'node',
   },
