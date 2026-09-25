@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest'
+// Every expected value here is a literal (MAR-3427 A): a test that read the
+// constant it checks would stay green when the constant changed.
 import {
-  CONVERSATION_NAME_RESERVED,
-  HEADER_GAP,
-  HEADER_PADDING_X,
-  HEADER_TWO_ROW_BELOW,
-  HEADER_YIELD_ORDER,
-  IDENTITY_INNER_GAP,
-  PROJECT_NAME_MIN,
   headerLayout,
   headerLayoutKey,
   headerYieldPriority,
@@ -77,9 +72,11 @@ function codeHeader(
     control('view', 110),
     status('attention', 72),
     ...(options.remote ? [status('remote', 68)] : []),
-    status('activity', 140),
+    // The status items at their real maximums (MAR-3427 C): the activity chip
+    // is `max-w-[12rem]`, the harness pill `max-w-[15rem]`.
+    status('activity', 192),
     ...(options.worktreeRemoved ? [status('worktree-removed', 116)] : []),
-    options.harnessAlert ? status('harness', 220) : control('harness', 150),
+    options.harnessAlert ? status('harness', 240) : control('harness', 150),
     control('agent-meter', 120),
     control('wires', 64),
     control('session-details', 104),
@@ -91,6 +88,35 @@ function codeHeader(
     ...(options.running ? [stop] : []),
     more,
   ]
+}
+
+/** The yield order, first to go first, for a header with every control. */
+const FULL_ORDER = [
+  'agent-meter',
+  'pin',
+  'terminal',
+  'pull-request',
+  'open',
+  'project-actions',
+  'view',
+  'harness',
+  'wires',
+  'session-details',
+  'parallel-work',
+]
+const without = (id: string) => FULL_ORDER.filter((entry) => entry !== id)
+
+/** Each scenario with the order its controls must yield in, as a literal. */
+const expectedOrder: Record<string, string[]> = {
+  idle: FULL_ORDER,
+  // Parallel work runs: it is live status and never yields.
+  running: without('parallel-work'),
+  // Running, nothing parallel: Parallel work is a control again.
+  'remote running': FULL_ORDER,
+  // The alert is live status and never yields.
+  'harness alert': without('harness'),
+  'worktree removed': FULL_ORDER,
+  chat: ['view', 'parallel-work'],
 }
 
 const scenarios: Array<[string, HeaderItem[]]> = [
@@ -106,7 +132,7 @@ const scenarios: Array<[string, HeaderItem[]]> = [
       control('parallel-work', 96),
       control('view', 110),
       status('attention', 72),
-      status('activity', 140),
+      status('activity', 192),
       { ...more, onlyWithOverflow: true },
     ],
   ],
@@ -122,7 +148,7 @@ function rowWidth(items: HeaderItem[], ids: string[]): number {
   if (drawn.length === 0) return 0
   return (
     drawn.reduce((sum, item) => sum + (item.minWidth ?? item.width), 0) +
-    HEADER_GAP * (drawn.length - 1)
+    6 * (drawn.length - 1)
   )
 }
 
@@ -131,11 +157,10 @@ const widths = Array.from({ length: 2400 - 320 + 1 }, (_, i) => 320 + i)
 describe('identityWidths (R1)', () => {
   it('reserves the conversation name and lets the project truncate first', () => {
     const widths = identityWidths({ projectNatural: 300, nameNatural: 400 })
-    expect(widths.nameMin).toBe(CONVERSATION_NAME_RESERVED)
-    expect(widths.projectMin).toBe(PROJECT_NAME_MIN)
-    expect(widths.minWidth).toBe(
-      PROJECT_NAME_MIN + IDENTITY_INNER_GAP + CONVERSATION_NAME_RESERVED,
-    )
+    expect(widths.nameMin).toBe(120)
+    expect(widths.projectMin).toBe(40)
+    // 40 of project, 20 of separator and gaps, 120 of name.
+    expect(widths.minWidth).toBe(180)
   })
 
   it('never reserves more than a short name needs', () => {
@@ -143,7 +168,16 @@ describe('identityWidths (R1)', () => {
     expect(widths).toMatchObject({
       projectMin: 20,
       nameMin: 30,
-      width: 50 + IDENTITY_INNER_GAP,
+      width: 70,
+    })
+  })
+
+  it('MAR-3427 I counts no project part for a conversation without a project', () => {
+    expect(identityWidths({ projectNatural: null, nameNatural: 400 })).toEqual({
+      width: 280,
+      minWidth: 120,
+      projectMin: 0,
+      nameMin: 120,
     })
   })
 })
@@ -158,26 +192,34 @@ describe('headerLayout', () => {
     }
   })
 
-  it('R2 yields controls in HEADER_YIELD_ORDER as the header narrows, never in DOM order — mutation yield in DOM order turns red', () => {
+  it('R2 yields controls in the one fixed order as the header narrows, never in DOM order — mutation yield in DOM order turns red', () => {
     for (const [name, items] of scenarios) {
-      const present = new Set(
-        items
-          .filter((item) => !item.pinned && item.width > 0)
-          .map((item) => item.id),
-      )
-      const expected = HEADER_YIELD_ORDER.filter((id) => present.has(id))
-      const firstYielded: string[] = []
+      const expected = expectedOrder[name]
+      // What yields at each narrowing step, in steps. Controls that yield at
+      // the same width must be the next ones in the expected order, as a set:
+      // the layout alone cannot say which of them went first.
+      const steps: string[][] = []
       let previous = new Set<string>()
       for (const width of [...widths].reverse()) {
         const overflow = new Set(headerLayout({ width, items }).overflow)
         // Nested: narrowing the header never brings a control back.
         for (const id of previous)
           expect(overflow.has(id), `${name} @${width}: ${id}`).toBe(true)
-        for (const id of HEADER_YIELD_ORDER)
-          if (overflow.has(id) && !previous.has(id)) firstYielded.push(id)
+        const fresh = [...overflow].filter((id) => !previous.has(id))
+        if (fresh.length > 0) steps.push(fresh)
         previous = overflow
       }
-      expect(firstYielded, name).toEqual(expected)
+      let at = 0
+      for (const step of steps) {
+        expect(
+          [...step].sort(),
+          `${name}: step ${steps.indexOf(step)}`,
+        ).toEqual(expected.slice(at, at + step.length).sort())
+        at += step.length
+      }
+      expect(at, name).toBe(expected.length)
+      // The order is observed, not assumed: most controls leave on their own.
+      expect(steps.length, name).toBeGreaterThanOrEqual(expected.length - 3)
     }
   })
 
@@ -204,9 +246,16 @@ describe('headerLayout', () => {
           expect(
             rowWidth(items, row),
             `${name} @${width}: ${row.join(',')}`,
-          ).toBeLessThanOrEqual(width - HEADER_PADDING_X)
+          ).toBeLessThanOrEqual(width - 32)
       }
     }
+  })
+
+  it('R3 the row is measured exactly: 32 px of padding and one 6 px gap between items', () => {
+    // identity 70 + gap + control 450 + gap + More 28 = 560, plus 32 padding.
+    const items = [identity(20, 30), control('open', 450), more]
+    expect(headerLayout({ width: 592, items }).overflow).toEqual([])
+    expect(headerLayout({ width: 591, items }).overflow).toEqual(['open'])
   })
 
   it('R4 every control is either drawn or in More, never dropped', () => {
@@ -226,7 +275,7 @@ describe('headerLayout', () => {
 
   it('R5 below the bound, row 1 is identity + Stop + More and row 2 is the status group — mutation wrap everything turns red', () => {
     const items = codeHeader({ running: true, remote: true })
-    for (const width of [320, 400, HEADER_TWO_ROW_BELOW - 1]) {
+    for (const width of [320, 400, 559]) {
       const layout = headerLayout({ width, items })
       expect(layout.rows[0], `@${width}`).toEqual(['identity', 'stop', 'more'])
       expect(layout.rows.slice(1).flat(), `@${width}`).toEqual([
@@ -241,12 +290,15 @@ describe('headerLayout', () => {
     }
   })
 
-  it('R5 at and above the bound, with room for the status group, it is one row', () => {
-    const layout = headerLayout({
-      width: HEADER_TWO_ROW_BELOW,
-      items: codeHeader({ running: true }),
-    })
-    expect(layout.rows).toHaveLength(1)
+  it('R5 the bound is 560 px: one row at 560, two at 559, for a status group that fits either way', () => {
+    const items = codeHeader({ running: true })
+    expect(headerLayout({ width: 560, items }).rows).toHaveLength(1)
+    // At 559 the pinned row would still fit (524 of 527 px): only the bound
+    // puts the status on its own row.
+    expect(headerLayout({ width: 559, items }).rows).toEqual([
+      ['identity', 'stop', 'more'],
+      ['attention', 'activity'],
+    ])
   })
 
   it('R5 a status group too wide for one row wraps onto more status rows, never into row 1', () => {

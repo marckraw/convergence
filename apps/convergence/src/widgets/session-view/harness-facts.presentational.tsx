@@ -41,11 +41,15 @@ export function HarnessFactsView({
           type="button"
           variant="ghost"
           size="sm"
-          className={`h-7 rounded-full border px-2 text-[11px] ${pill.alert ? 'border-destructive/50 text-destructive' : 'border-border/70 text-muted-foreground'}`}
+          // Capped, so an alert chaining several reasons truncates inside
+          // its header row instead of overlapping it; the full label stays in
+          // the title (MAR-3427 C).
+          className={`h-7 max-w-[15rem] rounded-full border px-2 text-[11px] ${pill.alert ? 'border-destructive/50 text-destructive' : 'border-border/70 text-muted-foreground'}`}
+          title={pill.label}
           data-testid="harness-pill"
           data-alert={pill.alert}
         >
-          {pill.label}
+          <span className="min-w-0 truncate">{pill.label}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

@@ -9,6 +9,7 @@ import { useSessionRelayStore } from '@/entities/session-relay'
 import { useProjectScriptStore } from '@/entities/project-script'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useTerminalStore } from '@/entities/terminal'
+import { useAgentMeterStore } from '@/entities/agent-meter'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import type { SessionAgentRun } from '@/shared/types/harness-evidence.types'
 const navigationScroll = vi.hoisted(() => vi.fn())
@@ -1970,6 +1971,187 @@ describe('SessionView', () => {
       expect(
         screen.getByRole('button', { name: 'Stop Test session' }),
       ).toBeInTheDocument()
+    })
+
+    const renderView = () =>
+      render(
+        <TooltipProvider>
+          <SessionView />
+        </TooltipProvider>,
+      )
+    const more = () => screen.getByRole('button', { name: 'Session actions' })
+    const openMore = () => fireEvent.pointerDown(more())
+    const innerTrigger = (id: string) =>
+      document
+        .querySelector(`[data-header-inner="${id}"]`)!
+        .querySelector('button')!
+    const setSession = (patch: Record<string, unknown>) =>
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) => ({ ...session, ...patch })),
+      }))
+
+    it('D Parallel work opened from More hands focus back to More when it closes — mutation save the hidden button turns red', async () => {
+      headerWidth(400)
+      renderView()
+      openMore()
+      fireEvent.click(
+        await screen.findByRole('menuitem', { name: 'Parallel work' }),
+      )
+      const close = await screen.findByRole('button', {
+        name: 'Close parallel work',
+      })
+      // The button it would otherwise return to is yielded: hidden and inert.
+      expect(
+        innerTrigger('parallel-work').closest('[data-yielded]'),
+      ).not.toBeNull()
+      close.focus()
+      fireEvent.click(close)
+      await waitFor(() => expect(document.activeElement).toBe(more()))
+    })
+
+    it('D Parallel work opened from its own drawn button still returns focus to that button', async () => {
+      headerWidth(2400)
+      renderView()
+      const opener = screen.getByRole('button', { name: 'Parallel work' })
+      opener.focus()
+      fireEvent.click(opener)
+      const close = await screen.findByRole('button', {
+        name: 'Close parallel work',
+      })
+      close.focus()
+      fireEvent.click(close)
+      await waitFor(() => expect(document.activeElement).toBe(opener))
+    })
+
+    it.each([
+      ['Project actions', 'project-actions', 'menu'],
+      ['Session details', 'session-details', 'menu'],
+      ['Harness', 'harness', 'menu'],
+      ['1 wire fires when this session finishes.', 'wires', 'dialog'],
+    ] as const)(
+      'E %s, yielded, opens its own %s from More — mutation popovers sent ArrowDown turns red',
+      async (name, id, role) => {
+        useSessionRelayStore.setState({
+          relays: [
+            {
+              id: 'relay-1',
+              crewId: 'crew-1',
+              sourceSessionId: 'session-1',
+              trigger: 'settled',
+              action: 'hail',
+              targetSessionId: 'session-2',
+              spawnSpec: null,
+              instruction: null,
+              opener: null,
+              conditionToken: null,
+              armed: true,
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          isLoaded: true,
+        })
+        headerWidth(400)
+        renderView()
+        await act(async () => {
+          await Promise.resolve()
+        })
+        openMore()
+        fireEvent.click(await screen.findByRole('menuitem', { name }))
+        const trigger = innerTrigger(id)
+        await waitFor(() =>
+          expect(trigger).toHaveAttribute('aria-expanded', 'true'),
+        )
+        const opened = screen.getByRole(role)
+        expect(opened.id).toBe(trigger.getAttribute('aria-controls'))
+      },
+    )
+
+    it('E a menu opened from More hands focus back to More when it closes — mutation the focus() removed turns red', async () => {
+      headerWidth(400)
+      renderView()
+      openMore()
+      fireEvent.click(
+        await screen.findByRole('menuitem', { name: 'Session details' }),
+      )
+      const trigger = innerTrigger('session-details')
+      await waitFor(() =>
+        expect(trigger).toHaveAttribute('aria-expanded', 'true'),
+      )
+      await act(async () =>
+        fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' }),
+      )
+      await waitFor(() =>
+        expect(trigger).toHaveAttribute('aria-expanded', 'false'),
+      )
+      await waitFor(() => expect(document.activeElement).toBe(more()))
+    })
+
+    it('F the agent meter, yielded, is a focusable menu item named by its reading — mutation the div back turns red', async () => {
+      useAgentMeterStore.setState({
+        snapshot: {
+          agents: null,
+          convergence: null,
+          rows: [
+            {
+              sessionId: 'session-1',
+              account: null,
+              usage: { cpu: 5, memoryMb: 120 },
+            },
+          ],
+        },
+      })
+      headerWidth(400)
+      renderView()
+      openMore()
+      const item = await screen.findByRole('menuitem', {
+        name: /^Agent CPU and memory: /,
+      })
+      expect(item).toHaveAttribute('tabindex', '-1')
+      expect(item).toHaveTextContent(/\S/)
+      useAgentMeterStore.setState({
+        snapshot: { agents: null, convergence: null, rows: [] },
+      })
+    })
+
+    it('G a yielded control is inert and hidden; a drawn one is neither — mutation removing inert turns red', () => {
+      headerWidth(400)
+      renderView()
+      const yielded = document.querySelector('[data-header-item="terminal"]')!
+      expect(yielded).toHaveAttribute('data-yielded')
+      expect(yielded).toHaveAttribute('inert')
+      expect(yielded).toHaveAttribute('aria-hidden', 'true')
+      const drawn = document.querySelector('[data-header-item="attention"]')!
+      expect(drawn).not.toHaveAttribute('inert')
+    })
+
+    it('H in two rows the status row drags by its empty space; only its controls are no-drag — mutation no-drag back on the row turns red', () => {
+      setSession({
+        status: 'running',
+        parallelWork: { running: 2, unknown: 0, failed: 0, stopped: 0 },
+      })
+      headerWidth(400)
+      renderView()
+      const header = document.querySelector<HTMLElement>(
+        '[data-conversation-header]',
+      )!
+      expect(header).toHaveAttribute('data-header-rows', '2')
+      const statusRow = header.querySelector<HTMLElement>(
+        '[data-header-status-row]',
+      )!
+      expect(statusRow).not.toHaveAttribute('data-app-region')
+      expect(statusRow.style.getPropertyValue('-webkit-app-region')).toBe('')
+      expect(
+        statusRow.closest('[data-app-region]')?.getAttribute('data-app-region'),
+      ).toBe('drag')
+      const buttons = statusRow.querySelectorAll('button')
+      expect([...buttons].map((button) => button.textContent)).toEqual([
+        'Parallel work · 2',
+      ])
+      for (const button of buttons)
+        expect(
+          button.closest('[data-app-region]')?.getAttribute('data-app-region'),
+        ).toBe('no-drag')
     })
 
     it('R7 every button in the header sits inside a no-drag region, and the header itself drags — mutation remove no-drag from the right-hand group turns red', () => {

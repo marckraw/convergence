@@ -18,6 +18,7 @@ import { ComposerContainer } from '@/features/composer'
 import { selectProjectName, useProjectStore } from '@/entities/project'
 import {
   ConversationHeader,
+  headerFocusTarget,
   SessionConversationSurface,
   SessionTranscriptViewSwitch,
   ParallelWork,
@@ -181,10 +182,13 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
     [sendMessageToSession],
   )
   const parallelRow = useRef<HTMLDivElement>(null)
+  // A Parallel work button that has yielded is hidden and inert; opened from
+  // More, the panel hands focus back to More (MAR-3427 D).
   const focusParallelInvoker = () =>
-    (parallelInvoker.current?.isConnected
-      ? parallelInvoker.current
-      : parallelButton.current
+    headerFocusTarget(
+      parallelInvoker.current?.isConnected
+        ? parallelInvoker.current
+        : parallelButton.current,
     )?.focus()
   const closeParallel = () => {
     setParallelOpen(false)
@@ -685,10 +689,11 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
   return (
     <div className="flex h-full flex-col">
       <ConversationHeader
-        // A project-free chat says so; one started from a project names it.
+        // A project-free chat has no project part; one started from a
+        // project names it (MAR-3427 I).
         projectName={
           session.projectId === null
-            ? 'Chat'
+            ? null
             : (sessionProjectName ?? 'Unknown project')
         }
         conversationName={session.name}

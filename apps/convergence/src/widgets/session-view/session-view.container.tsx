@@ -76,6 +76,7 @@ import {
 } from '@/entities/agent-meter'
 import {
   ConversationHeader,
+  headerFocusTarget,
   useConversationViewEntries,
 } from './conversation-header.container'
 import { harnessPill } from './harness-facts.pure'
@@ -185,10 +186,13 @@ export const SessionView: FC = () => {
     },
     [sendMessageToSession],
   )
+  // A Parallel work button that has yielded is hidden and inert; opened from
+  // More, the panel hands focus back to More (MAR-3427 D).
   const focusParallelInvoker = () =>
-    (parallelInvoker.current?.isConnected
-      ? parallelInvoker.current
-      : parallelButton.current
+    headerFocusTarget(
+      parallelInvoker.current?.isConnected
+        ? parallelInvoker.current
+        : parallelButton.current,
     )?.focus()
   const closeParallel = () => {
     setParallelOpen(false)
@@ -654,6 +658,7 @@ export const SessionView: FC = () => {
                 {
                   kind: 'text',
                   key: 'agent-meter',
+                  name: 'Agent CPU and memory',
                   label: formatSessionMeter(
                     meterRow ?? undefined,
                     isRemoteExecutionHost(session.executionHost),

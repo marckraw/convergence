@@ -77,6 +77,7 @@ vi.mock('@/widgets/session-view', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/widgets/session-view')>()
   return {
     ConversationHeader: actual.ConversationHeader,
+    headerFocusTarget: actual.headerFocusTarget,
     useConversationViewEntries: actual.useConversationViewEntries,
     // The real switch is proven in chat-surface.transcript-view.render.test.tsx.
     SessionTranscriptViewSwitch: () => null,
@@ -910,7 +911,7 @@ describe('ChatSurface', () => {
       )
     }
 
-    it('names a project-free chat as Chat and a project chat by its own project, with a named Stop', () => {
+    it('names a project chat by its own project with a named Stop, and a project-free chat by its name alone — mutation "Chat" back turns red', () => {
       useProjectStore.setState({
         projects: [
           {
@@ -941,11 +942,13 @@ describe('ChatSurface', () => {
       ).toBeInTheDocument()
       unmount()
 
+      // MAR-3427 I: no project, so no project part -- not "in Chat".
       useSessionStore.setState({ globalChatSessions: [globalSession] })
       render(<ChatSurface selectedSpaceId={null} />)
-      expect(
-        screen.getByRole('group', { name: 'Planning chat, in Chat' }),
-      ).toBeInTheDocument()
+      const identity = screen.getByRole('group', { name: 'Planning chat' })
+      expect(identity).toHaveAttribute('title', 'Planning chat')
+      expect(identity).toHaveTextContent(/^Planning chat$/)
+      expect(identity.querySelector('[data-header-project]')).toBeNull()
     })
 
     it('a narrow chat header yields Parallel work into More and keeps Stop — mutation the chat header without the layout function turns red', async () => {
@@ -971,6 +974,29 @@ describe('ChatSurface', () => {
         await screen.findByRole('menuitem', { name: 'Parallel work' }),
       )
       expect(screen.getByText('mock close parallel')).toBeInTheDocument()
+    })
+
+    it('D Parallel work opened from More hands focus back to More when it closes — mutation save the hidden button turns red', async () => {
+      useSessionStore.setState({
+        globalChatSessions: [{ ...globalSession, status: 'running' }],
+        activeGlobalSessionId: globalSession.id,
+        activeGlobalConversation: [],
+      })
+      headerWidth(400)
+      render(<ChatSurface selectedSpaceId={null} />)
+      const more = screen.getByRole('button', { name: 'Session actions' })
+      fireEvent.pointerDown(more)
+      fireEvent.click(
+        await screen.findByRole('menuitem', { name: 'Parallel work' }),
+      )
+      // Let More's own close hand focus back first, so it cannot be what
+      // the assertion below sees.
+      await waitFor(() => expect(document.activeElement).toBe(more))
+      const close = screen.getByRole('button', { name: 'mock close parallel' })
+      close.focus()
+      expect(document.activeElement).toBe(close)
+      fireEvent.click(close)
+      expect(document.activeElement).toBe(more)
     })
 
     it('a wide chat header shows everything and no More at all', () => {

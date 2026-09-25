@@ -61,8 +61,11 @@ export type HeaderMenuEntry =
    * the control's own trigger, under the name that trigger carries.
    */
   | { kind: 'opens'; key: string; opens: 'menu' | 'popover' }
-  /** A reading with no action (the agent meter). */
-  | { kind: 'text'; key: string; label: string }
+  /**
+   * A reading with no action (the agent meter): a focusable item that reads
+   * out `name: label` and leaves More open when chosen.
+   */
+  | { kind: 'text'; key: string; name: string; label: string }
 
 export interface HeaderSlot {
   /** A control's id is its place in `HEADER_YIELD_ORDER`. */
@@ -75,7 +78,8 @@ export interface HeaderSlot {
 }
 
 interface ConversationHeaderProps {
-  projectName: string
+  /** Null for a conversation with no project: no project part is drawn. */
+  projectName: string | null
   conversationName: string
   /** Drawn before the project name, with its width (the chat icon). */
   leading?: { node: ReactNode; width: number }
@@ -97,6 +101,38 @@ interface Measured {
 }
 
 const EMPTY_MEASURED: Measured = { items: {}, project: 0, name: 0 }
+
+/**
+ * A name's natural width, read with the min-width this layout applied to it
+ * lifted for the read: `scrollWidth` never reads below a box's min-width, so
+ * measuring the laid-out span would feed the reserve back to itself and a
+ * shorter name would never give it up (MAR-3427 B).
+ */
+function naturalWidth(span: HTMLElement | null): number {
+  if (!span) return 0
+  const applied = span.style.minWidth
+  span.style.minWidth = '0px'
+  const width = span.scrollWidth
+  span.style.minWidth = applied
+  return width
+}
+
+/**
+ * Where focus goes for a header control that may have yielded (MAR-3427 D).
+ * A yielded control is hidden and inert, so focusing it lands nowhere; its
+ * place is taken by More, which is where it can be reached. A control that is
+ * drawn (or never sat in a header) is its own target.
+ */
+export function headerFocusTarget(
+  element: HTMLElement | null,
+): HTMLElement | null {
+  if (!element?.closest('[data-header-item][data-yielded]')) return element
+  return (
+    element
+      .closest('[data-conversation-header]')
+      ?.querySelector<HTMLElement>('[data-header-more]') ?? null
+  )
+}
 
 function sameMeasured(left: Measured, right: Measured): boolean {
   if (left.project !== right.project || left.name !== right.name) return false
@@ -173,8 +209,8 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
       )
     const next: Measured = {
       items,
-      project: projectRef.current?.scrollWidth ?? 0,
-      name: nameRef.current?.scrollWidth ?? 0,
+      project: naturalWidth(projectRef.current),
+      name: naturalWidth(nameRef.current),
     }
     if (sameMeasured(lastMeasured.current, next)) return
     lastMeasured.current = next
@@ -215,7 +251,7 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
   )
 
   const identity = identityWidths({
-    projectNatural: measured.project,
+    projectNatural: projectName === null ? null : measured.project,
     nameNatural: measured.name,
     leading: leading?.width,
   })
@@ -268,14 +304,23 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
     const trigger = triggerOf(headerRef.current, id)
     if (!trigger) return
     // The trigger is inert while yielded, so the menu's own focus return
-    // lands nowhere; hand focus back to More when it closes.
+    // lands nowhere; hand focus back to More when it closes. One task later,
+    // after the menu's own return has run, and only if focus is lost (on the
+    // body, or on a yielded control): a click elsewhere keeps its focus.
     let opened = false
     const watch = new MutationObserver(() => {
       const expanded = trigger.getAttribute('aria-expanded') === 'true'
       if (expanded) opened = true
       else if (opened) {
         watch.disconnect()
-        if (moreRef.current?.isConnected) moreRef.current.focus()
+        window.setTimeout(() => {
+          const active = document.activeElement
+          const lost =
+            !active ||
+            active === document.body ||
+            active.closest('[data-yielded]') !== null
+          if (lost && moreRef.current?.isConnected) moreRef.current.focus()
+        }, 0)
       }
     })
     watch.observe(trigger, {
@@ -331,6 +376,9 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
             'flex shrink-0 items-center empty:hidden',
             yielded && 'absolute right-0 top-0',
           )}
+          // A control never drags the window, on whichever row it sits; the
+          // status row's own empty space still does (R7).
+          {...HEADER_NO_DRAG_REGION}
         >
           {slot.node}
         </div>
@@ -338,6 +386,15 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
     )
   }
   const inRow1 = (slot: HeaderSlot) => !onStatusRow.has(slot.id)
+
+  const identityLabel =
+    projectName === null
+      ? conversationName
+      : `${conversationName}, in ${projectName}`
+  const identityTitle =
+    projectName === null
+      ? conversationName
+      : `${projectName} / ${conversationName}`
 
   const yieldedEntries = slots
     .filter((slot) => overflow.has(slot.id))
@@ -358,27 +415,31 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
         >
           <div
             role="group"
-            aria-label={`${conversationName}, in ${projectName}`}
-            title={`${projectName} / ${conversationName}`}
+            aria-label={identityLabel}
+            title={identityTitle}
             data-header-identity
             className="flex min-w-0 shrink items-center gap-1.5 text-sm"
             style={{ minWidth: identity.minWidth }}
           >
             {leading?.node}
-            <span
-              ref={projectRef}
-              data-header-project
-              className="min-w-0 shrink-[999] truncate text-muted-foreground"
-              style={{ minWidth: identity.projectMin }}
-            >
-              {projectName}
-            </span>
-            <span
-              aria-hidden
-              className="w-2 shrink-0 text-center text-muted-foreground/60"
-            >
-              /
-            </span>
+            {projectName !== null && (
+              <>
+                <span
+                  ref={projectRef}
+                  data-header-project
+                  className="min-w-0 shrink-[999] truncate text-muted-foreground"
+                  style={{ minWidth: identity.projectMin }}
+                >
+                  {projectName}
+                </span>
+                <span
+                  aria-hidden
+                  className="w-2 shrink-0 text-center text-muted-foreground/60"
+                >
+                  /
+                </span>
+              </>
+            )}
             <span
               ref={nameRef}
               data-header-name
@@ -408,6 +469,7 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
               <DropdownMenuTrigger asChild>
                 <Button
                   ref={moreRef}
+                  data-header-more
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
@@ -459,13 +521,16 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
                       {triggers[slot.id]?.name ?? slot.id}
                     </DropdownMenuItem>
                   ) : (
-                    <div
+                    <DropdownMenuItem
                       key={entry.key}
                       data-yielded-entry={slot.id}
-                      className="px-2 py-1.5 text-xs tabular-nums text-muted-foreground"
+                      aria-label={`${entry.name}: ${entry.label}`}
+                      className="text-xs tabular-nums text-muted-foreground"
+                      // A reading: choosing it keeps More open.
+                      onSelect={(event) => event.preventDefault()}
                     >
                       {entry.label}
-                    </div>
+                    </DropdownMenuItem>
                   ),
                 )}
                 {yieldedEntries.length > 0 && moreContent !== null && (
@@ -482,7 +547,6 @@ export const ConversationHeader: FC<ConversationHeaderProps> = ({
           key={index}
           data-header-status-row
           className="flex h-8 items-center gap-1.5 pb-1"
-          {...HEADER_NO_DRAG_REGION}
         >
           {slots.filter((slot) => row.includes(slot.id)).map(renderSlot)}
         </div>

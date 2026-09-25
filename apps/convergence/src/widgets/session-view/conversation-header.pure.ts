@@ -113,18 +113,23 @@ export interface IdentityWidths {
  * The identity's widths from its two names' natural widths. The project name
  * gives way first, down to `PROJECT_NAME_MIN`; the conversation name keeps
  * `CONVERSATION_NAME_RESERVED` (or all of itself, when shorter).
+ *
+ * `projectNatural: null` is a conversation with no project (a project-free
+ * chat): no project part and no separator are drawn, so none is counted.
  */
 export function identityWidths(input: {
-  projectNatural: number
+  projectNatural: number | null
   nameNatural: number
   leading?: number
 }): IdentityWidths {
   const leading = input.leading ?? 0
-  const projectMin = Math.min(input.projectNatural, PROJECT_NAME_MIN)
+  const project = input.projectNatural
+  const projectMin = project === null ? 0 : Math.min(project, PROJECT_NAME_MIN)
   const nameMin = Math.min(input.nameNatural, CONVERSATION_NAME_RESERVED)
-  const natural =
-    leading + input.projectNatural + IDENTITY_INNER_GAP + input.nameNatural
-  const minWidth = leading + projectMin + IDENTITY_INNER_GAP + nameMin
+  const projectPart = (width: number) =>
+    project === null ? 0 : width + IDENTITY_INNER_GAP
+  const natural = leading + projectPart(project ?? 0) + input.nameNatural
+  const minWidth = leading + projectPart(projectMin) + nameMin
   return {
     width: Math.max(minWidth, Math.min(natural, IDENTITY_COMFORT)),
     minWidth,
@@ -144,7 +149,12 @@ function rowCost(items: HeaderItem[], useMin: boolean): number {
   return widths + HEADER_GAP * (drawn.length - 1)
 }
 
-/** Greedy rows of the status group, each within the available width. */
+/**
+ * Greedy rows of the status group, each within the available width. A lone
+ * item always takes a row of its own: every status item is capped (the
+ * activity chip at 192 px, the harness pill at 240), so from the 320 px the
+ * layout is held to, one item never overruns its row (MAR-3427 C).
+ */
 function packRows(items: HeaderItem[], available: number): HeaderItem[][] {
   const rows: HeaderItem[][] = []
   let current: HeaderItem[] = []
