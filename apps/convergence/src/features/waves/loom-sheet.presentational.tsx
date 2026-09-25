@@ -39,8 +39,10 @@ import {
   loomHorsesLine,
   LOOM_QA_PREVIEW,
   type LoomHorse,
+  type LoomMastermind,
 } from './loom-horses.pure'
 import { LoomHorseCardContainer as LoomHorseCard } from './loom-horse.container'
+import { LoomMastermindCardContainer } from './loom-mastermind.container'
 import { LoomDetailView } from './loom-detail.presentational'
 import type { LoomIssueDetail } from './loom-detail.pure'
 import { type LoomSheet } from './wave-panel-sheet.pure'
@@ -67,6 +69,7 @@ interface LoomSheetViewProps<TSession = unknown> {
   now: number
   /** The bound crews' horse seats, in crew order (MAR-3191 R1). */
   horses: readonly LoomHorse[]
+  masterminds?: readonly LoomMastermind[]
   /**
    * Whether Awaiting QA is showing all of its rows (R5). A prop, not state:
    * this file is a presentational, and the choice has to survive the sheet
@@ -125,6 +128,7 @@ export const LoomSheetView = <TSession,>({
   sheets,
   now,
   horses,
+  masterminds = [],
   dispatchPlan = null,
   mergeReviewed,
   qaExpanded,
@@ -147,9 +151,9 @@ export const LoomSheetView = <TSession,>({
   // Now right now" about a filtered sheet is a sentence about the filter
   // wearing the words of the ledger (MAR-3234 R3/R5).
   const note = search ? null : loomSheetNote(sheet, sheets, now)
-  // With a search, the open sheet may hold nothing the query matches; then
-  // its whole body is the one line that says where the matches are (R3), or
-  // why there are none (R5).
+  // With a search, the open sheet may hold no matching issues. The miss
+  // line says where the matches are (R3), or why there are none (R5); the
+  // mastermind stays above it because it is independent of issue search.
   const missed =
     search !== null && search.summary.bySheet[sheet] === 0 ? search : null
   // The counted-not-listed buckets are LISTED while a query is active (R5):
@@ -184,6 +188,25 @@ export const LoomSheetView = <TSession,>({
       data-loom-sheet={sheet}
       className={cn(LOOM_SHEET_BODY_CLASS, className)}
     >
+      {!detail && sheet === 'now' && masterminds.length > 0 ? (
+        <section
+          aria-label="Mastermind"
+          className="mb-4 flex min-w-0 flex-col gap-2"
+        >
+          <h3 className={LOOM_HORSES_LINE_CLASS}>Mastermind</h3>
+          {masterminds.map((mastermind) => (
+            <LoomMastermindCardContainer
+              key={mastermind.key}
+              mastermind={mastermind}
+              showCrewName={
+                new Set([...horses, ...masterminds].map((seat) => seat.crewId))
+                  .size > 1
+              }
+              onOpenSeat={onOpenSeat}
+            />
+          ))}
+        </section>
+      ) : null}
       {detail ? (
         <LoomDetailView
           detail={detail.view}
@@ -216,7 +239,9 @@ export const LoomSheetView = <TSession,>({
         </p>
       ) : (
         <>
-          {note ? <p className={LOOM_SHEET_NOTE_CLASS}>{note}</p> : null}
+          {note && sheet !== 'now' ? (
+            <p className={LOOM_SHEET_NOTE_CLASS}>{note}</p>
+          ) : null}
           {sheet === 'before' ? (
             <>
               {/* Grouped by the wave the work belonged to (MAR-3192 R1),
@@ -258,7 +283,7 @@ export const LoomSheetView = <TSession,>({
           ) : null}
           {sheet === 'now' ? (
             <div className={wide ? LOOM_NOW_WIDE_CLASS : undefined}>
-              {/* The horses first (MAR-3191): "what is on now" is a question
+              {/* The horses (MAR-3191): "what is on now" is a question
               about seats, and the four sections below only ever answered it
               about issues -- an idle or unreachable horse held none, so it
               was invisible on the sheet that exists to show it. */}
@@ -354,6 +379,9 @@ export const LoomSheetView = <TSession,>({
                 )
               })()}
             </div>
+          ) : null}
+          {note && sheet === 'now' ? (
+            <p className={LOOM_SHEET_NOTE_CLASS}>{note}</p>
           ) : null}
           {sheet === 'next' ? (
             <>

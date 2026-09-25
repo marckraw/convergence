@@ -7,6 +7,8 @@ import {
   LOOM_NO_ACTIVE_TICKET,
   rowBelongsToSeat,
   loomHorses,
+  loomMasterminds,
+  loomMastermindVerdictLine,
   loomHorsesLine,
   LOOM_NO_HORSES_LINE,
   LOOM_RECIPE_LINE,
@@ -858,5 +860,100 @@ describe('MAR-3204 R3: the card names the dispatch window', () => {
     expect(
       loomHorseTicketLine(horseFor([assigned('MAR-7', sentTo('grok-mac'))])),
     ).toBe(LOOM_NO_ACTIVE_TICKET)
+  })
+})
+
+describe('MAR-3457 mastermind derivation', () => {
+  const crews = [
+    boundCrewWith('crew-1', 'Convergence', [
+      residentSeat('fable', { role: 'mastermind' }),
+      residentSeat('astra'),
+      residentSeat('opus'),
+    ]),
+    boundCrewWith('crew-2', 'Segmemo', [
+      residentSeat('sage', { role: 'mastermind' }),
+    ]),
+  ]
+  const input = {
+    crews,
+    sessionsById: new Map(),
+    sheets: loomSheets([], 0),
+    hostLabelOf: (id: string | null) => id ?? 'This Mac',
+  }
+
+  it('R3: counts its own crew only, excluding reviewed and blocked returned rows', () => {
+    const sheets = loomSheets(
+      [
+        ledgerEntry({ issueIdentifier: 'MAR-1', state: 'returned' }),
+        ledgerEntry({ issueIdentifier: 'MAR-2', state: 'returned' }),
+        ledgerEntry({
+          issueIdentifier: 'MAR-3',
+          state: 'returned',
+          crewId: 'crew-2',
+        }),
+        ledgerEntry({ issueIdentifier: 'MAR-4', state: 'reviewed' }),
+        ledgerEntry({
+          issueIdentifier: 'MAR-5',
+          state: 'returned',
+          blocked: true,
+        }),
+      ],
+      0,
+    )
+    expect(
+      loomMasterminds({ ...input, sheets }).map((seat) => seat.waitingReturns),
+    ).toEqual([2, 1])
+  })
+
+  it('R4: the mastermind never enters the horses or their arithmetic', () => {
+    const horses = loomHorses(input)
+    expect(horses.map((horse) => horse.seat)).toEqual(['astra', 'opus'])
+    expect(loomHorsesLine(horses)).toBe(
+      '2 horses · 0 working · 0 idle · 0 failed · 2 not seen',
+    )
+  })
+
+  it('R2/R5: seats come from bound crew records, even if the session is missing', () => {
+    const cards = loomMasterminds(input)
+    expect(
+      cards.map((seat) => [seat.seat, seat.runtime, seat.openable]),
+    ).toEqual([
+      ['fable', 'not-seen', false],
+      ['sage', 'not-seen', false],
+    ])
+    expect(new Set(cards.map((seat) => seat.key)).size).toBe(2)
+    expect(
+      loomMasterminds({
+        ...input,
+        crews: [{ ...crews[0], trackerBinding: null }],
+      }),
+    ).toEqual([])
+  })
+
+  it('R2: a loaded mastermind uses its session host, then its seat policy as fallback', () => {
+    const sessionsById = new Map([
+      [
+        'session-fable',
+        { status: 'running' as const, executionHost: 'remote-mac' },
+      ],
+    ])
+    expect(loomMasterminds({ ...input, sessionsById })[0]).toMatchObject({
+      runtime: 'working',
+      openable: true,
+      hostLabel: 'remote-mac',
+    })
+    const crew = boundCrewWith('crew-1', 'Convergence', [
+      residentSeat('fable', { role: 'mastermind', hostPolicy: 'seat-host' }),
+    ])
+    expect(loomMasterminds({ ...input, crews: [crew] })[0].hostLabel).toBe(
+      'seat-host',
+    )
+  })
+  it.each([
+    [0, 'Nothing waits for its verdict'],
+    [1, '1 return waits for its verdict'],
+    [2, '2 returns wait for its verdict'],
+  ])('R3: %s returns have the right verdict words', (count, line) => {
+    expect(loomMastermindVerdictLine(count as number)).toBe(line)
   })
 })

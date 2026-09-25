@@ -758,6 +758,7 @@ export const WavePanel: FC<WavePanelProps> = memo(function WavePanel({
     sheets: board.sheets,
     now: board.now,
     horses: board.horses,
+    masterminds: board.masterminds,
     qaExpanded,
     onToggleQa: () => setQaExpanded((was) => !was),
     onOpenSeat: openSeat,

@@ -1,5 +1,11 @@
 # convergence
 
+## 0.90.0
+
+### Minor Changes
+
+- a08bcac: The conversation header is grouped: View, Details, Project and the conversation menu; Parallel work stands out while it runs.
+
 ## 0.89.0
 
 ### Minor Changes
