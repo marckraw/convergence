@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { useHarnessFacts } from './use-harness-facts'
 import { HarnessFactsView } from './harness-facts.presentational'
 import { ParallelWork } from './parallel-work.container'
+import { SIDE_PANEL_WIDTH } from './parallel-work-dock.pure'
 import { useParallelWork } from './use-parallel-work'
 import { isRemoteExecutionHost } from '@/entities/execution-host'
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
@@ -171,12 +172,14 @@ export const SessionView: FC = () => {
     },
     [sendMessageToSession],
   )
-  const closeParallel = () => {
-    setParallelOpen(false)
-    ;(parallelInvoker.current?.isConnected
+  const focusParallelInvoker = () =>
+    (parallelInvoker.current?.isConnected
       ? parallelInvoker.current
       : parallelButton.current
     )?.focus()
+  const closeParallel = () => {
+    setParallelOpen(false)
+    focusParallelInvoker()
   }
   const remoteSessionId = isRemoteExecutionHost(session?.executionHost)
     ? (session?.id ?? null)
@@ -462,7 +465,11 @@ export const SessionView: FC = () => {
   }
 
   return (
-    <div ref={sessionRootRef} className="relative flex h-full overflow-hidden">
+    <div
+      ref={sessionRootRef}
+      data-session-row
+      className="relative flex h-full overflow-hidden"
+    >
       {/* Main session area */}
       <div className="relative flex min-w-0 flex-1 flex-col">
         {/* Header */}
@@ -860,6 +867,12 @@ export const SessionView: FC = () => {
         }
         loading={parallel.loading}
         error={parallel.error}
+        rowRef={sessionRootRef}
+        onReturnFocus={focusParallelInvoker}
+        otherDockedWidths={[
+          showPullRequestPanel ? SIDE_PANEL_WIDTH : 0,
+          linkedSpace ? SIDE_PANEL_WIDTH : 0,
+        ]}
       />
 
       {showPullRequestPanel && (

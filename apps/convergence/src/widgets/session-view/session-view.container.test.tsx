@@ -15,6 +15,22 @@ const navigationScroll = vi.hoisted(() => vi.fn())
 const composerContexts = vi.hoisted((): unknown[] => [])
 import { SessionView } from './session-view.container'
 
+/**
+ * jsdom lays nothing out, so the session row measures 0 and Parallel work
+ * opens as the overlay (MAR-3426). Tests of the docked panel give the row --
+ * and only the row -- a width.
+ */
+function sessionRowWidth(width: number) {
+  const measure = HTMLElement.prototype.getBoundingClientRect
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+    function (this: HTMLElement) {
+      return this.hasAttribute('data-session-row')
+        ? ({ width } as DOMRect)
+        : measure.call(this)
+    },
+  )
+}
+
 vi.mock('@/features/composer', () => ({
   ComposerContainer: ({ context }: { context: unknown }) => {
     composerContexts.push(context)
@@ -1537,6 +1553,7 @@ describe('SessionView', () => {
   })
 
   it('L8 two navigation clicks in one millisecond both reach the transcript — mutation Date.now nonce turns red', async () => {
+    sessionRowWidth(1700)
     vi.spyOn(Date, 'now').mockReturnValue(17)
     vi.mocked(window.electronAPI.session.listAgentRuns).mockResolvedValue([
       {
@@ -1593,6 +1610,7 @@ describe('SessionView', () => {
   })
 
   it('T10 closing parallel work returns focus to its invoking control — mutation omit focus return turns red', async () => {
+    sessionRowWidth(1700)
     render(
       <TooltipProvider>
         <SessionView />
@@ -1607,5 +1625,144 @@ describe('SessionView', () => {
     close.focus()
     fireEvent.click(close)
     expect(document.activeElement).toBe(opener)
+  })
+
+  it('CH2 R3 Escape in the overlay closes it and returns focus to its invoking control — mutation drop onReturnFocus turns red', async () => {
+    sessionRowWidth(900)
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    const opener = screen.getByRole('button', { name: 'Parallel work' })
+    opener.focus()
+    fireEvent.click(opener)
+    const overlay = await screen.findByRole('dialog', {
+      name: 'Parallel work',
+    })
+    await act(async () => fireEvent.keyDown(overlay, { key: 'Escape' }))
+    // The dialog's focus trap lets go on a later task; wait for it rather
+    // than guess which one.
+    await waitFor(() => expect(document.activeElement).toBe(opener))
+    expect(screen.queryByRole('dialog', { name: 'Parallel work' })).toBeNull()
+  })
+
+  // The session view, not the panel, knows what else is docked in its row.
+  // At 1,300 px Parallel work fits alone (1300 − 420 = 880 ≥ 720) but not
+  // beside a 320 px side panel (560), so each side panel must tip it over.
+  const dockedParallel = () =>
+    screen.queryByRole('button', { name: 'Close parallel work' }) !== null &&
+    screen.queryByRole('dialog', { name: 'Parallel work' }) === null
+  const overlayParallel = () =>
+    screen.queryByRole('dialog', { name: 'Parallel work' }) !== null
+
+  it('CH2 lap 2 A opening the PR panel turns docked Parallel work into the overlay, closing it docks again — mutation drop the PR term turns red', async () => {
+    sessionRowWidth(1300)
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Parallel work' }))
+    await waitFor(() => expect(dockedParallel()).toBe(true))
+
+    fireEvent.click(screen.getByTitle('Pull request status'))
+    await waitFor(() => expect(overlayParallel()).toBe(true))
+
+    // The modal overlay hides the rest of the row from the accessibility
+    // tree; the wiring under test is the width the view hands the panel, so
+    // close the PR panel by its own control regardless.
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Close pull request panel',
+        hidden: true,
+      }),
+    )
+    await waitFor(() => expect(dockedParallel()).toBe(true))
+  })
+
+  it('CH2 lap 2 A linking a Space turns docked Parallel work into the overlay, unlinking docks again — mutation drop the Space term turns red', async () => {
+    sessionRowWidth(1300)
+    useSpaceStore.setState({ spaces: [space] })
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    // Let the mount's own attempts read land before the test links anything.
+    await waitFor(() =>
+      expect(
+        window.electronAPI.space.listAttemptsForSession,
+      ).toHaveBeenCalled(),
+    )
+    await act(async () => {})
+    fireEvent.click(screen.getByRole('button', { name: 'Parallel work' }))
+    await waitFor(() => expect(dockedParallel()).toBe(true))
+
+    act(() =>
+      useSpaceStore.setState({
+        attemptsBySpaceId: { 'space-1': [attempt] },
+        attemptsBySessionId: { 'session-1': [attempt] },
+      }),
+    )
+    expect(screen.getByTestId('space-context-panel')).toBeInTheDocument()
+    await waitFor(() => expect(overlayParallel()).toBe(true))
+
+    act(() =>
+      useSpaceStore.setState({
+        attemptsBySpaceId: {},
+        attemptsBySessionId: {},
+      }),
+    )
+    expect(screen.queryByTestId('space-context-panel')).toBeNull()
+    await waitFor(() => expect(dockedParallel()).toBe(true))
+  })
+
+  it('CH2 lap 2 B switching conversations with the overlay open leaves no stale dialog and no stolen focus — mutation return focus unconditionally turns red', async () => {
+    sessionRowWidth(900)
+    const [first] = useSessionStore.getState().sessions
+    useSessionStore.setState({
+      sessions: [first, { ...first, id: 'session-2', name: 'Second session' }],
+    })
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    const opener = screen.getByRole('button', { name: 'Parallel work' })
+    opener.focus()
+    fireEvent.click(opener)
+    const before = await screen.findByRole('dialog', { name: 'Parallel work' })
+    await waitFor(() =>
+      expect(before.contains(document.activeElement)).toBe(true),
+    )
+
+    // What a person would see: focus landing on the header button, even for
+    // a moment, before the next conversation's trap pulls it back.
+    const openerFocused = vi.fn()
+    opener.addEventListener('focus', openerFocused)
+    act(() =>
+      useSessionStore.setState({
+        activeSessionId: 'session-2',
+        activeConversationSessionId: 'session-2',
+        activeConversation: [],
+      }),
+    )
+    // Radix runs an unmounted scope's close-focus on a setTimeout(0); give
+    // every such task time to run before looking.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+
+    // The panel stays open across a switch (it always has); only the old
+    // conversation's dialog is gone.
+    expect(before.isConnected).toBe(false)
+    const dialogs = screen.getAllByRole('dialog', { name: 'Parallel work' })
+    expect(dialogs).toHaveLength(1)
+    const focused = document.activeElement
+    expect(focused?.isConnected).toBe(true)
+    expect(focused?.closest('[role="dialog"][data-state="closed"]')).toBeNull()
+    expect(dialogs[0].contains(focused)).toBe(true)
+    expect(openerFocused).not.toHaveBeenCalled()
   })
 })

@@ -79,15 +79,31 @@ vi.mock('@/widgets/session-view', () => ({
     open,
     onNavigate,
     onClose,
+    rowRef,
+    otherDockedWidths,
+    onReturnFocus,
   }: {
     open: boolean
     onNavigate: (id: string) => void
     onClose: () => void
+    rowRef: { current: HTMLElement | null }
+    otherDockedWidths: readonly number[]
+    onReturnFocus: () => void
   }) =>
     open ? (
-      <div>
+      <div
+        data-row-holds-conversation={String(
+          Boolean(
+            rowRef.current?.querySelector(
+              '[data-testid="conversation-surface"]',
+            ),
+          ),
+        )}
+        data-other-docked={otherDockedWidths.join(',')}
+      >
         <button onClick={() => onNavigate('spawn')}>mock view spawn</button>
         <button onClick={onClose}>mock close parallel</button>
+        <button onClick={onReturnFocus}>mock return focus</button>
       </div>
     ) : null,
   SessionConversationSurface: ({
@@ -830,5 +846,29 @@ describe('ChatSurface', () => {
       destination: second.id,
       focus: document.activeElement === opener,
     }).toEqual({ next: true, destination: 'spawn', focus: true })
+  })
+
+  it('CH2 the chat row is what Parallel work measures, nothing else docks in it, and the overlay returns focus to the opener — mutations drop the row ref or drop onReturnFocus turn red', () => {
+    useSessionStore.setState({
+      globalChatSessions: [globalSession],
+      activeGlobalSessionId: globalSession.id,
+    })
+    render(<ChatSurface selectedSpaceId={null} />)
+    const opener = screen.getByRole('button', { name: 'Parallel work' })
+    opener.focus()
+    fireEvent.click(opener)
+    const panel = screen.getByRole('button', {
+      name: 'mock return focus',
+    }).parentElement!
+    const returnFocus = screen.getByRole('button', {
+      name: 'mock return focus',
+    })
+    returnFocus.focus()
+    fireEvent.click(returnFocus)
+    expect({
+      rowHoldsConversation: panel.dataset.rowHoldsConversation,
+      otherDocked: panel.dataset.otherDocked,
+      focus: document.activeElement === opener,
+    }).toEqual({ rowHoldsConversation: 'true', otherDocked: '', focus: true })
   })
 })

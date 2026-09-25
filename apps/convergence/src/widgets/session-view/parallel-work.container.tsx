@@ -5,12 +5,14 @@ import {
   useRef,
   useState,
   type FC,
+  type RefObject,
 } from 'react'
 import type { ConversationItem as Item, Session } from '@/entities/session'
 import {
   parallelWorkRowState,
   type ParallelWorkRow,
 } from '@/shared/lib/parallel-work.pure'
+import { useElementWidth } from '@/shared/hooks/use-element-width'
 import { Button } from '@/shared/ui/button'
 import {
   Dialog,
@@ -31,6 +33,11 @@ import {
   withFetchedWorkItems,
 } from './parallel-work.pure'
 import {
+  MIN_CONVERSATION_WIDTH,
+  PARALLEL_WORK_PANEL_WIDTH,
+  parallelDockMode,
+} from './parallel-work-dock.pure'
+import {
   useParallelWorkDetail,
   useParallelWorkResults,
 } from './use-parallel-work'
@@ -48,6 +55,16 @@ import {
 } from './transcript-view.model'
 
 const itemOf = (item: Item) => item
+/**
+ * Radix calls the overlay's close-focus on a later task, and also when the
+ * instance unmounts rather than closes -- a conversation switch remounts this
+ * panel by key, and by then the next conversation may already hold focus.
+ * Focus goes back to the invoker only when nothing holds it (MAR-3426 lap 2).
+ */
+const focusIsLost = () => {
+  const active = document.activeElement
+  return active === null || active === document.body || !active.isConnected
+}
 
 interface Props {
   session: Session
@@ -60,6 +77,17 @@ interface Props {
   onNavigate: (id: string) => void
   loading: boolean
   error: string | null
+  /** The session view's root row: the conversation's own space (MAR-3426). */
+  rowRef: RefObject<HTMLElement | null>
+  /** Widths of the other panels docked in that row right now (0 = closed). */
+  otherDockedWidths: readonly number[]
+  /**
+   * Put focus back where the panel was opened from. The overlay calls it once
+   * its focus trap is gone: a focus made while the trap is still mounted is
+   * pulled back inside the dialog and lost with it (MAR-3426 R3). It is not
+   * called when something else already holds focus (see `focusIsLost`).
+   */
+  onReturnFocus: () => void
 }
 
 export const ParallelWork: FC<Props> = ({
@@ -73,6 +101,9 @@ export const ParallelWork: FC<Props> = ({
   onNavigate,
   loading,
   error,
+  rowRef,
+  otherDockedWidths,
+  onReturnFocus,
 }) => {
   const [olderOpen, setOlderOpen] = useState(false)
   const viewMode = useTranscriptViewMode(session.id)
@@ -87,11 +118,20 @@ export const ParallelWork: FC<Props> = ({
   const [details, setDetails] = useState(false)
   const [highlightedId, setHighlightedId] = useState(selectedId)
   const [now, setNow] = useState(Date.now())
-  const [narrow, setNarrow] = useState(
-    () =>
-      typeof matchMedia === 'function' &&
-      matchMedia('(max-width: 1100px)').matches,
-  )
+  // MAR-3426 CH2: dock only while the conversation keeps a usable width in
+  // its own row. The mode -- never the width -- is state, so a resize that
+  // stays on one side of the bound renders nothing here or above.
+  const overlay =
+    useElementWidth(rowRef, (rowWidth) =>
+      rowWidth === null
+        ? 'overlay'
+        : parallelDockMode({
+            rowWidth,
+            panelWidth: PARALLEL_WORK_PANEL_WIDTH,
+            otherDockedWidths,
+            minConversationWidth: MIN_CONVERSATION_WIDTH,
+          }),
+    ) === 'overlay'
   const host = useRef<HTMLDivElement>(null)
   const scrollPositions = useRef(new Map<string, number>())
   const scrollKey = selectedId ?? 'list'
@@ -105,13 +145,6 @@ export const ParallelWork: FC<Props> = ({
     saveScroll()
     onClose()
   }
-  useEffect(() => {
-    if (typeof matchMedia !== 'function') return
-    const query = matchMedia('(max-width: 1100px)')
-    const update = () => setNarrow(query.matches)
-    query.addEventListener('change', update)
-    return () => query.removeEventListener('change', update)
-  }, [])
   useEffect(() => {
     if (!open) return
     setNow(Date.now())
@@ -156,7 +189,7 @@ export const ParallelWork: FC<Props> = ({
     const scroll = host.current?.querySelector('[data-parallel-scroll]')
     if (scroll) scroll.scrollTop = scrollPositions.current.get(scrollKey) ?? 0
     previousScrollKey.current = scrollKey
-  }, [scrollKey, open, narrow])
+  }, [scrollKey, open, overlay])
   const select = (id: string | null) => {
     saveScroll()
     setDetails(false)
@@ -369,17 +402,17 @@ export const ParallelWork: FC<Props> = ({
           setDetails(true)
         }}
         onDecision={(id) => {
-          if (narrow) close()
+          if (overlay) close()
           onNavigate(id)
         }}
         onSpawn={(id) => {
-          if (narrow) close()
+          if (overlay) close()
           onNavigate(id)
         }}
         onResult={(id) => {
           const itemId = resultItems.get(id)
           if (itemId) {
-            if (narrow) close()
+            if (overlay) close()
             onNavigate(itemId)
           }
         }}
@@ -403,7 +436,7 @@ export const ParallelWork: FC<Props> = ({
   )
   return (
     <>
-      {narrow ? (
+      {overlay ? (
         <Dialog
           open={open}
           onOpenChange={(value) => {
@@ -411,7 +444,10 @@ export const ParallelWork: FC<Props> = ({
           }}
         >
           <DialogContent
-            onCloseAutoFocus={(event) => event.preventDefault()}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault()
+              if (focusIsLost()) onReturnFocus()
+            }}
             className="left-auto right-0 top-0 h-full max-h-none w-[min(420px,100vw)] translate-x-0 translate-y-0 rounded-none p-0 [&>button]:hidden"
             aria-describedby={undefined}
           >
@@ -421,7 +457,12 @@ export const ParallelWork: FC<Props> = ({
         </Dialog>
       ) : (
         open && (
-          <div className="h-full w-[420px] shrink-0 border-l">{panel}</div>
+          <div
+            className="h-full shrink-0 border-l"
+            style={{ width: PARALLEL_WORK_PANEL_WIDTH }}
+          >
+            {panel}
+          </div>
         )
       )}
       <Dialog
