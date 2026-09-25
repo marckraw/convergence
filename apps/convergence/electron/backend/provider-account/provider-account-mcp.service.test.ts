@@ -97,6 +97,28 @@ describe('Codex connectors (MAR-3183)', () => {
     resetDatabase()
   })
 
+  it('MAR-3458 R5 missing hosts return a ChatGPT error while configured connectors still list', async () => {
+    const b = bench(true)
+    const [apps, configured] = await Promise.all([
+      b.subject.listChatGptApps('codex-test'),
+      b.subject.listConnectors('codex-test'),
+    ])
+
+    expect(apps).toEqual({
+      providerAccountId: 'codex-test',
+      apps: [],
+      requiresChatGpt: false,
+      error: 'Could not read ChatGPT apps. Try Refresh.',
+    })
+    expect(configured).toMatchObject({
+      providerAccountId: 'codex-test',
+      error: null,
+      connectors: [{ name: 'linear', needsAuthorization: false }],
+    })
+    expect(b.read).toHaveBeenCalledOnce()
+    expect(b.terminal).not.toHaveBeenCalled()
+  })
+
   it.each([false, true])(
     'adds only missing Linear then logs in inside one door (present=%s)',
     async (present) => {

@@ -517,6 +517,7 @@ async function startApp(): Promise<void> {
    */
   const providerAccountMcpService = new ProviderAccountMcpService({
     repository: providerAccountRepository,
+    codexServerHosts,
     accountMaintenance: claudeAccountMaintenance,
     codexMaintenance: {
       run: (account, work) =>
