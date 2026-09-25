@@ -1,6 +1,21 @@
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 import { Button } from '@/shared/ui/button'
-import { compactionLabel, isMcpAlertStatus } from './harness-facts.pure'
+import {
+  compactionLabel,
+  hiddenPluginSentence,
+  hiddenPluginServers,
+  isMcpAlertStatus,
+} from './harness-facts.pure'
+
+/** What Details can do with a server of the running process (MAR-3206 R3). */
+export interface McpReconnectView {
+  /** Why Reconnect is unavailable; null when a running process can take it. */
+  unavailable: string | null
+  /** The server a reconnect is under way for. */
+  pending: string | null
+  error: { server: string; message: string } | null
+  onReconnect: (server: string) => void
+}
 
 /**
  * The harness history -- hooks, retries, denials, compactions, the rate limit
@@ -12,17 +27,24 @@ export function HarnessFactsSections({
   error,
   loading,
   onRetry,
+  mcp,
 }: {
   facts: SessionHarnessFacts | null
   error: string | null
   loading: boolean
   onRetry: () => void
+  mcp?: McpReconnectView
 }) {
   const current = facts?.currentTurn,
     init = facts?.init,
-    rate = facts?.rateLimit
+    rate = facts?.rateLimit,
+    status = facts?.mcpStatus
+  const hidden = status
+    ? hiddenPluginServers(status.servers, status.pluginServers)
+    : []
   const hasFacts = !!(
     init ||
+    status ||
     rate ||
     facts?.compactions.length ||
     current?.hooks.length ||
@@ -200,33 +222,98 @@ export function HarnessFactsSections({
           {init.permissionMode !== null && (
             <p>Permission mode: {init.permissionMode}</p>
           )}
-          {init.mcpServers !== null && (
-            <div className="mt-2">
-              MCP servers · {init.mcpServers.connected} connected of{' '}
-              {init.mcpServers.total}
-              {/* Which servers the session actually loaded (MAR-3213) —
-                absent on facts recorded before the change, and then
-                nothing extra renders. */}
-              {!!init.mcpServers.connectedNames?.length && (
-                <p>Connected: {init.mcpServers.connectedNames.join(', ')}</p>
-              )}
-              {(init.mcpServers.connectedOmitted ?? 0) > 0 && (
-                <p>{`… and ${init.mcpServers.connectedOmitted} more connected`}</p>
-              )}
-              {init.mcpServers.others.map((server, index) => (
+          {status ? (
+            <div className="mt-2" aria-label="MCP servers">
+              MCP servers ·{' '}
+              {
+                status.servers.filter((server) => server.status === 'connected')
+                  .length
+              }{' '}
+              connected of {status.servers.length + status.omitted}
+              {hidden.map((entry) => (
                 <p
-                  key={`${index}:${server.name}`}
-                  className={
-                    isMcpAlertStatus(server.status) ? 'text-destructive' : ''
-                  }
+                  key={`${entry.connector}:${entry.plugin}:${entry.server}`}
+                  role="note"
+                  className="text-destructive"
                 >
-                  {server.name} · {server.status ?? 'Not reported'}
+                  {hiddenPluginSentence(entry)}
                 </p>
               ))}
-              {init.mcpServers.omitted > 0 && (
-                <p>{`… and ${init.mcpServers.omitted} more not connected (${init.mcpServers.omittedAlerts} failed or needing auth)`}</p>
+              {status.servers.map((server, index) => (
+                <div
+                  key={`${index}:${server.name}`}
+                  className="flex items-center gap-2"
+                >
+                  <p
+                    className={
+                      isMcpAlertStatus(server.status) ? 'text-destructive' : ''
+                    }
+                  >
+                    {server.name} · {server.status ?? 'Not reported'} ·{' '}
+                    {server.scope ?? 'scope not reported'} ·{' '}
+                    {server.origin ?? 'no address'}
+                  </p>
+                  {mcp && isMcpAlertStatus(server.status) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs"
+                      disabled={
+                        mcp.unavailable !== null || mcp.pending !== null
+                      }
+                      title={mcp.unavailable ?? undefined}
+                      aria-label={`Reconnect ${server.name}`}
+                      onClick={() => mcp.onReconnect(server.name)}
+                    >
+                      {mcp.pending === server.name
+                        ? 'Reconnecting…'
+                        : 'Reconnect'}
+                    </Button>
+                  )}
+                </div>
+              ))}
+              {status.omitted > 0 && (
+                <p>{`… and ${status.omitted} more (${status.omittedAlerts} failed or needing auth)`}</p>
+              )}
+              {mcp?.unavailable &&
+                status.servers.some((server) =>
+                  isMcpAlertStatus(server.status),
+                ) && <p>Reconnect is unavailable: {mcp.unavailable}.</p>}
+              {mcp?.error && (
+                <p role="alert" className="text-destructive">
+                  Reconnect {mcp.error.server} failed: {mcp.error.message}
+                </p>
               )}
             </div>
+          ) : (
+            init.mcpServers !== null && (
+              <div className="mt-2">
+                MCP servers · {init.mcpServers.connected} connected of{' '}
+                {init.mcpServers.total}
+                {/* Which servers the session actually loaded (MAR-3213) —
+                absent on facts recorded before the change, and then
+                nothing extra renders. */}
+                {!!init.mcpServers.connectedNames?.length && (
+                  <p>Connected: {init.mcpServers.connectedNames.join(', ')}</p>
+                )}
+                {(init.mcpServers.connectedOmitted ?? 0) > 0 && (
+                  <p>{`… and ${init.mcpServers.connectedOmitted} more connected`}</p>
+                )}
+                {init.mcpServers.others.map((server, index) => (
+                  <p
+                    key={`${index}:${server.name}`}
+                    className={
+                      isMcpAlertStatus(server.status) ? 'text-destructive' : ''
+                    }
+                  >
+                    {server.name} · {server.status ?? 'Not reported'}
+                  </p>
+                ))}
+                {init.mcpServers.omitted > 0 && (
+                  <p>{`… and ${init.mcpServers.omitted} more not connected (${init.mcpServers.omittedAlerts} failed or needing auth)`}</p>
+                )}
+              </div>
+            )
           )}
           {init.plugins !== null && (
             <div className="mt-2">

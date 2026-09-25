@@ -1,6 +1,8 @@
 import type {
   HarnessFact,
   HarnessOutput,
+  McpServerFact,
+  PluginMcpServerFact,
 } from '../../../../src/shared/types/harness-facts.types'
 import { claudeRecord, claudeString } from './claude-evidence.pure'
 
@@ -208,6 +210,107 @@ export function readClaudeHarnessFact(
     })
   }
   return null
+}
+
+/**
+ * A server's address as its origin only (MAR-3206 R1): `https://host[:port]`.
+ * The path, the query and any credentials in the URL are never recorded; a
+ * value that is not an http(s) URL has no address.
+ */
+export function mcpOrigin(url: unknown): string | null {
+  if (typeof url !== 'string') return null
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return null
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null
+  return parsed.origin
+}
+
+const MCP_STATUS_SERVERS = 20
+const MCP_STATUS_PLUGIN_SERVERS = 8
+
+/**
+ * The resident query's `mcpServerStatus()` as a fact (MAR-3206 R1): name,
+ * status, scope and origin per server. Bounded so the recorded envelope stays
+ * under its 8192-byte budget (`boundedHarnessPayload`): the fact names 20
+ * servers and counts the rest, and every text field has its own bound.
+ */
+export function readClaudeMcpStatus(
+  statuses: unknown,
+  pluginServers: readonly PluginMcpServerFact[],
+  at: string,
+): Extract<HarnessFact, { kind: 'harness.mcpStatus' }> {
+  const entries = Array.isArray(statuses) ? statuses : []
+  const text = (value: unknown, budget: number): string | null => {
+    const raw = claudeString(value)
+    if (raw === null) return null
+    const bounded = boundHarnessText(raw, budget)
+    return typeof bounded === 'string' ? bounded : bounded.preview
+  }
+  const listed: McpServerFact[] = entries.map((value) => {
+    const r = claudeRecord(value)
+    return {
+      name: text(r?.name, 64) ?? 'unnamed',
+      status: text(r?.status, 24),
+      scope: text(r?.scope, 24),
+      origin: text(mcpOrigin(claudeRecord(r?.config)?.url), 96),
+    }
+  })
+  // Failing and needs-sign-in servers first, as the start record orders its
+  // own list: the bound drops quiet servers before it drops an alert.
+  const isAlert = (server: McpServerFact) =>
+    server.status === 'failed' || server.status === 'needs-auth'
+  const servers = [...listed].sort(
+    (a, b) => Number(isAlert(b)) - Number(isAlert(a)),
+  )
+  return {
+    kind: 'harness.mcpStatus',
+    at,
+    servers: servers.slice(0, MCP_STATUS_SERVERS),
+    omitted: Math.max(0, servers.length - MCP_STATUS_SERVERS),
+    omittedAlerts: servers.slice(MCP_STATUS_SERVERS).filter(isAlert).length,
+    pluginServers: pluginServers
+      .slice(0, MCP_STATUS_PLUGIN_SERVERS)
+      .map((entry) => ({
+        plugin: text(entry.plugin, 64) ?? 'unnamed',
+        server: text(entry.server, 64) ?? 'unnamed',
+        origin: text(entry.origin, 96) ?? entry.origin,
+      })),
+  }
+}
+
+/**
+ * The http(s) servers one plugin declares, from the text of its manifests:
+ * `.mcp.json` (`{ mcpServers: {...} }` or the servers at its top level) and
+ * `.claude-plugin/plugin.json`'s inline `mcpServers`. Only each server's name
+ * and origin leave this function -- headers and the rest of the URL do not.
+ */
+export function readPluginMcpServers(
+  plugin: string,
+  manifests: readonly (string | null)[],
+): PluginMcpServerFact[] {
+  const found = new Map<string, PluginMcpServerFact>()
+  for (const manifest of manifests) {
+    if (manifest === null) continue
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(manifest)
+    } catch {
+      continue
+    }
+    const root = claudeRecord(parsed)
+    const servers = claudeRecord(root?.mcpServers) ?? root
+    if (!servers) continue
+    for (const [server, config] of Object.entries(servers)) {
+      const origin = mcpOrigin(claudeRecord(config)?.url)
+      if (origin && !found.has(server))
+        found.set(server, { plugin, server, origin })
+    }
+  }
+  return [...found.values()]
 }
 
 /** Bound text in the envelope's JSON UTF-8 unit; never split a code point. */

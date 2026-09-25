@@ -475,6 +475,13 @@ export interface SessionHandle {
   initialDispatch?: Promise<InitialDispatchReceipt>
   readonly canStopTasks?: boolean
   stopTask?: (id: string) => Promise<void>
+  /** A running process whose MCP servers can be read and reconnected (MAR-3206). */
+  readonly canReconnectMcpServers?: boolean
+  /**
+   * Record the running process's MCP status, after reconnecting `reconnect`
+   * inside that same process when named. Never restarts the session.
+   */
+  refreshMcpServers?: (reconnect?: string) => Promise<void>
   /** A local process whose lifetime spans completed user turns. */
   resident?: boolean
   retainQueuedInputsOnCompletion?: boolean

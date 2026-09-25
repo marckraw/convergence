@@ -1135,6 +1135,8 @@ interface SessionSummaryData {
   pinnedAt?: string | null
   pullRequest?: SessionPullRequest | null
   canStopTasks?: boolean
+  /** Runtime fact: a running process can reconnect its MCP servers (MAR-3206). */
+  canReconnectMcpServers?: boolean
   parallelWork?: ParallelWorkCounts
   /** Runtime fact; never persisted or inferred from attention. */
   hasActiveHandle?: boolean
@@ -2066,6 +2068,11 @@ interface ElectronAPI {
     ) => () => void
     stopTask: (sessionId: string, id: string) => Promise<void>
     harnessFacts: (sessionId: string) => Promise<SessionHarnessFacts>
+    /** Record the running process's MCP status; reconnect one server first when named (MAR-3206). */
+    refreshMcpServers: (
+      sessionId: string,
+      reconnect: string | null,
+    ) => Promise<void>
     onHarnessFacts: (
       callback: (event: { sessionId: string }) => void,
     ) => () => void

@@ -29,6 +29,8 @@ export function createFixtureClaudeTransport(
     interrupt: async () => ({ still_queued: [] }),
     setModel: async () => {},
     setPermissionMode: async () => {},
+    mcpServerStatus: async () => [],
+    reconnectMcpServer: async () => {},
     close: async () => {
       child.stdin.end()
       child.kill('SIGTERM')

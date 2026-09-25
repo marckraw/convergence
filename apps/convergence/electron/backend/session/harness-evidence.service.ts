@@ -127,7 +127,8 @@ export class HarnessEvidenceService {
         fact.kind === 'harness.compaction' ||
         fact.kind === 'harness.denial' ||
         fact.kind === 'harness.rateLimit' ||
-        fact.kind === 'harness.init'
+        fact.kind === 'harness.init' ||
+        fact.kind === 'harness.mcpStatus'
       ) {
         this.recordHarnessEvent(
           sessionId,

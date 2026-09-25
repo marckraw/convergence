@@ -1,9 +1,13 @@
 import { isMcpAlertStatus } from './harness-facts.pure'
-import { expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   placeCompactions,
   harnessPill,
   compactionLabel,
+  hiddenPluginSentence,
+  hiddenPluginServers,
+  mcpReconnectUnavailable,
+  mcpRefusal,
 } from './harness-facts.pure'
 import type { SessionHarnessFacts } from '@/shared/types/harness-facts.types'
 const compact = {
@@ -251,4 +255,148 @@ it('CH1 R1 omitted alerts count without inventing their statuses', () => {
     alert: true,
     reason: '1 integration needs sign-in · 2 more integrations need attention',
   })
+})
+
+describe('MAR-3206 R2 — a claude.ai connector hiding a plugin server', () => {
+  const connector = (status: string) => ({
+    name: 'claude.ai Figma',
+    status,
+    scope: 'claudeai',
+    origin: 'https://mcp.figma.com',
+  })
+  const figmaPlugin = {
+    plugin: 'figma',
+    server: 'figma',
+    origin: 'https://mcp.figma.com',
+  }
+  const sentence =
+    "claude.ai Figma needs sign-in and is hiding the Figma plugin's server (same address). Authorize Figma at claude.ai → Settings → Connectors, then Reconnect."
+
+  it.each([
+    [
+      'duplicate in needs-auth',
+      [connector('needs-auth')],
+      [figmaPlugin],
+      [sentence],
+    ],
+    ['connector connected', [connector('connected')], [figmaPlugin], []],
+    ['no plugin', [connector('needs-auth')], [], []],
+    [
+      'the plugin server is present after all',
+      [
+        connector('needs-auth'),
+        {
+          name: 'plugin:figma:figma',
+          status: 'connected',
+          scope: 'dynamic',
+          origin: 'https://mcp.figma.com',
+        },
+      ],
+      [figmaPlugin],
+      [],
+    ],
+    [
+      'a user-scope server at the same address is not a claude.ai connector',
+      [{ ...connector('needs-auth'), scope: 'user' }],
+      [figmaPlugin],
+      [],
+    ],
+  ])('%s', (_label, status, plugins, sentences) => {
+    expect(
+      hiddenPluginServers(status, plugins).map(hiddenPluginSentence),
+    ).toEqual(sentences)
+  })
+
+  it('matches by origin, never by name — match on name instead and this turns red', () => {
+    // Same address, unrelated names: the harness compares addresses.
+    expect(
+      hiddenPluginServers(
+        [connector('needs-auth')],
+        [
+          {
+            plugin: 'design-tools',
+            server: 'canvas',
+            origin: 'https://mcp.figma.com',
+          },
+        ],
+      ).map((entry) => entry.plugin),
+    ).toEqual(['design-tools'])
+    // Same name, another address: nothing is hidden.
+    expect(
+      hiddenPluginServers(
+        [connector('needs-auth')],
+        [
+          {
+            plugin: 'figma',
+            server: 'figma',
+            origin: 'https://figma.internal.example',
+          },
+        ],
+      ),
+    ).toEqual([])
+  })
+})
+
+it('MAR-3206 R3 the pill reads the newer MCP status over the start record — a reconnected server is no longer an alert', () => {
+  const init = {
+    kind: 'harness.init' as const,
+    at: 'start',
+    claudeCodeVersion: null,
+    model: null,
+    permissionMode: null,
+    mcpServers: {
+      total: 1,
+      connected: 0,
+      others: [{ name: 'claude.ai Figma', status: 'needs-auth' }],
+      omitted: 0,
+      omittedAlerts: 0,
+    },
+    plugins: null,
+    capabilities: null,
+    tools: null,
+    skills: null,
+    slashCommands: null,
+  }
+  const facts: SessionHarnessFacts = {
+    turns: [],
+    currentTurn: null,
+    compactions: [],
+    rateLimit: null,
+    init,
+  }
+  expect(harnessPill(facts).alert).toBe(true)
+  expect(
+    harnessPill({
+      ...facts,
+      mcpStatus: {
+        kind: 'harness.mcpStatus',
+        at: 'later',
+        servers: [
+          {
+            name: 'claude.ai Figma',
+            status: 'connected',
+            scope: 'claudeai',
+            origin: 'https://mcp.figma.com',
+          },
+        ],
+        omitted: 0,
+        omittedAlerts: 0,
+        pluginServers: [],
+      },
+    }).alert,
+  ).toBe(false)
+})
+
+it('MAR-3206 R3 names why Reconnect is unavailable, and strips the IPC prefix from a refusal', () => {
+  expect(mcpReconnectUnavailable(true)).toBeNull()
+  expect(mcpReconnectUnavailable(undefined)).toMatch(
+    /^no Claude process is running for this conversation/,
+  )
+  expect(
+    mcpRefusal(
+      new Error(
+        "Error invoking remote method 'session:refreshMcpServers': Error: MCP server needs authentication",
+      ),
+    ),
+  ).toBe('MCP server needs authentication')
 })

@@ -84,7 +84,42 @@ export type HarnessFact = {
       skills: { count: number } | null
       slashCommands: { count: number } | null
     }
+  | {
+      /**
+       * The running process's own MCP status, read from the resident query
+       * after its start record and on demand (MAR-3206 R1). Unlike the start
+       * record it names each server's scope and address; an address is its
+       * origin only -- never a path, a query or credentials.
+       */
+      kind: 'harness.mcpStatus'
+      servers: McpServerFact[]
+      /** Servers beyond the ones listed above. */
+      omitted: number
+      /** Of those, the ones that failed or need sign-in (listed first, so rarely any). */
+      omittedAlerts: number
+      /**
+       * The servers the loaded plugins declare, read from their manifests:
+       * a plugin server the harness drops for a duplicate address is absent
+       * from `servers`, and only this says where it would have pointed.
+       */
+      pluginServers: PluginMcpServerFact[]
+    }
 )
+
+export interface McpServerFact {
+  name: string
+  status: string | null
+  /** e.g. `claudeai`, `user`, `project`, `local`, `dynamic`; null when not reported. */
+  scope: string | null
+  /** `https://mcp.figma.com`; null for a server with no URL (stdio, sdk). */
+  origin: string | null
+}
+
+export interface PluginMcpServerFact {
+  plugin: string
+  server: string
+  origin: string
+}
 
 export interface HarnessEvent {
   sequence: number
@@ -138,4 +173,9 @@ export interface SessionHarnessFacts {
   })[]
   rateLimit: Extract<HarnessFact, { kind: 'harness.rateLimit' }> | null
   init: Extract<HarnessFact, { kind: 'harness.init' }> | null
+  /**
+   * The latest MCP status read since the latest start record (MAR-3206);
+   * absent when none was read.
+   */
+  mcpStatus?: Extract<HarnessFact, { kind: 'harness.mcpStatus' }>
 }

@@ -1,4 +1,8 @@
-import type { SessionHarnessFacts } from '../../shared/types/harness-facts.types'
+import type {
+  McpServerFact,
+  PluginMcpServerFact,
+  SessionHarnessFacts,
+} from '../../shared/types/harness-facts.types'
 export function harnessPill(facts: SessionHarnessFacts | null): {
   label: string
   alert: boolean
@@ -7,14 +11,19 @@ export function harnessPill(facts: SessionHarnessFacts | null): {
   const current = facts?.currentTurn
   const retry = current?.retries
   const servers = facts?.init?.mcpServers
-  const alerts =
-    servers?.others.filter((server) => isMcpAlertStatus(server.status)) ?? []
+  // The running process's own status, when one was read after the start
+  // record, is the newer truth: a server reconnected since then is no longer
+  // an alert (MAR-3206 R3).
+  const status = facts?.mcpStatus
+  const alerts = (status ? status.servers : (servers?.others ?? [])).filter(
+    (server) => isMcpAlertStatus(server.status),
+  )
   const needsAuth = alerts.filter(
     (server) => server.status === 'needs-auth',
   ).length
   const failed = alerts.filter((server) => server.status === 'failed').length
   const needsAttention = alerts.length - needsAuth - failed
-  const omitted = servers?.omittedAlerts ?? 0
+  const omitted = status ? status.omittedAlerts : (servers?.omittedAlerts ?? 0)
   const reasons: string[] = []
   if (needsAuth)
     reasons.push(
@@ -90,4 +99,72 @@ export function placeCompactions(
 
 export function isMcpAlertStatus(status: string | null): boolean {
   return status === 'failed' || status === 'needs-auth'
+}
+
+export interface HiddenPluginServer {
+  /** The claude.ai connector, e.g. `claude.ai Figma`. */
+  connector: string
+  plugin: string
+  server: string
+  origin: string
+}
+
+/**
+ * The plugin servers a claude.ai connector is hiding (MAR-3206 R2): a
+ * connector in `needs-auth` at the same origin as a server a loaded plugin
+ * declares, while that plugin server is absent from the running process's
+ * status. The harness drops the plugin's copy of a duplicate address, so the
+ * one that survives cannot be used until it is authorized.
+ *
+ * Matched by ORIGIN, never by name: `claude.ai Figma` and the `figma` plugin
+ * share a word by coincidence, and it is the address the harness compares.
+ */
+export function hiddenPluginServers(
+  status: readonly McpServerFact[],
+  plugins: readonly PluginMcpServerFact[],
+): HiddenPluginServer[] {
+  const present = new Set(status.map((server) => server.name))
+  return status.flatMap((connector) =>
+    connector.scope === 'claudeai' &&
+    connector.status === 'needs-auth' &&
+    connector.origin !== null
+      ? plugins
+          .filter(
+            (plugin) =>
+              plugin.origin === connector.origin &&
+              !present.has(`plugin:${plugin.plugin}:${plugin.server}`),
+          )
+          .map((plugin) => ({
+            connector: connector.name,
+            plugin: plugin.plugin,
+            server: plugin.server,
+            origin: connector.origin!,
+          }))
+      : [],
+  )
+}
+
+/** The one sentence Details says for a hidden plugin server, with the fix. */
+export function hiddenPluginSentence(hidden: HiddenPluginServer): string {
+  const service = hidden.connector.replace(/^claude\.ai\s+/, '')
+  const plugin = hidden.plugin.charAt(0).toUpperCase() + hidden.plugin.slice(1)
+  return `${hidden.connector} needs sign-in and is hiding the ${plugin} plugin's server (same address). Authorize ${service} at claude.ai → Settings → Connectors, then Reconnect.`
+}
+
+/** A refused MCP refresh or reconnect, without the IPC wrapper's prefix. */
+export function mcpRefusal(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.replace(
+    /^Error invoking remote method ['"]session:refreshMcpServers['"]: (?:Error: )?/,
+    '',
+  )
+}
+
+/** Why Details cannot reconnect a server, or null when it can (MAR-3206 R3). */
+export function mcpReconnectUnavailable(
+  canReconnect: boolean | undefined,
+): string | null {
+  return canReconnect
+    ? null
+    : 'no Claude process is running for this conversation; the next message starts one, which reads its connectors afresh'
 }
